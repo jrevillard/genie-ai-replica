@@ -448,7 +448,7 @@ class QueryService {
    * @param {string} [opts.chatSessionId] - Stored on the queries doc as chatSessionId
    * @returns {Promise<{queryId: string, response: *, metadata: *, responseTime: number}>}
    */
-  async executeChatqnaTurn({ userId, sessionId, messages, context, chatSessionId }) {
+  async executeChatqnaTurn({ userId, sessionId, messages, context, chatSessionId, systemPrompt }) {
     const startTime = Date.now();
     if (!userId || !Array.isArray(messages) || messages.length === 0) {
       throw new Error('executeChatqnaTurn: userId and non-empty messages are required');
@@ -554,6 +554,9 @@ class QueryService {
         },
         user_id: userId,
         stream: false,
+        // Twin-specific system prompt — chatqna uses this instead of its hardcoded default
+        // when present. Null/undefined means "use chatqna's built-in default".
+        ...(systemPrompt ? { system_prompt: systemPrompt } : {}),
       };
       logger.debug(`TRACE_CTX executeChatqnaTurn -> OPEA context=${JSON.stringify(opeaPayload.context)}`);
       const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload);

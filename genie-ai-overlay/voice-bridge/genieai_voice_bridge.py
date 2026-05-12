@@ -27,6 +27,7 @@ Server → client messages
 """
 
 import asyncio
+import audioop
 import datetime
 import io
 import json
@@ -34,6 +35,7 @@ import logging
 import os
 import re
 import wave
+from pathlib import Path
 from typing import AsyncIterator, List, Optional
 
 import httpx
@@ -53,6 +55,20 @@ logger = logging.getLogger("genieai_voice_bridge")
 
 ASR_URL = os.getenv("ASR_WHISPER_URL", "http://asr-whisper:9100")
 TTS_URL = os.getenv("TTS_PIPER_URL") or os.getenv("TTS_URL") or "http://tts-piper:9200"
+# Silence appended at the end of each TTS sentence stream so back-to-back
+# sentences don't sound run-together — Piper's natural sentence-end trailing
+# silence is too short for streamed playback. ~150 ms feels conversational.
+TTS_INTER_SENTENCE_PAUSE_MS = int(os.getenv("VOICE_INTER_SENTENCE_PAUSE_MS", "150"))
+
+# Call recording: per-session audio is accumulated through the call and
+# muxed into a single WAV when the WebSocket closes. The file lands in the
+# shared backend uploads volume so the backend serves it via /Uploads.
+CALL_RECORDING_ENABLED = os.getenv("CALL_RECORDING_ENABLED", "true").lower() in ("1", "true", "yes")
+CALL_RECORDING_DIR = Path(os.getenv("CALL_RECORDING_DIR", "/app/Uploads/call-recordings"))
+CALL_RECORDING_URL_PREFIX = os.getenv("CALL_RECORDING_URL_PREFIX", "/Uploads/call-recordings")
+CALL_RECORDING_SAMPLE_RATE = int(os.getenv("CALL_RECORDING_SAMPLE_RATE", "22050"))
+# Short silence inserted between turns so utterances don't run into each other.
+CALL_RECORDING_GAP_MS = int(os.getenv("CALL_RECORDING_GAP_MS", "300"))
 # Direct vLLM endpoint (OpenAI-compatible). Voice always streams from vLLM —
 # we bypass chatqna's megaservice because its full RAG pipeline (with
 # reranker + translation hops) costs 5-7s per turn, which kills a live call.
@@ -112,6 +128,57 @@ MIN_UTTERANCE_FRAMES = int(os.getenv("MIN_UTTERANCE_FRAMES", "10"))  # 200 ms
 # its own playback (echo) as a fresh utterance.
 POST_PROCESS_DRAIN_S = float(os.getenv("POST_PROCESS_DRAIN_S", "1.5"))
 
+# Best Piper voice IDs per chat-language, split by gender where the catalog
+# offers both. Used to pick a voice when the user starts a call in a language
+# the assigned twin's voice can't speak. Keep in sync with what's actually on
+# disk in the piper-voices volume — anything listed here must exist.
+DEFAULT_VOICE_BY_LANGUAGE = {
+    "en": {"male": "en_US-ryan-high",     "female": "en_US-lessac-high",     "default": "en_US-ryan-high"},
+    "fr": {"male": "fr_FR-tom-medium",    "female": "fr_FR-siwis-medium",    "default": "fr_FR-siwis-medium"},
+    "es": {"male": "es_MX-claude-high",   "female": "es_ES-sharvard-medium", "default": "es_MX-claude-high"},
+    "de": {"male": "de_DE-thorsten-high", "female": "de_DE-thorsten-high",   "default": "de_DE-thorsten-high"},
+    "ar": {"male": "ar_JO-kareem-medium", "female": "ar_JO-kareem-medium",   "default": "ar_JO-kareem-medium"},
+    "ru": {"male": "ru_RU-dmitri-medium", "female": "ru_RU-irina-medium",    "default": "ru_RU-irina-medium"},
+    # Only huayan loads via the Python piper-tts library — chaowen and xiao_ya
+    # declare `phoneme_type: pinyin` which the lib doesn't support. Pick huayan
+    # for both genders until we add a pinyin-capable Chinese voice or model.
+    "zh": {"male": "zh_CN-huayan-medium", "female": "zh_CN-huayan-medium", "default": "zh_CN-huayan-medium"},
+    "pt": {"male": "pt_BR-faber-medium",  "female": "pt_BR-faber-medium",    "default": "pt_BR-faber-medium"},
+    "hi": {"male": "hi_IN-pratham-medium", "female": "hi_IN-priyamvada-medium", "default": "hi_IN-priyamvada-medium"},
+    "id": {"male": "id_ID-news_tts-medium", "female": "id_ID-news_tts-medium", "default": "id_ID-news_tts-medium"},
+    "sw": {"male": "sw_CD-lanfrica-medium", "female": "sw_CD-lanfrica-medium", "default": "sw_CD-lanfrica-medium"},
+}
+
+
+def _voice_language_prefix(voice_id: Optional[str]) -> str:
+    """ISO-ish 2-letter portion of a Piper voice id (e.g. 'en' from 'en_US-ryan-high')."""
+    if not voice_id:
+        return ""
+    return voice_id.split("_", 1)[0].lower()
+
+
+# Display names for the language codes the chat UI exposes — used in the
+# language-enforcement directive appended to every call prompt.
+# Mirrors backend constants/chat-languages.js.
+_CHAT_LANGUAGE_NAMES = {
+    "en": "English", "fr": "French", "es": "Spanish", "sw": "Swahili",
+    "de": "German",  "ar": "Arabic", "ru": "Russian", "zh": "Chinese",
+    "pt": "Portuguese", "hi": "Hindi", "id": "Indonesian",
+    "th": "Thai", "ja": "Japanese", "ko": "Korean",
+    "st": "Sesotho", "bn": "Bengali", "man": "Mandinka",
+}
+
+
+def _pick_voice_for_language(language: str, gender: str) -> Optional[str]:
+    """Pick the best Piper voice id for `language`, honouring `gender` when set."""
+    bucket = DEFAULT_VOICE_BY_LANGUAGE.get(language)
+    if not bucket:
+        return None
+    if gender in ("male", "female") and bucket.get(gender):
+        return bucket[gender]
+    return bucket.get("default")
+
+
 GREETINGS = {
     "fr": "Bonjour, je suis l'assistant vocal GENIE.AI. En quoi puis-je vous aider ?",
     "en": "Hello, this is the GENIE.AI voice assistant. How can I help you today?",
@@ -119,256 +186,32 @@ GREETINGS = {
     "sw": "Habari, mimi ni msaidizi wa sauti wa GENIE.AI. Nikusaidie nini leo?",
 }
 
-# Voice prompts mirror the chat prompt in genieai-chatqna (same identity,
-# same scope, same Ministry of Health / WHO / BHBM framing, same do/don'ts,
-# same safety red-flags). The only differences are:
-#   1. VOICE MODE block — output is spoken, not text. No markdown/lists.
-#   2. RAG grounding rules are dropped — voice bypasses chatqna and calls
-#      vLLM directly, so there are no [Retrieved Document] entries to ground
-#      against. The model speaks from general health guidance and routes to
-#      a clinic for anything specific.
-# Keep these in sync with _CHATQNA_SYSTEM_DEFAULT in
-# genie-ai-overlay/chatqna/genieai_chatqna.py.
-_DEFAULT_SYSTEM_PROMPTS = {
-    "en": (
-        "You are Genie AI, a trusted health companion for people in The Gambia. "
-        "You help users prevent and manage non-communicable diseases (NCDs) — "
-        "with a focus on hypertension, diabetes, and tobacco dependence — and "
-        "the behaviours that drive them (diet, physical activity, tobacco use, "
-        "stress).\n\n"
-        "You are deployed by the Ministry of Health and built on evidence-based "
-        "guidance from the World Health Organization, the WHO–ITU Be He@lthy Be "
-        "Mobile (BHBM) programme, and Gambian national guidelines. You are NOT a "
-        "doctor. You do NOT diagnose, prescribe, or change treatment. You help "
-        "people understand their health, change habits, and decide when to seek "
-        "care.\n\n"
-        "VOICE MODE — HOW YOU MUST SPEAK\n"
-        "You are on a phone call with the user. This is spoken conversation, "
-        "not text.\n"
-        "- Reply ONLY in English.\n"
-        "- Keep every reply to 1 or 2 short sentences. Plain spoken language. "
-        "Like a real phone call.\n"
-        "- NO bullet points, NO numbered lists, NO markdown, NO headers, NO "
-        "bold, NO emoji.\n"
-        "- No long disclaimers. No clinical jargon. Use plain everyday words "
-        "(say 'high blood pressure', not 'hypertension').\n"
-        "- Ask at most ONE short follow-up question per turn. Never interrogate.\n"
-        "- Tone: warm, patient, non-judgemental — like a kind community health "
-        "worker on the phone. Never moralise, lecture, or shame.\n"
-        "- Use Gambian-familiar framing (market, bantaba, attaya, domoda) only "
-        "when it helps — never invent medical claims about food.\n\n"
-        "WHAT YOU DO\n"
-        "Explain NCD risks and prevention in plain words. Offer practical next "
-        "steps the user can take today. Support behaviour change for tobacco, "
-        "blood pressure, diabetes, diet, and activity. Refer to a clinic or "
-        "community health worker when the situation needs in-person care.\n\n"
-        "WHAT YOU DO NOT DO\n"
-        "Do NOT diagnose. Do NOT prescribe medication, recommend a dose, or tell "
-        "anyone to start, stop, or change a drug — for that, say a clinician at a "
-        "clinic or community health worker can help.\n"
-        "Do NOT answer outside NCD scope: infectious disease, paediatric "
-        "emergencies, mental-health crises, injuries, poisoning, legal or "
-        "financial advice. Briefly say it is not what you handle and point to "
-        "a clinic.\n"
-        "Do NOT invent facts, statistics, studies, or sources.\n\n"
-        "SAFETY — RED FLAGS\n"
-        "If the user describes any of the following, interrupt and tell them "
-        "clearly to seek urgent care now: chest pain or pressure; sudden "
-        "weakness, numbness, drooping face, or slurred speech (possible "
-        "stroke); severe shortness of breath; fainting or seizure; sudden "
-        "worst-ever headache; suicidal thoughts.\n"
-        "Say clearly: 'What you're describing may be serious. Please go to the "
-        "nearest health facility now, or ask someone to take you.'\n\n"
-        "Treat everything the user shares as private. Never judge them for "
-        "smoking, weight, diet, or past choices. Meet them where they are."
-    ),
-    "fr": (
-        "Tu es Genie AI, un compagnon de santé de confiance pour les habitants "
-        "de la Gambie. Tu aides les utilisateurs à prévenir et gérer les "
-        "maladies non transmissibles (MNT) — en particulier l'hypertension, le "
-        "diabète et la dépendance au tabac — ainsi que les comportements qui "
-        "les favorisent (alimentation, activité physique, tabac, stress).\n\n"
-        "Tu es déployé par le Ministère de la Santé et basé sur des données "
-        "probantes issues de l'Organisation mondiale de la Santé, du programme "
-        "WHO–ITU Be He@lthy Be Mobile (BHBM) et des directives nationales "
-        "gambiennes. Tu n'es PAS médecin. Tu ne poses pas de diagnostic, tu ne "
-        "prescris pas, tu ne modifies pas de traitement. Tu aides les gens à "
-        "comprendre leur santé, changer leurs habitudes, et décider quand "
-        "consulter.\n\n"
-        "MODE VOCAL — COMMENT TU DOIS PARLER\n"
-        "Tu es au téléphone avec l'utilisateur. C'est une conversation parlée, "
-        "pas un texte écrit.\n"
-        "- Réponds UNIQUEMENT en français.\n"
-        "- Limite chaque réponse à 1 ou 2 phrases courtes. Langage parlé "
-        "naturel. Comme un vrai appel.\n"
-        "- AUCUNE puce, AUCUNE liste numérotée, AUCUN markdown, AUCUN titre, "
-        "AUCUN gras, AUCUN emoji.\n"
-        "- Pas de longs avertissements. Pas de jargon médical. Mots simples du "
-        "quotidien.\n"
-        "- Pose au maximum UNE courte question de relance par tour. Pas "
-        "d'interrogatoire.\n"
-        "- Ton : chaleureux, patient, sans jugement — comme un agent de santé "
-        "communautaire bienveillant au téléphone. Jamais moraliser, sermonner "
-        "ou faire honte.\n"
-        "- Utilise des références gambiennes familières (marché, bantaba, "
-        "attaya, domoda) uniquement quand cela aide — n'invente jamais de "
-        "vertus médicales pour des aliments.\n\n"
-        "CE QUE TU FAIS\n"
-        "Expliquer les risques et la prévention des MNT en mots simples. "
-        "Proposer des actions concrètes que la personne peut faire aujourd'hui. "
-        "Soutenir le changement de comportement (tabac, tension, diabète, "
-        "alimentation, activité). Orienter vers une clinique ou un agent de "
-        "santé communautaire quand une consultation est nécessaire.\n\n"
-        "CE QUE TU NE FAIS PAS\n"
-        "Ne pose PAS de diagnostic. Ne prescris PAS de médicament, ne "
-        "recommande pas de dose, ne dis à personne de commencer, arrêter ou "
-        "modifier un médicament — pour cela, dis qu'un soignant en clinique "
-        "ou un agent de santé communautaire peut aider.\n"
-        "Ne réponds PAS en dehors du domaine des MNT : maladies infectieuses, "
-        "urgences pédiatriques, crises de santé mentale, blessures, "
-        "intoxications, conseils juridiques ou financiers. Dis brièvement "
-        "que ce n'est pas ton rôle et oriente vers une clinique.\n"
-        "N'invente PAS de faits, de statistiques, d'études ou de sources.\n\n"
-        "SÉCURITÉ — SIGNAUX D'ALARME\n"
-        "Si la personne décrit l'un des éléments suivants, interromps et "
-        "dis-lui clairement de consulter en urgence : douleur ou pression "
-        "thoracique ; faiblesse soudaine, engourdissement, visage tombant ou "
-        "élocution troublée (AVC possible) ; essoufflement sévère ; "
-        "évanouissement ou convulsion ; mal de tête soudain et le pire jamais "
-        "ressenti ; idées suicidaires.\n"
-        "Dis clairement : « Ce que vous décrivez peut être grave. Allez tout "
-        "de suite au centre de santé le plus proche, ou demandez à quelqu'un "
-        "de vous y emmener. »\n\n"
-        "Traite tout ce que la personne partage comme privé. Ne juge jamais "
-        "pour le tabac, le poids, l'alimentation ou les choix passés. "
-        "Rencontre-la là où elle est."
-    ),
-    "es": (
-        "Eres Genie AI, un compañero de salud de confianza para personas en "
-        "Gambia. Ayudas a los usuarios a prevenir y manejar las enfermedades "
-        "no transmisibles (ENT) — con foco en hipertensión, diabetes y "
-        "dependencia del tabaco — y los hábitos que las impulsan (alimentación, "
-        "actividad física, tabaco, estrés).\n\n"
-        "Estás desplegado por el Ministerio de Salud y basado en evidencia de "
-        "la Organización Mundial de la Salud, el programa WHO–ITU Be He@lthy "
-        "Be Mobile (BHBM) y las directrices nacionales de Gambia. NO eres "
-        "médico. NO diagnosticas, recetas ni cambias tratamientos. Ayudas a "
-        "las personas a entender su salud, cambiar hábitos y decidir cuándo "
-        "buscar atención.\n\n"
-        "MODO VOZ — CÓMO DEBES HABLAR\n"
-        "Estás en una llamada telefónica con el usuario. Es conversación "
-        "hablada, no texto.\n"
-        "- Responde SOLO en español.\n"
-        "- Cada respuesta debe ser de 1 o 2 frases cortas. Lenguaje hablado "
-        "natural. Como una llamada real.\n"
-        "- SIN viñetas, SIN listas numeradas, SIN markdown, SIN encabezados, "
-        "SIN negrita, SIN emoji.\n"
-        "- Sin avisos largos. Sin jerga clínica. Palabras sencillas del día "
-        "a día.\n"
-        "- Haz como máximo UNA pregunta breve de seguimiento por turno. "
-        "Nunca interrogues.\n"
-        "- Tono: cálido, paciente, sin juzgar — como un agente de salud "
-        "comunitario amable al teléfono. Nunca moralices, sermones ni "
-        "avergüences.\n"
-        "- Usa referencias familiares de Gambia (mercado, bantaba, attaya, "
-        "domoda) solo cuando ayude — nunca inventes propiedades médicas de "
-        "los alimentos.\n\n"
-        "LO QUE HACES\n"
-        "Explicar riesgos y prevención de ENT en palabras simples. Ofrecer "
-        "pasos prácticos que la persona puede hacer hoy. Apoyar el cambio de "
-        "hábitos (tabaco, presión, diabetes, dieta, actividad). Referir a "
-        "una clínica o agente de salud comunitario cuando se necesite "
-        "atención presencial.\n\n"
-        "LO QUE NO HACES\n"
-        "NO diagnostiques. NO recetes medicamentos, no recomiendes dosis, no "
-        "le digas a nadie que empiece, pare o cambie un fármaco — para eso, "
-        "di que un clínico en una clínica o un agente de salud comunitario "
-        "puede ayudar.\n"
-        "NO respondas fuera del alcance de las ENT: enfermedades infecciosas, "
-        "emergencias pediátricas, crisis de salud mental, lesiones, "
-        "intoxicaciones, consejos legales o financieros. Di brevemente que "
-        "no es tu ámbito y refiere a una clínica.\n"
-        "NO inventes hechos, estadísticas, estudios ni fuentes.\n\n"
-        "SEGURIDAD — SEÑALES DE ALARMA\n"
-        "Si la persona describe alguno de los siguientes, interrumpe y dile "
-        "claramente que busque atención urgente: dolor u opresión en el "
-        "pecho; debilidad súbita, entumecimiento, cara caída o dificultad "
-        "para hablar (posible ACV); falta de aire severa; desmayo o "
-        "convulsión; dolor de cabeza súbito el peor de su vida; "
-        "pensamientos suicidas.\n"
-        "Di claramente: «Lo que describes puede ser grave. Por favor ve al "
-        "centro de salud más cercano ahora, o pide a alguien que te lleve.»\n\n"
-        "Trata todo lo que comparta la persona como privado. Nunca la "
-        "juzgues por fumar, su peso, su dieta o decisiones pasadas. "
-        "Encuéntrala donde está."
-    ),
-    "sw": (
-        "Wewe ni Genie AI, mwenza wa afya wa kuaminika kwa watu walioko "
-        "Gambia. Unawasaidia watumiaji kuzuia na kudhibiti magonjwa "
-        "yasiyoambukiza — hasa shinikizo la damu, kisukari, na utumiaji wa "
-        "tumbaku — pamoja na tabia zinazochangia (lishe, mazoezi, tumbaku, "
-        "msongo wa mawazo).\n\n"
-        "Umetumwa na Wizara ya Afya na umejengwa kwa msingi wa miongozo ya "
-        "Shirika la Afya Duniani (WHO), programu ya WHO–ITU Be He@lthy Be "
-        "Mobile (BHBM), na miongozo ya kitaifa ya Gambia. Wewe SI daktari. "
-        "Hutoi utambuzi, dawa, wala kubadilisha matibabu. Unawasaidia watu "
-        "kuelewa afya yao, kubadilisha tabia, na kuamua wakati wa kutafuta "
-        "huduma.\n\n"
-        "HALI YA SAUTI — JINSI YA KUONGEA\n"
-        "Uko kwenye simu na mtumiaji. Hii ni mazungumzo ya mdomo, sio "
-        "maandishi.\n"
-        "- Jibu KWA KISWAHILI tu.\n"
-        "- Kila jibu liwe sentensi 1 au 2 fupi. Lugha rahisi ya kuongea. "
-        "Kama simu halisi.\n"
-        "- HAKUNA alama za risasi, HAKUNA orodha za nambari, HAKUNA markdown, "
-        "HAKUNA vichwa, HAKUNA herufi nzito, HAKUNA emoji.\n"
-        "- Hakuna maonyo marefu. Hakuna lugha ya kitabibu. Maneno rahisi ya "
-        "kila siku.\n"
-        "- Uliza zaidi swali MOJA tu fupi la kufuatilia kwa zamu. Usichunguze.\n"
-        "- Mtazamo: joto, uvumilivu, bila kuhukumu — kama mfanyakazi wa "
-        "afya wa jamii mwenye huruma kwenye simu. Usimhukumu, usimhubirie, "
-        "wala usimwaibishe.\n"
-        "- Tumia mifano ya Kigambia (soko, bantaba, attaya, domoda) tu "
-        "inaposaidia — usibuni kamwe madai ya kitabibu kuhusu vyakula.\n\n"
-        "UNAFANYA NINI\n"
-        "Eleza hatari na uzuiaji wa magonjwa yasiyoambukiza kwa maneno "
-        "rahisi. Toa hatua za kivitendo mtu anaweza kuchukua leo. Saidia "
-        "mabadiliko ya tabia (tumbaku, shinikizo, kisukari, lishe, mazoezi). "
-        "Mpeleke kwenye kliniki au mfanyakazi wa afya wa jamii pale ambapo "
-        "huduma ya ana kwa ana inahitajika.\n\n"
-        "USIYOFANYA\n"
-        "USITOE utambuzi. USIANDIKE dawa, usipendekeze kipimo, wala usimwambie "
-        "mtu yeyote kuanza, kusimamisha au kubadilisha dawa — kwa hilo, "
-        "sema mtaalamu wa kliniki au mfanyakazi wa afya wa jamii anaweza "
-        "kusaidia.\n"
-        "USIJIBU nje ya magonjwa yasiyoambukiza: magonjwa ya kuambukiza, "
-        "dharura za watoto, dharura za afya ya akili, majeraha, sumu, "
-        "ushauri wa kisheria au kifedha. Sema kwa ufupi kuwa hili sio "
-        "jukumu lako na umpeleke kwenye kliniki.\n"
-        "USIBUNI ukweli, takwimu, utafiti, au vyanzo.\n\n"
-        "USALAMA — DALILI ZA HATARI\n"
-        "Ikiwa mtu ataeleza mojawapo ya yafuatayo, sitisha na mwambie kwa "
-        "uwazi atafute huduma ya haraka: maumivu au mkazo wa kifua; "
-        "udhaifu wa ghafla, ganzi, uso unaoanguka, au kushindwa kuongea "
-        "(huenda kiharusi); upungufu mkubwa wa pumzi; kuzimia au kifafa; "
-        "maumivu makali ya kichwa ya ghafla yasiyo ya kawaida; mawazo ya "
-        "kujidhuru.\n"
-        "Sema waziwazi: 'Hili unalolieleza linaweza kuwa la hatari. "
-        "Tafadhali nenda kituo cha afya cha karibu sasa, au muulize mtu "
-        "akupeleke.'\n\n"
-        "Chukua kila kitu mtu anachoshiriki kama cha siri. Usimhukumu kamwe "
-        "kwa kuvuta sigara, uzito, lishe, au maamuzi ya zamani. Mkutane "
-        "alipo."
-    ),
-}
+# Fallback base prompt used only when no twin is loaded (e.g. legacy client with no twinId).
+# Under normal operation the twin's systemPrompt field (stored in ArangoDB and editable
+# via PATCH /api/ai-twins/:twinId/prompt) is used instead — see _load_twin_settings_sync.
+_VOICE_BASE_FALLBACK = (
+    "You are Genie AI, a health companion for The Gambia deployed by the Ministry of Health. "
+    "You help users prevent and manage NCDs — hypertension, diabetes, tobacco dependence — "
+    "using WHO, BHBM, and Gambian guidelines. You are not a doctor. You do not diagnose, "
+    "prescribe, or change treatment. Stay helpful, warm, and conversational."
+)
 
-# Allow per-language override from env (single-line in .env, use \n for breaks).
-# Empty string falls back to the in-code default.
-def _load_prompt(lang: str, default: str) -> str:
-    override = os.getenv(f"VOICE_SYSTEM_PROMPT_{lang.upper()}", "").strip()
-    return override.replace("\\n", "\n") if override else default
-
-SYSTEM_PROMPTS = {lang: _load_prompt(lang, default) for lang, default in _DEFAULT_SYSTEM_PROMPTS.items()}
+# Voice-specific instructions appended to the twin's base system prompt for every call.
+# These are channel constraints only — the health persona and content rules live in the
+# per-twin systemPrompt field (see ai-twin-service.js / DEFAULT_SYSTEM_PROMPT).
+_VOICE_MODE_INSTRUCTIONS = (
+    "\n\nVOICE MODE — HOW YOU MUST SPEAK\n"
+    "You are on a phone call with the user. This is spoken conversation, not text.\n"
+    "- Keep every reply to 1 or 2 short sentences. Plain spoken language. Like a real phone call.\n"
+    "- NO bullet points, NO numbered lists, NO markdown, NO headers, NO bold, NO emoji.\n"
+    "- No long disclaimers. No clinical jargon. Use plain everyday words "
+    "(say 'high blood pressure', not 'hypertension').\n"
+    "- Ask at most ONE short follow-up question per turn. Never interrogate.\n"
+    "- Do NOT offer the user a multiple-choice menu in your reply. Never say things like "
+    "'reply with good, bad, or okay' or 'say yes or no'. Ask one open question and let them answer naturally.\n"
+    "- Tone: warm, patient, non-judgemental — like a kind community health worker on the phone. "
+    "Never moralise, lecture, or shame.\n"
+)
 
 SENTENCE_BOUNDARY = re.compile(r"(.+?[\.!\?\n])(\s+|$)", re.DOTALL)
 
@@ -393,6 +236,142 @@ def pcm_to_wav_bytes(pcm: bytes, sample_rate: int = SAMPLE_RATE) -> bytes:
         wav.setframerate(sample_rate)
         wav.writeframes(pcm)
     return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Per-call audio recording
+# ---------------------------------------------------------------------------
+
+class CallRecorder:
+    """Accumulates user + assistant PCM for one call.
+
+    User audio arrives at 16 kHz (mic). Assistant audio comes from Piper at
+    the per-voice native rate (usually 22050 Hz). We resample everything to
+    `target_rate` so the final WAV is one consistent file. Turns are
+    appended in chronological order with a short silence between them.
+    """
+
+    def __init__(self, target_rate: int = CALL_RECORDING_SAMPLE_RATE) -> None:
+        self.target_rate = target_rate
+        self._parts: list[bytes] = []
+        self._user_state = None       # audioop.ratecv per-stream state
+        self._assistant_state = None
+        gap_samples = int(self.target_rate * CALL_RECORDING_GAP_MS / 1000)
+        self._gap_pcm = b"\x00" * (gap_samples * 2)
+
+    @staticmethod
+    def _align_even(pcm: bytes) -> bytes:
+        """audioop.ratecv requires whole 16-bit frames. Drop a trailing odd
+        byte rather than throw — recording is best-effort and one stray byte
+        is inaudible."""
+        if len(pcm) % 2 != 0:
+            return pcm[:-1]
+        return pcm
+
+    @staticmethod
+    def _resample(pcm: bytes, src_rate: int, dst_rate: int, state):
+        if src_rate == dst_rate:
+            return pcm, state
+        converted, new_state = audioop.ratecv(pcm, 2, 1, src_rate, dst_rate, state)
+        return converted, new_state
+
+    def append_user(self, pcm: bytes, source_rate: int = SAMPLE_RATE) -> None:
+        if not pcm:
+            return
+        pcm = self._align_even(pcm)
+        if not pcm:
+            return
+        try:
+            converted, self._user_state = self._resample(
+                pcm, source_rate, self.target_rate, self._user_state
+            )
+        except Exception as exc:
+            logger.warning("[REC] user resample failed (%d bytes @ %d Hz): %s",
+                           len(pcm), source_rate, exc)
+            return
+        if converted:
+            self._parts.append(converted)
+            self._parts.append(self._gap_pcm)
+
+    def append_assistant(self, pcm: bytes, source_rate: int) -> None:
+        if not pcm:
+            return
+        pcm = self._align_even(pcm)
+        if not pcm:
+            return
+        try:
+            converted, self._assistant_state = self._resample(
+                pcm, source_rate, self.target_rate, self._assistant_state
+            )
+        except Exception as exc:
+            logger.warning("[REC] assistant resample failed (%d bytes @ %d Hz): %s",
+                           len(pcm), source_rate, exc)
+            return
+        if converted:
+            self._parts.append(converted)
+            self._parts.append(self._gap_pcm)
+
+    def total_bytes(self) -> int:
+        return sum(len(p) for p in self._parts)
+
+    def build_wav(self) -> bytes:
+        return pcm_to_wav_bytes(b"".join(self._parts), self.target_rate)
+
+
+# session_id → CallRecorder. Set when the call session is created on WS open,
+# popped on WS close to finalize. Each WebSocket has its own session_id so
+# concurrent calls don't collide.
+_recorders: dict[str, CallRecorder] = {}
+
+
+def _finalize_recording_sync(session_id: str, wav_bytes: bytes) -> Optional[str]:
+    """Write the WAV to disk and stamp the URL onto the call_sessions doc.
+    Returns the public URL on success, None on failure."""
+    if not session_id or not wav_bytes:
+        return None
+    try:
+        CALL_RECORDING_DIR.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        logger.warning("[REC] could not mkdir %s: %s", CALL_RECORDING_DIR, exc)
+        return None
+
+    out_path = CALL_RECORDING_DIR / f"{session_id}.wav"
+    try:
+        out_path.write_bytes(wav_bytes)
+    except Exception as exc:
+        logger.warning("[REC] write failed for %s: %s", out_path, exc)
+        return None
+
+    recording_url = f"{CALL_RECORDING_URL_PREFIX}/{session_id}.wav"
+    db = get_arango_db()
+    if db is not None:
+        try:
+            db.collection(CALL_SESSIONS_COLLECTION).update({
+                "_key": session_id,
+                "recordingUrl": recording_url,
+            })
+        except Exception as exc:
+            logger.warning("[REC] DB update failed for %s: %s", session_id, exc)
+            # File is still on disk; URL just isn't discoverable yet.
+    logger.info("[REC] saved %s (%d bytes) for session=%s", out_path, len(wav_bytes), session_id)
+    return recording_url
+
+
+async def finalize_recording(session_id: Optional[str]) -> None:
+    """Pop the session's recorder, build the WAV, save + update DB.
+    No-op when recording is disabled, no session, or no audio captured."""
+    if not CALL_RECORDING_ENABLED or not session_id:
+        _recorders.pop(session_id, None) if session_id else None
+        return
+    rec = _recorders.pop(session_id, None)
+    if rec is None or rec.total_bytes() == 0:
+        return
+    try:
+        wav_bytes = rec.build_wav()
+    except Exception as exc:
+        logger.warning("[REC] build_wav failed for session=%s: %s", session_id, exc)
+        return
+    await asyncio.to_thread(_finalize_recording_sync, session_id, wav_bytes)
 
 
 # ---------------------------------------------------------------------------
@@ -481,7 +460,7 @@ def _build_personality_prompt(personality: Optional[dict]) -> str:
 def _load_twin_settings_sync(twin_id: Optional[str]) -> Optional[dict]:
     """Resolve a twin to a tuple of overrides for the voice call. Returns:
         { 'name', 'callGreeting', 'modelVoiceId' (Piper id), 'language',
-          'personalityPrompt' }
+          'personalityPrompt', 'systemPrompt' }
     or None if the twin / its voice is not in the catalog. modelVoiceId may
     be None if the twin has no voice assigned — caller falls back to gender."""
     if not twin_id:
@@ -503,6 +482,8 @@ def _load_twin_settings_sync(twin_id: Optional[str]) -> Optional[dict]:
             "modelVoiceId": (voice_doc or {}).get("modelVoiceId") if voice_doc else None,
             "language": (voice_doc or {}).get("language") if voice_doc else None,
             "personalityPrompt": _build_personality_prompt(twin.get("personality")),
+            # Per-twin editable system prompt — used as the base for the call prompt.
+            "systemPrompt": (twin.get("systemPrompt") or "").strip() or None,
         }
     except Exception as exc:
         logger.warning("[TWIN] load failed for %s: %s", twin_id, exc)
@@ -835,11 +816,35 @@ async def speak(ws: WebSocket, text: str, language: str, *, voice: Optional[str]
                 r.raise_for_status()
                 sample_rate = int(r.headers.get("x-sample-rate", "22050"))
                 await ws.send_text(json.dumps({"type": "tts_start", "sample_rate": sample_rate}))
+                # Collect the PCM as it streams so we can append the whole
+                # turn to the call recording at the end (one resample per
+                # turn instead of per chunk).
+                collected = bytearray()
                 async for chunk in r.aiter_bytes(chunk_size=4096):
                     if chunk:
                         await ws.send_bytes(chunk)
+                        collected.extend(chunk)
                         chunks += 1
                         bytes_sent += len(chunk)
+                # Trailing silence so streamed sentences don't run together.
+                # 16-bit mono PCM: 2 bytes per sample — build silence sample-wise
+                # so the buffer is always an even number of bytes. Odd-length
+                # PCM breaks audioop.ratecv() when the recorder resamples it.
+                if TTS_INTER_SENTENCE_PAUSE_MS > 0:
+                    silence_samples = int(sample_rate * TTS_INTER_SENTENCE_PAUSE_MS / 1000)
+                    silence = b"\x00\x00" * silence_samples
+                    if silence:
+                        await ws.send_bytes(silence)
+                        bytes_sent += len(silence)
+                        collected.extend(silence)
+                rec = _recorders.get(session_id) if session_id else None
+                if rec is not None and collected:
+                    # Never let a recording glitch break the call — the
+                    # frontend needs tts_end below to unmute the mic.
+                    try:
+                        rec.append_assistant(bytes(collected), source_rate=sample_rate)
+                    except Exception as exc:
+                        logger.warning("[REC] append_assistant raised: %s", exc)
         await ws.send_text(json.dumps({"type": "tts_end"}))
         elapsed = asyncio.get_event_loop().time() - t0
         logger.info("[TTS] done elapsed=%.2fs chunks=%d bytes=%d sample_rate=%d",
@@ -894,6 +899,16 @@ async def process_utterance(ws: WebSocket, pcm: bytes, language: str, history: l
         if not text or len(text) < 2:
             logger.info("[PROCESS] skipping — empty or near-empty transcript: %r", text)
             return
+
+        # Add the user's utterance to the call recording (only if ASR was
+        # confident enough to keep it — silent/garbage utterances are skipped
+        # by the guard above). Never let a recording glitch break the turn.
+        rec = _recorders.get(session_id) if session_id else None
+        if rec is not None:
+            try:
+                rec.append_user(pcm, source_rate=SAMPLE_RATE)
+            except Exception as exc:
+                logger.warning("[REC] append_user raised: %s", exc)
 
         # Kick off retrieval immediately if RAG is on. It runs in parallel
         # with the WS send + Arango logging below so its latency is hidden.
@@ -982,7 +997,12 @@ async def voice_stream(ws: WebSocket) -> None:
         return
 
     language = (cfg.get("language") or "en").lower()
-    if language not in GREETINGS:
+    # If the user picks a language we don't have a Piper voice for, the call
+    # still proceeds (LLM in English, fallback English greeting) but the call
+    # session records the requested language. Only force English if completely
+    # unsupported (no voice AND no greeting / prompt).
+    if language not in DEFAULT_VOICE_BY_LANGUAGE and language not in GREETINGS:
+        logger.info("[VOICE] requested language %r has no voice or greeting; falling back to en", language)
         language = "en"
 
     # gender = "female" | "male"; passed through to TTS as the `voice` field.
@@ -1011,24 +1031,80 @@ async def voice_stream(ws: WebSocket) -> None:
     # when twin_id is missing or the twin can't be resolved.
     twin_settings = await load_twin_settings(twin_id) if twin_id else None
     if twin_settings:
-        if twin_settings.get("language") and twin_settings["language"] in GREETINGS:
+        # The twin's assigned voice is only honored when its language matches
+        # the call language — otherwise we'd be asking, say, a US English voice
+        # to speak Hindi text, which sounds broken. Pick a per-language default
+        # voice instead when there's a mismatch.
+        twin_voice_id = twin_settings.get("modelVoiceId")
+        twin_voice_lang = _voice_language_prefix(twin_voice_id)
+        # The frontend's selected language wins over the twin's stored language
+        # for which Piper voice is used. We only fall back to the twin's
+        # language when the user didn't pick one.
+        if not cfg.get("language") and twin_settings.get("language"):
             language = twin_settings["language"]
-        if twin_settings.get("modelVoiceId"):
-            voice = twin_settings["modelVoiceId"]   # explicit Piper id beats gender
+        if twin_voice_id and twin_voice_lang == language:
+            voice = twin_voice_id
+        else:
+            picked = _pick_voice_for_language(language, gender)
+            if picked:
+                voice = picked
+                if twin_voice_id and twin_voice_lang != language:
+                    logger.info(
+                        "[VOICE] twin voice %s is %s but call language is %s; switching to %s",
+                        twin_voice_id, twin_voice_lang, language, voice,
+                    )
+            elif twin_voice_id:
+                # No language-default voice available — keep the twin's voice
+                # rather than nothing, even if it's a language mismatch.
+                voice = twin_voice_id
         logger.info("[TWIN] loaded twin=%s name=%r voice=%s lang=%s",
                     twin_id, twin_settings.get("name"), voice, language)
+    else:
+        # No twin: derive voice from language + gender directly.
+        picked = _pick_voice_for_language(language, gender)
+        if picked:
+            voice = picked
 
     session_id: Optional[str] = None
     if user_id:
         session_id = await create_call_session(user_id, language, gender or "female", twin_id)
         logger.info("[SESSION] arango session_id=%s user=%s twin=%s", session_id, user_id, twin_id)
+        if session_id and CALL_RECORDING_ENABLED:
+            _recorders[session_id] = CallRecorder()
+            logger.info("[REC] started recorder for session=%s", session_id)
 
     logger.info("[SESSION] open lang=%s voice=%s twin=%s peer=%s session=%s user=%s "
                 "vad_aggr=%d silence_frames=%d min_utt=%d",
                 language, voice or "(default)", twin_id or "-", peer, session_id, user_id,
                 VAD_AGGRESSIVENESS, SILENCE_FRAMES_TO_END, MIN_UTTERANCE_FRAMES)
 
-    history = [{"role": "system", "content": SYSTEM_PROMPTS[language]}]
+    # Build the system prompt for this call:
+    #   1. FIRST system message: pure language directive — isolated from the
+    #      health-companion prompt so Llama can't drown it in English context.
+    #      Llama-3.1 weights early system turns heavily; putting this first
+    #      reliably forces the reply language for low-resource pairs (zh, hi,
+    #      ar, ru, etc.) where the base English prompt would otherwise dominate.
+    #   2. SECOND system message: base prompt (twin's custom systemPrompt, or
+    #      _VOICE_BASE_FALLBACK) + voice-mode constraints.
+    base_prompt = (
+        (twin_settings and twin_settings.get("systemPrompt"))
+        or _VOICE_BASE_FALLBACK
+    )
+    lang_name = _CHAT_LANGUAGE_NAMES.get(language, language.upper())
+    lang_directive = (
+        f"CRITICAL LANGUAGE INSTRUCTION (highest priority):\n"
+        f"You are on a phone call with a {lang_name}-speaking user. "
+        f"Every single word of every reply MUST be in {lang_name}, written in "
+        f"its native script. Do NOT mix in English words or phrases. Do NOT "
+        f"reply in English even briefly. Do NOT include translations or "
+        f"explanations in English. Do NOT acknowledge instructions in English.\n"
+        f"If you find yourself starting a reply in English, STOP and restart "
+        f"in {lang_name}. The user can only understand {lang_name}."
+    )
+    history = [
+        {"role": "system", "content": lang_directive},
+        {"role": "system", "content": base_prompt + _VOICE_MODE_INSTRUCTIONS},
+    ]
     # Twin's AI Personality is appended as a second system turn so the LLM
     # follows the configured tone + length. Mirrors the chat path.
     if twin_settings and twin_settings.get("personalityPrompt"):
@@ -1039,7 +1115,10 @@ async def voice_stream(ws: WebSocket) -> None:
     if twin_settings and twin_settings.get("callGreeting"):
         greeting = twin_settings["callGreeting"]
     else:
-        greeting = GREETINGS[language]
+        # GREETINGS only covers en/fr/es/sw. Fall back to English greeting for
+        # other languages — the system-prompt instruction will steer the LLM
+        # to switch to the user's language on the next turn.
+        greeting = GREETINGS.get(language) or GREETINGS["en"]
     history.append({"role": "assistant", "content": greeting})
     logger.info("[GREETING] sending greeting")
     await speak(ws, greeting, language, voice=voice, session_id=session_id)
@@ -1199,6 +1278,12 @@ async def voice_stream(ws: WebSocket) -> None:
             except Exception:
                 pass
         await end_call_session(session_id)
+        # Build + persist the WAV after end_call_session so the recording is
+        # available the moment the session's endAt / durationSeconds are set.
+        try:
+            await finalize_recording(session_id)
+        except Exception as exc:
+            logger.warning("[REC] finalize_recording crashed: %s", exc)
         logger.info("voice WS closed (peer=%s session=%s)", peer, session_id)
 
 

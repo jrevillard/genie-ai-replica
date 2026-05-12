@@ -106,6 +106,10 @@ const instructionsReplaceSchema = Joi.object({
   instructions: Joi.array().items(Joi.string().trim().max(1000)).max(100).required(),
 });
 
+const systemPromptSchema = Joi.object({
+  systemPrompt: Joi.string().trim().min(1).max(50000).required(),
+});
+
 
 /** Assign KB files: either `fileId` or `fileIds` (document-repository file_id values). */
 const assignKbBodySchema = Joi.alternatives().try(
@@ -556,6 +560,20 @@ module.exports = (aiTwinService) => {
    *                 updatedAt: { type: string, format: date-time }
    *       404: { description: Twin not found }
    */
+  /**
+   * @swagger
+   * /ai-twins/default-prompt:
+   *   get:
+   *     summary: Return the platform default system prompt (read-only, no twin ID needed)
+   *     tags: [AI Twins]
+   *     security: [{ bearerAuth: [] }]
+   *     responses:
+   *       200: { description: Default system prompt }
+   */
+  router.get('/default-prompt', adminOnly, (req, res) => {
+    res.json({ systemPrompt: aiTwinService.DEFAULT_SYSTEM_PROMPT });
+  });
+
   router.get('/:twinId', async (req, res) => {
     try {
       const userKey = ownerIdFromReq(req);
@@ -623,7 +641,11 @@ module.exports = (aiTwinService) => {
    *               value: { profilePicUrl: null }
    *     responses:
    *       200:
-   *         description: Updated twin
+   *         description: >-
+   *           Updated twin. Response shape mirrors GET /ai-twins/{twinId} —
+   *           the persisted fields plus the live read-only session counts
+   *           (numChats, numWhatsappChats, numCalls) so the frontend can
+   *           refresh its state in a single round-trip.
    *       400:
    *         description: Validation error
    *       401: { description: Unauthorized }
@@ -638,7 +660,10 @@ module.exports = (aiTwinService) => {
     }
     try {
       const twin = await aiTwinService.updateTwin(req.params.twinId, value, ownerIdFromReq(req));
-      res.json(twin);
+      // Mirror GET /:twinId — include the live session counts so the
+      // frontend can keep its store in sync without a second fetch.
+      const counts = await aiTwinService.getTwinSessionCounts(twin._key);
+      res.json({ ...twin, ...counts });
     } catch (error_) {
       if (error_.statusCode === 404) {
         return res.status(404).json({ message: error_.message });
@@ -686,7 +711,8 @@ module.exports = (aiTwinService) => {
     }
     try {
       const twin = await aiTwinService.updateTwin(req.params.twinId, { voiceId: value.voiceId }, ownerIdFromReq(req));
-      res.json(twin);
+      const counts = await aiTwinService.getTwinSessionCounts(twin._key);
+      res.json({ ...twin, ...counts });
     } catch (error_) {
       if (error_.statusCode === 404) {
         return res.status(404).json({ message: error_.message });
@@ -744,7 +770,8 @@ module.exports = (aiTwinService) => {
     const publicUrl = `${AVATAR_PUBLIC_PREFIX}/${req.file.filename}`;
     try {
       const twin = await aiTwinService.updateTwin(req.params.twinId, { profilePicUrl: publicUrl }, ownerIdFromReq(req));
-      res.json(twin);
+      const counts = await aiTwinService.getTwinSessionCounts(twin._key);
+      res.json({ ...twin, ...counts });
     } catch (error) {
       // Best-effort cleanup so we don't leave an orphan file on disk.
       try { fs.unlinkSync(req.file.path); } catch {}
@@ -1025,6 +1052,100 @@ module.exports = (aiTwinService) => {
       res.status(500).json({ message: error_.message });
     }
   });
+
+  /**
+   * @swagger
+   * /ai-twins/{twinId}/prompt:
+   *   get:
+   *     summary: Get the system prompt for a twin
+   *     description: >-
+   *       Returns the editable base system prompt for this twin.
+   *       This is the main identity/behaviour text that admins can customise.
+   *       Voice-specific instructions and retrieved-context directives are
+   *       appended automatically at runtime and are NOT returned here.
+   *     tags: [AI Twins]
+   *     security: [ { bearerAuth: [] } ]
+   *     parameters:
+   *       - in: path
+   *         name: twinId
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: The twin's system prompt
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 systemPrompt: { type: string }
+   *       404: { description: Twin not found }
+   *   patch:
+   *     summary: Update the system prompt for a twin (admin only)
+   *     description: >-
+   *       Replaces the editable base system prompt. Only the base/identity prompt
+   *       should be sent — do NOT include voice-mode instructions or retrieved-
+   *       context directives; those are managed by the system and appended at runtime.
+   *     tags: [AI Twins]
+   *     security: [ { bearerAuth: [] } ]
+   *     parameters:
+   *       - in: path
+   *         name: twinId
+   *         required: true
+   *         schema: { type: string }
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [systemPrompt]
+   *             properties:
+   *               systemPrompt:
+   *                 type: string
+   *                 minLength: 1
+   *                 maxLength: 50000
+   *     responses:
+   *       200: { description: Updated system prompt }
+   *       400: { description: Validation error }
+   *       404: { description: Twin not found }
+   */
+  router.get('/:twinId/prompt', adminOnly, async (req, res) => {
+    try {
+      const systemPrompt = await aiTwinService.getSystemPrompt(req.params.twinId, ownerIdFromReq(req));
+      res.json({ systemPrompt });
+    } catch (error) {
+      if (error.statusCode === 404) {
+        return res.status(404).json({ message: error.message });
+      }
+      logger.error(`ai-twin get prompt: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  router.patch('/:twinId/prompt', adminOnly, async (req, res) => {
+    const { value, error } = systemPromptSchema.validate(req.body || {}, { stripUnknown: true });
+    if (error) {
+      return res.status(400).json({ message: error.details[0].message });
+    }
+    try {
+      const systemPrompt = await aiTwinService.updateSystemPrompt(
+        req.params.twinId,
+        value.systemPrompt,
+        ownerIdFromReq(req)
+      );
+      res.json({ systemPrompt });
+    } catch (error_) {
+      if (error_.statusCode === 404) {
+        return res.status(404).json({ message: error_.message });
+      }
+      if (error_.statusCode === 400) {
+        return res.status(400).json({ message: error_.message });
+      }
+      logger.error(`ai-twin patch prompt: ${error_.message}`, { stack: error_.stack });
+    res.status(500).json({ message: error_.message });
+  }
+});
 
   /**
    * @swagger

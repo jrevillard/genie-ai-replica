@@ -8,10 +8,83 @@ const COLLECTION = 'aiTwins';
 const MAX_LINKED_KB_FILES = 10000;
 const MAX_GREETING_LEN = 5000;
 const MAX_TWIN_NUMBER_LEN = 32;
+const MAX_SYSTEM_PROMPT_LEN = 50000;
 /** Default WhatsApp/voice number used by newly-created twins. */
 const DEFAULT_TWIN_NUMBER = '+1 (575) 223-6878';
 /** Default greeting used for both chat and call on new twins. */
 const DEFAULT_GREETING = 'Hey, How can I help you today ?';
+
+/**
+ * The base system prompt shared by all channels (chat and call).
+ * For call, voice-specific instructions are appended at runtime by the voice-bridge.
+ * Admins can override this per-twin via PATCH /api/ai-twins/:twinId/prompt.
+ */
+const DEFAULT_SYSTEM_PROMPT = `You are Genie AI, a health companion for The Gambia deployed by the Ministry of Health. You help users prevent and manage NCDs — hypertension, diabetes, tobacco dependence — using WHO, BHBM, and Gambian guidelines. You are not a doctor. You do not diagnose, prescribe, or change treatment.
+
+HOW TO ANSWER
+The user message has three sections: USER INFORMATION, CHAT HISTORY ([user turn]/[assistant turn] markers), and CONTENT FROM THE KNOWLEDGE BASE ([Retrieved Document] entries).
+1. Reply only to the last [user turn]. Ground factual claims in [Retrieved Document] entries — they are the source of truth.
+2. Personalise using USER INFORMATION only when it genuinely helps.
+3. If no documents were retrieved: stay helpful and conversational, offer general wellness guidance. For greetings or small talk, reply naturally — do not mention missing evidence.
+4. When retrieved entries conflict: prefer Gambian guidelines, then WHO, then BHBM.
+5. Never return a blank or empty reply. If you have nothing specific to offer, give a warm safe fallback: acknowledge the user, share one practical general tip, and suggest they speak to a community health worker for more help.
+
+WHO YOU TALK TO
+Adult Gambians — limited time, possibly limited literacy, English as a second language. Talk like a warm, kind community health worker. Plain. Non-judgemental.
+
+STYLE
+- Short sentences. Grade-6 reading level. 2–4 sentences preferred (≤100 words) unless more detail is explicitly requested.
+- Plain words. Say "high blood pressure" not "hypertension" (use clinical term in parentheses once only).
+- One focused idea per reply. Use a numbered list only when steps genuinely need to be sequential (max 3 items). At most one follow-up question.
+- No emoji unless the user used them first. No jargon. No moralising. No long disclaimers. Lead with a sentence, not a bullet list.
+- Use local framing where helpful: market, bantaba, attaya, domoda, benachin. Never invent health claims about foods.
+
+DO
+- Explain NCD risks and symptoms in plain language from retrieved entries.
+- Offer one or two practical, locally-achievable next steps rather than a long list.
+- Support behaviour change (quit smoking, salt reduction, movement, medication adherence) when user is ready.
+- Refer to clinic or community health worker when in-person care is needed.
+
+WHEN YOU CANNOT FULLY HELP
+Never say "I can't help with that." Instead: briefly acknowledge the question, offer the closest safe general guidance you can (one practical tip or next step), and direct the user to where they can get more specific help — a community health worker, clinic, or pharmacist. Example: "That's something a clinician can advise on directly. In the meantime, [one practical tip]. Your nearest health worker can guide you further."
+
+DON'T
+- Diagnose or prescribe specific medications or dosages.
+- Invent facts, statistics, or citations. Label anything not in retrieved entries as general guidance only.
+- Give legal, financial, or immigration advice.
+
+SAFETY — RED FLAGS
+If the user describes any of the following, stop and tell them to seek urgent care immediately:
+- Chest pain, pressure, or tightness; pain to arm, jaw, or back
+- Sudden weakness, numbness, face drooping, slurred speech, vision trouble (possible stroke)
+- Severe shortness of breath; fainting, seizure, or loss of consciousness
+- Sudden severe headache ("worst ever")
+- Blood sugar crisis with confusion or vomiting
+- Any mention of suicide, self-harm, or harm to others
+
+Say: "What you're describing may be serious. Please go to the nearest health facility now, or ask someone to take you. If you cannot move safely, call for help. I'll still be here when you're safe."
+Do not continue other advice until the user confirms they are safe.
+
+OUTPUT
+Plain text only. No markdown. Numbers for lists (1. 2. 3.). End with at most one short follow-up question.
+
+EXAMPLES
+
+Example 1 — factual question with retrieved entry
+User: "What is high blood pressure?"
+Retrieved: High blood pressure (hypertension) is when blood force against artery walls stays too high. Usually no symptoms. Raises risk of stroke, heart attack, kidney damage. 140/90 mmHg or higher on repeated readings is considered high.
+Reply: High blood pressure (hypertension) means blood pushes too hard against your artery walls. Most people feel nothing — that's why it's called a silent problem. Over time it can cause stroke, heart attack, or kidney damage. A reading of 140/90 or higher, seen more than once, is high.
+Would you like to know how to check your blood pressure?
+
+Example 2 — red flag
+User: "I feel heavy pressure on my chest and my left arm is numb."
+Reply: What you're describing may be serious. Please go to the nearest health facility now, or ask someone to take you. If you cannot move safely, call for help. I'll still be here when you're safe.
+
+Example 3 — out-of-scope or prescribing question
+User: "Can you prescribe me metformin for my diabetes?"
+Reply: Prescribing medication is something only a clinician can do safely. What I can share is that managing blood sugar usually involves a combination of diet, movement, and medication your doctor or pharmacist can advise on. Would you like some tips on eating habits that help with blood sugar control?
+
+Reply only as the assistant. Never continue the user's voice or invent further turns.`;
 
 /** Allowed AI Personality values. Both fields are open enums today; broaden in this list. */
 const LANGUAGE_STYLES = Object.freeze(['slang', 'casual', 'professional']);
@@ -131,6 +204,29 @@ function normalizeKbFileId(id) {
 }
 
 /**
+ * Fields that are NEVER persisted on the aiTwins document — they're derived
+ * live from other collections at GET time only (see getTwinSessionCounts).
+ * Any update path that catches one of these in its payload is treated as a
+ * client bug: the field is stripped before the write and a warning logged.
+ *
+ * Read-only invariant: the only routes that compute these are GET handlers
+ * which merge `await getTwinSessionCounts(_key)` onto the response. There is
+ * no write API.
+ */
+const IMMUTABLE_TWIN_FIELDS = ['numChats', 'numWhatsappChats', 'numCalls'];
+
+function stripImmutableTwinFields(updates, callsite) {
+  if (!updates || typeof updates !== 'object') return updates;
+  for (const key of IMMUTABLE_TWIN_FIELDS) {
+    if (key in updates) {
+      logger.warn(`AiTwin update: dropping read-only field '${key}' from ${callsite}`);
+      delete updates[key];
+    }
+  }
+  return updates;
+}
+
+/**
  * AI Twin — admin-defined chat personas and optional KB file allow-list (`linkedKbFileIds`).
  */
 class AiTwinService {
@@ -195,6 +291,7 @@ class AiTwinService {
         twinNumber: DEFAULT_TWIN_NUMBER,
         linkedKbFileIds: [],
         instructions: [],
+        systemPrompt: DEFAULT_SYSTEM_PROMPT,
         createdAt: now,
         updatedAt: now,
       };
@@ -231,6 +328,9 @@ class AiTwinService {
       linkedKbFileIds,
       personality: this._readPersonality(doc),
       instructions: this._readInstructions(doc),
+      systemPrompt: typeof doc.systemPrompt === 'string' && doc.systemPrompt.trim()
+        ? doc.systemPrompt
+        : DEFAULT_SYSTEM_PROMPT,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     };
@@ -255,19 +355,30 @@ class AiTwinService {
             fileId: f.file_id,
             _key: f._key,
             fileName: f.file_name || null,
-            originalName: f.original_name || null,
-            mimeType: f.mime_type || null,
+            originalName: f.file_name || null,
+            mimeType: f.file_type || null,
             fileType: f.file_type || null,
-            size: f.size || null,
-            title: f.title || null,
-            description: f.description || null,
-            category: f.category || null,
-            tags: f.tags || [],
+            size: f.file_size || null,
+            title: f.file_name || null,
+            description: null,
+            category: null,
+            tags: f.labels || [],
             labels: f.labels || [],
-            status: f.status || null,
+            status: f.dataprep.status || f.status || null,
             sourceUrl: f.source_url || null,
-            createdAt: f.created_at || f.createdAt || null,
-            updatedAt: f.updated_at || f.updatedAt || null
+            createdAt: f.create_date || f.uploaded_date || null,
+            updatedAt: f.dataprep.ingest_date || f.uploaded_date || null,
+            fileSize: f.file_size || null,
+            fileHash: f.file_hash || null,
+            storagePath: f.storage_path || null,
+            chunkCount: f.chunk_count || null,
+            language: f.language || null,
+            author: f.author || null,
+            uploadedDate: f.uploaded_date || null,
+            createDate: f.create_date || null,
+            crawlDate: f.crawl_date || null,
+            ingestDate: f.dataprep.ingest_date || null,
+            retractDate: f.dataprep.retract_date || null
           }
       `,
       bindVars: { ids: normalizedIds },
@@ -280,6 +391,7 @@ class AiTwinService {
       const primaryCursor = await this.db.query(querySpec);
       const primaryRows = await primaryCursor.all();
       if (primaryRows.length > 0) {
+        await this._attachLinkedTwinIds(primaryRows);
         return orderRows(primaryRows);
       }
 
@@ -290,10 +402,49 @@ class AiTwinService {
       }
       const fallbackCursor = await filesDb.query(querySpec);
       const fallbackRows = await fallbackCursor.all();
+      await this._attachLinkedTwinIds(fallbackRows);
       return orderRows(fallbackRows);
     } catch (e) {
       logger.warn(`AiTwin linked KB metadata fetch failed: ${e.message}`);
       return [];
+    }
+  }
+
+  /**
+   * Reverse-lookup: for each file row, set `linkedTwinIds` to the _keys of every
+   * twin whose `linkedKbFileIds` contains the file. aiTwins always lives in this
+   * service's primary DB even when files live in a separate "files" DB.
+   * Mutates the rows in place; best-effort (sets [] on failure).
+   */
+  async _attachLinkedTwinIds(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    const ids = rows.map((r) => r.fileId).filter(Boolean);
+    if (ids.length === 0) {
+      for (const r of rows) r.linkedTwinIds = [];
+      return;
+    }
+    try {
+      const cursor = await this.db.query(
+        `FOR t IN aiTwins
+           FILTER t.linkedKbFileIds != null
+             AND LENGTH(INTERSECTION(t.linkedKbFileIds, @ids)) > 0
+           FOR fid IN INTERSECTION(t.linkedKbFileIds, @ids)
+             RETURN { fileId: fid, twinKey: t._key }`,
+        { ids }
+      );
+      const pairs = await cursor.all();
+      const byId = new Map();
+      for (const { fileId, twinKey } of pairs) {
+        const arr = byId.get(fileId) || [];
+        arr.push(twinKey);
+        byId.set(fileId, arr);
+      }
+      for (const r of rows) {
+        r.linkedTwinIds = byId.get(r.fileId) || [];
+      }
+    } catch (e) {
+      logger.warn(`_attachLinkedTwinIds failed: ${e.message}`);
+      for (const r of rows) r.linkedTwinIds = [];
     }
   }
 
@@ -589,6 +740,7 @@ class AiTwinService {
       twinNumber: '',
       linkedKbFileIds: [],
       instructions: [],
+      systemPrompt: DEFAULT_SYSTEM_PROMPT,
       createdAt: now,
       updatedAt: now,
     };
@@ -665,6 +817,9 @@ class AiTwinService {
       return this.getTwinByKey(key);
     }
     updates.updatedAt = new Date().toISOString();
+    // Defensive: counts (numChats, numWhatsappChats, numCalls) are derived at
+    // read time only. Guard against a caller bypassing the route's Joi schema.
+    stripImmutableTwinFields(updates, 'updateTwin');
     await this.collection.update(key, updates);
     return this.getTwinByKey(key);
   }
@@ -753,6 +908,40 @@ class AiTwinService {
     return normalized;
   }
 
+  /**
+   * Read the systemPrompt for a twin (falls back to DEFAULT_SYSTEM_PROMPT).
+   */
+  async getSystemPrompt(key, ownerId) {
+    const twin = await this.getTwinByKey(key, { ownerId });
+    return twin.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+  }
+
+  /**
+   * Replace the systemPrompt for a twin.
+   * @param {string} key
+   * @param {string} prompt
+   * @param {string} [ownerId]
+   * @returns {Promise<string>} the saved prompt
+   */
+  async updateSystemPrompt(key, prompt, ownerId) {
+    if (typeof prompt !== 'string') {
+      throw new ValidationError('systemPrompt must be a string');
+    }
+    const trimmed = prompt.trim();
+    if (!trimmed) {
+      throw new ValidationError('systemPrompt must not be empty');
+    }
+    if (trimmed.length > MAX_SYSTEM_PROMPT_LEN) {
+      throw new ValidationError(`systemPrompt must be at most ${MAX_SYSTEM_PROMPT_LEN} characters`);
+    }
+    await this.getTwinByKey(key, { ownerId }); // 404 if missing or not yours
+    await this.collection.update(key, {
+      systemPrompt: trimmed,
+      updatedAt: new Date().toISOString(),
+    });
+    return trimmed;
+  }
+
   getSuggestedInstructions() {
     return [...SUGGESTED_INSTRUCTIONS];
   }
@@ -801,6 +990,7 @@ class AiTwinService {
     }
     await this.getTwinByKey(key, { ownerId }); // 404 if missing or not yours
     updates.updatedAt = new Date().toISOString();
+    stripImmutableTwinFields(updates, 'updateSettings');
     await this.collection.update(key, updates);
     return this.getSettings(key, ownerId);
   }
@@ -1057,3 +1247,4 @@ module.exports.LANGUAGE_STYLES = LANGUAGE_STYLES;
 module.exports.RESPONSE_LENGTHS = RESPONSE_LENGTHS;
 module.exports.DEFAULT_PERSONALITY = DEFAULT_PERSONALITY;
 module.exports.SUGGESTED_INSTRUCTIONS = SUGGESTED_INSTRUCTIONS;
+module.exports.DEFAULT_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT;

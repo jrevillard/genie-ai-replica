@@ -117,6 +117,7 @@ class ChatSessionService {
       ...(m.contentEn != null ? { contentEn: String(m.contentEn) } : {}),
       audioUrl: m.audioUrl || null,
       createdAt: m.createdAt,
+      ...(m.language ? { language: String(m.language) } : {}),
     }));
   }
 
@@ -145,6 +146,12 @@ class ChatSessionService {
     }
     if (extra && typeof extra.contentEn === 'string' && extra.contentEn) {
       doc.contentEn = extra.contentEn;
+    }
+    // ISO-639-1 chat-content language. Persisted so the chat-history view can
+    // gate per-message UI on language (e.g. only show "Listen" when Piper has
+    // a voice for it). Lower-cased for stable comparison.
+    if (extra && typeof extra.language === 'string' && extra.language.trim()) {
+      doc.language = extra.language.trim().toLowerCase();
     }
     const meta = await this.sessionMessages.save(doc);
     await this.sessions.update(sessionId, { updatedAt: now });
@@ -229,6 +236,7 @@ class ChatSessionService {
       content: m.content == null ? '' : String(m.content),
       audioUrl: m.audioUrl || null,
       createdAt: m.createdAt,
+      ...(m.language ? { language: String(m.language) } : {}),
     }));
   }
 
@@ -279,10 +287,13 @@ class ChatSessionService {
     // Best-effort — if we can't load the twin (legacy session, twin deleted)
     // we skip the directive.
     const opeaMessages = [];
+    let twinSystemPrompt = null;
     if (session.twinId) {
       try {
         const aiTwinService = require('./ai-twin-service');
         const twin = await aiTwinService.getTwinByKey(session.twinId);
+        // Twin's custom system prompt — used by chatqna instead of the hardcoded default.
+        twinSystemPrompt = twin.systemPrompt || null;
         const directive = aiTwinService.buildTwinPromptFragment(twin);
         if (directive) opeaMessages.push({ role: 'system', content: directive });
       } catch (e) {
@@ -303,16 +314,18 @@ class ChatSessionService {
       messages: opeaMessages,
       context: ctx,
       chatSessionId: sessionId,
+      systemPrompt: twinSystemPrompt,
     });
 
-    const userMessageKey = await this.appendMessage(
-      sessionId,
-      'user',
-      t,
-      options && options.userAudioUrl ? { audioUrl: options.userAudioUrl } : {}
-    );
+    // The user-supplied chat language drives both the LLM context and the
+    // per-message language tag we persist for downstream UX gates (TTS
+    // availability, locale-based renderers, etc.).
+    const messageLanguage = (context?.language || 'EN').toLowerCase();
+    const userExtra = { language: messageLanguage };
+    if (options && options.userAudioUrl) userExtra.audioUrl = options.userAudioUrl;
+    const userMessageKey = await this.appendMessage(sessionId, 'user', t, userExtra);
     const reply = result.response == null ? '' : String(result.response);
-    const assistantExtra = { responseTime: result.responseTime };
+    const assistantExtra = { responseTime: result.responseTime, language: messageLanguage };
     // When the session is non-English, ChatQnA returns the raw English LLM
     // output in response_en so we can cache it and skip re-translation next turn.
     if (result.response_en && typeof result.response_en === 'string') {

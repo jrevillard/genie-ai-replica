@@ -11,6 +11,7 @@ import aiohttp # for async http requests
 import requests
 import asyncio
 import copy
+from typing import Optional
 
 from comps import MegaServiceEndpoint, MicroService, ServiceOrchestrator, ServiceRoleType, ServiceType, CustomLogger
 from comps.cores.mega.utils import handle_message
@@ -74,6 +75,8 @@ RETRIEVER_TRAVERSAL_MAX_DEPTH = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX_DE
 RETRIEVER_TRAVERSAL_MAX_RETURNED = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED", 3))
 RETRIEVER_TRAVERSAL_SCORE_THRESHOLD = float(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD", 0.5))
 RETRIEVER_LAMBDA_MULT = float(os.getenv("RETRIEVER_ARANGO_LAMBDA_MULT", 0.5)) 
+# Temporary test switch: force graph traversal for all non-small-talk queries.
+FORCE_GRAPH_SEARCH = False
 
 RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "threshold")	# slice | threshold | knee_threshold
 RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 2)) # if RERANKING_STRATEGY set to 'slice'
@@ -84,6 +87,39 @@ BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000") # 
 GET_AUTH_TOKEN_URL = os.getenv("GET_AUTH_TOKEN_URL", "http://http-service:6666/get-token")
 LANGUAGE_CODES_FILEPATH = os.getenv("LANGUAGE_CODES_FILEPATH", "language_codes.json")
 MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max token length for text generation models
+
+# fastText LID microservice — newer, stronger detector than `langdetect`.
+# Optional: when LID_URL is empty or the call fails we fall back to `langdetect`.
+LID_URL = os.getenv("LID_URL", "http://lid:8000")
+LID_TIMEOUT_S = float(os.getenv("LID_TIMEOUT_S", "3.0"))
+LID_MIN_CONFIDENCE = float(os.getenv("LID_MIN_CONFIDENCE", "0.5"))
+
+# Display names for the chat-language codes — used when nudging the LLM in
+# `_direct_llm_call` ("respond only in <name>"). Keep aligned with the
+# language_codes.json catalog.
+_LANGUAGE_DISPLAY_NAMES = {
+    "EN": "English", "FR": "French", "ES": "Spanish", "SW": "Swahili",
+    "DE": "German",  "AR": "Arabic", "RU": "Russian", "ZH": "Chinese",
+    "PT": "Portuguese", "HI": "Hindi", "ID": "Indonesian",
+    "TH": "Thai", "JA": "Japanese", "KO": "Korean",
+    "ST": "Sesotho", "BN": "Bengali", "MAN": "Mandinka",
+}
+
+# ISO 639-3 → the 2-letter / chatqna code used in language_codes.json.
+# fastText returns labels like "wol_Latn"; we strip the script suffix and look
+# up here. Codes not in this map fall through to langdetect / EN.
+ISO3_TO_CHATQNA_CODE = {
+    "eng": "en", "fra": "fr", "spa": "es", "ara": "ar", "por": "pt",
+    "deu": "de", "rus": "ru", "ind": "id", "tha": "th",
+    "cmn": "zh", "zho": "zh", "swh": "sw", "swa": "sw",
+    "amh": "am", "ben": "bn", "hin": "hi", "jpn": "ja", "kor": "ko",
+    "wol": "wo",  # Wolof
+    "mnk": "man", "man": "man",  # Mandinka
+    "ful": "ff", "fuc": "ff",  # Fulah / Pulaar
+    "hau": "ha", "yor": "yo", "ibo": "ig", "bam": "bm",
+    "sot": "st",  # Sesotho
+    "som": "so", "orm": "om",
+}
 
 MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max characters for translation models
 # Matches a `[user turn] ...` segment in a flattened history string. The
@@ -130,152 +166,68 @@ def is_small_talk_query(text: str) -> bool:
         return True
     return False
 
+
+
 # Two-tier priority: ENV VAR (override) > Hardcoded default
-_CHATQNA_SYSTEM_DEFAULT = """You are Genie AI, a trusted health companion for people in The Gambia. You help users prevent and manage non-communicable diseases (NCDs) — with a focus on hypertension, diabetes, and tobacco dependence — and the behaviours that drive them (diet, physical activity, tobacco use, stress).
+_CHATQNA_SYSTEM_DEFAULT = """You are Genie AI, a health companion for The Gambia deployed by the Ministry of Health. You help users prevent and manage NCDs — hypertension, diabetes, tobacco dependence — using WHO, BHBM, and Gambian guidelines. You are not a doctor. You do not diagnose, prescribe, or change treatment.
 
-You are deployed by the Ministry of Health and built on evidence-based guidance from the World Health Organization, the WHO–ITU Be He@lthy Be Mobile (BHBM) programme, and Gambian national guidelines. You are not a doctor. You do not diagnose, prescribe, or change treatment. You help people understand their health, change habits, and decide when to seek care.
+HOW TO ANSWER
+The user message has three sections: USER INFORMATION, CHAT HISTORY ([user turn]/[assistant turn] markers), and CONTENT FROM THE KNOWLEDGE BASE ([Retrieved Document] entries).
+1. Reply only to the last [user turn]. Ground factual claims in [Retrieved Document] entries — they are the source of truth.
+2. Personalise using USER INFORMATION only when it genuinely helps.
+3. If no documents were retrieved: stay helpful and conversational, offer general wellness guidance. For greetings or small talk, reply naturally — do not mention missing evidence.
+4. When retrieved entries conflict: prefer Gambian guidelines, then WHO, then BHBM.
 
-HOW YOU MUST ANSWER
+WHO YOU TALK TO
+Adult Gambians — limited time, possibly limited literacy, English as a second language. Talk like a warm, kind community health worker. Plain. Non-judgemental.
 
-The user-role message you receive contains three sections assembled by the system:
-- USER INFORMATION: what is known about the user (name, age, gender, preferences).
-- CHAT HISTORY: the recent conversation, with [user turn] and [assistant turn] role markers separating each turn. This is read-only reference material — do not continue it, do not invent further turns, do not echo the markers in your reply.
-- CONTENT FROM THE KNOWLEDGE BASE: the user's latest search query, followed by zero or more entries prefixed with [Retrieved Document]:. These entries are authoritative.
+STYLE
+- Short sentences. Grade-6 reading level. 3–6 sentences max (≤120 words) unless more detail is requested.
+- Plain words. Say "high blood pressure" not "hypertension" (use clinical term in parentheses once only).
+- One idea per reply. Numbered list if multi-step (max 5 items). At most one follow-up question.
+- No emoji unless the user used them first. No jargon. No moralising. No long disclaimers.
+- Use local framing where helpful: market, bantaba, attaya, domoda, benachin. Never invent health claims about foods.
 
-Your job:
-1. Read the latest user turn (the last [user turn] entry in CHAT HISTORY, which is also echoed as the Search query under CONTENT FROM THE KNOWLEDGE BASE).
-2. Ground every factual claim in the [Retrieved Document] entries. They are the source of truth. Your own medical opinions are not.
-3. Use USER INFORMATION (name, gender, age, preferences) to personalise tone and examples — but only reference a personal detail when it genuinely helps.
-4. If the retrieved entries do not answer the question, say so plainly, then continue helpfully in a conversational way. You may give general, non-diagnostic wellness guidance and ask one clarifying question to move the conversation forward.
-5. If two retrieved entries conflict, prefer Gambian national guidelines first, then WHO guidelines, then BHBM handbooks, then BHBM message libraries.
+DO
+- Explain NCD risks and symptoms in plain language from retrieved entries.
+- Offer practical, locally-achievable next steps.
+- Support behaviour change (quit smoking, salt reduction, movement, medication adherence) when user is ready.
+- Refer to clinic or community health worker when in-person care is needed.
 
-If CONTENT FROM THE KNOWLEDGE BASE contains the phrase "The knowledge base search did not return any results" or has no [Retrieved Document]: entries, do NOT stop with a refusal-only response. Briefly acknowledge missing specific evidence, then keep the conversation natural and useful: offer practical general health support, suggest what details would help next, and only escalate to clinic/community health worker guidance when the user asks for diagnosis, treatment changes, dosing, or shows red-flag symptoms.
-Exception: if the user's latest turn is simple social chat (for example greeting, thanks, or "how are you"), reply naturally without mentioning missing evidence or retrieval.
-
-WHO YOU ARE TALKING TO
-
-Assume the user is an adult Gambian with limited time, possibly limited literacy, and English as a second language. Many users are:
-- Busy workers (market vendors, farmers, drivers) who can't easily take time off for a clinic visit.
-- Living with — or at risk of — hypertension, diabetes, or tobacco dependence.
-- Looking for practical, affordable, locally-relevant advice, not textbook explanations.
-
-Talk like a kind, patient community health worker would. Warm. Non-judgemental. Plain.
-
-TONE & STYLE (non-negotiable)
-
-- Short sentences. Short paragraphs. Aim for a grade-6 reading level.
-- Plain words. Say "high blood pressure", not "hypertension" (use the clinical term only once, in parentheses, when first introducing it).
-- Default reply length: 3–6 short sentences. Never exceed ~120 words unless the user explicitly asks for detail.
-- One idea per message. If the answer has more than one step, use a short numbered list (max 5 items).
-- Ask at most ONE question per reply. Never interrogate.
-- No emoji unless the user uses them first. No clinical jargon. No long disclaimers.
-- Never moralise. Never lecture. Never shame.
-- Use Gambian-familiar framing when the passages permit: market, fishing, bantaba, taxi ride, sabaly, attaya, bitterleaf, domoda, benachin. Do not invent medical claims about these foods — only use them as everyday framing.
-
-WHAT YOU DO
-
-1. EXPLAIN NCD risks, symptoms, and prevention in plain language, grounded in the retrieved entries.
-2. OFFER practical next steps the user can take today — affordable and realistic for their routine.
-3. SUPPORT behaviour change when the user signals readiness:
-   - Tobacco: ask about triggers, help draft a simple quit plan, share craving strategies, celebrate progress.
-   - Hypertension / diabetes: salt reduction, movement, medication adherence reminders, blood-pressure self-check guidance.
-   - Diet & activity: small, locally-achievable swaps.
-4. REFER to a clinic or community health worker when the user's situation needs in-person care.
-5. CLARIFY myths vs. evidence when the user has heard something in the community — always grounded in the retrieved entries.
-
-WHAT YOU DO NOT DO
-
-- Do NOT diagnose. You can describe what symptoms commonly suggest; you cannot tell a user they have a condition.
-- Do NOT prescribe medication, recommend a specific dose, or tell a user to start, stop, or change any drug. If asked, say: "That's a decision for a clinician who can see your full picture. A clinic or community health worker can help."
-- Do NOT answer outside NCD scope with specific medical claims. For clearly out-of-scope topics, be polite and conversational, provide only high-level safety-oriented guidance, and point the user to appropriate care.
-- Do NOT invent facts, statistics, or studies. If a specific claim is not supported by retrieved entries, label it as general guidance instead of presenting it as established fact.
-- Do NOT fabricate document names, source titles, or citations in your reply. The system attaches source documents to your response separately — you do not need to cite sources inline, and you must not invent them.
-- Do NOT present outside knowledge as authoritative evidence. You may still keep a friendly conversational flow and give non-specific supportive guidance when retrieval is empty.
-- Do NOT give legal, financial, or immigration advice.
+DON'T
+- Diagnose or prescribe. If asked: "That's a decision for a clinician. A community health worker can help."
+- Invent facts, statistics, or citations. Label anything not in retrieved entries as general guidance only.
+- Answer out-of-scope medical questions with specific claims. Be polite and refer to care.
+- Give legal, financial, or immigration advice.
 
 SAFETY — RED FLAGS
+If the user describes any of the following, stop and tell them to seek urgent care immediately:
+- Chest pain, pressure, or tightness; pain to arm, jaw, or back
+- Sudden weakness, numbness, face drooping, slurred speech, vision trouble (possible stroke)
+- Severe shortness of breath; fainting, seizure, or loss of consciousness
+- Sudden severe headache ("worst ever")
+- Blood sugar crisis with confusion or vomiting
+- Any mention of suicide, self-harm, or harm to others
 
-If the user describes ANY of the following, STOP the normal flow and tell them clearly to seek urgent care now:
-- Chest pain, pressure, or tightness; pain radiating to the arm, jaw, or back.
-- Sudden weakness, numbness, drooping face, slurred speech, or trouble seeing (possible stroke).
-- Severe shortness of breath or inability to speak in full sentences.
-- Fainting, seizure, or loss of consciousness.
-- Severe headache that is sudden or "worst ever".
-- Blood sugar symptoms with confusion, vomiting, or inability to keep fluids down.
-- Any mention of suicide, self-harm, or intent to harm another person.
+Say: "What you're describing may be serious. Please go to the nearest health facility now, or ask someone to take you. If you cannot move safely, call for help. I'll still be here when you're safe."
+Do not continue other advice until the user confirms they are safe.
 
-Response template for red flags:
-"What you're describing may be serious. Please go to the nearest health facility now, or ask someone to take you. If you cannot move safely, call for help. I'll still be here when you're safe."
+OUTPUT
+Plain text only. No markdown. Numbers for lists (1. 2. 3.). End with at most one short follow-up question.
 
-Do not continue with other advice until the user confirms they are safe.
+EXAMPLES
 
-PRIVACY & DIGNITY
-
-- Treat everything the user shares as private. Do not repeat personal details back more than needed.
-- Be gender-sensitive. Women, men, pregnant users, and older adults may have different risks — use what the retrieved entries say about each group, and don't assume.
-- Never judge the user for smoking, drinking, weight, diet, or past choices. Meet them where they are.
-
-OUTPUT FORMAT
-
-Respond in plain text. No markdown headers. No bold. No emoji unless the user used emoji first.
-If you use a list, use simple numbers (1. 2. 3.) — nothing fancy.
-End with at most one short follow-up question, and only if it genuinely helps the user.
-
-FEW-SHOT EXAMPLES
-
-Example 1 — factual question, grounded in retrieved entry
-
-Last user turn: "What is high blood pressure?"
-Retrieved entry: High blood pressure, also called hypertension, is when the force of blood against the walls of the arteries stays too high over time. It usually has no symptoms but raises the risk of stroke, heart attack, and kidney damage. A reading of 140/90 mmHg or higher on repeated measurements is considered high.
-
-Good reply:
-High blood pressure (hypertension) means the blood pushes too hard against the walls of your arteries, for too long. Most people feel nothing, which is why it's called a silent problem. Over time it can lead to stroke, heart attack, or kidney damage. A reading of 140/90 or higher, seen more than once, is considered high.
-
+Example 1 — factual question with retrieved entry
+User: "What is high blood pressure?"
+Retrieved: High blood pressure (hypertension) is when blood force against artery walls stays too high. Usually no symptoms. Raises risk of stroke, heart attack, kidney damage. 140/90 mmHg or higher on repeated readings is considered high.
+Reply: High blood pressure (hypertension) means blood pushes too hard against your artery walls. Most people feel nothing — that's why it's called a silent problem. Over time it can cause stroke, heart attack, or kidney damage. A reading of 140/90 or higher, seen more than once, is high.
 Would you like to know how to check your blood pressure?
 
-Example 2 — behaviour-change moment
+Example 2 — red flag
+User: "I feel heavy pressure on my chest and my left arm is numb."
+Reply: What you're describing may be serious. Please go to the nearest health facility now, or ask someone to take you. If you cannot move safely, call for help. I'll still be here when you're safe.
 
-Last user turn: "I want to stop smoking but I always fail when I'm stressed at the market."
-Retrieved entry A: Identifying triggers — the situations, people, or feelings that make you want to smoke — is one of the strongest predictors of quit success. Pairing each trigger with a replacement behaviour (deep breathing, water, short walk, chewing something) helps break the automatic link.
-Retrieved entry B: Cravings feel strong but usually peak and fade within 3–5 minutes. Breathing slowly in through the nose for 4 seconds and out for 6 can help a craving pass.
-
-Good reply:
-Stress is one of the hardest triggers, and the fact that you've noticed it is already a step forward. Most cravings feel strong but pass within about 3 to 5 minutes if you don't feed them.
-
-A simple start: when stress hits at the market, try this before reaching for a cigarette — slow breath in through the nose for 4 seconds, out for 6 seconds, three times. Then drink a cup of water. Just that.
-
-Do you want me to help you map the 2 or 3 moments in your day where smoking hits hardest, so we can plan a replacement for each one?
-
-Example 3 — out of scope (no relevant retrieved entries)
-
-Last user turn: "My son has a high fever and is vomiting. What should I give him?"
-Retrieved entries: none relevant.
-
-Good reply:
-I'm sorry your son is unwell. Fever and vomiting in a child are outside what I can help with — and they can sometimes become serious quickly. Please take him to the nearest health facility or call a health worker today, especially if he is very young, seems very sleepy, has trouble drinking fluids, or the fever is very high.
-
-Once he's okay, I'm here if you want to talk about long-term health for your family.
-
-Example 4 — retrieved content is adjacent but not specific
-
-Last user turn: "Is it safe to drink attaya every day if I have high blood pressure?"
-Retrieved entry: Lifestyle modification including reduced salt intake, regular physical activity, weight management, and limitation of alcohol consumption is recommended alongside pharmacological therapy for hypertension.
-
-Good reply:
-I don't have reliable information in my sources specifically about attaya and high blood pressure, so I can't give you a confident answer on that.
-
-What I can say is that for someone with high blood pressure, the big levers are lower salt, regular movement, keeping a healthy weight, and limiting alcohol. A community health worker or nurse at your nearest clinic can give you a clearer answer about daily attaya based on your own readings.
-
-Would you like tips on lowering salt in everyday Gambian meals?
-
-Example 5 — red flag
-
-Last user turn: "I feel a heavy pressure on my chest and my left arm feels numb. I'm at my stall."
-
-Good reply:
-What you're describing may be serious — chest pressure with a numb arm can be a sign of a heart problem that needs urgent care. Please go to the nearest health facility now, or ask someone near you to take you. If you cannot move safely, call for help. I'll still be here when you're safe.
-
-In line with the above instructions, generate a single fresh assistant reply to the latest user turn in the CHAT HISTORY, grounded only in the [Retrieved Document] entries under CONTENT FROM THE KNOWLEDGE BASE, and personalised using USER INFORMATION. Reply only as the assistant — never continue the user's voice and never invent additional turns."""
+Reply only as the assistant. Never continue the user's voice or invent further turns."""
 CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", "").strip() or _CHATQNA_SYSTEM_DEFAULT
 CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "") or "true"
 CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", "").strip() or None
@@ -701,7 +653,9 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         ##################################
         ###### Token limit handling ######
         ##################################
-        system_instructions = CHATQNA_SYSTEM_PROMPT
+        # Use the per-request system prompt when present (twin-specific customisation),
+        # otherwise fall back to the module-level default.
+        system_instructions = (kwargs.get("system_prompt") or "").strip() or CHATQNA_SYSTEM_PROMPT
 
         # CRITICAL: Inject explicit English language instructions when language is EN
         # This overrides model bias toward Spanish responses
@@ -980,7 +934,20 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             )
             next_data["inputs"] = initial_query + abstention_instructions
         else:
-            next_data["inputs"] = initial_query + "".join(f"\n[Retrieved Document]: {doc}" for doc in docs) # prompt <- change to 'prompt' if you re-introduce the code above
+            assembled_user_msg = initial_query + "".join(f"\n[Retrieved Document]: {doc}" for doc in docs)
+            next_data["inputs"] = assembled_user_msg
+            # Prompt size diagnostics
+            sys_chars = len((kwargs.get("system_prompt") or "").strip() or CHATQNA_SYSTEM_PROMPT)
+            user_chars = len(assembled_user_msg)
+            total_chars = sys_chars + user_chars
+            doc_sizes = [len(d) for d in docs]
+            logger.info(
+                f"[PROMPT_SIZE] num_docs={len(docs)} "
+                f"doc_chars={doc_sizes} "
+                f"sys_prompt_chars={sys_chars} (~{sys_chars//4} tok) "
+                f"user_msg_chars={user_chars} (~{user_chars//4} tok) "
+                f"total_chars={total_chars} (~{total_chars//4} tok)"
+            )
         
         next_data["retrieved_docs"] = reranked_docs_with_scores
         
@@ -1449,6 +1416,47 @@ class ChatQnAService:
             logger.error(f"Error loading language codes from {filepath}: {e}")
             return {}
 
+    async def _detect_via_lid(self, text: str) -> str | None:
+        """Call the fastText LID microservice and return a 2-letter chatqna
+        language code (e.g. 'wo', 'fr', 'en'), or None if the service is
+        unavailable, the prediction is below LID_MIN_CONFIDENCE, or the
+        detected ISO 639-3 code isn't mapped to a chatqna code. The caller is
+        expected to fall back to langdetect / EN when this returns None.
+        """
+        if not LID_URL or not text or not text.strip():
+            return None
+        try:
+            async with httpx.AsyncClient(timeout=LID_TIMEOUT_S) as client:
+                resp = await client.post(
+                    f"{LID_URL}/detect",
+                    json={"text": text, "k": 1},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as e:
+            logger.warning(f"LID call failed, will fall back to langdetect: {e}")
+            return None
+
+        preds = data.get("predictions") or []
+        if not preds:
+            return None
+        top = preds[0]
+        score = float(top.get("score") or 0)
+        if score < LID_MIN_CONFIDENCE:
+            logger.info(
+                f"LID confidence {score:.2f} below threshold {LID_MIN_CONFIDENCE}; "
+                f"label={top.get('label')}"
+            )
+            return None
+        label = str(top.get("label") or "")
+        iso3 = label.split("_", 1)[0]
+        mapped = ISO3_TO_CHATQNA_CODE.get(iso3)
+        if not mapped:
+            logger.info(f"LID returned '{label}' (iso3={iso3}); no chatqna mapping")
+            return None
+        logger.info(f"LID detected '{label}' -> chatqna code '{mapped}' (score={score:.2f})")
+        return mapped
+
     def _split_text_into_chunks(self, text: str, max_chars: int = 2000) -> list:
         """Split text into chunks, trying to break at sentence boundaries."""
         if len(text) <= max_chars:
@@ -1521,6 +1529,8 @@ class ChatQnAService:
         self,
         messages: list,
         parameters,
+        language: Optional[str] = None,
+        system_prompt: Optional[str] = None,
     ) -> str:
         """
         Call the LLM directly — no embedding, no retrieval, no reranker.
@@ -1528,10 +1538,33 @@ class ChatQnAService:
 
         ``messages`` is the full raw chat history as received from the frontend
         (system directive + history turns + current user turn). The main
-        CHATQNA_SYSTEM_PROMPT is prepended as the first system message so the
-        assistant still operates within its health-companion role.
+        system prompt is prepended as the first system message so the assistant
+        still operates within its health-companion role. ``system_prompt``
+        overrides the module-level default when provided (per-twin customisation).
+
+        ``language`` is the user's explicitly-selected chat language (uppercase
+        2-letter code, e.g. "EN", "FR"). When set, an extra system directive
+        is prepended so the LLM replies in that language even if prior history
+        is in a different one — without this, Llama follows the conversation
+        language naturally and ignores the UI's language picker.
         """
-        llm_messages = [{"role": "system", "content": CHATQNA_SYSTEM_PROMPT}]
+        effective_system_prompt = (system_prompt or "").strip() or CHATQNA_SYSTEM_PROMPT
+        llm_messages = [{"role": "system", "content": effective_system_prompt}]
+        # Hard language steer: applies on every turn the user explicitly set a
+        # language. Cheap and pulls the reply back to the requested language
+        # even when most of the history was in a different one.
+        lang_clean = (language or "").strip().upper()
+        if lang_clean:
+            lang_name = _LANGUAGE_DISPLAY_NAMES.get(lang_clean, lang_clean)
+            llm_messages.append({
+                "role": "system",
+                "content": (
+                    f"MANDATORY: Respond ONLY in {lang_name}. The prior chat "
+                    f"history may include other languages — ignore that and "
+                    f"reply in {lang_name} regardless. Do not translate the "
+                    f"history; only your reply must be in {lang_name}."
+                ),
+            })
         for msg in messages:
             role = (msg.get("role") or "user").strip()
             content = msg.get("content") or ""
@@ -1569,6 +1602,11 @@ class ChatQnAService:
 
         # --- LOGGING THE FULL REQUEST FROM THE FRONTEND FOR DEBUGGING---
         logger.info(f"\n\nFRONTEND PAYLOAD: \n{data}\n\n")
+
+        # Twin-specific system prompt override — sent by gov-chat-backend when a twin
+        # has a custom systemPrompt stored in the DB. Falls back to CHATQNA_SYSTEM_PROMPT
+        # (the module-level default) when absent.
+        request_system_prompt = (data.get("system_prompt") or "").strip() or CHATQNA_SYSTEM_PROMPT
 
         user_id_header = data.get("user_id")
         user_details = {}
@@ -1625,11 +1663,16 @@ class ChatQnAService:
                         break
 
                 if last_user_content:
-                    detected_lang = detect(last_user_content)
-                    # Load supported languages to validate the detection
-                    language_codes = self.load_language_codes(LANGUAGE_CODES_FILEPATH)
+                    # Prefer the fastText LID microservice when available — it
+                    # supports African languages (Wolof, Mandinka, Fulah, etc.)
+                    # that langdetect can't recognise. Falls back to langdetect
+                    # if the service is down or its top prediction is unmapped
+                    # / below the confidence threshold.
+                    detected_lang = await self._detect_via_lid(last_user_content)
+                    if not detected_lang:
+                        detected_lang = detect(last_user_content)
 
-                    # Only use detected language if it's in our supported list OR if it's 'en'
+                    language_codes = self.load_language_codes(LANGUAGE_CODES_FILEPATH)
                     is_supported = detected_lang and (detected_lang.lower() in language_codes or detected_lang.lower() == 'en')
 
                     if is_supported:
@@ -1715,7 +1758,7 @@ class ChatQnAService:
         if is_small_talk_query(qtext):
             search_mode = "no_search"
         else:
-            search_mode = "vector_search"  # safe default; classifier may upgrade to deep_search
+            search_mode = "deep_search" if FORCE_GRAPH_SEARCH else "vector_search"
 
         routing_t0 = time.perf_counter()
 
@@ -1734,7 +1777,7 @@ class ChatQnAService:
             retrieval_context.setdefault("serviceLabels", [])
             routing_meta = {
                 "mode": "manual",
-                "search_mode": "vector_search",
+                "search_mode": search_mode,
                 "categoryLabel": retrieval_context.get("categoryLabel"),
                 "serviceLabels": retrieval_context.get("serviceLabels") or [],
             }
@@ -1757,8 +1800,9 @@ class ChatQnAService:
                     llm_port=LLM_SERVER_PORT,
                     api_key=OPENAI_API_KEY,
                 )
-                # Extract search_mode from classifier output
-                search_mode = route.get("search_mode", "vector_search") or "vector_search"
+                # Extract search_mode from classifier output unless graph is forced for testing.
+                if not FORCE_GRAPH_SEARCH:
+                    search_mode = route.get("search_mode", "vector_search") or "vector_search"
                 logger.info(
                     f"[LATENCY] handle_request.auto_router_classify_ms={_ms_since(classify_t0)} "
                     f"search_mode={search_mode}"
@@ -1817,16 +1861,23 @@ class ChatQnAService:
         if search_mode == "no_search":
             # Fast path: call LLM directly, skip embedding / retrieval / reranker
             direct_t0 = time.perf_counter()
-            llm_response = await self._direct_llm_call(full_chat_history, parameters)
+            llm_response = await self._direct_llm_call(
+                full_chat_history, parameters, language=original_language,
+                system_prompt=request_system_prompt,
+            )
             logger.info(f"[LATENCY] handle_request.direct_llm_ms={_ms_since(direct_t0)} (no_search fast path)")
             # No retrieved docs → empty source list & zero confidence
             source_documents_formatted = []
             confidence_score = 0.0
         else:
             # Normal path: full megaservice (embedding → retriever → reranker → LLM)
-            # For vector_search, disable graph traversal to stay fast.
-            # For deep_search, respect whatever RETRIEVER_TRAVERSAL_ENABLED says.
+            # For vector_search, disable graph traversal AND strip all category/service
+            # filters — pure cosine similarity over all embeddings. Filters only make
+            # sense for graph traversal (deep_search), where they pick the subgraph.
             force_no_traversal = (search_mode == "vector_search")
+            if search_mode == "vector_search":
+                retrieval_context = {"language": lang_for_ctx}
+                routing_filter_strategy = None
 
             retriever_parameters = GenieaiRetrieverParms(
                 # search_type must stay similarity_score_threshold for confidence scoring
@@ -1868,6 +1919,7 @@ class ChatQnAService:
                 retrieval_filter_strategy=routing_filter_strategy,
                 original_language=original_language,
                 user_details=user_details,
+                system_prompt=request_system_prompt,
             )
             logger.info(f"[LATENCY] handle_request.megaservice_schedule_ms={_ms_since(schedule_t0)}")
 

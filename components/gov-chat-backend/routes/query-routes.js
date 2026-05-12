@@ -378,6 +378,55 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
+   * /queries/{queryId}/expert-answer:
+   *   patch:
+   *     summary: Attach an expert-curated correct answer to a query
+   *     description: Admins use this to record the answer the AI should have given. The expert answer is stored on the query and surfaced in the admin Feedback insights page.
+   *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
+   *     parameters:
+   *       - in: path
+   *         name: queryId
+   *         schema: { type: string }
+   *         required: true
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [text]
+   *             properties:
+   *               text:
+   *                 type: string
+   *                 description: The expert answer text
+   *     responses:
+   *       200: { description: Expert answer saved }
+   *       400: { description: Missing text }
+   *       500: { description: Server error }
+   */
+  router.patch('/:queryId/expert-answer', async (req, res, next) => {
+    try {
+      const { queryId } = req.params;
+      const text = req.body?.text;
+      if (!text || typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: 'INVALID_INPUT', message: 'text is required' });
+      }
+      const providedBy = req.headers['x-user-id'] || req.user?.preferred_username || null;
+      const updated = await queryService.setExpertAnswer(queryId, { text, providedBy });
+      res.json(updated);
+    } catch (error) {
+      logger.error(
+        `Error setting expert answer for query ${req.params.queryId}: ${error.message}`,
+        { stack: error.stack }
+      );
+      next(error);
+    }
+  });
+
+  /**
+   * @swagger
    * /queries/{queryId}/answered:
    *   patch:
    *     summary: Mark query as answered

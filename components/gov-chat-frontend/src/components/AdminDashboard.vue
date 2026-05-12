@@ -61,6 +61,12 @@
                 <span>{{ translate('admin.documentManagement', 'Document Management') }}</span>
               </a>
             </li>
+            <li class="nav-item">
+              <a href="#" class="nav-link" @click.prevent="setActiveTab('feedback')">
+                <i>💬</i>
+                <span>{{ translate('admin.feedbackInsights', 'Feedback') }}</span>
+              </a>
+            </li>
           </ul>
         </div>
 
@@ -259,64 +265,150 @@
                       <div class="loading-spinner-small"></div>
                       <span>{{ translate('admin.hierarchy.loading', 'Loading Hierarchy...') }}</span>
                     </div>
-                    <ul v-else class="hierarchy-list">
-                      <li v-for="category in knowledgeHierarchy" :key="category.id" class="hierarchy-category">
-                        <div class="hierarchy-item">
-                          <span class="item-name">{{ category.nameEN }}</span>
-                          <div class="item-actions">
-                            <button
-                              class="action-btn"
-                              :aria-label="translate('admin.hierarchy.addService', 'Add Service')"
-                              @click="showAddServiceForm(category)"
-                            >
-                              ➕
-                            </button>
-                            <button
-                              class="action-btn"
-                              :aria-label="translate('admin.hierarchy.editCategory', 'Edit Category')"
-                              @click="showEditForm(category)"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              class="action-btn"
-                              :aria-label="translate('admin.hierarchy.deleteCategory', 'Delete Category')"
-                              @click="deleteHierarchyItem(category)"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        </div>
-                        <ul v-if="category.services && category.services.length > 0" class="hierarchy-services-list">
-                          <li v-for="service in category.services" :key="service.id">
-                            <div class="hierarchy-item service-item">
-                              <span class="item-name">{{ service.nameEN }}</span>
-                              <div class="item-actions">
-                                <button
-                                  class="action-btn"
-                                  :aria-label="translate('admin.hierarchy.editService', 'Edit Service')"
-                                  @click="showEditForm(service, category)"
-                                >
-                                  ✏️
-                                </button>
-                                <button
-                                  class="action-btn"
-                                  :aria-label="translate('admin.hierarchy.deleteService', 'Delete Service')"
-                                  @click="deleteHierarchyItem(service, category)"
-                                >
-                                  🗑️
-                                </button>
-                              </div>
+                    <template v-else>
+                      <div class="hierarchy-kind-tabs" role="tablist">
+                        <button
+                          v-for="tab in hierarchyKindTabs"
+                          :key="tab.id"
+                          type="button"
+                          class="hierarchy-kind-tab"
+                          :class="{ active: hierarchyActiveKind === tab.id }"
+                          role="tab"
+                          :aria-selected="hierarchyActiveKind === tab.id"
+                          @click="hierarchyActiveKind = tab.id"
+                        >
+                          <span>{{ tab.label }}</span>
+                          <span class="hierarchy-kind-count">{{ tab.count }}</span>
+                        </button>
+                      </div>
+                      <div
+                        v-if="hierarchyActiveKind === 'documents' && documentHierarchyTabs.length > 1"
+                        class="hierarchy-subkind-tabs"
+                        role="tablist"
+                      >
+                        <button
+                          v-for="tab in documentHierarchyTabs"
+                          :key="tab.id"
+                          type="button"
+                          class="hierarchy-subkind-tab"
+                          :class="{ active: activeDocumentHierarchyKey === tab.id }"
+                          role="tab"
+                          :aria-selected="activeDocumentHierarchyKey === tab.id"
+                          @click="setDocumentHierarchyTab(tab.id)"
+                        >
+                          <span>{{ tab.label }}</span>
+                          <span class="hierarchy-kind-count">{{ tab.count }}</span>
+                        </button>
+                      </div>
+                      <ul class="hierarchy-list">
+                        <li
+                          v-for="category in visibleHierarchyCategories"
+                          :key="category._key"
+                          class="hierarchy-category"
+                          :class="{ 'hierarchy-category--readonly': isReadOnlyHierarchyCategory(category) }"
+                        >
+                          <div class="hierarchy-item">
+                            <span class="item-name">
+                              {{ category.nameEN }}
+                              <span v-if="isReadOnlyHierarchyCategory(category)" class="hierarchy-readonly-badge">
+                                {{ getReadOnlyHierarchyBadge(category) }}
+                              </span>
+                            </span>
+                            <div v-if="!isReadOnlyHierarchyCategory(category)" class="item-actions">
+                              <button
+                                class="action-btn"
+                                :aria-label="translate('admin.hierarchy.addService', 'Add Service')"
+                                @click="showAddServiceForm(category)"
+                              >
+                                ➕
+                              </button>
+                              <button
+                                class="action-btn"
+                                :aria-label="translate('admin.hierarchy.editCategory', 'Edit Category')"
+                                @click="showEditForm(category)"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                class="action-btn"
+                                :aria-label="translate('admin.hierarchy.deleteCategory', 'Delete Category')"
+                                @click="deleteHierarchyItem(category)"
+                              >
+                                🗑️
+                              </button>
                             </div>
-                          </li>
-                        </ul>
-                      </li>
-                      <li v-if="knowledgeHierarchy.length === 0" class="empty-hierarchy">
-                        {{
-                          translate('admin.hierarchy.empty', 'No categories found. Click "Add New Category" to start.')
-                        }}
-                      </li>
-                    </ul>
+                          </div>
+                          <ul v-if="category.services && category.services.length > 0" class="hierarchy-services-list">
+                            <li v-for="service in visibleHierarchyChildren(category)" :key="service._key">
+                              <div class="hierarchy-item service-item">
+                                <span class="item-name">{{ service.nameEN }}</span>
+                                <div v-if="!isReadOnlyHierarchyCategory(category)" class="item-actions">
+                                  <button
+                                    class="action-btn"
+                                    :aria-label="translate('admin.hierarchy.editService', 'Edit Service')"
+                                    @click="showEditForm(service, category)"
+                                  >
+                                    ✏️
+                                  </button>
+                                  <button
+                                    class="action-btn"
+                                    :aria-label="translate('admin.hierarchy.deleteService', 'Delete Service')"
+                                    @click="deleteHierarchyItem(service, category)"
+                                  >
+                                    🗑️
+                                  </button>
+                                </div>
+                              </div>
+                            </li>
+                          </ul>
+                          <div v-if="hierarchyTotalPages(category) > 1" class="hierarchy-pagination">
+                            <button
+                              type="button"
+                              class="hierarchy-page-btn"
+                              :disabled="hierarchyCurrentPage(category) === 1"
+                              :aria-label="translate('admin.hierarchy.prev', 'Previous')"
+                              @click="setHierarchyPage(category, hierarchyCurrentPage(category) - 1)"
+                            >
+                              ‹
+                            </button>
+                            <template v-for="token in hierarchyPaginationTokens(category)" :key="token.key">
+                              <span v-if="token.ellipsis" class="hierarchy-page-ellipsis">…</span>
+                              <button
+                                v-else
+                                type="button"
+                                class="hierarchy-page-btn"
+                                :class="{ active: token.page === hierarchyCurrentPage(category) }"
+                                :aria-current="token.page === hierarchyCurrentPage(category) ? 'page' : null"
+                                @click="setHierarchyPage(category, token.page)"
+                              >
+                                {{ token.page }}
+                              </button>
+                            </template>
+                            <button
+                              type="button"
+                              class="hierarchy-page-btn"
+                              :disabled="hierarchyCurrentPage(category) === hierarchyTotalPages(category)"
+                              :aria-label="translate('admin.hierarchy.next', 'Next')"
+                              @click="setHierarchyPage(category, hierarchyCurrentPage(category) + 1)"
+                            >
+                              ›
+                            </button>
+                            <span class="hierarchy-page-summary">
+                              {{ translate('admin.hierarchy.page', 'Page') }} {{ hierarchyCurrentPage(category) }}
+                              {{ translate('admin.hierarchy.of', 'of') }} {{ hierarchyTotalPages(category) }}
+                            </span>
+                          </div>
+                        </li>
+                        <li v-if="visibleHierarchyCategories.length === 0" class="empty-hierarchy">
+                          {{
+                            translate(
+                              'admin.hierarchy.empty',
+                              'No categories found. Click "Add New Category" to start.'
+                            )
+                          }}
+                        </li>
+                      </ul>
+                    </template>
                   </div>
 
                   <div v-if="hierarchyForm.visible" class="hierarchy-form-panel">
@@ -427,20 +519,41 @@
                     <option value="pending">
                       {{ translate('admin.documents.statusPending', 'Pending') }}
                     </option>
+                    <option value="queued">
+                      {{ translate('admin.documents.statusQueued', 'Queued') }}
+                    </option>
                     <option value="ingested">
                       {{ translate('admin.documents.statusIngested', 'Ingested') }}
                     </option>
                     <option value="retracted">
                       {{ translate('admin.documents.statusRetracted', 'Retracted') }}
                     </option>
+                    <option value="ingesting">
+                      {{ translate('admin.documents.statusIngesting', 'Ingesting') }}
+                    </option>
+                    <option value="ingestion error">
+                      {{ translate('admin.documents.statusError', 'Ingestion Error') }}
+                    </option>
                   </select>
-                  <div v-if="showIngestButton" class="card-actions">
+                  <div v-if="showDocumentBatchActions" class="card-actions document-batch-actions">
                     <button class="btn btn-primary" @click="handleBatchAction('ingest')">
                       {{ translate('admin.documents.ingestSelected', 'Ingest Selected') }}
                       ({{ selectedDocuments.length }})
                     </button>
+                    <button class="btn btn-outline btn-danger-outline" @click="handleBatchAction('delete')">
+                      {{ translate('admin.documents.deleteSelected', 'Delete Selected') }}
+                      ({{ selectedDocuments.length }})
+                    </button>
                   </div>
                 </div>
+                <p class="document-selection-hint text-secondary">
+                  {{
+                    translate(
+                      'admin.documents.selectionHint',
+                      'Select files using the checkboxes, then use Ingest or Delete.'
+                    )
+                  }}
+                </p>
 
                 <div class="table-container">
                   <table class="data-table">
@@ -506,19 +619,35 @@
                         @click="viewDocumentDetails(doc.file_id)"
                       >
                         <td @click.stop>
-                          <input v-model="selectedDocuments" type="checkbox" :value="doc._key" />
+                          <input v-model="selectedDocuments" type="checkbox" :value="doc.file_id" />
                         </td>
                         <td class="cell-main">{{ doc.file_name }}</td>
                         <td>
-                          <span :class="['status-tag', getStatusClass(doc)]">
-                            {{ getDisplayStatus(doc) }}
-                          </span>
+                          <div class="status-cell-wrap">
+                            <span :class="['status-tag', getStatusClass(doc)]">
+                              {{ getDisplayStatus(doc) }}
+                            </span>
+                            <span
+                              v-if="doc.knowledge_base_ready"
+                              class="status-tag status-kb-added"
+                              :title="
+                                translate(
+                                  'admin.documents.tagAddedToDatabaseHint',
+                                  'Document chunks are indexed in the knowledge graph for retrieval.'
+                                )
+                              "
+                            >
+                              {{ translate('admin.documents.tagAddedToDatabase', 'Added to database') }}
+                            </span>
+                          </div>
                         </td>
                         <td>
-                          <span v-for="label in doc.labels.slice(0, 2)" :key="label" class="label-tag">
+                          <span v-for="label in (doc.labels || []).slice(0, 2)" :key="label" class="label-tag">
                             {{ label }}
                           </span>
-                          <span v-if="doc.labels.length > 2" class="label-tag-more">+{{ doc.labels.length - 2 }}</span>
+                          <span v-if="(doc.labels || []).length > 2" class="label-tag-more"
+                            >+{{ (doc.labels || []).length - 2 }}</span
+                          >
                         </td>
                         <td>
                           {{ new Date(doc.upload_date).toLocaleDateString() }}
@@ -554,6 +683,10 @@
                     {{ translate('admin.next', 'Next') }} »
                   </button>
                 </div>
+              </div>
+
+              <div v-if="activeTab === 'feedback'" class="dashboard-card" style="grid-column: span 2">
+                <FeedbackInsights />
               </div>
 
               <div v-if="activeTab === 'database'" class="dashboard-card" style="grid-column: span 2">
@@ -1515,6 +1648,7 @@ import UploadFilesDialog from './UploadFilesDialog.vue';
 import AddFromLinkDialog from './AddFromLinkDialog.vue';
 import FileDetailsDialog from './FileDetailsDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue'; // IMPORT ConfirmDialog
+import FeedbackInsights from './FeedbackInsights.vue';
 import { eventBus } from '../eventBus.js';
 import { availableLanguages } from '../config/languageConfig.js';
 import oidcConfig from '../config/oidcConfig.js';
@@ -1530,7 +1664,8 @@ export default {
     UploadFilesDialog,
     AddFromLinkDialog,
     FileDetailsDialog,
-    ConfirmDialog // REGISTER ConfirmDialog
+    ConfirmDialog, // REGISTER ConfirmDialog
+    FeedbackInsights
   },
   emits: ['close'],
   data() {
@@ -1566,6 +1701,7 @@ export default {
         { id: 'overview', label: 'System Health' },
         { id: 'hierarchy', label: 'Knowledge Hierarchy' },
         { id: 'documents', label: 'Document Management' },
+        { id: 'feedback', label: 'Feedback' },
         { id: 'database', label: 'Database' },
         { id: 'logs', label: 'Logs' },
         { id: 'security', label: 'Security' },
@@ -1655,6 +1791,10 @@ export default {
       // --- START: NEW DATA FOR HIERARCHY & DOCUMENTS ---
       isHierarchyLoading: false,
       knowledgeHierarchy: [],
+      hierarchyPageSize: 10,
+      hierarchyPageState: {},
+      hierarchyActiveKind: 'managed',
+      hierarchyActiveDocumentKey: null,
       hierarchyForm: {
         visible: false,
         mode: null,
@@ -1676,6 +1816,8 @@ export default {
       documentFilters: {
         status: 'all'
       },
+      /** Auto-refresh document list while batch ingestion is running (Queued / Ingesting). */
+      documentPollTimer: null,
       selectedDocuments: [],
 
       // --- END: DOCUMENT and HIERARCHY DATA ---
@@ -1714,6 +1856,67 @@ export default {
       return JSON.stringify(this.hierarchyForm) !== this.originalHierarchyFormState;
     },
 
+    hierarchyKindTabs() {
+      const managedCount = this.knowledgeHierarchy.filter(
+        (category) => !this.isReadOnlyHierarchyCategory(category)
+      ).length;
+      const documentCount = this.knowledgeHierarchy.filter((category) =>
+        this.isDocumentHierarchyCategory(category)
+      ).length;
+      const quickHelpCount = this.knowledgeHierarchy.filter((category) =>
+        this.isQuickHelpHierarchyCategory(category)
+      ).length;
+
+      return [
+        {
+          id: 'managed',
+          label: this.translate('admin.hierarchy.tabManaged', 'Managed categories'),
+          count: managedCount
+        },
+        {
+          id: 'documents',
+          label: this.translate('admin.hierarchy.tabDocuments', 'Document tags'),
+          count: documentCount
+        },
+        {
+          id: 'quickHelp',
+          label: this.translate('admin.hierarchy.tabQuickHelp', 'Quick-help categories'),
+          count: quickHelpCount
+        }
+      ];
+    },
+
+    documentHierarchyCategories() {
+      return this.knowledgeHierarchy.filter((category) => this.isDocumentHierarchyCategory(category));
+    },
+
+    documentHierarchyTabs() {
+      return this.documentHierarchyCategories.map((category) => ({
+        id: category._key,
+        label: category.nameEN.replace(/\s*\(from documents\)\s*$/i, ''),
+        count: this.getHierarchyChildren(category).length
+      }));
+    },
+
+    activeDocumentHierarchyKey() {
+      const existing = this.documentHierarchyTabs.some((tab) => tab.id === this.hierarchyActiveDocumentKey);
+      if (existing) {
+        return this.hierarchyActiveDocumentKey;
+      }
+      return this.documentHierarchyTabs[0]?.id || null;
+    },
+
+    visibleHierarchyCategories() {
+      if (this.hierarchyActiveKind === 'documents') {
+        const activeKey = this.activeDocumentHierarchyKey;
+        return this.documentHierarchyCategories.filter((category) => category._key === activeKey);
+      }
+      if (this.hierarchyActiveKind === 'quickHelp') {
+        return this.knowledgeHierarchy.filter((category) => this.isQuickHelpHierarchyCategory(category));
+      }
+      return this.knowledgeHierarchy.filter((category) => !this.isReadOnlyHierarchyCategory(category));
+    },
+
     // User list to display (either search results or all users)
     displayedUsers() {
       // If we have search results, show them
@@ -1741,7 +1944,11 @@ export default {
       if (selectedStatus === 'all') {
         return this.documents; // If 'All' is selected, return the full list
       }
-      return this.documents.filter((doc) => doc.dataprep && doc.dataprep.status === selectedStatus);
+      const want = String(selectedStatus).toLowerCase();
+      return this.documents.filter((doc) => {
+        const st = doc.dataprep && doc.dataprep.status ? String(doc.dataprep.status).toLowerCase() : '';
+        return st === want;
+      });
     },
 
     sortedAndFilteredDocuments() {
@@ -1774,23 +1981,20 @@ export default {
       });
     },
 
-    showIngestButton() {
-      // 1. Don't show if no documents are selected
-      if (this.selectedDocuments.length === 0) {
+    /** Show Ingest + Delete when at least one row is selected (uses file_id, not _key). */
+    showDocumentBatchActions() {
+      return this.selectedDocuments.length > 0;
+    },
+
+    /** True when the documents tab should poll for live status updates. */
+    documentsNeedLiveRefresh() {
+      if (this.activeTab !== 'documents') {
         return false;
       }
-
-      // 2. Create a Set of selected keys for efficient lookup
-      const selectedKeys = new Set(this.selectedDocuments);
-
-      // 3. Find all the full document objects that are currently selected
-      const selectedDocObjects = this.documents.filter((doc) => selectedKeys.has(doc._key));
-
-      // 4. Check if ANY of the selected documents have the status 'ingested'
-      const hasIngestedFile = selectedDocObjects.some((doc) => doc.dataprep && doc.dataprep.status === 'ingested');
-
-      // 5. Only show the button if there are selected files AND none of them are ingested
-      return !hasIngestedFile;
+      return (this.documents || []).some((d) => {
+        const s = d.dataprep?.status?.toLowerCase() || '';
+        return s === 'queued' || s === 'ingesting';
+      });
     }
   },
   watch: {
@@ -1802,6 +2006,19 @@ export default {
     activeTab(newTab) {
       if (newTab === 'hierarchy' && this.knowledgeHierarchy.length === 0) {
         this.loadKnowledgeHierarchy();
+      }
+      if (newTab !== 'documents') {
+        this.stopDocumentsLivePoll();
+      } else if (this.documentsNeedLiveRefresh) {
+        this.startDocumentsLivePoll();
+      }
+    },
+
+    documentsNeedLiveRefresh(needs) {
+      if (needs) {
+        this.startDocumentsLivePoll();
+      } else {
+        this.stopDocumentsLivePoll();
       }
     },
 
@@ -1843,6 +2060,7 @@ export default {
   beforeUnmount() {
     // Clean up event listeners when component is destroyed
     window.removeEventListener('themeChange', this.handleThemeChange);
+    this.stopDocumentsLivePoll();
   },
   methods: {
     formatFileSize,
@@ -2609,6 +2827,122 @@ export default {
       }
     },
 
+    /** Synthetic groups from ingested files (admin Knowledge Hierarchy) — not editable in Keycloak taxonomy CRUD */
+    isDocumentHierarchyCategory(category) {
+      const k = category && category._key;
+      return typeof k === 'string' && k.startsWith('_docmeta_');
+    },
+
+    isQuickHelpHierarchyCategory(category) {
+      const k = category && category._key;
+      return k === '_qh_categories';
+    },
+
+    isReadOnlyHierarchyCategory(category) {
+      return this.isDocumentHierarchyCategory(category) || this.isQuickHelpHierarchyCategory(category);
+    },
+
+    getReadOnlyHierarchyBadge(category) {
+      if (this.isQuickHelpHierarchyCategory(category)) {
+        return this.translate('admin.hierarchy.quickHelpBadge', 'quick-help');
+      }
+      return this.translate('admin.hierarchy.fromDocuments', 'from documents');
+    },
+
+    setDocumentHierarchyTab(categoryKey) {
+      this.hierarchyActiveDocumentKey = categoryKey;
+    },
+
+    getHierarchyChildren(category) {
+      return Array.isArray(category?.services) ? category.services : [];
+    },
+
+    hierarchyTotalPages(category) {
+      const total = this.getHierarchyChildren(category).length;
+      return Math.max(1, Math.ceil(total / this.hierarchyPageSize));
+    },
+
+    hierarchyCurrentPage(category) {
+      const key = category?._key;
+      const current = key ? Number(this.hierarchyPageState[key] || 1) : 1;
+      return Math.min(Math.max(current, 1), this.hierarchyTotalPages(category));
+    },
+
+    setHierarchyPage(category, page) {
+      const key = category?._key;
+      if (!key) {
+        return;
+      }
+      const nextPage = Math.min(Math.max(Number(page) || 1, 1), this.hierarchyTotalPages(category));
+      this.hierarchyPageState = {
+        ...this.hierarchyPageState,
+        [key]: nextPage
+      };
+    },
+
+    visibleHierarchyChildren(category) {
+      const children = this.getHierarchyChildren(category);
+      const start = (this.hierarchyCurrentPage(category) - 1) * this.hierarchyPageSize;
+      return children.slice(start, start + this.hierarchyPageSize);
+    },
+
+    hierarchyPaginationTokens(category) {
+      const total = this.hierarchyTotalPages(category);
+      const current = this.hierarchyCurrentPage(category);
+      const token = (page) => ({ key: `page-${page}`, page });
+      const ellipsis = (key) => ({ key, ellipsis: true });
+
+      if (total <= 7) {
+        return Array.from({ length: total }, (_, index) => token(index + 1));
+      }
+
+      const middleStart = Math.max(2, Math.min(current - 1, total - 4));
+      const middleEnd = Math.min(total - 1, Math.max(current + 1, 5));
+      const tokens = [token(1)];
+
+      if (middleStart > 2) {
+        tokens.push(ellipsis('ellipsis-start'));
+      }
+
+      for (let page = middleStart; page <= middleEnd; page += 1) {
+        tokens.push(token(page));
+      }
+
+      if (middleEnd < total - 1) {
+        tokens.push(ellipsis('ellipsis-end'));
+      }
+
+      tokens.push(token(total));
+      return tokens;
+    },
+
+    async buildQuickHelpHierarchyCategory() {
+      try {
+        const { loadConfig } = await import('../main.js');
+        const config = await loadConfig();
+        const buttons = config?.features?.chat?.quickHelp?.buttons || [];
+        const services = buttons.map((button) => ({
+          _key: `qh_${button.id}`,
+          nameEN: this.$t(button.title),
+          translations: []
+        }));
+
+        if (services.length === 0) {
+          return null;
+        }
+
+        return {
+          _key: '_qh_categories',
+          nameEN: this.translate('admin.hierarchy.quickHelpTitle', 'Quick-help categories (homepage)'),
+          translations: [],
+          services
+        };
+      } catch (error) {
+        console.warn('[AdminDashboard] Failed to load quick-help hierarchy group:', error);
+        return null;
+      }
+    },
+
     async loadKnowledgeHierarchy() {
       this.isHierarchyLoading = true;
       try {
@@ -2616,7 +2950,7 @@ export default {
         const categories = await serviceTreeService.getAdminCategories('en');
         // The API returns a simple structure; adapt it for the UI.
         // A dedicated admin endpoint should return the full object with translations.
-        this.knowledgeHierarchy = categories.map((cat) => ({
+        const mappedCategories = categories.map((cat) => ({
           _key: cat.catKey, // Use _key from service
           nameEN: cat.name,
           translations: [], // TODO: Your API should eventually return this data
@@ -2627,6 +2961,14 @@ export default {
             translations: []
           }))
         }));
+        const quickHelpCategory = await this.buildQuickHelpHierarchyCategory();
+        this.knowledgeHierarchy = quickHelpCategory ? [...mappedCategories, quickHelpCategory] : mappedCategories;
+        this.hierarchyPageState = {};
+        this.hierarchyActiveDocumentKey = this.documentHierarchyCategories[0]?._key || null;
+        if (this.visibleHierarchyCategories.length === 0) {
+          const firstAvailableTab = this.hierarchyKindTabs.find((tab) => tab.count > 0);
+          this.hierarchyActiveKind = firstAvailableTab?.id || 'managed';
+        }
       } catch (error) {
         this.showNotification(
           this.translate('admin.hierarchy.loadError', 'Failed to load knowledge hierarchy.'),
@@ -2654,6 +2996,9 @@ export default {
     },
 
     showAddServiceForm(category) {
+      if (this.isReadOnlyHierarchyCategory(category)) {
+        return;
+      }
       // MODIFIED: Use translate method for title
       this.hierarchyForm = {
         visible: true,
@@ -2673,6 +3018,12 @@ export default {
 
     async showEditForm(item, parentCategory = null) {
       const isCategory = !parentCategory;
+      if (!isCategory && parentCategory && this.isReadOnlyHierarchyCategory(parentCategory)) {
+        return;
+      }
+      if (isCategory && this.isReadOnlyHierarchyCategory(item)) {
+        return;
+      }
 
       // MODIFIED: Use translate method for title
       const titleKey = isCategory ? 'admin.hierarchy.formTitleEditCategory' : 'admin.hierarchy.formTitleEditService';
@@ -2828,6 +3179,12 @@ export default {
 
     async deleteHierarchyItem(item, parentCategory = null) {
       const isCategory = !parentCategory;
+      if (isCategory && this.isReadOnlyHierarchyCategory(item)) {
+        return;
+      }
+      if (!isCategory && parentCategory && this.isReadOnlyHierarchyCategory(parentCategory)) {
+        return;
+      }
       const type = isCategory ? 'Category' : 'Service';
 
       // MODIFIED: Use new i18n keys for ConfirmDialog
@@ -2906,6 +3263,7 @@ export default {
       // 4. Fallback Logic: DataPrep Status
       if (dataPrepStatus === 'ingested') return 'status-ingested';
       if (dataPrepStatus === 'ingesting') return 'status-ingesting';
+      if (dataPrepStatus === 'queued') return 'status-queued';
       if (dataPrepStatus === 'ingested with warnings') return 'status-ingested-with-warnings';
       if (dataPrepStatus === 'ingestion error') return 'status-ingestion-error';
       if (dataPrepStatus === 'pending') return 'status-pending';
@@ -2935,8 +3293,7 @@ export default {
 
     selectAllDocuments(event) {
       if (event.target.checked) {
-        // MODIFICATION: Select based on _key, not file_id
-        this.selectedDocuments = this.sortedAndFilteredDocuments.map((d) => d._key);
+        this.selectedDocuments = this.sortedAndFilteredDocuments.map((d) => d.file_id).filter(Boolean);
       } else {
         this.selectedDocuments = [];
       }
@@ -2977,13 +3334,21 @@ export default {
 
               // Refresh the document list to show the updated statuses
               await this.loadDocuments();
+              eventBus.$emit('reload-service-tree');
             } catch (error) {
+              const isConflict = error.response && error.response.status === 409;
+              const serverMsg =
+                isConflict && error.response.data && error.response.data.message ? error.response.data.message : null;
               this.showNotification(
-                // MODIFIED: Use new i18n key
-                this.translate(
-                  'admin.documents.ingestQueuedError',
-                  'An error occurred during the batch ingestion process.'
-                ),
+                isConflict
+                  ? this.translate(
+                      'admin.documents.ingestBatchConflict',
+                      serverMsg || 'A batch ingestion is already running. Wait for it to finish, then try again.'
+                    )
+                  : this.translate(
+                      'admin.documents.ingestQueuedError',
+                      'An error occurred during the batch ingestion process.'
+                    ),
                 'error'
               );
               console.error('Batch ingest error:', error);
@@ -2995,8 +3360,36 @@ export default {
             // User canceled, do nothing
           }
         });
+      } else if (action === 'delete') {
+        const count = this.selectedDocuments.length;
+        this.showConfirmDialog({
+          title: this.translate('admin.documents.confirmDeleteTitle', 'Delete files'),
+          message: this.translate(
+            'admin.documents.confirmDeleteSelected',
+            'Permanently delete {count} selected file(s)? This cannot be undone.'
+          ).replace('{count}', count),
+          confirmText: this.translate('common.delete', 'Delete'),
+          cancelText: this.translate('common.cancel', 'Cancel'),
+          onConfirm: async () => {
+            this.isLoading = true;
+            try {
+              await documentFileService.deleteMultipleFiles(this.selectedDocuments);
+              this.showNotification(
+                this.translate('admin.documents.deleteSuccess', '{count} file(s) deleted.').replace('{count}', count),
+                'success'
+              );
+              this.selectedDocuments = [];
+              await this.loadDocuments();
+              eventBus.$emit('reload-service-tree');
+            } catch (error) {
+              this.showNotification(this.translate('admin.documents.deleteError', 'Failed to delete files.'), 'error');
+              console.error('Batch delete error:', error);
+            } finally {
+              this.isLoading = false;
+            }
+          }
+        });
       }
-      // You can add 'else if' blocks for other actions like 'retract' or 'delete' here
     },
     // --- END: DOCUMENT METHODS ---
 
@@ -3019,17 +3412,65 @@ export default {
       this.loadDocuments();
     },
 
-    // Handler for the @files-uploaded event from the UploadFilesDialog
-    handleFilesUploaded(uploadedFiles) {
-      // MODIFIED: Use new i18n key
+    // Handler for the @files-uploaded event from the UploadFilesDialog.
+    // Payload: { uploads: [{ fileName, fileId }], autoIngestScheduled } (preferred) or legacy array.
+    async handleFilesUploaded(uploadedPayload) {
+      const isObjectPayload =
+        uploadedPayload && !Array.isArray(uploadedPayload) && Array.isArray(uploadedPayload.uploads);
+      const autoIngestScheduled = isObjectPayload && uploadedPayload.autoIngestScheduled === true;
+      const rawItems = isObjectPayload ? uploadedPayload.uploads : uploadedPayload || [];
+      const items = rawItems.map((u) => (typeof u === 'string' ? { fileName: u, fileId: null } : u));
       this.showNotification(
         this.translate('admin.documents.uploadSuccessMultiple', `{count} file(s) uploaded successfully.`).replace(
           '{count}',
-          uploadedFiles.length
+          String(items.length)
         ),
         'success'
       );
-      this.refreshDocuments();
+      await this.loadDocuments();
+      if (autoIngestScheduled) {
+        this.showNotification(
+          this.translate(
+            'admin.documents.ingestAfterUpload',
+            'Ingestion started for {count} file(s). Status will update when processing completes.'
+          ).replace('{count}', String(items.filter((i) => i.fileId).length)),
+          'success'
+        );
+      } else {
+        let startedIngest = 0;
+        for (const item of items) {
+          if (!item.fileId) {
+            continue;
+          }
+          try {
+            await documentFileService.ingestFile(item.fileId);
+            startedIngest += 1;
+          } catch (err) {
+            const status = err.response && err.response.status;
+            if (status === 429) {
+              this.showNotification(
+                this.translate(
+                  'admin.documents.ingestBusy',
+                  'Another ingestion job is running. Wait for it to finish, then use Ingest Selected if needed.'
+                ),
+                'info'
+              );
+              break;
+            }
+          }
+        }
+        if (startedIngest > 0) {
+          this.showNotification(
+            this.translate(
+              'admin.documents.ingestAfterUpload',
+              'Ingestion started for {count} file(s). Status will update when processing completes.'
+            ).replace('{count}', String(startedIngest)),
+            'success'
+          );
+        }
+      }
+      await this.loadDocuments();
+      eventBus.$emit('reload-service-tree');
     },
 
     // Handler for the @link-submitted event from the AddFromLinkDialog
@@ -3069,8 +3510,36 @@ export default {
       this.refreshDocuments();
     },
 
-    async loadDocuments() {
-      this.isDocumentsLoading = true;
+    /**
+     * Poll document list while any visible row is Queued or Ingesting (batch pipeline is server-side sequential).
+     */
+    startDocumentsLivePoll() {
+      if (this.documentPollTimer || !this.documentsNeedLiveRefresh) {
+        return;
+      }
+      const tick = async () => {
+        if (!this.documentsNeedLiveRefresh) {
+          this.stopDocumentsLivePoll();
+          return;
+        }
+        await this.loadDocuments({ silent: true });
+      };
+      this.documentPollTimer = setInterval(tick, 5000);
+      tick();
+    },
+
+    stopDocumentsLivePoll() {
+      if (this.documentPollTimer) {
+        clearInterval(this.documentPollTimer);
+        this.documentPollTimer = null;
+      }
+    },
+
+    async loadDocuments(options = {}) {
+      const silent = options.silent === true;
+      if (!silent) {
+        this.isDocumentsLoading = true;
+      }
       try {
         // 1. Prepare Params
         // Note: 'sort' and 'order' removed because the backend returned 400 Bad Request.
@@ -3104,10 +3573,14 @@ export default {
         }
       } catch (error) {
         console.error('Error loading documents:', error);
-        this.showNotification(this.translate('admin.documents.loadError', 'Failed to load documents.'), 'error');
-        this.documents = [];
+        if (!silent) {
+          this.showNotification(this.translate('admin.documents.loadError', 'Failed to load documents.'), 'error');
+          this.documents = [];
+        }
       } finally {
-        this.isDocumentsLoading = false;
+        if (!silent) {
+          this.isDocumentsLoading = false;
+        }
       }
     }
   }
@@ -4633,6 +5106,80 @@ input:checked + .slider:before {
   list-style: none;
   padding-left: 0;
 }
+.hierarchy-kind-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 1rem;
+}
+.hierarchy-kind-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+.hierarchy-kind-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-section);
+}
+.hierarchy-kind-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--primary);
+}
+.hierarchy-kind-count {
+  min-width: 1.5rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--bg-section);
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  text-align: center;
+}
+.hierarchy-kind-tab.active .hierarchy-kind-count {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--primary);
+}
+.hierarchy-subkind-tabs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: -0.25rem 0 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  background: var(--bg-section);
+}
+.hierarchy-subkind-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.hierarchy-subkind-tab:hover {
+  color: var(--text-primary);
+  border-color: var(--primary);
+}
+.hierarchy-subkind-tab.active {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: var(--primary);
+  color: var(--primary);
+}
 .hierarchy-services-list {
   padding-left: 2rem;
   border-left: 2px solid var(--border-color);
@@ -4664,6 +5211,57 @@ input:checked + .slider:before {
 }
 .hierarchy-item:hover .item-actions {
   opacity: 1;
+}
+.hierarchy-category--readonly > .hierarchy-item {
+  border-left: 3px solid #22c55e;
+  padding-left: 0.5rem;
+}
+.hierarchy-readonly-badge {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  margin-left: 0.5rem;
+}
+.hierarchy-pagination {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 10px 12px 2.5rem;
+  color: var(--text-secondary);
+}
+.hierarchy-page-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.hierarchy-page-btn:hover:not(:disabled),
+.hierarchy-page-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.hierarchy-page-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.hierarchy-page-ellipsis {
+  min-width: 20px;
+  text-align: center;
+  color: var(--text-tertiary);
+}
+.hierarchy-page-summary {
+  margin-left: 4px;
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
 }
 .action-btn {
   background: none;
@@ -4713,6 +5311,29 @@ input:checked + .slider:before {
   padding-bottom: 1rem;
   border-bottom: 1px solid var(--border-color);
 }
+.document-batch-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.document-selection-hint {
+  font-size: 0.75rem;
+  margin: -0.25rem 0 0.75rem;
+  line-height: 1.35;
+  color: var(--text-secondary, #64748b);
+}
+.text-secondary {
+  color: var(--text-secondary, #64748b);
+}
+.btn-danger-outline {
+  border-color: var(--danger, #ef4444) !important;
+  color: var(--danger, #ef4444) !important;
+  background: transparent;
+}
+.btn-danger-outline:hover:not(:disabled) {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+}
 .filter-select {
   padding: 0.5rem;
   border-radius: 0.25rem;
@@ -4757,6 +5378,22 @@ input:checked + .slider:before {
 .status-pending {
   background-color: rgba(22, 72, 144, 0.1);
   color: var(--secondary);
+}
+.status-cell-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.status-kb-added {
+  background-color: rgba(16, 185, 129, 0.18);
+  color: var(--success);
+  font-size: 0.7rem;
+  text-transform: none;
+}
+.status-queued {
+  background-color: rgba(245, 158, 11, 0.12);
+  color: var(--warning);
 }
 .status-retracted {
   background-color: rgba(100, 116, 139, 0.1);

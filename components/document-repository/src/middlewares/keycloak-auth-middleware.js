@@ -1,14 +1,17 @@
 'use strict';
 
-// Adapted from gov-chat-backend/services/keycloak-auth-service.js
+// Adapted from gov-chat-backend/services/keycloak-auth-service.js and
+// gov-chat-backend/middleware/keycloak-auth-middleware.js (legacy JWT path).
 // Validates Keycloak JWTs via JWKS with defense-in-depth:
 // - Signature verification via JWKS
 // - Issuer validation (jwtVerify issuer option)
 // - Audience validation (azp claim)
 // - Algorithm restriction (RS256 only)
+// Falls back to HS256 legacy app JWT (same secret as gov-chat-backend /api/auth/login)
+// so admin flows work when users sign in with username/password instead of OIDC.
 const jose = require('jose');
 const appConfig = require('../config/appConfig');
-const { logger } = require('../../shared-lib');
+const { logger, dbService } = require('../../shared-lib');
 
 const PUBLIC_PATHS = ['/health', '/api-docs', '/api', '/api-docs.json'];
 
@@ -32,6 +35,54 @@ async function getJWKS() {
   return jwks;
 }
 
+function hasKeycloakJwksConfig() {
+  return !!(appConfig.security.keycloakUrl && appConfig.security.keycloakRealm);
+}
+
+/**
+ * Verify HS256 JWT from /api/auth/login (gov-chat-backend) and load user from ArangoDB.
+ * @param {string} token
+ * @returns {Promise<{ kind: 'ok', user: object } | { kind: 'expired' } | { kind: 'forbidden' } | { kind: 'invalid' }>}
+ */
+async function tryLegacyAppJwt(token) {
+  const jwtSecret = process.env.JWT_SECRET || 'your-secret-key-here-change-in-production';
+  const secretKey = new TextEncoder().encode(jwtSecret);
+  let payload;
+  try {
+    ({ payload } = await jose.jwtVerify(token, secretKey, { algorithms: ['HS256'] }));
+  } catch (e) {
+    if (e.name === 'JWTExpired') {
+      return { kind: 'expired' };
+    }
+    return { kind: 'invalid' };
+  }
+  if (!payload || typeof payload.userId !== 'string') {
+    return { kind: 'invalid' };
+  }
+  try {
+    const db = await dbService.getConnection('default');
+    const user = await db.collection('users').document(payload.userId);
+    if (user.deleted === true) {
+      return { kind: 'forbidden' };
+    }
+    const roleStr = user.role || 'User';
+    const rolesFromUser = Array.isArray(user.roles) ? user.roles : roleStr ? [roleStr] : [];
+    return {
+      kind: 'ok',
+      user: {
+        userId: user._key,
+        role: roleStr,
+        sub: user.iss_sub || `legacy#${user._key}`,
+        roles: rolesFromUser,
+        iss: 'legacy'
+      }
+    };
+  } catch (err) {
+    logger.debug(`[KEYCLOAK-AUTH] Legacy JWT user lookup failed: ${err.message}`);
+    return { kind: 'invalid' };
+  }
+}
+
 /**
  * Check if a given path is a public route
  * @param {string} path - Request path
@@ -44,6 +95,27 @@ function isPublicRoute(path) {
     }
     return path === publicPath;
   });
+}
+
+function getInternalServiceToken() {
+  return process.env.SERVICE_AUTH_TOKEN || process.env.JWT_SECRET || '';
+}
+
+function isDataprepInternalCallback(req) {
+  const path = req.originalUrl || req.path || req.url || '';
+  const hasAllowedPath =
+    /^\/api\/files\/[^/]+\/status(?:\?.*)?$/.test(path) ||
+    /^\/api\/files\/[^/]+\/ingestion-log(?:\?.*)?$/.test(path) ||
+    /^\/api\/files\/[^/]+\/ingestion-metadata(?:\?.*)?$/.test(path);
+  if (!hasAllowedPath) {
+    return false;
+  }
+  const presentedToken = String(req.headers['x-service-token'] || '').trim();
+  const expectedToken = getInternalServiceToken();
+  if (!presentedToken || !expectedToken) {
+    return false;
+  }
+  return presentedToken === expectedToken;
 }
 
 /**
@@ -65,12 +137,24 @@ function mapRole(roles) {
 }
 
 /**
- * Authenticate request using Keycloak JWT via JWKS
+ * Authenticate request using Keycloak JWT via JWKS, or legacy HS256 app JWT.
  */
 const authenticateToken = async (req, res, next) => {
   const path = req.originalUrl || req.path || req.url || '/';
 
   if (isPublicRoute(path)) {
+    return next();
+  }
+
+  // Internal dataprep fallback for status/log/metadata callbacks when OIDC service-account flow is down.
+  if (isDataprepInternalCallback(req)) {
+    req.user = {
+      userId: 'internal-dataprep',
+      role: 'dataprep-service',
+      iss: 'internal-service-token',
+      sub: 'internal-dataprep',
+      roles: ['dataprep-service']
+    };
     return next();
   }
 
@@ -93,71 +177,75 @@ const authenticateToken = async (req, res, next) => {
       });
     }
 
-    let keySet;
-    try {
-      keySet = await getJWKS();
-    } catch (err) {
-      logger.error(`[KEYCLOAK-AUTH] JWKS initialization failed: ${err.message}`);
-      return res.status(503).json({
-        error: 'AUTH_SERVICE_UNAVAILABLE',
-        message: 'Authentication service unavailable',
-        details: {}
-      });
-    }
-
-    let decoded;
-    try {
-      // jwtVerify validates: signature, issuer, expiration, and not-before
-      const { payload } = await jose.jwtVerify(token, keySet, {
-        issuer: expectedIssuer,
-        requiredClaims: ['iss', 'exp']
-      });
-      decoded = payload;
-    } catch (err) {
-      if (err.name === 'JWTExpired') {
-        return res.status(401).json({
-          error: 'TOKEN_EXPIRED',
-          message: 'Token has expired',
-          details: {}
+    if (hasKeycloakJwksConfig()) {
+      try {
+        const keySet = await getJWKS();
+        const { payload: decoded } = await jose.jwtVerify(token, keySet, {
+          issuer: expectedIssuer,
+          requiredClaims: ['iss', 'exp']
         });
+
+        const expectedClientId = appConfig.security.keycloakClientId;
+        if (decoded.azp && expectedClientId && decoded.azp !== expectedClientId) {
+          return res.status(401).json({
+            error: 'TOKEN_INVALID',
+            message: 'Token audience validation failed',
+            details: {}
+          });
+        }
+
+        const roles = decoded.realm_access?.roles || [];
+        const role = mapRole(roles);
+
+        req.user = {
+          userId: decoded.sub,
+          role: role,
+          iss: decoded.iss,
+          sub: decoded.sub,
+          roles: roles
+        };
+
+        return next();
+      } catch (err) {
+        if (err.name === 'JWTExpired') {
+          return res.status(401).json({
+            error: 'TOKEN_EXPIRED',
+            message: 'Token has expired',
+            details: {}
+          });
+        }
+        logger.debug(
+          `[KEYCLOAK-AUTH] Keycloak JWT path failed (${err.name || err.message}); trying legacy JWT`
+        );
       }
-      if (err.name === 'JWTClaimValidationFailed') {
-        return res.status(401).json({
-          error: 'TOKEN_INVALID',
-          message: 'Token claim validation failed',
-          details: {}
-        });
-      }
+    }
+
+    const legacy = await tryLegacyAppJwt(token);
+    if (legacy.kind === 'expired') {
       return res.status(401).json({
-        error: 'TOKEN_INVALID',
-        message: 'Token verification failed',
+        error: 'TOKEN_EXPIRED',
+        message: 'Token has expired',
         details: {}
       });
     }
-
-    // Validate azp (authorized party) — the client that requested the token.
-    // Keycloak 26+ sets aud=account for access tokens; azp holds the actual client ID.
-    const expectedClientId = appConfig.security.keycloakClientId;
-    if (decoded.azp && decoded.azp !== expectedClientId) {
-      return res.status(401).json({
-        error: 'TOKEN_INVALID',
-        message: 'Token audience validation failed',
+    if (legacy.kind === 'forbidden') {
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'User account is deactivated',
         details: {}
       });
     }
+    if (legacy.kind === 'ok') {
+      req.user = legacy.user;
+      logger.debug(`[KEYCLOAK-AUTH] Legacy JWT accepted for user ${legacy.user.userId}`);
+      return next();
+    }
 
-    const roles = decoded.realm_access?.roles || [];
-    const role = mapRole(roles);
-
-    req.user = {
-      userId: decoded.sub,
-      role: role,
-      iss: decoded.iss,
-      sub: decoded.sub,
-      roles: roles
-    };
-
-    next();
+    return res.status(401).json({
+      error: 'TOKEN_INVALID',
+      message: 'Token verification failed',
+      details: {}
+    });
   } catch (error) {
     logger.error(`[KEYCLOAK-AUTH] Unexpected error: ${error.message}`);
     return res.status(500).json({

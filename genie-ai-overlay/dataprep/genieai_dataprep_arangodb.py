@@ -7,6 +7,7 @@ import fcntl  # Added for file locking
 import json
 import os
 import re
+from datetime import datetime, timezone
 from typing import Any
 
 import aiohttp
@@ -22,6 +23,9 @@ from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDo
 
 # Import Custom Utils
 from comps.dataprep.src.genieai_dataprep_utils import docling_document_loader, document_loader, is_valid_content
+
+from agri_metadata.extractor import METADATA_EXTRACTION_VERSION_DEFAULT, AgriTaxonomyExtractor
+from agri_metadata.schema import taxonomy_to_chunk_flat
 
 # Import Parent Class
 from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep
@@ -59,19 +63,23 @@ CONTENT_EXTRACTION_METHOD = os.getenv("CONTENT_EXTRACTION_METHOD", "opea")
 LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
 # New: Concurrency Control for Batches
 MAX_CONCURRENT_BATCHES = int(os.getenv("DATAPREP_MAX_CONCURRENT_BATCHES", "5"))
+AGRI_TAXONOMY_ENABLED = os.getenv("AGRI_TAXONOMY_ENABLED", "true").lower() == "true"
 
 # Spec 5.3: Externalized Prompt - Two-tier priority
 # Level 1: ENV VAR (highest priority) - override via .env
 # Level 2: Hardcoded default (fallback) - works out-of-the-box
 _LABEL_SELECTOR_DEFAULT = """
 <SYSTEM INSTRUCTIONS>
-You are a precise semantic labeler for a RAG knowledge graph.
-Goal: Assign 1–4 MOST RELEVANT labels from the list below that best match the chunk content.
+You are a precise semantic labeler for a Lesotho-focused agricultural RAG knowledge graph.
+Goal: Assign 1–4 MOST RELEVANT labels from the list below that best match the chunk content (crops,
+livestock, soil, climate, extension topics, or other categories your list uses for farming in Lesotho).
 Rules:
 - Return ONLY labels that are strongly relevant.
 - Most chunks get 1–3 labels. Never exceed 5.
 - Do NOT "maximize" coverage.
 - Do NOT suggest new labels.
+- Do NOT assign labels based on Kenya-specific government or tax content unless the chunk explicitly
+  discusses such material.
 - If nothing fits well → return empty list.
 - Use ONLY exact strings from the list.
 
@@ -121,11 +129,28 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _service_headers(self):
         """Return auth headers using Keycloak service account Bearer token."""
+        service_token = os.getenv("SERVICE_AUTH_TOKEN") or os.getenv("JWT_SECRET")
+        if service_token:
+            # Prefer internal service-token auth for stable in-cluster callbacks.
+            return {
+                "X-Service-Token": service_token,
+                "X-Service-Name": "dataprep-arango-service",
+                "Content-Type": "application/json",
+            }
         try:
             token = await get_service_account_token()
             return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         except Exception as e:
             logger.error(f"Failed to obtain service account token: {e}")
+            # Fallback for environments where Keycloak service-account token flow is unavailable.
+            # This keeps internal dataprep -> document-repository callbacks operational.
+            if service_token:
+                logger.warning("Using SERVICE_AUTH_TOKEN/JWT_SECRET fallback for internal dataprep callbacks.")
+                return {
+                    "X-Service-Token": service_token,
+                    "X-Service-Name": "dataprep-arango-service",
+                    "Content-Type": "application/json",
+                }
             return None
 
     async def _update_doc_status(self, file_id: str, status: str, chunk_count: int = None):
@@ -186,6 +211,52 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         except Exception as e:
             logger.error(f"Error calling Doc Repo Log API: {e}")
 
+    async def _patch_ingestion_metadata(self, file_id: str, payload: dict):
+        """PATCH extended ingestion fields (taxonomy) on the document-repository service."""
+        headers = await self._service_headers()
+        if not headers:
+            logger.warning(f"Skipping ingestion-metadata patch for {file_id} (no auth token).")
+            return
+        url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/ingestion-metadata"
+        try:
+            async with (
+                self._log_semaphore,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=45)) as session,
+                session.patch(url, json=payload, headers=headers) as response,
+            ):
+                if response.status not in (200, 204):
+                    logger.error(
+                        f"ingestion-metadata patch failed for {file_id}: "
+                        f"{response.status} {await response.text()}"
+                    )
+        except Exception as e:
+            logger.error(f"ingestion-metadata patch error for {file_id}: {e}")
+
+    def _ensure_taxonomy_indexes(self, graph_name: str) -> None:
+        """Persistent indexes for metadata-filtered hybrid retrieval on SOURCE chunks."""
+        col_name = f"{graph_name}_SOURCE"
+        try:
+            if not self.db.has_collection(col_name):
+                return
+            col = self.db.collection(col_name)
+            specs = [
+                (["tax_countries"], "idx_tax_countries"),
+                (["tax_crop_names"], "idx_tax_crop_names"),
+                (["tax_varietals"], "idx_tax_varietals"),
+                (["tax_topics"], "idx_tax_topics"),
+                (["tax_climates"], "idx_tax_climates"),
+                (["tax_document_types"], "idx_tax_document_types"),
+                (["tax_is_relevant"], "idx_tax_is_relevant"),
+            ]
+            for fields, name in specs:
+                try:
+                    col.add_persistent_index(fields=fields, name=name, in_background=True)
+                except Exception as ie:  # noqa: BLE001
+                    if "duplicate" not in str(ie).lower():
+                        logger.warning(f"Taxonomy index {name}: {ie}")
+        except Exception as e:
+            logger.warning(f"Skipping taxonomy index ensure for {col_name}: {e}")
+
     async def _fetch_all_labels(self):
         """Fetch full taxonomy from the Backend Service to guide the LLM."""
         headers = await self._service_headers()
@@ -230,20 +301,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     # --- Core Pipeline Steps ---
 
-    async def _load_and_chunk(self, doc_path: DocPath) -> list[str]:
-        path = doc_path.path
+    @staticmethod
+    def _flatten_content_for_metadata(content: Any) -> str:
+        if isinstance(content, list):
+            return "\n\n".join(str(x) for x in content if x is not None)
+        return str(content or "")
 
-        # --- FIX: Expanded Docling Support ---
-        # Added .docx, .pptx, .xlsx, .md, .txt, .html support
+    async def _extract_raw_document_content(self, doc_path: DocPath) -> Any:
+        """Text extraction only (Docling or standard loader)."""
+        path = doc_path.path
         docling_extensions = (".pdf", ".docx", ".pptx", ".xlsx", ".html", ".txt", ".md", ".asciidoc")
 
         if path.endswith(docling_extensions) and CONTENT_EXTRACTION_METHOD == "docling":
             logger.info(f"Using Docling for file: {path}")
-            content = await docling_document_loader(path)
-        else:
-            logger.info(f"Using Standard Loader for file: {path}")
-            content = await document_loader(path)
+            return await docling_document_loader(path)
+        logger.info(f"Using Standard Loader for file: {path}")
+        return await document_loader(path)
 
+    def _plain_chunks_from_content(self, path: str, content: Any, doc_path: DocPath) -> list[str]:
         if not content:
             return []
 
@@ -270,8 +345,60 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             docs = text_splitter.create_documents([content])
             plain_chunks = [d.page_content for d in docs]
 
-        valid_chunks = [c for c in plain_chunks if is_valid_content(c)]
-        return valid_chunks
+        return [c for c in plain_chunks if is_valid_content(c)]
+
+    async def _load_and_chunk(self, doc_path: DocPath) -> list[str]:
+        content = await self._extract_raw_document_content(doc_path)
+        return self._plain_chunks_from_content(doc_path.path, content, doc_path)
+
+    async def reextract_taxonomy_only(self, input: ArangoDBDataprepRequestFromDocRepo) -> dict[str, Any]:
+        """
+        Re-run agricultural metadata extraction from an on-disk file (no chunking / graph writes).
+        Used by admin or CLI batch tools to refresh document-level taxonomy in the files collection.
+        """
+        doc_path = DocPath(
+            path=input.file_path,
+            chunk_size=input.chunk_size,
+            chunk_overlap=input.chunk_overlap,
+            process_table=input.process_table,
+            table_strategy=input.table_strategy,
+        )
+        raw_content = await self._extract_raw_document_content(doc_path)
+        if not raw_content:
+            raise HTTPException(status_code=400, detail="No textual content extracted.")
+
+        flat_meta_text = self._flatten_content_for_metadata(raw_content)
+
+        def _tax_log(level: str, stage: str, message: str) -> None:
+            try:
+                asyncio.get_running_loop().create_task(
+                    self._write_ingestion_log(input.file_id, level, stage, message)
+                )
+            except RuntimeError:
+                pass
+
+        extractor = AgriTaxonomyExtractor(log=_tax_log)
+        normalized, telemetry = await extractor.extract(flat_meta_text, input.file_id)
+        await self._patch_ingestion_metadata(
+            input.file_id,
+            {
+                "taxonomyMetadata": normalized.model_dump(),
+                "metadataExtractionVersion": METADATA_EXTRACTION_VERSION_DEFAULT,
+                "metadataExtractionTimestamp": datetime.now(timezone.utc).isoformat(),
+                "metadataConfidenceScore": normalized.metadataConfidenceScore,
+                "taxonomyVersion": normalized.taxonomyVersion,
+                "isRelevant": normalized.isRelevant,
+                "taxonomyExtractionTelemetry": telemetry,
+            },
+        )
+        return {
+            "success": True,
+            "file_id": input.file_id,
+            "taxonomyVersion": normalized.taxonomyVersion,
+            "isRelevant": normalized.isRelevant,
+            "metadataConfidenceScore": normalized.metadataConfidenceScore,
+            "telemetry": telemetry,
+        }
 
     async def _run_guardrail(self, plain_chunks: list[str]) -> dict[str, Any]:
         if not GUARDRAIL_ENABLED:
@@ -559,8 +686,49 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     table_strategy=input.table_strategy,
                 )
 
-                # 2. Extract and Chunk Content
-                chunks = await self._load_and_chunk(doc_path)
+                # 2. Extract raw text → agricultural taxonomy (pre-chunk) → chunk
+                raw_content = await self._extract_raw_document_content(doc_path)
+                if not raw_content:
+                    raise Exception("No valid content extracted from file.")
+
+                graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH"))
+                tax_flat: dict[str, Any] = {}
+
+                if AGRI_TAXONOMY_ENABLED:
+                    self._ensure_taxonomy_indexes(graph_name)
+                    flat_meta_text = self._flatten_content_for_metadata(raw_content)
+
+                    def _tax_log(level: str, stage: str, message: str) -> None:
+                        try:
+                            asyncio.get_running_loop().create_task(
+                                self._write_ingestion_log(input.file_id, level, stage, message)
+                            )
+                        except RuntimeError:
+                            pass
+
+                    extractor = AgriTaxonomyExtractor(log=_tax_log)
+                    normalized, telemetry = await extractor.extract(flat_meta_text, input.file_id)
+                    tax_flat = taxonomy_to_chunk_flat(normalized)
+                    await self._patch_ingestion_metadata(
+                        input.file_id,
+                        {
+                            "taxonomyMetadata": normalized.model_dump(),
+                            "metadataExtractionVersion": METADATA_EXTRACTION_VERSION_DEFAULT,
+                            "metadataExtractionTimestamp": datetime.now(timezone.utc).isoformat(),
+                            "metadataConfidenceScore": normalized.metadataConfidenceScore,
+                            "taxonomyVersion": normalized.taxonomyVersion,
+                            "isRelevant": normalized.isRelevant,
+                            "taxonomyExtractionTelemetry": telemetry,
+                        },
+                    )
+                    await self._write_ingestion_log(
+                        input.file_id,
+                        "INFO",
+                        "AgriTaxonomy",
+                        f"Taxonomy metadata extracted (fallback={telemetry.get('fallback_used')}).",
+                    )
+
+                chunks = self._plain_chunks_from_content(doc_path.path, raw_content, doc_path)
                 if not chunks:
                     raise Exception("No valid content extracted from file.")
 
@@ -577,21 +745,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 labelled_docs = await self._apply_labels(chunks, all_labels, file_labels, input.file_id)
 
                 # 5. Graph Insertion (BATCHED & CONCURRENT)
-                graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH"))
-
                 documents_to_process = []
                 for i, doc in enumerate(labelled_docs):
-                    documents_to_process.append(
-                        Document(
-                            page_content=doc["text"],
-                            metadata={
-                                "file_id": input.file_id,
-                                "file_path": input.storage_path,
-                                "chunk_index": i,
-                                "chunk_labels": doc["labels"],
-                            },
-                        )
-                    )
+                    chunk_meta: dict[str, Any] = {
+                        "file_id": input.file_id,
+                        "file_path": input.storage_path,
+                        "chunk_index": i,
+                        "chunk_labels": doc["labels"],
+                    }
+                    chunk_meta.update(tax_flat)
+                    documents_to_process.append(Document(page_content=doc["text"], metadata=chunk_meta))
 
                 BATCH_SIZE = 10
                 total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE

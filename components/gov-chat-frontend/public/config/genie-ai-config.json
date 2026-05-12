@@ -157,7 +157,11 @@
                           "string",
                           "null"
                         ],
-                        "description": "Category ID for the button (null for general)"
+                        "description": "serviceCategories._key (catKey) when it matches this deployment. Prefer categoryNameEN for portable configs."
+                      },
+                      "categoryNameEN": {
+                        "type": "string",
+                        "description": "English category title (must match serviceCategories.nameEN). Resolved to catKey at runtime; use instead of legacy numeric category when hierarchy is re-seeded."
                       },
                       "action": {
                         "type": "object",
@@ -234,7 +238,7 @@
     "title": "GENIE.AI",
     "icon": {
       "type": "file",
-      "value": "/config/genie-ai-icon-light.svg"
+      "value": "/config/genie-ai-inko.svg"
     }
   },
   "theme": {
@@ -273,13 +277,14 @@
             }
           },
           {
-            "id": "identity-civil",
+            "id": "maize",
             "title": "quickhelp.applyForID",
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/identity-civil.svg"
+              "value": "/config/quickhelp/maize.svg"
             },
-            "category": "1",
+            "category": null,
+            "categoryNameEN": "Maize",
             "action": {
               "visibleText": "quickhelp.applyForIDUserPrompt",
               "hiddenPrompt": "quickhelp.applyForIDPrompt"
@@ -291,13 +296,14 @@
             }
           },
           {
-            "id": "taxes-revenue",
+            "id": "beans",
             "title": "quickhelp.payTaxes",
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/taxes-revenue.svg"
+              "value": "/config/quickhelp/beans.svg"
             },
-            "category": "5",
+            "category": null,
+            "categoryNameEN": "Beans",
             "action": {
               "visibleText": "quickhelp.payTaxesUserPrompt",
               "hiddenPrompt": "quickhelp.payTaxesPrompt"
@@ -309,13 +315,14 @@
             }
           },
           {
-            "id": "business-trade",
+            "id": "soil-fertility",
             "title": "quickhelp.startBusiness",
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/business-trade.svg"
+              "value": "/config/quickhelp/soil-fertility.svg"
             },
-            "category": "8",
+            "category": null,
+            "categoryNameEN": "Soil fertility",
             "action": {
               "visibleText": "quickhelp.startBusinessUserPrompt",
               "hiddenPrompt": "quickhelp.startBusinessPrompt"
@@ -327,13 +334,14 @@
             }
           },
           {
-            "id": "healthcare-social",
+            "id": "pests-diseases",
             "title": "quickhelp.findHealthcare",
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/healthcare-social.svg"
+              "value": "/config/quickhelp/pests-diseases.svg"
             },
-            "category": "2",
+            "category": null,
+            "categoryNameEN": "Pests & diseases",
             "action": {
               "visibleText": "quickhelp.findHealthcareUserPrompt",
               "hiddenPrompt": "quickhelp.findHealthcarePrompt"
@@ -345,13 +353,14 @@
             }
           },
           {
-            "id": "education-learning",
+            "id": "livestock",
             "title": "quickhelp.educationServices",
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/education-learning.svg"
+              "value": "/config/quickhelp/livestock.svg"
             },
-            "category": "3",
+            "category": null,
+            "categoryNameEN": "Livestock",
             "action": {
               "visibleText": "quickhelp.educationServicesUserPrompt",
               "hiddenPrompt": "quickhelp.educationServicesPrompt"
@@ -363,13 +372,14 @@
             }
           },
           {
-            "id": "transportation-mobility",
+            "id": "water-irrigation",
             "title": "quickhelp.transportLicenses",
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/transportation-mobility.svg"
+              "value": "/config/quickhelp/water-irrigation.svg"
             },
-            "category": "7",
+            "category": null,
+            "categoryNameEN": "Water & irrigation",
             "action": {
               "visibleText": "quickhelp.transportLicensesUserPrompt",
               "hiddenPrompt": "quickhelp.transportLicensesPrompt"
@@ -381,13 +391,14 @@
             }
           },
           {
-            "id": "housing-urban",
+            "id": "weather-seasons",
             "title": "quickhelp.housingPrograms",
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/housing-urban.svg"
+              "value": "/config/quickhelp/weather-seasons.svg"
             },
-            "category": "9",
+            "category": null,
+            "categoryNameEN": "Weather & seasons",
             "action": {
               "visibleText": "quickhelp.housingProgramsUserPrompt",
               "hiddenPrompt": "quickhelp.housingProgramsPrompt"
@@ -399,13 +410,14 @@
             }
           },
           {
-            "id": "employment-labor",
+            "id": "markets-cooperatives",
             "title": "quickhelp.findJobs",
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/employment-labor.svg"
+              "value": "/config/quickhelp/markets-cooperatives.svg"
             },
-            "category": "4",
+            "category": null,
+            "categoryNameEN": "Markets & cooperatives",
             "action": {
               "visibleText": "quickhelp.findJobsUserPrompt",
               "hiddenPrompt": "quickhelp.findJobsPrompt"

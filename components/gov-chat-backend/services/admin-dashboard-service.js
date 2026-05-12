@@ -210,10 +210,12 @@ class AdminDashboardService {
 
       const resourceUsage = await this.resourceUsageMonitor.getResourceUsage();
       logger.debug(`Resource Usage: ${JSON.stringify(resourceUsage)}`);
+      const apiHealth = await this.checkApiServicesHealth();
+      logger.debug(`API health check result: ${JSON.stringify(apiHealth)}`);
 
       logger.debug('Determining health status of services');
       const healthServices = [
-        { id: 'apiServices', name: 'API Services', status: resourceUsage.cpu < 80 ? 'good' : 'warning' },
+        { id: 'apiServices', name: 'API Services', status: apiHealth.status },
         { id: 'database', name: 'Database', status: 'good' },
         { id: 'cache', name: 'Cache', status: 'good' },
         { id: 'storage', name: 'Storage', status: resourceUsage.storage < 90 ? 'good' : 'warning' },
@@ -294,20 +296,57 @@ class AdminDashboardService {
     try {
       logger.debug('Fetching collection statistics');
       const collections = await this.db.collections();
+
+      /**
+       * Best-effort byte estimate from ArangoDB collection figures (shape varies by version / engine).
+       * ArangoDB 3.12+ may expose sizes under figures.files, figures.indexes, etc., not only documentsSize.
+       */
+      const collectionBytes = raw => {
+        if (!raw || typeof raw !== 'object') return 0;
+        let n = 0;
+        const add = v => {
+          if (typeof v === 'number' && Number.isFinite(v) && v > 0) n += v;
+        };
+        const walk = obj => {
+          if (!obj || typeof obj !== 'object') return;
+          add(obj.documentsSize);
+          add(obj.size);
+          if (obj.indexes && typeof obj.indexes === 'object') add(obj.indexes.size);
+          if (obj.datafiles && typeof obj.datafiles === 'object') add(obj.datafiles.fileSize);
+          if (obj.journals && typeof obj.journals === 'object') add(obj.journals.fileSize);
+          if (obj.files && typeof obj.files === 'object') add(obj.files.fileSize);
+        };
+        walk(raw);
+        if (raw.figures) walk(raw.figures);
+        return n;
+      };
+
+      const formatDiskBytes = bytes => {
+        if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+        return `${parseFloat((bytes / 1024 ** i).toFixed(i === 0 ? 0 : 2))} ${units[i]}`;
+      };
+
       const collectionStats = await Promise.all(
         collections.map(async (collection) => {
           const figures = await collection.figures();
-          logger.debug(`Collection ${collection.name}: count=${figures.count}, size=${figures.size}`);
+          const inner = figures.figures || figures;
+          const count = typeof inner.alive === 'number'
+            ? inner.alive
+            : (typeof figures.count === 'number' ? figures.count : 0);
+          const bytes = collectionBytes(figures);
+          logger.debug(`Collection ${collection.name}: count=${count}, bytes=${bytes}`);
           return {
             name: collection.name,
-            count: figures.count,
-            size: figures.size
+            count,
+            size: bytes
           };
         })
       );
 
       const totalSize = collectionStats.reduce((sum, coll) => sum + coll.size, 0);
-      const formattedSize = (totalSize / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+      const formattedSize = formatDiskBytes(totalSize);
       logger.debug(`Total database size: ${totalSize} bytes, formatted: ${formattedSize}`);
 
       const response = {
@@ -1162,6 +1201,48 @@ class AdminDashboardService {
       throw error;
     }
   }
+
+  async _probeHttp(url) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      // 4xx can still indicate a healthy service (e.g., auth required).
+      return response.status > 0 && response.status < 500;
+    } catch (error) {
+      logger.warn(`API probe failed for ${url}: ${error.message}`);
+      return false;
+    }
+  }
+
+  async checkApiServicesHealth() {
+    const dataprepHost = (process.env.DATAPREP_HOST || 'http://dataprep-arango-service').replace(/\/+$/, '');
+    const dataprepPort = String(process.env.DATAPREP_PORT || '5000').replace(/^:/, '');
+    const dataprepBase = /:\d+$/.test(dataprepHost) ? dataprepHost : `${dataprepHost}:${dataprepPort}`;
+
+    const checks = [
+      { service: 'backend', url: `http://localhost:${process.env.BACKEND_PORT || '3000'}/api-docs` },
+      { service: 'document-repository', url: `${process.env.DOCUMENT_REPOSITORY_URL || 'http://document-repository:3001'}/api/files` },
+      { service: 'dataprep', url: `${dataprepBase}/v1/health_check` },
+      { service: 'retriever', url: `http://${process.env.RETRIEVER_SERVICE_HOST_IP || 'retriever-arango-service'}:${process.env.RETRIEVER_SERVICE_PORT || '7025'}/v1/health_check` },
+      { service: 'chatqna', url: `http://${process.env.OPEA_HOST || 'chatqna-xeon-backend-server'}:${process.env.OPEA_PORT || '8888'}/v1/health_check` },
+      { service: 'reranker', url: `http://${process.env.RERANK_SERVER_HOST_IP || 'reranker'}:${process.env.RERANK_SERVER_PORT || '8000'}/v1/health_check` }
+    ];
+
+    const results = await Promise.all(
+      checks.map(async (check) => ({
+        service: check.service,
+        healthy: await this._probeHttp(check.url)
+      }))
+    );
+
+    const failed = results.filter((r) => !r.healthy);
+    if (failed.length === 0) {
+      return { status: 'good', checks: results };
+    }
+    if (failed.length <= 2) {
+      return { status: 'warning', checks: results };
+    }
+    return { status: 'error', checks: results };
+  }
 }
 
 class ResourceUsageMonitor {
@@ -1172,7 +1253,8 @@ class ResourceUsageMonitor {
   }
 
   async getCpuUsage() {
-    return Math.round((os.loadavg()[0] / os.cpus().length) * 100);
+    const value = Math.round((os.loadavg()[0] / os.cpus().length) * 100);
+    return Math.min(Math.max(value, 0), 100);
   }
 
   async getMemoryUsage() {

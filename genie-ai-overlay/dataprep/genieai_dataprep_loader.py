@@ -27,3 +27,8 @@ class GenieDataprepLoader(OpeaDataprepLoader):
         if logflag:
             logger.info("[ dataprep loader ] retract files")
         return await self.component.retract_file(*args, **kwargs)
+
+    async def reextract_taxonomy_only(self, *args, **kwargs):
+        if logflag:
+            logger.info("[ dataprep loader ] reextract taxonomy")
+        return await self.component.reextract_taxonomy_only(*args, **kwargs)

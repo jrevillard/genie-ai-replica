@@ -676,7 +676,8 @@ async function sendMsg(){
     const d=await r.json();
     rmTyping(tid);
     if(d.response){
-      const conf=d.metadata&&d.metadata.confidence_score?d.metadata.confidence_score:0;
+      const rawConf = d.metadata && d.metadata.confidence_score;
+      const conf = typeof rawConf === 'number' && Number.isFinite(rawConf) ? rawConf : null;
       const hasSrc=!!(d.metadata&&d.metadata.source_documents&&d.metadata.source_documents.length);
       addBubble(d.response,'ai',hasSrc,conf);
     }else if(d.error==='Unauthorized'||(d.message&&d.message.includes('log in'))){
@@ -689,7 +690,7 @@ async function sendMsg(){
   saveChatHistory();
 }
 
-function addBubble(txt,sender,src,conf){src=src||false;conf=conf||0;
+function addBubble(txt,sender,src,conf){src=src||false;
   const m=document.getElementById('chat-msgs');if(!m)return;
   const now=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
   const d=document.createElement('div');
@@ -700,7 +701,7 @@ function addBubble(txt,sender,src,conf){src=src||false;conf=conf||0;
   }else{
     const adv=src?'<div style="display:flex;align-items:center;gap:4px;margin-bottom:8px"><span style="font-size:9px;font-weight:900;color:var(--secondary);text-transform:uppercase;letter-spacing:.05em;background:rgba(144,76,39,.12);padding:2px 8px;border-radius:5px">Advisory · Keletso</span></div>':'';
     const brd=src?' style="border-left:4px solid var(--secondary-c)"':'';
-    const confPct=conf>0?Math.round(conf*100):null;
+    const confPct=typeof conf==='number'&&Number.isFinite(conf)?Math.round(conf*100):null;
     let confBar='';
     if(confPct!==null){const col=confPct>=60?'#16a34a':confPct>=35?'#d97706':'#ba1a1a';confBar='<div style="display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(193,201,191,.2)"><div style="flex:1;background:var(--surf-highest);border-radius:999px;height:4px"><div style="background:'+col+';height:4px;border-radius:999px;width:'+Math.min(confPct,100)+'%"></div></div><span style="font-size:9px;font-weight:700;color:'+col+'">'+confPct+'% confidence</span></div>';}
     const fb='<div style="display:flex;gap:6px;margin-top:6px"><button onclick="submitFeedback(this,1)" style="padding:3px 8px;border-radius:7px;background:var(--surf-mid);border:1px solid rgba(193,201,191,.3);font-size:9px;font-weight:700;color:var(--on-sv);cursor:pointer">Helpful</button><button onclick="submitFeedback(this,-1)" style="padding:3px 8px;border-radius:7px;background:var(--surf-mid);border:1px solid rgba(193,201,191,.3);font-size:9px;font-weight:700;color:var(--on-sv);cursor:pointer">Not helpful</button></div>';

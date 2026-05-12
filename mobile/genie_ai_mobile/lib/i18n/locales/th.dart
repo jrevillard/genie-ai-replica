@@ -1005,7 +1005,7 @@ const Map<String, dynamic> thLocale = {
     "fileUploadError": "เกิดข้อผิดพลาดในการอัปโหลดไฟล์",
     "processingError": "เกิดข้อผิดพลาดในการประมวลผลคำขอของคุณ",
     "welcomeMessage":
-        "ยินดีต้อนรับ! ฉันจะช่วยคุณเกี่ยวกับบริการของรัฐบาลเคนยาได้อย่างไรในวันนี้?",
+        "ยินดีต้อนรับ! ฉันพร้อมช่วยเกษตรกรในเลโซโตเรื่องพืชผล ปศุสัตว์ ดิน และสภาพอากาศ วันนี้ต้องการความช่วยเหลือเรื่องอะไร?",
     "attachFile": "แนบไฟล์",
     "fileTooLarge": "ไฟล์มีขนาดใหญ่เกินไป ขนาดสูงสุดคือ {maxSize}",
     "saveChat": "บันทึกแชท",
@@ -1068,50 +1068,51 @@ const Map<String, dynamic> thLocale = {
     "shareWhatsApp": "แชร์ทาง WhatsApp",
   },
   "quickhelp": {
-    "applyForID": "ทำบัตรประชาชน",
-    "payTaxes": "จ่ายภาษี",
-    "startBusiness": "เริ่มธุรกิจ",
-    "findHealthcare": "บริการสุขภาพ",
-    "educationServices": "การศึกษา",
-    "transportLicenses": "การขนส่ง",
-    "housingPrograms": "ที่อยู่อาศัย",
-    "findJobs": "หางาน",
+    "applyForID": "ข้าวโพดและธัญพืช",
+    "payTaxes": "ถั่วและพืชตระกูลถั่ว",
+    "startBusiness": "ดินและความอุดมสมบูรณ์",
+    "findHealthcare": "ศัตรูพืชและโรคพืช",
+    "educationServices": "ปศุสัตว์",
+    "transportLicenses": "น้ำและการชลประทาน",
+    "housingPrograms": "ฤดูกาลและสภาพอากาศ",
+    "findJobs": "ตลาดและสหกรณ์",
     "justChat": "คุยเล่น",
     "applyForIDPrompt":
-        "ทำหน้าที่เป็นผู้เชี่ยวชาญด้านทะเบียนราษฎร์ของเคนยา อธิบายขั้นตอนการขอรับบัตรประจำตัวประชาชนแห่งชาติ (Maisha Namba) หรือการขอทำบัตรใหม่กรณีสูญหาย ข้อสำคัญ: ระบุรายการเอกสารที่จำเป็นให้ชัดเจน (เช่น ใบสูติบัตร สำเนาบัตรประชาชนของบิดามารดา) และแนะนำให้ผู้ใช้ไปที่ Huduma Centre หรือสำนักงานนายทะเบียนราษฎร์ที่ใกล้ที่สุด กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Answer using ONLY what the knowledge base retrieval provides about farming in Lesotho. Focus on maize and cereals: planting times for highland vs lowland areas, varieties, rotation, storage. Never give Kenya civil registration, Huduma centres, Maisha Namba, or other non-Lesotho ID processes unless a retrieved document explicitly names them for comparison.",
     "payTaxesPrompt":
-        "ทำหน้าที่เป็นผู้นำทางของ KRA (สรรพากรเคนยา) อธิบายขั้นตอนการยื่นแบบภาษี การสมัครรหัส KRA PIN หรือการรีเซ็ตรหัสผ่านบนพอร์ทัล iTax ข้อสำคัญ: เตือนผู้ใช้เกี่ยวกับวันครบกำหนด 30 มิถุนายนสำหรับการยื่นแบบประจำปี และแนะนำวิธีการยื่นแบบแสดงรายการภาษีเป็นศูนย์ (Nil returns) หากไม่มีรายได้ กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on beans, pulses, and legumes (planting, pests, soil). Do NOT answer with Kenya Revenue Authority, KRA, iTax, tax filing, or business registration unless that information appears in retrieved text about Lesotho or cross-border trade.",
     "startBusinessPrompt":
-        "ทำหน้าที่เป็นที่ปรึกษาทางธุรกิจสำหรับบริการ eCitizen แนะนำผู้ใช้เกี่ยวกับการจองชื่อธุรกิจและการจดทะเบียนบริษัทในเคนยา ข้อสำคัญ: อธิบายค่าใช้จ่ายปัจจุบันสำหรับการค้นหาชื่อและการจดทะเบียน และนำทางผู้ใช้ไปยังพอร์ทัล eCitizen อย่างเป็นทางการเพื่อดำเนินการสมัคร กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved content. Focus on soil health, compost, manure, liming, erosion control, and fertility for Lesotho's conditions. Do NOT give eCitizen, Kenya company registration, or business-name search steps unless retrieved documents mention them.",
     "findHealthcarePrompt":
-        "ทำหน้าที่เป็นผู้นำทางด้านบริการสุขภาพ ให้ข้อมูลเกี่ยวกับการเปลี่ยนจาก NHIF เป็น SHIF (กองทุนประกันสุขภาพสังคม) และวิธีการลงทะเบียน ข้อสำคัญ: แจ้งรหัส USSD อย่างเป็นทางการ (เช่น *263#) หรือลิงก์เว็บไซต์สำหรับการลงทะเบียน และอธิบายประโยชน์ของความคุ้มครองสุขภาพภาครัฐ กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved materials. Focus on identifying crop pests and diseases, prevention, and safe management relevant to Lesotho. Do NOT answer with Kenya NHIF, SHIF, hospital insurance, or health USSD codes unless retrieved documents include them.",
     "educationServicesPrompt":
-        "ทำหน้าที่เป็นที่ปรึกษาด้านการศึกษา พูดคุยเกี่ยวกับหลักสูตร CBC การลงทะเบียน NEMIS หรือการจัดสรรเข้ามหาวิทยาลัยผ่าน KUCCPS ข้อสำคัญ: อธิบายวิธีที่ผู้ปกครองสามารถตรวจสอบผลสอบระดับชาติผ่าน SMS หรือพอร์ทัล KNEC เมื่อมีการประกาศผล กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on livestock care (cattle, sheep, goats, poultry), feed, housing, and common diseases in Lesotho. Do NOT discuss Kenya's CBC, NEMIS, KUCCPS, or national exam systems unless retrieved text does.",
     "transportLicensesPrompt":
-        "ทำหน้าที่เป็นผู้นำทางบริการของ NTSA อธิบายขั้นตอนการต่ออายุใบขับขี่ การตรวจสภาพรถ หรือการจัดการบัญชี TIMS ข้อสำคัญ: แนะนำผู้ใช้เกี่ยวกับวิธีเข้าสู่ระบบพอร์ทัล eCitizen NTSA เพื่อสมัคร Smart DL หรือจองคิวตรวจสภาพรถ กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved content. Focus on irrigation, rainwater harvesting, soil moisture, and water conservation for crops in Lesotho. Do NOT give Kenya NTSA, eCitizen transport, Smart DL, or vehicle inspection steps unless retrieved documents include them.",
     "housingProgramsPrompt":
-        "ทำหน้าที่เป็นที่ปรึกษาโครงการที่อยู่อาศัย อธิบายการลงทะเบียนโครงการบ้านเอื้ออาทร (Boma Yangu) และขั้นตอนการสมทบเงินโดยสมัครใจ ข้อสำคัญ: นำทางผู้ใช้ไปยังพอร์ทัล Boma Yangu เพื่อดูโครงการและอธิบายเกณฑ์คุณสมบัติสำหรับการจัดสรร กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved materials. Focus on seasonal planting calendars, frost risk, rainfall patterns, and climate considerations for Lesotho. Do NOT describe Kenya affordable housing, Boma Yangu, or urban mortgage programs unless retrieved documents mention them.",
     "findJobsPrompt":
-        "ทำหน้าที่เป็นโค้ชอาชีพสำหรับงานราชการ แนะนำผู้ใช้ในการสร้างโปรไฟล์และสมัครตำแหน่งงานว่างผ่านพอร์ทัลคณะกรรมการข้าราชการพลเรือน (PSC) ข้อสำคัญ: แนะนำให้ผู้ใช้เตรียมใบรับรองการศึกษาให้พร้อม และหมั่นตรวจสอบเว็บไซต์ PSC หรือหนังสือพิมพ์ท้องถิ่นสำหรับประกาศ MyGov กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on marketing produce, cooperatives, local buyers, and farmer groups in Lesotho. Do NOT give Kenya Public Service Commission, MyGov job portals, or civil-service recruitment unless retrieved text supports it.",
     "justChatPrompt":
-        "ทำหน้าที่เป็นเพื่อนชาวท้องถิ่นที่เป็นมิตร สุภาพ มีน้ำใจ และมีความรู้เกี่ยวกับวัฒนธรรมเคนยาและชีวิตประจำวัน ข้อสำคัญ: เตือนผู้ใช้ว่าแม้คุณจะคุยได้ทุกเรื่อง แต่จุดแข็งหลักของคุณคือการช่วยพวกเขานำทางบริการภาครัฐของเคนยา เช่น **บัตรประชาชน** **ภาษี** และ **การจดทะเบียนธุรกิจ** กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, a friendly assistant for people working the land in Lesotho. Be practical and respectful. If the user chats generally, keep the tone helpful but steer toward farming, livestock, soil, water, and climate in Lesotho. Do not present Kenya taxes, IDs, eCitizen, or other Kenya government services as default answers. Always rely on retrieved knowledge when answering factual questions about agriculture.",
     "applyForIDUserPrompt":
-        "ฉันต้องการทราบเกี่ยวกับการสมัครทำบัตรประชาชนแห่งชาติในเคนยา",
+        "ฉันควรปลูกข้าวโพดเมื่อไร และควรระวังอะไรในเลโซโต?",
     "payTaxesUserPrompt":
-        "ฉันต้องการสอบถามเกี่ยวกับการจ่ายภาษีหรือการยื่นแบบ KRA ในเคนยา",
+        "ฉันจะปลูกถั่วและพืชตระกูลถั่วให้ประสบความสำเร็จในไร่ได้อย่างไร?",
     "startBusinessUserPrompt":
-        "ฉันต้องการทราบเกี่ยวกับการจดทะเบียนธุรกิจหรือบริษัทใหม่ในเคนยา",
+        "การดูแลดินหรือการทำ compost แบบใดเหมาะกับเลโซโต?",
     "findHealthcareUserPrompt":
-        "ฉันต้องการสอบถามเกี่ยวกับสถานพยาบาลของรัฐและประกันสุขภาพ (NHIF/SHIF) ในเคนยา",
+        "อาการของศัตรูพืชหรือโรคพืชทั่วไปมีลักษณะอย่างไร?",
     "educationServicesUserPrompt":
-        "ฉันต้องการทราบข้อมูลเกี่ยวกับโรงเรียนและบริการด้านการศึกษาในเคนยา",
+        "ฉันจะดูแลปศุสัตว์ในไร่เล็กได้อย่างไร?",
     "transportLicensesUserPrompt":
-        "ฉันต้องการสอบถามเกี่ยวกับใบขับขี่และบริการของ NTSA ในเคนยา",
+        "ฉันควรจัดการน้ำหรือการชลประทานของพืชอย่างไร?",
     "housingProgramsUserPrompt":
-        "ฉันต้องการทราบเกี่ยวกับโครงการบ้านเอื้ออาทร (Boma Yangu) ในเคนยา",
+        "ฤดูกาลและสภาพอากาศส่งผลต่อการปลูกและเก็บเกี่ยวอย่างไร?",
     "findJobsUserPrompt":
-        "ฉันต้องการสอบถามเกี่ยวกับโอกาสงานราชการและการสมัคร PSC ในเคนยา",
-    "justChatUserPrompt": "ฉันต้องการคุยเล่นทั่วไปเกี่ยวกับชีวิตในเคนยา",
+        "ฉันจะขายผลผลิตหรือติดต่อเกษตรกรรายอื่นได้อย่างไร?",
+    "justChatUserPrompt":
+        "ฉันอยากถามคำถามทั่วไปเกี่ยวกับการทำเกษตรในเลโซโต",
   },
   "common": {
     "cancel": "ยกเลิก",

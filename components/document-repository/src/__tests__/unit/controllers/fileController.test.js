@@ -51,6 +51,7 @@ describe('fileController', () => {
       expect(result.language).toBe('en');
       expect(result.chunk_count).toBe(10);
       expect(result.dataprep.status).toBe('Ingested');
+      expect(result.knowledge_base_ready).toBe(true);
     });
 
     it('should not include extra fields from input', () => {
@@ -76,6 +77,7 @@ describe('fileController', () => {
       };
 
       const result = fileController._formatFileRecord(input);
+      expect(result.knowledge_base_ready).toBe(false);
       expect(result._key).toBeUndefined();
       expect(result._rev).toBeUndefined();
       expect(result.extraField).toBeUndefined();

@@ -1,6 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const mime = require('mime-types');
+const axios = require('axios');
 const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
 const fileUtils = require('../utils/fileUtils');
@@ -23,11 +24,126 @@ class FileService {
     this.allowedExtensions = appConfig.upload.allowedExtensions;
   }
 
+  _sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Remove doc-repo ingestion_log rows for a file (Arango files DB).
+   */
+  async _deleteIngestionLogsForFile(fileId) {
+    try {
+      const db = await this.getDb();
+      await db.query('FOR log IN ingestion_log FILTER log.file_id == @id REMOVE log IN ingestion_log', {
+        id: fileId
+      });
+      logger.debug(`[FILE-SERVICE] Removed ingestion_log entries for ${fileId}`);
+    } catch (e) {
+      logger.warn(`[FILE-SERVICE] Failed to remove ingestion_log for ${fileId}: ${e.message}`);
+    }
+  }
+
+  /**
+   * Remove chunks / graph data in dataprep (same Arango DB as retriever) before deleting file metadata.
+   * Best-effort: doc-repo row is still removed if dataprep is unreachable (orphan chunks possible; logged).
+   */
+  async _cleanupDataprepGraphForFile(file) {
+    const fileId = file.file_id;
+    const status = String(file.dataprep?.status || '')
+      .trim()
+      .toLowerCase();
+
+    if (!status || status === 'pending' || status === 'queued') {
+      return;
+    }
+
+    const base = appConfig.buildDataprepBaseUrl();
+
+    if (status === 'ingesting') {
+      try {
+        await axios.post(`${base}/v1/dataprep/kill_ingest`, { fileId }, { timeout: 30000 });
+        logger.info(`[FILE-SERVICE] kill_ingest sent for ${fileId} before delete`);
+      } catch (e) {
+        logger.warn(`[FILE-SERVICE] kill_ingest failed for ${fileId}: ${e.message}`);
+      }
+      await this._sleep(1500);
+    }
+
+    const retractStatuses = new Set([
+      'ingested',
+      'ingested with warnings',
+      'ingestion error',
+      'killed',
+      'retracted',
+      'ingesting'
+    ]);
+    if (!retractStatuses.has(status)) {
+      return;
+    }
+
+    try {
+      const url = `${base}${appConfig.dataprep.retractPath}`;
+      const resp = await axios.post(url, { fileId }, { timeout: 180000 });
+      if (resp.data && resp.data.success === false) {
+        logger.warn(`[FILE-SERVICE] Dataprep retract reported failure for ${fileId}: ${JSON.stringify(resp.data)}`);
+      } else {
+        logger.info(`[FILE-SERVICE] Dataprep retract completed for ${fileId}`);
+      }
+    } catch (e) {
+      logger.error(`[FILE-SERVICE] Dataprep retract failed for ${fileId}: ${e.message}`);
+    }
+  }
+
+  _cleanupDataprepGraphForFileInBackground(file) {
+    setImmediate(() => {
+      this._cleanupDataprepGraphForFile(file).catch((e) => {
+        logger.error(`[FILE-SERVICE] Async dataprep cleanup failed for ${file?.file_id || 'unknown'}: ${e.message}`);
+      });
+    });
+  }
+
   /**
    * Get database connection for files
    */
   async getDb() {
     return await dbService.getConnection('files');
+  }
+
+  /**
+   * When there are no files left, purge derived pipeline artifacts so the system
+   * returns to a clean baseline (prevents stale graph/log residues and DB bloat).
+   */
+  async _cleanupPipelineCollectionsIfNoFilesRemain() {
+    try {
+      const db = await this.getDb();
+      const filesCountCursor = await db.query('RETURN LENGTH(FOR f IN files RETURN 1)');
+      const filesCount = (await filesCountCursor.next()) || 0;
+      if (filesCount > 0) {
+        return;
+      }
+
+      const collectionsToTruncate = [
+        'ingestion_log',
+        'crawl_job',
+        'crawl_log',
+        'crawl_metrics',
+        'GRAPH_TEST_SOURCE',
+        'GRAPH_TEST_HAS_SOURCE',
+        'GRAPH_TEST_LINKS_TO',
+        'GRAPH_TEST_ENTITY'
+      ];
+
+      for (const name of collectionsToTruncate) {
+        try {
+          await db.collection(name).truncate();
+          logger.info(`[FILE-SERVICE] Truncated ${name} because files collection is empty.`);
+        } catch (e) {
+          logger.warn(`[FILE-SERVICE] Could not truncate ${name}: ${e.message}`);
+        }
+      }
+    } catch (e) {
+      logger.warn(`[FILE-SERVICE] Cleanup-if-empty check failed: ${e.message}`);
+    }
   }
 
   /**
@@ -126,6 +242,7 @@ class FileService {
 
       // Perform Language Detection (Spec Sec 4.1)
       const requiredLanguage = (appConfig.upload.requiredIngestionLanguage || 'en').toLowerCase();
+      const enforceIngestionLanguage = appConfig.upload.enforceIngestionLanguage !== false;
 
       // Only check supported types for ingestion
       const ingestionTypes = [
@@ -154,13 +271,25 @@ class FileService {
           `[FILE-SERVICE] Language detected (Content): ${detectedLang}, (HTML Tag): ${tagLang}, (Required): ${requiredLanguage}`
         );
 
-        // 4. Stricter validation
-        // Block if language is NOT detected (null) OR if it is the wrong language.
-        if (!detectedLang || detectedLang.toLowerCase() !== requiredLanguage) {
-          const langFound = detectedLang || 'unknown'; // Handle null for the error message
+        // 4. Language validation
+        // Keep blocking clearly non-English content, but allow "unknown" when
+        // extraction/detection confidence is insufficient (common for scanned PDFs).
+        if (enforceIngestionLanguage && detectedLang && detectedLang.toLowerCase() !== requiredLanguage) {
+          const langFound = detectedLang;
           throw new Error(
             `File [${originalFileName}] content appears to be in [${langFound}]. Only [${requiredLanguage.toUpperCase()}] documents are supported for ingestion.`
           );
+        }
+        if (!enforceIngestionLanguage && detectedLang && detectedLang.toLowerCase() !== requiredLanguage) {
+          logger.warn(
+            `[FILE-SERVICE] Language enforcement disabled; accepting ${originalFileName} despite detected language [${detectedLang}].`
+          );
+        }
+        if (!detectedLang) {
+          logger.warn(
+            `[FILE-SERVICE] Language detection returned unknown for ${originalFileName}; allowing upload and defaulting to required language [${requiredLanguage}].`
+          );
+          detectedLang = requiredLanguage;
         }
 
         // 5. NEW: Validate tag language against content language if tag exists
@@ -682,8 +811,9 @@ class FileService {
    * @param {string} fileId - File ID
    * @returns {boolean} Success status
    */
-  async deleteFile(fileId) {
+  async deleteFile(fileId, options = {}) {
     try {
+      const cleanupMode = options.cleanupMode === 'background' ? 'background' : 'await';
       // Get file record
       const file = await metadataService.getMetadataById(fileId);
       if (!file) {
@@ -703,6 +833,13 @@ class FileService {
         logger.warn(`File not found on disk: ${filePath}`);
         // Do not throw error here, allow metadata deletion even if file is missing
       }
+
+      if (cleanupMode === 'background') {
+        this._cleanupDataprepGraphForFileInBackground(file);
+      } else {
+        await this._cleanupDataprepGraphForFile(file);
+      }
+      await this._deleteIngestionLogsForFile(fileId);
 
       // Delete metadata first and keep a backup
       let deletedMetadata = false;
@@ -733,10 +870,12 @@ class FileService {
       try {
         await fs.unlink(filePath);
         logger.info(`File deleted from disk: ${filePath}`);
+        await this._cleanupPipelineCollectionsIfNoFilesRemain();
         return true;
       } catch (error) {
         if (error.code === 'ENOENT') {
           logger.warn(`Physical file was already missing, but metadata deleted: ${filePath}`);
+          await this._cleanupPipelineCollectionsIfNoFilesRemain();
           return true; // Consider success if metadata is gone and file was already gone
         }
         logger.error(`File metadata deleted but failed to delete physical file: ${error.message}`);

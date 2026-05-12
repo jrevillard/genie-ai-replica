@@ -73,6 +73,54 @@ ARANGO_EMBEDDING_FIELD = "embedding"
 ARANGO_FILE_ID_FIELD = "file_id"
 
 
+def _as_bool(value: Any) -> bool:
+    """Normalize env/request boolean-like values."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return False
+
+
+def _aql_quote_label(value: str) -> str:
+    """Escape double quotes in user-supplied filter tokens."""
+    return str(value).replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _taxonomy_filter_inner(taxonomy_filters: dict[str, Any] | None) -> str | None:
+    """Build AND-joined AQL predicates for chunk.tax_* fields (SOURCE collection)."""
+    if not taxonomy_filters:
+        return None
+    parts: list[str] = []
+    mapping = [
+        ("countries", "tax_countries"),
+        ("crop_names", "tax_crop_names"),
+        ("varietals", "tax_varietals"),
+        ("topics", "tax_topics"),
+        ("climates", "tax_climates"),
+        ("document_types", "tax_document_types"),
+        ("regions", "tax_regions"),
+    ]
+    for json_key, field in mapping:
+        vals = taxonomy_filters.get(json_key)
+        if not vals:
+            continue
+        if not isinstance(vals, list):
+            vals = [vals]
+        arr = "[" + ", ".join(f'"{_aql_quote_label(v)}"' for v in vals if v is not None and str(v).strip()) + "]"
+        if arr == "[]":
+            continue
+        parts.append(f"(doc.{field} != null AND LENGTH(INTERSECTION(doc.{field}, {arr})) > 0)")
+    if "is_relevant" in taxonomy_filters and taxonomy_filters["is_relevant"] is not None:
+        ir = "true" if taxonomy_filters["is_relevant"] else "false"
+        parts.append(f"(doc.tax_is_relevant == {ir})")
+    if not parts:
+        return None
+    return " AND ".join(parts)
+
+
 @OpeaComponentRegistry.register("GENIE_RETRIEVER_ARANGODB")
 class GenieaiArangoRetriever(OpeaComponent):
     """A specialized retriever component derived from OpeaComponent for ArangoDB retriever services.
@@ -506,7 +554,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         graph_name = input_dict.get("graph_name", ARANGO_GRAPH_NAME)
         search_start = input_dict.get("search_start", ARANGO_SEARCH_START)
         search_mode = input_dict.get("search_mode", ARANGO_SEARCH_MODE)
-        enable_traversal = input_dict.get("enable_traversal", ARANGO_TRAVERSAL_ENABLED)
+        enable_traversal = _as_bool(input_dict.get("enable_traversal", ARANGO_TRAVERSAL_ENABLED))
         enable_summarizer = input_dict.get("enable_summarizer", SUMMARIZER_ENABLED)
         distance_strategy = input_dict.get("distance_strategy", ARANGO_DISTANCE_STRATEGY)
         use_approx_search = input_dict.get("use_approx_search", ARANGO_USE_APPROX_SEARCH)
@@ -546,6 +594,15 @@ class GenieaiArangoRetriever(OpeaComponent):
 
             if logflag:
                 logger.debug(f"Applying filter strategy '{filter_strategy}' with labels: {labels_to_filter}")
+
+        tax_inner = _taxonomy_filter_inner(filter_data.get("taxonomy_filters"))
+        if tax_inner:
+            if aql_filter_clause:
+                aql_filter_clause = f"{aql_filter_clause} AND ({tax_inner})"
+            else:
+                aql_filter_clause = f"FILTER ({tax_inner})"
+            if logflag:
+                logger.debug(f"Applied taxonomy filter fragment: {tax_inner}")
 
         if not graph_name:
             raise HTTPException(

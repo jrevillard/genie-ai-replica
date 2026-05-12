@@ -205,13 +205,20 @@ export default {
       this.isUploading = true;
       this.errorMessage = ''; // --- ADDED ---
       const successfulUploads = [];
+      const failedUploads = [];
+      let autoIngestScheduled = false;
 
       for (const file of this.files) {
         try {
           const formData = new FormData();
           formData.append('file', file);
-          await documentFileService.uploadFile(formData);
-          successfulUploads.push(file.name);
+          const res = await documentFileService.uploadFile(formData);
+          if (res && res.autoIngestScheduled === true) {
+            autoIngestScheduled = true;
+          }
+          const inner = res && res.data ? res.data : res;
+          const fileId = inner && inner.file_id ? inner.file_id : null;
+          successfulUploads.push({ fileName: file.name, fileId });
           // UPDATED
           this.showNotification(
             this.translate('uploadDialog.notifications.uploadSuccess', `Successfully uploaded {fileName}`).replace(
@@ -235,6 +242,7 @@ export default {
           // --- UPDATED ---
           this.errorMessage = backendMessage; // --- ADDED: Show error in the dialog box
           this.showNotification(backendMessage, 'error');
+          failedUploads.push({ file, message: backendMessage });
 
           console.error(`Error uploading ${file.name}. Displayed message:`, backendMessage);
           console.error(`Full error object for ${file.name}:`, error);
@@ -246,10 +254,20 @@ export default {
       }
       this.isUploading = false;
       if (successfulUploads.length > 0) {
-        this.$emit('files-uploaded', successfulUploads);
+        eventBus.$emit('reload-service-tree');
+        this.$emit('files-uploaded', { uploads: successfulUploads, autoIngestScheduled });
       }
-      // Only close if ALL files were uploaded successfully
-      if (successfulUploads.length === this.files.length && this.files.length > 0) {
+      if (failedUploads.length > 0) {
+        // Keep only failed files in the dialog so user can retry quickly.
+        this.files = failedUploads.map((f) => f.file);
+        const summary = failedUploads
+          .slice(0, 3)
+          .map((f) => `${f.file.name}: ${f.message}`)
+          .join(' | ');
+        this.errorMessage = summary;
+      }
+      // Close automatically when all selected files uploaded successfully.
+      if (failedUploads.length === 0 && successfulUploads.length > 0) {
         this.$emit('close');
       }
     },

@@ -131,10 +131,24 @@
             </div>
 
             <div class="info-section">
-              <div class="info-item">
+              <div class="info-item status-info-row">
                 <span class="info-label">{{ translate('details.status', 'Status') }}</span>
-                <span :class="['status-tag', getStatusClass(displayStatus)]">
-                  {{ displayStatus }}
+                <span class="status-tags-row">
+                  <span :class="['status-tag', getStatusClass(displayStatus)]">
+                    {{ displayStatus }}
+                  </span>
+                  <span
+                    v-if="file && file.knowledge_base_ready"
+                    class="status-tag status-kb-added"
+                    :title="
+                      translate(
+                        'details.tagAddedToDatabaseHint',
+                        'Document chunks are indexed in the knowledge graph for retrieval (RAG).'
+                      )
+                    "
+                  >
+                    {{ translate('details.tagAddedToDatabase', 'Added to database') }}
+                  </span>
                 </span>
               </div>
               <div class="info-item">
@@ -418,6 +432,7 @@
 <script>
 import documentFileService from '../services/documentFileService.js';
 import serviceTreeService from '../services/serviceTreeService.js';
+import userService from '../services/userService.js';
 import { eventBus } from '../eventBus.js';
 import ConfirmDialog from './ConfirmDialog.vue';
 import { formatFileSize } from '../utils/fileUtils.js';
@@ -481,6 +496,7 @@ export default {
       activeTab: 'details',
       ingestionLogs: [],
       isLogLoading: false,
+      ingestionLogPollTimer: null,
       confirmDialog: {
         visible: false,
         title: '',
@@ -581,8 +597,8 @@ export default {
         isCrawlPending = true;
       }
 
-      // FIX: Disable Ingest button if status is 'ingesting'
-      const isIngesting = status === 'ingesting';
+      // Disable while dataprep lock may be held by this file or batch queue
+      const isIngesting = status === 'ingesting' || status === 'queued';
 
       return {
         text: this.translate('details.buttons.ingest', 'Ingest'),
@@ -607,6 +623,14 @@ export default {
         return `/api/files/${this.file.file_id}/viewbrowser`;
       }
       return null;
+    },
+    /** Poll ingestion log while this file is in the server-side batch queue or dataprep is working. */
+    ingestionLivePollActive() {
+      if (this.activeTab !== 'ingestionLog' || !this.file) {
+        return false;
+      }
+      const s = this.file.dataprep?.status?.toLowerCase() || '';
+      return s === 'queued' || s === 'ingesting';
     }
   },
   watch: {
@@ -647,10 +671,18 @@ export default {
         this.currentLocale = newLocale;
         this.fetchData(this.fileId);
       }
+    },
+    ingestionLivePollActive(active) {
+      if (active) {
+        this.startIngestionLogPoll();
+      } else {
+        this.stopIngestionLogPoll();
+      }
     }
   },
   beforeUnmount() {
     this.stopDashboardTimer();
+    this.stopIngestionLogPoll();
   },
   methods: {
     formatFileSize,
@@ -663,6 +695,14 @@ export default {
         return translation;
       }
       return fallback || key;
+    },
+
+    getAuthToken() {
+      const fromStore = this.$store.getters.currentUser?.accessToken;
+      if (fromStore) {
+        return fromStore;
+      }
+      return userService.getCurrentUser()?.accessToken || null;
     },
 
     // --- DASHBOARD TIMER METHODS ---
@@ -747,7 +787,7 @@ export default {
           if (crawlResponse && crawlResponse.data) {
             this.crawlJob = crawlResponse.data;
           }
-} catch {
+        } catch {
           // Not a crawl job or not found, ignore
           this.crawlJob = null;
         }
@@ -954,7 +994,7 @@ export default {
       }
 
       try {
-        const token = this.$store.getters.accessToken;
+        const token = this.getAuthToken();
 
         if (!token) throw new Error('Authentication token not found.');
         if (!this.fileViewUrl) throw new Error('Could not determine file view URL.');
@@ -1282,26 +1322,55 @@ export default {
     // --- Log Tab Methods ---
     switchToLogTab() {
       this.activeTab = 'ingestionLog';
-      // Fetch logs when switching to the tab for the first time
-      if (this.ingestionLogs.length === 0) {
-        this.fetchIngestionLogs();
+      this.fetchIngestionLogs();
+    },
+
+    startIngestionLogPoll() {
+      this.stopIngestionLogPoll();
+      const tick = async () => {
+        if (!this.ingestionLivePollActive) {
+          this.stopIngestionLogPoll();
+          return;
+        }
+        await this.fetchIngestionLogs({ silent: true });
+        try {
+          this.file = await documentFileService.getFileMetadata(this.fileId);
+        } catch (e) {
+          console.warn('File metadata refresh during ingestion poll failed', e);
+        }
+      };
+      this.ingestionLogPollTimer = setInterval(tick, 4000);
+      tick();
+    },
+
+    stopIngestionLogPoll() {
+      if (this.ingestionLogPollTimer) {
+        clearInterval(this.ingestionLogPollTimer);
+        this.ingestionLogPollTimer = null;
       }
     },
 
-    async fetchIngestionLogs() {
-      this.isLogLoading = true;
+    async fetchIngestionLogs(options = {}) {
+      const silent = options.silent === true;
+      if (!silent) {
+        this.isLogLoading = true;
+      }
       try {
         const response = await documentFileService.getIngestionLogs(this.fileId);
         this.ingestionLogs = response.data || [];
       } catch (error) {
         console.error('Error fetching ingestion logs:', error);
-        this.showNotification(
-          this.translate('details.notifications.logError', 'Failed to fetch ingestion logs.'),
-          'error'
-        );
-        this.ingestionLogs = []; // Clear logs on error
+        if (!silent) {
+          this.showNotification(
+            this.translate('details.notifications.logError', 'Failed to fetch ingestion logs.'),
+            'error'
+          );
+        }
+        this.ingestionLogs = [];
       } finally {
-        this.isLogLoading = false;
+        if (!silent) {
+          this.isLogLoading = false;
+        }
       }
     },
 
@@ -1319,6 +1388,7 @@ export default {
     getStatusClass(status) {
       const lowerStatus = status ? status.toLowerCase() : '';
       if (lowerStatus === 'ingested') return 'status-ingested';
+      if (lowerStatus === 'queued') return 'status-queued';
       if (lowerStatus === 'pending') return 'status-pending';
       if (lowerStatus === 'retracted') return 'status-retracted';
       if (lowerStatus === 'ingesting') return 'status-ingesting';
@@ -1898,6 +1968,20 @@ export default {
 .info-item > span:not(.info-label):not(.status-tag) {
   color: var(--text-primary);
 }
+.status-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+.status-kb-added {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: none;
+  background-color: rgba(16, 185, 129, 0.18);
+  color: var(--success, #10b981);
+  border-color: rgba(16, 185, 129, 0.35);
+}
 .info-hash {
   word-break: break-all;
   font-family: monospace;
@@ -2003,6 +2087,11 @@ export default {
   color: var(--warning, #f59e0b);
   border-color: rgba(245, 158, 11, 0.3);
 }
+.status-queued {
+  background-color: rgba(147, 51, 234, 0.1);
+  color: #9333ea;
+  border-color: rgba(147, 51, 234, 0.35);
+}
 .status-retracted {
   background-color: rgba(100, 116, 139, 0.1);
   color: var(--secondary, #64748b);
@@ -2033,6 +2122,10 @@ export default {
 [data-theme='dark'] .status-warn {
   background-color: rgba(245, 158, 11, 0.2);
   border-color: rgba(245, 158, 11, 0.5);
+}
+[data-theme='dark'] .status-queued {
+  background-color: rgba(147, 51, 234, 0.2);
+  border-color: rgba(147, 51, 234, 0.5);
 }
 [data-theme='dark'] .status-retracted {
   background-color: rgba(100, 116, 139, 0.2);

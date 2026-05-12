@@ -19,7 +19,7 @@ LLM prompts are now **built into the Python code** with a two-tier override syst
 
 | Variable | Service | Purpose |
 |----------|---------|---------|
-| `CHATQNA_SYSTEM_PROMPT` | ChatQnA | Main LLM system prompt for RAG responses |
+| `CHATQNA_SYSTEM_PROMPT` | ChatQnA | Main RAG system prompt; built-in default is Master Farmer Bot guardrails (closed KB, citations, Lesotho scope, safety, mandatory sections) in `genieai_chatqna.py` |
 | `CHATQNA_ABSTENTION_INSTRUCTIONS` | ChatQnA | Instructions when no relevant documents found |
 | `CHATQNA_ENFORCE_ABSTENTION` | ChatQnA | Whether to enforce abstention (default: "true") |
 | `LABEL_SELECTOR_SYSTEM_PROMPT` | Dataprep | LLM prompt for automatic document labeling |

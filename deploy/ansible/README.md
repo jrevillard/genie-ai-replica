@@ -240,6 +240,11 @@ Set in `group_vars/<env>/vars.yml`:
 | `chatqna_type` | `standard` | ChatQnA service type |
 | `chatqna_system_prompt` | (built-in) | LLM system prompt (optional, has built-in default) |
 | `chatqna_enforce_abstention` | `true` | Whether to enforce abstention |
+| `chatqna_confidence_aggregate` | (unset, → `max`) | `max` or `mean_top3` — see ChatQnA `_aggregate_retrieval_confidence` |
+| `chatqna_confidence_sourced_floor_enabled` | (unset, → `true` in code) | `true`/`false` — UX floor on confidence when sources returned |
+| `chatqna_confidence_sourced_floor` | (unset, → `0.91` in code) | Minimum displayed confidence when floor applies (e.g. `0.93`) |
+| `chatqna_confidence_sourced_gate` | (unset, → `0.12` in code) | Raw aggregate must be ≥ this before the floor applies |
+| `backend_public_url` | (unset) | Public API origin for source-document links in ChatQnA metadata (browser must resolve host; e.g. `https://your.domain`) |
 
 ### Retriever Configuration
 

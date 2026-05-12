@@ -81,6 +81,39 @@ module.exports = (serviceCategoryService) => {
   });
 
   /**
+   * GET /services/document-metatags
+   * Distinct labels and extracted taxonomy terms from uploaded files (for Knowledge Areas sidebar).
+   */
+  router.get('/document-metatags', async (req, res) => {
+    const start = Date.now();
+    try {
+      const tags = await serviceCategoryService.getDistinctDocumentMetatags();
+      logger.info(`Fetched ${tags.length} document metatags in ${Date.now() - start}ms`);
+      res.json(tags);
+    } catch (error) {
+      logger.error(`Error fetching document metatags: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  /**
+   * GET /services/document-metatags-grouped
+   * Taxonomy-field groups (and inferred buckets) for the Knowledge Areas sidebar.
+   */
+  router.get('/document-metatags-grouped', async (req, res) => {
+    const start = Date.now();
+    try {
+      const payload = await serviceCategoryService.getDocumentMetatagsGroupedForSidebar();
+      const n = payload.groups ? payload.groups.length : 0;
+      logger.info(`Fetched document metatags grouped (${n} groups) in ${Date.now() - start}ms`);
+      res.json(payload);
+    } catch (error) {
+      logger.error(`Error fetching grouped document metatags: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  /**
    * @swagger
    * /services/categories/{categoryId}:
    *   get:

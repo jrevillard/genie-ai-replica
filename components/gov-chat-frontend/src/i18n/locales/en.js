@@ -224,6 +224,7 @@ export default {
       overview: 'System Health',
       hierarchy: 'Knowledge Hierarchy',
       documents: 'Document Management',
+      feedback: 'Feedback',
       database: 'Database',
       logs: 'Logs',
       security: 'Security',
@@ -233,6 +234,75 @@ export default {
     contentManagement: 'CONTENT MANAGEMENT',
     knowledgeHierarchy: 'Knowledge Hierarchy',
     documentManagement: 'Document Management',
+    feedbackInsights: 'Feedback',
+    feedback: {
+      title: 'Feedback insights',
+      subtitle: 'Review user ratings, comments and unanswered queries to improve the assistant.',
+      refresh: 'Refresh',
+      retry: 'Retry',
+      loading: 'Loading…',
+      metrics: {
+        totalFeedback: 'Total feedback',
+        positive: 'Positive',
+        negative: 'Negative',
+        neutral: 'Neutral',
+        avgRating: 'Avg rating',
+        totalQueries: 'Total queries',
+        unanswered: "AI couldn't answer",
+        unansweredOf: 'of',
+        queries: 'queries',
+        answered: 'Answered rate'
+      },
+      trend: {
+        title: 'Trend over time',
+        hint: 'Counts per ',
+        hour: 'hour',
+        day: 'day',
+        week: 'week',
+        month: 'month',
+        positive: 'Positive',
+        negative: 'Negative',
+        neutral: 'Neutral',
+        unanswered: "Couldn't answer",
+        empty: 'No feedback in this period.'
+      },
+      list: {
+        title: 'All feedback',
+        empty: 'No feedback matches this filter.',
+        when: 'When',
+        rating: 'Rating',
+        question: 'Question',
+        response: 'AI response',
+        comment: 'Comment',
+        responseTime: 'Response time',
+        unanswered: 'AI could not answer',
+        expand: 'Show more',
+        collapse: 'Show less',
+        neutral: 'Neutral',
+        filter: {
+          all: 'All',
+          positive: 'Positive',
+          negative: 'Negative',
+          needsExpert: 'Needs expert answer'
+        }
+      },
+      expert: {
+        label: 'Expert answer',
+        addBtn: 'Add expert comment',
+        editBtn: 'Edit expert comment',
+        editorLabel: 'What should the AI have answered?',
+        placeholder: 'Write the correct answer…',
+        save: 'Save expert answer',
+        saving: 'Saving…',
+        cancel: 'Cancel',
+        saved: 'Expert answer saved.',
+        saveError: 'Could not save expert answer. Please try again.',
+        noQuery: 'No query associated with this feedback'
+      },
+      errors: {
+        loadFailed: 'Could not load feedback data. Please try again.'
+      }
+    },
     noLogsFound: 'No logs found for today',
     invalidLogsResponse: 'Invalid logs summary response structure',
     logsSummaryError: 'Failed to load logs summary',
@@ -265,8 +335,8 @@ export default {
       network: 'Network Bandwidth'
     },
     databaseManagement: 'Database Management',
-    databaseSize: 'Database Size',
-    totalTables: 'Total Tables',
+    databaseSize: 'Estimated data size',
+    totalTables: 'ArangoDB collections',
     logManagement: 'Log Management',
     rolloverLogs: 'Rollover Logs',
     searchLogs: 'Search Logs',
@@ -480,7 +550,17 @@ export default {
       deleteSuccessService: 'Service deleted successfully.',
       deleteErrorCategory: 'Failed to delete Category.',
       deleteErrorService: 'Failed to delete Service.',
-      duplicateLangError: 'Duplicate languages found in translations. Please remove them.'
+      duplicateLangError: 'Duplicate languages found in translations. Please remove them.',
+      fromDocuments: 'from documents',
+      quickHelpTitle: 'Quick-help categories (homepage)',
+      quickHelpBadge: 'quick-help',
+      tabManaged: 'Managed categories',
+      tabDocuments: 'Document tags',
+      tabQuickHelp: 'Quick-help categories',
+      page: 'Page',
+      of: 'of',
+      prev: 'Previous',
+      next: 'Next'
     },
     // --- NEW OBJECT ---
     documents: {
@@ -490,6 +570,9 @@ export default {
       searchPlaceholder: 'Search by file name...',
       allStatuses: 'All Statuses',
       statusPending: 'Pending',
+      statusQueued: 'Queued',
+      tagAddedToDatabase: 'Added to database',
+      tagAddedToDatabaseHint: 'Document chunks are indexed in the knowledge graph for retrieval (RAG).',
       statusIngested: 'Ingested',
       statusRetracted: 'Retracted',
       // --- NEW STATUSES ---
@@ -498,6 +581,15 @@ export default {
       statusWarning: 'Ingested with Warnings',
       // ---
       ingestSelected: 'Ingest Selected',
+      deleteSelected: 'Delete Selected',
+      selectionHint:
+        'Select files using the checkboxes, then use Ingest Selected or Delete Selected. Pending files are not searchable in chat until ingested. Labels (and extra tags from taxonomy) appear after ingestion completes. Knowledge Hierarchy is the service category tree you manage here—it is not auto-filled from PDFs.',
+      confirmDeleteTitle: 'Delete files',
+      confirmDeleteSelected: 'Permanently delete {count} selected file(s)? This cannot be undone.',
+      deleteSuccess: '{count} file(s) deleted.',
+      deleteError: 'Failed to delete one or more files.',
+      ingestBusy: 'Another ingestion job is running. Wait for it to finish, then use Ingest Selected if needed.',
+      ingestAfterUpload: 'Ingestion started for {count} file(s). Status will update when processing completes.',
       colFileName: 'File Name',
       colStatus: 'Status',
       colLabels: 'Labels',
@@ -511,6 +603,7 @@ export default {
       confirmIngestSelected: 'Are you sure you want to ingest {count} selected file(s)?',
       ingestQueuedSuccess: '{count} file(s) have been queued for ingestion.',
       ingestQueuedError: 'An error occurred during the batch ingestion process.',
+      ingestBatchConflict: 'A batch ingestion is already running. Wait for it to finish, then try again.',
       uploadSuccessMultiple: '{count} file(s) uploaded successfully.',
       linkSubmitSuccess: 'Successfully crawled and saved "{fileName}".',
       actionSuccess: 'Action "{action}" on file {fileId} was successful.',
@@ -670,7 +763,15 @@ export default {
     allOperational: 'All systems operational',
     someIssues: 'Some issues detected',
     majorIssues: 'Major issues',
-    checking: 'Checking status…'
+    checking: 'Checking status…',
+    stackSubtitle: 'Core services',
+    stack: {
+      backendApi: 'Application API',
+      chatAi: 'Chat assistant (Genie AI)',
+      documentRepo: 'Document library',
+      knowledgeBase: 'Knowledge base & search',
+      aiModels: 'AI inference & embeddings'
+    }
   },
   deadlines: {
     taxFiling: 'Tax filing'
@@ -684,8 +785,11 @@ export default {
   },
   sidebar: {
     governmentServices: 'Knowledge Areas',
+    documentMetatags: 'From your documents',
     chatHistory: 'Chat History',
     searchPlaceholder: 'Search knowledge areas...',
+    metatagGroupSelectHint:
+      'Click the group name to select or clear all items. Use the arrow to expand or collapse the list.',
     createFolder: 'Create Folder',
     editFolder: 'Edit Folder',
     folderName: 'Folder Name',
@@ -711,6 +815,7 @@ export default {
     weatherGeolocationPermissionDenied: 'Location access was denied. Allow location for this site to see weather.',
     weatherGeolocationTimeout: 'Location request timed out. Try again or check your connection.',
     weatherPositionUnavailable: 'Your location could not be determined.',
+    weatherUnavailable: 'Weather unavailable',
     weatherAuthRequired: 'Sign in to load weather for your area.',
     weatherRefresh: 'Refresh Weather',
     weatherConditions: {
@@ -728,6 +833,8 @@ export default {
     title: 'Info & Resources',
     noChats: 'No recent chats',
     relatedDocs: 'Related Documents',
+    documentOpenAuthRequired: 'Sign in to open this document.',
+    documentOpenFailed: 'Could not open the document. Please try again.',
     noDocuments: 'No related documents',
     faq: 'Frequently Asked Questions',
     tab: {
@@ -1370,13 +1477,19 @@ export default {
       dropdownSelect: 'Select an option'
     }
   },
+  status: {
+    online: 'Online',
+    offline: 'Offline',
+    lastResponseTime: 'Last response'
+  },
   chatbot: {
     placeholder: 'Type your query here...',
     sendButton: 'Send',
     fileReceived: 'File received successfully.',
     fileUploadError: 'Error uploading file.',
     processingError: 'Error processing your request.',
-    welcomeMessage: 'Welcome! How can I assist you with Kenya government services today?',
+    welcomeMessage:
+      'Welcome! I am here to help Lesotho farmers with crops, livestock, soil, and the weather. What would you like to know?',
     attachFile: 'Attach File',
     fileTooLarge: 'File is too large. Maximum size is {maxSize}.',
     saveChat: 'Save Chat',
@@ -1416,55 +1529,54 @@ export default {
     exportError: 'Failed to export chat. Please try again.'
   },
   quickhelp: {
-    // Labels (Short for UI)
-    applyForID: 'Apply for ID',
-    payTaxes: 'Pay Taxes',
-    startBusiness: 'Start Business',
-    findHealthcare: 'Healthcare',
-    educationServices: 'Education',
-    transportLicenses: 'Transport',
-    housingPrograms: 'Housing',
-    findJobs: 'Find Jobs',
-    justChat: 'Just Chat',
+    // Labels (short — Lesotho farming topics; legacy i18n keys unchanged for routing)
+    applyForID: 'Maize',
+    payTaxes: 'Beans',
+    startBusiness: 'Soil & fertility',
+    findHealthcare: 'Pests & diseases',
+    educationServices: 'Livestock',
+    transportLicenses: 'Water & irrigation',
+    housingPrograms: 'Weather & seasons',
+    findJobs: 'Markets & cooperatives',
+    justChat: 'Just chat',
 
-    // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: "I'd like to chat about government services",
-    applyForIDUserPrompt: 'I need information on how to apply for a national ID card',
-    payTaxesUserPrompt: "What's the process for paying my taxes online?",
-    startBusinessUserPrompt: 'Guide me through the steps to register a new business',
-    findHealthcareUserPrompt: 'Where can I find information about public healthcare services?',
-    educationServicesUserPrompt: 'What education services are available for my children?',
-    transportLicensesUserPrompt: 'How do I renew my driving license?',
-    housingProgramsUserPrompt: 'Tell me about affordable housing programs in Kenya',
-    findJobsUserPrompt: 'What government job opportunities are currently available?',
+    justChatUserPrompt: "I'd like to ask a general question about farming in Lesotho",
+    applyForIDUserPrompt: 'When should I plant maize and what should I watch for in Lesotho?',
+    payTaxesUserPrompt: 'How can I grow beans and legumes successfully on my farm?',
+    startBusinessUserPrompt: 'What soil fertility or compost practices work well in Lesotho?',
+    findHealthcareUserPrompt: 'What are signs of common crop pests or diseases I should look for?',
+    educationServicesUserPrompt: 'How do I care for livestock on a small farm?',
+    transportLicensesUserPrompt: 'How should I manage water or irrigation for my crops?',
+    housingProgramsUserPrompt: 'How do seasons and weather affect planting and harvest?',
+    findJobsUserPrompt: 'How can I sell my produce or connect with other farmers?',
 
-    // System Prompts (Hidden from User - detailed prompts sent to LLM)
+    // System prompts sent to the LLM (must align with Lesotho farmer bot — no Kenya-specific services)
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+      'You are Genie AI, an agricultural assistant for farmers in Lesotho. Answer using ONLY what the knowledge base retrieval provides about farming in Lesotho. Focus on maize and cereals: planting times for highland vs lowland areas, varieties, rotation, storage. Never give Kenya civil registration, Huduma centres, Maisha Namba, or other non-Lesotho ID processes unless a retrieved document explicitly names them for comparison. At the start of your answer, state which region or country the guidance applies to (e.g. Lesotho highlands).',
 
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+      'You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on beans, pulses, and legumes (planting, pests, soil). Do NOT answer with Kenya Revenue Authority, KRA, iTax, tax filing, or business registration unless that information appears in retrieved text about Lesotho or cross-border trade. Begin by stating the geographic source of the advice (region/country).',
 
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+      'You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved content. Focus on soil health, compost, manure, liming, erosion control, and fertility for Lesotho’s conditions. Do NOT give eCitizen, Kenya company registration, or business-name search steps unless retrieved documents mention them. Open with where the soil or practice guidance applies geographically.',
 
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+      'You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved materials. Focus on identifying crop pests and diseases, prevention, and safe management relevant to Lesotho. Do NOT answer with Kenya NHIF, SHIF, hospital insurance, or health USSD codes unless retrieved documents include them. Cite the region or climate zone your pest or disease advice refers to at the beginning.',
 
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+      'You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on livestock care (cattle, sheep, goats, poultry), feed, housing, and common diseases in Lesotho. Do NOT discuss Kenya’s CBC, NEMIS, KUCCPS, or national exam systems unless retrieved text does. Start by naming the geographic scope of the livestock guidance.',
 
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+      'You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved content. Focus on irrigation, rainwater harvesting, soil moisture, and water conservation for crops in Lesotho. Do NOT give Kenya NTSA, eCitizen transport, Smart DL, or vehicle inspection steps unless retrieved documents include them. State which region or country the water or irrigation advice applies to first.',
 
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+      'You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved materials. Focus on seasonal planting calendars, frost risk, rainfall patterns, and climate considerations for Lesotho. Do NOT describe Kenya affordable housing, Boma Yangu, or urban mortgage programs unless retrieved documents mention them. Lead with the geographic or agro-ecological zone the seasonal advice refers to.',
 
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+      'You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on marketing produce, cooperatives, local buyers, and farmer groups in Lesotho. Do NOT give Kenya Public Service Commission, MyGov job portals, or civil-service recruitment unless retrieved text supports it. Begin by stating which market or region the guidance covers.',
 
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+      'You are Genie AI, a friendly assistant for people working the land in Lesotho. Be practical and respectful. If the user chats generally, keep the tone helpful but steer toward farming, livestock, soil, water, and climate in Lesotho. Do not present Kenya taxes, IDs, eCitizen, or other Kenya government services as default answers. Always rely on retrieved knowledge when answering factual questions about agriculture. When giving farming facts, state the geographic source (region or country) at the start.'
   },
   common: {
     cancel: 'Cancel',
@@ -1521,6 +1633,8 @@ export default {
     selectAll: 'Select All',
     loadingLabels: 'Loading labels...',
     status: 'Status',
+    tagAddedToDatabase: 'Added to database',
+    tagAddedToDatabaseHint: 'Document chunks are indexed in the knowledge graph for retrieval (RAG).',
     fileId: 'File ID',
     fileType: 'File Type',
     viewFile: 'View File',

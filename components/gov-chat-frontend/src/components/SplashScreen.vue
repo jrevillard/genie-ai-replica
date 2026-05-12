@@ -3,8 +3,8 @@
   <div class="splash-screen" :class="{ 'fade-out': isFadingOut }">
     <div class="splash-content">
       <img
-        src="/config/splash.png"
-        alt="Splash Screen"
+        src="/config/splash-genie-ai-inko.png"
+        alt="GENIE.AI"
         class="splash-image"
         @error="handleImageError"
         @load="handleImageLoad"

@@ -112,21 +112,30 @@ const securityScanService = {
       { type: 'token_issue', severity: 'critical', regex: /invalid token/i, description: 'Invalid or expired token usage detected', recommendation: 'Review token expiration policies.', service: 'auth' },
       { type: 'attack_attempt', severity: 'critical', regex: /SQL injection|XSS|CSRF/i, description: 'Potential attack attempt detected', recommendation: 'Implement WAF and input sanitization.', service: 'http' },
       { type: 'command_injection', severity: 'critical', regex: /(sleep\s+\d+|__import__\(\s*['"]subprocess['"]\)|execSync\(\s*['"]sleep\s+\d+['"]\)|%x\(\s*sleep\s+\d+\s*\))/i, description: 'Command injection attempt detected in token or request', recommendation: 'Sanitize all inputs and implement strict validation.', service: 'auth' },
-      { type: 'sensitive_file_access', severity: 'medium', regex: /Blocked access to sensitive path:\s*((?:\/api\/)?(?:\.env|\.git\/config|\.gitignore|\.npmrc|node_modules\/\.package-lock\.json|\.well-known\/security\.txt))/i, description: 'Attempt to access sensitive file detected', recommendation: 'Ensure sensitive files are not exposed and access is blocked.', service: 'http' },
+      // Probe was blocked at the gateway — informational, not an open vulnerability
+      { type: 'sensitive_file_access', severity: 'low', regex: /Blocked access to sensitive path:\s*((?:\/api\/)?(?:\.env|\.git\/config|\.gitignore|\.npmrc|node_modules\/\.package-lock\.json|\.well-known\/security\.txt))/i, description: 'External probe for a sensitive path was blocked', recommendation: 'Keep blocking these paths at the gateway; optional: rate-limit or denylist scanning IPs.', service: 'http' },
       { type: 'ip_blocked', severity: 'medium', regex: /IP Blocked/i, description: 'IP blocked due to suspicious activity', recommendation: 'Review blocked IPs for false positives and enhance rate limiting.', service: 'system' },
-      { type: 'auth_failure_401', severity: 'medium', regex: /Authentication Failure - 401/i, description: 'HTTP 401 unauthorized access attempt detected', recommendation: 'Monitor for brute force and review access controls.', service: 'system' },
+      // 401s are normal for unauthenticated API calls, expired tokens, and bots — track as low noise
+      { type: 'auth_failure_401', severity: 'low', regex: /Authentication Failure - 401/i, description: 'HTTP 401 responses (often expected for protected APIs without a session)', recommendation: 'If counts spike from one IP, enable stricter rate limits; otherwise no action required.', service: 'system' },
       { type: 'db_error', severity: 'medium', regex: /collection\.save failed.*expecting both `_from` and `_to` attributes/i, description: 'Database operation failed due to misconfiguration', recommendation: 'Review ArangoDB edge document configuration.', service: 'database' },
       { type: 'non_critical_file_access', severity: 'low', regex: /Blocked access to sensitive path:\s*(\/\.well-known\/appspecific\/com\.chrome\.devtools\.json)/i, description: 'Attempt to access non-critical configuration file detected', recommendation: 'Verify if access to such files should be blocked.', service: 'http' },
-      { type: 'unauthorized_access', severity: 'medium', regex: /not authorized/i, description: 'Unauthorized access attempt detected', recommendation: 'Check access control policies.', service: 'auth' },
+      // Narrower than bare "not authorized" (which matches recycled log lines and JSON noise)
+      {
+        type: 'unauthorized_access',
+        severity: 'low',
+        regex: /\b(?:Access denied|not authorized to (?:access|perform|invoke|use)|User (?:is )?not authorized|User not authorized for)\b/i,
+        description: 'Authorization denial in application or IdP logs',
+        recommendation: 'Review only if unexpected for your RBAC design.',
+        service: 'auth'
+      },
       { type: 'brute_force', severity: 'medium', regex: /brute force/i, description: 'Brute force attempt detected', recommendation: 'Implement rate limiting.', service: 'auth' },
       { type: 'failed_login', severity: 'low', regex: /Invalid credentials|failed login/i, description: 'Failed login attempt detected', recommendation: 'Monitor for suspicious activity.', service: 'auth' },
       { type: 'not_found_404', severity: 'low', regex: /404 Not Found: (GET|POST|PUT|DELETE)\s+\/api\/api\//i, description: 'Invalid API endpoint access attempt detected', recommendation: 'Review for probing attempts and ensure proper routing.', service: 'http' },
       { type: 'registration_failure', severity: 'low', regex: /(Email|Username) already exists|Registration failed/i, description: 'Registration attempt failed due to existing credentials', recommendation: 'Monitor for automated registration attempts.', service: 'system' },
       { type: 'log_limit_exceeded', severity: 'low', regex: /Too many log lines.*limiting to/i, description: 'Log file exceeds processing limit', recommendation: 'Optimize log rotation or increase scan limits.', service: 'system' },
     ];
-    const suspiciousPatterns = [
-      /SQL injection|XSS|CSRF|brute force|command injection|threat detection|ip blocked/i
-    ];
+    // Do not include "threat detection" — it matches our own middleware DEBUG lines and inflates false positives
+    const suspiciousPatterns = [/SQL injection|XSS|CSRF|brute force|command injection|ip blocked/i];
 
     try {
       console.log(`Starting unified log scan for period ${startDate} to ${endDate}`);
@@ -581,7 +590,7 @@ const securityScanService = {
     if (!logsService) throw new Error('LogsService is required for loginIssues');
     try {
       const loginKeywords = ['login', 'failed', 'unauthorized', 'disabled', 'expired', 'invalid', 'access denied', 'account'];
-      const suspiciousKeywords = ['suspicious', 'brute force', 'injection', 'attack', 'breach', 'security', 'vulnerability', 'exploit', 'ip blocked', 'threat detection'];
+      const suspiciousKeywords = ['suspicious', 'brute force', 'injection', 'attack', 'breach', 'vulnerability', 'exploit', 'ip blocked'];
       const allKeywords = [...new Set([...loginKeywords, ...suspiciousKeywords])];
       console.debug(`Checking logs with keywords: ${allKeywords.join(', ')}`);
 
@@ -605,6 +614,14 @@ const securityScanService = {
         if (results.logs && results.logs.length > 0) {
           for (const log of results.logs) {
             const messageLower = log.message.toLowerCase();
+            if (
+              messageLower.includes('skipping threat detection') ||
+              messageLower.includes('skipping unparseable log line') ||
+              messageLower.includes('does not match any format') ||
+              messageLower.includes('initiating security scan')
+            ) {
+              continue;
+            }
             const timestamp = `${log.date} ${log.time}`;
             const loginMatch = loginKeywords.find(keyword => messageLower.includes(keyword.toLowerCase()));
             const suspiciousMatch = suspiciousKeywords.find(keyword => messageLower.includes(keyword.toLowerCase()));
@@ -665,12 +682,14 @@ const securityScanService = {
           action: 'Review account status in user management and verify if account disabling is legitimate'
         });
       }
-      recommendations.push({
-        severity: 'medium',
-        title: 'Improve Authentication Security',
-        description: `${loginIssues.count} authentication issues detected`,
-        action: 'Consider implementing account lockout policies and multi-factor authentication'
-      });
+      if (loginIssues.count >= 5) {
+        recommendations.push({
+          severity: 'low',
+          title: 'Review Authentication Log Patterns',
+          description: `${loginIssues.count} log lines matched authentication-related keywords in the scan window`,
+          action: 'Review for brute force only if many events share the same source; otherwise keyword matches alone are not an incident'
+        });
+      }
     }
 
     if (vulnerabilities.critical.length > 0) {
@@ -804,6 +823,27 @@ const securityScanService = {
           action: 'Adjust log rotation policies or increase scan capacity'
         });
       }
+
+      const sensitiveProbes = vulnerabilities.low.filter(v => v.type === 'sensitive_file_access');
+      if (sensitiveProbes.length > 0) {
+        recommendations.push({
+          severity: 'low',
+          title: 'Sensitive Path Probes (Blocked)',
+          description: 'Scanner or bots requested well-known sensitive URLs; the gateway reported them as blocked',
+          action: 'No change required if responses stay blocked; optional: fail2ban or CDN rules for noisy IPs'
+        });
+      }
+
+      const authNoise = vulnerabilities.low.filter(v => v.type === 'auth_failure_401' || v.type === 'unauthorized_access');
+      const authNoiseEvents = authNoise.reduce((sum, v) => sum + (v.instanceCount || 1), 0);
+      if (authNoise.length > 0 && authNoiseEvents > 500) {
+        recommendations.push({
+          severity: 'low',
+          title: 'High Volume of 401 / Authorization Denials',
+          description: `${authNoiseEvents} matched events in the scan window (often normal for public APIs and bots)`,
+          action: 'Investigate only if a single IP or user shows a sustained spike; otherwise tune API exposure or WAF rules'
+        });
+      }
     }
 
     recommendations.push({
@@ -842,6 +882,26 @@ if (!isMainThread) {
 
   const parseLogLine = securityScanService.parseLogLine;
 
+  /** Lines recycled into DEBUG or our own middleware/parser chatter must not match vulnerability regexes */
+  const isScanNoiseLine = (message, level) => {
+    if (!message || typeof message !== 'string') return true;
+    if (
+      message.includes('Skipping threat detection for authenticated request') ||
+      message.includes('Skipping unparseable log line') ||
+      message.includes('does not match any format') ||
+      message.includes('Skipping security scan')
+    ) {
+      return true;
+    }
+    if (/Initiating security scan|Starting comprehensive security scan|Parsed \d+ total log entries|Security scan completed/i.test(message)) {
+      return true;
+    }
+    if (level === 'DEBUG' && /Skipping|unparseable|does not match any format/i.test(message)) {
+      return true;
+    }
+    return false;
+  };
+
   const results = {
     vulnerabilities: { critical: [], medium: [], low: [] },
     failedLogins: [],
@@ -869,7 +929,7 @@ if (!isMainThread) {
 
     const { timestamp, message, url, level } = parsedLog;
 
-    if (/Initiating security scan|Starting comprehensive security scan|Parsed \d+ total log entries|Security scan completed/i.test(message)) {
+    if (isScanNoiseLine(message, level)) {
       results.linesSkipped++;
       return true;
     }

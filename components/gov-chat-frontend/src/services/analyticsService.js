@@ -314,7 +314,22 @@ class AnalyticsService {
    * @returns {Object} Start and end date
    */
   calculateDateRange(period, date) {
-    const endDate = date ? new Date(date) : new Date();
+    // Parse YYYY-MM-DD as a *local* date. `new Date('YYYY-MM-DD')` parses as
+    // UTC midnight, which combined with the local-time `setHours(...)` calls
+    // below shifts the window by the user's UTC offset (e.g. an IST user
+    // ends up with an upper bound of 18:29:59Z, dropping data captured
+    // between local-midnight and the actual UTC end-of-day).
+    let endDate;
+    if (date) {
+      const parts = String(date).split('-').map(Number);
+      if (parts.length === 3 && parts.every((n) => Number.isFinite(n))) {
+        endDate = new Date(parts[0], parts[1] - 1, parts[2]);
+      } else {
+        endDate = new Date(date);
+      }
+    } else {
+      endDate = new Date();
+    }
     let startDate = new Date(endDate);
 
     switch (period) {
@@ -555,6 +570,61 @@ class AnalyticsService {
     } catch (error) {
       console.error('Error recording query in analytics:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Get feedback + unanswered time series for the admin Feedback page.
+   * Returns one row per bucket with positive / negative / neutral feedback counts
+   * and the number of unanswered queries in that bucket.
+   *
+   * @param {string} period - daily | weekly | monthly | all-time
+   * @param {string} date - Selected date (YYYY-MM-DD) used as the upper bound
+   * @param {string} interval - Bucket size (hourly|daily|weekly|monthly)
+   * @returns {Promise<Array>} Time series rows
+   */
+  async getFeedbackTimeSeries(period, date, interval = 'daily') {
+    try {
+      const { startDate, endDate } = this.calculateDateRange(period, date);
+      const response = await httpService.get('analytics/feedback/timeseries', {
+        params: { startDate, endDate, interval }
+      });
+      if (!response.data || !Array.isArray(response.data)) {
+        console.warn('Invalid feedback time series response:', response.data);
+        return [];
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching feedback time series:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get a paginated list of recent feedback entries for the admin Feedback page.
+   *
+   * @param {string} period - daily | weekly | monthly | all-time
+   * @param {string} date - Selected date (YYYY-MM-DD)
+   * @param {Object} options - { filter, limit, offset }
+   * @returns {Promise<{items:Array,total:number}>}
+   */
+  async getFeedbackList(period, date, options = {}) {
+    try {
+      const { startDate, endDate } = this.calculateDateRange(period, date);
+      const filter = options.filter || 'all';
+      const limit = options.limit || 10;
+      const offset = options.offset || 0;
+      const response = await httpService.get('analytics/feedback/list', {
+        params: { startDate, endDate, filter, limit, offset }
+      });
+      const data = response?.data || {};
+      return {
+        items: Array.isArray(data.items) ? data.items : [],
+        total: typeof data.total === 'number' ? data.total : 0
+      };
+    } catch (error) {
+      console.error('Error fetching feedback list:', error);
+      return { items: [], total: 0 };
     }
   }
 

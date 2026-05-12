@@ -37,6 +37,12 @@ class RequestContext(BaseModel):
     categoryLabel: str | None = None
     serviceLabels: list[str] | None = None
     language: str | None = None
+    # Hybrid retrieval: filter SOURCE chunks by normalized agricultural taxonomy (see dataprep chunk metadata keys)
+    taxonomy_filters: dict[str, Any] | None = None
+    # Multi-region comparison: backend-set regions for prompt grounding (not dual-index by default).
+    comparative_regions: list[str] | None = None
+    # Quick-help dual-prompt: visible user line stays in messages; this carries topic routing rules to the LLM only.
+    topicFocusInstructions: str | None = None
 
 
 class ChatCompletionRequest(BaseModel):

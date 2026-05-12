@@ -35,7 +35,14 @@ async function extractMetadata(filePath, fileInfo = {}) {
       status: 'Pending', // Changed to capitalized 'Pending' per spec
       ingest_date: '',
       retract_date: ''
-    }
+    },
+    taxonomyMetadata: fileInfo.taxonomyMetadata ?? null,
+    metadataExtractionVersion: fileInfo.metadataExtractionVersion ?? null,
+    metadataExtractionTimestamp: fileInfo.metadataExtractionTimestamp ?? null,
+    metadataConfidenceScore: fileInfo.metadataConfidenceScore ?? null,
+    taxonomyVersion: fileInfo.taxonomyVersion ?? null,
+    isRelevant: fileInfo.isRelevant ?? null,
+    taxonomyExtractionTelemetry: fileInfo.taxonomyExtractionTelemetry ?? null
   };
 
   return baseMeta;
@@ -215,6 +222,45 @@ class MetadataService {
       return updated;
     } catch (error) {
       logger.error(`Failed to update metadata for file_id ${file_id}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Updates agricultural taxonomy and related ingestion metadata (dataprep / Admin service only).
+   */
+  async updateIngestionMetadataFields(file_id, updates = {}) {
+    const allowedFields = [
+      'taxonomyMetadata',
+      'metadataExtractionVersion',
+      'metadataExtractionTimestamp',
+      'metadataConfidenceScore',
+      'taxonomyVersion',
+      'isRelevant',
+      'taxonomyExtractionTelemetry'
+    ];
+    try {
+      const db = await this.getDb();
+      const cursor = await db.query(`FOR file IN files FILTER file.file_id == @file_id LIMIT 1 RETURN file`, {
+        file_id
+      });
+      const metadata = await cursor.next();
+      if (!metadata) {
+        throw new Error(`Metadata not found for file_id: ${file_id}`);
+      }
+      const updateObj = {};
+      for (const key of Object.keys(updates)) {
+        if (allowedFields.includes(key)) {
+          updateObj[key] = updates[key];
+        }
+      }
+      if (Object.keys(updateObj).length === 0) {
+        throw new Error('No valid ingestion metadata fields to update');
+      }
+      await db.collection('files').update(metadata._key, updateObj);
+      return await db.collection('files').document(metadata._key);
+    } catch (error) {
+      logger.error(`Failed to update ingestion metadata for file_id ${file_id}: ${error.message}`);
       throw error;
     }
   }

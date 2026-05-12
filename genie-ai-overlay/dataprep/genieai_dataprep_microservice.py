@@ -14,6 +14,11 @@ import fcntl
 import os
 import time
 
+# Side-effect: registers GENIE_DATAPREP_ARANGODB with OpeaComponentRegistry.
+# MUST run before `import opea_dataprep_microservice` — that module constructs
+# OpeaDataprepLoader at import time and would raise KeyError otherwise.
+from integrations.genieai_dataprep_arangodb import GenieArangoDataprep  # noqa: F401  # isort: skip
+
 import opea_dataprep_microservice as base
 from comps import (
     CustomLogger,
@@ -26,8 +31,6 @@ from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDo
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-# Side-effect: registers GenieArangoDataprep with OpeaComponentRegistry (must precede GenieDataprepLoader)
-from integrations.genieai_dataprep_arangodb import GenieArangoDataprep  # noqa: F401  # isort: skip
 from genieai_dataprep_loader import GenieDataprepLoader
 
 logger = CustomLogger("genie_dataprep_microservice")
@@ -140,6 +143,7 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
     CHUNK_SIZE = get_chunk_size_for_file(payload.fileName)
     CHUNK_OVERLAP = int(os.getenv("DATAPREP_CHUNK_OVERLAP", 50))
 
+    save_path = None
     try:
         # Decode and temporarily save file
         file_bytes = base64.b64decode(payload.fileBase64)
@@ -153,6 +157,7 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             file_id=payload.fileId,
             file_name=payload.fileName,
             file_path=save_path,
+            storage_path=payload.storagePath,
             file_type=payload.fileType,
             file_labels=payload.fileLabels,
             upload_date=payload.uploadDate,
@@ -191,9 +196,56 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         fcntl.flock(lock_file, fcntl.LOCK_UN)
         lock_file.close()
 
-        if os.path.exists(save_path):
+        if save_path is not None and os.path.exists(save_path):
             os.remove(save_path)
         raise
+
+
+# ------------------------------------------------------------------------------
+# Re-extract agricultural taxonomy only (admin / batch)
+# ------------------------------------------------------------------------------
+@register_microservice(
+    name="opea_service@dataprep",
+    service_type=ServiceType.DATAPREP,
+    endpoint="/v1/dataprep/reextract_taxonomy",
+    host="0.0.0.0",
+    port=5000,
+)
+@register_statistics(names=["opea_service@dataprep"])
+async def reextract_taxonomy(payload: DocRepoIngestPayload):
+    """
+    Parses the uploaded file again and refreshes taxonomy fields on the document-repository record.
+    Does not modify graph chunks; run full ingest after retract to propagate new chunk metadata.
+    """
+    start = time.time()
+    CHUNK_SIZE = get_chunk_size_for_file(payload.fileName)
+    CHUNK_OVERLAP = int(os.getenv("DATAPREP_CHUNK_OVERLAP", "50"))
+    ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
+
+    try:
+        file_bytes = base64.b64decode(payload.fileBase64)
+        save_path = os.path.join(upload_folder, payload.fileName)
+        with open(save_path, "wb") as f:
+            f.write(file_bytes)
+
+        input_req = ArangoDBDataprepRequestFromDocRepo(
+            file_id=payload.fileId,
+            file_name=payload.fileName,
+            file_path=save_path,
+            file_type=payload.fileType,
+            file_labels=payload.fileLabels,
+            upload_date=payload.uploadDate,
+            storage_path=payload.storagePath,
+            graph_name=ARANGO_GRAPH_NAME,
+            chunk_size=CHUNK_SIZE,
+            chunk_overlap=CHUNK_OVERLAP,
+        )
+        result = await loader.reextract_taxonomy_only(input_req)
+        statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)
+        return result
+    except Exception as e:
+        logger.error(f"[ reextract_taxonomy ] {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ------------------------------------------------------------------------------

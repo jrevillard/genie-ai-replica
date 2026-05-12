@@ -34,12 +34,12 @@ class AnalyticsService {
       this.serviceCategoriesCollection = this.db.collection('serviceCategories');
 
       logger.info('Initializing AnalyticsService...');
-      
+
       // Initialize ServiceCategoryService
       logger.info('Initializing ServiceCategoryService from AnalyticsService...');
       await this.serviceCategoryService.init();
       logger.info('ServiceCategoryService initialized successfully');
-      
+
       this.initialized = true;
       logger.info('AnalyticsService initialized successfully');
     } catch (error) {
@@ -108,6 +108,34 @@ class AnalyticsService {
   }
 
   /**
+   * Record a weather widget request (called from WeatherService after persisting weatherRequests)
+   * @param {Object} payload - { _key, userId, city, timestamp }
+   * @returns {Promise<Object>} The created analytics record
+   */
+  async recordWeatherRequest(payload) {
+    try {
+      const analyticsDoc = {
+        type: 'weather',
+        weatherRequestId: payload._key,
+        userId: payload.userId || null,
+        timestamp: payload.timestamp || new Date().toISOString(),
+        data: {
+          city: payload.city || 'Unknown'
+        }
+      };
+
+      logger.debug('Recording weather analytics...');
+      const record = await this.analytics.save(analyticsDoc);
+      logger.info(`Weather analytics record created: ${record._key}`);
+
+      return record;
+    } catch (error) {
+      logger.error(`Error recording weather analytics: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
+
+  /**
    * Track an event
    * @param {String} userId - User ID
    * @param {String} eventType - Event type
@@ -144,10 +172,10 @@ class AnalyticsService {
    */
   async getUniqueUsersCount(startDate, endDate) {
     try {
-      const validStartDate = startDate ? new Date(startDate).toISOString() :
-        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const validEndDate = endDate ? new Date(endDate).toISOString() :
-        new Date().toISOString();
+      const validStartDate = startDate
+        ? new Date(startDate).toISOString()
+        : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const validEndDate = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
 
       logger.info(`Getting unique users count from ${validStartDate} to ${validEndDate}`);
 
@@ -159,7 +187,7 @@ class AnalyticsService {
             RETURN a.userId
         `);
         const testResult = await testCursor.all();
-        logger.info("Sample user IDs:", testResult);
+        logger.info('Sample user IDs:', testResult);
       } catch (testError) {
         logger.error(`Test query failed: ${testError.message}`, { stack: testError.stack });
       }
@@ -176,7 +204,7 @@ class AnalyticsService {
         RETURN LENGTH(usersList)
       `;
 
-      logger.info("Executing unique users count query...");
+      logger.info('Executing unique users count query...');
       const cursor = await this.db.query(query, {
         startDate: validStartDate,
         endDate: validEndDate
@@ -200,7 +228,9 @@ class AnalyticsService {
    */
   async getDashboardAnalytics(startDate, endDate, locale = 'en') {
     try {
-      const validStartDate = startDate ? new Date(startDate).toISOString() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const validStartDate = startDate
+        ? new Date(startDate).toISOString()
+        : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const validEndDate = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
 
       logger.info(`Getting dashboard analytics from ${validStartDate} to ${validEndDate} with locale ${locale}`);
@@ -212,7 +242,7 @@ class AnalyticsService {
           }
         `);
         const testResult = await testCursor.next();
-        logger.info("Test query result:", testResult);
+        logger.info('Test query result:', testResult);
       } catch (testError) {
         logger.error(`Test query failed: ${testError.message}`, { stack: testError.stack });
         return this.getEmptyDashboardData();
@@ -352,37 +382,46 @@ class AnalyticsService {
         }
       `;
 
-      logger.info("Executing dashboard analytics query...");
+      logger.info('Executing dashboard analytics query...');
 
-      const analyticsData = await this.db.query(analyticsQuery, {
-        startDate: validStartDate,
-        endDate: validEndDate
-      }).then(cursor => cursor.next());
+      const analyticsData = await this.db
+        .query(analyticsQuery, {
+          startDate: validStartDate,
+          endDate: validEndDate
+        })
+        .then((cursor) => cursor.next());
 
       if (!analyticsData) {
-        logger.info("No analytics data found, returning empty data");
+        logger.info('No analytics data found, returning empty data');
         return this.getEmptyDashboardData();
       }
 
-      logger.info("======= DEBUG: CATEGORY NAMES LOCALIZATION =======");
+      logger.info('======= DEBUG: CATEGORY NAMES LOCALIZATION =======');
       logger.info(`DEBUG: Processing locale "${locale}" for category name localization`);
 
       // Use ServiceCategoryService to get properly translated categories
-      logger.info("Getting categories with translations using ServiceCategoryService...");
+      logger.info('Getting categories with translations using ServiceCategoryService...');
       try {
         const categoriesWithTranslations = await this.serviceCategoryService.getAllCategoriesWithServices(locale);
         logger.info(`DEBUG: Retrieved ${categoriesWithTranslations.length} categories from ServiceCategoryService`);
-        
+
         if (categoriesWithTranslations.length > 0) {
-          logger.info("DEBUG: First few categories from service:", JSON.stringify(categoriesWithTranslations.slice(0, 3).map(c => ({
-            catKey: c.catKey,
-            name: c.name
-          })), null, 2));
+          logger.info(
+            'DEBUG: First few categories from service:',
+            JSON.stringify(
+              categoriesWithTranslations.slice(0, 3).map((c) => ({
+                catKey: c.catKey,
+                name: c.name
+              })),
+              null,
+              2
+            )
+          );
         }
 
         // Build a map of categoryId to translated name
         const categoryMap = {};
-        categoriesWithTranslations.forEach(cat => {
+        categoriesWithTranslations.forEach((cat) => {
           categoryMap[cat.catKey] = cat.name;
           logger.debug(`DEBUG: Mapped category ${cat.catKey} => "${cat.name}"`);
         });
@@ -390,15 +429,15 @@ class AnalyticsService {
         // Apply translated names to analytics data
         if (analyticsData.categories && analyticsData.categories.length > 0) {
           logger.info(`DEBUG: Processing ${analyticsData.categories.length} categories from analytics data`);
-          
-          analyticsData.categories = analyticsData.categories.map(category => {
+
+          analyticsData.categories = analyticsData.categories.map((category) => {
             const idParts = category.categoryId.split('/');
             const categoryKey = idParts.length > 1 ? idParts[1] : category.categoryId;
 
             logger.debug(`DEBUG: Looking up category for ID: ${category.categoryId}, extracted key: ${categoryKey}`);
 
             const translatedName = categoryMap[categoryKey];
-            
+
             if (translatedName) {
               logger.debug(`DEBUG: Found translated name for category ${categoryKey}: "${translatedName}"`);
               return {
@@ -415,14 +454,14 @@ class AnalyticsService {
           });
         }
       } catch (serviceCategoryError) {
-        logger.error(`Error getting categories from ServiceCategoryService: ${serviceCategoryError.message}`, { 
-          stack: serviceCategoryError.stack 
+        logger.error(`Error getting categories from ServiceCategoryService: ${serviceCategoryError.message}`, {
+          stack: serviceCategoryError.stack
         });
         // Analytics data will be returned without category names
       }
 
-      logger.info("======= END DEBUG: CATEGORY NAMES LOCALIZATION =======");
-      logger.info("Dashboard analytics processing completed successfully");
+      logger.info('======= END DEBUG: CATEGORY NAMES LOCALIZATION =======');
+      logger.info('Dashboard analytics processing completed successfully');
       return analyticsData;
     } catch (error) {
       logger.error(`Error getting dashboard analytics: ${error.message}`, { stack: error.stack });
@@ -476,15 +515,26 @@ class AnalyticsService {
       const startDateISO = start.toISOString();
       const endDateISO = end.toISOString();
 
-      logger.info(`Getting time series data for metric: ${metricType}, interval: ${interval}, from ${startDateISO} to ${endDateISO}`);
+      logger.info(
+        `Getting time series data for metric: ${metricType}, interval: ${interval}, from ${startDateISO} to ${endDateISO}`
+      );
 
       let dateFormat;
       switch (interval) {
-        case 'hourly': dateFormat = '%Y-%m-%dT%H:00:00Z'; break;
-        case 'daily': dateFormat = '%Y-%m-%d'; break;
-        case 'weekly': dateFormat = '%Y-W%W'; break;
-        case 'monthly': dateFormat = '%Y-%m'; break;
-        default: dateFormat = '%Y-%m-%d';
+        case 'hourly':
+          dateFormat = '%Y-%m-%dT%H:00:00Z';
+          break;
+        case 'daily':
+          dateFormat = '%Y-%m-%d';
+          break;
+        case 'weekly':
+          dateFormat = '%Y-W%W';
+          break;
+        case 'monthly':
+          dateFormat = '%Y-%m';
+          break;
+        default:
+          dateFormat = '%Y-%m-%d';
       }
 
       const baseQuery = `
@@ -509,7 +559,7 @@ class AnalyticsService {
 
       const dailyBreakdown = await cursor.all();
 
-      const chartData = dailyBreakdown.map(day => ({
+      const chartData = dailyBreakdown.map((day) => ({
         timestamp: day.date,
         dateLabel: this.formatDateLabel(day.date, interval),
         value: day.totalQueries,
@@ -665,8 +715,11 @@ class AnalyticsService {
         const categoryResults = await feedbackCursor.all();
 
         // Calculate average of non-zero category values
-        const categoryValues = categoryResults.map(r => Math.floor((r.average / 5) * 100)).filter(v => v > 0);
-        const periodValue = categoryValues.length > 0 ? Math.floor(categoryValues.reduce((sum, val) => sum + val, 0) / categoryValues.length) : 0;
+        const categoryValues = categoryResults.map((r) => Math.floor((r.average / 5) * 100)).filter((v) => v > 0);
+        const periodValue =
+          categoryValues.length > 0
+            ? Math.floor(categoryValues.reduce((sum, val) => sum + val, 0) / categoryValues.length)
+            : 0;
 
         result.historicalData.push({
           label: period.label,
@@ -677,14 +730,18 @@ class AnalyticsService {
 
         if (period.label === (locale === 'fr' ? 'Actuel' : locale === 'sw' ? 'Sasa' : 'Current')) {
           result.currentValue = periodValue;
-        } else if (period.label === (locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki iliyopita' : 'Last Week')) {
+        } else if (
+          period.label === (locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki iliyopita' : 'Last Week')
+        ) {
           result.previousValue = periodValue;
         }
       }
 
       // Calculate change percentage
-      result.changePercentage = result.previousValue > 0 ?
-        Math.round(((result.currentValue - result.previousValue) / result.previousValue) * 100) : 0;
+      result.changePercentage =
+        result.previousValue > 0
+          ? Math.round(((result.currentValue - result.previousValue) / result.previousValue) * 100)
+          : 0;
 
       // Ensure historicalData is always 5 entries
       if (result.historicalData.length < 5) {
@@ -701,7 +758,9 @@ class AnalyticsService {
           periodStart: new Date(endTimestamp - (i + 1) * weekDuration).toISOString(),
           periodEnd: new Date(endTimestamp - i * weekDuration).toISOString()
         }));
-        result.historicalData = defaultHistoricalData.slice(0, 5 - result.historicalData.length).concat(result.historicalData);
+        result.historicalData = defaultHistoricalData
+          .slice(0, 5 - result.historicalData.length)
+          .concat(result.historicalData);
       }
 
       logger.info('getSatisfactionGaugeData: Successful data retrieval', {
@@ -796,35 +855,40 @@ class AnalyticsService {
       // Use ServiceCategoryService to get all categories with translations
       logger.info('Getting categories with translations using ServiceCategoryService for heatmap...');
       let categories = [];
-      
+
       try {
         const categoriesWithTranslations = await this.serviceCategoryService.getAllCategoriesWithServices(locale);
-        logger.info(`DEBUG: Retrieved ${categoriesWithTranslations.length} categories for heatmap from ServiceCategoryService`);
-        
+        logger.info(
+          `DEBUG: Retrieved ${categoriesWithTranslations.length} categories for heatmap from ServiceCategoryService`
+        );
+
         // Map to format needed for heatmap
-        categories = categoriesWithTranslations.map(cat => ({
+        categories = categoriesWithTranslations.map((cat) => ({
           id: cat.catKey,
           name: cat.name // Already translated by service
         }));
-        
+
         logger.debug(`DEBUG: Mapped categories for heatmap:`, JSON.stringify(categories.slice(0, 3), null, 2));
       } catch (serviceCategoryError) {
-        logger.error(`Error getting categories from ServiceCategoryService for heatmap: ${serviceCategoryError.message}`, { 
-          stack: serviceCategoryError.stack 
-        });
-        
+        logger.error(
+          `Error getting categories from ServiceCategoryService for heatmap: ${serviceCategoryError.message}`,
+          {
+            stack: serviceCategoryError.stack
+          }
+        );
+
         // Fallback to generic categories if service fails
         logger.warn('Using generic fallback categories for heatmap');
-        categories = Array.from({length: 10}, (_, i) => ({
+        categories = Array.from({ length: 10 }, (_, i) => ({
           id: String(i + 1),
           name: `Category ${i + 1}`
         }));
       }
 
       // Initialize heatmap data with zeros for all categories
-      const heatmapData = categories.map(category => ({
+      const heatmapData = categories.map((category) => ({
         name: category.name,
-        data: timePeriods.map(period => ({ x: period.label, y: 0 }))
+        data: timePeriods.map((period) => ({ x: period.label, y: 0 }))
       }));
 
       // Batch query for all feedback per period
@@ -842,34 +906,38 @@ class AnalyticsService {
               average: totalRatings > 0 ? (sumRatings / totalRatings) : 0
             }
         `;
-        
+
         try {
           const feedbackCursor = await this.db.query(feedbackQuery);
           const feedbackResults = await feedbackCursor.all();
-          
+
           logger.debug(`DEBUG: Feedback results for period ${period.label}:`, feedbackResults.length);
 
           // Update heatmap data for this period
-          feedbackResults.forEach(result => {
-            const categoryIndex = categories.findIndex(c => c.id === result.categoryId);
+          feedbackResults.forEach((result) => {
+            const categoryIndex = categories.findIndex((c) => c.id === result.categoryId);
             if (categoryIndex !== -1) {
-              const periodIndex = timePeriods.findIndex(p => p.label === period.label);
+              const periodIndex = timePeriods.findIndex((p) => p.label === period.label);
               if (periodIndex !== -1) {
                 const satisfactionPercentage = Math.floor((result.average / 5) * 100);
                 heatmapData[categoryIndex].data[periodIndex].y = satisfactionPercentage;
-                logger.debug(`DEBUG: Set heatmap value for ${categories[categoryIndex].name} at ${period.label}: ${satisfactionPercentage}%`);
+                logger.debug(
+                  `DEBUG: Set heatmap value for ${categories[categoryIndex].name} at ${period.label}: ${satisfactionPercentage}%`
+                );
               }
             }
           });
         } catch (queryError) {
-          logger.error(`Error querying feedback for period ${period.label}: ${queryError.message}`, { stack: queryError.stack });
+          logger.error(`Error querying feedback for period ${period.label}: ${queryError.message}`, {
+            stack: queryError.stack
+          });
         }
       }
 
       logger.info('getSatisfactionHeatmapData: Successful data retrieval', {
         categories: categories.length,
         periods: timePeriods.length,
-        heatmapDataSample: heatmapData.slice(0, 2).map(item => ({
+        heatmapDataSample: heatmapData.slice(0, 2).map((item) => ({
           name: item.name,
           dataLength: item.data.length
         })),
@@ -883,12 +951,237 @@ class AnalyticsService {
         stack: error.stack,
         method: 'getSatisfactionHeatmapData'
       });
-      
+
       // Return empty array on error
       return [];
     }
   }
 
+  /**
+   * Get feedback + unanswered time series for the Feedback admin page.
+   * Buckets feedback records by rating/thumb into positive/negative/neutral and
+   * unanswered queries from the analytics collection in the same buckets.
+   *
+   * @param {String} startDate - ISO start date
+   * @param {String} endDate - ISO end date
+   * @param {String} interval - hourly|daily|weekly|monthly
+   * @returns {Promise<Array<{timestamp:string,dateLabel:string,positive:number,negative:number,neutral:number,unanswered:number,totalFeedback:number}>>}
+   */
+  async getFeedbackTimeSeries(startDate, endDate, interval = 'daily') {
+    try {
+      await this.init();
+
+      const validStartDate = startDate
+        ? new Date(startDate).toISOString()
+        : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const validEndDate = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
+
+      let dateFormat;
+      switch (interval) {
+        case 'hourly':
+          dateFormat = '%yyyy-%mm-%ddT%hh:00:00Z';
+          break;
+        case 'daily':
+          dateFormat = '%yyyy-%mm-%dd';
+          break;
+        case 'weekly':
+          dateFormat = '%yyyy-W%kk';
+          break;
+        case 'monthly':
+          dateFormat = '%yyyy-%mm';
+          break;
+        default:
+          dateFormat = '%yyyy-%mm-%dd';
+      }
+      // Note: ArangoDB DATE_FORMAT uses %yyyy/%mm/%dd/%hh/%kk placeholders (verbatim
+      // copies of the parts) rather than C-style %Y/%m/%d. See ArangoDB docs.
+
+      logger.info(`Getting feedback time series from ${validStartDate} to ${validEndDate} (interval=${interval})`);
+
+      // Source feedback from the canonical queries.userFeedback field (mirrors
+      // the satisfaction heatmap query). The analytics collection's
+      // type='feedback' records are a denormalised copy that can sometimes miss
+      // entries; reading the queries collection guarantees every recorded
+      // rating/thumb is counted.
+      const query = `
+        LET feedbackBuckets = (
+          FOR q IN queries
+            FILTER q.userFeedback != null
+            LET ts = q.userFeedback.providedAt != null ? q.userFeedback.providedAt : q.timestamp
+            FILTER ts >= @startDate AND ts <= @endDate
+            LET rating = TO_NUMBER(q.userFeedback.rating)
+            LET thumb = q.userFeedback.thumbFeedback
+            LET sentiment = (
+              rating >= 4 || thumb == 'up' ? 'positive' :
+              (rating > 0 && rating <= 2) || thumb == 'down' ? 'negative' :
+              'neutral'
+            )
+            COLLECT bucket = DATE_FORMAT(ts, @dateFormat), s = sentiment WITH COUNT INTO c
+            RETURN { bucket, sentiment: s, count: c }
+        )
+
+        LET unansweredBuckets = (
+          FOR q IN queries
+            FILTER q.timestamp >= @startDate AND q.timestamp <= @endDate
+            FILTER q.isAnswered == false
+            COLLECT bucket = DATE_FORMAT(q.timestamp, @dateFormat) WITH COUNT INTO c
+            RETURN { bucket, count: c }
+        )
+
+        LET bucketKeys = UNIQUE(APPEND(feedbackBuckets[*].bucket, unansweredBuckets[*].bucket))
+
+        FOR k IN bucketKeys
+          SORT k ASC
+          LET positive = SUM(
+            FOR f IN feedbackBuckets FILTER f.bucket == k AND f.sentiment == 'positive' RETURN f.count
+          )
+          LET negative = SUM(
+            FOR f IN feedbackBuckets FILTER f.bucket == k AND f.sentiment == 'negative' RETURN f.count
+          )
+          LET neutral = SUM(
+            FOR f IN feedbackBuckets FILTER f.bucket == k AND f.sentiment == 'neutral' RETURN f.count
+          )
+          LET unanswered = SUM(
+            FOR u IN unansweredBuckets FILTER u.bucket == k RETURN u.count
+          )
+          RETURN {
+            bucket: k,
+            positive: positive,
+            negative: negative,
+            neutral: neutral,
+            unanswered: unanswered,
+            totalFeedback: positive + negative + neutral
+          }
+      `;
+
+      const cursor = await this.db.query(query, {
+        startDate: validStartDate,
+        endDate: validEndDate,
+        dateFormat
+      });
+      const rows = await cursor.all();
+
+      return rows.map((row) => ({
+        timestamp: row.bucket,
+        dateLabel: this.formatDateLabel(row.bucket, interval),
+        positive: row.positive || 0,
+        negative: row.negative || 0,
+        neutral: row.neutral || 0,
+        unanswered: row.unanswered || 0,
+        totalFeedback: row.totalFeedback || 0
+      }));
+    } catch (error) {
+      logger.error(`Error in getFeedbackTimeSeries: ${error.message}`, { stack: error.stack });
+      return [];
+    }
+  }
+
+  /**
+   * Get a paginated list of recent feedback entries, enriched with the
+   * originating query text + AI response so admins can review what users said.
+   *
+   * @param {String} startDate - ISO start date
+   * @param {String} endDate - ISO end date
+   * @param {Object} options - { filter: 'all'|'positive'|'negative'|'needsExpert', limit, offset }
+   * @returns {Promise<{items:Array,total:number}>}
+   */
+  async getFeedbackList(startDate, endDate, options = {}) {
+    try {
+      await this.init();
+
+      const validStartDate = startDate
+        ? new Date(startDate).toISOString()
+        : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const validEndDate = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
+
+      const filter = options.filter || 'all';
+      const limit = Math.min(Math.max(parseInt(options.limit, 10) || 10, 1), 100);
+      const offset = Math.max(parseInt(options.offset, 10) || 0, 0);
+
+      logger.info(
+        `Getting feedback list from ${validStartDate} to ${validEndDate} (filter=${filter}, limit=${limit}, offset=${offset})`
+      );
+
+      // Read directly from queries.userFeedback (the canonical store), not
+      // from the analytics-collection mirror. This guarantees every recorded
+      // rating/thumb shows up.
+      let filterAql = '';
+      switch (filter) {
+        case 'positive':
+          filterAql =
+            'FILTER (TO_NUMBER(q.userFeedback.rating) >= 4) OR q.userFeedback.thumbFeedback == "up"';
+          break;
+        case 'negative':
+          filterAql =
+            'FILTER (TO_NUMBER(q.userFeedback.rating) > 0 AND TO_NUMBER(q.userFeedback.rating) <= 2) OR q.userFeedback.thumbFeedback == "down"';
+          break;
+        case 'needsExpert':
+          // Negative feedback that has not yet received an expert answer —
+          // the actionable backlog for admins.
+          filterAql =
+            'FILTER ((TO_NUMBER(q.userFeedback.rating) > 0 AND TO_NUMBER(q.userFeedback.rating) <= 2) OR q.userFeedback.thumbFeedback == "down") FILTER q.expertAnswer == null OR LENGTH(q.expertAnswer.text) == 0';
+          break;
+        default:
+          filterAql = '';
+      }
+
+      const totalQuery = `
+        FOR q IN queries
+          FILTER q.userFeedback != null
+          LET ts = q.userFeedback.providedAt != null ? q.userFeedback.providedAt : q.timestamp
+          FILTER ts >= @startDate AND ts <= @endDate
+          ${filterAql}
+          COLLECT WITH COUNT INTO c
+          RETURN c
+      `;
+
+      const listQuery = `
+        FOR q IN queries
+          FILTER q.userFeedback != null
+          LET ts = q.userFeedback.providedAt != null ? q.userFeedback.providedAt : q.timestamp
+          FILTER ts >= @startDate AND ts <= @endDate
+          ${filterAql}
+          SORT ts DESC
+          LIMIT @offset, @limit
+          RETURN {
+            _key: q._key,
+            timestamp: ts,
+            rating: q.userFeedback.rating,
+            thumbFeedback: q.userFeedback.thumbFeedback,
+            comment: q.userFeedback.comment,
+            queryId: q._key,
+            userId: q.userId,
+            queryText: q.text,
+            queryResponse: q.response,
+            responseTime: q.responseTime,
+            isAnswered: q.isAnswered,
+            categoryId: q.categoryId,
+            expertAnswer: q.expertAnswer
+          }
+      `;
+
+      const [totalCursor, listCursor] = await Promise.all([
+        this.db.query(totalQuery, { startDate: validStartDate, endDate: validEndDate }),
+        this.db.query(listQuery, {
+          startDate: validStartDate,
+          endDate: validEndDate,
+          offset,
+          limit
+        })
+      ]);
+
+      const totalRow = await totalCursor.next();
+      const items = await listCursor.all();
+
+      return {
+        items,
+        total: totalRow || 0
+      };
+    } catch (error) {
+      logger.error(`Error in getFeedbackList: ${error.message}`, { stack: error.stack });
+      return { items: [], total: 0 };
+    }
+  }
 }
 
 // Singleton instance

@@ -8,6 +8,7 @@ const { Worker } = require('worker_threads'); // [ADDED] For non-blocking execut
 const app = require('./app');
 const appConfig = require('./config/appConfig');
 const { logger } = require('../shared-lib');
+const { ensureDocRepoCollections } = require('./utils/ensureDocRepoCollections');
 
 // Validate required environment variables
 const requiredEnvVars = ['ARANGO_URL', 'ARANGO_DB', 'ARANGO_PASSWORD'];
@@ -43,6 +44,11 @@ const HOST = appConfig.host || process.env.HOST || '0.0.0.0';
 const gracefulShutdown = (signal) => {
   logger.info(`Received ${signal}. Shutting down gracefully...`);
 
+  if (!server) {
+    process.exit(0);
+    return;
+  }
+
   server.close(() => {
     logger.info('HTTP server closed.');
 
@@ -59,42 +65,55 @@ const gracefulShutdown = (signal) => {
   }, 30000);
 };
 
-// Start server
-const server = app.listen(PORT, HOST, () => {
-  logger.info(appConfig.getFormattedConfiguration());
-  logger.info(`🚀 Document Repository Server is running on http://${HOST}:${PORT}`);
-  logger.info(`📂 Upload directory: ${appConfig.upload.uploadDir}`);
-  logger.info(`🛡️  Virus scanning: ${appConfig.virusScanning ? 'enabled' : 'disabled'}`);
-
-  // [ADDED] Server Socket Optimizations
-  // Prevents "EMFILE" errors and helps drop stuck connections faster
-  server.maxConnections = 10000; // Hard limit on concurrent TCP connections
-  server.keepAliveTimeout = 60000; // 1 minute (must be higher than load balancer timeout)
-  server.headersTimeout = 65000; // Must be slightly higher than keepAliveTimeout
-
-  // Start background workers
+// Start server (ensure Arango collections before accepting traffic)
+let server;
+(async () => {
   try {
-    // [MODIFIED] Spawn Crawler in a separate thread to prevent Event Loop blocking
-    const workerPath = path.resolve(__dirname, './workers/crawlWorker.js');
+    await ensureDocRepoCollections();
+  } catch (err) {
+    logger.error('FATAL: Could not ensure Arango collections for document-repository:', err);
+    process.exit(1);
+  }
 
-    // We use eval to require the file and call start(), isolating the CPU load
-    const worker = new Worker(
-      `
+  server = app.listen(PORT, HOST, () => {
+    logger.info(appConfig.getFormattedConfiguration());
+    logger.info(`🚀 Document Repository Server is running on http://${HOST}:${PORT}`);
+    logger.info(`📂 Upload directory: ${appConfig.upload.uploadDir}`);
+    logger.info(`🛡️  Virus scanning: ${appConfig.virusScanning ? 'enabled' : 'disabled'}`);
+
+    // [ADDED] Server Socket Optimizations
+    // Prevents "EMFILE" errors and helps drop stuck connections faster
+    server.maxConnections = 10000; // Hard limit on concurrent TCP connections
+    server.keepAliveTimeout = 60000; // 1 minute (must be higher than load balancer timeout)
+    server.headersTimeout = 65000; // Must be slightly higher than keepAliveTimeout
+
+    // Start background workers
+    try {
+      // [MODIFIED] Spawn Crawler in a separate thread to prevent Event Loop blocking
+      const workerPath = path.resolve(__dirname, './workers/crawlWorker.js');
+
+      // We use eval to require the file and call start(), isolating the CPU load
+      const worker = new Worker(
+        `
       const { start } = require('${workerPath.replace(/\\/g, '/')}');
       start();
     `,
-      { eval: true }
-    );
+        { eval: true }
+      );
 
-    worker.on('error', (err) => logger.error('Crawl Worker Error:', err));
-    worker.on('exit', (code) => {
-      if (code !== 0) logger.warn(`Crawl Worker stopped with exit code ${code}`);
-    });
+      worker.on('error', (err) => logger.error('Crawl Worker Error:', err));
+      worker.on('exit', (code) => {
+        if (code !== 0) logger.warn(`Crawl Worker stopped with exit code ${code}`);
+      });
 
-    logger.info('🕷️  Background Crawl Worker started (Threaded Mode)');
-  } catch (error) {
-    logger.error('Failed to start Crawl Worker:', error);
-  }
+      logger.info('🕷️  Background Crawl Worker started (Threaded Mode)');
+    } catch (error) {
+      logger.error('Failed to start Crawl Worker:', error);
+    }
+  });
+})().catch((err) => {
+  logger.error('Document-repository startup failed:', err);
+  process.exit(1);
 });
 
 // Handle unhandled promise rejections — log but don't crash
@@ -112,4 +131,4 @@ process.on('uncaughtException', (error) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-module.exports = server;
+module.exports = app;

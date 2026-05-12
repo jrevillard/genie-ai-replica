@@ -63,14 +63,14 @@
                 </div>
               </div>
 
-              <div v-if="nextDeadline" class="next-deadline">
-                <h4>{{ $t('systemStatus.nextDeadline') }}</h4>
-                <div class="deadline-info">
-                  <span class="deadline-title">{{ $t('deadlines.taxFiling') }}</span>
-                  <span class="deadline-days" :class="{ urgent: nextDeadline.daysRemaining < 7 }">
-                    {{ nextDeadline.daysRemaining }} {{ $t('systemStatus.days') }}
-                  </span>
-                </div>
+              <div class="status-service-block">
+                <h4 class="status-service-subtitle">{{ $t('systemStatus.stackSubtitle') }}</h4>
+                <ul class="status-service-list" role="list">
+                  <li v-for="(svc, idx) in systemStatus.services" :key="idx" class="status-service-row" role="listitem">
+                    <span class="status-dot" :class="serviceStatusDotClass(svc.status)"></span>
+                    <span class="status-service-name">{{ $t(svc.nameKey) }}</span>
+                  </li>
+                </ul>
               </div>
 
               <div class="status-footer">
@@ -234,14 +234,19 @@
               </div>
             </div>
 
-            <div v-if="nextDeadline" class="next-deadline">
-              <h4>{{ $t('systemStatus.nextDeadline') }}</h4>
-              <div class="deadline-info">
-                <span class="deadline-title">{{ $t('deadlines.taxFiling') }}</span>
-                <span class="deadline-days" :class="{ urgent: nextDeadline.daysRemaining < 7 }">
-                  {{ nextDeadline.daysRemaining }} {{ $t('systemStatus.days') }}
-                </span>
-              </div>
+            <div class="status-service-block">
+              <h4 class="status-service-subtitle">{{ $t('systemStatus.stackSubtitle') }}</h4>
+              <ul class="status-service-list" role="list">
+                <li
+                  v-for="(svc, idx) in systemStatus.services"
+                  :key="'desk-' + idx"
+                  class="status-service-row"
+                  role="listitem"
+                >
+                  <span class="status-dot" :class="serviceStatusDotClass(svc.status)"></span>
+                  <span class="status-service-name">{{ $t(svc.nameKey) }}</span>
+                </li>
+              </ul>
             </div>
 
             <div class="status-footer">
@@ -404,22 +409,18 @@ export default {
     return {
       isStatusDropdownOpen: false,
       currentUser: null,
-      // Sample system status data - would be fetched from an API
+      // Shipped as all-operational placeholders until a real health API exists (see mounted()).
       systemStatus: {
-        overall: 'degraded', // 'operational', 'degraded', or 'outage'
+        overall: 'operational',
         services: [
-          { name: 'eCitizen Portal', status: 'operational' },
-          { name: 'Tax Filing System', status: 'degraded' },
-          { name: 'ID Application', status: 'outage' },
-          { name: 'Business Registration', status: 'operational' },
-          { name: 'Driving License', status: 'operational' }
+          { nameKey: 'systemStatus.stack.backendApi', status: 'operational' },
+          { nameKey: 'systemStatus.stack.chatAi', status: 'operational' },
+          { nameKey: 'systemStatus.stack.documentRepo', status: 'operational' },
+          { nameKey: 'systemStatus.stack.knowledgeBase', status: 'operational' },
+          { nameKey: 'systemStatus.stack.aiModels', status: 'operational' }
         ]
       },
-      // Sample next deadline - would be personalized
-      nextDeadline: {
-        titleKey: 'taxFiling',
-        daysRemaining: 12
-      }
+      nextDeadline: null
     };
   },
   computed: {
@@ -612,6 +613,18 @@ export default {
     viewStatusPage() {
       this.$emit('viewStatusPage');
       this.isStatusDropdownOpen = false;
+    },
+    serviceStatusDotClass(status) {
+      switch (status) {
+        case 'operational':
+          return 'status-operational';
+        case 'degraded':
+          return 'status-degraded';
+        case 'outage':
+          return 'status-outage';
+        default:
+          return '';
+      }
     }
   }
 };
@@ -673,24 +686,41 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  height: 52px;
   margin-left: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 /* Adjusted for GENIE.AI configured SVG icon */
 .govt-logo {
-  height: 40px;
-  width: 40px;
+  display: block;
+  height: 52px;
+  width: auto;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
   color: white;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
   transition: transform 0.3s ease;
 }
 
+.govt-logo:not(img) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.govt-logo:not(img) :deep(svg) {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+}
+
 .logo-container:hover .govt-logo {
-  transform: scale(1.08);
+  transform: scale(1.06);
 }
 
 /* Logo animations */
@@ -907,6 +937,43 @@ export default {
 
 .status-count-item:last-child {
   margin-bottom: 0;
+}
+
+.status-service-block {
+  padding: 10px 16px 4px;
+  border-bottom: 1px solid #eee;
+}
+
+.status-service-subtitle {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.status-service-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.status-service-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 0.875rem;
+  color: #334155;
+}
+
+.status-service-row .status-dot {
+  flex-shrink: 0;
+}
+
+.status-service-name {
+  line-height: 1.3;
 }
 
 .status-label {
@@ -1318,9 +1385,12 @@ export default {
     display: flex;
   }
 
+  .logo-container {
+    height: 44px;
+  }
+
   .govt-logo {
-    height: 36px;
-    width: 36px;
+    height: 44px;
   }
 
   .nav-bar {
@@ -1366,9 +1436,12 @@ export default {
 }
 
 @media (max-width: 600px) {
+  .logo-container {
+    height: 40px;
+  }
+
   .govt-logo {
-    height: 32px;
-    width: 32px;
+    height: 40px;
   }
 
   .icon-btn {
@@ -1392,9 +1465,12 @@ export default {
 }
 
 @media (max-width: 480px) {
+  .logo-container {
+    height: 38px;
+  }
+
   .govt-logo {
-    height: 32px;
-    width: 32px;
+    height: 38px;
   }
 
   .nav-bar {

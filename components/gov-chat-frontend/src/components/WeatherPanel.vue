@@ -1,6 +1,11 @@
 <template>
-  <div :key="$i18n.locale" class="weather-panel" :data-theme="$route.meta.theme || 'light'">
-    <div class="weather-header">
+  <div
+    :key="$i18n.locale"
+    class="weather-panel"
+    :class="{ compact: isTransientError }"
+    :data-theme="$route.meta.theme || 'light'"
+  >
+    <div v-if="!isTransientError" class="weather-header">
       <h4>{{ weatherTitle }}</h4>
       <div class="weather-location">
         {{ location || weatherLocationLoading }}
@@ -13,6 +18,14 @@
     <div v-if="isLoading" class="weather-loading">
       <i class="fas fa-spinner fa-pulse"></i>
       {{ weatherLoading }}
+    </div>
+
+    <div v-else-if="isTransientError" class="weather-error-compact" :title="$t(`sidebar.${errorKey}`)">
+      <i class="fas fa-cloud-sun"></i>
+      <span class="weather-error-text">{{ $t('sidebar.weatherUnavailable', 'Weather unavailable') }}</span>
+      <button class="refresh-btn" :title="weatherRefresh" @click="refreshWeather">
+        <i class="fas fa-sync-alt" :class="{ rotating: isLoading }"></i>
+      </button>
     </div>
 
     <div v-else-if="errorKey" class="weather-error">
@@ -97,6 +110,16 @@ export default {
         iconClass: this.getWeatherIcon(day.condition),
         translatedCondition: this.getTranslatedCondition(day.condition)
       }));
+    },
+    isTransientError() {
+      const transient = new Set([
+        'weatherGeolocationTimeout',
+        'weatherPositionUnavailable',
+        'weatherGeolocationUnsupported',
+        'weatherError',
+        'weatherErrorDefault'
+      ]);
+      return !this.isLoading && transient.has(this.errorKey);
     }
   },
 
@@ -303,6 +326,34 @@ html[data-theme='dark'] .weather-header h4 {
   align-items: center;
   gap: 8px;
   color: var(--text-secondary);
+}
+
+.weather-panel.compact {
+  padding: 8px 12px;
+  margin-top: 10px;
+}
+
+.weather-error-compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.weather-error-compact i.fa-cloud-sun {
+  color: var(--accent-color);
+}
+
+.weather-error-compact .weather-error-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weather-error-compact .refresh-btn {
+  margin-left: auto;
 }
 
 .current-weather {

@@ -107,6 +107,28 @@ HUGGING_FACE_HUB_TOKEN=
 # DEPLOY_OPEA=1
 
 # =============================================================================
+# SECTION 3c: BACKEND → CHATQNA (OPEA) CONNECTIVITY
+# =============================================================================
+# The Node backend calls ChatQnA over HTTP. The hostname must resolve from where the backend runs.
+#
+# In Docker (default compose): use the Compose service name (stable DNS on genieai_network):
+#   OPEA_HOST=chatqna-xeon-backend-server
+#   OPEA_PORT=8888
+# The chatqna service also registers the alias genie-ai-chatqna-server on the network.
+#
+# If you run the backend on the host (npm, IDE) while ChatQnA runs in Docker with ports published:
+#   OPEA_HOST=127.0.0.1
+#   OPEA_PORT=<same host port mapped to ChatQnA, usually 8888>
+#
+# ChatQnA must be running (depends on vLLM, embedding, retriever, reranker) or queries return 500 / ENOTFOUND.
+#
+# How the backend sends chat to ChatQnA (sidebar / Query Context requires the conversation mode):
+#   CONTEXT_OPTION=conversation-with-context-labels   (recommended — forwards categoryLabel + serviceLabels)
+#   CONTEXT_OPTION=single-message                     (legacy — only last user line; labels still merged in code if present)
+# Default in docker-compose.yaml is conversation-with-context-labels unless you override below.
+# CONTEXT_OPTION=conversation-with-context-labels
+
+# =============================================================================
 # SECTION 4: AI/ML MODEL CONFIGURATION
 # =============================================================================
 # All models have sensible defaults in code/docker-compose.
@@ -199,6 +221,7 @@ HUGGING_FACE_HUB_TOKEN=
 # Default: localhost
 # Production: your-domain.com
 # Should match NGINX_PUBLIC_DOMAIN (section 7)
+# In Docker Compose, Kong's proxy listens on port 8000 inside the network (use kong:8000, not kong:8010).
 # VUE_PROXY_HOST=
 
 # Content Security Policy connect sources (allowed WebSocket/API origins)
@@ -230,6 +253,12 @@ HUGGING_FACE_HUB_TOKEN=
 # IMPORTANT: Also set VUE_APP_CSP_CONNECT_SRC (section 5) to the same value.
 # They serve the same purpose but at different stages (build-time vs runtime).
 # CSP_CONNECT_SRC=
+
+# Optional absolute origin for source-document links in ChatQnA metadata (when you need full URLs in JSON).
+# If unset, ChatQnA uses path-only URLs (/api/files/.../viewbrowser) so the browser uses the web app origin
+# (recommended for Gov chat + Vue proxy). Set BACKEND_PUBLIC_URL only for clients that cannot resolve relative
+# paths (no trailing slash). Examples: http://localhost:8090, https://your.public.domain
+# BACKEND_PUBLIC_URL=http://localhost:8090
 
 # Log level for backend and document-repository services
 # Used by: backend (shared-lib/logger.js), document-repository (appConfig.js)
@@ -286,6 +315,12 @@ HUGGING_FACE_HUB_TOKEN=
 # Restrict to your Docker network subnet for production.
 # KONG_TRUSTED_IPS=
 
+# Kong DNS: how long (seconds) a resolved upstream IP is considered fresh before re-querying Docker DNS.
+# Low values (e.g. 5) reduce 502 Bad Gateway errors after `docker compose up -d backend` when the backend
+# container gets a new IP; Kong otherwise may keep connecting to the old address (connection refused).
+# Default in compose: 5. Increase only if you see unnecessary upstream DNS churn.
+# KONG_DNS_STALE_TTL=5
+
 # Let's Encrypt certificate management (optional)
 # Set CERTBOT_EMAIL to enable automatic SSL certificate provisioning via Let's Encrypt.
 # Activation requires: CERTBOT_EMAIL + deployment flag (--profile letsencrypt / CERTBOT_REPLICAS)
@@ -302,8 +337,9 @@ HUGGING_FACE_HUB_TOKEN=
 # =============================================================================
 # SECTION 8: LLM PROMPTS & FLAGS (OPTIONAL)
 # =============================================================================
-# Default prompts and flags are built into the Python code.
+# Default prompts and flags are built into the Python code (Lesotho farmer assistant scope).
 # Override here ONLY for deployment-specific customization.
+# If you previously set CHATQNA_* to Kenya-specific text, replace it to match Lesotho farming use cases.
 #
 # **Prompts** (text instructions for AI):
 #   - CHATQNA_SYSTEM_PROMPT: Main system prompt for chat behavior
@@ -320,10 +356,53 @@ HUGGING_FACE_HUB_TOKEN=
 # edit the Python code in genie-ai-overlay/chatqna/ or genie-ai-overlay/dataprep/
 
 # CHATQNA_SYSTEM_PROMPT="You are a helpful assistant..."
+# Default chat behaviour uses Master Farmer Bot guardrails in genieai_chatqna.py (closed KB, citations,
+# safety, Lesotho-first, mandatory response sections). Leave CHATQNA_SYSTEM_PROMPT unset to use that default.
+# If you override, keep the same safety constraints or paste the full prompt from configs/README or repo docs.
 # CHATQNA_ABSTENTION_INSTRUCTIONS="If no information found in the context..."
 # CHATQNA_ENFORCE_ABSTENTION="false"
 # CHATQNA_SKIP_BEARER_JWT_VALIDATION="true"
 # LABEL_SELECTOR_SYSTEM_PROMPT="Categorize this document..."
+
+# How ChatQnA combines per-file retrieval scores into metadata.confidence_score (0-1, UI shows ×100%).
+# max (default) = best matching document only; mean_top3 = average of up to three strongest files.
+# See genieai_chatqna._aggregate_retrieval_confidence for the full formula.
+# CHATQNA_CONFIDENCE_AGGREGATE=max
+# CHATQNA_CONFIDENCE_AGGREGATE=mean_top3
+#
+# When source documents are returned, optionally floor metadata.confidence_score so the UI stays >90%
+# if raw retrieval signal clears CHATQNA_CONFIDENCE_SOURCED_GATE (policy display, not LLM certainty).
+# While CHATQNA_CLARIFY_ON_LOW_CONFIDENCE is true, this floor is skipped when raw retrieval is below
+# CHATQNA_CLARIFY_CONFIDENCE_THRESHOLD so the headline score matches low-confidence / abstention behaviour.
+# CHATQNA_CONFIDENCE_SOURCED_FLOOR_ENABLED=true
+# CHATQNA_CONFIDENCE_SOURCED_FLOOR=0.91
+# CHATQNA_CONFIDENCE_SOURCED_GATE=0.12
+#
+# When provisional retrieval strength is below CHATQNA_CLARIFY_CONFIDENCE_THRESHOLD (default 0.8 = 80%),
+# ChatQnA injects low-match instructions and replaces the assistant body with an expert-feedback notice plus one question.
+# CHATQNA_CLARIFY_ON_LOW_CONFIDENCE=true
+# CHATQNA_CLARIFY_CONFIDENCE_THRESHOLD=0.8
+#
+# Cap headline and per-document confidence in the API so the UI never shows 100% (default 0.99 = 99%).
+# CHATQNA_CONFIDENCE_MAX_PRESENTED=0.99
+#
+# When true (default), apply conservative English typo fixes to the retriever embedding text only (not the LLM block).
+# CHATQNA_RETRIEVAL_QUERY_NORMALIZE=true
+#
+# Between CHATQNA_CLARIFY_CONFIDENCE_THRESHOLD and this value (exclusive upper), inject "full answer + one clarifying question".
+# CHATQNA_MODERATE_CONFIDENCE_HIGH=0.9
+#
+# Multi-turn chat context (last N messages carried Vue -> Node -> ChatQnA so follow-ups inherit prior turns).
+# Backend hard cap on messages forwarded to ChatQnA (default 10).
+# CHATQNA_HISTORY_MAX_MESSAGES=10
+# ChatQnA: number of recent USER turns included in the retrieval embedding text (default 3).
+# CHATQNA_RETRIEVAL_HISTORY_TURNS=3
+# ChatQnA: max USER+ASSISTANT entries kept in the LLM CHAT HISTORY block before tokenizer budget (default 10).
+# CHATQNA_LLM_HISTORY_MAX_MESSAGES=10
+
+# Document repository: after upload, queue dataprep ingestion without a separate POST .../ingest.
+# Default: enabled. Set DOC_REPO_AUTO_INGEST_ON_UPLOAD=false for manual-only ingest from the admin UI.
+# DOC_REPO_AUTO_INGEST_ON_UPLOAD=false
 
 # =============================================================================
 # SECTION 9: KEYCLOAK IDENTITY PROVIDER (REQUIRED)
@@ -590,4 +669,19 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 #
 # GPU-specific overrides work the same as Docker:
 #   set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
+
+# =============================================================================
+# SECTION 14: AGRICULTURAL TAXONOMY METADATA (OPTIONAL)
+# =============================================================================
+# Dataprep: Lesotho/South Africa focused document taxonomy extraction (pre-chunking).
+# AGRI_TAXONOMY_ENABLED=true
+# AGRI_TAXONOMY_MAX_INPUT_CHARS=12000
+# AGRI_TAXONOMY_TEMPERATURE=0.1
+# AGRI_TAXONOMY_TIMEOUT_SEC=120
+# AGRI_TAXONOMY_MAX_RETRIES=3
+
+# Backend query → retriever: infer taxonomy_filters (crop/country) from user message text.
+# Default: unset/false — required for RAG when chunks lack full tax_* metadata (otherwise queries like
+# "maize" match zero chunks). Set to true only when ingestion populates tax_crop_names / tax_countries, etc.
+# AGRI_INFER_TAXONOMY_FILTERS=false
 

@@ -5,9 +5,9 @@ const path = require('path');
 const PORT = process.env.PORT || 8090;
 const DIST = path.join(__dirname, 'dist');
 const CSP = process.env.VUE_APP_CSP_CONNECT_SRC || "'self'";
-// API proxy target (Docker network hostname:internal_port)
-// VUE_PROXY_HOST uses the host-mapped port (e.g. kong:8010), but container-to-container
-// traffic must use the internal port (e.g. kong:8000). VUE_API_PROXY overrides this.
+// API proxy target (Docker network hostname:internal_port).
+// Kong's proxy listens on 8000 inside the container; use kong:8000 for service-to-service calls.
+// VUE_API_PROXY overrides (e.g. kong:8000).
 const API_PROXY = process.env.VUE_API_PROXY || process.env.VUE_PROXY_HOST || 'localhost:3000';
 const [PROXY_HOST, PROXY_PORT] = API_PROXY.split(':');
 

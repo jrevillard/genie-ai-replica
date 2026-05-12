@@ -58,7 +58,8 @@ TRANSLATION_CACHE_PORT=6379
 # OPEA Host configuration
 OPEA_HOST=vllm-vllm-2
 OPEA_PORT=8000
-CONTEXT_OPTION=single-message
+# Forward full conversation + sidebar labels to OPEA ChatQnA (required for Query Context).
+CONTEXT_OPTION=conversation-with-context-labels
 
 #CORS configuration
 CORS_ALLOWED_ORIGINS=https://164.52.196.46,https://inko.site,https://www.inko.site

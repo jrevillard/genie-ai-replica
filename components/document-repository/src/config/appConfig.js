@@ -3,6 +3,38 @@
  */
 require('dotenv').config();
 
+const parseBoolean = (value, defaultValue = false) => {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  if (['true', '1', 'yes', 'on'].includes(normalized)) {
+    return true;
+  }
+  if (['false', '0', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+  return defaultValue;
+};
+
+const parseSocket = value => {
+  if (value === undefined || value === null) {
+    return false;
+  }
+  const normalized = String(value).trim();
+  if (!normalized) {
+    return false;
+  }
+  const lowered = normalized.toLowerCase();
+  if (['false', '0', 'no', 'off', 'none', 'null'].includes(lowered)) {
+    return false;
+  }
+  if (['true', '1', 'yes', 'on'].includes(lowered)) {
+    return '/var/run/clamav/clamd.ctl';
+  }
+  return normalized;
+};
+
 const config = {
   port: process.env.PORT || 3001,
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -22,11 +54,15 @@ const config = {
 
     // This needs to be changed as it cannot be deployed on Kubernetes like this; David F
     ingestPath: '/v1/dataprep/ingest_file',
-    retractPath: '/v1/dataprep/retract_file'
+    retractPath: '/v1/dataprep/retract_file',
+    reextractTaxonomyPath: '/v1/dataprep/reextract_taxonomy'
   },
 
   // File upload configuration
   upload: {
+    // Queue dataprep ingestion immediately after upload (async; upload API still returns 201 quickly).
+    // Default: enabled. Set DOC_REPO_AUTO_INGEST_ON_UPLOAD=false to require manual "Ingest" from admin UI.
+    autoIngestOnUpload: process.env.DOC_REPO_AUTO_INGEST_ON_UPLOAD !== 'false',
     maxFilesUpload: parseInt(process.env.MAX_FILES_UPLOAD) || 10, // Maximum number of files that can be uploaded at once
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 50 * 1024 * 1024, // 50MB
     uploadDir: process.env.UPLOAD_DIR || './uploads',
@@ -43,7 +79,8 @@ const config = {
       'application/x-zip-compressed' // Windows browsers sometimes report Office files as this
     ],
     allowedExtensions: ['.pdf', '.docx', '.xlsx', '.md', '.html', '.txt'],
-    requiredIngestionLanguage: process.env.DOCUMENT_INGESTION_LANGUAGE || 'en' // Added per spec
+    requiredIngestionLanguage: process.env.DOCUMENT_INGESTION_LANGUAGE || 'en',
+    enforceIngestionLanguage: process.env.DOCUMENT_INGESTION_ENFORCE_LANGUAGE !== 'false'
   },
 
   // Crawler configuration (NEW)
@@ -70,20 +107,20 @@ const config = {
   },
 
   //Controls whether or not the clamav service is used for uploaded documents
-  virusScanning: process.env.VIRUS_SCANNING === 'true' || false,
+  virusScanning: parseBoolean(process.env.VIRUS_SCANNING, false),
 
   // ClamAV configuration using clamscan library
   clamscan: {
-    removeInfected: process.env.CLAMSCAN_REMOVE_INFECTED === 'true' || false,
+    removeInfected: parseBoolean(process.env.CLAMSCAN_REMOVE_INFECTED, false),
 
     // FIX: Check for the string 'false' or use the env var as a path
     quarantineInfected:
       process.env.CLAMSCAN_QUARANTINE_INFECTED === 'false' ? false : process.env.CLAMSCAN_QUARANTINE_INFECTED || false,
 
-    debugMode: process.env.CLAMSCAN_DEBUG_MODE === 'true' || false,
+    debugMode: parseBoolean(process.env.CLAMSCAN_DEBUG_MODE, false),
 
     // FIX: Use a strict === 'true' check, as 'false' string is truthy
-    socket: process.env.CLAMSCAN_SOCKET === 'true' || false,
+    socket: parseSocket(process.env.CLAMSCAN_SOCKET),
 
     host: process.env.CLAMSCAN_HOST || '127.0.0.1',
 
@@ -93,15 +130,35 @@ const config = {
     // FIX: Convert timeout string to a number
     timeout: parseInt(process.env.CLAMSCAN_TIMEOUT, 10) || 60000,
 
-    localFallback: process.env.CLAMSCAN_LOCAL_FALLBACK === 'true' || true,
+    localFallback: parseBoolean(process.env.CLAMSCAN_LOCAL_FALLBACK, true),
     path: process.env.CLAMSCAN_PATH || '/usr/bin/clamdscan',
-    active: process.env.CLAMSCAN_ACTIVE === 'true' || true
+    active: parseBoolean(process.env.CLAMSCAN_ACTIVE, true)
   },
 
   // Logging configuration
   logging: {
     level: process.env.LOG_LEVEL || 'info',
     file: process.env.LOG_FILE || 'app.log'
+  }
+};
+
+/**
+ * Base URL for dataprep HTTP calls. If DATAPREP_HOST already includes a port,
+ * avoids appending DATAPREP_PORT again (fixes http://host:5000 plus port 5000).
+ * @returns {string}
+ */
+config.buildDataprepBaseUrl = function () {
+  const hostRaw = String(this.dataprep.host || 'http://dataprep-arango-service').trim().replace(/\/+$/, '');
+  const portStr = String(this.dataprep.port || '5000').trim().replace(/^:/, '');
+  const withScheme = /^https?:\/\//i.test(hostRaw) ? hostRaw : `http://${hostRaw}`;
+  try {
+    const u = new URL(withScheme);
+    if (!u.port) {
+      u.port = portStr;
+    }
+    return u.origin;
+  } catch {
+    return `${withScheme}:${portStr}`;
   }
 };
 

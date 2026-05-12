@@ -125,7 +125,7 @@
         {
           "name": "file-log",
           "id": "54117e7d-fb6e-49a8-bb93-472d76ed392e",
-          "enabled": true,
+          "enabled": false,
           "config": {
             "path": "/var/log/kong/api.log",
             "reopen": true
@@ -638,7 +638,7 @@
         {
           "name": "file-log",
           "id": "c2ac47f0-12d2-4d91-a12d-84538fe2344a",
-          "enabled": true,
+          "enabled": false,
           "config": {
             "custom_fields_by_lua": null,
             "reopen": true,

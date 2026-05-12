@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0 Developed by Intel. Adapted by ITU
 
 import os
+import re
 
 import aiohttp
 from comps import CustomLogger, LLMParamsDoc, OpeaComponentRegistry, SearchedDoc
@@ -31,6 +32,34 @@ logflag = os.getenv("LOGFLAG", False)
 RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice")  # slice, threshold, knee_threshold
 RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.75))
 RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 1))
+COUNTRY_HINT_TERMS = [
+    "lesotho",
+    "south africa",
+    "tanzania",
+    "kenya",
+    "uganda",
+    "zambia",
+    "zimbabwe",
+    "botswana",
+    "eswatini",
+    "mozambique",
+    "malawi",
+]
+
+
+def _normalize_query_for_reranking(query: str) -> str:
+    """Drop country hint terms to avoid penalizing otherwise relevant chunks.
+
+    Country targeting is still handled downstream by context/prompting logic.
+    This normalization only affects reranker matching robustness.
+    """
+    if not query:
+        return query
+    normalized = query
+    for term in COUNTRY_HINT_TERMS:
+        normalized = re.sub(rf"\b{re.escape(term)}\b", " ", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\s+", " ", normalized).strip(" ,.;:-")
+    return normalized or query
 
 
 @OpeaComponentRegistry.register("GENIE_TEI_RERANKING")
@@ -63,10 +92,13 @@ class GenieTEIReranking(OpeaTEIReranking):
         if input.retrieved_docs:
             docs = [doc.text for doc in input.retrieved_docs]
             query = input.initial_query if isinstance(input, SearchedDoc) else input.input
+            rerank_query = _normalize_query_for_reranking(query)
+            if rerank_query != query:
+                logger.info(f"[ DEBUG ] Normalized reranker query: '{query}' -> '{rerank_query}'")
 
             async with (
                 aiohttp.ClientSession() as session,
-                session.post(f"{self.base_url}/rerank", json={"query": query, "texts": docs}) as resp,
+                session.post(f"{self.base_url}/rerank", json={"query": rerank_query, "texts": docs}) as resp,
             ):
                 decoded_response = await resp.json()
 
@@ -87,6 +119,17 @@ class GenieTEIReranking(OpeaTEIReranking):
                     if best_response["score"] >= reranking_threshold:
                         reranking_results.append(
                             {"text": input.retrieved_docs[best_response["index"]].text, "score": best_response["score"]}
+                        )
+                # Avoid empty reranker output causing false abstention when retrieval found relevant docs.
+                if not reranking_results and decoded_response:
+                    fallback_count = min(3, len(decoded_response))
+                    logger.warning(
+                        "[ DEBUG ] Threshold removed all docs; using top fallback "
+                        f"(count={fallback_count}, threshold={reranking_threshold})."
+                    )
+                    for top in decoded_response[:fallback_count]:
+                        reranking_results.append(
+                            {"text": input.retrieved_docs[top["index"]].text, "score": top["score"]}
                         )
 
             elif reranking_strategy == "knee_threshold":

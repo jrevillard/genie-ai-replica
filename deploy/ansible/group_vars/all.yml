@@ -60,6 +60,11 @@ nginx_https_port: "443"
 # Restrict further with: docker network inspect <network> to find the exact subnet.
 kong_trusted_ips: "10.0.0.0/8"
 
+# Browser-openable API origin for ChatQnA source-document links (metadata.url). Must match how users reach /api
+# (e.g. https://your.domain or http://host:8010 via Kong). Unset = ChatQnA uses BACKEND_SERVICE_URL (often
+# http://backend:3000), which does not resolve in the browser.
+# backend_public_url: "https://localhost"
+
 # =============================================================================
 # SSL CERTIFICATES
 # =============================================================================

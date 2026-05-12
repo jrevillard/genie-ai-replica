@@ -17,9 +17,6 @@ const documentFileService = {
     try {
       const response = await httpService.getFiles('/files', { params });
 
-      // <-- ADD THIS LINE to inspect the raw API response
-      console.log('[documentFileService] Raw API Response:', response);
-
       return response.data;
     } catch (error) {
       console.error('Error fetching files:', error);
@@ -105,6 +102,21 @@ const documentFileService = {
       return response.data;
     } catch (error) {
       console.error(`Error deleting file ${fileId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Deletes multiple files (Admin). Body: { fileIds }.
+   * @param {string[]} fileIds - file_id values (not Arango _key).
+   * @returns {Promise<Object>}
+   */
+  async deleteMultipleFiles(fileIds) {
+    try {
+      const response = await httpService.deleteFiles('/files', { data: { fileIds } });
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting files in batch:', error);
       throw error;
     }
   },

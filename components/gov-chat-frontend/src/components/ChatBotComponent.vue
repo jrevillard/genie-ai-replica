@@ -59,23 +59,21 @@
       </modal-dialog>
 
       <!-- System Status Panel -->
-      <div class="system-status-panel">
+      <div v-if="!systemStatus.online || systemStatus.lastResponseTime !== null" class="system-status-panel">
         <div class="status-left">
           <div class="status-indicator" :class="{ online: systemStatus.online }">
             <div class="status-dot"></div>
-            <span>{{ systemStatus.online ? translate('status.online') : translate('status.offline') }}</span>
+            <span>{{
+              systemStatus.online ? translate('status.online', 'Online') : translate('status.offline', 'Offline')
+            }}</span>
           </div>
           <div v-if="!systemStatus.online && systemStatus.errorMessage" class="status-error-message">
             {{ systemStatus.errorMessage }}
           </div>
         </div>
-        <div class="status-metrics">
-          <div class="metric">
-            <span class="metric-label">{{ translate('status.lastResponseTime') }}</span>
-            <span class="metric-value">
-              {{ systemStatus.lastResponseTime !== null ? systemStatus.lastResponseTime + 'ms' : 'N/A' }}
-            </span>
-          </div>
+        <div v-if="systemStatus.lastResponseTime !== null" class="status-metric">
+          <span class="metric-label">{{ translate('status.lastResponseTime', 'Last response') }}</span>
+          <span class="metric-value">{{ systemStatus.lastResponseTime }}ms</span>
         </div>
       </div>
       <!-- Context Panel for selected tree nodes -->
@@ -107,11 +105,11 @@
           </div>
           <!-- Feedback and confidence score for bot messages -->
           <div v-if="msg.sender === 'bot'" class="bot-message-meta">
-            <div v-if="msg.confidenceScore" class="confidence-score">
+            <div v-if="messageConfidence(msg) != null" class="confidence-score">
               <i class="fas fa-brain"></i>
-              <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
+              <span>Confidence: {{ Math.min(99, Math.round((messageConfidence(msg) || 0) * 100)) }}%</span>
             </div>
-            <div class="feedback-trigger">
+            <div v-if="msg.queryId" class="feedback-trigger">
               <button @click="openFeedbackDialog(index)">
                 {{ translate('feedback.button') }}
               </button>
@@ -127,7 +125,7 @@
         <span class="loading-text">Thinking...</span>
       </div>
       <!-- Quick Help Overlay -->
-      <div v-if="showQuickHelp && chatMessages.length <= 1" class="quick-help-overlay">
+      <div v-if="quickHelpVisible" class="quick-help-overlay">
         <div class="quick-help-content">
           <h2 class="quick-help-heading">
             {{ translate('chatbot.whatCanIHelp') }}
@@ -263,7 +261,7 @@ import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue';
 import ModalDialog from './ModalDialog.vue';
 import RightSideBarComponent from './RightSideBarComponent.vue';
 import chatbotService from '../services/chatbotService';
-import serviceTreeService from '../services/serviceTreeService'; // *** NEW: Import serviceTreeService
+import serviceTreeService, { DOCUMENT_METATAGS_CAT_KEY } from '../services/serviceTreeService'; // *** NEW: Import serviceTreeService
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import chatHistoryService from '../services/chatHistoryService';
 import { marked } from 'marked';
@@ -353,6 +351,10 @@ export default {
         return userMessage.content.length > 50 ? userMessage.content.substring(0, 47) + '...' : userMessage.content;
       }
       return 'New conversation';
+    },
+
+    quickHelpVisible() {
+      return this.showQuickHelp && !this.chatMessages.some((m) => m.sender === 'user');
     }
   },
 
@@ -363,6 +365,11 @@ export default {
   },
 
   created() {
+    marked.use({
+      gfm: true,
+      breaks: true
+    });
+
     eventBus.$on('chat-deleted', (deletedChatId) => {
       if (this.conversationId === deletedChatId) {
         this.conversationId = null;
@@ -423,7 +430,7 @@ export default {
             ...item,
             service: this.safeTranslate(item.serviceKey || item.service)
           }));
-          this.loadServiceCategories(); // Reload categories for the new locale
+          this.loadServiceCategories().then(() => this.loadQuickHelpButtons());
         }
       );
     }
@@ -431,8 +438,11 @@ export default {
     eventBus.$on('treeNodeSelected', this.handleTreeNodeSelected);
     eventBus.$on('open-chat', this.loadChatFromHistory);
     this.scrollToBottom();
-    this.loadQuickHelpButtons();
-    this.loadServiceCategories(); // Fetch categories on mount
+    this.loadServiceCategories()
+      .then(() => this.loadQuickHelpButtons())
+      .catch((err) => {
+        console.error('[ChatBotComponent] Failed to load categories or quick help:', err);
+      });
 
     // Removed the statusUpdateInterval
     this.updateDialogTexts();
@@ -448,6 +458,17 @@ export default {
 
   methods: {
     ...mapActions('chatHistory', ['createChat', 'updateChat']),
+
+    /** Bot message confidence for display; 0 is valid. Checks top-level and saved metadata. */
+    messageConfidence(msg) {
+      if (!msg || msg.sender !== 'bot') return null;
+      if (typeof msg.confidenceScore === 'number' && Number.isFinite(msg.confidenceScore)) {
+        return msg.confidenceScore;
+      }
+      const cs = msg.metadata && msg.metadata.confidence_score;
+      if (typeof cs === 'number' && Number.isFinite(cs)) return cs;
+      return null;
+    },
 
     // *** UPDATED: Use serviceTreeService to load and transform categories ***
     async loadServiceCategories() {
@@ -466,7 +487,7 @@ export default {
 
     // *** UPDATED: Find category label by its key in the transformed tree data ***
     getCategoryLabelById(id) {
-      if (id === null || id === undefined) {
+      if (id === null || id === undefined || id === '') {
         const selectedServices = this.selectedContextItems.map((item) => item.serviceKey);
         if (selectedServices.includes('quickhelp.justChat')) {
           return 'General';
@@ -474,11 +495,15 @@ export default {
         return null;
       }
 
-      // The service returns `catKey` which corresponds to the numeric ID
-      const category = this.serviceCategories.find((cat) => cat.catKey == id.toString());
+      const idStr = String(id);
+      const category = this.serviceCategories.find((cat) => cat.catKey === idStr || cat.catKey == idStr);
       if (category) {
-        // The service already provides the localized name in the `name` property
-        return category.name || `Category ${id}`;
+        return category.name || category.nameEN || `Category ${id}`;
+      }
+
+      const qh = (this.quickHelpButtons || []).find((b) => b.category != null && String(b.category) === idStr);
+      if (qh && qh.service) {
+        return qh.service;
       }
 
       console.warn(`[ChatBotComponent] Category label for ID "${id}" not found.`);
@@ -489,6 +514,10 @@ export default {
       const user = this.$store.getters.currentUser;
       if (!user || !(user.roles || []).map((r) => r.toLowerCase()).includes('admin')) return;
 
+      if (!context || (!context.categoryLabel && !(context.serviceLabels && context.serviceLabels.length))) {
+        return;
+      }
+
       const warnings = [];
       if (context.categoryLabel && /^Category \d+$/.test(context.categoryLabel)) {
         warnings.push(`Category "${context.categoryLabel}" not found in knowledge hierarchy`);
@@ -496,8 +525,12 @@ export default {
       if (context.serviceLabels?.length > 0) {
         for (const label of context.serviceLabels) {
           const item = this.selectedContextItems.find((i) => i.service === label);
-          if (item?.serviceKey?.startsWith('quickhelp.') && item.serviceKey !== 'quickhelp.justChat') {
-            warnings.push(`Service "${label}" uses a UI label that may not match the knowledge hierarchy`);
+          if (!item?.serviceKey?.startsWith('quickhelp.') || item.serviceKey === 'quickhelp.justChat') {
+            continue;
+          }
+          const configured = (this.quickHelpButtons || []).some((b) => b.textKey === item.serviceKey);
+          if (!configured) {
+            warnings.push(`Service "${label}" uses Quick Help but no matching entry was found in genie-ai-config.json`);
           }
         }
       }
@@ -551,12 +584,26 @@ export default {
     async loadQuickHelpButtons() {
       console.log('[ChatBotComponent] Loading Quick Help buttons from config');
       try {
+        if (!this.serviceCategories || this.serviceCategories.length === 0) {
+          await this.loadServiceCategories();
+        }
+        const allCategories = this.serviceCategories || [];
+
         const { loadConfig } = await import('../main.js');
         const config = await loadConfig();
         const buttons = config?.features?.chat?.quickHelp?.buttons || [];
+        const unresolvedQuickHelp = [];
         this.quickHelpButtons = buttons.map((button) => {
           if (this.$t(button.title) === button.title) {
             console.warn(`[ChatBotComponent] Missing i18n key: ${button.title}`);
+          }
+          const resolvedCategory = this.resolveQuickHelpCategoryFromConfig(button, allCategories);
+          if (
+            resolvedCategory == null &&
+            (button.categoryNameEN || button.categoryName) &&
+            String(button.categoryNameEN || button.categoryName).trim()
+          ) {
+            unresolvedQuickHelp.push(button.id);
           }
           return {
             service: this.$t(button.title),
@@ -564,22 +611,182 @@ export default {
             visibleTextKey: button.action.visibleText,
             hiddenPromptKey: button.action.hiddenPrompt,
             icon: button.icon.value,
-            category: button.category,
+            category: resolvedCategory,
             id: button.id
           };
         });
+        if (unresolvedQuickHelp.length > 0) {
+          console.debug(
+            `[ChatBotComponent] Quick Help: no category/service match for ids: ${unresolvedQuickHelp.join(
+              ', '
+            )}. Align categoryNameEN with a category nameEN, a service label under a category, document metatag, or set category to a valid catKey. Rebuild the frontend after config/code changes.`
+          );
+        }
         console.log(
           `[ChatBotComponent] Loaded ${buttons.length} Quick Help buttons:`,
           buttons.map((b) => ({
             id: b.id,
             title: b.title,
-            category: b.category
+            category: b.category,
+            categoryNameEN: b.categoryNameEN
           }))
         );
       } catch (error) {
         console.error('[ChatBotComponent] Failed to load Quick Help config:', error);
         this.quickHelpButtons = [];
       }
+    },
+
+    /**
+     * Normalize English category labels for matching config to DB nameEN.
+     * @param {string} s
+     * @returns {string}
+     */
+    normalizeCategoryMatchName(s) {
+      return String(s || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ');
+    },
+
+    /**
+     * Normalize for fuzzy match (punctuation, ampersand).
+     * @param {string} s
+     * @returns {string}
+     */
+    normalizeCategoryMatchLoose(s) {
+      return String(s || '')
+        .trim()
+        .toLowerCase()
+        .replace(/&/g, ' and ')
+        .replace(/[^a-z0-9\s]+/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    },
+
+    /**
+     * Map Quick Help config to serviceCategories._key (catKey).
+     * Prefer categoryNameEN (matches Arango nameEN or a service label under a category).
+     * @param {object} button - Raw button from genie-ai-config.json
+     * @param {Array<{ catKey: string, nameEN?: string, name?: string, children?: string[] }>} hierarchyCategories
+     * @returns {string|null}
+     */
+    _flattenCategoryComparableStrings(categoryRow) {
+      const out = [];
+      if (!categoryRow || !categoryRow.catKey) {
+        return out;
+      }
+      const push = (s) => {
+        const t = String(s || '').trim();
+        if (t) {
+          out.push(t);
+        }
+      };
+      push(categoryRow.nameEN);
+      push(categoryRow.name);
+      if (Array.isArray(categoryRow.children)) {
+        categoryRow.children.forEach((ch) => push(ch));
+      }
+      if (categoryRow.catKey === DOCUMENT_METATAGS_CAT_KEY && Array.isArray(categoryRow.metatagGroups)) {
+        categoryRow.metatagGroups.forEach((g) => {
+          (g.entries || []).forEach((e) => {
+            if (e && e.text) {
+              push(e.text);
+            }
+          });
+        });
+      }
+      return out;
+    },
+
+    resolveQuickHelpCategoryFromConfig(button, hierarchyCategories) {
+      const rows = Array.isArray(hierarchyCategories) ? hierarchyCategories : [];
+      const nameLookup = button.categoryNameEN || button.categoryName;
+
+      if (rows.length === 0) {
+        return null;
+      }
+
+      const tryMatchWant = (wantStrict, wantLoose, idSlugLoose) => {
+        let hit = null;
+        if (wantStrict) {
+          hit = rows.find((c) => this.normalizeCategoryMatchName(c.nameEN) === wantStrict);
+          if (!hit) {
+            hit = rows.find((c) => this.normalizeCategoryMatchName(c.name) === wantStrict);
+          }
+        }
+        if (!hit && wantLoose) {
+          hit = rows.find((c) => this.normalizeCategoryMatchLoose(c.nameEN || '') === wantLoose);
+        }
+        if (!hit && wantLoose) {
+          hit = rows.find((c) => this.normalizeCategoryMatchLoose(c.name || '') === wantLoose);
+        }
+        if (!hit && wantLoose) {
+          for (const c of rows) {
+            if (!c || !c.catKey) {
+              continue;
+            }
+            const flat = this._flattenCategoryComparableStrings(c);
+            for (const raw of flat) {
+              const childLoose = this.normalizeCategoryMatchLoose(raw);
+              if (!childLoose) {
+                continue;
+              }
+              if (childLoose === wantLoose) {
+                hit = c;
+                break;
+              }
+              if (wantLoose.length >= 4 && (childLoose.includes(wantLoose) || wantLoose.includes(childLoose))) {
+                hit = c;
+                break;
+              }
+            }
+            if (hit) {
+              break;
+            }
+          }
+        }
+        if (!hit && idSlugLoose) {
+          hit = rows.find((c) => {
+            const flat = this._flattenCategoryComparableStrings(c);
+            return flat.some((raw) => this.normalizeCategoryMatchLoose(raw) === idSlugLoose);
+          });
+        }
+        if (!hit && button.id) {
+          const bid = String(button.id).trim().toLowerCase();
+          hit = rows.find((c) => String(c.catKey || '').toLowerCase() === bid);
+        }
+        return hit || null;
+      };
+
+      if (nameLookup && String(nameLookup).trim()) {
+        const wantStrict = this.normalizeCategoryMatchName(nameLookup);
+        const wantLoose = this.normalizeCategoryMatchLoose(nameLookup);
+        const idSlugLoose = button.id ? this.normalizeCategoryMatchLoose(String(button.id).replace(/-/g, ' ')) : '';
+        const hit = tryMatchWant(wantStrict, wantLoose, idSlugLoose);
+        if (hit) {
+          return hit.catKey;
+        }
+      } else if (button.id) {
+        const idSlugLoose = this.normalizeCategoryMatchLoose(String(button.id).replace(/-/g, ' '));
+        const hit = tryMatchWant('', idSlugLoose, idSlugLoose);
+        if (hit) {
+          return hit.catKey;
+        }
+      }
+
+      const explicit = button.category;
+      if (explicit === null || explicit === undefined || explicit === '') {
+        return null;
+      }
+      const ex = String(explicit).trim();
+      if (rows.some((c) => String(c.catKey) === ex)) {
+        return ex;
+      }
+      console.warn(
+        `[ChatBotComponent] Quick Help "${button.id}": category "${ex}" is not a serviceCategories _key in this deployment. Prefer categoryNameEN aligned with nameEN.`
+      );
+      return null;
     },
 
     getCurrentTheme() {
@@ -602,6 +809,64 @@ export default {
       return this.$t(key);
     },
 
+    /**
+     * Build Related Documents from POST /queries metadata. ChatQnA uses source_documents (snake_case);
+     * tolerate camelCase or alternate keys. Dedupes by file id. Replaces sidebar each turn — only chunks used for the answer.
+     */
+    mapMetadataToRelatedDocuments(metadata) {
+      if (!metadata || typeof metadata !== 'object') {
+        return [];
+      }
+      const raw =
+        metadata.source_documents ||
+        metadata.sourceDocuments ||
+        metadata.sources ||
+        metadata.retrieved_documents ||
+        metadata.retrievedDocuments ||
+        [];
+      if (!Array.isArray(raw)) {
+        return [];
+      }
+      const out = [];
+      const seen = new Set();
+      for (const doc of raw) {
+        if (!doc || typeof doc !== 'object') continue;
+        const id =
+          doc.document_id ||
+          doc.file_id ||
+          doc.id ||
+          doc.documentId ||
+          (doc.metadata && (doc.metadata.file_id || doc.metadata.fileId));
+        if (!id || String(id) === 'error') continue;
+        const sid = String(id);
+        if (seen.has(sid)) continue;
+        seen.add(sid);
+        const fileName = doc.file_name || doc.fileName || '';
+        const documentName = doc.document_name || doc.documentName || '';
+        const title =
+          documentName ||
+          fileName ||
+          doc.title ||
+          (typeof doc.text === 'string' ? `${doc.text.slice(0, 72).trim()}…` : '') ||
+          `Source ${sid.slice(0, 8)}`;
+        const url = doc.url || '';
+        const ext = url && url.includes('.') ? url.split('.').pop().split('?')[0].toUpperCase() : 'DOC';
+        out.push({
+          id: sid,
+          title,
+          documentName: documentName || null,
+          fileName: fileName || null,
+          type: ext.length <= 8 ? ext : 'DOC',
+          size: 0,
+          url,
+          score: typeof doc.score === 'number' ? doc.score : null,
+          categoryLabel: doc.categoryLabel,
+          serviceLabels: Array.isArray(doc.serviceLabels) ? doc.serviceLabels : []
+        });
+      }
+      return out;
+    },
+
     selectQuickHelpOption(option) {
       console.log(`[ChatBotComponent] Quick Help button clicked: id=${option.id}, textKey=${option.textKey}`);
       const rawOption = option && option.__v_isReactive ? { ...option } : option || {};
@@ -609,7 +874,20 @@ export default {
         console.error('Invalid quick help option, missing service:', rawOption);
         return;
       }
-      const categoryId = rawOption.category || (rawOption.service !== this.$t('quickhelp.justChat') ? 'general' : null);
+
+      const isJustChat = rawOption.textKey === 'quickhelp.justChat' || rawOption.id === 'just-chat';
+
+      if (isJustChat) {
+        this.currentCategoryId = null;
+        this.selectedContextItems = this.selectedContextItems.filter(
+          (item) =>
+            !item.serviceKey ||
+            !String(item.serviceKey).startsWith('quickhelp.') ||
+            item.serviceKey === 'quickhelp.justChat'
+        );
+      }
+
+      const categoryId = rawOption.category != null && rawOption.category !== '' ? rawOption.category : null;
 
       const contextExists = this.selectedContextItems.some(
         (item) => item.service === rawOption.service && item.category === categoryId
@@ -630,11 +908,11 @@ export default {
       if (rawOption.service !== this.$t('quickhelp.justChat')) {
         this.currentCategoryId = categoryId;
         console.log(`Set current category ID to ${this.currentCategoryId} from quick help option.`);
-      } else {
-        this.currentCategoryId = this.currentCategoryId || null;
       }
 
-      this.showQuickHelp = false;
+      // "Just chat" uses the same dual-prompt path as other chips (visible user line + hidden routing in
+      // context.topicFocusInstructions) so the assistant always replies with helpful Lesotho-farming guidance.
+
       if (rawOption.hiddenPromptKey) {
         // Display the visible text in the chat (what user sees)
         const visibleMessage = this.$t(rawOption.visibleTextKey);
@@ -647,7 +925,7 @@ export default {
     },
 
     handleTextareaFocus() {
-      this.showQuickHelp = false;
+      // No-op: quick-help visibility is now driven by whether a user message has been sent.
     },
 
     handleTreeNodeSelected(item) {
@@ -730,9 +1008,10 @@ export default {
       const content = this.newMessage.trim();
       if (!content) return;
 
-      // For dual-prompt mechanism: use hidden prompt for backend, visible text for display
+      // Dual-prompt: visible text stays in `messages` for retrieval; hidden routing rules go in context.topicFocusInstructions.
       const messageForBackend = this.hiddenPromptForNextMessage || content;
       const messageForDisplay = content;
+      const hasDualPrompt = messageForBackend !== messageForDisplay;
 
       this.chatMessages.push({
         sender: 'user',
@@ -751,47 +1030,44 @@ export default {
 
       try {
         const useConversationContext = this.selectedContextItems.length > 0;
-        const contextOption = useConversationContext ? 'conversation-with-labels' : 'single-message';
-        let queryData;
-        const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
-        console.log(`[ChatBotComponent] Resolved Category ID "${this.currentCategoryId}" to Label "${categoryLabel}"`);
-        if (contextOption === 'conversation-with-labels') {
-          const serviceLabels = this.selectedContextItems.map((item) => item.service);
-          // Build messages array, replacing last user message with hidden prompt if available
-          const messagesForQuery = this.chatMessages.map((msg) => ({
-            role: msg.sender === 'user' ? 'user' : 'assistant',
-            content: msg.content
-          }));
-
-          // Replace the last user message with the hidden prompt (for dual-prompt mechanism)
-          const lastUserMsgIndex = messagesForQuery.map((m) => m.role).lastIndexOf('user');
-          if (lastUserMsgIndex !== -1 && messageForBackend !== messageForDisplay) {
-            messagesForQuery[lastUserMsgIndex].content = messageForBackend;
+        const HISTORY_LIMIT = 10;
+        let categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
+        if ((!categoryLabel || /^Category \d+$/.test(String(categoryLabel))) && useConversationContext) {
+          const qhItem = this.selectedContextItems.find(
+            (i) =>
+              i.serviceKey && String(i.serviceKey).startsWith('quickhelp.') && i.serviceKey !== 'quickhelp.justChat'
+          );
+          if (qhItem && qhItem.service) {
+            categoryLabel = qhItem.service;
           }
-
-          queryData = {
-            conversationId: this.conversationId,
-            sessionId: this.currentSessionId || 'new-session',
-            messages: messagesForQuery,
-            context: {
-              categoryLabel: categoryLabel,
-              serviceLabels: serviceLabels,
-              language: this.currentLocale.toUpperCase()
-            },
-            contextOption: 'conversation-with-context-labels',
-            timestamp: new Date().toISOString()
-          };
-        } else {
-          queryData = {
-            sessionId: this.currentSessionId || 'new-session',
-            text: messageForBackend,
-            context: {
-              language: this.currentLocale.toUpperCase(),
-            },
-            contextOption: contextOption,
-            timestamp: new Date().toISOString()
-          };
         }
+        console.log(`[ChatBotComponent] Resolved Category ID "${this.currentCategoryId}" to Label "${categoryLabel}"`);
+
+        // Always carry the last N chat turns to the backend so follow-ups inherit prior context.
+        const messagesForQuery = this.chatMessages.slice(-HISTORY_LIMIT).map((msg) => ({
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          content: msg.content
+        }));
+
+        const serviceLabels = useConversationContext
+          ? this.selectedContextItems
+              .filter((item) => item.serviceKey !== 'quickhelp.justChat')
+              .map((item) => item.service)
+          : [];
+
+        const queryData = {
+          conversationId: this.conversationId,
+          sessionId: this.currentSessionId || 'new-session',
+          messages: messagesForQuery,
+          context: {
+            categoryLabel: useConversationContext ? categoryLabel : undefined,
+            serviceLabels: serviceLabels,
+            language: this.currentLocale.toUpperCase(),
+            ...(hasDualPrompt ? { topicFocusInstructions: messageForBackend } : {})
+          },
+          contextOption: useConversationContext ? 'conversation-with-context-labels' : 'conversation',
+          timestamp: new Date().toISOString()
+        };
         console.log('Submitting query with data:', JSON.stringify(queryData, null, 2));
 
         this.checkContextConfig(queryData.context);
@@ -818,33 +1094,14 @@ export default {
         };
 
         if (result.metadata) {
-          if (result.metadata.confidence_score) {
-            botMessage.confidenceScore = result.metadata.confidence_score;
+          const cs = result.metadata.confidence_score;
+          if (typeof cs === 'number' && Number.isFinite(cs)) {
+            botMessage.confidenceScore = cs;
           }
-          if (result.metadata.source_documents && Array.isArray(result.metadata.source_documents)) {
-            // Transform new documents
-            const newDocs = result.metadata.source_documents.map((doc) => ({
-              id: doc.document_id,
-              // Prioritize document_name, then file_name for the main title
-              title: doc.document_name || doc.file_name || doc.title || `Source ${doc.document_id.slice(0, 4)}`,
-              // Pass the new fields through to the child component
-              documentName: doc.document_name,
-              fileName: doc.file_name,
-              type: doc.url?.split('.').pop().toUpperCase() || 'LINK',
-              size: 0,
-              url: doc.url,
-              score: doc.score,
-              categoryLabel: doc.categoryLabel,
-              serviceLabels: doc.serviceLabels
-            }));
-
-            // Incremental Update: Add new documents to the top, filtering out duplicates
-            const existingIds = new Set(this.relatedDocuments.map((d) => d.id));
-            const uniqueNewDocs = newDocs.filter((d) => !existingIds.has(d.id));
-
-            // Add unique new docs to start of array (newest at top)
-            this.relatedDocuments.unshift(...uniqueNewDocs);
-          }
+          // Show only sources retrieved for this answer (RAG), not accumulated history
+          this.relatedDocuments = this.mapMetadataToRelatedDocuments(result.metadata);
+        } else {
+          this.relatedDocuments = [];
         }
         this.chatMessages.push(botMessage);
         if (result.sessionId) {
@@ -863,6 +1120,7 @@ export default {
           sender: 'bot',
           content: this.translate('chatbot.processingError'),
           timestamp: new Date().toISOString(),
+          queryId: null,
           isSaved: false
         });
         notificationService.error(this.translate('chatbot.processingError'));
@@ -898,6 +1156,7 @@ export default {
         await chatbotService.submitFeedback(queryId, {
           rating: feedback.rating || (feedback.thumbFeedback === 'up' ? 4 : 2),
           comment: feedback.text || '',
+          thumbFeedback: feedback.thumbFeedback || null,
           providedAt: new Date().toISOString()
         });
         console.log('Feedback submitted successfully for queryId:', queryId);
@@ -1301,7 +1560,18 @@ export default {
       try {
         const storedChatData = localStorage.getItem(`chat_data_${chatId}`);
         if (storedChatData) {
-          this.chatMessages = JSON.parse(storedChatData);
+          const parsed = JSON.parse(storedChatData);
+          this.chatMessages = parsed.map((msg) => {
+            if (msg.sender !== 'bot') return msg;
+            if (typeof msg.confidenceScore === 'number' && Number.isFinite(msg.confidenceScore)) {
+              return msg;
+            }
+            const fromMeta = msg.metadata && msg.metadata.confidence_score;
+            if (typeof fromMeta === 'number' && Number.isFinite(fromMeta)) {
+              return { ...msg, confidenceScore: fromMeta };
+            }
+            return msg;
+          });
         } else {
           this.chatMessages = [
             {
@@ -1698,21 +1968,21 @@ export default {
 .system-status-panel {
   background: var(--bg-tertiary, #f8fafc);
   border-bottom: 1px solid var(--border-light, #e2e8f0);
-  padding: 8px 16px;
+  padding: 6px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.85rem;
-  min-height: 45px; /* Added for consistency */
+  font-size: 0.8rem;
+  gap: 12px;
 }
 
 .status-left {
   display: flex;
-  flex-direction: column; /* Stack status and error */
+  flex-direction: column;
   align-items: flex-start;
-  gap: 4px; /* Space between status and error */
-  flex: 1; /* Allow error message to take space */
-  overflow: hidden; /* Prevent long errors from breaking layout */
+  gap: 2px;
+  flex: 1;
+  overflow: hidden;
 }
 
 .status-indicator {
@@ -1757,28 +2027,24 @@ export default {
   max-width: 100%;
 }
 
-.status-metrics {
-  display: flex;
-  gap: 20px;
-  padding-left: 16px; /* Add space between error and metric */
-}
-
-.metric {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+.status-metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .metric-label {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: var(--text-tertiary, #64748b);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .metric-value {
   font-weight: 600;
   color: var(--text-primary, #334155);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Context Panel Styles */
@@ -1871,20 +2137,27 @@ export default {
 }
 
 .message-bubble {
-  background: var(--bg-tertiary, #e5e5ea);
-  color: var(--text-primary, #000);
-  padding: 8px 12px;
-  border-radius: 16px;
+  background: var(--bg-card, #ffffff);
+  color: var(--text-primary, #1f2937);
+  padding: 10px 14px;
+  border-radius: 14px;
   max-width: 60%;
-  line-height: 1.4;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-wrap: break-word;
-  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.1));
+  border: 1px solid var(--border-light, #e5e7eb);
+  box-shadow: none;
+}
+
+.chat-message.bot .message-bubble {
+  border-top-left-radius: 4px;
 }
 
 .chat-message.user .message-bubble {
   background: var(--accent-color, #4e97d1);
   color: var(--text-button-primary, #fff);
+  border-color: transparent;
+  border-top-right-radius: 4px;
 }
 
 /* Markdown Styles within Message Bubble */
@@ -1927,6 +2200,14 @@ export default {
 .message-bubble :deep(ol) {
   margin: 0.5em 0;
   padding-left: 1.5em;
+}
+
+.message-bubble :deep(ul ul),
+.message-bubble :deep(ol ol),
+.message-bubble :deep(ul ol),
+.message-bubble :deep(ol ul) {
+  margin: 0.25em 0 0.35em;
+  padding-left: 1.25em;
 }
 
 .message-bubble :deep(li) {
@@ -2146,20 +2427,22 @@ html[data-theme='dark'] .loading-spinner .loading-text {
 .quick-help-item {
   display: flex;
   align-items: center;
-  padding: 12px 16px;
+  padding: 10px 14px;
   background: var(--bg-card);
   border: 1px solid var(--border-light);
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: var(--shadow-sm);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+  box-shadow: none;
 }
 
 .quick-help-item:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--border-color);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  background: var(--bg-card);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 18%, transparent);
 }
 
 .quick-help-item.just-chat {
@@ -2168,8 +2451,8 @@ html[data-theme='dark'] .loading-spinner .loading-text {
 }
 
 .quick-help-item.just-chat:hover {
-  background: var(--bg-tertiary);
   border-color: var(--accent-hover);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-hover) 22%, transparent);
 }
 
 .quick-help-icon {
@@ -2177,8 +2460,9 @@ html[data-theme='dark'] .loading-spinner .loading-text {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
 }
 
 .quick-help-icon img {
@@ -2221,55 +2505,47 @@ html[data-theme='dark'] .loading-spinner .loading-text {
   align-items: center;
 }
 
-.new-chat-btn {
-  background: var(--bg-button-secondary, #f0f0f0);
-  color: var(--text-button-secondary, #555);
-  border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
+.new-chat-btn,
+.save-chat-btn,
+.export-chat-btn {
+  background: var(--bg-card, #ffffff);
+  color: var(--text-secondary, #6b7280);
+  border: 1px solid var(--border-light, #e5e7eb);
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
   cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.new-chat-btn {
   margin-right: auto;
 }
 
-.new-chat-btn:hover {
-  background: var(--bg-tertiary, #e0e0e0);
-  color: var(--accent-color, #4e97d1);
-}
-
-.save-chat-btn {
-  background: var(--bg-button-secondary, #f0f0f0);
-  color: var(--text-button-secondary, #555);
-  border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.save-chat-btn:hover {
-  background: var(--bg-tertiary, #e0e0e0);
-}
-
-.export-chat-btn {
-  background: var(--bg-button-secondary, #f0f0f0);
-  color: var(--text-button-secondary, #555);
-  border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
+.new-chat-btn:hover,
+.save-chat-btn:hover,
 .export-chat-btn:hover {
-  background: var(--bg-tertiary, #e0e0e0);
+  background: var(--bg-tertiary, #f3f4f6);
+  color: var(--accent-color, #4e97d1);
+  border-color: var(--accent-color, #4e97d1);
 }
 
 .send-btn {
   background: var(--accent-color, #4e97d1);
   color: var(--text-button-primary, #fff);
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
+  border: 1px solid transparent;
+  padding: 0 16px;
+  height: 36px;
+  border-radius: 8px;
   cursor: pointer;
   font-weight: 500;
+  transition: background 0.15s ease;
 }
 
 .send-btn:hover {
@@ -2359,14 +2635,13 @@ html[data-theme='dark'] .loading-spinner .loading-text {
 
 @media (max-width: 768px) {
   .system-status-panel {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
     gap: 8px;
   }
 
-  .status-metrics {
-    width: 100%;
-    justify-content: space-between;
+  .status-metric {
+    margin-left: auto;
   }
 }
 
@@ -2382,7 +2657,7 @@ html[data-theme='dark'] .loading-spinner .loading-text {
 
 /* Additional fixes for dark theme visibility */
 [data-theme='dark'] .metric-label,
-[data-theme='dark'] .status-metrics,
+[data-theme='dark'] .status-metric,
 html[data-theme='dark'] .metric-label,
 html[data-theme='dark'] .metric-value {
   color: rgba(255, 255, 255, 0.8) !important;

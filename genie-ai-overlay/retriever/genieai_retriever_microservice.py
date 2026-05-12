@@ -5,6 +5,9 @@
 import os
 import time
 
+# Side-effect import: register GENIE_RETRIEVER_ARANGODB before loader initialization.
+from integrations.genieai_retriever_arangodb import GenieaiArangoRetriever  # noqa: F401
+
 # import for retrievers component registration
 # from integrations.elasticsearch import OpeaElasticsearchRetriever
 # from integrations.mariadb import OpeaMARIADBVectorRetriever

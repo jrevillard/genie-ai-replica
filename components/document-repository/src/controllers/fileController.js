@@ -31,8 +31,135 @@ function buildContentDisposition(disposition, filename) {
   return `${disposition}; filename="${sanitized}"`;
 }
 
+/**
+ * Normalize dataprep / ingest error bodies for HTTP JSON clients.
+ * @param {*} raw
+ * @returns {{ message: string, details: *|undefined }}
+ */
+function ingestFailurePayload(raw) {
+  if (raw == null) {
+    return { message: 'Ingest failed', details: undefined };
+  }
+  if (typeof raw === 'string') {
+    return { message: raw, details: undefined };
+  }
+  if (typeof raw === 'object') {
+    if (typeof raw.detail === 'string') {
+      return { message: raw.detail, details: raw };
+    }
+    if (typeof raw.message === 'string') {
+      return { message: raw.message, details: raw };
+    }
+    try {
+      const s = JSON.stringify(raw);
+      return { message: s.length > 1800 ? `${s.slice(0, 1800)}…` : s, details: raw };
+    } catch {
+      return { message: 'Ingest failed', details: raw };
+    }
+  }
+  return { message: String(raw), details: undefined };
+}
+
 // Maximum items allowed in batch fileIds operations
 const MAX_BATCH_SIZE = 50;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Polling while waiting for dataprep to PATCH terminal status (single-flight dataprep lock). */
+const INGEST_POLL_INTERVAL_MS = parseInt(process.env.INGEST_POLL_INTERVAL_MS || '2500', 10);
+const INGEST_MAX_WAIT_MS = parseInt(process.env.INGEST_MAX_WAIT_MS || String(2 * 60 * 60 * 1000), 10);
+const INGEST_BUSY_RETRY_MS = parseInt(process.env.INGEST_BUSY_RETRY_MS || '3000', 10);
+
+/** Normalize dataprep.status for comparisons (Arango stores Title Case: Ingested, Pending, …) */
+function dataprepStatusNorm(s) {
+  return String(s || '')
+    .trim()
+    .toLowerCase();
+}
+
+function isTerminalIngestedStatus(status) {
+  const n = dataprepStatusNorm(status);
+  return n === 'ingested' || n === 'ingested with warnings';
+}
+
+function isIngestionInProgressStatus(status) {
+  return dataprepStatusNorm(status) === 'ingesting';
+}
+
+function isRetractedStatus(status) {
+  return dataprepStatusNorm(status) === 'retracted';
+}
+
+function isQueuedStatus(status) {
+  return dataprepStatusNorm(status) === 'queued';
+}
+
+/** Terminal dataprep states (ingestion finished or document no longer active in index). */
+function isDataprepTerminalStatus(status) {
+  const n = dataprepStatusNorm(status);
+  return (
+    n === 'ingested' ||
+    n === 'ingested with warnings' ||
+    n === 'ingestion error' ||
+    n === 'killed' ||
+    n === 'retracted'
+  );
+}
+
+/**
+ * Build labels for API responses: upload-time `labels` plus agricultural meta tags from `taxonomyMetadata`.
+ * Stored document is unchanged; this is display-only merging for admin / client UIs.
+ * @param {object} fileRecord - Raw file document from Arango
+ * @returns {string[]}
+ */
+function buildDisplayLabels(fileRecord) {
+  const seen = new Set();
+  const ordered = [];
+
+  const pushUnique = (val) => {
+    if (val === null || val === undefined) {
+      return;
+    }
+    const s = String(val).trim();
+    if (!s.length || seen.has(s)) {
+      return;
+    }
+    seen.add(s);
+    ordered.push(s);
+  };
+
+  (fileRecord.labels || []).forEach(pushUnique);
+
+  const tax = fileRecord.taxonomyMetadata;
+  if (!tax || typeof tax !== 'object') {
+    return ordered;
+  }
+
+  const sections = [
+    ['Agriculture', ['CropName', 'CropCategory', 'Varietal', 'Livestock', 'FarmingSystem', 'Season']],
+    ['Content', ['Topic', 'SubTopic', 'DocumentType', 'UseCase']],
+    ['Location', ['Country', 'Region', 'District', 'GeoScope']],
+    ['Environment', ['Climate', 'Soil', 'AgroEcologicalZone']],
+    ['Risk', ['Pest', 'Disease']],
+    ['Economics', ['MarketFocus', 'ValueChainStage']],
+    ['Governance', ['Programs', 'PolicyMentioned']]
+  ];
+
+  for (const [section, keys] of sections) {
+    const block = tax[section];
+    if (!block || typeof block !== 'object') {
+      continue;
+    }
+    for (const key of keys) {
+      const arr = block[key];
+      if (Array.isArray(arr)) {
+        arr.forEach(pushUnique);
+      }
+    }
+  }
+
+  return ordered.slice(0, 24);
+}
 
 // Schema for batch fileIds validation
 const batchFileIdsSchema = Joi.object({
@@ -62,7 +189,7 @@ const getFilesSchema = Joi.object({
   mimeType: Joi.string().optional(),
   search: Joi.string().max(100).optional(),
   dataprepStatus: Joi.string()
-    .valid('pending', 'ingesting', 'ingested', 'ingested with warnings', 'ingestion error', 'retracted', 'killed')
+    .valid('pending', 'queued', 'ingesting', 'ingested', 'ingested with warnings', 'ingestion error', 'retracted', 'killed')
     .optional()
 });
 
@@ -93,13 +220,25 @@ const ingestionLogSchema = Joi.object({
 const updateStatusSchema = Joi.object({
   dataprep: Joi.object({
     status: Joi.string()
-      .valid('Pending', 'Ingesting', 'Ingested', 'Ingested with Warnings', 'Ingestion Error', 'Retracted', 'Killed')
+      .valid('Pending', 'Queued', 'Ingesting', 'Ingested', 'Ingested with Warnings', 'Ingestion Error', 'Retracted', 'Killed')
       .required(),
     ingest_date: Joi.string().isoDate().optional().allow(null, ''),
     retract_date: Joi.string().isoDate().optional().allow(null, '')
   }).required(),
   chunk_count: Joi.number().integer().min(0).optional()
 });
+
+const ingestionMetadataSchema = Joi.object({
+  taxonomyMetadata: Joi.object().unknown(true).optional(),
+  metadataExtractionVersion: Joi.string().max(64).optional().allow(null, ''),
+  metadataExtractionTimestamp: Joi.string().isoDate().optional().allow(null, ''),
+  metadataConfidenceScore: Joi.number().min(0).max(1).optional().allow(null),
+  taxonomyVersion: Joi.string().max(32).optional().allow(null, ''),
+  isRelevant: Joi.boolean().optional().allow(null),
+  taxonomyExtractionTelemetry: Joi.object().unknown(true).optional()
+})
+  .min(1)
+  .unknown(false);
 
 // Schema for scheduling a site crawl
 const scheduleCrawlSchema = Joi.object({
@@ -115,6 +254,12 @@ const scheduleCrawlSchema = Joi.object({
 
 class FileController {
   constructor() {
+    /** Prevents two concurrent batch-ingest workers (would corrupt sequential queue semantics). */
+    this._batchIngestWorkerRunning = false;
+    this._ingestQueueWorkerRunning = false;
+    this._ingestQueue = [];
+    this._ingestQueueSet = new Set();
+
     // Bind methods to preserve 'this' context
     this.downloadFile = this.downloadFile.bind(this);
     this.downloadMultipleFiles = this.downloadMultipleFiles.bind(this);
@@ -138,6 +283,8 @@ class FileController {
     this.addIngestionLog = this.addIngestionLog.bind(this);
     this.getIngestionLogs = this.getIngestionLogs.bind(this);
     this.updateFileStatus = this.updateFileStatus.bind(this);
+    this.updateIngestionMetadata = this.updateIngestionMetadata.bind(this);
+    this.reextractTaxonomy = this.reextractTaxonomy.bind(this);
     this.killIngestion = this.killIngestion.bind(this);
 
     // --- CRAWLER BINDS ---
@@ -146,6 +293,41 @@ class FileController {
     this.getCrawlMetrics = this.getCrawlMetrics.bind(this);
     this.getCrawlLogs = this.getCrawlLogs.bind(this);
     this.killCrawlTask = this.killCrawlTask.bind(this);
+
+    // Recover queued ingestion items after process/container restart.
+    setTimeout(() => {
+      this._recoverQueuedIngestAfterRestart().catch((err) => {
+        logger.error('[FILE-CONTROLLER] Failed to recover queued ingest jobs after restart:', err);
+      });
+    }, 3000);
+  }
+
+  async _recoverQueuedIngestAfterRestart() {
+    if (this._ingestQueueWorkerRunning) {
+      return;
+    }
+    const queued = await metadataService.searchMetadata(
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      [],
+      null,
+      'Queued',
+      null
+    );
+    const fileIds = (queued || []).map((f) => f?.file_id).filter(Boolean);
+    if (fileIds.length === 0) {
+      return;
+    }
+
+    logger.warn(
+      `[FILE-CONTROLLER] Recovery: found ${fileIds.length} queued files after restart; resuming sequential ingestion worker.`
+    );
+    await this._queueFilesForIngest(fileIds, { markQueued: false });
+    await this._startIngestQueueWorker();
   }
 
   /**
@@ -267,6 +449,30 @@ class FileController {
       };
     }
 
+    if (error.message.includes('INSTREAM size limit exceeded')) {
+      return {
+        status: 413,
+        response: {
+          success: false,
+          error: 'File scan size limit exceeded',
+          message:
+            'The antivirus stream scanner rejected this file size. Please retry upload; fallback scanning is enabled. ' +
+            'If the issue persists, reduce file size or adjust ClamAV stream limits.'
+        }
+      };
+    }
+
+    if (error.message.includes('Buffer scan failed')) {
+      return {
+        status: 500,
+        response: {
+          success: false,
+          error: 'File security scan failed',
+          message: error.message
+        }
+      };
+    }
+
     return {
       status: 500,
       response: {
@@ -284,14 +490,17 @@ class FileController {
    * @returns {Object} Formatted file record
    */
   _formatFileRecord(fileRecord) {
-    return {
+    const dp = fileRecord.dataprep || {};
+    const st = dataprepStatusNorm(dp.status);
+    const knowledge_base_ready = st === 'ingested' || st === 'ingested with warnings';
+    const out = {
       file_id: fileRecord.file_id,
       file_name: fileRecord.file_name,
       file_size: fileRecord.file_size,
       file_type: fileRecord.file_type,
       storage_path: fileRecord.storage_path,
       file_hash: fileRecord.file_hash,
-      labels: fileRecord.labels,
+      labels: buildDisplayLabels(fileRecord),
       author: fileRecord.author,
       upload_date: fileRecord.uploaded_date,
       create_date: fileRecord.create_date,
@@ -300,11 +509,19 @@ class FileController {
       language: fileRecord.language,
       chunk_count: fileRecord.chunk_count,
       dataprep: {
-        status: fileRecord.dataprep.status,
-        ingest_date: fileRecord.dataprep.ingest_date,
-        retract_date: fileRecord.dataprep.retract_date
-      }
+        status: dp.status || 'Pending',
+        ingest_date: dp.ingest_date || '',
+        retract_date: dp.retract_date ?? null
+      },
+      knowledge_base_ready
     };
+    if (Object.prototype.hasOwnProperty.call(fileRecord, 'crawl_job')) {
+      out.crawl_job = fileRecord.crawl_job;
+    }
+    if (fileRecord._key) {
+      out._key = fileRecord._key;
+    }
+    return out;
   }
 
   /**
@@ -384,10 +601,26 @@ class FileController {
 
       logger.debug(`[FILE-CONTROLLER] fileRecord: ${fileRecord}`);
 
+      if (config.upload.autoIngestOnUpload && fileRecord && fileRecord.file_id) {
+        const fid = fileRecord.file_id;
+        setImmediate(() => {
+          (async () => {
+            await this._queueFilesForIngest([fid], { markQueued: true });
+            await this._startIngestQueueWorker();
+          })().catch(async (err) => {
+            logger.error(`[FILE-CONTROLLER] Auto-ingest queue failed for ${fid}: ${err.message}`);
+            await this._markIngestionErrorIfStillNonTerminal(fid);
+          });
+        });
+      }
+
       res.status(201).json({
         success: true,
         message: 'File uploaded successfully',
-        data: this._formatFileRecord(fileRecord)
+        data: this._formatFileRecord(fileRecord),
+        autoIngestScheduled: Boolean(
+          config.upload.autoIngestOnUpload && fileRecord && fileRecord.file_id
+        )
       });
     } catch (error) {
       logger.error('[FILE-CONTROLLER] Upload process error:', error);
@@ -424,10 +657,28 @@ class FileController {
       const uploadPromises = req.files.map((file) => fileService.uploadFile(file, validatedData));
       const fileRecords = await Promise.all(uploadPromises);
 
+      if (config.upload.autoIngestOnUpload) {
+        const ids = fileRecords.map((r) => (r && r.file_id ? r.file_id : null)).filter(Boolean);
+        if (ids.length > 0) {
+          setImmediate(() => {
+            (async () => {
+              await this._queueFilesForIngest(ids, { markQueued: true });
+              await this._startIngestQueueWorker();
+            })().catch((err) => {
+              logger.error('[FILE-CONTROLLER] Auto-ingest queue worker failed:', err);
+            });
+          });
+        }
+      }
+
       res.status(201).json({
         success: true,
         message: 'Files uploaded successfully',
-        data: fileRecords.map((record) => this._formatFileRecord(record))
+        data: fileRecords.map((record) => this._formatFileRecord(record)),
+        autoIngestScheduled: Boolean(
+          config.upload.autoIngestOnUpload &&
+            fileRecords.some((r) => r && r.file_id)
+        )
       });
     } catch (error) {
       const { status, response } = this._handleUploadError(error);
@@ -480,7 +731,7 @@ class FileController {
       res.json({
         success: true,
         message: 'Files retrieved successfully',
-        data: result.files,
+        data: result.files.map((record) => this._formatFileRecord(record)),
         pagination: result.pagination
       });
     } catch (error) {
@@ -712,7 +963,8 @@ class FileController {
       const results = [];
       for (const fileId of fileIds) {
         try {
-          const deleted = await fileService.deleteFile(fileId);
+          // Avoid request timeout on large batches: do slow dataprep cleanup in background.
+          const deleted = await fileService.deleteFile(fileId, { cleanupMode: 'background' });
           results.push({ fileId, success: !!deleted });
         } catch (error) {
           results.push({ fileId, success: false, error: error.message });
@@ -720,6 +972,7 @@ class FileController {
       }
 
       res.json({
+        success: true,
         message: 'Batch delete completed',
         results
       });
@@ -846,7 +1099,7 @@ class FileController {
       res.json({
         success: true,
         message: 'Search completed successfully',
-        data: results,
+        data: results.map((record) => this._formatFileRecord(record)),
         query: q,
         resultCount: results.length
       });
@@ -956,10 +1209,14 @@ class FileController {
         });
       }
 
+      const formatted = this._formatFileRecord(metadata);
       res.json({
         success: true,
         message: 'Metadata retrieved successfully',
-        data: metadata
+        data: {
+          ...metadata,
+          ...formatted
+        }
       });
     } catch (error) {
       logger.error('Get metadata by ID error:', error);
@@ -972,35 +1229,235 @@ class FileController {
 
   // --- Helper for ingesting a single file ---
 
-  async _ingestFileById(fileId) {
-    const { file, base64String } = await this._getFileBase64(fileId);
-    if (file.dataprep && file.dataprep.status === 'ingested') {
-      return { success: false, error: 'File has already been ingested' };
-    }
-    const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
+  /**
+   * POST ingest to dataprep. Returns { success, busy } instead of throwing on HTTP 429 (single-flight lock).
+   */
+  async _postDataprepIngest(file, base64String) {
+    const dataprepUrl = `${config.buildDataprepBaseUrl()}${config.dataprep.ingestPath}`;
     logger.debug(`[FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);
-    const response = await axios.post(dataprepUrl, {
-      fileId: file.file_id,
-      fileName: file.file_name,
-      fileType: file.file_type,
-      fileLabels: file.labels,
-      uploadDate: file.uploaded_date,
-      storagePath: file.storage_path,
-      fileBase64: base64String
-    });
-    if (response.data.success) {
+    try {
+      const response = await axios.post(dataprepUrl, {
+        fileId: file.file_id,
+        fileName: file.file_name,
+        fileType: file.file_type,
+        fileLabels: file.labels,
+        uploadDate: file.uploaded_date,
+        storagePath: file.storage_path,
+        fileBase64: base64String
+      });
+      if (response.data.success) {
+        return { success: true, chunkCount: response.data.chunk_count, data: response.data };
+      }
+      return { success: false, error: response.data };
+    } catch (error) {
+      if (error.response && error.response.status === 429) {
+        return { success: false, busy: true };
+      }
+      throw error;
+    }
+  }
+
+  async _waitUntilDataprepTerminal(fileId) {
+    const deadline = Date.now() + INGEST_MAX_WAIT_MS;
+    while (Date.now() < deadline) {
+      const meta = await metadataService.getMetadataById(fileId);
+      const st = meta?.dataprep?.status;
+      if (isDataprepTerminalStatus(st)) {
+        return;
+      }
+      await sleep(INGEST_POLL_INTERVAL_MS);
+    }
+    logger.warn(
+      `[FILE-CONTROLLER] Ingest wait timeout for ${fileId} after ${INGEST_MAX_WAIT_MS}ms (status may remain Ingesting if dataprep cannot PATCH doc-repo)`
+    );
+  }
+
+  /**
+   * One file in a batch: retry on dataprep 429 until accepted, then wait until terminal dataprep status.
+   */
+  async _ingestOneFileWithRetryAndWait(fileId) {
+    const meta = await metadataService.getMetadataById(fileId);
+    if (!meta) {
+      throw new Error('File not found');
+    }
+    if (isTerminalIngestedStatus(meta.dataprep?.status)) {
+      return;
+    }
+    if (isRetractedStatus(meta.dataprep?.status)) {
+      return;
+    }
+    if (isIngestionInProgressStatus(meta.dataprep?.status)) {
+      await this._waitUntilDataprepTerminal(fileId);
+      return;
+    }
+
+    let accepted = false;
+    while (!accepted) {
+      const latestMeta = await metadataService.getMetadataById(fileId);
+      if (!latestMeta) {
+        throw new Error('File not found');
+      }
+      if (isTerminalIngestedStatus(latestMeta.dataprep?.status) || isRetractedStatus(latestMeta.dataprep?.status)) {
+        return;
+      }
+      if (isIngestionInProgressStatus(latestMeta.dataprep?.status)) {
+        await this._waitUntilDataprepTerminal(fileId);
+        return;
+      }
+
+      const { file, base64String } = await this._getFileBase64(fileId);
+      const post = await this._postDataprepIngest(file, base64String);
+      if (post.busy) {
+        await sleep(INGEST_BUSY_RETRY_MS);
+        continue;
+      }
+      if (!post.success) {
+        const errMsg =
+          typeof post.error === 'object' && post.error !== null
+            ? JSON.stringify(post.error)
+            : String(post.error || 'Dataprep ingest failed');
+        throw new Error(errMsg);
+      }
       await metadataService.updateMetadata(fileId, {
-        chunk_count: response.data.chunk_count || file.chunk_count || 0, // Update chunk count if provided
+        chunk_count: post.chunkCount ?? file.chunk_count ?? 0,
         dataprep: {
           status: 'Ingesting',
           ingest_date: new Date().toISOString(),
-          retract_date: file.dataprep.retract_date || null
+          retract_date: file.dataprep?.retract_date || null
         }
       });
-      return { success: true };
-    } else {
-      return { success: false, error: response.data };
+      await this._waitUntilDataprepTerminal(fileId);
+      accepted = true;
     }
+  }
+
+  async _markIngestionErrorIfStillNonTerminal(fileId) {
+    try {
+      const m = await metadataService.getMetadataById(fileId);
+      if (!m || isTerminalIngestedStatus(m.dataprep?.status)) {
+        return;
+      }
+      await metadataService.updateMetadata(fileId, {
+        dataprep: {
+          ...m.dataprep,
+          status: 'Ingestion Error'
+        }
+      });
+    } catch (e) {
+      logger.warn(`[FILE-CONTROLLER] Could not mark ingestion error for ${fileId}:`, e.message);
+    }
+  }
+
+  async _runSequentialBatchIngest(fileIds) {
+    for (const fileId of fileIds) {
+      try {
+        await this._ingestOneFileWithRetryAndWait(fileId);
+      } catch (error) {
+        logger.error(`[FILE-CONTROLLER] Batch ingest failed for ${fileId}:`, error);
+        await this._markIngestionErrorIfStillNonTerminal(fileId);
+      }
+    }
+  }
+
+  async _queueFilesForIngest(fileIds, { markQueued = true } = {}) {
+    for (const fileId of fileIds) {
+      try {
+        const meta = await metadataService.getMetadataById(fileId);
+        if (!meta) {
+          continue;
+        }
+        if (isTerminalIngestedStatus(meta.dataprep?.status) || isRetractedStatus(meta.dataprep?.status)) {
+          continue;
+        }
+        if (isIngestionInProgressStatus(meta.dataprep?.status)) {
+          continue;
+        }
+        if (markQueued) {
+          await metadataService.updateMetadata(fileId, {
+            dataprep: {
+              ...(meta.dataprep || {}),
+              status: 'Queued',
+              ingest_date: meta.dataprep?.ingest_date || '',
+              retract_date: meta.dataprep?.retract_date ?? null
+            }
+          });
+        }
+        if (!this._ingestQueueSet.has(fileId)) {
+          this._ingestQueue.push(fileId);
+          this._ingestQueueSet.add(fileId);
+        }
+      } catch (e) {
+        logger.warn(`[FILE-CONTROLLER] Could not queue file ${fileId} for ingestion:`, e.message);
+      }
+    }
+  }
+
+  async _startIngestQueueWorker() {
+    if (this._ingestQueueWorkerRunning) {
+      return;
+    }
+    this._ingestQueueWorkerRunning = true;
+    this._batchIngestWorkerRunning = true;
+    logger.info(`[FILE-CONTROLLER] Ingest queue worker started with ${this._ingestQueue.length} item(s).`);
+    try {
+      while (this._ingestQueue.length > 0) {
+        const fileId = this._ingestQueue.shift();
+        this._ingestQueueSet.delete(fileId);
+        logger.debug(`[FILE-CONTROLLER] Ingest queue worker processing ${fileId}.`);
+        try {
+          await this._ingestOneFileWithRetryAndWait(fileId);
+        } catch (error) {
+          logger.error(`[FILE-CONTROLLER] Queue ingest failed for ${fileId}:`, error);
+          await this._markIngestionErrorIfStillNonTerminal(fileId);
+        }
+      }
+    } finally {
+      this._ingestQueueWorkerRunning = false;
+      this._batchIngestWorkerRunning = false;
+      logger.info('[FILE-CONTROLLER] Ingest queue worker finished.');
+    }
+  }
+
+  async _ingestFileById(fileId) {
+    const { file, base64String } = await this._getFileBase64(fileId);
+    if (file.dataprep) {
+      if (isTerminalIngestedStatus(file.dataprep.status)) {
+        return { success: false, httpStatus: 409, error: 'File has already been ingested' };
+      }
+      if (isQueuedStatus(file.dataprep.status)) {
+        return {
+          success: false,
+          httpStatus: 409,
+          error:
+            'This file is already in the ingestion queue. Wait for the batch to finish, then refresh the list if needed.'
+        };
+      }
+      if (isIngestionInProgressStatus(file.dataprep.status)) {
+        return {
+          success: false,
+          httpStatus: 409,
+          error: 'Ingestion is already in progress for this file'
+        };
+      }
+    }
+    const post = await this._postDataprepIngest(file, base64String);
+    if (post.busy) {
+      const err = new Error('Dataprep busy');
+      err.response = { status: 429 };
+      throw err;
+    }
+    if (!post.success) {
+      return { success: false, httpStatus: 502, error: post.error };
+    }
+    await metadataService.updateMetadata(fileId, {
+      chunk_count: post.chunkCount ?? file.chunk_count ?? 0,
+      dataprep: {
+        status: 'Ingesting',
+        ingest_date: new Date().toISOString(),
+        retract_date: file.dataprep?.retract_date || null
+      }
+    });
+    return { success: true };
   }
 
   // --- Single file ingest ---
@@ -1010,11 +1467,36 @@ class FileController {
       const result = await this._ingestFileById(fileId);
       if (result.success) {
         return res.json({ success: true, message: 'File ingested successfully' });
-      } else {
-        return res.status(500).json({ success: false, error: 'Data prep failed.', details: result.error });
       }
+      const httpStatus =
+        typeof result.httpStatus === 'number' && result.httpStatus >= 400 && result.httpStatus < 600
+          ? result.httpStatus
+          : 500;
+      const payload = ingestFailurePayload(result.error);
+      return res.status(httpStatus).json({
+        success: false,
+        error: payload.message,
+        details: payload.details
+      });
     } catch (error) {
       logger.error('Ingest file error:', error);
+
+      if (error.response && error.response.status >= 400 && error.response.status !== 429) {
+        const upstream = ingestFailurePayload(error.response.data);
+        return res.status(502).json({
+          success: false,
+          error: upstream.message || `Dataprep error (${error.response.status})`,
+          details: upstream.details
+        });
+      }
+
+      if (error.isAxiosError && error.request && !error.response) {
+        return res.status(503).json({
+          success: false,
+          error: 'Cannot reach dataprep service. Check DATAPREP_HOST, DATAPREP_PORT, networking, and that dataprep is running.',
+          message: error.message
+        });
+      }
 
       // --- FIXED: Check for 429 Busy status from Dataprep ---
       if (error.response && error.response.status === 429) {
@@ -1023,6 +1505,14 @@ class FileController {
           error: 'Too Many Requests',
           message:
             'Only a single dataprep job can be run at any given time. Wait until the current job finishes before submitting new jobs'
+        });
+      }
+
+      if (typeof error.status === 'number') {
+        return res.status(error.status).json({
+          success: false,
+          error: error.error || 'Request failed',
+          message: error.message || error.error
         });
       }
 
@@ -1038,16 +1528,29 @@ class FileController {
         return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
       }
       const { fileIds } = value;
-      const results = [];
-      for (const fileId of fileIds) {
-        try {
-          const result = await this._ingestFileById(fileId);
-          results.push({ fileId, ...result });
-        } catch (error) {
-          results.push({ fileId, success: false, error: error.message });
-        }
+
+      if (this._ingestQueueWorkerRunning) {
+        return res.status(409).json({
+          success: false,
+          error: 'Conflict',
+          message: 'A batch ingestion is already running. Wait for it to finish before starting another.'
+        });
       }
-      res.json({ success: true, results });
+      await this._queueFilesForIngest(fileIds, { markQueued: true });
+
+      res.status(202).json({
+        success: true,
+        message: 'Batch ingestion queued. Files are processed one at a time.',
+        count: fileIds.length
+      });
+
+      setImmediate(() => {
+        (async () => {
+          await this._startIngestQueueWorker();
+        })().catch((err) => {
+          logger.error('[FILE-CONTROLLER] Batch ingest queue worker failed:', err);
+        });
+      });
     } catch (error) {
       logger.error('Ingest multiple files error:', error);
       res.status(500).json({ success: false, error: error.message });
@@ -1058,16 +1561,16 @@ class FileController {
   async _retractFileById(fileId) {
     const file = await metadataService.getMetadataById(fileId);
     if (!file) return { success: false, error: 'File not found' };
-    if (!file.dataprep || file.dataprep.status === 'retracted') {
+    if (!file.dataprep || isRetractedStatus(file.dataprep.status)) {
       return { success: false, error: 'File has already been retracted' };
     }
-    const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.retractPath}`;
+    const dataprepUrl = `${config.buildDataprepBaseUrl()}${config.dataprep.retractPath}`;
     const response = await axios.post(dataprepUrl, { fileId: file.file_id });
     if (response.data.success) {
       await metadataService.updateMetadata(fileId, {
         chunk_count: 0, // Reset chunk count on retract
         dataprep: {
-          status: 'retracted',
+          status: 'Retracted',
           ingest_date: file.dataprep.ingest_date || null,
           retract_date: new Date().toISOString()
         }
@@ -1215,13 +1718,62 @@ class FileController {
   }
 
   /**
+   * Update taxonomy / extraction metadata (called by dataprep service account)
+   */
+  async updateIngestionMetadata(req, res) {
+    try {
+      const { fileId } = req.params;
+      const { error, value } = ingestionMetadataSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation error',
+          message: error.details[0].message
+        });
+      }
+      const updated = await metadataService.updateIngestionMetadataFields(fileId, value);
+      return res.json({ success: true, data: updated });
+    } catch (error) {
+      logger.error('updateIngestionMetadata error:', error);
+      if (error.message && error.message.includes('not found')) {
+        return res.status(404).json({ success: false, error: 'File not found' });
+      }
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Admin: re-run agricultural taxonomy extraction via dataprep (does not update graph chunks).
+   */
+  async reextractTaxonomy(req, res) {
+    try {
+      const { fileId } = req.params;
+      const { file, base64String } = await this._getFileBase64(fileId);
+      const dataprepUrl = `${config.buildDataprepBaseUrl()}${config.dataprep.reextractTaxonomyPath}`;
+      const response = await axios.post(dataprepUrl, {
+        fileId: file.file_id,
+        fileName: file.file_name,
+        fileType: file.file_type,
+        fileLabels: file.labels,
+        uploadDate: file.uploaded_date,
+        storagePath: file.storage_path,
+        fileBase64: base64String
+      });
+      return res.json({ success: true, data: response.data });
+    } catch (error) {
+      logger.error('reextractTaxonomy error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
    * Kill ingestion for a specific file
    */
   async killIngestion(req, res) {
     try {
       const { fileId } = req.params;
       // Triggers the signal in genieai_dataprep_microservice.py
-      const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}/v1/dataprep/kill_ingest`;
+      const dataprepUrl = `${config.buildDataprepBaseUrl()}/v1/dataprep/kill_ingest`;
 
       const response = await axios.post(dataprepUrl, { fileId });
       res.json(response.data);

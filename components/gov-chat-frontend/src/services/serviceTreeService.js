@@ -1,20 +1,64 @@
 // src/services/serviceTreeService.js - Connect ServiceTreePanelComponent to backend
 import httpService from './httpService';
 
+/** Synthetic category key for file-derived labels + taxonomy (merged after admin hierarchy). */
+export const DOCUMENT_METATAGS_CAT_KEY = '_document_metatags';
+
+function buildMetatagSidebarNodes(rawGroups) {
+  const groups = Array.isArray(rawGroups) ? rawGroups : [];
+  let idx = 0;
+  const metatagGroups = groups.map((g) => ({
+    groupKey: g.groupKey,
+    groupName: g.groupName || g.groupKey,
+    groupExpanded: true,
+    entries: (g.items || []).map((text) => ({ text, flatIndex: idx++ }))
+  }));
+  const children = metatagGroups.flatMap((g) => g.entries.map((e) => e.text));
+  return { metatagGroups, children };
+}
+
 export default {
   /**
    * For the MAIN application sidebar.
    * Fetches all categories with a simple array of service name strings.
+   * Appends one virtual category with distinct metatags from uploaded documents when available.
    * @param {String} locale - Locale code (e.g., 'en')
    * @returns {Promise} Categories with simple service name strings.
    */
   async getAllCategories(locale = 'en') {
     try {
-      // This points to the PUBLIC endpoint that returns simple data
-      const response = await httpService.get('services/categories', {
-        params: { locale }
-      });
-      return response.data || [];
+      const [categoriesRes, groupedRes] = await Promise.all([
+        httpService.get('services/categories', {
+          params: { locale }
+        }),
+        httpService.get('services/document-metatags-grouped').catch(() => ({ data: { groups: [] } }))
+      ]);
+      const categories = categoriesRes.data || [];
+      const rawGroups = groupedRes.data && Array.isArray(groupedRes.data.groups) ? groupedRes.data.groups : [];
+      if (rawGroups.length > 0) {
+        const { metatagGroups, children } = buildMetatagSidebarNodes(rawGroups);
+        if (children.length > 0) {
+          categories.push({
+            catKey: DOCUMENT_METATAGS_CAT_KEY,
+            name: null,
+            catCode: null,
+            metatagGroups,
+            children
+          });
+        }
+      } else {
+        const metatagsRes = await httpService.get('services/document-metatags').catch(() => ({ data: [] }));
+        const metatags = Array.isArray(metatagsRes.data) ? metatagsRes.data : [];
+        if (metatags.length > 0) {
+          categories.push({
+            catKey: DOCUMENT_METATAGS_CAT_KEY,
+            name: null,
+            catCode: null,
+            children: metatags
+          });
+        }
+      }
+      return categories;
     } catch (error) {
       console.error('Error fetching service categories:', error);
       throw error;

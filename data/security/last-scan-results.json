@@ -1,0 +1,204 @@
+{
+  "scanTime": "2026-05-11T18:56:09.152Z",
+  "vulnerabilities": {
+    "critical": 0,
+    "medium": 0,
+    "low": 3,
+    "details": [
+      {
+        "type": "auth_failure_401",
+        "severity": "low",
+        "description": "HTTP 401 responses (often expected for protected APIs without a session)",
+        "recommendation": "If counts spike from one IP, enable stricter rate limits; otherwise no action required.",
+        "matchedTerm": "Authentication Failure - 401",
+        "timestamp": "2026-05-11T09:01:19.000Z",
+        "service": "system",
+        "url": "N/A",
+        "firstSeen": "2026-05-11T09:01:19.000Z",
+        "lastSeen": "2026-05-11T18:46:54.000Z",
+        "instanceCount": 186
+      },
+      {
+        "type": "sensitive_file_access",
+        "severity": "low",
+        "description": "External probe for a sensitive path was blocked",
+        "recommendation": "Keep blocking these paths at the gateway; optional: rate-limit or denylist scanning IPs.",
+        "matchedTerm": "/api/.env",
+        "timestamp": "2026-05-11T04:31:04.000Z",
+        "service": "http",
+        "url": "N/A",
+        "firstSeen": "2026-05-11T04:31:04.000Z",
+        "lastSeen": "2026-05-11T04:40:03.000Z",
+        "instanceCount": 7
+      },
+      {
+        "type": "failed_login",
+        "severity": "low",
+        "description": "Failed login attempt detected",
+        "recommendation": "Monitor for suspicious activity.",
+        "matchedTerm": "Invalid credentials",
+        "timestamp": "2026-05-10T22:58:52.000Z",
+        "service": "auth",
+        "url": "N/A",
+        "firstSeen": "2026-05-10T22:58:52.000Z",
+        "lastSeen": "2026-05-10T22:59:01.000Z",
+        "instanceCount": 32
+      }
+    ]
+  },
+  "vulnerabilityDetails": {
+    "critical": [],
+    "medium": [],
+    "low": [
+      {
+        "type": "auth_failure_401",
+        "severity": "low",
+        "description": "HTTP 401 responses (often expected for protected APIs without a session)",
+        "recommendation": "If counts spike from one IP, enable stricter rate limits; otherwise no action required.",
+        "matchedTerm": "Authentication Failure - 401",
+        "timestamp": "2026-05-11T09:01:19.000Z",
+        "service": "system",
+        "url": "N/A",
+        "firstSeen": "2026-05-11T09:01:19.000Z",
+        "lastSeen": "2026-05-11T18:46:54.000Z",
+        "instanceCount": 186
+      },
+      {
+        "type": "sensitive_file_access",
+        "severity": "low",
+        "description": "External probe for a sensitive path was blocked",
+        "recommendation": "Keep blocking these paths at the gateway; optional: rate-limit or denylist scanning IPs.",
+        "matchedTerm": "/api/.env",
+        "timestamp": "2026-05-11T04:31:04.000Z",
+        "service": "http",
+        "url": "N/A",
+        "firstSeen": "2026-05-11T04:31:04.000Z",
+        "lastSeen": "2026-05-11T04:40:03.000Z",
+        "instanceCount": 7
+      },
+      {
+        "type": "failed_login",
+        "severity": "low",
+        "description": "Failed login attempt detected",
+        "recommendation": "Monitor for suspicious activity.",
+        "matchedTerm": "Invalid credentials",
+        "timestamp": "2026-05-10T22:58:52.000Z",
+        "service": "auth",
+        "url": "N/A",
+        "firstSeen": "2026-05-10T22:58:52.000Z",
+        "lastSeen": "2026-05-10T22:59:01.000Z",
+        "instanceCount": 32
+      }
+    ]
+  },
+  "failedLoginDetails": [
+    {
+      "timestamp": "2026-05-10T04:41:19.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T04:55:28.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T04:56:33.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T05:01:10.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T10:01:09.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T10:01:51.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T10:02:18.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T10:02:23.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T10:02:26.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T10:02:29.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T10:02:54.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T10:02:55.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T10:02:56.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T10:03:39.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T10:05:59.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T10:08:57.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T10:10:05.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T10:10:36.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T10:11:08.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T22:58:52.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    },
+    {
+      "timestamp": "2026-05-10T22:59:01.000Z",
+      "level": "UNKNOWN",
+      "message": "[WARN]: Login failed: Invalid credentials"
+    }
+  ],
+  "suspiciousDetails": [],
+  "status": "completed",
+  "message": "Security scan completed successfully"
+}

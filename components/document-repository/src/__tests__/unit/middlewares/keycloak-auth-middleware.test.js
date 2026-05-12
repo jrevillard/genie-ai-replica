@@ -23,10 +23,17 @@ beforeEach(() => {
       error: jest.fn(),
       debug: jest.fn(),
       warn: jest.fn()
+    },
+    dbService: {
+      getConnection: jest.fn()
     }
   }));
 
   jose = require('jose');
+  const sharedLib = require('../../../../shared-lib');
+  sharedLib.dbService.getConnection.mockReset();
+  sharedLib.dbService.getConnection.mockRejectedValue(new Error('db not used'));
+
   const middleware = require('../../../middlewares/keycloak-auth-middleware');
   authenticateToken = middleware.authenticateToken;
   authorizeRole = middleware.authorizeRole;
@@ -143,7 +150,7 @@ describe('keycloak-auth-middleware', () => {
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
     });
 
-    it('should return 401 for claim validation failure (JWTClaimValidationFailed)', async () => {
+    it('should return 401 when Keycloak path fails and legacy JWT is invalid', async () => {
       jose.createRemoteJWKSet.mockReturnValue({});
       const claimError = new Error('claim validation failed');
       claimError.name = 'JWTClaimValidationFailed';
@@ -155,11 +162,11 @@ describe('keycloak-auth-middleware', () => {
       await authenticateToken(req, res, next);
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: 'TOKEN_INVALID', message: 'Token claim validation failed' })
+        expect.objectContaining({ error: 'TOKEN_INVALID', message: 'Token verification failed' })
       );
     });
 
-    it('should return 503 when JWKS initialization fails', async () => {
+    it('should return 401 when JWKS initialization fails and legacy JWT is invalid', async () => {
       jose.createRemoteJWKSet.mockImplementation(() => {
         throw new Error('Network error');
       });
@@ -168,8 +175,38 @@ describe('keycloak-auth-middleware', () => {
         req: { headers: { authorization: 'Bearer some-token' } }
       });
       await authenticateToken(req, res, next);
-      expect(res.status).toHaveBeenCalledWith(503);
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'AUTH_SERVICE_UNAVAILABLE' }));
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
+    });
+
+    it('should accept legacy HS256 JWT when Keycloak verification fails', async () => {
+      const sharedLib = require('../../../../shared-lib');
+      const exp = Math.floor(Date.now() / 1000) + 3600;
+      jose.createRemoteJWKSet.mockReturnValue({});
+      jose.jwtVerify
+        .mockRejectedValueOnce(new Error('Invalid signature'))
+        .mockResolvedValueOnce({ payload: { userId: 'user-legacy-1', exp } });
+
+      sharedLib.dbService.getConnection.mockResolvedValue({
+        collection: jest.fn().mockReturnValue({
+          document: jest.fn().mockResolvedValue({
+            _key: 'user-legacy-1',
+            role: 'Admin',
+            deleted: false
+          })
+        })
+      });
+
+      const { req, res, next } = createMocks({
+        req: { headers: { authorization: 'Bearer legacy-token' } }
+      });
+      await authenticateToken(req, res, next);
+
+      expect(next).toHaveBeenCalledWith();
+      expect(req.user).toBeDefined();
+      expect(req.user.userId).toBe('user-legacy-1');
+      expect(req.user.role).toBe('Admin');
+      expect(req.user.iss).toBe('legacy');
     });
 
     it('should attach user object for valid token with admin role', async () => {

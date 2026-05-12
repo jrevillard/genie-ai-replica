@@ -101,5 +101,22 @@ export default {
       console.error('Error submitting feedback:', error);
       throw error;
     }
+  },
+
+  /**
+   * Attach (or update) an expert-curated correct answer to a query.
+   * Used by admins from the Feedback insights page.
+   * @param {String} queryId - Query ID
+   * @param {String} text - Expert answer text
+   * @returns {Promise} The updated query
+   */
+  async submitExpertAnswer(queryId, text) {
+    try {
+      const response = await httpService.patch(`queries/${queryId}/expert-answer`, { text });
+      return response.data;
+    } catch (error) {
+      console.error('Error saving expert answer:', error);
+      throw error;
+    }
   }
 };

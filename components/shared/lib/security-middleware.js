@@ -58,12 +58,6 @@ class SecurityMiddleware {
   static threatDetectionMiddleware(req, res, next) {
     // Skip threat detection for authenticated requests, auth endpoints, and health checks
     if (req.headers.authorization || req.user || req.path.startsWith('/api/auth') || req.path === '/api/health') {
-      logger.debug('Skipping threat detection for authenticated request', {
-        ip: req.ip,
-        path: req.path,
-        user: req.user || null,
-        hasAuthHeader: !!req.headers.authorization
-      });
       return next();
     }
 

@@ -21,10 +21,30 @@
               </div>
               <div class="document-info">
                 <div class="document-title">{{ doc.title }}</div>
-                <div class="document-url-link">
-                  {{ getDisplayUrl(doc) }}
-                </div>
               </div>
+            </div>
+            <div class="document-link-row">
+              <a
+                v-if="usesNativeWindowOpen(doc)"
+                class="document-url-link"
+                :href="doc.url || getDisplayUrl(doc)"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {{ getDisplayUrl(doc) }}
+              </a>
+              <a
+                v-else
+                class="document-url-link document-url-action"
+                href="#"
+                role="button"
+                tabindex="0"
+                @click.prevent="openDocument(doc)"
+                @keydown.enter.prevent="openDocument(doc)"
+                @keydown.space.prevent="openDocument(doc)"
+              >
+                {{ getDisplayUrl(doc) }}
+              </a>
             </div>
             <div class="document-details">
               <div v-if="doc.documentName" class="detail-item">
@@ -78,6 +98,8 @@
 <script>
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import notificationService from '../services/notificationService';
+import userService from '../services/userService';
 import { formatFileSize } from '../utils/fileUtils.js';
 
 export default {
@@ -218,12 +240,73 @@ export default {
       return isHttp && !isPlaceholder;
     },
 
+    /** Docker-only hostnames in absolute file URLs — browsers cannot resolve them; treat as app-relative. */
+    isDockerInternalFileApiUrl(url) {
+      if (!url || typeof url !== 'string') return false;
+      try {
+        const u = new URL(url);
+        if (!u.pathname.includes('/api/files/')) return false;
+        const h = u.hostname.toLowerCase();
+        return h === 'backend' || h === 'document-repository' || h === 'doc-repo-dev';
+      } catch {
+        return false;
+      }
+    },
+
+    /** True when URL path is GENIE file API (needs Bearer; plain new-tab GET usually fails). */
+    isFileApiPath(url) {
+      if (!url || typeof url !== 'string') {
+        return false;
+      }
+      try {
+        const u = new URL(url, typeof window !== 'undefined' ? window.location.href : undefined);
+        return u.pathname.includes('/api/files/');
+      } catch {
+        return false;
+      }
+    },
+
+    /** Same branch as openDocument(): real navigation with window.open(doc.url) (no bearer fetch). */
+    usesNativeWindowOpen(doc) {
+      if (!doc || !this.isExternalUrl(doc.url)) {
+        return false;
+      }
+      if (this.isDockerInternalFileApiUrl(doc.url)) {
+        return false;
+      }
+      if (this.isFileApiPath(doc.url)) {
+        return false;
+      }
+      return true;
+    },
+
+    dedupeCommaList(str) {
+      if (!str || typeof str !== 'string') {
+        return '';
+      }
+      const parts = str
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const seen = new Set();
+      const out = [];
+      for (const p of parts) {
+        const k = p.toLowerCase();
+        if (seen.has(k)) {
+          continue;
+        }
+        seen.add(k);
+        out.push(p);
+      }
+      return out.join(', ');
+    },
+
     // Added missing method to fix runtime error
     documentIconClass(doc) {
       if (!doc) return 'fas fa-file';
 
-      // Check for external web links using the existing helper
-      if (this.isExternalUrl(doc.url)) {
+      // True external web (not GENIE file API — that opens via Bearer fetch)
+      if (this.isExternalUrl(doc.url) && !this.isDockerInternalFileApiUrl(doc.url) && !this.isFileApiPath(doc.url)) {
         return 'fas fa-globe';
       }
 
@@ -243,7 +326,7 @@ export default {
     },
 
     async openDocument(doc) {
-      if (this.isExternalUrl(doc.url)) {
+      if (this.isExternalUrl(doc.url) && !this.isDockerInternalFileApiUrl(doc.url) && !this.isFileApiPath(doc.url)) {
         console.log(`Opening external URL: ${doc.url}`);
         window.open(doc.url, '_blank');
         this.$emit('open-document', doc);
@@ -253,6 +336,7 @@ export default {
       const authToken = this.getAuthToken();
       if (!authToken) {
         console.error('Authentication token not found. Unable to open internal document.');
+        notificationService.error(this.$t('sidebar.documentOpenAuthRequired'));
         return;
       }
 
@@ -278,16 +362,21 @@ export default {
         this.$emit('open-document', doc);
       } catch (error) {
         console.error('There was a problem fetching the internal document:', error);
+        notificationService.error(this.$t('sidebar.documentOpenFailed'));
       }
     },
 
     getAuthToken() {
-      return this.$store.getters.accessToken || null;
+      const fromStore = this.$store.getters.currentUser?.accessToken;
+      if (fromStore) {
+        return fromStore;
+      }
+      return userService.getCurrentUser()?.accessToken || null;
     },
 
     getDisplayUrl(doc) {
       if (!doc) return '';
-      if (this.isExternalUrl(doc.url)) {
+      if (this.isExternalUrl(doc.url) && !this.isDockerInternalFileApiUrl(doc.url)) {
         return doc.url;
       }
       if (doc.id) {
@@ -298,13 +387,23 @@ export default {
 
     formatScore(score) {
       if (typeof score !== 'number' || isNaN(score)) return this.$t('sidebar.unknown');
-      return (score * 100).toFixed(2) + '%';
+      const pct = Math.min(99, score * 100);
+      return pct.toFixed(2) + '%';
     },
 
     formatLabels(doc) {
-      if (!doc.categoryLabel) return this.$t('sidebar.unknown');
-      const services = doc.serviceLabels?.join(', ') || '';
-      return `${doc.categoryLabel}${services ? ':' + services : ''}`;
+      const cat = doc.categoryLabel;
+      const catStr = Array.isArray(cat)
+        ? this.dedupeCommaList(cat.filter(Boolean).join(', '))
+        : this.dedupeCommaList(cat || '');
+      if (!catStr) {
+        return this.$t('sidebar.unknown');
+      }
+      const servicesRaw = Array.isArray(doc.serviceLabels)
+        ? doc.serviceLabels.filter(Boolean).join(', ')
+        : doc.serviceLabels || '';
+      const services = this.dedupeCommaList(servicesRaw);
+      return services ? `${catStr}: ${services}` : catStr;
     }
   }
 };
@@ -401,7 +500,17 @@ export default {
   align-items: center;
   gap: 12px;
   cursor: pointer;
+  margin-bottom: 4px;
+}
+
+.document-link-row {
   margin-bottom: 8px;
+}
+
+.document-link-row .document-url-link {
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
 }
 
 .document-header:hover {
@@ -434,16 +543,28 @@ export default {
 }
 
 .document-url-link {
+  display: block;
   font-size: 0.75rem;
   color: var(--accent-color, #4e97d1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   text-decoration: none;
+  cursor: pointer;
 }
 
-.document-header:hover .document-url-link {
+.document-url-action {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+}
+
+.document-link-row .document-url-link:hover,
+.document-link-row .document-url-link:focus-visible {
   text-decoration: underline;
+  outline: none;
 }
 
 .document-details {

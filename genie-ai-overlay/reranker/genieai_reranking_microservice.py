@@ -5,6 +5,10 @@
 import os
 import time
 
+# Side-effect import: register GENIE_TEI_RERANKING into OpeaComponentRegistry
+# before OpeaComponentLoader resolves RERANK_COMPONENT_NAME.
+from integrations.genieai_tei_reranker import GenieTEIReranking  # noqa: F401
+
 from comps import (
     CustomLogger,
     OpeaComponentLoader,

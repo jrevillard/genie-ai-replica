@@ -1059,6 +1059,7 @@ const Map<String, dynamic> ptLocale = {
     "exportSuccess": "Chat exportado com sucesso",
     "exportError": "Falha ao exportar chat. Por favor, tente novamente.",
     "thinking": "Genie está pensando...",
+    "generating": "Gerando resposta...",
     "contextPrefix": "Contexto:",
     "removeContext": "Remover Contexto",
     "dialogs": {

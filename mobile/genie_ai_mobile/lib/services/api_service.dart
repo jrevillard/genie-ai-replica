@@ -17,6 +17,9 @@ class ApiService {
         baseUrl = baseUrl ?? getConfig().backendUrl,
         _logger = logger;
 
+  /// Exposes the underlying HTTP client for streaming requests.
+  http.Client get httpClient => _httpClient;
+
   Future<http.Response> get(
     String endpoint, {
     Map<String, dynamic>? params,

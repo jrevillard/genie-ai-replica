@@ -6,7 +6,6 @@ const axios = require('axios');
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
-const KEYCLOAK_CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID;
 const INIT_RETRY_COOLDOWN = 30000; // 30 seconds between retry attempts
 const JWKS_CACHE_TTL = 300000; // 5 minutes JWKS cache TTL (NFR10)
 

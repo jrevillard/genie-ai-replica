@@ -111,6 +111,11 @@ class WeatherService {
     try {
       logger.info('WeatherService.get_weather_start', { locationData });
 
+      // Fallback if ipapi.co rate-limited us at startup
+      if (!this.serverLocation) {
+        this.serverLocation = { latitude: 0, longitude: 0, city: 'Unknown' };
+      }
+
       // Validate and format coordinates
       let latitude = parseFloat(locationData.latitude) || this.serverLocation.latitude;
       let longitude = parseFloat(locationData.longitude) || this.serverLocation.longitude;

@@ -1066,6 +1066,7 @@ const Map<String, dynamic> deLocale = {
     "exportError":
         "Exportieren des Chats fehlgeschlagen. Bitte versuche es erneut.",
     "thinking": "Genie denkt nach...",
+    "generating": "Antwort wird generiert...",
     "contextPrefix": "Kontext:",
     "removeContext": "Kontext entfernen",
     "dialogs": {

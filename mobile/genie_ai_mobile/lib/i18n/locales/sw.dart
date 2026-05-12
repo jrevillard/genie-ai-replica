@@ -1060,6 +1060,7 @@ const Map<String, dynamic> swLocale = {
     "exportSuccess": "Gumzo limehamishwa",
     "exportError": "Imeshindwa kuhamisha gumzo. Tafadhali jaribu tena.",
     "thinking": "Genie anafikiria...",
+    "generating": "Inatengeneza jibu...",
     "contextPrefix": "Muktadha:",
     "removeContext": "Ondoa Muktadha",
     "dialogs": {

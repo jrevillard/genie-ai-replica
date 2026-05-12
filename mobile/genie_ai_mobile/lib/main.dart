@@ -30,6 +30,7 @@ import 'package:url_launcher/url_launcher.dart';
 // COMPONENT IMPORTS
 // ===========================================================================
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:genie_ai_mobile/components/shared/nav_bar_component.dart';
 import 'package:genie_ai_mobile/components/sidebar/sidebar_component.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
@@ -246,6 +247,8 @@ class _MyAppState extends ConsumerState<MyApp> {
                   isDarkMode: ThemeManager().isDarkMode,
                   toggleTheme: _toggleTheme,
                   onLogout: _onLogout,
+                  httpClient: ref.read(apiServiceProvider).httpClient,
+                  streamBaseUrl: ref.read(apiServiceProvider).baseUrl,
                 )
               : const OidcLoginScreen(),
           routes: {
@@ -266,6 +269,8 @@ class MainScreen extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback toggleTheme;
   final VoidCallback onLogout;
+  final http.Client? httpClient;
+  final String? streamBaseUrl;
 
   const MainScreen({
     super.key,
@@ -273,6 +278,8 @@ class MainScreen extends StatefulWidget {
     required this.isDarkMode,
     required this.toggleTheme,
     required this.onLogout,
+    this.httpClient,
+    this.streamBaseUrl,
   });
 
   @override
@@ -375,6 +382,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           ? null
           : SidebarComponent(
               user: widget.user,
+              httpClient: widget.httpClient,
               onServiceSelected: _onServiceSelected,
               onConversationSelected: _onConversationSelected,
             ),
@@ -433,6 +441,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                 userId: widget.user['id'] ?? widget.user['_id'],
                                 onRefreshSidebar: _refreshSidebar,
                                 onRelatedDocumentsUpdate: _updateRelatedDocuments,
+                                httpClient: widget.httpClient,
+                                streamBaseUrl: widget.streamBaseUrl,
                               ),
                             ),
                           ),

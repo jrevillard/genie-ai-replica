@@ -121,8 +121,8 @@
         <!-- Auto-scroll anchor element -->
         <div ref="messagesEnd"></div>
       </div>
-      <!-- Loading spinner with "Thinking..." text -->
-      <div v-if="isLoading" class="loading-spinner" aria-label="Processing your request">
+      <!-- Loading spinner with "Thinking..." text (non-streaming fallback only) -->
+      <div v-if="isLoading && !isStreaming" class="loading-spinner" aria-label="Processing your request">
         <i class="fas fa-spinner fa-spin"></i>
         <span class="loading-text">Thinking...</span>
       </div>
@@ -335,6 +335,9 @@ export default {
       pendingConversationId: null,
       isLoading: false, // Loading state for spinner
       isSaving: false, // Loading state for save operation to prevent double-save
+      isStreaming: false, // SSE streaming state
+      streamingQueryId: null, // Query ID of the current streaming response
+      streamController: null, // AbortController for cancelling active streams
       relatedDocuments: [], // Holds documents for the right sidebar
       hiddenPromptForNextMessage: null // Stores hidden prompt for dual-prompt mechanism
     };
@@ -444,6 +447,10 @@ export default {
     eventBus.$off('chat-deleted'); // Clean up the chat-deleted listener
     // Removed clearInterval
     eventBus.$off('load-conversation');
+    // Abort active SSE stream on component unmount
+    if (this.streamController) {
+      this.streamController.abort();
+    }
   },
 
   methods: {
@@ -742,12 +749,22 @@ export default {
       });
       this.newMessage = '';
       this.showQuickHelp = false;
-      this.isLoading = true;
+      this.isLoading = false;
+      this.isStreaming = true;
       // Clear hidden prompt after use
       this.hiddenPromptForNextMessage = null;
-      // Do NOT clear relatedDocuments here. We want to keep previous docs visible.
 
-      const startTime = performance.now(); // Start timing
+      const lastMessageIndex = this.chatMessages.length;
+
+      // Push placeholder bot message for streaming content
+      this.chatMessages.push({
+        sender: 'bot',
+        content: '',
+        timestamp: new Date().toISOString(),
+        isSaved: false,
+        metadata: {},
+        isStreaming: true
+      });
 
       try {
         const useConversationContext = this.selectedContextItems.length > 0;
@@ -757,13 +774,11 @@ export default {
         console.log(`[ChatBotComponent] Resolved Category ID "${this.currentCategoryId}" to Label "${categoryLabel}"`);
         if (contextOption === 'conversation-with-labels') {
           const serviceLabels = this.selectedContextItems.map((item) => item.service);
-          // Build messages array, replacing last user message with hidden prompt if available
           const messagesForQuery = this.chatMessages.map((msg) => ({
             role: msg.sender === 'user' ? 'user' : 'assistant',
             content: msg.content
           }));
 
-          // Replace the last user message with the hidden prompt (for dual-prompt mechanism)
           const lastUserMsgIndex = messagesForQuery.map((m) => m.role).lastIndexOf('user');
           if (lastUserMsgIndex !== -1 && messageForBackend !== messageForDisplay) {
             messagesForQuery[lastUserMsgIndex].content = messageForBackend;
@@ -786,88 +801,105 @@ export default {
             sessionId: this.currentSessionId || 'new-session',
             text: messageForBackend,
             context: {
-              language: this.currentLocale.toUpperCase(),
+              language: this.currentLocale.toUpperCase()
             },
             contextOption: contextOption,
             timestamp: new Date().toISOString()
           };
         }
-        console.log('Submitting query with data:', JSON.stringify(queryData, null, 2));
+        console.log('Submitting streaming query with data:', JSON.stringify(queryData, null, 2));
 
         this.checkContextConfig(queryData.context);
 
-        const result = await chatbotService.submitQuery(queryData);
-
-        // --- Success State Update ---
-        const endTime = performance.now();
-        this.systemStatus.lastResponseTime = Math.round(endTime - startTime);
-        this.systemStatus.online = true;
-        this.systemStatus.errorMessage = '';
-        this.systemStatus.lastUpdated = new Date();
-        // --------------------------
-
-        console.log('Query result:', result);
-        const botMessage = {
-          sender: 'bot',
-          content: result.response || this.translate('chatbot.processingError'),
-          queryId: result.queryId,
-          timestamp: new Date().toISOString(),
-          isSaved: false,
-          // CRITICAL FIX: Attach the full metadata object so it can be saved later
-          metadata: result.metadata || {}
-        };
-
-        if (result.metadata) {
-          if (result.metadata.confidence_score) {
-            botMessage.confidenceScore = result.metadata.confidence_score;
-          }
-          if (result.metadata.source_documents && Array.isArray(result.metadata.source_documents)) {
-            // Transform new documents
-            const newDocs = result.metadata.source_documents.map((doc) => ({
-              id: doc.document_id,
-              // Prioritize document_name, then file_name for the main title
-              title: doc.document_name || doc.file_name || doc.title || `Source ${doc.document_id.slice(0, 4)}`,
-              // Pass the new fields through to the child component
-              documentName: doc.document_name,
-              fileName: doc.file_name,
-              type: doc.url?.split('.').pop().toUpperCase() || 'LINK',
-              size: 0,
-              url: doc.url,
-              score: doc.score,
-              categoryLabel: doc.categoryLabel,
-              serviceLabels: doc.serviceLabels
-            }));
-
-            // Incremental Update: Add new documents to the top, filtering out duplicates
-            const existingIds = new Set(this.relatedDocuments.map((d) => d.id));
-            const uniqueNewDocs = newDocs.filter((d) => !existingIds.has(d.id));
-
-            // Add unique new docs to start of array (newest at top)
-            this.relatedDocuments.unshift(...uniqueNewDocs);
-          }
+        // Cancel any previous stream
+        if (this.streamController) {
+          this.streamController.abort();
         }
-        this.chatMessages.push(botMessage);
-        if (result.sessionId) {
-          this.currentSessionId = result.sessionId;
-        }
+
+        this.streamController = chatbotService.submitQueryStream(queryData, {
+          onChunk: (content) => {
+            this.chatMessages[lastMessageIndex].content += content;
+            this.scrollToBottom();
+          },
+          onMetadata: (metadata) => {
+            this.chatMessages[lastMessageIndex].metadata = metadata;
+            if (metadata.confidence_score) {
+              this.chatMessages[lastMessageIndex].confidenceScore = metadata.confidence_score;
+            }
+            if (metadata.responseTime) {
+              this.systemStatus.lastResponseTime = metadata.responseTime;
+            }
+            this.systemStatus.online = true;
+            this.systemStatus.errorMessage = '';
+            this.systemStatus.lastUpdated = new Date();
+
+            if (metadata.source_documents && Array.isArray(metadata.source_documents)) {
+              const newDocs = metadata.source_documents.map((doc) => ({
+                id: doc.document_id,
+                title: doc.document_name || doc.file_name || `Source ${(doc.document_id || '').slice(0, 4)}`,
+                documentName: doc.document_name,
+                fileName: doc.file_name,
+                type: doc.url?.split('.').pop().toUpperCase() || 'LINK',
+                size: 0,
+                url: doc.url,
+                score: doc.score,
+                categoryLabel: doc.categoryLabel,
+                serviceLabels: doc.serviceLabels
+              }));
+              const existingIds = new Set(this.relatedDocuments.map((d) => d.id));
+              const uniqueNewDocs = newDocs.filter((d) => !existingIds.has(d.id));
+              this.relatedDocuments.unshift(...uniqueNewDocs);
+            }
+          },
+          onTranslation: (translatedContent) => {
+            this.chatMessages[lastMessageIndex].content = translatedContent;
+            this.scrollToBottom();
+          },
+          onDone: (data) => {
+            this.isStreaming = false;
+            this.streamController = null;
+            this.streamingQueryId = data.queryId;
+            this.chatMessages[lastMessageIndex].isStreaming = false;
+            this.chatMessages[lastMessageIndex].isSaved = false;
+            if (data.queryId) {
+              this.chatMessages[lastMessageIndex].queryId = data.queryId;
+            }
+            this.scrollToBottom();
+            if (this.currentChatId) {
+              this.updateChatInHistory();
+            }
+          },
+          onError: (error) => {
+            console.error('Stream error:', error);
+            this.isStreaming = false;
+            this.streamController = null;
+            this.chatMessages[lastMessageIndex].isStreaming = false;
+
+            if (!this.chatMessages[lastMessageIndex].content) {
+              this.chatMessages[lastMessageIndex].content = this.translate('chatbot.streamingError');
+            }
+
+            this.systemStatus.lastResponseTime = null;
+            this.systemStatus.online = false;
+            this.systemStatus.errorMessage = error.message || this.translate('chatbot.processingError');
+            this.systemStatus.lastUpdated = new Date();
+            notificationService.error(this.translate('chatbot.streamingError'));
+          }
+        });
       } catch (error) {
-        // --- Error State Update ---
-        this.systemStatus.lastResponseTime = null; // No successful response time
+        this.isStreaming = false;
+        this.streamController = null;
+        this.chatMessages[lastMessageIndex].isStreaming = false;
+
+        console.error('Error sending query:', error);
+        if (!this.chatMessages[lastMessageIndex].content) {
+          this.chatMessages[lastMessageIndex].content = this.translate('chatbot.processingError');
+        }
+        this.systemStatus.lastResponseTime = null;
         this.systemStatus.online = false;
         this.systemStatus.errorMessage = error.message || this.translate('chatbot.processingError');
         this.systemStatus.lastUpdated = new Date();
-        // ------------------------
-
-        console.error('Error sending query:', error);
-        this.chatMessages.push({
-          sender: 'bot',
-          content: this.translate('chatbot.processingError'),
-          timestamp: new Date().toISOString(),
-          isSaved: false
-        });
         notificationService.error(this.translate('chatbot.processingError'));
-      } finally {
-        this.isLoading = false;
       }
       this.scrollToBottom();
       if (this.currentChatId) {

@@ -1044,6 +1044,7 @@ const Map<String, dynamic> manLocale = {
     "exportSuccess": "Kumoo kiita bongo a benta",
     "exportError": "Kumoo kii bongo manta. A nyoofa tukung.",
     "thinking": "Genie be mirila...",
+    "generating": "Generating response...",
     "contextPrefix": "Kumo:",
     "removeContext": "Kumo wulu",
     "dialogs": {

@@ -9,18 +9,21 @@ import 'package:image_picker/image_picker.dart';
 import 'package:genie_ai_mobile/services/api_service.dart';
 
 class UserProfileProxy {
-  final ApiService _api = ApiService();
+  final ApiService _api;
 
-  /// GET /api/users/:userId
+  UserProfileProxy({http.Client? httpClient})
+      : _api = ApiService(httpClient: httpClient ?? http.Client());
+
+  /// GET /api/me
   Future<Map<String, dynamic>> getProfile(String userId) async {
-    final res = await _api.get('$userId');
+    final res = await _api.get('me');
     if (res.statusCode != 200) {
       throw Exception('Failed to load profile: ${res.statusCode} ${res.body}');
     }
     return jsonDecode(res.body);
   }
 
-  /// PUT /api/users/:userId - update profile with actual userId
+  /// PUT /api/me - update current user profile
   Future<Map<String, dynamic>> updateProfile(
     String userId,
     Map<String, dynamic> profileData,
@@ -28,7 +31,7 @@ class UserProfileProxy {
     final bool hasFiles = _containsFiles(profileData);
 
     if (!hasFiles) {
-      final res = await _api.put('$userId', profileData);
+      final res = await _api.put('me', profileData);
       if (res.statusCode != 200) {
         throw Exception('Update failed: ${res.statusCode} ${res.body}');
       }
@@ -38,7 +41,7 @@ class UserProfileProxy {
     // Multipart upload
     final request = http.MultipartRequest(
       'PUT',
-      Uri.parse('${_api.baseUrl}/$userId'),
+      Uri.parse('${_api.baseUrl}/me'),
     );
 
     final Map<String, dynamic> dataToSend = jsonDecode(jsonEncode(profileData));

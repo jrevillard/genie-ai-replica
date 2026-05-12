@@ -1,0 +1,10 @@
+{
+  "input_dir": "/home/ubuntu/Uploads",
+  "output_dir": "/home/ubuntu/production_pipeline/genie_outputs",
+  "documents_generated": 448,
+  "metadata_records": 448,
+  "arango_documents": 448,
+  "generated_at_utc": "2026-05-11T18:18:09.306613+00:00",
+  "metadata_jsonl": "/home/ubuntu/production_pipeline/genie_outputs/metadata/documents_metadata.jsonl",
+  "arango_jsonl": "/home/ubuntu/production_pipeline/genie_outputs/metadata/arango_documents.jsonl"
+}

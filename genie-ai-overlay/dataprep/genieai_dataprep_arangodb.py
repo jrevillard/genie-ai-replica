@@ -84,6 +84,139 @@ Output strict JSON only:
 </SYSTEM INSTRUCTIONS>
 """.strip())
 
+# ---------------------------------------------------------------------------
+# Chunk text cleaner
+# ---------------------------------------------------------------------------
+# PyMuPDF encodes table cell addresses as "CropName.Month.WeekNumber" inside
+# chunk text (e.g. "Potato.November.47 = 22.3").  The raw week numbers leak
+# into LLM responses and confuse users.  Replace the pattern with a readable
+# form: "November (week 47)".
+
+_MONTH_WEEK_RE = re.compile(
+    r'\b[A-Z]\w*\.(January|February|March|April|May|June|July|August|September|'
+    r'October|November|December)\.(\d{1,2})\b'
+)
+
+
+def _clean_chunk_text(text: str) -> str:
+    """Replace 'CropName.Month.NN' with 'Month (week NN)'."""
+    return _MONTH_WEEK_RE.sub(r'\1 (week \2)', text)
+
+
+# ---------------------------------------------------------------------------
+# Aggregation chunk builder
+# ---------------------------------------------------------------------------
+# Crop-calendar PDFs are extracted column-by-column by PyMuPDF/Docling, so
+# "list all X" queries span multiple chunks.  This pass creates one synthetic
+# aggregation chunk per detected list-type column so that the retriever always
+# finds a single chunk with the complete answer.
+
+_METEO_COLUMN_RE = re.compile(
+    r'(?i)^(max\.?\s*temp|min\.?\s*temp|max\s+temp|min\s+temp|'
+    r'rainfall|humidity|rh\s*max|rh\s*min|wind\s*speed|wind\s*dir|'
+    r'wind\s+direction|sunshine|evapor|solar|ws\b|wd\b|'
+    r'time\s*duration|week|period|month|day\b|january|february|march|'
+    r'april|may|june|july|august|september|october|november|december)'
+)
+
+_LIFECYCLE_RE = re.compile(
+    r'(?i)\b(stage|sprouting|seedling|vegetative|tuber|maturity|harvest|'
+    r'germination|flowering|ripening|tillering|heading|panicle|booting|'
+    r'emergence|transplant|nursery)\b'
+)
+
+_ENTITY_RE = re.compile(
+    r'(?i)\b(pest|worm|aphid|mite|larva|larvae|nematode|insect|blight|'
+    r'fungus|bacteria|virus|rust|rot|mould|mold|weevil|caterpillar|beetle|'
+    r'fly|moth|bug|thrip|scale|whitefly|leafhopper|disease|pathogen|wire\s*worm)\b'
+)
+
+
+def _build_aggregation_chunks(chunks: list) -> list:
+    """
+    Scan raw chunks and return new synthetic aggregation chunks.
+
+    Two patterns are handled:
+
+    Type A — pure short-line list (no "=" in chunk):
+        First line is the column header; remaining lines are values.
+        E.g. "Stages\\nSprouting\\nSeedling\\n…" and "Maturity\\nHarvesting"
+        both get merged into one aggregated stages chunk.
+
+    Type B — key=value rows ("EntityName, N = Condition" format):
+        Multi-word entity names (pests, diseases) are collected from all
+        matching entries and listed in one aggregated chunk.
+    """
+    lifecycle_values: list = []
+    entity_names: set = set()
+
+    for chunk in chunks:
+        text = chunk.get("text", "")
+        if not text:
+            continue
+
+        lines = [l.strip() for l in text.splitlines() if l.strip()]
+
+        # Type A: pure short-line list — no "=" signs, all lines short
+        if '=' not in text:
+            all_short = all(len(l) <= 80 and len(l.split()) <= 8 for l in lines)
+            if all_short and len(lines) >= 2:
+                if _LIFECYCLE_RE.search(text):
+                    lifecycle_values.extend(lines)
+                elif _ENTITY_RE.search(text):
+                    for line in lines:
+                        # Skip bare category header lines ("Pest", "Disease", …)
+                        if not re.match(r'(?i)^(pest|disease|insect|pathogen)s?$', line):
+                            entity_names.add(line)
+
+        # Type B: "EntityName, N = Condition" key-value format
+        else:
+            for entry in re.split(r'\.\s+', text):
+                m = re.match(r'^(.+?),\s*\d+\s*=', entry.strip())
+                if not m:
+                    continue
+                col_name = m.group(1).strip()
+                if _METEO_COLUMN_RE.match(col_name):
+                    continue  # meteorological variable — not an entity name
+                if len(col_name.split()) >= 2:
+                    entity_names.add(col_name)
+
+    synthetic = []
+
+    if lifecycle_values:
+        seen: set = set()
+        unique: list = []
+        for v in lifecycle_values:
+            key = v.lower().strip()
+            if key not in seen:
+                seen.add(key)
+                if not re.match(r'(?i)^stages?$', v.strip()):
+                    unique.append(v)
+        if unique:
+            body = "\n".join(f"- {v}" for v in unique)
+            synthetic.append({
+                "text": (
+                    "[AGGREGATED] Potato crop stages, growth phases, and development cycle "
+                    "(complete list of all stages in this document):\n" + body
+                ),
+                "headings": ["Stages"],
+                "page_numbers": [],
+            })
+
+    if entity_names:
+        body = "\n".join(f"- {name}" for name in sorted(entity_names))
+        synthetic.append({
+            "text": (
+                "[AGGREGATED] Pests, diseases, and organisms affecting this crop "
+                "(complete list from this document):\n" + body
+            ),
+            "headings": ["Pests", "Diseases"],
+            "page_numbers": [],
+        })
+
+    return synthetic
+
+
 @OpeaComponentRegistry.register("GENIE_DATAPREP_ARANGODB")
 class GenieArangoDataprep(OpeaArangoDataprep):
     """
@@ -302,6 +435,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
                 # Prepend heading breadcrumb so the embedding captures section context.
                 # E.g. "Pest Management > BPH Control\n\n<chunk body>"
+                text = _clean_chunk_text(text)
+
                 if headings:
                     heading_prefix = " > ".join(headings)
                     embedded_text = f"{heading_prefix}\n\n{text}"
@@ -314,6 +449,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     "page_numbers": pages,
                 })
 
+            enriched += _build_aggregation_chunks(enriched)
             return enriched
 
         # ── Non-Docling path ────────────────────────────────────────────────────
@@ -355,11 +491,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             plain_chunks = [d.page_content for d in docs]
 
         # Wrap plain strings into dicts so the rest of the pipeline is uniform
-        return [
-            {"text": c, "headings": [], "page_numbers": []}
+        result = [
+            {"text": _clean_chunk_text(c), "headings": [], "page_numbers": []}
             for c in plain_chunks
             if is_valid_content(c)
         ]
+        result += _build_aggregation_chunks(result)
+        return result
 
     async def _run_guardrail(self, plain_chunks: List[str]) -> Dict[str, Any]:
         if not GUARDRAIL_ENABLED:

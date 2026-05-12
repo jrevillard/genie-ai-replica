@@ -195,13 +195,16 @@ class AuthController {
         return res.status(400).json({ success: false, message: 'Email is required' });
       }
       const result = await this.authService.resendVerificationEmail(email, frontendUrl, backendUrl);
+      if (!result.success) {
+        return res.status(503).json(result);
+      }
       logger.info(`Verification email resent successfully for email: ${email}`);
       res.json(result);
     } catch (error) {
       logger.error(`Resend verification email error: ${error.message}`, { stack: error.stack });
       res.status(500).json({
-        success: true,
-        message: 'If your email exists in our system, a verification email has been sent'
+        success: false,
+        message: 'Failed to send verification email. Please try again later.'
       });
     }
   }

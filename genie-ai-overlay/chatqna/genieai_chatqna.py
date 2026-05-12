@@ -81,6 +81,26 @@ USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", None)
 CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "true")
 CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", None)
+
+# Markers that appear at the very end of the system prompt, just before the
+# model's actual answer.  If the LLM echoes its own instructions, we strip
+# everything up to and including the last marker.
+_SYSTEM_PROMPT_END_MARKERS = [
+    "Answer the user's latest question using ONLY the provided knowledge base content.",
+    "</INSTRUCTIONS>",
+]
+
+
+def _strip_system_prompt_leakage(text: str) -> str:
+    """Remove system-prompt content if the LLM echoed it before its answer."""
+    for marker in _SYSTEM_PROMPT_END_MARKERS:
+        if marker in text:
+            idx = text.find(marker) + len(marker)
+            stripped = text[idx:].lstrip("\n ")
+            if stripped:
+                logger.warning("[LLM] System prompt leakage detected and stripped.")
+                return stripped
+    return text
 SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
 
 ##################################################################################################################################
@@ -482,13 +502,12 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
                          f"\n\nCHAT HISTORY:\n{translated_history_string}"
                          f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}")
         
-        final_llm_prompt = f"{system_instructions}{prompt_add_context}"
-
         tokenizer = get_tokenizer()
         max_model_tokens = MAX_MODEL_LEN_TEXTGEN
         max_answer_tokens = llm_parameters_dict["max_tokens"]  # Typically 1024
-        # Count tokens in prompt
-        prompt_tokens = len(tokenizer.encode(final_llm_prompt))
+        # Count tokens in combined prompt (system + user context)
+        combined_for_count = f"{system_instructions}{prompt_add_context}"
+        prompt_tokens = len(tokenizer.encode(combined_for_count))
         # Check if the total token count exceeds the model's limit
         if prompt_tokens + max_answer_tokens > max_model_tokens - 200:  # Leave buffer
             # Calculate maximum tokens for history
@@ -509,14 +528,17 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
                 current_tokens += segment_tokens
             # Rebuild truncated history
             translated_history_string = " |<-MSG->| ".join(truncated_history)
-            # Reconstruct final prompt
+            # Reconstruct context
             prompt_add_context = (f"\n\nUSER INFORMATION:\n{user_context_string}"
                          f"\n\nCHAT HISTORY:\n{translated_history_string}"
                          f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\n{rag_augmented_prompt}")
-            final_llm_prompt = f"{system_instructions}{prompt_add_context}"
-        
 
-        next_inputs["messages"] = [{"role": "user", "content": final_llm_prompt}]
+        # System prompt goes in the system role so the model treats it as instructions,
+        # not as content to echo back. User message contains context + query only.
+        next_inputs["messages"] = [
+            {"role": "system", "content": system_instructions},
+            {"role": "user", "content": prompt_add_context.lstrip()},
+        ]
         next_inputs["max_tokens"] = llm_parameters_dict["max_tokens"]
         next_inputs["top_p"] = llm_parameters_dict["top_p"]
         next_inputs["stream"] = inputs["stream"]
@@ -731,7 +753,8 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         else:
             if logflag:
                 logger.debug(f'\nRaw output of the llm\n {data}\n')
-            next_data["text"] = data["choices"][0]["message"]["content"]
+            raw_text = data["choices"][0]["message"]["content"]
+            next_data["text"] = _strip_system_prompt_leakage(raw_text)
         if logflag:
             logger.debug(f'\nAligned output of the llm\n {next_data}\n')
     else:
@@ -1263,7 +1286,9 @@ class ChatQnAService:
                 if logflag:
                     logger.info(f"Last user content for detection (first 100 chars): {last_user_content[:100] if last_user_content else 'None'}")
 
-                if last_user_content:
+                # langdetect is unreliable for short texts — require at least
+                # 80 characters before trusting the auto-detected result.
+                if last_user_content and len(last_user_content.strip()) >= 80:
                     detected_lang = detect(last_user_content)
                     if logflag:
                         logger.info(f"langdetect result: '{detected_lang}' (will convert to uppercase: '{detected_lang.upper()}')")
@@ -1284,6 +1309,9 @@ class ChatQnAService:
                     else:
                         logger.warning(f"Detected language '{detected_lang}' is not in supported languages list. Ignoring auto-detection. Falling back to EN.")
                         original_language = "EN"
+                else:
+                    logger.info(f"Text too short for reliable language detection ({len(last_user_content.strip()) if last_user_content else 0} chars) — defaulting to EN.")
+                    original_language = "EN"
         except Exception as e:
             logger.warning(f"Language detection failed: {e}")
             # Fallback to English if detection fails
@@ -1335,7 +1363,7 @@ class ChatQnAService:
             max_tokens=chat_request.max_tokens if chat_request.max_tokens else 1024,
             top_k=chat_request.top_k if chat_request.top_k else 10,
             top_p=chat_request.top_p if chat_request.top_p else 0.95,
-            temperature=chat_request.temperature if chat_request.temperature else 0.01,
+            temperature=chat_request.temperature if chat_request.temperature else 0,
             frequency_penalty=chat_request.frequency_penalty if chat_request.frequency_penalty else 0.0,
             presence_penalty=chat_request.presence_penalty if chat_request.presence_penalty else 0.0,
             repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,

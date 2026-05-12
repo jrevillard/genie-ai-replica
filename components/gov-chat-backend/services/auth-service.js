@@ -150,18 +150,33 @@ class AuthService {
       const savedUser = await this.users.save(user);
       logger.info(`Saved user before email verification: ${savedUser._key}`);
 
-      setImmediate(async () => {
-        try {
-          const freshUser = await this.getUserById(savedUser._key);
-          if (freshUser) {
-            await this.sendVerificationEmail(freshUser, frontendUrl, backendUrl);
-          } else {
-            logger.error(`Could not retrieve fresh user for email verification: ${savedUser._key}`);
+      const smtpConfigured = (
+        process.env.EMAIL_HOST &&
+        !process.env.EMAIL_HOST.startsWith('<') &&
+        process.env.EMAIL_USER &&
+        !process.env.EMAIL_USER.startsWith('<') &&
+        process.env.EMAIL_PASSWORD &&
+        !process.env.EMAIL_PASSWORD.startsWith('<')
+      );
+
+      if (!smtpConfigured) {
+        // SMTP not configured — auto-verify so users can log in immediately.
+        await this.users.update(savedUser._key, { emailVerified: true });
+        logger.warn(`SMTP not configured — auto-verified email for user ${savedUser._key}. Configure EMAIL_* env vars to enable email verification.`);
+      } else {
+        setImmediate(async () => {
+          try {
+            const freshUser = await this.getUserById(savedUser._key);
+            if (freshUser) {
+              await this.sendVerificationEmail(freshUser, frontendUrl, backendUrl);
+            } else {
+              logger.error(`Could not retrieve fresh user for email verification: ${savedUser._key}`);
+            }
+          } catch (emailError) {
+            logger.error(`Email verification failed, but user was registered: ${emailError.message}`, { stack: emailError.stack });
           }
-        } catch (emailError) {
-          logger.error(`Email verification failed, but user was registered: ${emailError.message}`, { stack: emailError.stack });
-        }
-      });
+        });
+      }
 
       const accessToken = this.generateToken(savedUser);
 
@@ -462,6 +477,23 @@ class AuthService {
 
       if (backendUrl) logger.info(`Using backend URL: ${backendUrl}`);
 
+      const smtpConfigured = (
+        process.env.EMAIL_HOST &&
+        !process.env.EMAIL_HOST.startsWith('<') &&
+        process.env.EMAIL_USER &&
+        !process.env.EMAIL_USER.startsWith('<') &&
+        process.env.EMAIL_PASSWORD &&
+        !process.env.EMAIL_PASSWORD.startsWith('<')
+      );
+
+      if (!smtpConfigured) {
+        logger.warn(`Resend verification requested for ${email} but SMTP is not configured`);
+        return {
+          success: false,
+          message: 'Email service is not configured on this server. Please contact the administrator.'
+        };
+      }
+
       const user = await this.getUserByEmail(email);
       if (!user) {
         logger.info(`User not found for email: ${email}, returning generic response`);
@@ -475,7 +507,7 @@ class AuthService {
         logger.info(`Email already verified for: ${email}, returning generic response`);
         return {
           success: true,
-          message: 'If your email exists in our system, a verification email has been sent'
+          message: 'Your email is already verified. You can log in.'
         };
       }
 

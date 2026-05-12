@@ -1,0 +1,241 @@
+{
+  "database": "genie-ai",
+  "graph_name": "GRAPH",
+  "description": "ArangoDB schema for GENIE.AI Bangladesh climate/agriculture knowledge graph",
+  "document_collections": [
+    {
+      "name": "GRAPH_source_documents",
+      "keyOptions": {
+        "type": "traditional",
+        "allowUserKeys": true
+      },
+      "indexes": [
+        {
+          "type": "persistent",
+          "name": "idx_source_documents_labels",
+          "fields": [
+            "metadata.category_label",
+            "metadata.service_label"
+          ],
+          "unique": false,
+          "sparse": true
+        },
+        {
+          "type": "persistent",
+          "name": "idx_source_documents_district",
+          "fields": [
+            "metadata.district_id",
+            "metadata.record_date"
+          ],
+          "unique": false,
+          "sparse": true
+        }
+      ]
+    },
+    {
+      "name": "GRAPH_chunks",
+      "keyOptions": {
+        "type": "traditional",
+        "allowUserKeys": true
+      },
+      "indexes": [
+        {
+          "type": "persistent",
+          "name": "idx_chunks_labels",
+          "fields": [
+            "metadata.category_label",
+            "metadata.service_label"
+          ],
+          "unique": false,
+          "sparse": true
+        },
+        {
+          "type": "persistent",
+          "name": "idx_chunks_district_period",
+          "fields": [
+            "metadata.district_id",
+            "metadata.period"
+          ],
+          "unique": false,
+          "sparse": true
+        },
+        {
+          "type": "inverted",
+          "name": "idx_chunks_text_inverted",
+          "fields": [
+            {
+              "name": "text",
+              "analyzer": "text_en"
+            }
+          ],
+          "includeAllFields": false,
+          "searchField": true
+        },
+        {
+          "type": "vector",
+          "name": "idx_chunks_embedding_vector",
+          "fields": [
+            "embedding"
+          ],
+          "params": {
+            "metric": "cosine",
+            "dimension": 768,
+            "nLists": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "GRAPH_entities",
+      "keyOptions": {
+        "type": "traditional",
+        "allowUserKeys": true
+      },
+      "indexes": [
+        {
+          "type": "persistent",
+          "name": "idx_entities_type_value",
+          "fields": [
+            "entity_type",
+            "value"
+          ],
+          "unique": false,
+          "sparse": true
+        }
+      ]
+    },
+    {
+      "name": "district_profiles",
+      "keyOptions": {
+        "type": "traditional",
+        "allowUserKeys": true
+      },
+      "indexes": [
+        {
+          "type": "persistent",
+          "name": "idx_district_profiles_district",
+          "fields": [
+            "district_id",
+            "profile_type"
+          ],
+          "unique": false,
+          "sparse": true
+        }
+      ]
+    }
+  ],
+  "edge_collections": [
+    {
+      "name": "GRAPH_contains",
+      "indexes": [
+        {
+          "type": "persistent",
+          "name": "idx_contains_source_chunk",
+          "fields": [
+            "_from",
+            "_to"
+          ],
+          "unique": true,
+          "sparse": false
+        }
+      ]
+    },
+    {
+      "name": "GRAPH_mentions",
+      "indexes": [
+        {
+          "type": "persistent",
+          "name": "idx_mentions_chunk_entity",
+          "fields": [
+            "_from",
+            "_to"
+          ],
+          "unique": false,
+          "sparse": false
+        }
+      ]
+    },
+    {
+      "name": "GRAPH_related_to",
+      "indexes": [
+        {
+          "type": "persistent",
+          "name": "idx_related_to_pair",
+          "fields": [
+            "_from",
+            "_to",
+            "relation"
+          ],
+          "unique": false,
+          "sparse": true
+        }
+      ]
+    },
+    {
+      "name": "district_has_document",
+      "indexes": [
+        {
+          "type": "persistent",
+          "name": "idx_district_has_document",
+          "fields": [
+            "_from",
+            "_to"
+          ],
+          "unique": true,
+          "sparse": false
+        }
+      ]
+    }
+  ],
+  "graph_definitions": [
+    {
+      "graph": "GRAPH",
+      "edgeDefinitions": [
+        {
+          "collection": "GRAPH_contains",
+          "from": [
+            "GRAPH_source_documents"
+          ],
+          "to": [
+            "GRAPH_chunks"
+          ]
+        },
+        {
+          "collection": "GRAPH_mentions",
+          "from": [
+            "GRAPH_chunks"
+          ],
+          "to": [
+            "GRAPH_entities"
+          ]
+        },
+        {
+          "collection": "GRAPH_related_to",
+          "from": [
+            "GRAPH_entities"
+          ],
+          "to": [
+            "GRAPH_entities"
+          ]
+        },
+        {
+          "collection": "district_has_document",
+          "from": [
+            "district_profiles"
+          ],
+          "to": [
+            "GRAPH_source_documents"
+          ]
+        }
+      ],
+      "orphanCollections": [
+        "district_profiles"
+      ]
+    }
+  ],
+  "notes": [
+    "Vector index dimension=768 assumes BAAI/bge-base-en-v1.5 embeddings.",
+    "Adjust vector index params if you use a different embedding model.",
+    "GENIE dataprep can create core GRAPH_* collections automatically; this schema keeps explicit definitions for repeatable infrastructure-as-code."
+  ]
+}

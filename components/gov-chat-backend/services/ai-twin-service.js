@@ -10,6 +10,11 @@ const { NotFoundError, ValidationError } = require('../middleware/errors');
 const LLM_GEN_URL = process.env.LLM_VLLM_URL || 'http://vllm:8000/v1/chat/completions';
 const LLM_GEN_MODEL = process.env.VLLM_LLM_MODEL_ID || 'meta-llama/Meta-Llama-3.1-8B-Instruct';
 const SUGGESTED_QUESTIONS_COUNT = 6;
+// How many of the generated/curated questions are enabled by default.
+// The rest land in the collection as enabled=false so the admin can toggle
+// them on later from the management UI. Applies to both LLM generation and
+// the curated fallback returned when a twin has no rows yet.
+const SUGGESTED_QUESTIONS_DEFAULT_ENABLED = 3;
 const SUGGESTED_QUESTIONS_CHUNK_SAMPLE = 8;
 const SUGGESTED_QUESTIONS_CHUNK_CHARS = 600;
 
@@ -36,10 +41,21 @@ HOW TO ANSWER
 The user message has three sections: USER INFORMATION, CHAT HISTORY ([user turn]/[assistant turn] markers), and CONTENT FROM THE KNOWLEDGE BASE ([Retrieved Document] entries).
 1. Reply only to the last [user turn]. Ground factual claims in [Retrieved Document] entries — they are the source of truth.
 2. Personalise using USER INFORMATION only when it genuinely helps.
-3. If no documents were retrieved: stay helpful and conversational, offer general wellness guidance. For greetings or small talk, reply naturally — do not mention missing evidence.
+3. If no documents were retrieved AND the user is asking for specific medical or clinical information: do not invent specifics — defer using the DEFERRAL wording below. For greetings, small talk, or general wellness chat: reply naturally and never mention retrieval or a knowledge base.
 4. When retrieved entries conflict: prefer Gambian guidelines, then WHO, then BHBM.
-5. Never return a blank or empty reply. If you have nothing specific to offer, give a warm safe fallback: acknowledge the user, share one practical general tip, and suggest they speak to a community health worker for more help.
-6. When documents ARE retrieved but only partially answer the question: synthesise the best answer you can from what the documents contain, then extend with general knowledge (label it "generally speaking" or similar). Never say "the retrieved information doesn't provide a clear answer" or "I'm not sure what X is" when you have retrieved context about X — use what you have.
+5. Never return a blank or empty reply.
+6. When documents ARE retrieved: try your hardest to answer from them, even if they only partially address the question. Synthesise the best answer you can from what the documents contain, then extend with general knowledge if needed (label it "generally speaking" or similar). Use what you have — partial retrieval is not a reason to defer.
+
+DEFERRAL — only when ZERO documents were retrieved on a specific medical question
+Say something along the lines of: "I'm not sure about that specifically. For accurate information, please speak with a community health worker or visit your nearest clinic." You may add one safe general tip if it genuinely helps, but never invent medical specifics, dosages, or statistics. Never defer when documents WERE retrieved — use them.
+
+BANNED PHRASES — never use these or anything close to them
+- "I couldn't find any specific information in my knowledge area"
+- "I couldn't find anything about this in the knowledge base"
+- "The retrieved information doesn't provide a clear answer"
+- "I don't have information about that"
+- "I'm not sure what X is" when retrieved entries mention X
+- Any wording that exposes retrieval, documents, or a "knowledge base" to the user
 
 WHO YOU TALK TO
 Adult Gambians — limited time, possibly limited literacy, English as a second language. Talk like a warm, kind community health worker. Plain. Non-judgemental.
@@ -1521,14 +1537,17 @@ class AiTwinService {
         `,
         bindVars: { tw: twinKey },
       });
-      // 2. Insert the new generated rows
-      const newRows = questions.map((q) => ({
+      // 2. Insert the new generated rows. Only the first
+      // SUGGESTED_QUESTIONS_DEFAULT_ENABLED are enabled by default so the
+      // chat-landing UI shows a small focused set; the admin can toggle the
+      // remaining rows on from the management UI (status=all).
+      const newRows = questions.map((q, i) => ({
         _key: uuidv4(),
         twinId: twinKey,
         order: q.order,
         category: q.category,
         content: q.content,
-        enabled: true,
+        enabled: i < SUGGESTED_QUESTIONS_DEFAULT_ENABLED,
         source: 'generated',
         generationBatch: batchId,
         createdAt: nowIso,
@@ -1623,7 +1642,7 @@ class AiTwinService {
         order: typeof q.order === 'number' ? q.order : i + 1,
         category: typeof q.category === 'string' ? q.category : 'General',
         content: String(q.content).trim().slice(0, 300),
-        enabled: true,
+        enabled: i < SUGGESTED_QUESTIONS_DEFAULT_ENABLED,
         source: 'generated',
         generationBatch: null,
         createdAt: nowIso,
@@ -1700,7 +1719,9 @@ class AiTwinService {
       this._kickoffSuggestedQuestionsRefresh(twinKey);
     }
     const { SUGGESTED_QUESTIONS } = require('../constants/suggested-questions');
-    return SUGGESTED_QUESTIONS;
+    // Mirror the default-enabled cap used for generated rows so the
+    // chat-landing UI never surfaces more than N curated fallbacks either.
+    return SUGGESTED_QUESTIONS.slice(0, SUGGESTED_QUESTIONS_DEFAULT_ENABLED);
   }
 
   /**

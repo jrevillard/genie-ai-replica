@@ -99,6 +99,7 @@ AMINA ships with a measurable safety perimeter validated against 170 test cases.
 | Setup + troubleshooting | [docs/SETUP.md](docs/SETUP.md) |
 | 5-minute UNICC demo script | [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) |
 | Architecture & data flow | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Mobile app (architecture, build, storage) | [docs/MOBILE_APP.md](docs/MOBILE_APP.md) |
 | Abuse-defense logic & results | [docs/compliance/ABUSE_DEFENSE_LOGIC_AND_TEST_RESULTS.md](docs/compliance/ABUSE_DEFENSE_LOGIC_AND_TEST_RESULTS.md) |
 | Jailbreak logic & results | [docs/compliance/JAILBREAK_LOGIC_AND_TEST_RESULTS.md](docs/compliance/JAILBREAK_LOGIC_AND_TEST_RESULTS.md) |
 | Model card | [docs/compliance/MODEL_CARD_AMINA.md](docs/compliance/MODEL_CARD_AMINA.md) |

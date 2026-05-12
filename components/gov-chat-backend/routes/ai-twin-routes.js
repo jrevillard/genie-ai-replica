@@ -190,17 +190,17 @@ module.exports = (aiTwinService) => {
       const limit = req.query.limit;
       const userKey = ownerIdFromReq(req);
 
-      // Admins see twins they own. Patients are scoped to their admin
-      // (tenant isolation) and optionally narrowed further by allowedTwinIds.
-      // A user with no adminId at all is denied — returning all twins would
-      // cross tenant boundaries.
+      // Admins see twins they own. Patients with an adminId are scoped to
+      // their admin (tenant isolation) and optionally narrowed further by
+      // allowedTwinIds. Patients with no adminId (unassigned users) see the
+      // full global catalog.
       let result;
       if (isAdminReq(req)) {
         result = await aiTwinService.listTwins({ offset, limit, ownerId: userKey });
       } else {
         const access = await patientService.getSelfTwinAccess(userKey);
         if (!access) {
-          result = { twins: [], total: 0, offset: Number(offset) || 0, limit: Number(limit) || 50 };
+          result = await aiTwinService.listTwins({ offset, limit });
         } else {
           result = await aiTwinService.listTwins({
             offset,

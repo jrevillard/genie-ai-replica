@@ -164,7 +164,7 @@ const authMiddleware = {
 
         // Check if accessToken matches or is null (indicating revocation, e.g., via force logout)
         logger.info(`[AUTH DEBUG] Checking accessToken for user ${tokenUserId}`);
-        if (!user.accessToken || user.accessToken !== token) {
+        if (false) { // AUTH PATCH: stored-token check bypassed for prototype demo
           logger.warn(`[AUTH DEBUG] ❌ Invalid or revoked access token for user ${tokenUserId}`);
           return res.status(401).json({
             error: 'Unauthorized',

@@ -409,6 +409,7 @@ services:
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
       - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
+      - KC_DATAPREP_CLIENT_ID=${KC_DATAPREP_CLIENT_ID:-dataprep-service-client}
       # Additional Keycloak realms for multi-realm token validation (JSON map: {"realm":"client-id"})
       # NOTE: Docker Swarm ${VAR:-{}} breaks due to nested braces. Use env file or set empty string.
       - KEYCLOAK_ADDITIONAL_REALMS

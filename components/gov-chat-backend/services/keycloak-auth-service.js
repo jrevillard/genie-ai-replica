@@ -7,6 +7,7 @@ const axios = require('axios');
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
 const KEYCLOAK_CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID;
+const KC_DATAPREP_CLIENT_ID = process.env.KC_DATAPREP_CLIENT_ID;
 const INIT_RETRY_COOLDOWN = 30000; // 30 seconds between retry attempts
 const JWKS_CACHE_TTL = 300000; // 5 minutes JWKS cache TTL (NFR10)
 
@@ -145,7 +146,10 @@ async function init(idpUrl, clientId) {
 
   const jwks = createJwksCache(doc.jwks_uri);
   issuerMap.set(doc.issuer, jwks);
-  audienceMap.set(doc.issuer, expectedClientId);
+  // Accept both the user-facing client and the dataprep service-account client.
+  // Multiple azp values per issuer are required for service-to-service calls
+  // (e.g. dataprep posting labels / status to the backend).
+  audienceMap.set(doc.issuer, [expectedClientId, KC_DATAPREP_CLIENT_ID].filter(Boolean));
   initialized = true;
   initFailedAt = 0;
 
@@ -272,9 +276,10 @@ const keycloakAuthService = {
 
       // Validate azp (authorized party) — the client that requested the token.
       // Keycloak 26+ sets aud=account for access tokens; azp holds the
-      // actual client ID. Uses per-realm mapping from audienceMap.
-      const expectedAudience = audienceMap.get(unverifiedIss);
-      if (verifiedPayload.azp && verifiedPayload.azp !== expectedAudience) {
+      // actual client ID. Uses per-realm mapping from audienceMap, which
+      // stores an array of allowed client IDs (user-facing + service accounts).
+      const allowedAudiences = audienceMap.get(unverifiedIss) || [];
+      if (verifiedPayload.azp && !allowedAudiences.includes(verifiedPayload.azp)) {
         throw new TokenVerificationError('TOKEN_INVALID', 'Token audience validation failed');
       }
 

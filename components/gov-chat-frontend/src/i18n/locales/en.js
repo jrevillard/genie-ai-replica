@@ -210,7 +210,7 @@ export default {
     backToLogin: 'Back to Login'
   },
   admin: {
-    huduma: 'Genie AI',
+    huduma: 'MEWA',
     dashboard: 'Dashboard',
     system: 'System',
     settings: 'Settings',
@@ -580,7 +580,7 @@ export default {
     }
   },
   passwordResetConfirm: {
-    appTitle: 'Genie AI',
+    appTitle: 'MEWA',
     resetPassword: 'Create New Password',
     tokenLabel: 'Reset Token',
     tokenPlaceholder: 'Enter reset token',
@@ -620,7 +620,7 @@ export default {
     }
   },
   passwordReset: {
-    appTitle: 'Genie AI',
+    appTitle: 'MEWA',
     resetPassword: 'Reset Your Password',
     emailLabel: 'Email Address',
     emailPlaceholder: 'Enter your email',
@@ -635,7 +635,7 @@ export default {
     checkEmail: 'Please check your email for further instructions.'
   },
   register: {
-    appTitle: "Genie AI",
+    appTitle: "MEWA",
     createAccount: "Create New Account",
     username: "Username",
     usernamePlaceholder: "Enter a username",
@@ -672,7 +672,7 @@ export default {
     networkError: 'Network error. Please check your connection and try again.'
   },
   login: {
-    appTitle: 'Genie AI',
+    appTitle: 'MEWA',
     username: 'Username',
     password: 'Password',
     loginButton: 'Login',
@@ -809,7 +809,7 @@ export default {
     satisfactionRate: 'Satisfaction Rate',
     satisfactionAnalysis: 'User Satisfaction Analysis'
   },
-  brandName: 'Genie AI: Your Digital Government Assistant',
+  brandName: 'MEWA: Your Digital Government Assistant',
   nav: {
     systemStatus: 'System Status',
     menu: 'Menu',
@@ -1412,7 +1412,7 @@ export default {
     fileReceived: 'File received successfully.',
     fileUploadError: 'Error uploading file.',
     processingError: 'Error processing your request.',
-    welcomeMessage: 'Welcome! How can I assist you with Kenya government services today?',
+    welcomeMessage: 'Welcome! I\'m MEWA, your agricultural early warning assistant for Bangladesh. How can I help you today?',
     attachFile: 'Attach File',
     fileTooLarge: 'File is too large. Maximum size is {maxSize}.',
     saveChat: 'Save Chat',
@@ -1452,45 +1452,45 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: "Apply for ID",
-    payTaxes: "Pay Taxes",
-    startBusiness: "Start Business",
-    findHealthcare: "Healthcare",
-    educationServices: "Education",
-    transportLicenses: "Transport",
+    applyForID: "Weather",
+    payTaxes: "Alerts",
+    startBusiness: "Crops",
+    findHealthcare: "Thresholds",
+    educationServices: "Risk Map",
+    transportLicenses: "Reference",
     housingPrograms: "Housing",
     findJobs: "Find Jobs",
     justChat: "Just Chat",
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: "I'd like to chat about government services",
-    applyForIDUserPrompt: "I need information on how to apply for a national ID card",
-    payTaxesUserPrompt: "What's the process for paying my taxes online?",
-    startBusinessUserPrompt: "Guide me through the steps to register a new business",
-    findHealthcareUserPrompt: "Where can I find information about public healthcare services?",
-    educationServicesUserPrompt: "What education services are available for my children?",
-    transportLicensesUserPrompt: "How do I renew my driving license?",
+    justChatUserPrompt: "I'd like to ask about agriculture and weather in Bangladesh",
+    applyForIDUserPrompt: "What is the weather forecast for my district?",
+    payTaxesUserPrompt: "Are there any extreme weather or flood alerts I should know about?",
+    startBusinessUserPrompt: "What crops should I focus on this season and how do I manage them?",
+    findHealthcareUserPrompt: "What are the crop alert thresholds I need to watch for?",
+    educationServicesUserPrompt: "What is the flood or drought risk profile for my area?",
+    transportLicensesUserPrompt: "Where can I find general agricultural reference information?",
     housingProgramsUserPrompt: "Tell me about affordable housing programs in Kenya",
     findJobsUserPrompt: "What government job opportunities are currently available?",
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
-    applyForIDPrompt: "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+    applyForIDPrompt: "You are MEWA, an agricultural early warning assistant for Bangladesh. The user is asking about weather forecasts. Help them understand the current and upcoming weather conditions for their district and how it may affect their farming activities. If they mention a district name, focus on that area.",
 
-    payTaxesPrompt: "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+    payTaxesPrompt: "You are MEWA, an agricultural early warning assistant for Bangladesh. The user is asking about extreme weather or flood alerts. Provide clear, actionable information about severe weather events such as floods, cyclones, heavy rainfall, or storms. Advise on protective actions for crops and personal safety.",
 
-    startBusinessPrompt: "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+    startBusinessPrompt: "You are MEWA, an agricultural early warning assistant for Bangladesh. The user is asking about crop management advice. Provide practical guidance on crop selection, planting schedules, fertilization, irrigation, and pest management based on the current season and regional weather patterns in Bangladesh.",
 
-    findHealthcarePrompt: "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+    findHealthcarePrompt: "You are MEWA, an agricultural early warning assistant for Bangladesh. The user is asking about crop alert thresholds. Explain the specific meteorological and soil conditions that trigger warnings for major Bangladesh crops such as rice, wheat, jute, and vegetables. Describe what protective actions farmers should take when thresholds are exceeded.",
 
-    educationServicesPrompt: "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+    educationServicesPrompt: "You are MEWA, an agricultural early warning assistant for Bangladesh. The user is asking about geospatial risk profiles. Explain flood-prone zones, cyclone-risk corridors, drought-susceptible areas, and how geographic location affects agricultural risk in Bangladesh districts.",
 
-    transportLicensesPrompt: "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+    transportLicensesPrompt: "You are MEWA, an agricultural early warning assistant for Bangladesh. The user is asking for general agricultural reference information. Provide factual, practical information about Bangladesh agriculture, including crop calendars, common pests and diseases, soil types, and best practices for smallholder farmers.",
 
-    housingProgramsPrompt: "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+    housingProgramsPrompt: "You are MEWA, an agricultural early warning assistant for Bangladesh. Help the user with any agriculture, weather, or early warning question they have. Be friendly, practical, and focused on information relevant to Bangladesh farmers and rural communities.",
 
-    findJobsPrompt: "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+    findJobsPrompt: "You are MEWA, an agricultural early warning assistant for Bangladesh. Help the user with any agriculture, weather, or early warning question they have. Be friendly, practical, and focused on information relevant to Bangladesh farmers and rural communities.",
 
-    justChatPrompt: "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+    justChatPrompt: "You are MEWA, an agricultural early warning assistant for Bangladesh. Be friendly, helpful, and knowledgeable about Bangladesh agriculture, weather patterns, crop management, pest risks, and early warning systems. Your primary strength is helping farmers and citizens understand weather conditions and their impact on agricultural activities. Always refer to the application as 'MEWA'."
   },
   common: {
     cancel: 'Cancel',

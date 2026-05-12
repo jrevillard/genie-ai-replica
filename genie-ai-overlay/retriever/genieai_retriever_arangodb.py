@@ -2,9 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
+import re
 import time
 from typing import Any, Union, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from rank_bm25 import BM25Okapi
 
 import openai
 from arango import ArangoClient
@@ -839,7 +842,41 @@ class GenieaiArangoRetriever(OpeaComponent):
         if logflag:
             logger.debug(f"Final results of retrievers/src/integrations/arangodb_genieai.py: {search_res}")
 
-        
+        ################################
+        #  BM25 Reranking              #
+        ################################
+        # After vector search (and optional traversal/summarization) we have up to K=20
+        # candidates. BM25 scores each chunk against the query using keyword overlap,
+        # then we combine: final_score = vector_score + bm25_score (normalised 0-1).
+        # This surfaces exact-term matches that cosine similarity alone misses.
+        # The cross-encoder TEI reranker then does the final top-N cut.
+
+        if len(search_res) > 1:
+            try:
+                tokenize = lambda text: re.findall(r"\b\w+\b", text.lower())
+                corpus = [r["doc"].page_content for r in search_res]
+                tokenized_corpus = [tokenize(doc) for doc in corpus]
+                bm25 = BM25Okapi(tokenized_corpus)
+                bm25_scores = bm25.get_scores(tokenize(query))
+
+                # Normalise BM25 scores to [0, 1] so they're on the same scale as cosine scores
+                bm25_max = max(bm25_scores) if max(bm25_scores) > 0 else 1.0
+                bm25_norm = [s / bm25_max for s in bm25_scores]
+
+                for i, r in enumerate(search_res):
+                    vector_score = r.get("score", 0.0) or 0.0
+                    r["bm25_score"] = bm25_norm[i]
+                    r["combined_score"] = vector_score + bm25_norm[i]
+
+                search_res.sort(key=lambda r: r["combined_score"], reverse=True)
+
+                logger.info(
+                    f"[BM25] Reranked {len(search_res)} docs. "
+                    f"Top combined scores: {[round(r['combined_score'], 3) for r in search_res[:5]]}"
+                )
+            except Exception as e:
+                logger.warning(f"[BM25] Reranking failed, keeping vector order: {e}")
+
         ################################
         #  Returning Powerful Results  #
         ################################

@@ -46,6 +46,15 @@ APP_NAME=Genie AI
 FRONTEND_URL=https://genie-ai.itu.int/
 OPENWEATHERMAP_API_KEY=b115ccced35ade4c9a1077b6e5a210dd
 
+# Firebase Admin / FCM notifications
+# Option A: put firebase-service-account.json in ./secrets and set:
+# GOOGLE_APPLICATION_CREDENTIALS=/opt/genie/firebase-service-account.json
+# Option B: provide the full service account JSON as one environment value:
+# FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+GOOGLE_APPLICATION_CREDENTIALS=
+FIREBASE_SERVICE_ACCOUNT_JSON=
+NOTIFICATION_BROADCAST_SECRET=
+
 # Frontend Translation Service configuration
 TRANSLATION_THREADS=4
 TRANSLATION_BATCHES=5
@@ -64,3 +73,14 @@ CONTEXT_OPTION=conversation-with-context-labels
 CORS_ALLOWED_ORIGINS=http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/
 CSP_CONNECT_SRC="'self' http://localhost:3000 http://localhost:8090 ws://localhost:8090 wss://*.ssdcloudindia.net *.ssdcloudindia.net https://api.open-meteo.com https://ipapi.co https://nominatim.openstreetmap.org wss://genie-ai.itu.int:443'"
 
+# When true: queries containing weather keywords bypass OPEA entirely
+# and are sent to weather-mcp-service /query endpoint.
+WEATHER_ENABLED=true
+WEATHER_MCP_URL=http://localhost:8000   # Docker: http://weather-mcp-service:8000
+
+# ── vLLM Tool Calling (disabled — OPEA port 9000 does not support tool_choice: auto) ──
+# These are wired in query-service.js but require a raw vLLM instance to work.
+#TOOLS_ENABLED=false
+#VLLM_URL=http://91.203.132.198:9000/v1/chat/completions
+#VLLM_MODEL=ibm-granite/granite-3.3-2b-instruct
+#MAX_TOOL_ROUNDS=5

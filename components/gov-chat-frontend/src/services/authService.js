@@ -235,7 +235,12 @@ class AuthService {
    * @private
    */
   setUserData(userData) {
-    localStorage.setItem(this.tokenKey, JSON.stringify(userData));
+    const stored = {
+      ...userData,
+      loginTimeIso: userData.loginTimeIso || new Date().toISOString(),
+    };
+    localStorage.setItem(this.tokenKey, JSON.stringify(stored));
+    localStorage.setItem('loginTimeIso', stored.loginTimeIso);
   }
 
   /**
@@ -244,6 +249,7 @@ class AuthService {
    */
   clearUserData() {
     localStorage.removeItem(this.tokenKey);
+    localStorage.removeItem('loginTimeIso');
   }
 
   /**

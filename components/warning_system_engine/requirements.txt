@@ -1,0 +1,31 @@
+# Warning System Engine — standalone container dependencies
+
+# Schema validation
+pydantic>=2.11.0
+
+# ArangoDB client
+python-arango==7.9.1
+
+# Scheduler
+APScheduler==3.10.4
+
+# HTTP (notifier channels)
+requests==2.31.0
+
+# PDF text extraction for BAMIS special bulletins
+pypdf==4.3.1
+
+# Environment
+python-dotenv==1.0.1
+
+# ── Long-term pipeline (Copernicus SEAS5) ─────────────────────────────────
+# Required for the weekly Copernicus fetch + LongTermPotatoEWS.
+# If not installed, the long-term pipeline is automatically disabled at startup.
+cdsapi>=0.7.0          # Copernicus Climate Data Store API client
+xarray>=2024.1.0       # NetCDF / GRIB dataset handling
+netCDF4>=1.6.5         # NetCDF4 backend for xarray
+numpy>=1.26.0          # Array operations used by xarray + copernicus_fetcher
+pandas>=2.0.0          # DatetimeIndex used in copernicus_fetcher
+
+# Optional — Twilio SMS / voice (uncomment if TWILIO_ACCOUNT_SID is set):
+# twilio==9.0.0

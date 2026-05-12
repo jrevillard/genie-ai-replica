@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:crypto/crypto.dart'; 
+import 'package:crypto/crypto.dart';
 import 'package:genie_ai_mobile/services/api_service.dart';
 
 class UserService {
@@ -12,8 +12,8 @@ class UserService {
   // --- AUTHENTICATION & HASHING ---
 
   String hashPassword(String password) {
-    var bytes = utf8.encode(password); 
-    return sha256.convert(bytes).toString(); 
+    var bytes = utf8.encode(password);
+    return sha256.convert(bytes).toString();
   }
 
   Future<Map<String, dynamic>> login(String loginName, String password) async {
@@ -21,16 +21,31 @@ class UserService {
       'loginName': loginName,
       'encPassword': hashPassword(password),
     });
-    
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data['accessToken'] != null) {
-        _api.setToken(data['accessToken']);
-        _currentUser = data['user'] ?? data;
-      }
-      return data;
+
+    final data = _decodeJsonObject(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Login Error: ${data['message'] ?? data['error'] ?? response.body}',
+      );
     }
-    throw Exception('Login Error: ${response.body}');
+
+    final accessToken = data['accessToken'] ?? data['token'];
+    if (accessToken is String && accessToken.isNotEmpty) {
+      _api.setToken(accessToken);
+    }
+
+    final userData = data['user'];
+    _currentUser = userData is Map<String, dynamic> ? userData : data;
+    return data;
+  }
+
+  Map<String, dynamic> _decodeJsonObject(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      return decoded is Map<String, dynamic> ? decoded : {};
+    } catch (_) {
+      return {};
+    }
   }
 
   Future<void> logout() async {
@@ -67,10 +82,10 @@ class UserService {
   // --- ACCOUNT MANAGEMENT ---
 
   Future<Map<String, dynamic>> updateAccountSettings(String userId, Map<String, dynamic> settings) async {
-  // Use the specific userId to avoid greedy router collisions on the backend
-  final response = await _api.put('$userEndpoint/$userId', settings);
-  return jsonDecode(response.body);
-}
+    // Use the specific userId to avoid greedy router collisions on the backend
+    final response = await _api.put('$userEndpoint/$userId', settings);
+    return jsonDecode(response.body);
+  }
 
   Future<Map<String, dynamic>> updateEmail(String email, String password, String userId) async {
     final response = await _api.put('$userEndpoint/email', {
@@ -107,20 +122,50 @@ class UserService {
 
   Future<Map<String, dynamic>> register(Map<String, dynamic> userData) async {
     final payload = Map<String, dynamic>.from(userData);
-    if (payload.containsKey('password')) {
-      payload['encPassword'] = hashPassword(payload['password']);
-      payload.remove('password');
+    final password = payload.remove('password');
+    if (password is String && password.isNotEmpty) {
+      payload['encPassword'] = hashPassword(password);
     }
-    return jsonDecode((await _api.post('$authEndpoint/register', payload)).body);
+
+    final response = await _api.post('$authEndpoint/register', payload);
+    final data = _decodeJsonObject(response.body);
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return data.isNotEmpty ? data : {'success': true};
+    }
+
+    return {
+      'success': false,
+      'message':
+          data['message'] ??
+          data['error'] ??
+          'Registration failed (${response.statusCode})',
+    };
   }
 
   Future<bool> checkUsernameAvailability(String username) async {
-    final response = await _api.get('$userEndpoint/check-username', params: {'username': username});
-    return jsonDecode(response.body)['available'] ?? false;
+    try {
+      final response = await _api.get(
+        '$userEndpoint/check-username',
+        params: {'username': username},
+      );
+      if (response.statusCode != 200) return true;
+      return jsonDecode(response.body)['available'] ?? true;
+    } catch (_) {
+      return true;
+    }
   }
 
   Future<bool> checkEmailAvailability(String email) async {
-    final response = await _api.get('$userEndpoint/check-email', params: {'email': email});
-    return jsonDecode(response.body)['available'] ?? false;
+    try {
+      final response = await _api.get(
+        '$userEndpoint/check-email',
+        params: {'email': email},
+      );
+      if (response.statusCode != 200) return true;
+      return jsonDecode(response.body)['available'] ?? true;
+    } catch (_) {
+      return true;
+    }
   }
 }

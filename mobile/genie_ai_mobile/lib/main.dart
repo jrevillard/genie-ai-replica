@@ -10,10 +10,16 @@ import 'package:flutter_localizations/flutter_localizations.dart'; // REQUIRED F
 // ===========================================================================
 // SERVICE & UTILS IMPORTS
 // ===========================================================================
+import 'package:genie_ai_mobile/services/notification_service.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:genie_ai_mobile/firebase_options.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/services/connectivity_service.dart'; // ADDED
 import 'package:genie_ai_mobile/services/fallback_localizations.dart';
+import 'package:genie_ai_mobile/services/voice_conversation_service.dart';
+import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 
 // ===========================================================================
 // AUTHENTICATION SCREEN IMPORTS
@@ -44,9 +50,28 @@ class MyHttpOverrides extends HttpOverrides {
   }
 }
 
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  debugPrint('[NOTIF] Background message received: ${message.messageId}');
+}
+
 void main() async {
   // Ensure binding is initialized for rootBundle access
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase & Notifications
+  try {
+    if (!kIsWeb) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+      await NotificationService.init();
+    }
+  } catch (e) {
+    debugPrint("[MAIN] Firebase/Notification init failed: $e");
+  }
 
   // Apply the HTTP overrides for development environment
   if (!kIsWeb) {
@@ -81,8 +106,9 @@ class _MyAppState extends State<MyApp> {
   Future<void> _loadAppConfiguration() async {
     try {
       debugPrint("[MAIN] Loading configuration...");
-      final String configString =
-          await rootBundle.loadString('assets/config/genie-ai-config.json');
+      final String configString = await rootBundle.loadString(
+        'assets/config/genie-ai-config.json',
+      );
       final Map<String, dynamic> config = json.decode(configString);
 
       // Initialize ThemeManager with the loaded config
@@ -107,9 +133,13 @@ class _MyAppState extends State<MyApp> {
 
   void _handleLogin(Map<String, dynamic> user) {
     debugPrint("User logged in: ${user['email'] ?? 'unknown'}");
+    ChatbotProxy.markLoginNow();
     setState(() {
       _user = user;
     });
+    if (!kIsWeb) {
+      unawaited(NotificationService.registerDeviceForUser(user));
+    }
   }
 
   void _handleLogout() {
@@ -128,8 +158,9 @@ class _MyAppState extends State<MyApp> {
           title: 'Genie AI',
           debugShowCheckedModeBanner: false,
           locale: I18nService().currentLocale,
-          supportedLocales:
-              I18nService().supportedLanguages.keys.map((code) => Locale(code)),
+          supportedLocales: I18nService().supportedLanguages.keys.map(
+            (code) => Locale(code),
+          ),
           localizationsDelegates: const [
             FallbackMaterialLocalizationsDelegate(),
             FallbackWidgetsLocalizationsDelegate(),
@@ -172,9 +203,7 @@ class _MyAppState extends State<MyApp> {
               final String? token = settings?.arguments as String?;
               if (token == null) {
                 return const Scaffold(
-                  body: Center(
-                    child: Text("Invalid or missing reset token"),
-                  ),
+                  body: Center(child: Text("Invalid or missing reset token")),
                 );
               }
               return PasswordResetConfirmScreen(token: token);
@@ -213,6 +242,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   // Connectivity state
   StreamSubscription<bool>? _connectivitySubscription;
   bool _isOnline = true;
+  bool _showHandsfreeMode = false;
+  bool _isChatOnStartPage = true;
+  final VoiceConversationService _voiceSupport = VoiceConversationService();
 
   @override
   void initState() {
@@ -224,8 +256,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _isOnline = ConnectivityService().isOnline;
 
     // 3. Listen to Connectivity Stream for Sync Trigger
-    _connectivitySubscription =
-        ConnectivityService().isOnlineStream.listen((isOnline) {
+    _connectivitySubscription = ConnectivityService().isOnlineStream.listen((
+      isOnline,
+    ) {
       if (mounted) {
         setState(() {
           _isOnline = isOnline;
@@ -233,7 +266,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
         if (isOnline) {
           debugPrint(
-              "[MAIN] App is Online. Placeholder for future Sync Trigger.");
+            "[MAIN] App is Online. Placeholder for future Sync Trigger.",
+          );
           // TODO: TRIGGER SYNC SERVICE HERE WHEN IMPLEMENTED
           // e.g. SyncService().syncPendingData();
         }
@@ -266,6 +300,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     debugPrint("[MAIN] Sidebar refresh requested");
   }
 
+  void _handleChatStateChanged() {
+    final isOnStartPage = _chatBotKey.currentState?.isQuickHelpVisible ?? true;
+    if (_isChatOnStartPage == isOnStartPage) return;
+    setState(() {
+      _isChatOnStartPage = isOnStartPage;
+    });
+  }
+
   void _onServiceSelected(Map<String, dynamic> service) {
     final String name = service['name'] ?? 'Unknown Service';
     final String id = service['category_id'] ?? service['id'] ?? '';
@@ -287,8 +329,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
     // Theme color logic for Binder Tabs
     // Dark Mode -> Green (Primary), Light Mode -> Grey
-    final Color binderColor =
-        widget.isDarkMode ? ThemeManager().getColors()['primary'] : Colors.grey;
+    final Color binderColor = widget.isDarkMode
+        ? ThemeManager().getColors()['primary']
+        : Colors.grey;
 
     return Scaffold(
       // Drawer is handled via Scaffold callbacks but triggered by BinderTabs
@@ -318,6 +361,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 NavBarComponent(
                   user: widget.user,
                   onLogout: widget.onLogout,
+                  onHomeTap: () => _chatBotKey.currentState?.startNewChat(),
                   showRightDrawerButton: !isWideScreen,
                 ),
                 Expanded(
@@ -353,6 +397,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                               userId: widget.user['id'] ?? widget.user['_id'],
                               onRefreshSidebar: _refreshSidebar,
                               onRelatedDocumentsUpdate: _updateRelatedDocuments,
+                              onChatStateChanged: _handleChatStateChanged,
                             ),
                           ),
                         ),
@@ -373,7 +418,36 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               ],
             ),
 
-            // 2. BINDER TABS (Overlay)
+            // 2. HANDSFREE MODE BUTTON / OVERLAY
+            if (!isWideScreen &&
+                _isOnline &&
+                _voiceSupport.isSupportedPlatform &&
+                _isChatOnStartPage &&
+                !_showHandsfreeMode)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 16,
+                child: Center(
+                  child: FloatingActionButton.extended(
+                    heroTag: 'handsfree-mode',
+                    icon: const Icon(Icons.record_voice_over),
+                    label: const Text('Handsfree'),
+                    onPressed: () {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      setState(() => _showHandsfreeMode = true);
+                    },
+                  ),
+                ),
+              ),
+
+            if (_showHandsfreeMode)
+              _HandsfreeOverlay(
+                chatBotKey: _chatBotKey,
+                onClose: () => setState(() => _showHandsfreeMode = false),
+              ),
+
+            // 3. BINDER TABS (Overlay)
             // Left Tab
             if (!isWideScreen)
               Positioned(
@@ -442,7 +516,7 @@ class _BinderTab extends StatelessWidget {
               color: Colors.black12,
               blurRadius: 4,
               offset: isLeft ? const Offset(2, 0) : const Offset(-2, 0),
-            )
+            ),
           ],
         ),
         child: Center(
@@ -450,6 +524,230 @@ class _BinderTab extends StatelessWidget {
             isLeft ? Icons.chevron_right : Icons.chevron_left,
             color: Colors.white.withOpacity(0.8),
             size: 12,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HandsfreeOverlay extends StatefulWidget {
+  final GlobalKey<ChatBotComponentState> chatBotKey;
+  final VoidCallback onClose;
+
+  const _HandsfreeOverlay({required this.chatBotKey, required this.onClose});
+
+  @override
+  State<_HandsfreeOverlay> createState() => _HandsfreeOverlayState();
+}
+
+class _HandsfreeOverlayState extends State<_HandsfreeOverlay> {
+  final VoiceConversationService _voiceService = VoiceConversationService();
+  bool _isListening = false;
+  bool _isThinking = false;
+  bool _isSpeaking = false;
+  bool _isClosing = false;
+  bool _isSubmittingHeardText = false;
+  String _heardText = '';
+  Timer? _speechSilenceTimer;
+  Timer? _listenFallbackTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    FocusManager.instance.primaryFocus?.unfocus();
+    unawaited(_startHandsfreeLoop());
+  }
+
+  @override
+  void dispose() {
+    _isClosing = true;
+    _cancelListenTimers();
+    unawaited(_voiceService.dispose());
+    super.dispose();
+  }
+
+  String get _localeId {
+    final code = I18nService().currentLocale.languageCode;
+    return _voiceService.localeForLanguageCode(code);
+  }
+
+  Future<void> _startHandsfreeLoop() async {
+    await _speak(
+      'Handsfree mode started. Ask me about Bangladesh agriculture and weather.',
+    );
+    await _listen();
+  }
+
+  Future<void> _listen() async {
+    if (_isClosing || !mounted) return;
+    _cancelListenTimers();
+    _heardText = '';
+    _isSubmittingHeardText = false;
+    setState(() {
+      _isListening = true;
+      _isThinking = false;
+      _isSpeaking = false;
+    });
+
+    final started = await _voiceService.startListening(
+      localeId: _localeId,
+      onText: (text) {
+        _heardText = text;
+        _scheduleSilenceSubmit();
+      },
+      onDone: () => unawaited(_submitHeardText()),
+      onError: (_) => unawaited(_restartListening()),
+    );
+
+    if (!started) {
+      await _speak('Voice input is unavailable on this device.');
+      if (mounted) widget.onClose();
+      return;
+    }
+
+    _listenFallbackTimer = Timer(const Duration(seconds: 18), () {
+      if (_heardText.trim().isEmpty) {
+        unawaited(_restartListening());
+      } else {
+        unawaited(_submitHeardText());
+      }
+    });
+  }
+
+  void _scheduleSilenceSubmit() {
+    if (_heardText.trim().isEmpty || _isSubmittingHeardText) return;
+    _speechSilenceTimer?.cancel();
+    _speechSilenceTimer = Timer(const Duration(milliseconds: 1600), () {
+      unawaited(_submitHeardText());
+    });
+  }
+
+  void _cancelListenTimers() {
+    _speechSilenceTimer?.cancel();
+    _speechSilenceTimer = null;
+    _listenFallbackTimer?.cancel();
+    _listenFallbackTimer = null;
+  }
+
+  Future<void> _submitHeardText() async {
+    if (_isClosing || _isThinking || _isSpeaking || _isSubmittingHeardText) {
+      return;
+    }
+
+    _isSubmittingHeardText = true;
+    _cancelListenTimers();
+    await _voiceService.stopListening();
+
+    final text = _heardText.trim();
+    if (mounted) {
+      setState(() {
+        _isListening = false;
+        _isThinking = text.isNotEmpty;
+      });
+    }
+
+    if (text.isEmpty) {
+      _isSubmittingHeardText = false;
+      await _restartListening();
+      return;
+    }
+
+    final response = await widget.chatBotKey.currentState?.sendHandsfreeMessage(
+      text,
+    );
+    if (_isClosing || !mounted) return;
+
+    setState(() => _isThinking = false);
+    await _speak(
+      response?.trim().isNotEmpty == true
+          ? response!
+          : 'I could not get a response. Please try again.',
+    );
+
+    _isSubmittingHeardText = false;
+    await _listen();
+  }
+
+  Future<void> _restartListening() async {
+    if (_isClosing || !mounted || _isSubmittingHeardText) return;
+    _cancelListenTimers();
+    await _voiceService.cancelListening();
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    await _listen();
+  }
+
+  Future<void> _speak(String text) async {
+    if (_isClosing || !mounted) return;
+    setState(() {
+      _isSpeaking = true;
+      _isListening = false;
+      _isThinking = false;
+    });
+    await _voiceService.speak(text, localeId: _localeId, awaitCompletion: true);
+    if (mounted) setState(() => _isSpeaking = false);
+  }
+
+  Future<void> _close() async {
+    _isClosing = true;
+    _cancelListenTimers();
+    await _voiceService.dispose();
+    if (mounted) widget.onClose();
+  }
+
+  IconData get _statusIcon {
+    if (_isThinking) return Icons.auto_awesome;
+    if (_isSpeaking) return Icons.volume_up;
+    return _isListening ? Icons.mic : Icons.mic_none;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = ThemeManager().getColors();
+    final primary = colors['primary'] as Color;
+
+    return Positioned.fill(
+      child: WillPopScope(
+        onWillPop: () async {
+          await _close();
+          return false;
+        },
+        child: Material(
+          color: Colors.black,
+          child: SafeArea(
+            child: Stack(
+              children: [
+                Center(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    width: _isListening ? 148 : 128,
+                    height: _isListening ? 148 : 128,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: primary.withOpacity(_isListening ? 0.28 : 0.18),
+                      border: Border.all(color: primary, width: 2),
+                    ),
+                    child: Center(
+                      child: _isThinking
+                          ? SizedBox(
+                              width: 42,
+                              height: 42,
+                              child: CircularProgressIndicator(color: primary),
+                            )
+                          : Icon(_statusIcon, color: Colors.white, size: 56),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: IconButton.filled(
+                    icon: const Icon(Icons.close),
+                    onPressed: _close,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

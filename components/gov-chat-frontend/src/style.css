@@ -2,12 +2,12 @@
 
 /* Basic resets and fonts */
 :root {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "DM Sans", -apple-system, "Helvetica Neue", Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color-scheme: light dark;
-  color: #213547;
-  background-color: #ffffff;
+  color: #141517;
+  background-color: #F5F2EC;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -80,15 +80,7 @@ h1 {
 .nav-right,
 .brand-name,
 .brand-logo {
-  font-family: Arial, Helvetica, sans-serif !important;
-}
-
-/* Override block for nav bar and service tree */
-[data-v-5d5c126d],
-[data-v-5d5c126d] *,
-[data-v-9c4dc7a8],
-[data-v-9c4dc7a8] * {
-  font-family: Arial, Helvetica, sans-serif !important;
+  font-family: "DM Sans", -apple-system, "Helvetica Neue", Arial, sans-serif !important;
 }
 
 /* Fix for dropdown/ellipsis menu positioning */

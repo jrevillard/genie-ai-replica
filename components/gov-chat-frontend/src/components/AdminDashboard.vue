@@ -27,7 +27,7 @@
       <div class="sidebar">
         <div class="logo">
           <div class="logo-icon">H</div>
-          <span>{{ translate("admin.huduma", "Huduma AI") }}</span>
+          <span>{{ translate("admin.huduma", "MEWA") }}</span>
         </div>
 
         <div class="nav-section">
@@ -2573,8 +2573,8 @@ export default {
 
       status: {
         info: {
-          color: "#3b82f6",
-          backgroundColor: "rgba(59, 130, 246, 0.1)",
+          color: "#5E8EA6",
+          backgroundColor: "rgba(94, 142, 166, 0.12)",
         },
       },
 
@@ -4429,67 +4429,67 @@ export default {
 </script>
 
 <style scoped>
-/* Base variables */
+/* Base variables — MEWA palette */
 :root {
-  --primary: #3b82f6;
-  --primary-dark: #2563eb;
-  --secondary: #64748b;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --light: #f8fafc;
-  --dark: #1e293b;
-  --border: #e2e8f0;
+  --primary: #5E8EA6;
+  --primary-dark: #3A6B82;
+  --secondary: #B5AFA5;
+  --success: #6B9E7A;
+  --warning: #C9A96E;
+  --danger: #BF6A5A;
+  --light: #F5F2EC;
+  --dark: #141517;
+  --border: #E3DED6;
 
   /* Theme variables */
-  --bg-dialog: #ffffff;
-  --text-primary: #333333;
-  --text-secondary: #4d4d4d;
-  --text-tertiary: #767676;
-  --text-button-primary: #ffffff;
-  --text-button-secondary: #4d4d4d;
-  --bg-button-secondary: #e9ecef;
-  --border-color: #dcdfe4;
-  --bg-section: rgba(0, 0, 0, 0.02);
-  --bg-danger: #ef4444;
-  --bg-danger-hover: #dc2626;
-  --bg-input: #ffffff;
-  --border-input: #dcdfe4;
-  --switch-track-off: #d0d0d0;
-  --switch-track-on: #3b82f6;
-  --switch-thumb: #ffffff;
-  --slider-track: #e9ecef;
-  --slider-thumb: #3b82f6;
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --bg-dialog: #FDFCFA;
+  --text-primary: #141517;
+  --text-secondary: #1F4A5E;
+  --text-tertiary: #B5AFA5;
+  --text-button-primary: #FDFCFA;
+  --text-button-secondary: #1F4A5E;
+  --bg-button-secondary: #E3DED6;
+  --border-color: #E3DED6;
+  --bg-section: rgba(20, 21, 23, 0.025);
+  --bg-danger: #BF6A5A;
+  --bg-danger-hover: #a85a4a;
+  --bg-input: #FDFCFA;
+  --border-input: #D0DFE6;
+  --switch-track-off: #B5AFA5;
+  --switch-track-on: #5E8EA6;
+  --switch-thumb: #FDFCFA;
+  --slider-track: #D0DFE6;
+  --slider-thumb: #5E8EA6;
+  --shadow-lg: 0 10px 15px rgba(20, 21, 23, 0.12);
 }
 
 /* Dark theme variables */
 [data-theme="dark"],
 .dark-mode {
-  --bg-dialog: #1e293b;
-  --text-primary: #f1f5f9;
-  --text-secondary: #cbd5e1;
-  --text-tertiary: #94a3b8;
-  --text-button-primary: #ffffff;
-  --text-button-secondary: #cbd5e1;
-  --bg-button-secondary: #334155;
-  --border-color: #334155;
-  --bg-section: rgba(255, 255, 255, 0.03);
-  --bg-danger: #ef4444;
-  --bg-danger-hover: #dc2626;
-  --bg-input: #0f172a;
-  --border-input: #334155;
-  --switch-track-off: #475569;
-  --switch-track-on: #3b82f6;
-  --switch-thumb: #ffffff;
-  --slider-track: #334155;
-  --slider-thumb: #3b82f6;
+  --bg-dialog: #1E2024;
+  --text-primary: #FDFCFA;
+  --text-secondary: #A3C4D4;
+  --text-tertiary: #B5AFA5;
+  --text-button-primary: #FDFCFA;
+  --text-button-secondary: #A3C4D4;
+  --bg-button-secondary: #26323a;
+  --border-color: #2a3033;
+  --bg-section: rgba(253, 252, 250, 0.03);
+  --bg-danger: #BF6A5A;
+  --bg-danger-hover: #a85a4a;
+  --bg-input: #141517;
+  --border-input: #2a3033;
+  --switch-track-off: #44535b;
+  --switch-track-on: #5E8EA6;
+  --switch-thumb: #FDFCFA;
+  --slider-track: #2a3033;
+  --slider-thumb: #5E8EA6;
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
 }
 
 /* Ensure consistent styling for sidebar elements in both themes */
 .sidebar .logo {
-  color: #f8fafc;
+  color: #FDFCFA;
 }
 
 .sidebar .nav-header {
@@ -4497,7 +4497,7 @@ export default {
 }
 
 .sidebar .nav-link {
-  color: #e2e8f0;
+  color: #D0DFE6;
 }
 
 .sidebar .nav-link:hover,
@@ -4515,7 +4515,7 @@ export default {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-family: "DM Sans", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
 }
 
 /* Modal backdrop */
@@ -4566,7 +4566,7 @@ export default {
 }
 
 .close-dashboard-btn:hover {
-  background: rgba(239, 68, 68, 0.8);
+  background: rgba(191, 106, 90, 0.9);
   color: white;
   transform: scale(1.1);
 }
@@ -4582,7 +4582,7 @@ export default {
 /* Sidebar */
 .sidebar {
   background: var(--bg-navbar);
-  color: #f8fafc;
+  color: #FDFCFA;
   padding: 1.5rem 1rem;
   max-height: calc(100vh - 80px);
   overflow-y: auto;
@@ -4595,7 +4595,7 @@ export default {
   margin-bottom: 2rem;
   font-size: 1.25rem;
   font-weight: 600;
-  color: #f8fafc;
+  color: #FDFCFA;
 }
 
 .logo-icon {
@@ -4635,7 +4635,7 @@ export default {
   gap: 0.75rem;
   padding: 0.5rem 0.75rem;
   text-decoration: none;
-  color: #e2e8f0;
+  color: #D0DFE6;
   border-radius: 0.375rem;
   transition: all 0.2s;
   cursor: pointer;
@@ -4876,17 +4876,17 @@ export default {
 }
 
 .status-good {
-  background-color: rgba(16, 185, 129, 0.1);
+  background-color: rgba(107, 158, 122, 0.12);
   color: var(--success);
 }
 
 .status-warning {
-  background-color: rgba(245, 158, 11, 0.1);
+  background-color: rgba(201, 169, 110, 0.12);
   color: var(--warning);
 }
 
 .status-error {
-  background-color: rgba(239, 68, 68, 0.1);
+  background-color: rgba(191, 106, 90, 0.12);
   color: var(--danger);
 }
 
@@ -4980,17 +4980,17 @@ export default {
 }
 
 .log-error {
-  background-color: rgba(239, 68, 68, 0.1);
+  background-color: rgba(191, 106, 90, 0.12);
   color: var(--danger);
 }
 
 .log-warning {
-  background-color: rgba(245, 158, 11, 0.1);
+  background-color: rgba(201, 169, 110, 0.12);
   color: var(--warning);
 }
 
 .log-info {
-  background-color: rgba(59, 130, 246, 0.1);
+  background-color: rgba(94, 142, 166, 0.12);
   color: var(--primary);
 }
 
@@ -5351,27 +5351,27 @@ input:checked + .slider:before {
 
 /* Ensure text colors in dark mode */
 [data-theme="dark"] .page-title {
-  color: #f8fafc !important; /* Bright white for high contrast */
+  color: #FDFCFA !important; /* Bright white for high contrast */
 }
 
 [data-theme="dark"] .header {
-  color: #f8fafc;
+  color: #FDFCFA;
 }
 
 [data-theme="dark"] .card-title {
-  color: #f8fafc !important;
+  color: #FDFCFA !important;
 }
 
 [data-theme="dark"] .stat-title {
-  color: #cbd5e1 !important; /* Slightly softer white for secondary titles */
+  color: #A3C4D4 !important; /* Slightly softer white for secondary titles */
 }
 
 [data-theme="dark"] .stat-value {
-  color: #f8fafc !important;
+  color: #FDFCFA !important;
 }
 
 [data-theme="dark"] .dashboard-card {
-  color: #f8fafc;
+  color: #FDFCFA;
 }
 
 /* Log Summary Styles */
@@ -5454,11 +5454,11 @@ input:checked + .slider:before {
 
 [data-theme="dark"] .logs-summary h3,
 [data-theme="dark"] .summary-title {
-  color: #f8fafc !important;
+  color: #FDFCFA !important;
 }
 
 [data-theme="dark"] h3 {
-  color: #f8fafc !important;
+  color: #FDFCFA !important;
 }
 
 /* Add these styles to your <style> section in AdminDashboard.vue */
@@ -5825,7 +5825,7 @@ input:checked + .slider:before {
   height: 60px;
   width: 60px;
   border-radius: 50%;
-  background-color: rgba(16, 185, 129, 0.1);
+  background-color: rgba(107, 158, 122, 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5875,12 +5875,12 @@ input:checked + .slider:before {
 [data-theme="dark"] .vuln-detail,
 [data-theme="dark"] .empty-title,
 [data-theme="dark"] .recommendation-title {
-  color: #f1f5f9 !important;
+  color: #FDFCFA !important;
 }
 
 [data-theme="dark"] .empty-description,
 [data-theme="dark"] .recommendation-description {
-  color: #cbd5e1 !important;
+  color: #A3C4D4 !important;
 }
 
 @keyframes spin {
@@ -6048,32 +6048,32 @@ input:checked + .slider:before {
   text-transform: capitalize;
 }
 .status-ingested {
-  background-color: rgba(16, 185, 129, 0.1);
+  background-color: rgba(107, 158, 122, 0.12);
   color: var(--success);
 }
 .status-ingesting {
-  background-color: rgba(59, 130, 246, 0.1);
+  background-color: rgba(94, 142, 166, 0.12);
   color: var(--primary);
 }
 .status-ingested-with-warnings {
-  background-color: rgba(245, 158, 11, 0.1);
+  background-color: rgba(201, 169, 110, 0.12);
   color: var(--warning);
 }
 .status-ingestion-error {
-  background-color: rgba(239, 68, 68, 0.1);
+  background-color: rgba(191, 106, 90, 0.12);
   color: var(--danger);
 }
 /* NEW: Error status for failed/killed crawls */
 .status-error {
-  background-color: rgba(239, 68, 68, 0.1);
+  background-color: rgba(191, 106, 90, 0.12);
   color: var(--danger);
 }
 .status-pending {
-  background-color: rgba(22, 72, 144, 0.1);
+  background-color: rgba(31, 74, 94, 0.12);
   color: var(--secondary);
 }
 .status-retracted {
-  background-color: rgba(100, 116, 139, 0.1);
+  background-color: rgba(181, 175, 165, 0.12);
   color: var(--secondary);
 }
 .label-tag {
@@ -6122,7 +6122,7 @@ input:checked + .slider:before {
 .translation-delete-btn {
   background: none;
   border: none;
-  color: var(--danger, #ef4444);
+  color: var(--danger, #BF6A5A);
   cursor: pointer;
   font-size: 1.1rem;
   padding: 0.25rem;

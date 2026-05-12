@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:genie_ai_mobile/services/chat_history_proxy.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N SERVICE
-import 'dart:convert';
 
 class ChatFoldersPanel extends StatefulWidget {
   final String activeTab;
@@ -695,8 +694,9 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
         previewText = lastMsg.toString();
       }
     }
-    if (previewText.isEmpty)
+    if (previewText.isEmpty) {
       previewText = tr("chatbot.newChat"); // "New Conversation"
+    }
 
     // 3. Date
     final String dateStr = _formatDate(chat['updated']);
@@ -775,8 +775,9 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
       onSelected: (val) {
         if (val == 'rename') _promptRenameChat(chat);
         if (val == 'move') _promptMoveChat(chat);
-        if (val == 'archive')
+        if (val == 'archive') {
           _toggleArchived(chat, !(chat['isArchived'] ?? false));
+        }
         if (val == 'delete') _showDeleteConversationDialog(chat);
       },
       itemBuilder: (ctx) => [
@@ -820,8 +821,9 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
     String msg = tr("sidebar.noConversations"); // "No conversations found"
     if (widget.activeTab == 'starred') msg = tr("sidebar.noStarredChats");
     if (widget.activeTab == 'archived') msg = tr("sidebar.noArchivedChats");
-    if (widget.activeTab == 'folders' && _folderSelected)
+    if (widget.activeTab == 'folders' && _folderSelected) {
       msg = tr("sidebar.folderEmptyState"); // "Folder is empty"
+    }
 
     return Center(
       child: Column(

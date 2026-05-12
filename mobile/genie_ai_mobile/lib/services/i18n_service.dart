@@ -24,11 +24,12 @@ class I18nService extends ChangeNotifier {
 
   I18nService._internal() {
     debugPrint(
-        "[I18N SERVICE] Singleton Initialized. Default Locale: ${_currentLocale.languageCode}");
+      "[I18N SERVICE] Singleton Initialized. Default Locale: ${_currentLocale.languageCode}",
+    );
   }
 
-  // Current Locale State (Default to English)
-  Locale _currentLocale = const Locale('en');
+  // Current Locale State (Default to Bengali for the Bangladesh MEWA app)
+  Locale _currentLocale = const Locale('bn');
   Locale get currentLocale => _currentLocale;
 
   // Supported Languages Configuration
@@ -78,13 +79,15 @@ class I18nService extends ChangeNotifier {
 
     if (_currentLocale.languageCode == languageCode) {
       debugPrint(
-          "[I18N SERVICE] Language is already $languageCode. No change.");
+        "[I18N SERVICE] Language is already $languageCode. No change.",
+      );
       return;
     }
 
     _currentLocale = Locale(languageCode);
     debugPrint(
-        "[I18N SERVICE] Locale updated to $_currentLocale. Notifying listeners...");
+      "[I18N SERVICE] Locale updated to $_currentLocale. Notifying listeners...",
+    );
     notifyListeners();
   }
 
@@ -95,11 +98,7 @@ class I18nService extends ChangeNotifier {
         _localizedValues[_currentLocale.languageCode];
 
     // 2. Fallback to English if not found
-    if (langMap == null) {
-      // Only log this once per session ideally, but okay for debug now
-      // debugPrint("[I18N SERVICE] Missing map for ${_currentLocale.languageCode}, falling back to EN");
-      langMap = _localizedValues['en'];
-    }
+    langMap ??= _localizedValues['en'];
 
     // 3. Navigate the nested keys
     dynamic value = _getValueFromMap(key, langMap ?? {});

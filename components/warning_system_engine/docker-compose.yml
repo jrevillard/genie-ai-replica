@@ -1,0 +1,42 @@
+version: "3.9"
+
+# Standalone compose for the Warning System Engine.
+# Attach to the shared mewa network so it can reach arango-vector-db.
+# In production, merge this into the top-level docker-compose.yml.
+
+services:
+  warning-system-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: warning-system-engine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - ARANGO_URL=http://arango-vector-db:8529
+      - ARANGO_DB_NAME=genie-ai
+      - ARANGO_USER=root
+      - ARANGO_PASSWORD=test
+      - LOG_LEVEL=INFO
+      - BACKEND_API_URL=${BACKEND_API_URL:-http://backend:3000}
+      - NOTIFICATION_BROADCAST_SECRET=${NOTIFICATION_BROADCAST_SECRET:-}
+    networks:
+      - mewa-net
+    depends_on:
+      - arango-vector-db
+
+  # Reference — arango-vector-db is defined in the top-level compose.
+  # Uncomment below only when running this compose file in isolation.
+  # arango-vector-db:
+  #   image: arangodb:3.11
+  #   environment:
+  #     ARANGO_ROOT_PASSWORD: test
+  #   ports:
+  #     - "8529:8529"
+  #   networks:
+  #     - mewa-net
+
+networks:
+  mewa-net:
+    external: true
+    name: mewa-net

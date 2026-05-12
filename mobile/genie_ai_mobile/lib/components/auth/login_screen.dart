@@ -66,8 +66,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
-    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty)
+    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
       return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -75,11 +76,15 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final user = await UserService()
-          .login(_usernameController.text, _passwordController.text);
+      final user = await UserService().login(
+        _usernameController.text,
+        _passwordController.text,
+      );
 
       await _handleRememberMe(
-          _usernameController.text, _passwordController.text);
+        _usernameController.text,
+        _passwordController.text,
+      );
 
       widget.onLoginSuccess(user);
 
@@ -101,135 +106,219 @@ class _LoginScreenState extends State<LoginScreen> {
 
     // [MODIFIED] Wrapped Scaffold in FutureBuilder to load Config
     return FutureBuilder(
-        future: GenieAiConfig.load(),
-        builder: (context, snapshot) {
-          // Show loading spinner while config is being read
-          if (!GenieAiConfig.isLoaded &&
-              snapshot.connectionState != ConnectionState.done) {
-            return Scaffold(
-                backgroundColor: colors['background'],
-                body: const Center(child: CircularProgressIndicator()));
-          }
-
+      future: GenieAiConfig.load(),
+      builder: (context, snapshot) {
+        // Show loading spinner while config is being read
+        if (!GenieAiConfig.isLoaded &&
+            snapshot.connectionState != ConnectionState.done) {
           return Scaffold(
             backgroundColor: colors['background'],
-            body: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 400),
-                  padding: const EdgeInsets.all(24.0),
-                  decoration: BoxDecoration(
-                    color: colors['surface'],
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4))
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildHeader(colors, isDark),
-                      if (_error != null) _buildError(),
-                      _buildField(_usernameController, tr('login.username'),
-                          Icons.person, colors, isDark),
-                      const SizedBox(height: 10),
-                      _buildField(_passwordController, tr('login.password'),
-                          Icons.lock, colors, isDark,
-                          obscure: true),
-                      _buildRememberForgot(colors, isDark),
-                      _buildLoginButton(colors),
-                      _buildRegisterLink(colors, isDark),
-                      _buildDivider(isDark),
-                      _buildSocialButtons(colors, isDark),
-                      const SizedBox(height: 24),
-                      LanguageSelector(textColor: colors['text']),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            body: const Center(child: CircularProgressIndicator()),
           );
-        });
+        }
+
+        return Scaffold(
+          resizeToAvoidBottomInset: true,
+          backgroundColor: colors['background'],
+          body: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompact = constraints.maxWidth < 380;
+                final horizontalPadding = isCompact ? 12.0 : 16.0;
+                final cardPadding = isCompact ? 16.0 : 24.0;
+
+                return Center(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      16,
+                      horizontalPadding,
+                      16 + MediaQuery.viewInsetsOf(context).bottom,
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      constraints: const BoxConstraints(maxWidth: 400),
+                      padding: EdgeInsets.all(cardPadding),
+                      decoration: BoxDecoration(
+                        color: colors['surface'],
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildHeader(colors, isDark, isCompact),
+                          if (_error != null) _buildError(),
+                          _buildField(
+                            _usernameController,
+                            tr('login.username'),
+                            Icons.person,
+                            colors,
+                            isDark,
+                          ),
+                          const SizedBox(height: 10),
+                          _buildField(
+                            _passwordController,
+                            tr('login.password'),
+                            Icons.lock,
+                            colors,
+                            isDark,
+                            obscure: true,
+                          ),
+                          _buildRememberForgot(colors, isDark),
+                          _buildLoginButton(colors),
+                          _buildRegisterLink(colors, isDark),
+                          _buildDivider(isDark),
+                          _buildSocialButtons(colors, isDark),
+                          const SizedBox(height: 24),
+                          LanguageSelector(textColor: colors['text']),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
 
-  Widget _buildHeader(Map<String, dynamic> colors, bool isDark) {
-    return Column(children: [
-      // [MODIFIED] Replaced hardcoded Icon with Dynamic Image from Config
-      SizedBox(
-        height: 80,
-        child: GenieAiConfig.iconPath.toLowerCase().endsWith('.svg')
-            ? SvgPicture.asset(
-                GenieAiConfig.iconPath,
-                height: 80, // Adjust size as needed
-                fit: BoxFit.contain,
-              )
-            : Image.asset(
-                GenieAiConfig.iconPath,
-                height: 80,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  return const Icon(Icons.error, size: 40);
-                },
-              ),
-      ),
-      const SizedBox(height: 20),
-      // [MODIFIED] Replaced tr('login.appTitle') with GenieAiConfig.title
-      Text(GenieAiConfig.title,
-          style: TextStyle(
-              fontSize: 28,
+  Widget _buildHeader(
+    Map<String, dynamic> colors,
+    bool isDark,
+    bool isCompact,
+  ) {
+    final logoSize = isCompact ? 64.0 : 80.0;
+    return Column(
+      children: [
+        // [MODIFIED] Replaced hardcoded Icon with Dynamic Image from Config
+        SizedBox(
+          height: logoSize,
+          child: GenieAiConfig.iconPath.toLowerCase().endsWith('.svg')
+              ? SvgPicture.asset(
+                  GenieAiConfig.iconPath,
+                  height: logoSize,
+                  fit: BoxFit.contain,
+                )
+              : Image.asset(
+                  GenieAiConfig.iconPath,
+                  height: logoSize,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(Icons.error, size: 40);
+                  },
+                ),
+        ),
+        SizedBox(height: isCompact ? 14 : 20),
+        // [MODIFIED] Replaced tr('login.appTitle') with GenieAiConfig.title
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            GenieAiConfig.title,
+            maxLines: 1,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: isCompact ? 24 : 28,
               fontWeight: FontWeight.bold,
-              color: colors['text'])),
-      const SizedBox(height: 20),
-    ]);
+              color: colors['text'],
+            ),
+          ),
+        ),
+        SizedBox(height: isCompact ? 14 : 20),
+      ],
+    );
   }
 
-  Widget _buildField(TextEditingController ctrl, String hint, IconData icon,
-      Map<String, dynamic> colors, bool isDark,
-      {bool obscure = false}) {
+  Widget _buildField(
+    TextEditingController ctrl,
+    String hint,
+    IconData icon,
+    Map<String, dynamic> colors,
+    bool isDark, {
+    bool obscure = false,
+  }) {
     return TextField(
       controller: ctrl,
       obscureText: obscure,
       style: TextStyle(color: colors['text']),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle:
-            TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600]),
-        prefixIcon:
-            Icon(icon, color: isDark ? Colors.grey[500] : Colors.grey[600]),
+        hintStyle: TextStyle(
+          color: isDark ? Colors.grey[500] : Colors.grey[600],
+        ),
+        prefixIcon: Icon(
+          icon,
+          color: isDark ? Colors.grey[500] : Colors.grey[600],
+        ),
         filled: true,
-        fillColor:
-            isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF0F2F5),
+        fillColor: isDark
+            ? Colors.white.withOpacity(0.05)
+            : const Color(0xFFF0F2F5),
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide.none),
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide.none,
+        ),
       ),
     );
   }
 
   Widget _buildRememberForgot(Map<String, dynamic> colors, bool isDark) {
-    return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Row(children: [
-        Checkbox(
-          value: _rememberMe,
-          onChanged: (v) => setState(() => _rememberMe = v!),
-          activeColor: colors['primary'],
-          side: BorderSide(color: colors['text'].withOpacity(0.6)),
-        ),
-        Text(tr('login.rememberMe'),
-            style: TextStyle(
-                fontSize: 13,
-                color: isDark ? Colors.grey[400] : Colors.grey[700])),
-      ]),
-      TextButton(
-        onPressed: () => Navigator.pushNamed(context, '/password-reset'),
-        child: Text(tr('login.forgotPassword'),
-            style: TextStyle(color: colors['primary'], fontSize: 13)),
+    final secondaryTextColor = isDark ? Colors.grey[400] : Colors.grey[700];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 0,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 190),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Checkbox(
+                  value: _rememberMe,
+                  visualDensity: VisualDensity.compact,
+                  onChanged: (v) => setState(() => _rememberMe = v ?? false),
+                  activeColor: colors['primary'],
+                  side: BorderSide(color: colors['text'].withOpacity(0.6)),
+                ),
+                Flexible(
+                  child: Text(
+                    tr('login.rememberMe'),
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, color: secondaryTextColor),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              minimumSize: Size.zero,
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () => Navigator.pushNamed(context, '/password-reset'),
+            child: Text(
+              tr('login.forgotPassword'),
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: colors['primary'], fontSize: 13),
+            ),
+          ),
+        ],
       ),
-    ]);
+    );
   }
 
   Widget _buildLoginButton(Map<String, dynamic> colors) {
@@ -245,56 +334,88 @@ class _LoginScreenState extends State<LoginScreen> {
               height: 20,
               width: 20,
               child: CircularProgressIndicator(
-                  color: Colors.white, strokeWidth: 2))
-          : Text(tr('login.loginButton'),
+                color: Colors.white,
+                strokeWidth: 2,
+              ),
+            )
+          : Text(
+              tr('login.loginButton'),
               style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold)),
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
     );
   }
 
   Widget _buildRegisterLink(Map<String, dynamic> colors, bool isDark) {
     return Padding(
       padding: const EdgeInsets.only(top: 12),
-      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(tr('login.noAccount') + ' ',
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 4,
+        runSpacing: 4,
+        children: [
+          Text(
+            tr('login.noAccount'),
+            textAlign: TextAlign.center,
             style: TextStyle(
-                fontSize: 14,
-                color: isDark ? Colors.grey[400] : Colors.grey[700])),
-        GestureDetector(
-          onTap: () => Navigator.pushNamed(context, '/register'),
-          child: Text(tr('login.registerNow'),
+              fontSize: 14,
+              color: isDark ? Colors.grey[400] : Colors.grey[700],
+            ),
+          ),
+          GestureDetector(
+            onTap: () => Navigator.pushNamed(context, '/register'),
+            child: Text(
+              tr('login.registerNow'),
+              textAlign: TextAlign.center,
               style: TextStyle(
-                  color: colors['primary'],
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14)),
-        ),
-      ]),
+                color: colors['primary'],
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildDivider(bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Row(children: [
-        const Expanded(child: Divider()),
-        Padding(
+      child: Row(
+        children: [
+          const Expanded(child: Divider()),
+          Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Text(tr('login.or'),
-                style: TextStyle(
-                    color: isDark ? Colors.grey : Colors.grey[600],
-                    fontSize: 12))),
-        const Expanded(child: Divider()),
-      ]),
+            child: Text(
+              tr('login.or'),
+              style: TextStyle(
+                color: isDark ? Colors.grey : Colors.grey[600],
+                fontSize: 12,
+              ),
+            ),
+          ),
+          const Expanded(child: Divider()),
+        ],
+      ),
     );
   }
 
   Widget _buildSocialButtons(Map<String, dynamic> colors, bool isDark) {
-    return Column(children: [
-      _socBtn(tr('login.googleLogin'), Icons.g_mobiledata, colors['primary']),
-      const SizedBox(height: 8),
-      _socBtn(tr('login.facebookLogin'), Icons.facebook,
-          Color.lerp(colors['primary'], Colors.black, 0.2)!),
-    ]);
+    return Column(
+      children: [
+        _socBtn(tr('login.googleLogin'), Icons.g_mobiledata, colors['primary']),
+        const SizedBox(height: 8),
+        _socBtn(
+          tr('login.facebookLogin'),
+          Icons.facebook,
+          Color.lerp(colors['primary'], Colors.black, 0.2)!,
+        ),
+      ],
+    );
   }
 
   Widget _socBtn(String text, IconData icon, Color color) {
@@ -306,7 +427,12 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       onPressed: () {},
       icon: Icon(icon, color: Colors.white),
-      label: Text(text, style: const TextStyle(color: Colors.white)),
+      label: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: Colors.white),
+      ),
     );
   }
 
@@ -316,11 +442,14 @@ class _LoginScreenState extends State<LoginScreen> {
       padding: const EdgeInsets.all(10),
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-          color: Colors.red.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(8)),
-      child: Text(_error!,
-          style: const TextStyle(color: Colors.red, fontSize: 13),
-          textAlign: TextAlign.center),
+        color: Colors.red.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        _error!,
+        style: const TextStyle(color: Colors.red, fontSize: 13),
+        textAlign: TextAlign.center,
+      ),
     );
   }
 }

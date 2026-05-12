@@ -80,6 +80,16 @@ RUN pip install --no-cache-dir -r ${REQ_PATH}
 # **UPDATED**: Added 'docling' and 'opencv-python-headless' which are required by the new utils/arangodb code.
 RUN pip install --no-cache-dir rank_bm25 docling opencv-python-headless
 
+# Step F2: Pin PyTorch to a cu121 build compatible with the host NVIDIA driver (max CUDA 12.2).
+# docling pulls torch 2.11+ (CUDA 13.0) which cannot initialise on this host — force-reinstall
+# the latest torch available on the cu121 index so Docling and EasyOCR still work on GPU.
+RUN pip install --no-cache-dir --force-reinstall \
+    "torch==2.5.1+cu121" \
+    "torchvision==0.20.1+cu121" \
+    "torchaudio==2.5.1+cu121" \
+    --index-url https://download.pytorch.org/whl/cu121 && \
+    pip install --no-cache-dir "numpy<2" "scipy"
+
 # Step G: Pre-install EasyOCR models (using pre-downloaded files)
 # This prevents the service from hanging on its one-time model download at runtime.
 # 1. Create the model and config directories

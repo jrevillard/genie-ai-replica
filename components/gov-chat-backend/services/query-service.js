@@ -5,6 +5,125 @@ const { v4: uuidv4 } = require('uuid');
 const { logger, dbService } = require('../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
+const toolRegistry = require('./tool-registry');
+const { runWithTools } = require('./tool-orchestrator');
+
+/**
+ * Three-tier hybrid weather router.
+ *
+ * Tier 1 — hard weather terms:  route to weather immediately, no LLM.
+ * Tier 2 — no weather signals:  route to RAG immediately, no LLM.
+ * Tier 3 — ambiguous terms:     ask Granite to classify YES/NO; fallback=RAG on timeout/error.
+ */
+async function classifyWeatherWithLLM(query) {
+  const vllmBase = process.env.VLLM_ENDPOINT || 'http://vllm:8000';
+  const model    = process.env.VLLM_LLM_MODEL_ID || 'ibm-granite/granite-3.3-2b-instruct';
+  try {
+    const resp = await axios.post(
+      `${vllmBase}/v1/chat/completions`,
+      {
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a query classifier. Reply with exactly one word: YES or NO. No punctuation.',
+          },
+          {
+            role: 'user',
+            content:
+              `Is the following query asking about weather conditions or a meteorological ` +
+              `forecast for a specific location or time period (past, present, or future)?\n\nQuery: "${query}"`,
+          },
+        ],
+        max_tokens: 3,
+        temperature: 0,
+      },
+      { timeout: 5000 },
+    );
+    const answer = (resp.data?.choices?.[0]?.message?.content || '').trim().toUpperCase();
+    logger.info(`[WEATHER] LLM classifier → "${answer}"`);
+    return answer.startsWith('YES');
+  } catch (err) {
+    logger.warn(`[WEATHER] LLM classifier failed (${err.message}) — defaulting to RAG`);
+    return false;
+  }
+}
+
+
+function getClientDate(queryData) {
+  const clientContext = queryData.clientContext || {};
+  const iso = clientContext.currentTimeIso || queryData.timestamp || new Date().toISOString();
+  const parsed = new Date(iso);
+  const baseDate = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  const offset = Number(clientContext.timezoneOffsetMinutes);
+
+  if (!Number.isFinite(offset)) {
+    return { date: baseDate, useUtc: false, clientContext };
+  }
+
+  return {
+    date: new Date(baseDate.getTime() + offset * 60 * 1000),
+    useUtc: true,
+    clientContext,
+  };
+}
+
+function formatClientDate(queryData) {
+  const { date, useUtc, clientContext } = getClientDate(queryData);
+  const locale = clientContext.locale || queryData.language || 'en';
+  const options = {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    ...(useUtc ? { timeZone: 'UTC' } : {}),
+  };
+  const formattedDate = new Intl.DateTimeFormat(locale, options).format(date);
+  const formattedTime = new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(useUtc ? { timeZone: 'UTC' } : {}),
+  }).format(date);
+  const timezone = clientContext.timezoneName ||
+    (Number.isFinite(Number(clientContext.timezoneOffsetMinutes))
+      ? `UTC${Number(clientContext.timezoneOffsetMinutes) >= 0 ? '+' : ''}${Number(clientContext.timezoneOffsetMinutes) / 60}`
+      : 'server local time');
+
+  return { formattedDate, formattedTime, timezone };
+}
+
+function isDirectDateTimeQuestion(query) {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return false;
+  return /\b(what|whats|what's)\s+(date|day|time)\b/.test(q) ||
+    /\b(date|day|time)\s+(is\s+it\s+)?(today|now|current)\b/.test(q) ||
+    /\bcurrent\s+(date|day|time)\b/.test(q) ||
+    /আজ\s*(কত\s*)?(তারিখ|বার|সময়|সময়)/.test(query || '');
+}
+
+function buildDirectDateTimeAnswer(queryData, query) {
+  if (!isDirectDateTimeQuestion(query)) return null;
+  const { formattedDate, formattedTime, timezone } = formatClientDate(queryData);
+  const locale = queryData.clientContext?.locale || queryData.language || '';
+  console.log(locale);
+  if (String(locale).startsWith('bn') || /[\u0980-\u09FF]/.test(query || '')) {
+    return `আজ ${formattedDate}। স্থানীয় সময় ${formattedTime} (${timezone})।`;
+  }
+  return `Today is ${formattedDate}. The local time is ${formattedTime} (${timezone}).`;
+}
+
+function buildTemporalSystemMessage(queryData) {
+  const { formattedDate, formattedTime, timezone } = formatClientDate(queryData);
+  const loginTime = queryData.clientContext?.loginTimeIso || 'unknown';
+  return [
+    'User temporal context:',
+    `- User local date: ${formattedDate}`,
+    `- User local time: ${formattedTime} (${timezone})`,
+    `- User login time: ${loginTime}`,
+    `- Server received time: ${new Date().toISOString()}`,
+    'Use this for today, now, tomorrow, current-season, and time-sensitive agricultural advice. Do not say the date is unavailable.',
+  ].join('\n');
+}
 
 class QueryService {
   constructor() {
@@ -299,6 +418,15 @@ class QueryService {
         logger.warn('No extractable text from messages; analytics may be affected.');
       }
 
+      const temporalSystemMessage = buildTemporalSystemMessage(queryData);
+      queryData.context = {
+        ...queryData.context,
+        temporalContext: {
+          client: queryData.clientContext || null,
+          serverReceivedAt: new Date().toISOString(),
+        },
+      };
+
       // Resolve categoryLabel to categoryId if not provided
       let categoryId = queryData.categoryId || null;
       if (queryData.context?.categoryLabel && !categoryId) {
@@ -353,6 +481,7 @@ class QueryService {
         contextOption: backendMode,
         messages: queryData.messages,
         context: queryData.context,
+        clientContext: queryData.clientContext || null,
         text: queryText
       };
 
@@ -366,8 +495,26 @@ class QueryService {
       let opeaResponseTime = 0;
       const opeaStartTime = Date.now();
 
+      const directTemporalAnswer = buildDirectDateTimeAnswer(queryData, queryText);
+
       // *** START: TEST MODE LOGIC ***
-      if (backendMode === 'test-mode') {
+      if (directTemporalAnswer) {
+        logger.info('[TIME] Direct date/time query answered without RAG.');
+        opeaResponseContent = directTemporalAnswer;
+        opeaMetadata = {
+          source_documents: [],
+          confidence_score: 1.0,
+          temporal: true,
+          clientContext: queryData.clientContext || null,
+        };
+        opeaResponseTime = Date.now() - opeaStartTime;
+        await this.queries.update(queryId, {
+          response: opeaResponseContent,
+          responseTime: opeaResponseTime,
+          isAnswered: true,
+          metadata: opeaMetadata
+        });
+      } else if (backendMode === 'test-mode') {
         logger.info('[DEBUG] TEST MODE ACTIVATED. Bypassing OPEA call.');
         const mockData = this.getMockOpeaResponse(queryData);
         opeaResponseContent = mockData.response;
@@ -387,6 +534,196 @@ class QueryService {
         await this.queries.update(queryId, updateData);
 
       } else {
+        // ── Weather Query Direct Routing ─────────────────────────────────────
+        // Port 9000 on OPEA does not support OpenAI tool_calls. Weather queries
+        // are detected by the hybrid router above and forwarded to the weather-mcp-service.
+        const weatherEnabled = process.env.WEATHER_ENABLED === 'true';
+        const weatherMcpUrl = process.env.WEATHER_MCP_URL || 'http://localhost:8000';
+        const lastUserMsg = [...(queryData.messages || [])].reverse().find(m => m.role === 'user')?.content || queryText;
+
+        // Hybrid weather router — five tiers (evaluated in order):
+        //   Tier 0: document/knowledge signals present   → RAG    (overrides everything)
+        //   Tier 1: hard weather event terms present     → weather (no LLM)
+        //   Tier 2: agricultural/knowledge terms present → RAG    (no LLM)
+        //   Tier 3: ambiguous weather terms present      → Granite LLM YES/NO
+        //   Tier 4: no signals at all                   → RAG    (no LLM)
+        //
+        // Tier 0 fires first: words like "uploaded", "listed", "threshold", "calendar"
+        // prove the user is querying a document — never a live forecast request.
+        // "weather" moved to WEATHER_AMBIGUOUS: it appears in document titles
+        // ("Crop Weather Calendar") and is not unambiguous enough for Tier 1.
+        const RAG_OVERRIDE = [
+          'uploaded', 'listed', 'according to', 'in the document', 'from the document',
+          'threshold', 'calendar', 'table', 'chart', 'section', 'page', 'schedule',
+          'what does', 'what is listed', 'what is stated', 'document says',
+        ];
+        // Question-form phrases that are unambiguously live forecast requests — they never
+        // appear in document/knowledge-base queries, so no LLM classification is needed.
+        const WEATHER_FORECAST_PHRASES = [
+          'how is the weather', 'what is the weather', 'what will the weather',
+          'weather today', 'weather tomorrow', 'weather this week', 'weather next week',
+          'weather next month', 'next month', '30 days', 'next 30 days',
+          'weather in 1', 'weather in 2', 'weather in 3', 'weather in 4', 'weather in 5',
+          'weather in 6', 'weather in 7', 'weather forecast', 'current weather',
+          'will it rain', 'will it be hot', 'will it be cold', 'how hot will', 'how cold will',
+        ];
+        const WEATHER_HARD      = ['rainfall', 'storm', 'flood', 'cyclone', 'monsoon', 'typhoon',
+          'bulletin', 'agrometeorological', 'agromet', 'agri advisory', 'national bulletin', 'advisory bulletin',
+          // geo-inference routing — delineation and satellite flood detection
+          'delineat', 'field boundar', 'farm boundar', 'plot boundar', 'field segment',
+          'flood detection', 'flood mapping', 'flood map', 'flood extent', 'flood zone',
+          'satellite flood', 'inundation map', 'detect flood', 'map flood', 'prithvi'];
+        const AGRO_TERMS        = [
+          'soil', 'crop', 'plant', 'pest', 'disease', 'seed', 'harvest', 'fertilizer',
+          'worm', 'insect', 'fungus', 'larvae', 'larva', 'bacteria', 'bacterial', 'viral',
+          'nitrogen', 'phosphorus', 'germination', 'irrigation', 'variety', 'hybrid',
+          'cultivation', 'paddy', 'rice', 'wheat', 'potato', 'maize', 'vegetable',
+          'infestation', 'blight', 'mite', 'aphid', 'thrip', 'nematode',
+        ];
+        const WEATHER_AMBIGUOUS = ['weather', 'temperature', 'rain', 'humid', 'climate', 'forecast', 'wind', 'drought'];
+        const PLANTING_DECISION_TERMS = ['sow', 'sowing', 'plant', 'planting', 'transplant', 'good time', 'right time'];
+        const CURRENT_TIME_TERMS = ['now', 'today', 'currently', 'current', 'this week', 'right now'];
+        const LONG_TERM_FORECAST_HORIZON = /\b(?:(?:next|in|for)\s+)?(?:[8-9]|[1-9]\d)\s*days?\b|\b(?:(?:next|in|for)\s+)?(?:two|three|four|five|six|[2-6])\s*weeks?\b|\bfortnight\b|\bnext\s+month\b|\b(?:next\s+)?(?:few|couple\s+of|coming)\s+months?\b/;
+
+        const lowerMsg          = lastUserMsg.toLowerCase();
+        const hasRagOverride    = RAG_OVERRIDE.some(kw => lowerMsg.includes(kw));
+        const hasForecastPhrase = WEATHER_FORECAST_PHRASES.some(kw => lowerMsg.includes(kw));
+        const hasHardSignal     = WEATHER_HARD.some(kw => lowerMsg.includes(kw));
+        const hasAgroTerm       = AGRO_TERMS.some(kw => lowerMsg.includes(kw));
+        const hasAmbiguous      = WEATHER_AMBIGUOUS.some(kw => lowerMsg.includes(kw));
+        const hasLongTermHorizon = LONG_TERM_FORECAST_HORIZON.test(lowerMsg);
+        const asksPlantingDecision =
+          hasAgroTerm &&
+          PLANTING_DECISION_TERMS.some(kw => lowerMsg.includes(kw)) &&
+          CURRENT_TIME_TERMS.some(kw => lowerMsg.includes(kw));
+
+        let isWeatherQuery = false;
+        if (weatherEnabled) {
+          if (hasRagOverride) {
+            // Tier 0: document/knowledge query signals — always RAG, no LLM call needed
+            logger.info('[WEATHER] Tier 0 — document/knowledge signal detected → RAG');
+          } else if (hasForecastPhrase || hasHardSignal || asksPlantingDecision || (hasAmbiguous && hasLongTermHorizon)) {
+            // Tier 1: unambiguous forecast phrase ("how is the weather", "weather tomorrow"…),
+            // hard event keyword (cyclone, flood…), current planting/sowing decision,
+            // or weather term with a long-term horizon beyond the 7-day short forecast.
+            isWeatherQuery = true;
+            logger.info(`[WEATHER] Tier 1 — ${asksPlantingDecision ? 'current planting decision' : (hasLongTermHorizon ? 'long-term forecast horizon' : (hasForecastPhrase ? 'forecast phrase' : 'hard weather keyword'))} → weather`);
+          } else if (hasAgroTerm) {
+            // Tier 2: agricultural/knowledge context — route to RAG without LLM call
+            // Agro terms (soil, pest, crop, worm…) never appear in real forecast queries
+            logger.info('[WEATHER] Tier 2 — agricultural term detected → RAG');
+          } else if (hasAmbiguous) {
+            // Tier 3: ambiguous measurable (weather, temperature, rain…) with no other context
+            // Only here do we call the LLM classifier
+            logger.info('[WEATHER] Tier 3 — ambiguous term, calling LLM classifier …');
+            isWeatherQuery = await classifyWeatherWithLLM(lastUserMsg);
+            logger.info(`[WEATHER] Tier 3 — LLM result → isWeatherQuery=${isWeatherQuery}`);
+          } else {
+            logger.info('[WEATHER] Tier 4 — no weather signals → RAG');
+          }
+        }
+
+        if (isWeatherQuery) {
+          logger.info(`[WEATHER] Weather query detected — routing to weather-mcp-service: "${lastUserMsg}"`);
+          // Geo-inference queries (delineation, flood) can take 3-10 minutes; regular
+          // weather forecasts complete in <5 s. Use a long timeout for the former.
+          const GEO_KEYWORDS = ['delineat', 'field boundar', 'farm boundar', 'flood detection',
+            'flood map', 'flood extent', 'satellite flood', 'inundation', 'prithvi'];
+          const lowerQuery = lastUserMsg.toLowerCase();
+          const isGeoQuery = GEO_KEYWORDS.some(kw => lowerQuery.includes(kw));
+          const wxTimeout  = isGeoQuery ? 660000 : 30000;   // 11 min for geo, 30 s for weather
+          if (isGeoQuery) logger.info('[WEATHER] Geo-inference query — using 11-minute timeout');
+          try {
+            const wResp = await axios.post(`${weatherMcpUrl}/query`, { query: lastUserMsg }, { timeout: wxTimeout });
+            opeaResponseContent = wResp.data.answer;
+            opeaMetadata = {
+              source_documents: [],
+              confidence_score: 1.0,
+              weather: true,
+              location:          wResp.data.location         ?? null,
+              forecast:          wResp.data.forecast         ?? null,
+              field_delineation: wResp.data.field_delineation ?? null,
+              flood_analysis:    wResp.data.flood_analysis    ?? null,
+              risk_tier:         wResp.data.risk_tier         ?? null,
+              risk_label:        wResp.data.risk_label        ?? null,
+            };
+          } catch (wErr) {
+            logger.error(`[WEATHER] weather-mcp-service call failed: ${wErr.message}`);
+            // Surface a more specific message when the geo-inference-worker is the failure point
+            const errBody = wErr.response?.data?.detail || wErr.response?.data || '';
+            const errStr  = typeof errBody === 'string' ? errBody : JSON.stringify(errBody);
+            const isGeoErr = isGeoQuery ||
+                             errStr.includes('geo') || errStr.includes('delineat') ||
+                             errStr.includes('flood') || errStr.includes('inference') ||
+                             wErr.response?.status === 502 ||
+                             wErr.code === 'ECONNABORTED';   // axios timeout
+            opeaResponseContent = isGeoErr
+              ? `The geospatial inference service is not available right now. Make sure the **geo-inference-worker** container is running.\n\n_Error: ${errStr || wErr.message}_`
+              : "I'm sorry, I couldn't fetch the weather information right now. Please try again later.";
+            opeaMetadata = { source_documents: [], confidence_score: 0, weather: true };
+          }
+          opeaResponseTime = Date.now() - opeaStartTime;
+          await this.queries.update(queryId, {
+            response: opeaResponseContent,
+            responseTime: opeaResponseTime,
+            isAnswered: true,
+            metadata: opeaMetadata
+          });
+
+        } else { // non-weather: tool orchestration or OPEA ChatQnA
+        const toolsEnabled = process.env.TOOLS_ENABLED === 'true';
+        const availableTools = toolsEnabled ? toolRegistry.getDefinitions() : [];
+
+        if (toolsEnabled && availableTools.length > 0) {
+          // ── Tool Orchestration via vLLM ──────────────────────────────────
+          const vllmUrl = process.env.VLLM_URL ||
+            `http://${process.env.OPEA_HOST || 'e2e-109-198'}:9000/v1/chat/completions`;
+          const vllmModel = process.env.VLLM_MODEL || 'granite-3.2-2b-instruct';
+
+          // Build OpenAI-compatible messages from queryData
+          const vllmMessages = [
+            { role: 'system', content: temporalSystemMessage },
+            ...queryData.messages.map(m => ({
+              role: m.role || 'user',
+              content: m.content
+            }))
+          ];
+
+          const llmClient = {
+            chat: async ({ messages, tools, tool_choice }) => {
+              const response = await axios.post(vllmUrl, {
+                model: vllmModel,
+                messages,
+                tools,
+                tool_choice: tool_choice || 'auto',
+                stream: false
+              });
+              return response.data;
+            }
+          };
+
+          logger.info('[DEBUG] Sending request via Tool Orchestration (vLLM)...');
+          const result = await runWithTools(llmClient, vllmMessages, availableTools, toolRegistry);
+
+          opeaResponseContent = result.content;
+          opeaMetadata = {
+            toolsUsedCount: result.toolsUsed,
+            source_documents: [],
+            confidence_score: 1.0,
+            orchestrator: true
+          };
+          opeaResponseTime = Date.now() - opeaStartTime;
+
+          const updateData = {
+            response: opeaResponseContent,
+            responseTime: opeaResponseTime,
+            isAnswered: true,
+            metadata: opeaMetadata
+          };
+          await this.queries.update(queryId, updateData);
+
+        } else {
+        // ── Existing: Worker thread → OPEA /v1/chatqna ───────────────────
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
         const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
         const opeaPort = process.env.OPEA_PORT || '8888';
@@ -403,17 +740,21 @@ class QueryService {
           }
 
           opeaPayload = {
-            messages: queryText,
+            messages: `${temporalSystemMessage}\n\nUser question: ${queryText}`,
             stream: false
           };
         } else {
           logger.info('[DEBUG] Backend mode is "conversation-with-labels". Formatting payload with full context.');
           opeaPayload = {
-            messages: queryData.messages,
+            messages: [
+              { role: 'system', content: temporalSystemMessage },
+              ...queryData.messages
+            ],
             context: {
               categoryLabel: queryData.context.categoryLabel,
               serviceLabels: queryData.context.serviceLabels,
-              language: queryData.context.language
+              language: queryData.context.language,
+              temporalContext: queryData.context.temporalContext
             },
             user_id: queryData.userId,
             stream: false
@@ -441,11 +782,17 @@ class QueryService {
           metadata: opeaMetadata
         };
         await this.queries.update(queryId, updateData);
+        } // end else (OPEA worker path)
+        } // end else (non-weather path)
       }
 
-      // Record the query in analytics
+      // Record the query in analytics — non-fatal so large geo responses don't kill the reply
       if (this.analyticsService) {
-        await this.analyticsService.recordQuery(await this.queries.document(queryId));
+        try {
+          await this.analyticsService.recordQuery(await this.queries.document(queryId));
+        } catch (analyticsErr) {
+          logger.warn('QueryService.analytics_record_failed', { queryId, error: analyticsErr.message });
+        }
       }
 
       const totalDuration = Date.now() - startTime;

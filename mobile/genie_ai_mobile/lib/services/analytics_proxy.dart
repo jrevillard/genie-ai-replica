@@ -8,7 +8,7 @@ class AnalyticsProxy {
     final res = await _api.get('analytics/metric/uniqueUsers', params: {
       'startDate': startDate,
       'endDate': endDate,
-      if (locale != null) 'locale': locale,
+      'locale': ?locale,
     });
     return jsonDecode(res.body)['value'] ?? 0;
   }
@@ -18,7 +18,7 @@ class AnalyticsProxy {
     final res = await _api.get('analytics/dashboard', params: {
       'startDate': range['startDate'],
       'endDate': range['endDate'],
-      if (locale != null) 'locale': locale,
+      'locale': ?locale,
     });
     return jsonDecode(res.body);
   }

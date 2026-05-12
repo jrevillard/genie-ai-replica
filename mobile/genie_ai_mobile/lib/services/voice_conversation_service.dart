@@ -1,0 +1,208 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+
+class VoiceConversationService {
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  final FlutterTts _tts = FlutterTts();
+
+  bool _speechReady = false;
+  bool _ttsReady = false;
+
+  bool get isSupportedPlatform {
+    if (kIsWeb) return true;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows;
+  }
+
+  bool get isListening => isSupportedPlatform && _speech.isListening;
+
+  Future<bool> initialize({
+    ValueChanged<String>? onStatus,
+    ValueChanged<String>? onError,
+  }) async {
+    if (!isSupportedPlatform) {
+      debugPrint('[VOICE] Voice plugins are not available on this platform.');
+      return false;
+    }
+
+    if (!_speechReady) {
+      try {
+        _speechReady = await _speech.initialize(
+          onStatus: onStatus,
+          onError: (error) => onError?.call(error.errorMsg),
+          options: [stt.SpeechToText.androidNoBluetooth],
+        );
+      } catch (e) {
+        debugPrint('[VOICE] Speech initialization failed: $e');
+        _speechReady = false;
+      }
+    }
+
+    if (!_ttsReady) {
+      try {
+        await _tts.awaitSpeakCompletion(false);
+        await _tts.setSpeechRate(0.48);
+        await _tts.setVolume(1.0);
+        await _tts.setPitch(1.0);
+        _ttsReady = true;
+      } catch (e) {
+        debugPrint('[VOICE] TTS initialization failed: $e');
+        _ttsReady = false;
+      }
+    }
+
+    return _speechReady;
+  }
+
+  Future<bool> startListening({
+    required String localeId,
+    required ValueChanged<String> onText,
+    VoidCallback? onDone,
+    ValueChanged<String>? onError,
+  }) async {
+    if (!isSupportedPlatform) return false;
+    final ready = await initialize(onError: onError);
+    if (!ready) return false;
+
+    try {
+      await stopSpeaking();
+      final resolvedLocaleId = await _resolveSpeechLocale(localeId);
+      debugPrint(
+        '[VOICE] Speech locale requested=$localeId resolved=$resolvedLocaleId',
+      );
+      await _speech.listen(
+        localeId: resolvedLocaleId,
+        listenFor: const Duration(seconds: 60),
+        pauseFor: const Duration(seconds: 3),
+        listenOptions: stt.SpeechListenOptions(
+          cancelOnError: true,
+          partialResults: true,
+          listenMode: stt.ListenMode.dictation,
+          autoPunctuation: true,
+        ),
+        onResult: (result) {
+          onText(result.recognizedWords);
+          if (result.finalResult) onDone?.call();
+        },
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[VOICE] Listen failed: $e');
+      onError?.call(e.toString());
+      return false;
+    }
+  }
+
+  Future<void> stopListening() async {
+    if (!isSupportedPlatform) return;
+    if (_speechReady && _speech.isListening) {
+      await _speech.stop();
+    }
+  }
+
+  Future<void> cancelListening() async {
+    if (!isSupportedPlatform) return;
+    if (_speechReady && _speech.isListening) {
+      await _speech.cancel();
+    }
+  }
+
+  Future<void> speak(
+    String text, {
+    required String localeId,
+    bool awaitCompletion = false,
+  }) async {
+    if (!isSupportedPlatform || text.trim().isEmpty) return;
+    if (!_ttsReady) {
+      await initialize();
+    }
+    if (!_ttsReady) return;
+
+    try {
+      await _tts.awaitSpeakCompletion(awaitCompletion);
+      await _tts.setLanguage(localeId.replaceAll('_', '-'));
+      await _tts.stop();
+      await _tts.speak(_speechText(text));
+      if (awaitCompletion) {
+        await _tts.awaitSpeakCompletion(false);
+      }
+    } catch (e) {
+      debugPrint('[VOICE] Speak failed: $e');
+    }
+  }
+
+  Future<void> stopSpeaking() async {
+    if (!isSupportedPlatform) return;
+    if (_ttsReady) {
+      await _tts.stop();
+    }
+  }
+
+  Future<void> dispose() async {
+    await cancelListening();
+    await stopSpeaking();
+  }
+
+  Future<String> _resolveSpeechLocale(String requestedLocaleId) async {
+    try {
+      final availableLocales = await _speech.locales();
+      if (availableLocales.isEmpty) return requestedLocaleId;
+
+      final requested = requestedLocaleId.toLowerCase().replaceAll('-', '_');
+      for (final locale in availableLocales) {
+        final normalized = locale.localeId.toLowerCase().replaceAll('-', '_');
+        if (normalized == requested) return locale.localeId;
+      }
+
+      final requestedLanguage = requested.split('_').first;
+      for (final locale in availableLocales) {
+        final normalized = locale.localeId.toLowerCase().replaceAll('-', '_');
+        if (normalized.split('_').first == requestedLanguage) {
+          return locale.localeId;
+        }
+      }
+    } catch (e) {
+      debugPrint('[VOICE] Could not resolve speech locale: $e');
+    }
+    return requestedLocaleId;
+  }
+
+  String localeForLanguageCode(String languageCode) {
+    const locales = {
+      'ar': 'ar_SA',
+      'bn': 'bn_BD',
+      'de': 'de_DE',
+      'en': 'en_US',
+      'es': 'es_ES',
+      'fr': 'fr_FR',
+      'id': 'id_ID',
+      'pt': 'pt_PT',
+      'ru': 'ru_RU',
+      'sw': 'sw_KE',
+      'th': 'th_TH',
+      'zh': 'zh_CN',
+    };
+    return locales[languageCode] ?? 'en_US';
+  }
+
+  String _speechText(String text) {
+    var cleaned = text
+        .replaceAll(RegExp(r'```[\s\S]*?```'), ' ')
+        .replaceAllMapped(RegExp(r'!\[([^\]]*)\]\([^\)]*\)'), (m) => m[1] ?? '')
+        .replaceAllMapped(RegExp(r'\[([^\]]+)\]\([^\)]*\)'), (m) => m[1] ?? '')
+        .replaceAllMapped(RegExp(r'`([^`]*)`'), (m) => m[1] ?? '')
+        .replaceAll(RegExp(r'[#>*_~\-]+'), ' ')
+        .replaceAll(RegExp(r'<[^>]+>'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    const maxLength = 1400;
+    if (cleaned.length > maxLength) {
+      cleaned = '${cleaned.substring(0, maxLength)}.';
+    }
+    return cleaned;
+  }
+}

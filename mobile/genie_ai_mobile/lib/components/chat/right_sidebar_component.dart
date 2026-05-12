@@ -177,19 +177,25 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
             .toLowerCase();
 
     if (type == 'pdf' || name.endsWith('.pdf')) return Icons.picture_as_pdf;
-    if (type.contains('word') || name.contains('.doc'))
+    if (type.contains('word') || name.contains('.doc')) {
       return Icons.description;
-    if (type.contains('excel') || name.contains('.xls'))
+    }
+    if (type.contains('excel') || name.contains('.xls')) {
       return Icons.table_chart;
-    if (type.contains('powerpoint') || name.contains('.ppt'))
+    }
+    if (type.contains('powerpoint') || name.contains('.ppt')) {
       return Icons.slideshow;
+    }
     if (type.contains('image') ||
         name.contains('.jpg') ||
-        name.contains('.png')) return Icons.image;
+        name.contains('.png')) {
+      return Icons.image;
+    }
     if (type.contains('video')) return Icons.videocam;
     if (type.contains('audio')) return Icons.audiotrack;
-    if (name.endsWith('.md') || name.endsWith('.txt'))
+    if (name.endsWith('.md') || name.endsWith('.txt')) {
       return Icons.text_snippet;
+    }
 
     return Icons.insert_drive_file;
   }
@@ -237,26 +243,29 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
 
     final cat = _getDocValue(doc, ['categoryLabel', 'category']);
     if (cat != null) {
-      if (cat is List)
+      if (cat is List) {
         allLabels.addAll(cat.map((e) => e.toString()));
-      else
+      } else {
         allLabels.add(cat.toString());
+      }
     }
 
     final srv = _getDocValue(doc, ['serviceLabels', 'services']);
     if (srv != null) {
-      if (srv is List)
+      if (srv is List) {
         allLabels.addAll(srv.map((e) => e.toString()));
-      else
+      } else {
         allLabels.add(srv.toString());
+      }
     }
 
     final lbl = _getDocValue(doc, ['labels', 'tags', 'keywords']);
     if (lbl != null) {
-      if (lbl is List)
+      if (lbl is List) {
         allLabels.addAll(lbl.map((e) => e.toString()));
-      else
+      } else {
         allLabels.add(lbl.toString());
+      }
     }
 
     if (allLabels.isEmpty) return tr('sidebar.unknown');

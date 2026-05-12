@@ -496,113 +496,123 @@ const Map<String, dynamic> enLocale = {
   },
   "leftPanel": {
     "cat1": {
-      "name": "1. Identity & Civil Registration",
+      "name": "1. Crop Advisory",
       "children": [
-        "Birth certificates",
-        "National ID cards",
-        "Passports",
-        "Marriage and death certificates",
-        "Voter registration"
+        "Seasonal Crop Selection",
+        "High-yield Varieties",
+        "Planting Techniques",
+        "Harvesting Advice",
+        "Post-harvest Management"
       ]
     },
     "cat2": {
-      "name": "2. Healthcare & Social Services",
+      "name": "2. Weather & Climate",
       "children": [
-        "Public healthcare access",
-        "Vaccination programs",
-        "Health insurance",
-        "Disability benefits",
-        "Welfare and food assistance"
+        "Daily Forecast",
+        "Severe Weather Alerts",
+        "Flood Warnings",
+        "Drought Monitoring",
+        "Climate Change Adaptation"
       ]
     },
     "cat3": {
-      "name": "3. Education & Learning",
+      "name": "3. Soil & Fertilizers",
       "children": [
-        "Public schools and universities",
-        "Scholarships and student loans",
-        "Adult education programs",
-        "Online learning resources"
+        "Soil Testing Services",
+        "Fertilizer Recommendations",
+        "Organic Farming",
+        "Compost Preparation",
+        "Soil Health Management"
       ]
     },
     "cat4": {
-      "name": "4. Employment & Labor Services",
+      "name": "4. Pest & Disease Management",
       "children": [
-        "Job search and unemployment benefits",
-        "Worker protections and labor rights",
-        "Workplace safety regulations",
-        "Skills training and apprenticeships"
+        "Pest Identification",
+        "Integrated Pest Management",
+        "Safe Pesticide Use",
+        "Disease Control",
+        "Biological Control"
       ]
     },
     "cat5": {
-      "name": "5. Taxes & Revenue",
+      "name": "5. Irrigation & Water",
       "children": [
-        "Income tax filing and refunds",
-        "Property tax payments",
-        "Business tax compliance",
-        "Customs and import duties"
+        "Irrigation Scheduling",
+        "Efficient Water Use",
+        "Tube Well Registration",
+        "Solar Irrigation Systems",
+        "Rainwater Harvesting"
       ]
     },
     "cat6": {
-      "name": "6. Public Safety & Justice",
+      "name": "6. Agricultural Loans & Insurance",
       "children": [
-        "Police and emergency services",
-        "Court and legal aid services",
-        "Crime reporting",
-        "Consumer protection laws"
+        "Crop Insurance",
+        "Low-interest Farm Loans",
+        "Credit Facilities",
+        "Microfinance for Farmers",
+        "Loan Application Process"
       ]
     },
     "cat7": {
-      "name": "7. Transportation & Mobility",
+      "name": "7. Market Prices & Trade",
       "children": [
-        "Driver's licenses and vehicle registration",
-        "Public transit and infrastructure",
-        "Traffic violations and fines",
-        "Road safety programs"
+        "Current Market Rates",
+        "E-Marketing Platforms",
+        "Supply Chain Info",
+        "Export Opportunities",
+        "Wholesale Market Locations"
       ]
     },
     "cat8": {
-      "name": "8. Housing & Urban Development",
+      "name": "8. Livestock & Poultry",
       "children": [
-        "Public housing assistance",
-        "Property registration and land records",
-        "Housing loans and subsidies",
-        "Zoning and building permits"
+        "Cattle Rearing",
+        "Poultry Management",
+        "Animal Vaccination",
+        "Feed & Nutrition",
+        "Dairy Farming"
       ]
     },
     "cat9": {
-      "name": "9. Utilities & Environment",
+      "name": "9. Fisheries & Aquaculture",
       "children": [
-        "Water and electricity services",
-        "Waste management and recycling",
-        "Environmental regulations",
-        "Renewable energy initiatives"
+        "Fish Pond Management",
+        "Shrimp Farming",
+        "Fingerling Sources",
+        "Fish Feed Management",
+        "Disease Control in Fish"
       ]
     },
     "cat10": {
-      "name": "10. Business & Trade",
+      "name": "10. Farm Machinery",
       "children": [
-        "Business registration and licensing",
-        "Trade regulations and permits",
-        "Small business grants and incentives",
-        "E-commerce and digital business support"
+        "Tractor & Power Tiller",
+        "Irrigation Pumps",
+        "Harvester & Thresher",
+        "Subsidized Machinery",
+        "Maintenance & Repair"
       ]
     },
     "cat11": {
-      "name": "11. Social Security & Pensions",
+      "name": "11. Government Subsidies",
       "children": [
-        "Retirement benefits",
-        "Pension fund management",
-        "Survivor benefits",
-        "Disability pensions"
+        "Seed Subsidies",
+        "Fertilizer Subsidies",
+        "Electricity for Irrigation",
+        "Machinery Incentives",
+        "Disaster Recovery Grants"
       ]
     },
     "cat12": {
-      "name": "12. Community & Civic Engagement",
+      "name": "12. Training & Workshops",
       "children": [
-        "Voting and elections",
-        "Public feedback and citizen complaints",
-        "Volunteering and community programs",
-        "Local government participation"
+        "Farmer Field Schools",
+        "Modern Technology Training",
+        "Skill Development",
+        "Workshops & Seminars",
+        "Youth in Agribusiness"
       ]
     }
   },
@@ -1139,7 +1149,7 @@ const Map<String, dynamic> enLocale = {
     "fileUploadError": "Error uploading file.",
     "processingError": "Error processing your request.",
     "welcomeMessage":
-        "Welcome! How can I assist you with Kenya government services today?",
+        "Welcome! How can I assist you with Bangladesh Agricultural and weather services today?",
     "attachFile": "Attach File",
     "fileTooLarge": "File is too large. Maximum size is {maxSize}.",
     "saveChat": "Save Chat",
@@ -1201,62 +1211,62 @@ const Map<String, dynamic> enLocale = {
   },
   "quickhelp": {
     // Labels (Short for UI)
-    "applyForID": "Apply for ID",
-    "payTaxes": "Pay Taxes",
-    "startBusiness": "Start Business",
-    "findHealthcare": "Healthcare",
-    "educationServices": "Education",
-    "transportLicenses": "Transport",
-    "housingPrograms": "Housing",
-    "findJobs": "Find Jobs",
+    "applyForID": "Crop Advisory",
+    "payTaxes": "Weather Alerts",
+    "startBusiness": "Agribusiness",
+    "findHealthcare": "Market Prices",
+    "educationServices": "Irrigation",
+    "transportLicenses": "Pest Control",
+    "housingPrograms": "Subsidies",
+    "findJobs": "Livestock/Fisheries",
     "justChat": "Just Chat",
 
     // System Prompts (Hidden from User)
     "applyForIDPrompt":
-        "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+        "Act as a helpful Bangladesh agricultural extension officer. Explain the steps for obtaining high-quality seeds, fertilizers, or applying for agricultural loans in Bangladesh. Provide advice on seasonal crop selection based on weather patterns. RULE: Always refer to the application as 'Genie AI'.",
 
     "payTaxesPrompt":
-        "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+        "Act as a Bangladesh weather expert. Explain how to interpret weather alerts, flood warnings, and provide advice on protecting crops from extreme weather events in Bangladesh. RULE: Always refer to the application as 'Genie AI'.",
 
     "startBusinessPrompt":
-        "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+        "Act as a farm management consultant in Bangladesh. Guide the user through the process of starting a commercial farm, business registration for agribusinesses, and accessing government subsidies for agriculture in Bangladesh. RULE: Always refer to the application as 'Genie AI'.",
 
     "findHealthcarePrompt":
-        "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+        "Act as a market information specialist. Provide current market prices for major crops in Bangladesh like rice, jute, and vegetables. Explain how farmers can find the best markets for their produce. RULE: Always refer to the application as 'Genie AI'.",
 
     "educationServicesPrompt":
-        "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+        "Act as an irrigation specialist in Bangladesh. Provide information on efficient water management, deep tube well registration, and solar-powered irrigation systems. RULE: Always refer to the application as 'Genie AI'.",
 
     "transportLicensesPrompt":
-        "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+        "Act as a pest control and plant protection expert. Explain how to identify and manage common pests and diseases affecting crops in Bangladesh. Advise on the safe use of pesticides. RULE: Always refer to the application as 'Genie AI'.",
 
     "housingProgramsPrompt":
-        "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+        "Act as an agricultural subsidy advisor. Explain available government subsidies for machinery, seeds, and electricity for irrigation in Bangladesh. RULE: Always refer to the application as 'Genie AI'.",
 
     "findJobsPrompt":
-        "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+        "Act as a livestock and fisheries advisor. Provide information on modern poultry farming, cattle rearing, and aquaculture techniques in Bangladesh. RULE: Always refer to the application as 'Genie AI'.",
 
     "justChatPrompt":
-        "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'.",
+        "Act as a friendly local agriculture and weather assistant in Bangladesh. Be polite, helpful, and knowledgeable about Bangladesh's farming traditions and seasonal weather. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them with **Crop Advisory**, **Weather Alerts**, and **Market Prices**. RULE: Always refer to the application as 'Genie AI'.",
 
     // User Prompts (Visible Text - First Person)
     "applyForIDUserPrompt":
-        "I want to find out about applying for a National ID card in Kenya.",
+        "I want to find out about crop advisory and agricultural loans in Bangladesh.",
     "payTaxesUserPrompt":
-        "I want to ask about paying taxes or filing my KRA returns in Kenya.",
+        "I want to ask about weather alerts and flood warnings in Bangladesh.",
     "startBusinessUserPrompt":
-        "I want to find out about registering a new business or company in Kenya.",
+        "I want to find out about starting an agribusiness or commercial farm in Bangladesh.",
     "findHealthcareUserPrompt":
-        "I want to ask about public healthcare facilities and insurance (NHIF/SHIF) in Kenya.",
+        "I want to ask about current market prices for crops in Bangladesh.",
     "educationServicesUserPrompt":
-        "I want to find out about schools and education services in Kenya.",
+        "I want to find out about irrigation and water management in Bangladesh.",
     "transportLicensesUserPrompt":
-        "I want to ask about driving licenses and NTSA services in Kenya.",
+        "I want to ask about pest control and plant protection in Bangladesh.",
     "housingProgramsUserPrompt":
-        "I want to find out about the Affordable Housing Program (Boma Yangu) in Kenya.",
+        "I want to find out about agricultural subsidies in Bangladesh.",
     "findJobsUserPrompt":
-        "I want to ask about government job opportunities and PSC applications in Kenya.",
-    "justChatUserPrompt": "I want to chat generally about life in Kenya."
+        "I want to ask about livestock and fisheries management in Bangladesh.",
+    "justChatUserPrompt": "I want to chat generally about agriculture and weather in Bangladesh."
   },
   "common": {
     "cancel": "Cancel",

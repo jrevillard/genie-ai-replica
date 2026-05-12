@@ -61,6 +61,9 @@
         v-if="showAdminDashboard"
         @close="showAdminDashboard = false"
       />
+
+      <!-- Crop early warning pop-out (deterministic, outside chatbot) -->
+      <crop-alert-banner />
     </template>
 
     <!-- Login screen for unauthenticated users on auth-required routes -->
@@ -94,6 +97,7 @@ import SettingsComponent from "./components/SettingsComponent.vue";
 import LoginScreen from "./components/LoginScreen.vue";
 import AdminDashboard from "./components/AdminDashboard.vue";
 import SplashScreen from "./components/SplashScreen.vue";
+import CropAlertBanner from "./components/CropAlertBanner.vue";
 import { mapGetters } from "vuex";
 import { eventBus } from "./eventBus.js";
 import chatHistoryService from "./services/chatHistoryService";
@@ -110,6 +114,7 @@ export default {
     LoginScreen,
     AdminDashboard,
     SplashScreen,
+    CropAlertBanner,
   },
 
   data() {

@@ -52,20 +52,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     setState(() => _isLoading = true);
-    final svc = UserService();
-    final res = await svc.register({
-      'loginName': _username.text,
-      'email': _email.text,
-      'password': _password.text,
-    });
+    try {
+      final svc = UserService();
+      final res = await svc.register({
+        'loginName': _username.text,
+        'email': _email.text,
+        'password': _password.text,
+      });
 
-    setState(() => _isLoading = false);
-    if (res['success']) {
-      Navigator.pushReplacementNamed(context, '/registration-success',
-          arguments: _email.text);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(res['message'] ?? tr('register.registrationFailed'))));
+      if (!mounted) return;
+      if (res['success']) {
+        Navigator.pushReplacementNamed(
+          context,
+          '/registration-success',
+          arguments: _email.text,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message'] ?? tr('register.registrationFailed')),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(tr('register.registrationFailed'))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -115,59 +132,59 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SizedBox(height: 24),
 
                       Text(tr('register.createAccount'),
-                          style: TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
                               color: colors['text'])),
                       const SizedBox(height: 24),
                       _buildInput(
-                          _username,
-                          tr('register.username'),
-                          Icons.person,
-                          (v) => v!.length < 3
-                              ? tr('register.usernameMinLength')
-                              : _userErr,
-                          (v) => _checkAvailability('username', v),
-                          colors,
+                        _username,
+                        tr('register.username'),
+                        Icons.person,
+                        (v) => v!.length < 3
+                            ? tr('register.usernameMinLength')
+                            : _userErr,
+                        (v) => _checkAvailability('username', v),
+                        colors,
                           isDark),
                       _buildInput(
-                          _email,
-                          tr('register.email'),
-                          Icons.email,
-                          (v) => !v!.contains('@')
-                              ? tr('register.invalidEmail')
-                              : _emailErr,
-                          (v) => _checkAvailability('email', v),
-                          colors,
+                        _email,
+                        tr('register.email'),
+                        Icons.email,
+                        (v) => !v!.contains('@')
+                            ? tr('register.invalidEmail')
+                            : _emailErr,
+                        (v) => _checkAvailability('email', v),
+                        colors,
                           isDark),
                       _buildInput(
-                          _password,
-                          tr('register.password'),
-                          Icons.lock,
-                          (v) => !_strength['isValid']
-                              ? tr('register.passwordRequirements')
-                              : null,
-                          _checkPassword,
-                          colors,
-                          isDark,
+                        _password,
+                        tr('register.password'),
+                        Icons.lock,
+                        (v) => !_strength['isValid']
+                            ? tr('register.passwordRequirements')
+                            : null,
+                        _checkPassword,
+                        colors,
+                        isDark,
                           isPass: true),
                       // Strength Meter
                       if (_password.text.isNotEmpty)
                         Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: LinearProgressIndicator(
-                                value: _strength['score'] / 4,
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: LinearProgressIndicator(
+                            value: _strength['score'] / 4,
                                 color: _strength['color'] ?? Colors.red)),
                       _buildInput(
-                          _confirm,
-                          tr('register.confirmPassword'),
-                          Icons.lock_outline,
-                          (v) => v != _password.text
-                              ? tr('register.passwordsDoNotMatch')
-                              : null,
-                          null,
-                          colors,
-                          isDark,
+                        _confirm,
+                        tr('register.confirmPassword'),
+                        Icons.lock_outline,
+                        (v) => v != _password.text
+                            ? tr('register.passwordsDoNotMatch')
+                            : null,
+                        null,
+                        colors,
+                        isDark,
                           isPass: true),
                       _buildTerms(colors),
                       const SizedBox(height: 24),
@@ -175,7 +192,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       _buildLoginLink(colors, isDark),
                       const SizedBox(height: 24),
                       Text(tr('register.privacyNotice'),
-                          textAlign: TextAlign.center,
+                        textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 11, color: Colors.grey)),
                       const SizedBox(height: 16),
                       LanguageSelector(textColor: colors['text']),
@@ -191,12 +208,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Widget _buildInput(
-      TextEditingController ctrl,
-      String label,
-      IconData icon,
-      String? Function(String?) validator,
-      Function(String)? onChanged,
-      Map<String, dynamic> colors,
+    TextEditingController ctrl,
+    String label,
+    IconData icon,
+    String? Function(String?) validator,
+    Function(String)? onChanged,
+    Map<String, dynamic> colors,
       bool isDark,
       {bool isPass = false}) {
     return Padding(
@@ -225,12 +242,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       value: _acceptTerms,
       onChanged: (v) => setState(() => _acceptTerms = v!),
       title: Wrap(children: [
-        Text(tr('register.acceptTerms') + ' ',
+        Text('${tr('register.acceptTerms')} ',
             style: TextStyle(color: colors['text'], fontSize: 13)),
         Text(tr('register.termsOfService'),
             style: TextStyle(
-                color: colors['primary'],
-                fontWeight: FontWeight.bold,
+              color: colors['primary'],
+              fontWeight: FontWeight.bold,
                 fontSize: 13))
       ]),
       controlAffinity: ListTileControlAffinity.leading,
@@ -243,8 +260,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget _buildRegisterButton(Map<String, dynamic> colors) {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
-          backgroundColor: colors['primary'],
-          minimumSize: const Size(double.infinity, 45),
+        backgroundColor: colors['primary'],
+        minimumSize: const Size(double.infinity, 45),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
       onPressed: _isLoading || !_acceptTerms ? null : _handleRegister,
@@ -258,15 +275,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _buildLoginLink(Map<String, dynamic> colors, bool isDark) {
     return Padding(
-        padding: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.only(top: 16),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(tr('register.alreadyHaveAccount') + ' ',
-              style: TextStyle(
+          Text('${tr('register.alreadyHaveAccount')} ',
+            style: TextStyle(
                   color: isDark ? Colors.grey[400] : Colors.grey[700])),
           GestureDetector(
-              onTap: () => Navigator.pop(context),
+            onTap: () => Navigator.pop(context),
               child: Text(tr('register.loginNow'),
-                  style: TextStyle(
+              style: TextStyle(
                       color: colors['primary'], fontWeight: FontWeight.bold)))
         ]));
   }

@@ -28,6 +28,8 @@ volumes:
   nginx_conf:
   redis_data:
   doc_repo_uploads: {}
+  drought_reports: {}
+  geo_inference_models: {}   # SAM + Prithvi-EO-2.0 checkpoints — persisted across container restarts
 
 services:
 
@@ -99,6 +101,7 @@ services:
         - VUE_APP_API_URL=${VUE_APP_API_URL}
         - VUE_PROXY_HOST=${VUE_PROXY_HOST}
         - VUE_APP_CSP_CONNECT_SRC=${VUE_APP_CSP_CONNECT_SRC}
+        - VUE_APP_MAPBOX_TOKEN=${MAPBOX_ACCESS_TOKEN}
     restart: unless-stopped
     env_file:
       - .env
@@ -140,6 +143,7 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
       - ./components/gov-chat-backend/Uploads:/app/Uploads
+      - ./secrets:/opt/genie:ro
     env_file:
       - .env
     depends_on:
@@ -160,6 +164,10 @@ services:
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - CSP_CONNECT_SRC=${CSP_CONNECT_SRC}
       - PORT=${BACKEND_PORT}
+      # Firebase Admin / FCM notifications
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-}
+      - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+      - NOTIFICATION_BROADCAST_SECRET=${NOTIFICATION_BROADCAST_SECRET:-}
       # Translation Service Configuration
       - TRANSLATION_BACKEND=${TRANSLATION_BACKEND:-cpu}
       - TRANSLATION_CPU_MODEL_ID=${TRANSLATION_CPU_MODEL_ID:-Xenova/nllb-200-distilled-600M}
@@ -209,6 +217,104 @@ services:
       - "3310:3310"
     networks:
       - genieai_network
+  
+  drought-monitoring:
+    build:
+      context: ./components/drought_monitoring
+      dockerfile: dockerfile
+    container_name: drought-monitoring
+    volumes:
+      - ./secrets:/app/secrets:ro
+      - drought_reports:/app/reports
+    environment:
+      - GEE_PROJECT=${GEE_PROJECT:-mewa-493916}
+      - DROUGHT_REPORTS_DIR=/app/reports
+      - ARANGO_URL=${ARANGO_URL}
+      - ARANGO_DB_NAME=${ARANGO_DB_NAME:-genie-ai}
+      - ARANGO_USER=${ARANGO_USER:-root}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      arango-vector-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - genieai_network
+
+  warning-system-engine:
+    build:
+      context: ./components/warning_system_engine
+      dockerfile: Dockerfile
+    container_name: warning-system-engine
+    env_file:
+      - .env
+    environment:
+      - DROUGHT_MONITORING_URL=http://drought-monitoring:8001
+      - ARANGO_URL=${ARANGO_URL}
+      - ARANGO_DB_NAME=${ARANGO_DB_NAME:-genie-ai}
+      - ARANGO_USER=${ARANGO_USER:-root}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD}
+      # Copernicus SEAS5 long-term pipeline
+      - CDSAPI_URL=${CDSAPI_URL:-https://cds.climate.copernicus.eu/api}
+      - CDSAPI_KEY=${CDSAPI_KEY:-}
+      - COPERNICUS_MONTHS_AHEAD=${COPERNICUS_MONTHS_AHEAD:-5}
+    depends_on:
+      arango-vector-db:
+        condition: service_healthy
+      drought-monitoring:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - genieai_network
+
+  geo-inference-worker:
+    build:
+      context: ./components/geo-inference-worker
+      dockerfile: Dockerfile
+    container_name: geo-inference-worker
+    runtime: nvidia
+    volumes:
+      - ./secrets:/app/secrets:ro              # GEE service account JSON
+      - geo_inference_models:/app/models       # SAM + Prithvi-EO-2.0 cached models
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - GEE_PROJECT_ID=${GEE_PROJECT_ID:-mewa-493916}
+      - GPU_INFERENCE=true
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    env_file:
+      - .env
+    networks:
+      - genieai_network
+    restart: unless-stopped
+
+  weather-mcp-standalone:
+    build:
+      context: ./components/weather-mcp-service
+      dockerfile: Dockerfile
+    container_name: weather-mcp-standalone
+    ports:
+      - "${WEATHER_MCP_PORT}:8000"
+    volumes:
+      - ./components/warning_system_engine:/warning_system_engine:ro
+      - drought_reports:/app/drought_reports:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - WARNING_SYSTEM_ENGINE_DIR=/warning_system_engine
+      - DROUGHT_REPORTS_DIR=/app/drought_reports
+      - DROUGHT_MONITORING_URL=http://drought-monitoring:8001
+      - GEO_INFERENCE_URL=http://geo-inference-worker:8001
+      - PORT=${WEATHER_MCP_PORT}
+      - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
+      - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
+    env_file:
+      - .env
+    depends_on:
+      - geo-inference-worker
+    networks:
+      - genieai_network
+    restart: unless-stopped
 
   arango-vector-db:
     image: arangodb/arangodb:3.12.4

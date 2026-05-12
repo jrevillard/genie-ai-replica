@@ -1,0 +1,137 @@
+"""
+Potato-specific risk evaluator for short-term daily weather conditions.
+
+All functions are pure (no I/O) so they can be unit tested in isolation.
+Uses DayForecast dicts as stored in ArangoDB weather_forecasts collection.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from app.crops.potato.profile import PotatoThresholds
+
+_TIER_LABELS = {0: "Normal", 1: "Advisory", 2: "Warning", 3: "Severe", 4: "Emergency"}
+
+
+@dataclass
+class DailyForecastPoint:
+    date: str
+    temp_min: float
+    temp_max: float
+    humidity_max: float
+    rain_mm: float
+    wind_kmh: float
+    source: str
+
+
+def to_point_from_dict(day: dict, source: str) -> DailyForecastPoint:
+    """Convert a raw ArangoDB DayForecast dict to DailyForecastPoint."""
+    return DailyForecastPoint(
+        date=day["date"],
+        temp_min=day["temperature"]["min"],
+        temp_max=day["temperature"]["max"],
+        humidity_max=day["humidity"],
+        rain_mm=day["precipitation"]["value"],
+        wind_kmh=day["wind"]["speed"],
+        source=source,
+    )
+
+
+def evaluate_potato_day(day: DailyForecastPoint, t: PotatoThresholds) -> list[str]:
+    """Return a list of human-readable threshold breaches for one forecast day."""
+    triggers: list[str] = []
+
+    if day.temp_max > t.temp_max:
+        triggers.append(
+            f"Max temperature {day.temp_max:.1f}°C exceeds potato limit {t.temp_max:.0f}°C"
+        )
+    if day.temp_min < t.temp_min:
+        triggers.append(
+            f"Min temperature {day.temp_min:.1f}°C below potato limit {t.temp_min:.0f}°C"
+        )
+    if day.humidity_max < t.humidity_min or day.humidity_max > t.humidity_max:
+        triggers.append(
+            f"Humidity {day.humidity_max:.0f}% outside potato range "
+            f"{t.humidity_min:.0f}–{t.humidity_max:.0f}%"
+        )
+    if day.rain_mm >= t.rain_critical:
+        triggers.append(f"Critical rainfall {day.rain_mm:.1f} mm/day")
+    elif day.rain_mm >= t.rain_medium:
+        triggers.append(f"High rainfall {day.rain_mm:.1f} mm/day")
+    if day.wind_kmh > t.wind_max:
+        triggers.append(
+            f"Wind {day.wind_kmh:.0f} km/h exceeds potato limit {t.wind_max:.0f} km/h"
+        )
+
+    return triggers
+
+
+def detect_late_blight(day: DailyForecastPoint) -> str | None:
+    """Return a disease watch string when late blight conditions are met, else None."""
+    temp_mean = (day.temp_min + day.temp_max) / 2.0
+    if 16 <= temp_mean <= 20 and day.humidity_max >= 90 and day.rain_mm >= 1:
+        return "Late blight conditions likely (cool, humid, wet)"
+    return None
+
+
+def classify_tier(triggers: list[str], flood_confirmed: bool) -> tuple[int, str]:
+    """
+    Map trigger list to a severity tier.
+
+    Severe triggers: temperature breach, wind breach, high/critical rainfall.
+    Advisory triggers: humidity deviation, disease watch.
+    """
+    severe = 0
+    advisory = 0
+
+    for trig in triggers:
+        t_lower = trig.lower()
+        if "critical rainfall" in t_lower:
+            severe += 1
+        elif "temperature" in t_lower or "wind" in t_lower or "high rainfall" in t_lower:
+            severe += 1
+        else:
+            advisory += 1
+
+    if severe == 0 and advisory == 0:
+        tier = 0
+    elif severe == 0:
+        tier = 1
+    elif severe == 1:
+        tier = 2
+    else:
+        tier = 3
+
+    tier = _escalate_for_flood(tier, flood_confirmed)
+    return tier, _TIER_LABELS[tier]
+
+
+def _escalate_for_flood(base_tier: int, flood_confirmed: bool) -> int:
+    if flood_confirmed and base_tier >= 3:
+        return min(base_tier + 1, 4)
+    return base_tier
+
+
+def build_push_message(assessment: dict) -> str:
+    location = assessment["location"]
+    forecast_date = assessment.get("forecast_date", "")
+    tier = assessment.get("tier", 0)
+    triggers = assessment.get("triggers", [])
+    disease_risks = assessment.get("disease_risks", [])
+
+    if tier >= 4:
+        return (
+            f"Potato emergency for {location}: severe weather and flood risk "
+            f"expected on {forecast_date}. Protect low-lying fields now."
+        )
+    if triggers:
+        return (
+            f"Potato warning for {location} on {forecast_date}: "
+            f"{triggers[0]}. Take protective action today."
+        )
+    if disease_risks:
+        return (
+            f"Potato advisory for {location}: "
+            f"{disease_risks[0]}. Monitor field conditions closely."
+        )
+    return f"Potato weather update for {location}: monitor conditions."

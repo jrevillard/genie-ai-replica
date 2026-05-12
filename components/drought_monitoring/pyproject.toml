@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "drought-alert"
+version = "0.1.0"
+description = "Drought monitoring and alert system"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  {name = "Khuzaima Aziz"}
+]
+
+dependencies = [
+  "earthengine-api",
+  "numpy",
+  "pandas",
+  "geemap",
+  "pyproj>=3.7.1",
+  "contextily>=1.7.0",
+  "reportlab",
+  "matplotlib",
+  "fastapi>=0.111.0",
+  "uvicorn[standard]>=0.29.0",
+  "python-arango==7.9.1",
+  "python-dotenv>=1.0.1",
+  "requests>=2.31.0"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+drought-alert = "drought_alert:main"

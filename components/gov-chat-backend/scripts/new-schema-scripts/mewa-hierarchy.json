@@ -1,0 +1,80 @@
+[
+  {
+    "category": "Weather Forecasts",
+    "services": [
+      "Short-term Forecast (1-7 days)",
+      "Extended Forecast (8-15 days)",
+      "Seasonal Outlook (1-6 months)"
+    ]
+  },
+  {
+    "category": "Extreme Weather Alerts",
+    "services": [
+      "Drought Alerts",
+      "Flood & Waterlogging Alerts",
+      "Heat Wave Alerts",
+      "Cold Spell & Frost Alerts",
+      "Cyclone & Storm Surge Alerts",
+      "Heavy Rainfall Alerts"
+    ]
+  },
+  {
+    "category": "Crop Alert Thresholds",
+    "services": [
+      "Cotton Threshold Profiles",
+      "Cucumber Threshold Profiles",
+      "Garlic Threshold Profiles",
+      "Gourd Threshold Profiles",
+      "Green Gram Kharif Threshold Profiles",
+      "Green Gram Robi Threshold Profiles",
+      "Groundnut Threshold Profiles",
+      "Groundnut Kharif Threshold Profiles",
+      "Groundnut Robi Threshold Profiles",
+      "Guava Threshold Profiles",
+      "Jackfruit Threshold Profiles",
+      "Jujube Threshold Profiles",
+      "Jute Threshold Profiles",
+      "Lentil Threshold Profiles",
+      "Litchi Threshold Profiles",
+      "Maize Threshold Profiles",
+      "Maize Kharif Threshold Profiles",
+      "Maize Rabi Threshold Profiles",
+      "Mango Threshold Profiles",
+      "Mustard Threshold Profiles",
+      "Onion Threshold Profiles",
+      "Papaya Threshold Profiles",
+      "Pepper Threshold Profiles",
+      "Pineapple Threshold Profiles",
+      "Pointed Gourd Threshold Profiles",
+      "Potato Threshold Profiles",
+      "Pumpkin Threshold Profiles",
+      "Rice Aman Threshold Profiles",
+      "Rice Aus Threshold Profiles",
+      "Rice Boro Threshold Profiles",
+      "Soybean Threshold Profiles",
+      "Sugarcane Threshold Profiles",
+      "Tomato Threshold Profiles",
+      "Wheat Threshold Profiles"
+    ]
+  },
+  {
+    "category": "Agricultural Guidance",
+    "services": [
+      "Crop Management",
+      "Irrigation & Water Management",
+      "Pest & Disease Management"
+    ]
+  },
+  {
+    "category": "Geospatial Risk Profiles",
+    "services": [
+      "Geospatial Model Interpretation"
+    ]
+  },
+  {
+    "category": "General Reference",
+    "services": [
+      "Government Information & Schemes"
+    ]
+  }
+]

@@ -48,7 +48,7 @@ class _PasswordResetInitiateScreenState
     if (_emailController.text.isEmpty && widget.isEmbedded) {
       // Logic for fetching logged-in user email if resetting from inside the app
       try {
-        final user = await UserService().getCurrentUser();
+        final user = UserService().getCurrentUser();
         if (user != null && user['email'] != null && mounted) {
           setState(() {
             _emailController.text = user['email'];
@@ -264,7 +264,7 @@ class _PasswordResetInitiateScreenState
     return Column(children: [
       const SizedBox(height: 16),
       Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(tr('passwordReset.rememberPassword') + ' ',
+        Text('${tr('passwordReset.rememberPassword')} ',
             style:
                 TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])),
         GestureDetector(

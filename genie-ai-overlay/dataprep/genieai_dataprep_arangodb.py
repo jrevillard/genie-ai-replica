@@ -19,7 +19,7 @@ from openai import AsyncOpenAI
 from langchain_community.embeddings import HuggingFaceHubEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
-from langchain_text_splitters import HTMLHeaderTextSplitter, RecursiveCharacterTextSplitter
+from langchain_text_splitters import HTMLHeaderTextSplitter, MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_arangodb import ArangoGraph
 # Import exceptions for robust error handling
 from arango.exceptions import AQLQueryExecuteError
@@ -83,6 +83,139 @@ Output strict JSON only:
 {"labels": ["Label1", "Label2"]}
 </SYSTEM INSTRUCTIONS>
 """.strip())
+
+# ---------------------------------------------------------------------------
+# Chunk text cleaner
+# ---------------------------------------------------------------------------
+# PyMuPDF encodes table cell addresses as "CropName.Month.WeekNumber" inside
+# chunk text (e.g. "Potato.November.47 = 22.3").  The raw week numbers leak
+# into LLM responses and confuse users.  Replace the pattern with a readable
+# form: "November (week 47)".
+
+_MONTH_WEEK_RE = re.compile(
+    r'\b[A-Z]\w*\.(January|February|March|April|May|June|July|August|September|'
+    r'October|November|December)\.(\d{1,2})\b'
+)
+
+
+def _clean_chunk_text(text: str) -> str:
+    """Replace 'CropName.Month.NN' with 'Month (week NN)'."""
+    return _MONTH_WEEK_RE.sub(r'\1 (week \2)', text)
+
+
+# ---------------------------------------------------------------------------
+# Aggregation chunk builder
+# ---------------------------------------------------------------------------
+# Crop-calendar PDFs are extracted column-by-column by PyMuPDF/Docling, so
+# "list all X" queries span multiple chunks.  This pass creates one synthetic
+# aggregation chunk per detected list-type column so that the retriever always
+# finds a single chunk with the complete answer.
+
+_METEO_COLUMN_RE = re.compile(
+    r'(?i)^(max\.?\s*temp|min\.?\s*temp|max\s+temp|min\s+temp|'
+    r'rainfall|humidity|rh\s*max|rh\s*min|wind\s*speed|wind\s*dir|'
+    r'wind\s+direction|sunshine|evapor|solar|ws\b|wd\b|'
+    r'time\s*duration|week|period|month|day\b|january|february|march|'
+    r'april|may|june|july|august|september|october|november|december)'
+)
+
+_LIFECYCLE_RE = re.compile(
+    r'(?i)\b(stage|sprouting|seedling|vegetative|tuber|maturity|harvest|'
+    r'germination|flowering|ripening|tillering|heading|panicle|booting|'
+    r'emergence|transplant|nursery)\b'
+)
+
+_ENTITY_RE = re.compile(
+    r'(?i)\b(pest|worm|aphid|mite|larva|larvae|nematode|insect|blight|'
+    r'fungus|bacteria|virus|rust|rot|mould|mold|weevil|caterpillar|beetle|'
+    r'fly|moth|bug|thrip|scale|whitefly|leafhopper|disease|pathogen|wire\s*worm)\b'
+)
+
+
+def _build_aggregation_chunks(chunks: list) -> list:
+    """
+    Scan raw chunks and return new synthetic aggregation chunks.
+
+    Two patterns are handled:
+
+    Type A — pure short-line list (no "=" in chunk):
+        First line is the column header; remaining lines are values.
+        E.g. "Stages\\nSprouting\\nSeedling\\n…" and "Maturity\\nHarvesting"
+        both get merged into one aggregated stages chunk.
+
+    Type B — key=value rows ("EntityName, N = Condition" format):
+        Multi-word entity names (pests, diseases) are collected from all
+        matching entries and listed in one aggregated chunk.
+    """
+    lifecycle_values: list = []
+    entity_names: set = set()
+
+    for chunk in chunks:
+        text = chunk.get("text", "")
+        if not text:
+            continue
+
+        lines = [l.strip() for l in text.splitlines() if l.strip()]
+
+        # Type A: pure short-line list — no "=" signs, all lines short
+        if '=' not in text:
+            all_short = all(len(l) <= 80 and len(l.split()) <= 8 for l in lines)
+            if all_short and len(lines) >= 2:
+                if _LIFECYCLE_RE.search(text):
+                    lifecycle_values.extend(lines)
+                elif _ENTITY_RE.search(text):
+                    for line in lines:
+                        # Skip bare category header lines ("Pest", "Disease", …)
+                        if not re.match(r'(?i)^(pest|disease|insect|pathogen)s?$', line):
+                            entity_names.add(line)
+
+        # Type B: "EntityName, N = Condition" key-value format
+        else:
+            for entry in re.split(r'\.\s+', text):
+                m = re.match(r'^(.+?),\s*\d+\s*=', entry.strip())
+                if not m:
+                    continue
+                col_name = m.group(1).strip()
+                if _METEO_COLUMN_RE.match(col_name):
+                    continue  # meteorological variable — not an entity name
+                if len(col_name.split()) >= 2:
+                    entity_names.add(col_name)
+
+    synthetic = []
+
+    if lifecycle_values:
+        seen: set = set()
+        unique: list = []
+        for v in lifecycle_values:
+            key = v.lower().strip()
+            if key not in seen:
+                seen.add(key)
+                if not re.match(r'(?i)^stages?$', v.strip()):
+                    unique.append(v)
+        if unique:
+            body = "\n".join(f"- {v}" for v in unique)
+            synthetic.append({
+                "text": (
+                    "[AGGREGATED] Potato crop stages, growth phases, and development cycle "
+                    "(complete list of all stages in this document):\n" + body
+                ),
+                "headings": ["Stages"],
+                "page_numbers": [],
+            })
+
+    if entity_names:
+        body = "\n".join(f"- {name}" for name in sorted(entity_names))
+        synthetic.append({
+            "text": (
+                "[AGGREGATED] Pests, diseases, and organisms affecting this crop "
+                "(complete list from this document):\n" + body
+            ),
+            "headings": ["Pests", "Diseases"],
+            "page_numbers": [],
+        })
+
+    return synthetic
+
 
 @OpeaComponentRegistry.register("GENIE_DATAPREP_ARANGODB")
 class GenieArangoDataprep(OpeaArangoDataprep):
@@ -268,25 +401,85 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     # --- Core Pipeline Steps ---
 
-    async def _load_and_chunk(self, doc_path: DocPath) -> List[str]:
+    async def _load_and_chunk(self, doc_path: DocPath) -> List[dict]:
+        """
+        Extract and chunk a document.
+
+        Returns List[dict] with keys:
+            text         – chunk body, headings prepended for better embeddings
+            headings     – raw heading list (stored in ArangoDB metadata)
+            page_numbers – page list (stored in ArangoDB metadata)
+
+        For non-Docling paths (plain text, fallback) headings and page_numbers are [].
+        """
         path = doc_path.path
-        
-        # --- FIX: Expanded Docling Support ---
-        # Added .docx, .pptx, .xlsx, .md, .txt, .html support
+
         docling_extensions = (".pdf", ".docx", ".pptx", ".xlsx", ".html", ".txt", ".md", ".asciidoc")
-        
+
         if path.endswith(docling_extensions) and CONTENT_EXTRACTION_METHOD == "docling":
-            logger.info(f"Using Docling for file: {path}")
-            content = await docling_document_loader(path)
-        else:
-            logger.info(f"Using Standard Loader for file: {path}")
-            content = await document_loader(path)
+            logger.info(f"Using Docling+HybridChunker for file: {path}")
+            # Returns list[dict]: {text, headings, page_numbers}
+            raw_chunks = await docling_document_loader(path)
+
+            if not raw_chunks:
+                return []
+
+            enriched = []
+            for chunk in raw_chunks:
+                text     = chunk.get("text", "")
+                headings = chunk.get("headings") or []
+                pages    = chunk.get("page_numbers") or []
+
+                if not is_valid_content(text):
+                    continue
+
+                # Prepend heading breadcrumb so the embedding captures section context.
+                # E.g. "Pest Management > BPH Control\n\n<chunk body>"
+                text = _clean_chunk_text(text)
+
+                if headings:
+                    heading_prefix = " > ".join(headings)
+                    embedded_text = f"{heading_prefix}\n\n{text}"
+                else:
+                    embedded_text = text
+
+                enriched.append({
+                    "text":         embedded_text,
+                    "headings":     headings,
+                    "page_numbers": pages,
+                })
+
+            enriched += _build_aggregation_chunks(enriched)
+            return enriched
+
+        # ── Non-Docling path ────────────────────────────────────────────────────
+        logger.info(f"Using Standard Loader for file: {path}")
+        content = await document_loader(path)
 
         if not content:
             return []
 
         if path.endswith(".html"):
             text_splitter = HTMLHeaderTextSplitter(headers_to_split_on=[("h1", "H1"), ("h2", "H2")])
+            docs = text_splitter.split_text(content)
+            plain_chunks = [d.page_content if hasattr(d, "page_content") else str(d) for d in docs]
+        elif path.endswith(".md"):
+            md_splitter = MarkdownHeaderTextSplitter(
+                headers_to_split_on=[("#", "H1"), ("##", "H2"), ("###", "H3")],
+                strip_headers=False,
+            )
+            md_docs = md_splitter.split_text(content)
+            for doc in md_docs:
+                h1 = doc.metadata.get("H1", "")
+                if h1 and not doc.page_content.lstrip().startswith("# "):
+                    doc.page_content = f"# {h1}\n{doc.page_content}"
+            secondary_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=doc_path.chunk_size,
+                chunk_overlap=doc_path.chunk_overlap,
+                separators=get_separators(),
+            )
+            docs = secondary_splitter.split_documents(md_docs)
+            plain_chunks = [d.page_content for d in docs]
         else:
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=doc_path.chunk_size,
@@ -294,22 +487,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 add_start_index=True,
                 separators=get_separators(),
             )
-
-        if isinstance(content, list): 
-            raw_chunks = []
-            for item in content:
-                item_str = str(item)
-                if len(item_str) > doc_path.chunk_size:
-                    raw_chunks.extend(text_splitter.split_text(item_str))
-                else:
-                    raw_chunks.append(item_str)
-            plain_chunks = raw_chunks
-        else:
             docs = text_splitter.create_documents([content])
             plain_chunks = [d.page_content for d in docs]
 
-        valid_chunks = [c for c in plain_chunks if is_valid_content(c)]
-        return valid_chunks
+        # Wrap plain strings into dicts so the rest of the pipeline is uniform
+        result = [
+            {"text": _clean_chunk_text(c), "headings": [], "page_numbers": []}
+            for c in plain_chunks
+            if is_valid_content(c)
+        ]
+        result += _build_aggregation_chunks(result)
+        return result
 
     async def _run_guardrail(self, plain_chunks: List[str]) -> Dict[str, Any]:
         if not GUARDRAIL_ENABLED:
@@ -465,22 +653,31 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             results.append({"text": text, "labels": selected})
         return results
 
-    async def _apply_labels(self, plain_chunks: List[str], all_labels: List[str], file_labels: List[str], file_id: str):
+    async def _apply_labels(self, chunks: List[dict], all_labels: List[str], file_labels: List[str], file_id: str):
+        """
+        chunks is List[dict] with keys: text, headings, page_numbers.
+        Returns the same list with a 'labels' key added to each dict.
+        """
+        # Extract plain text strings for the labeling functions (unchanged internals)
+        plain_texts = [c["text"] for c in chunks]
+
         if not all_labels:
             await self._write_ingestion_log(file_id, "WARN", "Labeling", "No labels found in Taxonomy. Using only file labels.")
-            return [{"text": c, "labels": file_labels if file_labels else []} for c in plain_chunks]
+            labelled = [{"text": t, "labels": file_labels if file_labels else []} for t in plain_texts]
+        elif LABELING_STRATEGY == "embedding":
+            labelled = await asyncio.to_thread(self._label_with_embedding, plain_texts, all_labels)
+        elif LABELING_STRATEGY == "bm25":
+            labelled = await asyncio.to_thread(self._label_with_bm25, plain_texts, all_labels)
+        else:
+            labelled = await self._label_with_llm(plain_texts, all_labels, file_labels, file_id)
 
         logger.info(f"Labeling using strategy: {LABELING_STRATEGY}")
-        
-        if LABELING_STRATEGY == "embedding":
-            # Offload CPU-bound embedding calculations to a thread
-            return await asyncio.to_thread(self._label_with_embedding, plain_chunks, all_labels)
-        elif LABELING_STRATEGY == "bm25":
-            # Offload CPU-bound BM25 calculations to a thread
-            return await asyncio.to_thread(self._label_with_bm25, plain_chunks, all_labels)
-        else:
-            # Default to LLM (with retry fix and advisory logic)
-            return await self._label_with_llm(plain_chunks, all_labels, file_labels, file_id)
+
+        # Merge labels back into the original dicts (preserving headings + page_numbers)
+        for i, chunk in enumerate(chunks):
+            chunk["labels"] = labelled[i]["labels"]
+
+        return chunks
 
     # --- Main Ingestion Logic (Async + Batched) ---
     
@@ -574,7 +771,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 await self._write_ingestion_log(input.file_id, "INFO", "Chunking", f"Generated {len(chunks)} chunks.")
 
                 # 3. Guardrail Check
-                gr_result = await self._run_guardrail(chunks)
+                gr_result = await self._run_guardrail([c["text"] for c in chunks])
                 if not gr_result["success"]:
                     await self._write_ingestion_log(input.file_id, "ERROR", "Guardrail", gr_result["message"])
                     raise Exception("Guardrail Violation")
@@ -594,7 +791,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             "file_id": input.file_id,
                             "file_path": input.storage_path,
                             "chunk_index": i,
-                            "chunk_labels": doc["labels"]
+                            "chunk_labels": doc["labels"],
+                            "headings": doc.get("headings", []),
+                            "page_numbers": doc.get("page_numbers", []),
                         }
                     ))
 

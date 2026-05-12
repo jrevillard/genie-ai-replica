@@ -14,22 +14,15 @@ Future<void> openWebFile({
   required String accessToken,
   required Map<String, dynamic> docMetadata,
 }) async {
-  final ApiService _api = ApiService();
-  final String viewUrl = '${_api.baseUrl}/files/$fileId/view';
+  final ApiService api = ApiService();
+  final String viewUrl = '${api.baseUrl}/files/$fileId/view';
   debugPrint("[WEB_UTILS] Opening web window for: $viewUrl");
 
   // Check Theme for Dark Mode Support in Markdown Rendering
   final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
   // 1. Open the window IMMEDIATELY to bypass popup blockers.
-  final html.WindowBase? openedWindow = html.window.open('', '_blank');
-
-  if (openedWindow == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(tr('common.popupBlocked'))), // TRANSLATED
-    );
-    return;
-  }
+  final html.WindowBase openedWindow = html.window.open('', '_blank');
 
   try {
     // 2. Fetch the content
@@ -58,7 +51,7 @@ Future<void> openWebFile({
           } else {
             // Standard File
             final url = html.Url.createObjectUrlFromBlob(blob);
-            openedWindow.location?.href = url;
+            openedWindow.location.href = url;
 
             Future.delayed(const Duration(seconds: 15), () {
               html.Url.revokeObjectUrl(url);
@@ -153,7 +146,7 @@ $htmlContent
       final url = html.Url.createObjectUrlFromBlob(htmlBlob);
 
       // Navigate the window to our generated HTML blob
-      win.location?.href = url;
+      win.location.href = url;
 
       Future.delayed(
           const Duration(seconds: 15), () => html.Url.revokeObjectUrl(url));
@@ -191,9 +184,7 @@ Future<html.Blob> _unwrapBlob(html.Blob originalBlob, String mimeType) async {
           if (parsed.containsKey('data') && parsed['data'] is Map) {
             content = parsed['data']['base64'] ?? parsed['data']['content'];
           }
-          if (content == null) {
-            content = parsed['base64'] ?? parsed['content'] ?? parsed['file'];
-          }
+          content ??= parsed['base64'] ?? parsed['content'] ?? parsed['file'];
         }
 
         if (content != null) {
@@ -235,9 +226,11 @@ String _getMimeType(Map<String, dynamic> doc) {
 
   if (type == 'pdf' || name.endsWith('.pdf')) return 'application/pdf';
   if (type == 'html' || name.endsWith('.html')) return 'text/html';
-  if (type == 'docx' || name.endsWith('.docx'))
+  if (type == 'docx' || name.endsWith('.docx')) {
     return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-  if (type == 'xlsx' || name.endsWith('.xlsx'))
+  }
+  if (type == 'xlsx' || name.endsWith('.xlsx')) {
     return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  }
   return 'application/octet-stream';
 }

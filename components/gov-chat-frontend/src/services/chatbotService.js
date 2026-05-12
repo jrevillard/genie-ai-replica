@@ -1,6 +1,22 @@
 // src/services/chatbotService.js - Chatbot and Analytics Service
 import httpService from './httpService';
 
+function getLoginTimeIso() {
+  return localStorage.getItem('loginTimeIso') || new Date().toISOString();
+}
+
+function buildClientContext() {
+  const now = new Date();
+  return {
+    currentTimeIso: now.toISOString(),
+    loginTimeIso: getLoginTimeIso(),
+    timezoneOffsetMinutes: -now.getTimezoneOffset(),
+    timezoneName: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+    locale: localStorage.getItem('locale') || document.documentElement.lang || navigator.language || 'en',
+    platform: 'web',
+  };
+}
+
 export default {
   /**
    * Submit a query to the chatbot
@@ -12,9 +28,14 @@ export default {
       console.log('Submitting query:', JSON.stringify(queryData, null, 2));
       const startTime = Date.now();
       
+      const now = new Date();
       const response = await httpService.post('queries', {
         ...queryData,
-        timestamp: new Date().toISOString()
+        timestamp: now.toISOString(),
+        clientContext: {
+          ...buildClientContext(),
+          ...(queryData.clientContext || {})
+        }
       });
       
       if (response.data.response && response.data.response.startsWith('Error:')) {

@@ -21,7 +21,7 @@
           {{
             $config && $config.app
               ? $config.app.title
-              : $t("app.name", "Huduma AI")
+              : $t("app.name", "MEWA")
           }}
         </h1>
       </div>

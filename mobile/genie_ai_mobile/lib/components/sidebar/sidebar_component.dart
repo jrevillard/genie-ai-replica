@@ -3,7 +3,6 @@ import 'package:genie_ai_mobile/components/sidebar/service_tree_panel.dart';
 import 'package:genie_ai_mobile/components/sidebar/chat_folders_panel.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N SERVICE
-import 'package:intl/intl.dart';
 
 class SidebarComponent extends StatefulWidget {
   final Map<String, dynamic> user;

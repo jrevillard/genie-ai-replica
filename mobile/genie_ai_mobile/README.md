@@ -4,7 +4,7 @@
 
 **Author:** ITU (International Telecommunication Union)
 **Framework:** Flutter (Dart)
-**Target Platforms:** Android, iOS, Web, Windows, macOS, Linux
+**Target Platforms:** Android primary target. Web/Linux desktop can be used for UI and API debugging, but voice conversation is intended for Android builds.
 **Version:** 1.0.0+1
 **License:** See project license file
 
@@ -21,8 +21,9 @@ This mobile app serves as a complete, production-ready example showcasing:
 - **Framework Integration** - How to connect a Flutter app to the GENIE.AI RAG backend API
 - **Authentication Flow** - Complete user authentication (login, registration, password reset)
 - **Chat Interface** - Conversational AI chatbot with markdown rendering and document references
+- **Voice Conversation** - Android handsfree mode, speech input, and spoken replies for agriculture/weather conversations
 - **Service Discovery** - Hierarchical service tree navigation and category filtering
-- **Multi-Language Support** - Internationalization (i18n) architecture for 11 languages
+- **Multi-Language Support** - Internationalization (i18n) architecture with Bengali as the default language for the Bangladesh MEWA app
 - **Responsive Design** - Adaptive layouts for mobile, tablet, and desktop
 - **Offline Capabilities** - Online/offline detection with sync preparation
 - **Theme System** - Configuration-driven theming with dark/light mode
@@ -44,7 +45,7 @@ Developers can use this codebase as a foundation to:
 - **Clean Separation** - UI components, services, and utilities are organized for maintainability
 - **Configuration-Driven** - Theme, Quick Help buttons, and app settings are JSON-configurable
 - **Scalable Structure** - Easy to add new languages, services, and features
-- **Platform-Agnostic** - Core business logic works across Android, iOS, Web, and desktop
+- **Android Voice Target** - Core chat logic can run across platforms, but speech-to-text and text-to-speech should be validated on Android devices
 
 Use this app as a starting point for your own GENIE.AI-powered mobile solution!
 
@@ -84,7 +85,8 @@ The app follows a clean architecture with separated concerns for UI components, 
 
 ### Core Functionality
 - **AI Chatbot Interface** - Conversational AI powered by RAG (Retrieval-Augmented Generation)
-- **Multi-Language Support** - 11 languages: English, German, Arabic, Spanish, French, Indonesian, Portuguese, Russian, Swahili, Thai, Chinese
+- **Handsfree Voice Mode** - Full-screen voice overlay on the main page that listens, responds aloud, and saves the conversation to chat history
+- **Multi-Language Support** - Bengali default locale, plus English and other configured app languages
 - **Authentication System** - Login, registration, password reset with email verification
 - **Service Categories** - Browse and filter government services by category
 - **Chat History** - Persistent conversation history with search capabilities
@@ -123,7 +125,7 @@ The app follows a clean architecture with separated concerns for UI components, 
 - **compileSdk**: 36
 - **targetSdk**: 36
 - **minSdk**: 21 (Android 5.0 Lollipop)
-- **NDK**: 27.0.12077973
+- **NDK**: 28.2.13676358
 
 ### Dependencies
 
@@ -142,6 +144,8 @@ The app follows a clean architecture with separated concerns for UI components, 
 | `cached_network_image` | ^3.3.1 | Cached image loading |
 | `flutter_svg` | ^2.1.0 | SVG image support |
 | `url_launcher` | ^6.3.1 | Open URLs in browser/apps |
+| `speech_to_text` | ^7.3.0 | Android speech recognition for voice input |
+| `flutter_tts` | ^4.2.5 | Spoken replies and handsfree conversation output |
 
 #### File Handling
 | Package | Version | Purpose |
@@ -249,7 +253,7 @@ assets/                                 # Static assets
 
 ### Optional Software
 - **Xcode** (macOS only) - Required for iOS builds
-- **Chrome/Edge** - For web development testing
+- **Microsoft Edge** - For web development testing
 
 ### IDE Setup (VS Code)
 
@@ -292,6 +296,12 @@ flutter pub get
 ### 3. Verify Flutter Setup
 
 ```bash
+# Linux
+export CHROME_EXECUTABLE=/usr/bin/microsoft-edge
+
+# Windows PowerShell
+$env:CHROME_EXECUTABLE = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+
 flutter doctor
 ```
 
@@ -309,7 +319,15 @@ Edit [assets/config/genie-ai-config.json](assets/config/genie-ai-config.json) to
 
 ```bash
 # Web (fastest for UI testing)
+export CHROME_EXECUTABLE=/usr/bin/microsoft-edge
 flutter run -d chrome
+
+# Web against hosted API
+export CHROME_EXECUTABLE=/usr/bin/microsoft-edge
+flutter run -d chrome --dart-define=API_BASE_URL=https://164.52.194.143/api
+
+# Android/Linux against hosted API
+flutter run --dart-define=API_BASE_URL=https://164.52.194.143/api
 
 # Android (requires device or emulator)
 flutter run
@@ -326,6 +344,13 @@ flutter run -d <device-id>
 ### App Configuration (genie-ai-config.json)
 
 The app uses a JSON configuration file for customization:
+
+The API base URL defaults to `https://164.52.194.143/api` in [api_service.dart](lib/services/api_service.dart). Override it at run or build time with:
+
+```bash
+flutter run --dart-define=API_BASE_URL=https://164.52.194.143/api
+flutter build apk --release --dart-define=API_BASE_URL=https://164.52.194.143/api
+```
 
 ```json
 {
@@ -357,6 +382,21 @@ The app uses a JSON configuration file for customization:
 }
 ```
 
+### Bengali Service Tree Data
+
+The app default locale is Bengali (`bn`) for the Bangladesh MEWA build. The side service tree requests categories from the backend with `locale=bn`:
+
+```text
+GET /api/services/categories?locale=bn
+```
+
+The backend must have Bengali translation rows for service categories and services. If those BN rows are missing, the backend can return `name: null` or `children: [null, ...]`. The mobile app now falls back to English labels so the UI does not show `null`, but the recommended production fix is to populate Bengali entries in the backend translation collections:
+
+- `serviceCategoryTranslations` for category names
+- `serviceTranslations` for child service names
+
+After adding translations, restart or refresh the app so `ServiceTreePanel` reloads categories for the current locale.
+
 ### Assets (pubspec.yaml)
 
 All assets must be declared in [pubspec.yaml](pubspec.yaml):
@@ -385,6 +425,13 @@ For release builds, ensure these permissions are present in [android/app/src/mai
 <manifest ...>
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 
     <application
         ...
@@ -418,10 +465,36 @@ The app includes `MyHttpOverrides` in [main.dart](lib/main.dart:36-44) to bypass
 
 #### Web Development (Fastest Iteration)
 ```bash
+export CHROME_EXECUTABLE=/usr/bin/microsoft-edge
 flutter run -d chrome
 ```
 - Note: CORS and asset handling differ from mobile
+- Flutter still uses the `chrome` device id for web runs, but `CHROME_EXECUTABLE` makes it launch Microsoft Edge.
 - Use for UI/UX testing only
+
+Normal username/password login uses the hosted legacy JWT auth routes from `gov-chat-backend`:
+
+- `POST /api/auth/login`
+- `POST /api/auth/register`
+
+```bash
+flutter run --dart-define=API_BASE_URL=https://164.52.194.143/api
+```
+
+The app hashes the password before sending it as `encPassword`, matching the MEWA backend contract.
+
+#### Voice and Handsfree Testing
+
+Voice conversation is intended for Android builds. Linux desktop runs are useful for checking login, API calls, layout, and chat behavior, but Linux does not provide implementations for the current `speech_to_text` and `flutter_tts` plugins. If you run on Linux and see `MissingPluginException` for voice channels, that is expected for desktop voice testing.
+
+For Android testing:
+
+```bash
+flutter devices
+flutter run -d <android-device-id> --dart-define=API_BASE_URL=https://164.52.194.143/api
+```
+
+Bengali voice input depends on Android/Google Speech Services having Bengali recognition available on the device. The app requests Bengali with locale `bn_BD`, but if the device has no Bengali recognizer installed or enabled, Android may fall back to another language.
 
 #### Android Debug
 ```bash
@@ -494,10 +567,10 @@ The script:
 flutter clean
 
 # 2. Build APK (for direct installation)
-flutter build apk --no-tree-shake-icons
+flutter build apk --no-tree-shake-icons --dart-define=API_BASE_URL=https://164.52.194.143/api
 
 # 3. Build App Bundle (for Play Store)
-flutter build appbundle --no-tree-shake-icons
+flutter build appbundle --no-tree-shake-icons --dart-define=API_BASE_URL=https://164.52.194.143/api
 ```
 
 **Output locations:**
@@ -640,6 +713,31 @@ Before public release:
 - Run build from external PowerShell terminal
 - Move project out of cloud-sync folders (OneDrive, Dropbox)
 - Use the [build-release.ps1](build-release.ps1) script
+
+### Linux MissingPluginException for speech or TTS
+
+**Context:** Running `flutter run` on Linux shows errors like `No implementation found for method initialize on channel plugin.csdcorp.com/speech_to_text` or `No implementation found for method awaitSpeakCompletion on channel flutter_tts`.
+
+**Cause:** The app is being run as a Linux desktop app. The current voice plugins are meant to be used in the Android build for this project.
+
+**Solution:** Test voice and handsfree mode on a physical Android device. Linux desktop can still be used for UI, login, API, and normal text chat testing.
+
+```bash
+flutter run -d <android-device-id> --dart-define=API_BASE_URL=https://164.52.194.143/api
+```
+
+### Bengali service categories display as null
+
+**Context:** After switching the app to Bengali, the service tree shows `Unknown Category` or service rows named `null`.
+
+**Cause:** The backend response for `GET /api/services/categories?locale=bn` is missing Bengali translations for one or more categories/services.
+
+**Solution:** Populate Bengali translation rows in the backend collections:
+
+- `serviceCategoryTranslations`
+- `serviceTranslations`
+
+The mobile app has an English fallback to avoid rendering `null`, but complete Bengali labels require backend BN translation data.
 
 ### Failed host lookup (errno = 7)
 

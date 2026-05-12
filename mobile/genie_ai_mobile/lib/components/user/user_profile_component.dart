@@ -8,8 +8,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:country_picker/country_picker.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:genie_ai_mobile/services/user_profile_proxy.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N SERVICE
+import 'package:genie_ai_mobile/services/auth/auth_providers.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -22,7 +24,13 @@ class UserProfileScreen extends StatefulWidget {
 
 class _UserProfileScreenState extends State<UserProfileScreen>
     with SingleTickerProviderStateMixin {
-  final UserProfileProxy _proxy = UserProfileProxy();
+  UserProfileProxy? _proxy;
+
+  UserProfileProxy get proxy => _proxy ??= UserProfileProxy(
+        httpClient: ProviderScope.containerOf(context)
+            .read(apiServiceProvider)
+            .httpClient,
+      );
   final ImagePicker _imagePicker = ImagePicker();
   final FilePicker _filePicker = FilePicker.platform;
 
@@ -137,8 +145,8 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     });
 
     try {
-      debugPrint('[PROFILE SCREEN] Calling _proxy.getProfile($_userId)');
-      final data = await _proxy.getProfile(_userId);
+      debugPrint('[PROFILE SCREEN] Calling proxy.getProfile($_userId)');
+      final data = await proxy.getProfile(_userId);
       debugPrint(
         '[PROFILE SCREEN] API response received. Keys: ${data.keys.toList()}',
       );
@@ -461,7 +469,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       debugPrint('[PROFILE SCREEN] Encoding files for API transmission...');
       final dataToSubmit = await _prepareDataForSubmission(_formData);
 
-      await _proxy.updateProfile(_userId, dataToSubmit);
+      await proxy.updateProfile(_userId, dataToSubmit);
 
       debugPrint('[PROFILE SCREEN] Profile saved successfully');
       if (mounted) {

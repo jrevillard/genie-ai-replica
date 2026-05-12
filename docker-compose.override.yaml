@@ -1,0 +1,22 @@
+# Deployment-local override for non-Swarm GPU host (app.youngailinz.org).
+# The main docker-compose.yaml is designed for Docker Swarm; under plain
+# docker compose, GPU-using services need the gpus directive explicitly.
+#
+# Also marks hf_cache as external so docker compose down -v cannot wipe the
+# downloaded LLM weights (e.g. ~15 GB for Qwen2.5-7B-Instruct).
+services:
+  vllm:
+    gpus: all
+  vllm-translation-guardrail:
+    gpus: all
+  tei:
+    gpus: all
+  tei_reranker:
+    gpus: all
+  dataprep-arango-service:
+    gpus: all
+
+volumes:
+  hf_cache:
+    external: true
+    name: genie-ai_hf_cache

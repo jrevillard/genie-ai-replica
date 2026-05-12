@@ -181,6 +181,26 @@ server {
     # Uses a variable for proxy_pass so nginx resolves the hostname at request time
     # via the Docker DNS resolver, instead of failing at startup if frontend is down.
     set $frontend_addr ${NGINX_FRONTEND_HOST}:${NGINX_FRONTEND_PORT};
+
+    # config.js is the runtime app config (window.APP_CONFIG) — must NOT be
+    # cached at CDN/browser. Defined before location / so the exact match wins.
+    # The upstream Vue static-file server tags it with the same long max-age
+    # as the content-hashed bundles; we strip and replace with no-store.
+    location = /config.js {
+        include conf.d/security-headers.inc;
+        proxy_pass http://$frontend_addr;
+        proxy_http_version 1.1;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host ${NGINX_PUBLIC_DOMAIN};
+        proxy_hide_header Cache-Control;
+        proxy_hide_header Pragma;
+        proxy_hide_header Expires;
+        add_header Cache-Control "no-store, max-age=0" always;
+        add_header Pragma "no-cache" always;
+    }
+
     location / {
         include conf.d/security-headers.inc;
 

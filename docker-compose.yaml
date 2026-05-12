@@ -351,6 +351,7 @@ services:
     environment:
       - ARANGO_URL=http://arango-vector-db:8529
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
+      - ARANGO_DB_NAME=${ARANGO_DB_NAME:-${ARANGO_DB:-genie-ai}}
       - ARANGO_USER=${ARANGO_USER:-root}
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
     deploy:
@@ -400,6 +401,7 @@ services:
       # Secrets (required, no defaults in code)
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
+      - ARANGO_DB_NAME=${ARANGO_DB_NAME:-${ARANGO_DB:-genie-ai}}
       - ARANGO_URL=http://arango-vector-db:8529
       - ARANGO_USER=${ARANGO_USER:-root}
       # Keycloak OIDC discovery — must use the public URL (via NGINX proxy),
@@ -466,6 +468,7 @@ services:
       # Secrets (required, no defaults in code)
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
+      - ARANGO_DB_NAME=${ARANGO_DB_NAME:-${ARANGO_DB:-genie-ai}}
       - ARANGO_URL=http://arango-vector-db:8529
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
       - KC_REALM=${KEYCLOAK_REALM:-genie}
@@ -885,7 +888,7 @@ services:
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
       ARANGO_URL: http://arango-vector-db:8529
       ARANGO_DB: ${ARANGO_DB:-genie-ai}
-      ARANGO_DB_NAME: ${ARANGO_DB:-genie-ai}
+      ARANGO_DB_NAME: ${ARANGO_DB_NAME:-${ARANGO_DB:-genie-ai}}
       ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME:-GRAPH}
       ARANGO_USERNAME: ${ARANGO_USERNAME:-root}
       ARANGO_PASSWORD: ${ARANGO_PASSWORD}
@@ -945,6 +948,7 @@ services:
       # ArangoDB connection
       ARANGO_URL: http://arango-vector-db:8529
       ARANGO_DB: ${ARANGO_DB:-genie-ai}
+      ARANGO_DB_NAME: ${ARANGO_DB_NAME:-${ARANGO_DB:-genie-ai}}
       ARANGO_USERNAME: ${ARANGO_USERNAME:-root}
       ARANGO_PASSWORD: ${ARANGO_PASSWORD}
       ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME:-GRAPH}
@@ -1019,6 +1023,8 @@ services:
       RERANKING_THRESHOLD: ${RERANKING_THRESHOLD:-0.001}
       LLM_SERVER_HOST_IP: vllm
       LLM_SERVER_PORT: 8000
+      LLM_MODEL: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      CHATQNA_CATEGORY_PROMPT_EXTENSIONS_PATH: ${CHATQNA_CATEGORY_PROMPT_EXTENSIONS_PATH:-/app/configs/chatqna/category-prompt-extensions.json}
       GUARDRAIL_SERVICE_HOST_IP: guardrail
       GUARDRAIL_SERVICE_PORT: 9090
       TRANSLATION_SERVICE_HOST_IP: vllm-translation-guardrail
@@ -1030,6 +1036,8 @@ services:
       KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
+    volumes:
+      - ./configs/chatqna:/app/configs/chatqna:ro
     networks:
       - genieai_network
     healthcheck:

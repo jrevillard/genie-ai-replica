@@ -75,11 +75,11 @@ _CHATQNA_SYSTEM_DEFAULT = """You are a friendly and polite information assistant
 Your task is to answer the user's latest question using only the content provided from the knowledge base.
 
 **Instructions:**
-- Do not invent or assume information
-- If the answer is not in the provided content, inform the user that the information is unavailable
-- Use the user's name, gender, age, preferences, and chat history to tailor and personalise your responses
-- Keep answers informative but concise; provide detailed explanations
-  only when necessary or explicitly requested
+- Do not invent or assume information.
+- If the answer is not in the provided content, inform the user that the information is unavailable.
+- Use the user's name, gender, age, preferences, and chat history to tailor and personalise your responses.
+- Keep answers informative but concise; provide detailed explanations only when necessary or explicitly requested.
+- When you use information from a specific document, cite it inline using the format [Source: <document title>] right after the statement it supports. Use only titles that appear in the provided content; do not invent source titles.
 
 In line with the above instructions, generate a reply to the user's latest
 message in the chat history based on the relevant content provided."""
@@ -87,6 +87,41 @@ CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", "").strip() or _CHATQ
 CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "") or "true"
 CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", "").strip() or None
 SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
+
+
+# Per-knowledge-area system prompt extensions.
+# JSON file maps categoryLabel (matches serviceCategories.nameEN) to additional
+# instructions appended to the base CHATQNA_SYSTEM_PROMPT when that category is
+# the active retrieval context. Keys starting with "_" are reserved (comments,
+# shared snippets) and ignored at lookup time. Keeps the base prompt generic
+# while allowing domain-specific tone/safety guidance per knowledge area.
+CHATQNA_CATEGORY_PROMPT_EXTENSIONS_PATH = os.getenv(
+    "CHATQNA_CATEGORY_PROMPT_EXTENSIONS_PATH",
+    "/app/configs/chatqna/category-prompt-extensions.json",
+)
+
+
+def _load_category_prompt_extensions():
+    path = CHATQNA_CATEGORY_PROMPT_EXTENSIONS_PATH
+    if not path or not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {}
+        return {k: v for k, v in data.items() if isinstance(v, str) and not k.startswith("_")}
+    except Exception as e:
+        logger.error(f"[CategoryPromptExtensions] Failed to load from {path}: {e}")
+        return {}
+
+
+CATEGORY_PROMPT_EXTENSIONS = _load_category_prompt_extensions()
+logger.info(
+    f"[CategoryPromptExtensions] Loaded {len(CATEGORY_PROMPT_EXTENSIONS)} extensions "
+    f"from {CHATQNA_CATEGORY_PROMPT_EXTENSIONS_PATH} "
+    f"(keys: {sorted(CATEGORY_PROMPT_EXTENSIONS.keys())})"
+)
 
 
 ##################################################################################################################################
@@ -422,6 +457,20 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         ###### Token limit handling ######
         ##################################
         system_instructions = CHATQNA_SYSTEM_PROMPT
+
+        # Per-knowledge-area extension: if the active category has a registered
+        # extension in CATEGORY_PROMPT_EXTENSIONS, append it after the base prompt.
+        retrieval_context = kwargs.get("retrieval_context") or {}
+        if isinstance(retrieval_context, dict) and CATEGORY_PROMPT_EXTENSIONS:
+            category_label = retrieval_context.get("categoryLabel")
+            if category_label:
+                extension = CATEGORY_PROMPT_EXTENSIONS.get(category_label)
+                if extension:
+                    system_instructions = system_instructions + "\n\n" + extension
+                    if logflag:
+                        logger.info(
+                            f"[SYSTEM PROMPT] Appended extension for category: {category_label}"
+                        )
 
         # CRITICAL: Inject explicit English language instructions when language is EN
         # This overrides model bias toward Spanish responses

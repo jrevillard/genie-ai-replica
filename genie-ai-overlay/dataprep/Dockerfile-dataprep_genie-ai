@@ -78,7 +78,14 @@ RUN pip install --no-cache-dir -r ${REQ_PATH}
 
 # Step F: Install overlay-specific dependencies
 # **UPDATED**: Added 'docling' and 'opencv-python-headless' which are required by the new utils/arangodb code.
-RUN pip install --no-cache-dir rank_bm25 docling opencv-python-headless hf_xet "python-jose[cryptography]"
+RUN pip install --no-cache-dir rank_bm25 docling opencv-python-headless hf_xet "python-jose[cryptography]" python-multipart
+
+# Step F2: Install torch+torchvision compiled for CUDA 12.1 to match common host CUDA 12.2 drivers.
+# The OPEA base image ships torch built for a newer CUDA that older host drivers reject,
+# silently falling back to CPU - making Docling ~20x slower per PDF.
+# numpy is pinned <2 to preserve ABI compatibility with the prebuilt scipy / easyocr wheels.
+# Single pip call with both indices (pypi primary, pytorch cu121 as extra).
+RUN pip install --no-cache-dir --force-reinstall torch==2.5.1+cu121 torchvision==0.20.1+cu121 "numpy<2" --extra-index-url https://download.pytorch.org/whl/cu121
 
 # Step G: Pre-install EasyOCR models (auto-download during build)
 # This prevents the service from hanging on its one-time model download at runtime.

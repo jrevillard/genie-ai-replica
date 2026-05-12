@@ -80,11 +80,11 @@ export const usePatientsStore = defineStore('patients', {
       }
     },
 
-    async create(payload: CreatePatientPayload): Promise<Patient> {
+    async create(payload: CreatePatientPayload, signal?: AbortSignal): Promise<Patient> {
       this.saving = true;
       this.error = null;
       try {
-        const patient = await api.createPatient(payload);
+        const patient = await api.createPatient(payload, signal);
         this.patients.unshift(patient);
         this.total += 1;
         return patient;

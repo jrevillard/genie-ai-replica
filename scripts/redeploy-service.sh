@@ -10,6 +10,15 @@ Examples:
   # Default: build + push + redeploy (auto-guess Dockerfile/context for known services)
   scripts/redeploy-service.sh genieai_dataprep-arango-service
 
+  # RAG megaservice (ChatQnA Python — not the TEI model server)
+  scripts/redeploy-service.sh genieai_chatqna-xeon-backend-server
+
+  # Cross-encoder orchestration (Python wraps TEI); threshold/slice logic lives here
+  scripts/redeploy-service.sh genieai_reranker
+
+  # TEI rerank container is upstream image only — no repo Dockerfile (use --no-build to roll)
+  scripts/redeploy-service.sh genieai_tei_reranker --no-build
+
   # Build from explicit Dockerfile/context then redeploy
   scripts/redeploy-service.sh genieai_chatqna-xeon-backend-server --dockerfile genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai --context .
 
@@ -129,6 +138,9 @@ guess_dockerfile() {
     *backend) echo "components/gov-chat-backend/Dockerfile" ;;
     *frontend) echo "components/gov-chat-frontend/Dockerfile" ;;
     *chatqna-xeon-backend-server) echo "genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai" ;;
+    # Custom OPEA rerank microservice (genieai_tei_reranker.py). Not the tei_reranker GPU container.
+    *tei_reranker) echo "" ;;
+    *reranker) echo "genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai" ;;
     *) echo "" ;;
   esac
 }
@@ -141,8 +153,16 @@ echo "Target image:  $image_to_use"
 
 if [[ "$do_build" == "true" ]]; then
   if [[ -z "$dockerfile_to_use" ]]; then
-    echo "Error: Could not auto-detect Dockerfile for service '$service_name'." >&2
-    echo "Please provide it explicitly with --dockerfile <path>." >&2
+    if [[ "$service_name" == *tei_reranker ]]; then
+      echo "Error: Service '$service_name' is the upstream Hugging Face TEI image — there is no Dockerfile in this repo to build it." >&2
+      echo "  Rerank threshold/slice Python code is in genieai_reranker → run:" >&2
+      echo "    bash scripts/redeploy-service.sh genieai_reranker" >&2
+      echo "  To force-restart TEI only without rebuilding:" >&2
+      echo "    bash scripts/redeploy-service.sh $service_name --no-build" >&2
+    else
+      echo "Error: Could not auto-detect Dockerfile for service '$service_name'." >&2
+      echo "Please provide it explicitly with --dockerfile <path>." >&2
+    fi
     exit 1
   fi
   if [[ ! -f "$dockerfile_to_use" ]]; then

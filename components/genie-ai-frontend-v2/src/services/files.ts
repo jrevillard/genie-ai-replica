@@ -55,6 +55,10 @@ export interface RepoFileRow {
     ingest_date?: string | null;
     retract_date?: string | null;
   };
+  /** Twin IDs that reference this file — drives the linked-twins avatar
+   *  stack on each row. The repository returns this in camelCase even though
+   *  the rest of the row is snake_case. */
+  linkedTwinIds?: string[];
   [key: string]: unknown;
 }
 
@@ -117,7 +121,8 @@ async function listFiles(params: ListFilesParams = {}): Promise<ListFilesResult>
 
 async function uploadFile(
   file: File,
-  options?: FileUploadOptions
+  options?: FileUploadOptions,
+  signal?: AbortSignal
 ): Promise<UploadedFileRecord> {
   const formData = new FormData();
   formData.append('file', file);
@@ -126,7 +131,7 @@ async function uploadFile(
     success?: boolean;
     data?: UploadedFileRecord;
     message?: string;
-  }>('files/upload', formData);
+  }>('files/upload', formData, { signal });
   if (!data?.data?.file_id) {
     throw new Error(data?.message || 'Upload failed');
   }
@@ -135,7 +140,8 @@ async function uploadFile(
 
 async function uploadMultipleFiles(
   files: File[],
-  options?: FileUploadOptions
+  options?: FileUploadOptions,
+  signal?: AbortSignal
 ): Promise<UploadedFileRecord[]> {
   const formData = new FormData();
   files.forEach((f) => {
@@ -146,7 +152,7 @@ async function uploadMultipleFiles(
     success?: boolean;
     data?: UploadedFileRecord[];
     message?: string;
-  }>('files/uploads', formData);
+  }>('files/uploads', formData, { signal });
   const list = Array.isArray(data?.data) ? data.data : [];
   if (!list.length) {
     throw new Error(data?.message || 'Upload failed');
@@ -286,12 +292,15 @@ export interface UploadLinkPayload {
   author?: string;
 }
 
-async function uploadLink(payload: UploadLinkPayload): Promise<UploadedFileRecord> {
+async function uploadLink(
+  payload: UploadLinkPayload,
+  signal?: AbortSignal
+): Promise<UploadedFileRecord> {
   const { data } = await api.post<{
     success?: boolean;
     data?: UploadedFileRecord;
     message?: string;
-  }>('files/upload-link', payload);
+  }>('files/upload-link', payload, { signal });
   if (!data?.data?.file_id) {
     throw new Error(data?.message || 'Link upload failed');
   }
@@ -313,7 +322,10 @@ export interface SiteCrawlPayload {
   config?: SiteCrawlConfig;
 }
 
-async function scheduleSiteCrawl(payload: SiteCrawlPayload): Promise<unknown> {
+async function scheduleSiteCrawl(
+  payload: SiteCrawlPayload,
+  signal?: AbortSignal
+): Promise<unknown> {
   const depth = typeof payload.maxDepth === 'number' ? payload.maxDepth : 2;
   const body: { url: string; depth: number; config?: SiteCrawlConfig } = {
     url: payload.url,
@@ -322,7 +334,8 @@ async function scheduleSiteCrawl(payload: SiteCrawlPayload): Promise<unknown> {
   if (payload.config) body.config = payload.config;
   const { data } = await api.post<{ success?: boolean; data?: unknown; message?: string }>(
     'files/crawl/schedule',
-    body
+    body,
+    { signal }
   );
   if (data?.success === false) {
     throw new Error(data?.message || 'Crawl scheduling failed');

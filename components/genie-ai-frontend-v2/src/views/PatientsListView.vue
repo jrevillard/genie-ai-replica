@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { Cancel01Icon, PlusSignIcon, Search01Icon, UserMultipleIcon } from '@hugeicons/core-free-icons';
 import { storeToRefs } from 'pinia';
 import { notify } from '../lib/notify';
@@ -22,6 +22,24 @@ const { patients, loading } = storeToRefs(store);
 const search = ref('');
 const dialogOpen = ref(false);
 const creating = ref(false);
+// Abort controller for the in-flight create-user request, so closing the
+// dialog mid-flight actually kills the network call.
+let activeCreateRequest: AbortController | null = null;
+
+function isAbortError(err: unknown): boolean {
+  const e = err as { name?: string; code?: string };
+  return (
+    e?.name === 'CanceledError' ||
+    e?.name === 'AbortError' ||
+    e?.code === 'ERR_CANCELED'
+  );
+}
+
+watch(dialogOpen, (open) => {
+  if (!open && creating.value && activeCreateRequest) {
+    activeCreateRequest.abort();
+  }
+});
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -45,13 +63,18 @@ onMounted(loadPatients);
 async function onCreated(payload: CreatePatientPayload) {
   if (creating.value) return;
   creating.value = true;
+  activeCreateRequest = new AbortController();
+  const { signal } = activeCreateRequest;
   try {
-    await store.create(payload);
+    await store.create(payload, signal);
     notify.success(t('patients.list.createdToast', 'User created'));
     dialogOpen.value = false;
-  } catch {
-    notify.error(store.error ?? t('patients.list.createFailedToast', 'Failed to create user'));
+  } catch (err) {
+    if (!isAbortError(err)) {
+      notify.error(store.error ?? t('patients.list.createFailedToast', 'Failed to create user'));
+    }
   } finally {
+    activeCreateRequest = null;
     creating.value = false;
   }
 }

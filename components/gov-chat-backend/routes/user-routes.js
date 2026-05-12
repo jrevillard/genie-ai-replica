@@ -338,18 +338,23 @@ module.exports = (userService) => {
       const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
       const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
 
-      // Determine which twin IDs this patient is allowed to see.
-      // getSelfTwinAccess returns:
-      //   null  → user is not a patient (or no restriction) → show all
-      //   []    → patient has no access to any twin
-      //   [...] → explicit allow-list
-      const allowedIds = await patientService.getSelfTwinAccess(userKey);
+      // Patients are scoped to their admin always — even with allowedTwinIds
+      // null they MUST NOT see other admins' twins. The optional
+      // allowedTwinIds narrows further when the admin has set an allow-list.
+      const access = await patientService.getSelfTwinAccess(userKey);
 
-      const result = await aiTwinService.listTwins({
-        offset,
-        limit,
-        allowedIds, // null → all twins, [] → none, [...] → filtered
-      });
+      let result;
+      if (!access) {
+        // Not a patient (no adminId) — deny by default.
+        result = { twins: [], total: 0, offset, limit };
+      } else {
+        result = await aiTwinService.listTwins({
+          offset,
+          limit,
+          ownerId: access.adminId,                 // always tenant-scoped
+          allowedIds: access.allowedTwinIds,       // null = admin's full catalog
+        });
+      }
 
       return res.json({
         twins: result.twins.map((t) => ({

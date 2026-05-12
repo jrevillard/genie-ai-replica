@@ -38,6 +38,19 @@ const drawerFiles = ref<File[]>([]);
 const dragOver = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
 const submitting = ref(false);
+// Abort controller for the in-flight upload/link/crawl request, so the user
+// can hit Cancel mid-flight and actually kill the network call instead of
+// waiting for it to settle.
+let activeRequest: AbortController | null = null;
+
+function isAbortError(err: unknown): boolean {
+  const e = err as { name?: string; code?: string; message?: string };
+  return (
+    e?.name === 'CanceledError' ||
+    e?.name === 'AbortError' ||
+    e?.code === 'ERR_CANCELED'
+  );
+}
 
 const linkUrl = ref('');
 const linkLanguage = ref('');
@@ -75,6 +88,11 @@ watch(
 );
 
 function close(): void {
+  // If an upload is mid-flight, abort it before closing so the network call
+  // is actually cancelled (and the success/failure toast won't fire).
+  if (submitting.value && activeRequest) {
+    activeRequest.abort();
+  }
   emit('update:open', false);
 }
 
@@ -191,24 +209,31 @@ async function submitDrawerUpload(): Promise<void> {
   }
   if (submitting.value) return;
   submitting.value = true;
+  activeRequest = new AbortController();
+  const { signal } = activeRequest;
   try {
     let ids: string[] = [];
     if (drawerFiles.value.length === 1) {
-      const rec = await fileService.uploadFile(drawerFiles.value[0]);
+      const rec = await fileService.uploadFile(drawerFiles.value[0], undefined, signal);
       ids = [rec.file_id];
     } else {
-      const recs = await fileService.uploadMultipleFiles(drawerFiles.value);
+      const recs = await fileService.uploadMultipleFiles(drawerFiles.value, undefined, signal);
       ids = recs.map((r) => r.file_id);
     }
     notify.success(t('knowledgeSet.toasts.uploadSuccess', 'Upload complete'));
     emit('uploaded', ids);
     close();
   } catch (err) {
+    if (isAbortError(err)) {
+      notify.info(t('knowledgeSet.toasts.uploadCancelled', 'Upload cancelled'));
+      return;
+    }
     notify.error(
       t('knowledgeSet.toasts.uploadFailed', 'Upload failed'),
       extractServerError(err)
     );
   } finally {
+    activeRequest = null;
     submitting.value = false;
   }
 }
@@ -221,21 +246,31 @@ async function submitLinkUpload(): Promise<void> {
   }
   if (submitting.value) return;
   submitting.value = true;
+  activeRequest = new AbortController();
+  const { signal } = activeRequest;
   try {
-    const rec = await fileService.uploadLink({
-      url,
-      language: linkLanguage.value.trim() || undefined,
-      labels: parseLabelList(linkLabels.value),
-    });
+    const rec = await fileService.uploadLink(
+      {
+        url,
+        language: linkLanguage.value.trim() || undefined,
+        labels: parseLabelList(linkLabels.value),
+      },
+      signal
+    );
     notify.success(t('knowledgeSet.toasts.linkAdded', 'Link added to repository'));
     emit('uploaded', rec?.file_id ? [rec.file_id] : []);
     close();
   } catch (err) {
+    if (isAbortError(err)) {
+      notify.info(t('knowledgeSet.toasts.uploadCancelled', 'Upload cancelled'));
+      return;
+    }
     notify.error(
       t('knowledgeSet.toasts.linkFailed', 'Could not add link'),
       extractServerError(err)
     );
   } finally {
+    activeRequest = null;
     submitting.value = false;
   }
 }
@@ -248,11 +283,16 @@ async function submitCrawl(): Promise<void> {
   }
   if (submitting.value) return;
   submitting.value = true;
+  activeRequest = new AbortController();
+  const { signal } = activeRequest;
   try {
-    await fileService.scheduleSiteCrawl({
-      url,
-      maxDepth: typeof crawlMaxDepth.value === 'number' ? crawlMaxDepth.value : undefined,
-    });
+    await fileService.scheduleSiteCrawl(
+      {
+        url,
+        maxDepth: typeof crawlMaxDepth.value === 'number' ? crawlMaxDepth.value : undefined,
+      },
+      signal
+    );
     notify.success(t('knowledgeSet.toasts.crawlScheduled', 'Crawl scheduled'));
     // The crawl is asynchronous and does not return file IDs synchronously, so
     // the consumer just learns "something was scheduled". Linking from a twin
@@ -260,11 +300,16 @@ async function submitCrawl(): Promise<void> {
     emit('uploaded', []);
     close();
   } catch (err) {
+    if (isAbortError(err)) {
+      notify.info(t('knowledgeSet.toasts.uploadCancelled', 'Upload cancelled'));
+      return;
+    }
     notify.error(
       t('knowledgeSet.toasts.crawlFailed', 'Could not schedule crawl'),
       extractServerError(err)
     );
   } finally {
+    activeRequest = null;
     submitting.value = false;
   }
 }
@@ -514,7 +559,6 @@ async function submitCrawl(): Promise<void> {
       <button
         type="button"
         class="text-body font-semibold text-text-muted transition hover:text-text"
-        :disabled="submitting"
         @click="close"
       >
         {{ t('knowledgeSet.cancel', 'Cancel') }}

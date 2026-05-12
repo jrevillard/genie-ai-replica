@@ -25,6 +25,8 @@ import VoiceTab from '../components/twin-tabs/VoiceTab.vue';
 import PersonalityTab from '../components/twin-tabs/PersonalityTab.vue';
 import KnowledgeSetTab from '../components/twin-tabs/KnowledgeSetTab.vue';
 import InstructionsTab from '../components/twin-tabs/InstructionsTab.vue';
+import SystemPromptTab from '../components/twin-tabs/SystemPromptTab.vue';
+import SuggestionsTab from '../components/twin-tabs/SuggestionsTab.vue';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useT } from '../i18n/composables';
 
@@ -56,6 +58,8 @@ const tabs = computed<TabItem[]>(() => [
   { value: 'personality', label: t('twins.tabs.personality', 'AI Personality') },
   { value: 'knowledge', label: t('twins.tabs.knowledge', 'Knowledge Set') },
   { value: 'instructions', label: t('twins.tabs.instructions', 'Instructions') },
+  { value: 'system-prompt', label: t('twins.tabs.systemPrompt', 'System Prompt') },
+  { value: 'suggestions', label: t('twins.tabs.suggestions', 'Suggestions') },
 ]);
 
 const twinId = computed(() => String(route.params.id ?? ''));
@@ -287,7 +291,16 @@ async function confirmDelete() {
 
           <Transition name="edit-actions" mode="out-in">
             <div v-if="!editing" key="view" class="flex items-center gap-2">
-              <BaseButton variant="outline" size="md" rounded="full" @click="startEditing">
+              <!-- Suggestions tab has no editable fields; Regenerate inside
+                   the tab is the only mutating action there, so the global
+                   Update button would be confusing. -->
+              <BaseButton
+                v-if="tab !== 'suggestions'"
+                variant="outline"
+                size="md"
+                rounded="full"
+                @click="startEditing"
+              >
                 <Icon :icon="Edit02Icon" :size="16" />
                 {{ t('common.update', 'Update') }}
               </BaseButton>
@@ -319,14 +332,14 @@ async function confirmDelete() {
         <TwinStatsGrid v-if="tab === 'general'" :twin="twin" />
 
         <fieldset
-          :disabled="!editing && tab !== 'voice' && tab !== 'knowledge'"
+          :disabled="!editing && tab !== 'voice' && tab !== 'suggestions'"
           :class="[
             'rounded-2xl border bg-surface p-6 shadow-card transition-colors',
             editing ? 'border-accent/30 ring-1 ring-accent/10' : 'border-border',
-            !editing && tab !== 'voice' && tab !== 'knowledge' && 'opacity-70',
+            !editing && tab !== 'voice' && tab !== 'suggestions' && 'opacity-70',
           ]"
         >
-          <div :class="!editing && tab !== 'voice' && tab !== 'knowledge' && 'pointer-events-none select-none'">
+          <div :class="!editing && tab !== 'voice' && tab !== 'suggestions' && 'pointer-events-none select-none'">
             <GeneralTab
               v-if="tab === 'general'"
               ref="activeTab"
@@ -340,12 +353,28 @@ async function confirmDelete() {
               :twin="twin"
               :editing="editing"
             />
-            <KnowledgeSetTab v-else-if="tab === 'knowledge'" ref="activeTab" :twin="twin" />
+            <KnowledgeSetTab
+              v-else-if="tab === 'knowledge'"
+              ref="activeTab"
+              :twin="twin"
+              :editing="editing"
+            />
             <InstructionsTab
               v-else-if="tab === 'instructions'"
               ref="activeTab"
               :twin="twin"
               :editing="editing"
+            />
+            <SystemPromptTab
+              v-else-if="tab === 'system-prompt'"
+              ref="activeTab"
+              :twin="twin"
+              :editing="editing"
+            />
+            <SuggestionsTab
+              v-else-if="tab === 'suggestions'"
+              ref="activeTab"
+              :twin="twin"
             />
           </div>
         </fieldset>

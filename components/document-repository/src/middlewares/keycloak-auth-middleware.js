@@ -6,9 +6,14 @@
 // - Issuer validation (jwtVerify issuer option)
 // - Audience validation (azp claim)
 // - Algorithm restriction (RS256 only)
+// Also accepts legacy HS256 JWTs issued by gov-chat-backend during the Keycloak
+// migration window — same JWT_SECRET shared via .env.
 const jose = require('jose');
+const jwt = require('jsonwebtoken');
 const appConfig = require('../config/appConfig');
 const { logger } = require('../../shared-lib');
+
+const LEGACY_JWT_SECRET = process.env.JWT_SECRET || '';
 
 const PUBLIC_PATHS = ['/health', '/api-docs', '/api', '/api-docs.json'];
 
@@ -106,6 +111,7 @@ const authenticateToken = async (req, res, next) => {
     }
 
     let decoded;
+    let isLegacyToken = false;
     try {
       // jwtVerify validates: signature, issuer, expiration, and not-before
       const { payload } = await jose.jwtVerify(token, keySet, {
@@ -121,41 +127,79 @@ const authenticateToken = async (req, res, next) => {
           details: {}
         });
       }
-      if (err.name === 'JWTClaimValidationFailed') {
+      // Keycloak verification failed — try the legacy HS256 backend token
+      // before giving up. Same JWT_SECRET is shared via .env. Tokens minted
+      // by gov-chat-backend carry { userId, loginName, email, role } claims.
+      if (LEGACY_JWT_SECRET) {
+        try {
+          decoded = jwt.verify(token, LEGACY_JWT_SECRET, { algorithms: ['HS256'] });
+          isLegacyToken = true;
+        } catch (legacyErr) {
+          if (legacyErr.name === 'TokenExpiredError') {
+            return res.status(401).json({
+              error: 'TOKEN_EXPIRED',
+              message: 'Token has expired',
+              details: {}
+            });
+          }
+          return res.status(401).json({
+            error: 'TOKEN_INVALID',
+            message: 'Token verification failed',
+            details: {}
+          });
+        }
+      } else {
+        if (err.name === 'JWTClaimValidationFailed') {
+          return res.status(401).json({
+            error: 'TOKEN_INVALID',
+            message: 'Token claim validation failed',
+            details: {}
+          });
+        }
         return res.status(401).json({
           error: 'TOKEN_INVALID',
-          message: 'Token claim validation failed',
+          message: 'Token verification failed',
           details: {}
         });
       }
-      return res.status(401).json({
-        error: 'TOKEN_INVALID',
-        message: 'Token verification failed',
-        details: {}
-      });
     }
 
-    // Validate azp (authorized party) — the client that requested the token.
-    // Keycloak 26+ sets aud=account for access tokens; azp holds the actual client ID.
-    const expectedClientId = appConfig.security.keycloakClientId;
-    if (decoded.azp && decoded.azp !== expectedClientId) {
-      return res.status(401).json({
-        error: 'TOKEN_INVALID',
-        message: 'Token audience validation failed',
-        details: {}
-      });
+    if (isLegacyToken) {
+      // Legacy token: claims are flat (userId, role) instead of Keycloak's
+      // sub + realm_access.roles. Map them into the same req.user shape so
+      // downstream code doesn't need to branch.
+      req.user = {
+        userId: decoded.userId || decoded.sub || null,
+        role: decoded.role || 'User',
+        iss: decoded.iss || 'legacy-backend',
+        sub: decoded.userId || decoded.sub || null,
+        roles: decoded.role ? [String(decoded.role).toLowerCase()] : [],
+        email: decoded.email || null,
+        loginName: decoded.loginName || null
+      };
+    } else {
+      // Validate azp (authorized party) — the client that requested the token.
+      // Keycloak 26+ sets aud=account for access tokens; azp holds the actual client ID.
+      const expectedClientId = appConfig.security.keycloakClientId;
+      if (decoded.azp && decoded.azp !== expectedClientId) {
+        return res.status(401).json({
+          error: 'TOKEN_INVALID',
+          message: 'Token audience validation failed',
+          details: {}
+        });
+      }
+
+      const roles = decoded.realm_access?.roles || [];
+      const role = mapRole(roles);
+
+      req.user = {
+        userId: decoded.sub,
+        role: role,
+        iss: decoded.iss,
+        sub: decoded.sub,
+        roles: roles
+      };
     }
-
-    const roles = decoded.realm_access?.roles || [];
-    const role = mapRole(roles);
-
-    req.user = {
-      userId: decoded.sub,
-      role: role,
-      iss: decoded.iss,
-      sub: decoded.sub,
-      roles: roles
-    };
 
     next();
   } catch (error) {

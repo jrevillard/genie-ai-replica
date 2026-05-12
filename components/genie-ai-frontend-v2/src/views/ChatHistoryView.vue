@@ -2,7 +2,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import {
-  ArrowDown01Icon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
   BubbleChatIcon,
@@ -12,6 +11,7 @@ import {
   Cancel01Icon,
   Copy01Icon,
   Delete02Icon,
+  Download01Icon,
   Tick02Icon,
   FilterHorizontalIcon,
   Mic01Icon,
@@ -40,13 +40,21 @@ import { useAiTwinsStore } from '../stores/aiTwins';
 import { useAuthStore } from '../stores/auth';
 import { useChatHistoryStore } from '../stores/chatHistory';
 import { useVoiceStore } from '../stores/voice';
+import { useVoiceCatalogStore } from '../stores/voiceCatalog';
 import type { AiTwin, PublicAiTwin } from '../services/aiTwins';
 import * as chatSessionsApi from '../services/chatSessions';
 import type { ChatSessionRecord } from '../services/chatSessions';
+import { listPatients, type Patient } from '../services/patients';
 import type { VoiceSession } from '../services/voice';
 import { useT } from '../i18n/composables';
 
-const { t } = useT();
+const { t, locale } = useT();
+
+// Match ChatView's clock-time formatter so the same time renders identically
+// across the chat page, the session list, and the message list.
+function localeTagForTime(): string {
+  return locale.value === 'mnk' ? 'en-GB' : locale.value;
+}
 
 const dateOptions = computed(() => [
   t('history.dateOptions.today', 'Today'),
@@ -82,6 +90,7 @@ const auth = useAuthStore();
 const voice = useVoiceStore();
 const aiTwins = useAiTwinsStore();
 const chatHistory = useChatHistoryStore();
+const voiceCatalogStore = useVoiceCatalogStore();
 
 const {
   sessions: callSessions,
@@ -111,6 +120,7 @@ const {
   messagesError,
   typeFilter,
   scopeFilter,
+  userIdFilter,
   phoneNumberFilter,
   twinIdFilter,
   deleting: deletingChat,
@@ -244,6 +254,93 @@ const scopeFilterValue = computed<string>({
   },
 });
 
+// Patient (= "user" in product language) dropdown for admins. Lazy-loaded
+// the first time the filter panel opens or when scope=all is picked; subsequent
+// renders reuse the cached list.
+const patients = ref<Patient[]>([]);
+const patientsLoading = ref(false);
+const patientsLoaded = ref(false);
+
+async function ensurePatientsLoaded(): Promise<void> {
+  if (patientsLoaded.value || patientsLoading.value || !isAdmin.value) return;
+  patientsLoading.value = true;
+  try {
+    // 500 covers all realistic single-tenant admin patient counts without
+    // paginating the dropdown. Past this we'd need a typeahead.
+    const res = await listPatients({ offset: 0, limit: 500 });
+    patients.value = res.patients;
+    patientsLoaded.value = true;
+    // If a previously-selected user no longer exists (deleted while we were
+    // away), drop the filter rather than leave the admin staring at an empty
+    // session list with no obvious reason. Refresh so the freshly-cleared
+    // filter takes effect.
+    if (userIdFilter.value && !res.patients.some((p) => p._key === userIdFilter.value)) {
+      chatHistory.setUserIdFilter(null);
+      notify.error(
+        t('history.userMissingTitle', 'Selected user no longer exists'),
+        t('history.userMissingBody', 'The user filter has been cleared.'),
+      );
+      refreshChats();
+    }
+  } catch (err) {
+    // The dropdown still works (shows just "All users"), but the admin needs
+    // to know the user-filter is degraded — otherwise they'd assume there are
+    // no patients to filter by.
+    const message =
+      (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data
+        ?.message ||
+      (err as { message?: string })?.message ||
+      t('history.userLoadFailedBody', 'The user filter will be limited to "All users".');
+    notify.error(t('history.userLoadFailed', 'Could not load the user list'), message);
+  } finally {
+    patientsLoading.value = false;
+  }
+}
+
+const userFilterOptions = computed(() => [
+  { value: '', label: t('history.filters.allUsers', 'All users') },
+  ...patients.value.map((p) => ({
+    value: p._key,
+    label: p.personalIdentification?.fullName?.trim() || p.email || p.loginName,
+  })),
+]);
+
+const userFilterValue = computed<string>({
+  get: () => userIdFilter.value ?? '',
+  set: (v) => {
+    chatHistory.setUserIdFilter(v || null);
+    refreshChats();
+  },
+});
+
+// Open the filter panel → load patient list so the dropdown is ready by the
+// time the admin clicks it. Idempotent thanks to ensurePatientsLoaded().
+watch(filterPanelOpen, (open) => {
+  if (open) void ensurePatientsLoaded();
+});
+
+// Surface a "Clear all" affordance only when at least one filter is in a
+// non-default state. The twin filter and channel filter live outside this
+// panel and stay untouched by Clear all.
+const hasActiveFilters = computed(
+  () =>
+    (isAdmin.value && scopeFilter.value !== 'me') ||
+    Boolean(userIdFilter.value) ||
+    chatSort.value !== 'newest' ||
+    phoneNumberFilter.value.trim().length > 0
+);
+
+function clearAllFilters(): void {
+  // Reset everything in one go, then a single refresh so the user sees one
+  // round-trip instead of four.
+  chatHistory.setScopeFilter('me');
+  chatHistory.setUserIdFilter(null);
+  chatHistory.setPhoneNumberFilter('');
+  phoneInput.value = '';
+  chatSort.value = 'newest';
+  refreshChats();
+}
+
 const showPhoneFilter = computed(
   () => isAdmin.value && scopeFilter.value === 'all' && typeFilter.value === 'whatsapp'
 );
@@ -265,12 +362,29 @@ function refreshChats(): void {
   });
 }
 
+// Languages used to filter the Calls list. The catalogue lives behind
+// `/public/chat-sessions/languages`; we keep only the ones the backend can
+// actually serve voice for (`isVoiceSupported === true`) since chatting in a
+// language the server can't speak doesn't produce a call record to filter.
+const voiceLanguages = ref<chatSessionsApi.ChatLanguage[]>([]);
+
+async function loadVoiceLanguages(): Promise<void> {
+  try {
+    const list = await chatSessionsApi.getChatLanguages();
+    voiceLanguages.value = list.filter((l) => l.isVoiceSupported);
+  } catch {
+    // Keep whatever we already had; if nothing, the dropdown still works
+    // with the "All languages" entry below.
+  }
+}
+
 const languageOptions = computed(() => [
   { value: 'all', label: t('history.filters.allLanguages', 'All languages') },
-  { value: 'en', label: 'English', flag: flagForLang('en') },
-  { value: 'fr', label: 'Français', flag: flagForLang('fr') },
-  { value: 'es', label: 'Español', flag: flagForLang('es') },
-  { value: 'sw', label: 'Kiswahili', flag: flagForLang('sw') },
+  ...voiceLanguages.value.map((l) => ({
+    value: l.code,
+    label: l.name,
+    flag: flagForLang(l.code),
+  })),
 ]);
 
 const twinFilterOptions = computed(() =>
@@ -372,27 +486,36 @@ const displayedRangeEnd = computed(
   () => callsOffset.value + displayedSessions.value.length
 );
 
-const dateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
-const sessionListDateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
-const messageTimeFormatter = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
-const fullDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-});
+const dateFormatter = computed(
+  () => new Intl.DateTimeFormat(localeTagForTime(), { month: 'short', day: 'numeric', year: 'numeric' })
+);
+// 2-digit hour/minute with locale-aware AM/PM vs 24h, matching ChatView.
+const timeFormatter = computed(
+  () => new Intl.DateTimeFormat(localeTagForTime(), { hour: '2-digit', minute: '2-digit' })
+);
+const sessionListDateFormatter = computed(
+  () => new Intl.DateTimeFormat(localeTagForTime(), { month: 'short', day: 'numeric' })
+);
+const fullDateTimeFormatter = computed(
+  () =>
+    new Intl.DateTimeFormat(localeTagForTime(), {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+);
 function formatSessionDate(iso?: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '—' : dateFormatter.format(d);
+  return Number.isNaN(d.getTime()) ? '—' : dateFormatter.value.format(d);
 }
 
 function formatSessionTime(iso?: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '—' : timeFormatter.format(d);
+  return Number.isNaN(d.getTime()) ? '—' : timeFormatter.value.format(d);
 }
 
 function formatSessionListDate(iso?: string | null): string {
@@ -405,7 +528,7 @@ function formatSessionListDate(iso?: string | null): string {
     d.getFullYear() === now.getFullYear() &&
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate();
-  if (sameDay) return timeFormatter.format(d);
+  if (sameDay) return timeFormatter.value.format(d);
 
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
@@ -417,10 +540,10 @@ function formatSessionListDate(iso?: string | null): string {
 
   const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000);
   if (diffDays > 0 && diffDays < 7) {
-    return new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(d);
+    return new Intl.DateTimeFormat(localeTagForTime(), { weekday: 'short' }).format(d);
   }
 
-  return sessionListDateFormatter.format(d);
+  return sessionListDateFormatter.value.format(d);
 }
 
 /** Clock time for sent-at; adds a short date when the message is not from today. */
@@ -433,11 +556,11 @@ function formatMessageSentAt(iso?: string | null): string {
     d.getFullYear() === now.getFullYear() &&
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate();
-  if (sameDay) return messageTimeFormatter.format(d);
-  return new Intl.DateTimeFormat(undefined, {
+  if (sameDay) return timeFormatter.value.format(d);
+  return new Intl.DateTimeFormat(localeTagForTime(), {
     month: 'short',
     day: 'numeric',
-    hour: 'numeric',
+    hour: '2-digit',
     minute: '2-digit',
     ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}),
   }).format(d);
@@ -446,7 +569,7 @@ function formatMessageSentAt(iso?: string | null): string {
 function formatFullDateTime(iso?: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : fullDateTimeFormatter.format(d);
+  return Number.isNaN(d.getTime()) ? '' : fullDateTimeFormatter.value.format(d);
 }
 
 function formatDuration(seconds: number): string {
@@ -762,12 +885,67 @@ function preloadAudioDuration(messageId: string, audioUrl: string): void {
   const audio = new Audio();
   audio.preload = 'metadata';
   audio.src = audioUrl;
+  // MediaRecorder webm blobs report `duration === Infinity` until the
+  // browser scans the file. Seeking past the end forces a `durationchange`
+  // event with the real value.
+  const apply = (): boolean => {
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
+      state.duration = audio.duration;
+      return true;
+    }
+    return false;
+  };
+  const onDurationChange = (): void => {
+    if (apply()) {
+      audio.removeEventListener('durationchange', onDurationChange);
+      try { audio.currentTime = 0; } catch { /* ignore */ }
+    }
+  };
   audio.addEventListener('loadedmetadata', () => {
-    if (Number.isFinite(audio.duration)) state.duration = audio.duration;
+    if (apply()) return;
+    audio.addEventListener('durationchange', onDurationChange);
+    try { audio.currentTime = Number.MAX_SAFE_INTEGER; } catch { /* ignore */ }
   });
 }
 
+// Tracks the message the user has *intended* to play. Anything else racing
+// in the background (an earlier blob fetch that's still in flight) checks
+// this before calling `.play()` and bails if the intent has moved on.
+const currentPlaybackId = ref<string | null>(null);
+
+// Frame-locked progress tick. The browser's `timeupdate` event fires every
+// ~250ms which makes the waveform fill jump in visible chunks. Reading
+// `audio.currentTime` on every animation frame and writing it onto reactive
+// state lets the progress flow smoothly at display refresh rate.
+let progressRafId: number | null = null;
+function startSmoothProgress(): void {
+  if (progressRafId !== null) return;
+  const tick = (): void => {
+    const id = currentPlaybackId.value;
+    if (!id) {
+      progressRafId = null;
+      return;
+    }
+    const state = assistantAudio.value[id];
+    if (!state?.playing || !state.audio) {
+      progressRafId = null;
+      return;
+    }
+    state.currentTime = state.audio.currentTime;
+    progressRafId = requestAnimationFrame(tick);
+  };
+  progressRafId = requestAnimationFrame(tick);
+}
+function stopSmoothProgress(): void {
+  if (progressRafId !== null) {
+    cancelAnimationFrame(progressRafId);
+    progressRafId = null;
+  }
+}
+
 function stopAllMessageAudio(): void {
+  currentPlaybackId.value = null;
+  stopSmoothProgress();
   Object.values(assistantAudio.value).forEach((state) => {
     if (state.audio && state.playing) {
       state.audio.pause();
@@ -779,11 +957,29 @@ function stopAllMessageAudio(): void {
 function attachAudioListeners(state: MessageAudioState): void {
   if (!state.audio) return;
   const audio = state.audio;
+  let durationResolved = false;
+  const applyDuration = (): boolean => {
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
+      state.duration = audio.duration;
+      durationResolved = true;
+      return true;
+    }
+    return false;
+  };
+  const onDurationChange = (): void => {
+    if (applyDuration()) {
+      audio.removeEventListener('durationchange', onDurationChange);
+      try { audio.currentTime = 0; } catch { /* ignore */ }
+    }
+  };
   audio.addEventListener('loadedmetadata', () => {
-    if (Number.isFinite(audio.duration)) state.duration = audio.duration;
+    if (applyDuration()) return;
+    audio.addEventListener('durationchange', onDurationChange);
+    try { audio.currentTime = Number.MAX_SAFE_INTEGER; } catch { /* ignore */ }
   });
   audio.addEventListener('timeupdate', () => {
     state.currentTime = audio.currentTime;
+    if (!durationResolved) applyDuration();
   });
   audio.addEventListener('ended', () => {
     state.playing = false;
@@ -799,6 +995,49 @@ function formatAudioClock(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
+}
+
+// Voice bubble shows elapsed time while playing and total duration while
+// idle, matching the ChatView player. Em-dash while we don't yet know the
+// duration so we never flash a fake "0:00".
+function voiceBubbleClock(state?: MessageAudioState | null): string {
+  const duration = state?.duration ?? 0;
+  if (!Number.isFinite(duration) || duration <= 0) return '—:—';
+  if (state?.playing) return formatAudioClock(state.currentTime ?? 0);
+  return formatAudioClock(duration);
+}
+
+function audioProgress(state?: MessageAudioState | null): number {
+  if (!state) return 0;
+  const duration = state.duration ?? 0;
+  const current = state.currentTime ?? 0;
+  if (!Number.isFinite(duration) || duration <= 0) return 0;
+  return Math.max(0, Math.min(1, current / duration));
+}
+
+// Continuous opacity for a waveform bar based on playback position. Replaces
+// the previous binary white/dim swap so the fill flows smoothly across bars.
+// Bars on each side of the playhead crossfade through FADE_BARS bar-widths;
+// combined with the rAF tick, this yields a fluid "ink wash" instead of a
+// row of light switches turning on one-by-one.
+const HISTORY_PLAYED_OPACITY = 1;
+const HISTORY_UNPLAYED_OPACITY = 0.4;
+const HISTORY_FADE_BARS = 1.6;
+function voiceBarOpacity(
+  state: MessageAudioState | undefined,
+  index: number,
+  total: number
+): number {
+  if (!state || !state.playing) return HISTORY_PLAYED_OPACITY;
+  const duration = state.duration ?? 0;
+  const current = state.currentTime ?? 0;
+  if (!Number.isFinite(duration) || duration <= 0) return HISTORY_UNPLAYED_OPACITY;
+  const playhead = (current / duration) * total;
+  const distance = index - playhead;
+  if (distance <= -HISTORY_FADE_BARS) return HISTORY_PLAYED_OPACITY;
+  if (distance >= 0) return HISTORY_UNPLAYED_OPACITY;
+  const t = (distance + HISTORY_FADE_BARS) / HISTORY_FADE_BARS;
+  return HISTORY_PLAYED_OPACITY - (HISTORY_PLAYED_OPACITY - HISTORY_UNPLAYED_OPACITY) * t;
 }
 
 // Per-message "just copied" flag — flips a button's icon to a check for ~2s
@@ -875,9 +1114,14 @@ async function toggleMessageAudio(message: { _key?: string; role: string; audioU
   if (state.playing && state.audio) {
     state.audio.pause();
     state.playing = false;
+    if (currentPlaybackId.value === messageId) {
+      currentPlaybackId.value = null;
+      stopSmoothProgress();
+    }
     return;
   }
   stopAllMessageAudio();
+  currentPlaybackId.value = messageId;
   try {
     if (!state.url) {
       const direct = message.audioUrl;
@@ -892,15 +1136,22 @@ async function toggleMessageAudio(message: { _key?: string; role: string; audioU
       } else {
         state.loading = true;
         const blob = await chatSessionsApi.fetchMessageAudio(selectedSessionId.value, messageId);
+        if (currentPlaybackId.value !== messageId) return;
         state.url = URL.createObjectURL(blob);
       }
     }
+    if (currentPlaybackId.value !== messageId) return;
     if (!state.audio) {
       state.audio = new Audio(state.url);
       attachAudioListeners(state);
     }
     await state.audio.play();
+    if (currentPlaybackId.value !== messageId) {
+      state.audio.pause();
+      return;
+    }
     state.playing = true;
+    startSmoothProgress();
   } catch (err) {
     const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
     const status = e?.response?.status;
@@ -981,7 +1232,131 @@ async function openCallDetails(session: VoiceSession, mode: 'transcript' | 'summ
 function closeCallDetails(): void {
   callDetailOpen.value = false;
   voice.closeSession();
+  stopRecordingPlayback();
 }
+
+// ─── Call-recording player ───────────────────────────────────────────────
+// Plays the .wav captured during the call (surfaced as `recordingUrl` on the
+// VoiceSession). A single shared <audio> element drives these reactive refs.
+// The visual language mirrors the chat voice-note bubble: circular play
+// button with a progress ring tracing it, plus a click-to-seek waveform.
+
+const recordingAudio = ref<HTMLAudioElement | null>(null);
+const recordingWaveEl = ref<HTMLButtonElement | null>(null);
+const recordingPlaying = ref(false);
+const recordingCurrentTime = ref(0);
+const recordingDuration = ref(0);
+const recordingLoadError = ref(false);
+
+// Static waveform shape — a precomputed peaks-and-valleys pattern reads like a
+// real recording without recomputing pseudo-random heights every frame. Same
+// approach as ChatView's VOICE_WAVE_HEIGHTS, but tuned for this card's height.
+const CALL_WAVE_HEIGHTS = [
+  28, 46, 64, 52, 38, 56, 72, 48, 32, 50, 68, 88, 60, 44, 32, 54,
+  78, 58, 40, 28, 48, 72, 64, 46, 32, 46, 64, 84, 58, 42, 50, 70,
+  56, 36, 24, 42, 60, 80, 58, 44, 30, 48, 66, 76, 52, 38, 56, 30,
+] as const;
+
+const hasRecording = computed<boolean>(() => Boolean(currentSession.value?.recordingUrl));
+
+function formatPlaybackTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const total = Math.floor(seconds);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// Total time shown to the right of the scrubber. Prefer the live media
+// duration once <audio> has loaded its metadata; fall back to the session's
+// stored seconds so the label isn't 0:00 in the brief load window.
+const recordingTotalSeconds = computed<number>(() =>
+  recordingDuration.value || currentSession.value?.durationSeconds || 0
+);
+
+// 0..1 — drives both the play-button progress ring and the waveform fill.
+const recordingFraction = computed<number>(() => {
+  const total = recordingTotalSeconds.value;
+  if (!total) return 0;
+  return Math.min(1, Math.max(0, recordingCurrentTime.value / total));
+});
+
+function onRecordingLoaded(): void {
+  const el = recordingAudio.value;
+  if (!el) return;
+  recordingDuration.value = Number.isFinite(el.duration) ? el.duration : 0;
+  recordingLoadError.value = false;
+}
+
+function onRecordingTimeUpdate(): void {
+  const el = recordingAudio.value;
+  if (!el) return;
+  recordingCurrentTime.value = el.currentTime;
+}
+
+function onRecordingEnded(): void {
+  recordingPlaying.value = false;
+  recordingCurrentTime.value = 0;
+  const el = recordingAudio.value;
+  if (el) el.currentTime = 0;
+}
+
+function onRecordingError(): void {
+  recordingPlaying.value = false;
+  recordingLoadError.value = true;
+}
+
+function toggleRecordingPlayback(): void {
+  const el = recordingAudio.value;
+  if (!el || !currentSession.value?.recordingUrl) return;
+  if (recordingPlaying.value) {
+    el.pause();
+    recordingPlaying.value = false;
+    return;
+  }
+  el.play()
+    .then(() => {
+      recordingPlaying.value = true;
+    })
+    .catch(() => {
+      recordingLoadError.value = true;
+    });
+}
+
+function seekRecordingFromWave(event: MouseEvent): void {
+  const el = recordingAudio.value;
+  const wave = recordingWaveEl.value;
+  const total = recordingTotalSeconds.value;
+  if (!el || !wave || !total) return;
+  // Convert the click's X offset within the waveform to a fraction of the
+  // total duration. clamp() guards against rounding errors on the edges.
+  const rect = wave.getBoundingClientRect();
+  const fraction = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+  const next = fraction * total;
+  el.currentTime = next;
+  recordingCurrentTime.value = next;
+}
+
+function stopRecordingPlayback(): void {
+  const el = recordingAudio.value;
+  if (el) {
+    el.pause();
+    el.currentTime = 0;
+  }
+  recordingPlaying.value = false;
+  recordingCurrentTime.value = 0;
+  recordingDuration.value = 0;
+  recordingLoadError.value = false;
+}
+
+// Switching to a different call from the same dialog should reset the player
+// — otherwise the new session inherits the previous one's mid-track position.
+watch(
+  () => currentSession.value?._key,
+  () => {
+    stopRecordingPlayback();
+  }
+);
 
 function openDeleteCallDialog(session: VoiceSession): void {
   callToDeleteId.value = session._key;
@@ -1047,6 +1422,13 @@ watch(
 
 onMounted(() => {
   loadChats();
+  // Loads the TTS voice catalog so the "Listen" button only shows for
+  // languages with a Piper voice. Cached, so this is a no-op when ChatView
+  // already populated it.
+  void voiceCatalogStore.ensureLoaded();
+  // Populate the Calls tab language filter from the server's authoritative
+  // list (voice-supported subset). Same endpoint ChatView uses.
+  void loadVoiceLanguages();
 });
 
 function cleanupAssistantAudio(): void {
@@ -1201,29 +1583,73 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <div v-if="filterPanelOpen" class="flex flex-col gap-3 border-b border-slate-100 px-3 pb-3 pt-1">
-              <BaseDropdown
-                v-if="isAdmin"
-                v-model="scopeFilterValue"
-                :options="scopeOptions"
-                :placeholder="t('history.scopePlaceholder', 'Scope')"
-                width="w-full"
-              />
-              <BaseDropdown
-                v-model="chatSort"
-                :options="chatSortOptions"
-                :placeholder="t('history.sortBy', 'Sort By')"
-                width="w-full"
-              />
-              <input
-                v-if="showPhoneFilter"
-                type="tel"
-                inputmode="tel"
-                :value="phoneInput"
-                :placeholder="t('history.phonePlaceholder', 'Phone number')"
-                class="h-10 w-full rounded-full border border-slate-200 bg-white px-4 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-ieee-700"
-                @input="onPhoneInput"
-              />
+            <div
+              v-if="filterPanelOpen"
+              class="flex flex-col gap-4 border-b border-slate-100 bg-slate-50/60 px-3 pb-4 pt-3"
+            >
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  {{ t('history.filtersHeading', 'Filters') }}
+                </p>
+                <button
+                  v-if="hasActiveFilters"
+                  type="button"
+                  class="text-xs font-semibold text-ieee-700 transition hover:text-ieee-800"
+                  @click="clearAllFilters"
+                >
+                  {{ t('history.clearFilters', 'Clear all') }}
+                </button>
+              </div>
+
+              <div v-if="isAdmin" class="flex flex-col gap-1.5">
+                <label class="text-xs font-medium text-slate-600">
+                  {{ t('history.scopeLabel', 'Show sessions from') }}
+                </label>
+                <BaseDropdown
+                  v-model="scopeFilterValue"
+                  :options="scopeOptions"
+                  :placeholder="t('history.scopePlaceholder', 'Scope')"
+                  width="w-full"
+                />
+              </div>
+
+              <div v-if="isAdmin && scopeFilterValue === 'all'" class="flex flex-col gap-1.5">
+                <label class="text-xs font-medium text-slate-600">
+                  {{ t('history.userLabel', 'User') }}
+                </label>
+                <BaseDropdown
+                  v-model="userFilterValue"
+                  :options="userFilterOptions"
+                  :placeholder="t('history.filters.allUsers', 'All users')"
+                  width="w-full"
+                />
+              </div>
+
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-medium text-slate-600">
+                  {{ t('history.sortBy', 'Sort by') }}
+                </label>
+                <BaseDropdown
+                  v-model="chatSort"
+                  :options="chatSortOptions"
+                  :placeholder="t('history.sortBy', 'Sort by')"
+                  width="w-full"
+                />
+              </div>
+
+              <div v-if="showPhoneFilter" class="flex flex-col gap-1.5">
+                <label class="text-xs font-medium text-slate-600">
+                  {{ t('history.phoneLabel', 'Phone number') }}
+                </label>
+                <input
+                  type="tel"
+                  inputmode="tel"
+                  :value="phoneInput"
+                  :placeholder="t('history.phonePlaceholder', 'e.g. +220 …')"
+                  class="h-10 w-full rounded-full border border-slate-200 bg-white px-4 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-ieee-700"
+                  @input="onPhoneInput"
+                />
+              </div>
             </div>
 
             <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -1431,34 +1857,77 @@ onBeforeUnmount(() => {
                   <div :class="['flex max-w-[86%] flex-col gap-1 md:max-w-[430px]', message.role === 'user' && 'items-end']">
                     <div
                       v-if="message.role === 'user' && message.audioUrl && message._key"
-                      class="flex items-center gap-3 rounded-2xl rounded-tr-md bg-ieee-700 px-3 py-2.5 text-white shadow-sm"
+                      class="flex min-w-[14rem] items-center gap-2.5 rounded-2xl rounded-tr-md bg-ieee-700 px-3 py-2 text-white shadow-sm"
                       :title="message.createdAt ? formatFullDateTime(message.createdAt) : undefined"
                     >
                       <button
                         type="button"
-                        class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25 disabled:opacity-50"
+                        class="group relative grid h-11 w-11 shrink-0 place-items-center disabled:cursor-not-allowed disabled:opacity-50"
                         :aria-label="assistantAudio[message._key]?.playing ? t('history.aria.pauseVoiceNote', 'Pause voice note') : t('history.aria.playVoiceNote', 'Play voice note')"
                         :disabled="assistantAudio[message._key]?.loading"
                         @click="toggleMessageAudio(message)"
                       >
-                        <span v-if="assistantAudio[message._key]?.loading" class="typing-dots typing-dots--sm"><span /><span /><span /></span>
-                        <Icon
-                          v-else-if="assistantAudio[message._key]?.playing"
-                          :icon="PauseIcon"
-                          :size="16"
-                        />
-                        <Icon v-else :icon="PlayIcon" :size="16" />
+                        <svg
+                          class="pointer-events-none absolute inset-0 h-full w-full -rotate-90"
+                          viewBox="0 0 36 36"
+                          aria-hidden="true"
+                        >
+                          <circle
+                            cx="18"
+                            cy="18"
+                            r="16"
+                            fill="none"
+                            stroke="rgba(255,255,255,0.22)"
+                            stroke-width="2.25"
+                          />
+                          <circle
+                            cx="18"
+                            cy="18"
+                            r="16"
+                            fill="none"
+                            stroke="white"
+                            stroke-width="2.25"
+                            stroke-linecap="round"
+                            pathLength="100"
+                            stroke-dasharray="100"
+                            :stroke-dashoffset="100 - audioProgress(assistantAudio[message._key]) * 100"
+                            style="transition: stroke-dashoffset 120ms linear"
+                          />
+                        </svg>
+                        <span
+                          class="grid h-9 w-9 place-items-center rounded-full bg-white text-ieee-700 shadow-sm transition group-hover:scale-105 group-active:scale-95"
+                        >
+                          <span
+                            v-if="assistantAudio[message._key]?.loading"
+                            class="block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+                            aria-hidden="true"
+                          />
+                          <Icon
+                            v-else-if="assistantAudio[message._key]?.playing"
+                            :icon="PauseIcon"
+                            :size="16"
+                          />
+                          <Icon
+                            v-else
+                            :icon="PlayIcon"
+                            :size="16"
+                            class="translate-x-[1px]"
+                          />
+                        </span>
                       </button>
-                      <span class="flex h-7 flex-1 items-center gap-0.5" aria-hidden="true">
+                      <span class="flex h-9 flex-1 items-center gap-0.5" aria-hidden="true">
                         <span
                           v-for="(bar, barIdx) in detailWaveformBars.slice(0, 32)"
                           :key="barIdx"
-                          class="w-0.5 rounded-full bg-white/60"
-                          :style="{ height: `${Math.max(20, bar * 0.6)}%` }"
+                          class="voice-history-wave__bar w-0.5 rounded-full bg-white"
+                          :style="{
+                            height: `${Math.max(20, bar * 0.6)}%`,
+                            opacity: voiceBarOpacity(assistantAudio[message._key], barIdx, 32),
+                          }"
                         />
                       </span>
-                      <span class="shrink-0 text-[11px] font-semibold tabular-nums text-white/80">
-                        {{ formatAudioClock(assistantAudio[message._key]?.duration ?? 0) || '0:00' }}
+                      <span class="shrink-0 pr-1 text-xs font-medium tabular-nums text-white/85">
+                        {{ voiceBubbleClock(assistantAudio[message._key]) }}
                       </span>
                     </div>
                     <div
@@ -1500,7 +1969,7 @@ onBeforeUnmount(() => {
                         />
                       </button>
                       <button
-                        v-if="message.role === 'assistant' && message._key"
+                        v-if="message.role === 'assistant' && message._key && (!message.language || voiceCatalogStore.isTtsSupported(message.language))"
                         type="button"
                         class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 transition hover:bg-ieee-50 hover:text-ieee-800 disabled:opacity-50"
                         :aria-label="assistantAudio[message._key]?.playing ? t('history.aria.pauseAudio', 'Pause audio') : t('history.aria.playAudio', 'Play audio')"
@@ -1835,6 +2304,100 @@ onBeforeUnmount(() => {
               </button>
             </header>
 
+            <div v-if="hasRecording && currentSession" class="mt-5 px-6">
+              <!-- Hidden media element — the visible controls drive it. -->
+              <audio
+                ref="recordingAudio"
+                :src="currentSession.recordingUrl ?? undefined"
+                preload="metadata"
+                @loadedmetadata="onRecordingLoaded"
+                @timeupdate="onRecordingTimeUpdate"
+                @ended="onRecordingEnded"
+                @error="onRecordingError"
+              />
+              <div class="call-player flex items-center gap-3.5 rounded-2xl border border-slate-200/70 bg-gradient-to-r from-white via-slate-50/40 to-white px-3.5 py-3 shadow-[0_1px_3px_rgba(15,23,42,0.06),0_4px_16px_-8px_rgba(15,23,42,0.08)]">
+                <button
+                  type="button"
+                  class="call-player__btn group relative grid h-12 w-12 shrink-0 place-items-center disabled:cursor-not-allowed disabled:opacity-50"
+                  :aria-label="recordingPlaying
+                    ? t('history.recording.pause', 'Pause recording')
+                    : t('history.recording.play', 'Play recording')"
+                  :disabled="recordingLoadError"
+                  @click="toggleRecordingPlayback"
+                >
+                  <!-- Progress ring tracing the play button. Matches the chat
+                       voice-note bubble's circular indicator. -->
+                  <svg
+                    class="pointer-events-none absolute inset-0 h-full w-full -rotate-90"
+                    viewBox="0 0 36 36"
+                    aria-hidden="true"
+                  >
+                    <circle cx="18" cy="18" r="16.5" fill="none" stroke="rgba(15,61,145,0.12)" stroke-width="2" />
+                    <circle
+                      cx="18"
+                      cy="18"
+                      r="16.5"
+                      fill="none"
+                      stroke="currentColor"
+                      class="text-ieee-700"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      pathLength="100"
+                      stroke-dasharray="100"
+                      :stroke-dashoffset="100 - recordingFraction * 100"
+                      style="transition: stroke-dashoffset 120ms linear"
+                    />
+                  </svg>
+                  <span class="grid h-[40px] w-[40px] place-items-center rounded-full bg-gradient-to-br from-ieee-600 to-ieee-800 text-white shadow-[0_4px_12px_-2px_rgba(15,61,145,0.45)] transition group-hover:scale-105 group-active:scale-95">
+                    <Icon v-if="recordingPlaying" :icon="PauseIcon" :size="15" />
+                    <Icon v-else :icon="PlayIcon" :size="15" class="translate-x-[1px]" />
+                  </span>
+                </button>
+
+                <button
+                  ref="recordingWaveEl"
+                  type="button"
+                  class="call-player__wave group flex h-10 min-w-0 flex-1 items-center gap-[3px]"
+                  :aria-label="t('history.recording.seek', 'Seek recording')"
+                  :disabled="recordingLoadError || !recordingTotalSeconds"
+                  @click="seekRecordingFromWave"
+                >
+                  <span
+                    v-for="(h, i) in CALL_WAVE_HEIGHTS"
+                    :key="i"
+                    class="call-player__wave-bar min-w-0 flex-1 rounded-full"
+                    :class="[
+                      i / CALL_WAVE_HEIGHTS.length < recordingFraction
+                        ? 'bg-gradient-to-b from-ieee-600 to-ieee-800'
+                        : 'bg-slate-300/80 group-hover:bg-slate-400/80',
+                    ]"
+                    :style="{ height: `${Math.max(18, h)}%` }"
+                  />
+                </button>
+
+                <div class="flex shrink-0 items-center gap-2.5">
+                  <span class="whitespace-nowrap text-xs font-semibold tabular-nums text-slate-700">
+                    <span v-if="recordingLoadError" class="text-red-500">
+                      {{ t('history.recording.loadError', 'Recording unavailable') }}
+                    </span>
+                    <template v-else>
+                      {{ formatPlaybackTime(recordingCurrentTime) }}
+                      <span class="font-normal text-slate-400">/ {{ formatPlaybackTime(recordingTotalSeconds) }}</span>
+                    </template>
+                  </span>
+                  <a
+                    :href="currentSession.recordingUrl ?? '#'"
+                    :download="`call-${currentSession._key}.wav`"
+                    class="call-player__download grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-ieee-700 hover:text-white hover:shadow-[0_4px_10px_-2px_rgba(15,61,145,0.4)]"
+                    :aria-label="t('history.recording.download', 'Download recording')"
+                    :title="t('history.recording.download', 'Download recording')"
+                  >
+                    <Icon :icon="Download01Icon" :size="15" />
+                  </a>
+                </div>
+              </div>
+            </div>
+
             <div class="mt-5 px-6">
               <div class="inline-flex w-full gap-1 rounded-full bg-slate-100 p-1" role="tablist">
                 <button
@@ -1965,6 +2528,45 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* Smooths any jitter between rAF ticks driving voiceBarOpacity. The
+   transition is short so the fill still feels frame-locked, just dampened. */
+.voice-history-wave__bar {
+  transition: opacity 80ms linear;
+  will-change: opacity;
+}
+
+/* Call-recording player — waveform-style seek surface. Bar colour is driven
+   by the template binding (slate vs. ieee gradient); these rules smooth the
+   colour swap so the playhead doesn't snap jaggedly, and give the wave a
+   subtle "lift" cue on hover so users sense it's seekable. */
+.call-player__wave {
+  cursor: pointer;
+}
+.call-player__wave:disabled {
+  cursor: not-allowed;
+}
+.call-player__wave-bar {
+  transition: background-color 140ms ease, height 220ms ease, transform 140ms ease;
+}
+.call-player__wave:not(:disabled):hover .call-player__wave-bar {
+  transform: scaleY(1.06);
+}
+.call-player__btn:focus-visible,
+.call-player__download:focus-visible {
+  outline: 2px solid var(--tw-color-ieee-700, #0b3d91);
+  outline-offset: 4px;
+  border-radius: 9999px;
+}
+.call-player__download {
+  transition: background-color 160ms ease, color 160ms ease, transform 140ms ease, box-shadow 160ms ease;
+}
+.call-player__download:hover {
+  transform: translateY(-1px);
+}
+.call-player__download:active {
+  transform: translateY(0);
+}
+
 .typing-dots {
   display: inline-flex;
   align-items: center;
@@ -2062,6 +2664,9 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .voice-history-wave__bar {
+    transition: none;
+  }
   .recorder-led__core,
   .recorder-led__halo,
   .recorder-wave__bar,

@@ -141,8 +141,14 @@ class VoiceSessionService {
     limit = 50,
     offset = 0,
   }) {
-    const filters = ['s.userId == @uid'];
-    const bind = { uid: String(userId), '@coll': SESSIONS_COLLECTION };
+    // userId=null is a deliberate admin scope=all (no userId filter); only
+    // bind it when we actually want to constrain to a single user.
+    const filters = [];
+    const bind = { '@coll': SESSIONS_COLLECTION };
+    if (userId != null) {
+      filters.push('s.userId == @uid');
+      bind.uid = String(userId);
+    }
 
     if (twinId) {
       filters.push('s.twinId == @twinId');
@@ -174,9 +180,10 @@ class VoiceSessionService {
     bind.limit = Number(limit);
     bind.offset = Number(offset);
 
+    const whereClause = filters.length ? `FILTER ${filters.join(' AND ')}` : '';
     const query = `
       FOR s IN @@coll
-        FILTER ${filters.join(' AND ')}
+        ${whereClause}
         ${safeSort}
         LIMIT @offset, @limit
         RETURN s

@@ -10,6 +10,10 @@ export interface VoiceSession {
   endAt: string | null;
   durationSeconds: number | null;
   createdAt: string;
+  // Relative URL to the captured call audio (e.g. /Uploads/call-recordings/<id>.wav).
+  // Returned by GET /voice/sessions/:id once the recording has been finalised on
+  // the backend. Absent on older sessions and may be null while encoding.
+  recordingUrl?: string | null;
 }
 
 export interface VoiceMessage {

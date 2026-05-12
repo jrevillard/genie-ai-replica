@@ -15,6 +15,15 @@ export interface SendChatMessagePayload {
   context?: ChatMessageContext;
 }
 
+export interface SourceDocument {
+  document_id: string;
+  document_name: string;
+  url: string;
+  score: number;
+  categoryLabel?: string[];
+  serviceLabels?: string[];
+}
+
 export interface SendChatMessageResponse {
   userMessageId?: string;
   assistantMessageId?: string;
@@ -23,7 +32,7 @@ export interface SendChatMessageResponse {
   response?: string;
   responseTime?: number;
   metadata?: {
-    source_documents?: unknown[];
+    source_documents?: SourceDocument[];
     confidence_score?: number;
   };
 }
@@ -96,6 +105,10 @@ export interface ChatSessionRecord {
 export interface ListChatSessionsParams {
   type?: ChatSessionType;
   scope?: 'me' | 'all';
+  // Admin-only — filter sessions to a single user's userId. The backend
+  // auto-implies scope=all when this is set, but we still send scope=all so
+  // the URL is self-describing.
+  userId?: string;
   phoneNumber?: string;
   limit?: number;
   offset?: number;
@@ -107,6 +120,11 @@ export interface ChatHistoryMessage {
   content: string;
   audioUrl?: string | null;
   createdAt?: string;
+  /** ISO-639-1 language code of the message, when the backend records it.
+   *  Drives the "Listen" button gate — only shown if Piper supports it. */
+  language?: string;
+  /** RAG citations + confidence restored from DB on message history GET. */
+  metadata?: SendChatMessageResponse['metadata'];
 }
 
 function normalizeChatHistoryMessage(raw: unknown): ChatHistoryMessage {
@@ -155,7 +173,38 @@ function normalizeChatHistoryMessage(raw: unknown): ChatHistoryMessage {
     }
   }
 
-  return { _key, role, content, audioUrl, createdAt };
+  // Optional ISO-639-1 language tag — accept several casings/key names. Used
+  // by the chat-history view to gate the "Listen" button against the TTS
+  // voice catalog (only show for languages with a Piper voice).
+  const langCandidates = [r.language, r.lang, r.languageCode, r.language_code];
+  let language: string | undefined;
+  for (const candidate of langCandidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      language = candidate.trim().toLowerCase();
+      break;
+    }
+  }
+
+  let metadata: ChatHistoryMessage['metadata'];
+  const rawMeta = r.metadata;
+  if (rawMeta && typeof rawMeta === 'object' && !Array.isArray(rawMeta)) {
+    const md = rawMeta as Record<string, unknown>;
+    const out: NonNullable<ChatHistoryMessage['metadata']> = {};
+    if (Array.isArray(md.source_documents)) {
+      out.source_documents = md.source_documents as SourceDocument[];
+    }
+    if (typeof md.confidence_score === 'number' && Number.isFinite(md.confidence_score)) {
+      out.confidence_score = md.confidence_score;
+    }
+    if (
+      (out.source_documents && out.source_documents.length > 0) ||
+      out.confidence_score != null
+    ) {
+      metadata = out;
+    }
+  }
+
+  return { _key, role, content, audioUrl, createdAt, language, metadata };
 }
 
 export interface SendVoiceMessageOptions {
@@ -170,6 +219,7 @@ export interface SendVoiceMessageResponse {
   assistantMessage: { id: string; text: string };
   responseTime?: number;
   queryId?: string;
+  metadata?: SendChatMessageResponse['metadata'];
 }
 
 export interface ChatSessionMessagesResponse {
@@ -211,6 +261,7 @@ export async function listChatSessions(
   };
   if (params.type) query.type = params.type;
   if (params.scope) query.scope = params.scope;
+  if (params.userId) query.userId = params.userId;
   if (params.phoneNumber) query.phoneNumber = params.phoneNumber;
 
   const res = await api.get<ChatSessionRecord[]>('/chat-sessions', { params: query });
@@ -287,6 +338,11 @@ function inferAudioFileName(blob: Blob): string {
 export interface ChatLanguage {
   code: string;
   name: string;
+  // Voice-call availability is gated by whether the language has both an
+  // STT pipeline and a TTS voice on the backend. The picker still lists
+  // every language so users can chat, but the call button must refuse the
+  // ones flagged false here.
+  isVoiceSupported?: boolean;
 }
 
 export interface SuggestedQuestion {

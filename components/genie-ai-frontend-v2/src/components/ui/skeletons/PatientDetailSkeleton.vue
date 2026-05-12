@@ -7,17 +7,39 @@ import BaseSkeleton from './BaseSkeleton.vue';
     <!-- Back button -->
     <BaseSkeleton variant="circle" width="2.25rem" height="2.25rem" />
 
-    <!-- Header: avatar + name/email block + Delete user pill -->
+    <!-- Header: avatar + name/email/verified pill/last-active badge + Delete user pill -->
     <header class="flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-4">
         <BaseSkeleton variant="circle" width="5rem" height="5rem" />
         <div class="flex flex-col gap-2">
           <BaseSkeleton height="1.5rem" width="11rem" rounded="md" />
-          <BaseSkeleton height="0.875rem" width="14rem" rounded="md" />
+          <div class="flex items-center gap-2">
+            <BaseSkeleton height="0.875rem" width="13rem" rounded="md" />
+            <BaseSkeleton height="1.125rem" width="4.25rem" rounded="full" />
+          </div>
+          <BaseSkeleton height="1.25rem" width="11rem" rounded="full" />
         </div>
       </div>
       <BaseSkeleton height="2.5rem" width="9rem" rounded="full" />
     </header>
+
+    <!-- Stats grid: 4 cards (Chats / WhatsApp / Calls / Sessions) -->
+    <section class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <article
+        v-for="n in 4"
+        :key="n"
+        class="rounded-2xl border border-border-subtle bg-surface p-4"
+      >
+        <div class="flex items-center gap-3">
+          <BaseSkeleton variant="circle" width="2.5rem" height="2.5rem" />
+          <div class="min-w-0 flex-1 space-y-2">
+            <BaseSkeleton height="0.6875rem" width="3.5rem" rounded="md" />
+            <BaseSkeleton height="1.5rem" width="3rem" rounded="md" />
+          </div>
+        </div>
+        <BaseSkeleton height="0.6875rem" width="80%" rounded="md" class="mt-2" />
+      </article>
+    </section>
 
     <!-- Tabs row + Update button -->
     <div class="flex flex-wrap items-center justify-between gap-3">

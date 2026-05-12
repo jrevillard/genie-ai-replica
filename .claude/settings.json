@@ -22,7 +22,9 @@
       "Bash(grep -nB3 -A8 \"INVALID_LINKED_FORMAT\" /root/genie-ai/components/genie-ai-frontend-v2/node_modules/vue-i18n/dist/vue-i18n.esm-browser.js)",
       "Bash(python3)",
       "Bash(chmod +x /tmp/audit.sh)",
-      "Bash(/tmp/audit.sh)"
+      "Bash(/tmp/audit.sh)",
+      "Bash(awk 'NR==2406,/<\\\\/BaseDrawer>/{print NR\": \"$0}' /root/genie-ai/components/genie-ai-frontend-v2/src/views/KnowledgeSetView.vue)",
+      "Bash(awk '/^async function submitLinkUpload/,/^}$/{print NR\": \"$0}' /root/genie-ai/components/genie-ai-frontend-v2/src/views/KnowledgeSetView.vue)"
     ],
     "additionalDirectories": [
       "/root/.claude/plans"

@@ -1,5 +1,8 @@
 const fs = require('fs').promises;
 const path = require('path');
+const os = require('os');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 const mime = require('mime-types');
 const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
@@ -15,6 +18,9 @@ const securityService = require('./securityService');
 
 // Import utils
 const appConfig = require('../config/appConfig');
+const execFileAsync = promisify(execFile);
+const OCR_MIN_TEXT_CHARS = 50;
+const OCR_MAX_PAGES = 3;
 
 class FileService {
   constructor() {
@@ -31,6 +37,45 @@ class FileService {
   }
 
   /**
+   * Reverse-lookup: for each file row in `files`, set `linkedTwinIds` to the
+   * _keys of every twin whose `linkedKbFileIds` contains the file's file_id.
+   * Mutates the rows in place; best-effort (sets [] on failure or when the
+   * aiTwins DB isn't reachable).
+   */
+  async _attachLinkedTwinIds(files) {
+    if (!Array.isArray(files) || files.length === 0) return;
+    const ids = files.map((f) => f && f.file_id).filter(Boolean);
+    if (ids.length === 0) {
+      for (const f of files) f.linkedTwinIds = [];
+      return;
+    }
+    try {
+      const twinDb = await dbService.getConnection('default');
+      const cursor = await twinDb.query(
+        `FOR t IN aiTwins
+           FILTER t.linkedKbFileIds != null
+             AND LENGTH(INTERSECTION(t.linkedKbFileIds, @ids)) > 0
+           FOR fid IN INTERSECTION(t.linkedKbFileIds, @ids)
+             RETURN { fileId: fid, twinKey: t._key }`,
+        { ids }
+      );
+      const pairs = await cursor.all();
+      const byId = new Map();
+      for (const { fileId, twinKey } of pairs) {
+        const arr = byId.get(fileId) || [];
+        arr.push(twinKey);
+        byId.set(fileId, arr);
+      }
+      for (const f of files) {
+        f.linkedTwinIds = byId.get(f.file_id) || [];
+      }
+    } catch (e) {
+      logger.warn(`[FILE-SERVICE] _attachLinkedTwinIds failed: ${e.message}`);
+      for (const f of files) f.linkedTwinIds = [];
+    }
+  }
+
+  /**
    * Remove a file id from all aiTwins.linkedKbFileIds.
    * Best-effort cleanup only; does not fail file deletion if aiTwins DB is unavailable.
    *
@@ -40,18 +85,50 @@ class FileService {
     if (!fileId) return;
     try {
       const twinDb = await dbService.getConnection('default');
-      await twinDb.query(
+      // Step 1: remove the file from each affected twin's allow-list. Also
+      // clear the legacy embedded suggestedQuestions array (back-compat — the
+      // new code path uses the aiTwinSuggestedQuestions collection).
+      const cursor = await twinDb.query(
         `
           FOR t IN aiTwins
             FILTER t.linkedKbFileIds != null AND @fileId IN t.linkedKbFileIds
             UPDATE t WITH {
               linkedKbFileIds: REMOVE_VALUE(t.linkedKbFileIds, @fileId),
+              suggestedQuestions: null,
+              suggestedQuestionsUpdatedAt: DATE_ISO8601(DATE_NOW()),
               updatedAt: DATE_ISO8601(DATE_NOW())
             } IN aiTwins
+            RETURN NEW._key
         `,
         { fileId }
       );
-      logger.info(`[FILE-SERVICE] Unlinked file ${fileId} from aiTwins`);
+      const affected = await cursor.all();
+
+      // Step 2: delete the affected twins' source='generated' suggested-question
+      // rows. Manual rows (source='manual') survive — the admin authored those
+      // independently of any specific KB file. Backend's next read of
+      // suggested-questions will self-heal and regenerate from remaining KB.
+      if (affected.length > 0) {
+        try {
+          await twinDb.query(
+            `
+              FOR q IN aiTwinSuggestedQuestions
+                FILTER q.twinId IN @keys AND q.source == 'generated'
+                REMOVE q IN aiTwinSuggestedQuestions
+            `,
+            { keys: affected }
+          );
+        } catch (eInner) {
+          logger.warn(
+            `[FILE-SERVICE] Could not purge generated suggested-questions for affected twins: ${eInner.message}`
+          );
+        }
+      }
+
+      logger.info(
+        `[FILE-SERVICE] Unlinked file ${fileId} from ${affected.length} aiTwin(s) ` +
+        `(generated suggestedQuestions cleared; backend will regenerate on next read)`
+      );
     } catch (e) {
       logger.warn(`[FILE-SERVICE] Could not unlink ${fileId} from aiTwins: ${e.message}`);
     }
@@ -67,10 +144,26 @@ class FileService {
     try {
       if (mimeType === 'application/pdf') {
         const data = await pdf(buffer);
-        const text = data.text || '';
+        let text = data.text || '';
         logger.info(
           `[FILE-SERVICE] pdf-parse extracted ${text.length} characters. Start of text: "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`
         );
+        if (text.trim().length < OCR_MIN_TEXT_CHARS) {
+          logger.warn(
+            `[FILE-SERVICE] pdf-parse text too short (${text.trim().length} chars). Trying OCR fallback for ${originalFileName}.`
+          );
+          const ocrText = await this._extractPdfTextWithOcr(buffer, originalFileName);
+          if (ocrText && ocrText.trim().length >= OCR_MIN_TEXT_CHARS) {
+            text = ocrText;
+            logger.info(
+              `[FILE-SERVICE] OCR fallback extracted ${text.length} characters. Start of text: "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`
+            );
+          } else {
+            logger.warn(
+              `[FILE-SERVICE] OCR fallback did not extract enough text (${ocrText ? ocrText.trim().length : 0} chars).`
+            );
+          }
+        }
         return text;
       }
       if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
@@ -102,6 +195,75 @@ class FileService {
       logger.error(`[FILE-SERVICE] Text extraction failed for mimeType ${mimeType}: ${error.message}`);
     }
     return ''; // Return empty string if no text extracted or type not supported
+  }
+
+  /**
+   * OCR fallback for scanned/image PDFs.
+   * Renders first pages to PNG via pdftoppm, then runs tesseract on each page.
+   * @param {Buffer} buffer
+   * @param {string} originalFileName
+   * @returns {Promise<string>}
+   */
+  async _extractPdfTextWithOcr(buffer, originalFileName = '') {
+    const token = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const tempPdfPath = path.join(os.tmpdir(), `docrepo_ocr_${token}.pdf`);
+    const imagePrefix = path.join(os.tmpdir(), `docrepo_ocr_${token}_page`);
+    try {
+      await fs.writeFile(tempPdfPath, buffer);
+
+      // Convert first N PDF pages into PNG images.
+      await execFileAsync('pdftoppm', ['-f', '1', '-l', String(OCR_MAX_PAGES), '-png', tempPdfPath, imagePrefix]);
+
+      const tempDirFiles = await fs.readdir(os.tmpdir());
+      const imageFiles = tempDirFiles
+        .filter((name) => name.startsWith(path.basename(imagePrefix)) && name.endsWith('.png'))
+        .sort()
+        .map((name) => path.join(os.tmpdir(), name));
+
+      if (!imageFiles.length) {
+        logger.warn(`[FILE-SERVICE] OCR fallback: pdftoppm produced no images for ${originalFileName}`);
+        return '';
+      }
+
+      const texts = [];
+      for (const imagePath of imageFiles) {
+        try {
+          const { stdout } = await execFileAsync('tesseract', [imagePath, 'stdout', '-l', 'eng', '--psm', '6']);
+          if (stdout && stdout.trim()) {
+            texts.push(stdout.trim());
+          }
+        } catch (ocrErr) {
+          logger.warn(`[FILE-SERVICE] OCR fallback page failed (${path.basename(imagePath)}): ${ocrErr.message}`);
+        }
+      }
+      return texts.join('\n');
+    } catch (error) {
+      logger.warn(`[FILE-SERVICE] OCR fallback failed for ${originalFileName}: ${error.message}`);
+      return '';
+    } finally {
+      try {
+        await fs.unlink(tempPdfPath);
+      } catch {
+        // Best effort cleanup.
+      }
+      try {
+        const tempDirFiles = await fs.readdir(os.tmpdir());
+        const toDelete = tempDirFiles.filter(
+          (name) => name.startsWith(path.basename(imagePrefix)) && name.endsWith('.png')
+        );
+        await Promise.all(
+          toDelete.map(async (name) => {
+            try {
+              await fs.unlink(path.join(os.tmpdir(), name));
+            } catch {
+              // Best effort cleanup.
+            }
+          })
+        );
+      } catch {
+        // Best effort cleanup.
+      }
+    }
   }
 
   /**
@@ -677,6 +839,12 @@ class FileService {
       const db = await this.getDb();
       const cursor = await db.query(query, bindVars);
       const files = await cursor.all();
+
+      // Annotate each file with the list of twin _keys that link to it. aiTwins
+      // always lives in the primary ("default") DB; this DB may be the files DB
+      // or separate depending on deployment. Best-effort — failure leaves an
+      // empty list rather than breaking the list endpoint.
+      await this._attachLinkedTwinIds(files);
 
       // Get total count for pagination
       let countQuery = 'FOR file IN files';

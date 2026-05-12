@@ -10,13 +10,13 @@ import {
   Download04Icon,
   File02Icon,
   Globe02Icon,
-  Link01Icon,
   MoreVerticalIcon,
   PauseIcon,
   Pdf01Icon,
   PlayIcon,
   Search01Icon,
   StopCircleIcon,
+  Tick02Icon,
   Upload01Icon,
 } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
@@ -28,16 +28,12 @@ import BaseDrawer from '../components/ui/BaseDrawer.vue';
 import BaseDropdown from '../components/ui/BaseDropdown.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
 import { CHAT_LANGS } from '../lib/chatStrings';
-import {
-  ACCEPT_ATTR,
-  MAX_FILE_SIZE_BYTES,
-  MAX_FILES_PER_UPLOAD,
-  validateUploadCandidates,
-} from '../lib/uploadLimits';
+import AddKnowledgeDrawer from '../components/dashboard/AddKnowledgeDrawer.vue';
 import CreateAiTwinDialog from '../components/dashboard/CreateAiTwinDialog.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import TranslatedText from '../components/ui/TranslatedText.vue';
+import TwinAvatarStack from '../components/ui/TwinAvatarStack.vue';
 import AiTwinCardSkeleton from '../components/ui/skeletons/AiTwinCardSkeleton.vue';
 import KnowledgeSetDocsSkeleton from '../components/ui/skeletons/KnowledgeSetDocsSkeleton.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
@@ -58,6 +54,8 @@ type DocumentRow = {
   statusRaw: string;
   subtitle: string;
   selected: boolean;
+  /** Twin IDs that link this file — used by `TwinAvatarStack`. */
+  linkedTwinIds: string[];
 };
 
 const { t, locale } = useT();
@@ -68,10 +66,6 @@ const mode = ref<'documents' | 'twins'>('documents');
 const documents = ref<DocumentRow[]>([]);
 const documentsLoading = ref(false);
 const uploadOpen = ref(false);
-const uploadSubmitting = ref(false);
-const dragOver = ref(false);
-const fileInput = ref<HTMLInputElement | null>(null);
-const drawerFiles = ref<File[]>([]);
 const documentSearch = ref('');
 const twinSearch = ref('');
 const pendingLinkIds = ref<string[]>([]);
@@ -97,13 +91,6 @@ function setDocViewMode(next: DocViewMode): void {
 
 const createTwinOpen = ref(false);
 const creatingTwin = ref(false);
-
-const uploadTab = ref<'files' | 'url' | 'crawl'>('files');
-const linkUrl = ref('');
-const linkLanguage = ref('');
-const linkLabels = ref('');
-const crawlUrl = ref('');
-const crawlMaxDepth = ref<number | ''>(2);
 
 const rowMenuOpenFor = ref<string | null>(null);
 const ingestingId = ref<string | null>(null);
@@ -239,8 +226,22 @@ function mapDataprepToLabel(raw: string | undefined): string {
   return raw?.trim() || t('knowledgeSet.statusPending', 'Pending');
 }
 
+// Resolves an ISO-639-1 code to a human-readable language name in the
+// active UI locale ("en" → "English" / "Anglais" / etc). Falls back to the
+// upper-cased code when the runtime can't resolve it. Mirrors the helper
+// used in `KnowledgeSetTab.vue` so both surfaces read the same way.
+function languageLabel(code: string | null | undefined): string {
+  if (!code) return '';
+  try {
+    const display = new Intl.DisplayNames([locale.value], { type: 'language' });
+    return display.of(String(code)) || String(code).toUpperCase();
+  } catch {
+    return String(code).toUpperCase();
+  }
+}
+
 function fileSubtitle(row: RepoFileRow): string {
-  const lang = row.language ? String(row.language) : '';
+  const lang = row.language ? languageLabel(row.language) : '';
   const chunks =
     row.chunk_count != null && row.chunk_count !== undefined
       ? String(row.chunk_count)
@@ -269,6 +270,9 @@ function mapRepoToRow(f: RepoFileRow, selectedMap: Map<string, boolean>): Docume
     statusRaw: raw || '',
     subtitle: fileSubtitle(f),
     selected: selectedMap.get(fileId) ?? false,
+    linkedTwinIds: Array.isArray(f.linkedTwinIds)
+      ? f.linkedTwinIds.filter((id): id is string => typeof id === 'string')
+      : [],
   };
 }
 
@@ -300,9 +304,11 @@ watch(documentSearch, () => {
   void debouncedReload();
 });
 
-watch(uploadOpen, (open) => {
-  if (!open) drawerFiles.value = [];
-});
+function onUploadComplete(): void {
+  // The drawer fires `uploaded` once the request succeeds — refresh the file
+  // list so the new entry appears at the top.
+  void loadDocuments();
+}
 
 function onDocumentClick(e: MouseEvent): void {
   if (!rowMenuOpenFor.value) return;
@@ -481,69 +487,6 @@ function toggleDocument(doc: DocumentRow) {
   doc.selected = !doc.selected;
 }
 
-function pickFile() {
-  fileInput.value?.click();
-}
-
-function formatUploadLimit(bytes: number): string {
-  return `${Math.round(bytes / (1024 * 1024))} MB`;
-}
-
-function reportUploadRejections(
-  rejected: ReturnType<typeof validateUploadCandidates>['rejected'],
-  overflow: File[]
-): void {
-  for (const r of rejected) {
-    if (r.reason === 'extension') {
-      notify.warning(
-        t(
-          'knowledgeSet.toasts.unsupportedType',
-          { name: r.file.name, ext: r.ext || '?' },
-          'Skipped "{name}" — {ext} is not supported.'
-        )
-      );
-    } else {
-      notify.warning(
-        t(
-          'knowledgeSet.toasts.fileTooLarge',
-          { name: r.file.name, limit: formatUploadLimit(MAX_FILE_SIZE_BYTES) },
-          'Skipped "{name}" — exceeds the {limit} per-file limit.'
-        )
-      );
-    }
-  }
-  if (overflow.length) {
-    notify.warning(
-      t(
-        'knowledgeSet.toasts.tooManyFiles',
-        { max: MAX_FILES_PER_UPLOAD, count: overflow.length },
-        'Only {max} files can be staged at once — {count} dropped.'
-      )
-    );
-  }
-}
-
-function appendDrawerFiles(list: FileList | File[] | null | undefined) {
-  if (!list?.length) return;
-  const { accepted, rejected, overflow } = validateUploadCandidates(
-    Array.from(list),
-    drawerFiles.value.length
-  );
-  reportUploadRejections(rejected, overflow);
-  if (!accepted.length) return;
-  drawerFiles.value = [...drawerFiles.value, ...accepted];
-}
-
-function onFileChange(e: Event) {
-  const input = e.target as HTMLInputElement;
-  appendDrawerFiles(input.files);
-  input.value = '';
-}
-
-function removeDrawerFile(index: number): void {
-  drawerFiles.value = drawerFiles.value.filter((_, i) => i !== index);
-}
-
 function formatFileSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB'];
@@ -554,47 +497,6 @@ function formatFileSize(bytes: number): string {
     unit += 1;
   }
   return `${value < 10 && unit > 0 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
-}
-
-const drawerFilesTotalSize = computed(() =>
-  drawerFiles.value.reduce((sum, f) => sum + (f.size || 0), 0)
-);
-
-function fileTypeIcon(name: string) {
-  return name.toLowerCase().endsWith('.pdf') ? Pdf01Icon : File02Icon;
-}
-
-function onDrop(e: DragEvent) {
-  e.preventDefault();
-  dragOver.value = false;
-  appendDrawerFiles(e.dataTransfer?.files);
-}
-
-async function submitDrawerUpload() {
-  if (!drawerFiles.value.length) {
-    notify.warning(t('knowledgeSet.drawerNoFiles', 'Add at least one file to upload.'));
-    return;
-  }
-  if (uploadSubmitting.value) return;
-  uploadSubmitting.value = true;
-  try {
-    if (drawerFiles.value.length === 1) {
-      await fileService.uploadFile(drawerFiles.value[0]);
-    } else {
-      await fileService.uploadMultipleFiles(drawerFiles.value);
-    }
-    notify.success(t('knowledgeSet.toasts.uploadSuccess', 'Upload complete'));
-    drawerFiles.value = [];
-    uploadOpen.value = false;
-    await loadDocuments();
-  } catch (err) {
-    notify.error(
-      t('knowledgeSet.toasts.uploadFailed', 'Upload failed'),
-      extractServerError(err)
-    );
-  } finally {
-    uploadSubmitting.value = false;
-  }
 }
 
 function goToTwinPicker() {
@@ -612,8 +514,98 @@ function continueWithSelected() {
   goToTwinPicker();
 }
 
+// Per-twin diff between the pending file selection and the twin's current
+// `linkedKbFileIds`. Drives the disabled state of redundant twin cards
+// (selecting a twin that already has every chosen file would be a no-op
+// re-link, so we surface that visually and refuse the click).
+function twinLinkState(twin: AiTwin): {
+  alreadyLinked: number;
+  totalPending: number;
+  newLinks: number;
+  fullyRedundant: boolean;
+} {
+  const have = new Set(twin.linkedKbFileIds ?? []);
+  const pending = pendingLinkIds.value;
+  let alreadyLinked = 0;
+  for (const id of pending) {
+    if (have.has(id)) alreadyLinked++;
+  }
+  const newLinks = pending.length - alreadyLinked;
+  return {
+    alreadyLinked,
+    totalPending: pending.length,
+    newLinks,
+    fullyRedundant: pending.length > 0 && newLinks === 0,
+  };
+}
+
 function selectTwinRow(twin: AiTwin) {
+  // Cards for twins that already have every selected file are non-actionable.
+  if (twinLinkState(twin).fullyRedundant) return;
   selectedTwinKey.value = twin._key;
+}
+
+// Document rows for the files currently staged for linking. Drives the
+// preview chips on the twin-picker page so the user always sees *what* is
+// being linked, not just a count.
+const pendingFileRows = computed(() => {
+  const ids = new Set(pendingLinkIds.value);
+  return documents.value.filter((d) => ids.has(d.fileId));
+});
+
+// Per-twin breakdown of which pending files are already linked vs new. Used
+// to render the per-card detail strip so the user can answer "which one is
+// already linked?" without leaving the picker.
+function linkBreakdown(twin: AiTwin): {
+  alreadyLinkedFiles: { fileId: string; name: string }[];
+  newFiles: { fileId: string; name: string }[];
+} {
+  const have = new Set(twin.linkedKbFileIds ?? []);
+  const alreadyLinkedFiles: { fileId: string; name: string }[] = [];
+  const newFiles: { fileId: string; name: string }[] = [];
+  for (const row of pendingFileRows.value) {
+    const entry = { fileId: row.fileId, name: row.name };
+    if (have.has(row.fileId)) alreadyLinkedFiles.push(entry);
+    else newFiles.push(entry);
+  }
+  return { alreadyLinkedFiles, newFiles };
+}
+
+// Bucket-then-alpha sort:
+//   1. Best fit (zero overlap) — every selected file is new for this twin.
+//   2. Partial overlap — some already linked, some new.
+//   3. Fully redundant — already has every selected file (disabled).
+// Within each bucket twins keep their natural alphabetical order so the
+// list doesn't reshuffle as a redundancy bucket grows/shrinks.
+const sortedTwinsForLink = computed<AiTwin[]>(() => {
+  const rank = (twin: AiTwin): number => {
+    const s = twinLinkState(twin);
+    if (s.fullyRedundant) return 2;
+    if (s.alreadyLinked > 0) return 1;
+    return 0;
+  };
+  return [...filteredTwins.value].sort((a, b) => {
+    const r = rank(a) - rank(b);
+    if (r !== 0) return r;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+});
+
+// Tracks the twin currently being linked via the per-row quick-link button so
+// we can show a row-scoped loading spinner without freezing the rest of the
+// list.
+const linkingToTwinId = ref<string | null>(null);
+
+async function quickLinkToTwin(twin: AiTwin): Promise<void> {
+  if (twinLinkState(twin).fullyRedundant) return;
+  if (linkingToTwinId.value) return;
+  selectedTwinKey.value = twin._key;
+  linkingToTwinId.value = twin._key;
+  try {
+    await confirmLinkToTwin();
+  } finally {
+    linkingToTwinId.value = null;
+  }
 }
 
 async function confirmLinkToTwin() {
@@ -732,6 +724,25 @@ function openCreateTwin() {
   createTwinOpen.value = true;
 }
 
+// Abort controller for the in-flight create-twin request, so closing the
+// dialog mid-flight kills the network call.
+let activeCreateTwinRequest: AbortController | null = null;
+
+function isCreateAbortError(err: unknown): boolean {
+  const e = err as { name?: string; code?: string };
+  return (
+    e?.name === 'CanceledError' ||
+    e?.name === 'AbortError' ||
+    e?.code === 'ERR_CANCELED'
+  );
+}
+
+watch(createTwinOpen, (open) => {
+  if (!open && creatingTwin.value && activeCreateTwinRequest) {
+    activeCreateTwinRequest.abort();
+  }
+});
+
 async function onTwinCreated(payload: {
   name: string;
   description: string;
@@ -739,16 +750,22 @@ async function onTwinCreated(payload: {
 }): Promise<void> {
   if (creatingTwin.value) return;
   creatingTwin.value = true;
+  activeCreateTwinRequest = new AbortController();
+  const { signal } = activeCreateTwinRequest;
   try {
-    const twin = await aiStore.create({
-      name: payload.name,
-      description: payload.description,
-      profilePicUrl: null,
-    });
+    const twin = await aiStore.create(
+      {
+        name: payload.name,
+        description: payload.description,
+        profilePicUrl: null,
+      },
+      signal
+    );
     if (payload.avatarFile) {
       try {
-        await aiStore.uploadAvatar(twin._key, payload.avatarFile);
-      } catch {
+        await aiStore.uploadAvatar(twin._key, payload.avatarFile, signal);
+      } catch (err) {
+        if (isCreateAbortError(err)) throw err;
         notify.error(
           aiStore.error ?? t('twins.list.avatarFailedToast', 'Twin created, but the avatar upload failed.')
         );
@@ -760,9 +777,12 @@ async function onTwinCreated(payload: {
     selectedTwinKey.value = twin._key;
     // Make sure the list reflects any server-side enrichment (counts, defaults).
     await aiStore.fetchAll().catch(() => {});
-  } catch {
-    notify.error(aiStore.error ?? t('twins.list.createFailedToast', 'Failed to create AI Twin'));
+  } catch (err) {
+    if (!isCreateAbortError(err)) {
+      notify.error(aiStore.error ?? t('twins.list.createFailedToast', 'Failed to create AI Twin'));
+    }
   } finally {
+    activeCreateTwinRequest = null;
     creatingTwin.value = false;
   }
 }
@@ -996,70 +1016,11 @@ async function retractSelected(): Promise<void> {
   }
 }
 
-// ─── Add from URL / site crawl (drawer tabs) ──────────────────────────────
-
 function parseLabelList(raw: string): string[] {
   return raw
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-}
-
-async function submitLinkUpload(): Promise<void> {
-  const url = linkUrl.value.trim();
-  if (!url) {
-    notify.warning(t('knowledgeSet.toasts.urlRequired', 'Enter a URL'));
-    return;
-  }
-  if (uploadSubmitting.value) return;
-  uploadSubmitting.value = true;
-  try {
-    await fileService.uploadLink({
-      url,
-      language: linkLanguage.value.trim() || undefined,
-      labels: parseLabelList(linkLabels.value),
-    });
-    notify.success(t('knowledgeSet.toasts.linkAdded', 'Link added to repository'));
-    linkUrl.value = '';
-    linkLanguage.value = '';
-    linkLabels.value = '';
-    uploadOpen.value = false;
-    await loadDocuments();
-  } catch (err) {
-    notify.error(
-      t('knowledgeSet.toasts.linkFailed', 'Could not add link'),
-      extractServerError(err)
-    );
-  } finally {
-    uploadSubmitting.value = false;
-  }
-}
-
-async function submitCrawl(): Promise<void> {
-  const url = crawlUrl.value.trim();
-  if (!url) {
-    notify.warning(t('knowledgeSet.toasts.urlRequired', 'Enter a URL'));
-    return;
-  }
-  if (uploadSubmitting.value) return;
-  uploadSubmitting.value = true;
-  try {
-    await fileService.scheduleSiteCrawl({
-      url,
-      maxDepth: typeof crawlMaxDepth.value === 'number' ? crawlMaxDepth.value : undefined,
-    });
-    notify.success(t('knowledgeSet.toasts.crawlScheduled', 'Crawl scheduled'));
-    crawlUrl.value = '';
-    uploadOpen.value = false;
-    await loadDocuments();
-  } catch (err) {
-    notify.error(
-      t('knowledgeSet.toasts.crawlFailed', 'Could not schedule crawl'),
-      extractServerError(err)
-    );
-  } finally {
-    uploadSubmitting.value = false;
-  }
 }
 
 // ─── File details drawer (metadata, edit, ingestion log, crawl) ───────────
@@ -1607,12 +1568,8 @@ watch(
     <section class="h-full min-h-0 bg-surface p-4 md:p-6">
       <div class="flex h-full min-h-[700px] flex-col">
         <template v-if="mode === 'documents'">
-          <header class="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <header class="mb-4">
             <h1 class="text-headline text-text">{{ t('knowledgeSet.title', 'Knowledge Set') }}</h1>
-            <BaseButton variant="primary" rounded="full" @click="uploadOpen = true">
-              <Icon :icon="Upload01Icon" :size="16" />
-              {{ t('knowledgeSet.addKnowledge', 'Add Knowledge') }}
-            </BaseButton>
           </header>
 
           <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -1625,53 +1582,59 @@ watch(
                 <template #leading><Icon :icon="Search01Icon" :size="18" /></template>
               </BaseInput>
             </div>
-            <div
-              role="group"
-              :aria-label="t('knowledgeSet.viewToggleAria', 'Switch document layout')"
-              class="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-surface p-1"
-            >
-              <button
-                type="button"
-                :class="[
-                  'inline-flex h-8 w-8 items-center justify-center rounded-full transition',
-                  docViewMode === 'list'
-                    ? 'bg-accent text-text-inverse shadow-sm'
-                    : 'text-text-muted hover:bg-surface-subtle hover:text-text',
-                ]"
-                :aria-pressed="docViewMode === 'list'"
-                :aria-label="t('knowledgeSet.viewList', 'List view')"
-                :title="t('knowledgeSet.viewList', 'List view')"
-                @click="setDocViewMode('list')"
+            <div class="flex flex-wrap items-center gap-2">
+              <div
+                role="group"
+                :aria-label="t('knowledgeSet.viewToggleAria', 'Switch document layout')"
+                class="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-surface p-1"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" aria-hidden="true">
-                  <line x1="8" y1="6" x2="21" y2="6" />
-                  <line x1="8" y1="12" x2="21" y2="12" />
-                  <line x1="8" y1="18" x2="21" y2="18" />
-                  <line x1="3" y1="6" x2="3.01" y2="6" />
-                  <line x1="3" y1="12" x2="3.01" y2="12" />
-                  <line x1="3" y1="18" x2="3.01" y2="18" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                :class="[
-                  'inline-flex h-8 w-8 items-center justify-center rounded-full transition',
-                  docViewMode === 'grid'
-                    ? 'bg-accent text-text-inverse shadow-sm'
-                    : 'text-text-muted hover:bg-surface-subtle hover:text-text',
-                ]"
-                :aria-pressed="docViewMode === 'grid'"
-                :aria-label="t('knowledgeSet.viewGrid', 'Grid view')"
-                :title="t('knowledgeSet.viewGrid', 'Grid view')"
-                @click="setDocViewMode('grid')"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" aria-hidden="true">
-                  <rect x="3" y="3" width="7" height="7" rx="1.5" />
-                  <rect x="14" y="3" width="7" height="7" rx="1.5" />
-                  <rect x="3" y="14" width="7" height="7" rx="1.5" />
-                  <rect x="14" y="14" width="7" height="7" rx="1.5" />
-                </svg>
-              </button>
+                <button
+                  type="button"
+                  :class="[
+                    'inline-flex h-8 w-8 items-center justify-center rounded-full transition',
+                    docViewMode === 'list'
+                      ? 'bg-accent text-text-inverse shadow-sm'
+                      : 'text-text-muted hover:bg-surface-subtle hover:text-text',
+                  ]"
+                  :aria-pressed="docViewMode === 'list'"
+                  :aria-label="t('knowledgeSet.viewList', 'List view')"
+                  :title="t('knowledgeSet.viewList', 'List view')"
+                  @click="setDocViewMode('list')"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" aria-hidden="true">
+                    <line x1="8" y1="6" x2="21" y2="6" />
+                    <line x1="8" y1="12" x2="21" y2="12" />
+                    <line x1="8" y1="18" x2="21" y2="18" />
+                    <line x1="3" y1="6" x2="3.01" y2="6" />
+                    <line x1="3" y1="12" x2="3.01" y2="12" />
+                    <line x1="3" y1="18" x2="3.01" y2="18" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  :class="[
+                    'inline-flex h-8 w-8 items-center justify-center rounded-full transition',
+                    docViewMode === 'grid'
+                      ? 'bg-accent text-text-inverse shadow-sm'
+                      : 'text-text-muted hover:bg-surface-subtle hover:text-text',
+                  ]"
+                  :aria-pressed="docViewMode === 'grid'"
+                  :aria-label="t('knowledgeSet.viewGrid', 'Grid view')"
+                  :title="t('knowledgeSet.viewGrid', 'Grid view')"
+                  @click="setDocViewMode('grid')"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" aria-hidden="true">
+                    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                    <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                  </svg>
+                </button>
+              </div>
+              <BaseButton variant="primary" rounded="full" @click="uploadOpen = true">
+                <Icon :icon="Upload01Icon" :size="16" />
+                {{ t('knowledgeSet.addKnowledge', 'Add Knowledge') }}
+              </BaseButton>
             </div>
           </div>
 
@@ -1850,11 +1813,19 @@ watch(
                   </p>
                 </div>
 
+                <TwinAvatarStack
+                  v-if="document.linkedTwinIds.length"
+                  :twin-ids="document.linkedTwinIds"
+                  :max="3"
+                  class="shrink-0"
+                  @click.stop
+                />
+
                 <div class="relative flex shrink-0 items-center gap-0.5" data-row-menu>
                   <button
                     v-if="canStop(document)"
                     type="button"
-                    class="grid h-8 w-8 place-items-center rounded-lg text-text-muted opacity-0 transition hover:bg-surface-subtle hover:text-text focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    class="grid h-8 w-8 place-items-center rounded-lg text-text-muted transition hover:bg-surface-subtle hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
                     :aria-label="t('knowledgeSet.stopAria', 'Stop ingestion')"
                     :title="t('knowledgeSet.stopAria', 'Stop ingestion')"
                     :disabled="killingId === document.fileId"
@@ -1870,7 +1841,7 @@ watch(
                   <button
                     v-else-if="canIngest(document)"
                     type="button"
-                    class="grid h-8 w-8 place-items-center rounded-lg text-text-muted opacity-0 transition hover:bg-surface-subtle hover:text-text focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    class="grid h-8 w-8 place-items-center rounded-lg text-text-muted transition hover:bg-surface-subtle hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
                     :aria-label="t('knowledgeSet.ingestAria', 'Ingest now')"
                     :title="
                       isGloballyBusy
@@ -1889,7 +1860,7 @@ watch(
                   </button>
                   <button
                     type="button"
-                    class="grid h-8 w-8 place-items-center rounded-lg text-text-muted opacity-0 transition hover:bg-surface-subtle hover:text-text focus-visible:opacity-100 group-hover:opacity-100"
+                    class="grid h-8 w-8 place-items-center rounded-lg text-text-muted transition hover:bg-surface-subtle hover:text-text"
                     :aria-label="t('knowledgeSet.downloadAria', 'Download document')"
                     @click.stop="downloadDoc(document)"
                   >
@@ -1898,10 +1869,10 @@ watch(
                   <button
                     type="button"
                     :class="[
-                      'grid h-8 w-8 place-items-center rounded-lg text-text-muted transition hover:bg-surface-subtle hover:text-text',
+                      'grid h-8 w-8 place-items-center rounded-lg transition hover:bg-surface-subtle hover:text-text',
                       rowMenuOpenFor === document.fileId
-                        ? 'opacity-100 bg-surface-subtle text-text'
-                        : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+                        ? 'bg-surface-subtle text-text'
+                        : 'text-text-muted',
                     ]"
                     :aria-label="t('knowledgeSet.moreAria', 'More actions')"
                     :aria-expanded="rowMenuOpenFor === document.fileId"
@@ -1965,7 +1936,9 @@ watch(
                     <button
                       type="button"
                       role="menuitem"
-                      class="flex w-full items-center gap-2 px-3 py-2 text-left text-caption text-danger transition hover:bg-danger-soft"
+                      class="flex w-full items-center gap-2 px-3 py-2 text-left text-caption text-danger transition hover:bg-danger-soft disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                      :disabled="canRetract(document)"
+                      :title="canRetract(document) ? t('knowledgeSet.menu.deleteBlockedRetractFirst', 'Retract this file before deleting') : ''"
                       @click="closeRowMenu(); askDelete(document)"
                     >
                       <Icon :icon="Delete02Icon" :size="14" />
@@ -2111,7 +2084,9 @@ watch(
                       <button
                         type="button"
                         role="menuitem"
-                        class="flex w-full items-center gap-2 px-3 py-2 text-left text-caption text-danger transition hover:bg-danger-soft"
+                        class="flex w-full items-center gap-2 px-3 py-2 text-left text-caption text-danger transition hover:bg-danger-soft disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                        :disabled="canRetract(document)"
+                        :title="canRetract(document) ? t('knowledgeSet.menu.deleteBlockedRetractFirst', 'Retract this file before deleting') : ''"
                         @click="closeRowMenu(); askDelete(document)"
                       >
                         <Icon :icon="Delete02Icon" :size="14" />
@@ -2133,6 +2108,13 @@ watch(
                     <span v-if="document.subtitle" aria-hidden="true" class="mx-1.5">·</span>
                     <span>{{ document.subtitle }}</span>
                   </p>
+                  <TwinAvatarStack
+                    v-if="document.linkedTwinIds.length"
+                    :twin-ids="document.linkedTwinIds"
+                    :max="3"
+                    class="mt-1 self-start"
+                    @click.stop
+                  />
                 </div>
               </div>
             </div>
@@ -2219,6 +2201,42 @@ watch(
             </div>
           </header>
 
+          <!-- Pending file preview — keeps "what" visible the entire time the
+               user is picking the target twin. Shows up to 6 file chips with
+               a "+N more" overflow chip when the selection is larger. -->
+          <section
+            v-if="pendingFileRows.length"
+            class="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-accent/15 bg-gradient-to-br from-accent-soft/40 via-surface to-surface px-4 py-3 shadow-sm"
+            :aria-label="t('knowledgeSet.linkingHintAria', 'Files being linked')"
+          >
+            <span class="inline-flex items-center gap-2 text-caption font-semibold text-accent">
+              <span class="grid h-6 w-6 place-items-center rounded-full bg-accent text-text-inverse">
+                <Icon :icon="File02Icon" :size="13" />
+              </span>
+              {{
+                t(
+                  'knowledgeSet.linkingFilesLabel',
+                  { count: pendingFileRows.length },
+                  'Linking {count} file(s):'
+                )
+              }}
+            </span>
+            <span
+              v-for="row in pendingFileRows.slice(0, 6)"
+              :key="row.fileId"
+              class="inline-flex max-w-[18rem] items-center gap-1.5 truncate rounded-full border border-border bg-surface px-2.5 py-1 text-caption font-medium text-text shadow-sm"
+              :title="row.name"
+            >
+              {{ row.name }}
+            </span>
+            <span
+              v-if="pendingFileRows.length > 6"
+              class="inline-flex items-center rounded-full bg-accent px-2.5 py-1 text-caption font-semibold text-text-inverse shadow-sm"
+            >
+              +{{ pendingFileRows.length - 6 }}
+            </span>
+          </section>
+
           <div
             v-if="twinsLoading"
             class="min-h-0 flex-1 overflow-y-auto pr-1"
@@ -2230,51 +2248,140 @@ watch(
             </div>
           </div>
           <div v-else class="min-h-0 flex-1 overflow-y-auto pr-1">
-            <div v-if="filteredTwins.length" class="grid gap-3 lg:grid-cols-2">
-              <button
-                v-for="twin in filteredTwins"
+            <div v-if="sortedTwinsForLink.length" class="grid gap-4 lg:grid-cols-2">
+              <div
+                v-for="twin in sortedTwinsForLink"
                 :key="twin._key"
-                type="button"
+                role="button"
+                :tabindex="twinLinkState(twin).fullyRedundant ? -1 : 0"
                 :aria-pressed="selectedTwinKey === twin._key"
+                :aria-disabled="twinLinkState(twin).fullyRedundant || undefined"
+                :title="
+                  twinLinkState(twin).fullyRedundant
+                    ? t('knowledgeSet.twinAllLinked', 'This twin already has every selected file')
+                    : ''
+                "
                 :class="[
-                  'group flex flex-col gap-3 rounded-xl border bg-surface p-4 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
-                  selectedTwinKey === twin._key
-                    ? 'border-accent bg-accent-soft/30 shadow-card'
-                    : 'border-border shadow-card hover:border-border-strong hover:bg-surface-subtle',
+                  'group relative flex flex-col gap-3.5 overflow-hidden rounded-2xl border bg-surface p-5 text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
+                  twinLinkState(twin).fullyRedundant
+                    ? 'cursor-not-allowed border-border-subtle bg-surface-muted/30 opacity-70'
+                    : twinLinkState(twin).alreadyLinked === 0 && twinLinkState(twin).totalPending > 0
+                      ? 'cursor-pointer border-accent/40 shadow-card hover:-translate-y-0.5 hover:border-accent hover:shadow-md'
+                      : 'cursor-pointer border-border shadow-card hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md',
                 ]"
                 @click="selectTwinRow(twin)"
+                @keydown.enter.prevent="selectTwinRow(twin)"
+                @keydown.space.prevent="selectTwinRow(twin)"
               >
+                <!-- Subtle accent rail on best-fit cards — every selected
+                     file would be new for this twin, so the user's most
+                     useful targets get a visual nudge without shouting. -->
+                <span
+                  v-if="twinLinkState(twin).alreadyLinked === 0 && twinLinkState(twin).totalPending > 0"
+                  class="pointer-events-none absolute inset-y-0 left-0 w-1 rounded-l-2xl bg-gradient-to-b from-accent via-accent to-accent/60"
+                  aria-hidden="true"
+                />
+
+                <!-- "Best fit" hint chip in the top-right. Light, optional,
+                     never appears for partial or redundant cards. -->
+                <span
+                  v-if="twinLinkState(twin).alreadyLinked === 0 && twinLinkState(twin).totalPending > 0"
+                  class="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-meta font-semibold uppercase tracking-wide text-accent"
+                >
+                  <span class="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
+                  {{ t('knowledgeSet.bestFit', 'Best fit') }}
+                </span>
                 <div class="flex items-start gap-3">
                   <BaseAvatar
                     :src="twin.profilePicUrl ?? ''"
                     :name="twin.name"
                     size="lg"
                   />
-                  <div class="min-w-0 flex-1">
-                    <h2 class="truncate text-body font-semibold text-text">
+                  <div class="min-w-0 flex-1 pr-20">
+                    <h2 class="truncate text-title font-semibold text-text">
                       <TranslatedText :text="twin.name" />
                     </h2>
                     <p
                       v-if="twin.description"
-                      class="mt-0.5 line-clamp-2 text-meta text-text-muted"
+                      class="mt-1 line-clamp-2 text-caption text-text-muted"
                     >
                       {{ twin.description }}
                     </p>
-                    <p v-else class="mt-0.5 text-meta italic text-text-subtle">
+                    <p v-else class="mt-1 text-caption italic text-text-subtle">
                       {{ t('knowledgeSet.noDescription', 'No description') }}
                     </p>
                   </div>
+                </div>
+
+                <div
+                  v-if="twinLinkState(twin).alreadyLinked > 0"
+                  class="flex flex-col gap-1.5"
+                >
                   <span
-                    :class="[
-                      'grid h-5 w-5 shrink-0 place-items-center rounded-full border transition',
-                      selectedTwinKey === twin._key
-                        ? 'border-accent bg-accent text-text-inverse'
-                        : 'border-border-strong group-hover:border-text-muted',
-                    ]"
-                    aria-hidden="true"
+                    v-if="twinLinkState(twin).fullyRedundant"
+                    class="inline-flex w-fit items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-meta font-semibold text-warning"
                   >
-                    <span v-if="selectedTwinKey === twin._key" class="block h-1.5 w-1.5 rounded-full bg-white" />
+                    {{
+                      t(
+                        'knowledgeSet.twinAllLinkedBadge',
+                        { count: twinLinkState(twin).totalPending },
+                        'Already has all {count} selected'
+                      )
+                    }}
                   </span>
+                  <span
+                    v-else
+                    class="inline-flex w-fit items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-meta font-semibold text-accent"
+                  >
+                    {{
+                      t(
+                        'knowledgeSet.twinPartiallyLinked',
+                        {
+                          alreadyLinked: twinLinkState(twin).alreadyLinked,
+                          newLinks: twinLinkState(twin).newLinks,
+                        },
+                        '{alreadyLinked} already linked · {newLinks} new'
+                      )
+                    }}
+                  </span>
+
+                  <!-- Per-file breakdown so the user knows *which* selected
+                       files are already linked vs which would be added.
+                       Suppressed for fully-redundant cards — those are
+                       disabled, so the per-file list is just clutter (the
+                       file chips at the top of the page already show the
+                       full selection). -->
+                  <div
+                    v-if="!twinLinkState(twin).fullyRedundant"
+                    class="flex flex-col gap-1 text-meta"
+                  >
+                    <div
+                      v-if="linkBreakdown(twin).alreadyLinkedFiles.length"
+                      class="flex flex-wrap items-center gap-1"
+                    >
+                      <Icon :icon="Tick02Icon" :size="12" class="text-warning" />
+                      <span class="text-text-muted">
+                        {{ t('knowledgeSet.breakdownAlready', 'Already on twin:') }}
+                      </span>
+                      <template v-for="(f, idx) in linkBreakdown(twin).alreadyLinkedFiles" :key="f.fileId">
+                        <span aria-hidden="true" v-if="idx > 0" class="text-border-strong">·</span>
+                        <span class="max-w-[12rem] truncate text-warning" :title="f.name">{{ f.name }}</span>
+                      </template>
+                    </div>
+                    <div
+                      v-if="linkBreakdown(twin).newFiles.length"
+                      class="flex flex-wrap items-center gap-1"
+                    >
+                      <Icon :icon="AddCircleIcon" :size="12" class="text-success" />
+                      <span class="text-text-muted">
+                        {{ t('knowledgeSet.breakdownNew', 'Will be added:') }}
+                      </span>
+                      <template v-for="(f, idx) in linkBreakdown(twin).newFiles" :key="f.fileId">
+                        <span aria-hidden="true" v-if="idx > 0" class="text-border-strong">·</span>
+                        <span class="max-w-[12rem] truncate text-success" :title="f.name">{{ f.name }}</span>
+                      </template>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-meta text-text-muted">
@@ -2319,7 +2426,28 @@ watch(
                     }}
                   </span>
                 </div>
-              </button>
+
+                <div class="mt-auto flex items-center justify-end gap-2 border-t border-border-subtle pt-3">
+                  <BaseButton
+                    variant="primary"
+                    rounded="full"
+                    :disabled="twinLinkState(twin).fullyRedundant || (linkingToTwinId !== null && linkingToTwinId !== twin._key)"
+                    :loading="linkingToTwinId === twin._key"
+                    @click.stop="quickLinkToTwin(twin)"
+                  >
+                    <Icon :icon="AddCircleIcon" :size="16" />
+                    {{
+                      twinLinkState(twin).newLinks > 0
+                        ? t(
+                            'knowledgeSet.linkNewCount',
+                            { count: twinLinkState(twin).newLinks },
+                            'Link {count} file(s)'
+                          )
+                        : t('knowledgeSet.linkBtn', 'Link')
+                    }}
+                  </BaseButton>
+                </div>
+              </div>
             </div>
 
             <EmptyState
@@ -2334,310 +2462,15 @@ watch(
             </EmptyState>
           </div>
 
-          <footer class="mt-5 flex items-center justify-between">
+          <footer class="mt-5 flex items-center justify-start">
             <BaseButton variant="outline" rounded="full" @click="mode = 'documents'">
               {{ t('common.back', 'Back') }}
-            </BaseButton>
-            <BaseButton
-              variant="primary"
-              rounded="full"
-              :disabled="!selectedTwinKey"
-              @click="confirmLinkToTwin"
-            >
-              {{ t('knowledgeSet.selectTwin', 'Link files to twin') }}
             </BaseButton>
           </footer>
         </template>
       </div>
 
-      <BaseDrawer
-        v-model:open="uploadOpen"
-        :title="t('knowledgeSet.drawerTitle', 'Add knowledge')"
-        :icon="Upload01Icon"
-        width="md"
-      >
-        <p class="mb-3 text-caption text-text-muted">
-          {{ t('knowledgeSet.drawerIntro', 'Upload files to the document repository.') }}
-        </p>
-
-        <div
-          class="mb-4 inline-flex w-full gap-1 rounded-full bg-surface-muted p-1"
-          role="tablist"
-          :aria-label="t('knowledgeSet.drawerTabsLabel', 'Upload source')"
-        >
-          <button
-            type="button"
-            role="tab"
-            :aria-selected="uploadTab === 'files'"
-            :class="[
-              'flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-caption font-semibold transition',
-              uploadTab === 'files' ? 'bg-surface text-text shadow-card' : 'text-text-muted',
-            ]"
-            @click="uploadTab = 'files'"
-          >
-            <Icon :icon="Upload01Icon" :size="14" />
-            {{ t('knowledgeSet.tabFiles', 'Files') }}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            :aria-selected="uploadTab === 'url'"
-            :class="[
-              'flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-caption font-semibold transition',
-              uploadTab === 'url' ? 'bg-surface text-text shadow-card' : 'text-text-muted',
-            ]"
-            @click="uploadTab = 'url'"
-          >
-            <Icon :icon="Link01Icon" :size="14" />
-            {{ t('knowledgeSet.tabUrl', 'URL') }}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            :aria-selected="uploadTab === 'crawl'"
-            :class="[
-              'flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-caption font-semibold transition',
-              uploadTab === 'crawl' ? 'bg-surface text-text shadow-card' : 'text-text-muted',
-            ]"
-            @click="uploadTab = 'crawl'"
-          >
-            <Icon :icon="Globe02Icon" :size="14" />
-            {{ t('knowledgeSet.tabCrawl', 'Site crawl') }}
-          </button>
-        </div>
-
-        <input
-          ref="fileInput"
-          type="file"
-          multiple
-          :accept="ACCEPT_ATTR"
-          class="hidden"
-          @change="onFileChange"
-        />
-
-        <!-- Files tab -->
-        <div v-if="uploadTab === 'files'">
-        <!-- Empty state — large dropzone -->
-        <div
-          v-if="!drawerFiles.length"
-          :class="[
-            'flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-10 text-center transition',
-            dragOver ? 'border-accent bg-accent-soft' : 'border-border bg-surface-muted',
-          ]"
-          @dragover.prevent="dragOver = true"
-          @dragleave="dragOver = false"
-          @drop="onDrop"
-        >
-          <span class="grid h-12 w-12 place-items-center rounded-full bg-surface text-text-muted shadow-card">
-            <Icon :icon="CloudUploadIcon" :size="24" />
-          </span>
-          <p class="text-body font-medium text-text">{{ t('knowledgeSet.uploadFile', 'Drag & drop files here') }}</p>
-          <p class="max-w-xs text-caption text-text-muted">
-            {{ t('knowledgeSet.allowedTypes', 'PDF, Word (.docx), Excel (.xlsx), Markdown, HTML, TXT — up to 50 MB') }}
-          </p>
-          <BaseButton variant="soft" size="sm" rounded="full" @click="pickFile">
-            {{ t('knowledgeSet.browseFiles', 'Browse files') }}
-          </BaseButton>
-        </div>
-
-        <!-- Has files — header + staged list + compact "add more" zone -->
-        <div v-else class="flex flex-col gap-3">
-          <div class="flex items-center justify-between gap-3">
-            <span class="text-caption font-semibold text-text">
-              {{
-                drawerFiles.length === 1
-                  ? t('knowledgeSet.fileReadyOne', '1 file ready')
-                  : t(
-                      'knowledgeSet.fileReadyMany',
-                      { count: drawerFiles.length },
-                      '{count} files ready'
-                    )
-              }}
-              <span class="ml-1 font-normal text-text-muted">· {{ formatFileSize(drawerFilesTotalSize) }}</span>
-            </span>
-            <button
-              type="button"
-              class="text-meta font-semibold text-text-muted transition hover:text-danger"
-              :disabled="uploadSubmitting"
-              @click="drawerFiles = []"
-            >
-              {{ t('knowledgeSet.clearAll', 'Clear all') }}
-            </button>
-          </div>
-
-          <ul class="flex max-h-72 flex-col gap-2 overflow-y-auto pr-0.5" role="list">
-            <li
-              v-for="(file, index) in drawerFiles"
-              :key="`${file.name}-${index}`"
-              class="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5"
-            >
-              <span
-                class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-danger-soft text-danger"
-                aria-hidden="true"
-              >
-                <Icon :icon="fileTypeIcon(file.name)" :size="18" />
-              </span>
-              <div class="flex min-w-0 flex-1 flex-col">
-                <span class="truncate text-caption font-medium text-text">{{ file.name }}</span>
-                <span class="text-meta text-text-muted">{{ formatFileSize(file.size) }}</span>
-              </div>
-              <button
-                type="button"
-                class="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-muted transition hover:bg-danger-soft hover:text-danger disabled:cursor-not-allowed disabled:opacity-50"
-                :aria-label="t('knowledgeSet.removeFileAria', 'Remove file')"
-                :disabled="uploadSubmitting"
-                @click="removeDrawerFile(index)"
-              >
-                <Icon :icon="Cancel01Icon" :size="16" />
-              </button>
-            </li>
-          </ul>
-
-          <button
-            type="button"
-            :class="[
-              'flex items-center justify-center gap-2 rounded-xl border-2 border-dashed py-3 text-caption font-medium transition',
-              dragOver
-                ? 'border-accent bg-accent-soft text-accent'
-                : 'border-border bg-surface-muted text-text-muted hover:border-border-strong hover:text-text',
-            ]"
-            :disabled="uploadSubmitting"
-            @click="pickFile"
-            @dragover.prevent="dragOver = true"
-            @dragleave="dragOver = false"
-            @drop="onDrop"
-          >
-            <Icon :icon="CloudUploadIcon" :size="16" />
-            {{ t('knowledgeSet.addMoreFiles', 'Add more files or drop here') }}
-          </button>
-        </div>
-        </div>
-
-        <!-- URL tab -->
-        <div v-else-if="uploadTab === 'url'" class="flex flex-col gap-3">
-          <label class="flex flex-col gap-1.5">
-            <span class="text-caption font-semibold text-text">
-              {{ t('knowledgeSet.urlField', 'URL') }}
-            </span>
-            <BaseInput
-              v-model="linkUrl"
-              type="url"
-              :placeholder="t('knowledgeSet.urlPlaceholder', 'https://example.com/document.pdf')"
-              rounded="full"
-            />
-          </label>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <label class="flex flex-col gap-1.5">
-              <span class="text-caption font-semibold text-text">
-                {{ t('knowledgeSet.languageField', 'Language') }}
-              </span>
-              <BaseDropdown
-                v-model="linkLanguage"
-                :options="languageOptions"
-                :placeholder="t('knowledgeSet.languagePlaceholder', 'Select a language')"
-                width="w-full"
-              />
-            </label>
-            <label class="flex flex-col gap-1.5">
-              <span class="text-caption font-semibold text-text">
-                {{ t('knowledgeSet.labelsField', 'Labels') }}
-              </span>
-              <BaseInput
-                v-model="linkLabels"
-                :placeholder="t('knowledgeSet.labelsPlaceholder', 'comma, separated')"
-                rounded="full"
-              />
-            </label>
-          </div>
-          <p class="text-meta text-text-muted">
-            {{ t('knowledgeSet.urlHint', 'We download the page contents and ingest them like a normal upload.') }}
-          </p>
-        </div>
-
-        <!-- Site crawl tab -->
-        <div v-else class="flex flex-col gap-3">
-          <label class="flex flex-col gap-1.5">
-            <span class="text-caption font-semibold text-text">
-              {{ t('knowledgeSet.crawlUrlField', 'Start URL') }}
-            </span>
-            <BaseInput
-              v-model="crawlUrl"
-              type="url"
-              :placeholder="t('knowledgeSet.crawlUrlPlaceholder', 'https://example.com')"
-              rounded="full"
-            />
-          </label>
-          <label class="flex flex-col gap-1.5">
-            <span class="text-caption font-semibold text-text">
-              {{ t('knowledgeSet.crawlMaxDepth', 'Max depth') }}
-            </span>
-            <BaseInput
-              v-model.number="crawlMaxDepth"
-              type="number"
-              min="1"
-              max="20"
-              :placeholder="t('knowledgeSet.crawlMaxDepthPlaceholder', '2 (recommended)')"
-              rounded="full"
-            />
-          </label>
-          <p class="text-meta text-text-muted">
-            {{
-              t(
-                'knowledgeSet.crawlHint',
-                'We schedule a background crawl. Track progress from the file row → Crawl status.'
-              )
-            }}
-          </p>
-        </div>
-
-        <template #footer>
-          <button
-            type="button"
-            class="text-body font-semibold text-text-muted transition hover:text-text"
-            :disabled="uploadSubmitting"
-            @click="uploadOpen = false"
-          >
-            {{ t('knowledgeSet.cancel', 'Cancel') }}
-          </button>
-          <BaseButton
-            v-if="uploadTab === 'files'"
-            variant="primary"
-            :loading="uploadSubmitting"
-            :disabled="!drawerFiles.length"
-            @click="submitDrawerUpload"
-          >
-            {{
-              drawerFiles.length > 1
-                ? t(
-                    'knowledgeSet.uploadCount',
-                    { count: drawerFiles.length },
-                    'Upload {count} files'
-                  )
-                : t('knowledgeSet.addKnowledge', 'Upload')
-            }}
-          </BaseButton>
-          <BaseButton
-            v-else-if="uploadTab === 'url'"
-            variant="primary"
-            :loading="uploadSubmitting"
-            :disabled="!linkUrl.trim()"
-            @click="submitLinkUpload"
-          >
-            <Icon :icon="Link01Icon" :size="14" />
-            {{ t('knowledgeSet.urlSubmit', 'Add link') }}
-          </BaseButton>
-          <BaseButton
-            v-else
-            variant="primary"
-            :loading="uploadSubmitting"
-            :disabled="!crawlUrl.trim()"
-            @click="submitCrawl"
-          >
-            <Icon :icon="Globe02Icon" :size="14" />
-            {{ t('knowledgeSet.crawlSubmit', 'Schedule crawl') }}
-          </BaseButton>
-        </template>
-      </BaseDrawer>
+      <AddKnowledgeDrawer v-model:open="uploadOpen" @uploaded="onUploadComplete" />
 
       <ConfirmDialog
         v-model:open="deleteDialogOpen"

@@ -12,6 +12,7 @@ import {
   sendPublicVoiceMessage,
   sendVoiceMessage,
   type SendVoiceMessageOptions,
+  type SourceDocument,
 } from '../services/chatSessions';
 import { readSession } from '../services/http';
 
@@ -28,6 +29,10 @@ export interface ChatMessage {
   createdAt: Date;
   streaming?: boolean;
   errored?: boolean;
+  /** KB documents that provided context for this assistant reply. */
+  sourceDocuments?: SourceDocument[];
+  /** Overall RAG confidence score (0–1) for this reply. */
+  confidenceScore?: number;
 }
 
 interface ChatState {
@@ -176,15 +181,26 @@ export const useChatStore = defineStore('chat', {
         const fetcher = readSession() ? getChatSessionMessages : getPublicChatSessionMessages;
         const data = await fetcher(sessionId, { limit: 500 });
         this.sessionId = sessionId;
-        this.messages = data.messages.map((m) => ({
-          id: makeId(),
-          serverId: m._key,
-          role: m.role === 'user' ? 'user' : 'assistant',
-          text: m.content ?? '',
-          lang: this.lang,
-          audioUrl: m.audioUrl ?? null,
-          createdAt: m.createdAt ? new Date(m.createdAt) : new Date(),
-        }));
+        this.messages = data.messages.map((m) => {
+          const docs = m.metadata?.source_documents;
+          const conf = m.metadata?.confidence_score;
+          const base = {
+            id: makeId(),
+            serverId: m._key,
+            role: m.role === 'user' ? 'user' : 'assistant',
+            text: m.content ?? '',
+            lang: m.language ?? this.lang,
+            audioUrl: m.audioUrl ?? null,
+            createdAt: m.createdAt ? new Date(m.createdAt) : new Date(),
+          };
+          if (Array.isArray(docs) && docs.length > 0) {
+            return { ...base, sourceDocuments: docs, confidenceScore: conf };
+          }
+          if (typeof conf === 'number' && Number.isFinite(conf)) {
+            return { ...base, confidenceScore: conf };
+          }
+          return base;
+        });
         return true;
       } catch {
         // Session likely missing/expired or auth mismatch — caller decides
@@ -261,6 +277,11 @@ export const useChatStore = defineStore('chat', {
           target.text = res.response ?? '';
           target.serverId = assistantId;
           target.streaming = false;
+          const docs = res.metadata?.source_documents;
+          if (Array.isArray(docs) && docs.length > 0) {
+            target.sourceDocuments = docs;
+            target.confidenceScore = res.metadata?.confidence_score;
+          }
         }
       } catch (err) {
         const target = this.messages.find((m) => m.id === placeholder.id);
@@ -274,14 +295,21 @@ export const useChatStore = defineStore('chat', {
       }
     },
 
-    async sendVoice(audio: Blob, opts: SendVoiceMessageOptions = {}): Promise<void> {
+    async sendVoice(
+      audio: Blob,
+      opts: SendVoiceMessageOptions & { localAudioUrl?: string | null } = {},
+    ): Promise<void> {
       if (this.sending) return;
+
+      const { localAudioUrl, ...apiOpts } = opts;
 
       // Optimistic placeholders so the welcome stage gives way to the chat
       // surface immediately on the first voice message — otherwise the user
       // taps mic, releases, and sees no feedback while the upload + transcribe
       // round-trip is in flight (the welcome state hides the messages area
-      // and its "Sending voice note…" indicator).
+      // and its "Sending voice note…" indicator). Seed the user placeholder
+      // with the local blob URL so the voice-note bubble (and its duration)
+      // render instantly, before the server round-trip completes.
       const userPlaceholder: ChatMessage = {
         id: makeId(),
         role: 'user',
@@ -289,6 +317,7 @@ export const useChatStore = defineStore('chat', {
         lang: this.lang,
         createdAt: new Date(),
         streaming: true,
+        audioUrl: localAudioUrl ?? null,
       };
       const assistantPlaceholder: ChatMessage = {
         id: makeId(),
@@ -306,13 +335,19 @@ export const useChatStore = defineStore('chat', {
         const sessionId = await this.ensureSession();
         if (!sessionId) throw new Error('No twin selected');
         const send = readSession() ? sendVoiceMessage : sendPublicVoiceMessage;
-        const res = await send(sessionId, audio, { language: this.lang, ...opts });
+        const res = await send(sessionId, audio, { language: this.lang, ...apiOpts });
 
         const userTarget = this.messages.find((m) => m.id === userPlaceholder.id);
         if (userTarget) {
           userTarget.serverId = res.userMessage.id;
           userTarget.text = res.userMessage.text;
-          userTarget.audioUrl = res.userMessage.audioUrl ?? null;
+          // Keep the local blob URL when present — overwriting it with the
+          // server URL would force the bubble to re-probe the duration and
+          // cause a visible "0:00" flicker. The server URL is only needed
+          // when restoring history on a fresh page load.
+          if (!userTarget.audioUrl) {
+            userTarget.audioUrl = res.userMessage.audioUrl ?? null;
+          }
           userTarget.streaming = false;
         }
         const assistantTarget = this.messages.find((m) => m.id === assistantPlaceholder.id);
@@ -320,6 +355,16 @@ export const useChatStore = defineStore('chat', {
           assistantTarget.serverId = res.assistantMessage.id;
           assistantTarget.text = res.assistantMessage.text;
           assistantTarget.streaming = false;
+          const docs = res.metadata?.source_documents;
+          if (Array.isArray(docs) && docs.length > 0) {
+            assistantTarget.sourceDocuments = docs;
+            assistantTarget.confidenceScore = res.metadata?.confidence_score;
+          } else if (
+            typeof res.metadata?.confidence_score === 'number' &&
+            Number.isFinite(res.metadata.confidence_score)
+          ) {
+            assistantTarget.confidenceScore = res.metadata.confidence_score;
+          }
         }
       } catch (err) {
         const userTarget = this.messages.find((m) => m.id === userPlaceholder.id);

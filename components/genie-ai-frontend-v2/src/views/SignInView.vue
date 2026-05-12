@@ -32,13 +32,25 @@ onMounted(() => {
   }
 });
 
+// Reject anything that isn't a same-origin in-app path. A raw `redirect` query
+// param goes straight into `router.push`, so a value like `//evil.com/x` or
+// `https://evil.com` would bounce the user off the app post-login — classic
+// open-redirect. Vue Router treats most external strings as relative paths,
+// but `//host`-style protocol-relative URLs slip through.
+function safeRedirect(raw: unknown, fallback = '/dashboard'): string {
+  if (typeof raw !== 'string' || raw.length === 0) return fallback;
+  // Must start with a single '/' and not be a protocol-relative '//host' URL
+  // or a backslash trick that some browsers normalise to '//'.
+  if (raw[0] !== '/' || raw[1] === '/' || raw[1] === '\\') return fallback;
+  return raw;
+}
+
 async function onSubmit() {
   if (!validate(form)) return;
   try {
     await auth.signIn({ loginName: form.loginName.trim(), password: form.password });
     sileo.success({ title: t('auth.signIn.welcomeBack', 'Welcome back!') });
-    const redirect = (route.query.redirect as string) || '/dashboard';
-    router.push(redirect);
+    router.push(safeRedirect(route.query.redirect));
   } catch {
     sileo.error({ title: auth.error ?? t('auth.signIn.failed', 'Sign-in failed') });
   }

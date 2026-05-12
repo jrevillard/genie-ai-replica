@@ -1,4 +1,7 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 fasttext==0.9.3
+# fasttext 0.9.3 calls np.array(..., copy=False) which is forbidden in NumPy 2.0+;
+# pin to the last 1.x release until upstream fasttext picks up the API change.
+numpy<2
 pydantic==2.9.2

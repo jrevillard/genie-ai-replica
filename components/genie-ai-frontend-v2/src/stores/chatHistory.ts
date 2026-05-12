@@ -24,6 +24,9 @@ interface ChatHistoryState {
 
   typeFilter: ChatSessionType | null;
   scopeFilter: 'me' | 'all';
+  // Admin-only — when set, the backend returns sessions belonging to this
+  // specific userId (auto-implies scope=all server-side).
+  userIdFilter: string | null;
   phoneNumberFilter: string;
   twinIdFilter: string | null;
 }
@@ -46,6 +49,7 @@ export const useChatHistoryStore = defineStore('chatHistory', {
 
     typeFilter: null,
     scopeFilter: 'me',
+    userIdFilter: null,
     phoneNumberFilter: '',
     twinIdFilter: null,
   }),
@@ -66,11 +70,16 @@ export const useChatHistoryStore = defineStore('chatHistory', {
       this.error = null;
       try {
         const phone = this.phoneNumberFilter.trim();
+        // userIdFilter implies admin scope server-side; pin scope=all to keep
+        // the request URL self-describing and to stop the backend from 403-ing
+        // if scopeFilter happens to still be 'me'.
+        const effectiveScope = this.userIdFilter ? 'all' : this.scopeFilter;
         const merged: ListChatSessionsParams = {
           limit: 50,
           offset: 0,
           ...(this.typeFilter ? { type: this.typeFilter } : {}),
-          ...(this.scopeFilter ? { scope: this.scopeFilter } : {}),
+          ...(effectiveScope ? { scope: effectiveScope } : {}),
+          ...(this.userIdFilter ? { userId: this.userIdFilter } : {}),
           ...(phone ? { phoneNumber: phone } : {}),
           ...params,
         };
@@ -225,6 +234,13 @@ export const useChatHistoryStore = defineStore('chatHistory', {
 
     setScopeFilter(scope: 'me' | 'all'): void {
       this.scopeFilter = scope;
+      // Switching back to "my sessions" must clear any sticky user filter,
+      // otherwise the server would still scope to that single user.
+      if (scope === 'me') this.userIdFilter = null;
+    },
+
+    setUserIdFilter(userId: string | null): void {
+      this.userIdFilter = userId;
     },
 
     setPhoneNumberFilter(phone: string): void {

@@ -72,6 +72,7 @@ module.exports = {
     man: 'man',   // Mandinka (ISO 639-2)
     mnk: 'mnk',   // Mandinka (ISO 639-3)
     st: 'st',     // Sesotho
+    wo: 'wo',     // Wolof
   },
 
   // Language fallback chains for graceful degradation
@@ -97,6 +98,7 @@ module.exports = {
     man: 'en', // Mandinka to English
     mnk: 'en', // Mandinka (alternative code) to English
     st: 'en',  // Sesotho to English
+    wo: 'en',  // Wolof to English
   },
 
   // Gemma-3 requires prompt-based translation
@@ -114,6 +116,6 @@ module.exports = {
     sd: 'Sindhi', skr: 'Saraiki', so: 'Somali', su: 'Sundanese', tr: 'Turkish',
     ug: 'Uyghur', ur: 'Urdu', uz: 'Uzbek', yo: 'Yoruba', ckb: 'Sorani Kurdish',
     // Newly added language names
-    man: 'Mandinka', mnk: 'Mandinka', st: 'Sesotho',
+    man: 'Mandinka', mnk: 'Mandinka', st: 'Sesotho', wo: 'Wolof',
   },
 };

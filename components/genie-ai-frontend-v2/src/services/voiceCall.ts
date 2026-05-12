@@ -17,7 +17,11 @@ import { mintVoiceToken } from './voice';
  * The class is event-driven; consumers attach handlers via on(...).
  */
 
-export type VoiceLanguage = 'en' | 'fr' | 'es' | 'sw';
+// The backend gates voice availability via /public/chat-sessions/languages
+// (isVoiceSupported). Any ISO-639-1 code from that endpoint is a valid call
+// language, so this is intentionally a string alias rather than a closed union
+// — the UI is responsible for refusing unsupported codes before reaching here.
+export type VoiceLanguage = string;
 export type VoiceGender = 'female' | 'male';
 export type VoiceStatus =
   | 'idle'

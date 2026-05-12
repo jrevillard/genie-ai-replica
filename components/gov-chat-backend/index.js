@@ -1198,7 +1198,8 @@ async function startApp() {
   });
 
   // Error handling middleware
-  app.use((err, req, res) => {
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, req, res, next) => {
     logger.error(`Error processing ${req.method} ${req.url}:`, {
       error: err.message || 'Unknown error',
       stack: err.stack || 'No stack trace',

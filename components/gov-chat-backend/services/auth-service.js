@@ -258,9 +258,12 @@ class AuthService {
         throw new Error('Invalid refresh token');
       }
 
-      // Generate new tokens
+      // Generate new tokens. Pass the full `user` (already fetched at L243)
+      // so the new access token carries `loginName` and `email` claims —
+      // matches what /auth/login mints. Passing only `{ _key }` strips those
+      // claims and downstream services that key off them start returning 401.
       logger.info(`AuthService.generating_tokens_for_user`, { userId: decoded.userId });
-      const accessToken = this.generateToken({ _key: decoded.userId });
+      const accessToken = this.generateToken(user);
       const newRefreshToken = this.generateRefreshToken(decoded.userId, currentTokenVersion);
 
       // Update tokens in database
@@ -844,7 +847,11 @@ class AuthService {
       {
         userId: user._key,
         loginName: user.loginName,
-        email: user.email
+        email: user.email,
+        // Embed role so other services (e.g. document-repository) can do
+        // authorization without a database lookup. Defaults to 'User' when
+        // the source record has no role assigned.
+        role: user.role || 'User'
       },
       this.jwtSecret,
       { expiresIn: this.jwtExpiresIn }

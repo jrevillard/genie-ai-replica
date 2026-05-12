@@ -75,6 +75,7 @@ class GenieTEIReranking(OpeaTEIReranking):
 
             if reranking_strategy == "slice":
                 top_n = reranker_top_n if reranker_top_n else 1
+                top_n = min(max(top_n, 1), len(decoded_response))
                 for best_response in decoded_response[:top_n]:
                     reranking_results.append(
                         {"text": input.retrieved_docs[best_response["index"]].text, "score": best_response["score"]}
@@ -83,10 +84,32 @@ class GenieTEIReranking(OpeaTEIReranking):
             elif reranking_strategy == "threshold":
                 document_scores = [resp["score"] for resp in decoded_response]
                 logger.info(f"[ DEBUG ] Reranked document scores {document_scores}")
-                for best_response in decoded_response:
+                sorted_resp = sorted(decoded_response, key=lambda r: r.get("score", 0.0), reverse=True)
+                for best_response in sorted_resp:
                     if best_response["score"] >= reranking_threshold:
                         reranking_results.append(
                             {"text": input.retrieved_docs[best_response["index"]].text, "score": best_response["score"]}
+                        )
+                # Guard: cross-encoder scores often sit below a fixed threshold for paraphrased
+                # queries even when vector retrieval found relevant chunks. Dropping every doc
+                # yields empty context and "no KB" answers — keep top-N by score as fallback.
+                if not reranking_results and sorted_resp:
+                    fallback_n = reranker_top_n if reranker_top_n else RERANKER_TOP_N
+                    try:
+                        fallback_n = int(fallback_n)
+                    except (TypeError, ValueError):
+                        fallback_n = RERANKER_TOP_N
+                    fallback_n = min(max(fallback_n, 1), len(sorted_resp))
+                    logger.warning(
+                        f"[ RERANK ] threshold={reranking_threshold} excluded all "
+                        f"{len(sorted_resp)} candidates; using top {fallback_n} by cross-encoder score"
+                    )
+                    for best_response in sorted_resp[:fallback_n]:
+                        reranking_results.append(
+                            {
+                                "text": input.retrieved_docs[best_response["index"]].text,
+                                "score": best_response["score"],
+                            }
                         )
 
             elif reranking_strategy == "knee_threshold":

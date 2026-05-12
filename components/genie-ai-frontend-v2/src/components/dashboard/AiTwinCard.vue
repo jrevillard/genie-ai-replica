@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Cancel01Icon } from '@hugeicons/core-free-icons';
+import { Cancel01Icon, SparklesIcon } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../ui/BaseAvatar.vue';
-import BaseButton from '../ui/BaseButton.vue';
 import Icon from '../ui/Icon.vue';
 import type { AiTwin } from '../../services/aiTwins';
 import { useT } from '../../i18n/composables';
@@ -58,7 +57,7 @@ function closeImagePreview() {
   <article
     class="flex flex-col gap-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm transition hover:border-ieee-200 hover:shadow-md"
   >
-    <!-- Header: avatar + name -->
+    <!-- Header: avatar + name + optional Default pill -->
     <header class="flex items-center gap-3">
       <button
         type="button"
@@ -72,7 +71,17 @@ function closeImagePreview() {
       >
         <BaseAvatar :src="twin.profilePicUrl ?? ''" :name="twin.name" size="lg" />
       </button>
-      <h3 class="truncate text-base font-semibold text-slate-900">{{ translatedName }}</h3>
+      <div class="flex min-w-0 flex-1 items-center gap-2">
+        <h3 class="truncate text-base font-semibold text-slate-900">{{ translatedName }}</h3>
+        <span
+          v-if="twin.isDefault"
+          class="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent ring-1 ring-inset ring-accent/15"
+          :title="t('twins.list.card.defaultTooltip', 'This is your default AI Twin')"
+        >
+          <Icon :icon="SparklesIcon" :size="11" />
+          {{ t('twins.list.card.default', 'Default') }}
+        </span>
+      </div>
     </header>
 
     <div class="grid grid-cols-2 items-center gap-x-6 rounded-2xl bg-neutral-50 px-4 py-3 text-xs">
@@ -92,9 +101,16 @@ function closeImagePreview() {
       </div>
     </div>
 
-    <!-- Action: View AI Twin (soft IEEE blue, bottom-right) -->
+    <!-- Action: View AI Twin — matches BaseButton primary (ieee-700) so it
+         reads as the same accent as "Create AI Twin" in the page header. -->
     <div class="flex justify-end">
-      <BaseButton variant="soft" size="md" rounded="full" @click="open">{{ t('twins.list.card.view', 'View AI Twin') }}</BaseButton>
+      <button
+        type="button"
+        class="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-ieee-700 px-5 text-sm font-semibold text-white shadow-sm transition-colors duration-200 hover:bg-ieee-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ieee-700"
+        @click="open"
+      >
+        {{ t('twins.list.card.view', 'View AI Twin') }}
+      </button>
     </div>
 
     <Teleport to="body">

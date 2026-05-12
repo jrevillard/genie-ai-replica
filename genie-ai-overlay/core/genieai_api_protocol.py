@@ -64,7 +64,7 @@ class ChatCompletionRequest(BaseModel):
     stop: Union[str, list[str], None] = Field(default_factory=list)
     stream: bool | None = False
     stream_options: StreamOptions | None = Field(default=None)  # changed from default_factory=StreamOptions
-    temperature: float | None = 0.01  # vllm default 0.7
+    temperature: float | None = 0.2  # Genie chat default; OpenAI default 1.0; vLLM often 0.7
     top_p: float | None = None  # openai default 1.0, but tgi needs `top_p` must be > 0.0 and < 1.0, set None
     tools: list[ChatCompletionToolsParam] | None = None
     tool_choice: Union[Literal["none"], ChatCompletionNamedToolChoiceParam] | None = "none"

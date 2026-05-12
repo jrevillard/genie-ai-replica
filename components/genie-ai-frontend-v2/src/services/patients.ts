@@ -22,6 +22,18 @@ export interface Patient {
   notes: string;
   createdAt: string;
   updatedAt: string;
+  // Backend-enriched fields from `/api/patients`. All optional because the
+  // detail endpoint may not include every counter, and older snapshots in
+  // memory predate this enrichment.
+  emailVerified?: boolean;
+  twinsAllowedCount?: number | null;
+  lastActivityAt?: string | null;
+  totalSessions?: number;
+  numChats?: number;
+  lastChatAt?: string | null;
+  numWhatsappChats?: number;
+  numCalls?: number;
+  lastCallAt?: string | null;
 }
 
 export interface ListPatientsParams {
@@ -76,14 +88,17 @@ export async function getPatient(patientId: string): Promise<Patient> {
   return res.data;
 }
 
-export async function createPatient(payload: CreatePatientPayload): Promise<Patient> {
+export async function createPatient(
+  payload: CreatePatientPayload,
+  signal?: AbortSignal
+): Promise<Patient> {
   // Match the project's auth-flow convention: hash with SHA-256 hex on the
   // client before sending. The backend stores/compares the hex digest.
   const body: CreatePatientPayload = {
     ...payload,
     password: await sha256Hex(payload.password),
   };
-  const res = await api.post<Patient>('/patients', body);
+  const res = await api.post<Patient>('/patients', body, { signal });
   return res.data;
 }
 

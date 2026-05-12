@@ -102,11 +102,11 @@ export const useAiTwinsStore = defineStore('aiTwins', {
       }
     },
 
-    async create(payload: CreateAiTwinPayload): Promise<AiTwin> {
+    async create(payload: CreateAiTwinPayload, signal?: AbortSignal): Promise<AiTwin> {
       this.saving = true;
       this.error = null;
       try {
-        const twin = await api.createAiTwin(payload);
+        const twin = await api.createAiTwin(payload, signal);
         this.twins.unshift(twin);
         this.total += 1;
         return twin;
@@ -123,9 +123,9 @@ export const useAiTwinsStore = defineStore('aiTwins', {
       this.error = null;
       try {
         const twin = await api.updateAiTwin(twinId, payload);
-        upsert(this.twins, twin);
-        if (this.current?._key === twinId) this.current = twin;
-        return twin;
+        const merged = upsert(this.twins, twin);
+        if (this.current?._key === twinId) this.current = merged;
+        return merged;
       } catch (err) {
         this.error = extractError(err, 'Failed to update AI Twin');
         throw err;
@@ -154,9 +154,9 @@ export const useAiTwinsStore = defineStore('aiTwins', {
       this.error = null;
       try {
         const twin = await api.linkKbFile(twinId, fileId);
-        upsert(this.twins, twin);
-        if (this.current?._key === twinId) this.current = twin;
-        return twin;
+        const merged = upsert(this.twins, twin);
+        if (this.current?._key === twinId) this.current = merged;
+        return merged;
       } catch (err) {
         this.error = extractError(err, 'Failed to link knowledge file');
         throw err;
@@ -167,23 +167,23 @@ export const useAiTwinsStore = defineStore('aiTwins', {
       this.error = null;
       try {
         const twin = await api.unlinkKbFile(twinId, fileId);
-        upsert(this.twins, twin);
-        if (this.current?._key === twinId) this.current = twin;
-        return twin;
+        const merged = upsert(this.twins, twin);
+        if (this.current?._key === twinId) this.current = merged;
+        return merged;
       } catch (err) {
         this.error = extractError(err, 'Failed to unlink knowledge file');
         throw err;
       }
     },
 
-    async uploadAvatar(twinId: string, file: File): Promise<AiTwin> {
+    async uploadAvatar(twinId: string, file: File, signal?: AbortSignal): Promise<AiTwin> {
       this.saving = true;
       this.error = null;
       try {
-        const twin = await api.uploadAiTwinAvatar(twinId, file);
-        upsert(this.twins, twin);
-        if (this.current?._key === twinId) this.current = twin;
-        return twin;
+        const twin = await api.uploadAiTwinAvatar(twinId, file, signal);
+        const merged = upsert(this.twins, twin);
+        if (this.current?._key === twinId) this.current = merged;
+        return merged;
       } catch (err) {
         this.error = extractError(err, 'Failed to upload avatar');
         throw err;
@@ -196,21 +196,58 @@ export const useAiTwinsStore = defineStore('aiTwins', {
       this.error = null;
       try {
         const twin = await api.replaceKbFiles(twinId, fileIds);
-        upsert(this.twins, twin);
-        if (this.current?._key === twinId) this.current = twin;
-        return twin;
+        const merged = upsert(this.twins, twin);
+        if (this.current?._key === twinId) this.current = merged;
+        return merged;
       } catch (err) {
         this.error = extractError(err, 'Failed to update knowledge files');
+        throw err;
+      }
+    },
+
+    // The instructions endpoint returns just the saved string[] (not the full
+    // twin), so we splice the new array onto the twin we already have rather
+    // than refetching. Keeps the store the single source of truth — without
+    // this, `current.instructions` would stay stale after save and any other
+    // consumer reading `twin.instructions` would see pre-save data.
+    async replaceInstructions(twinId: string, instructions: string[]): Promise<string[]> {
+      this.error = null;
+      try {
+        const saved = await api.replaceTwinInstructions(twinId, instructions);
+        const update = (t: AiTwin): AiTwin => ({ ...t, instructions: [...saved] });
+        if (this.current?._key === twinId) this.current = update(this.current);
+        const idx = this.twins.findIndex((t) => t._key === twinId);
+        if (idx >= 0) this.twins[idx] = update(this.twins[idx]);
+        return saved;
+      } catch (err) {
+        this.error = extractError(err, 'Failed to update instructions');
         throw err;
       }
     },
   },
 });
 
-function upsert(list: AiTwin[], twin: AiTwin): void {
+/**
+ * Insert or merge a twin into the list.
+ *
+ * PATCH /ai-twins/:id now echoes the derived stats (numChats, numWhatsappChats,
+ * numCalls) alongside the persisted fields, but the voice/avatar/kb-files
+ * routes still return only the twin core. Merging onto the existing entry
+ * means whichever fields the response carries get refreshed, and anything it
+ * omits stays intact — so the stats UI never flashes to zero after a save.
+ *
+ * Returns the resulting (merged) twin so callers can keep `this.current` in
+ * sync without re-running the merge.
+ */
+function upsert(list: AiTwin[], twin: AiTwin): AiTwin {
   const idx = list.findIndex((t) => t._key === twin._key);
-  if (idx >= 0) list[idx] = twin;
-  else list.unshift(twin);
+  if (idx >= 0) {
+    const merged = { ...list[idx], ...twin };
+    list[idx] = merged;
+    return merged;
+  }
+  list.unshift(twin);
+  return twin;
 }
 
 function extractError(err: unknown, fallback: string): string {

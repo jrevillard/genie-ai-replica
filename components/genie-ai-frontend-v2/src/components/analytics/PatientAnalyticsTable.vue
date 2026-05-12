@@ -161,15 +161,15 @@ const columns: ColumnSpec[] = [
 <template>
   <div class="flex flex-col gap-4">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div class="max-w-sm flex-1">
+      <div class="max-w-md flex-1">
         <BaseInput
           v-model="search"
           rounded="full"
-          size="sm"
+          size="md"
           :placeholder="t('analytics.tables.patients.searchPlaceholder', 'Search by name or email…')"
         >
           <template #leading>
-            <Icon :icon="Search01Icon" :size="14" />
+            <Icon :icon="Search01Icon" :size="18" />
           </template>
         </BaseInput>
       </div>

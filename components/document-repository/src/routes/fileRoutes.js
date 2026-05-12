@@ -5,7 +5,12 @@ const { authenticateToken, authorizeRole } = require('../middlewares/keycloak-au
 
 const router = express.Router();
 
-// Apply authentication to all routes
+// Public file-view routes — no auth required so source document links work
+// without a login token. These must be registered BEFORE authenticateToken.
+router.get('/:fileId/viewbrowser', fileController.viewFileInBrowser);
+router.get('/:fileId/view', fileController.viewFile);
+
+// Apply authentication to all other routes
 router.use(authenticateToken);
 
 /**
@@ -459,10 +464,8 @@ router.post('/:fileId/kill-ingest', authorizeRole(['Admin']), fileController.kil
  * @swagger
  * /api/files/{fileId}/view:
  *   get:
- *     summary: Get file as base64 for viewing
+ *     summary: Get file as base64 for viewing (public — no auth required)
  *     tags: [Files]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: fileId
@@ -473,21 +476,16 @@ router.post('/:fileId/kill-ingest', authorizeRole(['Admin']), fileController.kil
  *     responses:
  *       '200':
  *         description: File content in base64
- *       '401':
- *         description: Unauthorized
  *       '404':
  *         description: File not found
  */
-router.get('/:fileId/view', fileController.viewFile);
 
 /**
  * @swagger
  * /api/files/{fileId}/viewbrowser:
  *   get:
- *     summary: View file in browser (if supported)
+ *     summary: View file in browser (public — no auth required)
  *     tags: [Files]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: fileId
@@ -498,12 +496,10 @@ router.get('/:fileId/view', fileController.viewFile);
  *     responses:
  *       '200':
  *         description: File content for browser viewing
- *       '401':
- *         description: Unauthorized
  *       '404':
  *         description: File not found
  */
-router.get('/:fileId/viewbrowser', fileController.viewFileInBrowser);
+// Routes registered publicly above (before authenticateToken middleware)
 
 /**
  * @swagger

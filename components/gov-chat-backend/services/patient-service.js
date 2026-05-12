@@ -85,12 +85,65 @@ class PatientService {
   async listPatients(adminKey, { offset = 0, limit = 50 } = {}) {
     logger.info('PatientService.listPatients', { adminKey, offset, limit });
 
+    // One aggregated query — per-patient subqueries pull session counts and
+    // last-activity timestamps from chatSessions / call_sessions so a single
+    // round-trip gives the admin everything they need to render a usage table.
+    // collection-or-view-not-found errors degrade to zero/null per row.
     const cursor = await this.db.query(aql`
       FOR u IN users
         FILTER u.adminId == ${adminKey}
+        LET userKey = u._key
+
+        LET numChats = LENGTH(
+          FOR s IN chatSessions
+            FILTER s.userId == userKey AND s.type == 'chat'
+            RETURN 1
+        )
+        LET numWhatsappChats = LENGTH(
+          FOR s IN chatSessions
+            FILTER s.userId == userKey AND s.type == 'whatsapp'
+            RETURN 1
+        )
+        LET numCalls = LENGTH(
+          FOR c IN call_sessions
+            FILTER c.userId == userKey
+            RETURN 1
+        )
+
+        LET lastChatAt = FIRST(
+          FOR s IN chatSessions
+            FILTER s.userId == userKey
+            SORT s.updatedAt DESC
+            LIMIT 1
+            RETURN s.updatedAt
+        )
+        LET lastCallAt = FIRST(
+          FOR c IN call_sessions
+            FILTER c.userId == userKey
+            SORT (c.endAt OR c.startAt) DESC
+            LIMIT 1
+            RETURN (c.endAt OR c.startAt)
+        )
+
+        LET twinsAllowedCount = u.allowedTwinIds == null
+          ? null
+          : LENGTH(u.allowedTwinIds)
+
         SORT u.createdAt DESC
         LIMIT ${offset}, ${limit}
-        RETURN UNSET(u, 'encPassword', 'accessToken')
+        RETURN MERGE(
+          UNSET(u, 'encPassword', 'accessToken'),
+          {
+            numChats: numChats,
+            numWhatsappChats: numWhatsappChats,
+            numCalls: numCalls,
+            totalSessions: numChats + numWhatsappChats + numCalls,
+            lastChatAt: lastChatAt,
+            lastCallAt: lastCallAt,
+            lastActivityAt: lastChatAt > lastCallAt ? lastChatAt : lastCallAt,
+            twinsAllowedCount: twinsAllowedCount
+          }
+        )
     `);
 
     const patients = await cursor.all();
@@ -109,6 +162,8 @@ class PatientService {
 
   /**
    * Fetch a single patient that belongs to the given admin.
+   * Same enriched shape as listPatients — counts and last-activity timestamps
+   * are joined in via subqueries so the detail page doesn't need a second call.
    */
   async getPatient(adminKey, patientKey) {
     logger.info('PatientService.getPatient', { adminKey, patientKey });
@@ -117,7 +172,52 @@ class PatientService {
       FOR u IN users
         FILTER u._key == ${patientKey} AND u.adminId == ${adminKey}
         LIMIT 1
-        RETURN UNSET(u, 'encPassword', 'accessToken')
+        LET userKey = u._key
+        LET numChats = LENGTH(
+          FOR s IN chatSessions
+            FILTER s.userId == userKey AND s.type == 'chat'
+            RETURN 1
+        )
+        LET numWhatsappChats = LENGTH(
+          FOR s IN chatSessions
+            FILTER s.userId == userKey AND s.type == 'whatsapp'
+            RETURN 1
+        )
+        LET numCalls = LENGTH(
+          FOR c IN call_sessions
+            FILTER c.userId == userKey
+            RETURN 1
+        )
+        LET lastChatAt = FIRST(
+          FOR s IN chatSessions
+            FILTER s.userId == userKey
+            SORT s.updatedAt DESC
+            LIMIT 1
+            RETURN s.updatedAt
+        )
+        LET lastCallAt = FIRST(
+          FOR c IN call_sessions
+            FILTER c.userId == userKey
+            SORT (c.endAt OR c.startAt) DESC
+            LIMIT 1
+            RETURN (c.endAt OR c.startAt)
+        )
+        LET twinsAllowedCount = u.allowedTwinIds == null
+          ? null
+          : LENGTH(u.allowedTwinIds)
+        RETURN MERGE(
+          UNSET(u, 'encPassword', 'accessToken'),
+          {
+            numChats: numChats,
+            numWhatsappChats: numWhatsappChats,
+            numCalls: numCalls,
+            totalSessions: numChats + numWhatsappChats + numCalls,
+            lastChatAt: lastChatAt,
+            lastCallAt: lastCallAt,
+            lastActivityAt: lastChatAt > lastCallAt ? lastChatAt : lastCallAt,
+            twinsAllowedCount: twinsAllowedCount
+          }
+        )
     `);
 
     const patient = await cursor.next();
@@ -253,9 +353,19 @@ class PatientService {
   }
 
   /**
-   * Return the allowed twin IDs for a patient identified only by their own key.
-   * Used by /api/me/twins — no admin ownership check needed (user is reading their own data).
-   * Returns null when no restriction has been set.
+   * Resolve the patient's twin-access scope from their user row.
+   *
+   * Returns `{ adminId, allowedTwinIds }` when the user is a patient (has
+   * adminId), or `null` when they're not. Callers MUST treat `null` as
+   * "deny — show no twins" (NOT "no restriction → show everything"; that
+   * historical interpretation leaked twins across tenants).
+   *
+   * `allowedTwinIds` field semantics:
+   *   null    — no explicit allow-list. Patient sees ALL of their admin's
+   *             twins. Use adminId for tenant scoping.
+   *   []      — explicit deny-all. Patient sees nothing.
+   *   [...]   — explicit allow-list. Patient sees the intersection of this
+   *             list and their admin's twins.
    */
   async getSelfTwinAccess(patientKey) {
     logger.info('PatientService.getSelfTwinAccess', { patientKey });
@@ -267,10 +377,12 @@ class PatientService {
     `);
     const row = await cursor.next();
     if (!row) {
-      // Not a patient — return null (no restriction)
       return null;
     }
-    return row.allowedTwinIds ?? null;
+    return {
+      adminId: row.adminId,
+      allowedTwinIds: row.allowedTwinIds ?? null,
+    };
   }
 
   /**

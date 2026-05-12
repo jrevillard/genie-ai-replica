@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { CheckmarkCircle02Icon, PlusSignIcon, Tag01Icon } from '@hugeicons/core-free-icons';
+import { PlusSignIcon, Tag01Icon } from '@hugeicons/core-free-icons';
 import BaseButton from '../ui/BaseButton.vue';
+import BaseSkeleton from '../ui/skeletons/BaseSkeleton.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import Icon from '../ui/Icon.vue';
 import InstructionsTabSkeleton from '../ui/skeletons/InstructionsTabSkeleton.vue';
@@ -9,12 +10,13 @@ import { extractError } from '../../lib/errors';
 import { notify } from '../../lib/notify';
 import {
   getSuggestedInstructions,
-  replaceTwinInstructions,
   type AiTwin,
 } from '../../services/aiTwins';
+import { useAiTwinsStore } from '../../stores/aiTwins';
 import { useT } from '../../i18n/composables';
 
 const { t } = useT();
+const aiTwinsStore = useAiTwinsStore();
 
 const props = withDefaults(
   defineProps<{ twin: AiTwin; editing?: boolean }>(),
@@ -42,11 +44,23 @@ const draft = ref('');
 const draftRef = ref<HTMLTextAreaElement | null>(null);
 
 const hasInstructions = computed(() => applied.value.length > 0);
-// Suggestions list excludes anything already staged locally so the UI stays
-// truthful even before the next save round-trip refreshes the server view.
+// The suggestion pool unions the server's curated list with whatever the twin
+// already had applied at the last server sync (`baseline`). The server
+// endpoint only returns suggestions that aren't already applied, so without
+// folding `baseline` in we couldn't restore an instruction the moment the
+// user removes it — the user would have to Save first to refetch. By keeping
+// `baseline` in the pool, removing a previously-applied entry makes it pop
+// straight back into "Suggested Instructions" without a round-trip.
 const visibleSuggestions = computed(() => {
-  const set = new Set(applied.value);
-  return suggested.value.filter((s) => !set.has(s));
+  const appliedSet = new Set(applied.value);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const s of [...suggested.value, ...baseline.value]) {
+    if (!s || appliedSet.has(s) || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  return out;
 });
 const hasSuggestions = computed(() => visibleSuggestions.value.length > 0);
 
@@ -68,9 +82,12 @@ watch(
   () => props.twin?._key,
   () => {
     // Twin switched — reseed synchronously so the rows don't flash the
-    // previous twin's list while the new fetch is in flight.
+    // previous twin's list while the new fetch is in flight. Clearing
+    // `suggested` lets the inline skeleton render until the new pool lands;
+    // otherwise the user briefly sees the previous twin's suggestions.
     applied.value = seedFromTwin();
     baseline.value = seedFromTwin();
+    suggested.value = [];
     void load();
   }
 );
@@ -148,16 +165,23 @@ async function save(): Promise<boolean> {
   }
 
   try {
-    const saved = await replaceTwinInstructions(props.twin._key, applied.value);
-    applied.value = [...saved];
-    baseline.value = [...saved];
-    // Refresh suggestions so newly-applied entries fall off and removed ones
-    // reappear if they're part of the curated set.
+    // Save through the store so `current.instructions` stays in sync; without
+    // this the parent's `twin` prop keeps the pre-save list and any consumer
+    // reading from it sees stale data.
+    const saved = await aiTwinsStore.replaceInstructions(props.twin._key, applied.value);
+    // Fetch the refreshed suggestion pool *before* committing local state so
+    // the UI transitions in a single render — applied/baseline/suggested all
+    // flip together, no intermediate flicker between "save completed" and
+    // "suggestions refetched".
+    let freshSuggested = suggested.value;
     try {
-      suggested.value = await getSuggestedInstructions(props.twin._key);
+      freshSuggested = await getSuggestedInstructions(props.twin._key);
     } catch {
       // Non-blocking — main save succeeded.
     }
+    applied.value = [...saved];
+    baseline.value = [...saved];
+    suggested.value = freshSuggested;
     notify.success(t('twins.instructions.savedToast', 'Instructions saved'));
     return true;
   } catch (err) {
@@ -215,20 +239,41 @@ defineExpose({ save, discard });
         <li
           v-for="text in applied"
           :key="text"
-          class="group flex items-start gap-3 rounded-2xl border border-accent/20 bg-accent-soft/30 px-3 py-2.5 transition"
-          :class="editing && 'hover:border-accent/40'"
+          :class="[
+            'group flex items-start gap-3 rounded-2xl border border-accent/20 bg-accent-soft/30 px-3 py-2.5 transition',
+            editing
+              ? 'cursor-pointer hover:border-accent/40 focus-within:border-accent/40'
+              : '',
+          ]"
+          :role="editing ? 'checkbox' : undefined"
+          :aria-checked="editing ? true : undefined"
+          :tabindex="editing ? 0 : undefined"
+          :aria-label="editing ? t('twins.instructions.remove', 'Remove instruction') : undefined"
+          @click="editing && removeInstruction(text)"
+          @keydown.enter.prevent="editing && removeInstruction(text)"
+          @keydown.space.prevent="editing && removeInstruction(text)"
         >
-          <button
-            type="button"
-            class="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-white transition disabled:cursor-not-allowed"
-            :class="editing ? 'hover:bg-red-500' : 'cursor-default'"
-            :disabled="!editing"
-            :aria-label="t('twins.instructions.remove', 'Remove instruction')"
+          <span
+            :class="[
+              'mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 border-accent bg-accent text-white transition',
+              editing && 'group-hover:border-red-500 group-hover:bg-red-500',
+            ]"
             :title="editing ? t('twins.instructions.remove', 'Remove instruction') : t('twins.instructions.appliedBadge', 'Applied')"
-            @click="removeInstruction(text)"
+            aria-hidden="true"
           >
-            <Icon :icon="CheckmarkCircle02Icon" :size="16" />
-          </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="h-3 w-3"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
           <p class="flex-1 text-body text-text">{{ text }}</p>
         </li>
       </ul>
@@ -291,9 +336,42 @@ defineExpose({ save, discard });
       </Transition>
     </section>
 
+    <!-- Suggestions skeleton while the curated list is in flight. Shows only
+         when we don't have suggestions to render yet, so a re-fetch after a
+         save doesn't flash the existing list back to placeholders. -->
+    <section
+      v-if="loading && suggested.length === 0 && !error"
+      class="space-y-3"
+      aria-hidden="true"
+    >
+      <BaseSkeleton width="11rem" height="1rem" rounded="md" />
+      <ul class="space-y-2">
+        <li
+          v-for="i in 3"
+          :key="`sug-skel-${i}`"
+          class="flex items-start gap-3 rounded-2xl border border-border bg-surface px-3 py-2.5 shadow-card"
+        >
+          <BaseSkeleton variant="circle" width="1.75rem" height="1.75rem" />
+          <div class="flex min-w-0 flex-1 flex-col gap-1.5 pt-0.5">
+            <BaseSkeleton
+              :width="['90%', '75%', '85%'][(i - 1) % 3]"
+              height="0.875rem"
+              rounded="md"
+            />
+            <BaseSkeleton
+              v-if="i % 2 === 1"
+              :width="['55%', '45%', '35%'][(i - 1) % 3]"
+              height="0.75rem"
+              rounded="md"
+            />
+          </div>
+        </li>
+      </ul>
+    </section>
+
     <!-- Suggested Instructions — always visible; the fieldset disables the
          + buttons until the user clicks Update, mirroring the rest of the page. -->
-    <section v-if="hasSuggestions" class="space-y-3">
+    <section v-else-if="hasSuggestions" class="space-y-3">
       <h3 class="text-body font-semibold text-text">
         {{ t('twins.instructions.suggestedTitle', 'Suggested Instructions') }}
       </h3>

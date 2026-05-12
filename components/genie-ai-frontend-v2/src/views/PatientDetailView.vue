@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import {
+  AlertCircleIcon,
   ArrowLeft01Icon,
+  BubbleChatIcon,
+  CallIcon,
   Cancel01Icon,
+  CheckmarkCircle02Icon,
   Delete02Icon,
   Edit02Icon,
+  Pulse02Icon,
+  WhatsappIcon,
 } from '@hugeicons/core-free-icons';
 import { storeToRefs } from 'pinia';
 import { notify } from '../lib/notify';
@@ -21,9 +28,11 @@ import DashboardLayout from '../layouts/DashboardLayout.vue';
 import GeneralPatientTab from '../components/patient-tabs/GeneralPatientTab.vue';
 import TwinAccessTab from '../components/patient-tabs/TwinAccessTab.vue';
 import { usePatientsStore } from '../stores/patients';
+import { formatRelative, type RelativeStrings } from '../lib/analytics';
 import { useT } from '../i18n/composables';
 
 const { t } = useT();
+const { locale } = useI18n();
 
 interface EditableTab {
   save?: () => Promise<boolean> | boolean;
@@ -53,6 +62,78 @@ const patientId = computed(() => String(route.params.id ?? ''));
 const fullName = computed(
   () => patient.value?.personalIdentification?.fullName?.trim() || patient.value?.email || ''
 );
+
+const relativeStrings = computed<RelativeStrings>(() => ({
+  justNow: t('analytics.relative.justNow', 'just now'),
+  minutesAgo: (n) => t('analytics.relative.minutesAgo', { n }, '{n} min ago'),
+  hoursAgo: (n) => t('analytics.relative.hoursAgo', { n }, '{n} hr ago'),
+  daysAgo: (n) => t('analytics.relative.daysAgo', { n }, '{n} days ago'),
+  weeksAgo: (n) => t('analytics.relative.weeksAgo', { n }, '{n} weeks ago'),
+  monthsAgo: (n) => t('analytics.relative.monthsAgo', { n }, '{n} months ago'),
+  yearsAgo: (n) => t('analytics.relative.yearsAgo', { n }, '{n} years ago'),
+  never: t('patients.detail.stats.neverActive', 'Never active'),
+}));
+
+const lastActiveLabel = computed(() =>
+  formatRelative(patient.value?.lastActivityAt, relativeStrings.value)
+);
+
+// "Active" = activity within the last 14 days (same threshold as the list).
+const isActive = computed(() => {
+  const iso = patient.value?.lastActivityAt;
+  if (!iso) return false;
+  const ts = new Date(iso).getTime();
+  if (!Number.isFinite(ts)) return false;
+  return Date.now() - ts < 14 * 24 * 60 * 60 * 1000;
+});
+
+const numberFormatter = computed(() => new Intl.NumberFormat(locale.value));
+function fmtNum(n: number | null | undefined): string {
+  return numberFormatter.value.format(Number.isFinite(n as number) ? (n as number) : 0);
+}
+
+const statCards = computed(() => {
+  const p = patient.value;
+  if (!p) return [];
+  return [
+    {
+      key: 'chats',
+      label: t('patients.detail.stats.chats', 'Chats'),
+      sub: t('patients.detail.stats.chatsSub', 'Total chat sessions'),
+      value: p.numChats ?? 0,
+      icon: BubbleChatIcon,
+      iconBg: 'bg-rose-50',
+      iconColor: 'text-rose-500',
+    },
+    {
+      key: 'whatsapp',
+      label: t('patients.detail.stats.whatsapp', 'WhatsApp'),
+      sub: t('patients.detail.stats.whatsappSub', 'WhatsApp conversations'),
+      value: p.numWhatsappChats ?? 0,
+      icon: WhatsappIcon,
+      iconBg: 'bg-emerald-50',
+      iconColor: 'text-emerald-500',
+    },
+    {
+      key: 'calls',
+      label: t('patients.detail.stats.calls', 'Calls'),
+      sub: t('patients.detail.stats.callsSub', 'Voice calls placed'),
+      value: p.numCalls ?? 0,
+      icon: CallIcon,
+      iconBg: 'bg-ieee-50',
+      iconColor: 'text-ieee-600',
+    },
+    {
+      key: 'sessions',
+      label: t('patients.detail.stats.sessions', 'Sessions'),
+      sub: t('patients.detail.stats.sessionsSub', 'Total sign-in sessions'),
+      value: p.totalSessions ?? 0,
+      icon: Pulse02Icon,
+      iconBg: 'bg-amber-50',
+      iconColor: 'text-amber-500',
+    },
+  ];
+});
 
 async function loadPatient() {
   if (!patientId.value) return;
@@ -130,7 +211,30 @@ async function confirmDelete() {
             <BaseAvatar :name="fullName" size="xl" />
             <div class="min-w-0">
               <h1 class="truncate text-headline text-text">{{ fullName }}</h1>
-              <p class="truncate text-caption text-text-muted">{{ patient.email }}</p>
+              <div class="mt-0.5 flex min-w-0 items-center gap-2">
+                <p class="min-w-0 truncate text-caption text-text-muted">{{ patient.email }}</p>
+                <span
+                  v-if="patient.emailVerified"
+                  class="inline-flex shrink-0 items-center gap-1 rounded-full bg-success-soft px-2 py-0.5 text-[11px] font-medium text-success"
+                  :title="t('patients.detail.emailVerifiedTooltip', 'This user has confirmed their email address')"
+                >
+                  <Icon :icon="CheckmarkCircle02Icon" :size="12" />
+                  {{ t('patients.detail.emailVerified', 'Verified') }}
+                </span>
+                <span
+                  v-else
+                  class="inline-flex shrink-0 items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-medium text-warning"
+                  :title="t('patients.detail.emailUnverifiedTooltip', `This user hasn't confirmed their email yet`)"
+                >
+                  <Icon :icon="AlertCircleIcon" :size="12" />
+                  {{ t('patients.detail.emailUnverified', 'Unverified') }}
+                </span>
+              </div>
+              <div class="mt-1.5 flex flex-wrap items-center gap-2">
+                <BaseBadge :tone="isActive ? 'success' : 'neutral'" dot>
+                  {{ t('patients.detail.lastActive', 'Last active') }} · {{ lastActiveLabel }}
+                </BaseBadge>
+              </div>
             </div>
           </div>
 
@@ -151,6 +255,41 @@ async function confirmDelete() {
             <span class="hidden sm:inline">{{ t('patients.detail.delete', 'Delete user') }}</span>
           </button>
         </header>
+
+        <!-- Engagement stats — primary surface of the new backend fields. Sits
+             between the header and tabs so admins see activity totals before
+             diving into edit forms. -->
+        <section
+          :aria-label="t('patients.detail.stats.ariaLabel', 'User activity overview')"
+          class="grid grid-cols-2 gap-3 lg:grid-cols-4"
+        >
+          <article
+            v-for="stat in statCards"
+            :key="stat.key"
+            class="rounded-2xl border border-border-subtle bg-surface p-4"
+          >
+            <div class="flex items-center gap-3">
+              <span
+                :class="['inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl', stat.iconBg, stat.iconColor]"
+                aria-hidden="true"
+              >
+                <Icon :icon="stat.icon" :size="20" />
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
+                  {{ stat.label }}
+                </p>
+                <p
+                  class="mt-0.5 text-2xl font-bold leading-none tabular-nums text-text"
+                  :title="String(stat.value)"
+                >
+                  {{ fmtNum(stat.value) }}
+                </p>
+              </div>
+            </div>
+            <p class="mt-2 truncate text-caption text-text-muted">{{ stat.sub }}</p>
+          </article>
+        </section>
 
         <div class="flex flex-wrap items-center justify-between gap-3">
           <BaseTabs v-model="tab" :tabs="tabs" />

@@ -1106,6 +1106,9 @@ services:
       GUARDRAIL_SERVICE_PORT: 9090
       TRANSLATION_SERVICE_HOST_IP: vllm-translation-guardrail
       TRANSLATION_SERVICE_PORT: 9031
+      LID_URL: ${LID_URL:-http://lid:8000}
+      LID_TIMEOUT_S: ${LID_TIMEOUT_S:-3.0}
+      LID_MIN_CONFIDENCE: ${LID_MIN_CONFIDENCE:-0.5}
       DOC_REPO_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
       KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
@@ -1455,6 +1458,15 @@ services:
       ARANGO_USERNAME: ${ARANGO_USERNAME:-root}
       ARANGO_PASSWORD: ${ARANGO_PASSWORD}
       LOGFLAG: ${LOGFLAG:-}
+      # Where call recordings are written. The backend serves the same path
+      # over HTTP via its /Uploads static route; the volume is shared.
+      CALL_RECORDING_ENABLED: ${CALL_RECORDING_ENABLED:-true}
+      CALL_RECORDING_DIR: /app/Uploads/call-recordings
+      CALL_RECORDING_URL_PREFIX: /Uploads/call-recordings
+    volumes:
+      # Shared with the backend: voice-bridge writes WAVs here, backend serves
+      # them under /Uploads/call-recordings/<sessionId>.wav.
+      - backend_uploads:/app/Uploads
     networks:
       - genieai_network
     healthcheck:

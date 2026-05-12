@@ -30,7 +30,7 @@ import BaseSkeleton from './BaseSkeleton.vue';
     </div>
 
     <div class="flex justify-end">
-      <BaseSkeleton height="2.25rem" width="8.5rem" rounded="full" />
+      <BaseSkeleton height="2.5rem" width="9rem" rounded="full" />
     </div>
   </article>
 </template>

@@ -180,10 +180,13 @@ module.exports = (chatSessionService, deps = {}) => {
    * @swagger
    * /chat-sessions/languages:
    *   get:
-   *     summary: List supported chat languages (translator coverage)
+   *     summary: List supported chat languages (translator + TTS coverage)
    *     description: >-
    *       Use the `code` as `context.language` on send-message requests to override
    *       auto-detection. Auto-detection runs when no language is supplied.
+   *       `isVoiceSupported` tells the frontend whether the language can also be
+   *       used for a voice call (some languages have translator coverage but no
+   *       Piper TTS voice installed).
    *     tags: [Chat Sessions]
    *     security: [ { bearerAuth: [] } ]
    *     responses:
@@ -198,6 +201,12 @@ module.exports = (chatSessionService, deps = {}) => {
    *                 properties:
    *                   code: { type: string, example: en }
    *                   name: { type: string, example: English }
+   *                   isVoiceSupported:
+   *                     type: boolean
+   *                     description: >-
+   *                       True when a Piper TTS voice exists for this language.
+   *                       When false, the frontend should disable / hide the
+   *                       call button or surface "voice not available".
    */
   router.get('/languages', (req, res) => {
     const { CHAT_LANGUAGES } = require('../constants/chat-languages');
@@ -265,6 +274,35 @@ module.exports = (chatSessionService, deps = {}) => {
    *                     type: array
    *                     items: { type: string }
    *                   language: { type: string }
+   *     responses:
+   *       200:
+   *         description: AI response with source documents
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 queryId: { type: string }
+   *                 response: { type: string, description: "AI reply text" }
+   *                 responseTime: { type: number, description: "Response latency in ms" }
+   *                 sessionId: { type: string }
+   *                 userMessageId: { type: string }
+   *                 assistantMessageId: { type: string }
+   *                 metadata:
+   *                   type: object
+   *                   properties:
+   *                     confidence_score: { type: number }
+   *                     source_documents:
+   *                       type: array
+   *                       description: KB documents that contributed context to this answer
+   *                       items:
+   *                         type: object
+   *                         properties:
+   *                           document_id: { type: string, description: "File ID in document-repository" }
+   *                           document_name: { type: string }
+   *                           url: { type: string, description: "Public viewbrowser link" }
+   *                           score: { type: number, description: "Relevance score (0–1)" }
+   *                           categoryLabel: { type: array, items: { type: string } }
    */
   router.post('/:sessionId/messages', async (req, res) => {
     try {
@@ -308,6 +346,10 @@ module.exports = (chatSessionService, deps = {}) => {
    *         name: scope
    *         schema: { type: string, enum: [me, all] }
    *         description: "me (default) returns the caller's sessions; all requires admin role"
+   *       - in: query
+   *         name: userId
+   *         schema: { type: string }
+   *         description: "Admin-only — filter sessions to a specific user's userId (auto-implies scope=all)"
    *       - in: query
    *         name: phoneNumber
    *         schema: { type: string }
@@ -362,9 +404,17 @@ module.exports = (chatSessionService, deps = {}) => {
     try {
       const userId = userIdFromReq(req);
       const isAdmin = req.user?.role === 'Admin';
-      const scope = req.query.scope === 'all' ? 'all' : 'me';
+      const requestedUserId = req.query.userId && String(req.query.userId).trim();
+      // Setting userId=... is an admin-only narrowing — it implicitly means
+      // scope=all (you're asking about *another* user). We accept either the
+      // explicit `scope=all` or just `userId=...` from admins.
+      const scope = req.query.scope === 'all' || requestedUserId ? 'all' : 'me';
       if (scope === 'all' && !isAdmin) {
-        return res.status(403).json({ message: 'admin role required for scope=all' });
+        return res.status(403).json({
+          message: requestedUserId
+            ? 'admin role required to filter by userId'
+            : 'admin role required for scope=all',
+        });
       }
       const type = req.query.type === 'whatsapp' || req.query.type === 'chat' ? req.query.type : null;
       const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
@@ -380,6 +430,9 @@ module.exports = (chatSessionService, deps = {}) => {
       if (scope === 'me') {
         filters.push('s.userId == @uid');
         bind.uid = String(userId);
+      } else if (requestedUserId) {
+        filters.push('s.userId == @uid');
+        bind.uid = requestedUserId;
       }
       if (type) {
         filters.push('s.type == @type');
@@ -651,6 +704,7 @@ module.exports = (chatSessionService, deps = {}) => {
         assistantMessage: { id: result.assistantMessageId, text: result.response },
         responseTime: result.responseTime,
         queryId: result.queryId,
+        metadata: result.metadata,
       });
     } catch (error) {
       cleanup();

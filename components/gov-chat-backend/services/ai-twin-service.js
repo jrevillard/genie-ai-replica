@@ -1,9 +1,20 @@
+const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 const { aql } = require('arangojs');
 const { logger, dbService, ensureCollection } = require('../shared-lib');
 const { NotFoundError, ValidationError } = require('../middleware/errors');
 
+// vLLM endpoint used by the per-twin suggested-questions generator. Defaults
+// to the main Llama-3.1-8B instance — same model that answers chats — so
+// generated questions match the quality of regular replies.
+const LLM_GEN_URL = process.env.LLM_VLLM_URL || 'http://vllm:8000/v1/chat/completions';
+const LLM_GEN_MODEL = process.env.VLLM_LLM_MODEL_ID || 'meta-llama/Meta-Llama-3.1-8B-Instruct';
+const SUGGESTED_QUESTIONS_COUNT = 6;
+const SUGGESTED_QUESTIONS_CHUNK_SAMPLE = 8;
+const SUGGESTED_QUESTIONS_CHUNK_CHARS = 600;
+
 const COLLECTION = 'aiTwins';
+const SUGGESTED_QUESTIONS_COLLECTION = 'aiTwinSuggestedQuestions';
 /** Max linked KB file ids per twin (document-repository `file_id` values, normalized). */
 const MAX_LINKED_KB_FILES = 10000;
 const MAX_GREETING_LEN = 5000;
@@ -28,6 +39,7 @@ The user message has three sections: USER INFORMATION, CHAT HISTORY ([user turn]
 3. If no documents were retrieved: stay helpful and conversational, offer general wellness guidance. For greetings or small talk, reply naturally — do not mention missing evidence.
 4. When retrieved entries conflict: prefer Gambian guidelines, then WHO, then BHBM.
 5. Never return a blank or empty reply. If you have nothing specific to offer, give a warm safe fallback: acknowledge the user, share one practical general tip, and suggest they speak to a community health worker for more help.
+6. When documents ARE retrieved but only partially answer the question: synthesise the best answer you can from what the documents contain, then extend with general knowledge (label it "generally speaking" or similar). Never say "the retrieved information doesn't provide a clear answer" or "I'm not sure what X is" when you have retrieved context about X — use what you have.
 
 WHO YOU TALK TO
 Adult Gambians — limited time, possibly limited literacy, English as a second language. Talk like a warm, kind community health worker. Plain. Non-judgemental.
@@ -250,7 +262,9 @@ class AiTwinService {
     try {
       this.db = await dbService.getConnection('default');
       await ensureCollection(this.db, COLLECTION);
+      await ensureCollection(this.db, SUGGESTED_QUESTIONS_COLLECTION);
       this.collection = this.db.collection(COLLECTION);
+      this.suggestedQuestionsCollection = this.db.collection(SUGGESTED_QUESTIONS_COLLECTION);
       this.initialized = true;
       logger.info('AiTwinService initialized');
       await this._seedDefaultTwin();
@@ -331,6 +345,11 @@ class AiTwinService {
       systemPrompt: typeof doc.systemPrompt === 'string' && doc.systemPrompt.trim()
         ? doc.systemPrompt
         : DEFAULT_SYSTEM_PROMPT,
+      // suggestedQuestions is generated from the twin's linked KB content and
+      // refreshed (fire-and-forget) on KB add/remove/replace. Null means
+      // "never generated" — callers should fall back to the global static list.
+      suggestedQuestions: Array.isArray(doc.suggestedQuestions) ? doc.suggestedQuestions : null,
+      suggestedQuestionsUpdatedAt: doc.suggestedQuestionsUpdatedAt || null,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     };
@@ -593,55 +612,45 @@ class AiTwinService {
     const limitRaw = parseInt(String(opts.limit ?? 50), 10);
     const limit = Math.min(Math.max(limitRaw || 50, 1), 200);
     const ownerId = typeof opts.ownerId === 'string' && opts.ownerId ? String(opts.ownerId) : null;
-    // allowedIds: string[] | null — when non-null, only return twins whose _key is in the list.
+    // allowedIds: string[] | null — when non-null, narrow to these _keys.
+    // ownerId and allowedIds combine as AND (intersection). The patient
+    // endpoints pass both: ownerId scopes to their admin (tenant isolation),
+    // allowedIds optionally narrows to a specific subset their admin granted.
     const allowedIds = Array.isArray(opts.allowedIds) ? opts.allowedIds : null;
 
-    let total;
-    let cursor;
-    if (allowedIds !== null) {
-      // Patient-scoped fetch: only the explicitly allowed twin keys.
-      if (allowedIds.length === 0) {
-        return { twins: [], total: 0, offset, limit };
-      }
-      const countCursor = await this.db.query(
-        aql`FOR t IN ${this.collection} FILTER t._key IN ${allowedIds} COLLECT WITH COUNT INTO n RETURN n`
-      );
-      total = (await countCursor.all())[0] ?? 0;
-      cursor = await this.db.query(
-        aql`
-          FOR t IN ${this.collection}
-            FILTER t._key IN ${allowedIds}
-            SORT t.updatedAt DESC
-            LIMIT ${offset}, ${limit}
-            RETURN t
-        `
-      );
-    } else if (ownerId) {
-      const countCursor = await this.db.query(
-        aql`FOR t IN ${this.collection} FILTER t.ownerId == ${ownerId} COLLECT WITH COUNT INTO n RETURN n`
-      );
-      total = (await countCursor.all())[0] ?? 0;
-      cursor = await this.db.query(
-        aql`
-          FOR t IN ${this.collection}
-            FILTER t.ownerId == ${ownerId}
-            SORT t.updatedAt DESC
-            LIMIT ${offset}, ${limit}
-            RETURN t
-        `
-      );
-    } else {
-      const countResult = await this.collection.count();
-      total = countResult?.count ?? 0;
-      cursor = await this.db.query(
-        aql`
-          FOR t IN ${this.collection}
-            SORT t.updatedAt DESC
-            LIMIT ${offset}, ${limit}
-            RETURN t
-        `
-      );
+    // Explicit empty allow-list → deny-all (admin set "this patient may use
+    // no twins"). Bail before hitting Arango.
+    if (allowedIds !== null && allowedIds.length === 0) {
+      return { twins: [], total: 0, offset, limit };
     }
+
+    // Compose two optional FILTER fragments and stitch them onto a
+    // `FILTER true` base so the AND-chain is syntactically valid regardless
+    // of which fragments are populated. Embedded aql templates compose with
+    // automatic bind-var generation — no shared-bind-object footguns.
+    const ownerFilter = ownerId
+      ? aql`AND t.ownerId == ${ownerId}`
+      : aql``;
+    const allowedFilter =
+      allowedIds && allowedIds.length > 0
+        ? aql`AND t._key IN ${allowedIds}`
+        : aql``;
+
+    const countCursor = await this.db.query(aql`
+      FOR t IN ${this.collection}
+        FILTER true ${ownerFilter} ${allowedFilter}
+        COLLECT WITH COUNT INTO n
+        RETURN n
+    `);
+    const total = (await countCursor.all())[0] ?? 0;
+
+    const cursor = await this.db.query(aql`
+      FOR t IN ${this.collection}
+        FILTER true ${ownerFilter} ${allowedFilter}
+        SORT t.updatedAt DESC
+        LIMIT ${offset}, ${limit}
+        RETURN t
+    `);
     const rows = await cursor.all();
     const twins = rows.map((d) => this._sanitizeTwin(d));
     return { twins, total, offset, limit };
@@ -1117,6 +1126,7 @@ class AiTwinService {
       updatedAt: new Date().toISOString(),
     });
     logger.info(`AiTwin ${twinKey}: assigned ${normalized.length} KB file(s); total linked=${merged.length}`);
+    this._kickoffSuggestedQuestionsRefresh(twinKey);
     return this.getTwinByKey(twinKey);
   }
 
@@ -1154,6 +1164,7 @@ class AiTwinService {
       updatedAt: new Date().toISOString(),
     });
     logger.info(`AiTwin ${twinKey}: unassigned KB file(s); remaining=${next.length}`);
+    this._kickoffSuggestedQuestionsRefresh(twinKey);
     return this.getTwinByKey(twinKey);
   }
 
@@ -1232,7 +1243,582 @@ class AiTwinService {
       updatedAt: new Date().toISOString(),
     });
     logger.info(`AiTwin ${twinKey}: replaced KB links; count=${normalizedOrdered.length} skipExistenceCheck=${skipCheck}`);
+    this._kickoffSuggestedQuestionsRefresh(twinKey);
     return this.getTwinByKey(twinKey);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Suggested questions — per-twin chat-landing prompts derived from the twin's
+  // linked KB files. Generated by the same LLM that answers chats. Re-generated
+  // (fire-and-forget) whenever the KB allow-list changes; admins can also
+  // trigger a manual refresh via POST .../suggested-questions/regenerate.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Best-effort: pull a representative sample of chunks from the twin's KB and
+   * ask the LLM for `SUGGESTED_QUESTIONS_COUNT` short patient-style questions.
+   * Writes the result to the twin doc and returns it. Returns `null` (and
+   * clears the stored list) when the twin has no KB / no chunks. Never throws
+   * — failures log a warning and leave the previous stored list intact.
+   *
+   * @param {string} twinKey
+   * @param {string} [ownerId]  When set, scopes to this admin (404 otherwise).
+   * @returns {Promise<Array<{order:number, category:string, content:string}> | null>}
+   */
+  async generateSuggestedQuestions(twinKey, ownerId) {
+    await this.getTwinByKey(twinKey, { ownerId });
+
+    let twinDoc;
+    try {
+      twinDoc = await this.collection.document(twinKey);
+    } catch (e) {
+      if (e.errorNum === 1202) throw new NotFoundError('AI twin not found');
+      throw e;
+    }
+    const fileIds = Array.isArray(twinDoc.linkedKbFileIds)
+      ? twinDoc.linkedKbFileIds.map((x) => normalizeKbFileId(x)).filter(Boolean)
+      : [];
+
+    if (fileIds.length === 0) {
+      // No KB attached — clear any stale stored list so the UI falls back to
+      // the global curated set.
+      await this.collection.update(twinKey, {
+        suggestedQuestions: null,
+        suggestedQuestionsUpdatedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      return null;
+    }
+
+    // 1. Stratified sampling: pull a small substantive pool PER FILE, then
+    //    round-robin across files (and labels within each file). This is the
+    //    only way to guarantee that every linked KB file contributes at least
+    //    one chunk to the LLM context — otherwise a single large or newer
+    //    file's chunks dominate the random sample, and the generated
+    //    questions cover only one topic.
+    //
+    //    Round-robin priority: file first, then label within file. So with
+    //    two files (music + sports), eight chunks split roughly 4-and-4, and
+    //    within each file the picks span distinct chunk_labels when present.
+    let chunks = [];
+    try {
+      // Budget per file so we still pull a useful pool when there are many files.
+      const perFilePool = Math.max(8, Math.ceil(64 / fileIds.length));
+
+      const fileBuckets = new Map(); // file_id → chunk[]
+      for (const fid of fileIds) {
+        const rows = await (await this.db.query({
+          query: `
+            FOR c IN GRAPH_SOURCE
+              FILTER c.file_id == @fid
+              FILTER LENGTH(c.text) >= @minLen
+              FILTER LENGTH(c.text) <= @maxLen
+              SORT RAND()
+              LIMIT @n
+              RETURN { text: c.text, labels: c.chunk_labels, file_id: c.file_id }
+          `,
+          bindVars: { fid, minLen: 250, maxLen: 4000, n: perFilePool },
+        })).all();
+        if (rows.length > 0) {
+          fileBuckets.set(fid, rows);
+        }
+      }
+
+      // Fallback for files where the length filter dropped everything (very
+      // short docs / heavy boilerplate). Without this, a tiny file would be
+      // invisible to question generation.
+      for (const fid of fileIds) {
+        if (fileBuckets.has(fid)) continue;
+        const rows = await (await this.db.query({
+          query: `
+            FOR c IN GRAPH_SOURCE
+              FILTER c.file_id == @fid
+              SORT RAND()
+              LIMIT @n
+              RETURN { text: c.text, labels: c.chunk_labels, file_id: c.file_id }
+          `,
+          bindVars: { fid, n: 4 },
+        })).all();
+        if (rows.length > 0) {
+          fileBuckets.set(fid, rows);
+        }
+      }
+
+      // Sort each file's pool by primary label so the per-file draws also
+      // span distinct labels when the dataprep labeler produced them. (For
+      // off-topic content where every chunk is `_unlabeled`, this is a no-op.)
+      for (const [fid, bucket] of fileBuckets) {
+        const subBuckets = new Map();
+        for (const c of bucket) {
+          const key = Array.isArray(c.labels) && c.labels.length > 0
+            ? String(c.labels[0])
+            : '_unlabeled';
+          if (!subBuckets.has(key)) subBuckets.set(key, []);
+          subBuckets.get(key).push(c);
+        }
+        // Interleave: take one from each label group in turn until empty.
+        const interleaved = [];
+        const labelKeys = [...subBuckets.keys()];
+        let any = true;
+        while (any) {
+          any = false;
+          for (const k of labelKeys) {
+            const b = subBuckets.get(k);
+            if (b && b.length > 0) {
+              interleaved.push(b.shift());
+              any = true;
+            }
+          }
+        }
+        fileBuckets.set(fid, interleaved);
+      }
+
+      // Round-robin across files: drains one chunk from each file in turn.
+      // For 2 files we end at 4-and-4; for 3 files 3-3-2; for 8 files 1 each.
+      const fileKeys = [...fileBuckets.keys()];
+      while (chunks.length < SUGGESTED_QUESTIONS_CHUNK_SAMPLE) {
+        let progressed = false;
+        for (const fid of fileKeys) {
+          if (chunks.length >= SUGGESTED_QUESTIONS_CHUNK_SAMPLE) break;
+          const bucket = fileBuckets.get(fid);
+          if (bucket && bucket.length > 0) {
+            chunks.push(bucket.shift());
+            progressed = true;
+          }
+        }
+        if (!progressed) break;
+      }
+    } catch (e) {
+      logger.warn(`generateSuggestedQuestions: GRAPH_SOURCE query failed for ${twinKey}: ${e.message}`);
+      return null;
+    }
+    if (chunks.length === 0) {
+      logger.info(`generateSuggestedQuestions: twin ${twinKey} has KB files but no ingested chunks yet`);
+      return null;
+    }
+    const filesCovered = new Set(chunks.map((c) => c.file_id)).size;
+    const labelsCovered = new Set(
+      chunks.map((c) => (Array.isArray(c.labels) && c.labels[0]) || '_unlabeled')
+    ).size;
+    logger.info(
+      `generateSuggestedQuestions: ${twinKey} sampled ${chunks.length} chunks across ` +
+      `${filesCovered}/${fileIds.length} file(s), ${labelsCovered} distinct label(s)`
+    );
+
+    // 2. Build the LLM prompt. Tag each chunk with its file index so the LLM
+    //    can see they come from multiple distinct sources, and explicitly ask
+    //    for cross-source coverage in the questions.
+    const fileIndexById = new Map();
+    let nextFileIdx = 0;
+    for (const c of chunks) {
+      if (!fileIndexById.has(c.file_id)) {
+        fileIndexById.set(c.file_id, ++nextFileIdx);
+      }
+    }
+    const numFiles = fileIndexById.size;
+    const labels = [...new Set(chunks.flatMap((c) => c.labels || []))].slice(0, 10);
+    const labelsHint = labels.length ? `Topics covered: ${labels.join(', ')}.` : '';
+    const docsBlock = chunks
+      .map((c, i) => {
+        const srcIdx = fileIndexById.get(c.file_id);
+        const text = String(c.text || '').slice(0, SUGGESTED_QUESTIONS_CHUNK_CHARS);
+        return `[Chunk ${i + 1} from Source ${srcIdx}] ${text}`;
+      })
+      .join('\n\n');
+
+    // Bias the question count to cover all files when there are several.
+    // 2 files → aim for ~3 per file (6 total); 3 files → 2 each; 6+ files → 1 each.
+    const coverageHint =
+      numFiles > 1
+        ? `The chunks above come from ${numFiles} DIFFERENT source documents (Source 1..${numFiles}). ` +
+          `Your questions MUST cover content from all ${numFiles} sources — at minimum one question per source. ` +
+          `Do not write multiple questions about the same source unless the source is the only one available.`
+        : `The chunks above all come from a single document. Cover different topics within it.`;
+
+    const prompt =
+      `${docsBlock}\n\n${labelsHint}\n${coverageHint}\n\n` +
+      `Write exactly ${SUGGESTED_QUESTIONS_COUNT} short questions a real user would ask. The questions must:\n` +
+      `- Sound like everyday spoken language, not technical jargon.\n` +
+      `- Be answerable using the chunks above.\n` +
+      `- Span the available sources (see coverage rule above).\n` +
+      `- Be 5-12 words each, end with a question mark.\n` +
+      `- Be written from the user's perspective ("How do I…", "What should I…", "Is it safe to…").\n\n` +
+      `Respond with strict JSON only, on a single line, with this exact shape:\n` +
+      `{"questions": [{"category": "<short topic, 1-4 words>", "content": "<the question>"}, ...]}\n\n` +
+      `Do not include markdown fences, commentary, or extra fields.`;
+
+    // 3. Call the LLM
+    let raw = '';
+    try {
+      const resp = await axios.post(
+        LLM_GEN_URL,
+        {
+          model: LLM_GEN_MODEL,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.4,
+          max_tokens: 700,
+        },
+        { timeout: 60000 }
+      );
+      raw = resp.data?.choices?.[0]?.message?.content || '';
+    } catch (e) {
+      logger.warn(`generateSuggestedQuestions: LLM call failed for ${twinKey}: ${e.message}`);
+      return null;
+    }
+
+    // 4. Parse — be lenient (strip fences / extract first JSON object)
+    const cleaned = String(raw)
+      .replace(/^\s*```(?:json)?\s*/i, '')
+      .replace(/\s*```\s*$/i, '')
+      .trim();
+    let parsed = null;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      const m = cleaned.match(/\{[\s\S]*\}/);
+      if (m) {
+        try { parsed = JSON.parse(m[0]); } catch {}
+      }
+    }
+    if (!parsed || !Array.isArray(parsed.questions)) {
+      logger.warn(
+        `generateSuggestedQuestions: LLM returned unparseable output for ${twinKey}: ${String(raw).slice(0, 200)}`
+      );
+      return null;
+    }
+
+    // 5. Sanitise + persist
+    const questions = parsed.questions
+      .filter((q) => q && typeof q.content === 'string' && q.content.trim())
+      .slice(0, SUGGESTED_QUESTIONS_COUNT)
+      .map((q, i) => ({
+        order: i + 1,
+        category:
+          typeof q.category === 'string' && q.category.trim()
+            ? q.category.trim().slice(0, 100)
+            : 'General',
+        content: q.content.trim().slice(0, 300),
+      }));
+
+    if (questions.length === 0) return null;
+
+    // ── Persist into the aiTwinSuggestedQuestions collection ──────────────
+    // Atomic-ish replace of all `source='generated'` rows for this twin.
+    // Manual rows (`source='manual'` or auto-generated rows the admin has
+    // edited/toggled — sticky-on-edit promotes them to 'manual') are
+    // preserved across regen. We rebuild the `order` for surviving manual
+    // rows so the new generated questions slot in at the start (1..N) and
+    // manual rows follow.
+    const batchId = uuidv4();
+    const nowIso = new Date().toISOString();
+    try {
+      // 1. Delete previous generated rows for this twin
+      await this.db.query({
+        query: `
+          FOR q IN ${SUGGESTED_QUESTIONS_COLLECTION}
+            FILTER q.twinId == @tw AND q.source == 'generated'
+            REMOVE q IN ${SUGGESTED_QUESTIONS_COLLECTION}
+        `,
+        bindVars: { tw: twinKey },
+      });
+      // 2. Insert the new generated rows
+      const newRows = questions.map((q) => ({
+        _key: uuidv4(),
+        twinId: twinKey,
+        order: q.order,
+        category: q.category,
+        content: q.content,
+        enabled: true,
+        source: 'generated',
+        generationBatch: batchId,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      }));
+      await this.suggestedQuestionsCollection.import(newRows);
+      // 3. Push manual rows to the end of the ordering (after the new generated ones)
+      await this.db.query({
+        query: `
+          FOR q IN ${SUGGESTED_QUESTIONS_COLLECTION}
+            FILTER q.twinId == @tw AND q.source == 'manual'
+            SORT q.order ASC
+            LET newOrder = ${questions.length} + LENGTH(
+              FOR p IN ${SUGGESTED_QUESTIONS_COLLECTION}
+                FILTER p.twinId == @tw AND p.source == 'manual' AND p.order < q.order
+                RETURN 1
+            ) + 1
+            UPDATE q WITH { order: newOrder, updatedAt: @now } IN ${SUGGESTED_QUESTIONS_COLLECTION}
+        `,
+        bindVars: { tw: twinKey, now: nowIso },
+      });
+    } catch (e) {
+      logger.warn(`generateSuggestedQuestions: collection persist failed for ${twinKey}: ${e.message}`);
+      return null;
+    }
+
+    // Clear the legacy embedded-array field if present.
+    try {
+      await this.collection.update(twinKey, {
+        suggestedQuestions: null,
+        suggestedQuestionsUpdatedAt: nowIso,
+        updatedAt: nowIso,
+      });
+    } catch {
+      // best-effort cleanup; not critical
+    }
+
+    logger.info(`AiTwin ${twinKey}: generated ${questions.length} suggested questions (batch=${batchId})`);
+    return questions;
+  }
+
+  /** Fire-and-forget kickoff. Used after KB allow-list mutations. Never awaits. */
+  _kickoffSuggestedQuestionsRefresh(twinKey) {
+    if (!twinKey) return;
+    setImmediate(() => {
+      this.generateSuggestedQuestions(twinKey).catch((e) => {
+        logger.warn(`_kickoffSuggestedQuestionsRefresh ${twinKey}: ${e.message}`);
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Suggested questions — collection-backed CRUD. Two read modes:
+  //   - default (chat-page): enabled-only, sorted by order, falls back to the
+  //     global curated list when no enabled rows exist for the twin
+  //   - status='all' (admin management view): every row including disabled
+  // ---------------------------------------------------------------------------
+
+  /**
+   * One-shot migration helper. The collection used to be an embedded array on
+   * the twin doc. On the first read after deploy we copy the legacy array into
+   * the new collection (as source='generated', enabled=true) and clear the
+   * embedded field. Idempotent — returns immediately when there's nothing to
+   * migrate.
+   */
+  async _migrateLegacySuggestedQuestions(twinKey) {
+    let doc;
+    try {
+      doc = await this.collection.document(twinKey);
+    } catch {
+      return;
+    }
+    const legacy = Array.isArray(doc.suggestedQuestions) ? doc.suggestedQuestions : null;
+    if (!legacy || legacy.length === 0) return;
+    // Skip when the collection already has rows for this twin (migration done).
+    const haveCursor = await this.db.query({
+      query: `RETURN LENGTH(FOR q IN ${SUGGESTED_QUESTIONS_COLLECTION} FILTER q.twinId == @tw LIMIT 1 RETURN 1)`,
+      bindVars: { tw: twinKey },
+    });
+    const haveCount = (await haveCursor.next()) || 0;
+    if (haveCount > 0) {
+      // Just clear the legacy array — collection wins.
+      await this.collection.update(twinKey, { suggestedQuestions: null, updatedAt: new Date().toISOString() }).catch(() => {});
+      return;
+    }
+    const nowIso = new Date().toISOString();
+    const rows = legacy
+      .filter((q) => q && typeof q.content === 'string' && q.content.trim())
+      .map((q, i) => ({
+        _key: uuidv4(),
+        twinId: twinKey,
+        order: typeof q.order === 'number' ? q.order : i + 1,
+        category: typeof q.category === 'string' ? q.category : 'General',
+        content: String(q.content).trim().slice(0, 300),
+        enabled: true,
+        source: 'generated',
+        generationBatch: null,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      }));
+    if (rows.length > 0) {
+      try {
+        await this.suggestedQuestionsCollection.import(rows);
+      } catch (e) {
+        logger.warn(`_migrateLegacySuggestedQuestions ${twinKey}: ${e.message}`);
+        return;
+      }
+    }
+    await this.collection.update(twinKey, { suggestedQuestions: null, updatedAt: nowIso }).catch(() => {});
+    logger.info(`AiTwin ${twinKey}: migrated ${rows.length} legacy suggested questions to collection`);
+  }
+
+  /** Internal: fetch raw rows for a twin, sorted by order. */
+  async _fetchSuggestedQuestionRows(twinKey, { onlyEnabled }) {
+    const cursor = await this.db.query({
+      query: `
+        FOR q IN ${SUGGESTED_QUESTIONS_COLLECTION}
+          FILTER q.twinId == @tw
+          ${onlyEnabled ? 'FILTER q.enabled == true' : ''}
+          SORT q.order ASC, q.createdAt ASC
+          RETURN q
+      `,
+      bindVars: { tw: twinKey },
+    });
+    return cursor.all();
+  }
+
+  /**
+   * Return the twin's suggested questions.
+   *
+   * @param {string} twinKey
+   * @param {string} [ownerId]   When set, scopes to this admin (404 otherwise).
+   * @param {object} [opts]
+   * @param {'enabled'|'all'} [opts.status='enabled']
+   *   - 'enabled' (default, chat-side): only enabled rows; falls back to the
+   *     global curated list when no enabled rows exist for the twin
+   *   - 'all'    (admin management):    every row including disabled
+   * @returns {Promise<Array>}
+   */
+  async getSuggestedQuestions(twinKey, ownerId, opts = {}) {
+    await this.getTwinByKey(twinKey, { ownerId });
+    await this._migrateLegacySuggestedQuestions(twinKey);
+
+    const status = opts.status === 'all' ? 'all' : 'enabled';
+    const rows = await this._fetchSuggestedQuestionRows(twinKey, {
+      onlyEnabled: status === 'enabled',
+    });
+
+    if (status === 'all') {
+      return rows;
+    }
+
+    if (rows.length > 0) {
+      return rows;
+    }
+
+    // No enabled rows — self-heal if KB attached, then serve the curated fallback.
+    let twinDoc;
+    try {
+      twinDoc = await this.collection.document(twinKey);
+    } catch {
+      twinDoc = {};
+    }
+    const hasKb =
+      Array.isArray(twinDoc.linkedKbFileIds) && twinDoc.linkedKbFileIds.length > 0;
+    // Only kick off regen if there are no rows at all (not even disabled ones).
+    const allRows = await this._fetchSuggestedQuestionRows(twinKey, { onlyEnabled: false });
+    if (hasKb && allRows.length === 0) {
+      this._kickoffSuggestedQuestionsRefresh(twinKey);
+    }
+    const { SUGGESTED_QUESTIONS } = require('../constants/suggested-questions');
+    return SUGGESTED_QUESTIONS;
+  }
+
+  /**
+   * Admin: add a manual suggested question. New rows are enabled=true by
+   * default and slotted at the end of the existing order.
+   */
+  async addSuggestedQuestion(twinKey, { content, category, order, enabled }, ownerId) {
+    await this.getTwinByKey(twinKey, { ownerId });
+    if (typeof content !== 'string' || !content.trim()) {
+      throw new ValidationError('content is required');
+    }
+    const text = content.trim().slice(0, 300);
+    const cat = typeof category === 'string' && category.trim()
+      ? category.trim().slice(0, 100)
+      : 'General';
+
+    // Append to the end unless order is specified.
+    let nextOrder = order;
+    if (typeof nextOrder !== 'number' || !Number.isFinite(nextOrder)) {
+      const cursor = await this.db.query({
+        query: `RETURN MAX(FOR q IN ${SUGGESTED_QUESTIONS_COLLECTION} FILTER q.twinId == @tw RETURN q.order)`,
+        bindVars: { tw: twinKey },
+      });
+      const max = (await cursor.next()) || 0;
+      nextOrder = (Number(max) || 0) + 1;
+    }
+
+    const nowIso = new Date().toISOString();
+    const row = {
+      _key: uuidv4(),
+      twinId: twinKey,
+      order: nextOrder,
+      category: cat,
+      content: text,
+      enabled: enabled === false ? false : true,
+      source: 'manual',
+      generationBatch: null,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    await this.suggestedQuestionsCollection.save(row);
+    return row;
+  }
+
+  /**
+   * Admin: patch a single question. Sticky-on-edit: when the admin changes the
+   * content/category/enabled of a source='generated' row, we promote it to
+   * source='manual' so the next regen doesn't overwrite the change. Pure
+   * reordering does NOT flip source (reorder is presentational only).
+   */
+  async updateSuggestedQuestion(twinKey, questionKey, patch, ownerId) {
+    await this.getTwinByKey(twinKey, { ownerId });
+    if (!patch || typeof patch !== 'object') {
+      throw new ValidationError('patch body is required');
+    }
+    let existing;
+    try {
+      existing = await this.suggestedQuestionsCollection.document(questionKey);
+    } catch (e) {
+      if (e.errorNum === 1202) throw new NotFoundError('Suggested question not found');
+      throw e;
+    }
+    if (existing.twinId !== twinKey) {
+      throw new NotFoundError('Suggested question not found');
+    }
+
+    const updates = { updatedAt: new Date().toISOString() };
+    let flipToManual = false;
+
+    if (patch.content !== undefined) {
+      if (typeof patch.content !== 'string' || !patch.content.trim()) {
+        throw new ValidationError('content must be a non-empty string');
+      }
+      updates.content = patch.content.trim().slice(0, 300);
+      flipToManual = true;
+    }
+    if (patch.category !== undefined) {
+      if (typeof patch.category !== 'string') {
+        throw new ValidationError('category must be a string');
+      }
+      updates.category = patch.category.trim().slice(0, 100) || 'General';
+      flipToManual = true;
+    }
+    if (patch.enabled !== undefined) {
+      updates.enabled = !!patch.enabled;
+      flipToManual = true;
+    }
+    if (patch.order !== undefined) {
+      if (typeof patch.order !== 'number' || !Number.isFinite(patch.order)) {
+        throw new ValidationError('order must be a finite number');
+      }
+      updates.order = Math.max(0, Math.floor(patch.order));
+      // Reorder alone does NOT promote to manual — purely presentational.
+    }
+
+    if (flipToManual && existing.source === 'generated') {
+      updates.source = 'manual';
+      updates.generationBatch = null;
+    }
+
+    await this.suggestedQuestionsCollection.update(questionKey, updates);
+    return this.suggestedQuestionsCollection.document(questionKey);
+  }
+
+  /** Admin: delete a question (generated or manual). */
+  async deleteSuggestedQuestion(twinKey, questionKey, ownerId) {
+    await this.getTwinByKey(twinKey, { ownerId });
+    let existing;
+    try {
+      existing = await this.suggestedQuestionsCollection.document(questionKey);
+    } catch (e) {
+      if (e.errorNum === 1202) throw new NotFoundError('Suggested question not found');
+      throw e;
+    }
+    if (existing.twinId !== twinKey) {
+      throw new NotFoundError('Suggested question not found');
+    }
+    await this.suggestedQuestionsCollection.remove(questionKey);
   }
 }
 

@@ -31,7 +31,8 @@ const avatarFile = ref<File | null>(null);
 const previewUrl = ref<string | null>(null);
 
 function close() {
-  if (props.submitting) return;
+  // Always emit — if a request is in flight the parent watches `open` going
+  // false and aborts it. Blocking the close here would make Cancel feel dead.
   emit('update:open', false);
 }
 
@@ -83,8 +84,7 @@ watch(
     :title="t('twins.create.title', 'Create AI Twin')"
     :icon="SparklesIcon"
     width="md"
-    :close-on-backdrop="!submitting"
-    @update:open="(v) => !submitting && emit('update:open', v)"
+    @update:open="emit('update:open', $event)"
   >
     <section class="space-y-4">
       <header>
@@ -172,8 +172,7 @@ watch(
     <template #footer>
       <button
         type="button"
-        class="text-body font-semibold text-text-muted transition hover:text-text disabled:cursor-not-allowed disabled:opacity-60"
-        :disabled="submitting"
+        class="text-body font-semibold text-text-muted transition hover:text-text"
         @click="close"
       >
         {{ t('common.cancel', 'Cancel') }}

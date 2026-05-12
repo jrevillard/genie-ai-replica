@@ -63,11 +63,13 @@ LLM_SERVER_HOST_IP = os.getenv("LLM_SERVER_HOST_IP", "0.0.0.0")
 LLM_SERVER_PORT = int(os.getenv("LLM_SERVER_PORT", 80))
 LLM_MODEL = os.getenv("LLM_MODEL", "meta-llama/Meta-Llama-3.1-8B-Instruct")
 LLM_TRANS_MODEL = os.getenv("LLM_TRANS_MODEL", "google/gemma-3-1b-it")
+# Main chat / RAG generation (not translation). Override with CHAT_LLM_TEMPERATURE env.
+CHAT_LLM_TEMPERATURE = float(os.getenv("CHAT_LLM_TEMPERATURE", "0.2"))
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 
 RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "chunk")  # node | edge | chunk
-RETRIEVER_K = int(os.getenv("RETRIEVER_ARANGO_K", 4))
-RETRIEVER_FETCH_K = int(os.getenv("RETRIEVER_ARANGO_FETCH_K", 20)) 
+RETRIEVER_K = int(os.getenv("RETRIEVER_ARANGO_K", 8))
+RETRIEVER_FETCH_K = int(os.getenv("RETRIEVER_ARANGO_FETCH_K", 36))
 RETRIEVER_SCORE_THRESHOLD = float(os.getenv("RETRIEVER_ARANGO_SCORE_THRESHOLD", 0.1)) 
 RETRIEVER_DISTANCE_THRESHOLD = int(os.getenv("RETRIEVER_ARANGO_DISTANCE_THRESHOLD", 1)) 
 RETRIEVER_TRAVERSAL_ENABLED = os.getenv("RETRIEVER_ARANGO_TRAVERSAL_ENABLED", "false")
@@ -76,13 +78,17 @@ RETRIEVER_TRAVERSAL_MAX_RETURNED = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX
 RETRIEVER_TRAVERSAL_SCORE_THRESHOLD = float(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD", 0.5))
 RETRIEVER_LAMBDA_MULT = float(os.getenv("RETRIEVER_ARANGO_LAMBDA_MULT", 0.5)) 
 # Temporary test switch: force graph traversal for all non-small-talk queries.
-FORCE_GRAPH_SEARCH = False
+FORCE_GRAPH_SEARCH = True
 
 RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "threshold")	# slice | threshold | knee_threshold
-RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 2)) # if RERANKING_STRATEGY set to 'slice'
-RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.9)) # if RERANKING_STRATEGY set to 'threshold'
+RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 4)) # if RERANKING_STRATEGY set to 'slice'
+# Cross-encoder scores are not calibrated 0–1 across models; 0.7 often drops all paraphrase hits.
+RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.42))
+# Append guideline-aligned phrases for embedding only (rerank/LLM keep the user wording).
+RAG_QUERY_EXPAND = os.getenv("RAG_QUERY_EXPAND", "true").lower() in ("1", "true", "yes")
 
 DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001") # Document repository URL
+PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "https://genie.innov8ai.com") # Public-facing API base URL (used to build source document view links)
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000") # Frontend backend service URL
 GET_AUTH_TOKEN_URL = os.getenv("GET_AUTH_TOKEN_URL", "http://http-service:6666/get-token")
 LANGUAGE_CODES_FILEPATH = os.getenv("LANGUAGE_CODES_FILEPATH", "language_codes.json")
@@ -150,6 +156,37 @@ SMALL_TALK_PATTERN = re.compile(
     """,
     re.IGNORECASE | re.VERBOSE,
 )
+
+
+def build_retrieval_embedding_text(user_text: str) -> tuple[str, str]:
+    """
+    Return (text_for_embedding_api, canonical_user_text).
+
+    Vector search uses the first string; pipeline `text` / initial_query stay canonical
+    so the reranker and LLM still see the user's real question.
+    """
+    canonical = (user_text or "").strip()
+    if not canonical or not RAG_QUERY_EXPAND:
+        return canonical, canonical
+    lower = canonical.lower()
+    hints: list[str] = []
+    if re.search(r"\bbmi\b|body\s+mass\s+index", lower):
+        hints.append(
+            "Body Mass Index classification underweight normal range overweight obesity "
+            "kg per square meter height weight WHO BMI table"
+        )
+    elif re.search(
+        r"\b(underweight|overweight|obes|obesity)\b|"
+        r"\bmy\s+(?:bmi|weight)\b|"
+        r"\b(weight|weigh).{0,48}\b(height|tall|cm|kg|kilogram|meter|metre)",
+        lower,
+    ):
+        hints.append(
+            "Body Mass Index BMI classification nutrition counselling weight management"
+        )
+    if not hints:
+        return canonical, canonical
+    return canonical + "\n" + " ".join(hints), canonical
 
 
 def is_small_talk_query(text: str) -> bool:
@@ -607,9 +644,11 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
 
     elif self.services[cur_node].service_type == ServiceType.EMBEDDING:
-        inputs["input"] = inputs["text"]
-        del inputs["text"]
-
+        canonical = inputs.pop("text", "") or ""
+        expanded = inputs.pop("retrieval_embedding_text", None)
+        embed_use = (expanded.strip() if isinstance(expanded, str) and expanded.strip() else None) or canonical
+        inputs["input"] = embed_use
+        inputs["_canonical_query_for_pipeline"] = canonical.strip() or embed_use
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         retriever_parameters = kwargs.get("retriever_parameters", None)
@@ -752,7 +791,8 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         if isinstance(data, dict) and "data" in data:
             data = data["data"]
         assert isinstance(data, list)
-        next_data = {"text": inputs["input"], "embedding": data[0]["embedding"]}
+        canonical_q = inputs.get("_canonical_query_for_pipeline") or inputs.get("input", "")
+        next_data = {"text": canonical_q, "embedding": data[0]["embedding"]}
         # Preserve retrieval context across node transitions (embedding -> retriever).
         if "context" in inputs:
             next_data["context"] = inputs["context"]
@@ -1067,10 +1107,12 @@ class ChatQnAService:
                         file_metadata = await response.json()
                         if logflag:
                             logger.debug(f"Fetched metadata for file ID {file_id}: {file_metadata}")
-                        if file_metadata['success']:
-                            return file_metadata['data']
-                        else:
-                            logger.error(f"Failed to fetch metadata for file ID {file_id}. Response indicates failure.")
+                        if file_metadata.get("success"):
+                            return file_metadata["data"]
+                        logger.error(
+                            f"Failed to fetch metadata for file ID {file_id}: "
+                            f"{file_metadata.get('message') or file_metadata.get('error') or file_metadata}"
+                        )
                     else:
                         logger.error(f"Failed to fetch metadata for file ID {file_id}. HTTP Status: {response.status}")
         except Exception as e:
@@ -1574,7 +1616,7 @@ class ChatQnAService:
         payload = {
             "model": parameters.model or LLM_MODEL,
             "messages": llm_messages,
-            "temperature": parameters.temperature if parameters.temperature is not None else 0.01,
+            "temperature": parameters.temperature if parameters.temperature is not None else CHAT_LLM_TEMPERATURE,
             "max_tokens": parameters.max_tokens if parameters.max_tokens else 512,
             "stream": False,
         }
@@ -1607,6 +1649,29 @@ class ChatQnAService:
         # has a custom systemPrompt stored in the DB. Falls back to CHATQNA_SYSTEM_PROMPT
         # (the module-level default) when absent.
         request_system_prompt = (data.get("system_prompt") or "").strip() or CHATQNA_SYSTEM_PROMPT
+
+        # Runtime injection — prepended (NOT appended) so it sits at the TOP of the system
+        # prompt. Small/medium LLMs follow rules at the start of the prompt much more
+        # reliably than rules buried 5000+ tokens deep. Applied to every request so all
+        # twins benefit without requiring a DB migration.
+        _RUNTIME_RULES = (
+            "CRITICAL OUTPUT RULES — read these BEFORE everything else and ALWAYS obey them:\n"
+            "1. You are FORBIDDEN from starting any answer with hedge phrases like "
+            "\"I'm not sure\", \"I don't know\", \"the retrieved information doesn't provide a clear answer\", "
+            "\"based on the retrieved information\", or any similar admission of ignorance. "
+            "These openings are BANNED.\n"
+            "2. If [Retrieved Document] entries mention the subject at all (even indirectly — e.g. "
+            "evaluation criteria, templates, or related processes), you DO have context. "
+            "Use it to confidently introduce the subject, then naturally extend with general "
+            "knowledge if needed. Start your answer with a direct definition or description, "
+            "NEVER with a disclaimer.\n"
+            "3. Example — if asked \"what is the mTobaccoCessation programme?\" and retrieved chunks "
+            "discuss its monitoring and international deployment, start with: \"The mTobaccoCessation "
+            "programme is a national mobile-based initiative to help people quit smoking...\" "
+            "Then add detail from the chunks. Never start with \"I'm not sure\".\n\n"
+            "--- TWIN INSTRUCTIONS BELOW ---\n\n"
+        )
+        request_system_prompt = _RUNTIME_RULES + request_system_prompt
 
         user_id_header = data.get("user_id")
         user_details = {}
@@ -1848,7 +1913,9 @@ class ChatQnAService:
             max_tokens=chat_request.max_tokens if chat_request.max_tokens else 1024,
             top_k=chat_request.top_k if chat_request.top_k else 10,
             top_p=chat_request.top_p if chat_request.top_p else 0.95,
-            temperature=chat_request.temperature if chat_request.temperature else 0.01,
+            temperature=chat_request.temperature
+            if chat_request.temperature is not None
+            else CHAT_LLM_TEMPERATURE,
             frequency_penalty=chat_request.frequency_penalty if chat_request.frequency_penalty else 0.0,
             presence_penalty=chat_request.presence_penalty if chat_request.presence_penalty else 0.0,
             repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,
@@ -1904,7 +1971,10 @@ class ChatQnAService:
                 reranking_threshold=chat_request.reranking_threshold if chat_request.reranking_threshold is not None else RERANKING_THRESHOLD,
             )
 
-            initial_inputs = {"text": last_translated_message_content}
+            embed_q, canonical_q = build_retrieval_embedding_text(last_translated_message_content)
+            initial_inputs = {"text": canonical_q}
+            if embed_q != canonical_q:
+                initial_inputs["retrieval_embedding_text"] = embed_q
             if retrieval_context:
                 initial_inputs["context"] = retrieval_context
 
@@ -1990,65 +2060,70 @@ class ChatQnAService:
         # retrieved_docs_with_scores / file_id_pairs only exist on the megaservice path
         _retrieved_docs = retrieved_docs_with_scores if search_mode != "no_search" else []
         _file_id_pairs = file_id_pairs if search_mode != "no_search" else {}
+        # RAG chunks may still reference file_id values deleted from doc-repo; skip citing those.
+        omitted_sources_file_ids: set[str] = set()
 
         for item in _retrieved_docs:
             doc_id_by_orchestrator = item.get("id", "N/A")
             if doc_id_by_orchestrator not in _file_id_pairs:
                 logger.warning(f"Warning: Document ID {doc_id_by_orchestrator} not found in file_id_pairs mapping.")
                 continue
-            else:
-                file_id = _file_id_pairs[doc_id_by_orchestrator]
-                if not file_id:
-                    logger.warning(f"Warning: No File ID mapped for Document ID {doc_id_by_orchestrator}.")
-                    continue
-                else:
-                    if file_id in source_documents_file_ids:
-                        logger.info(f"Note: Duplicate File ID {file_id} found. Skipping duplicate.")
-                        score = item.get("score", 0.0)
-                        scores.append(score)
-                        continue
-                    else:
-                        logger.info(f"Document ID {doc_id_by_orchestrator} mapped to File ID {file_id}.")
-                        source_documents_file_ids.append(file_id)
 
-                        score = item.get("score", 0.0)
-                        # Construct the file read URL (assuming a standard pattern)
-                        file_read_url = f"https://<HOST>/<PORT>/api/files/{file_id}/viewbrowser" if file_id else ""
+            file_id = _file_id_pairs[doc_id_by_orchestrator]
+            if not file_id:
+                logger.warning(f"Warning: No File ID mapped for Document ID {doc_id_by_orchestrator}.")
+                continue
 
-                        labels = []
-                        file_name = ''
-                        if file_id:
-                            file_metadata = await self.fetch_file_metadata(file_id)
-                            if file_metadata and isinstance(file_metadata, dict):
-                                labels = file_metadata['labels']
-                                file_name = file_metadata['file_name'] if 'file_name' in file_metadata else ''
-                                logger.info(f"Labels for file ID {file_id}: {labels}")
-                                logger.info(f"File name for file ID {file_id}: {file_name}")
-                                author = file_metadata['author'] if 'author' in file_metadata else ''
-                                if author == 'crawler' and file_name.endswith('.html'):
-                                    # If the author is 'crawler' and the file is an HTML, we can assume it's a web page
-                                    file_read_url = file_metadata['source_url'] if 'source_url' in file_metadata else file_read_url
-                                    logger.info(f"Updated file read URL for crawled HTML: {file_read_url}")
-                            else:
-                                logger.warning(f"Skipping metadata for file ID {file_id} due to fetch failure.")
-                                # Assigning error values to avoid service crashing [to be optimised]
-                                labels = "error" 
-                                file_id = "error"
-                                file_name = "error"
-                                file_read_url = "error"
-                                score = 0
+            score = item.get("score", 0.0)
 
-                        source_documents_formatted.append({
-                            "document_id": file_id,
-                            "document_name": file_name,
-                            "url": file_read_url,
-                            "categoryLabel": labels, 
-                            "serviceLabels": [], 
-                            "score": score,
-                            })
+            if file_id in source_documents_file_ids:
+                logger.info(f"Note: Duplicate File ID {file_id} found. Skipping duplicate.")
+                scores.append(score)
+                logger.info(f"\n\n[ DEBUG ] appendding document conf score: {score} ")
+                continue
 
-                        scores.append(score)
-            
+            if file_id in omitted_sources_file_ids:
+                scores.append(score)
+                logger.info(f"\n\n[ DEBUG ] appendding document conf score: {score} ")
+                continue
+
+            logger.info(f"Document ID {doc_id_by_orchestrator} mapped to File ID {file_id}.")
+
+            file_metadata = await self.fetch_file_metadata(file_id)
+            if not file_metadata or not isinstance(file_metadata, dict):
+                logger.warning(
+                    f"Skipping source citation for file ID {file_id}: "
+                    "metadata not available or file missing in document repository (orphan vector chunk?)."
+                )
+                omitted_sources_file_ids.add(file_id)
+                scores.append(score)
+                logger.info(f"\n\n[ DEBUG ] appendding document conf score: {score} ")
+                continue
+
+            source_documents_file_ids.append(file_id)
+            real_file_id = file_id
+            file_read_url = f"{PUBLIC_API_URL}/api/files/{real_file_id}/viewbrowser"
+
+            raw_labels = file_metadata.get("labels")
+            labels: list = raw_labels if isinstance(raw_labels, list) else []
+            file_name = file_metadata.get("file_name") or ""
+            logger.info(f"Labels for file ID {real_file_id}: {labels}")
+            logger.info(f"File name for file ID {real_file_id}: {file_name}")
+            author = file_metadata.get("author") or ""
+            if author == "crawler" and file_name.endswith(".html"):
+                file_read_url = file_metadata.get("source_url") or file_read_url
+                logger.info(f"Updated file read URL for crawled HTML: {file_read_url}")
+
+            source_documents_formatted.append({
+                "document_id": real_file_id,
+                "document_name": file_name,
+                "url": file_read_url,
+                "categoryLabel": labels,
+                "serviceLabels": [],
+                "score": score,
+            })
+
+            scores.append(score)
             logger.info(f"\n\n[ DEBUG ] appendding document conf score: {score} ")
 
         # Calculate overall confidence score (e.g., average of top documents)

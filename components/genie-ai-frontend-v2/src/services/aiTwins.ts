@@ -17,19 +17,34 @@ export interface AiTwin {
     fileId: string;
     _key: string;
     fileName: string | null;
-    originalName: string | null;
-    mimeType: string | null;
+    originalName?: string | null;
+    mimeType?: string | null;
     fileType: string | null;
-    size: number | null;
-    title: string | null;
-    description: string | null;
-    category: string | null;
-    tags: string[];
+    /** Legacy field — newer backend sends `fileSize` (bytes) instead. */
+    size?: number | null;
+    fileSize?: number | null;
+    title?: string | null;
+    description?: string | null;
+    category?: string | null;
+    tags?: string[];
     labels: string[];
     status: string | null;
     sourceUrl: string | null;
-    createdAt: string | null;
-    updatedAt: string | null;
+    /** ISO-639-1 language tag detected/assigned on upload. */
+    language?: string | null;
+    author?: string | null;
+    chunkCount?: number | null;
+    uploadedDate?: string | null;
+    createDate?: string | null;
+    crawlDate?: string | null;
+    ingestDate?: string | null;
+    retractDate?: string | null;
+    /** Legacy aliases kept for older payloads. */
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    /** Twin IDs that link this file — used to render an avatar stack on the
+     *  file row showing every AI Twin currently using it. */
+    linkedTwinIds?: string[];
   }>;
   // Hydrated by the privileged read so PersonalityTab/InstructionsTab can
   // render correct initial values without a separate async fetch (and the
@@ -111,8 +126,11 @@ export async function getPublicAiTwin(twinId: string): Promise<AiTwin> {
   return res.data;
 }
 
-export async function createAiTwin(payload: CreateAiTwinPayload): Promise<AiTwin> {
-  const res = await api.post<AiTwin>('/ai-twins', payload);
+export async function createAiTwin(
+  payload: CreateAiTwinPayload,
+  signal?: AbortSignal
+): Promise<AiTwin> {
+  const res = await api.post<AiTwin>('/ai-twins', payload, { signal });
   return res.data;
 }
 
@@ -226,15 +244,92 @@ export async function getSuggestedInstructions(twinId: string): Promise<string[]
   return res.data?.instructions ?? [];
 }
 
+// Per-twin LLM-generated chat-landing questions. The backend refreshes this
+// set fire-and-forget whenever the KB changes; the regenerate endpoint forces
+// a synchronous re-run (~1-3s) for admins. When the twin has no KB, the
+// backend falls back to the global curated NCD set.
+export interface TwinSuggestedQuestion {
+  order: number;
+  category: string;
+  content: string;
+}
+
+function normaliseTwinSuggestedQuestions(raw: unknown): TwinSuggestedQuestion[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (item): item is TwinSuggestedQuestion =>
+        typeof item?.content === 'string' && item.content.trim().length > 0
+    )
+    .map((item, idx) => ({
+      // Server may omit `order` on the fallback list — derive a stable index
+      // so grouping/sorting still works.
+      order: typeof item.order === 'number' ? item.order : idx + 1,
+      category: typeof item.category === 'string' && item.category.trim() ? item.category.trim() : 'General',
+      content: item.content.trim(),
+    }))
+    .sort((a, b) => a.order - b.order);
+}
+
+export async function getTwinSuggestedQuestions(twinId: string): Promise<TwinSuggestedQuestion[]> {
+  const res = await api.get<TwinSuggestedQuestion[]>(
+    `/ai-twins/${encodeURIComponent(twinId)}/suggested-questions`
+  );
+  return normaliseTwinSuggestedQuestions(res.data);
+}
+
+export async function regenerateTwinSuggestedQuestions(
+  twinId: string
+): Promise<TwinSuggestedQuestion[]> {
+  const res = await api.post<TwinSuggestedQuestion[]>(
+    `/ai-twins/${encodeURIComponent(twinId)}/suggested-questions/regenerate`
+  );
+  return normaliseTwinSuggestedQuestions(res.data);
+}
+
+// System prompt — admin-editable base prompt for a twin. The backend always
+// returns a non-empty value (falls back to the platform default when the
+// twin document has no systemPrompt stored yet).
+export interface TwinSystemPrompt {
+  systemPrompt: string;
+}
+
+export async function getTwinSystemPrompt(twinId: string): Promise<string> {
+  const res = await api.get<TwinSystemPrompt>(
+    `/ai-twins/${encodeURIComponent(twinId)}/prompt`
+  );
+  return res.data?.systemPrompt ?? '';
+}
+
+export async function updateTwinSystemPrompt(
+  twinId: string,
+  systemPrompt: string
+): Promise<string> {
+  const res = await api.patch<TwinSystemPrompt>(
+    `/ai-twins/${encodeURIComponent(twinId)}/prompt`,
+    { systemPrompt }
+  );
+  return res.data?.systemPrompt ?? systemPrompt;
+}
+
+export async function getDefaultSystemPrompt(): Promise<string> {
+  const res = await api.get<TwinSystemPrompt>('/ai-twins/default-prompt');
+  return res.data?.systemPrompt ?? '';
+}
+
 // Multipart upload — server stores the file and returns the updated twin
 // (profilePicUrl set to /Uploads/ai-twins/...). Limits: jpeg/png/webp/gif, ≤ 5 MB.
-export async function uploadAiTwinAvatar(twinId: string, file: File): Promise<AiTwin> {
+export async function uploadAiTwinAvatar(
+  twinId: string,
+  file: File,
+  signal?: AbortSignal
+): Promise<AiTwin> {
   const form = new FormData();
   form.append('image', file);
   const res = await api.post<AiTwin>(
     `/ai-twins/${encodeURIComponent(twinId)}/avatar`,
     form,
-    { headers: { 'Content-Type': 'multipart/form-data' } }
+    { headers: { 'Content-Type': 'multipart/form-data' }, signal }
   );
   return res.data;
 }

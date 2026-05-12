@@ -2,12 +2,15 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
+import NProgress from 'nprogress';
 import {
   ArrowLeft01Icon,
+  BookOpen01Icon,
   BubbleChatIcon,
   CallIcon,
   Cancel01Icon,
   Copy01Icon,
+  LinkSquare01Icon,
   Mic01Icon,
   PauseIcon,
   PlayIcon,
@@ -22,7 +25,7 @@ import ChatMessageBody from '../components/chat/ChatMessageBody.vue';
 import ChatPageSkeleton from '../components/ui/skeletons/ChatPageSkeleton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
-import { CHAT_LANGS, chatStrings, flagForLang, flagUrl, type ChatLang } from '../lib/chatStrings';
+import { chatStrings, flagForLang, flagUrl, type ChatLang } from '../lib/chatStrings';
 import {
   getChatLanguages,
   getPublicSuggestedQuestions,
@@ -32,8 +35,10 @@ import {
 import { playRecordStartChime, playRecordStopChime } from '../lib/chimes';
 import { notify } from '../lib/notify';
 import { useAiTwinsStore } from '../stores/aiTwins';
+import { useAuthStore } from '../stores/auth';
 import { useChatStore, type ChatMessage } from '../stores/chat';
 import { useTranslationStore } from '../stores/translation';
+import { useVoiceCatalogStore } from '../stores/voiceCatalog';
 import { useT } from '../i18n/composables';
 
 const { t: tt, locale } = useT();
@@ -42,8 +47,68 @@ const route = useRoute();
 const router = useRouter();
 
 const aiTwinsStore = useAiTwinsStore();
+const authStore = useAuthStore();
 const chatStore = useChatStore();
 const translationStore = useTranslationStore();
+const voiceCatalogStore = useVoiceCatalogStore();
+
+// Auth gate: when an unauthenticated visitor opens the chat (e.g. via a shared
+// link), prompt them to sign in or explicitly continue as a guest before
+// kicking off any session/twin loads. The choice is stickied in sessionStorage
+// so a reload within the same tab doesn't re-prompt.
+const GUEST_ACCEPTED_KEY = 'genie.chat.guestAccepted';
+const guestAccepted = ref<boolean>(
+  typeof sessionStorage !== 'undefined' && sessionStorage.getItem(GUEST_ACCEPTED_KEY) === '1'
+);
+const showAuthGate = computed(() => !authStore.isAuthenticated && !guestAccepted.value);
+const loggingIn = ref(false);
+
+function chooseLogin(): void {
+  if (loggingIn.value) return;
+  loggingIn.value = true;
+  // Kick the top-of-page progress bar synchronously on click so the feedback
+  // appears the instant the button is pressed (the router guard would also
+  // start it, but only after `router.push` resolves async).
+  NProgress.start();
+  router.push({ name: 'signin', query: { redirect: route.fullPath } }).catch(() => {
+    // Guard rejection, duplicate nav, or signin chunk failed to load — bring
+    // the UI back to a clean state so the user can retry.
+    NProgress.done();
+    loggingIn.value = false;
+  });
+}
+
+function chooseGuest(): void {
+  try {
+    sessionStorage.setItem(GUEST_ACCEPTED_KEY, '1');
+  } catch {
+    // sessionStorage unavailable (private mode) — fall back to in-memory only.
+  }
+  guestAccepted.value = true;
+  loadTwin();
+  loadLanguages();
+  loadSuggestedQuestions();
+}
+
+// Mid-session sign-out (e.g. user logs out from another tab while the chat
+// page is open): the chat store's sessionId was created against the now-stale
+// JWT and the next send would 401. Drop the conversation and re-show the gate
+// so the user can choose between logging back in or continuing as guest.
+watch(
+  () => authStore.isAuthenticated,
+  (isAuthed, wasAuthed) => {
+    if (wasAuthed && !isAuthed) {
+      chatStore.resetConversation();
+      try {
+        sessionStorage.removeItem(GUEST_ACCEPTED_KEY);
+      } catch {
+        // best-effort — falls through to in-memory clear below.
+      }
+      guestAccepted.value = false;
+    }
+  }
+);
+
 // All chat content (greeting, suggested questions) is authored in English.
 // The selected ChatLang is the target.
 const CHAT_SOURCE_LANG = 'en';
@@ -84,17 +149,22 @@ interface LangPickerOption {
   code: ChatLang;
   label: string;
   flag: string;
+  // Optional — only the API payload carries this. The fallback list has no
+  // way to know, so it defaults to `undefined` and we treat that as "allowed"
+  // to avoid blocking calls when the API is offline.
+  isVoiceSupported?: boolean;
 }
 
-// Local table is used only as a fallback if the languages API is unavailable
-// (e.g. brief network failure on first load). The API is the source of truth.
-const FALLBACK_LANG_OPTIONS: LangPickerOption[] = CHAT_LANGS.map((opt) => ({
-  code: opt.code,
-  label: opt.label,
-  flag: opt.flag,
-}));
+// The languages API (`GET /public/chat-sessions/languages`) is the sole source
+// of truth — it controls which codes are exposed AND which carry voice
+// support. The picker starts empty and renders only what the server actually
+// serves; the offline fallback (below) is a one-entry safety net so a fetch
+// failure doesn't leave the picker unusable.
+const OFFLINE_LANG_FALLBACK: LangPickerOption[] = [
+  { code: 'en', label: 'English', flag: flagForLang('en') },
+];
 
-const languageOptions = ref<LangPickerOption[]>(FALLBACK_LANG_OPTIONS);
+const languageOptions = ref<LangPickerOption[]>([]);
 const languagesLoading = ref(false);
 const suggestedQuestions = ref<SuggestedQuestion[]>([]);
 const suggestedQuestionsLoading = ref(false);
@@ -119,11 +189,17 @@ async function loadLanguages(): Promise<void> {
         code: l.code,
         label: l.name,
         flag: flagForLang(l.code),
+        isVoiceSupported: l.isVoiceSupported,
       }));
+    } else {
+      languageOptions.value = OFFLINE_LANG_FALLBACK;
     }
   } catch {
-    // Keep the fallback list — the picker stays usable even if the API is
-    // briefly unreachable.
+    // Fall back to a single-entry list so the picker stays usable if the
+    // languages endpoint is briefly unreachable.
+    if (languageOptions.value.length === 0) {
+      languageOptions.value = OFFLINE_LANG_FALLBACK;
+    }
   } finally {
     languagesLoading.value = false;
   }
@@ -259,16 +335,27 @@ function scrollToBottom(): void {
 
 watch(
   () => messages.value.length,
+  () => scrollToBottom(),
+);
+
+// Preload duration for any user voice notes so their bubble shows the real
+// length without forcing the listener to hit play first. Watching the
+// audioUrl per message id (not just length) catches the post-send case where
+// the optimistic placeholder gets its blob URL set in-place — that mutation
+// doesn't change `messages.length`.
+watch(
+  () => messages.value
+    .filter((m) => m.role === 'user')
+    .map((m) => `${m.id}|${m.audioUrl ?? ''}`)
+    .join(','),
   () => {
-    scrollToBottom();
-    // Preload duration for any user voice notes so their bubble shows the
-    // real length without forcing the listener to hit play first.
     for (const m of messages.value) {
-      if (m.role === 'user' && m.serverId && isDirectAudioUrl(m.audioUrl)) {
-        preloadAudioDuration(m.serverId, m.audioUrl);
+      if (m.role === 'user' && isDirectAudioUrl(m.audioUrl)) {
+        preloadAudioDuration(m.id, m.audioUrl);
       }
     }
   },
+  { immediate: true },
 );
 
 watch(
@@ -368,6 +455,9 @@ async function startRecording(): Promise<void> {
     );
     return;
   }
+  // Stop any AI response that's currently playing — the mic chime + recording
+  // shouldn't overlap a playing message.
+  stopAllAudio();
   try {
     recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (err) {
@@ -449,8 +539,13 @@ function cancelRecording(): void {
 }
 
 async function submitVoiceMessage(blob: Blob): Promise<void> {
+  // Build a local blob URL so the user's voice-note bubble can render
+  // instantly with its real duration, instead of waiting for the upload +
+  // server response to populate `audioUrl`. disposeAllAudio revokes
+  // state.url on twin change once the bubble's audio state seeds it.
+  const localAudioUrl = URL.createObjectURL(blob);
   try {
-    await chatStore.sendVoice(blob);
+    await chatStore.sendVoice(blob, { localAudioUrl });
   } catch (err) {
     const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
     const status = e?.response?.status;
@@ -504,16 +599,76 @@ function isDirectAudioUrl(url: string | null | undefined): url is string {
 // hits play, matching the chat-history view.
 function preloadAudioDuration(id: string, url: string): void {
   const state = ensureAudioState(id);
+  // Seed state.url so disposeAllAudio revokes any locally-created blob URL
+  // on twin change. For non-blob URLs revokeObjectURL is a no-op.
+  if (!state.url && isDirectAudioUrl(url)) state.url = url;
   if (state.duration > 0 || state.audio) return;
   const probe = new Audio();
   probe.preload = 'metadata';
   probe.src = url;
+  // MediaRecorder webm blobs report `duration === Infinity` until the
+  // browser is forced to scan the chunks. Seeking past the end triggers
+  // a `durationchange` event with the real value.
+  const apply = (): boolean => {
+    if (Number.isFinite(probe.duration) && probe.duration > 0) {
+      state.duration = probe.duration;
+      return true;
+    }
+    return false;
+  };
+  const onDurationChange = (): void => {
+    if (apply()) {
+      probe.removeEventListener('durationchange', onDurationChange);
+      try { probe.currentTime = 0; } catch { /* ignore */ }
+    }
+  };
   probe.addEventListener('loadedmetadata', () => {
-    if (Number.isFinite(probe.duration)) state.duration = probe.duration;
+    if (apply()) return;
+    probe.addEventListener('durationchange', onDurationChange);
+    try { probe.currentTime = Number.MAX_SAFE_INTEGER; } catch { /* ignore */ }
   });
 }
 
+// Tracks the message the user has *intended* to play. Anything else racing in
+// the background (an earlier blob fetch that's still in flight) checks this
+// before calling `.play()` and bails if the intent has moved on. Without this,
+// rapid clicks on multiple messages can each finish their async load and call
+// play(), producing overlapping audio.
+const currentPlaybackId = ref<string | null>(null);
+
+// Frame-locked progress tick. The browser's `timeupdate` event fires every
+// ~250ms which makes the waveform fill jump in visible chunks. By reading
+// `audio.currentTime` on every animation frame (and writing it onto reactive
+// state), the progress flows smoothly at display refresh rate.
+let progressRafId: number | null = null;
+function startSmoothProgress(): void {
+  if (progressRafId !== null) return;
+  const tick = (): void => {
+    const id = currentPlaybackId.value;
+    if (!id) {
+      progressRafId = null;
+      return;
+    }
+    const state = messageAudio.value[id];
+    if (!state?.playing || !state.audio) {
+      progressRafId = null;
+      return;
+    }
+    state.currentTime = state.audio.currentTime;
+    progressRafId = requestAnimationFrame(tick);
+  };
+  progressRafId = requestAnimationFrame(tick);
+}
+function stopSmoothProgress(): void {
+  if (progressRafId !== null) {
+    cancelAnimationFrame(progressRafId);
+    progressRafId = null;
+  }
+}
+
 function stopAllAudio(): void {
+  currentPlaybackId.value = null;
+  stopSmoothProgress();
   Object.values(messageAudio.value).forEach((state) => {
     if (state.audio && state.playing) {
       state.audio.pause();
@@ -525,11 +680,33 @@ function stopAllAudio(): void {
 function attachAudioListeners(state: MessageAudioState): void {
   const audio = state.audio;
   if (!audio) return;
+  // MediaRecorder webm blobs report `duration === Infinity` until the file
+  // has been fully scanned. We only apply the seek workaround on the very
+  // first metadata load, before playback begins, so it doesn't disturb the
+  // listener once they've hit play.
+  let durationResolved = false;
+  const applyDuration = (): boolean => {
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
+      state.duration = audio.duration;
+      durationResolved = true;
+      return true;
+    }
+    return false;
+  };
+  const onDurationChange = (): void => {
+    if (applyDuration()) {
+      audio.removeEventListener('durationchange', onDurationChange);
+      try { audio.currentTime = 0; } catch { /* ignore */ }
+    }
+  };
   audio.addEventListener('loadedmetadata', () => {
-    if (Number.isFinite(audio.duration)) state.duration = audio.duration;
+    if (applyDuration()) return;
+    audio.addEventListener('durationchange', onDurationChange);
+    try { audio.currentTime = Number.MAX_SAFE_INTEGER; } catch { /* ignore */ }
   });
   audio.addEventListener('timeupdate', () => {
     state.currentTime = audio.currentTime;
+    if (!durationResolved) applyDuration();
   });
   audio.addEventListener('ended', () => {
     state.playing = false;
@@ -547,31 +724,91 @@ function formatAudioClock(seconds: number): string {
   return `${m}:${s}`;
 }
 
+// Continuous opacity for a voice-note waveform bar based on playback
+// position. Replaces the previous tri-state (played/active/unplayed)
+// approach so the fill flows smoothly across bars instead of stepping. Two
+// bars on each side of the playhead crossfade between PLAYED_OPACITY and
+// UNPLAYED_OPACITY, which — combined with the rAF tick that updates
+// currentTime every frame — makes the fill feel liquid even at small
+// playhead movements. When not playing, the whole wave reads at full
+// opacity so the user can see the shape at rest.
+const PLAYED_OPACITY = 1;
+const UNPLAYED_OPACITY = 0.32;
+const FADE_BARS = 1.6; // how many bars the soft edge spans
+
+function voiceBarOpacity(
+  serverId: string | undefined,
+  index: number
+): number {
+  if (!serverId) return PLAYED_OPACITY;
+  const state = messageAudio.value[serverId];
+  if (!state || !state.playing) return PLAYED_OPACITY;
+  const duration = state.duration;
+  const current = state.currentTime;
+  if (!Number.isFinite(duration) || duration <= 0) return UNPLAYED_OPACITY;
+  const total = VOICE_WAVE_HEIGHTS.length;
+  const playhead = (current / duration) * total;
+  const distance = index - playhead; // negative = behind playhead (played)
+  if (distance <= -FADE_BARS) return PLAYED_OPACITY;
+  if (distance >= 0) return UNPLAYED_OPACITY;
+  // Linear crossfade in the soft edge zone.
+  const t = (distance + FADE_BARS) / FADE_BARS; // 0 at fully played, 1 at playhead
+  return PLAYED_OPACITY - (PLAYED_OPACITY - UNPLAYED_OPACITY) * t;
+}
+
+function audioProgress(audioKey: string | undefined): number {
+  if (!audioKey) return 0;
+  const state = messageAudio.value[audioKey];
+  if (!state) return 0;
+  const { duration, currentTime } = state;
+  if (!Number.isFinite(duration) || duration <= 0) return 0;
+  return Math.max(0, Math.min(1, currentTime / duration));
+}
+
 async function toggleMessageAudio(message: ChatMessage): Promise<void> {
-  if (!message.serverId) return;
-  const state = ensureAudioState(message.serverId);
+  // Key state on m.id so user voice notes work the moment the placeholder is
+  // pushed (server response not yet in). The serverId is only needed when we
+  // have to fetch the audio bytes from the server (assistant TTS, or user
+  // notes loaded from history without a direct URL).
+  if (!isDirectAudioUrl(message.audioUrl) && !message.serverId) return;
+  const stateKey = message.id;
+  const state = ensureAudioState(stateKey);
   if (state.playing && state.audio) {
     state.audio.pause();
     state.playing = false;
+    if (currentPlaybackId.value === stateKey) {
+      currentPlaybackId.value = null;
+      stopSmoothProgress();
+    }
     return;
   }
   stopAllAudio();
+  currentPlaybackId.value = stateKey;
   try {
     if (!state.url) {
       if (isDirectAudioUrl(message.audioUrl)) {
         state.url = message.audioUrl;
-      } else {
+      } else if (message.serverId) {
         state.loading = true;
         const blob = await chatStore.loadMessageAudio(message.serverId);
+        if (currentPlaybackId.value !== stateKey) return;
         state.url = URL.createObjectURL(blob);
+      } else {
+        return;
       }
     }
+    if (currentPlaybackId.value !== stateKey) return;
     if (!state.audio) {
       state.audio = new Audio(state.url);
       attachAudioListeners(state);
     }
     await state.audio.play();
+    if (currentPlaybackId.value !== stateKey) {
+      state.audio.pause();
+      return;
+    }
     state.playing = true;
+    startSmoothProgress();
   } catch (err) {
     const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
     const status = e?.response?.status;
@@ -605,6 +842,21 @@ watch(twinId, () => {
 
 function startVoiceCall(): void {
   if (!twinId.value) return;
+  // Block the call when the currently selected chat language has no voice
+  // pipeline on the backend. `isVoiceSupported === false` is the only refusal
+  // signal — `undefined` (language missing from the API or fallback entry) is
+  // treated as allowed so a transient API outage doesn't lock users out.
+  const selected = languageOptions.value.find((l) => l.code === lang.value);
+  if (selected && selected.isVoiceSupported === false) {
+    notify.info(
+      tt('chat.voiceLangUnsupportedTitle', 'Voice calls unavailable'),
+      tt(
+        'chat.voiceLangUnsupportedBody',
+        `Calls aren't available in ${selected.label} yet. Pick a language that supports voice to start a call.`
+      )
+    );
+    return;
+  }
   router.push({ name: 'call', params: { twinId: twinId.value } });
 }
 
@@ -631,9 +883,14 @@ function onDocumentClick(e: MouseEvent): void {
 onMounted(() => {
   document.addEventListener('click', onDocumentClick);
   autoSize();
-  loadTwin();
-  loadLanguages();
-  loadSuggestedQuestions();
+  if (!showAuthGate.value) {
+    loadTwin();
+    loadLanguages();
+    loadSuggestedQuestions();
+  }
+  // Loads the TTS voice catalog so the "Listen" button is only rendered for
+  // languages the backend can actually synthesise. Cached across views.
+  void voiceCatalogStore.ensureLoaded();
 });
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick);
@@ -644,11 +901,20 @@ onBeforeUnmount(() => {
 
 const currentLang = computed<LangPickerOption>(() => {
   const list = languageOptions.value;
+  // Order of resolution:
+  //   1. Exact match in the API-loaded list (the normal case).
+  //   2. First entry in the API list — if the chat store's selected lang isn't
+  //      something the server serves, pick whatever it does serve.
+  //   3. Synthesised placeholder from `lang.value` — only hit before the API
+  //      response arrives so the picker header has something to render.
   return (
     list.find((l) => l.code === lang.value) ??
-    FALLBACK_LANG_OPTIONS.find((l) => l.code === lang.value) ??
     list[0] ??
-    FALLBACK_LANG_OPTIONS[0]
+    {
+      code: lang.value,
+      label: lang.value.toUpperCase(),
+      flag: flagForLang(lang.value),
+    }
   );
 });
 
@@ -727,7 +993,48 @@ function translationToggleLabel(id: string): string {
 
 <template>
   <div class="chat-shell flex h-[100dvh] min-h-0 w-full flex-col bg-surface">
-    <ChatPageSkeleton v-if="showTwinSkeleton" />
+    <section
+      v-if="showAuthGate"
+      class="flex h-full min-h-0 flex-col items-center justify-center bg-surface px-6"
+    >
+      <div class="flex w-full max-w-md flex-col items-center text-center">
+        <img src="/images/logo.svg" alt="IEEE" class="h-9 w-auto" />
+
+        <h1 class="mt-10 text-[2rem] font-semibold leading-tight tracking-tight text-slate-900 sm:text-4xl">
+          {{ tt('chat.authGate.title', 'Welcome') }}
+        </h1>
+        <p class="mt-3 text-sm leading-relaxed text-slate-500 sm:text-base">
+          {{
+            tt(
+              'chat.authGate.subtitle',
+              'Sign in to keep your chat history, or continue as a guest.'
+            )
+          }}
+        </p>
+
+        <div class="mt-10 flex w-full flex-col gap-3 sm:flex-row">
+          <BaseButton
+            block
+            variant="primary"
+            autofocus
+            :loading="loggingIn"
+            :disabled="loggingIn"
+            @click="chooseLogin"
+          >
+            {{ tt('chat.authGate.login', 'Login') }}
+          </BaseButton>
+          <BaseButton block variant="outline" :disabled="loggingIn" @click="chooseGuest">
+            {{ tt('chat.authGate.guest', 'Continue as guest') }}
+          </BaseButton>
+        </div>
+
+        <p class="mt-6 text-xs text-slate-400">
+          {{ tt('chat.authGate.footnote', 'No account needed for guest chat.') }}
+        </p>
+      </div>
+    </section>
+
+    <ChatPageSkeleton v-else-if="showTwinSkeleton" />
 
     <section v-else-if="showTwinError" class="flex h-full min-h-0 flex-col items-center justify-center bg-surface px-6">
       <EmptyState
@@ -749,9 +1056,9 @@ function translationToggleLabel(id: string): string {
     <section v-else class="flex h-full min-h-0 flex-col bg-surface">
       <!-- Top bar -->
       <header
-        class="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle bg-surface px-6 py-3"
+        class="flex flex-nowrap items-center justify-between gap-2 border-b border-border-subtle bg-surface px-3 py-2 sm:gap-3 sm:px-6 sm:py-3"
       >
-        <div class="flex items-center gap-3">
+        <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <template v-if="twinId">
             <BaseAvatar
               :src="twin?.profilePicUrl ?? ''"
@@ -759,7 +1066,7 @@ function translationToggleLabel(id: string): string {
               size="sm"
               badge="online"
             />
-            <div class="min-w-0">
+            <div class="min-w-0 flex-1">
               <p class="truncate text-title text-text">{{ twin?.name ?? 'AI Twin' }}</p>
               <p class="truncate text-meta text-text-muted">
                 {{ tt('chat.subgreeting', t.subgreeting).split('.')[0] }}
@@ -771,13 +1078,13 @@ function translationToggleLabel(id: string): string {
           </template>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <!-- Language switcher -->
           <div class="relative" data-lang-root>
             <button
               ref="langButton"
               type="button"
-              class="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-2 py-1.5 text-body font-medium text-text transition hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              class="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-1.5 py-1 text-body font-medium text-text transition hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:gap-2 sm:px-2 sm:py-1.5"
               :aria-label="tt('chat.langLabel', t.langLabel)"
               :aria-expanded="langOpen"
               aria-haspopup="listbox"
@@ -787,7 +1094,7 @@ function translationToggleLabel(id: string): string {
               <img
                 :src="flagUrl(currentLang.flag)"
                 :alt="currentLang.label"
-                class="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-border"
+                class="h-6 w-6 shrink-0 rounded-full object-cover ring-1 ring-border sm:h-7 sm:w-7"
                 loading="lazy"
               />
               <span class="px-1 text-meta uppercase tracking-wide text-text-muted">{{ currentLang.code }}</span>
@@ -961,7 +1268,7 @@ function translationToggleLabel(id: string): string {
         <!-- Active conversation -->
         <div
           v-else
-          class="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-6 scrollbar-thin"
+          class="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-4 scrollbar-thin sm:px-6 sm:py-6"
         >
           <div class="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
             <template v-for="group in groupedMessages" :key="group.label">
@@ -993,41 +1300,79 @@ function translationToggleLabel(id: string): string {
                   ]"
                 >
                   <div
-                    v-if="m.role === 'user' && m.audioUrl && m.serverId"
-                    class="flex min-w-[16rem] items-center gap-3 rounded-full bg-accent px-3 py-2.5 text-text-inverse shadow-card"
+                    v-if="m.role === 'user' && m.audioUrl"
+                    class="voice-note-bubble flex min-w-[16rem] items-center gap-2.5 rounded-2xl bg-accent px-3 py-2 text-text-inverse shadow-card"
                   >
                     <button
                       type="button"
-                      class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25 disabled:opacity-50"
-                      :aria-label="messageAudio[m.serverId]?.playing ? tt('chat.aria.pauseVoiceNote', 'Pause voice note') : tt('chat.aria.playVoiceNote', 'Play voice note')"
-                      :disabled="messageAudio[m.serverId]?.loading"
+                      class="voice-note-play group relative grid h-11 w-11 shrink-0 place-items-center disabled:cursor-not-allowed disabled:opacity-50"
+                      :aria-label="messageAudio[m.id]?.playing ? tt('chat.aria.pauseVoiceNote', 'Pause voice note') : tt('chat.aria.playVoiceNote', 'Play voice note')"
+                      :title="isRecording ? tt('chat.listenDisabledRecording', 'Stop recording first') : ''"
+                      :disabled="messageAudio[m.id]?.loading || isRecording"
                       @click="toggleMessageAudio(m)"
                     >
-                      <span
-                        v-if="messageAudio[m.serverId]?.loading"
-                        class="block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                      <svg
+                        class="pointer-events-none absolute inset-0 h-full w-full -rotate-90"
+                        viewBox="0 0 36 36"
                         aria-hidden="true"
-                      />
-                      <Icon
-                        v-else-if="messageAudio[m.serverId]?.playing"
-                        :icon="PauseIcon"
-                        :size="18"
-                      />
-                      <Icon v-else :icon="PlayIcon" :size="18" />
+                      >
+                        <circle
+                          cx="18"
+                          cy="18"
+                          r="16"
+                          fill="none"
+                          stroke="rgba(255,255,255,0.22)"
+                          stroke-width="2.25"
+                        />
+                        <circle
+                          cx="18"
+                          cy="18"
+                          r="16"
+                          fill="none"
+                          stroke="white"
+                          stroke-width="2.25"
+                          stroke-linecap="round"
+                          pathLength="100"
+                          stroke-dasharray="100"
+                          :stroke-dashoffset="100 - audioProgress(m.id) * 100"
+                          style="transition: stroke-dashoffset 120ms linear"
+                        />
+                      </svg>
+                      <span
+                        class="voice-note-play__core grid h-9 w-9 place-items-center rounded-full bg-white text-accent shadow-sm transition group-hover:scale-105 group-active:scale-95"
+                      >
+                        <span
+                          v-if="messageAudio[m.id]?.loading"
+                          class="block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+                          aria-hidden="true"
+                        />
+                        <Icon
+                          v-else-if="messageAudio[m.id]?.playing"
+                          :icon="PauseIcon"
+                          :size="16"
+                        />
+                        <Icon
+                          v-else
+                          :icon="PlayIcon"
+                          :size="16"
+                          class="translate-x-[1px]"
+                        />
+                      </span>
                     </button>
-                    <span class="voice-note-wave flex h-9 flex-1 items-center gap-[3px]" aria-hidden="true">
+                    <span class="voice-note-wave flex h-8 flex-1 items-center gap-[2.5px]" aria-hidden="true">
                       <span
                         v-for="(h, i) in VOICE_WAVE_HEIGHTS"
                         :key="i"
-                        :class="[
-                          'voice-note-wave__bar w-[3px] rounded-full bg-white/85',
-                          messageAudio[m.serverId]?.playing && 'voice-note-wave__bar--active',
-                        ]"
-                        :style="{ '--voice-bar-height': `${h}%`, animationDelay: `${(i % 10) * 90}ms` }"
+                        class="voice-note-wave__bar w-[2.5px] rounded-full bg-white"
+                        :style="{ height: `${h}%`, opacity: voiceBarOpacity(m.id, i) }"
                       />
                     </span>
-                    <span class="shrink-0 text-sm font-bold tabular-nums text-white">
-                      {{ formatAudioClock(messageAudio[m.serverId]?.duration ?? 0) }}
+                    <span class="shrink-0 pr-1 text-xs font-medium tabular-nums text-white/85">
+                      {{ formatAudioClock(
+                        messageAudio[m.id]?.playing
+                          ? (messageAudio[m.id]?.currentTime ?? 0)
+                          : (messageAudio[m.id]?.duration ?? 0)
+                      ) }}
                     </span>
                   </div>
                   <div
@@ -1094,30 +1439,69 @@ function translationToggleLabel(id: string): string {
                           {{ translationToggleLabel(m.id) }}
                         </button>
                       </template>
-                      <template v-if="m.serverId && m.role === 'assistant'">
+                      <template v-if="m.serverId && m.role === 'assistant' && voiceCatalogStore.isTtsSupported(m.lang ?? lang)">
                         <span aria-hidden="true">·</span>
                         <button
                           type="button"
-                          class="inline-flex items-center gap-1 rounded p-1 text-text-subtle transition hover:bg-surface-muted hover:text-text disabled:opacity-50"
-                          :aria-label="messageAudio[m.serverId]?.playing ? tt('chat.aria.pauseMessage', 'Pause audio') : tt('chat.aria.playMessage', 'Listen to message')"
-                          :disabled="messageAudio[m.serverId]?.loading"
+                          class="inline-flex items-center gap-1 rounded p-1 text-text-subtle transition hover:bg-surface-muted hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+                          :aria-label="messageAudio[m.id]?.playing ? tt('chat.aria.pauseMessage', 'Pause audio') : tt('chat.aria.playMessage', 'Listen to message')"
+                          :title="isRecording ? tt('chat.listenDisabledRecording', 'Stop recording first') : ''"
+                          :disabled="messageAudio[m.id]?.loading || isRecording"
                           @click="toggleMessageAudio(m)"
                         >
                           <span
-                            v-if="messageAudio[m.serverId]?.loading"
-                            class="block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"
+                            v-if="messageAudio[m.id]?.loading"
+                            class="inline-flex items-center gap-1"
                             aria-hidden="true"
-                          />
+                          >
+                            <span class="dot dot--xs" />
+                            <span class="dot dot--xs" style="animation-delay: 0.15s" />
+                            <span class="dot dot--xs" style="animation-delay: 0.3s" />
+                          </span>
                           <Icon
-                            v-else-if="messageAudio[m.serverId]?.playing"
+                            v-else-if="messageAudio[m.id]?.playing"
                             :icon="PauseIcon"
                             :size="13"
                           />
                           <Icon v-else :icon="VolumeHighIcon" :size="13" />
-                          <span>{{ messageAudio[m.serverId]?.playing ? tt('chat.playing', 'Playing') : tt('chat.listen', 'Listen') }}</span>
+                          <span>{{ messageAudio[m.id]?.playing ? tt('chat.playing', 'Playing') : tt('chat.listen', 'Listen') }}</span>
                         </button>
                       </template>
                     </template>
+                  </div>
+
+                  <!-- Source documents (assistant messages with KB context only) -->
+                  <div
+                    v-if="
+                      m.role === 'assistant' &&
+                      !m.streaming &&
+                      (m.sourceDocuments?.length || m.confidenceScore != null)
+                    "
+                    class="mt-2 flex flex-col gap-1"
+                  >
+                    <div class="flex items-center gap-1.5 text-meta text-text-muted">
+                      <Icon :icon="BookOpen01Icon" :size="12" class="shrink-0" />
+                      <span class="font-medium">Sources</span>
+                      <span
+                        v-if="m.confidenceScore != null"
+                        class="ml-1 rounded-full bg-success/10 px-1.5 py-0.5 text-[11px] font-semibold text-success"
+                      >
+                        {{ Math.round((m.confidenceScore ?? 0) * 100) }}% match
+                      </span>
+                    </div>
+                    <div v-if="m.sourceDocuments?.length" class="flex flex-col gap-0.5">
+                      <a
+                        v-for="doc in m.sourceDocuments"
+                        :key="doc.document_id"
+                        :href="doc.url || '#'"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex max-w-[280px] items-center gap-1 truncate rounded text-meta text-accent underline-offset-2 hover:underline"
+                      >
+                        <Icon :icon="LinkSquare01Icon" :size="11" class="shrink-0" />
+                        <span class="truncate">{{ doc.document_name || doc.document_id }}</span>
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1131,7 +1515,7 @@ function translationToggleLabel(id: string): string {
       <!-- Composer -->
       <footer
         v-if="twinId"
-        class="border-t border-border-subtle bg-surface px-6 py-4"
+        class="border-t border-border-subtle bg-surface px-3 py-3 sm:px-6 sm:py-4"
       >
         <div class="mx-auto w-full max-w-5xl">
           <div
@@ -1236,6 +1620,10 @@ function translationToggleLabel(id: string): string {
   opacity: 0.55;
   animation: pulse-dot 1.1s ease-in-out infinite;
 }
+.dot--xs {
+  width: 4px;
+  height: 4px;
+}
 @keyframes pulse-dot {
   0%, 80%, 100% {
     transform: scale(0.7);
@@ -1247,23 +1635,14 @@ function translationToggleLabel(id: string): string {
   }
 }
 
-/* ===== Voice-note playback waveform ===== */
+/* ===== Voice-note playback waveform =====
+   Bars stay at their natural heights; opacity is driven inline from
+   `voiceBarOpacity` and tweens smoothly via the transition below. Combined
+   with the rAF-driven currentTime tick, this yields a fluid playhead that
+   reads as a continuous fill rather than discrete bar flips. */
 .voice-note-wave__bar {
-  height: var(--voice-bar-height);
-  transition: height 180ms ease, opacity 180ms ease;
-}
-.voice-note-wave__bar--active {
-  animation: voice-note-wave-bounce 1.2s ease-in-out infinite;
-}
-@keyframes voice-note-wave-bounce {
-  0%, 100% {
-    height: calc(var(--voice-bar-height) * 0.62);
-    opacity: 0.65;
-  }
-  50% {
-    height: var(--voice-bar-height);
-    opacity: 0.95;
-  }
+  transition: opacity 80ms linear;
+  will-change: opacity;
 }
 
 /* ===== Voice recorder ===== */
@@ -1321,7 +1700,9 @@ function translationToggleLabel(id: string): string {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .voice-note-wave__bar--active,
+  .voice-note-wave__bar {
+    transition: none;
+  }
   .recorder-led__core,
   .recorder-led__halo,
   .recorder-wave__bar {
@@ -1340,8 +1721,8 @@ function translationToggleLabel(id: string): string {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  height: 40px;
-  padding: 0 1rem;
+  height: 36px;
+  padding: 0 0.625rem;
   border-radius: 9999px;
   font-size: 0.8125rem;
   font-weight: 600;
@@ -1354,6 +1735,12 @@ function translationToggleLabel(id: string): string {
     background-color 200ms ease,
     color 200ms ease,
     border-color 200ms ease;
+}
+@media (min-width: 640px) {
+  .header-btn {
+    height: 40px;
+    padding: 0 1rem;
+  }
 }
 .header-btn:focus-visible {
   outline: none;
@@ -1378,10 +1765,17 @@ function translationToggleLabel(id: string): string {
   color: #ffffff;
   background: linear-gradient(135deg, #0073b9 0%, #003e62 100%);
   border: 1px solid rgba(0, 0, 0, 0);
-  padding-left: 0.5rem;
+  width: 36px;
+  padding: 0;
   box-shadow:
     0 6px 14px -4px rgba(0, 82, 128, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+@media (min-width: 640px) {
+  .header-btn--call {
+    width: auto;
+    padding: 0 1rem 0 0.5rem;
+  }
 }
 .header-btn--call:hover {
   transform: translateY(-1px);
@@ -1393,11 +1787,18 @@ function translationToggleLabel(id: string): string {
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.18);
+  background: transparent;
   flex-shrink: 0;
+}
+@media (min-width: 640px) {
+  .header-btn__call-icon {
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.18);
+  }
 }
 .header-btn__call-icon::after {
   content: '';
@@ -1407,6 +1808,12 @@ function translationToggleLabel(id: string): string {
   border: 2px solid rgba(255, 255, 255, 0.35);
   animation: header-call-pulse 2s ease-out infinite;
   pointer-events: none;
+  display: none;
+}
+@media (min-width: 640px) {
+  .header-btn__call-icon::after {
+    display: block;
+  }
 }
 @keyframes header-call-pulse {
   0% { transform: scale(1); opacity: 0.6; }

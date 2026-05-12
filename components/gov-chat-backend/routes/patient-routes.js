@@ -60,7 +60,7 @@ module.exports = (patientService) => {
 
   /**
    * @swagger
-   * /api/patients:
+   * /patients:
    *   post:
    *     summary: Create a new patient
    *     description: Admin creates a new patient user linked to their account.
@@ -139,10 +139,16 @@ module.exports = (patientService) => {
 
   /**
    * @swagger
-   * /api/patients:
+   * /patients:
    *   get:
    *     summary: List patients
-   *     description: Returns all patients created by the authenticated admin.
+   *     description: >-
+   *       Returns all patients created by the authenticated admin. Each row is
+   *       enriched with live usage counts (chat / WhatsApp / call session totals),
+   *       last-activity timestamps, and how many AI twins the patient has been
+   *       granted access to. All these enriched fields are computed at read time
+   *       from chatSessions and call_sessions — they are never stored on the user
+   *       document and cannot be edited.
    *     tags: [Patients]
    *     security:
    *       - BearerAuth: []
@@ -160,6 +166,50 @@ module.exports = (patientService) => {
    *     responses:
    *       200:
    *         description: Paginated list of patients
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 patients:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       _key:        { type: string }
+   *                       loginName:   { type: string }
+   *                       email:       { type: string, format: email }
+   *                       role:        { type: string, example: User }
+   *                       adminId:     { type: string, description: _key of the admin who owns this patient }
+   *                       personalIdentification:
+   *                         type: object
+   *                         properties:
+   *                           fullName:  { type: string }
+   *                           firstName: { type: string }
+   *                           lastName:  { type: string }
+   *                           dob:       { type: string }
+   *                           phone:     { type: string }
+   *                       notes:        { type: string }
+   *                       allowedTwinIds:
+   *                         type: array
+   *                         nullable: true
+   *                         items: { type: string }
+   *                         description: Explicit allow-list of twin _keys, or null when unrestricted
+   *                       emailVerified: { type: boolean }
+   *                       disabled:      { type: boolean, nullable: true }
+   *                       createdAt:     { type: string, format: date-time }
+   *                       updatedAt:     { type: string, format: date-time }
+   *                       numChats:         { type: integer, description: Web chat sessions (computed) }
+   *                       numWhatsappChats: { type: integer, description: WhatsApp chat sessions (computed) }
+   *                       numCalls:         { type: integer, description: Voice call sessions (computed) }
+   *                       totalSessions:    { type: integer, description: Sum of the three counts above }
+   *                       lastChatAt:       { type: string, format: date-time, nullable: true }
+   *                       lastCallAt:       { type: string, format: date-time, nullable: true }
+   *                       lastActivityAt:   { type: string, format: date-time, nullable: true, description: Most recent of lastChatAt / lastCallAt }
+   *                       twinsAllowedCount: { type: integer, nullable: true, description: Number of twins granted access; null means unrestricted }
+   *                 total:  { type: integer }
+   *                 offset: { type: integer }
+   *                 limit:  { type: integer }
    *       403:
    *         description: Admin access required
    */
@@ -184,10 +234,17 @@ module.exports = (patientService) => {
 
   /**
    * @swagger
-   * /api/patients/{patientId}:
+   * /patients/{patientId}:
    *   get:
    *     summary: Get a patient
-   *     description: Returns a single patient owned by the authenticated admin.
+   *     description: >-
+   *       Returns a single patient owned by the authenticated admin. The
+   *       response shape mirrors the list endpoint — enriched with live usage
+   *       counts (chat / WhatsApp / call session totals), last-activity
+   *       timestamps, and how many AI twins the patient has been granted
+   *       access to. All these enriched fields are computed at read time from
+   *       chatSessions and call_sessions; they are never stored on the user
+   *       document and cannot be edited.
    *     tags: [Patients]
    *     security:
    *       - BearerAuth: []
@@ -199,7 +256,43 @@ module.exports = (patientService) => {
    *           type: string
    *     responses:
    *       200:
-   *         description: Patient object
+   *         description: Patient object with usage counts
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 _key:        { type: string }
+   *                 loginName:   { type: string }
+   *                 email:       { type: string, format: email }
+   *                 role:        { type: string, example: User }
+   *                 adminId:     { type: string, description: _key of the admin who owns this patient }
+   *                 personalIdentification:
+   *                   type: object
+   *                   properties:
+   *                     fullName:  { type: string }
+   *                     firstName: { type: string }
+   *                     lastName:  { type: string }
+   *                     dob:       { type: string }
+   *                     phone:     { type: string }
+   *                 notes:        { type: string }
+   *                 allowedTwinIds:
+   *                   type: array
+   *                   nullable: true
+   *                   items: { type: string }
+   *                   description: Explicit allow-list of twin _keys, or null when unrestricted
+   *                 emailVerified: { type: boolean }
+   *                 disabled:      { type: boolean, nullable: true }
+   *                 createdAt:     { type: string, format: date-time }
+   *                 updatedAt:     { type: string, format: date-time }
+   *                 numChats:         { type: integer, description: Web chat sessions (computed) }
+   *                 numWhatsappChats: { type: integer, description: WhatsApp chat sessions (computed) }
+   *                 numCalls:         { type: integer, description: Voice call sessions (computed) }
+   *                 totalSessions:    { type: integer, description: Sum of the three counts above }
+   *                 lastChatAt:       { type: string, format: date-time, nullable: true }
+   *                 lastCallAt:       { type: string, format: date-time, nullable: true }
+   *                 lastActivityAt:   { type: string, format: date-time, nullable: true, description: Most recent of lastChatAt / lastCallAt }
+   *                 twinsAllowedCount: { type: integer, nullable: true, description: Number of twins granted access; null means unrestricted }
    *       403:
    *         description: Admin access required
    *       404:
@@ -224,7 +317,7 @@ module.exports = (patientService) => {
 
   /**
    * @swagger
-   * /api/patients/{patientId}:
+   * /patients/{patientId}:
    *   put:
    *     summary: Update a patient
    *     description: Admin updates details for one of their patients.
@@ -285,7 +378,7 @@ module.exports = (patientService) => {
 
   /**
    * @swagger
-   * /api/patients/{patientId}:
+   * /patients/{patientId}:
    *   delete:
    *     summary: Delete a patient
    *     description: Admin permanently removes one of their patients.
@@ -330,7 +423,7 @@ module.exports = (patientService) => {
 
   /**
    * @swagger
-   * /api/patients/{patientId}/twin-access:
+   * /patients/{patientId}/twin-access:
    *   get:
    *     summary: Get allowed twin IDs for a patient
    *     description: >
@@ -384,7 +477,7 @@ module.exports = (patientService) => {
 
   /**
    * @swagger
-   * /api/patients/{patientId}/twin-access:
+   * /patients/{patientId}/twin-access:
    *   put:
    *     summary: Replace the allowed twin list for a patient
    *     description: >
@@ -446,7 +539,7 @@ module.exports = (patientService) => {
 
   /**
    * @swagger
-   * /api/patients/{patientId}/twin-access/{twinId}:
+   * /patients/{patientId}/twin-access/{twinId}:
    *   post:
    *     summary: Enable a specific twin for a patient
    *     tags: [Patients]
@@ -494,7 +587,7 @@ module.exports = (patientService) => {
 
   /**
    * @swagger
-   * /api/patients/{patientId}/twin-access/{twinId}:
+   * /patients/{patientId}/twin-access/{twinId}:
    *   delete:
    *     summary: Disable a specific twin for a patient
    *     tags: [Patients]

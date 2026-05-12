@@ -3,7 +3,7 @@ FROM node:22.14.0
 
 # Install system dependencies
 RUN apt-get update && \
-    apt-get install -y clamav clamav-daemon && \
+    apt-get install -y clamav clamav-daemon tesseract-ocr poppler-utils && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

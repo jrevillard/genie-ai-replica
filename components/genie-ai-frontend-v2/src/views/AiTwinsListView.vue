@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { Cancel01Icon, PlusSignIcon, Search01Icon, SparklesIcon } from '@hugeicons/core-free-icons';
 import { storeToRefs } from 'pinia';
 import { notify } from '../lib/notify';
@@ -21,6 +21,24 @@ const { twins, loading } = storeToRefs(store);
 const search = ref('');
 const dialogOpen = ref(false);
 const creating = ref(false);
+// Abort controller for the in-flight create-twin (and avatar upload) request,
+// so closing the dialog mid-flight actually kills the network call.
+let activeCreateRequest: AbortController | null = null;
+
+function isAbortError(err: unknown): boolean {
+  const e = err as { name?: string; code?: string };
+  return (
+    e?.name === 'CanceledError' ||
+    e?.name === 'AbortError' ||
+    e?.code === 'ERR_CANCELED'
+  );
+}
+
+watch(dialogOpen, (open) => {
+  if (!open && creating.value && activeCreateRequest) {
+    activeCreateRequest.abort();
+  }
+});
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -48,24 +66,33 @@ onMounted(loadTwins);
 async function onCreated(payload: { name: string; description: string; avatarFile: File | null }) {
   if (creating.value) return;
   creating.value = true;
+  activeCreateRequest = new AbortController();
+  const { signal } = activeCreateRequest;
   try {
-    const twin = await store.create({
-      name: payload.name,
-      description: payload.description,
-      profilePicUrl: null,
-    });
+    const twin = await store.create(
+      {
+        name: payload.name,
+        description: payload.description,
+        profilePicUrl: null,
+      },
+      signal
+    );
     if (payload.avatarFile) {
       try {
-        await store.uploadAvatar(twin._key, payload.avatarFile);
-      } catch {
+        await store.uploadAvatar(twin._key, payload.avatarFile, signal);
+      } catch (err) {
+        if (isAbortError(err)) throw err;
         notify.error(store.error ?? t('twins.list.avatarFailedToast', 'Twin created, but the avatar upload failed.'));
       }
     }
     notify.success(t('twins.list.createdToast', 'AI Twin created'));
     dialogOpen.value = false;
-  } catch {
-    notify.error(store.error ?? t('twins.list.createFailedToast', 'Failed to create AI Twin'));
+  } catch (err) {
+    if (!isAbortError(err)) {
+      notify.error(store.error ?? t('twins.list.createFailedToast', 'Failed to create AI Twin'));
+    }
   } finally {
+    activeCreateRequest = null;
     creating.value = false;
   }
 }

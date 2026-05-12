@@ -118,6 +118,9 @@ class ChatSessionService {
       audioUrl: m.audioUrl || null,
       createdAt: m.createdAt,
       ...(m.language ? { language: String(m.language) } : {}),
+      ...(m.metadata && typeof m.metadata === 'object' && Object.keys(m.metadata).length > 0
+        ? { metadata: m.metadata }
+        : {}),
     }));
   }
 
@@ -152,6 +155,26 @@ class ChatSessionService {
     // a voice for it). Lower-cased for stable comparison.
     if (extra && typeof extra.language === 'string' && extra.language.trim()) {
       doc.language = extra.language.trim().toLowerCase();
+    }
+    // RAG citations + confidence (assistant only in practice). Persisted so GET
+    // /chat-sessions/:id/messages can restore sources after a page reload.
+    if (
+      role === 'assistant' &&
+      extra &&
+      extra.metadata &&
+      typeof extra.metadata === 'object'
+    ) {
+      const em = extra.metadata;
+      const md = {};
+      if (Array.isArray(em.source_documents) && em.source_documents.length > 0) {
+        md.source_documents = em.source_documents;
+      }
+      if (typeof em.confidence_score === 'number' && Number.isFinite(em.confidence_score)) {
+        md.confidence_score = em.confidence_score;
+      }
+      if (Object.keys(md).length > 0) {
+        doc.metadata = md;
+      }
     }
     const meta = await this.sessionMessages.save(doc);
     await this.sessions.update(sessionId, { updatedAt: now });
@@ -237,6 +260,9 @@ class ChatSessionService {
       audioUrl: m.audioUrl || null,
       createdAt: m.createdAt,
       ...(m.language ? { language: String(m.language) } : {}),
+      ...(m.metadata && typeof m.metadata === 'object' && Object.keys(m.metadata).length > 0
+        ? { metadata: m.metadata }
+        : {}),
     }));
   }
 
@@ -330,6 +356,18 @@ class ChatSessionService {
     // output in response_en so we can cache it and skip re-translation next turn.
     if (result.response_en && typeof result.response_en === 'string') {
       assistantExtra.contentEn = result.response_en;
+    }
+    if (result.metadata && typeof result.metadata === 'object') {
+      const md = {};
+      if (Array.isArray(result.metadata.source_documents) && result.metadata.source_documents.length > 0) {
+        md.source_documents = result.metadata.source_documents;
+      }
+      if (typeof result.metadata.confidence_score === 'number' && Number.isFinite(result.metadata.confidence_score)) {
+        md.confidence_score = result.metadata.confidence_score;
+      }
+      if (Object.keys(md).length > 0) {
+        assistantExtra.metadata = md;
+      }
     }
     const assistantMessageKey = await this.appendMessage(sessionId, 'assistant', reply, assistantExtra);
 

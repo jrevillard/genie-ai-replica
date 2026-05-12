@@ -4,7 +4,11 @@ const router = express.Router();
 const authMiddleware = require('../middleware/auth-middleware');
 const { logger } = require('../shared-lib');
 
-const SUPPORTED_LANGUAGES = ['fr', 'en', 'es', 'sw'];
+// Languages with at least one Piper TTS voice in the deployment catalog. Must
+// stay in sync with constants/chat-languages.js (the entries flagged
+// isVoiceSupported: true) and genie-ai-overlay/voice-bridge's
+// DEFAULT_VOICE_BY_LANGUAGE map.
+const SUPPORTED_LANGUAGES = ['en', 'fr', 'es', 'sw', 'ar', 'de', 'hi', 'id', 'pt', 'ru', 'zh'];
 
 const tokenSchema = Joi.object({
   language: Joi.string().valid(...SUPPORTED_LANGUAGES).default('en'),
@@ -26,6 +30,11 @@ const listSessionsSchema = Joi.object({
   language:  Joi.string().valid(...SUPPORTED_LANGUAGES),
   dateRange: Joi.string().valid(...DATE_RANGES).default('all'),
   sort:      Joi.string().valid(...SORT_OPTIONS).default('newest'),
+  // Admin-only: scope=all returns every user's sessions; userId narrows to a
+  // specific user. Non-admin callers always see only their own sessions
+  // regardless of these params (enforced in the route handler).
+  scope:     Joi.string().valid('me', 'all'),
+  userId:    Joi.string().trim().max(200),
 });
 
 function getUserId(req) {
@@ -65,6 +74,10 @@ module.exports = (voiceTokenService, voiceSessionService) => {
    *         startAt: { type: string, format: date-time }
    *         endAt: { type: string, format: date-time, nullable: true }
    *         durationSeconds: { type: integer, nullable: true }
+   *         recordingUrl:
+   *           type: string
+   *           nullable: true
+   *           description: "Public path to the call recording WAV (set when the call ends). Served by the backend at this URL."
    *         createdAt: { type: string, format: date-time }
    *     CallMessage:
    *       type: object
@@ -93,8 +106,14 @@ module.exports = (voiceTokenService, voiceSessionService) => {
    *             properties:
    *               language:
    *                 type: string
-   *                 enum: [fr, en, es, sw]
+   *                 enum: [en, fr, es, sw, ar, de, hi, id, pt, ru, zh]
    *                 default: en
+   *                 description: >-
+   *                   Must be a language with a Piper TTS voice on this deployment
+   *                   (see GET /chat-sessions/languages → isVoiceSupported).
+   *               twinId:
+   *                 type: string
+   *                 description: Optional twin to call. Without this the default twin is used.
    *     responses:
    *       200:
    *         description: WebSocket info plus a signed voice token
@@ -166,6 +185,14 @@ module.exports = (voiceTokenService, voiceSessionService) => {
    *         description: >-
    *           `newest` / `oldest` sort by startAt; `longest` / `shortest` by
    *           durationSeconds (in-progress calls without a duration sort last).
+   *       - in: query
+   *         name: scope
+   *         schema: { type: string, enum: [me, all] }
+   *         description: "Admin-only — `all` returns every user's calls. Default is the caller's own."
+   *       - in: query
+   *         name: userId
+   *         schema: { type: string }
+   *         description: "Admin-only — filter calls to a specific user's userId (auto-implies scope=all)."
    *     responses:
    *       200:
    *         description: Filtered sessions
@@ -180,9 +207,32 @@ module.exports = (voiceTokenService, voiceSessionService) => {
     const { value, error } = listSessionsSchema.validate(req.query || {}, { stripUnknown: true });
     if (error) return res.status(400).json({ message: error.details[0].message });
     try {
-      const userId = getUserId(req);
+      const callerId = getUserId(req);
+      const isAdmin = req.user?.role === 'Admin';
+
+      // Setting userId=... implicitly means scope=all. Both require admin.
+      const wantsBroaderScope = value.scope === 'all' || !!value.userId;
+      if (wantsBroaderScope && !isAdmin) {
+        return res.status(403).json({
+          message: value.userId
+            ? 'admin role required to filter by userId'
+            : 'admin role required for scope=all',
+        });
+      }
+
+      // Resolve the effective userId filter passed to the service:
+      //   - non-admin: always caller's own
+      //   - admin + userId=X: filter to that user
+      //   - admin + scope=all: no userId filter
+      //   - admin default: caller's own (parity with the chat-sessions endpoint)
+      let filterUserId = callerId;
+      if (isAdmin) {
+        if (value.userId) filterUserId = value.userId;
+        else if (value.scope === 'all') filterUserId = null;
+      }
+
       const sessions = await voiceSessionService.listSessions({
-        userId,
+        userId: filterUserId,
         twinId: value.twinId,
         language: value.language,
         dateRange: value.dateRange,

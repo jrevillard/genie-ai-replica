@@ -191,6 +191,11 @@ def build_retrieval_from_route(
     lang = base_context.get("language") or "EN"
     # Propagate search_mode from classifier; fall back to vector_search
     search_mode = route.get("search_mode", "vector_search") or "vector_search"
+    # For vector_search, service-label filtering hurts recall — cosine similarity
+    # handles relevance on its own. Only apply service filtering for deep_search
+    # (graph traversal genuinely needs to know which subgraph to start from).
+    apply_service_filter = (search_mode == "deep_search")
+
     routing_meta: dict[str, Any] = {
         "mode": "auto_broad",
         "search_mode": search_mode,
@@ -217,7 +222,7 @@ def build_retrieval_from_route(
 
     if conf >= CHATQNA_AUTO_ROUTE_HIGH:
         cat = p.get("categoryLabel") or "General"
-        svcs = list(p.get("serviceLabels") or [])
+        svcs = list(p.get("serviceLabels") or []) if apply_service_filter else []
         routing_meta["mode"] = "auto_filtered"
         rc = {"categoryLabel": cat, "serviceLabels": svcs, "language": lang}
         nlab = _label_count(cat, svcs)
@@ -226,17 +231,20 @@ def build_retrieval_from_route(
 
     if conf >= CHATQNA_AUTO_ROUTE_LOW:
         cat = p.get("categoryLabel") or "General"
-        merged = list(p.get("serviceLabels") or [])
-        if s and isinstance(s, dict):
-            for x in s.get("serviceLabels") or []:
-                if isinstance(x, str) and x.strip() and x.strip() not in merged:
-                    merged.append(x.strip())
-        merged = merged[:6]
+        if apply_service_filter:
+            merged = list(p.get("serviceLabels") or [])
+            if s and isinstance(s, dict):
+                for x in s.get("serviceLabels") or []:
+                    if isinstance(x, str) and x.strip() and x.strip() not in merged:
+                        merged.append(x.strip())
+            merged = merged[:6]
+        else:
+            merged = []
         routing_meta["mode"] = "auto_merged_top2"
         return (
             {"categoryLabel": cat, "serviceLabels": merged, "language": lang},
             routing_meta,
-            "OR",
+            "OR" if merged else None,
         )
 
     routing_meta["mode"] = "auto_broad"

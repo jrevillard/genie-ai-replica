@@ -16,7 +16,6 @@ import { chatStrings } from '../lib/chatStrings';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useChatStore } from '../stores/chat';
 import { useVoiceCallStore } from '../stores/voiceCall';
-import type { VoiceLanguage } from '../services/voiceCall';
 import { useT } from '../i18n/composables';
 
 const { t: tt } = useT();
@@ -65,19 +64,15 @@ async function loadTwin(): Promise<void> {
   }
 }
 
-const SUPPORTED_VOICE_LANGS: readonly VoiceLanguage[] = ['en', 'fr', 'es', 'sw'];
-function toVoiceLang(code: string): VoiceLanguage {
-  return (SUPPORTED_VOICE_LANGS as readonly string[]).includes(code)
-    ? (code as VoiceLanguage)
-    : 'en';
-}
-
 async function startVoiceCall(): Promise<void> {
   if (!twinId.value) return;
   if (voiceCall.isActive) return;
   try {
+    // Pass the chat-picker language straight through — the call is only
+    // reachable when ChatView's startVoiceCall gate confirmed
+    // isVoiceSupported, so any code here is one the backend can handle.
     await voiceCall.startCall({
-      language: toVoiceLang(lang.value),
+      language: lang.value,
       twinId: twinId.value,
     });
   } catch {

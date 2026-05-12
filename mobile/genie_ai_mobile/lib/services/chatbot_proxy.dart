@@ -191,9 +191,15 @@ class _Utf8Sink implements Sink<List<int>> {
   @override
   void add(List<int> chunk) {
     _buffer.addAll(chunk);
-    final decoded = utf8.decode(_buffer, allowMalformed: true);
-    _buffer.clear();
-    _outputSink.add(decoded);
+    try {
+      final decoded = utf8.decode(_buffer, allowMalformed: false);
+      _buffer.clear();
+      _outputSink.add(decoded);
+    } on FormatException {
+      final decoded = utf8.decode(_buffer, allowMalformed: true);
+      _buffer.clear();
+      _outputSink.add(decoded);
+    }
   }
 
   @override

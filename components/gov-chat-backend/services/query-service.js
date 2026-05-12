@@ -239,7 +239,9 @@ class QueryService {
         .replace(/\\t/g, '\t')
         .replace(/\\r/g, '\r')
         .replace(quote === "'" ? /\\'/g : /\\"/g, quote === '"' ? '"' : "'")
-        .replace(new RegExp(BS, 'g'), '\\');
+        .replace(new RegExp(BS, 'g'), '\\')
+        // eslint-disable-next-line no-control-regex -- intentional: strip control chars from LLM output
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
       return { type: 'chunk', content };
     }
     return { type: 'error', raw: trimmed };

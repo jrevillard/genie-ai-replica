@@ -148,6 +148,7 @@ module.exports = (queryService) => {
 
     const queryData = { ...req.body, userId };
     let opeaController = null;
+    let keepalive = null;
 
     try {
       const { queryId, opeaUrl, opeaPayload } = await queryService.initStreamQuery(queryData, { authorization: req.headers.authorization });
@@ -160,7 +161,7 @@ module.exports = (queryService) => {
         'X-Accel-Buffering': 'no'
       });
 
-      const streamTimeout = parseInt(process.env.CHATQNA_STREAM_TIMEOUT, 10) || 300000;
+      const streamTimeout = parseInt(process.env.CHATQNA_STREAM_TIMEOUT, 10) || 3600000;
       opeaController = new AbortController();
 
       const opeaResponse = await axios.post(opeaUrl, opeaPayload, {
@@ -176,6 +177,20 @@ module.exports = (queryService) => {
       let fullResponseText = '';
       const startTime = Date.now();
       let buffer = '';
+      const doneState = { handled: false };
+
+      function cleanupKeepalive() {
+        if (keepalive !== null) {
+          clearInterval(keepalive);
+          keepalive = null;
+        }
+      }
+
+      const doHandleStreamDone = () => {
+        if (doneState.handled || res.writableEnded) return;
+        doneState.handled = true;
+        handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res);
+      };
 
       stream.on('data', (chunk) => {
         buffer += chunk.toString();
@@ -193,7 +208,7 @@ module.exports = (queryService) => {
             fullResponseText += parsed.content;
             res.write(`data: ${JSON.stringify({ type: 'chunk', content: parsed.content })}\n\n`);
           } else if (parsed.type === 'done') {
-            handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res);
+            doHandleStreamDone();
           } else if (parsed.type === 'error') {
             logger.warn('QueryService.sse_parse_error', { raw: parsed.raw });
           }
@@ -201,6 +216,7 @@ module.exports = (queryService) => {
       });
 
       stream.on('error', (error) => {
+        cleanupKeepalive();
         logger.error('QueryService.opea_stream_error', { error: error.message, queryId });
         if (!res.headersSent) {
           res.status(502).json({ error: 'CHATQNA_STREAM_ERROR', message: error.message });
@@ -212,11 +228,12 @@ module.exports = (queryService) => {
 
       stream.on('end', () => {
         if (fullResponseText && res.writableEnded === false) {
-          handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res);
+          doHandleStreamDone();
         }
       });
 
       req.on('close', () => {
+        cleanupKeepalive();
         if (opeaController && !opeaController.signal.aborted) {
           opeaController.abort();
           logger.info('QueryService.stream_client_disconnected', { queryId });
@@ -229,15 +246,16 @@ module.exports = (queryService) => {
         }
       });
 
-      const keepalive = setInterval(() => {
+      keepalive = setInterval(() => {
         if (res.writableEnded) {
-          clearInterval(keepalive);
+          cleanupKeepalive();
           return;
         }
         res.write(': keepalive\n\n');
       }, 15000);
 
     } catch (error) {
+      if (keepalive !== null) clearInterval(keepalive);
       logger.error('QueryService.stream_setup_error', { error: error.message });
       if (!res.headersSent) {
         if (error.code === 'ECONNABORTED' || error.code === 'ERR_CANCELED') {

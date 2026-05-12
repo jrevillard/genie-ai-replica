@@ -394,6 +394,9 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   void _sendStreaming(Map<String, dynamic> params) async {
+    await _streamSubscription?.cancel();
+    _streamSubscription = null;
+
     final int assistantIndex = _messages.length;
 
     // Insert placeholder assistant message for streaming content
@@ -411,53 +414,99 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
     Map<String, dynamic>? metadata;
     String? queryId;
-    final stream = _chatBotProxy.submitQueryStream(
-      httpClient: httpClient!,
-      baseUrl: streamBaseUrl!,
-      sessionId: params['sessionId'],
-      messages: params['messages'],
-      userId: params['userId'],
-      categoryId: params['categoryId'],
-      contextLabels: params['contextLabels'],
-      language: params['language'],
-    );
 
     try {
-      await for (final event in stream) {
-        if (!mounted) break;
+      final stream = _chatBotProxy.submitQueryStream(
+        httpClient: httpClient!,
+        baseUrl: streamBaseUrl!,
+        sessionId: params['sessionId'],
+        messages: params['messages'],
+        userId: params['userId'],
+        categoryId: params['categoryId'],
+        contextLabels: params['contextLabels'],
+        language: params['language'],
+      );
 
-        switch (event) {
-          case SseChunkEvent(:final content):
+      _streamSubscription = stream.listen(
+        (event) {
+          if (!mounted) return;
+
+          switch (event) {
+            case SseChunkEvent(:final content):
+              setState(() {
+                final msg = Map<String, dynamic>.from(_messages[assistantIndex]);
+                msg['content'] = (msg['content'] as String) + content;
+                _messages[assistantIndex] = msg;
+              });
+              _scrollToBottom();
+
+            case SseMetadataEvent(:final sourceDocuments, :final confidenceScore):
+              metadata = {
+                'source_documents': sourceDocuments,
+                'confidence_score': confidenceScore,
+              };
+
+            case SseTranslationEvent(:final content):
+              setState(() {
+                final msg = Map<String, dynamic>.from(_messages[assistantIndex]);
+                msg['content'] = content;
+                _messages[assistantIndex] = msg;
+              });
+
+            case SseDoneEvent(queryId: final id):
+              queryId = id;
+
+            case SseErrorEvent(:final message):
+              debugPrint("[CHATBOT] Stream error: $message");
+              NotificationService.error(tr('chatbot.processingError'));
+          }
+        },
+        onError: (error) {
+          if (!mounted) return;
+
+          if (error is StreamingDisabledException) {
+            debugPrint("[CHATBOT] Streaming disabled, falling back to non-streaming");
             setState(() {
-              final msg = Map<String, dynamic>.from(_messages[assistantIndex]);
-              msg['content'] = (msg['content'] as String) + content;
-              _messages[assistantIndex] = msg;
+              _isStreaming = false;
+              if (_messages.length > assistantIndex) {
+                _messages.removeAt(assistantIndex);
+              }
+              _isLoading = true;
             });
-            _scrollToBottom();
+            _sendNonStreaming(params);
+            return;
+          }
 
-          case SseMetadataEvent(:final sourceDocuments, :final confidenceScore):
-            metadata = {
-              'source_documents': sourceDocuments,
-              'confidence_score': confidenceScore,
-            };
+          debugPrint("[CHATBOT] Stream error: $error");
+          setState(() => _isStreaming = false);
+          NotificationService.error(tr('chatbot.processingError'));
+        },
+        onDone: () {
+          if (!mounted) return;
 
-          case SseTranslationEvent(:final content):
-            setState(() {
-              final msg = Map<String, dynamic>.from(_messages[assistantIndex]);
-              msg['content'] = content;
-              _messages[assistantIndex] = msg;
-            });
+          final List<dynamic> newDocs =
+              metadata?['sources'] ?? metadata?['source_documents'] ?? [];
 
-          case SseDoneEvent(queryId: final id):
-            queryId = id;
+          setState(() {
+            final msg = Map<String, dynamic>.from(_messages[assistantIndex]);
+            msg['id'] = queryId;
+            msg['queryId'] = queryId;
+            msg['sources'] = newDocs;
+            msg['confidence'] = metadata?['confidence_score'];
+            msg['metadata'] = metadata;
+            msg['isSaved'] = false;
+            _messages[assistantIndex] = msg;
+            _relatedDocuments = _mergeUniqueDocs(newDocs, _relatedDocuments);
+            _isStreaming = false;
+          });
 
-          case SseErrorEvent(:final message):
-            debugPrint("[CHATBOT] Stream error: $message");
-            NotificationService.error(tr('chatbot.processingError'));
-        }
-      }
+          widget.onRelatedDocumentsUpdate(_relatedDocuments);
+          _scrollToBottom();
+          _updateQuickHelpVisibility();
+        },
+        cancelOnError: false,
+      );
     } on StreamingDisabledException {
-      // Backend doesn't support streaming — fall back
       debugPrint("[CHATBOT] Streaming disabled, falling back to non-streaming");
       setState(() {
         _isStreaming = false;
@@ -467,34 +516,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         _isLoading = true;
       });
       _sendNonStreaming(params);
-      return;
     } catch (e) {
-      debugPrint("[CHATBOT] Stream error: $e");
+      debugPrint("[CHATBOT] Stream setup error: $e");
       setState(() => _isStreaming = false);
       NotificationService.error(tr('chatbot.processingError'));
-      return;
     }
-
-    // Finalize the streamed message with metadata
-    final List<dynamic> newDocs =
-        metadata?['sources'] ?? metadata?['source_documents'] ?? [];
-
-    setState(() {
-      final msg = Map<String, dynamic>.from(_messages[assistantIndex]);
-      msg['id'] = queryId;
-      msg['queryId'] = queryId;
-      msg['sources'] = newDocs;
-      msg['confidence'] = metadata?['confidence_score'];
-      msg['metadata'] = metadata;
-      msg['isSaved'] = false;
-      _messages[assistantIndex] = msg;
-      _relatedDocuments = _mergeUniqueDocs(newDocs, _relatedDocuments);
-      _isStreaming = false;
-    });
-
-    widget.onRelatedDocumentsUpdate(_relatedDocuments);
-    _scrollToBottom();
-    _updateQuickHelpVisibility();
   }
 
   void _sendNonStreaming(Map<String, dynamic> params) async {

@@ -1315,7 +1315,7 @@ export default {
     fileReceived: 'Fayiloo yeleta benta.',
     fileUploadError: 'Filiyata fayiloo yele to.',
     processingError: 'Filiyata i la ñiningo dada to.',
-    welcomeMessage: 'Bismillay! Mbe ñaadi ka i makaamoo ning Keniya gomnati baaralu bii?',
+    welcomeMessage: "I be ñaa? N b'i dèmèn cogo di bii?",
     attachFile: 'Fayiloo Kafu',
     fileTooLarge: 'Fayiloo warata baa. Tambi-da mu {maxSize} ti.',
     saveChat: 'Kuma Mara',
@@ -1379,31 +1379,31 @@ export default {
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+      'N lafiya la ka long ñaadi mbe ID kaard ñiningo ke',
 
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+      'Jooyaa muta onlayin coko mu munne ti?',
 
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+      'N makaamoo bita lataramoo to',
 
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+      'Mbe kenda-yaa dulaa kibaroo soto minto?',
 
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+      'Karandiri baaralu munne soto nna dingingolu ye?',
 
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+      'Ñaadi mbe nna moto laisins kurandi?',
 
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+      'Maa Keniya suw baaralu kang (affordable housing)',
 
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+      'Gomnati baara munne ka nyining saaying?',
 
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+      'N lafiya la ka kuma gomnati baaralu kang'
   },
   common: {
     cancel: 'A bula',

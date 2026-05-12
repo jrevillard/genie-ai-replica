@@ -1359,7 +1359,7 @@ export default {
     fileReceived: 'ได้รับไฟล์สำเร็จ',
     fileUploadError: 'ข้อผิดพลาดในการอัปโหลดไฟล์',
     processingError: 'ข้อผิดพลาดในการประมวลผลคำขอของคุณ',
-    welcomeMessage: 'ยินดีต้อนรับ! ฉันสามารถช่วยเหลือคุณเกี่ยวกับบริการรัฐบาลเคนยาได้อย่างไรวันนี้?',
+    welcomeMessage: 'ยินดีต้อนรับ! ฉันจะช่วยคุณได้อย่างไรในวันนี้?',
     attachFile: 'แนบไฟล์',
     fileTooLarge: 'ไฟล์ใหญ่เกินไป ขนาดสูงสุดคือ {maxSize}',
     saveChat: 'บันทึกแชท',
@@ -1423,31 +1423,31 @@ export default {
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+      'ฉันต้องการข้อมูลเกี่ยวกับวิธีสมัครบัตรประชาชนแห่งชาติ',
 
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+      'กระบวนการชำระภาษีออนไลน์คืออะไร?',
 
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+      'นำฉันผ่านขั้นตอนการจดทะเบียนธุรกิจใหม่',
 
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+      'ฉันสามารถหาข้อมูลเกี่ยวกับบริการสุขภาพสาธารณะได้ที่ไหน?',
 
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+      'บริการการศึกษาอะไรที่มีสำหรับลูกของฉัน?',
 
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+      'ฉันจะต่ออายุใบขับขี่อย่างไร?',
 
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+      'บอกฉันเกี่ยวกับโปรแกรมที่อยู่อาศัยราคาไม่แพงในเคนยา',
 
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+      'โอกาสงานรัฐบาลอะไรที่มีอยู่ในปัจจุบัน?',
 
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+      'ฉันอยากแชทเกี่ยวกับบริการรัฐบาล'
   },
   common: {
     cancel: 'ยกเลิก',

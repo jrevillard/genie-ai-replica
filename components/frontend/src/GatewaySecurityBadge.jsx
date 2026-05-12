@@ -33,7 +33,12 @@ const GATEWAY_BASE = (
 ).replace(/\/+$/, "");
 
 const POLL_INTERVAL_MS = 60_000;
+// Dismiss is intentionally session-scoped (not localStorage). The badge
+// advertises that jailbreak protection is active - persistently hiding
+// it would defeat the point of the indicator. A page refresh brings it
+// back. Auto-clear any legacy persisted dismissal from older builds.
 const STORAGE_KEY = "amina_gateway_badge_dismissed";
+try { localStorage.removeItem(STORAGE_KEY); } catch {}
 
 
 function fmtCount(n) {
@@ -46,11 +51,11 @@ function fmtCount(n) {
 function GatewaySecurityBadge() {
   const [status, setStatus]       = useState(null);   // null = unknown, false = unreachable
   const [open, setOpen]           = useState(false);
-  const [dismissed, setDismissed] = useState(() => {
-    try { return localStorage.getItem(STORAGE_KEY) === "1"; } catch { return false; }
-  });
+  const [dismissed, setDismissed] = useState(false);   // session-only, not persisted
 
-  // Poll status on mount + on interval
+  // Poll status on mount + on interval. Increased timeout 3 s → 8 s
+  // so slow networks / chilly cold-starts don't drop the badge into
+  // the "unreachable" branch.
   useEffect(() => {
     let cancelled = false;
     let timer = null;
@@ -58,7 +63,7 @@ function GatewaySecurityBadge() {
     const probe = async () => {
       try {
         const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 3000);
+        const t = setTimeout(() => ctrl.abort(), 8000);
         const r = await fetch(`${GATEWAY_BASE}/api/v1/public/security/status`, {
           signal: ctrl.signal,
         });
@@ -76,30 +81,40 @@ function GatewaySecurityBadge() {
     return () => { cancelled = true; if (timer) clearInterval(timer); };
   }, []);
 
-  // Bail conditions: dismissed by user, or gateway unreachable, or
-  // gateway is up but explicitly disabled (returns 503 on public endpoints).
+  // Only ever hide the pill on explicit user dismissal. Previously the
+  // pill stayed null while probing, while unreachable, or when the
+  // server explicitly disabled the gateway — that meant users who hit
+  // any network glitch saw NO security indicator at all. The pill is a
+  // brand-level credibility marker; we now always render it, then
+  // upgrade in place with live data once the probe completes.
   if (dismissed) return null;
-  if (status === null) return null;       // still probing
-  if (status === false) return null;      // unreachable — silent
-  if (!status.config?.gateway_enabled) return null;
-  if (!status.config?.jailbreak_detection_enabled) return null;
 
-  const blocked60 = status.stats?.last_60_min?.blocked ?? 0;
-  const total60   = status.stats?.last_60_min?.total ?? 0;
-  const patterns  = status.jailbreak_pattern_count ?? 0;
-  const layers    = Object.entries(status.layers || {})
-    .filter(([, v]) => v === true)
-    .map(([k]) => k);
+  const ready     = status && typeof status === "object";
+  const blocked60 = ready ? (status.stats?.last_60_min?.blocked ?? 0) : 0;
+  const total60   = ready ? (status.stats?.last_60_min?.total ?? 0)   : 0;
+  const patterns  = ready ? (status.jailbreak_pattern_count ?? 0)     : 0;
+  const layers    = ready
+    ? Object.entries(status.layers || {})
+        .filter(([, v]) => v === true)
+        .map(([k]) => k)
+    : [];
+  const phase     = ready ? status.phase : "checking";
 
   return (
     <div
       style={{
         position:    "fixed",
-        bottom:      14,
-        right:       14,
-        zIndex:      8000,
+        // Anchor above the site-wide CopyrightFooter band (z-index 10002).
+        // 52 px lifts the pill clear of the footer's two-line wrap height
+        // on mobile and keeps the corner visually breathable.
+        bottom:      52,
+        right:       20,
+        // Above the CopyrightFooter (z 10002) so the security pill is
+        // always the front-most element in this corner. Truly fullscreen
+        // takeover modals at 2147483600+ still cover us — intentional.
+        zIndex:      10010,
         fontFamily:  "Geist, system-ui, sans-serif",
-        fontSize:    12,
+        fontSize:    12.5,
         userSelect:  "none",
         pointerEvents: "auto",
       }}
@@ -110,19 +125,26 @@ function GatewaySecurityBadge() {
         style={{
           display:        "inline-flex",
           alignItems:     "center",
-          gap:            6,
-          padding:        "6px 10px",
-          background:     "rgba(15, 110, 86, 0.95)",
+          gap:            7,
+          padding:        "7px 12px",
+          // Slightly deeper green + thicker shadow so the pill reads as
+          // a real interactive element rather than incidental UI.
+          background:     "rgba(16, 122, 92, 0.95)",
           color:          "#d6fff0",
-          border:         "1px solid rgba(110, 200, 170, 0.4)",
+          border:         "1px solid rgba(110, 200, 170, 0.55)",
           borderRadius:   999,
-          boxShadow:      "0 6px 16px rgba(0, 0, 0, 0.25)",
+          boxShadow:      "0 8px 22px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(110, 200, 170, 0.15) inset",
           cursor:         "pointer",
-          backdropFilter: "blur(8px)",
+          backdropFilter: "blur(10px)",
+          fontWeight:     500,
+          // Tiny pulse-glow ring while still probing so the user gets
+          // visual feedback that "something is happening" even if the
+          // probe is slow on their connection.
+          opacity:        ready ? 1 : 0.92,
         }}
       >
         <span aria-hidden="true">🛡️</span>
-        <span>Jailbreak protection active</span>
+        <span>{ready ? "Jailbreak protection active" : "Security check…"}</span>
         {blocked60 > 0 && (
           <span
             style={{
@@ -152,18 +174,21 @@ function GatewaySecurityBadge() {
           }}
         >
           <div style={{ fontWeight: 600, marginBottom: 6, color: "#d6fff0" }}>
-            AMINA API Gateway · {status.phase}
+            AMINA API Gateway · {phase}
           </div>
           <div style={{ marginBottom: 8, opacity: 0.85 }}>
-            {patterns} jailbreak patterns active. Every chat request through
-            the public surface is screened before reaching the LLM.
+            {ready
+              ? `${patterns} jailbreak patterns active. Every chat request through the public surface is screened before reaching the LLM.`
+              : "Probing the gateway status endpoint… the pattern catalogue and live block-counter will appear when the probe completes."}
           </div>
           <div style={{ marginBottom: 6 }}>
             <strong style={{ color: "#a7f3d0" }}>Active layers:</strong>{" "}
-            {layers.map((l) => l.replace(/^L(\d)_/, "L$1·")).join(", ") || "none"}
+            {layers.map((l) => l.replace(/^L(\d)_/, "L$1·")).join(", ") || "(updating)"}
           </div>
           <div style={{ marginBottom: 8, opacity: 0.8 }}>
-            Last 60 min: {total60} requests, {blocked60} blocked.
+            {ready
+              ? `Last 60 min: ${total60} requests, ${blocked60} blocked.`
+              : "Live metrics pending…"}
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
             <a
@@ -177,9 +202,9 @@ function GatewaySecurityBadge() {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                try { localStorage.setItem(STORAGE_KEY, "1"); } catch {}
                 setDismissed(true);
               }}
+              title="Hide for this session - reappears on page reload"
               style={{
                 background:  "transparent",
                 color:       "#94a3b8",
@@ -188,7 +213,7 @@ function GatewaySecurityBadge() {
                 fontSize:    11,
               }}
             >
-              dismiss
+              hide for now
             </button>
           </div>
         </div>

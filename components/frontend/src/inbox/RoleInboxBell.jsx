@@ -26,8 +26,28 @@ const API_BASE = (() => {
   return String(raw).replace(/\/+$/, "");
 })();
 
+function _readRole() {
+  try { return localStorage.getItem("AMINA_ROLE") || "patient"; }
+  catch { return "patient"; }
+}
+
+// True when the active session is a caregiver (clinician) login. Caregiver
+// JWTs are stored under `cg_token`, NOT AMINA_TOKEN, and they only validate
+// against caregiver-scoped endpoints under /api/v1/caregiver/*.
+function _isCaregiverSession() {
+  try {
+    const role = _readRole();
+    if (role !== "clinician" && role !== "caregiver") return false;
+    return !!localStorage.getItem("cg_token");
+  } catch { return false; }
+}
+
 function _auth() {
   try {
+    if (_isCaregiverSession()) {
+      const cg = localStorage.getItem("cg_token") || "";
+      return cg ? { Authorization: `Bearer ${cg}` } : {};
+    }
     const tok = localStorage.getItem("AMINA_ADMIN_TOKEN")
              || localStorage.getItem("AMINA_TOKEN")
              || "";
@@ -35,9 +55,13 @@ function _auth() {
   } catch { return {}; }
 }
 
-function _readRole() {
-  try { return localStorage.getItem("AMINA_ROLE") || "patient"; }
-  catch { return "patient"; }
+// Resolve the inbox base path for the active session. Caregiver sessions
+// must hit /caregiver/inbox/*, which validates the cg_token; the patient
+// /inbox/* endpoints would 401.
+function _inboxBase() {
+  return _isCaregiverSession()
+    ? `${API_BASE}/api/v1/caregiver/inbox`
+    : `${API_BASE}/api/v1/inbox`;
 }
 
 const ROLE_COLORS = {
@@ -187,7 +211,7 @@ function RoleInboxBellComponent() {
 
   const pollUnread = useCallback(async () => {
     try {
-      const r = await fetch(`${API_BASE}/api/v1/inbox/unread-count`, { headers: _auth() });
+      const r = await fetch(`${_inboxBase()}/unread-count`, { headers: _auth() });
       if (r.ok) { const d = await r.json(); setUnread(Number(d.unread || 0)); }
     } catch { /* noop */ }
   }, []);
@@ -202,7 +226,7 @@ function RoleInboxBellComponent() {
   const refresh = useCallback(async () => {
     setLoad(true);
     try {
-      const r = await fetch(`${API_BASE}/api/v1/inbox/list?limit=50`, { headers: _auth() });
+      const r = await fetch(`${_inboxBase()}/list?limit=50`, { headers: _auth() });
       if (r.ok) { const d = await r.json(); setItems(d.items || []); setUnread(d.unread || 0); }
     } catch { /* noop */ }
     setLoad(false);
@@ -214,7 +238,7 @@ function RoleInboxBellComponent() {
 
   const markRead = useCallback(async (id) => {
     try {
-      await fetch(`${API_BASE}/api/v1/inbox/${encodeURIComponent(id)}/read`, {
+      await fetch(`${_inboxBase()}/${encodeURIComponent(id)}/read`, {
         method: "POST", headers: _auth(),
       });
       setItems(prev => prev.map(i => i.inbox_id === id ? { ...i, read: true } : i));
@@ -224,7 +248,7 @@ function RoleInboxBellComponent() {
 
   const markAllRead = useCallback(async () => {
     try {
-      await fetch(`${API_BASE}/api/v1/inbox/mark-all-read`, {
+      await fetch(`${_inboxBase()}/mark-all-read`, {
         method: "POST", headers: _auth(),
       });
       setItems(prev => prev.map(i => ({ ...i, read: true })));

@@ -22,26 +22,32 @@
  * @param {Object} opts
  * @param {string} opts.baseUrl - API base URL
  * @param {Object} opts.body - AgentChatRequest body
+ * @param {Object} [opts.headers] - extra headers (e.g. Authorization)
  * @param {(text: string) => void} opts.onToken - called per token chunk
  * @param {(meta: Object) => void} opts.onDone - called with full metadata
  * @param {(err: string) => void} opts.onError - called on error
  * @param {AbortSignal} [opts.signal] - optional abort signal
  */
-export async function streamChat({ baseUrl, body, onToken, onDone, onError, signal }) {
+export async function streamChat({ baseUrl, body, headers, onToken, onDone, onError, signal }) {
   const url = `${baseUrl.replace(/\/+$/, "")}/api/v1/agent/chat-stream`;
+  const mergedHeaders = {
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+    ...(headers || {}),
+  };
 
   try {
     const response = await fetch(url, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      headers: mergedHeaders,
       body: JSON.stringify(body),
       signal,
     });
 
     if (!response.ok) {
       // Fall back to non-streaming endpoint
-      return fallbackChat({ baseUrl, body, onToken, onDone, onError });
+      return fallbackChat({ baseUrl, body, headers, onToken, onDone, onError });
     }
 
     const reader = response.body.getReader();
@@ -81,21 +87,22 @@ export async function streamChat({ baseUrl, body, onToken, onDone, onError, sign
   } catch (err) {
     if (err.name === "AbortError") return;
     console.warn("[streamChat] SSE failed, falling back:", err.message);
-    return fallbackChat({ baseUrl, body, onToken, onDone, onError });
+    return fallbackChat({ baseUrl, body, headers, onToken, onDone, onError });
   }
 }
 
 /**
  * Fallback: standard POST /agent/chat with simulated streaming.
  */
-async function fallbackChat({ baseUrl, body, onToken, onDone, onError }) {
+async function fallbackChat({ baseUrl, body, headers, onToken, onDone, onError }) {
   const url = `${baseUrl.replace(/\/+$/, "")}/api/v1/agent/chat`;
+  const mergedHeaders = { "Content-Type": "application/json", ...(headers || {}) };
 
   try {
     const r = await fetch(url, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: mergedHeaders,
       body: JSON.stringify(body),
     });
 

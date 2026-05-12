@@ -15,9 +15,32 @@
 
 const API_BASE = (typeof window !== "undefined" && window.AMINA_API) || "http://localhost:8000";
 
+// Caregiver sessions store their JWT under `cg_token` and validate against
+// /api/v1/caregiver/inbox/*. Patient sessions use AMINA_TOKEN against
+// /api/v1/inbox/*. The two token spaces are NOT interchangeable.
+function _isCaregiverSession() {
+  if (typeof localStorage === "undefined") return false;
+  try {
+    const role = localStorage.getItem("AMINA_ROLE") || "patient";
+    if (role !== "clinician" && role !== "caregiver") return false;
+    return !!localStorage.getItem("cg_token");
+  } catch { return false; }
+}
+
 function authHeader() {
-  const t = (typeof localStorage !== "undefined" && localStorage.getItem("AMINA_TOKEN")) || "";
+  if (typeof localStorage === "undefined") return {};
+  if (_isCaregiverSession()) {
+    const cg = localStorage.getItem("cg_token") || "";
+    return cg ? { Authorization: `Bearer ${cg}` } : {};
+  }
+  const t = localStorage.getItem("AMINA_TOKEN") || "";
   return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+function _inboxBase() {
+  return _isCaregiverSession()
+    ? `${API_BASE}/api/v1/caregiver/inbox`
+    : `${API_BASE}/api/v1/inbox`;
 }
 
 async function safeJson(r) {
@@ -33,7 +56,7 @@ export async function listInbox({ limit = 50, offset = 0, unread = false, kind =
   if (unread) q.set("unread", "true");
   if (kind)   q.set("kind",   kind);
   try {
-    const r = await fetch(`${API_BASE}/api/v1/inbox/list?${q}`, {
+    const r = await fetch(`${_inboxBase()}/list?${q}`, {
       headers: authHeader(),
     });
     if (!r.ok) return { items: [], count: 0, unread: 0, _error: `HTTP ${r.status}` };
@@ -46,7 +69,7 @@ export async function listInbox({ limit = 50, offset = 0, unread = false, kind =
 /** GET /inbox/unread-count — cheap, safe to poll every 20s. */
 export async function unreadCount() {
   try {
-    const r = await fetch(`${API_BASE}/api/v1/inbox/unread-count`, {
+    const r = await fetch(`${_inboxBase()}/unread-count`, {
       headers: authHeader(),
     });
     if (!r.ok) return 0;
@@ -60,7 +83,7 @@ export async function unreadCount() {
 /** POST /inbox/{id}/read */
 export async function markRead(inboxId) {
   try {
-    const r = await fetch(`${API_BASE}/api/v1/inbox/${encodeURIComponent(inboxId)}/read`, {
+    const r = await fetch(`${_inboxBase()}/${encodeURIComponent(inboxId)}/read`, {
       method: "POST",
       headers: authHeader(),
     });
@@ -73,7 +96,7 @@ export async function markRead(inboxId) {
 /** POST /inbox/mark-all-read */
 export async function markAllRead() {
   try {
-    const r = await fetch(`${API_BASE}/api/v1/inbox/mark-all-read`, {
+    const r = await fetch(`${_inboxBase()}/mark-all-read`, {
       method: "POST",
       headers: authHeader(),
     });

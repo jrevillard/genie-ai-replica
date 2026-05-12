@@ -540,7 +540,15 @@ export default function AppRouter() {
       {showOverlay && !isFullscreenShell && (
         <div style={{
           position: "fixed",
-          top: 52, left: 0, right: 0, bottom: 0,
+          // bottom: 28 reserves a thin strip for the ambient
+          // CopyrightFooter (z-index 10002). The footer is now
+          // pure typography on a transparent background — single
+          // line on desktop, two lines on mobile portrait. 28 px
+          // covers the brand line without forcing reserved space
+          // for the worst-case wrap (which is permitted to overlay
+          // the bottom of inputs as a dim watermark — click-through
+          // means functionality isn't affected).
+          top: 52, left: 0, right: 0, bottom: 28,
           zIndex: 9800,
           background:
             "radial-gradient(1200px 600px at 20% -10%, rgba(99, 102, 241, 0.18), transparent 60%),"

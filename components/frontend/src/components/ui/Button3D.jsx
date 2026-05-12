@@ -194,13 +194,29 @@ export default function Button3D({
     scene.add(mesh);
     meshRef.current = mesh;
 
-    // Resize observer
+    // Resize observer.
+    // The synchronous version (renderer.setSize inside the observer
+    // callback) triggers an immediate layout, which the browser
+    // observes as a "loop completed with undelivered notifications"
+    // warning AND blanks the page through any boot-time error trap.
+    // Defer the resize to the next frame so the layout settles
+    // before we mutate the canvas again.
+    let resizePending = false;
+    let lastSize = { w: 0, h: 0 };
     const ro = new ResizeObserver((entries) => {
       for (const e of entries) {
-        const { width: w, height: h } = e.contentRect;
-        renderer.setSize(Math.max(1, w), Math.max(1, h), false);
-        uniforms.u_resolution.value.set(w, h);
+        lastSize.w = e.contentRect.width;
+        lastSize.h = e.contentRect.height;
       }
+      if (resizePending) return;
+      resizePending = true;
+      requestAnimationFrame(() => {
+        resizePending = false;
+        const w = Math.max(1, lastSize.w);
+        const h = Math.max(1, lastSize.h);
+        renderer.setSize(w, h, false);
+        uniforms.u_resolution.value.set(w, h);
+      });
     });
     ro.observe(canvas);
 

@@ -11,6 +11,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { navigate, currentAuthRole } from "../AppRouter.jsx";
+import { streamChat } from "../../platform/utils/streamingChat.js";
+import { useStickToBottom } from "../../utils/stickToBottom.js";
 
 
 // Backend origin. Vite's dev server doesn't proxy /api — every other
@@ -106,43 +108,74 @@ export default function ChatPage() {
     const text = draft.trim();
     if (!text || busy) return;
     setDraft("");
-    setMessages((xs) => [...xs, { role: "user", text }]);
+    // Append the user message AND an empty assistant bubble that tokens
+    // will fill in progressively. Streaming = first character lands in
+    // ~500ms instead of ~1.5s of blank silence on the non-stream path.
+    setMessages((xs) => [
+      ...xs,
+      { role: "user", text },
+      { role: "assistant", text: "" },
+    ]);
     setBusy(true);
-    try {
-      const r = await fetch(`${API}/api/v1/agent/chat`, {
-        method: "POST",
-        credentials: "include",          // send amina_session / jwt cookies if present
-        headers: _authHeaders(),
-        body: JSON.stringify({
-          session_id: sid,
-          message:    text,
-          user_role:  role || null,
-        }),
+
+    let acc = "";
+    let receivedAny = false;
+
+    const replaceLastAssistant = (newText) => {
+      setMessages((xs) => {
+        const last = xs[xs.length - 1];
+        if (last && last.role === "assistant") {
+          return [...xs.slice(0, -1), { role: "assistant", text: newText }];
+        }
+        return xs;
       });
-      const d = await r.json().catch(() => ({}));
-      // Show the backend's friendly error detail when the server returns
-      // a non-2xx (e.g. 503 when all free-tier models are down for guests).
-      const reply =
-        d?.response || d?.message || d?.reply
-        || (r.ok
-              ? "Sorry — I couldn't reach the care server just now. Please try again in a moment."
-              : (d?.detail
-                    || `Sorry — Amina isn't reachable right now (HTTP ${r.status}). Please try again in a moment.`));
-      setMessages((xs) => [...xs, { role: "assistant", text: String(reply) }]);
+    };
+
+    try {
+      await streamChat({
+        baseUrl: API,
+        headers: _authHeaders(),
+        body: { session_id: sid, message: text, user_role: role || null },
+        onToken: (chunk) => {
+          acc += chunk;
+          receivedAny = true;
+          replaceLastAssistant(acc);
+        },
+        onDone: (meta) => {
+          // Some pipelines deliver the final, post-policy text in `done`.
+          // Prefer it when it differs from what we accumulated from tokens.
+          const finalText = meta?.response || meta?.message || meta?.reply;
+          if (finalText && String(finalText) !== acc) {
+            replaceLastAssistant(String(finalText));
+          } else if (!receivedAny) {
+            replaceLastAssistant(
+              "Sorry — I couldn't reach the care server just now. Please try again in a moment."
+            );
+          }
+        },
+        onError: (err) => {
+          if (!receivedAny) {
+            const msg = typeof err === "string" && err && err.length < 240
+              ? err
+              : "Sorry — Amina isn't reachable right now. Please try again in a moment.";
+            replaceLastAssistant(msg);
+          }
+        },
+      });
     } catch {
-      setMessages((xs) => [...xs, {
-        role: "assistant",
-        text: "Network trouble — let's try that again when you're back online.",
-      }]);
+      if (!receivedAny) {
+        replaceLastAssistant(
+          "Network trouble — let's try that again when you're back online."
+        );
+      }
     } finally {
       setBusy(false);
     }
   }, [draft, busy, sid, role]);
 
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, busy]);
+  // Stick to bottom on new messages — but only if the user was already at
+  // the bottom. If they scrolled up to re-read, don't yank them.
+  useStickToBottom(scrollerRef, [messages, busy]);
 
   return (
     <div style={{
@@ -180,6 +213,11 @@ export default function ChatPage() {
       <div ref={scrollerRef} style={{
         flex: 1, minHeight: 240, overflow: "auto",
         padding: "18px 4px",
+        // Industry-standard scroll-container polish — see utils/stickToBottom.js.
+        overscrollBehavior: "contain",
+        scrollbarGutter: "stable",
+        scrollbarWidth: "thin",
+        scrollbarColor: "rgba(148, 163, 184, 0.25) transparent",
       }}>
         {messages.map((m, i) => <Bubble key={i} role={m.role} text={m.text} />)}
         {busy && (

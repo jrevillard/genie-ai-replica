@@ -129,6 +129,10 @@
 .amina-gov-scope   *::-webkit-scrollbar {
   width: 10px; height: 10px;
 }
+.amina-admin-scope *::-webkit-scrollbar-track,
+.amina-gov-scope   *::-webkit-scrollbar-track {
+  background: transparent;
+}
 .amina-admin-scope *::-webkit-scrollbar-thumb,
 .amina-gov-scope   *::-webkit-scrollbar-thumb {
   background: rgba(148, 163, 184, 0.18);
@@ -137,6 +141,22 @@
 .amina-admin-scope *::-webkit-scrollbar-thumb:hover,
 .amina-gov-scope   *::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.30);
+}
+
+/* Firefox parity + modern overscroll behavior. The four properties below
+   are no-ops on non-scrolling elements, so applying universally inside
+   the scope is safe and saves us from hunting every scroll container.
+     • scrollbar-width / scrollbar-color  → Firefox scrollbar styling
+     • overscroll-behavior: contain       → no page-bounce when a nested
+       scroller hits its end (trackpad / iOS)
+     • scrollbar-gutter: stable           → no 10 px layout shift when the
+       scrollbar transiently appears/disappears                          */
+.amina-admin-scope *,
+.amina-gov-scope   * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 /* ── Motion-safe defaults ───────────────────────────────────── */

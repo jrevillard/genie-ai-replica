@@ -7,6 +7,7 @@ import CaregiverDirectory from "./CaregiverDirectory";
 import PrivacyPanel from "./PrivacyPanel";
 import { toNko } from "./utils/nkoTransliterate";
 import { getThreads, getThread, getActiveThreadId, setActiveThreadId, saveThread, deleteThread } from "./utils/conversationStore";
+import { useStickToBottom } from "./utils/stickToBottom.js";
 
 // Professional smooth waveform avatar
 function AvatarPlaceholder({ size = 170, isSpeaking = false, audioAnalyser = null }) {
@@ -1555,7 +1556,18 @@ function Toggle({ label, on, flip }) {
 }
 
 export default function App() {
-  const [base, setBase] = useState(localStorage.getItem("VOICE_BASE_URL") || "http://127.0.0.1:8000");
+  const [base, setBase] = useState(() => {
+    // Resolution order:
+    //   1. VOICE_BASE_URL in localStorage IF it isn't a stale dev URL
+    //      (legacy local builds cached "http://127.0.0.1:8000" — we must
+    //      ignore that on prod or every fetch hits the wrong origin).
+    //   2. window.AMINA_API — set by index.html from VITE_API_URL at build.
+    //   3. http://localhost:8000 dev fallback (npm run dev).
+    const stored = localStorage.getItem("VOICE_BASE_URL");
+    if (stored && !/127\.0\.0\.1|localhost/.test(stored)) return stored;
+    if (typeof window !== "undefined" && window.AMINA_API) return window.AMINA_API;
+    return "http://localhost:8000";
+  });
   const [rec, setRec] = useState(false);
   const [status, setStatus] = useState("idle");
   const [live, setLive] = useState("");
@@ -1644,6 +1656,11 @@ export default function App() {
   const [showCareEdit, setShowCareEdit] = useState(null); // "supply" | "dualpath" | null
   const [docPreview, setDocPreview] = useState(null);  // generated document JSON
   const [docLoading, setDocLoading] = useState(false);
+  // PDF (chat-transcript) button gets a separate busy flag so it can lock
+  // itself the moment the user clicks until the browser starts the download.
+  // Pre-fix, double-clicking fired two parallel exports; now the second
+  // click is a no-op while the first is in flight.
+  const [pdfDownloading, setPdfDownloading] = useState(false);
   const [docFeedback, setDocFeedback] = useState(null); // "up" | "down" | null
   const [docDownloading, setDocDownloading] = useState(null); // "pdf" | "docx" | null
   const [careEditData, setCareEditData] = useState({});
@@ -1783,7 +1800,9 @@ export default function App() {
 
   // i18n helper
   const t = (key) => uiTranslations[key] || UI_STRINGS_EN[key] || key;
-  useEffect(() => { if (endRef.current) endRef.current.scrollIntoView({ behavior: "smooth" }); }, [msgs, processing, live]);
+  // Stick the chat to the bottom on new messages — but only when the user
+  // was already there; don't yank them mid-read of older messages.
+  useStickToBottom(endRef, [msgs, processing, live]);
 
   useEffect(() => {
     (async () => {
@@ -2093,7 +2112,19 @@ export default function App() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId, doc_type: docType, format: "preview", language: language || "en" }),
+        // Pass the message list from local state as a fallback. The backend
+        // primarily reads from Redis, but uses this when abuse-defense
+        // short-circuits the agent (so the user-visible exchange never
+        // got persisted) or when the session has expired.
+        body: JSON.stringify({
+          session_id: sessionId,
+          doc_type: docType,
+          format: "preview",
+          language: language || "en",
+          messages: (msgs || [])
+            .filter((m) => m && m.content)
+            .map((m) => ({ role: m.role || "user", content: m.content })),
+        }),
       });
       if (r.ok) {
         const d = await r.json();
@@ -2118,7 +2149,17 @@ export default function App() {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ session_id: sessionId, doc_type: docType, format: fmt, language: language || "en" }),
+          // Pass local message state for the same reason as generateDocument:
+          // abuse-defense responses never persist server-side.
+          body: JSON.stringify({
+            session_id: sessionId,
+            doc_type: docType,
+            format: fmt,
+            language: language || "en",
+            messages: (msgs || [])
+              .filter((m) => m && m.content)
+              .map((m) => ({ role: m.role || "user", content: m.content })),
+          }),
         });
       }
       if (!r.ok) { setErr(`Download failed (${r.status})`); return; }
@@ -2139,10 +2180,14 @@ export default function App() {
   // automatically when the backend returns export_action from /agent/chat
   // (user typed "send me a pdf of our chat" or similar).
   async function downloadChatTranscript() {
+    // Guard against double-click — second click is a no-op while the
+    // first request is still in flight.
+    if (pdfDownloading) return;
     if (!sessionId || msgs.length < 1) {
       setErr("No conversation to export yet. Chat with AMINA first.");
       return;
     }
+    setPdfDownloading(true);
     try {
       const payload = {
         session_id:   sessionId,
@@ -2174,6 +2219,10 @@ export default function App() {
     } catch (e) {
       console.error("PDF export failed:", e);
       setErr(e.message || "Could not export the chat. Please try again.");
+    } finally {
+      // Always release the lock, even on error, so the user can retry.
+      // Short delay so the spinner is visible even on instant cache hits.
+      setTimeout(() => setPdfDownloading(false), 350);
     }
   }
 
@@ -3013,13 +3062,32 @@ export default function App() {
   const [emergencyAlert, setEmergencyAlert] = useState(null);   // { message, from_caregiver }
   const [toastAlerts, setToastAlerts]       = useState([]);     // [{ id, message, severity, from_caregiver }]
 
+  // Track which alert_ids we've already surfaced so successive
+  // ?clear=false polls don't re-fire the same toast/overlay every 10s.
+  const seenAlertIdsRef = useRef(new Set());
+
   useEffect(() => {
-    if (!authToken || !authPatient || isCaregiverMode) return;
+    // Run whenever a patient session is active. Don't gate on
+    // isCaregiverMode - if cg_token lingers in localStorage from an
+    // unclean logout, this useEffect would never start, and a real
+    // patient logged into this tab would silently miss every caregiver
+    // alert. The render path below already routes caregiver mode to the
+    // CaregiverPortal, so this hook only ever paints alerts on the
+    // patient-rendered view.
+    if (!authToken || !authPatient) return;
     const API_BASE = window.AMINA_API || "http://localhost:8000";
 
+    // IMPORTANT: poll with clear=false. The previous clear=true behaviour
+    // consumed the alert on the first poll - so if the patient's tab was
+    // open and polling silently for the 10s before they looked at it,
+    // the alert flashed through a 8s toast and was gone. With clear=false
+    // the alert persists in redis, the toast keeps showing on every poll
+    // (deduped by alert_id), and we explicitly POST /alerts/read when
+    // the user dismisses or acknowledges. Any inbox/bell consumer can
+    // also mirror these into a persistent record.
     const poll = async () => {
       try {
-        const r = await fetch(`${API_BASE}/api/v1/patient/alerts/pending?clear=true`, {
+        const r = await fetch(`${API_BASE}/api/v1/patient/alerts/pending?clear=false`, {
           headers: { Authorization: `Bearer ${authToken}` },
         });
         if (!r.ok) return;
@@ -3027,22 +3095,42 @@ export default function App() {
         if (!data.alerts?.length) return;
 
         for (const alert of data.alerts) {
+          const aid = alert.alert_id;
+          if (!aid || seenAlertIdsRef.current.has(aid)) continue;
+          seenAlertIdsRef.current.add(aid);
+          // eslint-disable-next-line no-console
+          console.log("[AMINA] caregiver alert received:", aid, alert.severity, alert.from_caregiver, alert.message);
           if (alert.severity === "emergency") {
             setEmergencyAlert(alert);
           } else {
             const id = `${Date.now()}_${Math.random()}`;
             setToastAlerts(prev => [...prev, { ...alert, id }]);
-            // Auto-dismiss toast after 8s
-            setTimeout(() => setToastAlerts(prev => prev.filter(t => t.id !== id)), 8000);
+            // Long-lived toast - user will see it across tab-switches.
+            setTimeout(() => setToastAlerts(prev => prev.filter(t => t.id !== id)), 60000);
           }
         }
-      } catch (e) { /* silent — don't spam console */ }
+      } catch (e) { /* silent */ }
     };
 
     poll(); // immediate first poll
-    const interval = setInterval(poll, 30000);
+    const interval = setInterval(poll, 10000);
     return () => clearInterval(interval);
-  }, [authToken, authPatient, isCaregiverMode]);
+  }, [authToken, authPatient]);
+
+  // Acknowledge alerts on the server (clears redis queue) when the
+  // patient dismisses the emergency overlay or closes a toast. This
+  // is the only path that drains the queue now that polling is
+  // non-destructive - so future polls stop re-firing this alert.
+  const acknowledgeAlerts = useCallback(async () => {
+    if (!authToken) return;
+    const API_BASE = window.AMINA_API || "http://localhost:8000";
+    try {
+      await fetch(`${API_BASE}/api/v1/patient/alerts/read`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+    } catch { /* silent */ }
+  }, [authToken]);
 
   // ── Auth gate ──
   if (!authToken || !authPatient) {
@@ -3124,7 +3212,7 @@ export default function App() {
               📞 Call Emergency (112)
             </a>
             <button
-              onClick={() => setEmergencyAlert(null)}
+              onClick={() => { setEmergencyAlert(null); acknowledgeAlerts(); }}
               style={{
                 padding: "14px 28px", borderRadius: 10, background: "rgba(255,255,255,.2)",
                 color: "#fff", fontWeight: 700, fontSize: 16, border: "2px solid rgba(255,255,255,.4)",
@@ -3137,34 +3225,62 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Alert Toasts ── */}
+      {/* ── Alert Toasts (top-center, max z-index so no shell can cover them) ── */}
       {toastAlerts.length > 0 && (
         <div style={{
-          position: "fixed", bottom: 24, right: 24, zIndex: 9000,
-          display: "flex", flexDirection: "column", gap: 10, maxWidth: 360,
+          position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)",
+          zIndex: 2147483646,    // one below browser-reserved max
+          display: "flex", flexDirection: "column", gap: 10,
+          width: "min(560px, calc(100vw - 32px))",
+          pointerEvents: "auto",
         }}>
           {toastAlerts.map(t => (
             <div key={t.id} style={{
-              background: t.severity === "warning" ? "#92400e" : "#1e3a5f",
-              color: "#fff", borderRadius: 12,
-              padding: "14px 16px",
-              boxShadow: "0 4px 20px rgba(0,0,0,.35)",
-              display: "flex", gap: 12, alignItems: "flex-start",
-              animation: "slideIn .25s ease",
+              background: t.severity === "warning"
+                ? "linear-gradient(135deg, #b45309 0%, #92400e 100%)"
+                : "linear-gradient(135deg, #1e40af 0%, #1e3a5f 100%)",
+              color: "#fff", borderRadius: 14,
+              padding: "16px 18px",
+              boxShadow: "0 12px 36px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.12)",
+              display: "flex", gap: 14, alignItems: "flex-start",
+              animation: "aminaAlertSlideIn .35s ease",
+              border: t.severity === "warning"
+                ? "2px solid rgba(251,191,36,.55)"
+                : "2px solid rgba(96,165,250,.45)",
             }}>
-              <style>{`@keyframes slideIn { from{transform:translateX(100%);opacity:0} to{transform:none;opacity:1} }`}</style>
-              <span style={{ fontSize: 20, flexShrink: 0 }}>
-                {t.severity === "warning" ? "⚠️" : "💙"}
+              <style>{`
+                @keyframes aminaAlertSlideIn {
+                  from { transform: translateY(-32px); opacity: 0; }
+                  to   { transform: none;             opacity: 1; }
+                }
+              `}</style>
+              <span style={{ fontSize: 28, flexShrink: 0, lineHeight: 1 }}>
+                {t.severity === "warning" ? "⚠️" : "💬"}
               </span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 3 }}>
-                  {t.severity === "warning" ? "Health Alert" : "Message"} from {t.from_caregiver}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontWeight: 800, fontSize: 11, letterSpacing: ".12em",
+                  textTransform: "uppercase", opacity: 0.9, marginBottom: 4,
+                }}>
+                  {t.severity === "warning" ? "Health alert" : "New message"} · {t.from_caregiver}
                 </div>
-                <div style={{ fontSize: 13, lineHeight: 1.4, opacity: 0.9 }}>{t.message}</div>
+                <div style={{ fontSize: 15, lineHeight: 1.45, fontWeight: 500 }}>
+                  {t.message}
+                </div>
               </div>
               <button
-                onClick={() => setToastAlerts(prev => prev.filter(x => x.id !== t.id))}
-                style={{ background: "none", border: "none", color: "rgba(255,255,255,.7)", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}
+                onClick={() => {
+                  setToastAlerts(prev => prev.filter(x => x.id !== t.id));
+                  acknowledgeAlerts();
+                }}
+                aria-label="Dismiss alert"
+                style={{
+                  background: "rgba(255,255,255,.18)", border: "none",
+                  color: "#fff", cursor: "pointer",
+                  width: 30, height: 30, borderRadius: "50%",
+                  fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0,
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                }}
               >
                 ×
               </button>
@@ -3765,11 +3881,27 @@ export default function App() {
               <button
                 className="chat-rx-btn"
                 onClick={() => downloadChatTranscript()}
-                disabled={processing || rec || msgs.length < 2}
-                title="Download chat as PDF"
+                disabled={processing || rec || msgs.length < 2 || pdfDownloading}
+                title={pdfDownloading ? "Preparing PDF…" : "Download chat as PDF"}
+                aria-busy={pdfDownloading || undefined}
+                style={pdfDownloading ? { opacity: 0.65, cursor: "wait" } : undefined}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                <span>PDF</span>
+                {pdfDownloading ? (
+                  // Inline spinner while the PDF is being prepared so the
+                  // user can see at a glance that their click was received.
+                  // Uses the existing global `spin` keyframe (see end of file).
+                  <svg
+                    width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2.5"
+                    strokeLinecap="round" strokeLinejoin="round"
+                    style={{ animation: "spin 0.85s linear infinite" }}
+                  >
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                )}
+                <span>{pdfDownloading ? "Preparing…" : "PDF"}</span>
               </button>
             </div>
 
@@ -5142,9 +5274,11 @@ body { font-family: 'Outfit', sans-serif; background: var(--bg); overflow: hidde
    3-COLUMN DASHBOARD LAYOUT — fluid responsive
    ═══════════════════════════════════════════════════════════════ */
 .dashboard { display: grid; grid-template-columns: clamp(220px, 22vw, 320px) 1fr clamp(220px, 22vw, 320px); gap: clamp(8px, 1.2vw, 16px); max-width: 1600px; margin: 0 auto; width: 100%; padding: clamp(8px, 1vw, 12px) clamp(8px, 1.2vw, 16px); height: 100%; align-items: stretch; }
-.sidebar { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-bottom: 20px; min-width: 0; }
+.sidebar { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-bottom: 20px; min-width: 0; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: rgba(129,140,248,0.25) transparent; }
 .sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
 .sidebar::-webkit-scrollbar-thumb { background: rgba(129,140,248,0.2); border-radius: 4px; }
+.sidebar::-webkit-scrollbar-thumb:hover { background: rgba(129,140,248,0.4); }
 .sidebar-head { display: flex; align-items: center; gap: 6px; padding: 6px 4px 2px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; }
 .sidebar-head > svg { color: var(--accent); }
 .center { overflow-y: auto; min-width: 0; }
@@ -5176,7 +5310,7 @@ body { font-family: 'Outfit', sans-serif; background: var(--bg); overflow: hidde
 /* ═══════════════════════════════════════════════════════════════
    COMMUNITY CARDS (ccard)
    ═══════════════════════════════════════════════════════════════ */
-.ccard { width: 100%; text-align: left; padding: 14px 14px; border-radius: 13px; border: 1px solid var(--border); background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.008)); color: var(--text); font-family: inherit; cursor: pointer; transition: all .22s ease; display: flex; flex-direction: column; gap: 10px; position: relative; overflow: hidden; }
+.ccard { width: 100%; text-align: left; padding: 16px 16px 18px; border-radius: 13px; border: 1px solid var(--border); background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.008)); color: var(--text); font-family: inherit; cursor: pointer; transition: all .22s ease; display: flex; flex-direction: column; gap: 10px; position: relative; overflow: hidden; flex-shrink: 0; }
 .ccard:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,0.3); }
 .ccard::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 2px; background: var(--ccolor, var(--accent)); opacity: 0.4; }
 .ccard-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
@@ -5239,7 +5373,7 @@ body { font-family: 'Outfit', sans-serif; background: var(--bg); overflow: hidde
 .scout-mission-count { margin-left: auto; color: var(--text); }
 .scout-mission-title { font-size: 12px; color: var(--text); font-weight: 600; line-height: 1.35; }
 
-.ccard-bottom-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.ccard-bottom-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
 .scout-select-mini { flex: 1; padding: 5px 6px; border-radius: 6px; border: 1px solid rgba(245,158,11,0.25); background: rgba(0,0,0,0.2); color: var(--text); font-size: 10px; font-weight: 600; font-family: inherit; cursor: pointer; min-width: 0; }
 .scout-select-mini:focus { border-color: rgba(245,158,11,0.50); outline: none; }
 
@@ -5517,7 +5651,7 @@ body { font-family: 'Outfit', sans-serif; background: var(--bg); overflow: hidde
 .role-badge-clinician { background: rgba(251,146,60,0.12); border: 1px solid rgba(251,146,60,0.34); color: #fdba74; }
 .role-badge-vhw { background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.34); color: #86efac; }
 
-.ccard-edit-row { display: flex; gap: 5px; margin-top: 4px; }
+.ccard-edit-row { display: flex; gap: 5px; margin-top: 8px; }
 .ccard-edit-btn { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(251,146,60,0.30); background: rgba(251,146,60,0.10); color: #fdba74; font-size: 10px; font-weight: 700; font-family: inherit; cursor: pointer; transition: all .15s; }
 .ccard-edit-btn:hover { background: rgba(251,146,60,0.22); border-color: rgba(251,146,60,0.52); }
 
@@ -5551,7 +5685,11 @@ body { font-family: 'Outfit', sans-serif; background: var(--bg); overflow: hidde
 .chat-avatar { display: flex; align-items: center; justify-content: center; }
 .chat-name { font-weight: 700; font-size: 14px; }
 .chat-status { font-size: 11px; font-weight: 500; transition: color .3s; }
-.messages { flex: 1; overflow-y: auto; padding: 8px 0; }
+.messages { flex: 1; overflow-y: auto; padding: 8px 0; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: rgba(129,140,248,0.25) transparent; }
+.messages::-webkit-scrollbar { width: 6px; }
+.messages::-webkit-scrollbar-track { background: transparent; }
+.messages::-webkit-scrollbar-thumb { background: rgba(129,140,248,0.2); border-radius: 4px; }
+.messages::-webkit-scrollbar-thumb:hover { background: rgba(129,140,248,0.4); }
 
 .msg-row { display: flex; animation: msgUp .3s ease both; margin-bottom: 16px; }
 

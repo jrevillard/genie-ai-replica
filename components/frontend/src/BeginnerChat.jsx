@@ -529,6 +529,12 @@ export default function BeginnerChat({ token, patient, language: initialLang, mo
           doc_type:   "consultation_summary",
           format:     "preview",
           language:   lang || "en",
+          // Fallback messages — backend uses these when Redis session is
+          // short (e.g. after abuse-defense terminated the session without
+          // persisting the user-visible exchange to memory).
+          messages:   (msgs || [])
+            .filter((m) => m && m.content)
+            .map((m) => ({ role: m.role || "user", content: m.content })),
         }),
       });
       if (!g.ok) throw new Error("generate failed");

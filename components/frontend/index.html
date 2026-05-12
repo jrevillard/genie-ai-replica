@@ -6,6 +6,68 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Amina — AI Health Assistant</title>
 
+    <!-- Boot-time error trap. Only fires while the React tree hasn't
+         mounted yet. After mount, runtime errors go to the console
+         instead of blanking the page. Also filters benign browser
+         spam (ResizeObserver loops, network 'load' events). -->
+    <script>
+      (function(){
+        var seen = false;
+        function isBenign(err){
+          var msg = (err && (err.message || String(err))) || "";
+          // ResizeObserver loop notifications are NOT errors - browsers
+          // surface them as ErrorEvents but the spec says they should be
+          // ignored. They commonly fire when a CSS layout settles.
+          if (/ResizeObserver loop/i.test(msg)) return true;
+          // ResourceLoading errors fire window 'error' but with no .error
+          // property and tag-level target - not a JS exception.
+          if (!err || (typeof err === 'string' && msg.length < 5)) return true;
+          return false;
+        }
+        function appMounted(){
+          var root = document.getElementById('root');
+          return !!(root && root.firstElementChild);
+        }
+        function show(label, err){
+          if (seen) return;
+          if (isBenign(err)) return;       // skip noise
+          if (appMounted()) {              // React already rendered, just log
+            try { console.error("[AMINA runtime error]", label, err); } catch(e){}
+            return;
+          }
+          seen = true;
+          var box = document.createElement('div');
+          box.style.cssText = "position:fixed;inset:0;z-index:2147483647;"
+            + "background:#0b1220;color:#fca5a5;padding:24px;"
+            + "font-family:ui-monospace,monospace;font-size:13px;"
+            + "white-space:pre-wrap;overflow:auto;line-height:1.45";
+          box.innerText = "[AMINA boot error] " + label + "\n\n"
+            + (err && (err.stack || err.message || String(err)) || "(unknown)");
+          (document.body || document.documentElement).appendChild(box);
+        }
+        window.addEventListener("error", function(e){ show("error", e.error || e.message); });
+        window.addEventListener("unhandledrejection", function(e){ show("promise rejection", e.reason); });
+      })();
+    </script>
+
+    <!-- API config — values injected at build/serve time via VITE_ env vars.
+         In dev (npm run dev) VITE_API_URL is unset → window.AMINA_API stays
+         empty and the app falls back to the Vite proxy on localhost:5174.
+         In prod build (npm run build) VITE_API_URL is read from
+         .env.production and points at the Cloudflare-tunneled backend. -->
+    <script>
+      // Three globals point at the same backend URL — different code paths
+      // grew up reading different names. Set them all so every fetch uses
+      // the prod backend in production builds.
+      window.AMINA_API             = "%VITE_API_URL%";
+      window.__AMINA_API_BASE__    = "%VITE_API_URL%";
+      window.__AMINA_GATEWAY_URL   = "%VITE_API_URL%";
+      // Strip the Vite placeholder if it survived (dev mode without the var)
+      if (window.AMINA_API.indexOf("%") !== -1)            window.AMINA_API = "";
+      if (window.__AMINA_API_BASE__.indexOf("%") !== -1)   window.__AMINA_API_BASE__ = "";
+      if (window.__AMINA_GATEWAY_URL.indexOf("%") !== -1)  window.__AMINA_GATEWAY_URL = "";
+    </script>
+
     <!-- OAuth config — values injected at build/serve time via VITE_ env vars -->
     <script>
       window.__AMINA_GOOGLE_CLIENT_ID = "%VITE_GOOGLE_CLIENT_ID%";
@@ -15,15 +77,34 @@
 
     <!-- Amina bot handles for the "Talk to us" widget (ChannelLinkFab).
          Values injected from VITE_ env vars at build time; any handle
-         left blank renders the channel as "coming soon". -->
+         left blank renders the channel as "coming soon".
+         AMINA_WHATSAPP_JOIN_CODE, when set, switches the WhatsApp card
+         into Twilio Sandbox mode (instructional onboarding + pre-filled
+         `join <code>` message). Leave blank for production senders.
+         AMINA_MESSENGER_DEV_MODE, when "true", makes the Messenger card
+         show an onboarding panel explaining that the Meta App is in
+         Development Mode and the user must be added as a Tester / Dev /
+         Admin by an AMINA admin first. Set to "false" or "0" after the
+         App Review for pages_messaging is granted Advanced Access. -->
     <script>
       (function () {
         var wa = "%VITE_AMINA_WHATSAPP_NUMBER%";
         var mg = "%VITE_AMINA_MESSENGER_HANDLE%";
         var tg = "%VITE_AMINA_TELEGRAM_HANDLE%";
-        window.AMINA_WHATSAPP_NUMBER  = (wa && wa.indexOf("%") === -1) ? wa : "";
-        window.AMINA_MESSENGER_HANDLE = (mg && mg.indexOf("%") === -1) ? mg : "";
-        window.AMINA_TELEGRAM_HANDLE  = (tg && tg.indexOf("%") === -1) ? tg : "amina_care_bot";
+        var jc = "%VITE_AMINA_WHATSAPP_JOIN_CODE%";
+        var md = "%VITE_AMINA_MESSENGER_DEV_MODE%";
+        window.AMINA_WHATSAPP_NUMBER     = (wa && wa.indexOf("%") === -1) ? wa : "14155238886";
+        // m.me supports both vanity usernames AND raw Page IDs. The Amina FB
+        // Page has no vanity username yet, so the Page ID 1047710801765129
+        // is the working default. Override via VITE_AMINA_MESSENGER_HANDLE
+        // once a vanity username is set on the Page.
+        window.AMINA_MESSENGER_HANDLE    = (mg && mg.indexOf("%") === -1) ? mg : "1047710801765129";
+        window.AMINA_TELEGRAM_HANDLE     = (tg && tg.indexOf("%") === -1) ? tg : "amina_care_bot";
+        window.AMINA_WHATSAPP_JOIN_CODE  = (jc && jc.indexOf("%") === -1) ? jc : "milk-shot";
+        // True until pages_messaging Advanced Access lands in App Review.
+        window.AMINA_MESSENGER_DEV_MODE  = (md && md.indexOf("%") === -1)
+          ? (md === "true" || md === "1")
+          : true;
       })();
     </script>
 

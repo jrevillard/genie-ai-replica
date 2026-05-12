@@ -16,10 +16,23 @@
 
 
 function _base() {
-  const raw = (typeof window !== "undefined" && window.__AMINA_API_BASE__)
-           || (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE)
-           || "http://localhost:8000";
-  return String(raw).replace(/\/+$/, "");
+  // Look for API base in this order:
+  //   1. window.AMINA_API           - injected by index.html (build-time VITE_API_URL)
+  //   2. window.__AMINA_API_BASE__  - legacy global some bootstrap code uses
+  //   3. import.meta.env.VITE_API_URL  / VITE_API_BASE  - direct Vite env vars
+  //   4. http://localhost:8000      - dev fallback
+  // Empty / placeholder strings ("%VITE_...") are treated as unset.
+  const candidates = [
+    typeof window !== "undefined" && window.AMINA_API,
+    typeof window !== "undefined" && window.__AMINA_API_BASE__,
+    typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_URL,
+    typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE,
+  ];
+  for (const c of candidates) {
+    const s = String(c || "").trim();
+    if (s && !s.includes("%VITE_")) return s.replace(/\/+$/, "");
+  }
+  return "http://localhost:8000";
 }
 
 

@@ -2632,8 +2632,12 @@ function Dashboard({ token, caregiverInfo, onLogout }) {
     setCarePlanLoading(true);
     try {
       const r = await fetch(`${API}/api/v1/caregiver/care-plan/${pid}`, { headers: authHeaders(token) });
-      if (r.ok) setCarePlan(await r.json());
-      else setCarePlan(null);
+      if (r.ok) {
+        const data = await r.json();
+        setCarePlan(data && data.status === "not_yet_generated" ? null : data);
+      } else {
+        setCarePlan(null);
+      }
     } catch { setCarePlan(null); }
     finally { setCarePlanLoading(false); }
   }, [token]);

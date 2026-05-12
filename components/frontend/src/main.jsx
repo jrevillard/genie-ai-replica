@@ -16,6 +16,11 @@ import "./CaregiverPrivacyReconsentBootstrap.jsx";
 // is unreachable on :8443 the badge silently renders nothing, so the
 // existing UNICC tester flow is unaffected.
 import "./GatewaySecurityBadge.jsx";
+// Site-wide copyright footer — "© 2026 Amina Care Project. Developed for
+// humanitarian use. Submitted under GenIA for Good terms." Self-mounting,
+// fixed-bottom, click-through (pointer-events:none) so it never blocks
+// the chat input bar or any underlying form.
+import "./CopyrightFooter.jsx";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

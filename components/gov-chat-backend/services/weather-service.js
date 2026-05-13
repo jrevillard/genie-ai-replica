@@ -133,9 +133,10 @@ class WeatherService {
       }
 
       // Get city name for the coordinates
-      const city = latitude !== this.serverLocation.latitude || longitude !== this.serverLocation.longitude
-        ? await this.getCityName(latitude, longitude)
-        : this.serverLocation.city;
+      const city =
+        latitude !== this.serverLocation.latitude || longitude !== this.serverLocation.longitude
+          ? await this.getCityName(latitude, longitude)
+          : this.serverLocation.city;
 
       logger.debug('WeatherService.location_selected', { latitude, longitude, city });
 

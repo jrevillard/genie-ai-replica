@@ -333,15 +333,7 @@
     }
   },
   "theme": {
-    "primaryColor": "#4682B4",
-    "secondaryColor": "#5F9EA0",
-    "backgroundColor": "#D3E0EA",
-    "textColor": "#1C2526",
-    "navbar": {
-      "gradientStart": "#4682B4",
-      "gradientEnd": "#5F9EA0",
-      "textColor": "#F0F8FF"
-    }
+    "brandColor": "#4682B4"
   },
   "features": {
     "chat": {
@@ -350,22 +342,7 @@
       "quickHelp": {
         "layout": {
           "columns": 2,
-          "gapX": "8px",
-          "gapY": "8px",
           "childAspectRatio": 4.2
-        },
-        "defaults": {
-          "height": "38px",
-          "fontSize": "11px",
-          "borderRadius": "8px",
-          "showShadow": true,
-          "shadow": {
-            "enabled": true,
-            "color": "#000000",
-            "blur": "6px",
-            "opacity": 0.2
-          },
-          "showBorder": false
         },
         "buttons": [
           {
@@ -376,40 +353,8 @@
               "hiddenPrompt": "quickhelp.justChatPrompt"
             },
             "appearance": {
-              "label": {
-                "text": "quickhelp.justChat",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/just-chat.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#4F4F4F",
-                      "end": "#333333",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
+              "label": { "text": "quickhelp.justChat" },
+              "icon": { "value": "/config/quickhelp/just-chat.svg" }
             }
           },
           {
@@ -420,40 +365,8 @@
               "hiddenPrompt": "quickhelp.applyForIDPrompt"
             },
             "appearance": {
-              "label": {
-                "text": "quickhelp.applyForID",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/identity-civil.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#2C3E50",
-                      "end": "#1A252F",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
+              "label": { "text": "quickhelp.applyForID" },
+              "icon": { "value": "/config/quickhelp/identity-civil.svg" }
             }
           },
           {
@@ -464,40 +377,8 @@
               "hiddenPrompt": "quickhelp.payTaxesPrompt"
             },
             "appearance": {
-              "label": {
-                "text": "quickhelp.payTaxes",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/taxes-revenue.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#34495E",
-                      "end": "#2C3E50",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
+              "label": { "text": "quickhelp.payTaxes" },
+              "icon": { "value": "/config/quickhelp/taxes-revenue.svg" }
             }
           },
           {
@@ -508,40 +389,8 @@
               "hiddenPrompt": "quickhelp.startBusinessPrompt"
             },
             "appearance": {
-              "label": {
-                "text": "quickhelp.startBusiness",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/business-trade.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#2E4053",
-                      "end": "#212F3D",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
+              "label": { "text": "quickhelp.startBusiness" },
+              "icon": { "value": "/config/quickhelp/business-trade.svg" }
             }
           },
           {
@@ -552,40 +401,8 @@
               "hiddenPrompt": "quickhelp.findHealthcarePrompt"
             },
             "appearance": {
-              "label": {
-                "text": "quickhelp.findHealthcare",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/healthcare-social.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#2980B9",
-                      "end": "#1F618D",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
+              "label": { "text": "quickhelp.findHealthcare" },
+              "icon": { "value": "/config/quickhelp/healthcare-social.svg" }
             }
           },
           {
@@ -596,40 +413,8 @@
               "hiddenPrompt": "quickhelp.educationServicesPrompt"
             },
             "appearance": {
-              "label": {
-                "text": "quickhelp.educationServices",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/education-learning.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#1ABC9C",
-                      "end": "#148F77",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
+              "label": { "text": "quickhelp.educationServices" },
+              "icon": { "value": "/config/quickhelp/education-learning.svg" }
             }
           },
           {
@@ -640,40 +425,8 @@
               "hiddenPrompt": "quickhelp.transportLicensesPrompt"
             },
             "appearance": {
-              "label": {
-                "text": "quickhelp.transportLicenses",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/transportation-mobility.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#F39C12",
-                      "end": "#B9770E",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
+              "label": { "text": "quickhelp.transportLicenses" },
+              "icon": { "value": "/config/quickhelp/transportation-mobility.svg" }
             }
           },
           {
@@ -684,40 +437,8 @@
               "hiddenPrompt": "quickhelp.housingProgramsPrompt"
             },
             "appearance": {
-              "label": {
-                "text": "quickhelp.housingPrograms",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/housing-urban.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#D35400",
-                      "end": "#A04000",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
+              "label": { "text": "quickhelp.housingPrograms" },
+              "icon": { "value": "/config/quickhelp/housing-urban.svg" }
             }
           },
           {
@@ -728,40 +449,8 @@
               "hiddenPrompt": "quickhelp.findJobsPrompt"
             },
             "appearance": {
-              "label": {
-                "text": "quickhelp.findJobs",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/employment-labor.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#8E44AD",
-                      "end": "#6C3483",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
+              "label": { "text": "quickhelp.findJobs" },
+              "icon": { "value": "/config/quickhelp/employment-labor.svg" }
             }
           }
         ]

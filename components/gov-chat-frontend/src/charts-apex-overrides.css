@@ -1,0 +1,80 @@
+/* charts-apex-overrides.css — Centralized ApexCharts theme overrides
+ *
+ * ApexCharts renders SVG elements that ignore CSS custom properties.
+ * These rules force DS tokens onto chart internals using !important.
+ * This file is loaded globally via main.js.
+ *
+ * Note: Custom tooltip HTML (rendered via JS callbacks) cannot be
+ * moved here — those inline styles stay in their component files.
+ */
+
+/* --- SVG text: dark mode --- */
+[data-theme='dark'] .apexcharts-text,
+[data-theme='dark'] .apexcharts-datalabel-label,
+[data-theme='dark'] .apexcharts-datalabel-value,
+[data-theme='dark'] .apexcharts-datalabels text,
+[data-theme='dark'] .apexcharts-bar-series .apexcharts-datalabels text,
+[data-theme='dark'] .apexcharts-xaxis .apexcharts-xaxis-texts-g text,
+[data-theme='dark'] .apexcharts-yaxis .apexcharts-yaxis-texts-g text,
+[data-theme='dark'] .apexcharts-yaxis-label text,
+[data-theme='dark'] .apexcharts-xaxis-label text,
+[data-theme='dark'] .apexcharts-title-text,
+[data-theme='dark'] .apexcharts-subtitle-text,
+[data-theme='dark'] .apexcharts-legend-text,
+[data-theme='dark'] text,
+[data-theme='dark'] text tspan {
+  fill: var(--fg) !important;
+  color: var(--fg) !important;
+  -webkit-text-fill-color: var(--fg) !important;
+  text-shadow: none !important;
+}
+
+/* --- SVG text: light mode --- */
+[data-theme='light'] .apexcharts-text,
+[data-theme='light'] .apexcharts-datalabel-label,
+[data-theme='light'] .apexcharts-datalabel-value,
+[data-theme='light'] .apexcharts-datalabels text,
+[data-theme='light'] .apexcharts-xaxis .apexcharts-xaxis-texts-g text,
+[data-theme='light'] .apexcharts-yaxis .apexcharts-yaxis-texts-g text {
+  fill: var(--fg) !important;
+  color: var(--fg) !important;
+}
+
+/* --- Radial bar track (SatisfactionGauge) --- */
+[data-theme='dark'] .apexcharts-radialbar .apexcharts-radialbar-track .apexcharts-radialbar-area {
+  stroke: var(--muted) !important;
+}
+
+/* --- Tooltip --- */
+.apexcharts-tooltip,
+.apexcharts-tooltip * {
+  background-color: transparent !important;
+}
+
+.apexcharts-tooltip-box {
+  background-color: var(--fg) !important;
+  color: var(--bg) !important;
+  border: none !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.apexcharts-tooltip-title {
+  background-color: var(--fg) !important;
+  color: var(--bg) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.apexcharts-tooltip-text,
+.apexcharts-tooltip-y-group,
+.apexcharts-tooltip-text-y-label,
+.apexcharts-tooltip-text-y-value,
+.apexcharts-tooltip-text-z-label,
+.apexcharts-tooltip-text-z-value,
+.apexcharts-tooltip-marker {
+  color: var(--bg) !important;
+}
+
+/* --- Legend text --- */
+.apexcharts-legend-text {
+  color: inherit !important;
+}

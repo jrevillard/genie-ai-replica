@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+// ignore: avoid_web_libraries_in_flutter, deprecated_member_use
 import 'dart:html' as html;
 import 'package:flutter/material.dart';
+// ignore: depend_on_referenced_packages
 import 'package:markdown/markdown.dart' as md;
-import 'package:genie_ai_mobile/services/api_service.dart';
+import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
 /// WEB implementation.
 /// This file is ONLY imported when the app runs on the browser.
@@ -14,22 +17,17 @@ Future<void> openWebFile({
   required String accessToken,
   required Map<String, dynamic> docMetadata,
 }) async {
-  final ApiService _api = ApiService();
-  final String viewUrl = '${_api.baseUrl}/files/$fileId/view';
+  final String viewUrl = '${getConfig().backendUrl}/api/files/$fileId/view';
   debugPrint("[WEB_UTILS] Opening web window for: $viewUrl");
 
   // Check Theme for Dark Mode Support in Markdown Rendering
   final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
   // 1. Open the window IMMEDIATELY to bypass popup blockers.
-  final html.WindowBase? openedWindow = html.window.open('', '_blank');
+  final html.WindowBase openedWindow = html.window.open('', '_blank');
 
-  if (openedWindow == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(tr('common.popupBlocked'))), // TRANSLATED
-    );
-    return;
-  }
+  // Note: Popup blockers are handled in the error handling below
+  // If window.open fails, subsequent operations will throw and be caught
 
   try {
     // 2. Fetch the content
@@ -59,7 +57,7 @@ Future<void> openWebFile({
           } else {
             // Standard File
             final url = html.Url.createObjectUrlFromBlob(blob);
-            openedWindow.location?.href = url;
+            openedWindow.location.href = url;
 
             Future.delayed(const Duration(seconds: 15), () {
               html.Url.revokeObjectUrl(url);
@@ -92,9 +90,12 @@ Future<void> openWebFile({
       openedWindow.close();
     } catch (_) {}
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text("${tr('sidebar.launchError')}: $e")));
+    final tokens = ThemeManager().tokens;
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      backgroundColor: tokens.surface,
+      content: Text("${tr('sidebar.launchError')}: $e", style: TextStyle(color: tokens.fg)),
+    ));
   }
 }
 
@@ -161,7 +162,7 @@ $htmlContent
       final url = html.Url.createObjectUrlFromBlob(htmlBlob);
 
       // Navigate the window to our generated HTML blob
-      win.location?.href = url;
+      win.location.href = url;
 
       Future.delayed(
         const Duration(seconds: 15),
@@ -202,11 +203,9 @@ Future<html.Blob> _unwrapBlob(html.Blob originalBlob, String mimeType) async {
 
         if (parsed is Map) {
           if (parsed.containsKey('data') && parsed['data'] is Map) {
-            content = parsed['data']['base64'] ?? parsed['data']['content'];
+            content ??= parsed['data']['base64'] ?? parsed['data']['content'];
           }
-          if (content == null) {
-            content = parsed['base64'] ?? parsed['content'] ?? parsed['file'];
-          }
+          content ??= parsed['base64'] ?? parsed['content'] ?? parsed['file'];
         }
 
         if (content != null) {
@@ -248,11 +247,17 @@ String _getMimeType(Map<String, dynamic> doc) {
           .toLowerCase() ??
       '';
 
-  if (type == 'pdf' || name.endsWith('.pdf')) return 'application/pdf';
-  if (type == 'html' || name.endsWith('.html')) return 'text/html';
-  if (type == 'docx' || name.endsWith('.docx'))
+  if (type == 'pdf' || name.endsWith('.pdf')) {
+    return 'application/pdf';
+  }
+  if (type == 'html' || name.endsWith('.html')) {
+    return 'text/html';
+  }
+  if (type == 'docx' || name.endsWith('.docx')) {
     return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-  if (type == 'xlsx' || name.endsWith('.xlsx'))
+  }
+  if (type == 'xlsx' || name.endsWith('.xlsx')) {
     return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  }
   return 'application/octet-stream';
 }

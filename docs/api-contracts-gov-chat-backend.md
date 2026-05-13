@@ -1,281 +1,380 @@
-# API Contracts - gov-chat-backend
+# GENIE.AI Backend API Contracts
 
-## Overview
-The gov-chat-backend provides RESTful APIs with Keycloak OIDC authentication. All routes require authentication unless explicitly marked as public.
-
-## Base URL
-```
-/api
-```
+**Component**: `components/gov-chat-backend/` (Node.js/Express)
+**Base URL**: `https://<domain>/api` (via Kong Gateway)
+**Documentation**: Swagger/OpenAPI available at `/api-docs`
 
 ## Authentication
-All endpoints use Keycloak OAuth2 authentication with JWT Bearer tokens:
-- Middleware: `keycloakAuthMiddleware.authenticate`
-- Headers: `Authorization: Bearer <token>`
-- User resolved from JWT claims: `req.user.iss_sub` (unique user identifier)
+
+All endpoints (except where noted) require Keycloak JWT authentication via `Authorization: Bearer <token>` header.
+
+**Auth middleware**: `keycloakAuthMiddleware.authenticate` (Keycloak OIDC)
+**Admin endpoints**: Additional `keycloakAuthMiddleware.requireAdmin` middleware
 
 ---
 
-## API Routes by Category
+## Route Domains
 
-### 1. Authentication Routes (`/auth`)
+### 1. Authentication Routes (`/api/auth`)
 
-#### POST `/auth/logout`
-- **Description**: User logout endpoint (Keycloak handles session invalidation server-side)
-- **Authentication**: Required
-- **Request Body**: None
-- **Response**:
-  - `200`: Logout successful
-  - `401`: Unauthorized
+**Route File**: `routes/auth-routes.js`
+**Auth Required**: None (login/logout endpoints)
+**Base Paths**: `/api/auth`
 
----
-
-### 2. Current User Routes (`/api/me`)
-
-#### GET `/api/me`
-- **Description**: Get current user profile (singleton, user resolved from JWT)
-- **Authentication**: Required
-- **Response**:
-  ```json
-  {
-    "email": "user@example.com",
-    "createdAt": "2024-01-01T00:00:00Z",
-    "updatedAt": "2024-01-01T00:00:00Z",
-    "displayName": "John Doe",
-    "country": "US",
-    "preferredLanguage": "en"
-  }
-  ```
-- **Status Codes**:
-  - `200`: Success
-  - `401`: Authentication required
-  - `404`: User not found
-  - `500`: Server error
-
-#### GET `/api/me/context`
-- **Description**: Get sanitized user context for AI enrichment
-- **Authentication**: Required
-- **Response**: Sanitized user subset for OPEA AI
-- **Status Codes**:
-  - `200`: Success
-  - `401`: Missing or invalid token
-  - `404`: User not found
-
-#### PUT `/api/me`
-- **Description**: Update current user profile
-- **Authentication**: Required
-- **Request Body**:
-  ```json
-  {
-    "displayName": "Updated Name",
-    "country": "FR",
-    "preferredLanguage": "fr"
-  }
-  ```
-
-#### POST `/api/me/reset-data`
-- **Description**: Reset user data (GDPR right to be forgotten)
-- **Authentication**: Required
-
-#### POST `/api/me/delete`
-- **Description**: Delete user account (GDPR right to erasure)
-- **Authentication**: Required
+| Method | Path | Auth Required | Description | Notes |
+|--------|------|---------------|-------------|-------|
+| POST | `/logout` | Yes | Logout user | Invalidates Keycloak session |
 
 ---
 
-### 3. Query Routes (`/api/queries`)
+### 2. User Profile Routes (`/api/me`)
 
-#### POST `/api/queries`
-- **Description**: Create a new query (single-message or full conversation mode)
-- **Authentication**: Required
-- **Request Body**:
-  ```json
-  {
-    "sessionId": "string",
-    "query": "string",
-    "categoryId": "string",
-    "labels": ["string"],
-    "language": "en",
-    "conversationHistory": []
-  }
-  ```
-- **Response**: Created query object with ID
+**Route File**: `routes/user-routes.js`
+**Auth Required**: **Yes** (all endpoints)
+**Base Paths**: `/api/me`
 
-#### PATCH `/api/queries/:queryId/responsetime`
-- **Description**: Update query response time for analytics
-- **Authentication**: Required
-- **Request Body**:
-  ```json
-  {
-    "responseTime": 250
-  }
-  ```
-- **Response**: Updated query object
-- **Status Codes**:
-  - `200`: Success
-  - `400`: Response time required
-  - `401`: Unauthorized
-  - `404`: Query not found
-
-#### POST `/api/queries/:queryId/feedback`
-- **Description**: Submit feedback on a query response
-- **Authentication**: Required
-- **Request Body**:
-  ```json
-  {
-    "rating": 1,
-    "categories": ["irrelevant", "inaccurate"],
-    "comment": "Optional comment"
-  }
-  ```
+| Method | Path | Auth Required | Description | Notes |
+|--------|------|---------------|-------------|-------|
+| GET | `/` | Yes | Get user profile | Returns singleton user profile |
+| GET | `/context` | Yes | Get user context | User preferences, settings |
+| POST | `/reset-data` | Yes | Reset user data | Clears user conversations/data |
+| POST | `/delete` | Yes | Delete user account | Soft/hard delete user account |
+| PUT | `/` | Yes | Update user profile | Supports file upload (avatar) |
 
 ---
 
-### 4. Chat History Routes (`/api/chat-history`)
+### 3. Query Routes (`/api/queries`, `/api/query`)
 
-#### GET `/api/chat-history`
-- **Description**: Get user's chat history
-- **Authentication**: Required
-- **Query Params**: `limit`, `offset`
-- **Response**: Array of chat conversations
+**Route File**: `routes/query-routes.js`
+**Auth Required**: **Yes** (all endpoints)
+**Base Paths**: `/api/queries`, `/api/query`
+**Special**: SSE support on `/stream` endpoint
 
-#### POST `/api/chat-history`
-- **Description**: Create new chat conversation
-- **Authentication**: Required
-- **Request Body**:
-  ```json
-  {
-    "title": "Chat Title",
-    "serviceCategoryId": "string"
-  }
-  ```
+| Method | Path | Auth Required | Description | Notes |
+|--------|------|---------------|-------------|-------|
+| POST | `/stream` | Yes | Stream query response (SSE) | **text/event-stream**, requires `OPEA_STREAMING=true` |
+| POST | `/` | Yes | Create new query | Standard non-streaming query |
+| GET | `/` | Yes | List queries | Paginated query list |
+| GET | `/:queryId` | Yes | Get query by ID | Full query details |
+| PATCH | `/:queryId/responsetime` | Yes | Update query response time | Internal metrics |
+| POST | `/:queryId/feedback` | Yes | Submit feedback | User feedback on query result |
+| PATCH | `/:queryId/answered` | Yes | Mark query as answered | Status update |
+| GET | `/:queryId/conversations` | Yes | Get conversations for query | Link queries ↔ conversations |
+| POST | `/:queryId/conversation` | Yes | Create conversation for query | Auto-link query to conversation |
+| POST | `/:queryId/link/:messageId` | Yes | Link query to message | Explicit query-message linkage |
 
-#### DELETE `/api/chat-history/:chatId`
-- **Description**: Delete a chat conversation
-- **Authentication**: Required
-
----
-
-### 5. Service Category Routes (`/api/service-categories`)
-
-#### GET `/api/service-categories`
-- **Description**: Get all service categories (with translation support)
-- **Authentication**: Not required (public endpoint)
-- **Response**: Array of service categories with hierarchy
-
-#### GET `/api/service-categories/:categoryId`
-- **Description**: Get specific service category
-- **Authentication**: Not required
+**SSE Event Types** (`/stream` endpoint):
+- `chunk` - LLM response content
+- `metadata` - Query metadata (queryId, responseTime, etc.)
+- `translation` - Translated content (if enabled)
+- `error` - Error message with code
+- `done` - Stream completion
 
 ---
 
-### 6. Service Routes (`/api/services`)
+### 4. Chat History Routes (`/api/chat`, `/api/chat-history`)
 
-#### GET `/api/services`
-- **Description**: Get all services (filtered by category optionally)
-- **Authentication**: Not required
-- **Query Params**: `categoryId`
+**Route File**: `routes/chat-history-routes.js`
+**Auth Required**: **Yes** (all endpoints)
+**Base Paths**: `/api/chat`, `/api/chat-history`
 
----
-
-### 7. Analytics Routes (`/api/analytics`)
-
-#### GET `/api/analytics/usage`
-- **Description**: Get usage analytics data
-- **Authentication**: Required
-- **Query Params**: `period`, `startDate`, `endDate`
-
-#### GET `/api/analytics/satisfaction`
-- **Description**: Get user satisfaction metrics
-- **Authentication**: Required
-
-#### GET `/api/analytics/queries`
-- **Description**: Get top queries statistics
-- **Authentication**: Required
-
----
-
-### 8. Admin Routes (`/api/admin`)
-
-#### GET `/api/admin/logs`
-- **Description**: Get application logs
-- **Authentication**: Required (Admin role)
-
-#### POST `/api/admin/database/operations`
-- **Description**: Execute database operations
-- **Authentication**: Required (Admin role)
-
-#### GET `/api/admin/analytics`
-- **Description**: Get admin analytics dashboard data
-- **Authentication**: Required (Admin role)
+| Method | Path | Auth Required | Description | Notes |
+|--------|------|---------------|-------------|-------|
+| GET | `/conversations` | Yes | List user conversations | Paginated, filterable |
+| GET | `/conversations/:conversationId` | Yes | Get conversation details | Full conversation with messages |
+| POST | `/conversations` | Yes | Create new conversation | Initialize conversation |
+| PATCH | `/conversations/:conversationId` | Yes | Update conversation | Title, metadata |
+| DELETE | `/conversations/:conversationId` | Yes | Delete conversation | Soft delete |
+| GET | `/conversations/:conversationId/messages` | Yes | Get conversation messages | Paginated message list |
+| POST | `/conversations/:conversationId/messages` | Yes | Add message to conversation | Create message |
+| POST | `/conversations/:conversationId/messages/read` | Yes | Mark messages as read | Read receipt |
+| GET | `/query/:queryId/messages` | Yes | Get messages for query | Reverse lookup |
+| GET | `/messages/:messageId/query` | Yes | Get query for message | Reverse lookup |
+| POST | `/query/:queryId/conversation` | Yes | Create conversation from query | Auto-link |
+| GET | `/search` | Yes | Search conversations | Full-text search |
+| GET | `/recent` | Yes | Get recent conversations | Quick access |
+| GET | `/stats` | Yes | Get conversation statistics | User stats |
+| GET | `/folders` | Yes | List folders | User folders |
+| POST | `/folders` | Yes | Create folder | New folder |
+| GET | `/folders/:folderId` | Yes | Get folder details | Folder metadata |
+| PATCH | `/folders/:folderId` | Yes | Update folder | Rename, metadata |
+| DELETE | `/folders/:folderId` | Yes | Delete folder | Cascade delete contents |
+| GET | `/folders/search` | Yes | Search folders | Folder search |
+| POST | `/folders/reorder` | Yes | Reorder folders | Custom sort order |
+| GET | `/folders/:folderId/path` | Yes | Get folder path | Breadcrumb trail |
+| POST | `/folders/:folderId/conversations/:conversationId` | Yes | Add conversation to folder | Folder membership |
+| DELETE | `/folders/:folderId/conversations/:conversationId` | Yes | Remove conversation from folder | Folder membership |
+| GET | `/conversations/:conversationId/folder` | Yes | Get conversation folder | Folder lookup |
+| POST | `/conversations/:conversationId/move` | Yes | Move conversation to folder | Change folder |
 
 ---
 
-### 9. Translation Routes (`/api/translation`)
+### 5. Analytics Routes (`/api/analytics`)
 
-#### POST `/api/translation/translate`
-- **Description**: Translate text using configured translation backend
-- **Authentication**: Required
-- **Request Body**:
-  ```json
-  {
-    "text": "Hello world",
-    "targetLanguage": "fr"
-  }
-  ```
+**Route File**: `routes/analytics-routes.js`
+**Auth Required**: **Yes** (all endpoints)
+**Base Paths**: `/api/analytics`
+
+| Method | Path | Auth Required | Description | Notes |
+|--------|------|---------------|-------------|-------|
+| GET | `/dashboard` | Yes | Get analytics dashboard | Aggregate metrics |
+| GET | `/metric/:metric` | Yes | Get specific metric | Generic metric lookup |
+| GET | `/` | Yes | Get analytics overview | High-level stats |
+| GET | `/timeseries/:metricType` | Yes | Get timeseries data | Time-based metrics |
+| POST | `/events` | Yes | Record analytics event | Event tracking |
+| GET | `/records` | Yes | Get analytics records | Raw event records |
+| GET | `/events` | Yes | Get events | Filtered event list |
+| GET | `/satisfaction/gauge` | Yes | Get satisfaction gauge | User satisfaction metric |
+| GET | `/satisfaction/heatmap` | Yes | Get satisfaction heatmap | Satisfaction by category |
+
+---
+
+### 6. Admin Routes (`/api/admin`)
+
+**Route File**: `routes/admin-routes.js`
+**Auth Required**: **Yes + Admin Role** (all endpoints)
+**Base Paths**: `/api/admin`
+**Middleware**: `keycloakAuthMiddleware.authenticate` + `keycloakAuthMiddleware.requireAdmin`
+
+| Method | Path | Auth Required | Description | Notes |
+|--------|------|---------------|-------------|-------|
+| GET | `/system-health` | Admin | Get system health | Service status checks |
+| GET | `/database/stats` | Admin | Get database statistics | ArangoDB stats |
+| GET | `/logs` | Admin | Get application logs | Log retrieval |
+| POST | `/logs/rollover` | Admin | Trigger log rollover | Log rotation |
+| GET | `/user-stats` | Admin | Get user statistics | User metrics |
+| GET | `/security-metrics` | Admin | Get security metrics | Security events |
+| POST | `/security-scan` | Admin | Trigger security scan | Security audit |
+| GET | `/security/last-scan` | Admin | Get last security scan | Scan results |
+| POST | `/diagnostics` | Admin | Run diagnostics | System diagnostics |
+| GET | `/logs/summary` | Admin | Get logs summary | Aggregated log stats |
+| GET | `/logs/search` | Admin | Search logs | Log search |
+| GET | `/logs/debug-yesterday` | Admin | Get yesterday's debug logs | Debug log retrieval |
+| POST | `/database-operations/backup` | Admin | Trigger database backup | Backup operation |
+| POST | `/database-operations/optimize` | Admin | Optimize database | DB optimization |
+| GET | `/users/search` | Admin | Search users | User lookup |
+
+---
+
+### 7. Service Category Routes (`/api/service-categories`)
+
+**Route File**: `routes/service-category-routes.js`
+**Auth Required**: **Yes** (all endpoints)
+**Base Paths**: `/api/service-categories`
+
+| Method | Path | Auth Required | Description | Notes |
+|--------|------|---------------|-------------|-------|
+| GET | `/categories` | Yes | List service categories | Hierarchical categories |
+| GET | `/categories/detailed` | Yes | Get detailed categories | With translations, services |
+| GET | `/categories/:categoryId` | Yes | Get category by ID | Category details |
+| GET | `/:categoryId/translations` | Yes | Get category translations | Multilingual translations |
+| GET | `/services/:serviceId/translations` | Yes | Get service translations | Service translations |
+| GET | `/search` | Yes | Search categories | Full-text search |
+| POST | `/` | Yes | Create category | New category |
+| DELETE | `/:categoryId` | Yes | Delete category | Soft delete |
+| DELETE | `/services/:serviceId` | Yes | Delete service | Soft delete |
+| POST | `/init` | Yes | Initialize categories | Seed categories |
+| POST | `/:categoryId/services` | Yes | Add service to category | Link service |
+| PUT | `/:categoryId` | Yes | Update category | Category metadata |
+| PUT | `/services/:serviceId` | Yes | Update service | Service metadata |
+
+---
+
+### 8. Service Routes (`/api/services`)
+
+**Route File**: `routes/service-routes.js`
+**Auth Required**: **Yes** (all endpoints)
+**Base Paths**: `/api/services`
+
+| Method | Path | Auth Required | Description | Notes |
+|--------|------|---------------|-------------|-------|
+| GET | `/categories` | Yes | List all services | Flat service list |
+| GET | `/categories/:categoryId` | Yes | Get services by category | Category services |
+| GET | `/search` | Yes | Search services | Full-text search |
+
+---
+
+### 9. Translation Routes (`/api/translate`)
+
+**Route File**: `routes/translation-routes.js`
+**Auth Required**: **Yes** (all endpoints)
+**Base Paths**: `/api/translate`
+
+| Method | Path | Auth Required | Description | Notes |
+|--------|------|---------------|-------------|-------|
+| POST | `/` | Yes | Translate text | Text translation |
+| POST | `/markdown` | Yes | Translate markdown | Markdown-aware translation |
 
 ---
 
 ### 10. Weather Routes (`/api/weather`)
 
-#### GET `/api/weather`
-- **Description**: Get weather information for user's location
-- **Authentication**: Required
-- **Query Params**: `location`, `units`
+**Route File**: `routes/weather-routes.js`
+**Auth Required**: **Yes** (all endpoints)
+**Base Paths**: `/api/weather`
+
+| Method | Path | Auth Required | Description | Notes |
+|--------|------|---------------|-------------|-------|
+| POST | `/` | Yes | Get weather data | Weather information |
 
 ---
 
-### 11. Database Operations Routes (`/api/database-operations`)
+### 11. Logger Routes (`/api/logger`)
 
-#### POST `/api/database-operations/export`
-- **Description**: Export database data
-- **Authentication**: Required (Admin role)
+**Route File**: `routes/logger-routes.js`
+**Auth Required**: **Yes + Admin Role** (all endpoints)
+**Base Paths**: `/api/logger`
+**Middleware**: `keycloakAuthMiddleware.authenticate` + `keycloakAuthMiddleware.requireAdmin`
 
-#### POST `/api/database-operations/import`
-- **Description**: Import database data
-- **Authentication**: Required (Admin role)
-
----
-
-### 12. Logger Routes (`/api/logger`)
-
-#### GET `/api/logger/search`
-- **Description**: Search application logs
-- **Authentication**: Required (Admin role)
-- **Query Params**: `level`, `startDate`, `endDate`, `query`
+| Method | Path | Auth Required | Description | Notes |
+|--------|------|---------------|-------------|-------|
+| POST | `/configure` | Admin | Configure logger | Update log levels |
+| POST | `/rollover` | Admin | Trigger log rollover | Log rotation |
 
 ---
 
-## Route Files Summary
+### 12. Database Operations Routes (`/api/database`)
 
-| Route File | Endpoints | Auth Required |
-|------------|-----------|---------------|
-| `auth-routes.js` | POST `/logout` | Yes |
-| `user-routes.js` | CRUD `/api/me` | Yes |
-| `query-routes.js` | CRUD `/queries` | Yes |
-| `chat-history-routes.js` | CRUD `/chat-history` | Yes |
-| `service-category-routes.js` | GET `/service-categories` | No |
-| `service-routes.js` | GET `/services` | No |
-| `analytics-routes.js` | GET `/analytics/*` | Yes |
-| `admin-routes.js` | Admin endpoints | Yes (Admin) |
-| `translation-routes.js` | POST `/translation/translate` | Yes |
-| `weather-routes.js` | GET `/weather` | Yes |
-| `database-operations-routes.js` | DB operations | Yes (Admin) |
-| `logger-routes.js` | GET `/logger/search` | Yes (Admin) |
+**Route File**: `routes/database-operations-routes.js`
+**Auth Required**: **Yes** (all endpoints, admin-level operations)
+**Base Paths**: `/api/database`
+
+| Method | Path | Auth Required | Description | Notes |
+|--------|------|---------------|-------------|-------|
+| POST | `/backup` | Yes | Trigger database backup | Backup operation |
+| POST | `/optimize` | Yes | Optimize database | DB optimization |
+
+---
+
+## Document Repository API
+
+**Component**: `components/document-repository/` (Node.js/Express)
+**Base URL**: `https://<domain>/api` (via Kong Gateway)
+
+### File Routes (`/api/files`)
+
+**Route File**: `src/routes/fileRoutes.js`
+**Auth Required**: Mixed (Admin role for write operations)
+**Base Paths**: `/api/files`
+
+| Method | Path | Auth Required | Description | Notes |
+|--------|------|---------------|-------------|-------|
+| POST | `/upload` | Admin | Upload single file | `multipart/form-data` |
+| POST | `/uploads` | Admin | Upload multiple files | Batch upload |
+| POST | `/upload-link` | Admin | Upload file via link | URL-based upload |
+| POST | `/crawl/schedule` | Admin | Schedule website crawl | Web crawling |
+| GET | `/` | No | List all files | Paginated file list |
+| GET | `/search` | No | Search metadata | Metadata search |
+| GET | `/search/files` | No | Search files | Full-text search |
+| GET | `/:fileId` | No | Get file metadata | File details |
+| GET | `/:fileId/crawl-job` | Admin | Get crawl job status | Crawl status |
+| GET | `/:fileId/crawl-metrics` | Admin | Get crawl metrics | Crawl analytics |
+| GET | `/:fileId/crawl-log` | Admin | Get crawl logs | Crawl logs |
+| POST | `/:fileId/kill-crawl` | Admin | Kill crawl task | Stop crawl |
+| POST | `/:fileId/kill-ingest` | Admin | Kill ingestion task | Stop ingest |
+| GET | `/:fileId/view` | No | View file | File preview |
+| GET | `/:fileId/viewbrowser` | No | View file in browser | Browser preview |
+| GET | `/:fileId/download` | No | Download file | File download |
+| POST | `/downloads` | No | Download multiple files | Batch download |
+| DELETE | `/:fileId` | Admin | Delete file | Soft delete |
+| DELETE | `/` | Admin | Delete multiple files | Batch delete |
+| PATCH | `/:fileId` | Admin | Update file metadata | File metadata |
+| POST | `/:fileId/ingest` | Admin | Ingest file to RAG pipeline | Start ingestion |
+| POST | `/:fileId/retract` | Admin | Retract file from RAG pipeline | Remove from vector store |
+| POST | `/ingest` | Admin | Ingest multiple files | Batch ingestion |
+| POST | `/retract` | Admin | Retract multiple files | Batch retraction |
+| POST | `/:fileId/ingestion-log` | Admin | Add ingestion log entry | Log ingestion event |
+| GET | `/:fileId/ingestion-log` | Admin | Get ingestion logs | Ingestion history |
+| PATCH | `/:fileId/status` | Admin, Dataprep Service | Update file status | Status update |
+
+**Auth Middleware**: `authorizeRole(['Admin'])` for write operations
+
+---
+
+### Label Routes (`/api/labels`)
+
+**Route File**: `src/routes/labelRoutes.js`
+**Auth Required**: **Admin Role** (all endpoints)
+**Base Paths**: `/api/labels`
+
+| Method | Path | Auth Required | Description | Notes |
+|--------|------|---------------|-------------|-------|
+| GET | `/` | Admin | List all labels | Hierarchical labels |
+| GET | `/:labelId` | Admin | Get label by ID | Label details |
+| POST | `/` | Admin | Create label | New label |
+| PATCH | `/:labelId` | Admin | Update label | Label metadata |
+| DELETE | `/:labelId` | Admin | Delete label | Soft delete |
+| DELETE | `/:labelId/with-children` | Admin | Delete label tree | Cascade delete |
+| GET | `/:labelId/related` | Admin | Get related labels | Label relationships |
+
+**Auth Middleware**: `authorizeRole(['Admin'])` for all endpoints
+
+---
+
+## Middleware Reference
+
+### Authentication Middleware
+
+**Keycloak OIDC Authentication** (`keycloakAuthMiddleware.authenticate`)
+- Validates JWT tokens from Keycloak
+- Extracts user info from token
+- Applied at router level or per-route
+
+**Admin Role Check** (`keycloakAuthMiddleware.requireAdmin`)
+- Requires `realm_access.roles` contains `admin`
+- Applied after `authenticate` middleware
+
+### Document Repository Auth
+
+**Role Authorization** (`authorizeRole(['Admin', 'dataprep-service'])`)
+- Checks Keycloak roles
+- Supports multiple roles (OR logic)
+- Some endpoints allow `dataprep-service` for internal calls
+
+---
+
+## SSE Streaming Protocol
+
+**Endpoint**: `POST /api/queries/stream`
+
+### Request Headers
+```
+Content-Type: application/json
+Authorization: Bearer <token>
+```
+
+### Response Headers
+```
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
+```
+
+### Event Format
+```
+data: {"type": "chunk", "content": "response text"}
+
+data: {"type": "metadata", "queryId": "123", "responseTime": 1234}
+
+data: {"type": "translation", "content": "translated text"}
+
+data: {"type": "error", "message": "error message", "code": "ERROR_CODE"}
+
+data: {"type": "done", "queryId": "123"}
+
+: keepalive
+```
+
+### Environment Control
+- Enable: `OPEA_STREAMING=true` (default)
+- Disable: `OPEA_STREAMING=false` (returns 501 error)
+
+---
 
 ## Error Response Format
 
-All endpoints return errors in the following format:
+All endpoints return JSON errors:
+
 ```json
 {
   "error": "ERROR_CODE",
@@ -284,19 +383,58 @@ All endpoints return errors in the following format:
 }
 ```
 
-Common error codes:
-- `TOKEN_INVALID`: Invalid or expired JWT
-- `TOKEN_EXPIRED`: JWT token has expired
-- `FORBIDDEN`: Insufficient permissions
-- `PROVISIONING_FAILED`: User provisioning failed
-- `AUTH_SERVICE_UNAVAILABLE`: Keycloak service unavailable
+### Common Error Codes
+- `UNAUTHORIZED` - Missing or invalid token
+- `FORBIDDEN` - Insufficient permissions
+- `NOT_FOUND` - Resource not found
+- `VALIDATION_ERROR` - Request validation failed
+- `STREAMING_DISABLED` - SSE streaming disabled (for `/stream` endpoint)
+- `CHATQNA_STREAM_ERROR` - Upstream OPEA service error
+- `TRANSLATION_FAILED` - Translation service error
+
+---
 
 ## Rate Limiting
 
-All authenticated endpoints are rate-limited using `express-rate-limit`.
-- Default limit configurable via environment variables
-- Rate limit headers included in responses
+Applied via Kong Gateway (configured in `api-gateway-solution/`):
+- Default: 100 requests per minute per IP
+- Authenticated users: Higher limits based on role
+- Admin users: No rate limiting
 
-## CORS
+---
 
-CORS is configured for allowed origins via `CORS_ALLOWED_ORIGINS` environment variable.
+## OpenAPI/Swagger Documentation
+
+Interactive API documentation available at:
+- **Development**: `http://localhost:3000/api-docs`
+- **Production**: `https://<domain>/api-docs`
+
+**Note**: Swagger definitions are inline in route files using JSDoc comments (`@swagger`, `@summary`, etc.)
+
+---
+
+## CORS Configuration
+
+Configured in Kong Gateway (`api-gateway-solution/`):
+- Allowed origins: `CORS_ALLOWED_ORIGINS` env var
+- Allowed methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+- Allowed headers: Authorization, Content-Type, X-Requested-With
+
+---
+
+## Version History
+
+- **v1.0** - Initial API design (2025)
+- **v1.1** - Added folder management (2025)
+- **v1.2** - Added SSE streaming (2025)
+- **v1.3** - Added label routes (2025)
+- **v1.4** - Refactored `/api/me` to singleton pattern (2025)
+
+---
+
+## Related Documentation
+
+- [Architecture Overview](../architecture.md)
+- [Server Testing Guide](../.claude/rules/SERVER-TESTING.md)
+- [Environment Configuration](../.claude/rules/ENVIRONMENT.md)
+- [CLAUDE.md](../CLAUDE.md) - Project overview and conventions

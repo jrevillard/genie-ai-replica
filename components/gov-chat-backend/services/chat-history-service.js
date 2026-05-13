@@ -83,13 +83,15 @@ class ChatHistoryService {
             FILTER cat._key == ${conversationData.categoryId}
             RETURN cat.nameEN
         `);
-        categoryName = await categoryQuery.next() || '';
+        categoryName = (await categoryQuery.next()) || '';
         logger.info(`Resolved categoryId ${conversationData.categoryId} to name: ${categoryName}`);
       }
 
       // Generate _key in a format similar to existing documents (numeric string)
       const timestamp = Date.now().toString();
-      const randomSuffix = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+      const randomSuffix = Math.floor(Math.random() * 10000)
+        .toString()
+        .padStart(4, '0');
       const generatedKey = `${timestamp}${randomSuffix}`; // e.g., "1747653190597"
 
       // Compute messageCount by counting existing messages for this conversation
@@ -171,7 +173,7 @@ class ChatHistoryService {
           RETURN msg.sequence
       `);
 
-      const latestSequence = await sequenceCursor.next() || 0;
+      const latestSequence = (await sequenceCursor.next()) || 0;
       const newSequence = latestSequence + 1;
 
       // Prepare message document
@@ -193,30 +195,30 @@ class ChatHistoryService {
       // ---------------------------------------------------------
       if (messageData.metadata && Array.isArray(messageData.metadata.source_documents)) {
         const docs = messageData.metadata.source_documents;
-        
+
         // Clean the ID just in case
-        const convKey = messageData.conversationId.includes('/') 
-          ? messageData.conversationId.split('/').pop() 
+        const convKey = messageData.conversationId.includes('/')
+          ? messageData.conversationId.split('/').pop()
           : messageData.conversationId;
 
         for (const doc of docs) {
           const rawId = doc.document_id || doc.id;
           if (rawId) {
             const fileId = rawId.includes('/') ? rawId : `files/${rawId}`;
-            
+
             try {
               // FIX: Save as standard fields since this is a Document collection
               await this.conversationFiles.save({
                 conversationId: convKey, // Standard field link
-                fileId: fileId,          // Standard field link
+                fileId: fileId, // Standard field link
                 messageId: message._key,
-                
+
                 // SNAPSHOT: Store display info directly to prevent "Unknown Document"
-                documentName: doc.document_name || doc.title || "Unknown Document",
-                fileName: doc.file_name || doc.document_name || "Unknown File",
+                documentName: doc.document_name || doc.title || 'Unknown Document',
+                fileName: doc.file_name || doc.document_name || 'Unknown File',
                 url: doc.url || null,
 
-                labels: doc.serviceLabels || doc.labels || [], 
+                labels: doc.serviceLabels || doc.labels || [],
                 categoryLabel: doc.categoryLabel || '',
                 confidenceScore: doc.score || 0,
                 createdAt: new Date().toISOString()
@@ -254,9 +256,8 @@ class ChatHistoryService {
       }
 
       // Update conversation stats
-      const snippet = messageData.content.length > 100
-        ? `${messageData.content.substring(0, 97)}...`
-        : messageData.content;
+      const snippet =
+        messageData.content.length > 100 ? `${messageData.content.substring(0, 97)}...` : messageData.content;
 
       const updateStatsQuery = aql`
         FOR doc IN conversations
@@ -268,8 +269,7 @@ class ChatHistoryService {
           } IN conversations
       `;
 
-      this.db.query(updateStatsQuery)
-        .catch(err => logger.warn(`Background stats update failed: ${err.message}`));
+      this.db.query(updateStatsQuery).catch((err) => logger.warn(`Background stats update failed: ${err.message}`));
 
       return { ...message, ...messageDoc };
     } catch (error) {
@@ -296,7 +296,9 @@ class ChatHistoryService {
       // OPTIMIZATION: Run independent queries in PARALLEL
       const [messages, categories, owners, files] = await Promise.all([
         // 1. Get Messages
-        this.db.query(aql`
+        this.db
+          .query(
+            aql`
           FOR msg IN messages
             FILTER msg.conversationId == ${convKey}
             SORT msg.sequence ASC
@@ -308,10 +310,14 @@ class ChatHistoryService {
                   RETURN q._key
             )[0]
             RETURN MERGE(msg, { queryId: queryLink })
-        `).then(cursor => cursor.all()),
+        `
+          )
+          .then((cursor) => cursor.all()),
 
         // 2. Get Categories
-        this.db.query(aql`
+        this.db
+          .query(
+            aql`
           FOR edge IN conversationCategories
             FILTER edge._from == ${conversationIdFull}
             FOR cat IN serviceCategories
@@ -324,10 +330,14 @@ class ChatHistoryService {
                 nameSW: cat.nameSW,
                 relevanceScore: edge.relevanceScore
               }
-        `).then(cursor => cursor.all()),
+        `
+          )
+          .then((cursor) => cursor.all()),
 
         // 3. Get Owners
-        this.db.query(aql`
+        this.db
+          .query(
+            aql`
           FOR edge IN userConversations
             FILTER edge._to == ${conversationIdFull}
             FOR user IN users
@@ -338,10 +348,14 @@ class ChatHistoryService {
                 role: edge.role,
                 lastViewedAt: edge.lastViewedAt
               }
-        `).then(cursor => cursor.all()),
+        `
+          )
+          .then((cursor) => cursor.all()),
 
         // 4. NEW: Get Linked Files (Standard Document Query with Schema Fix)
-        this.db.query(aql`
+        this.db
+          .query(
+            aql`
           FOR doc IN conversationFiles
             FILTER doc.conversationId == ${convKey}
             SORT doc.createdAt DESC
@@ -364,7 +378,9 @@ class ChatHistoryService {
               // SCHEMA FIX: Map 'source_url' from files collection
               url: doc.url || fileDoc.source_url || fileDoc.url || null
             }
-        `).then(cursor => cursor.all())
+        `
+          )
+          .then((cursor) => cursor.all())
       ]);
 
       logger.info(`Found ${messages.length} messages and ${files.length} files for conversation ${conversationId}`);
@@ -518,7 +534,7 @@ class ChatHistoryService {
       }
 
       const countCursor = await this.db.query(countQuery);
-      const totalCount = await countCursor.next() || 0;
+      const totalCount = (await countCursor.next()) || 0;
 
       return {
         conversations,
@@ -550,10 +566,14 @@ class ChatHistoryService {
         throw new Error('queryId and responseTime are required');
       }
 
-      const updatedQuery = await this.db.collection('queries').update(queryId, {
-        responseTime: Number(responseTime),
-        updatedAt: new Date().toISOString()
-      }, { returnNew: true });
+      const updatedQuery = await this.db.collection('queries').update(
+        queryId,
+        {
+          responseTime: Number(responseTime),
+          updatedAt: new Date().toISOString()
+        },
+        { returnNew: true }
+      );
 
       logger.info(`Successfully updated response time for query ${queryId}`);
       return updatedQuery.new;
@@ -634,7 +654,7 @@ class ChatHistoryService {
       `;
 
       const countCursor = await this.db.query(countQuery);
-      const totalCount = await countCursor.next() || 0;
+      const totalCount = (await countCursor.next()) || 0;
 
       logger.info(`Found ${messages.length} messages for conversation ${conversationId}`);
 
@@ -664,9 +684,7 @@ class ChatHistoryService {
     try {
       logger.info(`Updating conversation ${conversationId} with data:`, updateData);
 
-      const allowedFields = [
-        'title', 'isStarred', 'isArchived', 'tags', 'category'
-      ];
+      const allowedFields = ['title', 'isStarred', 'isArchived', 'tags', 'category'];
 
       // Filter out non-allowed fields
       const filteredData = {};
@@ -740,7 +758,7 @@ class ChatHistoryService {
 
         const updateCursor = await this.db.query(updateQuery);
         const updatedMessages = await updateCursor.all();
-        result = { count: updatedMessages.length, ids: updatedMessages.map(msg => msg._key) };
+        result = { count: updatedMessages.length, ids: updatedMessages.map((msg) => msg._key) };
       } else {
         // Update all unread messages in the conversation
         logger.info(`Marking all unread messages as read in conversation ${conversationId}`);
@@ -754,27 +772,30 @@ class ChatHistoryService {
 
         const updateCursor = await this.db.query(updateQuery);
         const updatedMessages = await updateCursor.all();
-        result = { count: updatedMessages.length, ids: updatedMessages.map(msg => msg._key) };
+        result = { count: updatedMessages.length, ids: updatedMessages.map((msg) => msg._key) };
       }
 
       // OPTIMIZATION: Fire and Forget Timestamp Update
       // We do not await this. It happens in background to speed up response.
       if (result.count > 0) {
-        this.getConversationOwnerId(conversationId).then(ownerKey => {
-          if (ownerKey) {
-            const currentTime = new Date().toISOString();
-            const updateViewedQuery = aql`
+        this.getConversationOwnerId(conversationId)
+          .then((ownerKey) => {
+            if (ownerKey) {
+              const currentTime = new Date().toISOString();
+              const updateViewedQuery = aql`
               FOR edge IN userConversations
                 FILTER edge._from == ${'users/' + ownerKey} AND edge._to == ${'conversations/' + conversationId}
                 UPDATE edge WITH { lastViewedAt: ${currentTime} } IN userConversations
             `;
-            return this.db.query(updateViewedQuery);
-          }
-        }).then(() => {
-          logger.info(`Updated lastViewedAt for conversation ${conversationId} (background)`);
-        }).catch(err => {
-          logger.warn(`Background Task Failed: Could not update lastViewedAt for ${conversationId}: ${err.message}`);
-        });
+              return this.db.query(updateViewedQuery);
+            }
+          })
+          .then(() => {
+            logger.info(`Updated lastViewedAt for conversation ${conversationId} (background)`);
+          })
+          .catch((err) => {
+            logger.warn(`Background Task Failed: Could not update lastViewedAt for ${conversationId}: ${err.message}`);
+          });
       }
 
       logger.info(`Marked ${result.count} messages as read in conversation ${conversationId}`);
@@ -799,7 +820,7 @@ class ChatHistoryService {
           RETURN SUBSTRING(edge._from, 6)
       `);
 
-      return await cursor.next() || null;
+      return (await cursor.next()) || null;
     } catch (error) {
       logger.error(`Error getting owner ID for conversation ${conversationId}:`, error);
       return null;
@@ -842,7 +863,14 @@ class ChatHistoryService {
       const messageIds = await messageCursor.all();
 
       const trx = await this.db.beginTransaction({
-        write: ['messages', 'queryMessages', 'userConversations', 'conversationCategories', 'conversations', 'conversationFiles']
+        write: [
+          'messages',
+          'queryMessages',
+          'userConversations',
+          'conversationCategories',
+          'conversations',
+          'conversationFiles'
+        ]
       });
 
       try {
@@ -1222,17 +1250,19 @@ class ChatHistoryService {
       const stats = await cursor.next();
       logger.info(`Retrieved conversation statistics for user ${userId}`);
 
-      return stats || {
-        total: 0,
-        active: 0,
-        archived: 0,
-        starred: 0,
-        messageCount: 0,
-        avgMessagesPerConversation: 0,
-        categoryDistribution: [],
-        timeDistribution: [],
-        lastUpdated: new Date().toISOString()
-      };
+      return (
+        stats || {
+          total: 0,
+          active: 0,
+          archived: 0,
+          starred: 0,
+          messageCount: 0,
+          avgMessagesPerConversation: 0,
+          categoryDistribution: [],
+          timeDistribution: [],
+          lastUpdated: new Date().toISOString()
+        }
+      );
     } catch (error) {
       logger.error(`Error getting conversation statistics for user ${userId}:`, error);
       throw error;
@@ -1259,8 +1289,8 @@ class ChatHistoryService {
       }
 
       // Extract conversationTitle from options or use the query text (truncated if needed)
-      const conversationTitle = options.title ||
-        (query.text.length > 50 ? `${query.text.substring(0, 47)}...` : query.text);
+      const conversationTitle =
+        options.title || (query.text.length > 50 ? `${query.text.substring(0, 47)}...` : query.text);
 
       // Create conversation
       const conversationData = {
@@ -1304,12 +1334,9 @@ class ChatHistoryService {
         });
 
         // Link query to the assistant's message
-        await this.linkQueryToConversation(
-          queryId,
-          conversation._key,
-          assistantMessage._key,
-          { responseType: 'primary' }
-        );
+        await this.linkQueryToConversation(queryId, conversation._key, assistantMessage._key, {
+          responseType: 'primary'
+        });
 
         logger.info(`Created conversation ${conversation._key} from query ${queryId} with response`);
 
@@ -1451,17 +1478,23 @@ class ChatHistoryService {
       // OPTIMIZATION: Run independent queries in PARALLEL
       const [conversations, owners, childFolders] = await Promise.all([
         // 1. Get conversations
-        this.db.query(aql`
+        this.db
+          .query(
+            aql`
           FOR edge IN folderConversations
             FILTER edge._from == ${'folders/' + folderId}
             FOR conv IN conversations
               FILTER conv._id == edge._to
               SORT conv.updated DESC
               RETURN conv
-        `).then(c => c.all()),
+        `
+          )
+          .then((c) => c.all()),
 
         // 2. Get owners
-        this.db.query(aql`
+        this.db
+          .query(
+            aql`
           FOR edge IN userFolders
             FILTER edge._to == ${'folders/' + folderId}
             FOR user IN users
@@ -1473,15 +1506,21 @@ class ChatHistoryService {
                 role: edge.role,
                 lastAccessedAt: edge.lastAccessedAt
               }
-        `).then(c => c.all()),
+        `
+          )
+          .then((c) => c.all()),
 
         // 3. Get child folders
-        this.db.query(aql`
+        this.db
+          .query(
+            aql`
           FOR folder IN folders
             FILTER folder.parentFolderId == ${folderId}
             SORT folder.order ASC, folder.created ASC
             RETURN folder
-        `).then(c => c.all())
+        `
+          )
+          .then((c) => c.all())
       ]);
 
       logger.info(`Found ${conversations.length} conversations for folder ${folderId}`);
@@ -1546,7 +1585,7 @@ class ChatHistoryService {
         });
 
         // Now fetch the actual folder documents to check their properties
-        const folderIds = edges.map(edge => edge._to);
+        const folderIds = edges.map((edge) => edge._to);
         const folderKeysQuery = aql`
         FOR folder IN folders
           FILTER folder._id IN ${folderIds}
@@ -1576,7 +1615,9 @@ class ChatHistoryService {
       }
 
       // Create the actual query with filters and verbose debug information
-      logger.info(`DEBUG - Using filters: includeArchived=${includeArchived}, parentFolderId=${parentFolderId || 'null'}`);
+      logger.info(
+        `DEBUG - Using filters: includeArchived=${includeArchived}, parentFolderId=${parentFolderId || 'null'}`
+      );
 
       const query = aql`
       FOR edge IN userFolders
@@ -1661,9 +1702,7 @@ class ChatHistoryService {
     try {
       logger.info(`Updating folder ${folderId} with data:`, updateData);
 
-      const allowedFields = [
-        'name', 'description', 'isArchived', 'color', 'icon', 'parentFolderId', 'order'
-      ];
+      const allowedFields = ['name', 'description', 'isArchived', 'color', 'icon', 'parentFolderId', 'order'];
 
       // Filter out non-allowed fields
       const filteredData = {};
@@ -2025,7 +2064,9 @@ class ChatHistoryService {
    */
   async moveConversation(conversationId, sourceFolderId, targetFolderId, userId, userKey) {
     try {
-      logger.info(`Moving conversation ${conversationId} from folder ${sourceFolderId || 'root'} to ${targetFolderId || 'root'}`);
+      logger.info(
+        `Moving conversation ${conversationId} from folder ${sourceFolderId || 'root'} to ${targetFolderId || 'root'}`
+      );
 
       const convPermissionQuery = aql`
         FOR edge IN userConversations
@@ -2084,21 +2125,27 @@ class ChatHistoryService {
             };
           } else {
             await trx.step(() => this.db.collection('folderConversations').remove(existingLink._key));
-            await trx.step(() => this.db.collection('folderConversations').save({
+            await trx.step(() =>
+              this.db.collection('folderConversations').save({
+                _from: `folders/${targetFolderId}`,
+                _to: `conversations/${conversationId}`,
+                addedAt: new Date().toISOString(),
+                addedBy: userId
+              })
+            );
+            logger.info(
+              `Conversation ${conversationId} moved from folder ${existingLink._from.split('/')[1]} to ${targetFolderId}`
+            );
+          }
+        } else if (targetFolderId) {
+          await trx.step(() =>
+            this.db.collection('folderConversations').save({
               _from: `folders/${targetFolderId}`,
               _to: `conversations/${conversationId}`,
               addedAt: new Date().toISOString(),
               addedBy: userId
-            }));
-            logger.info(`Conversation ${conversationId} moved from folder ${existingLink._from.split('/')[1]} to ${targetFolderId}`);
-          }
-        } else if (targetFolderId) {
-          await trx.step(() => this.db.collection('folderConversations').save({
-            _from: `folders/${targetFolderId}`,
-            _to: `conversations/${conversationId}`,
-            addedAt: new Date().toISOString(),
-            addedBy: userId
-          }));
+            })
+          );
           logger.info(`Conversation ${conversationId} moved from root to folder ${targetFolderId}`);
         } else {
           logger.info(`Conversation ${conversationId} is already in root, no change needed`);
@@ -2286,7 +2333,6 @@ class ChatHistoryService {
       throw error;
     }
   }
-
 }
 const chatHistoryService = ChatHistoryService.getInstance();
 module.exports = chatHistoryService;

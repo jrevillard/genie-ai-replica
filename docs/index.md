@@ -10,38 +10,32 @@
 
 | Part | Type | Tech Stack | Root |
 |------|------|------------|------|
-| **Frontend** | Web | Vue.js 3, Express, ArangoDB | `components/gov-chat-frontend/` |
-| **Backend** | API | Node.js 18+, Express 4.18, ArangoDB | `components/gov-chat-backend/` |
-| **Mobile** | Mobile | Flutter 3.10+, Dart 3.10 | `mobile/genie_ai_mobile/` |
-| **Document Repository** | Backend | Node.js, Express | `components/document-repository/` |
-| **OPEA AI Layer** | Data/AI | Python 3.10, FastAPI | `genie-ai-overlay/` |
-| **API Gateway** | Infra | Kong, NGINX | `api-gateway-solution/` |
-| **Ansible Deploy** | Infra | Ansible Playbooks | `deploy/ansible/` |
+| **Frontend** | Web | Vue.js 3.2+, Vuex 4, ApexCharts 5, Axios 1.13 | `components/gov-chat-frontend/` |
+| **Backend** | API | Node.js 22, Express 4.18, ArangoDB 3.12, Redis 7 | `components/gov-chat-backend/` |
+| **Document Repository** | Backend | Node.js 22, Express 4.18, Multer, ClamAV | `components/document-repository/` |
+| **Mobile** | Mobile | Flutter 3.10+, Dart, Riverpod 3.0, SSE streaming | `mobile/genie_ai_mobile/` |
+| **AI/ML (OPEA)** | Data/AI | Python 3.10+, FastAPI, LangChain, vLLM | `genie-ai-overlay/` |
+| **API Gateway** | Infra | Kong, Nginx 1.28, PostgreSQL 13 (Kong DB) | `api-gateway-solution/` |
 
 ## Generated Documentation
 
 ### Core Documentation
-- [Project Overview](./project-overview.md) - Project summary, tech stack, getting started
-- [Source Tree Analysis](./source-tree-analysis.md) - Annotated directory structure
-- [Integration Architecture](./integration-architecture.md) - Multi-part communication patterns
+- [Project Overview](./project-overview.md) — Executive summary, tech stack tables, architecture classification
+- [Source Tree Analysis](./source-tree-analysis.md) — Annotated directory structure for all 6 parts
+- [Integration Architecture](./integration-architecture.md) — 10 integration points, RAG pipeline, auth flow, SSE streaming diagrams
+- [Development Guide](./development-guide.md) — Prerequisites, setup, build, test, lint commands per part
 
 ### Frontend (Vue.js)
-- [State Management](./state-management-gov-chat-frontend.md) - Vuex store architecture
-- [UI Component Inventory](./ui-component-inventory-gov-chat-frontend.md) - 38 components catalog
+- [UI Component Inventory](./ui-component-inventory-gov-chat-frontend.md) — 55 Vue components (12 DS primitives + 43 app components)
+- [State Management](./state-management-gov-chat-frontend.md) — Vuex store architecture
+- [Theme System](./theme-system.md) — OKLch design tokens, dark mode, DS component reference
 
 ### Backend (Node.js)
-- [API Contracts](./api-contracts-gov-chat-backend.md) - REST endpoints documentation
+- [API Contracts](./api-contracts-gov-chat-backend.md) — 120+ endpoints across 14 route domains (incl. SSE streaming)
 
 ### Mobile (Flutter)
-- [Mobile Architecture](./mobile-architecture-genie-ai-mobile.md) - Flutter app architecture
-
-### Development
-- [Development Guide](./development-guide.md) - Setup, build, test commands
-
-### _(To be generated)_
-- Data Models Documentation
-- Deployment Guide
-- Architecture Documents per part
+- [UI Component Inventory](./ui-component-inventory-mobile.md) — 76 Dart files (6 DS components, tokens, services, i18n)
+- [Mobile Architecture](./mobile-architecture-genie-ai-mobile.md) — Flutter app architecture, flavors, auth flow
 
 ## Existing Documentation
 
@@ -145,8 +139,12 @@ flutter run
 
 ## Documentation Status
 
-**Generated:** 8 documents (Project Overview, Source Tree, Integration, State Mgmt, UI Components, API Contracts, Mobile Architecture, Dev Guide)
+**Generated:** 10 documents (Project Overview, Source Tree, Integration Architecture, Development Guide, API Contracts, Frontend Components, Mobile Components, State Management, Theme System, Mobile Architecture)
 
-**Existing:** 45+ documentation files (README, architecture, deployment, E2E tests)
+**Existing:** 45+ documentation files (README, architecture, deployment, E2E tests, Keycloak guides)
 
-**Total:** 50+ documentation files across the project
+**Total:** 55+ documentation files across the project
+
+---
+
+_Last updated: 2026-05-13_

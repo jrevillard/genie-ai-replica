@@ -25,22 +25,18 @@ export default {
     };
   },
   mounted() {
-    console.log('SplashScreen.vue: Component mounted');
     setTimeout(() => {
-      console.log('SplashScreen.vue: Starting fade-out after 5 seconds');
       this.isFadingOut = true;
       setTimeout(() => {
-        console.log('SplashScreen.vue: Fade-out complete, emitting splash-complete');
         this.$emit('splash-complete');
       }, 1000); // 1s fade-out duration
     }, 5000); // 5s display duration
   },
   methods: {
     handleImageLoad() {
-      console.log('SplashScreen.vue: SVG image loaded successfully');
+      // Image loaded successfully
     },
     handleImageError() {
-      console.error('SplashScreen.vue: Failed to load SVG image');
       this.imageError = true;
     }
   }
@@ -58,7 +54,7 @@ export default {
   justify-content: center;
   align-items: center;
   z-index: 30000; /* Ensure it’s above other elements */
-  background-color: rgba(245, 247, 250, 0.5); /* Default semi-transparent light background */
+  background-color: var(--overlay-bg);
   animation: splash-fade-in 0.5s ease-in;
 }
 
@@ -70,23 +66,18 @@ export default {
   max-width: 50%;
   max-height: 50%;
   object-fit: contain;
-  border-radius: 20px; /* Rounded corners for the box */
-  box-shadow: 50px 50px 20px rgba(0, 0, 0, 0.5); /* 50px right and bottom drop shadow, 20px blur, 50% opacity */
+  border-radius: var(--radius-xl); /* Rounded corners for the box */
+  box-shadow: var(--shadow-lg); /* Intentionally large decorative shadow */
 }
 
 .splash-fallback {
-  color: var(--text-primary, #333);
-  font-size: 1.5rem;
-  margin-top: 1rem;
+  color: var(--fg);
+  font-size: var(--text-xl);
+  margin-top: var(--space-md);
 }
 
 .splash-screen.fade-out {
   animation: splash-fade-out 1s ease-out forwards;
-}
-
-/* Override for dark theme */
-#app[data-theme='dark'] .splash-screen {
-  background-color: rgba(30, 30, 30, 0.5); /* Semi-transparent dark background */
 }
 
 @keyframes splash-fade-in {

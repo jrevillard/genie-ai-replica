@@ -4,7 +4,7 @@
     <div class="modal-content">
       <div class="modal-title">
         <h2>{{ title }}</h2>
-        <button class="close-btn" aria-label="Close dialog" @click="$emit('close')">×</button>
+        <DsButton variant="ghost" class="close-btn" aria-label="Close dialog" @click="$emit('close')">×</DsButton>
       </div>
 
       <div class="modal-body">
@@ -50,9 +50,9 @@
                   <tr v-for="(item, index) in results.results" :key="index">
                     <td>{{ item.collection }}</td>
                     <td>
-                      <span :class="['status-badge', item.status === 'success' ? 'badge-success' : 'badge-error']">
+                      <DsPill :variant="item.status === 'success' ? 'success' : 'danger'">
                         {{ item.status }}
-                      </span>
+                      </DsPill>
                     </td>
                     <td>
                       <ul v-if="item.indexSuggestions && item.indexSuggestions.length">
@@ -79,17 +79,21 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn btn-primary" @click="$emit('close')">
+        <DsButton variant="primary" @click="$emit('close')">
           {{ translate('admin.operations.close', 'Close') }}
-        </button>
+        </DsButton>
       </div>
     </div>
   </div>
 </template>
 
 <script>
+import DsPill from './ds/Pill.vue';
+import DsButton from './ds/Button.vue';
+
 export default {
   name: 'OperationResultsModal',
+  components: { DsPill, DsButton },
   props: {
     operation: {
       type: String,
@@ -151,8 +155,8 @@ export default {
         if (savedLocale) {
           return savedLocale;
         }
-      } catch (e) {
-        console.warn('Error accessing localStorage for language:', e);
+      } catch {
+        // Silently fall through to default
       }
 
       // Default to English if nothing else works
@@ -182,7 +186,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: var(--overlay-bg);
 }
 
 .modal-content {
@@ -190,9 +194,9 @@ export default {
   width: 90%;
   max-width: 700px;
   max-height: 90vh;
-  background-color: var(--bg-dialog, #ffffff);
-  border-radius: 8px;
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+  background-color: var(--bg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -203,49 +207,33 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border-color, #dcdfe4);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border);
 }
 
 .modal-title h2 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--text-lg);
   font-weight: 600;
-  color: var(--text-primary, #333333);
+  color: var(--fg);
 }
 
 .close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-  color: var(--text-tertiary, #767676);
-  padding: 0;
   width: 28px;
   height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all 0.2s;
-}
-
-.close-btn:hover {
-  background-color: var(--bg-section, rgba(0, 0, 0, 0.05));
-  color: var(--text-secondary, #4d4d4d);
+  padding: 0;
 }
 
 .modal-body {
-  padding: 1.5rem;
+  padding: var(--space-lg);
   overflow-y: auto;
   flex-grow: 1;
   max-height: calc(90vh - 130px);
 }
 
 .modal-footer {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid var(--border-color, #dcdfe4);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
 }
@@ -254,79 +242,79 @@ export default {
 .result-status {
   display: flex;
   align-items: center;
-  padding: 1rem;
-  border-radius: 6px;
-  margin-bottom: 1.5rem;
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-lg);
 }
 
 .status-success {
-  background-color: rgba(16, 185, 129, 0.1);
+  background-color: var(--success-bg);
 }
 
 .status-error {
-  background-color: rgba(239, 68, 68, 0.1);
+  background-color: var(--danger-bg);
 }
 
 .status-icon {
-  font-size: 1.5rem;
-  margin-right: 1rem;
+  font-size: var(--text-xl);
+  margin-right: var(--space-md);
 }
 
 .status-success .status-icon {
-  color: var(--success, #10b981);
+  color: var(--success);
 }
 
 .status-error .status-icon {
-  color: var(--danger, #ef4444);
+  color: var(--danger);
 }
 
 .status-message {
-  font-size: 1rem;
+  font-size: var(--text-md);
   font-weight: 500;
 }
 
 .status-success .status-message {
-  color: var(--success, #10b981);
+  color: var(--success);
 }
 
 .status-error .status-message {
-  color: var(--danger, #ef4444);
+  color: var(--danger);
 }
 
 /* Result Details Styles */
 .result-details {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--space-lg);
 }
 
 .result-section h3 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
-  margin: 0 0 1rem 0;
-  color: var(--text-primary, #333333);
+  margin: 0 0 var(--space-md) 0;
+  color: var(--fg);
 }
 
 .detail-item {
   display: flex;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-sm);
 }
 
 .detail-label {
   font-weight: 500;
   width: 120px;
   min-width: 120px;
-  color: var(--text-secondary, #4d4d4d);
+  color: var(--fg);
 }
 
 .detail-value {
-  color: var(--text-primary, #333333);
+  color: var(--fg);
 }
 
 /* Table Styles */
 .table-container {
   overflow-x: auto;
   max-height: 300px;
-  border: 1px solid var(--border-color, #dcdfe4);
-  border-radius: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 
 .results-table {
@@ -336,140 +324,42 @@ export default {
 
 .results-table th,
 .results-table td {
-  padding: 0.75rem;
-  border-bottom: 1px solid var(--border-color, #dcdfe4);
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border);
   text-align: left;
 }
 
 .results-table th {
   font-weight: 600;
-  background-color: var(--bg-section, rgba(0, 0, 0, 0.02));
-  color: var(--text-secondary, #4d4d4d);
+  background-color: var(--bg);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 1;
 }
 
-.status-badge {
-  display: inline-block;
-  padding: 0.25rem 0.5rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-transform: capitalize;
-}
-
-.badge-success {
-  background-color: rgba(16, 185, 129, 0.1);
-  color: var(--success, #10b981);
-}
-
-.badge-error {
-  background-color: rgba(239, 68, 68, 0.1);
-  color: var(--danger, #ef4444);
-}
-
 /* Error Details */
 .error-details {
-  background-color: rgba(239, 68, 68, 0.05);
-  border-radius: 6px;
-  padding: 1rem;
+  background-color: var(--danger-bg);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
 }
 
 .error-message {
   margin: 0;
-  padding: 1rem;
-  background-color: rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
-  color: var(--danger, #ef4444);
-  font-family: monospace;
+  padding: var(--space-md);
+  background-color: var(--muted-soft);
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  font-family: var(--font-mono);
   white-space: pre-wrap;
   overflow-x: auto;
 }
 
-/* Button Styles */
-.btn {
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s;
-}
-
-.btn-primary {
-  background-color: var(--bg-button-primary, #3b82f6);
-  color: var(--text-button-primary, #ffffff);
-}
-
-.btn-primary:hover {
-  background-color: var(--primary-dark, #2563eb);
-}
-
-/* Dark mode adjustments (handled by CSS variables) */
-[data-theme='dark'] .results-table th {
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-[data-theme='dark'] .error-message {
-  background-color: rgba(0, 0, 0, 0.2);
-}
-
-[data-theme='dark'] .status-success {
-  background-color: rgba(16, 185, 129, 0.2);
-}
-
-[data-theme='dark'] .status-error {
-  background-color: rgba(239, 68, 68, 0.2);
-}
-
-[data-theme='dark'] .badge-success {
-  background-color: rgba(16, 185, 129, 0.2);
-}
-
-[data-theme='dark'] .badge-error {
-  background-color: rgba(239, 68, 68, 0.2);
-}
-/* In OperationResultsModal.vue */
-.modal {
-  /* This fixes the overall modal background */
-  background-color: rgba(0, 0, 0, 0.5);
-}
-
-[data-theme='dark'] .modal-content {
-  /* This should match exactly the dark background in AdminDashboard.vue */
-  background-color: #1e1e1e; /* or #202020 - match exactly what AdminDashboard uses */
-}
-
-/* Also fix the table headers and other elements */
-[data-theme='dark'] .results-table th {
-  background-color: #292727; /* Slightly lighter than the main background */
-}
-
-/* Make sure the status badges maintain proper contrast */
-[data-theme='dark'] .status-badge {
-  color: white;
-}
-
-/* Fix the error details background if needed */
-[data-theme='dark'] .error-details {
-  background-color: rgba(239, 68, 68, 0.1);
-}
-
-/* Title text styling for dark mode */
-[data-theme='dark'] .modal-title h2,
-[data-theme='dark'] .result-section h3 {
-  color: #ffffff !important; /* Force white color for all headings */
-}
-
-/* Make sure the h2 (Database Optimization Results) is white */
-[data-theme='dark'] h2 {
-  color: #ffffff !important;
-}
-
-/* Make the subtitle text (Optimization Results) white too */
-[data-theme='dark'] .result-details h3,
-[data-theme='dark'] .modal-body h3 {
-  color: #ffffff !important;
-}
+/* Dark mode adjustments are now handled by CSS custom properties (design tokens) */
 </style>

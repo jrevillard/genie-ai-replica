@@ -44,54 +44,56 @@
     },
     "theme": {
       "type": "object",
-      "description": "UI theme and color scheme settings",
+      "description": "UI theme and color scheme settings. All accent variants (hover, muted, dark mode) are derived automatically from brandColor via CSS.",
       "properties": {
-        "primaryColor": {
+        "brandColor": {
           "type": "string",
-          "description": "Primary color for buttons and accents",
-          "default": "#4E97D1"
+          "description": "Primary brand color (hex). This is the single source for the entire accent palette.",
+          "default": "#4071cb"
         },
-        "secondaryColor": {
+        "bg": {
           "type": "string",
-          "description": "Secondary color for accents and highlights",
-          "default": "#2C5F8A"
+          "description": "Page background color (overrides the default light gray)"
         },
-        "backgroundColor": {
+        "fg": {
           "type": "string",
-          "description": "Background color for main content area",
-          "default": "#f5f7fa"
-        },
-        "textColor": {
-          "type": "string",
-          "description": "Primary text color",
-          "default": "#333333"
+          "description": "Primary text color (overrides the default dark gray)"
         },
         "navbar": {
           "type": "object",
-          "description": "Navbar-specific styling",
+          "description": "Navbar-specific overrides (optional, defaults to brand)",
           "properties": {
-            "gradientStart": {
+            "background": {
               "type": "string",
-              "description": "Start color for navbar gradient",
-              "default": "#4E97D1"
+              "description": "Navbar background color (defaults to brandColor)"
             },
-            "gradientEnd": {
+            "text": {
               "type": "string",
-              "description": "End color for navbar gradient",
-              "default": "#2C5F8A"
-            },
-            "textColor": {
-              "type": "string",
-              "description": "Navbar text/icon color",
-              "default": "#ffffff"
+              "description": "Navbar text/icon color (auto-contrasted if omitted)"
             }
+          }
+        },
+        "colors": {
+          "type": "object",
+          "description": "Override semantic status colors",
+          "properties": {
+            "success": { "type": "string", "description": "Success color" },
+            "warning": { "type": "string", "description": "Warning color" },
+            "danger": { "type": "string", "description": "Danger color" },
+            "info": { "type": "string", "description": "Info color" }
+          }
+        },
+        "typography": {
+          "type": "object",
+          "description": "Typography overrides",
+          "properties": {
+            "fontFamily": { "type": "string", "description": "Override body font stack" },
+            "fontScale": { "type": "number", "description": "Multiplier for all text sizes (e.g. 1.1)" }
           }
         }
       },
       "required": [
-        "primaryColor",
-        "secondaryColor",
-        "navbar"
+        "brandColor"
       ]
     },
     "features": {
@@ -234,19 +236,11 @@
     "title": "GENIE.AI",
     "icon": {
       "type": "file",
-      "value": "/config/genie-ai-icon-light.svg"
+      "value": "/config/logo-genie-ai.jpeg"
     }
   },
   "theme": {
-    "primaryColor": "#4682B4",
-    "secondaryColor": "#5F9EA0",
-    "backgroundColor": "#D3E0EA",
-    "textColor": "#1C2526",
-    "navbar": {
-      "gradientStart": "#4682B4",
-      "gradientEnd": "#5F9EA0",
-      "textColor": "#F0F8FF"
-    }
+    "brandColor": "#4071cb"
   },
   "features": {
     "chat": {

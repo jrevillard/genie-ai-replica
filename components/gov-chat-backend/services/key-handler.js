@@ -15,25 +15,25 @@ function sanitizeKey(key, prefix = 'doc') {
 
   // Remove any leading underscores
   let sanitized = key.replace(/^_+/, '');
-  
+
   // Replace invalid characters with underscores
   sanitized = sanitized.replace(/[^a-zA-Z0-9_\-:.@()+,=;$!*'%]/g, '_');
-  
+
   // Ensure key doesn't start with a number (add prefix if it does)
   if (/^[0-9]/.test(sanitized)) {
     sanitized = `${prefix}_${sanitized}`;
   }
-  
+
   // If sanitization results in an empty string, generate a new one
   if (!sanitized || sanitized.trim() === '') {
     return generateKey(prefix);
   }
-  
+
   // Truncate if key is too long (ArangoDB has some internal limits)
   if (sanitized.length > 254) {
     sanitized = sanitized.substring(0, 254);
   }
-  
+
   return sanitized;
 }
 
@@ -58,18 +58,18 @@ function processDocument(document, prefix = 'doc') {
   if (!document) {
     throw new Error('Document cannot be null or undefined');
   }
-  
+
   // Make a copy to avoid modifying the original directly
-  const processedDoc = {...document};
-  
+  const processedDoc = { ...document };
+
   // Ensure _key is valid
   const originalKey = processedDoc._key;
   processedDoc._key = sanitizeKey(originalKey, prefix);
-  
+
   // Remove potentially problematic system fields
   delete processedDoc._id;
   delete processedDoc._rev;
-  
+
   return processedDoc;
 }
 

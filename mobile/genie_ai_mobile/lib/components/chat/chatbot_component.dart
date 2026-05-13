@@ -4,23 +4,27 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
-import 'package:genie_ai_mobile/services/chat_history_proxy.dart';
-import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
-import 'package:genie_ai_mobile/services/api_service.dart';
+import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
+import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
+import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
+import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
+import 'package:genie_ai_mobile/providers/api_providers.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
 import 'package:genie_ai_mobile/services/notification_service.dart';
 import 'package:genie_ai_mobile/services/sse_parser.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
-import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:http/http.dart' as http;
+import 'package:openapi/api.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class ChatBotComponent extends StatefulWidget {
+class ChatBotComponent extends ConsumerStatefulWidget {
   final String userId;
   final VoidCallback onRefreshSidebar;
   final Function(List<dynamic>) onRelatedDocumentsUpdate;
@@ -48,10 +52,7 @@ class ChatBotComponent extends StatefulWidget {
   ChatBotComponentState createState() => ChatBotComponentState();
 }
 
-class ChatBotComponentState extends State<ChatBotComponent> {
-  final ChatHistoryProxy _chatHistoryProxy = ChatHistoryProxy();
-  final ChatbotProxy _chatBotProxy = ChatbotProxy();
-  final ApiService _api = ApiService();
+class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
   // Conversation State
   String? _currentConversationId;
@@ -61,7 +62,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   bool get isQuickHelpVisible => _showQuickHelpOverlay;
   bool _isLoading = false;
   bool _isStreaming = false;
-  StreamSubscription<SseEvent>? _streamSubscription;
+  StreamSubscription<String>? _streamSubscription;
 
   bool get _canStream => httpClient != null && streamBaseUrl != null;
   http.Client? get httpClient => widget.httpClient;
@@ -83,7 +84,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   // Quick Help Configuration
   List<Map<String, dynamic>> _quickHelpButtons = [];
   Map<String, dynamic> _quickHelpLayout = {};
-  Map<String, dynamic> _quickHelpDefaults = {};
 
   // Dialog States
   bool _showNewChatConfirm = false;
@@ -172,7 +172,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
       setState(() {
         _quickHelpLayout = quickHelpConfig['layout'] ?? {};
-        _quickHelpDefaults = quickHelpConfig['defaults'] ?? {};
       });
 
       final List<dynamic> buttonsJson = quickHelpConfig['buttons'] ?? [];
@@ -194,7 +193,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
           'action': btn['action'] ?? {},
           'appearance': appearance ?? {},
           'iconAsset': localIconAsset,
-          'darkMode': appearance?['darkMode'] ?? {},
         });
       }
 
@@ -244,6 +242,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   Future<void> loadConversation(String conversationId) async {
+    if (_isStreaming) return;
     if (_hasUnsavedChanges) {
       _pendingLoadConversationId = conversationId;
       setState(() => _showLoadConfirm = true);
@@ -258,9 +257,9 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
     try {
       final cleanId = conversationId.replaceFirst('conversations/', '');
-      final res = await _api.get(
-        'chat/conversations/$cleanId',
-        params: {'userId': widget.userId},
+      final chatHistoryApi = ref.read(chatHistoryApiProvider);
+      final res = await chatHistoryApi.apiChatConversationsConversationIdGetWithHttpInfo(
+        cleanId,
       );
 
       if (res.statusCode != 200) {
@@ -319,6 +318,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   void startNewChat() {
+    if (_isStreaming) return;
     if (_hasUnsavedChanges) {
       setState(() => _showNewChatConfirm = true);
     } else {
@@ -327,6 +327,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   void _resetChat({bool keepLoading = false}) {
+    _streamSubscription?.cancel();
+    _streamSubscription = null;
     setState(() {
       _currentConversationId = null;
       _conversationTitle = tr('chatbot.newChatTitle');
@@ -375,35 +377,58 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       return {'role': m['role'], 'content': m['actualContent'] ?? m['content']};
     }).toList();
 
-    final String currentLanguage = I18nService().currentLocale.languageCode;
-
-    final commonParams = {
-      'sessionId': sessionId,
-      'messages': messagesForApi,
-      'userId': widget.userId,
-      'categoryId': _selectedCategoryId,
-      'contextLabels': _selectedCategoryName,
-      'language': currentLanguage,
-    };
-
     if (_canStream) {
-      _sendStreaming(commonParams);
+      _sendStreaming(sessionId, messagesForApi);
     } else {
-      _sendNonStreaming(commonParams);
+      _sendNonStreaming(sessionId, messagesForApi);
     }
   }
 
-  void _sendStreaming(Map<String, dynamic> params) async {
-    await _streamSubscription?.cancel();
+  void _sendStreaming(
+    String sessionId,
+    List<Map<String, dynamic>> messagesForApi,
+  ) async {
+    // Cancel any previous stream before starting new one
+    _streamSubscription?.cancel();
     _streamSubscription = null;
 
-    final int assistantIndex = _messages.length;
+    final uri = Uri.parse('$streamBaseUrl/api/queries/stream');
+    final hasContext = _selectedCategoryId != null;
+    final request = http.Request('POST', uri)
+      ..headers['Content-Type'] = 'application/json'
+      ..headers['Accept'] = 'text/event-stream'
+      ..body = jsonEncode({
+        'sessionId': sessionId,
+        if (_currentConversationId != null)
+          'conversationId': _currentConversationId,
+        if (hasContext) ...{
+          'messages': messagesForApi,
+          'context': {
+            'categoryLabel': _selectedCategoryName,
+            'serviceLabels': <String>[],
+            'language': I18nService().currentLocale.languageCode.toUpperCase(),
+          },
+          'contextOption': 'conversation-with-context-labels',
+        } else ...{
+          'messages': messagesForApi,
+          'context': {
+            'language': I18nService().currentLocale.languageCode.toUpperCase(),
+          },
+          'contextOption': 'single-message',
+        },
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+      });
 
-    // Insert placeholder assistant message for streaming content
+    String? streamQueryId;
+    String accumulatedContent = '';
+    List<dynamic>? sources;
+    double? confidence;
+
+    final String streamingId = 'stream_${DateTime.now().millisecondsSinceEpoch}';
     setState(() {
-      _isLoading = false;
       _isStreaming = true;
       _messages.add({
+        'id': streamingId,
         'role': 'assistant',
         'content': '',
         'timestamp': DateTime.now().toIso8601String(),
@@ -412,128 +437,169 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     });
     _scrollToBottom();
 
-    Map<String, dynamic>? metadata;
-    String? queryId;
+    Map<String, dynamic>? findStreamingMessage() {
+      try {
+        return _messages.firstWhere((m) => m['id'] == streamingId);
+      } catch (_) {
+        return null;
+      }
+    }
 
     try {
-      final stream = _chatBotProxy.submitQueryStream(
-        httpClient: httpClient!,
-        baseUrl: streamBaseUrl!,
-        sessionId: params['sessionId'],
-        messages: params['messages'],
-        userId: params['userId'],
-        categoryId: params['categoryId'],
-        contextLabels: params['contextLabels'],
-        language: params['language'],
-      );
+      final streamedResponse = await httpClient!.send(request);
 
-      _streamSubscription = stream.listen(
-        (event) {
+      if (!mounted) return;
+
+      if (streamedResponse.statusCode != 200) {
+        throw Exception('SSE returned ${streamedResponse.statusCode}');
+      }
+
+      final parser = SseParser();
+
+      _streamSubscription = streamedResponse.stream
+          .transform(utf8.decoder)
+          .listen(
+        (chunk) {
           if (!mounted) return;
-
-          switch (event) {
-            case SseChunkEvent(:final content):
-              setState(() {
-                final msg = Map<String, dynamic>.from(_messages[assistantIndex]);
-                msg['content'] = (msg['content'] as String) + content;
-                _messages[assistantIndex] = msg;
-              });
-              _scrollToBottom();
-
-            case SseMetadataEvent(:final sourceDocuments, :final confidenceScore):
-              metadata = {
-                'source_documents': sourceDocuments,
-                'confidence_score': confidenceScore,
-              };
-
-            case SseTranslationEvent(:final content):
-              setState(() {
-                final msg = Map<String, dynamic>.from(_messages[assistantIndex]);
-                msg['content'] = content;
-                _messages[assistantIndex] = msg;
-              });
-
-            case SseDoneEvent(queryId: final id):
-              queryId = id;
-
-            case SseErrorEvent(:final message):
-              debugPrint("[CHATBOT] Stream error: $message");
-              NotificationService.error(tr('chatbot.processingError'));
+          for (final event in parser.parseChunk(chunk)) {
+            final msg = findStreamingMessage();
+            if (msg == null) {
+              _streamSubscription?.cancel();
+              return;
+            }
+            switch (event) {
+              case SseChunkEvent(:final content):
+                accumulatedContent += content;
+                setState(() { msg['content'] = accumulatedContent; });
+                _scrollToBottom();
+              case SseMetadataEvent(
+                :final sourceDocuments,
+                :final confidenceScore,
+              ):
+                sources = sourceDocuments;
+                confidence = confidenceScore;
+              case SseTranslationEvent(:final content):
+                accumulatedContent = content;
+                setState(() { msg['content'] = content; });
+                _scrollToBottom();
+              case SseDoneEvent(:final queryId):
+                streamQueryId = queryId;
+              case SseErrorEvent(:final message):
+                debugPrint('[SSE] Error event: $message');
+            }
           }
-        },
-        onError: (error) {
-          if (!mounted) return;
-
-          if (error is StreamingDisabledException) {
-            debugPrint("[CHATBOT] Streaming disabled, falling back to non-streaming");
-            setState(() {
-              _isStreaming = false;
-              if (_messages.length > assistantIndex) {
-                _messages.removeAt(assistantIndex);
-              }
-              _isLoading = true;
-            });
-            _sendNonStreaming(params);
-            return;
-          }
-
-          debugPrint("[CHATBOT] Stream error: $error");
-          setState(() => _isStreaming = false);
-          NotificationService.error(tr('chatbot.processingError'));
         },
         onDone: () {
           if (!mounted) return;
+          for (final event in parser.flush()) {
+            switch (event) {
+              case SseChunkEvent(:final content):
+                accumulatedContent += content;
+              case SseDoneEvent(:final queryId):
+                streamQueryId = queryId;
+              case SseMetadataEvent(
+                :final sourceDocuments,
+                :final confidenceScore,
+              ):
+                sources = sourceDocuments;
+                confidence = confidenceScore;
+              case SseTranslationEvent(:final content):
+                accumulatedContent = content;
+              case SseErrorEvent(:final message):
+                debugPrint('[SSE] Error event (flush): $message');
+            }
+          }
 
-          final List<dynamic> newDocs =
-              metadata?['sources'] ?? metadata?['source_documents'] ?? [];
+          final msg = findStreamingMessage();
+          if (msg != null) {
+            setState(() {
+              msg['content'] = accumulatedContent.isNotEmpty
+                  ? accumulatedContent
+                  : 'No response received';
+              msg['queryId'] = streamQueryId;
+              msg['sources'] = sources ?? [];
+              msg['confidence'] = confidence;
+              msg['metadata'] = {
+                'sources': sources,
+                'confidence_score': confidence,
+              }..removeWhere((key, value) => value == null);
+            });
+          }
 
           setState(() {
-            final msg = Map<String, dynamic>.from(_messages[assistantIndex]);
-            msg['id'] = queryId;
-            msg['queryId'] = queryId;
-            msg['sources'] = newDocs;
-            msg['confidence'] = metadata?['confidence_score'];
-            msg['metadata'] = metadata;
-            msg['isSaved'] = false;
-            _messages[assistantIndex] = msg;
-            _relatedDocuments = _mergeUniqueDocs(newDocs, _relatedDocuments);
             _isStreaming = false;
+            _isLoading = false;
           });
 
-          widget.onRelatedDocumentsUpdate(_relatedDocuments);
-          _scrollToBottom();
+          if (sources != null && sources!.isNotEmpty) {
+            _relatedDocuments = _mergeUniqueDocs(sources!, _relatedDocuments);
+            widget.onRelatedDocumentsUpdate(_relatedDocuments);
+          }
           _updateQuickHelpVisibility();
         },
-        cancelOnError: false,
+        onError: (error) {
+          if (!mounted) return;
+          debugPrint('[SSE] Stream error: $error');
+          final msg = findStreamingMessage();
+          if (msg != null) {
+            setState(() {
+              msg['content'] = accumulatedContent.isNotEmpty
+                  ? accumulatedContent
+                  : 'Streaming error';
+            });
+          }
+          setState(() {
+            _isStreaming = false;
+            _isLoading = false;
+          });
+        },
+        cancelOnError: true,
       );
-    } on StreamingDisabledException {
-      debugPrint("[CHATBOT] Streaming disabled, falling back to non-streaming");
+    } catch (e) {
+      debugPrint('[SSE] Connection error: $e');
+      if (!mounted) return;
+      final msg = findStreamingMessage();
+      if (msg != null) {
+        setState(() {
+          msg['content'] = accumulatedContent.isNotEmpty
+              ? accumulatedContent
+              : 'Connection error';
+        });
+      }
       setState(() {
         _isStreaming = false;
-        if (_messages.length > assistantIndex) {
-          _messages.removeAt(assistantIndex);
-        }
-        _isLoading = true;
+        _isLoading = false;
       });
-      _sendNonStreaming(params);
-    } catch (e) {
-      debugPrint("[CHATBOT] Stream setup error: $e");
-      setState(() => _isStreaming = false);
       NotificationService.error(tr('chatbot.processingError'));
     }
   }
 
-  void _sendNonStreaming(Map<String, dynamic> params) async {
+  void _sendNonStreaming(
+    String sessionId,
+    List<Map<String, dynamic>> messagesForApi,
+  ) async {
     try {
-      final response = await _chatBotProxy.submitQuery(
-        sessionId: params['sessionId'],
-        messages: params['messages'],
-        userId: params['userId'],
-        categoryId: params['categoryId'],
-        contextLabels: params['contextLabels'],
-        language: params['language'],
+      final queriesApi = ref.read(queriesApiProvider);
+
+      final request = ApiQueriesPostRequest(
+        sessionId: sessionId,
+        messages: messagesForApi.map((m) => ApiQueriesPostRequestMessagesInner(
+          role: m['role'] == 'user'
+              ? ApiQueriesPostRequestMessagesInnerRoleEnum.user
+              : ApiQueriesPostRequestMessagesInnerRoleEnum.assistant,
+          content: m['content'] as String,
+        )).toList(),
+        categoryId: _selectedCategoryId,
+        timestamp: DateTime.now().toUtc(),
       );
 
+      final res = await queriesApi.apiQueriesPostWithHttpInfo(request);
+
+      if (res.statusCode != 200 && res.statusCode != 201) {
+        throw Exception("Query failed: ${res.statusCode}");
+      }
+
+      final response = jsonDecode(res.body) as Map<String, dynamic>;
       final Map<String, dynamic>? metadata = response['metadata'];
 
       final assistantMessage = {
@@ -627,9 +693,10 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   void _openFeedbackDialog(Map<String, dynamic> message) {
+    final tokens = ThemeManager().tokens;
     showDialog(
       context: context,
-      barrierColor: Colors.black54,
+      barrierColor: tokens.scrim,
       builder: (context) => ChatResponseFeedbackDialog(
         message: message,
         onSubmit: (feedbackData) async {
@@ -641,18 +708,22 @@ class ChatBotComponentState extends State<ChatBotComponent> {
           }
 
           try {
-            final payload = {
-              'userId': widget.userId,
-              'rating': feedbackData['rating'],
-              'feedbackText': feedbackData['text'],
-              'thumb': feedbackData['thumbFeedback'],
-              'metadata': {'skinTone': feedbackData['skinTone']},
-            };
-
-            await _chatBotProxy.submitFeedback(
-              queryId: queryId,
-              feedback: payload,
+            final queriesApi = ref.read(queriesApiProvider);
+            final cleanQueryId = queryId.replaceFirst('queries/', '');
+            
+            final feedbackRequest = ApiQueriesQueryIdFeedbackPostRequest(
+              rating: feedbackData['rating'],
+              comment: feedbackData['text'],
             );
+
+            final res = await queriesApi.apiQueriesQueryIdFeedbackPostWithHttpInfo(
+              cleanQueryId,
+              feedbackRequest,
+            );
+
+            if (res.statusCode != 200 && res.statusCode != 201) {
+              throw Exception("Feedback failed: ${res.statusCode}");
+            }
 
             NotificationService.success(tr('feedback.success'));
           } catch (e) {
@@ -680,24 +751,37 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     });
 
     try {
-      final String sessionId = 'session_${widget.userId}';
-
-      final data = {
-        'userId': widget.userId,
-        'title': _conversationTitle,
-        if (_selectedCategoryId != null) 'categoryId': _selectedCategoryId,
-        'sessionId': sessionId,
-      };
-
       dynamic conversationResponse;
+      final chatHistoryApi = ref.read(chatHistoryApiProvider);
+      
       if (_currentConversationId == null) {
-        conversationResponse = await _chatHistoryProxy.createConversation(data);
+        final createRequest = ApiChatConversationsPostRequest(
+          title: _conversationTitle,
+          categoryId: _selectedCategoryId,
+        );
+        final res = await chatHistoryApi.apiChatConversationsPostWithHttpInfo(createRequest);
+        
+        if (res.statusCode != 200 && res.statusCode != 201) {
+          throw Exception("Create conversation failed: ${res.statusCode}");
+        }
+        
+        conversationResponse = jsonDecode(res.body);
       } else {
         final id = _currentConversationId!.replaceFirst('conversations/', '');
-        conversationResponse = await _chatHistoryProxy.updateConversation(
-          id,
-          data,
+        final updateRequest = ApiChatConversationsConversationIdPatchRequest(
+          title: _conversationTitle,
+          categoryId: _selectedCategoryId,
         );
+        final res = await chatHistoryApi.apiChatConversationsConversationIdPatchWithHttpInfo(
+          id,
+          updateRequest,
+        );
+        
+        if (res.statusCode != 200 && res.statusCode != 201) {
+          throw Exception("Update conversation failed: ${res.statusCode}");
+        }
+        
+        conversationResponse = jsonDecode(res.body);
       }
 
       final String conversationId =
@@ -713,20 +797,24 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
         // CRITICAL: We save msg['content'] (Visible prompt), NOT actualContent (hidden prompt).
         // This ensures the user sees exactly what they clicked in history.
-        final messagePayload = {
-          'conversationId': conversationIdClean,
-          'content': msg['content'],
-          'sender': msg['role'] == 'user' ? 'user' : 'assistant',
-          'userId': widget.userId,
-          if (msg['queryId'] != null) 'queryId': msg['queryId'],
-          if (msg['metadata'] != null) 'metadata': msg['metadata'],
-        };
-
         try {
-          await _chatHistoryProxy.addMessage(
-            conversationIdClean,
-            messagePayload,
+          final addMessageRequest = ApiChatConversationsConversationIdMessagesPostRequest(
+            content: msg['content'] as String,
+            sender: msg['role'] == 'user' 
+                ? ApiChatConversationsConversationIdMessagesPostRequestSenderEnum.user 
+                : ApiChatConversationsConversationIdMessagesPostRequestSenderEnum.assistant,
+            queryId: msg['queryId']?.toString(),
+            metadata: msg['metadata'] as Map<String, dynamic>?,
           );
+          
+          final res = await chatHistoryApi.apiChatConversationsConversationIdMessagesPostWithHttpInfo(
+            conversationIdClean,
+            addMessageRequest,
+          );
+          
+          if (res.statusCode != 200 && res.statusCode != 201) {
+            throw Exception("Add message failed: ${res.statusCode}");
+          }
           setState(() {
             _messages[i]['isSaved'] = true;
           });
@@ -880,6 +968,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
   Future<void> exportChatToPDF() async {
     final pdf = pw.Document();
+    final tokens = ThemeManager().tokens;
     pw.Font? customFont;
     try {
       final fontData = await rootBundle.load("assets/fonts/Roboto-Regular.ttf");
@@ -909,11 +998,15 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       final String content = msg['content'] ?? '';
       if (content.trim().isEmpty) continue;
 
-      final PdfColor bgColor = isUser ? PdfColors.blue50 : PdfColors.grey100;
+      final PdfColor bgColor = isUser
+          ? ColorUtils.toPdfColor(tokens.accent10)
+          : PdfColors.grey100;
       final PdfColor accentColor = isUser
-          ? PdfColors.blue400
-          : PdfColors.green400;
-      final PdfColor textColor = isUser ? PdfColors.blue900 : PdfColors.grey800;
+          ? ColorUtils.toPdfColor(tokens.accent)
+          : ColorUtils.toPdfColor(tokens.success);
+      final PdfColor textColor = isUser
+          ? ColorUtils.toPdfColor(tokens.fg)
+          : PdfColors.grey800;
 
       // One sender label per message
       pages.add(
@@ -923,7 +1016,9 @@ class ChatBotComponentState extends State<ChatBotComponent> {
             font: customFont,
             fontSize: 12,
             fontWeight: pw.FontWeight.bold,
-            color: isUser ? PdfColors.blue800 : PdfColors.grey800,
+            color: isUser
+                ? ColorUtils.toPdfColor(tokens.accent)
+                : PdfColors.grey800,
           ),
         ),
       );
@@ -994,7 +1089,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
     final StringBuffer buffer = StringBuffer();
     // Optional header
-    buffer.writeln("Conversation with Genie (${_conversationTitle}):\n");
+    buffer.writeln("Conversation with Genie ($_conversationTitle):\n");
 
     for (final msg in _messages) {
       // Skip system/welcome messages if desired, or keep them all
@@ -1030,27 +1125,12 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   // ===========================================================================
-  // HELPER FOR GRADIENT
-  // ===========================================================================
-  Alignment _getGradientAlignment(String direction, bool isStart) {
-    switch (direction) {
-      case 'vertical':
-        return isStart ? Alignment.topCenter : Alignment.bottomCenter;
-      case 'diagonal':
-        return isStart ? Alignment.topLeft : Alignment.bottomRight;
-      case 'horizontal':
-      default:
-        return isStart ? Alignment.centerLeft : Alignment.centerRight;
-    }
-  }
-
-  // ===========================================================================
   // UI BUILD
   // ===========================================================================
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = ThemeManager().getColors();
+    final tokens = ThemeManager().tokens;
     final isDark = ThemeManager().isDarkMode;
 
     // Wrap entire layout to detect taps outside input
@@ -1068,19 +1148,19 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+                    horizontal: DsSpacing.md,
+                    vertical: DsSpacing.sm,
                   ),
                   decoration: BoxDecoration(
-                    color: colors['primary'].withOpacity(0.1),
-                    border: Border(bottom: BorderSide(color: colors['border'])),
+                    color: tokens.accent10,
+                    border: Border(bottom: BorderSide(color: tokens.border)),
                   ),
                   child: Row(
                     children: [
                       Icon(
                         Icons.lightbulb_outline,
                         size: 20,
-                        color: colors['primary'],
+                        color: tokens.accent,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -1088,24 +1168,17 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                           "${tr('chatbot.contextPrefix')} $_selectedCategoryName",
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: colors['text'],
+                            color: tokens.fg,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Tooltip(
-                        message: tr('chatbot.removeContext'),
-                        child: IconButton(
-                          icon: Icon(
-                            Icons.close,
-                            size: 18,
-                            color: colors['text'],
-                          ),
-                          onPressed: () => setCategoryContext("", ""),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          splashRadius: 20,
-                        ),
+                      DsButton(
+                        iconOnly: true,
+                        icon: Icons.close,
+                        variant: DsButtonVariant.ghost,
+                        overrideFg: tokens.fg,
+                        onPressed: () => setCategoryContext("", ""),
                       ),
                     ],
                   ),
@@ -1115,20 +1188,25 @@ class ChatBotComponentState extends State<ChatBotComponent> {
               Expanded(
                 child: ListView.builder(
                   controller: _scrollController,
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(DsSpacing.md),
                   itemCount:
                       _messages.length + (_isLoading || _isStreaming ? 1 : 0),
                   itemBuilder: (context, index) {
                     if (index == _messages.length && (_isLoading || _isStreaming)) {
                       return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: DsSpacing.md,
+                        ),
                         child: Row(
                           children: [
                             const CircularProgressIndicator(strokeWidth: 2),
                             const SizedBox(width: 12),
-                            Text(_isStreaming
-                                ? tr('chatbot.generating')
-                                : tr('chatbot.thinking')),
+                            Text(
+                              _isStreaming
+                                  ? tr('chatbot.generating')
+                                  : tr('chatbot.thinking'),
+                              style: TextStyle(color: tokens.fg),
+                            ),
                           ],
                         ),
                       );
@@ -1142,16 +1220,18 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                           ? Alignment.centerRight
                           : Alignment.centerLeft,
                       child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        padding: const EdgeInsets.all(16),
+                        margin: const EdgeInsets.symmetric(
+                          vertical: DsSpacing.sm,
+                        ),
+                        padding: const EdgeInsets.all(DsSpacing.md),
                         constraints: BoxConstraints(
                           maxWidth: MediaQuery.of(context).size.width * 0.75,
                         ),
                         decoration: BoxDecoration(
                           color: isUser
-                              ? colors['primary']
-                              : (isDark ? colors['surface'] : Colors.grey[200]),
-                          borderRadius: BorderRadius.circular(16),
+                              ? tokens.accent
+                              : (isDark ? tokens.surface : tokens.muted20),
+                          borderRadius: BorderRadius.circular(DsRadii.xl),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1160,17 +1240,17 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                               data: msg['content'] ?? '',
                               styleSheet: MarkdownStyleSheet(
                                 p: TextStyle(
-                                  color: isUser ? Colors.white : colors['text'],
-                                  fontSize: 16,
+                                  color: isUser ? tokens.accentFg : tokens.fg,
+                                  fontSize: tokens.textMd,
                                   height: 1.5,
                                 ),
                                 codeblockDecoration: BoxDecoration(
                                   color: isUser
-                                      ? Colors.white.withOpacity(0.1)
-                                      : (isDark
-                                            ? Colors.white10
-                                            : Colors.black12),
-                                  borderRadius: BorderRadius.circular(8),
+                                      ? tokens.accentFg.withValues(alpha: 0.1)
+                                      : (isDark ? tokens.fg30 : tokens.muted20),
+                                  borderRadius: BorderRadius.circular(
+                                    DsRadii.md,
+                                  ),
                                 ),
                               ),
                               selectable: true,
@@ -1187,7 +1267,9 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                             // Footer: Confidence & Feedback
                             if (!isUser)
                               Padding(
-                                padding: const EdgeInsets.only(top: 12),
+                                padding: const EdgeInsets.only(
+                                  top: DsSpacing.md,
+                                ),
                                 child: Row(
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
@@ -1196,10 +1278,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                       Text(
                                         "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
                                         style: TextStyle(
-                                          fontSize: 11,
-                                          color: colors['text'].withOpacity(
-                                            0.6,
-                                          ),
+                                          fontSize: tokens.textXs,
+                                          color: tokens.fg50,
                                           fontStyle: FontStyle.italic,
                                         ),
                                       ),
@@ -1208,15 +1288,17 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                       message: tr('feedback.title'),
                                       child: InkWell(
                                         onTap: () => _openFeedbackDialog(msg),
-                                        borderRadius: BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(
+                                          DsRadii.lg,
+                                        ),
                                         child: Padding(
-                                          padding: const EdgeInsets.all(4.0),
+                                          padding: const EdgeInsets.all(
+                                            DsSpacing.xs,
+                                          ),
                                           child: Icon(
                                             Icons.thumb_up_alt_outlined,
                                             size: 16,
-                                            color: colors['text'].withOpacity(
-                                              0.5,
-                                            ),
+                                            color: tokens.fg50,
                                           ),
                                         ),
                                       ),
@@ -1234,92 +1316,95 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
               // Input Area
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(DsSpacing.md),
                 decoration: BoxDecoration(
-                  color: colors['surface'],
-                  border: Border(top: BorderSide(color: colors['border'])),
+                  color: tokens.surface,
+                  border: Border(top: BorderSide(color: tokens.border)),
                 ),
                 child: Column(
                   children: [
                     Row(
                       children: [
-                        IconButton(
-                          icon: Icon(
-                            Icons.add_circle_outline,
-                            color: colors['text'],
+                        Tooltip(
+                          message: tr('chatbot.newChatTitle'),
+                          child: DsButton(
+                            iconOnly: true,
+                            icon: Icons.add_circle_outline,
+                            variant: DsButtonVariant.ghost,
+                            overrideFg: tokens.fg,
+                            onPressed: startNewChat,
                           ),
-                          tooltip: tr('chatbot.newChatTitle'),
-                          onPressed: startNewChat,
                         ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.save_outlined,
-                            color: colors['text'],
+                        Tooltip(
+                          message: tr('chatbot.saveChat'),
+                          child: DsButton(
+                            iconOnly: true,
+                            icon: Icons.save_outlined,
+                            variant: DsButtonVariant.ghost,
+                            overrideFg: tokens.fg,
+                            onPressed: () {
+                              _titleController.text = _conversationTitle;
+                              setState(() => _showSaveDialog = true);
+                            },
                           ),
-                          tooltip: tr('chatbot.saveChat'),
-                          onPressed: () {
-                            _titleController.text = _conversationTitle;
-                            setState(() => _showSaveDialog = true);
-                          },
                         ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.picture_as_pdf_outlined,
-                            color: colors['text'],
+                        Tooltip(
+                          message: tr('chatbot.exportChat'),
+                          child: DsButton(
+                            iconOnly: true,
+                            icon: Icons.picture_as_pdf_outlined,
+                            variant: DsButtonVariant.ghost,
+                            overrideFg: tokens.fg,
+                            onPressed: () {
+                              _exportFilename =
+                                  "chat_${DateTime.now().toIso8601String().split('T').first}";
+                              setState(() => _showExportDialog = true);
+                            },
                           ),
-                          tooltip: tr('chatbot.exportChat'),
-                          onPressed: () {
-                            _exportFilename =
-                                "chat_${DateTime.now().toIso8601String().split('T').first}";
-                            setState(() => _showExportDialog = true);
-                          },
                         ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          tooltip: tr('chatbot.shareWhatsApp'),
-                          onPressed:
-                              _shareToWhatsApp, // Ensure you added the function from the previous step
-                          icon: SvgPicture.string(
-                            '''
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-      <path fill="#25D366" d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2m.01 16.61c-1.48 0-2.94-.4-4.21-1.15l-.3-.18-3.11.82.83-3.04-.19-.31a8.19 8.19 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24 2.2 0 4.27.86 5.82 2.42a8.183 8.183 0 0 1 2.41 5.83c.02 4.54-3.68 8.23-8.23 8.23m4.53-6.18c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43s.17-.25.25-.41c.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.14-1.18s-.22-.16-.47-.28z"/>
-    </svg>
-    ''',
-                            width: 24,
-                            height: 24,
+                        const SizedBox(width: DsSpacing.sm),
+                        Tooltip(
+                          message: tr('chatbot.shareWhatsApp'),
+                          child: IconButton(
+                            onPressed: _shareToWhatsApp,
+                            icon: SvgPicture.string(
+                              '''
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path fill="#25D366" d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2m.01 16.61c-1.48 0-2.94-.4-4.21-1.15l-.3-.18-3.11.82.83-3.04-.19-.31a8.19 8.19 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24 2.2 0 4.27.86 5.82 2.42a8.183 8.183 0 0 1 2.41 5.83c.02 4.54-3.68 8.23-8.23 8.23m4.53-6.18c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43s.17-.25.25-.41c.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.14-1.18s-.22-.16-.47-.28z"/>
+        </svg>
+        ''',
+                              width: 24,
+                              height: 24,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: DsSpacing.sm),
                     Row(
                       children: [
                         Expanded(
                           child: TextField(
                             controller: _inputController,
                             focusNode: _inputFocusNode,
-                            style: TextStyle(color: colors['text']),
+                            style: TextStyle(color: tokens.fg),
                             decoration: InputDecoration(
                               hintText: tr('chatbot.placeholder'),
-                              hintStyle: TextStyle(
-                                color: isDark
-                                    ? Colors.grey[500]
-                                    : Colors.grey[600],
-                              ),
+                              hintStyle: TextStyle(color: tokens.mutedSoft),
                               filled: true,
                               fillColor: isDark
-                                  ? Colors.white.withOpacity(0.05)
+                                  ? tokens.muted20
                                   : Colors.transparent,
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: colors['border']),
+                                borderRadius: BorderRadius.circular(DsRadii.md),
+                                borderSide: BorderSide(color: tokens.border),
                               ),
                               enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: colors['border']),
+                                borderRadius: BorderRadius.circular(DsRadii.md),
+                                borderSide: BorderSide(color: tokens.border),
                               ),
                               contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
+                                horizontal: DsSpacing.md,
                                 vertical: 14,
                               ),
                             ),
@@ -1329,9 +1414,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                           ),
                         ),
                         const SizedBox(width: 12),
-                        IconButton(
-                          icon: const Icon(Icons.send),
-                          color: colors['primary'],
+                        DsButton(
+                          iconOnly: true,
+                          icon: Icons.send,
+                          variant: DsButtonVariant.ghost,
+                          overrideFg: tokens.accent,
                           onPressed: _isLoading || _isStreaming
                               ? null
                               : () => _sendMessage(_inputController.text),
@@ -1347,8 +1434,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
           // Quick Help Overlay
           if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
             Container(
-              color: colors['background'].withOpacity(0.98),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              color: tokens.bg,
+              padding: const EdgeInsets.symmetric(
+                horizontal: DsSpacing.md,
+                vertical: DsSpacing.xl,
+              ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -1356,11 +1446,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                     tr('chatbot.whatCanIHelp'),
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: colors['text'],
+                      color: tokens.fg,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: DsSpacing.lg),
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
@@ -1382,168 +1472,20 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                           itemCount: _quickHelpButtons.length,
                           itemBuilder: (context, index) {
                             final button = _quickHelpButtons[index];
-                            // Use safe access with casting to Map to prevent null cast errors
-                            final appearance =
-                                button['appearance'] as Map<String, dynamic>? ??
-                                {};
-                            final action =
-                                button['action'] as Map<String, dynamic>? ?? {};
-                            final darkMode =
-                                button['darkMode'] as Map<String, dynamic>? ??
-                                {};
-
-                            // Determine active styles based on Theme
-                            // If in Dark Mode and darkMode overrides exist, merge them
-                            final Map<String, dynamic> activeAppearance;
-                            if (isDark && darkMode.isNotEmpty) {
-                              // Deep merge logic simplified: override top-level keys if present
-                              activeAppearance = {
-                                ...appearance,
-                                'label': {
-                                  ...(appearance['label']
-                                          as Map<String, dynamic>? ??
-                                      {}),
-                                  ...(darkMode['label']
-                                          as Map<String, dynamic>? ??
-                                      {}),
-                                },
-                                'icon': {
-                                  ...(appearance['icon']
-                                          as Map<String, dynamic>? ??
-                                      {}),
-                                  ...(darkMode['icon']
-                                          as Map<String, dynamic>? ??
-                                      {}),
-                                },
-                                'style': {
-                                  ...(appearance['style']
-                                          as Map<String, dynamic>? ??
-                                      {}),
-                                  ...(darkMode['style']
-                                          as Map<String, dynamic>? ??
-                                      {}),
-                                },
-                              };
-
-                              // Handle nested background style merge if needed
-                              if (darkMode['style'] != null &&
-                                  (darkMode['style'] as Map)['background'] !=
-                                      null) {
-                                final baseStyle =
-                                    appearance['style']
-                                        as Map<String, dynamic>? ??
-                                    {};
-                                final darkStyle =
-                                    darkMode['style']
-                                        as Map<String, dynamic>? ??
-                                    {};
-
-                                final baseBg =
-                                    baseStyle['background']
-                                        as Map<String, dynamic>? ??
-                                    {};
-                                final darkBg =
-                                    darkStyle['background']
-                                        as Map<String, dynamic>? ??
-                                    {};
-
-                                final mergedBg = {...baseBg, ...darkBg};
-
-                                final mergedStyle = {
-                                  ...(activeAppearance['style']
-                                      as Map<String, dynamic>),
-                                  'background': mergedBg,
-                                };
-                                activeAppearance['style'] = mergedStyle;
-                              }
-                            } else {
-                              activeAppearance = appearance;
-                            }
-
-                            // CORRECTED: Use label text key for button display
                             final labelMap =
-                                activeAppearance['label']
-                                    as Map<String, dynamic>?;
+                                button['appearance']?['label']
+                                    as Map<String, dynamic>? ??
+                                {};
                             final String titleKey =
-                                labelMap?['text']?.toString() ?? '';
+                                labelMap['text']?.toString() ?? '';
                             final String translatedTitle = tr(titleKey);
                             final String iconAsset =
                                 button['iconAsset']?.toString() ?? '';
 
-                            // Style Extraction from Active Appearance
-                            final styles =
-                                activeAppearance['style']
-                                    as Map<String, dynamic>? ??
-                                {};
-                            final bg =
-                                styles['background'] as Map<String, dynamic>? ??
-                                {};
-                            final gradientConfig =
-                                bg['gradient'] as Map<String, dynamic>? ?? {};
-                            final borderConfig =
-                                styles['border'] as Map<String, dynamic>? ?? {};
-                            final shadowConfig =
-                                styles['shadow'] as Map<String, dynamic>? ?? {};
-
-                            // Colors
-                            final String startColorHex =
-                                gradientConfig['start']?.toString() ??
-                                '#FFFFFF';
-                            final String endColorHex =
-                                gradientConfig['end']?.toString() ??
-                                startColorHex;
-                            final String gradientDirection =
-                                gradientConfig['direction']?.toString() ??
-                                'horizontal';
-
-                            final Color startColor = Color(
-                              int.parse(startColorHex.replaceAll('#', '0xFF')),
-                            );
-                            final Color endColor = Color(
-                              int.parse(endColorHex.replaceAll('#', '0xFF')),
-                            );
-
-                            final bool showShadow =
-                                (_quickHelpDefaults['showShadow'] == true) ||
-                                (shadowConfig['enabled'] == true);
-                            final bool showBorder =
-                                (_quickHelpDefaults['showBorder'] == true) ||
-                                (borderConfig['enabled'] == true);
-
-                            // Label Color
-                            final labelConfig =
-                                activeAppearance['label']
-                                    as Map<String, dynamic>? ??
-                                {};
-                            final String labelColorHex =
-                                labelConfig['color']?.toString() ??
-                                (isDark ? '#FFFFFF' : '#000000');
-                            final Color labelColor = Color(
-                              int.parse(labelColorHex.replaceAll('#', '0xFF')),
-                            );
-
-                            // Icon Color (if you want to tint icons, though SVGs might have own colors)
-                            // final iconConfig = activeAppearance['icon'] as Map<String, dynamic>? ?? {};
-                            // final String iconColorHex = iconConfig['color']?.toString() ?? labelColorHex;
-                            // final Color iconColor = Color(int.parse(iconColorHex.replaceAll('#', '0xFF')));
-
-                            // Shadow Configuration (Stronger defaults)
-                            final defaultShadow =
-                                _quickHelpDefaults['shadow']
-                                    as Map<String, dynamic>? ??
-                                {};
-                            final double shadowOpacity =
-                                (defaultShadow['opacity'] as num?)
-                                    ?.toDouble() ??
-                                0.25; // Stronger default
-                            final double shadowBlur = _parsePixelValue(
-                              defaultShadow['blur']?.toString() ?? '8px',
-                            ); // Stronger default
-
                             return Material(
                               color: Colors.transparent,
                               child: InkWell(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(DsRadii.lg),
                                 onTap: () => _quickHelpPressed(button),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
@@ -1551,48 +1493,24 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                     vertical: 8,
                                   ),
                                   decoration: BoxDecoration(
-                                    // Gradient Fill with Direction
-                                    gradient: LinearGradient(
-                                      colors: [startColor, endColor],
-                                      begin: _getGradientAlignment(
-                                        gradientDirection,
-                                        true,
-                                      ),
-                                      end: _getGradientAlignment(
-                                        gradientDirection,
-                                        false,
-                                      ),
+                                    color: tokens.surface,
+                                    borderRadius: BorderRadius.circular(
+                                      DsRadii.lg,
                                     ),
-                                    borderRadius: BorderRadius.circular(12),
-                                    // Border
-                                    border: showBorder
-                                        ? Border.all(color: colors['border'])
-                                        : null,
-                                    // Shadow
-                                    boxShadow: showShadow
-                                        ? [
-                                            BoxShadow(
-                                              color: Colors.black.withOpacity(
-                                                shadowOpacity,
-                                              ),
-                                              blurRadius: shadowBlur,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ]
-                                        : null,
+                                    border: Border.all(
+                                      color: tokens.borderLight,
+                                    ),
                                   ),
                                   child: Row(
-                                    // Changed to Row for Slimline
                                     children: [
                                       SvgPicture.asset(
                                         iconAsset,
-                                        width: 18, // Smaller icon for slimline
+                                        width: 18,
                                         height: 18,
                                         placeholderBuilder: (_) => Icon(
                                           Icons.help_outline,
                                           size: 20,
-                                          // Fallback icon color matches text if not specified in SVG
-                                          color: labelColor,
+                                          color: tokens.accent,
                                         ),
                                       ),
                                       const SizedBox(width: 12),
@@ -1602,8 +1520,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                           style: theme.textTheme.labelMedium
                                               ?.copyWith(
                                                 fontWeight: FontWeight.w600,
-                                                fontSize: 11, // Smaller font
-                                                color: labelColor,
+                                                fontSize: tokens.textXs,
+                                                color: tokens.fg,
                                               ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
@@ -1661,60 +1579,157 @@ class ChatBotComponentState extends State<ChatBotComponent> {
             },
           ),
           if (_showSaveDialog)
-            AlertDialog(
-              title: Text(tr('chatbot.dialogs.saveTitle')),
-              content: TextField(
-                controller: _titleController,
-                decoration: InputDecoration(
-                  hintText: tr('chatbot.dialogs.saveHint'),
-                  border: const OutlineInputBorder(),
-                ),
-                onChanged: (v) => _conversationTitle = v,
-                autofocus: true,
+            Dialog(
+              backgroundColor: tokens.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(DsRadii.xl),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => setState(() => _showSaveDialog = false),
-                  child: Text(tr('common.cancel')),
+              insetPadding: const EdgeInsets.all(DsSpacing.md),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        DsSpacing.lg,
+                        DsSpacing.lg,
+                        DsSpacing.md,
+                        DsSpacing.md,
+                      ),
+                      child: Text(
+                        tr('chatbot.dialogs.saveTitle'),
+                        style: TextStyle(
+                          color: tokens.fg,
+                          fontSize: tokens.textLg,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.all(DsSpacing.lg),
+                      child: TextField(
+                        controller: _titleController,
+                        style: TextStyle(color: tokens.fg),
+                        decoration: InputDecoration(
+                          hintText: tr('chatbot.dialogs.saveHint'),
+                          hintStyle: TextStyle(color: tokens.mutedSoft),
+                          border: const OutlineInputBorder(),
+                        ),
+                        onChanged: (v) => _conversationTitle = v,
+                        autofocus: true,
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        DsSpacing.md,
+                        DsSpacing.sm,
+                        DsSpacing.md,
+                        DsSpacing.md,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          DsButton(
+                            label: tr('common.cancel'),
+                            variant: DsButtonVariant.ghost,
+                            onPressed: () =>
+                                setState(() => _showSaveDialog = false),
+                          ),
+                          const SizedBox(width: DsSpacing.sm),
+                          DsButton(
+                            label: tr('common.save'),
+                            variant: DsButtonVariant.primary,
+                            onPressed: () {
+                              saveConversation().then((_) {});
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                ElevatedButton(
-                  onPressed: () {
-                    saveConversation().then((_) {});
-                  },
-                  child: Text(tr('common.save')),
-                ),
-              ],
+              ),
             ),
           if (_showExportDialog)
-            AlertDialog(
-              title: Text(tr('chatbot.dialogs.exportTitle')),
-              content: TextField(
-                decoration: InputDecoration(
-                  hintText: tr('chatbot.dialogs.exportHint'),
-                ),
-                onChanged: (v) => _exportFilename = v,
-                controller: TextEditingController(text: _exportFilename),
+            Dialog(
+              backgroundColor: tokens.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(DsRadii.xl),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => setState(() => _showExportDialog = false),
-                  child: Text(tr('common.cancel')),
+              insetPadding: const EdgeInsets.all(DsSpacing.md),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        DsSpacing.lg,
+                        DsSpacing.lg,
+                        DsSpacing.md,
+                        DsSpacing.md,
+                      ),
+                      child: Text(
+                        tr('chatbot.dialogs.exportTitle'),
+                        style: TextStyle(
+                          color: tokens.fg,
+                          fontSize: tokens.textLg,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.all(DsSpacing.lg),
+                      child: TextField(
+                        style: TextStyle(color: tokens.fg),
+                        decoration: InputDecoration(
+                          hintText: tr('chatbot.dialogs.exportHint'),
+                          hintStyle: TextStyle(color: tokens.mutedSoft),
+                        ),
+                        onChanged: (v) => _exportFilename = v,
+                        controller: TextEditingController(
+                          text: _exportFilename,
+                        ),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        DsSpacing.md,
+                        DsSpacing.sm,
+                        DsSpacing.md,
+                        DsSpacing.md,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          DsButton(
+                            label: tr('common.cancel'),
+                            variant: DsButtonVariant.ghost,
+                            onPressed: () =>
+                                setState(() => _showExportDialog = false),
+                          ),
+                          const SizedBox(width: DsSpacing.sm),
+                          DsButton(
+                            label: tr('chatbot.dialogs.actions.export'),
+                            variant: DsButtonVariant.primary,
+                            onPressed: _exportFilename.trim().isEmpty
+                                ? null
+                                : exportChatToPDF,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                ElevatedButton(
-                  onPressed: _exportFilename.trim().isEmpty
-                      ? null
-                      : exportChatToPDF,
-                  child: Text(tr('chatbot.dialogs.actions.export')),
-                ),
-              ],
+              ),
             ),
         ],
       ),
     );
-  }
-
-  // Helper to parse pixel string to double
-  double _parsePixelValue(String val) {
-    return double.tryParse(val.replaceAll('px', '')) ?? 0.0;
   }
 }

@@ -34,7 +34,6 @@ export default createStore({
           try {
             if (mutation.type === 'chatHistory/CLEAR_FOLDERS') {
               localStorage.removeItem('chatHistory');
-              console.log('Cleared chatHistory from localStorage due to CLEAR_FOLDERS');
             } else {
               localStorage.setItem('chatHistory', JSON.stringify(state.chatHistory));
             }

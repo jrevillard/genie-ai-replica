@@ -26,7 +26,7 @@ export default {
   justify-content: center;
   align-items: center;
   height: 100vh;
-  font-size: 1.2rem;
-  color: var(--text-primary, #333);
+  font-size: var(--text-lg);
+  color: var(--fg);
 }
 </style>

@@ -15,29 +15,31 @@ let db;
 function askQuestion(query) {
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout,
+    output: process.stdout
   });
 
-  return new Promise(resolve => rl.question(query, ans => {
-    rl.close();
-    resolve(ans);
-  }));
+  return new Promise((resolve) =>
+    rl.question(query, (ans) => {
+      rl.close();
+      resolve(ans);
+    })
+  );
 }
 
 async function initializeDatabase(config) {
   try {
     console.log(`Connecting to ArangoDB at ${config.url}...`);
-    
+
     db = new Database({
       url: config.url,
       databaseName: config.database,
       auth: config.auth
     });
-    
+
     // Test connection
     const info = await db.get();
     console.log(`✓ Connected to database: ${info.name} (version: ${info.version})`);
-    
+
     return db;
   } catch (error) {
     console.error('✗ Failed to connect to database:', error.message);
@@ -49,36 +51,36 @@ async function initializeDatabase(config) {
 async function createServiceCategoryTranslationsCollection() {
   try {
     console.log('Checking serviceCategoryTranslations collection...');
-    
+
     const collection = db.collection('serviceCategoryTranslations');
     const exists = await collection.exists();
-    
+
     if (exists) {
       console.log('⚠ serviceCategoryTranslations collection already exists - using existing collection');
       return collection;
     }
-    
+
     console.log('Creating serviceCategoryTranslations collection...');
-    
+
     const translationsCollection = await db.createCollection('serviceCategoryTranslations', {
       waitForSync: false,
       keyOptions: {},
       schema: {
-        message: "Service category translation document does not match schema",
-        level: "none", // Disable schema validation to avoid issues
-        type: "json",
+        message: 'Service category translation document does not match schema',
+        level: 'none', // Disable schema validation to avoid issues
+        type: 'json',
         rule: {
-          type: "object",
+          type: 'object',
           properties: {
-            "_key": { type: "string" },
-            "serviceCategoryId": { type: "string" },
-            "languageCode": { type: "string" },
-            "translation": { type: "string" },
-            "isActive": { type: "boolean", default: true },
-            "createdAt": { type: "string" },
-            "updatedAt": { type: "string" }
+            _key: { type: 'string' },
+            serviceCategoryId: { type: 'string' },
+            languageCode: { type: 'string' },
+            translation: { type: 'string' },
+            isActive: { type: 'boolean', default: true },
+            createdAt: { type: 'string' },
+            updatedAt: { type: 'string' }
           },
-          required: ["_key", "serviceCategoryId", "languageCode", "translation"]
+          required: ['_key', 'serviceCategoryId', 'languageCode', 'translation']
         }
       },
       computedValues: []
@@ -86,33 +88,32 @@ async function createServiceCategoryTranslationsCollection() {
 
     // Create indexes for better performance
     await translationsCollection.ensureIndex({
-      type: "hash",
-      fields: ["serviceCategoryId", "languageCode"],
+      type: 'hash',
+      fields: ['serviceCategoryId', 'languageCode'],
       unique: true,
-      name: "idx_serviceCategory_language"
+      name: 'idx_serviceCategory_language'
     });
 
     await translationsCollection.ensureIndex({
-      type: "skiplist", 
-      fields: ["serviceCategoryId"],
-      name: "idx_serviceCategoryId"
+      type: 'skiplist',
+      fields: ['serviceCategoryId'],
+      name: 'idx_serviceCategoryId'
     });
 
     await translationsCollection.ensureIndex({
-      type: "skiplist",
-      fields: ["languageCode"],
-      name: "idx_languageCode"
+      type: 'skiplist',
+      fields: ['languageCode'],
+      name: 'idx_languageCode'
     });
 
     await translationsCollection.ensureIndex({
-      type: "skiplist",
-      fields: ["createdAt"],
-      name: "idx_createdAt"
+      type: 'skiplist',
+      fields: ['createdAt'],
+      name: 'idx_createdAt'
     });
 
     console.log('✓ serviceCategoryTranslations collection created successfully');
     return translationsCollection;
-    
   } catch (error) {
     console.error('✗ Error creating serviceCategoryTranslations collection:', error);
     throw error;
@@ -123,36 +124,36 @@ async function createServiceCategoryTranslationsCollection() {
 async function createServiceTranslationsCollection() {
   try {
     console.log('Checking serviceTranslations collection...');
-    
+
     const collection = db.collection('serviceTranslations');
     const exists = await collection.exists();
-    
+
     if (exists) {
       console.log('⚠ serviceTranslations collection already exists - using existing collection');
       return collection;
     }
-    
+
     console.log('Creating serviceTranslations collection...');
-    
+
     const translationsCollection = await db.createCollection('serviceTranslations', {
       waitForSync: false,
       keyOptions: {},
       schema: {
-        message: "Service translation document does not match schema",
-        level: "none", // Disable schema validation to avoid issues
-        type: "json",
+        message: 'Service translation document does not match schema',
+        level: 'none', // Disable schema validation to avoid issues
+        type: 'json',
         rule: {
-          type: "object",
+          type: 'object',
           properties: {
-            "_key": { type: "string" },
-            "serviceId": { type: "string" },
-            "languageCode": { type: "string" },
-            "translation": { type: "string" },
-            "isActive": { type: "boolean", default: true },
-            "createdAt": { type: "string" },
-            "updatedAt": { type: "string" }
+            _key: { type: 'string' },
+            serviceId: { type: 'string' },
+            languageCode: { type: 'string' },
+            translation: { type: 'string' },
+            isActive: { type: 'boolean', default: true },
+            createdAt: { type: 'string' },
+            updatedAt: { type: 'string' }
           },
-          required: ["_key", "serviceId", "languageCode", "translation"]
+          required: ['_key', 'serviceId', 'languageCode', 'translation']
         }
       },
       computedValues: []
@@ -160,33 +161,32 @@ async function createServiceTranslationsCollection() {
 
     // Create indexes for better performance
     await translationsCollection.ensureIndex({
-      type: "hash",
-      fields: ["serviceId", "languageCode"],
+      type: 'hash',
+      fields: ['serviceId', 'languageCode'],
       unique: true,
-      name: "idx_service_language"
+      name: 'idx_service_language'
     });
 
     await translationsCollection.ensureIndex({
-      type: "skiplist", 
-      fields: ["serviceId"],
-      name: "idx_serviceId"
+      type: 'skiplist',
+      fields: ['serviceId'],
+      name: 'idx_serviceId'
     });
 
     await translationsCollection.ensureIndex({
-      type: "skiplist",
-      fields: ["languageCode"],
-      name: "idx_languageCode"
+      type: 'skiplist',
+      fields: ['languageCode'],
+      name: 'idx_languageCode'
     });
 
     await translationsCollection.ensureIndex({
-      type: "skiplist",
-      fields: ["createdAt"],
-      name: "idx_createdAt"
+      type: 'skiplist',
+      fields: ['createdAt'],
+      name: 'idx_createdAt'
     });
 
     console.log('✓ serviceTranslations collection created successfully');
     return translationsCollection;
-    
   } catch (error) {
     console.error('✗ Error creating serviceTranslations collection:', error);
     throw error;
@@ -197,40 +197,39 @@ async function createServiceTranslationsCollection() {
 async function createServiceCategoryTranslationsEdgeCollection() {
   try {
     console.log('Checking serviceCategoryTranslationsEdge collection...');
-    
+
     const collection = db.collection('serviceCategoryTranslationsEdge');
     const exists = await collection.exists();
-    
+
     if (exists) {
       console.log('⚠ serviceCategoryTranslationsEdge collection already exists - using existing collection');
       return collection;
     }
-    
+
     console.log('Creating serviceCategoryTranslationsEdge collection...');
-    
+
     const edgeCollection = await db.createCollection('serviceCategoryTranslationsEdge', {
       type: 3, // Edge collection type
       waitForSync: false,
       keyOptions: {},
       schema: {
-        message: "Service category translation edge does not match schema",
-        level: "none", // Disable schema validation
-        type: "json",
+        message: 'Service category translation edge does not match schema',
+        level: 'none', // Disable schema validation
+        type: 'json',
         rule: {
-          type: "object",
+          type: 'object',
           properties: {
-            "_from": { type: "string" },
-            "_to": { type: "string" },
-            "createdAt": { type: "string" }
+            _from: { type: 'string' },
+            _to: { type: 'string' },
+            createdAt: { type: 'string' }
           },
-          required: ["_from", "_to"]
+          required: ['_from', '_to']
         }
       }
     });
 
     console.log('✓ serviceCategoryTranslationsEdge collection created successfully');
     return edgeCollection;
-    
   } catch (error) {
     console.error('✗ Error creating serviceCategoryTranslationsEdge collection:', error);
     throw error;
@@ -241,40 +240,39 @@ async function createServiceCategoryTranslationsEdgeCollection() {
 async function createServiceTranslationsEdgeCollection() {
   try {
     console.log('Checking serviceTranslationsEdge collection...');
-    
+
     const collection = db.collection('serviceTranslationsEdge');
     const exists = await collection.exists();
-    
+
     if (exists) {
       console.log('⚠ serviceTranslationsEdge collection already exists - using existing collection');
       return collection;
     }
-    
+
     console.log('Creating serviceTranslationsEdge collection...');
-    
+
     const edgeCollection = await db.createCollection('serviceTranslationsEdge', {
       type: 3, // Edge collection type
       waitForSync: false,
       keyOptions: {},
       schema: {
-        message: "Service translation edge does not match schema",
-        level: "none", // Disable schema validation
-        type: "json",
+        message: 'Service translation edge does not match schema',
+        level: 'none', // Disable schema validation
+        type: 'json',
         rule: {
-          type: "object",
+          type: 'object',
           properties: {
-            "_from": { type: "string" },
-            "_to": { type: "string" },
-            "createdAt": { type: "string" }
+            _from: { type: 'string' },
+            _to: { type: 'string' },
+            createdAt: { type: 'string' }
           },
-          required: ["_from", "_to"]
+          required: ['_from', '_to']
         }
       }
     });
 
     console.log('✓ serviceTranslationsEdge collection created successfully');
     return edgeCollection;
-    
   } catch (error) {
     console.error('✗ Error creating serviceTranslationsEdge collection:', error);
     throw error;
@@ -285,40 +283,40 @@ async function createServiceTranslationsEdgeCollection() {
 async function migrateServiceCategoryTranslations() {
   try {
     console.log('\n=== Starting serviceCategories translation migration ===');
-    
+
     const serviceCategoriesCollection = db.collection('serviceCategories');
     const translationsCollection = db.collection('serviceCategoryTranslations');
     const edgeCollection = db.collection('serviceCategoryTranslationsEdge');
-    
+
     // Check if serviceCategories collection exists
     const exists = await serviceCategoriesCollection.exists();
     if (!exists) {
       console.log('⚠ serviceCategories collection does not exist - skipping migration');
       return 0;
     }
-    
+
     // Get all service categories
     const cursor = await serviceCategoriesCollection.all();
     const serviceCategories = await cursor.all();
-    
+
     let migratedCount = 0;
     const currentTimestamp = new Date().toISOString();
-    
+
     // Language mappings
     const languageMappings = [
       { field: 'nameEN', code: 'EN' },
-      { field: 'nameFR', code: 'FR' }, 
+      { field: 'nameFR', code: 'FR' },
       { field: 'nameSW', code: 'SW' }
     ];
-    
+
     console.log(`Found ${serviceCategories.length} service categories to process`);
-    
+
     for (const category of serviceCategories) {
       console.log(`Processing serviceCategory: ${category._key} (${category.nameEN || 'no nameEN'})`);
-      
+
       for (const lang of languageMappings) {
         const translation = category[lang.field];
-        
+
         // Only create translation if the field exists and has a value
         if (translation && translation.trim() !== '') {
           try {
@@ -333,27 +331,30 @@ async function migrateServiceCategoryTranslations() {
               createdAt: currentTimestamp,
               updatedAt: currentTimestamp
             };
-            
+
             // Insert translation document
             await translationsCollection.save(translationDoc);
-            
+
             // Create edge linking category to translation
             const edgeDoc = {
               _from: `serviceCategories/${category._key}`,
               _to: `serviceCategoryTranslations/${translationKey}`,
               createdAt: currentTimestamp
             };
-            
+
             await edgeCollection.save(edgeDoc);
-            
+
             migratedCount++;
             console.log(`  ✓ Migrated serviceCategory ${lang.code}: ${translation}`);
-            
           } catch (insertError) {
-            if (insertError.code === 1210 || insertError.errorNum === 1210) { // Unique constraint violation
+            if (insertError.code === 1210 || insertError.errorNum === 1210) {
+              // Unique constraint violation
               console.log(`  ⚠ Translation already exists for serviceCategory ${category._key} - ${lang.code}`);
             } else {
-              console.error(`  ✗ Error inserting translation for serviceCategory ${category._key} - ${lang.code}:`, insertError);
+              console.error(
+                `  ✗ Error inserting translation for serviceCategory ${category._key} - ${lang.code}:`,
+                insertError
+              );
             }
           }
         } else {
@@ -361,10 +362,9 @@ async function migrateServiceCategoryTranslations() {
         }
       }
     }
-    
+
     console.log(`✓ ServiceCategory translation migration completed. ${migratedCount} translations migrated.`);
     return migratedCount;
-    
   } catch (error) {
     console.error('✗ Error during serviceCategory translation migration:', error);
     throw error;
@@ -375,40 +375,40 @@ async function migrateServiceCategoryTranslations() {
 async function migrateServiceTranslations() {
   try {
     console.log('\n=== Starting services translation migration ===');
-    
+
     const servicesCollection = db.collection('services');
     const translationsCollection = db.collection('serviceTranslations');
     const edgeCollection = db.collection('serviceTranslationsEdge');
-    
+
     // Check if services collection exists
     const exists = await servicesCollection.exists();
     if (!exists) {
       console.log('⚠ services collection does not exist - skipping migration');
       return 0;
     }
-    
+
     // Get all services
     const cursor = await servicesCollection.all();
     const services = await cursor.all();
-    
+
     let migratedCount = 0;
     const currentTimestamp = new Date().toISOString();
-    
+
     // Language mappings
     const languageMappings = [
       { field: 'nameEN', code: 'EN' },
-      { field: 'nameFR', code: 'FR' }, 
+      { field: 'nameFR', code: 'FR' },
       { field: 'nameSW', code: 'SW' }
     ];
-    
+
     console.log(`Found ${services.length} services to process`);
-    
+
     for (const service of services) {
       console.log(`Processing service: ${service._key} (${service.nameEN || 'no nameEN'})`);
-      
+
       for (const lang of languageMappings) {
         const translation = service[lang.field];
-        
+
         // Only create translation if the field exists and has a value
         if (translation && translation.trim() !== '') {
           try {
@@ -423,24 +423,24 @@ async function migrateServiceTranslations() {
               createdAt: currentTimestamp,
               updatedAt: currentTimestamp
             };
-            
+
             // Insert translation document
             await translationsCollection.save(translationDoc);
-            
+
             // Create edge linking service to translation
             const edgeDoc = {
               _from: `services/${service._key}`,
               _to: `serviceTranslations/${translationKey}`,
               createdAt: currentTimestamp
             };
-            
+
             await edgeCollection.save(edgeDoc);
-            
+
             migratedCount++;
             console.log(`  ✓ Migrated service ${lang.code}: ${translation}`);
-            
           } catch (insertError) {
-            if (insertError.code === 1210 || insertError.errorNum === 1210) { // Unique constraint violation
+            if (insertError.code === 1210 || insertError.errorNum === 1210) {
+              // Unique constraint violation
               console.log(`  ⚠ Translation already exists for service ${service._key} - ${lang.code}`);
             } else {
               console.error(`  ✗ Error inserting translation for service ${service._key} - ${lang.code}:`, insertError);
@@ -451,10 +451,9 @@ async function migrateServiceTranslations() {
         }
       }
     }
-    
+
     console.log(`✓ Service translation migration completed. ${migratedCount} translations migrated.`);
     return migratedCount;
-    
   } catch (error) {
     console.error('✗ Error during service translation migration:', error);
     throw error;
@@ -465,14 +464,14 @@ async function migrateServiceTranslations() {
 async function verifyMigration() {
   try {
     console.log('\n=== Verifying migration ===');
-    
+
     const serviceCategoriesCollection = db.collection('serviceCategories');
     const servicesCollection = db.collection('services');
     const categoryTranslationsCollection = db.collection('serviceCategoryTranslations');
     const serviceTranslationsCollection = db.collection('serviceTranslations');
     const categoryEdgeCollection = db.collection('serviceCategoryTranslationsEdge');
     const serviceEdgeCollection = db.collection('serviceTranslationsEdge');
-    
+
     // Count documents
     const totalCategories = await serviceCategoriesCollection.count();
     const totalServices = await servicesCollection.count();
@@ -480,7 +479,7 @@ async function verifyMigration() {
     const totalServiceTranslations = await serviceTranslationsCollection.count();
     const totalCategoryEdges = await categoryEdgeCollection.count();
     const totalServiceEdges = await serviceEdgeCollection.count();
-    
+
     console.log(`Document counts:`);
     console.log(`  - ServiceCategories: ${totalCategories.count}`);
     console.log(`  - Services: ${totalServices.count}`);
@@ -488,7 +487,7 @@ async function verifyMigration() {
     console.log(`  - Service translations: ${totalServiceTranslations.count}`);
     console.log(`  - ServiceCategory edges: ${totalCategoryEdges.count}`);
     console.log(`  - Service edges: ${totalServiceEdges.count}`);
-    
+
     // Sample verification query for serviceCategories
     const categoryVerificationQuery = `
       FOR category IN serviceCategories
@@ -511,7 +510,7 @@ async function verifyMigration() {
           newTranslations: translations
         }
     `;
-    
+
     // Sample verification query for services
     const serviceVerificationQuery = `
       FOR service IN services
@@ -534,33 +533,32 @@ async function verifyMigration() {
           newTranslations: translations
         }
     `;
-    
+
     const categoryCursor = await db.query(categoryVerificationQuery);
     const categoryResults = await categoryCursor.all();
-    
+
     const serviceCursor = await db.query(serviceVerificationQuery);
     const serviceResults = await serviceCursor.all();
-    
+
     console.log('\nSample serviceCategory verification results:');
-    categoryResults.forEach(result => {
+    categoryResults.forEach((result) => {
       console.log(`\nServiceCategory: ${result.categoryKey}`);
       console.log(`  Original EN: ${result.originalEN}`);
       console.log(`  Original FR: ${result.originalFR}`);
       console.log(`  Original SW: ${result.originalSW}`);
       console.log(`  New translations:`, result.newTranslations);
     });
-    
+
     console.log('\nSample service verification results:');
-    serviceResults.forEach(result => {
+    serviceResults.forEach((result) => {
       console.log(`\nService: ${result.serviceKey}`);
       console.log(`  Original EN: ${result.originalEN}`);
       console.log(`  Original FR: ${result.originalFR}`);
       console.log(`  Original SW: ${result.originalSW}`);
       console.log(`  New translations:`, result.newTranslations);
     });
-    
+
     return true;
-    
   } catch (error) {
     console.error('✗ Error during verification:', error);
     return false;
@@ -587,7 +585,7 @@ async function executeTranslationMigration() {
   console.log(`  URL:      ${config.url}`);
   console.log(`  Database: ${config.database}`);
   console.log(`  User:     ${config.auth.username}`);
-  
+
   const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
 
   if (answer.toLowerCase() !== 'y') {
@@ -595,43 +593,42 @@ async function executeTranslationMigration() {
     process.exit(0);
   }
   // --- End Confirmation Prompt ---
-  
+
   try {
     // Initialize database connection
     await initializeDatabase(config);
-    
+
     // Step 1: Create translation collections
     await createServiceCategoryTranslationsCollection();
     await createServiceTranslationsCollection();
-    
+
     // Step 2: Create edge collections
     await createServiceCategoryTranslationsEdgeCollection();
     await createServiceTranslationsEdgeCollection();
-    
+
     // Step 3: Migrate serviceCategory translation data
     const categoryMigratedCount = await migrateServiceCategoryTranslations();
-    
+
     // Step 4: Migrate service translation data
     const serviceMigratedCount = await migrateServiceTranslations();
-    
+
     // Step 5: Verify migration
     const verificationSuccess = await verifyMigration();
-    
+
     console.log('\n=== Migration Summary ===');
     console.log(`✓ Translation collections created successfully`);
     console.log(`✓ ServiceCategory translations migrated: ${categoryMigratedCount}`);
     console.log(`✓ Service translations migrated: ${serviceMigratedCount}`);
     console.log(`✓ Total translations migrated: ${categoryMigratedCount + serviceMigratedCount}`);
     console.log(`${verificationSuccess ? '✓' : '✗'} Verification ${verificationSuccess ? 'passed' : 'failed'}`);
-    
+
     console.log('\n=== Next Steps ===');
     console.log('1. Test your application with the new translation system');
     console.log('2. Update your CRUD services to use both serviceCategoryTranslations and serviceTranslations');
     console.log('3. Add new language support as needed for both serviceCategories and services');
     console.log('4. Once migration is complete, you can remove nameEN, nameFR, nameSW from both collection schemas');
-    
+
     return true;
-    
   } catch (error) {
     console.error('\n✗ Migration failed:', error);
     return false;
@@ -643,7 +640,7 @@ async function addNewServiceCategoryTranslation(serviceCategoryKey, languageCode
   try {
     const currentTimestamp = new Date().toISOString();
     const translationKey = `${serviceCategoryKey}_${languageCode}`;
-    
+
     const translationDoc = {
       _key: translationKey,
       serviceCategoryId: serviceCategoryKey,
@@ -653,24 +650,23 @@ async function addNewServiceCategoryTranslation(serviceCategoryKey, languageCode
       createdAt: currentTimestamp,
       updatedAt: currentTimestamp
     };
-    
+
     const translationsCollection = db.collection('serviceCategoryTranslations');
     const edgeCollection = db.collection('serviceCategoryTranslationsEdge');
-    
+
     const result = await translationsCollection.save(translationDoc);
-    
+
     // Create edge
     const edgeDoc = {
       _from: `serviceCategories/${serviceCategoryKey}`,
       _to: `serviceCategoryTranslations/${translationKey}`,
       createdAt: currentTimestamp
     };
-    
+
     await edgeCollection.save(edgeDoc);
-    
+
     console.log(`✓ Added serviceCategory translation: ${languageCode} - ${translation}`);
     return result;
-    
   } catch (error) {
     console.error('✗ Error adding serviceCategory translation:', error);
     throw error;
@@ -682,7 +678,7 @@ async function addNewServiceTranslation(serviceKey, languageCode, translation) {
   try {
     const currentTimestamp = new Date().toISOString();
     const translationKey = `${serviceKey}_${languageCode}`;
-    
+
     const translationDoc = {
       _key: translationKey,
       serviceId: serviceKey,
@@ -692,24 +688,23 @@ async function addNewServiceTranslation(serviceKey, languageCode, translation) {
       createdAt: currentTimestamp,
       updatedAt: currentTimestamp
     };
-    
+
     const translationsCollection = db.collection('serviceTranslations');
     const edgeCollection = db.collection('serviceTranslationsEdge');
-    
+
     const result = await translationsCollection.save(translationDoc);
-    
+
     // Create edge
     const edgeDoc = {
       _from: `services/${serviceKey}`,
       _to: `serviceTranslations/${translationKey}`,
       createdAt: currentTimestamp
     };
-    
+
     await edgeCollection.save(edgeDoc);
-    
+
     console.log(`✓ Added service translation: ${languageCode} - ${translation}`);
     return result;
-    
   } catch (error) {
     console.error('✗ Error adding service translation:', error);
     throw error;
@@ -718,15 +713,16 @@ async function addNewServiceTranslation(serviceKey, languageCode, translation) {
 
 // Execute the migration if the script is run directly
 if (require.main === module) {
-    executeTranslationMigration().then(() => {
-        console.log('Migration script completed');
-        process.exit(0);
-    }).catch(error => {
-        console.error('Migration script failed:', error);
-        process.exit(1);
+  executeTranslationMigration()
+    .then(() => {
+      console.log('Migration script completed');
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('Migration script failed:', error);
+      process.exit(1);
     });
 }
-
 
 // Export helper functions for future use
 module.exports = {

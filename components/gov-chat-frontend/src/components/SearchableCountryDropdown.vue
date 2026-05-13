@@ -1,48 +1,22 @@
 <template>
   <div class="searchable-dropdown">
     <label v-if="label">{{ label }}</label>
-    <div class="select-wrapper">
-      <input
-        v-if="showSearch"
-        ref="searchInput"
-        v-model="searchTerm"
-        type="text"
-        class="search-input"
-        :placeholder="searchPlaceholder"
-        @input="filterOptions"
-        @blur="handleBlur"
-        @keydown.enter="selectActiveOption"
-        @keydown.down="navigateOptions(1)"
-        @keydown.up="navigateOptions(-1)"
-      />
-      <div v-else class="selected-option" @click="toggleSearch">
-        <span v-if="selectedOption">{{ selectedOption }}</span>
-        <span v-else-if="value && displayCode">{{ displayCode }}</span>
-        <span v-else>{{ placeholder }}</span>
-      </div>
-      <div v-if="showSearch" class="options-dropdown">
-        <div
-          v-for="(option, index) in filteredOptions"
-          :key="index"
-          class="option"
-          :class="{ active: index === selectedIndex }"
-          @click="selectOption(option.code, option.name)"
-          @mouseenter="selectedIndex = index"
-        >
-          {{ option.name }}
-        </div>
-        <div v-if="filteredOptions.length === 0" class="no-results">
-          {{ noResultsText }}
-        </div>
-      </div>
-    </div>
-    <!-- Add a hidden debugging element that can be toggled via prop -->
+    <DsCombobox
+      ref="combobox"
+      :model-value="value"
+      :options="sortedCountries"
+      option-label="name"
+      option-value="code"
+      :placeholder="placeholder"
+      :search-placeholder="searchPlaceholder"
+      :no-results-text="noResultsText"
+      @update:model-value="handleSelect"
+    />
     <div v-if="debug" class="debug-info">
       <p>
         <strong>Debug:</strong>
         value: {{ value }}, selectedOption: {{ selectedOption }}
       </p>
-      <p>displayCode: {{ displayCode }}</p>
       <p>Countries loaded: {{ allCountries.length }}</p>
       <p>Last update: {{ debugInfo.lastUpdated }}</p>
     </div>
@@ -50,8 +24,13 @@
 </template>
 
 <script>
+import DsCombobox from './ds/Combobox.vue';
+
 export default {
   name: 'SearchableCountrydropdown',
+  components: {
+    DsCombobox
+  },
   props: {
     value: {
       type: String,
@@ -81,12 +60,8 @@ export default {
   emits: ['update:name', 'input', 'change'],
   data() {
     return {
-      showSearch: false,
-      searchTerm: '',
       selectedOption: '',
-      selectedIndex: -1,
       allCountries: [],
-      filteredOptions: [],
       codeToNameMap: {
         // Default mapping for common countries - more will be added when loadCountries() is called
         AF: 'Afghanistan',
@@ -116,16 +91,16 @@ export default {
   computed: {
     displayCode() {
       if (!this.value) return '';
-
-      // Try to find the name for this code
       const countryName = this.getCountryNameByCode(this.value);
       return countryName || this.value;
+    },
+    sortedCountries() {
+      return [...this.allCountries];
     }
   },
   watch: {
     value: {
       handler(newVal, oldVal) {
-        console.log(`Value CHANGED: ${oldVal} -> ${newVal}`);
         this.debugInfo.valueHistory.push(`value changed: ${oldVal} -> ${newVal}`);
 
         if (newVal !== oldVal && this.isInitialized) {
@@ -143,8 +118,6 @@ export default {
     },
     allCountries: {
       handler(newCountries) {
-        console.log(`Countries list UPDATED with ${newCountries.length} countries`);
-
         // Update the code-to-name map
         newCountries.forEach((country) => {
           if (country && country.code) {
@@ -162,14 +135,12 @@ export default {
     }
   },
   created() {
-    console.log(`Dropdown CREATED with value: ${this.value}`);
     this.debugInfo.valueHistory.push(`created: ${this.value}`);
 
     // Load countries first
     this.loadCountries();
   },
   mounted() {
-    console.log(`Dropdown MOUNTED with value: ${this.value}, selectedOption: ${this.selectedOption}`);
     this.debugInfo.valueHistory.push(`mounted: ${this.value}`);
 
     // Set initial value after mounting
@@ -212,7 +183,6 @@ export default {
               });
 
               if (containsSelf && this.value) {
-                console.log('Dropdown re-attached to DOM, restoring state for:', this.value);
                 this.$nextTick(() => {
                   this.manuallySetCountryName(this.value);
                 });
@@ -232,15 +202,11 @@ export default {
     manuallySetCountryName(code) {
       if (!code) return;
 
-      console.log(`Trying to set country name for code: ${code}`);
       const countryName = this.getCountryNameByCode(code);
 
       if (countryName) {
-        console.log(`Setting selectedOption to: ${countryName}`);
         this.selectedOption = countryName;
         this.$emit('update:name', countryName);
-      } else {
-        console.log(`Country name not found for code: ${code}`);
       }
     },
     getCountryNameByCode(code) {
@@ -267,7 +233,6 @@ export default {
     },
     loadCountries() {
       try {
-        console.log('Loading countries');
         let loadedCountries = [];
 
         // Try to get translations if i18n is available
@@ -275,7 +240,6 @@ export default {
         const hasTeMethod = this.$te && typeof this.$te === 'function';
 
         if (hasI18n && hasTeMethod && this.$te('countries')) {
-          console.log('Using translated countries from i18n');
           try {
             const translatedCountries = this.$t('countries');
             if (typeof translatedCountries === 'object' && translatedCountries !== null) {
@@ -284,15 +248,12 @@ export default {
                 name: translatedCountries[code]
               }));
             } else {
-              console.warn('i18n countries not in expected format, using default countries');
               loadedCountries = this.getDefaultCountries();
             }
-          } catch (translationError) {
-            console.error('Error getting translations:', translationError);
+          } catch {
             loadedCountries = this.getDefaultCountries();
           }
         } else {
-          console.log('No translations found, using default countries');
           loadedCountries = this.getDefaultCountries();
         }
 
@@ -301,8 +262,7 @@ export default {
 
         try {
           loadedCountries.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase(), locale));
-        } catch (sortError) {
-          console.warn('Error sorting countries, using basic sort:', sortError);
+        } catch {
           loadedCountries.sort((a, b) => a.name.localeCompare(b.name));
         }
 
@@ -315,71 +275,16 @@ export default {
 
         // Update the component data
         this.allCountries = loadedCountries;
-        this.filteredOptions = [...loadedCountries];
-
-        console.log(`Loaded ${loadedCountries.length} countries`);
-      } catch (error) {
-        console.error('Error loading countries:', error);
-        // Fallback to default countries
+      } catch {
         this.allCountries = this.getDefaultCountries();
-        this.filteredOptions = [...this.allCountries];
       }
     },
-    toggleSearch() {
-      this.showSearch = true;
-      this.searchTerm = this.selectedOption || '';
-      this.filterOptions();
-      this.$nextTick(() => {
-        if (this.$refs.searchInput) {
-          this.$refs.searchInput.focus();
-        }
-      });
-    },
-    filterOptions() {
-      if (!this.searchTerm) {
-        this.filteredOptions = [...this.allCountries];
-      } else {
-        const searchTerm = this.searchTerm.toLowerCase();
-        this.filteredOptions = this.allCountries.filter((option) => option.name.toLowerCase().includes(searchTerm));
-      }
-      this.selectedIndex = -1;
-    },
-    selectOption(code, name) {
-      console.log(`User selected: ${name} (${code})`);
+    handleSelect(code) {
+      const name = this.getCountryNameByCode(code);
       this.selectedOption = name;
-      this.showSearch = false;
       this.$emit('input', code);
       this.$emit('update:name', name);
       this.$emit('change', code);
-    },
-    handleBlur(event) {
-      if (!event.relatedTarget || !event.relatedTarget.closest('.options-dropdown')) {
-        setTimeout(() => {
-          this.showSearch = false;
-        }, 150);
-      }
-    },
-    selectActiveOption() {
-      if (
-        this.filteredOptions.length > 0 &&
-        this.selectedIndex >= 0 &&
-        this.selectedIndex < this.filteredOptions.length
-      ) {
-        const selectedOption = this.filteredOptions[this.selectedIndex];
-        this.selectOption(selectedOption.code, selectedOption.name);
-      } else if (this.filteredOptions.length > 0) {
-        const firstOption = this.filteredOptions[0];
-        this.selectOption(firstOption.code, firstOption.name);
-      }
-    },
-    navigateOptions(direction) {
-      const optionsLength = this.filteredOptions.length;
-      if (optionsLength > 0) {
-        this.selectedIndex = (this.selectedIndex + direction + optionsLength) % optionsLength;
-        if (this.selectedIndex >= 0 && this.selectedIndex < optionsLength) {
-          this.$refs.searchInput.focus();
-        }
-      }
     },
     getDefaultCountries() {
       return [
@@ -585,115 +490,23 @@ export default {
 </script>
 
 <style scoped>
-/* Inherit styles from the parent UserProfileComponent for consistency */
 .searchable-dropdown {
   display: flex;
   flex-direction: column;
 }
 
 .searchable-dropdown label {
-  margin-bottom: 4px;
+  margin-bottom: var(--space-xs);
   font-weight: 500;
-  font-size: 0.95rem;
+  font-size: var(--text-base);
 }
 
-.select-wrapper {
-  position: relative;
-  width: 100%;
-}
-
-.search-input {
-  width: 100%;
-  padding: 6px;
-  border: 1px solid var(--dialog-input-border-color, #ddd);
-  border-radius: 4px;
-  background-color: var(--dialog-input-background, #ffffff);
-  color: var(--dialog-input-text-color, #333333);
-}
-
-.selected-option {
-  width: 100%;
-  padding: 6px;
-  border: 1px solid var(--dialog-input-border-color, #ddd);
-  border-radius: 4px;
-  background-color: var(--dialog-input-background, #ffffff);
-  color: var(--dialog-input-text-color, #333333);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  position: relative;
-}
-
-.selected-option:after {
-  content: '▼';
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.8em;
-  color: var(--dialog-input-text-color, #888);
-}
-
-.options-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  max-height: 200px;
-  overflow-y: auto;
-  background-color: var(--dialog-input-background, #ffffff);
-  border: 1px solid var(--dialog-input-border-color, #ddd);
-  border-radius: 0 0 4px 4px;
-  z-index: 10;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.option {
-  padding: 6px 10px;
-  cursor: pointer;
-}
-
-.option:hover,
-.option.active {
-  background-color: var(--dialog-primary-button-bg, #4e97d1);
-  color: var(--dialog-primary-button-text, #ffffff);
-}
-
-.no-results {
-  padding: 10px;
-  text-align: center;
-  color: #999;
-  font-style: italic;
-}
-
-/* Focus styles */
-.search-input:focus {
-  border-color: var(--dialog-primary-button-bg, #4e97d1);
-  box-shadow: 0 0 0 2px rgba(78, 151, 209, 0.2);
-  outline: none;
-}
-
-/* Dark theme adjustments */
-:deep([data-theme='dark']) .options-dropdown,
-:deep(.dark-mode) .options-dropdown {
-  background-color: var(--dialog-input-background, #333333);
-  border-color: var(--dialog-input-border-color, #3a3a3a);
-}
-
-:deep([data-theme='dark']) .option:hover,
-:deep(.dark-mode) .option:hover,
-:deep([data-theme='dark']) .option.active,
-:deep(.dark-mode) .option.active {
-  background-color: var(--dialog-primary-button-bg, #4e97d1);
-}
-
-:deep([data-theme='dark']) .no-results,
-:deep(.dark-mode) .no-results {
-  color: #777;
-}
-
-.unmatched-value {
-  font-style: italic;
-  opacity: 0.8;
+.debug-info {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
 }
 </style>

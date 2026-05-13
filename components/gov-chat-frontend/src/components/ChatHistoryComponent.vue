@@ -27,25 +27,20 @@ export default {
 
 <style scoped>
 .chat-history {
-  margin-top: 20px;
-  background-color: var(--bg-sidebar);
-  color: var(--text-primary);
-  padding: 10px;
+  margin-top: var(--space-lg);
+  background-color: var(--surface);
+  color: var(--fg);
+  padding: var(--space-sm);
 }
 
 .chat-history h4 {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 0 16px;
-}
-
-[data-theme='dark'] .chat-history h4,
-html[data-theme='dark'] .chat-history h4 {
-  color: rgba(255, 255, 255, 0.7) !important;
+  padding: 0 var(--space-md);
 }
 
 .chat-history ul {
@@ -55,10 +50,10 @@ html[data-theme='dark'] .chat-history h4 {
 }
 
 .chat-history li {
-  padding: 10px;
+  padding: var(--space-sm);
   cursor: pointer;
   border-bottom: 1px solid var(--border-light);
-  color: var(--text-primary);
+  color: var(--fg);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -66,24 +61,19 @@ html[data-theme='dark'] .chat-history h4 {
 }
 
 .chat-history li:hover {
-  background-color: var(--bg-tertiary);
+  background-color: var(--bg);
 }
 
 .date {
   font-size: 0.8em;
-  color: var(--text-tertiary);
-  margin-left: 8px;
+  color: var(--muted-soft);
+  margin-left: var(--space-sm);
 }
 .chat-history h4 {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
+  color: var(--muted);
+  font-size: var(--text-base);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-
-[data-theme='dark'] .chat-history h4,
-html[data-theme='dark'] .chat-history h4 {
-  color: rgba(255, 255, 255, 0.7) !important;
 }
 </style>

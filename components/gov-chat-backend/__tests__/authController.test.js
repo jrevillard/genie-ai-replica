@@ -1,14 +1,18 @@
 'use strict';
 
 // Mock shared-lib
-jest.mock('../shared-lib', () => ({
-  logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn()
-  }
-}), { virtual: true });
+jest.mock(
+  '../shared-lib',
+  () => ({
+    logger: {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn()
+    }
+  }),
+  { virtual: true }
+);
 
 // Mock session-service
 const mockGetUserSessions = jest.fn();
@@ -64,7 +68,10 @@ describe('authController', () => {
 
       await authController.logout(req, res);
 
-      expect(mockGetUserSessions).toHaveBeenCalledWith('http://localhost:8080/realms/genie#user-123', { legacyKey: 'user-123', activeOnly: true });
+      expect(mockGetUserSessions).toHaveBeenCalledWith('http://localhost:8080/realms/genie#user-123', {
+        legacyKey: 'user-123',
+        activeOnly: true
+      });
       expect(mockEndSession).toHaveBeenCalledTimes(2);
       expect(mockEndSession).toHaveBeenCalledWith('session-1');
       expect(mockEndSession).toHaveBeenCalledWith('session-2');
@@ -104,9 +111,7 @@ describe('authController', () => {
       // Should still return success (session ending is non-critical)
       expect(res.json).toHaveBeenCalledWith({ success: true, message: 'Logged out successfully' });
       // Should log a warning about the failure
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to end sessions on logout')
-      );
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to end sessions on logout'));
     });
 
     it('should succeed when user has no active sessions', async () => {

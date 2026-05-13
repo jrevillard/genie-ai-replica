@@ -24,7 +24,7 @@ const PUBLIC_PATHS = [
  */
 function isPublicRoute(path) {
   // Check static public paths
-  const isStaticPublic = PUBLIC_PATHS.some(publicPath => {
+  const isStaticPublic = PUBLIC_PATHS.some((publicPath) => {
     if (publicPath.endsWith('/')) {
       return path === publicPath || path.startsWith(publicPath);
     }
@@ -178,7 +178,9 @@ const keycloakAuthMiddleware = {
   requireAdmin(req, res, next) {
     const roles = req.user && req.user.roles;
     if (!roles || !Array.isArray(roles) || !roles.includes('admin')) {
-      logger.warn(`[requireAdmin] Access denied for ${req.user?.iss_sub || 'unknown'} — roles: ${JSON.stringify(roles)}`);
+      logger.warn(
+        `[requireAdmin] Access denied for ${req.user?.iss_sub || 'unknown'} — roles: ${JSON.stringify(roles)}`
+      );
       return res.status(403).json({
         error: 'FORBIDDEN',
         message: 'Admin access required',

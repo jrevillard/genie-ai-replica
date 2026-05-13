@@ -16,10 +16,6 @@ const documentFileService = {
   async getFiles(params) {
     try {
       const response = await httpService.get('/files', { params });
-
-      // <-- ADD THIS LINE to inspect the raw API response
-      console.log('[documentFileService] Raw API Response:', response);
-
       return response.data;
     } catch (error) {
       console.error('Error fetching files:', error);

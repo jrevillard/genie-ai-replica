@@ -6,7 +6,12 @@
         <h2 class="dialog-title">
           {{ translate('admin.documents.addLink', 'Add from Link') }}
         </h2>
-        <button class="dialog-close-btn" :aria-label="translate('common.close', 'Close')" @click="$emit('close')">
+        <DsButton
+          variant="ghost"
+          class="dialog-close-btn"
+          :aria-label="translate('common.close', 'Close')"
+          @click="$emit('close')"
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="24"
@@ -21,19 +26,19 @@
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
-        </button>
+        </DsButton>
       </div>
 
       <div class="dialog-body">
         <div class="form-group">
           <label for="url-input">{{ translate('link.label', 'Website URL') }}</label>
-          <input
+          <DsInput
             id="url-input"
             v-model="url"
             type="text"
             class="form-input"
             :placeholder="translate('link.placeholder', 'https://example.com/article')"
-            @keyup.enter="handleSubmit"
+            @enter="handleSubmit"
           />
           <p v-if="crawlMode === 'single_page'" class="form-hint">
             {{ translate('link.hint', 'The content of the webpage will be crawled and saved as an HTML file.') }}
@@ -65,18 +70,18 @@
         <template v-if="crawlMode === 'full_site'">
           <div class="form-group">
             <label for="depth-input">{{ translate('link.crawlDepth', 'Crawl Depth') }}</label>
-            <input id="depth-input" v-model.number="crawlDepth" type="number" class="form-input" min="1" max="20" />
+            <DsInput id="depth-input" v-model.number="crawlDepth" type="number" class="form-input" min="1" max="20" />
             <p class="form-hint">
               {{ translate('link.depthHint', 'Depth of links to follow (1-20).') }}
             </p>
           </div>
 
           <div class="advanced-toggle">
-            <button class="btn-link" @click="showAdvanced = !showAdvanced">
+            <DsButton variant="ghost" class="btn-link" @click="showAdvanced = !showAdvanced">
               {{ showAdvanced ? 'Hide' : 'Show' }}
               {{ translate('link.advancedOptions', 'Advanced Configuration') }}
               <span class="toggle-icon">{{ showAdvanced ? '▲' : '▼' }}</span>
-            </button>
+            </DsButton>
             <span v-if="detectedPreset" class="preset-badge"> Matched Preset: {{ detectedPreset }} </span>
           </div>
 
@@ -91,7 +96,7 @@
 
             <div v-if="config.followExternalLinks" class="form-group">
               <label for="ext-depth">{{ translate('link.config.extDepth', 'Max External Depth') }}</label>
-              <input
+              <DsInput
                 id="ext-depth"
                 v-model.number="config.maxExternalDepth"
                 type="number"
@@ -115,7 +120,7 @@
                   </div>
                 </div>
               </div>
-              <input
+              <DsInput
                 id="content-selector"
                 v-model="config.contentSelector"
                 type="text"
@@ -129,13 +134,14 @@
               <label for="exclude-patterns">{{
                 translate('link.config.exclude', 'Exclude Patterns (comma separated)')
               }}</label>
-              <textarea
+              <DsInput
                 id="exclude-patterns"
                 v-model="excludePatternsInput"
+                type="textarea"
                 class="form-input"
                 rows="3"
                 placeholder="/commits/, /issues/, /login"
-              ></textarea>
+              />
             </div>
           </div>
         </template>
@@ -144,10 +150,10 @@
       </div>
 
       <div class="dialog-footer">
-        <button class="btn btn-outline" @click="$emit('close')">
+        <DsButton variant="secondary" @click="$emit('close')">
           {{ translate('common.cancel', 'Cancel') }}
-        </button>
-        <button class="btn btn-primary" :disabled="!isValidUrl || isLoading" @click="handleSubmit">
+        </DsButton>
+        <DsButton variant="primary" :disabled="!isValidUrl || isLoading" @click="handleSubmit">
           <span v-if="isLoading">{{
             crawlMode === 'full_site'
               ? translate('link.scheduling', 'Scheduling...')
@@ -158,7 +164,7 @@
               ? translate('link.submitAsync', 'Start Crawl')
               : translate('link.submit', 'Crawl & Save')
           }}</span>
-        </button>
+        </DsButton>
       </div>
     </div>
   </Teleport>
@@ -167,6 +173,8 @@
 <script>
 import documentFileService from '../services/documentFileService.js';
 import { eventBus } from '../eventBus.js';
+import DsButton from './ds/Button.vue';
+import DsInput from './ds/Input.vue';
 
 // --- TOP 20 SITE PRESETS ---
 const SITE_PRESETS = {
@@ -301,6 +309,10 @@ const SITE_PRESETS = {
 
 export default {
   name: 'AddFromLinkDialog',
+  components: {
+    DsButton,
+    DsInput
+  },
   emits: ['close', 'link-submitted'],
   data() {
     return {
@@ -475,7 +487,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: var(--overlay-bg);
   z-index: 9998; /* Updated Z-Index for Teleport */
 }
 .dialog-container {
@@ -485,8 +497,8 @@ export default {
   transform: translate(-50%, -50%);
   width: 90%;
   max-width: 500px;
-  background-color: var(--bg-dialog, #fff);
-  border-radius: 8px;
+  background-color: var(--surface);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   z-index: 9999; /* Updated Z-Index for Teleport */
   max-height: 90vh;
@@ -496,102 +508,63 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border);
 }
 .dialog-title {
-  font-size: 1.25rem;
-  color: var(--text-primary, #333);
+  font-size: var(--text-lg);
+  color: var(--fg);
 }
 .dialog-close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-secondary);
+  /* Layout only - styling handled by DsButton */
 }
 .dialog-body {
-  padding: 1.5rem;
+  padding: var(--space-lg);
 }
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid var(--border-color, #e2e8f0);
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border);
 }
-.btn {
-  padding: 0.6rem 1rem;
-  border-radius: 0.375rem;
-  border: none;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-primary {
-  background-color: #3b82f6;
-  color: white;
-}
-.btn-primary:hover {
-  background-color: #2563eb;
-}
-.btn-primary:disabled {
-  background-color: #9ca3af;
-  cursor: not-allowed;
-}
-.btn-outline {
-  background-color: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-}
-.btn-outline:hover {
-  background-color: var(--bg-section);
-}
-
 /* Component-specific styles */
 .form-group {
   display: flex;
   flex-direction: column;
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-md);
 }
 .form-group label {
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-sm);
   font-weight: 500;
-  color: var(--text-secondary);
-}
-.form-input {
-  padding: 0.75rem;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  font-size: 1rem;
-  background-color: var(--bg-input, #fff);
-  color: var(--text-primary, #333);
+  color: var(--muted);
 }
 .form-hint {
-  font-size: 0.8rem;
-  color: var(--text-tertiary);
-  margin-top: 0.5rem;
+  font-size: var(--text-base);
+  color: var(--muted-soft);
+  margin-top: var(--space-sm);
 }
 .error-message {
-  margin-top: 1rem;
+  margin-top: var(--space-md);
   color: var(--danger, #ef4444);
-  background-color: rgba(239, 68, 68, 0.1);
-  padding: 0.75rem;
-  border-radius: 4px;
+  background-color: var(--danger-bg);
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
 }
 
 /* Radio group styles */
 .radio-group {
   display: flex;
-  gap: 1.5rem;
-  margin-top: 0.25rem;
+  gap: var(--space-lg);
+  margin-top: var(--space-xs);
 }
 .radio-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-sm);
   cursor: pointer;
-  font-size: 0.95rem;
-  color: var(--text-primary, #333);
+  font-size: var(--text-base);
+  color: var(--fg);
   user-select: none;
 }
 .radio-label input[type='radio'] {
@@ -602,45 +575,40 @@ export default {
 
 /* Advanced Toggle */
 .advanced-toggle {
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-md);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 .btn-link {
-  background: none;
-  border: none;
-  color: var(--primary, #3b82f6);
-  cursor: pointer;
-  font-size: 0.9rem;
-  padding: 0;
+  /* Layout only - styling handled by DsButton ghost */
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-sm);
 }
 .preset-badge {
-  font-size: 0.75rem;
-  background-color: rgba(16, 185, 129, 0.1);
-  color: #10b981;
-  padding: 2px 6px;
-  border-radius: 4px;
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  font-size: var(--text-sm);
+  background-color: var(--success-bg);
+  color: var(--success);
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--success-bg);
 }
 .toggle-icon {
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
 }
 .advanced-panel {
-  background-color: var(--bg-section, #f9fafb);
-  padding: 1rem;
-  border-radius: 4px;
-  border: 1px solid var(--border-color, #e5e7eb);
-  margin-bottom: 1rem;
+  background-color: var(--bg-tertiary);
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  margin-bottom: var(--space-md);
 }
 .checkbox-group {
   flex-direction: row;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
 }
 .checkbox-group input {
   width: 1rem;
@@ -652,16 +620,16 @@ export default {
   cursor: pointer;
 }
 .small-hint {
-  margin-top: 0.25rem;
-  font-size: 0.75rem;
+  margin-top: var(--space-xs);
+  font-size: var(--text-sm);
 }
 
 /* Tooltip Styles */
 .label-with-tooltip {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
 }
 
 .label-with-tooltip label {
@@ -681,20 +649,20 @@ export default {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background-color: var(--text-secondary);
-  color: var(--bg-dialog);
-  font-size: 11px;
+  background-color: var(--muted);
+  color: var(--surface);
+  font-size: var(--text-xs);
   font-weight: bold;
 }
 
 .tooltip-text {
   visibility: hidden;
   width: 220px;
-  background-color: #333;
-  color: #fff;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-fg);
   text-align: center;
-  border-radius: 6px;
-  padding: 8px;
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
   position: absolute;
   z-index: 1;
   bottom: 125%; /* Position above */
@@ -702,10 +670,10 @@ export default {
   margin-left: -110px; /* Center the tooltip */
   opacity: 0;
   transition: opacity 0.3s;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   line-height: 1.4;
   pointer-events: none;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-md);
 }
 
 .tooltip-text::after {
@@ -713,10 +681,10 @@ export default {
   position: absolute;
   top: 100%;
   left: 50%;
-  margin-left: -5px;
+  margin-left: -var(--space-xs);
   border-width: 5px;
   border-style: solid;
-  border-color: #333 transparent transparent transparent;
+  border-color: var(--tooltip-bg) transparent transparent transparent;
 }
 
 .tooltip-container:hover .tooltip-text {

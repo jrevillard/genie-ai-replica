@@ -16,35 +16,27 @@ import router from './router';
 import i18n from './i18n';
 import store from './store'; // Import the Vuex store
 import FileDialogSafe from './fileDialogSafe'; // Import our custom directive
-import '@fortawesome/fontawesome-free/css/all.min.css';
-import VueApexCharts from 'vue3-apexcharts';
-import './text-fix.css';
 
+import VueApexCharts from 'vue3-apexcharts';
+import ApexCharts from 'apexcharts';
 // Import theme CSS files
 import './theme-variables.css';
 import './theme-components.css';
+import './charts-apex-overrides.css';
 
 // Fetch configuration for GENIE.AI framework with fallback defaults
 let config = {
   app: {
-    title: 'Huduma AI',
-    icon: { type: 'file', value: '/config/huduma-icon.svg' }
+    title: 'GENIE.AI',
+    icon: { type: 'file', value: '/config/logo-genie-ai.jpeg' }
   },
   theme: {
-    primaryColor: '#4E97D1',
-    secondaryColor: '#2C5F8A',
-    backgroundColor: '#f5f7fa',
-    textColor: '#333333',
-    navbar: {
-      gradientStart: '#4E97D1',
-      gradientEnd: '#2C5F8A',
-      textColor: '#ffffff'
-    }
+    brandColor: '#4071cb'
   },
   features: {
     chat: {
-      welcomeMessage: 'Welcome to Huduma AI, your public service assistant!',
-      botName: 'Huduma'
+      welcomeMessage: 'Welcome to GENIE.AI',
+      botName: 'GENIE.AI'
     }
   },
   custom: {}
@@ -56,55 +48,41 @@ export async function loadConfig() {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
-    config = { ...config, ...data }; // Merge fetched config with defaults
-    console.log('Configuration loaded:', config);
-    console.log('Quick Help config:', config.features?.chat?.quickHelp);
-
-    // Dynamically set CSS variables based on config (FIX: Added for success case)
-    const root = document.documentElement;
-    if (config.theme) {
-      if (config.theme.navbar) {
-        root.style.setProperty('--navbar-gradient-start', config.theme.navbar.gradientStart);
-        root.style.setProperty('--navbar-gradient-end', config.theme.navbar.gradientEnd);
-        root.style.setProperty('--navbar-text-color', config.theme.navbar.textColor);
-      }
-      root.style.setProperty('--accent-color', config.theme.primaryColor);
-      root.style.setProperty('--accent-hover', adjustColor(config.theme.primaryColor, -20));
-      root.style.setProperty('--accent-color-secondary', config.theme.secondaryColor);
-    }
+    config = { ...config, ...data };
   } catch (error) {
     console.error('Error loading config:', error);
-    console.warn('Using default configuration');
-
-    // Set default CSS variables
-    const root = document.documentElement;
-    if (config.theme) {
-      if (config.theme.navbar) {
-        root.style.setProperty('--navbar-gradient-start', config.theme.navbar.gradientStart);
-        root.style.setProperty('--navbar-gradient-end', config.theme.navbar.gradientEnd);
-        root.style.setProperty('--navbar-text-color', config.theme.navbar.textColor);
-      }
-      root.style.setProperty('--accent-color', config.theme.primaryColor);
-      root.style.setProperty('--accent-hover', adjustColor(config.theme.primaryColor, -20));
-      root.style.setProperty('--accent-color-secondary', config.theme.secondaryColor);
-    }
   }
+
+  const root = document.documentElement;
+  const theme = config.theme || {};
+  root.style.setProperty('--brand', theme.brandColor || '#4071cb');
+
+  if (theme.bg) {
+    root.style.setProperty('--config-bg', theme.bg);
+  }
+  if (theme.fg) {
+    root.style.setProperty('--config-fg', theme.fg);
+  }
+  if (theme.navbar?.background) {
+    root.style.setProperty('--navbar-bg', theme.navbar.background);
+  }
+  if (theme.navbar?.text) {
+    root.style.setProperty('--navbar-fg', theme.navbar.text);
+  }
+  if (theme.colors) {
+    ['success', 'warning', 'danger', 'info'].forEach((key) => {
+      if (theme.colors[key]) root.style.setProperty(`--${key}`, theme.colors[key]);
+    });
+  }
+  if (theme.typography?.fontFamily) {
+    root.style.setProperty('--font-body', theme.typography.fontFamily);
+    root.style.setProperty('--font-display', theme.typography.fontFamily);
+  }
+  if (theme.typography?.fontScale) {
+    root.style.setProperty('--font-scale', String(theme.typography.fontScale));
+  }
+
   return config;
-}
-
-// Helper function to adjust color brightness (for hover states)
-function adjustColor(hexColor, percent) {
-  let r = parseInt(hexColor.slice(1, 3), 16);
-  let g = parseInt(hexColor.slice(3, 5), 16);
-  let b = parseInt(hexColor.slice(5, 7), 16);
-
-  // Adjust brightness
-  r = Math.min(255, Math.max(0, Math.round(r * (1 + percent / 100))));
-  g = Math.min(255, Math.max(0, Math.round(g * (1 + percent / 100))));
-  b = Math.min(255, Math.max(0, Math.round(b * (1 + percent / 100))));
-
-  // Convert back to hex
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 }
 
 // Initialize configuration before app creation to ensure it's available globally
@@ -117,8 +95,7 @@ await loadConfig();
 const getSavedLocale = () => {
   try {
     return localStorage.getItem('userLocale');
-  } catch (e) {
-    console.warn('Unable to access localStorage:', e);
+  } catch {
     return null;
   }
 };
@@ -147,16 +124,6 @@ const initialLocale = savedLocale || browserLocale || 'en';
 // Set the locale directly as a string (not as a ref)
 i18n.global.locale = initialLocale;
 
-// Log information only in development mode
-if (process.env.NODE_ENV === 'development') {
-  console.log('Available messages:', {
-    en: i18n.global.getLocaleMessage('en'),
-    fr: i18n.global.getLocaleMessage('fr'),
-    sw: i18n.global.getLocaleMessage('sw')
-  });
-  console.log('Active locale:', i18n.global.locale);
-}
-
 // ThemeManager singleton handles initial theme detection and DOM application
 // (initialized at import time via its constructor)
 // Just ensure saved font size is applied
@@ -165,8 +132,8 @@ try {
   if (fontSize) {
     document.documentElement.style.fontSize = `${parseInt(fontSize) / 50}rem`;
   }
-} catch (e) {
-  console.warn('Error initializing font size:', e);
+} catch {
+  // Silently fail - font size is optional
 }
 
 // Create the Vue app
@@ -182,13 +149,44 @@ app.use(store); // Register the Vuex store
 app.use(FileDialogSafe); // Register our custom directive
 app.use(VueApexCharts);
 
+// Global ApexCharts defaults — use DS tokens, disable built-in noData placeholder
+window.ApexCharts = window.ApexCharts || {};
+ApexCharts.defaults = {
+  theme: { mode: 'light', palette: 'palette1' },
+  chart: {
+    foreColor: 'var(--fg)',
+    background: 'transparent',
+    fontFamily: 'var(--font-body)',
+    toolbar: { show: false },
+    animations: { enabled: false },
+    noData: {
+      text: '',
+      align: 'center',
+      verticalAlign: 'middle',
+      style: { fontSize: '14px' }
+    }
+  },
+  tooltip: { theme: 'dark' },
+  grid: { borderColor: 'var(--border)', strokeDashArray: 0 },
+  xaxis: {
+    axisBorder: { color: 'var(--border)' },
+    axisTicks: { color: 'var(--border)' },
+    labels: { style: { colors: 'var(--fg)' } }
+  },
+  yaxis: {
+    axisBorder: { color: 'var(--border)' },
+    labels: { style: { colors: 'var(--fg)' } }
+  },
+  legend: { labels: { colors: 'var(--fg)' } }
+};
+
 // Create a global method for changing locale
 app.config.globalProperties.$setLocale = function (locale) {
   i18n.global.locale = locale;
   try {
     localStorage.setItem('userLocale', locale);
-  } catch (e) {
-    console.warn('Unable to save locale preference:', e);
+  } catch {
+    // Silently fail - locale preference is optional
   }
 
   // Update HTML lang attribute for accessibility
@@ -197,11 +195,6 @@ app.config.globalProperties.$setLocale = function (locale) {
 
 // Mount the app
 app.mount('#app');
-
-// Log active locale after mount (development only)
-if (process.env.NODE_ENV === 'development') {
-  console.log('Active locale (after mount):', i18n.global.locale);
-}
 
 // Function to set the actual viewport height as a CSS variable
 function setViewportHeight() {

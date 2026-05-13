@@ -1,9 +1,5 @@
 // src/router.js
 import { createRouter, createWebHistory } from 'vue-router';
-import DashboardView from '@/views/DashboardView.vue';
-import CallbackView from '@/views/CallbackView.vue';
-import UserProfileComponent from '@/components/UserProfileComponent.vue';
-import UnifiedAnalytics from '@/components/UnifiedAnalytics.vue';
 import store from '@/store';
 import keycloakAuthService from '@/services/keycloakAuthService';
 
@@ -11,26 +7,38 @@ const routes = [
   {
     path: '/callback',
     name: 'Callback',
-    component: CallbackView,
+    component: () => import('@/views/CallbackView.vue'),
     meta: { requiresAuth: false }
   },
   {
     path: '/dashboard',
     name: 'Dashboard',
-    component: DashboardView,
-    meta: { requiresAuth: true }
+    component: () => import('@/views/DashboardView.vue'),
+    meta: { requiresAuth: true, showSidebar: true }
   },
   {
     path: '/analytics',
     name: 'Analytics',
-    component: UnifiedAnalytics,
-    meta: { requiresAuth: true }
+    component: () => import('@/components/UnifiedAnalytics.vue'),
+    meta: { requiresAuth: true, showSidebar: false }
   },
   {
     path: '/profile',
     name: 'UserProfile',
-    component: UserProfileComponent,
-    meta: { requiresAuth: true }
+    component: () => import('@/components/UserProfileComponent.vue'),
+    meta: { requiresAuth: true, showSidebar: false }
+  },
+  {
+    path: '/settings',
+    name: 'Settings',
+    component: () => import('@/components/SettingsComponent.vue'),
+    meta: { requiresAuth: true, showSidebar: false }
+  },
+  {
+    path: '/admin',
+    name: 'Admin',
+    component: () => import('@/components/AdminDashboard.vue'),
+    meta: { requiresAuth: true, showSidebar: false }
   },
   {
     path: '/',

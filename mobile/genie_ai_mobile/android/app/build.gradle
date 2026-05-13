@@ -46,51 +46,6 @@ android {
             dimension "environment"
             applicationIdSuffix ".dev"
             manifestPlaceholders = [
-                appAuthRedirectScheme: "com.itu.genieai.dev",
-                nginxPublicDomain: "genieai.itu.int"
-            ]
-        }
-        staging {
-            dimension "environment"
-            applicationIdSuffix ".staging"
-            manifestPlaceholders = [
-                appAuthRedirectScheme: "com.itu.genieai.staging",
-                nginxPublicDomain: "genieai.itu.int"
-            ]
-        }
-        e2e {
-            dimension "environment"
-            applicationIdSuffix ".e2e"
-            manifestPlaceholders = [
-                appAuthRedirectScheme: "com.itu.genieai.e2e",
-                nginxPublicDomain: "genieai.itu.int"
-            ]
-        }
-        itu {
-            dimension "environment"
-            manifestPlaceholders = [
-                appAuthRedirectScheme: "com.itu.genieai",
-                nginxPublicDomain: "genieai.itu.int"
-            ]
-        }
-    }
-
-    signingConfigs {
-        release {
-            keyAlias keystoreProperties['keyAlias']
-            keyPassword keystoreProperties['keyPassword']
-            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
-            storePassword keystoreProperties['storePassword']
-        }
-    }
-
-    flavorDimensions "environment"
-
-    productFlavors {
-        dev {
-            dimension "environment"
-            applicationIdSuffix ".dev"
-            manifestPlaceholders = [
                 appAuthRedirectScheme: "com.itu.genieai.dev"
             ]
         }
@@ -113,6 +68,15 @@ android {
             manifestPlaceholders = [
                 appAuthRedirectScheme: "com.itu.genieai"
             ]
+        }
+    }
+
+    signingConfigs {
+        release {
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword keystoreProperties['storePassword']
         }
     }
 

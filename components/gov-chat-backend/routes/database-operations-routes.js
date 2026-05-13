@@ -9,7 +9,7 @@ module.exports = (databaseService) => {
 
   /**
    * @swagger
-   * /database/backup:
+   * /api/database/backup:
    *   post:
    *     summary: Backup Database
    *     description: Creates a full backup of the database
@@ -37,7 +37,7 @@ module.exports = (databaseService) => {
     try {
       logger.info('Initiating database backup via API');
       const result = await databaseService.backupDatabase();
-      
+
       if (result.success) {
         res.json(result);
       } else {
@@ -54,7 +54,7 @@ module.exports = (databaseService) => {
 
   /**
    * @swagger
-   * /database/optimize:
+   * /api/database/optimize:
    *   post:
    *     summary: Optimize Database
    *     description: Performs database optimization including compacting collections
@@ -89,7 +89,7 @@ module.exports = (databaseService) => {
     try {
       logger.info('Initiating database optimization via API');
       const result = await databaseService.optimizeDatabase();
-      
+
       if (result.success) {
         res.json(result);
       } else {

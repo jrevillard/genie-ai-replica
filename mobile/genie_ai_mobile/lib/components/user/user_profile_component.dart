@@ -5,32 +5,28 @@ import 'dart:io';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:country_picker/country_picker.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:genie_ai_mobile/services/user_profile_proxy.dart';
+import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N SERVICE
-import 'package:genie_ai_mobile/services/auth/auth_providers.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
+import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
+import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
 
-class UserProfileScreen extends StatefulWidget {
+class UserProfileScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> user;
 
   const UserProfileScreen({super.key, required this.user});
 
   @override
-  State<UserProfileScreen> createState() => _UserProfileScreenState();
+  ConsumerState<UserProfileScreen> createState() => _UserProfileScreenState();
 }
 
-class _UserProfileScreenState extends State<UserProfileScreen>
+class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     with SingleTickerProviderStateMixin {
-  UserProfileProxy? _proxy;
-
-  UserProfileProxy get proxy => _proxy ??= UserProfileProxy(
-        httpClient: ProviderScope.containerOf(context)
-            .read(apiServiceProvider)
-            .httpClient,
-      );
   final ImagePicker _imagePicker = ImagePicker();
   final FilePicker _filePicker = FilePicker.platform;
 
@@ -60,12 +56,12 @@ class _UserProfileScreenState extends State<UserProfileScreen>
 
   bool _showIconSelector = false;
   String _iconTab = 'preset';
-  Color _initialsColor = const Color(0xFF4E97D1);
+  Color _initialsColor = ThemeManager().tokens.brand;
 
-  final List<Color> _colorOptions = [
-    const Color(0xFF4E97D1),
-    Colors.green,
-    Colors.red,
+  List<Color> get _colorOptions => [
+    ThemeManager().tokens.brand,
+    ThemeManager().tokens.success,
+    ThemeManager().tokens.danger,
     Colors.purple,
     Colors.orange,
     Colors.teal,
@@ -145,8 +141,13 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     });
 
     try {
-      debugPrint('[PROFILE SCREEN] Calling proxy.getProfile($_userId)');
-      final data = await proxy.getProfile(_userId);
+      debugPrint('[PROFILE SCREEN] Calling currentUserApi.apiMeGetWithHttpInfo()');
+      final api = ref.read(currentUserApiProvider);
+      final response = await api.apiMeGetWithHttpInfo();
+      if (response.statusCode != 200) {
+        throw Exception('Failed to load profile: ${response.statusCode}');
+      }
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
       debugPrint(
         '[PROFILE SCREEN] API response received. Keys: ${data.keys.toList()}',
       );
@@ -400,13 +401,17 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       } else {
         if (platformFile.path == null) {
           debugPrint('[FILE PICKER] Unexpected: path is null on mobile');
+          if (!mounted) return;
+          final tokens = ThemeManager().tokens;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
+              backgroundColor: tokens.surface,
               content: Text(
                 tr(
                   'upload.notifications.uploadFailed',
                   args: {'fileName': 'Data'},
                 ),
+                style: TextStyle(color: tokens.fg),
               ),
             ), // Fallback error
           );
@@ -469,12 +474,20 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       debugPrint('[PROFILE SCREEN] Encoding files for API transmission...');
       final dataToSubmit = await _prepareDataForSubmission(_formData);
 
-      await proxy.updateProfile(_userId, dataToSubmit);
+      final api = ref.read(currentUserApiProvider);
+      await api.apiMePutWithHttpInfo(data: jsonEncode(dataToSubmit));
 
       debugPrint('[PROFILE SCREEN] Profile saved successfully');
       if (mounted) {
+        final tokens = ThemeManager().tokens;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr('userProfile.saveSuccess'))), // Correct Key
+          SnackBar(
+            backgroundColor: tokens.surface,
+            content: Text(
+              tr('userProfile.saveSuccess'),
+              style: TextStyle(color: tokens.fg),
+            ),
+          ), // Correct Key
         );
         Navigator.pop(context);
       }
@@ -482,9 +495,14 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       debugPrint('[PROFILE SCREEN] SAVE FAILED: $e');
       debugPrint('[PROFILE SCREEN] Save stack trace: $stack');
       if (mounted) {
+        final tokens = ThemeManager().tokens;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${tr('userProfile.errors.savingFailed')}: $e'),
+            backgroundColor: tokens.surface,
+            content: Text(
+              '${tr('userProfile.errors.savingFailed')}: $e',
+              style: TextStyle(color: tokens.fg),
+            ),
           ),
         );
       }
@@ -505,27 +523,29 @@ class _UserProfileScreenState extends State<UserProfileScreen>
 
     final lower = value.toLowerCase();
     if (type == 'gender') {
-      if (lower == 'male')
+      if (lower == 'male') {
         key = 'male';
-      else if (lower == 'female')
+      } else if (lower == 'female') {
         key = 'female';
-      else if (lower == 'other')
+      } else if (lower == 'other') {
         key = 'other';
-      else if (lower.contains('prefer'))
+      } else if (lower.contains('prefer')) {
         key = 'preferNot';
+      }
       return tr('userProfile.gender.$key');
     } else if (type == 'marital') {
-      if (lower == 'single')
+      if (lower == 'single') {
         key = 'single';
-      else if (lower == 'married')
+      } else if (lower == 'married') {
         key = 'married';
-      else if (lower == 'divorced')
+      } else if (lower == 'divorced') {
         key = 'divorced';
-      else if (lower == 'widowed')
+      } else if (lower == 'widowed') {
         key = 'widowed';
-      else
+      } else {
         key =
             'other'; // Fallback for Separated/Domestic Partnership as they aren't in de.dart
+      }
       return tr('userProfile.maritalStatus.$key');
     } else if (type == 'blood') {
       // keys: aPositive, aNegative...
@@ -551,6 +571,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   }
 
   Widget _buildProfileIcon() {
+    final tokens = ThemeManager().tokens;
     final icon = _formData['personalIdentification']?['profileIcon'];
     debugPrint(
       '[UI] Building profile icon, current value: $icon (${icon.runtimeType})',
@@ -598,9 +619,9 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                     _getInitials(
                       _formData['personalIdentification']?['fullName'],
                     ),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 50,
-                      color: Colors.white,
+                      color: tokens.fg,
                       fontWeight: FontWeight.bold,
                     ),
                   )
@@ -610,12 +631,12 @@ class _UserProfileScreenState extends State<UserProfileScreen>
             bottom: 0,
             right: 0,
             child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(
-                color: Colors.black54,
+              padding: const EdgeInsets.all(DsSpacing.sm),
+              decoration: BoxDecoration(
+                color: tokens.scrim,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.edit, color: Colors.white, size: 24),
+              child: Icon(Icons.edit, color: tokens.fg, size: 24),
             ),
           ),
         ],
@@ -639,7 +660,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     );
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: DsSpacing.sm),
       child: TextFormField(
         initialValue: currentValue,
         decoration: InputDecoration(
@@ -681,9 +702,9 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: DsSpacing.sm),
       child: DropdownButtonFormField<String>(
-        value: normalizedValue,
+        initialValue: normalizedValue,
         decoration: InputDecoration(
           labelText: translatedLabel,
           border: const OutlineInputBorder(),
@@ -699,7 +720,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         onChanged: (v) {
           setState(() {
             _formData[section] ??= {};
-            _formData[section][field] = v ?? null;
+            _formData[section][field] = v;
             debugPrint('[UI] Dropdown updated $section.$field = "$v"');
           });
         },
@@ -716,13 +737,18 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     final String translatedLabel = tr(labelKey);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: DsSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(translatedLabel, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
+          const SizedBox(height: DsSpacing.sm),
+          DsButton(
+            label: currentValue.isEmpty
+                ? tr('userProfile.placeholders.selectCountry')
+                : currentValue,
+            icon: Icons.flag,
+            variant: DsButtonVariant.secondary,
             onPressed: () {
               debugPrint('[UI] Country picker opened for $section.$field');
               showCountryPicker(
@@ -747,12 +773,6 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                 ),
               );
             },
-            icon: const Icon(Icons.flag),
-            label: Text(
-              currentValue.isEmpty
-                  ? tr('userProfile.placeholders.selectCountry')
-                  : currentValue,
-            ),
           ),
         ],
       ),
@@ -760,6 +780,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   }
 
   Widget _buildFilePicker(String labelKey, String section, String field) {
+    final tokens = ThemeManager().tokens;
     final file = _formData[section]?[field];
 
     // Use fallback string if translation missing for "Attached File"
@@ -790,27 +811,26 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: DsSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(translatedLabel, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
+          const SizedBox(height: DsSpacing.sm),
           Row(
             children: [
               Expanded(
                 child: Text(
                   fileName,
-                  style: const TextStyle(color: Colors.grey),
+                  style: TextStyle(color: tokens.muted),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 10),
-              ElevatedButton(
+              DsButton(
+                label: tr('userProfile.uploadFile'),
+                variant: DsButtonVariant.primary,
                 onPressed: () => _pickFile(section, field),
-                child: Text(
-                  tr('userProfile.uploadFile'),
-                ), // Key: "Datei hochladen"
               ),
             ],
           ),
@@ -820,6 +840,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   }
 
   Widget _buildDateOfBirthPicker() {
+    final tokens = ThemeManager().tokens;
     final String currentDob = _formData['personalIdentification']?['dob'] ?? '';
     debugPrint('[UI] Building DateOfBirthPicker, current value: "$currentDob"');
 
@@ -830,7 +851,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: DsSpacing.sm),
       child: InkWell(
         onTap: () async {
           debugPrint('[UI] Date picker tapped');
@@ -844,7 +865,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                 data: Theme.of(context).copyWith(
                   colorScheme: Theme.of(
                     context,
-                  ).colorScheme.copyWith(primary: const Color(0xFF4E97D1)),
+                  ).colorScheme.copyWith(primary: tokens.brand),
                 ),
                 child: child!,
               );
@@ -873,11 +894,10 @@ class _UserProfileScreenState extends State<UserProfileScreen>
             children: [
               Text(
                 currentDob.isEmpty
-                    ? tr('userProfile.instructions.dobHelp').substring(0, 10) +
-                          '...'
+                    ? '${tr('userProfile.instructions.dobHelp').substring(0, 10)}...'
                     : currentDob,
               ),
-              const Icon(Icons.calendar_today),
+              Icon(Icons.calendar_today, color: tokens.muted),
             ],
           ),
         ),
@@ -888,6 +908,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tokens = ThemeManager().tokens;
 
     debugPrint(
       '[UI] build() called. _isLoading: $_isLoading, _errorMessage: $_errorMessage',
@@ -907,9 +928,10 @@ class _UserProfileScreenState extends State<UserProfileScreen>
             children: [
               Text(_errorMessage!, textAlign: TextAlign.center),
               const SizedBox(height: 20),
-              ElevatedButton(
+              DsButton(
+                label: tr('sidebar.retry'),
+                variant: DsButtonVariant.primary,
                 onPressed: _loadProfile,
-                child: Text(tr('sidebar.retry')),
               ),
             ],
           ),
@@ -924,17 +946,20 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text(tr('userProfile.title')), // "Benutzerprofil"
+        backgroundColor: tokens.surface,
+        foregroundColor: tokens.fg,
         actions: [
-          TextButton(
+          DsButton(
+            label: tr('settings.save'),
+            variant: DsButtonVariant.primary,
             onPressed: _saveProfile,
-            child: Text(
-              tr('settings.save'),
-              style: const TextStyle(color: Colors.white),
-            ), // "Speichern"
           ),
-          IconButton(
+          DsButton(
+            iconOnly: true,
+            icon: Icons.close,
+            variant: DsButtonVariant.ghost,
+            overrideFg: tokens.fg,
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.close),
           ),
         ],
       ),
@@ -944,27 +969,26 @@ class _UserProfileScreenState extends State<UserProfileScreen>
             child: Column(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(20),
-                  color: theme.brightness == Brightness.dark
-                      ? Colors.grey[900]
-                      : Colors.grey[50],
+                  padding: const EdgeInsets.all(DsSpacing.xl),
+                  color: tokens.surface,
                   child: Column(
                     children: [
                       _buildProfileIcon(),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: DsSpacing.xl),
                       Text(
                         tr(
                           'userProfile.privacyInfo',
                         ), // Translated privacy info
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
+                        style: TextStyle(
+                          fontSize: ThemeManager().tokens.textBase,
+                          color: tokens.muted,
                         ),
                       ),
-                      TextButton(
+                      DsButton(
+                        label: tr('userProfile.privacyPolicyLink'),
+                        variant: DsButtonVariant.ghost,
                         onPressed: () {},
-                        child: Text(tr('userProfile.privacyPolicyLink')),
                       ),
                     ],
                   ),
@@ -973,8 +997,8 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                   controller: _tabController,
                   isScrollable: true,
                   indicatorSize: TabBarIndicatorSize.label,
-                  labelColor: theme.primaryColor,
-                  unselectedLabelColor: Colors.grey,
+                  labelColor: tokens.accent,
+                  unselectedLabelColor: tokens.muted,
                   // TRANSLATE TABS using keys: userProfile.tabsShort.personal
                   tabs: _tabs
                       .map((t) => Tab(text: tr('userProfile.tabsShort.$t')))
@@ -986,7 +1010,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                     children: [
                       // 1. Personal
                       ListView(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(DsSpacing.md),
                         children: [
                           _buildTextField(
                             'userProfile.fields.fullName',
@@ -1017,7 +1041,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                       ),
                       // 2. Civil
                       ListView(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(DsSpacing.md),
                         children: [
                           _buildFilePicker(
                             'userProfile.fields.birthCert',
@@ -1053,7 +1077,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                       ),
                       // 3. Address
                       ListView(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(DsSpacing.md),
                         children: [
                           _buildTextField(
                             'userProfile.fields.currentAddress',
@@ -1086,7 +1110,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                       ),
                       // 4. Identity
                       ListView(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(DsSpacing.md),
                         children: [
                           _buildTextField(
                             'userProfile.fields.idCard',
@@ -1122,7 +1146,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                       ),
                       // 5. Health
                       ListView(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(DsSpacing.md),
                         children: [
                           _buildTextField(
                             'userProfile.fields.medicalHistory',
@@ -1173,7 +1197,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                       ),
                       // 6. Employment
                       ListView(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(DsSpacing.md),
                         children: [
                           _buildTextField(
                             'userProfile.fields.eHistory',
@@ -1215,7 +1239,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                       ),
                       // 7. Education
                       ListView(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(DsSpacing.md),
                         children: [
                           _buildTextField(
                             'userProfile.fields.schools',
@@ -1242,7 +1266,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                       ),
                       // 8. Financial
                       ListView(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(DsSpacing.md),
                         children: [
                           _buildFilePicker(
                             'userProfile.fields.incomeTax',
@@ -1278,7 +1302,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                       ),
                       // 9. Social
                       ListView(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(DsSpacing.md),
                         children: [
                           _buildTextField(
                             'userProfile.fields.pensionStatus',
@@ -1314,7 +1338,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                       ),
                       // 10. Criminal
                       ListView(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(DsSpacing.md),
                         children: [
                           _buildFilePicker(
                             'userProfile.fields.policeRecords',
@@ -1345,7 +1369,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                       ),
                       // 11. Transport
                       ListView(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(DsSpacing.md),
                         children: [
                           _buildTextField(
                             'userProfile.fields.vehicleReg',
@@ -1371,7 +1395,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                       ),
                       // 12. Civic
                       ListView(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(DsSpacing.md),
                         children: [
                           _buildTextField(
                             'userProfile.fields.voterRegistration',
@@ -1408,48 +1432,41 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           ),
           if (_showIconSelector)
             Material(
-              color: Colors.black.withOpacity(0.7),
+              color: tokens.scrim,
               child: SafeArea(
                 child: Center(
                   child: Container(
                     width: MediaQuery.of(context).size.width * 0.9,
                     constraints: const BoxConstraints(maxWidth: 500),
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(DsSpacing.xl),
                     decoration: BoxDecoration(
                       color: theme.scaffoldBackgroundColor,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(DsRadii.xl),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           tr('userProfile.chooseProfileIcon'),
-                          style: const TextStyle(
-                            fontSize: 20,
+                          style: TextStyle(
+                            fontSize: ThemeManager().tokens.textLg,
                             fontWeight: FontWeight.bold,
+                            color: tokens.fg,
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: DsSpacing.xl),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: ['preset', 'upload', 'initials'].map((t) {
                             final active = _iconTab == t;
-                            return TextButton(
-                              onPressed: () => setState(() => _iconTab = t),
-                              child: Text(
-                                // userProfile.presetIcons, userProfile.upload, userProfile.initials
-                                tr(
-                                  'userProfile.${t == 'preset' ? 'presetIcons' : t}',
-                                ),
-                                style: TextStyle(
-                                  color: active
-                                      ? theme.primaryColor
-                                      : Colors.grey,
-                                  fontWeight: active
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                ),
+                            return DsButton(
+                              label: tr(
+                                'userProfile.${t == 'preset' ? 'presetIcons' : t}',
                               ),
+                              variant: active
+                                  ? DsButtonVariant.primary
+                                  : DsButtonVariant.ghost,
+                              onPressed: () => setState(() => _iconTab = t),
                             );
                           }).toList(),
                         ),
@@ -1458,8 +1475,8 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                           GridView.count(
                             shrinkWrap: true,
                             crossAxisCount: 4,
-                            mainAxisSpacing: 16,
-                            crossAxisSpacing: 16,
+                            mainAxisSpacing: DsSpacing.md,
+                            crossAxisSpacing: DsSpacing.md,
                             children: _presetIcons.map((path) {
                               final selected =
                                   _formData['personalIdentification']?['profileIcon'] ==
@@ -1476,14 +1493,18 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                                   decoration: BoxDecoration(
                                     border: Border.all(
                                       color: selected
-                                          ? theme.primaryColor
+                                          ? tokens.accent
                                           : Colors.transparent,
                                       width: 4,
                                     ),
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(
+                                      DsRadii.lg,
+                                    ),
                                   ),
                                   child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
+                                    borderRadius: BorderRadius.circular(
+                                      DsRadii.md,
+                                    ),
                                     child: Image.asset(path, fit: BoxFit.cover),
                                   ),
                                 ),
@@ -1492,10 +1513,11 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                           ),
                         if (_iconTab == 'upload')
                           Center(
-                            child: ElevatedButton.icon(
+                            child: DsButton(
+                              label: tr('userProfile.clickToUpload'),
+                              icon: Icons.photo_library,
+                              variant: DsButtonVariant.secondary,
                               onPressed: _pickImageForIcon,
-                              icon: const Icon(Icons.photo_library),
-                              label: Text(tr('userProfile.clickToUpload')),
                             ),
                           ),
                         if (_iconTab == 'initials')
@@ -1508,17 +1530,17 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                                   _getInitials(
                                     _formData['personalIdentification']?['fullName'],
                                   ),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 70,
-                                    color: Colors.white,
+                                    color: tokens.fg,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 30),
                               Wrap(
-                                spacing: 16,
-                                runSpacing: 16,
+                                spacing: DsSpacing.md,
+                                runSpacing: DsSpacing.md,
                                 children: _colorOptions.map((c) {
                                   final selected = c == _initialsColor;
                                   return GestureDetector(
@@ -1535,13 +1557,13 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                                         shape: BoxShape.circle,
                                         border: Border.all(
                                           color: selected
-                                              ? Colors.white
+                                              ? tokens.accent
                                               : Colors.transparent,
                                           width: 4,
                                         ),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.black26,
+                                            color: tokens.muted20,
                                             blurRadius: selected ? 10 : 4,
                                           ),
                                         ],
@@ -1556,15 +1578,17 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            TextButton(
+                            DsButton(
+                              label: tr('userProfile.actions.cancel'),
+                              variant: DsButtonVariant.ghost,
                               onPressed: () =>
                                   setState(() => _showIconSelector = false),
-                              child: Text(tr('userProfile.actions.cancel')),
                             ),
-                            ElevatedButton(
+                            DsButton(
+                              label: tr('common.done'),
+                              variant: DsButtonVariant.primary,
                               onPressed: () =>
                                   setState(() => _showIconSelector = false),
-                              child: Text(tr('common.done')),
                             ),
                           ],
                         ),

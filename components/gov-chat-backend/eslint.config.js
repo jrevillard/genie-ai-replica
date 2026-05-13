@@ -15,19 +15,19 @@ module.exports = [
       },
     },
     rules: {
-      ...sharedRules,
-    },
+      ...sharedRules
+    }
   },
   {
     files: ['**/__tests__/**/*.js', '**/*.test.js'],
     languageOptions: {
       globals: {
-        ...globals.jest,
-      },
-    },
+        ...globals.jest
+      }
+    }
   },
   {
-    ignores: ['node_modules/', 'uploads/', 'logs/', '*.log', 'coverage/', 'dist/', '.env', '.env.*'],
+    ignores: ['node_modules/', 'uploads/', 'logs/', '*.log', 'coverage/', 'dist/', '.env', '.env.*']
   },
-  prettierConfig,
+  prettierConfig
 ];

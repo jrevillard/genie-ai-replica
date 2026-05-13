@@ -17,9 +17,23 @@ const JIT_FORWARD_FIELDS = ['email', 'firstName', 'lastName', 'username'];
 
 // All JIT-provisioned fields that must not be written to ArangoDB
 const JIT_PROTECTED_FIELDS = [
-  'email', 'firstName', 'lastName', 'username',
-  'name', 'roles', 'enabled', 'disabled', 'active', 'deleted',
-  'iss', 'iss_sub', 'sub', 'createdAt', 'updatedAt', 'emailVerified', 'pendingEmailChange',
+  'email',
+  'firstName',
+  'lastName',
+  'username',
+  'name',
+  'roles',
+  'enabled',
+  'disabled',
+  'active',
+  'deleted',
+  'iss',
+  'iss_sub',
+  'sub',
+  'createdAt',
+  'updatedAt',
+  'emailVerified',
+  'pendingEmailChange'
 ];
 
 module.exports = { JIT_FORWARD_FIELDS, JIT_PROTECTED_FIELDS };

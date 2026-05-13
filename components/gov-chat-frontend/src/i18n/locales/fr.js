@@ -702,6 +702,9 @@ export default {
     deleteFolderConfirm: "Êtes-vous sûr de vouloir supprimer le dossier '{name}' ?",
     chatsMoveWarning: 'Toutes les discussions de ce dossier seront déplacées vers le dossier par défaut.',
     weatherError: 'Impossible de charger les données météo. Veuillez réessayer.',
+    weatherTitle: 'Prévisions météo',
+    collapse: 'Réduire la barre latérale',
+    expand: 'Développer la barre latérale',
     weatherLoading: 'Chargement des données météo...',
     weatherLocationLoading: 'Chargement de la position...',
     weatherErrorDefault: 'Impossible de récupérer les données météo.',
@@ -1413,7 +1416,8 @@ export default {
     exportFilenamePlaceholder: 'Entrez le nom du fichier',
     exportButton: 'Exporter',
     exportSuccess: 'Discussion exportée avec succès',
-    exportError: "Échec de l'exportation de la discussion. Veuillez réessayer."
+    exportError: "Échec de l'exportation de la discussion. Veuillez réessayer.",
+    removeItem: 'Supprimer'
   },
   quickhelp: {
     // Labels (Short for UI)

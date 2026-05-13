@@ -1,57 +1,66 @@
-/* theme-components.css - Fixed to ensure navbar title is white on blue, support GENIE.AI configurable colors, and remove !important for better local overrides */
+/* theme-components.css — GENIE.AI Design System component layer
+ *
+ * Applies DS tokens to component selectors.
+ * All color references use the canonical token names from theme-variables.css.
+ */
 
-/* Apply theme variables to all needed components */
+/* --- Typography foundation --- */
 body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+  font-family: var(--font-body);
+  background-color: var(--bg);
+  color: var(--fg);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  color-scheme: light;
 }
 
-/* Apply theme to main app layout elements */
+[data-theme='dark'] body,
+[data-theme='dark'] #app {
+  color-scheme: dark;
+}
+
 #app {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+  background-color: var(--bg);
+  color: var(--fg);
 }
 
-/* Nav Bar - Use GENIE.AI configured gradient and text color */
+/* --- Main layout --- */
+.content-area,
+main {
+  background-color: var(--bg);
+  color: var(--fg);
+}
+
+/* --- Navbar --- */
 .nav-bar {
-  background: var(--bg-navbar);
-  color: var(--text-navbar);
+  background: var(--navbar-bg, var(--accent));
+  color: var(--navbar-fg, var(--accent-fg));
 }
 
-/* Brand name/title in navbar - Force white color */
 .brand-name,
 .nav-bar h4,
 .nav-bar .brand-name,
 [class*='brand-name'],
 .nav-bar [class*='title'],
 .nav-bar [class*='heading'] {
-  color: var(--text-navbar, #ffffff) !important;
+  color: var(--accent-fg);
 }
 
-/* Main content area */
-.content-area,
-main {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-}
-
-/* Sidebar */
-.side-bar,
-.sidebar {
+/* --- Sidebar --- */
+.side-bar {
   background-color: var(--bg-sidebar);
-  color: var(--text-primary);
-  border-right: 1px solid var(--border-color);
+  color: var(--fg);
+  border-right: 1px solid var(--border);
 }
 
-/* Knowledge areas sidebar */
 .knowledge-areas {
   background-color: var(--bg-sidebar);
-  color: var(--text-primary);
+  color: var(--fg);
 }
 
-/* Modal dialogs and panels */
+/* --- Modal dialogs --- */
 .modal-overlay {
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: var(--overlay-bg);
 }
 
 .modal-content,
@@ -59,92 +68,98 @@ main {
 .analytics-content,
 .dialog-content,
 .feedback-dialog .dialog-content {
-  background-color: var(--bg-dialog);
-  color: var(--text-primary);
-  border-color: var(--border-color);
+  background-color: var(--surface);
+  color: var(--fg);
+  border-color: var(--border);
 }
 
 .dialog-header,
 .modal-header {
-  border-bottom-color: var(--border-color);
+  border-bottom-color: var(--border);
 }
 
 .dialog-footer,
 .modal-footer {
-  border-top-color: var(--border-color);
+  border-top-color: var(--border);
 }
 
-/* Settings panel */
+/* --- Settings --- */
 .settings-section {
-  border-bottom-color: var(--border-color);
+  border-bottom-color: var(--border);
 }
 
-/* Form controls */
-input,
-select,
-textarea,
+.settings-dialog {
+  background-color: var(--surface);
+  color: var(--fg);
+}
+
+.settings-dialog .section-title,
+.settings-dialog .dialog-header,
+.settings-dialog label {
+  color: var(--fg);
+}
+
+/* --- Form controls (non-DS: checkbox, file, range) --- */
 .dropdown,
 .search-box {
-  background-color: var(--bg-input) !important;
-  color: var(--text-primary) !important;
-  border-color: var(--border-input) !important;
+  background-color: var(--surface);
+  color: var(--fg);
+  border-color: var(--border);
+  font-family: var(--font-body);
+  border-radius: var(--radius-md);
 }
 
-input::placeholder,
-textarea::placeholder {
-  color: var(--text-tertiary);
-}
-
-/* Cards and panels */
-.metric-card,
-.card,
+/* --- Cards and panels --- */
 .panel,
 .chat-message.bot .message-bubble,
-.analytics-section,
-.chart-container {
-  background-color: var(--bg-card);
-  color: var(--text-primary);
-  border-color: var(--border-color);
+.analytics-section {
+  background-color: var(--surface);
+  color: var(--fg);
+  border-color: var(--border);
+  border-radius: var(--radius-md);
 }
 
-/* Ensure lighter background for message bubbles */
 .chat-message.bot .message-bubble {
-  background-color: var(--bg-tertiary);
+  background-color: var(--bg);
+  border-bottom-left-radius: var(--radius-sm);
 }
 
-/* User messages in chat */
+/* --- Chat bubbles --- */
 .chat-message.user .message-bubble {
-  background-color: var(--accent-color);
-  color: var(--text-button-primary);
+  background-color: var(--accent);
+  color: var(--accent-fg);
+  border: none;
+  border-bottom-right-radius: var(--radius-sm);
 }
 
-/* Theme toggles */
+/* --- Theme toggles --- */
 .theme-toggle {
-  background-color: var(--bg-button-secondary);
-  color: var(--text-button-secondary);
-  border: 1px solid var(--border-color);
+  background-color: var(--btn-secondary-bg);
+  color: var(--btn-secondary-fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
 }
 
 .theme-toggle.active {
-  background-color: var(--bg-button-primary);
-  color: var(--text-button-primary);
-  border-color: var(--bg-button-primary);
+  background-color: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
 }
 
-/* Slider styling */
+/* --- Slider --- */
 .slider {
   background-color: var(--slider-track);
 }
 
 .slider::-webkit-slider-thumb {
-  background-color: var(--bg-button-primary);
+  background-color: var(--slider-thumb);
 }
 
 .slider::-moz-range-thumb {
-  background-color: var(--bg-button-primary);
+  background-color: var(--slider-thumb);
 }
 
-/* Switch styling */
+/* --- Switch --- */
 .switch-track {
   background-color: var(--switch-track-off);
 }
@@ -157,88 +172,52 @@ textarea::placeholder {
   background-color: var(--switch-thumb);
 }
 
-/* Buttons */
-.btn-primary,
-.primary-btn,
-.send-btn {
-  background-color: var(--bg-button-primary);
-  color: var(--text-button-primary);
-}
-
-.btn-primary:hover,
-.primary-btn:hover,
-.send-btn:hover {
-  background-color: var(--bg-button-primary-hover);
-}
-
-.btn-secondary,
-.cancel-btn,
-.btn-close {
-  background-color: var(--bg-button-secondary);
-  color: var(--text-button-secondary);
-}
-
-.btn-secondary:hover,
-.cancel-btn:hover,
-.btn-close:hover {
-  background-color: var(--bg-button-secondary-hover);
-}
-
-/* Tables */
+/* --- Tables --- */
 table {
-  background-color: var(--bg-card);
-  color: var(--text-primary);
-  border-color: var(--border-color);
+  background-color: var(--surface);
+  color: var(--fg);
+  border-color: var(--border);
+  font-variant-numeric: tabular-nums;
 }
 
 th {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 td {
-  color: var(--text-primary);
+  color: var(--fg);
   border-color: var(--border-light);
 }
 
-/* Weather forecast panel */
+/* --- Weather panel --- */
 .weather-forecast {
-  background-color: var(--bg-card);
-  color: var(--text-primary);
+  background-color: var(--surface);
+  color: var(--fg);
 }
 
-/* Styles for settings dialog - removed !important for better local overrides */
-.settings-dialog {
-  background-color: var(--bg-dialog);
-  color: var(--text-primary);
-}
-
-.settings-dialog .section-title,
-.settings-dialog .dialog-header,
-.settings-dialog label {
-  color: var(--text-primary);
-}
-
-/* Force theme on Light/Dark/System buttons */
+/* --- Settings dialog overrides --- */
 .settings-dialog .theme-toggle {
-  background-color: var(--bg-button-secondary) !important;
-  color: var(--text-button-secondary) !important;
+  background-color: var(--btn-secondary-bg);
+  color: var(--btn-secondary-fg);
 }
 
 .settings-dialog .theme-toggle.active {
-  background-color: var(--bg-button-primary) !important;
-  color: var(--text-button-primary) !important;
+  background-color: var(--accent);
+  color: var(--accent-fg);
 }
 
+/* --- Misc --- */
 .app-name {
-  color: white !important;
-}
-
-.node-name {
-  color: var(--text-primary, white);
+  color: var(--accent-fg);
 }
 
 .node-name {
   flex: 1;
-  color: var(--text-primary, white) !important;
+  color: var(--fg);
 }

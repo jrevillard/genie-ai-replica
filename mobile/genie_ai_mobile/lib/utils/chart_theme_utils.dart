@@ -1,46 +1,42 @@
 import 'package:flutter/material.dart';
+import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
 class ChartThemeUtils {
-  /// Replicates the luminance calculation from getThemeColors()
   static bool detectDarkModeFromLuminance(Color bgColor) {
-    // formula: 0.2126*R + 0.7152*G + 0.0722*B
+    // ignore: deprecated_member_use
+    final red = bgColor.red;
+    // ignore: deprecated_member_use
+    final green = bgColor.green;
+    // ignore: deprecated_member_use
+    final blue = bgColor.blue;
     double luminance =
-        (0.2126 * bgColor.red +
-            0.7152 * bgColor.green +
-            0.0722 * bgColor.blue) /
+        (0.2126 * red +
+            0.7152 * green +
+            0.0722 * blue) /
         255;
-    return luminance < 0.5; //
+    return luminance < 0.5;
   }
 
-  /// Full implementation of createBarGradient()
   static LinearGradient barGradient() {
-    bool isDark = ThemeManager().isDarkMode;
-    if (isDark) {
-      return const LinearGradient(
-        colors: [Color(0xFF4A8BBF), Color(0xFF2D6FA7)], //
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-      );
-    } else {
-      return const LinearGradient(
-        colors: [Color(0xFF62D9A6), Color(0xFF2DA676)], //
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-      );
-    }
+    final tokens = ThemeManager().tokens;
+    return LinearGradient(
+      colors: [
+        tokens.accent,
+        ColorUtils.darken(tokens.accent, 0.1),
+      ],
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+    );
   }
 
-  /// Replicates getThemeColors() contrast logic
   static Map<String, Color> getChartTheme() {
-    bool isDark = ThemeManager().isDarkMode;
+    final tokens = ThemeManager().tokens;
     return {
-      'text': isDark ? Colors.white : const Color(0xFF333333), //
-      'grid': isDark
-          ? Colors.white.withOpacity(0.15)
-          : const Color(0xFFE0E0E0), //
-      'tooltipBg': const Color(0xB3000000), // rgba(0,0,0,0.7)
-      'tooltipText': Colors.white, //
+      'text': tokens.fg,
+      'grid': tokens.muted50,
+      'tooltipBg': tokens.scrim,
+      'tooltipText': tokens.fg,
     };
   }
 }

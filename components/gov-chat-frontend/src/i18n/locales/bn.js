@@ -693,6 +693,8 @@ export default {
     weatherLocationLoading: 'অবস্থান লোড হচ্ছে...',
     weatherErrorDefault: 'আবহাওয়ার ডেটা পুনরুদ্ধার করতে অক্ষম।',
     weatherGeolocationUnsupported: 'ভৌগোলিক অবস্থান আপনার ব্রাউজার দ্বারা সমর্থিত নয়।',
+    collapse: 'সাইডবার সংকুচিত করুন',
+    expand: 'সাইডবার প্রসারিত করুন',
     weatherRefresh: 'আবহাওয়া রিফ্রেশ করুন',
     weatherConditions: {
       clear: 'পরিষ্কার',
@@ -1378,7 +1380,8 @@ export default {
     exportFilenamePlaceholder: 'ফাইলের নাম লিখুন',
     exportButton: 'এক্সপোর্ট',
     exportSuccess: 'চ্যাট সফলভাবে এক্সপোর্ট করা হয়েছে',
-    exportError: 'চ্যাট এক্সপোর্ট করতে ব্যর্থ। অনুগ্রহ করে আবার চেষ্টা করুন।'
+    exportError: 'চ্যাট এক্সপোর্ট করতে ব্যর্থ। অনুগ্রহ করে আবার চেষ্টা করুন।',
+    removeItem: 'আইটেম সরান'
   },
   quickhelp: {
     // Labels (Short for UI)

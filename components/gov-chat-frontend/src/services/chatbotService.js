@@ -10,7 +10,6 @@ export default {
    */
   async submitQuery(queryData) {
     try {
-      console.log('Submitting query:', JSON.stringify(queryData, null, 2));
       const startTime = Date.now();
 
       const response = await httpService.post('queries', {
@@ -24,20 +23,11 @@ export default {
       }
 
       const responseTime = Date.now() - startTime;
-      console.log('Received response:', JSON.stringify(response.data, null, 2));
-      console.log('Response time:', responseTime, 'ms');
-      console.log('OPEA response content:', response.data.response || 'No response content available');
-
-      if (response.data.metadata) {
-        console.log('Metadata:', JSON.stringify(response.data.metadata, null, 2));
-      }
 
       const queryId = response.data.queryId;
       if (queryId) {
         await this.updateQueryResponseTime(queryId, responseTime);
         await this.markQueryAsAnswered(queryId, responseTime);
-      } else {
-        console.warn('No queryId in response; skipping updates');
       }
 
       return response.data;

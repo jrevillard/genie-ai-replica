@@ -1,16 +1,20 @@
 <template>
-  <select v-model="currentLocale" @change="changeLanguage">
+  <DsSelect v-model="currentLocale" aria-label="Language">
     <option v-for="locale in $i18n.availableLocales" :key="locale" :value="locale">
       {{ localeNames[locale] || locale }}
     </option>
-  </select>
+  </DsSelect>
 </template>
 
 <script>
-import { localeNames } from '../config/languageConfig'; // Adjust the path as needed
+import { localeNames } from '../config/languageConfig';
+import DsSelect from './ds/Select.vue';
 
 export default {
   name: 'LanguageSelector',
+  components: {
+    DsSelect
+  },
   data() {
     return {
       currentLocale: this.$i18n.locale,
@@ -20,16 +24,15 @@ export default {
   watch: {
     '$i18n.locale'(newLocale) {
       this.currentLocale = newLocale;
-    }
-  },
-  methods: {
-    changeLanguage() {
-      if (!this.$i18n) return;
-      this.$i18n.locale = this.currentLocale;
-      try {
-        localStorage.setItem('userLocale', this.currentLocale);
-      } catch (e) {
-        console.warn('Unable to save locale preference:', e);
+    },
+    currentLocale(newLocale) {
+      if (newLocale && this.$i18n && newLocale !== this.$i18n.locale) {
+        this.$i18n.locale = newLocale;
+        try {
+          localStorage.setItem('userLocale', newLocale);
+        } catch {
+          // Silently handle localStorage errors
+        }
       }
     }
   }
@@ -37,11 +40,5 @@ export default {
 </script>
 
 <style scoped>
-select {
-  padding: 4px 6px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  margin-right: 8px;
-  cursor: pointer;
-}
+/* Styling handled by DsSelect */
 </style>

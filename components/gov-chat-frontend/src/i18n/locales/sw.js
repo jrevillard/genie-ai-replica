@@ -702,6 +702,8 @@ export default {
     weatherLocationLoading: 'Inapakia eneo...',
     weatherErrorDefault: 'Haiwezi kupata data ya hali ya hewa.',
     weatherGeolocationUnsupported: 'Geolokeshoni haikubaliwa na kivinjari chako.',
+    collapse: 'Kunja upande wa kando',
+    expand: 'Panua upande wa kando',
     weatherRefresh: 'Sasisha Hali ya Hewa',
     weatherConditions: {
       clear: 'Wazi',
@@ -1401,7 +1403,8 @@ export default {
     exportFilenamePlaceholder: 'Ingiza jina la faili',
     exportButton: 'Hamisha',
     exportSuccess: 'Mazungumzo yamehamishwa kwa mafanikio',
-    exportError: 'Imeshindwa kuhamisha mazungumzo. Tafadhali jaribu tena.'
+    exportError: 'Imeshindwa kuhamisha mazungumzo. Tafadhali jaribu tena.',
+    removeItem: 'Ondoa'
   },
   quickhelp: {
     // Labels (Short for UI)

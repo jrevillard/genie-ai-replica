@@ -28,12 +28,14 @@ const authController = {
       }
 
       // Structured audit log
-      logger.info(JSON.stringify({
-        event: 'logout',
-        timestamp: new Date().toISOString(),
-        userId: userId || 'unknown',
-        issuer
-      }));
+      logger.info(
+        JSON.stringify({
+          event: 'logout',
+          timestamp: new Date().toISOString(),
+          userId: userId || 'unknown',
+          issuer
+        })
+      );
 
       res.json({ success: true, message: 'Logged out successfully' });
     } catch (error) {

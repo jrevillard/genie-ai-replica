@@ -78,11 +78,11 @@ export default {
 <style scoped>
 .context-menu {
   position: fixed;
-  background-color: white;
-  border-radius: 4px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  background-color: var(--surface);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
   min-width: 180px;
-  padding: 4px 0;
+  padding: var(--space-xs) 0;
   z-index: 1060;
   display: flex;
   flex-direction: column;

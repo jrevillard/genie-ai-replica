@@ -206,35 +206,35 @@ export default {
   display: flex;
   align-items: flex-start;
   padding: 15px;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
   margin-bottom: 10px;
   overflow: hidden;
   animation: slideIn 0.3s ease-out forwards;
 }
 
 .notification.success {
-  background: #f0fdf4;
-  border-left: 4px solid #10b981;
-  color: #065f46;
+  background: var(--success-bg);
+  border-left: 4px solid var(--success);
+  color: var(--success);
 }
 
 .notification.error {
-  background: #fef2f2;
-  border-left: 4px solid #ef4444;
-  color: #991b1b;
+  background: var(--danger-bg);
+  border-left: 4px solid var(--danger);
+  color: var(--danger);
 }
 
 .notification.info {
-  background: #eff6ff;
-  border-left: 4px solid #3b82f6;
-  color: #1e40af;
+  background: var(--info-bg);
+  border-left: 4px solid var(--accent);
+  color: var(--accent);
 }
 
 .notification.warning {
-  background: #fffbeb;
-  border-left: 4px solid #f59e0b;
-  color: #92400e;
+  background: var(--warning-bg);
+  border-left: 4px solid var(--warning);
+  color: var(--warning);
 }
 
 .notification-icon {
@@ -277,19 +277,19 @@ export default {
 }
 
 .notification.success .notification-progress {
-  background: #10b981;
+  background: var(--success);
 }
 
 .notification.error .notification-progress {
-  background: #ef4444;
+  background: var(--danger);
 }
 
 .notification.info .notification-progress {
-  background: #3b82f6;
+  background: var(--accent);
 }
 
 .notification.warning .notification-progress {
-  background: #f59e0b;
+  background: var(--warning);
 }
 
 @keyframes progress {

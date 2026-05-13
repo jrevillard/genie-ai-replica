@@ -13,7 +13,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /queries/{queryId}/responsetime:
+   * /api/queries/{queryId}/responsetime:
    *   patch:
    *     summary: Update query response time
    *     description: Updates the response time of a specific query.
@@ -79,7 +79,9 @@ module.exports = (queryService) => {
 
       res.json(updatedQuery);
     } catch (error) {
-      logger.error(`Error updating response time for query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
+      logger.error(`Error updating response time for query ${req.params.queryId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });
@@ -486,7 +488,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /queries/{queryId}:
+   * /api/queries/{queryId}:
    *   get:
    *     summary: Get query by ID
    *     description: Retrieves a query by its unique identifier
@@ -548,7 +550,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /queries/{queryId}/feedback:
+   * /api/queries/{queryId}/feedback:
    *   post:
    *     summary: Add feedback to a query
    *     description: Adds user feedback to a query and records it in analytics
@@ -636,7 +638,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /queries/{queryId}/answered:
+   * /api/queries/{queryId}/answered:
    *   patch:
    *     summary: Mark query as answered
    *     description: Marks a query as answered and updates response time
@@ -705,7 +707,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /queries:
+   * /api/queries:
    *   get:
    *     summary: Search queries
    *     description: Searches queries based on various criteria with pagination
@@ -832,7 +834,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /queries/{queryId}/conversations:
+   * /api/queries/{queryId}/conversations:
    *   get:
    *     summary: Get conversations for a query
    *     description: Retrieves all conversations associated with a specific query
@@ -866,14 +868,16 @@ module.exports = (queryService) => {
       const conversations = await queryService.getConversationsForQuery(req.params.queryId);
       res.json(conversations);
     } catch (error) {
-      logger.error(`Error getting conversations for query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
+      logger.error(`Error getting conversations for query ${req.params.queryId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });
 
   /**
    * @swagger
-   * /queries/{queryId}/conversation:
+   * /api/queries/{queryId}/conversation:
    *   post:
    *     summary: Create conversation from query
    *     description: Creates a new conversation based on an existing query
@@ -923,20 +927,22 @@ module.exports = (queryService) => {
     try {
       const { queryId } = req.params;
       const options = req.body;
-      
+
       logger.info(`Creating conversation from query ${queryId} with options: ${JSON.stringify(options)}`);
-      
+
       const result = await queryService.createConversationFromQuery(queryId, options);
       res.status(201).json(result);
     } catch (error) {
-      logger.error(`Error creating conversation from query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
+      logger.error(`Error creating conversation from query ${req.params.queryId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });
 
   /**
    * @swagger
-   * /queries/{queryId}/link/{messageId}:
+   * /api/queries/{queryId}/link/{messageId}:
    *   post:
    *     summary: Link query to message
    *     description: Creates a link between a query and an existing message
@@ -986,13 +992,15 @@ module.exports = (queryService) => {
     try {
       const { queryId, messageId } = req.params;
       const options = req.body;
-      
+
       logger.info(`Linking query ${queryId} to message ${messageId} with options: ${JSON.stringify(options)}`);
-      
+
       const result = await queryService.linkQueryToMessage(queryId, messageId, options);
       res.json(result);
     } catch (error) {
-      logger.error(`Error linking query ${req.params.queryId} to message ${req.params.messageId}: ${error.message}`, { stack: error.stack });
+      logger.error(`Error linking query ${req.params.queryId} to message ${req.params.messageId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });

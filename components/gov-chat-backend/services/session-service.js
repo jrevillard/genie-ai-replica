@@ -122,9 +122,7 @@ class SessionService {
       }
 
       const sessionStartTime = new Date(session.startTime).getTime();
-      const lastActive = session.lastActiveTime
-        ? new Date(session.lastActiveTime).getTime()
-        : sessionStartTime;
+      const lastActive = session.lastActiveTime ? new Date(session.lastActiveTime).getTime() : sessionStartTime;
       const currentTime = new Date().getTime();
 
       if (currentTime - lastActive > this.sessionExpirationTime) {
@@ -196,11 +194,7 @@ class SessionService {
 
       logger.info(`Update data: ${JSON.stringify(updateData)}`);
 
-      const updatedSession = await this.sessions.update(
-        sessionId,
-        updateData,
-        { returnNew: true }
-      );
+      const updatedSession = await this.sessions.update(sessionId, updateData, { returnNew: true });
 
       logger.info(`Session update result: ${JSON.stringify(updatedSession.new)}`);
 
@@ -335,7 +329,9 @@ class SessionService {
         endedCount++;
       }
 
-      logger.info(`Expired sessions cleanup completed: ${expiredSessions.length} found, ${endedCount} ended, ${edgesRemoved} edges removed`);
+      logger.info(
+        `Expired sessions cleanup completed: ${expiredSessions.length} found, ${endedCount} ended, ${edgesRemoved} edges removed`
+      );
       return {
         expiredSessionsFound: expiredSessions.length,
         sessionsEnded: endedCount,
@@ -425,7 +421,7 @@ class SessionService {
           sessionsByDevice
         }
       `;
-      
+
       const cursor = await this.db.query(query);
       const stats = await cursor.next();
       logger.info(`Session statistics retrieved successfully: ${JSON.stringify(stats)}`);

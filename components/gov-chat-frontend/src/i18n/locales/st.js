@@ -697,6 +697,8 @@ export default {
     weatherLocationLoading: 'E kenya sebaka...',
     weatherErrorDefault: 'E sitwa ho fumana datha ya boemo ba lehodimo.',
     weatherGeolocationUnsupported: 'Sebaka sa mmele ha se tshehetswe ke phetisi ya hao ya inthanete.',
+    collapse: 'Kgutla thalamo ya mahlakore',
+    expand: 'Bula thalamo ya mahlakore',
     weatherRefresh: 'Ntlafatsa Boemo ba Lehodimo',
     weatherConditions: {
       clear: 'Hlakileng',
@@ -1406,7 +1408,8 @@ export default {
     exportFilenamePlaceholder: 'Kenya lebitso la faele',
     exportButton: 'Ntshetsa Kantle',
     exportSuccess: 'Moqoqo o ntsheditswe kantle ka katleho',
-    exportError: 'Ho hlolehile ho ntshetsa moqoqo kantle. Ka kopo leka hape.'
+    exportError: 'Ho hlolehile ho ntshetsa moqoqo kantle. Ka kopo leka hape.',
+    removeItem: 'Susa'
   },
   quickhelp: {
     // Labels (Short for UI)

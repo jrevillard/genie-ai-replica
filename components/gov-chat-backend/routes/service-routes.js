@@ -9,14 +9,16 @@ module.exports = (serviceCategoryService) => {
     throw new Error('serviceCategoryService is required with getAllCategoriesWithServices');
   }
   logger.debug('service-routes initialized with serviceCategoryService', {
-    methods: Object.getOwnPropertyNames(Object.getPrototypeOf(serviceCategoryService)).filter(m => m !== 'constructor')
+    methods: Object.getOwnPropertyNames(Object.getPrototypeOf(serviceCategoryService)).filter(
+      (m) => m !== 'constructor'
+    )
   });
 
   router.use(keycloakAuthMiddleware.authenticate);
 
   /**
    * @swagger
-   * /services/categories:
+   * /api/services/categories:
    *   get:
    *     summary: Get all categories with services
    *     description: Retrieves all service categories with their associated services
@@ -75,14 +77,17 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched ${categories.length} categories in ${Date.now() - start}ms`);
       res.json(categories);
     } catch (error) {
-      logger.error(`Error fetching all categories with services: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error fetching all categories with services: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });
 
   /**
    * @swagger
-   * /services/categories/{categoryId}:
+   * /api/services/categories/{categoryId}:
    *   get:
    *     summary: Get category with services
    *     description: Retrieves a specific service category with its associated services
@@ -147,14 +152,17 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched category ${req.params.categoryId} in ${Date.now() - start}ms`);
       res.json(category);
     } catch (error) {
-      logger.error(`Error fetching category ${req.params.categoryId} with services: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error fetching category ${req.params.categoryId} with services: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       next(error);
     }
   });
 
   /**
    * @swagger
-   * /services/search:
+   * /api/services/search:
    *   get:
    *     summary: Search categories and services
    *     description: Searches for categories and services based on a query string
@@ -225,10 +233,15 @@ module.exports = (serviceCategoryService) => {
       }
       logger.info(`Searching services with query: "${query}", locale: ${locale}`);
       const results = await serviceCategoryService.searchCategoriesAndServices(query, locale);
-      logger.info(`Search completed in ${Date.now() - start}ms: ${results.categories.length} categories, ${results.services.length} services`);
+      logger.info(
+        `Search completed in ${Date.now() - start}ms: ${results.categories.length} categories, ${results.services.length} services`
+      );
       res.json(results);
     } catch (error) {
-      logger.error(`Error searching categories and services: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error searching categories and services: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });

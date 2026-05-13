@@ -22,7 +22,7 @@ module.exports = (translationService) => {
 
   /**
    * @swagger
-   * /translate:
+   * /api/translate:
    *   post:
    *     summary: Translate text content
    *     description: Translates an array of text strings from a specified source language to a specified target language.
@@ -75,8 +75,12 @@ module.exports = (translationService) => {
     const { texts, source_lang, target_lang } = req.body;
 
     if (!texts || !Array.isArray(texts) || !source_lang || !target_lang) {
-      logger.warn('[TRANSLATION-ROUTES] Bad request: Missing or invalid "texts" array, "source_lang", or "target_lang".');
-      return res.status(400).json({ message: 'Request body must include a "texts" array, a "source_lang" string, and a "target_lang" string.' });
+      logger.warn(
+        '[TRANSLATION-ROUTES] Bad request: Missing or invalid "texts" array, "source_lang", or "target_lang".'
+      );
+      return res.status(400).json({
+        message: 'Request body must include a "texts" array, a "source_lang" string, and a "target_lang" string.'
+      });
     }
 
     try {
@@ -91,7 +95,7 @@ module.exports = (translationService) => {
 
   /**
    * @swagger
-   * /translate/markdown:
+   * /api/translate/markdown:
    *   post:
    *     summary: Translate markdown content
    *     description: Translates the text content within a markdown string from a specified source language to a specified target language, preserving the markdown structure.
@@ -140,8 +144,12 @@ module.exports = (translationService) => {
     const { markdown, source_lang, target_lang } = req.body;
 
     if (!markdown || typeof markdown !== 'string' || !source_lang || !target_lang) {
-      logger.warn('[TRANSLATION-ROUTES] Bad request: Missing or invalid "markdown" string, "source_lang", or "target_lang".');
-      return res.status(400).json({ message: 'Request body must include a "markdown" string, a "source_lang" string, and a "target_lang" string.' });
+      logger.warn(
+        '[TRANSLATION-ROUTES] Bad request: Missing or invalid "markdown" string, "source_lang", or "target_lang".'
+      );
+      return res.status(400).json({
+        message: 'Request body must include a "markdown" string, a "source_lang" string, and a "target_lang" string.'
+      });
     }
 
     try {

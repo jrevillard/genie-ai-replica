@@ -9,38 +9,12 @@ const path = require('path');
 const fs = require('fs');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
-const { Server: SocketIOServer } = require('socket.io');
 const { logger, dbService, securityHeaders, SecurityMiddleware } = require('./shared-lib');
 const { keycloakAuthMiddleware } = require('./middleware/keycloak-auth-middleware');
 
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Initialize WebSocket server
-const server = require('http').createServer(app);
-const io = new SocketIOServer(server, {
-  path: '/ws',
-  transports: ['websocket'],
-  perMessageDeflate: false,
-});
-io.on('connection', (socket) => {
-  logger.info('WebSocket client connected', { id: socket.id });
-  socket.on('message', (msg) => {
-    logger.info('WebSocket message received:', { message: msg, id: socket.id });
-    socket.emit('message', 'Server response: ' + msg);
-  });
-  socket.on('disconnect', () => {
-    logger.info('WebSocket client disconnected:', { id: socket.id });
-  });
-  socket.on('error', (error) => {
-    logger.error('WebSocket error:', {
-      error: error.message,
-      stack: error.stack,
-      id: socket.id
-    });
-  });
-});
 
 // Disable ETag generation completely
 app.disable('etag');
@@ -105,21 +79,25 @@ app.use((req, res, next) => {
 });
 
 // Custom morgan format
-app.use(morgan(':method :url :status :response-time ms - Headers: :req[content-type] :req[user-agent]', {
-  stream: {
-    write: (message) => {
-      logger.info(`HTTP_REQUEST: ${message.trim()}`);
+app.use(
+  morgan(':method :url :status :response-time ms - Headers: :req[content-type] :req[user-agent]', {
+    stream: {
+      write: (message) => {
+        logger.info(`HTTP_REQUEST: ${message.trim()}`);
+      }
     }
-  }
-}));
+  })
+);
 
 // Block access to sensitive paths
 app.use((req, res, next) => {
   try {
-    if (req.path.match(/\/\.[^/]+/) ||
+    if (
+      req.path.match(/\/\.[^/]+/) ||
       req.path.includes('/BitKeeper') ||
       req.path.includes('/.git') ||
-      req.path.includes('/.env')) {
+      req.path.includes('/.env')
+    ) {
       logger.warn(`SECURITY: Blocked access to sensitive path: ${req.path}`, {
         ip: req.ip,
         method: req.method,
@@ -405,9 +383,7 @@ const swaggerOptions = {
         }
       }
     },
-    security: [
-      { KeycloakOAuth2: ['openid', 'profile'] }
-    ],
+    security: [{ KeycloakOAuth2: ['openid', 'profile'] }],
     tags: [
       {
         name: 'Chat History',
@@ -429,17 +405,21 @@ const swaggerOptions = {
 try {
   const swaggerSpec = swaggerJsdoc(swaggerOptions);
   logger.info('Swagger specification generated successfully');
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-    explorer: true,
-    customCss: '.swagger-ui .topbar { display: none }',
-    swaggerOptions: {
-      oauth: {
-        clientId: process.env.KEYCLOAK_CLIENT_ID,
-        usePkceWithAuthorizationCodeGrant: true,
-        scopes: 'openid profile email'
+  app.use(
+    '/api-docs',
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec, {
+      explorer: true,
+      customCss: '.swagger-ui .topbar { display: none }',
+      swaggerOptions: {
+        oauth: {
+          clientId: process.env.KEYCLOAK_CLIENT_ID,
+          usePkceWithAuthorizationCodeGrant: true,
+          scopes: 'openid profile email'
+        }
       }
-    }
-  }));
+    })
+  );
   app.get('/api-docs.json', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.send(swaggerSpec);
@@ -454,34 +434,38 @@ try {
 }
 
 // --- HELMET CSP ---
-const connectSrcUrls = (process.env.CSP_CONNECT_SRC || `'self' http://localhost:3000 ws://localhost:3000 ${process.env.KEYCLOAK_URL}`).split(' ');
+const connectSrcUrls = (
+  process.env.CSP_CONNECT_SRC || `'self' http://localhost:3000 ws://localhost:3000 ${process.env.KEYCLOAK_URL}`
+).split(' ');
 
 const cspOptions = {
   directives: {
     defaultSrc: ["'self'"],
-    scriptSrc: ["'self'", "cdn.jsdelivr.net"],
-    styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-    imgSrc: ["'self'", "data:"],
-    fontSrc: ["'self'", "data:", "https://cdnjs.cloudflare.com"],
+    scriptSrc: ["'self'", 'cdn.jsdelivr.net'],
+    styleSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
+    imgSrc: ["'self'", 'data:'],
+    fontSrc: ["'self'", 'data:', 'https://cdnjs.cloudflare.com'],
     connectSrc: connectSrcUrls,
     frameSrc: ["'none'"],
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
     formAction: ["'self'"],
-    frameAncestors: ["'none'"],
+    frameAncestors: ["'none'"]
   },
   reportOnly: false
 };
 
 try {
-  app.use(helmet({
-    contentSecurityPolicy: cspOptions,
-    xssFilter: true,
-    hsts: {
-      maxAge: 31536000,
-      includeSubDomains: true
-    }
-  }));
+  app.use(
+    helmet({
+      contentSecurityPolicy: cspOptions,
+      xssFilter: true,
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true
+      }
+    })
+  );
   logger.info('Helmet middleware applied with CSP from environment variables');
 } catch (error) {
   logger.error('Failed to apply helmet middleware:', {
@@ -495,12 +479,12 @@ try {
 // --- CORS ---
 const allowlist = (process.env.CORS_ALLOWED_ORIGINS || '').split(',');
 logger.debug('CORS allowlist configured:', { allowlist });
-console.log("allowlist:" + allowlist);
+console.log('allowlist:' + allowlist);
 
 const corsOptions = {
   origin: function (origin, callback) {
     logger.debug('--- CORS CHECK ---', {
-      'Request Origin': origin || 'No Origin (e.g., Postman, server-to-server)',
+      'Request Origin': origin || 'No Origin (e.g., Postman, server-to-server)'
     });
 
     if (!origin) {
@@ -508,7 +492,7 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    const isAllowed = allowlist.some(allowedOrigin => {
+    const isAllowed = allowlist.some((allowedOrigin) => {
       if (allowedOrigin.startsWith('/') && allowedOrigin.endsWith('/')) {
         const regex = new RegExp(allowedOrigin.slice(1, -1));
         return regex.test(origin);
@@ -583,7 +567,7 @@ app.use((req, res, next) => {
 // Recursive function to format timestamps
 function formatTimestamps(obj) {
   if (Array.isArray(obj)) {
-    return obj.map(item => formatTimestamps(item));
+    return obj.map((item) => formatTimestamps(item));
   }
   if (obj === null || typeof obj !== 'object') {
     return obj;
@@ -602,12 +586,16 @@ function formatTimestamps(obj) {
 
 // Configure static file serving
 try {
-  app.use('/Uploads', (req, res, next) => {
-    if (req.path === '/' || req.path === '') {
-      return res.status(404).json({ message: 'Not Found' });
-    }
-    next();
-  }, express.static(uploadsDir));
+  app.use(
+    '/Uploads',
+    (req, res, next) => {
+      if (req.path === '/' || req.path === '') {
+        return res.status(404).json({ message: 'Not Found' });
+      }
+      next();
+    },
+    express.static(uploadsDir)
+  );
   logger.info('Static file serving configured for Uploads');
 } catch (error) {
   logger.error('Failed to configure static file serving for Uploads:', {
@@ -620,15 +608,17 @@ try {
 
 // Secure static serving for frontend files
 try {
-  app.use(express.static('dist', {
-    setHeaders: (res, path) => {
-      if (path.endsWith('.html')) {
-        res.setHeader('Cache-Control', 'no-cache');
-      } else if (path.endsWith('.js') || path.endsWith('.css')) {
-        res.setHeader('Cache-Control', 'public, max-age=86400');
+  app.use(
+    express.static('dist', {
+      setHeaders: (res, path) => {
+        if (path.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
+        } else if (path.endsWith('.js') || path.endsWith('.css')) {
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+        }
       }
-    }
-  }));
+    })
+  );
   logger.info('Static file serving configured for dist');
 } catch (error) {
   logger.error('Failed to configure static file serving for dist:', {
@@ -645,8 +635,16 @@ async function initializeServices() {
   logger.debug('Logger level:', logger.level || 'unknown');
 
   // Validate environment variables
-  const requiredEnvVars = ['ARANGO_URL', 'ARANGO_DB', 'ARANGO_USER', 'ARANGO_PASSWORD', 'KEYCLOAK_URL', 'KEYCLOAK_REALM', 'KEYCLOAK_CLIENT_ID'];
-  const missingEnvVars = requiredEnvVars.filter(key => !process.env[key]);
+  const requiredEnvVars = [
+    'ARANGO_URL',
+    'ARANGO_DB',
+    'ARANGO_USER',
+    'ARANGO_PASSWORD',
+    'KEYCLOAK_URL',
+    'KEYCLOAK_REALM',
+    'KEYCLOAK_CLIENT_ID'
+  ];
+  const missingEnvVars = requiredEnvVars.filter((key) => !process.env[key]);
   if (missingEnvVars.length > 0) {
     logger.error('Missing required environment variables:', { missing: missingEnvVars });
     throw new Error(`Missing environment variables: ${missingEnvVars.join(', ')}`);
@@ -656,7 +654,9 @@ async function initializeServices() {
   const isProduction = process.env.NODE_ENV === 'production';
   if (isProduction) {
     const requiredSecrets = ['TRANSLATION_CACHE_PASSWORD'];
-    const missingSecrets = requiredSecrets.filter(key => !process.env[key] || process.env[key].includes('default') || process.env[key].includes('change'));
+    const missingSecrets = requiredSecrets.filter(
+      (key) => !process.env[key] || process.env[key].includes('default') || process.env[key].includes('change')
+    );
     if (missingSecrets.length > 0) {
       logger.error('Missing or insecure secrets in production:', { missing: missingSecrets });
       throw new Error(`Production requires secure values for: ${missingSecrets.join(', ')}`);
@@ -676,7 +676,9 @@ async function initializeServices() {
   try {
     const defaultConnection = await Promise.race([
       dbService.getConnection('default'),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Pre-initialization connection test timed out')), 30000))
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Pre-initialization connection test timed out')), 30000)
+      )
     ]);
     logger.info('Pre-initialization connection test successful');
 
@@ -733,7 +735,10 @@ async function initializeServices() {
     chatHistoryService = await importService('ChatHistoryService', './services/chat-history-service');
     serviceCategoryService = await importService('ServiceCategoryService', './services/service-category-service');
     logsService = await importService('LogsService', './services/logs-service');
-    databaseOperationsService = await importService('DatabaseOperationsService', './services/database-operations-service');
+    databaseOperationsService = await importService(
+      'DatabaseOperationsService',
+      './services/database-operations-service'
+    );
     weatherService = await importService('WeatherService', './services/weather-service');
     securityScanService = await importService('SecurityScanService', './services/security-scan-service');
     translationService = await importService('TranslationService', './services/translation-service');
@@ -767,7 +772,7 @@ async function initializeServices() {
         }
         services[key] = instance;
         logger.debug(`${name} singleton loaded`, {
-          methods: Object.getOwnPropertyNames(instance.__proto__).filter(m => m !== 'constructor')
+          methods: Object.getOwnPropertyNames(instance.__proto__).filter((m) => m !== 'constructor')
         });
       } catch (validationError) {
         logger.error(`Failed to validate service ${name}:`, {
@@ -781,7 +786,7 @@ async function initializeServices() {
     }
 
     // Add delay to capture async rejections
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     // Validate AdminDashboardService specifically
     if (services.adminDashboardService && typeof services.adminDashboardService.getSystemHealth !== 'function') {
@@ -820,7 +825,9 @@ async function initializeServices() {
 
         // If service is optional, log a warning but don't throw
         if (optional) {
-          logger.warn(`⚠️ Optional service ${name} failed to initialize. Continuing startup without it. Reason: ${initError.message}`);
+          logger.warn(
+            `⚠️ Optional service ${name} failed to initialize. Continuing startup without it. Reason: ${initError.message}`
+          );
         } else {
           throw initError;
         }
@@ -830,27 +837,51 @@ async function initializeServices() {
     // Set dependencies
     logger.info('Setting service dependencies');
     try {
-      if (services.queryService && services.analyticsService && typeof services.queryService.setAnalyticsService === 'function') {
+      if (
+        services.queryService &&
+        services.analyticsService &&
+        typeof services.queryService.setAnalyticsService === 'function'
+      ) {
         services.queryService.setAnalyticsService(services.analyticsService);
         logger.debug('QueryService.setAnalyticsService completed');
       }
-      if (services.queryService && services.chatHistoryService && typeof services.queryService.setChatHistoryService === 'function') {
+      if (
+        services.queryService &&
+        services.chatHistoryService &&
+        typeof services.queryService.setChatHistoryService === 'function'
+      ) {
         services.queryService.setChatHistoryService(services.chatHistoryService);
         logger.debug('QueryService.setChatHistoryService completed');
       }
-      if (services.chatHistoryService && services.analyticsService && typeof services.chatHistoryService.setAnalyticsService === 'function') {
+      if (
+        services.chatHistoryService &&
+        services.analyticsService &&
+        typeof services.chatHistoryService.setAnalyticsService === 'function'
+      ) {
         services.chatHistoryService.setAnalyticsService(services.analyticsService);
         logger.debug('ChatHistoryService.setAnalyticsService completed');
       }
-      if (services.adminDashboardService && services.logsService && typeof services.adminDashboardService.setLogsService === 'function') {
+      if (
+        services.adminDashboardService &&
+        services.logsService &&
+        typeof services.adminDashboardService.setLogsService === 'function'
+      ) {
         services.adminDashboardService.setLogsService(services.logsService);
         logger.debug('AdminDashboardService.setLogsService completed');
       }
-      if (services.adminDashboardService && services.securityScanService && typeof services.adminDashboardService.setSecurityScanService === 'function') {
+      if (
+        services.adminDashboardService &&
+        services.securityScanService &&
+        typeof services.adminDashboardService.setSecurityScanService === 'function'
+      ) {
         services.adminDashboardService.setSecurityScanService(services.securityScanService);
         logger.debug('AdminDashboardService.setSecurityScanService completed');
       }
-      if (services.weatherService && services.analyticsService && typeof services.weatherService.setAnalyticsService === 'function') {
+      if (
+        services.weatherService &&
+        services.analyticsService &&
+        typeof services.weatherService.setAnalyticsService === 'function'
+      ) {
         services.weatherService.setAnalyticsService(services.analyticsService);
         logger.debug('WeatherService.setAnalyticsService completed');
       }
@@ -865,8 +896,8 @@ async function initializeServices() {
     }
 
     logger.info('Service initialization completed', {
-      initialized: Object.keys(services).filter(key => services[key]).length,
-      failed: Object.keys(services).filter(key => !services[key]).length
+      initialized: Object.keys(services).filter((key) => services[key]).length,
+      failed: Object.keys(services).filter((key) => !services[key]).length
     });
 
     return services;
@@ -922,7 +953,9 @@ app.get('/robots.txt', (req, res) => {
 app.get('/sitemap.xml', (req, res) => {
   try {
     res.type('application/xml');
-    res.send('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n</urlset>');
+    res.send(
+      '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n</urlset>'
+    );
   } catch (error) {
     logger.error('Sitemap.xml endpoint error:', {
       error: error.message,
@@ -957,20 +990,41 @@ async function startApp() {
     { file: 'user-routes', paths: ['/api/me'], service: services.userProfileService, keycloakAuth: true },
     { file: 'query-routes', paths: ['/api/queries', '/api/query'], service: services.queryService, keycloakAuth: true },
     { file: 'service-routes', paths: ['/api/services'], service: services.serviceCategoryService, keycloakAuth: true },
-    { file: 'chat-history-routes', paths: ['/api/chat-history', '/api/chat'], service: services.chatHistoryService, keycloakAuth: true },
+    {
+      file: 'chat-history-routes',
+      paths: ['/api/chat-history', '/api/chat'],
+      service: services.chatHistoryService,
+      keycloakAuth: true
+    },
     { file: 'analytics-routes', paths: ['/api/analytics'], service: services.analyticsService, keycloakAuth: true },
-    { file: 'service-category-routes', paths: ['/api/service-categories'], service: services.serviceCategoryService, keycloakAuth: true },
+    {
+      file: 'service-category-routes',
+      paths: ['/api/service-categories'],
+      service: services.serviceCategoryService,
+      keycloakAuth: true
+    },
     { file: 'auth-routes', paths: ['/api/auth'], service: null },
     { file: 'logger-routes', paths: ['/api/logger'], service: null, keycloakAuth: true },
-    { file: 'database-operations-routes', paths: ['/api/database'], service: services.databaseOperationsService, keycloakAuth: true },
-    { file: 'admin-routes', paths: ['/api/admin'], service: services.adminDashboardService, extraService: services.logsService, keycloakAuth: true },
+    {
+      file: 'database-operations-routes',
+      paths: ['/api/database'],
+      service: services.databaseOperationsService,
+      keycloakAuth: true
+    },
+    {
+      file: 'admin-routes',
+      paths: ['/api/admin'],
+      service: services.adminDashboardService,
+      extraService: services.logsService,
+      keycloakAuth: true
+    },
     { file: 'weather-routes', paths: ['/api/weather'], service: services.weatherService, keycloakAuth: true },
     { file: 'translation-routes', paths: ['/api/translate'], service: services.translationService, keycloakAuth: true }
   ];
 
   // Log route configurations
   logger.info('Route configurations:', {
-    routes: routeConfigs.map(config => ({
+    routes: routeConfigs.map((config) => ({
       file: config.file,
       paths: config.paths,
       service: config.service ? config.service.constructor.name : 'null',
@@ -1028,7 +1082,9 @@ async function startApp() {
     // Instantiate route
     let routeInstance;
     try {
-      logger.debug(`Instantiating route ${config.file} with service: ${config.service ? config.service.constructor.name : 'null'}`);
+      logger.debug(
+        `Instantiating route ${config.file} with service: ${config.service ? config.service.constructor.name : 'null'}`
+      );
       if (config.file === 'analytics-routes') {
         const AnalyticsController = require('./controllers/analyticsController');
         const analyticsController = new AnalyticsController(config.service);
@@ -1071,8 +1127,10 @@ async function startApp() {
         } else {
           app.use(path, routeInstance);
         }
-        logger.info(`${config.file.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Module: LOADED`);
-        logger.debug(`Route ${config.file} mounted at ${path} with service: ${config.service ? config.service.constructor.name : 'no service'}`);
+        logger.info(`${config.file.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())} Module: LOADED`);
+        logger.debug(
+          `Route ${config.file} mounted at ${path} with service: ${config.service ? config.service.constructor.name : 'no service'}`
+        );
         logger.info('Total routes in stack:', app._router.stack.length);
       } catch (error) {
         logger.error(`Failed to mount route ${config.file} at ${path}:`, {
@@ -1099,7 +1157,7 @@ async function startApp() {
       res.json({
         message: 'Welcome to the Government Services API',
         apiDocumentation: '/api-docs',
-        availableEndpoints: routeConfigs.map(config => config.paths).flat()
+        availableEndpoints: routeConfigs.map((config) => config.paths).flat()
       });
     } catch (error) {
       logger.error('Root endpoint error:', {
@@ -1145,7 +1203,7 @@ async function startApp() {
 
   // Start the server
   try {
-    server.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
       logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
     });

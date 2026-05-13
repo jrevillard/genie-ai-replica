@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
+import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
+import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
+import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
 
 class ChatResponseFeedbackDialog extends StatefulWidget {
   final Map<String, dynamic> message;
@@ -56,7 +60,7 @@ class _ChatResponseFeedbackDialogState
     widget.onSubmit({
       'rating': _selectedRating,
       'thumbFeedback': _thumbFeedback,
-      'skinTone': _skinToneColor.value.toRadixString(16),
+      'skinTone': _skinToneColor.toARGB32().toRadixString(16),
       'text': _feedbackText,
       'messageId': cleanId, // Sending clean ID (e.g. "274711...")
     });
@@ -67,17 +71,17 @@ class _ChatResponseFeedbackDialogState
   @override
   Widget build(BuildContext context) {
     // ... (Rest of your UI code remains exactly the same)
-    final colors = ThemeManager().getColors();
+    final tokens = ThemeManager().tokens;
     final bool isDark = ThemeManager().isDarkMode;
 
     return Dialog(
-      backgroundColor: colors['surface'],
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      insetPadding: const EdgeInsets.all(16),
+      backgroundColor: tokens.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DsRadii.xl)),
+      insetPadding: const EdgeInsets.all(DsSpacing.md),
       child: SafeArea(
         child: Container(
           width: 700, // Max width from CSS
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(DsSpacing.xl),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -86,21 +90,21 @@ class _ChatResponseFeedbackDialogState
                 Text(
                   tr("responseRating.title"),
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: tokens.textLg,
                     fontWeight: FontWeight.bold,
-                    color: colors['text'],
+                    color: tokens.fg,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: DsSpacing.sm),
                 Text(
                   tr("responseRating.note"),
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 13,
-                    color: colors['text'].withOpacity(0.7),
+                    fontSize: tokens.textSm,
+                    color: tokens.fg70,
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: DsSpacing.xl),
 
                 // Layout
                 LayoutBuilder(
@@ -110,16 +114,16 @@ class _ChatResponseFeedbackDialogState
                         // --- MESSAGE PREVIEW ---
                         Container(
                           width: double.infinity,
-                          margin: const EdgeInsets.only(bottom: 20),
-                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: DsSpacing.lg),
+                          padding: const EdgeInsets.all(DsSpacing.sm),
                           decoration: BoxDecoration(
                             color: isDark
-                                ? Colors.white.withOpacity(0.05)
-                                : Colors.grey[100],
-                            borderRadius: BorderRadius.circular(12),
+                                ? tokens.muted20
+                                : tokens.mutedSoft,
+                            borderRadius: BorderRadius.circular(DsRadii.lg),
                             border: Border(
                               left: BorderSide(
-                                color: colors['border'],
+                                color: tokens.border,
                                 width: 3,
                               ),
                             ),
@@ -131,8 +135,8 @@ class _ChatResponseFeedbackDialogState
                                 tr("responseRating.chatbotResponse"),
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                  color: colors['text'],
+                                  fontSize: tokens.textSm,
+                                  color: tokens.fg,
                                 ),
                               ),
                               const SizedBox(height: 6),
@@ -141,8 +145,8 @@ class _ChatResponseFeedbackDialogState
                                 maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontSize: 13,
-                                  color: colors['text'].withOpacity(0.8),
+                                  fontSize: tokens.textSm,
+                                  color: tokens.fg70,
                                 ),
                               ),
                             ],
@@ -157,7 +161,7 @@ class _ChatResponseFeedbackDialogState
                                 type: 'up',
                                 label: tr("feedback.positive"),
                                 isActive: _thumbFeedback == 'up',
-                                colors: colors,
+                                tokens: tokens,
                                 isDark: isDark,
                               ),
                             ),
@@ -167,15 +171,15 @@ class _ChatResponseFeedbackDialogState
                                 type: 'down',
                                 label: tr("feedback.negative"),
                                 isActive: _thumbFeedback == 'down',
-                                colors: colors,
+                                tokens: tokens,
                                 isDark: isDark,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        _buildSkinToneSelector(colors),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: DsSpacing.sm),
+                        _buildSkinToneSelector(tokens),
+                        const SizedBox(height: DsSpacing.xl),
 
                         // --- RATING 1-5 ---
                         Align(
@@ -184,35 +188,35 @@ class _ChatResponseFeedbackDialogState
                             tr("feedback.promptText"),
                             style: TextStyle(
                               fontWeight: FontWeight.w500,
-                              color: colors['text'].withOpacity(0.7),
+                              color: tokens.fg70,
                             ),
                           ),
                         ),
                         const SizedBox(height: 10),
-                        _buildRatingSelector(colors, isDark),
+                        _buildRatingSelector(tokens, isDark),
                         const SizedBox(height: 20),
 
                         // --- TEXT INPUT ---
                         TextField(
                           onChanged: (v) => _feedbackText = v,
                           maxLines: 3,
-                          style: TextStyle(color: colors['text'], fontSize: 14),
+                          style: TextStyle(color: tokens.fg, fontSize: tokens.textBase),
                           decoration: InputDecoration(
                             hintText: tr("responseRating.additionalComments"),
                             hintStyle: TextStyle(
-                              color: colors['text'].withOpacity(0.5),
+                              color: tokens.fg30,
                             ),
                             filled: true,
                             fillColor: isDark
-                                ? Colors.white.withOpacity(0.05)
-                                : Colors.white,
+                                ? tokens.muted20
+                                : tokens.surface,
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: colors['border']),
+                              borderRadius: BorderRadius.circular(DsRadii.lg),
+                              borderSide: BorderSide(color: tokens.border),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: colors['border']),
+                              borderRadius: BorderRadius.circular(DsRadii.lg),
+                              borderSide: BorderSide(color: tokens.border),
                             ),
                           ),
                         ),
@@ -221,42 +225,25 @@ class _ChatResponseFeedbackDialogState
                   },
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: DsSpacing.xl),
 
                 // Actions
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    TextButton(
+                    DsButton(
+                      label: tr("responseRating.cancel"),
+                      variant: DsButtonVariant.ghost,
                       onPressed: () => Navigator.of(context).pop(),
-                      child: Text(
-                        tr("responseRating.cancel"),
-                        style: TextStyle(color: colors['text']),
-                      ),
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: colors['primary'],
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
-                      ),
+                    const SizedBox(width: DsSpacing.sm),
+                    DsButton(
+                      label: tr("responseRating.submit"),
+                      variant: DsButtonVariant.primary,
                       onPressed:
                           (_selectedRating != null || _thumbFeedback != null)
                           ? _submit
                           : null,
-                      child: Text(
-                        tr("responseRating.submit"),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
                     ),
                   ],
                 ),
@@ -273,21 +260,21 @@ class _ChatResponseFeedbackDialogState
     required String type,
     required String label,
     required bool isActive,
-    required Map<String, dynamic> colors,
+    required AppTokens tokens,
     required bool isDark,
   }) {
     final String fillColor =
-        '#${_skinToneColor.value.toRadixString(16).substring(2)}';
+        '#${_skinToneColor.toARGB32().toRadixString(16).substring(2)}';
     final Color bgColor = isActive
-        ? colors['primary'].withOpacity(0.1)
-        : (isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF5F9FF));
-    final Color borderColor = isActive ? colors['primary'] : colors['border'];
+        ? tokens.accent10
+        : (isDark ? tokens.muted20 : tokens.bg);
+    final Color borderColor = isActive ? tokens.accent : tokens.border;
 
     return GestureDetector(
       onTap: () => _selectThumbFeedback(type),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: DsSpacing.sm),
         decoration: BoxDecoration(
           color: bgColor,
           borderRadius: BorderRadius.circular(14),
@@ -301,8 +288,8 @@ class _ChatResponseFeedbackDialogState
               height: 28,
               colorFilter: ColorFilter.mode(
                 isActive
-                    ? colors['primary']
-                    : (isDark ? Colors.grey[400]! : Colors.grey[700]!),
+                    ? tokens.accent
+                    : tokens.muted,
                 BlendMode.srcIn,
               ),
             ),
@@ -310,11 +297,11 @@ class _ChatResponseFeedbackDialogState
             Text(
               label,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: tokens.textSm,
                 fontWeight: FontWeight.w600,
                 color: isActive
-                    ? colors['primary']
-                    : colors['text'].withOpacity(0.7),
+                    ? tokens.accent
+                    : tokens.fg70,
               ),
             ),
           ],
@@ -323,7 +310,7 @@ class _ChatResponseFeedbackDialogState
     );
   }
 
-  Widget _buildSkinToneSelector(Map<String, dynamic> colors) {
+  Widget _buildSkinToneSelector(AppTokens tokens) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: _skinTones.map((color) {
@@ -331,20 +318,20 @@ class _ChatResponseFeedbackDialogState
         return GestureDetector(
           onTap: () => setState(() => _skinToneColor = color),
           child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 4),
+            margin: const EdgeInsets.symmetric(horizontal: DsSpacing.xs),
             width: 24,
             height: 24,
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
               border: Border.all(
-                color: isSelected ? colors['primary'] : Colors.grey[300]!,
+                color: isSelected ? tokens.accent : tokens.border,
                 width: isSelected ? 2 : 1,
               ),
               boxShadow: isSelected
                   ? [
                       BoxShadow(
-                        color: colors['primary'].withOpacity(0.3),
+                        color: tokens.accent30,
                         spreadRadius: 2,
                       ),
                     ]
@@ -356,7 +343,7 @@ class _ChatResponseFeedbackDialogState
     );
   }
 
-  Widget _buildRatingSelector(Map<String, dynamic> colors, bool isDark) {
+  Widget _buildRatingSelector(AppTokens tokens, bool isDark) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: List.generate(5, (index) {
@@ -367,15 +354,15 @@ class _ChatResponseFeedbackDialogState
           child: GestureDetector(
             onTap: () => setState(() => _selectedRating = rating),
             child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              margin: const EdgeInsets.symmetric(horizontal: DsSpacing.xs),
+              padding: const EdgeInsets.symmetric(vertical: DsSpacing.sm),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? colors['primary'].withOpacity(0.1)
-                    : (isDark ? Colors.white.withOpacity(0.05) : Colors.white),
-                borderRadius: BorderRadius.circular(12),
+                    ? tokens.accent10
+                    : (isDark ? tokens.muted20 : tokens.surface),
+                borderRadius: BorderRadius.circular(DsRadii.lg),
                 border: Border.all(
-                  color: isSelected ? colors['primary'] : colors['border'],
+                  color: isSelected ? tokens.accent : tokens.border,
                 ),
               ),
               child: Column(
@@ -387,18 +374,18 @@ class _ChatResponseFeedbackDialogState
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: isSelected
-                          ? colors['primary']
+                          ? tokens.accent
                           : (isDark
-                                ? Colors.white.withOpacity(0.1)
-                                : Colors.grey[200]),
+                                ? tokens.fg30
+                                : tokens.mutedSoft),
                     ),
                     child: Text(
                       "$rating",
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: isSelected
-                            ? Colors.white
-                            : colors['text'].withOpacity(0.7),
+                            ? tokens.accentFg
+                            : tokens.fg70,
                       ),
                     ),
                   ),

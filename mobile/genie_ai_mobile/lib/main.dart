@@ -14,6 +14,8 @@ import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/services/connectivity_service.dart'; // ADDED
 import 'package:genie_ai_mobile/services/fallback_localizations.dart';
+import 'package:genie_ai_mobile/services/auth/auth_providers.dart';
+import 'package:genie_ai_mobile/providers/api_providers.dart';
 
 // ===========================================================================
 // AUTHENTICATION SCREEN IMPORTS
@@ -21,7 +23,6 @@ import 'package:genie_ai_mobile/services/fallback_localizations.dart';
 import 'package:genie_ai_mobile/components/auth/oidc_login_screen.dart';
 import 'package:genie_ai_mobile/services/genie_ai_config.dart';
 import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
-import 'package:genie_ai_mobile/services/auth/auth_providers.dart';
 import 'package:genie_ai_mobile/services/auth/auth_state.dart';
 import 'package:app_links/app_links.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -134,6 +135,7 @@ class _MyAppState extends ConsumerState<MyApp> {
         );
         // Set authenticated state directly — avoid invalidate() which
         // re-runs build() and crashes on late final fields.
+        // ignore: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
         ref.read(authProvider.notifier).state = const AuthState.authenticated();
         debugPrint('[TEST-AUTH] Tokens injected via deep link, expiration: $expiration');
       } else {
@@ -179,6 +181,9 @@ class _MyAppState extends ConsumerState<MyApp> {
 
       // Load GenieAiConfig for branding (iconPath, title) used by OidcLoginScreen
       await GenieAiConfig.load();
+
+      // Restore persisted user preferences (theme, fontSize) from local storage
+      await ThemeManager().restorePreferences();
 
       debugPrint("[MAIN] Configuration loaded successfully.");
     } catch (e) {
@@ -226,20 +231,23 @@ class _MyAppState extends ConsumerState<MyApp> {
           builder: (context, child) {
             if (!_isConfigLoaded) {
               return Scaffold(
-                backgroundColor: ThemeManager().getColors()['background'],
+                backgroundColor: ThemeManager().tokens.bg,
                 body: Center(
                   child: CircularProgressIndicator(
-                    color: ThemeManager().getColors()['primary'],
+                    color: ThemeManager().tokens.accent,
                   ),
                 ),
               );
             }
-            return child!;
+            return MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                textScaler: TextScaler.linear(ThemeManager().tokens.fontScale),
+              ),
+              child: child!,
+            );
           },
           home: authState.status == AuthStatus.authenticated
               ? MainScreen(
-                  // TODO(Epic 2): accessToken is empty until AuthInterceptor
-                  // provides real tokens to downstream components.
                   user: {
                     'id': authState.userId ?? '',
                     'accessToken': '',
@@ -247,8 +255,8 @@ class _MyAppState extends ConsumerState<MyApp> {
                   isDarkMode: ThemeManager().isDarkMode,
                   toggleTheme: _toggleTheme,
                   onLogout: _onLogout,
-                  httpClient: ref.read(apiServiceProvider).httpClient,
-                  streamBaseUrl: ref.read(apiServiceProvider).baseUrl,
+                  httpClient: ref.read(authenticatedHttpClientProvider),
+                  streamBaseUrl: ref.read(backendUrlProvider),
                 )
               : const OidcLoginScreen(),
           routes: {
@@ -369,11 +377,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final String? accessToken =
         widget.user['accessToken'] ?? widget.user['token'];
 
-    // Theme color logic for Binder Tabs
-    // Dark Mode -> Green (Primary), Light Mode -> Grey
     final Color binderColor = widget.isDarkMode
-        ? ThemeManager().getColors()['primary']
-        : Colors.grey;
+        ? ThemeManager().tokens.accent
+        : ThemeManager().tokens.muted;
 
     return Scaffold(
       // Drawer is handled via Scaffold callbacks but triggered by BinderTabs
@@ -382,7 +388,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           ? null
           : SidebarComponent(
               user: widget.user,
-              httpClient: widget.httpClient,
               onServiceSelected: _onServiceSelected,
               onConversationSelected: _onConversationSelected,
             ),
@@ -392,7 +397,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               relatedDocuments: _currentRelatedDocuments,
               accessToken: accessToken,
             ),
-      drawerScrimColor: Colors.black54,
+      drawerScrimColor: ThemeManager().tokens.scrim,
       drawerEdgeDragWidth: 40,
 
       body: SafeArea(
@@ -472,9 +477,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 top: 0, // Adjacent to Navbar
                 child: _BinderTab(
                   isLeft: true,
-                  // VISUAL DISABLE: Grey out when offline
-                  color: _isOnline ? binderColor : Colors.grey,
-                  // FUNCTIONAL DISABLE: No-op if offline
+                  color: _isOnline ? binderColor : ThemeManager().tokens.muted,
                   onTap: _isOnline
                       ? () => Scaffold.of(context).openDrawer()
                       : () {
@@ -523,14 +526,14 @@ class _BinderTab extends StatelessWidget {
         width: 10, // Slim Width
         height: 60, // Height matching Navbar approx
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.45), // Transparent
+          color: color.withValues(alpha: 0.45),
           borderRadius: BorderRadius.horizontal(
             right: isLeft ? const Radius.circular(10) : Radius.zero,
             left: !isLeft ? const Radius.circular(10) : Radius.zero,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black12,
+              color: ThemeManager().tokens.muted20,
               blurRadius: 4,
               offset: isLeft ? const Offset(2, 0) : const Offset(-2, 0),
             ),
@@ -539,7 +542,7 @@ class _BinderTab extends StatelessWidget {
         child: Center(
           child: Icon(
             isLeft ? Icons.chevron_right : Icons.chevron_left,
-            color: Colors.white.withValues(alpha: 0.8),
+            color: ThemeManager().tokens.fg70,
             size: 12,
           ),
         ),

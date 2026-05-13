@@ -1,15 +1,12 @@
 <template>
   <div class="usage-trend-chart">
-    <div v-if="loading" class="loading-overlay">
-      <div class="spinner"></div>
+    <DsSpinner v-if="loading" overlay>
       <span>{{ $t('analytics.status.loading') }}</span>
-    </div>
-    <div v-else-if="error" class="error-container">
-      <p class="error-message">{{ error }}</p>
-    </div>
-    <div v-else-if="!data || data.length === 0" class="no-data">
+    </DsSpinner>
+    <DsStateDisplay v-else-if="error" type="error" :message="error" />
+    <DsStateDisplay v-else-if="!data || data.length === 0" type="empty">
       {{ $t('analytics.status.noData') }}
-    </div>
+    </DsStateDisplay>
     <div v-else ref="chartContainer" class="chart-container"></div>
   </div>
 </template>
@@ -18,9 +15,15 @@
 import * as d3 from 'd3';
 import analyticsService from '../../services/analyticsService';
 import { useChartTheme } from '../../composables/useChartTheme';
+import DsSpinner from '../ds/Spinner.vue';
+import DsStateDisplay from '../ds/StateDisplay.vue';
 
 export default {
   name: 'UsageTrendChart',
+  components: {
+    DsSpinner,
+    DsStateDisplay
+  },
   props: {
     data: {
       type: Array,
@@ -45,8 +48,8 @@ export default {
     }
   },
   setup() {
-    const { theme, getTheme } = useChartTheme();
-    return { theme, getTheme };
+    const { theme, isDarkMode, getCssVarStrings } = useChartTheme();
+    return { theme, isDarkMode, getCssVarStrings };
   },
   data() {
     return {
@@ -157,44 +160,38 @@ export default {
      * Targets axis, title, and legend text
      */
     injectGlobalStyleForTheme() {
-      // Check if the style already exists
-      if (document.getElementById('usage-trend-chart-theme-style')) {
-        return;
+      // Remove existing style to allow re-injection on theme change
+      const existing = document.getElementById('usage-trend-chart-theme-style');
+      if (existing) {
+        existing.remove();
       }
 
-      // Create style element
       const styleEl = document.createElement('style');
       styleEl.id = 'usage-trend-chart-theme-style';
-      const theme = this.getTheme();
+      const theme = this.getCssVarStrings();
       if (theme.isDarkMode) {
         styleEl.textContent = `
-            /* Force chart text to be white in dark mode */
             [data-theme="dark"] .x-axis text,
             [data-theme="dark"] .y-axis-left text,
             [data-theme="dark"] .y-axis-right text,
             [data-theme="dark"] svg text[font-size="14px"],
             [data-theme="dark"] .legend text {
-              fill: #FFFFFF !important;
+              fill: var(--fg) !important;
             }
           `;
-        console.log('[UsageTrendChart] Injected dark mode style');
       } else {
         styleEl.textContent = `
-            /* Force chart text to be dark in light mode */
             [data-theme="light"] .x-axis text,
             [data-theme="light"] .y-axis-left text,
             [data-theme="light"] .y-axis-right text,
             [data-theme="light"] svg text[font-size="14px"],
             [data-theme="light"] .legend text {
-              fill: #333333 !important;
+              fill: var(--fg) !important;
             }
           `;
-        console.log('[UsageTrendChart] Injected light mode style');
       }
 
-      // Append to document head
       document.head.appendChild(styleEl);
-      console.log('[DEBUG] Injected theme style:', theme.isDarkMode ? 'dark' : 'light');
     },
 
     async fetchData() {
@@ -208,8 +205,6 @@ export default {
 
         const url = `/api/analytics/timeseries/queries`;
 
-        console.log(`Fetching time series data from ${url} with params:`, params);
-
         const response = await fetch(
           `${url}?interval=${params.interval}&startDate=${params.startDate}&endDate=${params.endDate}`
         );
@@ -221,8 +216,6 @@ export default {
         const data = await response.json();
 
         if (Array.isArray(data) && data.length > 0) {
-          console.log('Time series data loaded successfully:', data);
-
           this.chartData = data.map((item) => ({
             timestamp: item.timestamp || '',
             dateLabel: this.formatDate(item.timestamp),
@@ -230,7 +223,6 @@ export default {
             userCount: typeof item.userCount === 'number' ? item.userCount : 0
           }));
         } else {
-          console.warn('Empty or invalid time series data received:', data);
           this.chartData = [];
         }
 
@@ -276,7 +268,7 @@ export default {
      * Force text elements to use appropriate color based on theme
      */
     forceAxisTextColor() {
-      const theme = this.getTheme();
+      const theme = this.getCssVarStrings();
       const textColor = theme.textColor;
 
       const chartContainer = this.$refs.chartContainer;
@@ -297,8 +289,6 @@ export default {
 
         const legendText = chartContainer.querySelectorAll('.legend text');
         legendText.forEach((el) => el.setAttribute('fill', textColor));
-
-        console.log(`[DEBUG] Forcing axis text color to: ${textColor}`);
       }, 100);
     },
 
@@ -323,11 +313,28 @@ export default {
         return;
       }
 
-      // ──────────────────────────────────────────────────────────────
-      // YOUR ORIGINAL CHART — 100% UNTOUCHED FROM HERE ON
-      // ──────────────────────────────────────────────────────────────
-      const theme = this.getTheme();
+      const theme = this.getCssVarStrings();
       const { textColor, borderColor, gridColor, isDarkMode } = theme;
+
+      // Data series colors — constant across themes (dataviz convention)
+      const colors = {
+        barStart: '#62d9a6',
+        barEnd: '#2da676',
+        lineStart: '#5b9bd5',
+        lineEnd: '#3a6da0',
+        area: '#4682B4'
+      };
+
+      // UI colors — adapt to theme
+      const ui = {
+        shadowFlood: isDarkMode ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)',
+        barHighlight: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.5)',
+        lineShadow: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.2)',
+        dotShadow: isDarkMode ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.2)',
+        dotStroke: isDarkMode ? 'rgba(255,255,255,0.4)' : '#ffffff',
+        hoverDotStroke: isDarkMode ? 'rgba(255,255,255,0.5)' : '#ffffff',
+        tooltipBorder: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.3)'
+      };
 
       const svg = d3.select(container).append('svg').attr('width', containerWidth).attr('height', this.height);
 
@@ -343,7 +350,7 @@ export default {
         .attr('dx', 0)
         .attr('dy', 3)
         .attr('stdDeviation', 3)
-        .attr('flood-color', 'rgba(0,0,0,0.3)');
+        .attr('flood-color', ui.shadowFlood);
 
       const barGradient = defs
         .append('linearGradient')
@@ -352,8 +359,8 @@ export default {
         .attr('y1', '0%')
         .attr('x2', '0%')
         .attr('y2', '100%');
-      barGradient.append('stop').attr('offset', '0%').attr('stop-color', '#62d9a6');
-      barGradient.append('stop').attr('offset', '100%').attr('stop-color', '#2da676');
+      barGradient.append('stop').attr('offset', '0%').attr('stop-color', colors.barStart);
+      barGradient.append('stop').attr('offset', '100%').attr('stop-color', colors.barEnd);
 
       const areaGradient = defs
         .append('linearGradient')
@@ -362,8 +369,8 @@ export default {
         .attr('y1', '0%')
         .attr('x2', '0%')
         .attr('y2', '100%');
-      areaGradient.append('stop').attr('offset', '0%').attr('stop-color', '#4682B4').attr('stop-opacity', 0.7);
-      areaGradient.append('stop').attr('offset', '100%').attr('stop-color', '#4682B4').attr('stop-opacity', 0.1);
+      areaGradient.append('stop').attr('offset', '0%').attr('stop-color', colors.area).attr('stop-opacity', 0.7);
+      areaGradient.append('stop').attr('offset', '100%').attr('stop-color', colors.area).attr('stop-opacity', 0.1);
 
       const lineGradient = defs
         .append('linearGradient')
@@ -372,8 +379,8 @@ export default {
         .attr('y1', '0%')
         .attr('x2', '100%')
         .attr('y2', '0%');
-      lineGradient.append('stop').attr('offset', '0%').attr('stop-color', '#5b9bd5');
-      lineGradient.append('stop').attr('offset', '100%').attr('stop-color', '#3a6da0');
+      lineGradient.append('stop').attr('offset', '0%').attr('stop-color', colors.lineStart);
+      lineGradient.append('stop').attr('offset', '100%').attr('stop-color', colors.lineEnd);
 
       const data = this.chartData
         .map((d) => ({
@@ -453,7 +460,7 @@ export default {
         .attr('width', barWidth)
         .attr('height', (d) => (height - yLeft(d.value) > 0 ? 2 : 0))
         .attr('y', (d) => yLeft(d.value))
-        .attr('fill', '#ffffff')
+        .attr('fill', ui.barHighlight)
         .attr('opacity', 0.5)
         .attr('rx', 1);
 
@@ -483,7 +490,7 @@ export default {
         .datum(data)
         .attr('class', 'line-shadow')
         .attr('fill', 'none')
-        .attr('stroke', isDarkMode ? '#555' : '#333')
+        .attr('stroke', ui.lineShadow)
         .attr('stroke-width', 1.5)
         .attr('stroke-opacity', 0.2)
         .attr('d', line)
@@ -507,7 +514,7 @@ export default {
         .attr('cx', (d) => xTime(d.timestamp) + 1)
         .attr('cy', (d) => yRight(d.userCount) + 1)
         .attr('r', 3)
-        .attr('fill', 'rgba(0,0,0,0.2)');
+        .attr('fill', ui.dotShadow);
 
       mainGroup
         .selectAll('.dot')
@@ -518,8 +525,8 @@ export default {
         .attr('cx', (d) => xTime(d.timestamp))
         .attr('cy', (d) => yRight(d.userCount))
         .attr('r', 2.5)
-        .attr('fill', '#5b9bd5')
-        .attr('stroke', '#ffffff')
+        .attr('fill', colors.lineStart)
+        .attr('stroke', ui.dotStroke)
         .attr('stroke-width', 1);
 
       const xAxis = d3
@@ -615,7 +622,7 @@ export default {
         .attr('y1', 0)
         .attr('x2', 200)
         .attr('y2', 0)
-        .attr('stroke', '#5b9bd5')
+        .attr('stroke', colors.lineStart)
         .attr('stroke-width', 1.5);
 
       legend
@@ -623,8 +630,8 @@ export default {
         .attr('cx', 185)
         .attr('cy', 0)
         .attr('r', 2.5)
-        .attr('fill', '#5b9bd5')
-        .attr('stroke', '#fff')
+        .attr('fill', colors.lineStart)
+        .attr('stroke', ui.dotStroke)
         .attr('stroke-width', 1);
 
       legend
@@ -638,19 +645,7 @@ export default {
         .text(this.$t('charts.tooltip.uniqueUsers'));
 
       if (d3.select('body').select('.d3-tooltip').empty()) {
-        d3.select('body')
-          .append('div')
-          .attr('class', 'd3-tooltip')
-          .style('position', 'absolute')
-          .style('background', 'rgba(0, 0, 0, 0.7)')
-          .style('color', 'white')
-          .style('padding', '10px')
-          .style('border-radius', '5px')
-          .style('font-size', '12px')
-          .style('box-shadow', '0 3px 14px rgba(0,0,0,0.4)')
-          .style('pointer-events', 'none')
-          .style('opacity', 0)
-          .style('z-index', 1000);
+        d3.select('body').append('div').attr('class', 'd3-tooltip');
       }
 
       const verticalLine = mainGroup
@@ -668,7 +663,7 @@ export default {
         .attr('class', 'hover-dot')
         .attr('r', 5)
         .attr('fill', 'url(#bar-gradient)')
-        .attr('stroke', '#fff')
+        .attr('stroke', ui.hoverDotStroke)
         .attr('stroke-width', 1.5)
         .style('opacity', 0);
 
@@ -676,8 +671,8 @@ export default {
         .append('circle')
         .attr('class', 'hover-dot')
         .attr('r', 3)
-        .attr('fill', '#5b9bd5')
-        .attr('stroke', '#fff')
+        .attr('fill', colors.lineStart)
+        .attr('stroke', ui.hoverDotStroke)
         .attr('stroke-width', 1)
         .style('opacity', 0);
 
@@ -718,15 +713,13 @@ export default {
           const uniqueUsersLabel = this.$t('charts.tooltip.uniqueUsers');
 
           const tooltipContent = `
-        <div style="margin-bottom: 5px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 4px;">
-          ${d.dateLabel}
-        </div>
-        <div style="margin: 5px 0;">
-          <span style="display: inline-block; width: 12px; height: 12px; margin-right: 5px; background: linear-gradient(to bottom, #62d9a6, #2da676); border-radius: 2px; vertical-align: middle;"></span>
+        <div class="tt-header">${d.dateLabel}</div>
+        <div class="tt-row">
+          <span class="tt-swatch tt-swatch--bar"></span>
           ${totalQueriesLabel}: <strong>${d.value.toLocaleString(this.$i18n.locale)}</strong>
         </div>
-        <div style="margin: 5px 0;">
-          <span style="display: inline-block; width: 12px; height: 12px; margin-right: 5px; background: #5b9bd5; border-radius: 50%; vertical-align: middle;"></span>
+        <div class="tt-row">
+          <span class="tt-swatch tt-swatch--line"></span>
           ${uniqueUsersLabel}: <strong>${d.userCount.toLocaleString(this.$i18n.locale)}</strong>
         </div>
       `;
@@ -753,115 +746,53 @@ export default {
 .chart-container {
   width: 100%;
   height: 100%;
-  background-color: var(--bg-card, #fff);
-  border-radius: 8px;
+  background-color: var(--surface);
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm, 0 2px 15px rgba(0, 0, 0, 0.1));
-  padding: 10px;
-}
-
-.loading-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-card, rgba(255, 255, 255, 0.8));
-  opacity: 0.9;
-  z-index: 1;
-  border-radius: 8px;
-  color: var(--text-primary, #333);
-}
-
-.spinner {
-  border: 3px solid rgba(0, 0, 0, 0.1);
-  border-radius: 50%;
-  border-top: 3px solid var(--accent-color, #4e97d1);
-  width: 30px;
-  height: 30px;
-  animation: spin 1s linear infinite;
-  margin-bottom: 10px;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.error-container,
-.no-data {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  text-align: center;
-  color: var(--text-primary, #333);
-  font-style: italic;
-  font-weight: 500;
-  border-radius: 8px;
-}
-
-.error-message {
-  color: var(--status-outage, #d32f2f);
-  font-weight: 500;
+  padding: var(--space-sm);
 }
 
 :global(.d3-tooltip) {
   position: absolute;
-  background: rgba(0, 0, 0, 0.75);
-  color: white;
-  padding: 10px;
-  border-radius: 5px;
+  background: var(--fg);
+  color: var(--bg);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
   pointer-events: none;
   opacity: 0;
   z-index: 1000;
   max-width: 250px;
-  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-lg);
   font-weight: bold;
+  font-size: 12px;
 }
 
-[data-theme='dark'] :deep(.x-axis text),
-[data-theme='dark'] :deep(.y-axis-left text),
-[data-theme='dark'] :deep(.y-axis-right text),
-[data-theme='dark'] :deep(.legend text),
-[data-theme='dark'] :deep(text[font-size='14px']) {
-  fill: white !important;
+:global(.d3-tooltip .tt-header) {
+  margin-bottom: 5px;
+  font-weight: bold;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
 }
 
-[data-theme='dark'] .chart-container {
-  background-color: #414141 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
+:global(.d3-tooltip .tt-row) {
+  margin: 5px 0;
 }
 
-[data-theme='dark'] :deep(svg rect:first-child) {
-  fill: #414141 !important;
+:global(.d3-tooltip .tt-swatch) {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  vertical-align: middle;
 }
 
-[data-theme='dark'] :deep(svg rect[fill='#bbbcbe']) {
-  fill: #414141 !important;
+:global(.d3-tooltip .tt-swatch--bar) {
+  background: linear-gradient(to bottom, #62d9a6, #2da676);
+  border-radius: var(--radius-sm);
 }
 
-:deep(.bar) {
-  fill: url(#bar-gradient) !important;
-}
-
-:deep(#bar-gradient stop:first-child) {
-  stop-color: #62d9a6 !important;
-}
-
-:deep(#bar-gradient stop:last-child) {
-  stop-color: #2da676 !important;
-}
-
-:deep(rect.bar) {
-  fill: #62d9a6 !important;
+:global(.d3-tooltip .tt-swatch--line) {
+  background: #5b9bd5;
+  border-radius: 50%;
 }
 </style>

@@ -1,23 +1,22 @@
 <template>
   <div class="chat-folders-content">
     <div class="search-container">
-      <input
+      <DsInput
         v-model="searchTerm"
         type="text"
-        class="search-box"
         :placeholder="safeT('sidebar.searchConversations', 'Search conversations...')"
       />
-      <button class="search-btn" @click="handleSearch">
-        <i class="fas fa-search"></i>
-      </button>
+      <DsButton variant="primary" @click="handleSearch">
+        <SearchIcon :size="16" />
+      </DsButton>
     </div>
 
     <template v-if="shouldShowFoldersSection">
       <div class="folders-header">
         <h3>{{ safeT('sidebar.folders', 'Folders') }}</h3>
-        <button class="add-folder-btn" title="Create New Folder" @click.stop="openCreateFolderModal">
-          <i class="fas fa-folder-plus"></i>
-        </button>
+        <DsButton variant="ghost" title="Create New Folder" @click.stop="openCreateFolderModal">
+          <FolderPlus :size="16" />
+        </DsButton>
       </div>
 
       <div class="folders-list">
@@ -28,7 +27,7 @@
           @click="selectFolder(folder.id)"
         >
           <div class="folder-icon">
-            <i class="fas fa-folder"></i>
+            <Folder :size="16" />
           </div>
           <div class="folder-details">
             <div class="folder-name">{{ folder.name }}</div>
@@ -38,12 +37,12 @@
             </div>
           </div>
           <div class="folder-actions">
-            <button class="edit-btn" title="Edit Folder" @click.stop="openEditFolderDialog(folder)">
-              <i class="fas fa-edit"></i>
-            </button>
-            <button class="delete-btn" title="Delete Folder" @click.stop="openDeleteFolderDialog(folder)">
-              <i class="fas fa-trash-alt"></i>
-            </button>
+            <DsButton variant="ghost" title="Edit Folder" @click.stop="openEditFolderDialog(folder)">
+              <Pencil :size="14" />
+            </DsButton>
+            <DsButton variant="ghost" title="Delete Folder" @click.stop="openDeleteFolderDialog(folder)">
+              <Trash2 :size="14" />
+            </DsButton>
           </div>
         </div>
       </div>
@@ -75,50 +74,61 @@
         </div>
       </div>
 
-      <div v-if="isLoading" class="loading-state">
-        <i class="fas fa-spinner fa-spin"></i>
-        <p>{{ safeT('sidebar.loadingChats', 'Loading conversations...') }}</p>
-      </div>
+      <DsStateDisplay
+        v-if="isLoading"
+        type="loading"
+        :message="safeT('sidebar.loadingChats', 'Loading conversations...')"
+      >
+        <template #icon>
+          <Loader2 :size="24" class="animate-spin" />
+        </template>
+      </DsStateDisplay>
 
-      <div v-else-if="errorMessage" class="error-state">
-        <i class="fas fa-exclamation-circle"></i>
-        <p>{{ errorMessage }}</p>
-        <button class="retry-btn" @click="loadConversationsForCurrentTab">
-          {{ safeT('sidebar.retry', 'Retry') }}
-        </button>
-      </div>
+      <DsStateDisplay v-else-if="errorMessage" type="error" :message="errorMessage">
+        <template #icon>
+          <AlertCircle :size="24" />
+        </template>
+        <template #action>
+          <DsButton variant="secondary" @click="loadConversationsForCurrentTab">
+            {{ safeT('sidebar.retry', 'Retry') }}
+          </DsButton>
+        </template>
+      </DsStateDisplay>
 
-      <div v-else-if="activeTab === 'folders' && !folderSelected" class="empty-state">
-        <i class="fas fa-folder-open empty-state-icon"></i>
-        <p>
-          {{ safeT('sidebar.selectFolderInstruction', 'Select a folder to view its conversations') }}
-        </p>
-      </div>
+      <DsStateDisplay v-else-if="activeTab === 'folders' && !folderSelected" type="empty">
+        <template #icon>
+          <FolderOpen :size="48" />
+        </template>
+        {{ safeT('sidebar.selectFolderInstruction', 'Select a folder to view its conversations') }}
+      </DsStateDisplay>
 
       <div
         v-else-if="(activeTab !== 'folders' || folderSelected) && filteredConversations.length > 0"
         class="chats-list"
       >
-        <div
+        <DsCard
           v-for="conversation in filteredConversations"
           :key="conversation._key"
+          variant="default"
+          padding="md"
+          :hoverable="true"
           class="chat-item"
           @click="openChat(conversation._key)"
         >
           <div class="chat-icon">
-            <i class="fas fa-comment"></i>
+            <MessageSquare :size="16" />
           </div>
           <div class="chat-content">
             <div class="chat-header">
               <div class="chat-title">{{ conversation.title }}</div>
               <div class="chat-actions-group">
-                <button
-                  class="star-btn"
+                <DsButton
+                  variant="ghost"
                   :title="conversation.isStarred ? safeT('sidebar.unstar', 'Unstar') : safeT('sidebar.star', 'Star')"
                   @click.stop="toggleStarred(conversation)"
                 >
-                  <i :class="conversation.isStarred ? 'fas fa-star' : 'far fa-star'"></i>
-                </button>
+                  <Star :size="16" :fill="conversation.isStarred ? 'currentColor' : 'none'" />
+                </DsButton>
                 <label class="archive-checkbox">
                   <input
                     type="checkbox"
@@ -128,9 +138,9 @@
                   />
                   <span class="archive-label">{{ safeT('sidebar.archive', 'Archive') }}</span>
                 </label>
-                <button class="action-btn" title="Chat Actions" @click.stop="showChatActionsMenu(conversation, $event)">
-                  <i class="fas fa-ellipsis-v"></i>
-                </button>
+                <DsButton variant="ghost" title="Chat Actions" @click.stop="showChatActionsMenu(conversation, $event)">
+                  <MoreVertical :size="16" />
+                </DsButton>
               </div>
             </div>
             <div class="chat-message-count">
@@ -167,16 +177,18 @@
               <div v-if="conversation.isArchived" class="archived-badge">📦 Archived</div>
             </div>
           </div>
-        </div>
+        </DsCard>
       </div>
 
-      <div v-else-if="activeTab !== 'folders' || folderSelected" class="empty-state">
-        <p>{{ getEmptyStateMessage() }}</p>
-        <i v-if="activeTab === 'starred'" class="fas fa-star empty-state-icon"></i>
-        <i v-else-if="activeTab === 'archived'" class="fas fa-archive empty-state-icon"></i>
-        <i v-else-if="activeTab === 'all'" class="fas fa-comments empty-state-icon"></i>
-        <i v-else-if="activeTab === 'folders'" class="fas fa-folder-open empty-state-icon"></i>
-      </div>
+      <DsStateDisplay v-else-if="activeTab !== 'folders' || folderSelected" type="empty">
+        <template #icon>
+          <Star v-if="activeTab === 'starred'" :size="48" />
+          <Archive v-else-if="activeTab === 'archived'" :size="48" />
+          <MessagesSquare v-else-if="activeTab === 'all'" :size="48" />
+          <FolderOpen v-else-if="activeTab === 'folders'" :size="48" />
+        </template>
+        {{ getEmptyStateMessage() }}
+      </DsStateDisplay>
     </div>
 
     <modal-dialog v-if="showCreateFolderDialog" @close="showCreateFolderDialog = false">
@@ -184,24 +196,23 @@
         <h3>{{ safeT('sidebar.createFolder', 'Create Folder') }}</h3>
       </template>
       <template #body>
-        <div class="form-group">
-          <label for="folderName">{{ safeT('sidebar.folderName', 'Folder Name') }}</label>
-          <input
+        <DsFormGroup :label="safeT('sidebar.folderName', 'Folder Name')" input-id="folderName">
+          <DsInput
             id="folderName"
             v-model="newFolderName"
             type="text"
             :placeholder="safeT('sidebar.folderNamePlaceholder', 'Enter folder name')"
-            @keyup.enter="handleCreateFolder"
+            @enter="handleCreateFolder"
           />
-        </div>
+        </DsFormGroup>
       </template>
       <template #footer>
-        <button class="cancel-btn" @click="showCreateFolderDialog = false">
+        <DsButton variant="secondary" @click="showCreateFolderDialog = false">
           {{ safeT('common.cancel', 'Cancel') }}
-        </button>
-        <button class="primary-btn" :disabled="!newFolderName.trim()" @click="handleCreateFolder">
+        </DsButton>
+        <DsButton variant="primary" :disabled="!newFolderName.trim()" @click="handleCreateFolder">
           {{ safeT('common.create', 'Create') }}
-        </button>
+        </DsButton>
       </template>
     </modal-dialog>
 
@@ -210,24 +221,23 @@
         <h3>{{ safeT('sidebar.editFolder', 'Edit Folder') }}</h3>
       </template>
       <template #body>
-        <div class="form-group">
-          <label for="editFolderName">{{ safeT('sidebar.folderName', 'Folder Name') }}</label>
-          <input
+        <DsFormGroup :label="safeT('sidebar.folderName', 'Folder Name')" input-id="editFolderName">
+          <DsInput
             id="editFolderName"
             v-model="editingFolderName"
             type="text"
             :placeholder="safeT('sidebar.folderNamePlaceholder', 'Enter folder name')"
-            @keyup.enter="handleUpdateFolder"
+            @enter="handleUpdateFolder"
           />
-        </div>
+        </DsFormGroup>
       </template>
       <template #footer>
-        <button class="cancel-btn" @click="closeEditFolderDialog">
+        <DsButton variant="secondary" @click="closeEditFolderDialog">
           {{ safeT('common.cancel', 'Cancel') }}
-        </button>
-        <button class="primary-btn" :disabled="!editingFolderName.trim()" @click="handleUpdateFolder">
+        </DsButton>
+        <DsButton variant="primary" :disabled="!editingFolderName.trim()" @click="handleUpdateFolder">
           {{ safeT('common.save', 'Save') }}
-        </button>
+        </DsButton>
       </template>
     </modal-dialog>
 
@@ -245,28 +255,28 @@
         </p>
       </template>
       <template #footer>
-        <button class="cancel-btn" @click="closeDeleteFolderDialog">
+        <DsButton variant="secondary" @click="closeDeleteFolderDialog">
           {{ safeT('common.cancel', 'Cancel') }}
-        </button>
-        <button class="danger-btn" @click="handleDeleteFolder">
+        </DsButton>
+        <DsButton variant="danger" @click="handleDeleteFolder">
           {{ safeT('common.delete', 'Delete') }}
-        </button>
+        </DsButton>
       </template>
     </modal-dialog>
 
     <context-menu v-if="showChatMenu" :position="menuPosition" :class="themeClass" @close="showChatMenu = false">
-      <button class="menu-item" @click="promptRenameChat">
-        <i class="fas fa-edit"></i>
+      <DsButton variant="ghost" class="menu-item" @click="promptRenameChat">
+        <Pencil :size="16" />
         {{ safeT('sidebar.renameChat', 'Rename Chat') }}
-      </button>
-      <button class="menu-item" @click="showMoveChatDialog = true">
-        <i class="fas fa-exchange-alt"></i>
+      </DsButton>
+      <DsButton variant="ghost" class="menu-item" @click="showMoveChatDialog = true">
+        <ArrowLeftRight :size="16" />
         {{ safeT('sidebar.moveChat', 'Move Chat') }}
-      </button>
-      <button class="menu-item text-danger" @click="promptDeleteChat">
-        <i class="fas fa-trash"></i>
+      </DsButton>
+      <DsButton variant="ghost" class="menu-item text-danger" @click="promptDeleteChat">
+        <Trash2 :size="16" />
         {{ safeT('sidebar.deleteChat', 'Delete Chat') }}
-      </button>
+      </DsButton>
     </context-menu>
 
     <modal-dialog v-if="showMoveChatDialog" class="move-chat-dialog" @close="showMoveChatDialog = false">
@@ -278,9 +288,8 @@
           {{ safeT('sidebar.moveChatTo', 'Move chat to') }}:
           {{ activeChat ? activeChat.title : '' }}
         </p>
-        <div class="form-group">
-          <label for="destinationFolder">{{ safeT('sidebar.selectFolder', 'Select folder') }}</label>
-          <select id="destinationFolder" v-model="destinationFolderId">
+        <DsFormGroup :label="safeT('sidebar.selectFolder', 'Select folder')" input-id="destinationFolder">
+          <DsSelect id="destinationFolder" v-model="destinationFolderId">
             <option value="no_folder">
               {{ safeT('sidebar.noFolder', 'No Folder') }}
             </option>
@@ -292,22 +301,22 @@
             >
               {{ folder.name }}
             </option>
-          </select>
-        </div>
+          </DsSelect>
+        </DsFormGroup>
       </template>
       <template #footer>
-        <button class="cancel-btn" @click="showMoveChatDialog = false">
+        <DsButton variant="secondary" @click="showMoveChatDialog = false">
           {{ safeT('common.cancel', 'Cancel') }}
-        </button>
-        <button
-          class="primary-btn"
+        </DsButton>
+        <DsButton
+          variant="primary"
           :disabled="
             !destinationFolderId || (destinationFolderId !== 'no_folder' && selectedFolderId === destinationFolderId)
           "
           @click="handleMoveChat"
         >
           {{ safeT('common.move', 'Move') }}
-        </button>
+        </DsButton>
       </template>
     </modal-dialog>
 
@@ -316,24 +325,23 @@
         <h3>{{ safeT('sidebar.renameChat', 'Rename Chat') }}</h3>
       </template>
       <template #body>
-        <div class="form-group">
-          <label for="chatTitle">{{ safeT('sidebar.chatTitle', 'Chat Title') }}</label>
-          <input
+        <DsFormGroup :label="safeT('sidebar.chatTitle', 'Chat Title')" input-id="chatTitle">
+          <DsInput
             id="chatTitle"
             v-model="newChatTitle"
             type="text"
             :placeholder="safeT('sidebar.chatTitlePlaceholder', 'Enter chat title')"
-            @keyup.enter="handleRenameChat"
+            @enter="handleRenameChat"
           />
-        </div>
+        </DsFormGroup>
       </template>
       <template #footer>
-        <button class="cancel-btn" @click="showRenameChatDialog = false">
+        <DsButton variant="secondary" @click="showRenameChatDialog = false">
           {{ safeT('common.cancel', 'Cancel') }}
-        </button>
-        <button class="primary-btn" :disabled="!newChatTitle.trim()" @click="handleRenameChat">
+        </DsButton>
+        <DsButton variant="primary" :disabled="!newChatTitle.trim()" @click="handleRenameChat">
           {{ safeT('common.save', 'Save') }}
-        </button>
+        </DsButton>
       </template>
     </modal-dialog>
 
@@ -351,12 +359,12 @@
         </p>
       </template>
       <template #footer>
-        <button class="cancel-btn" @click="showDeleteChatDialog = false">
+        <DsButton variant="secondary" @click="showDeleteChatDialog = false">
           {{ safeT('common.cancel', 'Cancel') }}
-        </button>
-        <button class="danger-btn" @click="handleDeleteChat">
+        </DsButton>
+        <DsButton variant="danger" @click="handleDeleteChat">
           {{ safeT('common.delete', 'Delete') }}
-        </button>
+        </DsButton>
       </template>
     </modal-dialog>
   </div>
@@ -366,17 +374,59 @@
 import { mapGetters, mapActions } from 'vuex';
 import ModalDialog from './ModalDialog.vue';
 import ContextMenu from './ContextMenu.vue';
+import DsButton from './ds/Button.vue';
+import DsFormGroup from './ds/FormGroup.vue';
+import DsInput from './ds/Input.vue';
+import DsCard from './ds/Card.vue';
+import DsStateDisplay from './ds/StateDisplay.vue';
+import DsSelect from './ds/Select.vue';
 import chatHistoryService from '@/services/chatHistoryService';
 import notificationService from '@/services/notificationService';
 import { eventBus } from '../eventBus.js';
 import { getUserId } from '@/utils/userUtils';
+import {
+  Search as SearchIcon,
+  FolderPlus,
+  Folder,
+  Pencil,
+  Trash2,
+  Loader2,
+  AlertCircle,
+  FolderOpen,
+  MessageSquare,
+  Star,
+  MoreVertical,
+  Archive,
+  MessagesSquare,
+  ArrowLeftRight
+} from 'lucide-vue-next';
 
 export default {
   name: 'ChatFolders',
 
   components: {
     ModalDialog,
-    ContextMenu
+    ContextMenu,
+    DsButton,
+    DsFormGroup,
+    DsInput,
+    DsCard,
+    DsStateDisplay,
+    DsSelect,
+    SearchIcon,
+    FolderPlus,
+    Folder,
+    Pencil,
+    Trash2,
+    Loader2,
+    AlertCircle,
+    FolderOpen,
+    MessageSquare,
+    Star,
+    MoreVertical,
+    Archive,
+    MessagesSquare,
+    ArrowLeftRight
   },
   props: {
     activeTab: {
@@ -393,7 +443,6 @@ export default {
       isLoading: false,
       errorMessage: null,
       searchTerm: '',
-      searchDebounceTimeout: null,
       showCreateFolderDialog: false,
       newFolderName: '',
       editingFolder: null,
@@ -447,24 +496,18 @@ export default {
     },
 
     filteredConversations() {
-      console.log(`Computing filteredConversations for tab: ${this.activeTab}, searchTerm: "${this.searchTerm}"`);
       try {
         let filteredChats = [...this.conversations];
-        console.log(`Initial filteredChats length: ${filteredChats.length}`);
         if (this.activeTab === 'starred') {
           filteredChats = filteredChats.filter((conv) => conv.isStarred === true);
-          console.log(`After starred filtering: ${filteredChats.length} conversations`);
         } else if (this.activeTab === 'archived') {
           filteredChats = filteredChats.filter((conv) => conv.isArchived === true);
-          console.log(`After archived filtering: ${filteredChats.length} conversations`);
         } else if (this.activeTab === 'folders') {
           // Exclude archived conversations in folders tab
           filteredChats = filteredChats.filter((conv) => conv.isArchived !== true);
-          console.log(`After excluding archived in folders tab: ${filteredChats.length} conversations`);
         }
         if (this.searchTerm && this.searchTerm.trim() !== '') {
           const searchTermLower = this.searchTerm.trim().toLowerCase();
-          console.log(`Applying search term: ${searchTermLower}`);
           filteredChats = filteredChats.filter((conv) => {
             const matches =
               (conv.title && conv.title.toLowerCase().includes(searchTermLower)) ||
@@ -472,24 +515,17 @@ export default {
               (conv.category && conv.category.toLowerCase().includes(searchTermLower));
             return matches;
           });
-          console.log(`After search filtering: ${filteredChats.length} conversations`);
         }
         const sortedChats = filteredChats.sort((a, b) => {
           const dateA = a.updated ? new Date(a.updated) : new Date(0);
           const dateB = b.updated ? new Date(b.updated) : new Date(0);
           if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
-            console.warn('Invalid date in conversation sorting:', {
-              dateA,
-              dateB
-            });
             return 0;
           }
           return dateB - dateA;
         });
-        console.log(`Final filtered and sorted conversations length: ${sortedChats.length}`);
         return sortedChats;
-      } catch (error) {
-        console.error('Error in filteredConversations:', error);
+      } catch {
         return this.conversations;
       }
     }
@@ -513,9 +549,6 @@ export default {
         this.fetchFolderChats(newFolderId);
       }
     },
-    searchTerm() {
-      this.handleSearchInput();
-    },
     // Keep local currentUser in sync with the Vuex store
     '$store.getters.currentUser': {
       handler(user) {
@@ -538,7 +571,6 @@ export default {
       this.$watch(
         () => this.$i18n.locale,
         (newLocale) => {
-          console.log('[ChatFolders] Locale changed to:', newLocale);
           this.currentLocale = newLocale;
           this.forceUpdateKey++; // Track locale change
           this.$emit('locale-changed', newLocale); // Notify parent to re-render tabs
@@ -549,19 +581,9 @@ export default {
     eventBus.$on('conversation-saved', this.handleConversationSaved);
   },
 
-  mounted() {
-    console.log('ChatFolders component mounted');
-    this.connectExistingSearchField();
-  },
+  mounted() {},
 
   beforeUnmount() {
-    const searchInput = document.querySelector('input.search-box');
-
-    if (searchInput) {
-      searchInput.removeEventListener('input', this.handleSearchInput);
-    }
-
-    // Clean up conversation-saved event listener
     eventBus.$off('conversation-saved', this.handleConversationSaved);
   },
 
@@ -585,36 +607,18 @@ export default {
     },
 
     handleConversationSaved(conversationId) {
-      console.log(`Received conversation-saved event for conversation ${conversationId}`);
-      // Debug: Log Vuex state before processing
-      console.log('Vuex chats state:', this.$store.state.chatHistory.chats);
-      console.log(
-        'Vuex folderChats state for selected folder',
-        this.selectedFolderId,
-        ':',
-        this.$store.state.chatHistory.folderChats[this.selectedFolderId]
-      );
       // Refresh only if the current tab is 'all' or 'folders'
       if (this.activeTab === 'all' || this.activeTab === 'folders') {
-        console.log(`Refreshing ${this.activeTab} tab due to new conversation`);
         this.loadConversationsForCurrentTab();
         // If in folders tab and the conversation belongs to the selected folder, add it immediately
         if (this.activeTab === 'folders' && this.selectedFolderId) {
           // Check if the conversation is in the selected folder's folderChats
           const folderChats = this.$store.state.chatHistory.folderChats[this.selectedFolderId] || [];
-          console.log(
-            `Checking if conversation ${conversationId} is in folderChats for ${this.selectedFolderId}:`,
-            folderChats
-          );
           if (folderChats.includes(conversationId)) {
             // Retry fetching chat with $nextTick to account for Vuex reactivity
             this.$nextTick(() => {
               const chat = this.getChatById(conversationId);
-              console.log(`Fetched chat ${conversationId} from Vuex:`, chat);
               if (chat && !this.conversations.find((c) => c._key === conversationId)) {
-                console.log(
-                  `Manually adding conversation ${conversationId} to conversations for folder ${this.selectedFolderId}`
-                );
                 // Create conversation object matching backend structure
                 const newConversation = {
                   _key: chat.id,
@@ -630,52 +634,29 @@ export default {
                 };
                 this.conversations = [...this.conversations, newConversation];
                 this.folderCounts[this.selectedFolderId] = (this.folderCounts[this.selectedFolderId] || 0) + 1;
-                console.log(
-                  `Updated conversations for folder ${this.selectedFolderId}: ${this.conversations.length} chats`
-                );
-              } else if (!chat) {
-                console.warn(`Conversation ${conversationId} still not found in Vuex store after $nextTick`);
-              } else {
-                console.log(`Conversation ${conversationId} already in conversations`);
               }
             });
-          } else {
-            console.log(`Conversation ${conversationId} not in folder ${this.selectedFolderId}'s folderChats`);
           }
         }
-      } else {
-        console.log(`No refresh needed for ${this.activeTab} tab`);
       }
     },
 
     resetComponentState() {
-      console.log('Resetting component state');
       this.conversations = [];
       this.folderSelected = false;
       this.searchTerm = '';
       this.isLoading = false;
       this.errorMessage = null;
-
-      const searchInput = document.querySelector('input.search-box');
-      if (searchInput) {
-        searchInput.value = '';
-      }
     },
 
     safeT(key, fallback) {
-      try {
-        if (typeof this.$t === 'function') {
-          return this.$t(key);
-        }
-        return fallback;
-      } catch (error) {
-        console.warn(`Translation error for key ${key}:`, error);
-        return fallback;
+      if (typeof this.$t === 'function') {
+        return this.$t(key);
       }
+      return fallback;
     },
 
     openCreateFolderModal() {
-      console.log('Creating new folder - opening modal dialog');
       this.newFolderName = '';
       setTimeout(() => {
         this.showCreateFolderDialog = true;
@@ -683,62 +664,35 @@ export default {
     },
 
     closeCreateFolderDialog() {
-      console.log('Closing folder creation dialog');
       this.showCreateFolderDialog = false;
     },
 
     handleFoldersTabActivation() {
-      console.log('Folders tab activated, loading folders from backend');
       this.folderSelected = false;
       this.conversations = [];
       this.loadFoldersFromBackend();
     },
 
-    async loadCurrentUser() {
-      try {
-        console.log('Loading current user data');
-        this.currentUser = this.$store.getters.currentUser;
-        if (!this.currentUser) {
-          console.warn('No user in Vuex store, cannot load folders');
-          this.errorMessage = this.safeT(
-            'sidebar.errorLoadingUser',
-            'User data is incomplete. Please reload the page.'
-          );
-          return;
-        }
-        console.log('Current user loaded:', this.currentUser);
-        if (!this.currentUser || !getUserId(this.currentUser)) {
-          console.error('User data loaded but no valid ID found:', this.currentUser);
-          this.errorMessage = this.safeT(
-            'sidebar.errorLoadingUser',
-            'User data is incomplete. Please reload the page.'
-          );
-          return;
-        }
+    loadCurrentUser() {
+      const user = this.$store.getters.currentUser;
+      if (user && getUserId(user)) {
+        this.currentUser = user;
         this.loadConversationsForCurrentTab();
         this.loadFoldersFromBackend();
-      } catch (error) {
-        console.error('Error loading current user:', error);
-        this.errorMessage = this.safeT('sidebar.errorLoadingUser', 'Error loading user data');
       }
+      // If no user yet, the '$store.getters.currentUser' watcher (immediate: true)
+      // will retry once the OIDC callback populates the store.
     },
 
     forceDisplayConversations() {
-      console.log('Force displaying conversations:', this.conversations.length);
       this.conversations = [...this.conversations];
-      this.$nextTick(() => {
-        console.log('UI update scheduled after conversations change');
-      });
     },
 
     async loadConversations() {
-      console.log('Starting loadConversations for tab:', this.activeTab);
       this.isLoading = true;
       this.errorMessage = null;
       try {
         if (!this.currentUser || !getUserId(this.currentUser)) {
-          console.error('Cannot load conversations: No current user or missing user ID');
-          this.errorMessage = this.safeT('sidebar.errorLoadingUser', 'User data is missing. Please reload the page.');
           this.isLoading = false;
           return;
         }
@@ -746,9 +700,7 @@ export default {
         if (this.activeTab === 'all') {
           options.includeArchived = false;
         }
-        console.log('Fetching conversations with options:', options);
         const response = await chatHistoryService.getUserConversations(options);
-        console.log(`Received ${response.conversations?.length || 0} conversations from server:`, response);
         this.conversations = (response.conversations || []).map((conv) => {
           return {
             ...conv,
@@ -758,15 +710,10 @@ export default {
             messageCount: conv.messageCount || 0
           };
         });
-        console.log(`Set this.conversations to length: ${this.conversations.length}`);
-        this.$nextTick(() => {
-          console.log('UI should now be updated with conversations');
-        });
         if (Object.keys(this.categories).length === 0) {
           this.loadCategories();
         }
-      } catch (error) {
-        console.error('Error loading conversations:', error);
+      } catch {
         this.errorMessage = this.safeT(
           'sidebar.errorLoadingConversations',
           'Failed to load conversations. Please try again.'
@@ -777,14 +724,10 @@ export default {
     },
 
     loadConversationsForCurrentTab() {
-      console.log(`Loading conversations for current tab: ${this.activeTab}`);
-
       if (this.activeTab === 'folders') {
         if (this.folderSelected && this.selectedFolderId) {
-          console.log(`Loading conversations for selected folder: ${this.selectedFolderId}`);
           this.fetchFolderChats(this.selectedFolderId);
         } else {
-          console.log('No folder selected in Folders tab - clearing conversations');
           this.conversations = [];
           this.isLoading = false;
         }
@@ -801,7 +744,6 @@ export default {
     },
 
     async loadSpecificTabConversations(tabType) {
-      console.log(`Direct loading for ${tabType} tab with proper parameters`);
       this.isLoading = true;
       this.errorMessage = null;
       this.conversations = [];
@@ -815,9 +757,7 @@ export default {
         if (tabType === 'archived') {
           options.includeArchived = true;
         }
-        console.log('Fetching conversations with options:', options);
         const response = await chatHistoryService.getUserConversations(options);
-        console.log(`Received ${response.conversations?.length || 0} conversations from server:`, response);
         this.conversations = (response.conversations || []).map((conv) => {
           return {
             ...conv,
@@ -827,13 +767,11 @@ export default {
             messageCount: conv.messageCount || 0
           };
         });
-        console.log(`Loaded ${this.conversations.length} conversations for ${tabType} tab`);
         this.forceDisplayConversations();
         if (Object.keys(this.categories).length === 0) {
           this.loadCategories();
         }
       } catch (error) {
-        console.error(`Error loading ${tabType} conversations:`, error);
         this.errorMessage = `Failed to load conversations: ${error.message || 'Unknown error'}`;
       } finally {
         this.isLoading = false;
@@ -857,16 +795,11 @@ export default {
     },
 
     async loadCategories() {
-      try {
-        console.log('Loading categories');
-        this.categories = {
-          general: 'General',
-          work: 'Work',
-          personal: 'Personal'
-        };
-      } catch (error) {
-        console.error('Error loading categories:', error);
-      }
+      this.categories = {
+        general: 'General',
+        work: 'Work',
+        personal: 'Personal'
+      };
     },
 
     getCategoryName(categoryId) {
@@ -876,10 +809,8 @@ export default {
 
     async toggleStarred(conversation) {
       try {
-        console.log(`Toggling starred status for conversation ${conversation._key}`);
         const newStatus = !conversation.isStarred;
         if (!this.currentUser || !getUserId(this.currentUser)) {
-          console.error('Cannot update conversation: No current user or missing user ID');
           notificationService.error(this.safeT('sidebar.errorNoUser', 'User data is missing'));
           return;
         }
@@ -899,19 +830,16 @@ export default {
         } else {
           notificationService.info(this.safeT('sidebar.chatUnstarred', 'Conversation has been unstarred'));
         }
-      } catch (error) {
+      } catch {
         conversation.isStarred = !conversation.isStarred;
-        console.error('Error toggling starred status:', error);
         notificationService.error(this.safeT('sidebar.errorUpdatingChat', 'Failed to update conversation'));
       }
     },
 
     async toggleArchived(conversation, event) {
       try {
-        console.log(`Toggling archived status for conversation ${conversation._key}`);
         const newStatus = event.target.checked;
         if (!this.currentUser || !getUserId(this.currentUser)) {
-          console.error('Cannot update conversation: No current user or missing user ID');
           notificationService.error(this.safeT('sidebar.errorNoUser', 'User data is missing'));
           return;
         }
@@ -938,34 +866,15 @@ export default {
         } else {
           notificationService.info(this.safeT('sidebar.chatUnarchived', 'Conversation has been unarchived'));
         }
-      } catch (error) {
+      } catch {
         conversation.isArchived = !conversation.isArchived;
-        console.error('Error toggling archived status:', error);
         notificationService.error(this.safeT('sidebar.errorUpdatingChat', 'Failed to update conversation'));
       }
     },
 
-    connectExistingSearchField() {
-      console.log('Connecting to existing search field');
-      const searchInput = document.querySelector('input.search-box');
-      if (searchInput) {
-        console.log('[ChatFolders] Search input found:', searchInput);
-        searchInput.addEventListener('input', this.handleSearchInput);
-      } else {
-        console.warn('Could not find existing search input in DOM');
-      }
-    },
-
-    handleSearchInput() {
-      clearTimeout(this.searchDebounceTimeout);
-      this.searchDebounceTimeout = setTimeout(() => {
-        console.log(`Search term changed to: ${this.searchTerm}, reloading conversations`);
-        this.loadConversationsForCurrentTab();
-      }, 300);
-    },
-
     handleSearch() {
-      this.loadConversationsForCurrentTab();
+      // Search is handled reactively by filteredConversations computed.
+      // This method exists for the search button click — no-op since filtering is instant.
     },
 
     getTabTitle() {
@@ -1007,21 +916,17 @@ export default {
     },
 
     selectFirstCustomFolder() {
-      console.log('Attempting to select first custom folder');
       if (!this.nonDefaultFolders || this.nonDefaultFolders.length === 0) {
-        console.log('No custom folders available to select');
         return;
       }
       const customFolders = this.nonDefaultFolders;
       if (customFolders.length > 0) {
         const firstFolder = customFolders[0];
-        console.log('Auto-selecting folder:', firstFolder.name, firstFolder.id);
         this.selectFolder(firstFolder.id);
       }
     },
 
     async selectFolder(folderId) {
-      console.log(`Selecting folder: ${folderId}`);
       this.selectedFolderId = folderId;
       this.folderSelected = true;
       await this.fetchFolderChats(folderId, true);
@@ -1043,45 +948,35 @@ export default {
     },
 
     async handleCreateFolder() {
-      console.log('handleCreateFolder called with name:', this.newFolderName);
       if (!this.newFolderName.trim()) {
-        console.log('Folder name is empty, not creating');
         return;
       }
       try {
         if (!this.currentUser || !getUserId(this.currentUser)) {
-          console.error('Cannot create folder: No current user or missing user ID');
           notificationService.error(this.safeT('sidebar.errorNoUser', 'User data is missing'));
           return;
         }
         const folderData = {
           name: this.newFolderName.trim()
         };
-        console.log('Creating folder with data:', folderData);
         const result = await chatHistoryService.createFolder(folderData);
-        console.log('Folder created successfully:', result);
         this.folderCounts[result._key] = 0;
         notificationService.success(this.safeT('sidebar.folderCreated', 'Folder created successfully'));
         this.showCreateFolderDialog = false;
         this.loadFoldersFromBackend();
-      } catch (error) {
-        console.error('Error creating folder:', error);
+      } catch {
         notificationService.error(this.safeT('sidebar.errorCreatingFolder', 'Failed to create folder'));
       }
     },
 
     async loadFoldersFromBackend() {
       try {
-        console.log('Loading folders from backend');
         if (!this.currentUser || !getUserId(this.currentUser)) {
-          console.error('Cannot load folders: No current user or missing user ID');
           this.errorMessage = this.safeT('sidebar.errorNoUser', 'User data is missing');
           return [];
         }
         const response = await chatHistoryService.getUserFolders();
-        console.log('Raw getUserFolders response:', JSON.stringify(response, null, 2));
         const foldersArray = Array.isArray(response) ? response : response?.folders || [];
-        console.log(`Received ${foldersArray.length} folders:`, foldersArray);
         const processedFolders = foldersArray
           .filter((folder) => folder && (folder._key || folder.id))
           .map((folder) => ({
@@ -1101,23 +996,17 @@ export default {
         };
         this.folderCounts[defaultFolder.id] = 0;
         const allFolders = [defaultFolder, ...processedFolders];
-        console.log('All folders (with default) before dispatch:', JSON.stringify(allFolders, null, 2));
         await this.$store.dispatch('chatHistory/setFolders', allFolders);
-        const stateFolders = [...this.$store.state.chatHistory.folders];
-        console.log('Vuex state.chatHistory.folders after dispatch:', stateFolders);
-        const getterFolders = [...this.$store.getters['chatHistory/getAllFolders']];
-        console.log('Vuex getter getAllFolders after dispatch:', getterFolders);
-        const nonDefaultFoldersDebug = [...this.nonDefaultFolders];
-        console.log('Computed nonDefaultFolders after dispatch:', nonDefaultFoldersDebug);
-        for (const folder of processedFolders) {
-          await this.fetchFolderChats(folder.id, false);
+        if (this.activeTab === 'folders') {
+          for (const folder of processedFolders) {
+            await this.fetchFolderChats(folder.id, false);
+          }
         }
         if (this.activeTab === 'folders') {
           this.selectFirstCustomFolder();
         }
         return processedFolders;
-      } catch (error) {
-        console.error('Error loading folders from backend:', error);
+      } catch {
         this.errorMessage = this.safeT('sidebar.errorLoadingFolders', 'Failed to load folders');
         notificationService.error(this.errorMessage);
         return [];
@@ -1126,11 +1015,9 @@ export default {
 
     async handleUpdateFolder() {
       if (!this.editingFolder || !this.editingFolderName.trim()) {
-        console.log('No folder selected or empty name, not updating');
         return;
       }
       try {
-        console.log(`Updating folder ${this.editingFolder.id} with name: ${this.editingFolderName}`);
         await chatHistoryService.updateFolder(this.editingFolder.id, {
           name: this.editingFolderName.trim()
         });
@@ -1139,21 +1026,18 @@ export default {
         this.editingFolder = null;
         this.editingFolderName = '';
         this.showEditFolderDialog = false;
-      } catch (error) {
-        console.error(`Error updating folder ${this.editingFolder.id}:`, error);
+      } catch {
         notificationService.error(this.safeT('sidebar.errorUpdatingFolder', 'Failed to update folder'));
       }
     },
 
     async handleDeleteFolder() {
       if (!this.editingFolder) {
-        console.log('No folder selected, not deleting');
         return;
       }
       try {
         this.isLoading = true;
         if (!this.currentUser || !getUserId(this.currentUser)) {
-          console.error('Cannot delete folder: No current user or missing user ID');
           notificationService.error(this.safeT('sidebar.errorNoUser', 'User data is missing'));
           return;
         }
@@ -1167,8 +1051,7 @@ export default {
         notificationService.success(this.safeT('sidebar.folderDeleted', 'Folder deleted successfully'));
         this.editingFolder = null;
         this.showDeleteFolderDialog = false;
-      } catch (error) {
-        console.error(`Error deleting folder ${this.editingFolder.id}:`, error);
+      } catch {
         notificationService.error(this.safeT('sidebar.errorDeletingFolder', 'Failed to delete folder'));
       } finally {
         this.isLoading = false;
@@ -1176,12 +1059,10 @@ export default {
     },
 
     openChat(chatId) {
-      console.log(`Opening chat ${chatId}`);
       eventBus.$emit('load-conversation', chatId);
     },
 
     showChatActionsMenu(chat, event) {
-      console.log(`Showing actions menu for chat ${chat._key}`);
       this.activeChat = chat;
       if (this.activeTab !== 'folders') {
         const folderChats = this.$store.state.chatHistory.folderChats;
@@ -1225,7 +1106,6 @@ export default {
 
     promptRenameChat() {
       if (this.activeChat) {
-        console.log(`Prompting to rename chat ${this.activeChat._key}`);
         this.newChatTitle = this.activeChat.title;
         this.showRenameChatDialog = true;
         this.showChatMenu = false;
@@ -1236,7 +1116,6 @@ export default {
       if (!this.activeChat || !this.newChatTitle.trim()) {
         return;
       }
-      console.log(`Renaming chat ${this.activeChat._key} to "${this.newChatTitle}"`);
       const originalTitle = this.activeChat.title;
       try {
         this.activeChat.title = this.newChatTitle.trim();
@@ -1250,16 +1129,14 @@ export default {
         this.showRenameChatDialog = false;
         this.showChatMenu = false;
         notificationService.success(this.safeT('sidebar.chatRenamed', 'Conversation renamed successfully'));
-      } catch (error) {
+      } catch {
         this.activeChat.title = originalTitle;
-        console.error('Error renaming chat:', error);
         notificationService.error(this.safeT('sidebar.errorRenamingChat', 'Failed to rename conversation'));
       }
     },
 
     promptDeleteChat() {
       if (this.activeChat) {
-        console.log(`Prompting to delete chat ${this.activeChat._key}`);
         this.showDeleteChatDialog = true;
         this.showChatMenu = false;
       }
@@ -1270,11 +1147,9 @@ export default {
         return;
       }
       if (!this.currentUser || !getUserId(this.currentUser)) {
-        console.error('Cannot delete chat: No current user or missing user ID');
         notificationService.error(this.safeT('sidebar.errorNoUser', 'User data is missing'));
         return;
       }
-      console.log(`Deleting chat ${this.activeChat._key}`);
       try {
         await chatHistoryService.deleteConversation(this.activeChat._key);
         this.conversations = this.conversations.filter((c) => c._key !== this.activeChat._key);
@@ -1288,28 +1163,20 @@ export default {
         this.showChatMenu = false;
         notificationService.success(this.safeT('sidebar.chatDeleted', 'Conversation deleted successfully'));
         this.loadConversationsForCurrentTab();
-      } catch (error) {
-        console.error('Error deleting chat:', error);
+      } catch {
         notificationService.error(this.safeT('sidebar.errorDeletingChat', 'Failed to delete conversation'));
       }
     },
 
     async handleMoveChat() {
       if (!this.activeChat || !this.destinationFolderId) {
-        console.error('No active chat or destination folder selected');
         return;
       }
       if (!this.currentUser || !getUserId(this.currentUser)) {
-        console.error('Cannot move chat: No current user or missing user ID');
         notificationService.error(this.safeT('sidebar.errorNoUser', 'User data is missing'));
         return;
       }
       const isRemovingFromFolder = this.destinationFolderId === 'no_folder';
-      console.log(
-        `${isRemovingFromFolder ? 'Removing' : 'Moving'} chat ${this.activeChat._key} ${
-          isRemovingFromFolder ? 'from all custom folders' : `to folder ${this.destinationFolderId}`
-        }`
-      );
       try {
         if (isRemovingFromFolder) {
           await chatHistoryService.removeConversationFromFolder(this.activeChat._key, this.selectedFolderId);
@@ -1373,8 +1240,7 @@ export default {
             await this.selectFolder(this.selectedFolderId);
           }
         }
-      } catch (error) {
-        console.error(`Error ${isRemovingFromFolder ? 'removing chat from folder' : 'moving chat'}:`, error);
+      } catch {
         notificationService.error(
           isRemovingFromFolder
             ? this.safeT('sidebar.errorRemovingChat', 'Failed to remove conversation from folder')
@@ -1389,11 +1255,9 @@ export default {
       try {
         date = new Date(dateStr);
         if (isNaN(date.getTime())) {
-          console.warn(`Invalid date string: ${dateStr}`);
           return dateStr;
         }
-      } catch (error) {
-        console.warn(`Error parsing date ${dateStr}:`, error);
+      } catch {
         return dateStr;
       }
       const today = new Date();
@@ -1423,7 +1287,6 @@ export default {
         if (isSelected) {
           this.conversations = [];
         }
-        console.log(`Fetching conversations for folder ${folderId}`);
         if (!this.currentUser || !getUserId(this.currentUser)) {
           this.errorMessage = 'User data is missing';
           return;
@@ -1431,7 +1294,6 @@ export default {
         const folderData = await chatHistoryService.getFolder(folderId, {
           params: { limit: 100, offset: 0 }
         });
-        console.log(`Fetched folder data:`, folderData);
         if (folderData && folderData.conversations) {
           const convs = folderData.conversations.map((conv) => ({
             ...conv,
@@ -1440,27 +1302,20 @@ export default {
             preview: this.generatePreview(conv),
             messageCount: conv.messageCount || 0
           }));
-          console.log(`Total conversations fetched for folder ${folderId}: ${convs.length}`);
           const nonArchivedConvs = convs.filter((conv) => conv.isArchived !== true);
-          console.log(`Non-archived conversations for folder ${folderId}: ${nonArchivedConvs.length}`);
           if (isSelected) {
             this.conversations = convs;
             this.forceDisplayConversations();
           }
           this.folderCounts[folderId] = nonArchivedConvs.length;
-          console.log(
-            `Loaded ${nonArchivedConvs.length} non-archived conversations for folder ${folderId}, updated folderCounts[${folderId}] = ${nonArchivedConvs.length}`
-          );
           await this.$store.dispatch('chatHistory/setFolderChats', {
             folderId,
             chats: convs.map((conv) => conv._key)
           });
         } else {
-          console.log(`No conversations found for folder ${folderId}`);
           this.folderCounts[folderId] = 0;
         }
       } catch (error) {
-        console.error(`Error fetching chats for folder ${folderId}:`, error);
         this.errorMessage =
           this.safeT('sidebar.errorLoadingFolder', 'Failed to load folder: ') + (error.message || 'Unknown error');
         notificationService.error(this.errorMessage);
@@ -1482,35 +1337,9 @@ export default {
 
 .search-container {
   display: flex;
-  margin-bottom: 15px;
-  padding: 5px;
+  margin-bottom: var(--space-md);
+  padding: var(--space-xs);
   width: 100%;
-}
-
-.search-box {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid var(--border-input, #ddd);
-  border-radius: 4px 0 0 4px;
-  font-size: 0.9rem;
-  background-color: var(--bg-input, #fff);
-  color: var(--text-primary, #333);
-}
-
-.search-btn {
-  background: var(--accent-color, #4e97d1);
-  color: white;
-  border: none;
-  border-radius: 0 4px 4px 0;
-  padding: 0 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.search-btn:hover {
-  background: var(--accent-hover, #3a7da0);
 }
 
 .chat-folders {
@@ -1519,71 +1348,55 @@ export default {
   height: 100%;
   overflow: hidden;
   background-color: var(--bg-sidebar);
-  color: var(--text-primary);
+  color: var(--fg);
 }
 
 .folders-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-light);
+  padding: var(--space-md) var(--space-md);
+  border-bottom: 1px solid var(--border);
 }
 
 .folders-header h3 {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-[data-theme='dark'] .folders-header h3,
-html[data-theme='dark'] .folders-header h3 {
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-
 .add-folder-btn {
-  background: none;
-  border: none;
-  color: var(--accent-color);
-  cursor: pointer;
-  font-size: 1rem;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-
-.add-folder-btn:hover {
-  background: rgba(78, 151, 209, 0.1);
 }
 
 .folders-list {
   overflow-y: auto;
   flex-shrink: 0;
-  padding: 8px 0;
+  padding: var(--space-sm) 0;
 }
 
 .folder-item {
   display: flex;
   align-items: center;
-  padding: 10px 16px;
+  padding: var(--space-sm) var(--space-md);
   cursor: pointer;
   transition: background-color 0.2s;
-  color: var(--text-primary);
+  color: var(--fg);
 }
 
 .folder-item:hover {
-  background-color: var(--bg-tertiary);
+  background-color: var(--bg);
 }
 
 .folder-item-active {
-  background-color: var(--bg-secondary);
+  background-color: var(--accent-muted);
 }
 
 .folder-icon {
-  margin-right: 12px;
-  color: var(--accent-color);
+  margin-right: var(--space-md);
+  color: var(--accent);
 }
 
 .folder-details {
@@ -1592,17 +1405,17 @@ html[data-theme='dark'] .folders-header h3 {
 
 .folder-name {
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--fg);
 }
 
 .folder-count {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
+  font-size: var(--text-base);
+  color: var(--muted);
 }
 
 .folder-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   opacity: 0;
   transition: opacity 0.2s;
 }
@@ -1611,72 +1424,38 @@ html[data-theme='dark'] .folders-header h3 {
   opacity: 1;
 }
 
-.edit-btn,
-.delete-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-secondary);
-  padding: 4px;
-  border-radius: 4px;
-}
-
-.edit-btn:hover {
-  color: var(--accent-color);
-  background: rgba(78, 151, 209, 0.1);
-}
-
-.delete-btn:hover {
-  color: #e53935;
-  background: rgba(229, 57, 53, 0.1);
-}
-
 .folder-chats {
-  padding: 12px 16px;
-  border-top: 1_2_1px solid var(--border-light);
+  padding: var(--space-md) var(--space-md);
+  border-top: 1px solid var(--border-light);
   overflow-y: auto;
   flex-grow: 1;
   background-color: var(--bg-sidebar);
 }
 
 .folder-chats h3 {
-  margin: 0 0 12px 0;
-  font-size: 1.1rem;
+  margin: 0 0 var(--space-md) 0;
+  font-size: var(--text-lg);
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--fg);
 }
 
 .chats-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .chat-item {
   display: flex;
-  padding: 12px;
-  border-radius: 8px;
-  background-color: var(--bg-card);
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-  transition:
-    transform 0.2s,
-    box-shadow 0.2s;
-  color: var(--text-primary);
   position: relative;
   width: calc(100% - 10px);
   max-width: 412px;
-  margin-bottom: 8px;
-}
-
-.chat-item:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  margin-bottom: var(--space-sm);
 }
 
 .chat-icon {
-  margin-right: 12px;
-  color: var(--accent-color);
+  margin-right: var(--space-md);
+  color: var(--accent);
   padding-top: 2px;
   flex-shrink: 0;
 }
@@ -1693,42 +1472,42 @@ html[data-theme='dark'] .folders-header h3 {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
 }
 
 .chat-title {
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: calc(100% - 100px);
-  font-size: 1.05rem;
+  font-size: var(--text-lg);
   cursor: pointer;
 }
 
 .chat-title:hover {
   text-decoration: underline;
-  color: var(--accent-color);
+  color: var(--accent);
 }
 
 .chat-actions-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   flex-shrink: 0;
 }
 
 .chat-message-count {
-  font-size: 0.8rem;
-  color: var(--text-tertiary);
-  margin-bottom: 4px;
+  font-size: var(--text-base);
+  color: var(--muted-soft);
+  margin-bottom: var(--space-xs);
 }
 
 .chat-preview {
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
+  font-size: var(--text-base);
+  color: var(--muted);
+  margin-bottom: var(--space-sm);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1738,51 +1517,51 @@ html[data-theme='dark'] .folders-header h3 {
 .chat-footer {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 0.75rem;
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
 }
 
 .chat-category {
   display: inline-block;
-  padding: 2px 6px;
-  background-color: rgba(78, 151, 209, 0.1);
-  border-radius: 4px;
+  padding: 2px var(--space-sm);
+  background-color: var(--accent-muted);
+  border-radius: var(--radius-sm);
   font-weight: 500;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   max-width: fit-content;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-xs);
 }
 
 .chat-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 4px;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-xs);
 }
 
 .chat-tag {
   display: inline-block;
-  padding: 2px 6px;
-  background-color: rgba(78, 151, 209, 0.1);
-  border-radius: 4px;
+  padding: 2px var(--space-sm);
+  background-color: var(--accent-muted);
+  border-radius: var(--radius-sm);
   font-weight: 500;
-  font-size: 0.8rem;
-  color: var(--text-primary);
+  font-size: var(--text-base);
+  color: var(--fg);
 }
 
 .chat-dates {
   display: flex;
   justify-content: space-between;
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  color: var(--muted-soft);
 }
 
 .archive-checkbox {
   display: flex;
   flex-direction: column;
   align-items: center;
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  color: var(--muted-soft);
   cursor: pointer;
 }
 
@@ -1791,25 +1570,8 @@ html[data-theme='dark'] .folders-header h3 {
 }
 
 .archive-label {
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   text-align: center;
-}
-
-.action-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-secondary);
-  padding: 4px;
-  border-radius: 4px;
-  transition:
-    background-color 0.2s,
-    color 0.2s;
-}
-
-.action-btn:hover {
-  color: var(--accent-color);
-  background: rgba(78, 151, 209, 0.1);
 }
 
 .empty-folder {
@@ -1817,232 +1579,108 @@ html[data-theme='dark'] .folders-header h3 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px 16px;
-  color: var(--text-tertiary);
+  padding: var(--space-xl) var(--space-md);
+  color: var(--muted-soft);
   text-align: center;
 }
 
-.loading-state,
-.error-state,
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 32px 16px;
-  color: var(--text-tertiary);
-  text-align: center;
+.animate-spin {
+  animation: spin 1s linear infinite;
 }
 
-.loading-state i,
-.error-state i {
-  font-size: 1.5rem;
-  margin-bottom: 8px;
-  color: var(--accent-color);
-}
-
-.error-state i {
-  color: #e53935;
-}
-
-.retry-btn {
-  margin-top: 8px;
-  padding: 6px 12px;
-  background-color: var(--bg-button-secondary);
-  color: var(--text-button-secondary);
-  border: 1px solid var(--border-light);
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.retry-btn:hover {
-  background-color: var(--bg-tertiary);
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.form-group input,
-.form-group select {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--border-input);
-  border-radius: 4px;
-  font-size: 1rem;
-  background-color: var(--bg-input);
-  color: var(--text-primary);
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .warning-text {
-  color: #e53935;
-  font-size: 0.9rem;
-  margin-top: 8px;
-}
-
-.cancel-btn,
-.primary-btn,
-.danger-btn {
-  padding: 8px 16px;
-  border-radius: 4px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.cancel-btn:hover {
-  background-color: var(--bg-tertiary);
-}
-
-.primary-btn {
-  background-color: var(--bg-button-primary);
-  border: none;
-  color: var(--text-button-primary);
-}
-
-.primary-btn:hover {
-  background-color: var(--accent-hover);
-}
-
-.primary-btn:disabled {
-  background-color: var(--bg-button-secondary);
-  color: var(--text-tertiary);
-  cursor: not-allowed;
-}
-
-.danger-btn {
-  background-color: #e53935;
-  border: none;
-  color: white;
-}
-
-.danger-btn:hover {
-  background-color: #c62828;
+  color: var(--danger);
+  font-size: var(--text-base);
+  margin-top: var(--space-sm);
 }
 
 /* Context menu base styles */
 .context-menu {
-  background-color: var(--bg-card); /* Light background (e.g., white) */
-  border: 1px solid var(--border-light);
-  border-radius: 4px;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-md);
 }
 
 /* Explicit light mode class */
 .context-menu-light {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-light);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
 }
 
 /* Explicit dark mode class */
 .context-menu-dark {
-  background-color: #333; /* Dark background */
-  border: 1px solid rgba(255, 255, 255, 0.2); /* Light border */
+  background-color: var(--surface);
+  border: 1px solid var(--border);
 }
 
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   width: 100%;
   text-align: left;
-  padding: 8px 12px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  color: var(--text-primary); /* Dark text in light mode */
 }
 
-.menu-item:hover {
-  background-color: var(--bg-tertiary); /* Light hover effect */
-}
-
-.menu-item i {
+.menu-item i,
+.menu-item svg {
   width: 16px;
-  color: var(--text-secondary); /* Lighter icons in light mode */
+  color: var(--muted); /* Lighter icons in light mode */
 }
 
 /* Red text for delete option */
 .text-danger {
-  color: #e53935 !important; /* Ensure red in both modes */
+  color: var(--danger);
 }
 
 /* Light mode specific menu item styles */
 .context-menu-light .menu-item {
-  color: var(--text-primary);
+  color: var(--fg);
 }
 
 .context-menu-light .menu-item:hover {
-  background-color: var(--bg-tertiary);
+  background-color: var(--bg);
 }
 
-.context-menu-light .menu-item i {
-  color: var(--text-secondary);
+.context-menu-light .menu-item i,
+.context-menu-light .menu-item svg {
+  color: var(--muted);
 }
 
 /* Dark mode specific menu item styles */
 .context-menu-dark .menu-item {
-  color: #ffffff; /* Light text */
+  color: var(--fg);
 }
 
 .context-menu-dark .menu-item:hover {
-  background-color: #444; /* Darker hover effect */
+  background-color: var(--bg);
 }
 
-.context-menu-dark .menu-item i {
-  color: rgba(255, 255, 255, 0.7); /* Light icons */
-}
-
-/* Fallback for global theme attribute */
-[data-theme='dark'] .context-menu,
-html[data-theme='dark'] .context-menu {
-  background-color: #333;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-[data-theme='dark'] .menu-item,
-html[data-theme='dark'] .menu-item {
-  color: #ffffff;
-}
-
-[data-theme='dark'] .menu-item:hover,
-html[data-theme='dark'] .menu-item:hover {
-  background-color: #444;
-}
-
-[data-theme='dark'] .menu-item i,
-html[data-theme='dark'] .menu-item i {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-/* Ensure red text in dark mode */
-[data-theme='dark'] .menu-item.text-danger,
-html[data-theme='dark'] .menu-item.text-danger {
-  color: #e53935 !important;
+.context-menu-dark .menu-item i,
+.context-menu-dark .menu-item svg {
+  color: var(--muted);
 }
 
 /* Debug information styling */
 .debug-info {
-  background-color: rgba(0, 0, 0, 0.05);
-  padding: 8px;
-  margin-bottom: 12px;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 12px;
-  color: #333;
+  background-color: var(--bg);
+  padding: var(--space-sm);
+  margin-bottom: var(--space-md);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--fg);
 }
 
 [data-theme='dark'] .debug-info {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: #ddd;
+  background-color: var(--muted-soft);
+  color: var(--border-light);
 }
 
 .debug-info p {
@@ -2051,80 +1689,49 @@ html[data-theme='dark'] .menu-item.text-danger {
 }
 
 .debug-chat {
-  padding: 5px;
-  margin: 5px 0;
-  border-bottom: 1px solid #eee;
+  padding: var(--space-xs);
+  margin: var(--space-xs) 0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 [data-theme='dark'] .debug-chat {
-  border-color: #444;
+  border-color: var(--fg);
 }
 
 /* Star and archive badges */
 .starred-badge,
 .archived-badge {
   display: inline-block;
-  margin-top: 8px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  margin-top: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 
 .starred-badge {
-  background-color: rgba(245, 166, 35, 0.1);
-  color: #f5a623;
+  background-color: var(--warning-bg);
+  color: var(--warning);
 }
 
 .archived-badge {
-  background-color: rgba(96, 125, 139, 0.1);
-  color: #607d8b;
-}
-
-/* Empty state icons */
-.empty-state-icon {
-  font-size: 3rem;
-  margin-top: 16px;
-  color: var(--text-tertiary);
-  opacity: 0.5;
+  background-color: var(--info-bg);
+  color: var(--muted);
 }
 
 /* Star button with outline when not starred */
 .star-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-secondary);
-  padding: 4px;
-  border-radius: 4px;
-  transition: color 0.2s;
 }
 
-.star-btn:hover {
-  color: var(--accent-color);
+.star-btn svg {
+  color: var(--warning);
 }
 
-.star-btn .fa-star {
-  color: #f5a623;
-}
-
-.star-btn .fa-star-o {
-  color: #8e8e8e !important;
-}
-
-/* Tab titles and section headings in dark mode */
-[data-theme='dark'] .folder-chats h3,
-html[data-theme='dark'] .folder-chats h3 {
-  color: #ffffff !important;
-}
-
-/* This targets the "All Chats", "Starred", and "Archived" headings specifically */
-[data-theme='dark'] .folder-chats > h3,
-html[data-theme='dark'] .folder-chats > h3 {
-  color: #ffffff !important;
+.star-btn svg[fill='none'] {
+  color: var(--muted-soft);
 }
 
 .move-chat-dialog {
-  z-index: 10000 !important;
+  z-index: 10000;
 }
 </style>

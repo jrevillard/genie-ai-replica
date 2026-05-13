@@ -702,6 +702,8 @@ export default {
     weatherLocationLoading: 'Загрузка местоположения...',
     weatherErrorDefault: 'Не удалось получить данные о погоде.',
     weatherGeolocationUnsupported: 'Геолокация не поддерживается вашим браузером.',
+    collapse: 'Свернуть боковую панель',
+    expand: 'Развернуть боковую панель',
     weatherRefresh: 'Обновить погоду',
     weatherConditions: {
       clear: 'Ясно',
@@ -1408,7 +1410,8 @@ export default {
     exportFilenamePlaceholder: 'Введите имя файла',
     exportButton: 'Экспортировать',
     exportSuccess: 'Чат успешно экспортирован',
-    exportError: 'Не удалось экспортировать чат. Пожалуйста, попробуйте снова.'
+    exportError: 'Не удалось экспортировать чат. Пожалуйста, попробуйте снова.',
+    removeItem: 'Удалить'
   },
   quickhelp: {
     // Labels (Short for UI)

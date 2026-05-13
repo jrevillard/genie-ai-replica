@@ -99,6 +99,9 @@ arango_data/
 craft_mlt_*.zip
 english_g2.zip
 
+# Docker Compose local overrides (dev only)
+docker-compose.override.yml
+
 # Claude Code settings
 .claude/settings.local.json
 

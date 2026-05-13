@@ -6,18 +6,18 @@
       <!-- Period selector -->
       <div class="period-selector">
         <label>{{ $t('analytics.period') }}:</label>
-        <select v-model="selectedPeriod" @change="loadAnalytics">
+        <DsSelect v-model="selectedPeriod" @change="loadAnalytics">
           <option value="daily">{{ $t('analytics.periods.daily') }}</option>
           <option value="weekly">{{ $t('analytics.periods.weekly') }}</option>
           <option value="monthly">{{ $t('analytics.periods.monthly') }}</option>
           <option value="all-time">
             {{ $t('analytics.periods.allTime') }}
           </option>
-        </select>
+        </DsSelect>
 
         <!-- Date picker (hidden for all-time) -->
         <div v-if="selectedPeriod !== 'all-time'" class="date-picker">
-          <input
+          <DsInput
             v-model="selectedDate"
             type="date"
             :max="todayStr"
@@ -29,24 +29,23 @@
     </div>
 
     <!-- Loading state -->
-    <div v-if="isLoading" class="loading-container">
-      <div class="spinner"></div>
+    <DsSpinner v-if="isLoading" overlay>
       <p>{{ $t('analytics.status.loading') }}</p>
-    </div>
+    </DsSpinner>
 
-    <!-- Error state -->
-    <div v-else-if="error" class="error-container">
-      <p class="error-message">{{ error }}</p>
-      <button class="retry-button" @click="loadAnalytics">
-        {{ $t('analytics.retry') }}
-      </button>
-    </div>
+    <DsStateDisplay v-else-if="error" type="error" :message="error">
+      <template #action>
+        <DsButton variant="primary" @click="loadAnalytics">
+          {{ $t('analytics.retry') }}
+        </DsButton>
+      </template>
+    </DsStateDisplay>
 
     <!-- Dashboard content -->
     <div v-else class="dashboard-content">
       <!-- Key metrics summary -->
       <div class="metrics-summary">
-        <div class="metric-card">
+        <DsCard variant="default" padding="md" radius="lg">
           <h3>
             {{ $t('analytics.metrics.totalQueries') }}
           </h3>
@@ -56,9 +55,9 @@
           <div v-if="comparison.totalQueries" class="trend" :class="getTrendClass(comparison.totalQueries)">
             {{ formatTrend(comparison.totalQueries) }}
           </div>
-        </div>
+        </DsCard>
 
-        <div class="metric-card">
+        <DsCard variant="default" padding="md" radius="lg">
           <h3>{{ $t('analytics.metrics.uniqueUsers') }}</h3>
           <div class="metric-value">
             {{ formatValue(analytics.uniqueUsers) }}
@@ -66,9 +65,9 @@
           <div v-if="comparison.uniqueUsers" class="trend" :class="getTrendClass(comparison.uniqueUsers)">
             {{ formatTrend(comparison.uniqueUsers) }}
           </div>
-        </div>
+        </DsCard>
 
-        <div class="metric-card">
+        <DsCard variant="default" padding="md" radius="lg">
           <h3>{{ $t('analytics.metrics.avgResponseTime') }}</h3>
           <div class="metric-value">
             {{ formatValue(analytics.averageResponseTime, 'time') }}
@@ -80,9 +79,9 @@
           >
             {{ formatTrend(comparison.averageResponseTime, true) }}
           </div>
-        </div>
+        </DsCard>
 
-        <div class="metric-card">
+        <DsCard variant="default" padding="md" radius="lg">
           <h3>{{ $t('analytics.metrics.satisfaction') }}</h3>
           <div class="metric-value">
             {{ formatValue(analytics.satisfactionRate, 'percent') }}
@@ -90,11 +89,17 @@
           <div v-if="comparison.satisfactionRate" class="trend" :class="getTrendClass(comparison.satisfactionRate)">
             {{ formatTrend(comparison.satisfactionRate) }}
           </div>
-        </div>
+        </DsCard>
       </div>
 
       <!-- Category distribution chart -->
-      <div :key="'cat-container-' + currentLocale" class="chart-container half-width">
+      <DsCard
+        :key="'cat-container-' + currentLocale"
+        variant="default"
+        padding="md"
+        radius="lg"
+        class="chart-wrapper half-width"
+      >
         <h3>{{ $t('charts.categoryDistribution') }}</h3>
         <CategoryDistributionChart
           v-if="analytics.queryDistribution && analytics.queryDistribution.length > 0"
@@ -105,10 +110,16 @@
         <div v-else class="no-data">
           {{ $t('analytics.status.noData') }}
         </div>
-      </div>
+      </DsCard>
 
       <!-- Top queries -->
-      <div :key="'top-queries-container-' + currentLocale" class="chart-container half-width">
+      <DsCard
+        :key="'top-queries-container-' + currentLocale"
+        variant="default"
+        padding="md"
+        radius="lg"
+        class="chart-wrapper half-width"
+      >
         <h3>{{ $t('charts.topQueries') }}</h3>
         <TopQueriesChart
           v-if="analytics.topQueries && analytics.topQueries.length > 0"
@@ -118,10 +129,16 @@
         <div v-else class="no-data">
           {{ $t('analytics.status.noData') }}
         </div>
-      </div>
+      </DsCard>
 
       <!-- Usage trend chart -->
-      <div :key="'usage-trend-container-' + currentLocale" class="chart-container full-width">
+      <DsCard
+        :key="'usage-trend-container-' + currentLocale"
+        variant="default"
+        padding="md"
+        radius="lg"
+        class="chart-wrapper full-width"
+      >
         <h3>{{ $t('charts.usageTrend') }}</h3>
         <UsageTrendChart
           v-if="timeSeriesData && timeSeriesData.length > 0"
@@ -132,23 +149,35 @@
         <div v-else class="no-data">
           {{ $t('analytics.status.noData') }}
         </div>
-      </div>
+      </DsCard>
     </div>
   </div>
 </template>
 
 <script>
 import analyticsService from '../services/analyticsService';
+import DsCard from './ds/Card.vue';
 import CategoryDistributionChart from './charts/CategoryDistributionChart.vue';
 import TopQueriesChart from './charts/TopQueriesChart.vue';
 import UsageTrendChart from './charts/UsageTrendChart.vue';
+import DsButton from './ds/Button.vue';
+import DsSpinner from './ds/Spinner.vue';
+import DsStateDisplay from './ds/StateDisplay.vue';
+import DsInput from './ds/Input.vue';
+import DsSelect from './ds/Select.vue';
 
 export default {
   name: 'AnalyticsDashboard',
   components: {
+    DsButton,
+    DsSpinner,
+    DsCard,
+    DsStateDisplay,
     CategoryDistributionChart,
     TopQueriesChart,
-    UsageTrendChart
+    UsageTrendChart,
+    DsInput,
+    DsSelect
   },
   data() {
     return {
@@ -192,7 +221,6 @@ export default {
     // Watch for language changes - force complete refresh
     '$i18n.locale': {
       handler() {
-        console.log('Language changed, reloading dashboard:', this.$i18n.locale);
         // Force full reload of data when language changes
         this.loadAnalytics();
       },
@@ -200,7 +228,6 @@ export default {
     }
   },
   created() {
-    console.log('Analytics dashboard created with locale:', this.$i18n.locale);
     this.loadAnalytics();
     // Initialize theme
     this.theme = localStorage.getItem('theme') || document.documentElement.getAttribute('data-theme') || 'light';
@@ -219,11 +246,9 @@ export default {
       let themeMode = localStorage.getItem('theme') || document.documentElement.getAttribute('data-theme') || 'light';
       // Validate themeMode
       if (!['light', 'dark', 'system'].includes(themeMode)) {
-        console.warn(`[AnalyticsDashboard] Invalid themeMode: ${themeMode}, defaulting to light`);
         themeMode = 'light';
       }
       this.theme = themeMode;
-      console.log(`[AnalyticsDashboard] Applied theme: ${themeMode}`);
       // Force re-render of charts
       this.$nextTick(() => {
         this.loadAnalytics();
@@ -247,8 +272,6 @@ export default {
           ...analyticsData,
           uniqueUsers
         };
-
-        console.log('Dashboard data loaded:', this.analytics);
 
         await this.loadComparisonData();
         await this.loadTimeSeriesData();
@@ -324,8 +347,6 @@ export default {
         // Make API request
         const url = `/api/analytics/timeseries/queries`;
 
-        console.log(`Fetching time series data from ${url} with params:`, params);
-
         const response = await fetch(
           `${url}?interval=${params.interval}&startDate=${params.startDate}&endDate=${params.endDate}`
         );
@@ -337,8 +358,6 @@ export default {
         const data = await response.json();
 
         if (Array.isArray(data) && data.length > 0) {
-          console.log('Time series data loaded successfully:', data);
-
           // Process the data to ensure it has the expected format
           this.timeSeriesData = data.map((item) => ({
             timestamp: item.timestamp || '',
@@ -347,7 +366,6 @@ export default {
             userCount: typeof item.userCount === 'number' ? item.userCount : 0
           }));
         } else {
-          console.warn('Empty or invalid time series data received:', data);
           this.timeSeriesData = [];
         }
       } catch (error) {
@@ -544,164 +562,93 @@ export default {
 
 <style scoped>
 .analytics-dashboard {
-  padding: 20px;
-  color: var(--text-primary, #333333);
+  position: relative;
+  padding: var(--space-lg);
+  color: var(--fg);
 }
 
 .dashboard-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-lg);
 }
 
 .dashboard-header h2 {
-  color: var(--text-primary, #333333);
+  color: var(--fg);
   font-weight: 600;
 }
 
 .period-selector {
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: var(--text-primary, #333333);
+  gap: var(--space-sm);
+  color: var(--fg);
   font-weight: 500;
 }
 
 .period-selector label {
-  color: var(--text-primary, #333333);
+  color: var(--fg);
   font-weight: 500;
-}
-
-.period-selector select,
-.period-selector input {
-  padding: 8px;
-  border: 1px solid var(--border-color, #ddd);
-  border-radius: 4px;
-  color: var(--text-primary, #333333);
-  background-color: var(--bg-input, #ffffff);
-  font-weight: 500;
-}
-
-.loading-container,
-.error-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  text-align: center;
-}
-
-.spinner {
-  border: 4px solid var(--border-light, rgba(0, 0, 0, 0.1));
-  border-radius: 50%;
-  border-top: 4px solid var(--accent-color, #4e97d1);
-  width: 40px;
-  height: 40px;
-  animation: spin 1s linear infinite;
-  margin-bottom: 20px;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.error-message {
-  color: #d32f2f;
-  margin-bottom: 20px;
-  font-weight: 500;
-}
-
-.retry-button {
-  padding: 8px 16px;
-  background-color: var(--accent-color, #4e97d1);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.retry-button:hover {
-  background-color: var(--accent-hover, #3a7da0);
 }
 
 .dashboard-content {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: var(--space-lg);
 }
 
 .metrics-summary {
   display: flex;
   justify-content: space-between;
   width: 100%;
-  gap: 15px;
-  margin-bottom: 20px;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
 }
 
-.metric-card {
+.metrics-summary .ds-card {
   flex: 1;
-  background-color: var(--bg-card, #ffffff);
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: var(--shadow-sm, 0 2px 4px rgba(0, 0, 0, 0.1));
   text-align: center;
-  border: 1px solid var(--border-light, #e5e7eb);
 }
 
-.metric-card h3 {
+.metrics-summary .ds-card h3 {
   margin-top: 0;
-  margin-bottom: 10px;
-  font-size: 14px;
-  color: var(--text-primary, #333333);
+  margin-bottom: var(--space-sm);
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
 .metric-value {
-  font-size: 24px;
+  font-size: var(--text-xl);
   font-weight: bold;
-  margin-bottom: 5px;
-  color: var(--text-primary, #333333);
+  margin-bottom: var(--space-xs);
 }
 
 .trend {
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
 .trend.positive {
-  color: #4caf50;
+  color: var(--success);
 }
 
 .trend.negative {
-  color: #f44336;
+  color: var(--danger);
 }
 
 .trend.neutral {
-  color: var(--text-tertiary, #767676);
+  color: var(--muted-soft);
 }
 
-.chart-container {
-  background-color: var(--bg-card, #ffffff);
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: var(--shadow-sm, 0 2px 4px rgba(0, 0, 0, 0.1));
-  margin-bottom: 20px;
-  border: 1px solid var(--border-light, #e5e7eb);
+.chart-wrapper {
+  margin-bottom: var(--space-lg);
 }
 
-.chart-container h3 {
+.chart-wrapper h3 {
   margin-top: 0;
-  margin-bottom: 15px;
-  font-size: 16px;
-  color: var(--text-primary, #333333);
+  margin-bottom: var(--space-md);
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
@@ -718,7 +665,7 @@ export default {
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: var(--text-muted, #6c757d);
+  color: var(--muted);
   font-style: italic;
   font-weight: 500;
 }
@@ -727,7 +674,7 @@ export default {
   .dashboard-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 10px;
+    gap: var(--space-sm);
   }
 
   .metrics-summary {

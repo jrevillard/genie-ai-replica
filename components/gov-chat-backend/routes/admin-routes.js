@@ -19,13 +19,15 @@ module.exports = (adminService, logsService) => {
     throw new Error('adminService is required with getSystemHealth');
   }
   logger.debug('[ADMIN-ROUTES] admin-routes initialized with adminService', {
-    methods: Object.getOwnPropertyNames(Object.getPrototypeOf(adminService)).filter(m => m !== 'constructor')
+    methods: Object.getOwnPropertyNames(Object.getPrototypeOf(adminService)).filter((m) => m !== 'constructor')
   });
 
   // Debug: Log securityScanService availability
   logger.debug('[ADMIN-ROUTES] Checking securityScanService:', {
     hasSecurityScanService: !!securityScanService,
-    methods: securityScanService ? Object.getOwnPropertyNames(Object.getPrototypeOf(securityScanService)).filter(m => m !== 'constructor') : 'undefined'
+    methods: securityScanService
+      ? Object.getOwnPropertyNames(Object.getPrototypeOf(securityScanService)).filter((m) => m !== 'constructor')
+      : 'undefined'
   });
 
   // Debug: Log request entry before middleware
@@ -43,7 +45,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/system-health:
+   * /api/admin/system-health:
    *   get:
    *     summary: Get system health metrics
    *     tags: [Admin]
@@ -75,7 +77,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/database/stats:
+   * /api/admin/database/stats:
    *   get:
    *     summary: Get database statistics
    *     tags: [Admin]
@@ -103,7 +105,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/logs:
+   * /api/admin/logs:
    *   get:
    *     summary: Get system logs
    *     tags: [Admin]
@@ -148,7 +150,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/logs/rollover:
+   * /api/admin/logs/rollover:
    *   post:
    *     summary: Trigger log rollover
    *     tags: [Admin]
@@ -176,7 +178,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/user-stats:
+   * /api/admin/user-stats:
    *   get:
    *     summary: Get user statistics
    *     tags: [Admin]
@@ -205,7 +207,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/security-metrics:
+   * /api/admin/security-metrics:
    *   get:
    *     summary: Get security metrics
    *     tags: [Admin]
@@ -229,7 +231,7 @@ module.exports = (adminService, logsService) => {
       const metrics = {
         failedLoginAttempts: lastScan.failedLoginDetails?.length || 0,
         suspiciousActivities: lastScan.suspiciousDetails?.length || 0,
-        lastSecurityScan: lastScan.scanTime || "Never",
+        lastSecurityScan: lastScan.scanTime || 'Never',
         vulnerabilities: lastScan.vulnerabilities || { critical: 0, medium: 0, low: 0 }
       };
 
@@ -246,7 +248,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/security-scan:
+   * /api/admin/security-scan:
    *   post:
    *     summary: Run security scan
    *     tags: [Admin]
@@ -280,7 +282,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/security/last-scan:
+   * /api/admin/security/last-scan:
    *   get:
    *     summary: Retrieve the last security scan details
    *     tags: [Admin]
@@ -313,7 +315,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/diagnostics:
+   * /api/admin/diagnostics:
    *   post:
    *     summary: Run system diagnostics
    *     tags: [Admin]
@@ -341,7 +343,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/logs/summary:
+   * /api/admin/logs/summary:
    *   get:
    *     summary: Get logs summary by type and service
    *     tags: [Admin]
@@ -381,7 +383,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/logs/search:
+   * /api/admin/logs/search:
    *   get:
    *     summary: Search logs with filtering
    *     tags: [Admin]
@@ -442,7 +444,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/logs/debug-yesterday:
+   * /api/admin/logs/debug-yesterday:
    *   get:
    *     summary: Debug logs for yesterday to diagnose issues
    *     tags: [Admin]
@@ -470,7 +472,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/database-operations/backup:
+   * /api/admin/database-operations/backup:
    *   post:
    *     summary: Backup database
    *     tags: [Admin]
@@ -498,7 +500,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/database-operations/optimize:
+   * /api/admin/database-operations/optimize:
    *   post:
    *     summary: Optimize database
    *     tags: [Admin]
@@ -526,7 +528,7 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/users/search:
+   * /api/admin/users/search:
    *   get:
    *     summary: Search users with filtering
    *     tags: [Admin]

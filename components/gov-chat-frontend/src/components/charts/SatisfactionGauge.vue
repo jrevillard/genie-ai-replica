@@ -1,39 +1,8 @@
 <!-- SatisfactionGauge.vue - Changed dark mode gauge center circle background to transparent to blend with UnifiedAnalytics.vue (#414141) -->
 <template>
   <div class="gauge-wrapper">
-    <!-- Debug panel for troubleshooting -->
-    <pre
-      v-if="debug"
-      style="font-size: 10px; max-height: 150px; overflow: auto; background: #333; color: #fff; padding: 5px"
-    >
-      Loading: {{ loading }}
-      Error: {{ error }}
-      Value: {{ actualSatisfactionValue }}
-      Chart Options: {{ chartOptions ? 'Set' : 'Not Set' }}
-      externalData: {{ externalData }}
-      Last Error: {{ lastError }}
-      ChartKey: {{ chartKey }}
-      HistoricalData: {{ computedHistoricalData }}
-      ChangePercentage: {{ computedChangeIndicator }}
-    </pre>
-
     <!-- Chart container -->
     <div ref="chart" class="chart-container">
-      <!-- Debug outline for chart container visibility -->
-      <div
-        v-if="debug"
-        style="
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          border: 2px dashed red;
-          z-index: 100;
-          pointer-events: none;
-        "
-      ></div>
-
       <!-- ApexCharts radial bar for satisfaction gauge -->
       <apexchart
         v-if="!loading && !error && chartOptions"
@@ -90,16 +59,11 @@
       <span>{{ translate('analytics.gauge.target', 'Target') }}: {{ actualTarget }}%</span>
     </div>
 
-    <!-- Loading overlay -->
-    <div v-if="loading" class="loading-overlay">
-      <div class="spinner"></div>
+    <DsSpinner v-if="loading" overlay>
       <span>{{ translate('analytics.status.loading', 'Loading...') }}</span>
-    </div>
+    </DsSpinner>
 
-    <!-- Error message -->
-    <div v-if="error" class="error-message">
-      {{ error }}
-    </div>
+    <DsStateDisplay v-if="error" type="error" :message="error" />
   </div>
 </template>
 
@@ -107,9 +71,15 @@
 import { nextTick } from 'vue';
 import analyticsService from '../../services/analyticsService';
 import { useChartTheme } from '../../composables/useChartTheme';
+import DsSpinner from '../ds/Spinner.vue';
+import DsStateDisplay from '../ds/StateDisplay.vue';
 
 export default {
   name: 'SatisfactionGauge',
+  components: {
+    DsSpinner,
+    DsStateDisplay
+  },
   props: {
     // Current satisfaction value provided by parent
     value: {
@@ -152,8 +122,8 @@ export default {
     }
   },
   setup() {
-    const { theme, getTheme } = useChartTheme();
-    return { theme, getTheme };
+    const { theme, getCssVarStrings } = useChartTheme();
+    return { theme, getCssVarStrings };
   },
   data() {
     return {
@@ -164,21 +134,17 @@ export default {
       error: null,
       chartOptions: null,
       internalTarget: 85, // Default target
-      debug: false, // Debug mode enabled
       chartKey: 0, // Force re-renders
-      lastError: null,
-      mountCount: 0
+      lastError: null
     };
   },
   computed: {
     // Compute the actual satisfaction value to display
     actualSatisfactionValue() {
       if (this.externalData && this.value !== null) {
-        console.log('[SatisfactionGauge] Using external value:', this.value);
         return this.value >= 0 ? this.value : 0;
       }
       const value = this.satisfactionValue;
-      console.log('[SatisfactionGauge] Using internal value:', value);
       return value !== null && value >= 0 ? value : 0;
     },
     // Compute the target value
@@ -223,24 +189,20 @@ export default {
             periodEnd: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString()
           }
         ];
-        console.log('[SatisfactionGauge] Using fallback historical data:', JSON.stringify(data));
       }
-      console.log('[SatisfactionGauge] Computed historical data:', JSON.stringify(data));
       return data;
     },
     // Compute change percentage for indicator
     computedChangeIndicator() {
       const change =
         this.externalData && this.changePercentage !== null ? this.changePercentage : this.internalChangeIndicator;
-      console.log('[SatisfactionGauge] Computed change percentage:', change);
       return change !== null ? change : 0; // Default to 0 if null
     }
   },
   watch: {
     // Watch for theme changes from the composable
     theme: {
-      handler(newTheme) {
-        console.log(`[SatisfactionGauge] Theme changed to ${newTheme}`);
+      handler(_newTheme) {
         this.injectGlobalStyleForTheme();
         this.chartOptions = null;
         nextTick(() => {
@@ -252,7 +214,6 @@ export default {
     // Watch for changes in value prop
     value: {
       handler(newValue) {
-        console.log(`[SatisfactionGauge] value prop changed to ${newValue}`);
         if (this.externalData && newValue !== null) {
           this.satisfactionValue = newValue;
           this.chartOptions = null;
@@ -266,27 +227,22 @@ export default {
     },
     // Watch for changes in historicalData prop
     historicalData: {
-      handler(newData) {
-        if (this.externalData && newData) {
-          console.log('[SatisfactionGauge] historicalData prop changed:', JSON.stringify(newData));
-        }
+      handler(_newData) {
+        // Data is handled via computed property
       },
       deep: true,
       immediate: true
     },
     // Watch for changes in changePercentage prop
     changePercentage: {
-      handler(newValue) {
-        if (this.externalData && newValue !== null) {
-          console.log('[SatisfactionGauge] changePercentage prop changed:', newValue);
-        }
+      handler(_newValue) {
+        // Data is handled via computed property
       },
       immediate: true
     },
     // Watch for changes in period
     period: {
-      handler(newValue) {
-        console.log(`[SatisfactionGauge] period changed to ${newValue}`);
+      handler(_newValue) {
         if (!this.externalData) {
           this.fetchData();
         }
@@ -294,8 +250,7 @@ export default {
     },
     // Watch for changes in selectedDate
     selectedDate: {
-      handler(newValue) {
-        console.log(`[SatisfactionGauge] selectedDate changed to ${newValue}`);
+      handler(_newValue) {
         if (!this.externalData) {
           this.fetchData();
         }
@@ -303,8 +258,7 @@ export default {
     },
     // Watch for changes in renderKey (locale)
     renderKey: {
-      handler(newValue) {
-        console.log(`[SatisfactionGauge] renderKey changed to ${newValue}`);
+      handler(_newValue) {
         this.chartOptions = null;
         this.$nextTick(() => {
           this.chartKey++;
@@ -317,20 +271,12 @@ export default {
     }
   },
   mounted() {
-    console.log(`[SatisfactionGauge] MOUNTED (${++this.mountCount}) externalData=${this.externalData}`);
-
     // Initial theme detection via composable (theme ref is already set by useChartTheme)
     this.injectGlobalStyleForTheme();
 
     if (!this.externalData) {
-      console.log('[SatisfactionGauge] Fetching data from API');
       this.fetchData();
     } else {
-      console.log('[SatisfactionGauge] Using external data:', {
-        value: this.value,
-        historicalData: this.historicalData,
-        changePercentage: this.changePercentage
-      });
       this.chartOptions = null;
       this.$nextTick(() => {
         this.chartKey++;
@@ -346,7 +292,6 @@ export default {
     if (injectedStyle) {
       document.head.removeChild(injectedStyle);
     }
-    console.log('[SatisfactionGauge] UNMOUNTED');
   },
   methods: {
     /**
@@ -366,7 +311,6 @@ export default {
     handleGlobalError(event) {
       if (event.message && event.message.includes('chart')) {
         this.lastError = event.message;
-        console.warn('[SatisfactionGauge] Chart error caught:', event.message);
         this.chartKey++;
       }
     },
@@ -376,33 +320,24 @@ export default {
      */
     async fetchData() {
       if (this.externalData) {
-        console.log('[SatisfactionGauge] Skipping fetchData due to externalData=true');
         return;
       }
-      console.log('[SatisfactionGauge] Starting fetchData()');
       this.loading = true;
       this.error = null;
 
       try {
-        console.log(
-          `[SatisfactionGauge] Calling analyticsService.getSatisfactionGauge(${this.period}, ${this.selectedDate})`
-        );
         const data = await analyticsService.getSatisfactionGauge(
           this.period,
           this.selectedDate,
           this.$i18n ? this.$i18n.locale : null
         );
 
-        console.log('[SatisfactionGauge] Satisfaction data received:', JSON.stringify(data));
-
         if (data && typeof data.currentValue === 'number') {
-          console.log(`[SatisfactionGauge] Setting satisfactionValue to ${data.currentValue}`);
           this.satisfactionValue = data.currentValue;
           this.internalChangeIndicator = data.changePercentage;
           this.internalHistoricalData = data.historicalData || [];
           this.internalTarget = data.target || 85;
         } else {
-          console.warn('[SatisfactionGauge] Invalid data received, setting defaults');
           this.satisfactionValue = 0;
           this.internalHistoricalData = [];
           this.internalChangeIndicator = null;
@@ -413,8 +348,7 @@ export default {
           this.chartKey++;
           this.initChart();
         });
-      } catch (error) {
-        console.error('[SatisfactionGauge] Error fetching data:', error);
+      } catch {
         this.error = this.translate('analytics.errors.loading', 'Failed to load satisfaction data');
         this.satisfactionValue = 0;
         this.internalHistoricalData = [];
@@ -434,35 +368,32 @@ export default {
      * Get gauge color based on value
      */
     getGaugeColor(value) {
-      if (value >= 90) return '#22C55E'; // Green
+      if (value >= 90) return '#22C55E'; // Green - matches var(--success)
       if (value >= 80) return '#84CC16'; // Light green
-      if (value >= 70) return '#F59E0B'; // Orange
-      return '#EF4444'; // Red
+      if (value >= 70) return '#F59E0B'; // Orange - matches var(--warning)
+      return '#EF4444'; // Red - matches var(--danger)
     },
 
     /**
      * Initialize chart with speedometer options
      */
     initChart() {
-      console.log(`[SatisfactionGauge] initChart called with value: ${this.actualSatisfactionValue}`);
-
       if (this.actualSatisfactionValue < 0) {
-        console.warn('[SatisfactionGauge] Cannot initialize chart - invalid value');
         return;
       }
 
       const isDarkMode = this.theme === 'dark';
 
-      const textColor = isDarkMode ? '#FFFFFF' : '#333333';
-      const backgroundColor = isDarkMode ? 'transparent' : '#FFFFFF'; // Transparent in dark mode to blend with UnifiedAnalytics.vue
-      const trackColor = isDarkMode ? '#666666' : '#E5E7EB';
+      const textColor = this.getCssVarStrings().textColor;
+      const backgroundColor = 'transparent';
+      const trackColor = isDarkMode ? 'var(--muted)' : 'var(--border)';
 
       const getGradientColors = (value) => {
         const colors = {
-          poor: '#EF4444',
-          low: '#F59E0B',
+          poor: '#EF4444', // var(--danger)
+          low: '#F59E0B', // var(--warning)
           medium: '#84CC16',
-          high: '#22C55E'
+          high: '#22C55E' // var(--success)
         };
 
         if (value < 60) return [colors.poor, colors.poor];
@@ -556,8 +487,6 @@ export default {
         }
       };
 
-      console.log('[SatisfactionGauge] Chart options initialized');
-
       this.$nextTick(() => {
         setTimeout(() => {
           this.forceTextColorUpdate();
@@ -577,66 +506,45 @@ export default {
 
       styleEl = document.createElement('style');
       styleEl.id = styleId;
-      if (this.theme === 'dark') {
-        styleEl.textContent = `
-          [data-theme="dark"] .apexcharts-text,
-          [data-theme="dark"] .apexcharts-datalabel-label,
-          [data-theme="dark"] .apexcharts-datalabel-value,
-          [data-theme="dark"] .apexcharts-radialbar-label text,
-          [data-theme="dark"] .apexcharts-radialbar text {
-            fill: #FFFFFF !important;
-          }
-        `;
-        console.log('[SatisfactionGauge] Injected dark mode style');
-      } else {
-        styleEl.textContent = `
-          [data-theme="light"] .apexcharts-text,
-          [data-theme="light"] .apexcharts-datalabel-label,
-          [data-theme="light"] .apexcharts-datalabel-value,
-          [data-theme="light"] .apexcharts-radialbar-label text,
-          [data-theme="light"] .apexcharts-radialbar text {
-            fill: #333333 !important;
-          }
-        `;
-        console.log('[SatisfactionGauge] Injected light mode style');
-      }
+      styleEl.textContent = `
+        .apexcharts-text,
+        .apexcharts-datalabel-label,
+        .apexcharts-datalabel-value,
+        .apexcharts-radialbar-label text,
+        .apexcharts-radialbar text {
+          fill: var(--fg) !important;
+        }
+      `;
 
       document.head.appendChild(styleEl);
     },
 
     /**
-     * Force ApexCharts text color in dark mode
+     * Force ApexCharts text color update
      */
     forceTextColorUpdate() {
-      console.log('[SatisfactionGauge] Attempting to force text color update');
-      const isDarkMode = this.theme === 'dark';
-
-      if (isDarkMode) {
-        const chartElement = this.$refs.chart;
-        if (!chartElement) {
-          console.warn('[SatisfactionGauge] Chart element not found');
-          return;
-        }
-
-        setTimeout(() => {
-          try {
-            const textElements = chartElement.querySelectorAll(
-              '.apexcharts-text, .apexcharts-datalabel-label, .apexcharts-datalabel-value'
-            );
-            console.log(`[SatisfactionGauge] Found ${textElements.length} text elements to update`);
-
-            textElements.forEach((el) => {
-              el.setAttribute('fill', '#FFFFFF');
-              const tspans = el.querySelectorAll('tspan');
-              tspans.forEach((tspan) => {
-                tspan.setAttribute('fill', '#FFFFFF');
-              });
-            });
-          } catch (error) {
-            console.error('[SatisfactionGauge] Error updating text colors:', error);
-          }
-        }, 300);
+      const chartElement = this.$refs.chart;
+      if (!chartElement) {
+        return;
       }
+
+      setTimeout(() => {
+        try {
+          const textElements = chartElement.querySelectorAll(
+            '.apexcharts-text, .apexcharts-datalabel-label, .apexcharts-datalabel-value'
+          );
+
+          textElements.forEach((el) => {
+            el.setAttribute('fill', 'var(--fg)');
+            const tspans = el.querySelectorAll('tspan');
+            tspans.forEach((tspan) => {
+              tspan.setAttribute('fill', 'var(--fg)');
+            });
+          });
+        } catch {
+          // Silently handle errors
+        }
+      }, 300);
     }
   }
 };
@@ -657,126 +565,84 @@ export default {
   width: 100%;
   height: 290px;
   background-color: transparent;
-  border-radius: 8px;
-}
-
-.loading-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-secondary, rgba(255, 255, 255, 0.8));
-  z-index: 1;
-}
-
-.spinner {
-  border: 3px solid rgba(0, 0, 0, 0.1);
-  border-radius: 50%;
-  border-top: 3px solid var(--accent-color, #4e97d1);
-  width: 30px;
-  height: 30px;
-  animation: spin 1s linear infinite;
-  margin-bottom: 10px;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.error-message {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-  color: var(--status-outage, #d32f2f);
+  border-radius: var(--radius-md);
 }
 
 /* Historical trends section */
 .historical-trends {
   width: 100%;
-  margin-top: 20px;
-  padding: 0 20px;
+  margin-top: var(--space-lg);
+  padding: 0 var(--space-lg);
 }
 
 .historical-trends h3 {
-  font-size: 16px;
-  margin-bottom: 10px;
-  color: var(--text-primary);
+  font-size: var(--text-md);
+  margin-bottom: var(--space-sm);
+  color: var(--fg);
 }
 
 .trend-item {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
   position: relative;
   min-height: 20px;
 }
 
 .label {
   width: 120px;
-  font-size: 14px;
-  color: var(--text-secondary);
+  font-size: var(--text-base);
+  color: var(--muted);
 }
 
 .value {
   width: 50px;
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 600;
-  color: var(--text-primary);
-  margin-right: 10px;
+  color: var(--fg);
+  margin-right: var(--space-sm);
 }
 
 .progress {
   height: 8px;
-  background: linear-gradient(to right, #f59e0b, #84cc16, #22c55e);
-  border-radius: 4px;
+  background: linear-gradient(to right, var(--warning), var(--accent), var(--success));
+  border-radius: var(--radius-sm);
   max-width: calc(100% - 180px);
 }
 
 /* Change indicator */
 .change-indicator {
-  margin-top: 15px;
-  font-size: 14px;
+  margin-top: var(--space-md);
+  font-size: var(--text-base);
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-xs);
 }
 
 .change-indicator.positive {
-  color: var(--status-success, #22c55e);
+  color: var(--success);
 }
 
 .change-indicator.negative {
-  color: var(--status-outage, #d32f2f);
+  color: var(--danger);
 }
 
 .change-arrow {
-  font-size: 16px;
+  font-size: var(--text-md);
   font-weight: bold;
 }
 
 .change-period {
-  color: var(--text-secondary);
-  font-size: 12px;
-  margin-left: 5px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  margin-left: var(--space-xs);
 }
 
 /* Target indicator */
 .target-indicator {
-  margin-top: 10px;
-  font-size: 14px;
-  color: var(--text-secondary);
+  margin-top: var(--space-sm);
+  font-size: var(--text-base);
+  color: var(--muted);
 }
 
 /* Position the custom gauge scale */
@@ -790,27 +656,12 @@ export default {
   z-index: 20;
 }
 
-/* Dark mode text fixes */
-:deep([data-theme='dark']) .apexcharts-text,
-:deep([data-theme='dark']) .apexcharts-datalabel-label,
-:deep([data-theme='dark']) .apexcharts-datalabel-value {
-  fill: white !important;
-}
-
-:deep([data-theme='dark']) text tspan {
-  fill: white !important;
-}
-
-/* Dark mode track color */
-:deep([data-theme='dark']) .apexcharts-radialbar .apexcharts-radialbar-track .apexcharts-radialbar-area {
-  stroke: #666666 !important;
-}
-
+/* Component-specific text styles (historical trends section) */
 [data-theme='dark'] .historical-trends h3,
 [data-theme='dark'] .label,
 [data-theme='dark'] .value {
-  color: white !important;
-  -webkit-text-fill-color: white !important;
-  text-shadow: 0 0 1px rgba(255, 255, 255, 0.5) !important;
+  color: var(--fg) !important;
+  -webkit-text-fill-color: var(--fg) !important;
+  text-shadow: none !important;
 }
 </style>

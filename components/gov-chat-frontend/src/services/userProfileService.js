@@ -26,9 +26,6 @@ class UserProfileService {
    */
   async updateProfile(profileData) {
     try {
-      console.log('Updating user profile');
-      console.log('Profile data:', profileData);
-
       // Check if there are any File objects in the profile data
       const hasFiles = this.checkForFiles(profileData);
 

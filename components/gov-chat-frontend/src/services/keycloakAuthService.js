@@ -189,8 +189,7 @@ function getAccessTokenClaims() {
   if (!token) return null;
   try {
     return jwtDecode(token);
-  } catch (error) {
-    console.warn('[KeycloakAuth] Failed to decode access token claims:', error.message);
+  } catch {
     return null;
   }
 }

@@ -66,7 +66,7 @@ const config = {
   security: {
     keycloakUrl: process.env.KEYCLOAK_URL,
     keycloakRealm: process.env.KC_REALM,
-    keycloakClientId: process.env.KC_CLIENT_ID,
+    keycloakClientId: process.env.KC_CLIENT_ID
   },
 
   //Controls whether or not the clamav service is used for uploaded documents

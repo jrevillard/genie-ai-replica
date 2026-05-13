@@ -1,44 +1,34 @@
 <!-- ServiceTreePanelComponent.vue with Android keyboard fix -->
 <template>
   <div ref="treePanel" class="service-tree-panel">
-    <h4>{{ $t("sidebar.governmentServices") }}</h4>
+    <h4>{{ $t('sidebar.governmentServices') }}</h4>
 
     <div ref="searchContainer" class="search-container">
-      <input
+      <DsInput
         v-model="searchQuery"
         class="search-box"
         type="text"
         :placeholder="$t('sidebar.searchPlaceholder')"
         @input="performSearch"
         @focus="handleInputFocus"
-        @blur="handleBlur"
+        @blur="handleInputBlur"
       />
-      <button
-        class="expand-collapse-btn"
-        :title="isAnyNodeExpanded ? 'Collapse All' : 'Expand All'"
-        @click="toggleAllNodes"
-      >
-        {{ isAnyNodeExpanded ? "−" : "+" }}
-      </button>
+      <DsButton variant="primary" :title="isAnyNodeExpanded ? 'Collapse All' : 'Expand All'" @click="toggleAllNodes">
+        {{ isAnyNodeExpanded ? '−' : '+' }}
+      </DsButton>
     </div>
 
     <div ref="treeListContainer" class="tree-list-container">
       <ul class="service-tree-list">
         <li v-for="node in nodes" :key="node.catKey">
           <div class="node-label" @click="toggleNode(node)">
-            <span
-              v-if="node.children && node.children.length > 0"
-              class="toggle-icon"
-            >
-              {{ node.expanded ? "▼" : "▶" }}
+            <span v-if="node.children && node.children.length > 0" class="toggle-icon">
+              {{ node.expanded ? '▼' : '▶' }}
             </span>
             <span class="node-name">{{ node.name }}</span>
           </div>
 
-          <ul
-            v-if="node.expanded && node.children && node.children.length > 0"
-            class="child-list"
-          >
+          <ul v-if="node.expanded && node.children && node.children.length > 0" class="child-list">
             <li
               v-for="(childName, cIndex) in node.children"
               :key="cIndex"
@@ -58,26 +48,32 @@
 </template>
 
 <script>
-import { eventBus } from "../eventBus.js";
-import serviceTreeService from "../services/serviceTreeService.js";
+import { eventBus } from '../eventBus.js';
+import serviceTreeService from '../services/serviceTreeService.js';
+import DsButton from './ds/Button.vue';
+import DsInput from './ds/Input.vue';
 
 export default {
-  name: "ServiceTreePanelComponent",
+  name: 'ServiceTreePanelComponent',
+  components: {
+    DsButton,
+    DsInput
+  },
 
   data() {
     return {
-      searchQuery: "",
+      searchQuery: '',
       selectedNodes: {},
       nodes: [],
-      currentLocale: "en",
-      isAndroid: false,
+      currentLocale: 'en',
+      isAndroid: false
     };
   },
 
   computed: {
     isAnyNodeExpanded() {
       return this.nodes.some((node) => node.expanded);
-    },
+    }
   },
 
   created() {
@@ -91,7 +87,6 @@ export default {
       this.$watch(
         () => this.$i18n.locale,
         (newLocale) => {
-          console.log("Locale changed to:", newLocale);
           this.currentLocale = newLocale;
           // Reload categories when locale changes
           this.loadCategories(newLocale);
@@ -107,63 +102,62 @@ export default {
   },
 
   mounted() {
-    console.log("ServiceTreePanel - mounted");
-    eventBus.$on("contextItemRemoved", this.handleContextItemRemoved);
+    eventBus.$on('contextItemRemoved', this.handleContextItemRemoved);
 
     // Add Android keyboard detection
     if (/Android/i.test(navigator.userAgent)) {
       const originalHeight = window.innerHeight;
 
       // Listen for resize events (keyboard opening/closing)
-      window.addEventListener("resize", () => {
+      window.addEventListener('resize', () => {
         // If keyboard is likely open (height decreased significantly)
         if (window.innerHeight < originalHeight * 0.75) {
           // Force sidebar open
-          const sideBar = document.querySelector(".side-bar");
+          const sideBar = document.querySelector('.side-bar');
           if (sideBar) {
-            sideBar.classList.add("side-bar-open");
-            sideBar.style.transform = "translateX(0)";
-            sideBar.style.display = "block";
-            sideBar.style.position = "fixed";
-            sideBar.style.top = "60px"; // Adjust based on your header height
-            sideBar.style.bottom = "0";
-            sideBar.style.zIndex = "9999";
+            sideBar.classList.add('side-bar-open');
+            sideBar.style.transform = 'translateX(0)';
+            sideBar.style.display = 'block';
+            sideBar.style.position = 'fixed';
+            sideBar.style.top = '60px'; // Adjust based on your header height
+            sideBar.style.bottom = '0';
+            sideBar.style.zIndex = '9999';
           }
 
           // Add fixed position to sidebar content
-          const sidebarContent = document.querySelector(".sidebar-content");
+          const sidebarContent = document.querySelector('.sidebar-content');
           if (sidebarContent) {
-            sidebarContent.style.display = "block";
-            sidebarContent.style.overflow = "auto";
-            sidebarContent.style.height = "auto";
-            sidebarContent.style.maxHeight = "70vh";
+            sidebarContent.style.display = 'block';
+            sidebarContent.style.overflow = 'auto';
+            sidebarContent.style.height = 'auto';
+            sidebarContent.style.maxHeight = '70vh';
           }
 
           // Hide any elements that might interfere
-          const weatherContainer = document.querySelector(".weather-container");
+          const weatherContainer = document.querySelector('.weather-container');
           if (weatherContainer) {
-            weatherContainer.style.display = "none";
+            weatherContainer.style.display = 'none';
           }
         } else {
           // Restore normal state
-          const sideBar = document.querySelector(".side-bar");
+          const sideBar = document.querySelector('.side-bar');
           if (sideBar) {
-            sideBar.style.position = "";
-            sideBar.style.top = "";
-            sideBar.style.bottom = "";
-            sideBar.style.zIndex = "";
+            sideBar.style.position = '';
+            sideBar.style.top = '';
+            sideBar.style.bottom = '';
+            sideBar.style.zIndex = '';
           }
 
-          const sidebarContent = document.querySelector(".sidebar-content");
+          const sidebarContent = document.querySelector('.sidebar-content');
           if (sidebarContent) {
-            sidebarContent.style.overflow = "";
-            sidebarContent.style.height = "";
-            sidebarContent.style.maxHeight = "";
+            sidebarContent.style.overflow = '';
+            sidebarContent.style.height = '';
+            sidebarContent.style.maxHeight = '';
           }
 
-          const weatherContainer = document.querySelector(".weather-container");
+          const weatherContainer = document.querySelector('.weather-container');
           if (weatherContainer) {
-            weatherContainer.style.display = "";
+            weatherContainer.style.display = '';
           }
         }
       });
@@ -171,7 +165,7 @@ export default {
   },
 
   beforeUnmount() {
-    eventBus.$off("contextItemRemoved", this.handleContextItemRemoved);
+    eventBus.$off('contextItemRemoved', this.handleContextItemRemoved);
   },
 
   methods: {
@@ -179,32 +173,20 @@ export default {
     async loadCategories(locale) {
       try {
         const categories = await serviceTreeService.getAllCategories(locale);
-        console.log("Raw API response:", categories);
 
         // Verify each category has the expected properties
         if (!categories || !Array.isArray(categories)) {
-          throw new Error("Invalid API response format");
+          throw new Error('Invalid API response format');
         }
 
-        // Check categories without using unused index variable
-        categories.forEach((cat) => {
-          if (!cat.name) {
-            console.warn(
-              `Category ${cat.catKey || "unknown"} is missing name property:`,
-              cat
-            );
-          }
-        });
-
-        // Process the API response - just add expanded property
+        // Process the API response - just add expanded property, filter null children
         this.nodes = categories.map((category) => ({
           ...category,
-          expanded: false,
+          children: (category.children || []).filter(Boolean),
+          expanded: false
         }));
-
-        console.log("Categories loaded:", this.nodes);
       } catch (error) {
-        console.error("Error loading categories:", error);
+        console.error('Error loading categories:', error);
       }
     },
 
@@ -213,23 +195,23 @@ export default {
       // Only apply on Android
       if (this.isAndroid) {
         // Force the sidebar content to remain visible
-        const sidebarContent = document.querySelector(".sidebar-content");
+        const sidebarContent = document.querySelector('.sidebar-content');
         if (sidebarContent) {
-          sidebarContent.style.position = "fixed";
-          sidebarContent.style.top = "60px";
-          sidebarContent.style.bottom = "0";
-          sidebarContent.style.left = "0";
-          sidebarContent.style.width = "85%";
-          sidebarContent.style.maxWidth = "320px";
-          sidebarContent.style.zIndex = "9999";
-          sidebarContent.style.backgroundColor = "var(--bg-sidebar, #222)";
-          sidebarContent.style.overflowY = "auto";
+          sidebarContent.style.position = 'fixed';
+          sidebarContent.style.top = '60px';
+          sidebarContent.style.bottom = '0';
+          sidebarContent.style.left = '0';
+          sidebarContent.style.width = '85%';
+          sidebarContent.style.maxWidth = '320px';
+          sidebarContent.style.zIndex = '9999';
+          sidebarContent.style.backgroundColor = 'var(--surface)';
+          sidebarContent.style.overflowY = 'auto';
         }
 
         // Show the weather container
-        const weatherContainer = document.querySelector(".weather-container");
+        const weatherContainer = document.querySelector('.weather-container');
         if (weatherContainer) {
-          weatherContainer.style.display = "none";
+          weatherContainer.style.display = 'none';
         }
       }
     },
@@ -240,23 +222,23 @@ export default {
       if (this.isAndroid) {
         setTimeout(() => {
           // Reset sidebar content position
-          const sidebarContent = document.querySelector(".sidebar-content");
+          const sidebarContent = document.querySelector('.sidebar-content');
           if (sidebarContent) {
-            sidebarContent.style.position = "";
-            sidebarContent.style.top = "";
-            sidebarContent.style.bottom = "";
-            sidebarContent.style.left = "";
-            sidebarContent.style.width = "";
-            sidebarContent.style.maxWidth = "";
-            sidebarContent.style.zIndex = "";
-            sidebarContent.style.backgroundColor = "";
-            sidebarContent.style.overflowY = "";
+            sidebarContent.style.position = '';
+            sidebarContent.style.top = '';
+            sidebarContent.style.bottom = '';
+            sidebarContent.style.left = '';
+            sidebarContent.style.width = '';
+            sidebarContent.style.maxWidth = '';
+            sidebarContent.style.zIndex = '';
+            sidebarContent.style.backgroundColor = '';
+            sidebarContent.style.overflowY = '';
           }
 
           // Show the weather container
-          const weatherContainer = document.querySelector(".weather-container");
+          const weatherContainer = document.querySelector('.weather-container');
           if (weatherContainer) {
-            weatherContainer.style.display = "";
+            weatherContainer.style.display = '';
           }
         }, 300);
       }
@@ -277,18 +259,13 @@ export default {
       if (!item || !item.category || !item.service) return;
 
       const catKey = item.category;
-      const children =
-        this.nodes.find((n) => n.catKey === catKey)?.children || [];
-      const childIndex = children.findIndex(
-        (child) => String(child) === String(item.service)
-      );
+      const children = this.nodes.find((n) => n.catKey === catKey)?.children || [];
+      const childIndex = children.findIndex((child) => String(child) === String(item.service));
 
       if (childIndex !== -1 && this.selectedNodes[catKey]) {
         // Filter out the removed index
         const nodeSelection = this.selectedNodes[catKey] || [];
-        this.selectedNodes[catKey] = nodeSelection.filter(
-          (idx) => idx !== childIndex
-        );
+        this.selectedNodes[catKey] = nodeSelection.filter((idx) => idx !== childIndex);
       }
     },
 
@@ -313,10 +290,10 @@ export default {
       }
 
       // Notify chat component
-      eventBus.$emit("treeNodeSelected", {
+      eventBus.$emit('treeNodeSelected', {
         category: catKey,
         service: childName,
-        selected: isSelected,
+        selected: isSelected
       });
     },
 
@@ -328,10 +305,10 @@ export default {
       const query = this.searchQuery.toLowerCase();
 
       this.nodes.forEach((node) => {
-        const categoryName = (node.name || "").toLowerCase();
-        const childNames = (node.children || []).map((name) =>
-          typeof name === "string" ? name.toLowerCase() : ""
-        );
+        const categoryName = (node.name || '').toLowerCase();
+        const childNames = (node.children || [])
+          .filter(Boolean)
+          .map((name) => (typeof name === 'string' ? name.toLowerCase() : ''));
 
         if (!query) {
           node.expanded = false;
@@ -341,8 +318,8 @@ export default {
           node.expanded = matchesCategory || matchesChild;
         }
       });
-    },
-  },
+    }
+  }
 };
 </script>
 
@@ -359,58 +336,27 @@ export default {
 }
 
 .service-tree-panel h4 {
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
   font-weight: 600;
-  color: #333;
-  font-size: 0.75rem; /* This can remain as it's a title */
+  color: var(--fg);
+  font-size: var(--text-sm); /* This can remain as it's a title */
   flex-shrink: 0;
 }
 
 .search-container {
   position: relative;
   display: flex;
-  margin-bottom: 8px;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
   flex-shrink: 0;
   position: sticky;
   top: 0;
   z-index: 20;
-  background-color: var(--bg-sidebar, #fff);
-  padding: 4px 0;
-}
-
-.search-box {
-  flex: 1;
-  padding: 6px;
-  font-size: inherit; /* CHANGED from 0.625rem */
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  outline: none;
-  padding-right: 30px;
+  background-color: var(--bg-sidebar);
+  padding: var(--space-xs) 0;
 }
 
 .expand-collapse-btn {
-  position: absolute;
-  right: 0;
-  height: 100%;
-  width: 28px;
-  background: #f5f5f5;
-  border: 1px solid #ccc;
-  border-left: none;
-  border-top-right-radius: 4px;
-  border-bottom-right-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
-  font-weight: bold;
-  color: #555;
-  padding: 0;
-  transition: background-color 0.2s;
-}
-
-.expand-collapse-btn:hover {
-  background-color: #e5e5e5;
 }
 
 .tree-list-container {
@@ -427,27 +373,27 @@ export default {
 }
 
 .service-tree-list li {
-  list-style: none !important;
+  list-style: none;
 }
 
 .node-label {
   display: flex;
   align-items: center;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
   transition: background-color 0.2s;
 }
 
 .node-label:hover {
-  background-color: #f0f0f0;
+  background-color: var(--bg);
 }
 
 .toggle-icon {
   width: 18px;
   text-align: center;
-  margin-right: 4px;
-  color: #666;
+  margin-right: var(--space-xs);
+  color: var(--muted);
   font-size: inherit; /* CHANGED from 0.625rem */
 }
 
@@ -457,78 +403,37 @@ export default {
 
 .node-name {
   flex: 1;
-  color: #333;
+  color: var(--fg);
   font-size: inherit; /* CHANGED from 0.625rem */
 }
 
 .child-list {
   margin-left: 18px;
-  border-left: 1px dashed #ccc;
-  padding-left: 8px;
+  border-left: 1px dashed var(--border-light);
+  padding-left: var(--space-sm);
   margin-top: 2px;
-  list-style-type: none !important;
+  list-style-type: none;
 }
 
 .child-list li {
-  list-style-type: none !important;
+  list-style-type: none;
 }
 
 .child-list li::before {
-  content: none !important;
+  content: none;
 }
 
 .selected .node-label {
-  background-color: rgba(78, 151, 209, 0.3);
-  border-left: 2px solid var(--accent-color);
+  background-color: var(--accent-muted);
+  border-left: 2px solid var(--accent);
 }
 
 ul {
-  list-style-type: none !important;
+  list-style-type: none;
 }
 
 li {
-  list-style-type: none !important;
-}
-
-/* Dark mode specific styles */
-[data-theme="dark"] .service-tree-panel h4 {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.75rem; /* Ensure consistency */
-}
-
-[data-theme="dark"] .search-container {
-  background-color: var(--bg-sidebar);
-}
-
-[data-theme="dark"] .search-box {
-  background-color: var(--bg-input) !important;
-  color: var(--text-primary) !important;
-  border: 1px solid var(--border-input) !important;
-}
-
-[data-theme="dark"] .expand-collapse-btn {
-  background-color: var(--bg-button-secondary) !important;
-  color: var(--text-button-secondary) !important;
-  border: 1px solid var(--border-light);
-  border-radius: 4px;
-}
-
-[data-theme="dark"] .node-name {
-  color: var(--text-primary);
-}
-
-/* Restored missing dark mode styles */
-[data-theme="dark"] .service-tree-list,
-[data-theme="dark"] .service-tree-list * {
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-[data-theme="dark"] .node-label {
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-[data-theme="dark"] .toggle-icon {
-  color: rgba(255, 255, 255, 0.6) !important;
+  list-style-type: none;
 }
 
 /* Mobile specific styles */
@@ -537,29 +442,12 @@ li {
     position: sticky;
     top: 0;
     z-index: 30;
-    padding: 8px 0;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    padding: var(--space-sm) 0;
+    box-shadow: var(--shadow-sm);
   }
 
   .tree-list-container {
     min-height: 200px;
   }
-}
-
-/* Additional dark mode title styles */
-[data-theme="dark"] h4,
-[data-theme="dark"] .service-tree-panel h4,
-[data-theme="dark"] .service-categories-title,
-[data-theme="dark"] .knowledge-areas-title {
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-
-[data-theme="dark"] .sidebar-section-title,
-[data-theme="dark"] .sidebar-header h3 {
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-
-[data-theme="dark"] .node-label:hover {
-  background-color: #4a4a4a !important;
 }
 </style>

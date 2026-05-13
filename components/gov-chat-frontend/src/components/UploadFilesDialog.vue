@@ -5,7 +5,12 @@
       <h2 class="dialog-title">
         {{ translate('uploadDialog.title', 'Upload Files') }}
       </h2>
-      <button class="dialog-close-btn" :aria-label="translate('details.close', 'Close')" @click="$emit('close')">
+      <DsButton
+        variant="ghost"
+        class="dialog-close-btn"
+        :aria-label="translate('details.close', 'Close')"
+        @click="$emit('close')"
+      >
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="24"
@@ -20,7 +25,7 @@
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />
         </svg>
-      </button>
+      </DsButton>
     </div>
 
     <div class="dialog-body">
@@ -53,9 +58,9 @@
           <li v-for="(file, index) in files" :key="index" class="file-item">
             <span class="file-name">{{ file.name }}</span>
             <span class="file-size">{{ formatFileSize(file.size) }}</span>
-            <button class="remove-file-btn" @click="removeFile(index)">
+            <DsButton variant="ghost" class="remove-file-btn" small @click="removeFile(index)">
               {{ translate('uploadDialog.remove', 'Remove') }}
-            </button>
+            </DsButton>
           </li>
         </ul>
       </div>
@@ -64,15 +69,15 @@
     </div>
 
     <div class="dialog-footer">
-      <button class="btn btn-outline" @click="$emit('close')">
+      <DsButton variant="secondary" @click="$emit('close')">
         {{ translate('common.cancel', 'Cancel') }}
-      </button>
-      <button class="btn btn-primary" :disabled="files.length === 0 || isUploading" @click="handleUpload">
+      </DsButton>
+      <DsButton variant="primary" :disabled="files.length === 0 || isUploading" @click="handleUpload">
         <span v-if="isUploading">{{ translate('uploadDialog.uploading', 'Uploading...') }}</span>
         <span v-else>
           {{ translate('uploadDialog.buttonUpload', `Upload {count} File(s)`).replace('{count}', files.length) }}
         </span>
-      </button>
+      </DsButton>
     </div>
   </div>
 </template>
@@ -81,9 +86,13 @@
 import documentFileService from '../services/documentFileService.js';
 import { eventBus } from '../eventBus.js';
 import { formatFileSize } from '../utils/fileUtils.js';
+import DsButton from './ds/Button.vue';
 
 export default {
   name: 'UploadFilesDialog',
+  components: {
+    DsButton
+  },
   emits: ['close', 'files-uploaded'],
   data() {
     return {
@@ -268,7 +277,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: var(--overlay-bg);
   z-index: 1050;
 }
 .dialog-container {
@@ -278,8 +287,8 @@ export default {
   transform: translate(-50%, -50%);
   width: 90%;
   max-width: 600px;
-  background-color: var(--bg-dialog, #fff);
-  border-radius: 8px;
+  background-color: var(--surface);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   z-index: 1051;
   display: flex;
@@ -290,86 +299,59 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border);
 }
 .dialog-title {
-  font-size: 1.25rem;
-  color: var(--text-primary, #333);
+  font-size: var(--text-lg);
+  color: var(--fg);
 }
 .dialog-close-btn {
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 .dialog-body {
-  padding: 1.5rem;
+  padding: var(--space-lg);
   overflow-y: auto;
 }
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid var(--border-color, #e2e8f0);
-}
-.btn {
-  padding: 0.6rem 1rem;
-  border-radius: 0.375rem;
-  border: none;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-primary {
-  background-color: #3b82f6;
-  color: white;
-}
-.btn-primary:hover {
-  background-color: #2563eb;
-}
-.btn-primary:disabled {
-  background-color: #9ca3af;
-  cursor: not-allowed;
-}
-.btn-outline {
-  background-color: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-}
-.btn-outline:hover {
-  background-color: var(--bg-section);
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border);
 }
 
 /* Component-specific styles */
 .drop-zone {
-  border: 2px dashed var(--border-color, #d1d5db);
-  border-radius: 8px;
-  padding: 2rem;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
   text-align: center;
-  color: var(--text-secondary, #6b7280);
+  color: var(--muted);
   cursor: pointer;
   transition:
     background-color 0.2s,
     border-color 0.2s;
 }
 .drop-zone.drag-over {
-  background-color: rgba(59, 130, 246, 0.05);
-  border-color: #3b82f6;
+  background-color: var(--accent-muted);
+  border-color: var(--accent);
 }
 .form-hint {
-  font-size: 0.8rem;
-  color: var(--text-tertiary);
-  margin-top: 0.5rem;
+  font-size: var(--text-base);
+  color: var(--muted-soft);
+  margin-top: var(--space-sm);
   text-align: center;
 }
 .file-list-container {
-  margin-top: 1rem;
+  margin-top: var(--space-md);
   max-height: 200px;
   overflow-y: auto;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 .file-list {
   list-style: none;
@@ -379,42 +361,42 @@ export default {
 .file-item {
   display: flex;
   align-items: center;
-  padding: 0.75rem;
-  border-bottom: 1px solid var(--border-color);
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border);
 }
 .file-item:last-child {
   border-bottom: none;
 }
 .file-name {
   flex-grow: 1;
-  font-size: 0.9rem;
-  color: var(--text-primary);
+  font-size: var(--text-base);
+  color: var(--fg);
   /* Added for better truncation */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-right: 1rem;
+  margin-right: var(--space-md);
 }
 .file-size {
-  font-size: 0.8rem;
-  color: var(--text-tertiary);
-  margin: 0 1rem;
+  font-size: var(--text-base);
+  color: var(--muted-soft);
+  margin: 0 var(--space-md);
   white-space: nowrap; /* Prevent size wrapping */
 }
 .remove-file-btn {
-  color: var(--danger, #ef4444);
+  color: var(--danger, var(--danger));
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.2rem; /* Add padding for easier clicking */
+  padding: var(--space-xs); /* Add padding for easier clicking */
 }
 
 /* --- ADDED: Error Message Style --- */
 .error-message {
-  margin-top: 1rem;
-  color: var(--danger, #ef4444);
-  background-color: rgba(239, 68, 68, 0.1);
-  padding: 0.75rem;
-  border-radius: 4px;
+  margin-top: var(--space-md);
+  color: var(--danger, var(--danger));
+  background-color: var(--danger-bg);
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
 }
 </style>

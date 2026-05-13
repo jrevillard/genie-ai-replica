@@ -1,123 +1,174 @@
-# UI Component Inventory - gov-chat-frontend
+# UI Component Inventory - GENIE.AI Frontend
 
-## Overview
-This Vue.js component library contains 38 components organized across multiple categories for a government service chatbot application with RAG capabilities, analytics, multilingual support, and comprehensive user management.
+**Project**: GENIE.AI Web Application
+**Framework**: Vue 3 (Options API)
+**Location**: `/components/gov-chat-frontend/src/`
+**Generated**: 2026-05-13
 
-## Component Categories
+---
 
-### 1. Layout Components
-| Component | Location | Props | Reusability | Description |
-|-----------|----------|-------|-------------|-------------|
-| **App.vue** | `/src/App.vue` | - | App-specific | Main application container with sidebar, navigation, and modal management |
-| **NavBarComponent** | `/src/components/NavBarComponent.vue` | `isSidebarOpen`, `config` | Medium | Top navigation with logo, menu toggle, language selector, and admin controls |
-| **SideBarComponent** | `/src/components/SideBarComponent.vue` | `isOpen` | Medium | Left sidebar with service tree tabs and chat history |
-| **RightSideBarComponent** | `/src/components/RightSideBarComponent.vue` | `current-chat-id`, `current-locale` | Medium | Right sidebar for related documents and contextual information |
-| **DashboardView** | `/src/views/DashboardView.vue` | - | Medium | Main dashboard container wrapping ChatBotComponent |
+## Summary
 
-### 2. Chat Interface Components
-| Component | Location | Props | Reusability | Description |
-|-----------|----------|-------|-------------|-------------|
-| **ChatBotComponent** | `/src/components/ChatBotComponent.vue` | Complex state | Low | Main chat interface with message display, input, feedback, and document management |
-| **ChatResponseFeedbackDialog** | `/src/components/ChatResponseFeedbackDialog.vue` | `visible`, `message` | Medium | Modal for collecting user feedback on chat responses |
-| **ChatFolders** | `/src/components/ChatFolders.vue` | `active-tab` | Medium | Advanced conversation management with folders, search, starring |
-| **ChatHistoryComponent** | `/src/components/ChatHistoryComponent.vue` | - | Low | Legacy component for displaying chat history |
+- **Total Vue Components**: 55
+- **Design System Components**: 12
+- **Application Components**: 43
 
-### 3. Service & Navigation Components
-| Component | Location | Props | Reusability | Description |
-|-----------|----------|-------|-------------|-------------|
-| **ServiceTreePanelComponent** | `/src/components/ServiceTreePanelComponent.vue` | - | Medium | Hierarchical government service tree with search and selection |
-| **ServiceCategoryPanelComponent** | `/src/components/ServiceCategoryPanelComponent.vue` | - | Medium | Simplified service category display with icons |
-| **WeatherPanel** | `/src/components/WeatherPanel.vue` | - | Medium | Weather widget in sidebar with location-based forecasts |
+---
 
-### 4. Analytics & Dashboard Components
-| Component | Location | Props | Reusability | Description |
-|-----------|----------|-------|-------------|-------------|
-| **UnifiedAnalytics** | `/src/components/UnifiedAnalytics.vue` | `useDynamicData` | Medium | Comprehensive analytics dashboard with charts and metrics |
-| **AdminDashboard** | `/src/components/AdminDashboard.vue` | - | Low | Admin panel for system monitoring, logs, and security |
-| **AnalyticsDashboard** | `/src/components/AnalyticsDashboard.vue` | - | Low | Simplified KPI dashboard for user engagement |
-| **UsageTrendChart** | `/src/components/charts/UsageTrendChart.vue` | `data`, `externalData`, `period` | High | Reusable chart for displaying usage trends over time |
-| **SatisfactionGauge** | `/src/components/charts/SatisfactionGauge.vue` | `value`, `target` | High | Visual gauge for displaying user satisfaction metrics |
-| **SatisfactionHeatmap** | `/src/components/charts/SatisfactionHeatmap.vue` | `data`, `period` | High | Heatmap visualization for satisfaction patterns |
-| **CategoryDistributionChart** | `/src/components/charts/CategoryDistributionChart.vue` | `data`, `render-key` | High | Pie/donut chart for service usage distribution |
-| **TopQueriesChart** | `/src/components/charts/TopQueriesChart.vue` | `data`, `externalData` | High | Bar chart for displaying most frequent user queries |
+## Design System Primitives (`src/components/ds/`)
 
-### 5. User Profile & Settings Components
-| Component | Location | Props | Reusability | Description |
-|-----------|----------|-------|-------------|-------------|
-| **UserProfileComponent** | `/src/components/UserProfileComponent.vue` | - | Medium | Multi-tab modal for comprehensive user data management |
-| **SettingsComponent** | `/src/components/SettingsComponent.vue` | - | Medium | Settings dialog for theme, language, and preferences |
-| **LanguageSelector** | `/src/components/LanguageSelector.vue` | - | High | Dropdown for switching application language |
+### Core Primitives
 
-### 6. Modal & Dialog Components
-| Component | Location | Props | Reusability | Description |
-|-----------|----------|-------|-------------|-------------|
-| **ModalDialog** | `/src/components/ModalDialog.vue` | `title`, `message`, `useTranslation` | High | Generic reusable modal with header, body, footer slots |
-| **ModalComponent** | `/src/components/ModalComponent.vue` | - | Medium | Alternative modal component |
-| **ConfirmDialog** | `/src/components/ConfirmDialog.vue` | `visible`, `title`, `message` | High | Specialized confirmation dialog |
-| **UploadFilesDialog** | `/src/components/UploadFilesDialog.vue` | - | Low | File upload modal |
-| **AddFromLinkDialog** | `/src/components/AddFromLinkDialog.vue` | - | Low | Add content via URL dialog |
-| **FileDetailsDialog** | `/src/components/FileDetailsDialog.vue` | - | Low | File details display modal |
+| Component | Description |
+|-----------|-------------|
+| `Button.vue` | Button primitive with variants (primary, secondary, ghost, danger) |
+| `Card.vue` | Container card with shadow and border radius |
+| `Input.vue` | Text input field with label, validation states, and error messaging |
+| `Modal.vue` | Modal dialog overlay with header, body, footer slots |
+| `Select.vue` | Dropdown select component with options |
+| `Combobox.vue` | Auto-complete text input with dropdown suggestions |
+| `Tabs.vue` | Tab navigation component with panels |
+| `Pill.vue` | Small badge/tag component for status or category display |
+| `Spinner.vue` | Loading spinner animation |
+| `StatusTag.vue` | Status indicator with color coding (success, warning, error, info) |
+| `StateDisplay.vue` | Empty state / error state / loading state display component |
+| `FormGroup.vue` | Form field wrapper with label and error messaging |
 
-### 7. Form & Input Components
-| Component | Location | Props | Reusability | Description |
-|-----------|----------|-------|-------------|-------------|
-| **FileUploadComponent** | `/src/components/FileUploadComponent.vue` | - | Medium | File upload component with progress indication |
-| **SearchableCountryDropdown** | `/src/components/SearchableCountryDropdown.vue` | - | High | Country selection dropdown with search functionality |
+---
 
-### 8. Utility & Display Components
-| Component | Location | Props | Reusability | Description |
-|-----------|----------|-------|-------------|-------------|
-| **SplashScreen** | `/src/components/SplashScreen.vue` | - | Low | Application loading screen |
-| **ContextMenu** | `/src/components/ContextMenu.vue` | - | Medium | Right-click context menu implementation |
-| **CallbackView** | `/src/views/CallbackView.vue` | - | Low | OIDC authentication callback handler |
+## Layout Components
 
-## Design System Patterns
+| Component | Description |
+|-----------|-------------|
+| `App.vue` | Root application component with router-view and global providers |
+| `NavBarComponent.vue` | Top navigation bar with user menu, language selector, logout |
+| `SideBarComponent.vue` | Left sidebar with conversation history and navigation |
+| `SplashScreen.vue` | Initial loading screen with logo and progress indicator |
 
-### 1. Styling Approach
-- **Scoped CSS**: All components use scoped styles
-- **CSS Variables**: Theme system using CSS variables
-- **Dark/Light Mode**: Comprehensive dark mode support
-- **Responsive Design**: Mobile-first approach
+---
 
-### 2. State Management Patterns
-- **Local State**: Component-specific UI state
-- **Vuex Store**: Shared application state
-- **Event Bus**: Cross-component communication
+## Chat Components
 
-### 3. Internationalization
-- **Vue i18n**: Full i18n support
-- **Locale-specific components**: Components adapt to language changes
-- **Translation keys**: Consistent use of translation keys
+| Component | Description |
+|-----------|-------------|
+| `ChatBotComponent.vue` | Main chat interface with message list and input area |
+| `ChatFolders.vue` | Conversation folder management (create, rename, delete) |
+| `ChatHistoryComponent.vue` | Conversation history list with search and filtering |
+| `ChatResponseFeedbackDialog.vue` | Feedback dialog for rating chat responses (thumbs up/down) |
+| `RightSideBarComponent.vue` | Right sidebar displaying context, documents, or service info |
+| `WeatherPanel.vue` | Weather information display panel (contextual data) |
 
-### 4. Component Architecture Patterns
-- **Slots**: Reusable modals with slot-based content
-- **Props Validation**: Consistent prop validation
-- **Emits**: Standardized event emission patterns
-- **Composition**: Chart components built with D3.js
+---
 
-### 5. Mobile & Accessibility Features
-- **Android Keyboard Handling**: Special mobile keyboard handling
-- **Touch-friendly interfaces**: Mobile-responsive layouts
-- **ARIA Labels**: Proper accessibility attributes
-- **Responsive Breakpoints**: Consistent breakpoint system
+## Admin & Analytics Components
 
-## Reusability Assessment
+| Component | Description |
+|-----------|-------------|
+| `AdminDashboard.vue` | Admin dashboard with system metrics and user management |
+| `AnalyticsDashboard.vue` | Analytics dashboard with charts and usage statistics |
+| `AnalyticsComponent.vue` | Analytics data display with filtering and date ranges |
+| `UnifiedAnalytics.vue` | Unified analytics view combining multiple metrics |
 
-### Highly Reusable (Cross-project potential)
-- ModalDialog, LanguageSelector, UsageTrendChart, SatisfactionGauge, SearchableCountryDropdown
+### Chart Components (`src/components/charts/`)
 
-### Moderately Reusable (Project-specific but adaptable)
-- NavBarComponent, SideBarComponent, ChatFolders, FileUploadComponent
+| Component | Description |
+|-----------|-------------|
+| `UsageTrendChart.vue` | Line chart showing query usage over time |
+| `CategoryDistributionChart.vue` | Pie/donut chart for service category distribution |
+| `SatisfactionGauge.vue` | Gauge chart for user satisfaction scores |
+| `SatisfactionHeatmap.vue` | Heatmap chart for satisfaction by time/category |
+| `TopQueriesChart.vue` | Bar chart showing most frequent queries |
 
-### Low Reusability (Specific to this application)
-- ChatBotComponent, ServiceTreePanelComponent, AdminDashboard
+---
 
-## Key Technical Features
+## Authentication & User Profile
 
-1. **OIDC Integration**: Keycloak authentication handling
-2. **RAG Interface**: Specialized components for AI chatbot interactions
-3. **Multi-language Support**: English, French, Swahili with i18n
-4. **Analytics Integration**: Comprehensive charting and metrics
-5. **File Management**: Upload, preview, and export capabilities
-6. **Theme System**: Light/dark mode with CSS variables
-7. **Mobile Optimization**: Responsive design with mobile-specific interactions
+| Component | Description |
+|-----------|-------------|
+| `CallbackView.vue` | OIDC authentication callback handler (view-level component) |
+| `UserProfileComponent.vue` | User profile display and edit form |
+
+---
+
+## Settings Components
+
+| Component | Description |
+|-----------|-------------|
+| `SettingsComponent.vue` | Application settings panel (theme, language, preferences) |
+| `LanguageSelector.vue` | Language selection dropdown for i18n |
+
+---
+
+## File Management Components
+
+| Component | Description |
+|-----------|-------------|
+| `FileUploadComponent.vue` | File upload widget with drag-and-drop support |
+| `UploadFilesDialog.vue` | Dialog for uploading multiple files to the knowledge base |
+| `AddFromLinkDialog.vue` | Dialog for adding documents via URL/link |
+| `FileDetailsDialog.vue` | File metadata display (name, size, upload date, status) |
+
+---
+
+## Service & Context Components
+
+| Component | Description |
+|-----------|-------------|
+| `ServiceTreePanelComponent.vue` | Hierarchical tree view of service categories |
+| `ServiceCategoryPanelComponent.vue` | Service category list/details panel |
+
+---
+
+## Shared UI Components
+
+| Component | Description |
+|-----------|-------------|
+| `ConfirmDialog.vue` | Generic confirmation dialog (confirm/cancel actions) |
+| `ModalDialog.vue` | Generic modal dialog wrapper component |
+| `ContextMenu.vue` | Right-click context menu with custom actions |
+| `NotificationSystem.vue` | Toast notification system (success, error, warning messages) |
+| `OperationResultsModal.vue` | Modal displaying results of batch operations |
+| `LogSearchDialog.vue` | Dialog for searching through system logs |
+| `SearchableCountryDropdown.vue` | Country selector with search functionality |
+
+---
+
+## Views (`src/views/`)
+
+| Component | Description |
+|-----------|-------------|
+| `DashboardView.vue` | Main dashboard view (router target) |
+| `CallbackView.vue` | Authentication callback view (OIDC redirect handler) |
+
+---
+
+## Component Organization
+
+```
+src/
+├── App.vue                          # Root component
+├── views/                           # Router-level views
+│   ├── DashboardView.vue
+│   └── CallbackView.vue
+├── components/
+│   ├── ds/                          # Design system primitives (12)
+│   ├── charts/                      # Analytics chart components (5)
+│   ├── [Layout]                     # Navigation and layout (4)
+│   ├── [Chat]                       # Chat interface (6)
+│   ├── [Admin]                      # Admin/analytics (4)
+│   ├── [Auth]                       # Authentication (2)
+│   ├── [Settings]                   # Settings (2)
+│   ├── [Files]                      # File management (4)
+│   ├── [Services]                   # Service navigation (2)
+│   └── [Shared]                     # Shared UI components (6)
+```
+
+---
+
+## Notes
+
+- All components use Vue 3 **Options API** (not Composition API)
+- Design system components in `src/components/ds/` are reusable primitives
+- Chart components use **ApexCharts** library (via vue3-apexcharts)
+- Routing via Vue Router with views in `src/views/`
+- i18n via vue-i18n with translations in `/src/i18n/locales/`

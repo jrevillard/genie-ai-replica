@@ -692,6 +692,8 @@ export default {
     weatherLocationLoading: 'Dulaa ka looti...',
     weatherErrorDefault: 'Sanoo kibaroo ñiningo mang ben.',
     weatherGeolocationUnsupported: 'Browser ti nying dulaa kumpabo faa.',
+    collapse: 'Collapse sidebar',
+    expand: 'Expand sidebar',
     weatherRefresh: 'Sanoo Kurandi',
     weatherConditions: {
       clear: 'A keta-le (Clear)',
@@ -1352,7 +1354,8 @@ export default {
     exportFilenamePlaceholder: 'Fayil toh nyining',
     exportButton: 'Kii banta',
     exportSuccess: 'Kuma kiyata banta benta',
-    exportError: 'Filiyata kuma kii to. I si a ñining tugung.'
+    exportError: 'Filiyata kuma kii to. I si a ñining tugung.',
+    removeItem: 'Bɔ yi'
   },
   quickhelp: {
     // Labels (Short for UI)

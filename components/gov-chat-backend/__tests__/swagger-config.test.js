@@ -36,21 +36,27 @@ jest.mock('swagger-ui-express', () => ({
   }
 }));
 
-jest.mock('../shared-lib', () => ({
-  logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn()
-  },
-  dbService: {
-    getConnection: jest.fn(() => Promise.resolve({
-      version: jest.fn(() => Promise.resolve({ version: '3.12', server: 'arango' }))
-    }))
-  },
-  securityHeaders: {},
-  SecurityMiddleware: {}
-}), { virtual: true });
+jest.mock(
+  '../shared-lib',
+  () => ({
+    logger: {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn()
+    },
+    dbService: {
+      getConnection: jest.fn(() =>
+        Promise.resolve({
+          version: jest.fn(() => Promise.resolve({ version: '3.12', server: 'arango' }))
+        })
+      )
+    },
+    securityHeaders: {},
+    SecurityMiddleware: {}
+  }),
+  { virtual: true }
+);
 
 jest.mock('../middleware/keycloak-auth-middleware', () => ({
   keycloakAuthMiddleware: (req, res, next) => next()
@@ -84,19 +90,7 @@ jest.mock('body-parser', () => ({
   json: () => (req, res, next) => next(),
   urlencoded: () => (req, res, next) => next()
 }));
-jest.mock('socket.io', () => ({
-  Server: jest.fn().mockImplementation(() => ({
-    on: jest.fn(),
-    close: jest.fn()
-  }))
-}));
-jest.mock('http', () => ({
-  createServer: jest.fn(() => ({
-    listen: jest.fn(),
-    on: jest.fn(),
-    close: jest.fn()
-  }))
-}));
+
 
 const mockUse = jest.fn();
 const mockGet = jest.fn();
@@ -113,10 +107,17 @@ jest.mock('express', () => {
     set: jest.fn()
   };
   const Router = jest.fn(() => ({
-    get: jest.fn(), post: jest.fn(), put: jest.fn(),
-    delete: jest.fn(), patch: jest.fn(), use: jest.fn()
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    delete: jest.fn(),
+    patch: jest.fn(),
+    use: jest.fn()
   }));
-  return Object.assign(jest.fn(() => app), { Router, json: jest.fn(), static: jest.fn() });
+  return Object.assign(
+    jest.fn(() => app),
+    { Router, json: jest.fn(), static: jest.fn() }
+  );
 });
 
 jest.mock('dotenv', () => ({ config: jest.fn() }));
@@ -125,8 +126,12 @@ jest.mock('path', () => ({ join: jest.fn((...args) => args.join('/')) }));
 
 // Mock process.exit to prevent test process from being killed
 const originalExit = process.exit;
-beforeAll(() => { process.exit = jest.fn(); });
-afterAll(() => { process.exit = originalExit; });
+beforeAll(() => {
+  process.exit = jest.fn();
+});
+afterAll(() => {
+  process.exit = originalExit;
+});
 
 // Load index.js once (triggers swagger-jsdoc mock)
 require('../index');
@@ -148,20 +153,17 @@ describe('Swagger Configuration', () => {
 
     it('should point authorizationUrl to Keycloak with correct realm path', () => {
       const flow = capturedSwaggerOptions.definition.components.securitySchemes.KeycloakOAuth2.flows.authorizationCode;
-      expect(flow.authorizationUrl).toBe(
-        'https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth'
-      );
+      expect(flow.authorizationUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth');
     });
 
     it('should point tokenUrl to Keycloak with correct realm path', () => {
       const flow = capturedSwaggerOptions.definition.components.securitySchemes.KeycloakOAuth2.flows.authorizationCode;
-      expect(flow.tokenUrl).toBe(
-        'https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/token'
-      );
+      expect(flow.tokenUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/token');
     });
 
     it('should include openid, profile, and email scopes', () => {
-      const scopes = capturedSwaggerOptions.definition.components.securitySchemes.KeycloakOAuth2.flows.authorizationCode.scopes;
+      const scopes =
+        capturedSwaggerOptions.definition.components.securitySchemes.KeycloakOAuth2.flows.authorizationCode.scopes;
       expect(scopes.openid).toBeDefined();
       expect(scopes.profile).toBeDefined();
       expect(scopes.email).toBeDefined();
@@ -192,8 +194,12 @@ describe('Swagger Configuration', () => {
     it('should construct URLs using KEYCLOAK_URL and KEYCLOAK_REALM env vars', () => {
       const flow = capturedSwaggerOptions.definition.components.securitySchemes.KeycloakOAuth2.flows.authorizationCode;
       // Verify the pattern: {KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/auth
-      expect(flow.authorizationUrl).toMatch(/^https:\/\/keycloak\.example\.com\/auth\/realms\/genie\/protocol\/openid-connect\/auth$/);
-      expect(flow.tokenUrl).toMatch(/^https:\/\/keycloak\.example\.com\/auth\/realms\/genie\/protocol\/openid-connect\/token$/);
+      expect(flow.authorizationUrl).toMatch(
+        /^https:\/\/keycloak\.example\.com\/auth\/realms\/genie\/protocol\/openid-connect\/auth$/
+      );
+      expect(flow.tokenUrl).toMatch(
+        /^https:\/\/keycloak\.example\.com\/auth\/realms\/genie\/protocol\/openid-connect\/token$/
+      );
     });
 
     it('should use KEYCLOAK_CLIENT_ID env var for OAuth clientId', () => {

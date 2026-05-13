@@ -1,8 +1,9 @@
-import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/settings/settings_component.dart';
 import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
+import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
+import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/services/genie_ai_config.dart';
@@ -29,14 +30,14 @@ class NavBarComponent extends StatelessWidget {
     final message = newState
         ? "Switched to Offline Mode"
         : "Switched to Online Mode";
+    final tokens = ThemeManager().tokens;
 
-    // Check mounted mostly for safety, though Stateless usually fine for SnackBar if context valid
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
           duration: const Duration(seconds: 2),
-          backgroundColor: newState ? Colors.grey[700] : Colors.green[700],
+          backgroundColor: newState ? tokens.muted : tokens.success,
         ),
       );
     }
@@ -44,27 +45,16 @@ class NavBarComponent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, dynamic> themeColors = ThemeManager().getColors();
-    final Map<String, dynamic> navColors = themeColors['navbar'];
-    final bool isDark = ThemeManager().isDarkMode;
-    final Color contentColor = navColors['text'];
+    final tokens = ThemeManager().tokens;
+    final Color contentColor = tokens.navbarFg;
 
     return Material(
       elevation: 4,
       child: Container(
         height: 60,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              isDark ? const Color(0xFF212121) : navColors['gradientStart'],
-              isDark ? const Color(0xFF303030) : navColors['gradientEnd'],
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
+        decoration: BoxDecoration(color: tokens.navbarBg),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          padding: const EdgeInsets.symmetric(horizontal: DsSpacing.md),
           child: Row(
             children: [
               // 1. LOGO
@@ -78,7 +68,7 @@ class NavBarComponent extends StatelessWidget {
                       )
                     : Image.asset(GenieAiConfig.iconPath, fit: BoxFit.contain),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: DsSpacing.md),
 
               // 2. TITLE
               Text(
@@ -86,7 +76,7 @@ class NavBarComponent extends StatelessWidget {
                 style: TextStyle(
                   color: contentColor,
                   fontWeight: FontWeight.w900, // Extra Bold
-                  fontSize: 22,
+                  fontSize: ThemeManager().tokens.textLg,
                   letterSpacing: 1.5,
                 ),
               ),
@@ -99,25 +89,31 @@ class NavBarComponent extends StatelessWidget {
                 initialData: ConnectivityService().isOnline,
                 builder: (context, snapshot) {
                   final isOnline = snapshot.data ?? false;
-                  return IconButton(
-                    icon: Icon(
-                      isOnline ? Icons.wifi : Icons.cloud_off,
-                      color: isOnline ? contentColor : Colors.white38,
-                      size: 20,
+                  return Tooltip(
+                    message: isOnline ? "Online" : "Offline",
+                    child: DsButton(
+                      iconOnly: true,
+                      icon: isOnline ? Icons.wifi : Icons.cloud_off,
+                      variant: DsButtonVariant.ghost,
+                      overrideFg: isOnline ? contentColor : tokens.fg30,
+                      onPressed: () =>
+                          _handleConnectivityToggle(context, isOnline),
                     ),
-                    tooltip: isOnline ? "Online" : "Offline",
-                    onPressed: () =>
-                        _handleConnectivityToggle(context, isOnline),
                   );
                 },
               ),
 
               // 4. LOGOUT
-              IconButton(
-                key: const Key('navbar_logout_button'),
-                icon: Icon(Icons.logout, color: contentColor),
-                tooltip: tr('nav.logout'),
-                onPressed: onLogout,
+              Tooltip(
+                message: tr('nav.logout'),
+                child: DsButton(
+                  key: const Key('navbar_logout_button'),
+                  iconOnly: true,
+                  icon: Icons.logout,
+                  variant: DsButtonVariant.ghost,
+                  overrideFg: contentColor,
+                  onPressed: onLogout,
+                ),
               ),
 
               // 5. MORE MENU (Replaces separate Settings/Profile buttons)
@@ -164,23 +160,29 @@ class NavBarComponent extends StatelessWidget {
                             child: ListTile(
                               leading: Icon(
                                 Icons.person_outline,
-                                color: isOnline ? null : Colors.grey,
+                                color: isOnline ? tokens.fg : tokens.muted,
                               ),
                               title: Text(
                                 'Profile',
                                 style: TextStyle(
-                                  color: isOnline ? null : Colors.grey,
+                                  color: isOnline ? tokens.fg : tokens.muted,
                                 ),
                               ),
                               contentPadding: EdgeInsets.zero,
                               dense: true,
                             ),
                           ),
-                          const PopupMenuItem<String>(
+                          PopupMenuItem<String>(
                             value: 'settings',
                             child: ListTile(
-                              leading: Icon(Icons.settings_outlined),
-                              title: Text('Settings'),
+                              leading: Icon(
+                                Icons.settings_outlined,
+                                color: tokens.fg,
+                              ),
+                              title: Text(
+                                'Settings',
+                                style: TextStyle(color: tokens.fg),
+                              ),
                               contentPadding: EdgeInsets.zero,
                               dense: true,
                             ),

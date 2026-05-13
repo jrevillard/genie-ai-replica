@@ -12,71 +12,78 @@
     <div v-if="isOpen" class="mobile-sidebar-overlay" @click="closeOverlay"></div>
 
     <div class="sidebar-inner">
-      <div class="sidebar-tabs">
-        <button
-          class="tab-button"
-          :class="{ 'tab-button-active': activeTab === 'services' }"
-          @click="activeTab = 'services'"
-        >
-          <i class="fas fa-list"></i>
-          {{ $t('sidebar.governmentServices') }}
-        </button>
-        <button
-          class="tab-button"
-          :class="{ 'tab-button-active': activeTab === 'history' }"
-          @click="activeTab = 'history'"
-        >
-          <i class="fas fa-history"></i>
-          {{ $t('sidebar.savedChats') }}
-        </button>
-      </div>
+      <DsTabs
+        v-model="activeTab"
+        fill
+        :tabs="[
+          { label: $t('sidebar.governmentServices'), value: 'services' },
+          { label: $t('sidebar.savedChats'), value: 'history' }
+        ]"
+      >
+        <template #tab="{ tab }">
+          <component :is="tab.value === 'services' ? 'List' : 'History'" :size="16" style="margin-right: 4px" />
+          {{ tab.label }}
+        </template>
 
-      <div class="sidebar-content-wrapper">
-        <div ref="sidebarContent" class="sidebar-content">
-          <div v-if="activeTab === 'services'" class="services-list">
-            <service-tree-panel-component
-              ref="serviceTree"
-              @keyboard-focus="handleKeyboardFocus"
-              @keyboard-blur="handleKeyboardBlur"
-            />
-          </div>
-
-          <div v-else-if="activeTab === 'history'" class="chat-history">
-            <div :key="currentLocale" class="chat-sub-tabs">
-              <button class="chat-sub-tab" :class="{ active: activeSubTab === 'all' }" @click="activeSubTab = 'all'">
-                {{ getTabLabel('all') }}
-              </button>
-              <button
-                class="chat-sub-tab"
-                :class="{ active: activeSubTab === 'folders' }"
-                @click="activeSubTab = 'folders'"
-              >
-                {{ getTabLabel('folders') }}
-              </button>
-              <button
-                class="chat-sub-tab"
-                :class="{ active: activeSubTab === 'starred' }"
-                @click="activeSubTab = 'starred'"
-              >
-                {{ getTabLabel('starred') }}
-              </button>
-              <button
-                class="chat-sub-tab"
-                :class="{ active: activeSubTab === 'archived' }"
-                @click="activeSubTab = 'archived'"
-              >
-                {{ getTabLabel('archived') }}
-              </button>
+        <div class="sidebar-content-wrapper">
+          <div ref="sidebarContent" class="sidebar-content">
+            <div v-if="activeTab === 'services'" class="services-list">
+              <service-tree-panel-component
+                ref="serviceTree"
+                @keyboard-focus="handleKeyboardFocus"
+                @keyboard-blur="handleKeyboardBlur"
+              />
             </div>
 
-            <chat-folders :active-tab="activeSubTab" @open-chat="openChat" @locale-changed="handleLocaleChange" />
+            <div v-else-if="activeTab === 'history'" class="chat-history">
+              <div :key="currentLocale" class="chat-sub-tabs">
+                <DsButton
+                  variant="ghost"
+                  :small="true"
+                  class="chat-sub-tab"
+                  :class="{ active: activeSubTab === 'all' }"
+                  @click="activeSubTab = 'all'"
+                >
+                  {{ getTabLabel('all') }}
+                </DsButton>
+                <DsButton
+                  variant="ghost"
+                  :small="true"
+                  class="chat-sub-tab"
+                  :class="{ active: activeSubTab === 'folders' }"
+                  @click="activeSubTab = 'folders'"
+                >
+                  {{ getTabLabel('folders') }}
+                </DsButton>
+                <DsButton
+                  variant="ghost"
+                  :small="true"
+                  class="chat-sub-tab"
+                  :class="{ active: activeSubTab === 'starred' }"
+                  @click="activeSubTab = 'starred'"
+                >
+                  {{ getTabLabel('starred') }}
+                </DsButton>
+                <DsButton
+                  variant="ghost"
+                  :small="true"
+                  class="chat-sub-tab"
+                  :class="{ active: activeSubTab === 'archived' }"
+                  @click="activeSubTab = 'archived'"
+                >
+                  {{ getTabLabel('archived') }}
+                </DsButton>
+              </div>
+
+              <chat-folders :active-tab="activeSubTab" @open-chat="openChat" @locale-changed="handleLocaleChange" />
+            </div>
+          </div>
+
+          <div v-show="!isKeyboardActive" class="weather-container" :class="{ 'hide-on-keyboard': isKeyboardActive }">
+            <weather-panel class="weather-panel-fixed" />
           </div>
         </div>
-
-        <div v-show="!isKeyboardActive" class="weather-container" :class="{ 'hide-on-keyboard': isKeyboardActive }">
-          <weather-panel class="weather-panel-fixed" />
-        </div>
-      </div>
+      </DsTabs>
     </div>
   </aside>
 </template>
@@ -85,13 +92,20 @@
 import ServiceTreePanelComponent from './ServiceTreePanelComponent.vue';
 import ChatFolders from './ChatFolders.vue';
 import WeatherPanel from './WeatherPanel.vue';
+import { List, History } from 'lucide-vue-next';
+import DsButton from './ds/Button.vue';
+import DsTabs from './ds/Tabs.vue';
 
 export default {
   name: 'SideBarComponent',
   components: {
+    DsButton,
+    DsTabs,
     ServiceTreePanelComponent,
     ChatFolders,
-    WeatherPanel
+    WeatherPanel,
+    List,
+    History
   },
   props: {
     isOpen: {
@@ -127,12 +141,6 @@ export default {
     if (this.$i18n) {
       this.currentLocale = this.$i18n.locale;
     }
-    // Debug: Log active tab computed background color
-    const activeTab = document.querySelector('.tab-button-active');
-    console.log(
-      '[SIDEBAR] Active tab computed background color:',
-      activeTab ? window.getComputedStyle(activeTab).backgroundColor : 'not found'
-    );
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.handleResize);
@@ -145,7 +153,6 @@ export default {
   },
   methods: {
     handleLocaleChange(newLocale) {
-      console.log('[SideBar] Locale changed to:', newLocale);
       this.currentLocale = newLocale;
       this.$forceUpdate();
     },
@@ -222,8 +229,8 @@ export default {
           if (translation && translation !== i18nKey) {
             return translation;
           }
-        } catch (error) {
-          console.warn(`[SIDEBAR] Translation error for tab: ${tabKey}`, error);
+        } catch {
+          // Translation error, fall back to default
         }
       }
       return tabKey.charAt(0).toUpperCase() + tabKey.slice(1);
@@ -243,10 +250,9 @@ export default {
 .side-bar {
   width: 450px;
   background: var(--bg-sidebar);
-  border-right: 1px solid var(--border-color);
+  border-right: 1px solid var(--border);
   height: 100%;
-  color: var(--text-primary);
-  overflow: hidden !important;
+  color: var(--fg);
   transition:
     transform 0.3s ease,
     width 0.3s ease;
@@ -259,16 +265,15 @@ export default {
   position: relative;
   z-index: 1001;
   background: var(--bg-sidebar);
-  color: var(--text-primary);
-  overflow: hidden !important;
+  color: var(--fg);
   width: 100%;
 }
 
 .sidebar-section-title,
 .sidebar-header h3 {
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -276,12 +281,12 @@ export default {
 .sidebar-section h3,
 .sidebar-header h3 {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 10px 16px;
+  padding: var(--space-sm) var(--space-md);
 }
 
 /* Mobile overlay */
@@ -292,54 +297,29 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: var(--overlay-bg);
   z-index: 1000;
 }
 
-/* Tabs styling */
-.sidebar-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--border-light);
-  background-color: var(--bg-tertiary);
-  padding: 0;
-  flex-shrink: 0;
-  width: 100%;
+/* DsTabs overrides for sidebar context */
+.sidebar-inner :deep(.ds-tabs) {
+  flex-grow: 1;
 }
 
-.tab-button {
+.sidebar-inner :deep(.ds-tabs__btn) {
   flex: 1;
-  padding: 10px 0;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 0.9rem;
-  color: var(--text-tertiary);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  transition:
-    background-color 0.2s,
-    color 0.2s;
+  gap: var(--space-sm);
 }
 
-.tab-button i {
-  font-size: 1rem;
-  color: var(--text-tertiary);
+.sidebar-inner :deep(.ds-tabs__btn svg) {
+  color: var(--muted);
 }
 
-.tab-button:hover {
-  background-color: var(--bg-secondary);
-  color: var(--text-primary);
-}
-
-.tab-button-active {
-  background-color: var(--bg-button-primary, #2a9d8f);
-  color: var(--text-button-primary, #ffffff);
-}
-
-.tab-button-active i {
-  color: var(--text-button-primary, #ffffff);
+.sidebar-inner :deep(.ds-tabs__btn--active svg) {
+  color: var(--accent);
 }
 
 /* New wrapper to control the layout of content + weather */
@@ -348,28 +328,28 @@ export default {
   flex-direction: column;
   flex-grow: 1;
   height: 0;
-  overflow: hidden;
+  overflow: clip;
   width: 100%;
 }
 
 /* Scrollable container */
 .sidebar-content {
   flex-grow: 1;
-  overflow-y: auto !important;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  padding: 10px;
+  padding: var(--space-sm);
   padding-bottom: 0;
   margin-bottom: 0;
   background: var(--bg-sidebar);
-  color: var(--text-primary);
+  color: var(--fg);
   width: 100%;
 }
 
 .services-list,
 .chat-history {
   flex-grow: 1;
-  overflow: visible !important;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -379,9 +359,9 @@ export default {
 .weather-container {
   flex-shrink: 0;
   background: var(--bg-sidebar);
-  border-top: 1px solid var(--border-light);
-  padding: 10px;
-  margin-top: 5px;
+  border-top: 1px solid var(--border);
+  padding: var(--space-sm);
+  margin-top: var(--space-xs);
   width: 100%;
 }
 
@@ -400,19 +380,12 @@ export default {
   flex-grow: 1;
 }
 
-/* Android-specific styles */
-.side-bar.android-device.keyboard-active {
-  position: fixed !important;
-  height: auto !important;
-  bottom: auto !important;
-}
-
 /* Chat sub-tabs styling */
 .chat-sub-tabs {
   display: flex;
-  border-bottom: 1px solid var(--border-light);
-  margin-bottom: 10px;
-  background-color: var(--bg-secondary, #f5f7fa);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-sm);
+  background-color: var(--bg-sidebar);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
@@ -426,61 +399,45 @@ export default {
 .chat-sub-tab {
   flex: 1;
   min-width: 75px;
-  padding: 10px 15px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 0.85rem;
-  color: var(--text-tertiary);
   text-align: center;
   white-space: nowrap;
-  transition: all 0.2s;
   border-bottom: 2px solid transparent;
 }
 
 .chat-sub-tab.active {
-  color: var(--accent-color, #4e97d1);
-  border-bottom: 2px solid var(--accent-color, #4e97d1);
-  font-weight: 500;
-}
-
-.chat-sub-tab:hover:not(.active) {
-  background-color: var(--bg-tertiary, #f0f0f0);
-  color: var(--text-secondary);
+  border-bottom: 2px solid var(--accent);
+  font-weight: 600;
 }
 
 /* Search box styling */
 .search-container {
   display: flex;
-  margin-bottom: 15px;
-  padding: 5px;
+  margin-bottom: var(--space-md);
+  padding: var(--space-xs);
   width: 100%;
 }
 
 .search-box {
   flex: 1;
-  padding: 8px 12px;
-  border: 1px solid var(--border-input, #ddd);
-  border-radius: 4px 0 0 4px;
-  font-size: 0.9rem;
-  background-color: var(--bg-input, #fff);
-  color: var(--text-primary, #333);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--fg);
+  outline: none;
+  transition: border-color 0.15s;
 }
 
-.search-btn {
-  background: var(--accent-color, #4e97d1);
-  color: white;
-  border: none;
-  border-radius: 0 4px 4px 0;
-  padding: 0 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.search-box:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-muted);
 }
 
-.search-btn:hover {
-  background: var(--accent-hover, #3a7da0);
+.search-box::placeholder {
+  color: var(--muted);
+  opacity: 0.6;
 }
 
 /* Empty state styling */
@@ -489,21 +446,21 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
-  color: var(--text-tertiary, #888);
+  padding: var(--space-2xl) var(--space-lg);
+  color: var(--muted-soft);
   text-align: center;
   width: 100%;
 }
 
 .empty-icon {
-  font-size: 2rem;
-  margin-bottom: 10px;
+  font-size: var(--text-2xl);
+  margin-bottom: var(--space-sm);
   opacity: 0.5;
 }
 
 .empty-state p {
-  margin: 5px 0;
-  font-size: 0.9rem;
+  margin: var(--space-xs) 0;
+  font-size: var(--text-base);
 }
 
 /* All chats and folders content styling */
@@ -529,41 +486,25 @@ export default {
 
   .side-bar.side-bar-open {
     transform: translateX(0);
-    box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
-  }
-
-  .side-bar.side-bar-open.keyboard-active.android-device {
-    height: auto !important;
-    bottom: auto !important;
-    transform: translateX(0) !important;
+    box-shadow: var(--shadow-lg);
   }
 
   .mobile-sidebar-overlay {
     display: block;
   }
 
-  .tab-button {
-    padding: 12px 0;
-  }
-
-  .side-bar.keyboard-active .sidebar-content {
-    padding-bottom: 50px;
-  }
-
-  .side-bar.android-device.keyboard-active .sidebar-content {
-    height: auto !important;
-    min-height: 200px;
-    max-height: 70vh;
+  .sidebar-inner :deep(.ds-tabs__btn) {
+    padding: var(--space-md) 0;
   }
 
   .chat-sub-tab {
-    padding: 8px 12px;
-    font-size: 0.8rem;
+    padding: var(--space-sm) var(--space-md);
+    font-size: var(--text-base);
   }
 }
 
 /* Desktop: if not open, set width=0 or transform */
-@media screen and (min-width: 769px) {
+@media screen and (min-width: 768px) {
   .side-bar {
     position: relative;
     transform: translateX(0);
@@ -580,80 +521,5 @@ export default {
   .mobile-sidebar-overlay {
     display: none;
   }
-}
-
-/* Theme Styles - Dark and System Mode */
-[data-theme='dark'] .tab-button:hover:not(.tab-button-active) {
-  background-color: rgba(78, 151, 209, 0.15);
-  color: rgba(255, 255, 255, 0.9);
-}
-
-[data-theme='dark'] .tab-button {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-[data-theme='dark'] .tab-button i {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-[data-theme='dark'] .chat-sub-tabs {
-  background-color: #2a2a2a;
-  border-bottom-color: #444;
-}
-
-[data-theme='dark'] .chat-sub-tab {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-[data-theme='dark'] .chat-sub-tab.active {
-  color: #4e97d1;
-  border-bottom: 2px solid #4e97d1;
-  font-weight: 500;
-}
-
-[data-theme='dark'] .chat-sub-tab:hover:not(.active) {
-  background-color: #333;
-}
-
-[data-theme='dark'] .sidebar-tabs {
-  border-bottom-color: rgba(255, 255, 255, 0.1);
-}
-
-[data-theme='dark'] .sidebar-section-title,
-[data-theme='dark'] .sidebar-header h3 {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-[data-theme='dark'] .sidebar-content::-webkit-scrollbar {
-  width: 8px;
-  background-color: #2a2a2a;
-}
-
-[data-theme='dark'] .sidebar-content::-webkit-scrollbar-track {
-  background-color: #2a2a2a;
-}
-
-[data-theme='dark'] .sidebar-content::-webkit-scrollbar-thumb {
-  background-color: rgba(100, 100, 100, 0.3);
-  border-radius: 4px;
-}
-
-[data-theme='dark'] .sidebar-content::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(150, 150, 150, 0.4);
-}
-
-[data-theme='dark'] .sidebar-content {
-  scrollbar-color: rgba(100, 100, 100, 0.3) #2a2a2a;
-  scrollbar-width: thin;
-}
-
-[data-theme='dark'] .search-box {
-  background-color: #333;
-  color: var(--text-primary);
-  border-color: #444;
-}
-
-[data-theme='dark'] .empty-state {
-  color: rgba(255, 255, 255, 0.5);
 }
 </style>

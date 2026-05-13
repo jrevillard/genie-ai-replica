@@ -1,13 +1,14 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-
 import 'package:genie_ai_mobile/services/api_service.dart';
 
 class ServiceTreeProxy {
   final ApiService _api;
 
-  ServiceTreeProxy({http.Client? httpClient})
-      : _api = ApiService(httpClient: httpClient ?? http.Client());
+  /// Creates a [ServiceTreeProxy]. When [httpClient] is provided it is wrapped
+  /// in an [ApiService]; otherwise the static [ApiService.defaultHttpClient]
+  /// (set at app startup with the [AuthInterceptor]) is used automatically.
+  ServiceTreeProxy({http.Client? httpClient}) : _api = ApiService(httpClient: httpClient);
 
   Future<List<dynamic>> getAllCategories({String locale = 'en'}) async {
     final res = await _api.get(

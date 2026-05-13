@@ -1,15 +1,16 @@
 import 'dart:convert';
-import 'package:genie_ai_mobile/services/api_service.dart';
-import 'package:genie_ai_mobile/services/auth/token_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:genie_ai_mobile/services/api_service.dart';
 
 class FileProxy {
   final ApiService _api;
-  final TokenStorage _tokenStorage;
 
-  FileProxy({ApiService? api, required TokenStorage tokenStorage})
-      : _api = api ?? ApiService(),
-        _tokenStorage = tokenStorage;
+  /// Creates a [FileProxy]. Uses [ApiService.defaultHttpClient] (set at app
+  /// startup with the [AuthInterceptor]) unless an explicit [httpClient] is
+  /// provided. The authenticated client ensures Bearer token injection for
+  /// both regular and multipart requests.
+  FileProxy({http.Client? httpClient})
+      : _api = ApiService(httpClient: httpClient);
 
   Future<Map<String, dynamic>> uploadFile(
     List<int> bytes,
@@ -24,10 +25,8 @@ class FileProxy {
     // Do NOT set Content-Type manually — http.MultipartRequest auto-generates
     // the boundary parameter. Setting it manually without boundary breaks uploads.
 
-    final token = await _tokenStorage.getAccessToken();
-    if (token != null) {
-      request.headers['Authorization'] = 'Bearer $token';
-    }
+    // Auth token is injected by sendAuthenticated() which routes the request
+    // through the AuthInterceptor-wrapped client.
 
     request.fields['context'] = context;
     request.fields['entityId'] = entityId;
@@ -35,8 +34,8 @@ class FileProxy {
       http.MultipartFile.fromBytes('file', bytes, filename: filename),
     );
 
-    var response = await request.send();
-    var responseData = await response.stream.bytesToString();
+    final streamedResponse = await _api.sendAuthenticated(request);
+    var responseData = await streamedResponse.stream.bytesToString();
     return jsonDecode(responseData);
   }
 

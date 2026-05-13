@@ -1,6 +1,3 @@
-// lib/services/user_profile_proxy.dart
-// FINAL - WORKS WITH YOUR BACKEND (PUT /api/users/:userId)
-
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,8 +8,10 @@ import 'package:genie_ai_mobile/services/api_service.dart';
 class UserProfileProxy {
   final ApiService _api;
 
-  UserProfileProxy({http.Client? httpClient})
-      : _api = ApiService(httpClient: httpClient ?? http.Client());
+  /// Creates a [UserProfileProxy]. When [httpClient] is provided it is wrapped
+  /// in an [ApiService]; otherwise the static [ApiService.defaultHttpClient]
+  /// (set at app startup with the [AuthInterceptor]) is used automatically.
+  UserProfileProxy({http.Client? httpClient}) : _api = ApiService(httpClient: httpClient);
 
   /// GET /api/me
   Future<Map<String, dynamic>> getProfile(String userId) async {
@@ -96,7 +95,9 @@ class UserProfileProxy {
 
     request.fields['data'] = jsonEncode(dataToSend);
 
-    final streamedResponse = await request.send();
+    // Send through the authenticated client so AuthInterceptor injects
+    // the Bearer token — raw request.send() would bypass auth entirely.
+    final streamedResponse = await _api.sendAuthenticated(request);
     final response = await http.Response.fromStream(streamedResponse);
 
     if (response.statusCode != 200) {

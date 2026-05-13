@@ -10,10 +10,16 @@ struct SettingsView: View {
     @Environment(ConnectivityService.self) private var connectivity
     @Environment(\.dismiss) private var dismiss
 
+    @Environment(\.openURL) private var openURL
+
     @State private var showResetDataAlert = false
     @State private var showDeleteAccountSheet = false
-    @State private var showPasswordReset = false
     @State private var showEmailEditSheet = false
+
+    /// Keycloak's hosted account console — handles password change, MFA,
+    /// linked identities, etc. Opening Safari rather than embedding a web
+    /// view keeps the user inside the trusted Keycloak session.
+    private let keycloakAccountURL = URL(string: "https://app.youngailinz.org/auth/realms/genie/account")!
 
     // Local settings state
     @State private var fontSize: Double = 50.0
@@ -145,13 +151,17 @@ struct SettingsView: View {
                         .disabled(!connectivity.isOnline)
                     }
 
-                    // Change Password
+                    // Manage Account (Keycloak hosted account console)
                     Button {
-                        showPasswordReset = true
+                        openURL(keycloakAccountURL)
                     } label: {
                         HStack {
                             Image(systemName: "key")
-                            Text("Change Password")
+                            Text("Manage Account")
+                            Spacer()
+                            Image(systemName: "arrow.up.forward.square")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
                     .disabled(!connectivity.isOnline)
@@ -232,12 +242,6 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showDeleteAccountSheet) {
                 DeleteAccountSheet(onDismiss: { showDeleteAccountSheet = false })
-            }
-            .sheet(isPresented: $showPasswordReset) {
-                PasswordResetOverlay(
-                    prefilledEmail: authService.currentUser?.email ?? "",
-                    onDismiss: { showPasswordReset = false }
-                )
             }
             .sheet(isPresented: $showEmailEditSheet) {
                 EmailEditSheet(
@@ -357,33 +361,6 @@ struct SettingsView: View {
             } catch {
                 await MainActor.run {
                     isResettingData = false
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Password Reset Overlay
-
-struct PasswordResetOverlay: View {
-    @Environment(ThemeManager.self) private var theme
-
-    let prefilledEmail: String
-    var onDismiss: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            PasswordResetView(
-                onBackToLogin: onDismiss,
-                prefilledEmail: prefilledEmail
-            )
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: onDismiss) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(theme.secondaryTextColor)
-                    }
                 }
             }
         }

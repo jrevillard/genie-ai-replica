@@ -117,36 +117,7 @@ class AuthService: NSObject {
         currentUser = decoded
     }
 
-    // MARK: - Legacy methods kept for compile compatibility
-    //
-    // These were the password-based endpoints from the pre-Keycloak backend.
-    // The corresponding backend routes were removed in migration
-    // 004-remove-legacy-auth-fields.js. The views that call them
-    // (RegisterView, PasswordResetView, PasswordResetConfirmView) are no
-    // longer linked from the navigation flow — Keycloak's hosted UI handles
-    // registration and password reset — but the methods stay so the project
-    // still compiles. Anyone calling them gets a clear error.
-
-    func login(loginName _: String, password _: String) async throws {
-        throw AuthError.notSupported(reason: "Login moved to Keycloak — call signIn() instead.")
-    }
-
-    func register(username _: String, email _: String, password _: String) async throws {
-        throw AuthError.notSupported(reason: "Registration is handled by Keycloak's hosted page.")
-    }
-
-    func initiatePasswordReset(email _: String) async throws {
-        throw AuthError.notSupported(reason: "Password reset is handled by Keycloak's hosted page.")
-    }
-
-    func confirmPasswordReset(token _: String, newPassword _: String) async throws {
-        throw AuthError.notSupported(reason: "Password reset is handled by Keycloak's hosted page.")
-    }
-
-    func verifyEmail(token _: String) async throws {
-        throw AuthError.notSupported(reason: "Email verification is handled by Keycloak.")
-    }
-
+    /// Back-compat alias for existing callers (e.g. ContentView's profile menu).
     func logout() async {
         await signOut()
     }
@@ -400,7 +371,6 @@ enum AuthError: Error, LocalizedError {
     case serverError(String)
     case cancelled
     case unknown
-    case notSupported(reason: String)
 
     var errorDescription: String? {
         switch self {
@@ -410,7 +380,6 @@ enum AuthError: Error, LocalizedError {
         case .serverError(let message): return message
         case .cancelled: return "Sign-in was cancelled"
         case .unknown: return "An unknown error occurred"
-        case .notSupported(let reason): return reason
         }
     }
 }

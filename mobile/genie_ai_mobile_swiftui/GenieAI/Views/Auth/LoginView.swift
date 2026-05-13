@@ -17,12 +17,6 @@ struct LoginView: View {
     @State private var isLoading = false
     @State private var logoAppeared = false
 
-    // Closures kept so the AppRoute navigation continues to compile, but
-    // they are no longer surfaced from this view.
-    var onRegisterTapped: () -> Void = {}
-    var onForgotPasswordTapped: () -> Void = {}
-    var onLoginSuccess: () -> Void = {}
-
     var body: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
@@ -115,10 +109,7 @@ struct LoginView: View {
         Task {
             do {
                 try await authService.signIn()
-                await MainActor.run {
-                    isLoading = false
-                    onLoginSuccess()
-                }
+                await MainActor.run { isLoading = false }
             } catch {
                 await MainActor.run {
                     isLoading = false

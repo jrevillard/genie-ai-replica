@@ -14,12 +14,20 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 
 ## 1. Authentication
 
+> **Platform divergence note** — The SwiftUI app delegates the entire user-facing
+> auth experience (login, registration, password reset, email verification, MFA)
+> to **Keycloak's hosted pages** via the OIDC authorization-code flow with PKCE.
+> The native screens that used to implement those flows (`RegisterView`,
+> `PasswordResetView`, `PasswordResetConfirmView`, `RegistrationSuccessView`)
+> have been removed and are documented under section 1.7. The Flutter and
+> Compose apps still implement the requirements below natively.
+
 ### 1.1 Login
 <!-- Flutter: lib/components/auth/login_screen.dart, lib/services/user_service.dart -->
-<!-- SwiftUI: GenieAI/Views/Auth/LoginView.swift, GenieAI/Services/AuthService.swift, GenieAI/Services/UserService.swift -->
+<!-- SwiftUI: GenieAI/Views/Auth/LoginView.swift, GenieAI/Services/AuthService.swift — see 1.7 for the PKCE flow -->
 <!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/auth/LoginScreen.kt, app/src/main/java/com/genieai/mobile/viewmodel/AuthViewModel.kt, app/src/main/java/com/genieai/mobile/data/repository/AuthRepository.kt -->
 
-**Requirements:**
+**Requirements (Flutter / Compose):**
 - Username/email and password fields with validation
 - "Remember me" checkbox to persist username and password locally (not the auth token)
 - Password hashing (SHA-256) before transmission
@@ -29,14 +37,14 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 - Dynamic app icon display from configuration
 - Language selector component
 
-**API:** `POST /auth/login`
+**API (Flutter / Compose):** `POST /auth/login`
 
 ### 1.2 Registration
 <!-- Flutter: lib/components/auth/register_screen.dart, lib/services/user_service.dart, lib/services/password_proxy.dart -->
-<!-- SwiftUI: GenieAI/Views/Auth/RegisterView.swift, GenieAI/Services/AuthService.swift, GenieAI/Services/UserService.swift, GenieAI/Services/PasswordValidator.swift -->
+<!-- SwiftUI: handled by Keycloak's hosted registration page (no native view) — see 1.7 -->
 <!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/auth/RegisterScreen.kt, app/src/main/java/com/genieai/mobile/viewmodel/AuthViewModel.kt -->
 
-**Requirements:**
+**Requirements (Flutter / Compose):**
 - Username, email, password, and confirm password fields
 - Real-time username/email availability checking
 - Password strength meter with visual indicator
@@ -46,14 +54,14 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 - Success page navigation on completion
 - Language selector component
 
-**API:** `POST /auth/register`
+**API (Flutter / Compose):** `POST /auth/register`
 
 ### 1.3 Password Reset - Initiation
 <!-- Flutter: lib/components/auth/password_reset_initiate_screen.dart, lib/services/password_proxy.dart -->
-<!-- SwiftUI: GenieAI/Views/Auth/PasswordResetView.swift, GenieAI/Services/AuthService.swift -->
+<!-- SwiftUI: handled by Keycloak's hosted "Forgot password?" page (no native view) — see 1.7 -->
 <!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/auth/PasswordResetScreen.kt, app/src/main/java/com/genieai/mobile/viewmodel/AuthViewModel.kt -->
 
-**Requirements:**
+**Requirements (Flutter / Compose):**
 - Email input field with validation
 - Support for embedded mode (within settings) and standalone mode
 - Prefill email when embedded from settings
@@ -61,35 +69,35 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 - Avoid email enumeration (show success for any email)
 - Dynamic branding display
 
-**API:** `POST /auth/reset-password`
+**API (Flutter / Compose):** `POST /auth/reset-password`
 
 ### 1.4 Password Reset - Confirmation
 <!-- Flutter: lib/components/auth/password_reset_confirm_screen.dart, lib/services/password_proxy.dart -->
-<!-- SwiftUI: GenieAI/Views/Auth/PasswordResetConfirmView.swift, GenieAI/Services/AuthService.swift -->
+<!-- SwiftUI: handled by Keycloak's hosted reset page reached via email link (no native view) — see 1.7 -->
 <!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/auth/PasswordResetConfirmScreen.kt, app/src/main/java/com/genieai/mobile/viewmodel/AuthViewModel.kt -->
 
-**Requirements:**
+**Requirements (Flutter / Compose):**
 - Token-based reset (token from URL/deep link)
 - New password and confirm password fields
 - Password matching validation
 - Success screen with redirect to login
 - Error handling for invalid/expired tokens
 
-**API:** `POST /auth/reset-password/confirm`
+**API (Flutter / Compose):** `POST /auth/reset-password/confirm`
 
 ### 1.5 Registration Success
 <!-- Flutter: lib/components/auth/registration_success_screen.dart -->
-<!-- SwiftUI: GenieAI/Views/Auth/RegistrationSuccessView.swift -->
+<!-- SwiftUI: handled inline on Keycloak's registration page (no native view) — see 1.7 -->
 <!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/auth/RegistrationSuccessScreen.kt -->
 
-**Requirements:**
+**Requirements (Flutter / Compose):**
 - Confirmation message display
 - Email verification instructions
 - Navigation button to login screen
 
 ### 1.6 Logout
 <!-- Flutter: lib/components/shared/nav_bar_component.dart, lib/services/user_service.dart -->
-<!-- SwiftUI: GenieAI/ContentView.swift, GenieAI/Services/AuthService.swift -->
+<!-- SwiftUI: GenieAI/ContentView.swift, GenieAI/Services/AuthService.swift (clears Keychain only; no backend call) -->
 <!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/main/MainScreen.kt, app/src/main/java/com/genieai/mobile/viewmodel/AuthViewModel.kt -->
 
 **Requirements:**
@@ -97,7 +105,59 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 - Reset user state
 - Navigate to login screen
 
-**API:** `POST /auth/logout`
+**API:** `POST /auth/logout` (Flutter / Compose only — SwiftUI clears tokens locally).
+
+### 1.7 SwiftUI: OIDC PKCE flow
+<!-- SwiftUI: GenieAI/Views/Auth/LoginView.swift, GenieAI/Services/AuthService.swift, GenieAI/Views/Settings/SettingsView.swift -->
+
+The SwiftUI app authenticates against Keycloak directly using the OAuth2
+authorization-code flow with PKCE (RFC 7636). The legacy backend `POST
+/auth/*` routes were removed when auth moved to Keycloak (backend
+migration `004-remove-legacy-auth-fields.js`), so no native sign-in form
+exists on iOS.
+
+**Flow:**
+1. `LoginView` shows a single "Sign in" button.
+2. `AuthService.signIn()` generates a `code_verifier` (32 random bytes,
+   base64url-encoded) and `code_challenge = SHA256(code_verifier)` (S256).
+3. It launches an `ASWebAuthenticationSession` against
+   `https://app.youngailinz.org/auth/realms/genie/protocol/openid-connect/auth`
+   with `response_type=code`, `client_id=genie-app`,
+   `redirect_uri=int.itu.GenieAI://oauth2redirect`, `scope=openid profile email`,
+   `code_challenge`, `code_challenge_method=S256`, and a random `state`.
+4. The user signs in (or registers, or resets a password) inside
+   Keycloak's hosted UI. Keycloak's login page surfaces "Register" and
+   "Forgot password?" links that drive the corresponding hosted flows.
+5. Keycloak redirects to `int.itu.GenieAI://oauth2redirect?code=…&state=…`,
+   captured by `ASWebAuthenticationSession`'s `callbackURLScheme`
+   parameter (no Info.plist URL-scheme registration required).
+6. `AuthService` validates `state`, then POSTs to
+   `/realms/genie/protocol/openid-connect/token` with
+   `grant_type=authorization_code`, `code`, `code_verifier`, `client_id`,
+   `redirect_uri`. Keycloak returns `access_token`, `refresh_token`,
+   `id_token`.
+7. Tokens are stored in the iOS Keychain. The `access_token` flows into
+   `APIService` as the `Authorization: Bearer` header for backend calls.
+8. On app launch, a stored access token is reused. If `/api/me` rejects
+   it, `AuthService.refreshAccessToken()` exchanges the refresh token
+   for a new pair before giving up.
+
+**Account management:** The Settings screen's "Manage Account" button
+opens Keycloak's hosted account console
+(`https://app.youngailinz.org/auth/realms/genie/account`) in Safari,
+covering password change, MFA, and linked identities.
+
+**Logout:** Local-only — tokens are cleared from the Keychain and from
+`APIService`. The single-sign-on cookie inside the system browser
+session is left intact so a subsequent sign-in can be silent if it has
+not expired server-side.
+
+**Keycloak client config (`genie-app`):**
+- `publicClient: true`
+- `standardFlowEnabled: true`
+- `attributes."pkce.code.challenge.method": "S256"`
+- `redirectUris` includes `int.itu.GenieAI://oauth2redirect`
+- `attributes."post.logout.redirect.uris"` includes the same scheme
 
 ---
 

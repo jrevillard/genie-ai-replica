@@ -223,11 +223,11 @@
 			fileSystemSynchronizedGroups = (
 				D097197C2F34B31600E0EE08 /* Auth */,
 				D09719822F34B31600E0EE08 /* Chat */,
-				OFFLINE0100 /* OfflineLibrary */,
 				D09719842F34B31600E0EE08 /* Profile */,
 				D09719872F34B31600E0EE08 /* Settings */,
 				D097198C2F34B31600E0EE08 /* Shared */,
 				D09719912F34B31600E0EE08 /* Sidebar */,
+				OFFLINE0100 /* OfflineLibrary */,
 			);
 			name = GenieAI;
 			packageProductDependencies = (
@@ -272,7 +272,7 @@
 			);
 			mainGroup = 40000001;
 			packageReferences = (
-				LOCALRAG0005 /* XCLocalSwiftPackageReference "../../local_rag_swift" */,
+				LOCALRAG0005 /* XCLocalSwiftPackageReference "../local_rag_swift" */,
 			);
 			productRefGroup = 40000003 /* Products */;
 			projectDirPath = "";

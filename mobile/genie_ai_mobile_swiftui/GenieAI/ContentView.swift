@@ -5,10 +5,6 @@ import SwiftUI
 
 enum AppRoute: Hashable {
     case login
-    case register
-    case passwordReset
-    case passwordResetConfirm(token: String?)
-    case registrationSuccess(email: String)
     case chat
     case profile
     case settings
@@ -57,44 +53,10 @@ struct ContentView: View {
 
     @ViewBuilder
     private var authFlow: some View {
-        NavigationStack(path: $navigationPath) {
-            LoginView(
-                onRegisterTapped: { navigationPath.append(AppRoute.register) },
-                onForgotPasswordTapped: { navigationPath.append(AppRoute.passwordReset) },
-                onLoginSuccess: { /* Auth state will update automatically */ }
-            )
-            .navigationDestination(for: AppRoute.self) { route in
-                switch route {
-                case .register:
-                    RegisterView(
-                        onBackToLogin: { navigationPath.removeLast() },
-                        onRegistrationSuccess: { email in
-                            navigationPath.append(AppRoute.registrationSuccess(email: email))
-                        }
-                    )
-
-                case .passwordReset:
-                    PasswordResetView(
-                        onBackToLogin: { navigationPath.removeLast() }
-                    )
-
-                case .passwordResetConfirm(let token):
-                    PasswordResetConfirmView(
-                        resetToken: token,
-                        onBackToLogin: { navigationPath = NavigationPath() }
-                    )
-
-                case .registrationSuccess(let email):
-                    RegistrationSuccessView(
-                        email: email,
-                        onBackToLogin: { navigationPath = NavigationPath() }
-                    )
-
-                default:
-                    EmptyView()
-                }
-            }
-        }
+        // Sign-in, registration, and password reset are all handled by
+        // Keycloak's hosted UI launched from LoginView, so the auth flow
+        // is a single screen with no internal navigation.
+        LoginView()
     }
 
     // MARK: - Main App Layout

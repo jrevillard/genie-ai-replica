@@ -56,8 +56,8 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Backend API Test Suite
-  epic-2: backlog
-  2-1-refactor-backend-indexjs-to-export-createapp: backlog
+  epic-2: in-progress
+  2-1-refactor-backend-indexjs-to-export-createapp: ready-for-dev
   2-2-create-backend-test-fixtures-and-shared-mocks: backlog
   2-3-test-backend-auth-route-handlers: backlog
   2-4-test-backend-chat-route-handlers: backlog

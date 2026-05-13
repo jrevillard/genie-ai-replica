@@ -71,18 +71,29 @@ actor RemoteFilesService {
         self.api = api
     }
 
-    /// Page through `/api/files`. The backend caps page size; we just request
-    /// a single large page for now (the offline library is expected to be
-    /// small). When pagination becomes relevant, add a paged variant.
-    func listFiles(page: Int = 1, limit: Int = 200) async throws -> [RemoteFile] {
-        let data = try await api.get(
-            "files",
-            params: ["page": "\(page)", "limit": "\(limit)"]
-        )
-        let envelope = try JSONDecoder().decode(FilesListEnvelope.self, from: data)
-        // Only surface successfully-ingested files; partially-ingested or
-        // failed files would not have usable text downstream.
-        return envelope.data.filter { ($0.status ?? "").lowercased() == "ingested" }
+    /// Page through `/api/files`. The backend caps `limit` at 50 (Joi schema
+    /// `getFilesSchema`), and only ingested files are usable offline so we
+    /// push that filter server-side via `dataprepStatus`. Pages are walked
+    /// until the server reports we have them all.
+    func listFiles(maxPages: Int = 20) async throws -> [RemoteFile] {
+        var page = 1
+        var collected: [RemoteFile] = []
+        while page <= maxPages {
+            let data = try await api.get(
+                "files",
+                params: [
+                    "page": "\(page)",
+                    "limit": "50",
+                    "dataprepStatus": "ingested"
+                ]
+            )
+            let envelope = try JSONDecoder().decode(FilesListEnvelope.self, from: data)
+            collected.append(contentsOf: envelope.data)
+            let total = envelope.pagination?.total ?? collected.count
+            if collected.count >= total || envelope.data.isEmpty { break }
+            page += 1
+        }
+        return collected
     }
 
     /// Download raw bytes (PDF) for a single file.
@@ -93,5 +104,12 @@ actor RemoteFilesService {
     private struct FilesListEnvelope: Decodable {
         let success: Bool
         let data: [RemoteFile]
+        let pagination: Pagination?
+    }
+
+    private struct Pagination: Decodable {
+        let total: Int?
+        let page: Int?
+        let limit: Int?
     }
 }

@@ -14,26 +14,67 @@ class LocalRAGBridge {
     private(set) var error: String?
 
     init() {
+        let provider = Self.resolveProvider()
         let config = RAGConfiguration(
             topK: Self.topK,
+            chunkSize: Self.chunkSize,
+            chunkOverlap: Self.chunkOverlap,
             similarityThreshold: Self.similarityThreshold,
-            provider: .foundationModels,
+            provider: provider,
             systemPromptTemplate: Self.systemPromptTemplate,
             temperature: Self.temperature
         )
         self.ragService = LocalRAGService(config: config)
     }
 
-    /// Initialize with a specific model path for llama.cpp
+    /// Initialize with a specific model path for llama.cpp (overrides
+    /// auto-detection).
     init(modelPath: String) {
         let config = RAGConfiguration(
             topK: Self.topK,
+            chunkSize: Self.chunkSize,
+            chunkOverlap: Self.chunkOverlap,
             similarityThreshold: Self.similarityThreshold,
             provider: .llamaCpp(modelPath: modelPath),
             systemPromptTemplate: Self.systemPromptTemplate,
             temperature: Self.temperature
         )
         self.ragService = LocalRAGService(config: config)
+    }
+
+    /// Search the standard locations for a GGUF model and pick llama.cpp if
+    /// one is present, otherwise fall back to Apple's FoundationModels (iOS
+    /// 26+; otherwise LocalRAG's no-op provider). Order:
+    ///   1. <Documents>/Models/*.gguf — preferred path so the user can drop
+    ///      a model via the Files app or `xcrun simctl push` without
+    ///      rebuilding the app.
+    ///   2. App bundle resource (any `.gguf` inside the .app) — handy for
+    ///      development with a bundled fixture.
+    /// The first .gguf found wins. Recommended model:
+    ///   gemma-2-2b-it-Q4_K_M.gguf (≈1.6GB) — instruction-tuned, fits in
+    ///   phone RAM, uses the `<start_of_turn>` chat template baked into
+    ///   LlamaCppProvider.
+    private static func resolveProvider() -> LLMProviderType {
+        let fm = FileManager.default
+
+        // 1. Documents/Models/
+        if let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let modelsDir = docs.appendingPathComponent("Models", isDirectory: true)
+            if let candidates = try? fm.contentsOfDirectory(at: modelsDir, includingPropertiesForKeys: nil),
+               let gguf = candidates.first(where: { $0.pathExtension.lowercased() == "gguf" }) {
+                logger.info("LocalRAG: using llama.cpp model at \(gguf.path)")
+                return .llamaCpp(modelPath: gguf.path)
+            }
+        }
+
+        // 2. App bundle resource
+        if let bundled = Bundle.main.urls(forResourcesWithExtension: "gguf", subdirectory: nil)?.first {
+            logger.info("LocalRAG: using bundled llama.cpp model at \(bundled.path)")
+            return .llamaCpp(modelPath: bundled.path)
+        }
+
+        logger.info("LocalRAG: no .gguf found in Documents/Models or app bundle — falling back to FoundationModels")
+        return .foundationModels
     }
 
     // Retrieval tuning for the on-device pipeline. Apple's NLEmbedding
@@ -45,6 +86,17 @@ class LocalRAGBridge {
     // context to cite without blowing the context window for short queries.
     private static let topK = 8
     private static let similarityThreshold = 0.05
+
+    // Chunking tuning. LocalRAG defaults are 500 chars / 50 overlap — fine
+    // for sentence-precision retrieval but too narrow for an LLM doing
+    // RAG: relevant facts get split across multiple chunks, and a 500-char
+    // hit rarely contains enough context to support a useful citation. Use
+    // 1200 chars / 200 overlap so each retrieved chunk holds roughly a
+    // paragraph or two. NLEmbedding still works at this length (it embeds
+    // the whole chunk as one vector) and the cosine signal is strong
+    // enough for top-K retrieval.
+    private static let chunkSize = 1200
+    private static let chunkOverlap = 200
 
     // Generation tuning. LocalRAG's default temperature is 0.7 (calibrated
     // for free-form chat); for RAG we want grounded answers that quote and

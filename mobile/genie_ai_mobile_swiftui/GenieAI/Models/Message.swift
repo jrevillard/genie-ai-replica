@@ -264,7 +264,11 @@ struct QueryRequest: Codable {
     }
 }
 
-// Query response from the API
+// Query response from the API. Online (gov-chat-backend) returns:
+//   { queryId, response, metadata: { source_documents: [...], confidence_score } }
+// Offline (LocalRAGBridge) JSON-roundtrips through:
+//   { id, response, sources: [...], confidence }
+// This decoder accepts both shapes so ChatService doesn't need to branch.
 struct QueryResponse: Decodable {
     let id: String?
     let response: String?
@@ -276,10 +280,32 @@ struct QueryResponse: Decodable {
         case underscoreId = "_id"
         case underscoreKey = "_key"
         case plainId = "id"
+        case queryId
         case response
         case content
         case sources
         case confidence
+        case metadata
+    }
+
+    private struct Metadata: Decodable {
+        let sources: [MessageMetadata.DocumentSource]?
+        let confidence: Double?
+
+        private enum CodingKeys: String, CodingKey {
+            case sources
+            case sourceDocuments = "source_documents"
+            case confidence
+            case confidenceScore = "confidence_score"
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.sources = try c.decodeIfPresent([MessageMetadata.DocumentSource].self, forKey: .sources)
+                ?? c.decodeIfPresent([MessageMetadata.DocumentSource].self, forKey: .sourceDocuments)
+            self.confidence = try c.decodeIfPresent(Double.self, forKey: .confidence)
+                ?? c.decodeIfPresent(Double.self, forKey: .confidenceScore)
+        }
     }
 
     init(from decoder: Decoder) throws {
@@ -287,10 +313,16 @@ struct QueryResponse: Decodable {
         self.id = try container.decodeIfPresent(String.self, forKey: .underscoreId)
             ?? container.decodeIfPresent(String.self, forKey: .underscoreKey)
             ?? container.decodeIfPresent(String.self, forKey: .plainId)
+            ?? container.decodeIfPresent(String.self, forKey: .queryId)
         self.response = try container.decodeIfPresent(String.self, forKey: .response)
         self.content = try container.decodeIfPresent(String.self, forKey: .content)
-        self.sources = try container.decodeIfPresent([MessageMetadata.DocumentSource].self, forKey: .sources)
-        self.confidence = try container.decodeIfPresent(Double.self, forKey: .confidence)
+
+        let topLevelSources = try container.decodeIfPresent([MessageMetadata.DocumentSource].self, forKey: .sources)
+        let topLevelConfidence = try container.decodeIfPresent(Double.self, forKey: .confidence)
+        let metadata = try container.decodeIfPresent(Metadata.self, forKey: .metadata)
+
+        self.sources = topLevelSources ?? metadata?.sources
+        self.confidence = topLevelConfidence ?? metadata?.confidence
     }
 
     var messageContent: String {

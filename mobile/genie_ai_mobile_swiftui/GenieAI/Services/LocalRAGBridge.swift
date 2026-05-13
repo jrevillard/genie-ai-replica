@@ -15,6 +15,8 @@ class LocalRAGBridge {
 
     init() {
         let config = RAGConfiguration(
+            topK: Self.topK,
+            similarityThreshold: Self.similarityThreshold,
             provider: .foundationModels,
             systemPromptTemplate: Self.systemPromptTemplate
         )
@@ -24,11 +26,23 @@ class LocalRAGBridge {
     /// Initialize with a specific model path for llama.cpp
     init(modelPath: String) {
         let config = RAGConfiguration(
+            topK: Self.topK,
+            similarityThreshold: Self.similarityThreshold,
             provider: .llamaCpp(modelPath: modelPath),
             systemPromptTemplate: Self.systemPromptTemplate
         )
         self.ragService = LocalRAGService(config: config)
     }
+
+    // Retrieval tuning for the on-device pipeline. Apple's NLEmbedding
+    // produces lower-magnitude cosine similarities than dense LLM-style
+    // embeddings, so LocalRAG's default `similarityThreshold` of 0.3 routinely
+    // dropped every chunk and surfaced as "No relevant context found.". Keep
+    // the threshold permissive and let top-K + downstream reranking (when
+    // present) do the filtering instead. topK = 8 gives the LLM enough
+    // context to cite without blowing the context window for short queries.
+    private static let topK = 8
+    private static let similarityThreshold = 0.05
 
     /// Mirrors the server-side chatqna prompt: ground answers in the
     /// retrieved chunks, cite each fact inline with [Source: <title>], and

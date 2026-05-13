@@ -1,6 +1,7 @@
 issue_tracking:
   enabled: true
   platform: gitlab
+  git_platform: gitlab
   host: opensource.unicc.org
   project: un/itu/genie-ai
   worktree_base: .claude/worktrees

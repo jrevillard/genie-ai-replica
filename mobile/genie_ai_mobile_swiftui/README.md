@@ -135,7 +135,7 @@ GenieAI/
 
 ## API Configuration
 
-The app connects to `https://genie-ai.itu.int/api` by default. To change this, modify the `baseURL` in `APIService.swift`.
+The app connects to `https://app.youngailinz.org/api` by default. To change this, modify the `baseURL` in `APIService.swift`.
 
 ## Theme Configuration
 

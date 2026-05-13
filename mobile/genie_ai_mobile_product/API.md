@@ -3,7 +3,7 @@
 > Extracted from the backend at `components/gov-chat-backend/` — Swagger spec + route files.
 > This document covers **mobile-relevant endpoints only**. Admin-only endpoints are omitted.
 
-**Base URL:** `https://genie-ai.itu.int/api`
+**Base URL:** `https://app.youngailinz.org/api`
 **Auth:** Bearer JWT token in `Authorization` header (except registration, login, password reset, availability checks)
 
 ---

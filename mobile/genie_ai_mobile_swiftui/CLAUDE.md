@@ -78,7 +78,7 @@ GenieAI/
 1. **iOS 17.0 minimum** - Required for `@Observable` macro
 2. **Keychain for tokens** - Uses Security framework for secure storage
 3. **CryptoKit for hashing** - SHA256 password hashing via `String.sha256` extension
-4. **API endpoint** - Configured in `APIService.swift` (`genie-ai.itu.int`)
+4. **API endpoint** - Configured in `APIService.swift` (`app.youngailinz.org`)
 
 ## Translations
 

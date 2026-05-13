@@ -105,7 +105,7 @@ Android adaptation of SwiftUI's Liquid Glass aesthetic:
 
 ## API Integration
 
-Base URL: `https://genie-ai.itu.int/api`
+Base URL: `https://app.youngailinz.org/api`
 
 Key endpoints:
 - **Auth**: `auth/login` (`encPassword`), `auth/logout`, `auth/me`, `auth/register` (`encPassword`), `auth/password-reset`, `auth/reset-password/confirm` (`newPassword`)

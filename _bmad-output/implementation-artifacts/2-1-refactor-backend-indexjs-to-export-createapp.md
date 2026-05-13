@@ -10,23 +10,29 @@ so that I can test route handlers via Supertest without starting the server.
 
 ## Acceptance Criteria
 
-1. **AC1: createApp() factory function** — `components/gov-chat-backend/index.js` exports `createApp({ services } = {})` that creates and returns a configured Express app without calling `app.listen()`. All middleware registration (helmet, cors, body-parser, rate limiting, security, error handling) and all static endpoints (health, robots, sitemap) are inside `createApp()`. Route registration is inside `createApp()` when `services` object is provided.
+1. **AC1: createApp() factory function** — `components/gov-chat-backend/index.js` exports `createApp({ services } = {})` that creates and returns a configured Express app without calling `app.listen()`. All middleware registration (helmet, cors, body-parser, rate limiting, security, error handling) and all static endpoints (health, robots, sitemap) are inside `createApp()`. Route registration is inside `createApp()` when `services` object is provided. **Exception:** the `swaggerJsdoc(options)` call (spec generation, lines 121–403) stays at module level — only the `app.use('/api-docs', ...)` middleware moves inside `createApp()`. This preserves compatibility with `swagger-config.test.js` which captures the spec via `require('../index')`.
 
 2. **AC2: Production startup preserved** — `index.js` calls `createApp()` internally and starts the server when run directly (`require.main === module` guard). Production behavior is unchanged: `docker-compose` CMD `node index.js` still starts the full application with DB connection and route mounting.
 
-3. **AC3: No module-level side effects on import** — Importing `index.js` via `require('./index')` does NOT start the server, does NOT call `app.listen()`, and does NOT attempt database connections. The auto-start only fires when `require.main === module`.
+3. **AC3: No module-level side effects on import** — Importing `index.js` via `require('./index')` does NOT start the server, does NOT call `app.listen()`, and does NOT attempt database connections. The auto-start only fires when `require.main === module`. Known acceptable module-level behavior: env vars are read (PORT, UPLOAD_DIR, CORS_ALLOWED_ORIGINS, CSP_CONNECT_SRC with safe defaults), `swaggerJsdoc()` generates the OpenAPI spec, and the uploads directory is created if missing (lines 50-65). None of these are test-breaking side effects.
 
 4. **AC4: CommonJS export** — `module.exports = { createApp }` uses CommonJS `require()`/`module.exports` syntax exclusively (NFR21). No ES import/export syntax.
 
-5. **AC5: Self-tests** — A new test file `__tests__/createApp.test.js` verifies: (a) `createApp()` returns an Express app instance, (b) all middleware is applied (security headers, CORS, body parsing), (c) static endpoints work (GET `/api/health` returns 200), (d) `createApp({ services: mockServices })` registers all routes, (e) multiple calls produce independent app instances.
+5. **AC5: Self-tests** — A new test file `__tests__/createApp.test.js` verifies:
+   - (a) `createApp()` returns an Express app instance (has `.listen` and `.use` methods)
+   - (b) middleware is applied: `x-powered-by` header absent, CORS headers present, body parsing works (POST JSON)
+   - (c) static endpoints work: GET `/api/health` returns 200 without services
+   - (d) `createApp({ services: mockServices })` registers routes: verify at least 3 distinct endpoints respond (e.g. GET `/api/health` → 200, GET `/api/me` → 401 or 403, POST `/api/auth/login` without body → 400 or 405)
+   - (e) two `createApp()` calls produce independent instances: `app1 !== app2` and adding middleware to `app1` does not affect `app2`
+   - (f) `require('../index')` does NOT call `app.listen()` (server not started)
 
-6. **AC6: Existing tests pass** — All 8 existing test files in `__tests__/` continue to pass unchanged. These tests import individual modules (authController, middleware, services) — they do NOT import `index.js`, so the refactor must not break their module resolution.
+6. **AC6: Existing tests pass** — All 8 existing test files in `__tests__/` continue to pass. Seven tests import individual modules (authController, middleware, services) and are unaffected by the refactor. One test (`swagger-config.test.js`) imports `require('../index')` to trigger swagger spec generation via a mocked `swagger-jsdoc` — this must still work because the `swaggerJsdoc(options)` call stays at module level (see AC1 exception).
 
 ## Tasks / Subtasks
 
 - [ ] Task 1: Refactor index.js to extract createApp() (AC: #1, #2, #3, #4)
   - [ ] 1.1 Move Express app creation (`const app = express()`) inside `createApp()`
-  - [ ] 1.2 Move all middleware registration (lines 44–630) inside `createApp()`
+  - [ ] 1.2 Move all middleware registration (lines 44–630) inside `createApp()`. **Exception:** keep `swaggerJsdoc(options)` call (spec generation) at module level; only move `app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs))` inside `createApp()`. This preserves `swagger-config.test.js` compatibility.
   - [ ] 1.3 Move static endpoints (health, robots, sitemap, lines 916–968) inside `createApp()`
   - [ ] 1.4 Move error handler and 404 handler (lines 1174–1202) inside `createApp()`
   - [ ] 1.5 Extract `registerRoutes(app, services, routeConfigs)` helper from `startApp()` route mounting logic (lines 1036–1151)
@@ -38,15 +44,13 @@ so that I can test route handlers via Supertest without starting the server.
   - [ ] 1.11 Move `routeConfigs` array definition inside `createApp()` or as a module-level constant (not inside `startApp`)
 
 - [ ] Task 2: Create createApp test file (AC: #5)
-  - [ ] 2.1 Create `__tests__/createApp.test.js` with shared-lib mock at module level
-  - [ ] 2.2 Test: `createApp()` returns an object with `listen` function (Express app)
-  - [ ] 2.3 Test: GET `/api/health` returns 200 without any services (static endpoint)
-  - [ ] 2.4 Test: security headers are present (helmet, x-powered-by removed)
-  - [ ] 2.5 Test: CORS headers are set on responses
-  - [ ] 2.6 Test: body parsing works (POST with JSON body)
-  - [ ] 2.7 Test: `createApp({ services: mockServices })` registers all 12 route modules and returns 200/401 on protected endpoints
-  - [ ] 2.8 Test: two `createApp()` calls produce independent app instances (no shared state)
-  - [ ] 2.9 Test: importing index.js does NOT start the server (no `app.listen()` side effect)
+  - [ ] 2.1 Create `__tests__/createApp.test.js` with **complete** shared-lib mock (all 4 exports: `logger`, `dbService`, `securityHeaders`, `SecurityMiddleware`) — see Mock Requirements section below
+  - [ ] 2.2 Test (AC5a): `createApp()` returns an object with `listen` and `use` functions (Express app)
+  - [ ] 2.3 Test (AC5c): GET `/api/health` returns 200 without any services (static endpoint)
+  - [ ] 2.4 Test (AC5b): `x-powered-by` header is absent (helmet applied), body parsing works (POST JSON)
+  - [ ] 2.5 Test (AC5d): `createApp({ services: mockServices })` mounts routes — verify at least 3 endpoints: GET `/api/health` → 200, GET `/api/me` → 401 (auth required), POST `/api/auth/login` without body → 400
+  - [ ] 2.6 Test (AC5e): two `createApp()` calls produce independent instances — `app1 !== app2`, adding middleware to `app1` does not affect `app2`
+  - [ ] 2.7 Test (AC5f): importing index.js does NOT call `app.listen()` (verify no server socket opened)
 
 - [ ] Task 3: Verify existing tests pass (AC: #6)
   - [ ] 3.1 Run `cd components/gov-chat-backend && npm test` — all 8 existing tests pass
@@ -91,22 +95,37 @@ process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || 128;
 const express = require('express');
 // ... all imports ...
 
+// Swagger spec generation — stays at module level for swagger-config.test.js compatibility
+const swaggerSpec = swaggerJsdoc({ /* ... options from lines 121-403 ... */ });
+
 const ROUTE_CONFIGS = [
   { file: 'user-routes', paths: ['/api/me'], serviceName: 'userProfileService', keycloakAuth: true },
   { file: 'auth-routes', paths: ['/api/auth'], serviceName: null },
   // ... all 12 route configs ...
 ];
 
+/**
+ * Creates a configured Express application.
+ * @param {Object} [options]
+ * @param {Object} [options.services] - Service instances for route injection.
+ *   When provided, routes are mounted with these services. Keys must match
+ *   ROUTE_CONFIGS serviceName values: userProfileService, queryService,
+ *   serviceCategoryService, chatHistoryService, analyticsService, logsService,
+ *   databaseOperationsService, adminDashboardService, weatherService, translationService
+ * @returns {import('express').Express} Configured Express app (not listening).
+ */
 function createApp({ services = {} } = {}) {
   const app = express();
-  const PORT = process.env.PORT || 3000;
 
   // App config
   app.disable('etag');
   app.disable('x-powered-by');
 
-  // ALL middleware (security, swagger, helmet, cors, body parser, static files)
-  // ... move lines 44-630 here ...
+  // ALL middleware (security, helmet, cors, body parser, static files)
+  // ... move lines 44-630 here (EXCEPT swaggerJsdoc call — already at module level) ...
+
+  // Swagger UI middleware (uses spec generated at module level)
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { /* oauth config */ }));
 
   // Static endpoints (health, robots, sitemap)
   // ... move lines 916-968 here ...
@@ -159,17 +178,16 @@ module.exports = { createApp };
 
 2. **Lines 26-30 log on import** — `logger.info('Validating shared-lib imports:')` fires when the module loads. In tests with mocked logger, this is harmless. Consider moving inside `createApp()` or removing.
 
-3. **`shared-lib` import triggers side effects** — `require('./shared-lib')` auto-creates DB connection. Tests MUST mock this at module level via `jest.mock('./shared-lib', ...)` BEFORE requiring index.js. The existing test pattern already does this.
-
-4. **Swagger config (lines 121-426) is 300+ lines of inline schema definitions** — Move into `createApp()` as-is. No need to refactor swagger schemas in this story.
+3. **`shared-lib` import does NOT auto-connect to DB.** Verified: `require('./shared-lib')` creates the `dbService` singleton but the actual ArangoDB connection only happens when `dbService.getConnection()` is explicitly called (line 677, inside `initializeServices()`). However, tests MUST still mock all 4 exports of shared-lib at module level because `index.js` uses them at module level for middleware setup (securityHeaders at line 44, SecurityMiddleware.applySecurityMiddleware at line 529).
 
 5. **`initializeServices()` requires DB connection** — This function stays outside `createApp()`. Production calls it before `createApp({ services })`. Tests provide mock services directly.
 
-6. **Route instantiation patterns differ per route file:**
-   - 10 routes: factory function `routeModule(service)`
+6. **Route instantiation patterns differ per route file (verified):**
+   - 9 routes: factory function `routeModule(service)` — user, query, service, chat-history, service-category, database-operations, weather, translation
+   - `logger-routes`: factory function `routeModule()` with no parameters (service is null in config) — verified: `module.exports = () => { ... return router; }`
    - `analytics-routes`: factory with controller `routeModule(service, controller)` (requires `new AnalyticsController(service)`)
    - `admin-routes`: dual services `routeModule(service, extraService)`
-   - `auth-routes`: plain router (no factory)
+   - `auth-routes`: plain router `module.exports = router` (no factory) — verified: exports Express router directly
    These patterns MUST be preserved exactly in `registerRoutes()`.
 
 7. **`keycloakAuthMiddleware.authenticate` is applied per-route** — Only routes with `keycloakAuth: true` get the auth middleware. This logic is in the route mounting loop and must be preserved.
@@ -183,9 +201,12 @@ module.exports = { createApp };
 From `__tests__/authController.test.js` and `__tests__/keycloak-auth-middleware.test.js`:
 
 ```javascript
-// 1. Mock shared-lib FIRST with { virtual: true }
+// 1. Mock shared-lib FIRST — must include ALL 4 exports used by index.js
 jest.mock('../shared-lib', () => ({
-  logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
+  logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
+  dbService: { getConnection: jest.fn() },
+  securityHeaders: (req, res, next) => next(),
+  SecurityMiddleware: { applySecurityMiddleware: jest.fn() }
 }), { virtual: true });
 
 // 2. Use closure-based mock references
@@ -199,16 +220,31 @@ function createMockReq(overrides = {}) { return { user: { ... }, ...overrides };
 function createMockRes() { return { json: jest.fn(), status: jest.fn().mockReturnThis() }; }
 ```
 
+**Why all 4 exports:** `index.js` destructures `{ logger, dbService, securityHeaders, SecurityMiddleware }` from shared-lib at line 12. If any export is missing from the mock, the require will fail with `Cannot destructure property 'X' of undefined`.
+
 ### Supertest Usage Pattern (for createApp tests)
 
 ```javascript
 const request = require('supertest');
-const { createApp } = require('../index');
 
-// Mock shared-lib before requiring index
+// Mock shared-lib before requiring index — ALL 4 exports required
 jest.mock('../shared-lib', () => ({
-  logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
+  logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
+  dbService: { getConnection: jest.fn() },
+  securityHeaders: (req, res, next) => next(),
+  SecurityMiddleware: { applySecurityMiddleware: jest.fn() }
 }), { virtual: true });
+
+// Mock keycloak middleware (imported by index.js at line 13)
+jest.mock('../middleware/keycloak-auth-middleware', () => ({
+  keycloakAuthMiddleware: { authenticate: (req, res, next) => next() }
+}));
+
+// Mock swagger dependencies (index.js imports swagger-jsdoc and swagger-ui-express)
+jest.mock('swagger-jsdoc', () => () => ({ openapi: '3.0.0', info: {}, components: {}, security: [] }));
+jest.mock('swagger-ui-express', () => ({ serve: [], setup: () => (req, res, next) => next() }));
+
+const { createApp } = require('../index');
 
 describe('createApp', () => {
   it('should return Express app with health endpoint', async () => {
@@ -243,7 +279,7 @@ function createMockServices() {
 }
 ```
 
-Note: Route factory functions like `user-routes(service)` receive the service object. They don't call methods on it during route registration — only during request handling. So an empty object `{}` is sufficient for testing that routes are registered (mount without errors).
+Note: Route factory functions like `user-routes(service)` receive the service object. They don't call methods on it during route registration — only during request handling. So an empty object `{}` is sufficient for testing that routes are registered (mount without errors). **Important:** 11 of 12 routes import `shared-lib` directly for `logger` — since shared-lib is already mocked at module level, routes will load without errors. Only `query-routes.js` does not import shared-lib.
 
 ### Route Config Reference (12 modules)
 
@@ -277,12 +313,11 @@ This refactor **unblocks** Stories 2.2–2.8 (all backend route/service/middlewa
 
 - Do NOT use ES `import`/`export` syntax — backend is CommonJS only
 - Do NOT introduce a separate `app.js` file — keep createApp() in `index.js` per the AC ("index.js calls createApp()")
-- Do NOT remove the `shared-lib` validation logging — it helps debug production issues
-- Do NOT change the swagger configuration block — it's large but functional
+- Do NOT move `swaggerJsdoc(options)` inside `createApp()` — it must stay at module level for `swagger-config.test.js` compatibility. Only `app.use('/api-docs', ...)` moves inside.
 - Do NOT make `createApp()` async — the app creation is synchronous; async is only for service initialization
 - Do NOT register process event handlers inside `createApp()` — those are process-level concerns
 - Do NOT add `jest-junit` configuration in this story — that's Story 1.1
-- Do NOT modify any existing test files — they must pass unchanged
+- Do NOT modify any existing test files — they must pass unchanged (verified: `swagger-config.test.js` will work because `swaggerJsdoc()` stays at module level)
 
 ### Project Structure Notes
 

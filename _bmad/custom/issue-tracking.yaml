@@ -3,6 +3,7 @@ issue_tracking:
   platform: gitlab
   host: opensource.unicc.org
   project: un/itu/genie-ai
+  worktree_base: .claude/worktrees
   branch_patterns:
     prd: "feat/{prd_key}/prd"
     story: "feat/{prd_key}/{story_key}"

@@ -19,6 +19,19 @@ actor APIService {
 
     // MARK: - Token Management
 
+    /// Closure invoked when a request returns 401. AuthService installs this
+    /// to perform a Keycloak refresh-token grant; on success the original
+    /// request is retried once with the new bearer.
+    private var onUnauthorized: (@Sendable () async throws -> Void)?
+
+    /// Tracks an in-flight refresh so concurrent 401s coalesce into a single
+    /// refresh round-trip rather than triggering N parallel grants.
+    private var refreshTask: Task<Void, Error>?
+
+    func setUnauthorizedHandler(_ handler: @Sendable @escaping () async throws -> Void) {
+        onUnauthorized = handler
+    }
+
     func setToken(_ token: String) {
         print("[APIService] Setting access token: \(String(token.prefix(5)))...")
         accessToken = token
@@ -196,31 +209,72 @@ actor APIService {
     // MARK: - Request Execution
 
     private func performRequest(_ request: URLRequest) async throws -> Data {
+        var req = request
+        var didRetry = false
+
+        while true {
+            do {
+                let (data, response) = try await session.data(for: req)
+
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw APIError.invalidResponse
+                }
+
+                print("[API Response] Status Code: \(httpResponse.statusCode)")
+                if let bodyString = String(data: data, encoding: .utf8) {
+                    print("Body: \(bodyString)")
+                }
+                print("----------------------------------------------------------------")
+
+                // Refresh-on-401: if the auth layer has installed a handler,
+                // try to refresh tokens once and replay the request with the
+                // new bearer. If the refresh itself fails (or the retry also
+                // returns 401), surface the error to the caller.
+                if httpResponse.statusCode == 401, !didRetry, onUnauthorized != nil {
+                    do {
+                        try await coalescedRefresh()
+                    } catch {
+                        throw APIError.httpError(statusCode: 401, data: data)
+                    }
+                    if let token = accessToken {
+                        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                    }
+                    didRetry = true
+                    continue
+                }
+
+                guard (200...299).contains(httpResponse.statusCode) else {
+                    throw APIError.httpError(statusCode: httpResponse.statusCode, data: data)
+                }
+
+                return data
+            } catch let error as APIError {
+                throw error
+            } catch {
+                print("!!!!!!!!!!! [API EXCEPTION] !!!!!!!!!!!")
+                print("Error: \(error)")
+                print("----------------------------------------------------------------")
+                throw APIError.networkError(error)
+            }
+        }
+    }
+
+    /// Run the unauthorized handler, coalescing concurrent 401 retries so the
+    /// app fires at most one refresh-token round-trip at a time.
+    private func coalescedRefresh() async throws {
+        if let existing = refreshTask {
+            try await existing.value
+            return
+        }
+        guard let handler = onUnauthorized else { return }
+        let task = Task<Void, Error> { try await handler() }
+        refreshTask = task
         do {
-            let (data, response) = try await session.data(for: request)
-
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw APIError.invalidResponse
-            }
-
-            print("[API Response] Status Code: \(httpResponse.statusCode)")
-            if let bodyString = String(data: data, encoding: .utf8) {
-                print("Body: \(bodyString)")
-            }
-            print("----------------------------------------------------------------")
-
-            guard (200...299).contains(httpResponse.statusCode) else {
-                throw APIError.httpError(statusCode: httpResponse.statusCode, data: data)
-            }
-
-            return data
-        } catch let error as APIError {
-            throw error
+            try await task.value
+            refreshTask = nil
         } catch {
-            print("!!!!!!!!!!! [API EXCEPTION] !!!!!!!!!!!")
-            print("Error: \(error)")
-            print("----------------------------------------------------------------")
-            throw APIError.networkError(error)
+            refreshTask = nil
+            throw error
         }
     }
 }

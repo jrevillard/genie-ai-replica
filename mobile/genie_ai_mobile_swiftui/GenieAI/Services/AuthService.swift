@@ -42,7 +42,29 @@ class AuthService: NSObject {
     override init() {
         super.init()
         Task {
+            await installUnauthorizedHandler()
             await loadStoredToken()
+        }
+    }
+
+    /// Tell APIService to call back into us whenever a request returns 401
+    /// so we can run a Keycloak refresh-token grant before the request is
+    /// retried. The handler clears auth state when it can't refresh, so the
+    /// UI bounces the user back to the sign-in screen instead of looping.
+    private func installUnauthorizedHandler() async {
+        await api.setUnauthorizedHandler { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.refreshAccessToken()
+            } catch {
+                await MainActor.run {
+                    self.isAuthenticated = false
+                    self.currentUser = nil
+                }
+                self.clearStoredTokens()
+                await self.api.clearToken()
+                throw error
+            }
         }
     }
 

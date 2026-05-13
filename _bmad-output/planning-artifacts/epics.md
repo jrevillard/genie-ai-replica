@@ -160,6 +160,30 @@ None — testing framework has no user-facing UI.
 | FR45 | Epic 9 | AI test scaffolding generation |
 | FR46 | Epic 9 | AI test case suggestions |
 
+## Execution Dependencies
+
+Epics are numbered for reference, not for sequential execution. The recommended execution order for parallel work:
+
+**Wave 0 — Foundation (must complete first):**
+- Epic 1 Stories 1.1–1.3 (JUnit reporting, lint stage, test stage) — CI infrastructure
+- Epic 7 Stories 7.1–7.2 (trace context helpers, log assertions) — test utilities imported by Epics 3–6
+- Story 2.2 (backend fixtures) and Story 4.1 (OPEA pytest config + fixtures) — shared mock infrastructure
+
+**Wave 1 — Core tests (parallel across components):**
+- Epic 2 Stories 2.1, 2.3–2.8 (backend tests) — after `createApp()` refactor
+- Epic 3 Stories 3.1–3.5 (frontend tests) — after frontend fixtures
+- Epic 4 Stories 4.1–4.6 (OPEA tests) — after pytest config, Story 4.4 (core types) before 4.5–4.6
+- Epic 5 Stories 5.1–5.4 (doc-repo tests) — after doc-repo fixtures
+
+**Wave 2 — Cross-cutting and advanced:**
+- Epic 1 Stories 1.4–1.7 (contract stage, config validation, MR blocking, caching) — needs tests from Wave 1
+- Epic 6 (config validation) — independent, can start in Wave 0
+- Epic 8 (RAG quality) — needs OPEA fixtures from Epic 4
+- Epic 9 (AI test generation) — needs existing tests from Epics 2–5
+
+**Cross-component fixture consistency:**
+- Backend (Story 2.2), frontend (Story 3.1), and OPEA (Story 4.1) fixture stories MUST use consistent response shapes for shared entities (user, conversation, file metadata). When in doubt, the backend API response shape is the source of truth.
+
 ## Epic List
 
 ### Epic 1: Merge with Confidence — CI/CD Pipeline
@@ -277,17 +301,19 @@ So that I get fast feedback on whether my changes break anything.
 ### Story 1.4: Create CI Pipeline Contract Test Stage
 
 As a developer,
-I want the CI pipeline to validate API request/response schemas,
+I want the CI pipeline to run contract tests as a dedicated stage,
 So that breaking interface changes are caught before merge.
 
 **Acceptance Criteria:**
 
-**Given** the test stage passes
+**Given** the test stage passes and route handler tests exist from Epics 2 and 5
 **When** the contract stage runs
-**Then** contract test jobs validate API schemas for backend and document-repository
-**And** Supertest-based route handler tests verify request/response shapes
-**And** JUnit XML reports are collected as artifacts
+**Then** a `contract-test` CI stage executes `npm run test:contract` in backend and document-repository
+**And** the stage runs existing Supertest-based route handler tests that verify request/response schemas
+**And** the stage does NOT write new tests — it orchestrates execution of tests written in Epics 2 and 5
+**And** JUnit XML reports are collected as `artifacts:reports:junit`
 **And** the stage blocks the MR on failure
+**And** path-based `rules:changes` trigger only relevant contract tests on MRs
 
 ### Story 1.5: Create CI Pipeline Configuration Validation Stage
 
@@ -343,6 +369,40 @@ So that pipeline execution is fast and efficient.
 **And** full suite runs on `main` branch pushes regardless of path changes
 **And** total mandatory pipeline time is under 10 minutes (NFR1)
 
+### Story 1.8: E2E Playwright Tests for Chatbot Interaction Flows
+
+As a developer,
+I want automated Playwright E2E tests for the chatbot interaction flows,
+So that critical user journeys through the RAG pipeline are validated in CI.
+
+**Acceptance Criteria:**
+
+**Given** the existing manual E2E procedures in `docs/e2e-tests/` have been validated
+**When** I create automated Playwright tests for chatbot flows
+**Then** tests cover the full chatbot interaction: user sends a message → backend processes → RAG pipeline retrieves → LLM generates response → frontend displays answer
+**And** tests validate streaming SSE responses are rendered correctly
+**And** tests validate conversation history persistence across sessions
+**And** tests validate error handling when the RAG pipeline is unavailable
+**And** tests run as a scheduled CI job (not blocking MRs)
+**And** the full E2E suite completes within NFR3 (<30 minutes)
+
+### Story 1.9: E2E Playwright Tests for Document Upload and Search Flows
+
+As a developer,
+I want automated Playwright E2E tests for document upload and search flows,
+So that the document ingestion pipeline is validated end-to-end in CI.
+
+**Acceptance Criteria:**
+
+**Given** the existing manual E2E procedures in `docs/e2e-tests/` have been validated
+**When** I create automated Playwright tests for document flows
+**Then** tests cover: user uploads a document → ClamAV scanning → dataprep ingestion → chunking + embedding → document appears in search results
+**And** tests validate multi-format upload (.txt, .md, .pdf)
+**And** tests validate file type rejection for unsupported formats
+**And** tests validate search returns relevant results after ingestion
+**And** tests run as a scheduled CI job (not blocking MRs)
+**And** the full E2E suite completes within NFR3 (<30 minutes)
+
 ## Epic 2: Backend API Test Suite
 
 The developer writes and runs tests for backend route handlers, service layer business logic, and middleware behavior against an in-memory Express application with deterministic mocks.
@@ -381,6 +441,7 @@ So that all backend tests use consistent, maintainable test data.
 **And** all factories use the overrides pattern (spread with defaults)
 **And** `db-connection-service.js` is mocked at module level via `jest.mock()` in a setup file
 **And** all fixtures use CommonJS `require()` syntax (NFR21)
+**And** fixture response shapes (user, conversation, file metadata) are the source of truth — frontend (Story 3.1) and OPEA (Story 4.1) fixtures MUST match these shapes for cross-component consistency
 
 ### Story 2.3: Test Backend Auth Route Handlers
 
@@ -419,24 +480,38 @@ So that conversation endpoints are validated against the API contract.
 **And** query-service and chat-history-service are mocked
 **And** all tests use factory fixtures from `__tests__/fixtures/`
 
-### Story 2.5: Test Backend Analytics, Admin, Files, and Categories Route Handlers
+### Story 2.5: Test Backend Analytics and Categories Route Handlers
 
 As a developer,
-I want tests for the remaining route groups,
-So that all backend API contracts are fully validated.
+I want tests for analytics and categories route groups,
+So that these backend API contracts are fully validated.
 
 **Acceptance Criteria:**
 
 **Given** `createApp()` is exported from `index.js`
-**When** I create route test files for analytics, admin, files, and categories
+**When** I create route test files for analytics and categories
 **Then** `__tests__/routes/analytics.test.js` covers GET `/api/analytics/*` endpoints
-**And** `__tests__/routes/admin.test.js` covers GET/PUT `/api/admin/*` endpoints with role-based access (403 for non-admin)
-**And** `__tests__/routes/files.test.js` covers POST/GET/DELETE `/api/files/*` endpoints
 **And** `__tests__/routes/categories.test.js` covers GET `/api/categories/*` endpoints
-**And** all services are mocked (analytics-service, admin controller, fileService)
+**And** analytics-service is mocked via `jest.mock()`
 **And** error format follows `{ error, message, details }` (RFC 9457)
 
-### Story 2.6: Test Backend Service Layer
+### Story 2.6: Test Backend Admin and Files Route Handlers
+
+As a developer,
+I want tests for admin and files route groups,
+So that role-based access control and file proxy routing are validated.
+
+**Acceptance Criteria:**
+
+**Given** `createApp()` is exported from `index.js`
+**When** I create route test files for admin and files
+**Then** `__tests__/routes/admin.test.js` covers GET/PUT `/api/admin/*` endpoints with role-based access (403 for non-admin)
+**And** `__tests__/routes/files.test.js` covers POST/GET/DELETE `/api/files/*` endpoints as BFF proxy handlers
+**And** file route tests mock the document-repository service (`fileService`) — these tests validate the backend HTTP layer only, NOT the document-repository business logic (see Epic 5)
+**And** admin controller is mocked via `jest.mock()`
+**And** error format follows `{ error, message, details }` (RFC 9457)
+
+### Story 2.7: Test Backend Service Layer
 
 As a developer,
 I want unit tests for backend service business logic,
@@ -454,7 +529,7 @@ So that service-layer bugs are caught without network or database dependencies.
 **And** ArangoDB and external services are mocked via `jest.mock()`
 **And** all tests are independent of execution order (NFR7)
 
-### Story 2.7: Test Backend Middleware
+### Story 2.8: Test Backend Middleware
 
 As a developer,
 I want tests for middleware behavior,
@@ -572,6 +647,8 @@ So that API communication is validated with mocked responses.
 
 The developer writes and runs pytest tests for the retriever's hybrid search, dataprep extraction pipeline, reranker score validation, core types, and custom overlay interfaces — all with mocked ArangoDB, vLLM, and TEI dependencies.
 
+**Note:** Story 4.4 (Core Types) is a prerequisite for Stories 4.5 and 4.6 — other OPEA tests depend on validated type definitions.
+
 ### Story 4.1: Configure pytest and Create Shared Fixtures for OPEA
 
 As a developer,
@@ -629,25 +706,37 @@ So that document processing logic is validated without real file system or embed
 **And** tests verify error handling for corrupted or unsupported file formats
 **And** all external services (Docling, TEI, ArangoDB) are mocked
 
-### Story 4.4: Test Reranker Score Validation and Core Types
+### Story 4.4: Test Core Type Definitions and API Protocols
 
 As a developer,
-I want pytest tests for the reranker and core type definitions,
-So that score validation, top-K constraints, and API protocols are validated.
+I want pytest tests for shared core type definitions,
+So that Pydantic models, protocol constants, and type validation are verified as a foundation for other OPEA tests.
 
 **Acceptance Criteria:**
 
-**Given** `genieai_reranker.py` validates scores and `genieai_api_protocol.py` defines custom Pydantic models
-**When** I create `tests/test_reranker.py`
-**Then** tests verify score validation accepts valid scores and rejects out-of-range values
-**And** tests verify top-K constraint enforcement returns exactly K results
-**And** tests verify TEI service call with correct payload
+**Given** `genie-ai-overlay/core/` defines custom Pydantic models and protocol constants
 **When** I create `tests/test_core.py`
 **Then** tests verify custom Pydantic models serialize/deserialize correctly
 **And** tests verify protocol constants match expected values
 **And** tests verify type validation on request/response models
+**And** this story is a prerequisite for Stories 4.5 and 4.6 (other OPEA tests depend on these types)
 
-### Story 4.5: Test ChatQnA Orchestrator Interface
+### Story 4.5: Test Reranker Score Validation and Top-K Constraints
+
+As a developer,
+I want pytest tests for the reranker's score validation and result limiting,
+So that score boundaries and top-K enforcement are validated.
+
+**Acceptance Criteria:**
+
+**Given** `genieai_reranker.py` validates scores and enforces top-K constraints
+**When** I create `tests/test_reranker.py`
+**Then** tests verify score validation accepts valid scores and rejects out-of-range values
+**And** tests verify top-K constraint enforcement returns exactly K results
+**And** tests verify TEI service call with correct payload
+**And** TEI service is mocked via conftest fixture
+
+### Story 4.6: Test ChatQnA Orchestrator Interface
 
 As a developer,
 I want pytest tests for the ChatQnA orchestrator interface,

@@ -1,0 +1,122 @@
+# generated: 2026-05-13
+# last_updated: 2026-05-13
+# project: genie-ai
+# project_key: testing-framework
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-05-13
+last_updated: 2026-05-13
+project: genie-ai
+project_key: testing-framework
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # Epic 1: Merge with Confidence — CI/CD Pipeline
+  epic-1: backlog
+  1-1-configure-junit-xml-reporting-for-all-test-runners: backlog
+  1-2-create-ci-pipeline-lint-stage: backlog
+  1-3-create-ci-pipeline-test-stage: backlog
+  1-4-create-ci-pipeline-contract-test-stage: backlog
+  1-5-create-ci-pipeline-configuration-validation-stage: backlog
+  1-6-configure-mr-blocking-and-scheduled-jobs: backlog
+  1-7-configure-ci-caching-and-path-based-triggers: backlog
+  1-8-e2e-playwright-tests-for-chatbot-interaction-flows: backlog
+  1-9-e2e-playwright-tests-for-document-upload-and-search-flows: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: Backend API Test Suite
+  epic-2: backlog
+  2-1-refactor-backend-indexjs-to-export-createapp: backlog
+  2-2-create-backend-test-fixtures-and-shared-mocks: backlog
+  2-3-test-backend-auth-route-handlers: backlog
+  2-4-test-backend-chat-route-handlers: backlog
+  2-5-test-backend-analytics-and-categories-route-handlers: backlog
+  2-6-test-backend-admin-and-files-route-handlers: backlog
+  2-7-test-backend-service-layer: backlog
+  2-8-test-backend-middleware: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Frontend Component Test Suite
+  epic-3: backlog
+  3-1-create-frontend-test-fixtures-and-shared-mocks: backlog
+  3-2-test-critical-vue-components-chatbot-and-navbar: backlog
+  3-3-test-critical-vue-components-userprofile-and-admin-dashboard: backlog
+  3-4-test-vuex-store-modules: backlog
+  3-5-test-http-services: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: OPEA Microservice Test Suite
+  epic-4: backlog
+  4-1-configure-pytest-and-create-shared-fixtures-for-opea: backlog
+  4-2-test-retriever-hybrid-search-logic: backlog
+  4-3-test-dataprep-extraction-pipeline: backlog
+  4-4-test-core-type-definitions-and-api-protocols: backlog
+  4-5-test-reranker-score-validation-and-top-k-constraints: backlog
+  4-6-test-chatqna-orchestrator-interface: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Document Repository Test Suite
+  epic-5: backlog
+  5-1-create-document-repository-test-fixtures-and-mocks: backlog
+  5-2-test-file-upload-download-search-and-delete-endpoints: backlog
+  5-3-test-file-service-business-logic: backlog
+  5-4-test-security-middleware-and-metadata-services: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Configuration Integrity Validation
+  epic-6: backlog
+  6-1-build-env-template-parser-and-docker-compose-cross-reference-validator: backlog
+  6-2-build-hardware-profile-and-feature-flag-validators: backlog
+  6-3-create-configuration-validation-test-suite-and-env-profiles: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: MELT-Ready Test Instrumentation
+  epic-7: backlog
+  7-1-create-structured-test-output-and-trace-context-helpers: backlog
+  7-2-create-structured-log-assertion-helpers: backlog
+  7-3-create-melt-provider-api-query-interface-and-grafana-dashboard-specs: backlog
+  epic-7-retrospective: optional
+
+  # Epic 8: RAG Quality Assurance
+  epic-8: backlog
+  8-1-create-rag-quality-test-bed-and-document-corpus-fixtures: backlog
+  8-2-create-ragas-threshold-configuration-and-evaluation-pipeline: backlog
+  8-3-create-rag-quality-report-generator: backlog
+  epic-8-retrospective: optional
+
+  # Epic 9: AI-Assisted Test Generation
+  epic-9: backlog
+  9-1-create-ai-test-scaffolding-generator: backlog
+  9-2-create-ai-test-case-suggestion-engine: backlog
+  epic-9-retrospective: optional

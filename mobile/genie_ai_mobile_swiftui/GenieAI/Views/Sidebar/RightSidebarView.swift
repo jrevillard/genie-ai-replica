@@ -506,7 +506,7 @@ struct DocumentRow: View {
         guard let fileId = document.documentId, !fileId.isEmpty else { return }
         guard let token = accessToken, !token.isEmpty else { return }
 
-        let viewUrl = "https://genie-ai.itu.int/api/files/\(fileId)/view?access_token=\(token)"
+        let viewUrl = "https://app.youngailinz.org/api/files/\(fileId)/view?access_token=\(token)"
         if let url = URL(string: viewUrl) {
             openURL(url)
         }

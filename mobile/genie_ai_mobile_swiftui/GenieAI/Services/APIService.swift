@@ -6,7 +6,7 @@ import Foundation
 actor APIService {
     static let shared = APIService()
 
-    private let baseURL = "https://genie-ai.itu.int/api"
+    private let baseURL = "https://app.youngailinz.org/api"
     private var accessToken: String?
     private let session: URLSession
 

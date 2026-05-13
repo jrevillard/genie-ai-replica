@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 object ApiService {
 
     private const val TAG = "ApiService"
-    const val BASE_URL = "https://genie-ai.itu.int/api"
+    const val BASE_URL = "https://app.youngailinz.org/api"
 
     private var accessToken: String? = null
     val gson = Gson()

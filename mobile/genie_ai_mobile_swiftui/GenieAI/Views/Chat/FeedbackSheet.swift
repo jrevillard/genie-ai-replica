@@ -223,7 +223,7 @@ struct FeedbackSheet: View {
     FeedbackSheet(
         message: Message(
             role: .assistant,
-            content: "To apply for a national ID, you need to visit the Huduma Centre with your birth certificate."
+            content: "To apply for a national ID, you need to visit the registration office with your birth certificate."
         ),
         onSubmit: { _, _, _ in },
         onDismiss: {}

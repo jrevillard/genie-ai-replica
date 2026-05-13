@@ -222,7 +222,7 @@ struct RoundedCorner: Shape {
         MessageBubble(
             message: Message(
                 role: .assistant,
-                content: "To apply for a **national ID** in Kenya, you'll need to visit your nearest *Huduma Centre* with:\n\n1. Birth certificate\n2. Copies of parents' IDs\n\nFor more info, visit [Huduma](https://example.com).",
+                content: "To apply for a **national ID**, you'll need to visit your nearest *registration office* with:\n\n1. Birth certificate\n2. Copies of parents' IDs\n\nFor more info, see the [official guidance](https://example.com).",
                 queryId: "123",
                 confidence: 0.95
             ),

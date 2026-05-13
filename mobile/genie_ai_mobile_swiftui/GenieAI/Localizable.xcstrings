@@ -320,9 +320,6 @@
         }
       }
     },
-    "A verification email has been sent to \\(email)" : {
-
-    },
     "A verification email has been sent to %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5408,6 +5405,9 @@
           }
         }
       }
+    },
+    "By signing in, you agree to the Terms of Service and Privacy Policy." : {
+
     },
     "Cancel" : {
       "extractionState" : "manual",
@@ -31082,9 +31082,6 @@
         }
       }
     },
-    "Facebook" : {
-
-    },
     "Failed to create folder" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -36134,9 +36131,6 @@
           }
         }
       }
-    },
-    "Google" : {
-
     },
     "Graduate Certificate" : {
       "extractionState" : "manual",
@@ -45891,6 +45885,9 @@
           }
         }
       }
+    },
+    "Manage Account" : {
+
     },
     "Managed in iOS Settings" : {
 
@@ -64115,6 +64112,15 @@
           }
         }
       }
+    },
+    "Sign in" : {
+
+    },
+    "Sign in to access your conversations and the offline document library." : {
+
+    },
+    "Signing in…" : {
+
     },
     "Single" : {
       "extractionState" : "manual",

@@ -658,7 +658,7 @@ struct FAQRow: View {
                 confidence: 0.95
             ),
             DocumentItem(
-                title: "Huduma Centre Locations",
+                title: "Service Centre Locations",
                 url: "https://example.com",
                 type: .web,
                 fileName: nil,

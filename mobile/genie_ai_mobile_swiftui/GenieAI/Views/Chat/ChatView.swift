@@ -277,7 +277,7 @@ struct ChatView: View {
         guard messages.isEmpty else { return }
         let welcomeMsg = Message(
             role: .assistant,
-            content: String(localized: "Welcome! How can I assist you with Kenya government services today?"),
+            content: String(localized: "Welcome! How can I help you today?"),
             isSaved: true
         )
         messages.append(welcomeMsg)

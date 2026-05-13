@@ -1,6 +1,6 @@
 # Story 2.1: Refactor Backend index.js to Export createApp()
 
-Status: review
+Status: done
 
 ## Story
 
@@ -367,3 +367,13 @@ No debug issues encountered.
 ### Change Log
 
 - 2026-05-13: Refactored index.js to export createApp() factory function. Created createApp.test.js with 8 tests. All 173 tests pass, linting clean.
+
+### Review Findings
+
+- [x] [Review][Patch] `createApp({ services: null })` crash — Fixed: `registerRoutes(app, services || {})` guards against null/undefined. Routes requiring missing services are now skipped explicitly with a debug log.
+
+- [x] [Review][Patch] Routes without service (auth-routes, logger-routes) not mounted when `services={}` — Fixed: `registerRoutes()` is now always called; routes requiring a missing service are skipped via explicit guard.
+
+- [x] [Review][Defer] swaggerSpec/swaggerUi silent failure at module-level [components/gov-chat-backend/index.js:299-376] — deferred, pre-existing
+- [x] [Review][Defer] registerRoutes without external try-catch [components/gov-chat-backend/index.js:858] — deferred, pre-existing (internal try-catch exists)
+- [x] [Review][Defer] Route loading error handling inconsistency [components/gov-chat-backend/index.js:956-971] — deferred, pre-existing design choice

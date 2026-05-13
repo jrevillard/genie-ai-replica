@@ -748,10 +748,8 @@ function createApp({ services = {} } = {}) {
     }
   });
 
-  // Route registration (only when services provided)
-  if (Object.keys(services).length > 0) {
-    registerRoutes(app, services);
-  }
+  // Route registration — always attempt; routes requiring missing services are skipped
+  registerRoutes(app, services || {});
 
   // Root endpoint
   app.get('/', (req, res) => {
@@ -867,6 +865,12 @@ function registerRoutes(app, services) {
     // Instantiate route
     const service = config.serviceName ? services[config.serviceName] : null;
     const extraService = config.extraServiceName ? services[config.extraServiceName] : null;
+
+    // Skip routes that require a service when it's not provided
+    if (config.serviceName && !service) {
+      logger.debug(`Skipping ${config.file}: service ${config.serviceName} not provided`);
+      continue;
+    }
 
     let routeInstance;
     try {

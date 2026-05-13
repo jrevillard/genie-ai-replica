@@ -1,5 +1,9 @@
 // LoginView.swift
-// Login screen for user authentication
+// Single "Sign in" screen that delegates to Keycloak's hosted UI via
+// ASWebAuthenticationSession. Registration and password reset are handled
+// inside Keycloak (links surface on its login page), so the previous
+// inline email/password form, Register/Forgot Password navigation, and
+// "remember me" UserDefaults storage are intentionally removed.
 
 import SwiftUI
 
@@ -8,174 +12,84 @@ struct LoginView: View {
     @Environment(ThemeManager.self) private var theme
     @Environment(AppLocaleService.self) private var appLocale
 
-    @State private var username = ""
-    @State private var password = ""
-    @State private var rememberMe = false
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isLoading = false
-
-    var onRegisterTapped: () -> Void
-    var onForgotPasswordTapped: () -> Void
-    var onLoginSuccess: () -> Void
-
     @State private var logoAppeared = false
+
+    // Closures kept so the AppRoute navigation continues to compile, but
+    // they are no longer surfaced from this view.
+    var onRegisterTapped: () -> Void = {}
+    var onForgotPasswordTapped: () -> Void = {}
+    var onLoginSuccess: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
 
-            // Logo and Title
-            VStack(spacing: 8) {
+            VStack(spacing: 12) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 40))
+                    .font(.system(size: 56))
                     .foregroundStyle(theme.navbarGradient)
                     .scaleEffect(logoAppeared ? 1.0 : 0.5)
                     .opacity(logoAppeared ? 1.0 : 0)
 
                 Text("Genie AI")
-                    .font(.title)
+                    .font(.largeTitle)
                     .fontWeight(.bold)
                     .foregroundColor(theme.primaryTextColor)
                     .opacity(logoAppeared ? 1.0 : 0)
 
-                // Language Selector
-                LanguageSelectorCompact()
+                Text("Sign in to access your conversations and the offline document library.")
+                    .font(.subheadline)
+                    .foregroundColor(theme.secondaryTextColor)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, theme.spacingLG)
             }
 
-            Spacer().frame(maxHeight: 20)
+            Spacer().frame(maxHeight: 32)
 
-            // Login Form — wrapped in glass card
-            VStack(spacing: 10) {
-                // Username Field
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("login.username")
-                        .font(.subheadline)
-                        .foregroundColor(theme.secondaryTextColor)
-
-                    TextField("", text: $username)
-                        .textFieldStyle(GenieTextFieldStyle())
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
-
-                // Password Field
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Password")
-                        .font(.subheadline)
-                        .foregroundColor(theme.secondaryTextColor)
-
-                    SecureField("", text: $password)
-                        .textFieldStyle(GenieTextFieldStyle())
-                }
-
-                // Remember Me & Forgot Password
-                HStack {
-                    Toggle(isOn: $rememberMe) {
-                        Text("Remember me")
-                            .font(.subheadline)
-                    }
-                    .toggleStyle(CheckboxToggleStyle())
-
-                    Spacer()
-
-                    Button(action: onForgotPasswordTapped) {
-                        Text("Forgot password?")
-                            .font(.subheadline)
-                            .foregroundColor(theme.primaryColor)
-                    }
-                }
-
-                // Error Message
-                if showError {
-                    Text(errorMessage)
-                        .font(.subheadline)
-                        .foregroundColor(theme.errorColor)
-                }
-
-                // Login Button
-                Button(action: performLogin) {
+            VStack(spacing: theme.spacingMD) {
+                Button(action: performSignIn) {
                     HStack {
                         if isLoading {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Image(systemName: "person.crop.circle.badge.checkmark")
                         }
-                        Text(isLoading ? String(localized: "Logging in...") : String(localized: "Login"))
+                        Text(isLoading ? "Signing in…" : "Sign in")
+                            .fontWeight(.semibold)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 14)
                     .background(theme.primaryColor)
                     .foregroundColor(.white)
                     .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous))
                 }
-                .disabled(isLoading || username.isEmpty || password.isEmpty)
+                .disabled(isLoading)
                 .hapticOnTap(.medium, theme: theme)
 
-                // Social Login Divider
-                HStack {
-                    Rectangle().fill(theme.secondaryTextColor.opacity(0.2)).frame(height: 1)
-                    Text("or")
-                        .font(.caption)
-                        .foregroundColor(theme.secondaryTextColor)
-                    Rectangle().fill(theme.secondaryTextColor.opacity(0.2)).frame(height: 1)
+                if showError {
+                    Text(errorMessage)
+                        .font(.subheadline)
+                        .foregroundColor(theme.errorColor)
+                        .multilineTextAlignment(.center)
                 }
-                .padding(.vertical, 2)
 
-                // Social Login Buttons — side by side
-                HStack(spacing: 10) {
-                    Button(action: { /* Social login not yet implemented */ }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "g.circle.fill")
-                            Text("Google")
-                        }
-                        .font(.subheadline.weight(.medium))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(theme.primaryColor.opacity(0.9))
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous))
-                    }
-
-                    Button(action: { /* Social login not yet implemented */ }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "f.circle.fill")
-                            Text("Facebook")
-                        }
-                        .font(.subheadline.weight(.medium))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(theme.facebookBlue)
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous))
-                    }
-                }
+                LanguageSelectorCompact()
             }
             .padding(theme.spacingLG)
             .glassCardElevated(theme: theme)
             .padding(.horizontal)
 
-            Spacer().frame(maxHeight: 16)
+            Spacer().frame(maxHeight: 20)
 
-            // Register Link
-            HStack(spacing: 4) {
-                Text("Don't have an account?")
-                    .foregroundColor(theme.secondaryTextColor)
-
-                Button(action: onRegisterTapped) {
-                    Text("Register now")
-                        .fontWeight(.semibold)
-                        .foregroundColor(theme.primaryColor)
-                }
-            }
-            .font(.subheadline)
-
-            // Terms
-            Text("By logging in, you agree to our Terms of Service and Privacy Policy")
+            Text("By signing in, you agree to the Terms of Service and Privacy Policy.")
                 .font(.caption2)
                 .foregroundColor(theme.secondaryTextColor)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
-                .padding(.top, 4)
 
             Spacer(minLength: 0)
         }
@@ -188,57 +102,31 @@ struct LoginView: View {
             .ignoresSafeArea()
         )
         .onAppear {
-            loadSavedCredentials()
             withAnimation(theme.animationBounce) {
                 logoAppeared = true
             }
         }
     }
 
-    private func loadSavedCredentials() {
-        let defaults = UserDefaults.standard
-        if let savedUsername = defaults.string(forKey: "savedLoginName"),
-           let savedPassword = defaults.string(forKey: "savedPassword"),
-           !savedUsername.isEmpty, !savedPassword.isEmpty {
-            username = savedUsername
-            password = savedPassword
-            rememberMe = true
-        }
-    }
-
-    private func handleRememberMe() {
-        let defaults = UserDefaults.standard
-        if rememberMe {
-            defaults.set(username, forKey: "savedLoginName")
-            defaults.set(password, forKey: "savedPassword")
-        } else {
-            defaults.removeObject(forKey: "savedLoginName")
-            defaults.removeObject(forKey: "savedPassword")
-        }
-    }
-
-    private func performLogin() {
-        guard !username.isEmpty, !password.isEmpty else {
-            errorMessage = String(localized: "Username and password are required")
-            showError = true
-            return
-        }
-
+    private func performSignIn() {
         isLoading = true
         showError = false
 
         Task {
             do {
-                try await authService.login(loginName: username, password: password)
+                try await authService.signIn()
                 await MainActor.run {
                     isLoading = false
-                    handleRememberMe()
                     onLoginSuccess()
                 }
             } catch {
                 await MainActor.run {
                     isLoading = false
-                    errorMessage = String(localized: "Login failed. Please check your credentials.")
+                    if case AuthError.cancelled = error {
+                        // User cancelled — don't show an error, just reset.
+                        return
+                    }
+                    errorMessage = error.localizedDescription
                     showError = true
                 }
             }
@@ -269,7 +157,13 @@ struct LanguageSelectorCompact: View {
     }
 }
 
-// MARK: - Custom Text Field Style
+// MARK: - Shared text-field style
+//
+// Used by RegisterView, PasswordResetView, PasswordResetConfirmView. The
+// inline password form was removed from LoginView itself when sign-in
+// moved to Keycloak's hosted UI, but the style stays here as those views
+// still ship in the project (Keycloak handles the actual flows, but the
+// files remain so the project compiles).
 
 struct GenieTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
@@ -284,8 +178,8 @@ struct GenieTextFieldStyle: TextFieldStyle {
     }
 }
 
-// MARK: - Checkbox Toggle Style
-
+// SwiftUI ships a `CheckboxToggleStyle` only on macOS. Our custom version
+// is iOS-compatible and still referenced by RegisterView's Terms checkbox.
 struct CheckboxToggleStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack {
@@ -301,12 +195,8 @@ struct CheckboxToggleStyle: ToggleStyle {
 }
 
 #Preview {
-    LoginView(
-        onRegisterTapped: {},
-        onForgotPasswordTapped: {},
-        onLoginSuccess: {}
-    )
-    .environment(AuthService())
-    .environment(ThemeManager())
-    .environment(AppLocaleService.shared)
+    LoginView()
+        .environment(AuthService())
+        .environment(ThemeManager())
+        .environment(AppLocaleService.shared)
 }

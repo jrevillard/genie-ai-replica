@@ -3616,6 +3616,9 @@
         }
       }
     },
+    "Available" : {
+
+    },
     "B-" : {
 
     },
@@ -10248,6 +10251,9 @@
           }
         }
       }
+    },
+    "Could not load remote files" : {
+
     },
     "countries.AD" : {
       "extractionState" : "manual",
@@ -27508,6 +27514,9 @@
     "Documents" : {
 
     },
+    "Documents you ingest on the server will appear here for offline download." : {
+
+    },
     "Don't have an account?" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -27649,6 +27658,12 @@
           }
         }
       }
+    },
+    "Download" : {
+
+    },
+    "Downloaded (%lld)" : {
+
     },
     "Drag & drop files here, or click to select" : {
       "extractionState" : "manual",
@@ -44667,6 +44682,9 @@
     "Loading knowledge areas..." : {
 
     },
+    "Loading library…" : {
+
+    },
     "Loading location..." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -49575,6 +49593,9 @@
         }
       }
     },
+    "No files in the library yet" : {
+
+    },
     "No Folder" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -50864,6 +50885,9 @@
           }
         }
       }
+    },
+    "Offline Library" : {
+
     },
     "Offline mode: unable to generate a response. Please check that the local model is loaded." : {
       "extractionState" : "manual",
@@ -59678,6 +59702,9 @@
         }
       }
     },
+    "Remove from device" : {
+
+    },
     "Rename Chat" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -68427,6 +68454,9 @@
       }
     },
     "Treatment History" : {
+
+    },
+    "Try again" : {
 
     },
     "Type your query here..." : {

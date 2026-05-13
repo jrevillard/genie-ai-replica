@@ -7,39 +7,50 @@ import os
 
 @Observable
 class LocalRAGBridge {
-    private let ragService: LocalRAGService
+    // var rather than let so initialize() can swap providers if llama.cpp
+    // fails to load (e.g. unsupported model architecture).
+    private var ragService: LocalRAGService
     private static let logger = Logger(subsystem: "com.genieai", category: "llm.local")
     private(set) var isReady = false
     private(set) var isLoading = false
     private(set) var error: String?
 
+    /// Which provider the bridge ended up running with — useful for the UI
+    /// to tell the user whether the answer came from a downloaded GGUF or
+    /// the FoundationModels fallback.
+    private(set) var activeProvider: String = "foundationModels"
+
     init() {
         let provider = Self.resolveProvider()
-        let config = RAGConfiguration(
-            topK: Self.topK,
-            chunkSize: Self.chunkSize,
-            chunkOverlap: Self.chunkOverlap,
-            similarityThreshold: Self.similarityThreshold,
-            provider: provider,
-            systemPromptTemplate: Self.systemPromptTemplate,
-            temperature: Self.temperature
-        )
-        self.ragService = LocalRAGService(config: config)
+        self.ragService = LocalRAGService(config: Self.makeConfig(provider: provider))
+        self.activeProvider = Self.label(for: provider)
     }
 
     /// Initialize with a specific model path for llama.cpp (overrides
     /// auto-detection).
     init(modelPath: String) {
-        let config = RAGConfiguration(
-            topK: Self.topK,
-            chunkSize: Self.chunkSize,
-            chunkOverlap: Self.chunkOverlap,
-            similarityThreshold: Self.similarityThreshold,
-            provider: .llamaCpp(modelPath: modelPath),
-            systemPromptTemplate: Self.systemPromptTemplate,
-            temperature: Self.temperature
+        let provider: LLMProviderType = .llamaCpp(modelPath: modelPath)
+        self.ragService = LocalRAGService(config: Self.makeConfig(provider: provider))
+        self.activeProvider = Self.label(for: provider)
+    }
+
+    private static func makeConfig(provider: LLMProviderType) -> RAGConfiguration {
+        RAGConfiguration(
+            topK: topK,
+            chunkSize: chunkSize,
+            chunkOverlap: chunkOverlap,
+            similarityThreshold: similarityThreshold,
+            provider: provider,
+            systemPromptTemplate: systemPromptTemplate,
+            temperature: temperature
         )
-        self.ragService = LocalRAGService(config: config)
+    }
+
+    private static func label(for provider: LLMProviderType) -> String {
+        switch provider {
+        case .llamaCpp: return "llamaCpp"
+        case .foundationModels: return "foundationModels"
+        }
     }
 
     /// Search the standard locations for a GGUF model and pick llama.cpp if
@@ -138,34 +149,88 @@ class LocalRAGBridge {
     {context}
     """
 
-    /// Load the LLM model and embedding service
+    /// Load the LLM model and embedding service. If the primary provider
+    /// (currently llama.cpp when a GGUF is present) fails to load — e.g.
+    /// because the pinned llama.cpp version doesn't support the model's
+    /// architecture — fall back to FoundationModels rather than leaving the
+    /// pipeline unusable.
     func initialize() async {
         isLoading = true
         error = nil
 
-        Self.logger.info("Initializing local RAG model...")
+        Self.logger.info("Initializing local RAG model: provider=\(self.activeProvider)")
 
         let clock = ContinuousClock()
         let startTime = clock.now
 
         do {
             try await ragService.loadModel()
-            let duration = clock.now - startTime
-            let durationMs = Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
-            Self.logger.info("Local RAG model loaded successfully, duration=\(durationMs)ms")
+            let durationMs = Self.ms(since: startTime, clock: clock)
+            Self.logger.info("Local RAG model loaded successfully (provider=\(self.activeProvider), duration=\(durationMs)ms)")
+            await MainActor.run {
+                self.isReady = true
+                self.isLoading = false
+            }
+            return
+        } catch {
+            let durationMs = Self.ms(since: startTime, clock: clock)
+            Self.logger.error("Primary provider (\(self.activeProvider)) failed after \(durationMs)ms: \(error.localizedDescription)")
+
+            // Only fall back if we tried llama.cpp; if FoundationModels
+            // itself failed there's no useful next step.
+            guard activeProvider == "llamaCpp" else {
+                await MainActor.run {
+                    self.error = error.localizedDescription
+                    self.isLoading = false
+                }
+                return
+            }
+        }
+
+        // Fallback path: rebuild the service with FoundationModels and try
+        // again. The failure of the primary load is logged but not surfaced
+        // to the user — they still get a working pipeline.
+        Self.logger.info("Falling back to FoundationModels provider")
+        ragService = LocalRAGService(config: Self.makeConfig(provider: .foundationModels))
+        activeProvider = "foundationModels"
+        let fallbackStart = ContinuousClock().now
+        do {
+            try await ragService.loadModel()
+            let durationMs = Self.ms(since: fallbackStart, clock: ContinuousClock())
+            Self.logger.info("Local RAG fallback loaded successfully (provider=foundationModels, duration=\(durationMs)ms)")
             await MainActor.run {
                 self.isReady = true
                 self.isLoading = false
             }
         } catch {
-            let duration = clock.now - startTime
-            let durationMs = Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
+            let durationMs = Self.ms(since: fallbackStart, clock: ContinuousClock())
+            Self.logger.error("Fallback FoundationModels load failed after \(durationMs)ms: \(error.localizedDescription)")
             await MainActor.run {
                 self.error = error.localizedDescription
                 self.isLoading = false
             }
-            Self.logger.error("Initialization failed after \(durationMs)ms: \(error.localizedDescription)")
         }
+    }
+
+    private static func ms(since start: ContinuousClock.Instant, clock: ContinuousClock) -> Int {
+        let d = clock.now - start
+        return Int(d.components.seconds * 1000 + d.components.attoseconds / 1_000_000_000_000_000)
+    }
+
+    /// Re-run provider auto-detection and reload the model. Used after the
+    /// ModelDownloadService installs (or removes) a GGUF so subsequent
+    /// offline queries use the freshly-resolved provider without an app
+    /// restart. Clears `isReady` while the reload is in flight.
+    func reload() async {
+        await MainActor.run {
+            self.isReady = false
+            self.isLoading = true
+            self.error = nil
+        }
+        let provider = Self.resolveProvider()
+        ragService = LocalRAGService(config: Self.makeConfig(provider: provider))
+        activeProvider = Self.label(for: provider)
+        await initialize()
     }
 
     /// Submit a query through the local RAG pipeline, returning a QueryResponse

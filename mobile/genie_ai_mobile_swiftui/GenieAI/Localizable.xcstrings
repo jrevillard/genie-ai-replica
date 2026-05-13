@@ -73651,6 +73651,9 @@
         }
       }
     },
+    "Welcome! How can I help you today?" : {
+
+    },
     "What made you decide to delete your account?" : {
       "extractionState" : "manual",
       "localizations" : {

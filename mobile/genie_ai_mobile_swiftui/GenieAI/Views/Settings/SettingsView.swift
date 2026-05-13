@@ -131,6 +131,10 @@ struct SettingsView: View {
                     .disabled(!connectivity.isOnline)
                 }
 
+                // Local Model — download / delete the on-device GGUF used
+                // by the offline RAG pipeline.
+                LocalModelSection()
+
                 // Account Section
                 Section(header: Text("Account Management")) {
                     // Email with Edit
@@ -602,6 +606,116 @@ struct DeleteAccountSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Local Model Section
+
+/// Settings panel for the on-device LLM (Gemma GGUF). Lets the user
+/// download the model on first run, see progress, cancel, or remove the
+/// model later. When a download completes ModelDownloadService asks
+/// LocalRAGBridge to re-initialize so subsequent offline queries use
+/// llama.cpp instead of FoundationModels.
+struct LocalModelSection: View {
+    @Environment(ThemeManager.self) private var theme
+    @Environment(ConnectivityService.self) private var connectivity
+    @Environment(LocalRAGBridge.self) private var bridge
+    @Environment(LocalRAGIndexer.self) private var indexer
+    @State private var model = ModelDownloadService.shared
+
+    var body: some View {
+        Section {
+            // Title + active provider
+            HStack(spacing: theme.spacingMD) {
+                Image(systemName: "cpu")
+                    .foregroundStyle(theme.primaryColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.displayName)
+                        .font(.subheadline.weight(.semibold))
+                    Text(statusSubtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
+
+            switch model.downloadState {
+            case .idle:
+                if model.isInstalled {
+                    installedActions
+                } else {
+                    downloadButton
+                }
+            case .downloading(let received, let expected):
+                progressRow(received: received, expected: expected)
+                Button(role: .destructive) { model.cancelDownload() } label: {
+                    SwiftUI.Label("Cancel", systemImage: "xmark.circle")
+                }
+            case .finalizing:
+                HStack {
+                    ProgressView()
+                    Text("Finalising…")
+                }
+            case .failed(let message):
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                downloadButton
+            }
+        } header: {
+            Text("Local Model")
+        } footer: {
+            Text("Used for offline answers. The download is roughly 1.6 GB and runs over your active network.")
+        }
+        .onAppear {
+            model.onModelInstalled = { _ in
+                await bridge.reload()
+                await indexer.reindexLibrary()
+            }
+        }
+    }
+
+    private var statusSubtitle: String {
+        if model.isInstalled {
+            return "Installed · active provider: \(bridge.activeProvider)"
+        }
+        return "Not installed · active provider: \(bridge.activeProvider)"
+    }
+
+    private var installedActions: some View {
+        Button(role: .destructive) {
+            model.deleteModel()
+            Task { await bridge.reload() }
+        } label: {
+            SwiftUI.Label("Remove from Device", systemImage: "trash")
+        }
+    }
+
+    private var downloadButton: some View {
+        Button {
+            model.startDownload()
+        } label: {
+            SwiftUI.Label("Download Model", systemImage: "arrow.down.circle")
+        }
+        .disabled(!connectivity.isOnline)
+    }
+
+    private func progressRow(received: Int64, expected: Int64) -> some View {
+        let pct = expected > 0 ? Double(received) / Double(expected) : 0
+        return VStack(alignment: .leading, spacing: 6) {
+            ProgressView(value: max(0, min(pct, 1)))
+            Text("\(formatBytes(received)) / \(formatBytes(expected))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func formatBytes(_ bytes: Int64) -> String {
+        let f = ByteCountFormatter()
+        f.allowedUnits = [.useMB, .useGB]
+        f.countStyle = .file
+        return f.string(fromByteCount: bytes)
     }
 }
 

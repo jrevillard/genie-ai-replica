@@ -14,17 +14,9 @@ class LocalRAGBridge {
     private(set) var error: String?
 
     init() {
-        // Default to FoundationModels; can be reconfigured
         let config = RAGConfiguration(
             provider: .foundationModels,
-            systemPromptTemplate: """
-            You are a helpful government services assistant. Use the following context to answer \
-            the user's question accurately. If the context doesn't contain relevant information, \
-            answer based on your general knowledge.
-
-            Context:
-            {context}
-            """
+            systemPromptTemplate: Self.systemPromptTemplate
         )
         self.ragService = LocalRAGService(config: config)
     }
@@ -33,17 +25,35 @@ class LocalRAGBridge {
     init(modelPath: String) {
         let config = RAGConfiguration(
             provider: .llamaCpp(modelPath: modelPath),
-            systemPromptTemplate: """
-            You are a helpful government services assistant. Use the following context to answer \
-            the user's question accurately. If the context doesn't contain relevant information, \
-            answer based on your general knowledge.
-
-            Context:
-            {context}
-            """
+            systemPromptTemplate: Self.systemPromptTemplate
         )
         self.ragService = LocalRAGService(config: config)
     }
+
+    /// Mirrors the server-side chatqna prompt: ground answers in the
+    /// retrieved chunks, cite each fact inline with [Source: <title>], and
+    /// abstain when the context is empty instead of falling back to the
+    /// model's general knowledge. The {context} placeholder is filled by
+    /// LocalRAG's ContextFormatter with chunks formatted as
+    /// `[N] From "<file_name>" (relevance: X%):` so the model has a concrete
+    /// title to put inside each citation.
+    private static let systemPromptTemplate = """
+    You are a friendly and polite information assistant.
+
+    Your task is to answer the user's latest question using only the content provided from the knowledge base below.
+
+    **Strict rules:**
+    - Do NOT invent, assume, or extrapolate information. Every concrete fact in your answer (names, codes, URLs, phone numbers, dates, deadlines, prices, statistics, organisation names) MUST appear verbatim in the provided knowledge-base content.
+    - If the knowledge base content does NOT directly answer the question, do not attempt a partial answer or "general guidance". Say clearly that the requested information is not available in the offline library and stop.
+    - When you use a fact from a retrieved document, cite it inline using the exact format [Source: <document title>] immediately after the statement. The document title is shown in the context as `From "<title>"`. Use that title verbatim; never invent a title.
+
+    **Style rules:**
+    - Reply directly as a chat message. Do NOT use letter-style framing: no "Dear …", "Hello <Name>", opener; no "Best regards", "Sincerely", "[Your Assistant]", or any signoff at the end.
+    - Keep answers informative but concise; expand only when necessary or explicitly requested.
+
+    Knowledge base content:
+    {context}
+    """
 
     /// Load the LLM model and embedding service
     func initialize() async {

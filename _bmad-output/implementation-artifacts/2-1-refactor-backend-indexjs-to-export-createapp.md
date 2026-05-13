@@ -1,6 +1,6 @@
 # Story 2.1: Refactor Backend index.js to Export createApp()
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -30,31 +30,31 @@ so that I can test route handlers via Supertest without starting the server.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Refactor index.js to extract createApp() (AC: #1, #2, #3, #4)
-  - [ ] 1.1 Move Express app creation (`const app = express()`) inside `createApp()`
-  - [ ] 1.2 Move all middleware registration (lines 44–630) inside `createApp()`. **Exception:** keep `swaggerJsdoc(options)` call (spec generation) at module level; only move `app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs))` inside `createApp()`. This preserves `swagger-config.test.js` compatibility.
-  - [ ] 1.3 Move static endpoints (health, robots, sitemap, lines 916–968) inside `createApp()`
-  - [ ] 1.4 Move error handler and 404 handler (lines 1174–1202) inside `createApp()`
-  - [ ] 1.5 Extract `registerRoutes(app, services, routeConfigs)` helper from `startApp()` route mounting logic (lines 1036–1151)
-  - [ ] 1.6 Call `registerRoutes()` inside `createApp()` when `services` parameter is provided
-  - [ ] 1.7 Refactor `startApp()` to: initialize services → call `createApp({ services })` → call `app.listen()`
-  - [ ] 1.8 Add `require.main === module` guard around auto-start block (replace lines 1238–1249)
-  - [ ] 1.9 Change `module.exports = app` to `module.exports = { createApp }`
-  - [ ] 1.10 Keep `dotenv.config()` and `UV_THREADPOOL_SIZE` at module level (process-level config)
-  - [ ] 1.11 Move `routeConfigs` array definition inside `createApp()` or as a module-level constant (not inside `startApp`)
+- [x] Task 1: Refactor index.js to extract createApp() (AC: #1, #2, #3, #4)
+  - [x] 1.1 Move Express app creation (`const app = express()`) inside `createApp()`
+  - [x] 1.2 Move all middleware registration (lines 44–630) inside `createApp()`. **Exception:** keep `swaggerJsdoc(options)` call (spec generation) at module level; only move `app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs))` inside `createApp()`. This preserves `swagger-config.test.js` compatibility.
+  - [x] 1.3 Move static endpoints (health, robots, sitemap, lines 916–968) inside `createApp()`
+  - [x] 1.4 Move error handler and 404 handler (lines 1174–1202) inside `createApp()`
+  - [x] 1.5 Extract `registerRoutes(app, services, routeConfigs)` helper from `startApp()` route mounting logic (lines 1036–1151)
+  - [x] 1.6 Call `registerRoutes()` inside `createApp()` when `services` parameter is provided
+  - [x] 1.7 Refactor `startApp()` to: initialize services → call `createApp({ services })` → call `app.listen()`
+  - [x] 1.8 Add `require.main === module` guard around auto-start block (replace lines 1238–1249)
+  - [x] 1.9 Change `module.exports = app` to `module.exports = { createApp }`
+  - [x] 1.10 Keep `dotenv.config()` and `UV_THREADPOOL_SIZE` at module level (process-level config)
+  - [x] 1.11 Move `routeConfigs` array definition inside `createApp()` or as a module-level constant (not inside `startApp`)
 
-- [ ] Task 2: Create createApp test file (AC: #5)
-  - [ ] 2.1 Create `__tests__/createApp.test.js` with **complete** shared-lib mock (all 4 exports: `logger`, `dbService`, `securityHeaders`, `SecurityMiddleware`) — see Mock Requirements section below
-  - [ ] 2.2 Test (AC5a): `createApp()` returns an object with `listen` and `use` functions (Express app)
-  - [ ] 2.3 Test (AC5c): GET `/api/health` returns 200 without any services (static endpoint)
-  - [ ] 2.4 Test (AC5b): `x-powered-by` header is absent (helmet applied), body parsing works (POST JSON)
-  - [ ] 2.5 Test (AC5d): `createApp({ services: mockServices })` mounts routes — verify at least 3 endpoints: GET `/api/health` → 200, GET `/api/me` → 401 (auth required), POST `/api/auth/login` without body → 400
-  - [ ] 2.6 Test (AC5e): two `createApp()` calls produce independent instances — `app1 !== app2`, adding middleware to `app1` does not affect `app2`
-  - [ ] 2.7 Test (AC5f): importing index.js does NOT call `app.listen()` (verify no server socket opened)
+- [x] Task 2: Create createApp test file (AC: #5)
+  - [x] 2.1 Create `__tests__/createApp.test.js` with **complete** shared-lib mock (all 4 exports: `logger`, `dbService`, `securityHeaders`, `SecurityMiddleware`) — see Mock Requirements section below
+  - [x] 2.2 Test (AC5a): `createApp()` returns an object with `listen` and `use` functions (Express app)
+  - [x] 2.3 Test (AC5c): GET `/api/health` returns 200 without any services (static endpoint)
+  - [x] 2.4 Test (AC5b): `x-powered-by` header is absent (helmet applied), body parsing works (POST JSON)
+  - [x] 2.5 Test (AC5d): `createApp({ services: mockServices })` mounts routes — verify at least 3 endpoints: GET `/api/health` → 200, GET `/api/me` → 401 (auth required), POST `/api/auth/login` without body → 400
+  - [x] 2.6 Test (AC5e): two `createApp()` calls produce independent instances — `app1 !== app2`, adding middleware to `app1` does not affect `app2`
+  - [x] 2.7 Test (AC5f): importing index.js does NOT call `app.listen()` (verify no server socket opened)
 
-- [ ] Task 3: Verify existing tests pass (AC: #6)
-  - [ ] 3.1 Run `cd components/gov-chat-backend && npm test` — all 8 existing tests pass
-  - [ ] 3.2 Run `cd components/gov-chat-backend && npm run lint` — no lint errors
+- [x] Task 3: Verify existing tests pass (AC: #6)
+  - [x] 3.1 Run `cd components/gov-chat-backend && npm test` — all 8 existing tests pass
+  - [x] 3.2 Run `cd components/gov-chat-backend && npm run lint` — no lint errors
 
 ## Dev Notes
 
@@ -340,8 +340,30 @@ This refactor **unblocks** Stories 2.2–2.8 (all backend route/service/middlewa
 
 ### Agent Model Used
 
+Claude (glm-5.1)
+
 ### Debug Log References
+
+No debug issues encountered.
 
 ### Completion Notes List
 
+- Refactored `index.js` (1,251→1,092 lines) to export `createApp({ services })` factory function
+- Key structural changes: `createApp()` wraps all middleware, static endpoints, route registration, error handlers
+- `swaggerJsdoc(swaggerOptions)` and `swaggerUi.setup()` remain at module level for `swagger-config.test.js` compatibility
+- `ROUTE_CONFIGS` extracted as module-level constant with `serviceName` keys instead of direct service references
+- `registerRoutes(app, services)` helper handles all 12 route instantiation patterns (factory, plain router, dual-service, etc.)
+- `startApp()` now calls `createApp({ services })` then `app.listen()`
+- `require.main === module` guard prevents auto-start on import — eliminates post-test crash
+- `module.exports = { createApp }` (was `module.exports = app`)
+- Created `__tests__/createApp.test.js` with 8 tests covering AC5a–AC5f using Supertest
+- All 173 tests pass (165 existing + 8 new), linting clean
+
 ### File List
+
+- `components/gov-chat-backend/index.js` — MODIFIED: extracted createApp(), registerRoutes(), added require.main guard, changed export
+- `components/gov-chat-backend/__tests__/createApp.test.js` — NEW: 8 tests for createApp() factory function (AC5)
+
+### Change Log
+
+- 2026-05-13: Refactored index.js to export createApp() factory function. Created createApp.test.js with 8 tests. All 173 tests pass, linting clean.

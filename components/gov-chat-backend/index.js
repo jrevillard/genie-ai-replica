@@ -12,16 +12,6 @@ const swaggerUi = require('swagger-ui-express');
 const { logger, dbService, securityHeaders, SecurityMiddleware } = require('./shared-lib');
 const { keycloakAuthMiddleware } = require('./middleware/keycloak-auth-middleware');
 
-// Initialize Express app
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Disable ETag generation completely
-app.disable('etag');
-
-// Remove X-Powered-By header - prevent information leakage
-app.disable('x-powered-by');
-
 // Validate shared-lib imports
 logger.info('Validating shared-lib imports:', {
   logger: typeof logger,
@@ -41,10 +31,6 @@ if (!logger || !dbService || !SecurityMiddleware) {
   });
   throw new Error('Critical shared-lib components missing');
 }
-app.use(securityHeaders);
-
-// Enable trust proxy with specific setting
-app.set('trust proxy', 1); // Trust the first proxy (Kong)
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, process.env.UPLOAD_DIR || 'Uploads');
@@ -64,60 +50,7 @@ try {
   });
 }
 
-// Debug middleware for IP and request details
-app.use((req, res, next) => {
-  const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-  logger.debug(`Request IP details:`, {
-    ip: ip,
-    xForwardedFor: req.headers['x-forwarded-for'],
-    realIp: req.headers['x-real-ip'],
-    path: req.path,
-    method: req.method,
-    headers: req.headers
-  });
-  next();
-});
-
-// Custom morgan format
-app.use(
-  morgan(':method :url :status :response-time ms - Headers: :req[content-type] :req[user-agent]', {
-    stream: {
-      write: (message) => {
-        logger.info(`HTTP_REQUEST: ${message.trim()}`);
-      }
-    }
-  })
-);
-
-// Block access to sensitive paths
-app.use((req, res, next) => {
-  try {
-    if (
-      req.path.match(/\/\.[^/]+/) ||
-      req.path.includes('/BitKeeper') ||
-      req.path.includes('/.git') ||
-      req.path.includes('/.env')
-    ) {
-      logger.warn(`SECURITY: Blocked access to sensitive path: ${req.path}`, {
-        ip: req.ip,
-        method: req.method,
-        userAgent: req.get('User-Agent') || 'none'
-      });
-      return res.status(404).json({ message: 'Not Found' });
-    }
-    next();
-  } catch (error) {
-    logger.error('Sensitive path middleware error:', {
-      error: error.message,
-      stack: error.stack,
-      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-      errorType: error?.constructor?.name || 'Unknown'
-    });
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Swagger definition
+// Swagger definition (stays at module level for swagger-config.test.js compatibility)
 const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
@@ -132,7 +65,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: process.env.API_URL || `http://localhost:${PORT}/api`,
+        url: process.env.API_URL || `http://localhost:${process.env.PORT || 3000}/api`,
         description: 'Development server'
       }
     ],
@@ -402,30 +335,13 @@ const swaggerOptions = {
   apis: ['./routes/*.js']
 };
 
+// Generate swagger spec at module level (for swagger-config.test.js compatibility)
+let swaggerSpec;
 try {
-  const swaggerSpec = swaggerJsdoc(swaggerOptions);
+  swaggerSpec = swaggerJsdoc(swaggerOptions);
   logger.info('Swagger specification generated successfully');
-  app.use(
-    '/api-docs',
-    swaggerUi.serve,
-    swaggerUi.setup(swaggerSpec, {
-      explorer: true,
-      customCss: '.swagger-ui .topbar { display: none }',
-      swaggerOptions: {
-        oauth: {
-          clientId: process.env.KEYCLOAK_CLIENT_ID,
-          usePkceWithAuthorizationCodeGrant: true,
-          scopes: 'openid profile email'
-        }
-      }
-    })
-  );
-  app.get('/api-docs.json', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.send(swaggerSpec);
-  });
 } catch (error) {
-  logger.error('Failed to initialize Swagger:', {
+  logger.error('Failed to generate Swagger spec:', {
     error: error.message,
     stack: error.stack,
     rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
@@ -433,7 +349,33 @@ try {
   });
 }
 
-// --- HELMET CSP ---
+// Swagger UI setup options (called at module level for swagger-config.test.js compatibility)
+const swaggerUiSetupOptions = {
+  explorer: true,
+  customCss: '.swagger-ui .topbar { display: none }',
+  swaggerOptions: {
+    oauth: {
+      clientId: process.env.KEYCLOAK_CLIENT_ID,
+      usePkceWithAuthorizationCodeGrant: true,
+      scopes: 'openid profile email'
+    }
+  }
+};
+
+// Trigger swaggerUi.setup at module level so swagger-config.test.js captures the options
+let swaggerUiMiddleware;
+if (swaggerSpec) {
+  try {
+    swaggerUiMiddleware = swaggerUi.setup(swaggerSpec, swaggerUiSetupOptions);
+  } catch (error) {
+    logger.error('Failed to setup Swagger UI:', {
+      error: error.message,
+      stack: error.stack
+    });
+  }
+}
+
+// --- CSP configuration ---
 const connectSrcUrls = (
   process.env.CSP_CONNECT_SRC || `'self' http://localhost:3000 ws://localhost:3000 ${process.env.KEYCLOAK_URL}`
 ).split(' ');
@@ -455,28 +397,7 @@ const cspOptions = {
   reportOnly: false
 };
 
-try {
-  app.use(
-    helmet({
-      contentSecurityPolicy: cspOptions,
-      xssFilter: true,
-      hsts: {
-        maxAge: 31536000,
-        includeSubDomains: true
-      }
-    })
-  );
-  logger.info('Helmet middleware applied with CSP from environment variables');
-} catch (error) {
-  logger.error('Failed to apply helmet middleware:', {
-    error: error.message,
-    stack: error.stack,
-    rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-    errorType: error?.constructor?.name || 'Unknown'
-  });
-}
-
-// --- CORS ---
+// --- CORS configuration ---
 const allowlist = (process.env.CORS_ALLOWED_ORIGINS || '').split(',');
 logger.debug('CORS allowlist configured:', { allowlist });
 console.log('allowlist:' + allowlist);
@@ -514,56 +435,6 @@ const corsOptions = {
   optionsSuccessStatus: 204
 };
 
-try {
-  app.use(cors(corsOptions));
-  app.options('*', cors(corsOptions));
-  logger.info('CORS middleware applied with debugging');
-} catch (error) {
-  logger.error('Failed to apply CORS middleware:', {
-    error: error.message,
-    stack: error.stack
-  });
-}
-
-// Apply security middleware
-try {
-  SecurityMiddleware.applySecurityMiddleware(app);
-  logger.info('Security middleware applied');
-} catch (error) {
-  logger.error('Failed to apply security middleware:', {
-    error: error.message,
-    stack: error.stack,
-    rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-    errorType: error?.constructor?.name || 'Unknown'
-  });
-}
-
-// FIX: Increased payload size limit to 50mb to prevent 500 errors on large requests
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
-
-// Format timestamps in response data
-app.use((req, res, next) => {
-  try {
-    const originalJson = res.json;
-    res.json = function (body) {
-      if (body && typeof body === 'object') {
-        body = formatTimestamps(body);
-      }
-      return originalJson.call(this, body);
-    };
-    next();
-  } catch (error) {
-    logger.error('Timestamp formatting middleware error:', {
-      error: error.message,
-      stack: error.stack,
-      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-      errorType: error?.constructor?.name || 'Unknown'
-    });
-    next(error);
-  }
-});
-
 // Recursive function to format timestamps
 function formatTimestamps(obj) {
   if (Array.isArray(obj)) {
@@ -584,49 +455,490 @@ function formatTimestamps(obj) {
   return obj;
 }
 
-// Configure static file serving
-try {
-  app.use(
-    '/Uploads',
-    (req, res, next) => {
-      if (req.path === '/' || req.path === '') {
-        return res.status(404).json({ message: 'Not Found' });
-      }
-      next();
-    },
-    express.static(uploadsDir)
-  );
-  logger.info('Static file serving configured for Uploads');
-} catch (error) {
-  logger.error('Failed to configure static file serving for Uploads:', {
-    error: error.message,
-    stack: error.stack,
-    rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-    errorType: error?.constructor?.name || 'Unknown'
-  });
-}
+// Route configuration constants (service names used for route injection)
+const ROUTE_CONFIGS = [
+  { file: 'user-routes', paths: ['/api/me'], serviceName: 'userProfileService', keycloakAuth: true },
+  { file: 'query-routes', paths: ['/api/queries', '/api/query'], serviceName: 'queryService', keycloakAuth: true },
+  { file: 'service-routes', paths: ['/api/services'], serviceName: 'serviceCategoryService', keycloakAuth: true },
+  {
+    file: 'chat-history-routes',
+    paths: ['/api/chat-history', '/api/chat'],
+    serviceName: 'chatHistoryService',
+    keycloakAuth: true
+  },
+  { file: 'analytics-routes', paths: ['/api/analytics'], serviceName: 'analyticsService', keycloakAuth: true },
+  {
+    file: 'service-category-routes',
+    paths: ['/api/service-categories'],
+    serviceName: 'serviceCategoryService',
+    keycloakAuth: true
+  },
+  { file: 'auth-routes', paths: ['/api/auth'], serviceName: null },
+  { file: 'logger-routes', paths: ['/api/logger'], serviceName: null, keycloakAuth: true },
+  {
+    file: 'database-operations-routes',
+    paths: ['/api/database'],
+    serviceName: 'databaseOperationsService',
+    keycloakAuth: true
+  },
+  {
+    file: 'admin-routes',
+    paths: ['/api/admin'],
+    serviceName: 'adminDashboardService',
+    extraServiceName: 'logsService',
+    keycloakAuth: true
+  },
+  { file: 'weather-routes', paths: ['/api/weather'], serviceName: 'weatherService', keycloakAuth: true },
+  { file: 'translation-routes', paths: ['/api/translate'], serviceName: 'translationService', keycloakAuth: true }
+];
 
-// Secure static serving for frontend files
-try {
+/**
+ * Creates a configured Express application.
+ * @param {Object} [options]
+ * @param {Object} [options.services] - Service instances for route injection.
+ *   When provided, routes are mounted with these services. Keys must match
+ *   ROUTE_CONFIGS serviceName values: userProfileService, queryService,
+ *   serviceCategoryService, chatHistoryService, analyticsService, logsService,
+ *   databaseOperationsService, adminDashboardService, weatherService, translationService
+ * @returns {import('express').Express} Configured Express app (not listening).
+ */
+function createApp({ services = {} } = {}) {
+  const app = express();
+
+  // App config
+  app.disable('etag');
+  app.disable('x-powered-by');
+
+  // Security headers and trust proxy
+  app.use(securityHeaders);
+  app.set('trust proxy', 1);
+
+  // Debug middleware for IP and request details
+  app.use((req, res, next) => {
+    const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    logger.debug(`Request IP details:`, {
+      ip: ip,
+      xForwardedFor: req.headers['x-forwarded-for'],
+      realIp: req.headers['x-real-ip'],
+      path: req.path,
+      method: req.method,
+      headers: req.headers
+    });
+    next();
+  });
+
+  // Custom morgan format
   app.use(
-    express.static('dist', {
-      setHeaders: (res, path) => {
-        if (path.endsWith('.html')) {
-          res.setHeader('Cache-Control', 'no-cache');
-        } else if (path.endsWith('.js') || path.endsWith('.css')) {
-          res.setHeader('Cache-Control', 'public, max-age=86400');
+    morgan(':method :url :status :response-time ms - Headers: :req[content-type] :req[user-agent]', {
+      stream: {
+        write: (message) => {
+          logger.info(`HTTP_REQUEST: ${message.trim()}`);
         }
       }
     })
   );
-  logger.info('Static file serving configured for dist');
-} catch (error) {
-  logger.error('Failed to configure static file serving for dist:', {
-    error: error.message,
-    stack: error.stack,
-    rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-    errorType: error?.constructor?.name || 'Unknown'
+
+  // Block access to sensitive paths
+  app.use((req, res, next) => {
+    try {
+      if (
+        req.path.match(/\/\.[^/]+/) ||
+        req.path.includes('/BitKeeper') ||
+        req.path.includes('/.git') ||
+        req.path.includes('/.env')
+      ) {
+        logger.warn(`SECURITY: Blocked access to sensitive path: ${req.path}`, {
+          ip: req.ip,
+          method: req.method,
+          userAgent: req.get('User-Agent') || 'none'
+        });
+        return res.status(404).json({ message: 'Not Found' });
+      }
+      next();
+    } catch (error) {
+      logger.error('Sensitive path middleware error:', {
+        error: error.message,
+        stack: error.stack,
+        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+        errorType: error?.constructor?.name || 'Unknown'
+      });
+      res.status(500).json({ message: 'Internal server error' });
+    }
   });
+
+  // Swagger UI middleware (uses spec generated at module level)
+  if (swaggerSpec && swaggerUiMiddleware) {
+    app.use('/api-docs', swaggerUi.serve, swaggerUiMiddleware);
+    app.get('/api-docs.json', (req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.send(swaggerSpec);
+    });
+  }
+
+  // Helmet middleware
+  try {
+    app.use(
+      helmet({
+        contentSecurityPolicy: cspOptions,
+        xssFilter: true,
+        hsts: {
+          maxAge: 31536000,
+          includeSubDomains: true
+        }
+      })
+    );
+    logger.info('Helmet middleware applied with CSP from environment variables');
+  } catch (error) {
+    logger.error('Failed to apply helmet middleware:', {
+      error: error.message,
+      stack: error.stack,
+      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      errorType: error?.constructor?.name || 'Unknown'
+    });
+  }
+
+  // CORS middleware
+  try {
+    app.use(cors(corsOptions));
+    app.options('*', cors(corsOptions));
+    logger.info('CORS middleware applied with debugging');
+  } catch (error) {
+    logger.error('Failed to apply CORS middleware:', {
+      error: error.message,
+      stack: error.stack
+    });
+  }
+
+  // Apply security middleware
+  try {
+    SecurityMiddleware.applySecurityMiddleware(app);
+    logger.info('Security middleware applied');
+  } catch (error) {
+    logger.error('Failed to apply security middleware:', {
+      error: error.message,
+      stack: error.stack,
+      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      errorType: error?.constructor?.name || 'Unknown'
+    });
+  }
+
+  // Body parser
+  app.use(bodyParser.json({ limit: '50mb' }));
+  app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+
+  // Format timestamps in response data
+  app.use((req, res, next) => {
+    try {
+      const originalJson = res.json;
+      res.json = function (body) {
+        if (body && typeof body === 'object') {
+          body = formatTimestamps(body);
+        }
+        return originalJson.call(this, body);
+      };
+      next();
+    } catch (error) {
+      logger.error('Timestamp formatting middleware error:', {
+        error: error.message,
+        stack: error.stack,
+        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+        errorType: error?.constructor?.name || 'Unknown'
+      });
+      next(error);
+    }
+  });
+
+  // Configure static file serving for Uploads
+  try {
+    app.use(
+      '/Uploads',
+      (req, res, next) => {
+        if (req.path === '/' || req.path === '') {
+          return res.status(404).json({ message: 'Not Found' });
+        }
+        next();
+      },
+      express.static(uploadsDir)
+    );
+    logger.info('Static file serving configured for Uploads');
+  } catch (error) {
+    logger.error('Failed to configure static file serving for Uploads:', {
+      error: error.message,
+      stack: error.stack,
+      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      errorType: error?.constructor?.name || 'Unknown'
+    });
+  }
+
+  // Secure static serving for frontend files
+  try {
+    app.use(
+      express.static('dist', {
+        setHeaders: (res, staticPath) => {
+          if (staticPath.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache');
+          } else if (staticPath.endsWith('.js') || staticPath.endsWith('.css')) {
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+          }
+        }
+      })
+    );
+    logger.info('Static file serving configured for dist');
+  } catch (error) {
+    logger.error('Failed to configure static file serving for dist:', {
+      error: error.message,
+      stack: error.stack,
+      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      errorType: error?.constructor?.name || 'Unknown'
+    });
+  }
+
+  // Health check endpoint
+  app.get('/api/health', (req, res) => {
+    try {
+      const now = new Date();
+      const formattedDate = now.toISOString().replace('T', ' ').substring(0, 19);
+      res.json({
+        status: 'ok',
+        serverTime: formattedDate,
+        uptime: Math.floor(process.uptime()) + ' seconds'
+      });
+    } catch (error) {
+      logger.error('Health check endpoint error:', {
+        error: error.message,
+        stack: error.stack,
+        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+        errorType: error?.constructor?.name || 'Unknown'
+      });
+      res.status(500).json({ message: 'Health check failed' });
+    }
+  });
+
+  // Robots.txt handler
+  app.get('/robots.txt', (req, res) => {
+    try {
+      res.type('text/plain');
+      res.send('User-agent: *\nDisallow: /api/\nDisallow: /Uploads/');
+    } catch (error) {
+      logger.error('Robots.txt endpoint error:', {
+        error: error.message,
+        stack: error.stack,
+        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+        errorType: error?.constructor?.name || 'Unknown'
+      });
+      res.status(500).json({ message: 'Failed to serve robots.txt' });
+    }
+  });
+
+  // Sitemap.xml handler
+  app.get('/sitemap.xml', (req, res) => {
+    try {
+      res.type('application/xml');
+      res.send(
+        '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n</urlset>'
+      );
+    } catch (error) {
+      logger.error('Sitemap.xml endpoint error:', {
+        error: error.message,
+        stack: error.stack,
+        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+        errorType: error?.constructor?.name || 'Unknown'
+      });
+      res.status(500).json({ message: 'Failed to serve sitemap.xml' });
+    }
+  });
+
+  // Route registration (only when services provided)
+  if (Object.keys(services).length > 0) {
+    registerRoutes(app, services);
+  }
+
+  // Root endpoint
+  app.get('/', (req, res) => {
+    try {
+      logger.info('Accessed root endpoint');
+      res.json({
+        message: 'Welcome to the Government Services API',
+        apiDocumentation: '/api-docs',
+        availableEndpoints: ROUTE_CONFIGS.map((config) => config.paths).flat()
+      });
+    } catch (error) {
+      logger.error('Root endpoint error:', {
+        error: error.message,
+        stack: error.stack,
+        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+        errorType: error?.constructor?.name || 'Unknown'
+      });
+      res.status(500).json({ message: 'Failed to serve root endpoint' });
+    }
+  });
+
+  // Error handling middleware
+  app.use((err, req, res) => {
+    logger.error(`Error processing ${req.method} ${req.url}:`, {
+      error: err.message || 'Unknown error',
+      stack: err.stack || 'No stack trace',
+      rawError: JSON.stringify(err, Object.getOwnPropertyNames(err)),
+      errorType: err?.constructor?.name || 'Unknown',
+      method: req.method,
+      url: req.url,
+      ip: req.ip,
+      userAgent: req.get('User-Agent') || 'none'
+    });
+    // Typed errors (AppError subclasses) carry their own status code
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({ message: err.message });
+    }
+    res.status(500).json({
+      message: 'An unexpected error occurred',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  });
+
+  // 404 handler
+  app.use((req, res) => {
+    logger.warn(`404 Not Found: ${req.method} ${req.url}`, {
+      ip: req.ip,
+      userAgent: req.get('User-Agent') || 'none'
+    });
+    res.status(404).json({ message: 'Resource not found' });
+  });
+
+  return app;
+}
+
+function registerRoutes(app, services) {
+  // Log route configurations
+  logger.info('Route configurations:', {
+    routes: ROUTE_CONFIGS.map((config) => ({
+      file: config.file,
+      paths: config.paths,
+      service: config.serviceName ? (services[config.serviceName] ? 'loaded' : 'missing') : 'null'
+    }))
+  });
+
+  // Load and mount routes
+  for (const config of ROUTE_CONFIGS) {
+    const routeFilePath = `./routes/${config.file}.js`;
+    logger.info(`Processing route file: ${config.file}`);
+
+    // Check if route file exists
+    try {
+      if (!fs.existsSync(routeFilePath)) {
+        logger.warn(`Route file ${routeFilePath} does not exist, skipping`);
+        continue;
+      }
+      logger.debug(`Route file ${routeFilePath} found`);
+    } catch (error) {
+      logger.error(`Error checking existence of route file ${routeFilePath}:`, {
+        error: error.message,
+        stack: error.stack,
+        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+        errorType: error?.constructor?.name || 'Unknown'
+      });
+      continue;
+    }
+
+    // Load route module
+    let routeModule;
+    try {
+      logger.debug(`Attempting to require route file: ${routeFilePath}`);
+      console.log(`[DEBUG] Attempting to require route file: ${routeFilePath}`);
+      routeModule = require(routeFilePath);
+      logger.info(`Route module ${config.file} loaded successfully`);
+      console.log(`[INFO] Route module ${config.file} loaded successfully`);
+    } catch (error) {
+      logger.error(`Failed to load route module ${config.file}:`, {
+        error: error.message,
+        stack: error.stack,
+        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+        errorType: error?.constructor?.name || 'Unknown'
+      });
+      console.error(`[ERROR] Failed to load route module ${config.file}:`, {
+        message: error.message || 'No message',
+        stack: error.stack || 'No stack',
+        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+        type: error?.constructor?.name || 'Unknown'
+      });
+      logger.warn(`Skipping ${config.file}: route module not loaded`);
+      continue;
+    }
+
+    // Instantiate route
+    const service = config.serviceName ? services[config.serviceName] : null;
+    const extraService = config.extraServiceName ? services[config.extraServiceName] : null;
+
+    let routeInstance;
+    try {
+      logger.debug(
+        `Instantiating route ${config.file} with service: ${service ? service.constructor.name : 'null'}`
+      );
+      if (config.file === 'analytics-routes') {
+        const AnalyticsController = require('./controllers/analyticsController');
+        const analyticsController = new AnalyticsController(service);
+        routeInstance = routeModule(service, analyticsController);
+      } else if (config.file === 'admin-routes') {
+        routeInstance = routeModule(service, extraService);
+      } else if (config.file === 'auth-routes') {
+        // auth-routes exports a plain router (no factory function)
+        routeInstance = routeModule;
+      } else if (config.file === 'logger-routes') {
+        routeInstance = routeModule();
+      } else {
+        routeInstance = routeModule(service);
+      }
+      if (!routeInstance || typeof routeInstance.use !== 'function') {
+        throw new Error(`Route instance for ${config.file} is not a valid Express router`);
+      }
+      logger.info(`Route instance for ${config.file} created successfully`);
+    } catch (error) {
+      logger.error(`Failed to instantiate route ${config.file}:`, {
+        error: error.message,
+        stack: error.stack,
+        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+        errorType: error?.constructor?.name || 'Unknown'
+      });
+      console.error(`[ERROR] Failed to instantiate route ${config.file}:`, {
+        message: error.message || 'No message',
+        stack: error.stack || 'No stack',
+        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+        type: error?.constructor?.name || 'Unknown'
+      });
+      logger.warn(`Skipping ${config.file}: route instance not created`);
+      continue;
+    }
+
+    // Mount routes
+    for (const routePath of config.paths) {
+      try {
+        logger.info(`Mounting ${config.file} at ${routePath}`);
+        if (config.keycloakAuth) {
+          app.use(routePath, keycloakAuthMiddleware.authenticate, routeInstance);
+        } else {
+          app.use(routePath, routeInstance);
+        }
+        logger.info(`${config.file.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())} Module: LOADED`);
+        logger.debug(
+          `Route ${config.file} mounted at ${routePath} with service: ${service ? service.constructor.name : 'no service'}`
+        );
+        logger.info('Total routes in stack:', app._router.stack.length);
+      } catch (error) {
+        logger.error(`Failed to mount route ${config.file} at ${routePath}:`, {
+          error: error.message,
+          stack: error.stack,
+          rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+          errorType: error?.constructor?.name || 'Unknown'
+        });
+        console.error(`[ERROR] Failed to mount route ${config.file} at ${routePath}:`, {
+          message: error.message || 'No message',
+          stack: error.stack || 'No stack',
+          rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+          type: error?.constructor?.name || 'Unknown'
+        });
+        logger.warn(`Skipping ${config.file} at ${routePath}: route not mounted`);
+      }
+    }
+  }
 }
 
 // Initialize services
@@ -710,10 +1022,10 @@ async function initializeServices() {
   let chatHistoryService, serviceCategoryService, logsService;
   let databaseOperationsService, weatherService, securityScanService, translationService;
 
-  const importService = async (name, path) => {
+  const importService = async (name, servicePath) => {
     logger.info(`Importing service: ${name}`);
     try {
-      const module = require(path);
+      const module = require(servicePath);
       logger.debug(`Service ${name} imported successfully`);
       return module;
     } catch (error) {
@@ -912,296 +1224,15 @@ async function initializeServices() {
   }
 }
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  try {
-    const now = new Date();
-    const formattedDate = now.toISOString().replace('T', ' ').substring(0, 19);
-    res.json({
-      status: 'ok',
-      serverTime: formattedDate,
-      uptime: Math.floor(process.uptime()) + ' seconds'
-    });
-  } catch (error) {
-    logger.error('Health check endpoint error:', {
-      error: error.message,
-      stack: error.stack,
-      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-      errorType: error?.constructor?.name || 'Unknown'
-    });
-    res.status(500).json({ message: 'Health check failed' });
-  }
-});
-
-// Robots.txt handler
-app.get('/robots.txt', (req, res) => {
-  try {
-    res.type('text/plain');
-    res.send('User-agent: *\nDisallow: /api/\nDisallow: /Uploads/');
-  } catch (error) {
-    logger.error('Robots.txt endpoint error:', {
-      error: error.message,
-      stack: error.stack,
-      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-      errorType: error?.constructor?.name || 'Unknown'
-    });
-    res.status(500).json({ message: 'Failed to serve robots.txt' });
-  }
-});
-
-// Sitemap.xml handler
-app.get('/sitemap.xml', (req, res) => {
-  try {
-    res.type('application/xml');
-    res.send(
-      '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n</urlset>'
-    );
-  } catch (error) {
-    logger.error('Sitemap.xml endpoint error:', {
-      error: error.message,
-      stack: error.stack,
-      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-      errorType: error?.constructor?.name || 'Unknown'
-    });
-    res.status(500).json({ message: 'Failed to serve sitemap.xml' });
-  }
-});
-
 // Start the server
 async function startApp() {
   logger.info('Starting application');
-  let services;
-  try {
-    services = await initializeServices();
-    logger.info('Services initialized successfully');
-  } catch (error) {
-    logger.error('Failed to initialize services:', {
-      error: error.message,
-      stack: error.stack,
-      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-      errorType: error?.constructor?.name || 'Unknown'
-    });
-    throw error;
-  }
+  const services = await initializeServices();
+  logger.info('Services initialized successfully');
 
-  // Define routes with paths and services
-  // keycloakAuth: true means the route group is protected by Keycloak JWT middleware
-  const routeConfigs = [
-    { file: 'user-routes', paths: ['/api/me'], service: services.userProfileService, keycloakAuth: true },
-    { file: 'query-routes', paths: ['/api/queries', '/api/query'], service: services.queryService, keycloakAuth: true },
-    { file: 'service-routes', paths: ['/api/services'], service: services.serviceCategoryService, keycloakAuth: true },
-    {
-      file: 'chat-history-routes',
-      paths: ['/api/chat-history', '/api/chat'],
-      service: services.chatHistoryService,
-      keycloakAuth: true
-    },
-    { file: 'analytics-routes', paths: ['/api/analytics'], service: services.analyticsService, keycloakAuth: true },
-    {
-      file: 'service-category-routes',
-      paths: ['/api/service-categories'],
-      service: services.serviceCategoryService,
-      keycloakAuth: true
-    },
-    { file: 'auth-routes', paths: ['/api/auth'], service: null },
-    { file: 'logger-routes', paths: ['/api/logger'], service: null, keycloakAuth: true },
-    {
-      file: 'database-operations-routes',
-      paths: ['/api/database'],
-      service: services.databaseOperationsService,
-      keycloakAuth: true
-    },
-    {
-      file: 'admin-routes',
-      paths: ['/api/admin'],
-      service: services.adminDashboardService,
-      extraService: services.logsService,
-      keycloakAuth: true
-    },
-    { file: 'weather-routes', paths: ['/api/weather'], service: services.weatherService, keycloakAuth: true },
-    { file: 'translation-routes', paths: ['/api/translate'], service: services.translationService, keycloakAuth: true }
-  ];
+  const app = createApp({ services });
+  const PORT = process.env.PORT || 3000;
 
-  // Log route configurations
-  logger.info('Route configurations:', {
-    routes: routeConfigs.map((config) => ({
-      file: config.file,
-      paths: config.paths,
-      service: config.service ? config.service.constructor.name : 'null',
-      extraService: config.extraService ? config.extraService.constructor.name : 'null'
-    }))
-  });
-
-  // Load and mount routes
-  for (const config of routeConfigs) {
-    const routeFilePath = `./routes/${config.file}.js`;
-    logger.info(`Processing route file: ${config.file}`);
-
-    // Check if route file exists
-    try {
-      if (!fs.existsSync(routeFilePath)) {
-        logger.warn(`Route file ${routeFilePath} does not exist, skipping`);
-        continue;
-      }
-      logger.debug(`Route file ${routeFilePath} found`);
-    } catch (error) {
-      logger.error(`Error checking existence of route file ${routeFilePath}:`, {
-        error: error.message,
-        stack: error.stack,
-        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-        errorType: error?.constructor?.name || 'Unknown'
-      });
-      continue;
-    }
-
-    // Load route module
-    let routeModule;
-    try {
-      logger.debug(`Attempting to require route file: ${routeFilePath}`);
-      console.log(`[DEBUG] Attempting to require route file: ${routeFilePath}`);
-      routeModule = require(routeFilePath);
-      logger.info(`Route module ${config.file} loaded successfully`);
-      console.log(`[INFO] Route module ${config.file} loaded successfully`);
-    } catch (error) {
-      logger.error(`Failed to load route module ${config.file}:`, {
-        error: error.message,
-        stack: error.stack,
-        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-        errorType: error?.constructor?.name || 'Unknown'
-      });
-      console.error(`[ERROR] Failed to load route module ${config.file}:`, {
-        message: error.message || 'No message',
-        stack: error.stack || 'No stack',
-        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-        type: error?.constructor?.name || 'Unknown'
-      });
-      logger.warn(`Skipping ${config.file}: route module not loaded`);
-      continue;
-    }
-
-    // Instantiate route
-    let routeInstance;
-    try {
-      logger.debug(
-        `Instantiating route ${config.file} with service: ${config.service ? config.service.constructor.name : 'null'}`
-      );
-      if (config.file === 'analytics-routes') {
-        const AnalyticsController = require('./controllers/analyticsController');
-        const analyticsController = new AnalyticsController(config.service);
-        routeInstance = routeModule(config.service, analyticsController);
-      } else if (config.file === 'admin-routes') {
-        routeInstance = routeModule(config.service, config.extraService);
-      } else if (config.file === 'auth-routes') {
-        // auth-routes exports a plain router (no factory function)
-        routeInstance = routeModule;
-      } else {
-        routeInstance = routeModule(config.service);
-      }
-      if (!routeInstance || typeof routeInstance.use !== 'function') {
-        throw new Error(`Route instance for ${config.file} is not a valid Express router`);
-      }
-      logger.info(`Route instance for ${config.file} created successfully`);
-    } catch (error) {
-      logger.error(`Failed to instantiate route ${config.file}:`, {
-        error: error.message,
-        stack: error.stack,
-        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-        errorType: error?.constructor?.name || 'Unknown'
-      });
-      console.error(`[ERROR] Failed to instantiate route ${config.file}:`, {
-        message: error.message || 'No message',
-        stack: error.stack || 'No stack',
-        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-        type: error?.constructor?.name || 'Unknown'
-      });
-      logger.warn(`Skipping ${config.file}: route instance not created`);
-      continue;
-    }
-
-    // Mount routes
-    for (const path of config.paths) {
-      try {
-        logger.info(`Mounting ${config.file} at ${path}`);
-        if (config.keycloakAuth) {
-          app.use(path, keycloakAuthMiddleware.authenticate, routeInstance);
-        } else {
-          app.use(path, routeInstance);
-        }
-        logger.info(`${config.file.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())} Module: LOADED`);
-        logger.debug(
-          `Route ${config.file} mounted at ${path} with service: ${config.service ? config.service.constructor.name : 'no service'}`
-        );
-        logger.info('Total routes in stack:', app._router.stack.length);
-      } catch (error) {
-        logger.error(`Failed to mount route ${config.file} at ${path}:`, {
-          error: error.message,
-          stack: error.stack,
-          rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-          errorType: error?.constructor?.name || 'Unknown'
-        });
-        console.error(`[ERROR] Failed to mount route ${config.file} at ${path}:`, {
-          message: error.message || 'No message',
-          stack: error.stack || 'No stack',
-          rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-          type: error?.constructor?.name || 'Unknown'
-        });
-        logger.warn(`Skipping ${config.file} at ${path}: route not mounted`);
-      }
-    }
-  }
-
-  // Root route
-  app.get('/', (req, res) => {
-    try {
-      logger.info('Accessed root endpoint');
-      res.json({
-        message: 'Welcome to the Government Services API',
-        apiDocumentation: '/api-docs',
-        availableEndpoints: routeConfigs.map((config) => config.paths).flat()
-      });
-    } catch (error) {
-      logger.error('Root endpoint error:', {
-        error: error.message,
-        stack: error.stack,
-        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-        errorType: error?.constructor?.name || 'Unknown'
-      });
-      res.status(500).json({ message: 'Failed to serve root endpoint' });
-    }
-  });
-
-  // Error handling middleware
-  app.use((err, req, res) => {
-    logger.error(`Error processing ${req.method} ${req.url}:`, {
-      error: err.message || 'Unknown error',
-      stack: err.stack || 'No stack trace',
-      rawError: JSON.stringify(err, Object.getOwnPropertyNames(err)),
-      errorType: err?.constructor?.name || 'Unknown',
-      method: req.method,
-      url: req.url,
-      ip: req.ip,
-      userAgent: req.get('User-Agent') || 'none'
-    });
-    // Typed errors (AppError subclasses) carry their own status code
-    if (err.statusCode) {
-      return res.status(err.statusCode).json({ message: err.message });
-    }
-    res.status(500).json({
-      message: 'An unexpected error occurred',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  });
-
-  // 404 handler
-  app.use((req, res) => {
-    logger.warn(`404 Not Found: ${req.method} ${req.url}`, {
-      ip: req.ip,
-      userAgent: req.get('User-Agent') || 'none'
-    });
-    res.status(404).json({ message: 'Resource not found' });
-  });
-
-  // Start the server
   try {
     const server = app.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
@@ -1235,17 +1266,17 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
-// Start the application
-try {
-  startApp();
-} catch (error) {
-  logger.error('Application startup failed:', {
-    error: error.message,
-    stack: error.stack,
-    rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-    errorType: error?.constructor?.name || 'Unknown'
+// Auto-start only when run directly
+if (require.main === module) {
+  startApp().catch((error) => {
+    logger.error('Application startup failed:', {
+      error: error.message,
+      stack: error.stack,
+      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      errorType: error?.constructor?.name || 'Unknown'
+    });
+    process.exit(1);
   });
-  process.exit(1);
 }
 
-module.exports = app;
+module.exports = { createApp };

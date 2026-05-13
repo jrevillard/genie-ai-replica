@@ -385,9 +385,24 @@ struct ContentView: View {
             initialContextLabels: pendingContextLabels,
             onNewChat: { /* handled by startNewChat */ },
             onRelatedDocumentsUpdate: { docs in
-                let existingUrls = Set(relatedDocs.map { $0.url })
-                let newDocs = docs.filter { !existingUrls.contains($0.url) }
-                relatedDocs.append(contentsOf: newDocs)
+                // Identify a document by the first non-nil of url / documentId
+                // / title. Deduping by url alone broke for offline RAG, whose
+                // sources have url == nil — after the first response, every
+                // subsequent nil-url doc matched the existing nil entry and
+                // got filtered. Also collapses multiple chunks from the same
+                // PDF (offline returns up to topK chunk-level sources) so the
+                // sidebar shows each source document once.
+                func key(_ d: DocumentItem) -> String {
+                    return d.url ?? d.documentId ?? d.title
+                }
+                let existingKeys = Set(relatedDocs.map(key))
+                var seen = existingKeys
+                var unique: [DocumentItem] = []
+                for d in docs where !seen.contains(key(d)) {
+                    seen.insert(key(d))
+                    unique.append(d)
+                }
+                relatedDocs.append(contentsOf: unique)
             }
         )
         .id(chatViewKey)

@@ -2,12 +2,12 @@
   "originHash" : "de5aef9ca7ebf5688f9c293ff1405e1982d8a7a42db840306bbba174ae014e6b",
   "pins" : [
     {
-      "identity" : "llama.cpp",
+      "identity" : "llama.swift",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/StanfordBDHG/llama.cpp",
+      "location" : "https://github.com/mattt/llama.swift",
       "state" : {
-        "revision" : "6839853a321778906e210a33ee2c6aec52f34c97",
-        "version" : "0.3.3"
+        "revision" : "c1b1a696a3a4575471e8b83165b77080f2491abb",
+        "version" : "2.9128.0"
       }
     }
   ],

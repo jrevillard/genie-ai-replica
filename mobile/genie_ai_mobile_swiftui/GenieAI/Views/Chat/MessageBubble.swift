@@ -168,14 +168,31 @@ struct SourcesView: View {
 
     let sources: [MessageMetadata.DocumentSource]
 
+    /// Collapse multiple chunks from the same document down to one row. Chunks
+    /// share a documentId (or URL, or title) but each chunk is a distinct
+    /// DocumentSource — without dedup the ForEach would emit a "ID occurs
+    /// multiple times within the collection" warning and render duplicate
+    /// rows for the same PDF.
+    private var dedupedSources: [MessageMetadata.DocumentSource] {
+        var seen = Set<String>()
+        var result: [MessageMetadata.DocumentSource] = []
+        for s in sources {
+            let key = s.documentId ?? s.url ?? s.title ?? s.fileName ?? UUID().uuidString
+            if seen.insert(key).inserted {
+                result.append(s)
+            }
+        }
+        return result
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            ForEach(sources.prefix(3)) { source in
+            ForEach(dedupedSources.prefix(3)) { source in
                 if let urlString = source.url, let url = URL(string: urlString) {
                     Link(destination: url) {
                         HStack(spacing: 4) {
                             Image(systemName: "link")
-                            Text(source.title ?? urlString)
+                            Text(source.title ?? source.fileName ?? urlString)
                                 .lineLimit(1)
                         }
                         .font(.caption)

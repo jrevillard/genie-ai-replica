@@ -18,7 +18,8 @@ class LocalRAGBridge {
             topK: Self.topK,
             similarityThreshold: Self.similarityThreshold,
             provider: .foundationModels,
-            systemPromptTemplate: Self.systemPromptTemplate
+            systemPromptTemplate: Self.systemPromptTemplate,
+            temperature: Self.temperature
         )
         self.ragService = LocalRAGService(config: config)
     }
@@ -29,7 +30,8 @@ class LocalRAGBridge {
             topK: Self.topK,
             similarityThreshold: Self.similarityThreshold,
             provider: .llamaCpp(modelPath: modelPath),
-            systemPromptTemplate: Self.systemPromptTemplate
+            systemPromptTemplate: Self.systemPromptTemplate,
+            temperature: Self.temperature
         )
         self.ragService = LocalRAGService(config: config)
     }
@@ -44,6 +46,14 @@ class LocalRAGBridge {
     private static let topK = 8
     private static let similarityThreshold = 0.05
 
+    // Generation tuning. LocalRAG's default temperature is 0.7 (calibrated
+    // for free-form chat); for RAG we want grounded answers that quote and
+    // cite verbatim, so drop temp to 0.2. This noticeably reduced
+    // hallucinated phone numbers / URLs in early testing with Apple's
+    // FoundationModels backend, which is otherwise loose about following
+    // citation instructions.
+    private static let temperature: Float = 0.2
+
     /// Mirrors the server-side chatqna prompt: ground answers in the
     /// retrieved chunks, cite each fact inline with [Source: <title>], and
     /// abstain when the context is empty instead of falling back to the
@@ -54,16 +64,23 @@ class LocalRAGBridge {
     private static let systemPromptTemplate = """
     You are a friendly and polite information assistant.
 
-    Your task is to answer the user's latest question using only the content provided from the knowledge base below.
+    Your task is to answer the user's latest question using ONLY the content provided from the knowledge base below. The knowledge base is the ONLY source of truth — your own prior knowledge is irrelevant for this task.
 
     **Strict rules:**
-    - Do NOT invent, assume, or extrapolate information. Every concrete fact in your answer (names, codes, URLs, phone numbers, dates, deadlines, prices, statistics, organisation names) MUST appear verbatim in the provided knowledge-base content.
-    - If the knowledge base content does NOT directly answer the question, do not attempt a partial answer or "general guidance". Say clearly that the requested information is not available in the offline library and stop.
-    - When you use a fact from a retrieved document, cite it inline using the exact format [Source: <document title>] immediately after the statement. The document title is shown in the context as `From "<title>"`. Use that title verbatim; never invent a title.
+    - Do NOT invent, assume, or extrapolate information. Every concrete fact in your answer (names, codes, URLs, phone numbers, dates, deadlines, prices, statistics, helpline numbers, organisation names) MUST appear verbatim in one of the retrieved chunks below. If you cannot point to a specific chunk for a fact, do not state that fact.
+    - If the knowledge base content does NOT contain a direct answer to the question, do not invent partial answers, "general guidance", "things to consider", or numbered lists from your training. Reply with one short sentence saying the offline library does not cover this question, and stop.
+    - Cite every fact-bearing statement inline with [Source: <title>] immediately after the statement. The title is shown in the context as `From "<title>"`; copy that title verbatim — never paraphrase, abbreviate, or invent a title.
+    - End your reply with a single line `Sources: <comma-separated list of titles you cited>`. If you cited nothing, write `Sources:` followed by an empty list.
+
+    **Example (illustrative — do not reuse content):**
+    ```
+    Eligible adults can register at the Service Centre on weekdays [Source: example-policy.pdf]. Registration requires a birth certificate [Source: example-policy.pdf].
+    Sources: example-policy.pdf
+    ```
 
     **Style rules:**
-    - Reply directly as a chat message. Do NOT use letter-style framing: no "Dear …", "Hello <Name>", opener; no "Best regards", "Sincerely", "[Your Assistant]", or any signoff at the end.
-    - Keep answers informative but concise; expand only when necessary or explicitly requested.
+    - Reply directly as a chat message. Do NOT use letter-style framing: no "Dear …" / "Hello <Name>," opener; no "Best regards", "Sincerely", "[Your Assistant]" or any signoff.
+    - Keep answers informative but concise; expand only when explicitly requested.
 
     Knowledge base content:
     {context}

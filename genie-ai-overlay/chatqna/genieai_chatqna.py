@@ -63,6 +63,12 @@ RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.9))  # if RERANKI
 
 DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001")  # Document repository URL
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")  # Backend service URL
+# Public-facing base URL used when constructing URLs that ship to clients
+# (e.g. source_documents.url). BACKEND_SERVICE_URL points at the internal
+# Docker hostname which is unreachable from browsers/mobile, so prefer the
+# explicit override and fall back to BACKEND_SERVICE_URL only for legacy
+# single-node setups.
+PUBLIC_BACKEND_URL = os.getenv("PUBLIC_BACKEND_URL", "").strip() or BACKEND_SERVICE_URL
 LANGUAGE_CODES_FILEPATH = os.getenv("LANGUAGE_CODES_FILEPATH", "language_codes.json")
 MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max token length for text generation models
 
@@ -1661,8 +1667,10 @@ class ChatQnAService:
                         source_documents_file_ids.append(file_id)
 
                         score = item.get("score", 0.0)
-                        # Construct the file read URL (assuming a standard pattern)
-                        file_read_url = f"{BACKEND_SERVICE_URL}/api/files/{file_id}/viewbrowser" if file_id else ""
+                        # Construct the file read URL for client consumption. Use
+                        # PUBLIC_BACKEND_URL so the URL is reachable from outside
+                        # the Docker network (browsers and mobile apps).
+                        file_read_url = f"{PUBLIC_BACKEND_URL}/api/files/{file_id}/viewbrowser" if file_id else ""
 
                         labels = []
                         file_name = ""

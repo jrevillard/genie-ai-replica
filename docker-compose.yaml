@@ -1035,6 +1035,7 @@ services:
       TRANSLATION_SERVICE_PORT: 9031
       DOC_REPO_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
+      PUBLIC_BACKEND_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}
       KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
       KC_REALM: ${KEYCLOAK_REALM:-genie}
       KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}

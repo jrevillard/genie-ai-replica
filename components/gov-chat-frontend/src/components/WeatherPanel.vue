@@ -1,37 +1,37 @@
 <template>
   <div :key="$i18n.locale" class="weather-panel" :data-theme="$route.meta.theme || 'light'">
     <div class="weather-header">
-      <h4>{{ weatherTitle }}</h4>
+      <h3>{{ weatherTitle }}</h3>
       <div class="weather-location">
         {{ location || weatherLocationLoading }}
-        <button class="refresh-btn" :title="weatherRefresh" @click="refreshWeather">
-          <i class="fas fa-sync-alt" :class="{ rotating: isLoading }"></i>
-        </button>
+        <DsButton variant="ghost" class="refresh-btn" :title="weatherRefresh" @click="refreshWeather">
+          <RefreshCw :size="14" :class="{ rotating: isLoading }" />
+        </DsButton>
       </div>
     </div>
 
     <div v-if="isLoading" class="weather-loading">
-      <i class="fas fa-spinner fa-pulse"></i>
+      <Loader2 :size="20" class="animate-spin" />
       {{ weatherLoading }}
     </div>
 
     <div v-else-if="errorKey" class="weather-error">
-      <i class="fas fa-exclamation-triangle"></i>
+      <AlertTriangle :size="20" />
       {{ $t(`sidebar.${errorKey}`) }}
     </div>
 
     <div v-else class="weather-content">
       <div class="current-weather">
         <div class="current-icon">
-          <i :class="getWeatherIcon(currentWeather.condition)"></i>
+          <component :is="getWeatherIcon(currentWeather.condition)" :size="28" />
         </div>
         <div class="current-details">
           <div class="current-temp">{{ currentWeather.temperature }}°C</div>
           <div class="current-condition">{{ getTranslatedCondition(currentWeather.condition) }}</div>
         </div>
         <div class="current-info">
-          <div class="info-item"><i class="fas fa-tint"></i> {{ currentWeather.humidity }}%</div>
-          <div class="info-item"><i class="fas fa-wind"></i> {{ currentWeather.windSpeed }} km/h</div>
+          <div class="info-item"><Droplets :size="14" /> {{ currentWeather.humidity }}%</div>
+          <div class="info-item"><Wind :size="14" /> {{ currentWeather.windSpeed }} km/h</div>
         </div>
       </div>
 
@@ -39,7 +39,7 @@
         <div v-for="(day, index) in formattedForecast" :key="index" class="forecast-day">
           <div class="day-name">{{ day.formattedDate }}</div>
           <div class="day-icon">
-            <i :class="day.iconClass"></i>
+            <component :is="day.iconName" :size="20" />
           </div>
           <div class="day-temp">
             <span class="temp-high">{{ day.highTemp }}°</span>
@@ -55,9 +55,39 @@
 <script>
 import { mapGetters } from 'vuex';
 import weatherService from '@/services/weatherService';
+import {
+  RefreshCw,
+  Loader2,
+  AlertTriangle,
+  Droplets,
+  Wind,
+  CloudLightning,
+  CloudRain,
+  Snowflake,
+  Cloud,
+  CloudSun,
+  Sun
+} from 'lucide-vue-next';
+
+import DsButton from '@/components/ds/Button.vue';
 
 export default {
   name: 'WeatherPanel',
+
+  components: {
+    DsButton,
+    RefreshCw,
+    Loader2,
+    AlertTriangle,
+    Droplets,
+    Wind,
+    CloudLightning,
+    CloudRain,
+    Snowflake,
+    Cloud,
+    CloudSun,
+    Sun
+  },
 
   data() {
     return {
@@ -94,7 +124,7 @@ export default {
       return this.forecast.map((day) => ({
         ...day,
         formattedDate: this.formatDay(day.date),
-        iconClass: this.getWeatherIcon(day.condition),
+        iconName: this.getWeatherIcon(day.condition),
         translatedCondition: this.getTranslatedCondition(day.condition)
       }));
     }
@@ -164,8 +194,7 @@ export default {
         } else {
           this.errorKey = 'weatherGeolocationUnsupported';
         }
-      } catch (error) {
-        console.warn('Weather fetch error:', error);
+      } catch {
         this.errorKey = 'weatherErrorDefault';
       } finally {
         this.isLoading = false;
@@ -204,21 +233,13 @@ export default {
     },
 
     getWeatherIcon(condition) {
-      const conditionLower = condition.toLowerCase();
-
-      if (conditionLower.includes('thunder')) {
-        return 'fas fa-bolt';
-      } else if (conditionLower.includes('rain') || conditionLower.includes('shower')) {
-        return 'fas fa-cloud-rain';
-      } else if (conditionLower.includes('snow')) {
-        return 'fas fa-snowflake';
-      } else if (conditionLower.includes('cloudy') || conditionLower.includes('overcast')) {
-        return 'fas fa-cloud';
-      } else if (conditionLower.includes('partly')) {
-        return 'fas fa-cloud-sun';
-      } else {
-        return 'fas fa-sun';
-      }
+      const c = condition.toLowerCase();
+      if (c.includes('thunder')) return 'CloudLightning';
+      if (c.includes('rain') || c.includes('shower')) return 'CloudRain';
+      if (c.includes('snow')) return 'Snowflake';
+      if (c.includes('cloudy') || c.includes('overcast')) return 'Cloud';
+      if (c.includes('partly')) return 'CloudSun';
+      return 'Sun';
     }
   }
 };
@@ -227,45 +248,40 @@ export default {
 <style scoped>
 /* Styles remain unchanged */
 .weather-panel {
-  margin-top: 15px;
-  background-color: var(--bg-card);
-  border-radius: 10px;
-  color: var(--text-primary);
-  padding: 12px;
+  margin-top: var(--space-md);
+  background-color: var(--bg-sidebar);
+  border-radius: var(--radius-lg);
+  color: var(--fg);
+  padding: var(--space-md);
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border-light);
-  font-size: 0.9rem;
+  font-size: var(--text-base);
 }
 
 .weather-header h4 {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-
-[data-theme='dark'] .weather-header h4,
-html[data-theme='dark'] .weather-header h4 {
-  color: rgba(255, 255, 255, 0.7) !important;
 }
 
 .weather-location {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .refresh-btn {
   background: none;
   border: none;
-  color: var(--accent-color);
+  color: var(--accent);
   cursor: pointer;
   opacity: 0.8;
   transition: opacity 0.2s;
-  padding: 3px;
+  padding: var(--space-xs);
 }
 
 .refresh-btn:hover {
@@ -275,6 +291,19 @@ html[data-theme='dark'] .weather-header h4 {
 
 .rotating {
   animation: rotate 1s linear infinite;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes rotate {
@@ -289,12 +318,12 @@ html[data-theme='dark'] .weather-header h4 {
 .weather-loading,
 .weather-error {
   text-align: center;
-  padding: 10px;
+  padding: var(--space-sm);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  color: var(--text-secondary);
+  gap: var(--space-sm);
+  color: var(--muted);
 }
 
 .current-weather {
@@ -302,15 +331,15 @@ html[data-theme='dark'] .weather-header h4 {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
-  padding-bottom: 8px;
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-sm);
   border-bottom: 1px solid var(--border-light);
 }
 
 .current-icon {
-  font-size: 1.8rem;
-  margin-right: 8px;
-  color: var(--accent-color);
+  font-size: var(--text-xl);
+  margin-right: var(--space-sm);
+  color: var(--accent);
 }
 
 .current-details {
@@ -318,30 +347,30 @@ html[data-theme='dark'] .weather-header h4 {
 }
 
 .current-temp {
-  font-size: 1.5rem;
+  font-size: var(--text-xl);
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--fg);
 }
 
 .current-condition {
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .current-info {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  color: var(--text-secondary);
+  gap: var(--space-xs);
+  color: var(--muted);
 }
 
 .info-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .info-item i {
-  color: var(--accent-color);
+  color: var(--accent);
 }
 
 .forecast-list {
@@ -355,37 +384,37 @@ html[data-theme='dark'] .weather-header h4 {
   align-items: center;
   text-align: center;
   flex: 1;
-  padding: 3px;
+  padding: var(--space-xs);
 }
 
 .day-name {
-  color: var(--text-secondary);
-  margin-bottom: 3px;
+  color: var(--muted);
+  margin-bottom: var(--space-xs);
 }
 
 .day-icon {
-  font-size: 1rem;
-  margin: 3px 0;
-  color: var(--accent-color);
+  font-size: var(--text-md);
+  margin: var(--space-xs) 0;
+  color: var(--accent);
 }
 
 .day-temp {
   display: flex;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .temp-high {
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--fg);
 }
 
 .temp-low {
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .day-condition {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
+  color: var(--muted);
+  font-size: var(--text-base);
   margin-top: 2px;
 }
 </style>

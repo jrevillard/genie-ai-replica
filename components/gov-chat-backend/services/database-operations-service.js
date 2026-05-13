@@ -64,26 +64,24 @@ class DatabaseOperationsService {
       const filenameBase = `${this.appName.toLowerCase()}_backup_${timestamp}`;
       const backupFilename = `${filenameBase}.${this.backupFormat}`;
       const backupPath = path.join(this.backupDir, backupFilename);
-  
+
       const dbInfo = {
         name: process.env.ARANGO_DB,
         version: await this.db.version(),
         timestamp: timestamp,
         environment: process.env.NODE_ENV
       };
-  
+
       // Get collection metadata reliably
       const collectionInfos = await this.db.listCollections();
-      dbInfo.collections = collectionInfos
-        .filter(info => !info.isSystem)
-        .map(info => info.name);
-  
+      dbInfo.collections = collectionInfos.filter((info) => !info.isSystem).map((info) => info.name);
+
       const writeStream = fsStandard.createWriteStream(backupPath);
       if (this.backupFormat === 'json') {
         writeStream.write('{\n');
         writeStream.write(`  "_metadata": ${JSON.stringify(dbInfo, null, 2)},\n`);
       }
-  
+
       let collectionCount = 0;
       for (const info of collectionInfos) {
         const collectionName = info.name;
@@ -91,21 +89,21 @@ class DatabaseOperationsService {
           logger.info(`Skipping system collection: ${collectionName}`);
           continue;
         }
-  
+
         logger.info(`Attempting to backup collection: ${collectionName}`);
-  
+
         // Get proxied collection instance
         const collection = this.db.collection(collectionName);
-  
+
         // Use interpolation for safe collection binding
         const cursor = await this.db.query(aql`
           FOR doc IN ${collection}
           RETURN doc
         `);
-  
+
         const documents = await cursor.all();
         logger.info(`Backed up collection: ${collectionName} (${documents.length} documents)`);
-  
+
         if (this.backupFormat === 'json') {
           if (collectionCount > 0) {
             writeStream.write(',\n');
@@ -116,20 +114,20 @@ class DatabaseOperationsService {
         }
         collectionCount++;
       }
-  
+
       if (this.backupFormat === 'json') {
         writeStream.write('\n}');
       }
       writeStream.end();
-  
+
       await new Promise((resolve, reject) => {
         writeStream.on('finish', resolve);
         writeStream.on('error', reject);
       });
-  
+
       const stats = await fs.stat(backupPath);
       const fileSize = this._formatSize(stats.size);
-  
+
       let finalPath = backupPath;
       if (this.compressBackups) {
         finalPath = await this._compressBackup(backupPath);
@@ -138,10 +136,10 @@ class DatabaseOperationsService {
         const compressedSize = this._formatSize(compressedStats.size);
         logger.info(`Backup compressed successfully: ${fileSize} -> ${compressedSize}`);
       }
-  
+
       await this._cleanupOldBackups();
       const relativeBackupPath = path.relative(process.cwd(), finalPath);
-  
+
       logger.info(`Database backup completed successfully: ${relativeBackupPath} (${fileSize})`);
       return {
         success: true,
@@ -199,11 +197,11 @@ class DatabaseOperationsService {
 
       const backupPattern = new RegExp(`^${this.appName.toLowerCase()}_backup_.*\\.(${backupExtensions.join('|')})$`);
       const backupFiles = files
-        .filter(file => backupPattern.test(file))
-        .map(file => ({
+        .filter((file) => backupPattern.test(file))
+        .map((file) => ({
           name: file,
           path: path.join(this.backupDir, file),
-          time: fs.stat(path.join(this.backupDir, file)).then(stat => stat.mtime.getTime())
+          time: fs.stat(path.join(this.backupDir, file)).then((stat) => stat.mtime.getTime())
         }));
 
       if (backupFiles.length <= this.maxBackups) {
@@ -212,7 +210,7 @@ class DatabaseOperationsService {
       }
 
       const backupsWithTimes = await Promise.all(
-        backupFiles.map(async file => ({
+        backupFiles.map(async (file) => ({
           ...file,
           time: await file.time
         }))
@@ -253,7 +251,9 @@ class DatabaseOperationsService {
           });
           logger.info(`Optimized collection: ${collection.name}`);
         } catch (collectionError) {
-          logger.error(`Optimization error for collection ${collection.name}: ${collectionError.message}`, { stack: collectionError.stack });
+          logger.error(`Optimization error for collection ${collection.name}: ${collectionError.message}`, {
+            stack: collectionError.stack
+          });
           optimizationResults.push({
             collection: collection.name,
             status: 'error',
@@ -283,7 +283,7 @@ class DatabaseOperationsService {
       const indexes = await collection.indexes();
       const analysis = [];
 
-      indexes.forEach(index => {
+      indexes.forEach((index) => {
         if (index.type === 'hash' && index.selectivityEstimate < 0.5) {
           analysis.push(`Low selectivity for hash index on ${index.fields.join(', ')}`);
         }
@@ -295,7 +295,9 @@ class DatabaseOperationsService {
       logger.info(`Index analysis completed successfully for collection ${collection.name}`);
       return analysis;
     } catch (error) {
-      logger.error(`Error analyzing indexes for collection ${collection.name}: ${error.message}`, { stack: error.stack });
+      logger.error(`Error analyzing indexes for collection ${collection.name}: ${error.message}`, {
+        stack: error.stack
+      });
       return [];
     }
   }

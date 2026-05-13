@@ -1,5 +1,106 @@
 # Mobile — CLAUDE.md
 
+## OpenAPI Client
+
+The mobile app uses an auto-generated OpenAPI client from the backend spec. **Never edit generated files manually** — they are overwritten on regeneration.
+
+### Generation
+
+```bash
+# From project root — generates spec from backend source, then Dart client
+./scripts/generate-api-client.sh
+```
+
+**Prerequisites:** `openapi-generator-cli` (`npm install -g @openapitools/openapi-generator-cli`), Node.js, backend `node_modules`.
+
+The script:
+1. Extracts the OpenAPI spec from backend JSDoc annotations (`components/gov-chat-backend/routes/*.js`) — no running server needed
+2. Generates the Dart client into `openapi_client/` using `openapi-generator-cli`
+
+### Architecture
+
+```
+openapi_client/                    # Auto-generated (DO NOT EDIT)
+├── lib/
+│   ├── api_client.dart            # HTTP client (accepts custom Client via set client)
+│   ├── api/                       # One API class per domain
+│   │   ├── current_user_api.dart  # GET/PUT /api/me
+│   │   ├── chat_history_api.dart
+│   │   ├── service_categories_api.dart
+│   │   └── ...
+│   ├── auth/
+│   │   └── http_bearer_auth.dart  # Bearer token injection
+│   └── model/                     # Request/response DTOs
+└── test/                          # Template tests (not used)
+```
+
+### Usage
+
+```dart
+import 'package:openapi/api.dart';
+
+// Create API instance with authenticated client
+final userApi = CurrentUserApi(authenticatedApiClient);
+final response = await userApi.apiMeGetWithHttpInfo();
+final profile = jsonDecode(response.body);
+```
+
+### Key API Classes
+
+| Class | Endpoints |
+|-------|-----------|
+| `CurrentUserApi` | `/api/me`, `/api/me/context`, `/api/me/delete` |
+| `ChatHistoryApi` | `/chat/conversations`, `/chat/messages`, `/chat/folders` |
+| `ServiceCategoriesApi` | `/service-categories/*` |
+| `AuthenticationApi` | `/auth/logout` |
+| `AnalyticsApi` | `/analytics/*` |
+| `TranslationApi` | `/translate`, `/translate/markdown` |
+
+## Design System
+
+The mobile app shares the same DS architecture as the web frontend. See `docs/theme-system.md` for the full theming documentation.
+
+### Architecture
+
+```
+lib/design_system/
+├── tokens/
+│   ├── app_tokens.dart          # Type-safe color tokens (access via ThemeManager().tokens)
+│   ├── color_utils.dart         # Hex parsing, HSL brand tinting helpers
+│   ├── spacing.dart             # DsSpacing.xs(4)/sm(8)/md(16)/lg(24)/xl(32)/xl2(48)
+│   └── radii.dart               # DsRadii.sm(4)/md(8)/lg(12)/xl(16)
+├── theme/
+│   └── app_theme.dart           # ThemeData builder from AppTokens
+└── components/
+    ├── ds_button.dart           # DsButton — variants: primary, secondary, ghost, danger
+    ├── ds_card.dart             # DsCard — variants: standard, flat, elevated, outline
+    ├── ds_input.dart            # DsInput — sizes: sm, md, lg
+    └── ds_modal.dart            # DsModal — sizes: sm, md, lg, xl + DsModal.show()
+```
+
+### Rules
+
+1. **Always use `ThemeManager().tokens`** — Returns `AppTokens` with type-safe color getters. Never use the old `getColors()` map.
+2. **Always use DS components** — If a DS component exists for a pattern (button, card, input, modal), use it. Do not create ad-hoc implementations.
+3. **Always use DS tokens** — All colors must reference `tokens.accent`, `tokens.fg`, etc. Never hardcode `Color(0x...)`.
+4. **Use `DsSpacing` and `DsRadii`** — Replace magic numbers with the token constants.
+5. **Options API** — All components use stateful/stateless widgets. Follow existing conventions.
+
+### Token Reference
+
+| Token | Light Mode | Dark Mode |
+|-------|-----------|-----------|
+| `tokens.brand` | Config brandColor | Same |
+| `tokens.bg` | Config or default | Brand-tinted dark |
+| `tokens.fg` | Config or default | Near white |
+| `tokens.surface` | White | Brand-tinted (22% L) |
+| `tokens.muted` | Medium gray | Brand-tinted (58% L) |
+| `tokens.border` | Light gray | Brand-tinted (30% L) |
+| `tokens.accent` | Brand color | Lightened brand |
+| `tokens.accentFg` | White | Dark brand |
+| `tokens.danger` | Red | Red |
+| `tokens.success` | Green | Green |
+
 ## Prerequisites
 
 ### Keycloak Mobile Client
@@ -129,6 +230,27 @@ rm -f ~/.android/avd/pixel_6.avd/*.qcow2
 ```
 
 **Flavors:** `dev` (local Docker, `10.0.2.2`), `e2e`, `staging`, `itu` (production URL).
+
+### Physical Device Builds
+
+The `dev` flavor uses dart-defines to point to the server:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `DEV_SERVER` | `localhost` | Server hostname/IP |
+| `DEV_PORT` | `443` | Server HTTPS port |
+
+```bash
+# Custom server, default port (443)
+flutter build apk --flavor dev --debug \
+  --dart-define=DEV_SERVER=192.168.78.153
+
+# Custom server + custom port (e.g. local nginx with self-signed cert)
+flutter build apk --flavor dev --debug \
+  --dart-define=DEV_SERVER=192.168.78.153 --dart-define=DEV_PORT=8443
+
+adb install -r build/app/outputs/flutter-apk/app-dev-debug.apk
+```
 
 ### Android Release Signing
 

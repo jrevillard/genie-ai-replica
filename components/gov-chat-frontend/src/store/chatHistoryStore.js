@@ -34,12 +34,10 @@ export default {
 
   mutations: {
     setFolders(state, folders) {
-      console.log('setFolders mutation received:', folders);
       state.folders = [...folders];
     },
 
     SET_FOLDER_CHATS(state, { folderId, chats }) {
-      console.log(`Setting chats for folder ${folderId}:`, chats);
       state.folderChats[folderId] = chats;
     },
 
@@ -92,9 +90,6 @@ export default {
       if (folderId !== 'default' && !state.folderChats.default.includes(newChat.id)) {
         state.folderChats.default.push(newChat.id);
       }
-      // Debug: Log new chat and folderChats
-      console.log('ADD_CHAT mutation: Added chat:', newChat);
-      console.log('ADD_CHAT mutation: Updated folderChats for', folderId, ':', state.folderChats[folderId]);
       return newChat.id;
     },
 
@@ -157,15 +152,12 @@ export default {
         }
       ];
       state.folderChats = { default: [] };
-      console.log('CLEAR_FOLDERS mutation: Reset folders and folderChats');
     }
   },
 
   actions: {
     setFolders({ commit }, folders) {
-      console.log('setFolders action: Dispatching folders:', folders);
       commit('setFolders', folders);
-      console.log('setFolders action: Completed');
     },
 
     createFolder({ commit }, name) {
@@ -198,7 +190,6 @@ export default {
 
     // Enhanced moveChat action to sync with backend
     async moveChat({ commit, rootGetters }, { chatId, fromFolderId, toFolderId }) {
-      console.log(`Moving chat ${chatId} from ${fromFolderId} to ${toFolderId}`);
       try {
         const currentUser = rootGetters['auth/currentUser'];
         if (!currentUser) throw new Error('User is missing');
@@ -207,7 +198,6 @@ export default {
         const chatIds = folder.conversations.map((conv) => conv._key);
         commit('SET_FOLDER_CHATS', { folderId: toFolderId, chats: chatIds });
         commit('MOVE_CHAT', { chatId, fromFolderId, toFolderId });
-        console.log(`Chat ${chatId} moved successfully to ${toFolderId}`);
       } catch (error) {
         console.error(`Error moving chat ${chatId}:`, error);
         throw error;
@@ -216,8 +206,6 @@ export default {
 
     async removeChatFromFolder({ commit, state }, { chatId, folderId }) {
       try {
-        console.log(`Removing chat ${chatId} from folder ${folderId}`);
-
         // Call the mutation to remove the chat from the folder
         commit('REMOVE_CHAT_FROM_FOLDER', { chatId, folderId });
 
@@ -225,12 +213,14 @@ export default {
         if (!state.folderChats.default.includes(chatId)) {
           commit('ADD_CHAT_TO_FOLDER', { chatId, folderId: 'default' });
         }
-
-        console.log(`Chat ${chatId} removed from folder ${folderId}`);
       } catch (error) {
         console.error(`Error removing chat ${chatId} from folder ${folderId}:`, error);
         throw error;
       }
+    },
+
+    setFolderChats({ commit }, { folderId, chats }) {
+      commit('SET_FOLDER_CHATS', { folderId, chats });
     },
 
     async clearFolders({ commit }) {

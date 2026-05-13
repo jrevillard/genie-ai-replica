@@ -2,7 +2,13 @@ import 'dart:io';
 import 'package:flutter/foundation.dart'; // REQUIRED for kIsWeb check
 import 'package:flutter/material.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+
+// Design System Imports
+import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
+import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
+import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
@@ -75,8 +81,7 @@ class _AboutScreenState extends State<AboutScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final tokens = ThemeManager().tokens;
 
     return Scaffold(
       appBar: AppBar(
@@ -84,74 +89,82 @@ class _AboutScreenState extends State<AboutScreen> {
         title: Text(tr('about.title')),
         centerTitle: true,
         elevation: 0,
+        backgroundColor: tokens.surface,
+        foregroundColor: tokens.fg,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(DsSpacing.lg),
         child: Column(
           children: [
-            const SizedBox(height: 32),
+            const SizedBox(height: DsSpacing.xl),
             // --- Logo Section ---
             Container(
               width: 100,
               height: 100,
               decoration: BoxDecoration(
-                color: theme.primaryColor.withOpacity(0.1),
+                color: tokens.accentMuted,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.smart_toy_outlined,
                 size: 48,
-                color: theme.primaryColor,
+                color: tokens.accent,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: DsSpacing.lg),
 
             // --- App Name & Version ---
             Text(
               _appName,
-              style: theme.textTheme.headlineMedium?.copyWith(
+              style: TextStyle(
+                fontSize: tokens.textXl,
                 fontWeight: FontWeight.bold,
+                color: tokens.fg,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: DsSpacing.xs),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: DsSpacing.sm, vertical: DsSpacing.xxs),
               decoration: BoxDecoration(
-                color: isDark ? Colors.grey[800] : Colors.grey[200],
-                borderRadius: BorderRadius.circular(12),
+                color: tokens.mutedSoft,
+                borderRadius: BorderRadius.circular(DsRadii.lg),
               ),
               child: Text(
                 '${tr('about.version')} $_version ($_buildNumber)',
-                style: theme.textTheme.bodySmall?.copyWith(
+                style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.grey[300] : Colors.grey[700],
+                  color: tokens.fg,
+                  fontSize: tokens.textSm,
                 ),
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: DsSpacing.xl),
 
             // --- Description ---
             Text(
               tr('about.description'),
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyLarge?.copyWith(
+              style: TextStyle(
                 height: 1.5,
-                color: isDark ? Colors.grey[300] : Colors.grey[700],
+                color: tokens.fg,
+                fontSize: tokens.textMd,
               ),
             ),
-            const SizedBox(height: 48),
+            const SizedBox(height: DsSpacing.xl2),
 
             // --- Mobile Tech Stack Section ---
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
                 tr('about.techStack'),
-                style: theme.textTheme.titleLarge?.copyWith(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
+                  color: tokens.fg,
+                  fontSize: tokens.textLg,
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: DsSpacing.md),
             _buildTechCard(context, [
               _buildTechItem(
                 context,
@@ -163,14 +176,14 @@ class _AboutScreenState extends State<AboutScreen> {
               _buildTechItem(context, 'OS Platform', _osVersion),
             ]),
 
-            const SizedBox(height: 48),
+            const SizedBox(height: DsSpacing.xl2),
 
             // --- Copyright ---
             Text(
               '© ${DateTime.now().year} $_appName. ${tr('about.copyright')}',
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+              style: TextStyle(color: tokens.muted, fontSize: tokens.textSm),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: DsSpacing.lg),
           ],
         ),
       ),
@@ -178,34 +191,30 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   Widget _buildTechCard(BuildContext context, List<Widget> children) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
-      color: theme.cardColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: theme.dividerColor.withOpacity(0.1)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(children: children),
-      ),
+    final tokens = ThemeManager().tokens;
+    return DsCard(
+      variant: DsCardVariant.standard,
+      padding: const EdgeInsets.all(DsSpacing.md),
+      radius: DsRadii.xl,
+      overrideBorderColor: tokens.borderLight,
+      child: Column(children: children),
     );
   }
 
   Widget _buildTechItem(BuildContext context, String label, String value) {
+    final tokens = ThemeManager().tokens;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: DsSpacing.xs),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+          Text(label, style: TextStyle(fontWeight: FontWeight.w500, color: tokens.fg)),
           Expanded(
             child: Text(
               value,
               textAlign: TextAlign.end,
               style: TextStyle(
-                color: Theme.of(context).primaryColor,
+                color: tokens.accent,
                 fontWeight: FontWeight.bold,
               ),
               overflow: TextOverflow.ellipsis,

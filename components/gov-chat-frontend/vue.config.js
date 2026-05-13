@@ -15,17 +15,12 @@ module.exports = {
     },
     host: '0.0.0.0',
     client: {
-      webSocketURL: 'auto://0.0.0.0:0/ws',
+      webSocketURL: 'auto://0.0.0.0:0/__hmr',
       webSocketTransport: 'ws',
     },
     proxy: {
       '/api': {
         target: 'http://'+ vueProxyHost,
-        changeOrigin: true,
-      },
-      '/ws': {
-        target: 'ws://'+ vueProxyHost,
-        ws: true,
         changeOrigin: true,
       }
     }

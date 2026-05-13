@@ -98,11 +98,9 @@ class I18nService extends ChangeNotifier {
         _localizedValues[_currentLocale.languageCode];
 
     // 2. Fallback to English if not found
-    if (langMap == null) {
-      // Only log this once per session ideally, but okay for debug now
-      // debugPrint("[I18N SERVICE] Missing map for ${_currentLocale.languageCode}, falling back to EN");
-      langMap = _localizedValues['en'];
-    }
+    langMap ??= _localizedValues['en'];
+    // Only log this once per session ideally, but okay for debug now
+    // debugPrint("[I18N SERVICE] Missing map for ${_currentLocale.languageCode}, falling back to EN");
 
     // 3. Navigate the nested keys
     dynamic value = _getValueFromMap(key, langMap ?? {});

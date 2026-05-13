@@ -1,13 +1,18 @@
 <template>
-  <button class="icon-btn">
+  <DsButton variant="ghost" class="icon-btn">
     <img src="/icons/upload.svg" :alt="translate('upload.alt', 'Upload')" />
     <input type="file" @change="onFileChange" />
-  </button>
+  </DsButton>
 </template>
 
 <script>
+import DsButton from './ds/Button.vue';
+
 export default {
   name: 'FileUploadComponent',
+  components: {
+    DsButton
+  },
   emits: ['fileUploaded'],
   methods: {
     /**
@@ -39,10 +44,7 @@ export default {
 <style scoped>
 .icon-btn {
   position: relative;
-  padding: 6px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
+  padding: var(--space-sm);
 }
 
 .icon-btn input[type='file'] {

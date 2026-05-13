@@ -1,38 +1,29 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
-import 'package:http/http.dart' as http;
-import 'package:genie_ai_mobile/services/service_tree_proxy.dart';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
+import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
+import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
+import 'package:genie_ai_mobile/providers/api_providers.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
-import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N SERVICE
 
-class ServiceTreePanel extends StatefulWidget {
+class ServiceTreePanel extends ConsumerStatefulWidget {
   final String locale;
   final Function(Map<String, dynamic> selection) onSelectionChange;
-  final http.Client? httpClient;
 
   const ServiceTreePanel({
     super.key,
     this.locale = 'en',
     required this.onSelectionChange,
-    this.httpClient,
   });
 
   @override
-  State<ServiceTreePanel> createState() => _ServiceTreePanelState();
+  ConsumerState<ServiceTreePanel> createState() => _ServiceTreePanelState();
 }
 
-class _ServiceTreePanelState extends State<ServiceTreePanel> {
-  // Service Proxy — lazily created on first use since it needs widget.httpClient
-  ServiceTreeProxy? __serviceTreeProxy;
-  ServiceTreeProxy get _serviceTreeProxy =>
-      __serviceTreeProxy ??= ServiceTreeProxy(httpClient: widget.httpClient);
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Reset proxy if httpClient changes (e.g., on re-login)
-    __serviceTreeProxy = null;
-  }
+class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
 
   // Input Controller
   final TextEditingController _searchController = TextEditingController();
@@ -47,7 +38,7 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
   // Visual Selection Tracking
   // Maps Category Key -> List of Selected Child Indices
   // Example: { 'category_1': [0, 2], 'category_5': [1] }
-  Map<String, List<int>> _selectedNodes = {};
+  final Map<String, List<int>> _selectedNodes = {};
 
   // Logic Selection Tracking
   // Keeps track of the exact order of selection to determine the "Primary" category
@@ -98,24 +89,30 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
         "[SERVICE_TREE] Fetching categories for locale: $currentLocale",
       );
 
-      // Fetch categories using the correct proxy method with LOCALE
-      final categories = await _serviceTreeProxy.getAllCategories(
+      // Fetch categories using the OpenAPI-generated ServiceCategoriesApi
+      final categoriesApi = ref.read(serviceCategoriesApiProvider);
+      final response = await categoriesApi.apiServiceCategoriesCategoriesGetWithHttpInfo(
         locale: currentLocale,
       );
 
-      if (mounted) {
-        setState(() {
-          _nodes = categories;
-          _isLoading = false;
-        });
-        debugPrint(
-          "[SERVICE_TREE] Successfully loaded ${_nodes.length} categories.",
-        );
+      if (response.statusCode == 200) {
+        final categories = jsonDecode(response.body) as List<dynamic>;
+
+        if (mounted) {
+          setState(() {
+            _nodes = categories;
+            _isLoading = false;
+          });
+          debugPrint(
+            "[SERVICE_TREE] Successfully loaded ${_nodes.length} categories.",
+          );
+        }
+      } else {
+        throw Exception('Failed to load categories: ${response.statusCode}');
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          // REMOVED defaultValue
           _errorMessage = tr("userProfile.errors.loadingFailed");
           _isLoading = false;
         });
@@ -239,6 +236,7 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = ThemeManager().tokens;
     // Check for language change and trigger reload if necessary
     final currentLocale = I18nService().currentLocale.languageCode;
     if (_lastLoadedLocale != currentLocale) {
@@ -254,13 +252,13 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             CircularProgressIndicator(
-              color: ThemeManager().getColors()['primary'],
+              color: ThemeManager().tokens.brand,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: DsSpacing.md),
             // REMOVED defaultValue
             Text(
               tr("common.loading"),
-              style: const TextStyle(color: Colors.grey),
+              style: TextStyle(color: tokens.muted),
             ),
           ],
         ),
@@ -270,27 +268,27 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
     if (_errorMessage != null) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(DsSpacing.xl),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.error_outline,
                 size: 48,
-                color: Colors.redAccent,
+                color: tokens.danger,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: DsSpacing.md),
               Text(
                 _errorMessage!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.grey),
+                style: TextStyle(color: tokens.muted),
               ),
               const SizedBox(height: 16),
-              OutlinedButton.icon(
+              DsButton(
+                label: tr("settings.retry"),
+                icon: Icons.refresh,
+                variant: DsButtonVariant.secondary,
                 onPressed: _loadCategories,
-                icon: const Icon(Icons.refresh),
-                // REMOVED defaultValue
-                label: Text(tr("settings.retry")),
               ),
             ],
           ),
@@ -307,37 +305,35 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
   }
 
   Widget _buildSearchBar() {
-    final colors = ThemeManager().getColors();
-    final bool isDark = ThemeManager().isDarkMode;
+    final tokens = ThemeManager().tokens;
 
     return Container(
-      padding: const EdgeInsets.all(12.0),
+      padding: const EdgeInsets.all(DsSpacing.md),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: colors['border'])),
+        border: Border(bottom: BorderSide(color: tokens.border)),
       ),
       child: TextField(
         controller: _searchController,
-        style: TextStyle(color: colors['text']),
+        style: TextStyle(color: tokens.fg),
         decoration: InputDecoration(
           // REMOVED defaultValue
           hintText: tr("sidebar.searchPlaceholder"),
           hintStyle: TextStyle(
-            color: isDark ? Colors.grey[500] : Colors.grey[600],
+            color: tokens.muted,
           ),
           prefixIcon: Icon(
             Icons.search,
-            color: isDark ? Colors.grey[500] : Colors.grey,
+            color: tokens.muted,
           ),
           filled: true,
-          // Adapts to Light/Dark mode input backgrounds
-          fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[200],
+          fillColor: tokens.muted20,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(DsRadii.md),
             borderSide: BorderSide.none,
           ),
           contentPadding: const EdgeInsets.symmetric(
             vertical: 0,
-            horizontal: 16,
+            horizontal: DsSpacing.md,
           ),
           isDense: true,
         ),
@@ -395,7 +391,7 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
         _selectedNodes[catKey]!.isNotEmpty;
     final bool shouldExpand = _searchQuery.isNotEmpty || hasSelection;
 
-    final colors = ThemeManager().getColors();
+    final tokens = ThemeManager().tokens;
 
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -408,11 +404,11 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
           catLabel,
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            fontSize: 14,
-            color: colors['text'],
+            fontSize: ThemeManager().tokens.textBase,
+            color: tokens.fg,
           ),
         ),
-        leading: Icon(Icons.folder_open, color: colors['primary'], size: 20),
+        leading: Icon(Icons.folder_open, color: tokens.brand, size: 20),
         childrenPadding: EdgeInsets.zero,
 
         // Children Generation
@@ -450,48 +446,43 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
     // Check Selection Status
     final bool isSelected = _selectedNodes[catKey]?.contains(index) ?? false;
     final bool isSearchMatch = _searchQuery.isNotEmpty;
-    final colors = ThemeManager().getColors();
+    final tokens = ThemeManager().tokens;
 
     // Render Tile
     return Container(
       // FIX: Added margin for better touch area and visual separation when selected
-      margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+      margin: const EdgeInsets.symmetric(vertical: DsSpacing.xs, horizontal: DsSpacing.sm),
       decoration: BoxDecoration(
         // FIX: Solid Primary color when selected (Standard Button Color)
-        color: isSelected ? colors['primary'] : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
+        color: isSelected ? tokens.brand : Colors.transparent,
+        borderRadius: BorderRadius.circular(DsRadii.md),
       ),
       child: ListTile(
         dense: true,
-        contentPadding: const EdgeInsets.only(left: 48, right: 16),
+        contentPadding: const EdgeInsets.only(left: 48, right: DsSpacing.md),
         visualDensity: const VisualDensity(vertical: -2),
 
-        // Label
         title: Text(
           serviceName,
           style: TextStyle(
-            fontSize: 13,
-            // FIX: White text on selected button, theme text otherwise
-            color: isSelected ? Colors.white : colors['text'],
+            fontSize: ThemeManager().tokens.textSm,
+            color: isSelected ? tokens.accentFg : tokens.fg,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
 
-        // Subtitle for Search Matches
         subtitle: isSearchMatch
-            // REMOVED defaultValue
             ? Text(
                 tr("sidebar.matchFound"),
                 style: TextStyle(
-                  fontSize: 10,
-                  color: isSelected ? Colors.white70 : Colors.grey,
+                  fontSize: ThemeManager().tokens.textXs,
+                  color: isSelected ? tokens.fg70 : tokens.muted,
                 ),
               )
             : null,
 
-        // Checkmark (White on selected)
         trailing: isSelected
-            ? const Icon(Icons.check_circle, size: 16, color: Colors.white)
+            ? Icon(Icons.check_circle, size: 16, color: tokens.accentFg)
             : null,
 
         // Tap Handler - Passes the raw serviceItem AND catKey to logic

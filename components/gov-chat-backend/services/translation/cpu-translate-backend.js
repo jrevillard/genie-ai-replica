@@ -77,7 +77,6 @@ class CpuTranslateBackend {
       // Send init message to worker to start model loading
       this.worker.postMessage({ type: 'init' });
       logger.info('[CPU-BACKEND] Sent init message to worker');
-
     } catch (error) {
       logger.error(`[CPU-BACKEND] Failed to spawn worker: ${error.message}`);
       throw error;
@@ -115,7 +114,9 @@ class CpuTranslateBackend {
           reject(new Error(error || 'Translation failed'));
         }
       } else {
-        logger.error(`[CPU-BACKEND] Received translation response for unknown or stale messageId: ${responseMessageId}. Queue has: ${Array.from(this.messageQueue.keys()).join(', ')}`);
+        logger.error(
+          `[CPU-BACKEND] Received translation response for unknown or stale messageId: ${responseMessageId}. Queue has: ${Array.from(this.messageQueue.keys()).join(', ')}`
+        );
       }
       return;
     }
@@ -132,7 +133,7 @@ class CpuTranslateBackend {
       // Map model IDs to language map files
       const modelToMap = {
         'Xenova/nllb-200-distilled-600M': './language-maps/nllb-200-map.js',
-        'facebook/nllb-200-distilled-600M': './language-maps/nllb-200-map.js',
+        'facebook/nllb-200-distilled-600M': './language-maps/nllb-200-map.js'
       };
 
       const mapPath = modelToMap[modelId];
@@ -182,12 +183,11 @@ class CpuTranslateBackend {
           lastLogTime = Date.now();
         }
 
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
       this.initialized = true;
       logger.info('[CPU-BACKEND] Initialized successfully. Worker is ready.');
-
     } catch (error) {
       logger.error(`[CPU-BACKEND] Initialization failed: ${error.message}`, { stack: error.stack });
       throw error;
@@ -305,7 +305,6 @@ class CpuTranslateBackend {
       logger.debug(`[CPU-BACKEND] Extracted ${translatedTexts.length} translated texts`);
 
       return translatedTexts;
-
     } catch (error) {
       logger.error(`[CPU-BACKEND] Translation failed: ${error.message}`, {
         stack: error.stack,
@@ -330,7 +329,7 @@ class CpuTranslateBackend {
       batches: this.batches,
       initialized: this.initialized,
       workerReady: this.workerReady,
-      usingWorkerThreads: true,
+      usingWorkerThreads: true
     };
   }
 
@@ -343,7 +342,7 @@ class CpuTranslateBackend {
       this.worker.postMessage({ type: 'terminate' });
 
       // Wait for worker to exit gracefully
-      await new Promise(resolve => {
+      await new Promise((resolve) => {
         const timeout = setTimeout(() => {
           this.worker.terminate();
           resolve();

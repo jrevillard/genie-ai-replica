@@ -694,6 +694,8 @@ export default {
     weatherLocationLoading: 'Memuat lokasi...',
     weatherErrorDefault: 'Tidak dapat mengambil data cuaca.',
     weatherGeolocationUnsupported: 'Geolokasi tidak didukung oleh browser Anda.',
+    collapse: 'Perkecil sidebar',
+    expand: 'Perbesar sidebar',
     weatherRefresh: 'Segarkan Cuaca',
     weatherConditions: {
       clear: 'Cerah',
@@ -1388,7 +1390,8 @@ export default {
     exportFilenamePlaceholder: 'Masukkan nama file',
     exportButton: 'Ekspor',
     exportSuccess: 'Obrolan berhasil diekspor',
-    exportError: 'Gagal mengekspor obrolan. Silakan coba lagi.'
+    exportError: 'Gagal mengekspor obrolan. Silakan coba lagi.',
+    removeItem: 'Hapus'
   },
   quickhelp: {
     // Labels (Short for UI)

@@ -70,27 +70,27 @@ class LogsService {
         return { errors: [], warnings: [], date };
       }
       logger.info(`Getting summary for date: ${date}`);
-  
+
       // Use same file selection logic as searchLogs
       const logFiles = await this.getLogFilesInRange(date, date, true);
       logger.info(`[SUMMARY-DEBUG] Found ${logFiles.length} files for summary: ${logFiles.join(', ')}`);
-  
+
       if (logFiles.length === 0) {
         logger.warn(`No log files found for date ${date}`);
         return { errors: [], warnings: [], date };
       }
-  
+
       const allParsedLogs = [];
       for (const logFile of logFiles) {
         try {
           const logContent = await this.readLogFile(logFile);
-          let logLines = logContent.split('\n').filter(line => line.trim() !== '');
-  
+          let logLines = logContent.split('\n').filter((line) => line.trim() !== '');
+
           if (logLines.length > MAX_LINES_TO_PROCESS) {
             logger.warn(`Too many log lines in ${logFile}, limiting to ${MAX_LINES_TO_PROCESS}`);
             logLines = logLines.slice(0, MAX_LINES_TO_PROCESS);
           }
-  
+
           // Use same parsing logic as searchLogs
           const isErrorLog = logFile.includes('error');
           const parsedLogs = this.parseLogs(logLines, isErrorLog ? 'ERROR' : null);
@@ -99,24 +99,26 @@ class LogsService {
           logger.error(`Error processing file ${logFile} for summary: ${fileError.message}`);
         }
       }
-  
+
       logger.info(`[SUMMARY-DEBUG] Total parsed entries from all files: ${allParsedLogs.length}`);
-  
+
       // Filter logs for the specified date
-      const filteredLogs = allParsedLogs.filter(log => log.date === date);
+      const filteredLogs = allParsedLogs.filter((log) => log.date === date);
       logger.info(`[SUMMARY-DEBUG] Filtered logs for date ${date}: ${filteredLogs.length}`);
-  
-      const errorLogs = filteredLogs.filter(log => log.level === 'ERROR');
-      const warningLogs = filteredLogs.filter(log => log.level === 'WARN' || log.level === 'WARNING');
+
+      const errorLogs = filteredLogs.filter((log) => log.level === 'ERROR');
+      const warningLogs = filteredLogs.filter((log) => log.level === 'WARN' || log.level === 'WARNING');
       logger.info(`[SUMMARY-DEBUG] Filtered counts: ${errorLogs.length} ERRORs, ${warningLogs.length} WARNs`);
-  
+
       const errorLogsSummary = this.groupLogs(errorLogs);
       const warningLogsSummary = this.groupLogs(warningLogs);
-      logger.info(`[SUMMARY-DEBUG] Grouped summary: ${errorLogsSummary.length} error types, ${warningLogsSummary.length} warning types.`);
-  
+      logger.info(
+        `[SUMMARY-DEBUG] Grouped summary: ${errorLogsSummary.length} error types, ${warningLogsSummary.length} warning types.`
+      );
+
       const finalResult = { errors: errorLogsSummary, warnings: warningLogsSummary, date };
       logger.info(`[SUMMARY-DEBUG] Final summary object:`, JSON.stringify(finalResult, null, 2));
-  
+
       return finalResult;
     } catch (error) {
       logger.error(`Error in getLogsSummary: ${error.message}`, { stack: error.stack });
@@ -164,7 +166,7 @@ class LogsService {
         try {
           logger.debug(`Reading log file: ${file}`);
           const logContent = await this.readLogFile(file);
-          let logLines = logContent.split('\n').filter(line => line.trim() !== '');
+          let logLines = logContent.split('\n').filter((line) => line.trim() !== '');
 
           totalLinesProcessed += logLines.length;
 
@@ -185,27 +187,27 @@ class LogsService {
 
       logger.info(`Parsed ${allLogs.length} total log entries from ${totalLinesProcessed} lines before filtering`);
 
-      let filteredLogs = allLogs.filter(log => log.date >= startDate && log.date <= endDate);
+      let filteredLogs = allLogs.filter((log) => log.date >= startDate && log.date <= endDate);
       logger.debug(`After date filter: ${filteredLogs.length} logs`);
 
       if (searchParams.level && searchParams.level.trim() !== '') {
         const targetLevel = searchParams.level.toUpperCase();
-        filteredLogs = filteredLogs.filter(log =>
-          log.level === targetLevel || (targetLevel === 'WARN' && log.level === 'WARNING')
+        filteredLogs = filteredLogs.filter(
+          (log) => log.level === targetLevel || (targetLevel === 'WARN' && log.level === 'WARNING')
         );
         logger.debug(`After level filter (${targetLevel}): ${filteredLogs.length} logs`);
       }
 
       if (searchParams.service && searchParams.service.trim() !== '') {
-        filteredLogs = filteredLogs.filter(log =>
-          log.service && log.service.toLowerCase().includes(searchParams.service.toLowerCase())
+        filteredLogs = filteredLogs.filter(
+          (log) => log.service && log.service.toLowerCase().includes(searchParams.service.toLowerCase())
         );
         logger.debug(`After service filter (${searchParams.service}): ${filteredLogs.length} logs`);
       }
 
       if (searchParams.term && searchParams.term.trim() !== '') {
-        filteredLogs = filteredLogs.filter(log =>
-          log.message && log.message.toLowerCase().includes(searchParams.term.toLowerCase())
+        filteredLogs = filteredLogs.filter(
+          (log) => log.message && log.message.toLowerCase().includes(searchParams.term.toLowerCase())
         );
         logger.debug(`After term filter (${searchParams.term}): ${filteredLogs.length} logs`);
       }
@@ -223,19 +225,19 @@ class LogsService {
         logger.debug(`Limiting logs to ${limit}`);
       }
 
-      const formattedLogs = filteredLogs.map(log => ({
+      const formattedLogs = filteredLogs.map((log) => ({
         date: log.date,
         time: log.time,
         level: log.level,
         service: log.service,
-        message: log.message,
+        message: log.message
       }));
 
       logger.debug(`Log search response: ${formattedLogs.length} logs returned out of ${allLogs.length} total`);
 
       return {
         logs: formattedLogs,
-        total: formattedLogs.length,
+        total: formattedLogs.length
       };
     } catch (error) {
       logger.error(`Error in searchLogs: ${error.message}`, { stack: error.stack });
@@ -274,7 +276,9 @@ class LogsService {
         const stats = await fs.stat(filePath);
 
         if (stats.size > MAX_LOG_FILE_SIZE) {
-          logger.warn(`Log file too large (${Math.round(stats.size / 1024 / 1024)}MB), reading first ${Math.round(MAX_LOG_FILE_SIZE / 1024 / 1024)}MB`);
+          logger.warn(
+            `Log file too large (${Math.round(stats.size / 1024 / 1024)}MB), reading first ${Math.round(MAX_LOG_FILE_SIZE / 1024 / 1024)}MB`
+          );
           const fileHandle = await fs.open(filePath, 'r');
           const buffer = Buffer.alloc(MAX_LOG_FILE_SIZE);
           await fileHandle.read(buffer, 0, MAX_LOG_FILE_SIZE, 0);
@@ -317,24 +321,24 @@ class LogsService {
 
       const logDir = path.join(__dirname, '../logs');
       logger.debug(`Checking logs directory: ${logDir}`);
-  
+
       try {
         await fs.access(logDir);
       } catch {
         logger.error(`Logs directory does not exist: ${logDir}`);
         return [];
       }
-  
+
       const files = await fs.readdir(logDir);
       logger.debug(`Files in logs directory: ${files.join(', ')}`);
       const logFiles = [];
       const today = new Date().toISOString().split('T')[0];
-  
+
       if (new Date(startDate) > new Date(endDate)) {
         logger.error(`Invalid date range: startDate (${startDate}) is after endDate (${endDate})`);
         return [];
       }
-  
+
       if (startDate <= today && today <= endDate) {
         const currentLogs = ['combined.log', 'combined1.log', 'error.log'];
         for (const file of currentLogs) {
@@ -348,7 +352,7 @@ class LogsService {
           }
         }
       }
-  
+
       if (includeArchived) {
         for (const file of files) {
           const dateMatch = file.match(/^(combined|error)-(\d{4}-\d{2}-\d{2})\.log(?:\.\d+)?(?:\.gz)?$/);
@@ -356,7 +360,7 @@ class LogsService {
             logger.debug(`File does not match date pattern: ${file}`);
             continue;
           }
-  
+
           const [, , fileDate] = dateMatch;
           if (fileDate >= startDate && fileDate <= endDate) {
             const filePath = path.join(logDir, file);
@@ -372,36 +376,38 @@ class LogsService {
           }
         }
       }
-  
+
       logFiles.sort((a, b) => {
         const aFile = path.basename(a);
         const bFile = path.basename(b);
-  
-        if (aFile.startsWith('combined.log') || aFile.startsWith('combined1.log') || aFile.startsWith('error.log')) return -1;
-        if (bFile.startsWith('combined.log') || bFile.startsWith('combined1.log') || bFile.startsWith('error.log')) return 1;
-  
+
+        if (aFile.startsWith('combined.log') || aFile.startsWith('combined1.log') || aFile.startsWith('error.log'))
+          return -1;
+        if (bFile.startsWith('combined.log') || bFile.startsWith('combined1.log') || bFile.startsWith('error.log'))
+          return 1;
+
         const aMatch = aFile.match(/^(combined|error)-(\d{4}-\d{2}-\d{2})\.log(?:\.(\d+))?(?:\.gz)?$/);
         const bMatch = bFile.match(/^(combined|error)-(\d{4}-\d{2}-\d{2})\.log(?:\.(\d+))?(?:\.gz)?$/);
-  
+
         if (!aMatch || !bMatch) return aFile.localeCompare(bFile);
-  
+
         const [, aType, aDate, aSuffix] = aMatch;
         const [, bType, bDate, bSuffix] = bMatch;
-  
+
         if (aDate !== bDate) return bDate.localeCompare(aDate);
         if (aType !== bType) return aType.localeCompare(bType);
-  
+
         const aNum = aSuffix ? parseInt(aSuffix, 10) : 0;
         const bNum = bSuffix ? parseInt(aSuffix, 10) : 0;
         return aNum - bNum;
       });
-  
+
       if (logFiles.length === 0) {
         logger.warn(`No log files found for date range ${startDate} to ${endDate}`);
       } else {
         logger.info(`Found ${logFiles.length} log files in range ${startDate} to ${endDate}: ${logFiles.join(', ')}`);
       }
-  
+
       // Temporary debug: List file sizes
       for (const filePath of logFiles) {
         try {
@@ -411,7 +417,7 @@ class LogsService {
           logger.debug(`Could not stat file ${filePath}: ${error.message}`);
         }
       }
-  
+
       return [...new Set(logFiles)];
     } catch (error) {
       logger.error(`Error getting log files: ${error.message}`, { stack: error.stack });
@@ -440,13 +446,15 @@ class LogsService {
     logger.debug(`Extracting logs with level: ${level}`);
 
     const logs = logLines
-      .filter(line => {
-        return line.includes(`[${level}]`) ||
+      .filter((line) => {
+        return (
+          line.includes(`[${level}]`) ||
           line.includes(`[${level}]:`) ||
           (level === 'WARN' && (line.includes('[WARNING]') || line.includes('[WARNING]:'))) ||
-          (level === 'DEBUG' && (line.includes('[DEBUG]') || line.includes('[DEBUG]:')));
+          (level === 'DEBUG' && (line.includes('[DEBUG]') || line.includes('[DEBUG]:')))
+        );
       })
-      .map(line => {
+      .map((line) => {
         const match = line.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]:\s+(.*)/);
         if (!match) return null;
 
@@ -470,7 +478,7 @@ class LogsService {
 
         return { date, time, level: normalizedLevel, message, service };
       })
-      .filter(log => log !== null);
+      .filter((log) => log !== null);
 
     logger.debug(`Extracted ${logs.length} logs with level ${level}`);
     return logs;
@@ -496,7 +504,7 @@ class LogsService {
       { regex: /ENOENT: no such file or directory/i, type: 'File Not Found' }
     ];
 
-    logs.forEach(log => {
+    logs.forEach((log) => {
       try {
         let matchedType = null;
         const service = log.service || 'System';
@@ -527,7 +535,10 @@ class LogsService {
         if (!groups[key]) {
           groups[key] = {
             type: matchedType,
-            typeKey: matchedType.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
+            typeKey: matchedType
+              .toLowerCase()
+              .replace(/\s+/g, '_')
+              .replace(/[^a-z0-9_]/g, ''),
             service,
             count: 0
           };
@@ -541,8 +552,8 @@ class LogsService {
   }
 
   /**
- * Parse raw log lines into structured log objects
- */
+   * Parse raw log lines into structured log objects
+   */
   parseLogs(logLines, defaultLevel = null) {
     try {
       const logs = [];
@@ -580,7 +591,10 @@ class LogsService {
             const messageStart = trimmedLine.indexOf(':') + 1;
             const debugMessage = trimmedLine.slice(messageStart).trim();
             if (debugMessage) {
-              const potentialEmbeddedLogs = debugMessage.split(/(?:\n|;|\|)/).map(l => l.trim()).filter(l => l);
+              const potentialEmbeddedLogs = debugMessage
+                .split(/(?:\n|;|\|)/)
+                .map((l) => l.trim())
+                .filter((l) => l);
               for (const embeddedLine of potentialEmbeddedLogs) {
                 if (embeddedLine && !processedLines.has(embeddedLine)) {
                   const embeddedLogs = this.parseLogs([embeddedLine], defaultLevel);
@@ -597,7 +611,13 @@ class LogsService {
             if (!message || message.trim() === '') continue;
             let normalizedLevel = defaultLevel || level.toUpperCase();
             if (normalizedLevel === 'WARNING') normalizedLevel = 'WARN';
-            currentLog = { date, time, level: normalizedLevel, message: message.trim(), service: this.detectService(message) };
+            currentLog = {
+              date,
+              time,
+              level: normalizedLevel,
+              message: message.trim(),
+              service: this.detectService(message)
+            };
             logs.push(currentLog);
             continue;
           }
@@ -608,7 +628,13 @@ class LogsService {
             if (!message || message.trim() === '') continue;
             let normalizedLevel = defaultLevel || level.toUpperCase();
             if (normalizedLevel === 'WARNING') normalizedLevel = 'WARN';
-            currentLog = { date, time, level: normalizedLevel, message: message.trim(), service: this.detectService(message) };
+            currentLog = {
+              date,
+              time,
+              level: normalizedLevel,
+              message: message.trim(),
+              service: this.detectService(message)
+            };
             logs.push(currentLog);
             continue;
           }
@@ -619,7 +645,13 @@ class LogsService {
             if (!message || message.trim() === '') continue;
             let detectedLevel = defaultLevel || this.detectLogLevel(message);
             if (detectedLevel === 'WARNING') detectedLevel = 'WARN';
-            currentLog = { date, time, level: detectedLevel, message: message.trim(), service: this.detectService(message) };
+            currentLog = {
+              date,
+              time,
+              level: detectedLevel,
+              message: message.trim(),
+              service: this.detectService(message)
+            };
             logs.push(currentLog);
             continue;
           }
@@ -652,7 +684,8 @@ class LogsService {
     try {
       if (!message) return 'INFO';
       const lowerMessage = message.toLowerCase();
-      if (lowerMessage.includes('error') || lowerMessage.includes('exception') || lowerMessage.includes('fail')) return 'ERROR';
+      if (lowerMessage.includes('error') || lowerMessage.includes('exception') || lowerMessage.includes('fail'))
+        return 'ERROR';
       if (lowerMessage.includes('warn')) return 'WARN';
       if (lowerMessage.includes('debug')) return 'DEBUG';
       return 'INFO';
@@ -676,10 +709,13 @@ class LogsService {
       if (serviceMatch) {
         const serviceType = serviceMatch[1].toUpperCase();
         switch (serviceType) {
-          case 'AUTH': return 'Auth Service';
-          case 'ADMIN': return 'Admin Service';
+          case 'AUTH':
+            return 'Auth Service';
+          case 'ADMIN':
+            return 'Admin Service';
           // ... more cases
-          default: return serviceType + ' Service';
+          default:
+            return serviceType + ' Service';
         }
       }
       return 'System';

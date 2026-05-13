@@ -36,7 +36,7 @@ const securityScanService = {
     try {
       for (const transport of logger.transports) {
         if (transport.close) {
-          await new Promise(resolve => transport.close(resolve));
+          await new Promise((resolve) => transport.close(resolve));
         }
       }
     } catch (err) {
@@ -109,37 +109,141 @@ const securityScanService = {
     const endDate = today.toFormat('yyyy-MM-dd');
 
     const vulnerabilityPatterns = [
-      { type: 'token_issue', severity: 'critical', regex: /invalid token/i, description: 'Invalid or expired token usage detected', recommendation: 'Review token expiration policies.', service: 'auth' },
-      { type: 'attack_attempt', severity: 'critical', regex: /SQL injection|XSS|CSRF/i, description: 'Potential attack attempt detected', recommendation: 'Implement WAF and input sanitization.', service: 'http' },
-      { type: 'command_injection', severity: 'critical', regex: /(sleep\s+\d+|__import__\(\s*['"]subprocess['"]\)|execSync\(\s*['"]sleep\s+\d+['"]\)|%x\(\s*sleep\s+\d+\s*\))/i, description: 'Command injection attempt detected in token or request', recommendation: 'Sanitize all inputs and implement strict validation.', service: 'auth' },
-      { type: 'sensitive_file_access', severity: 'medium', regex: /Blocked access to sensitive path:\s*((?:\/api\/)?(?:\.env|\.git\/config|\.gitignore|\.npmrc|node_modules\/\.package-lock\.json|\.well-known\/security\.txt))/i, description: 'Attempt to access sensitive file detected', recommendation: 'Ensure sensitive files are not exposed and access is blocked.', service: 'http' },
-      { type: 'ip_blocked', severity: 'medium', regex: /IP Blocked/i, description: 'IP blocked due to suspicious activity', recommendation: 'Review blocked IPs for false positives and enhance rate limiting.', service: 'system' },
-      { type: 'auth_failure_401', severity: 'medium', regex: /Authentication Failure - 401/i, description: 'HTTP 401 unauthorized access attempt detected', recommendation: 'Monitor for brute force and review access controls.', service: 'system' },
-      { type: 'db_error', severity: 'medium', regex: /collection\.save failed.*expecting both `_from` and `_to` attributes/i, description: 'Database operation failed due to misconfiguration', recommendation: 'Review ArangoDB edge document configuration.', service: 'database' },
-      { type: 'non_critical_file_access', severity: 'low', regex: /Blocked access to sensitive path:\s*(\/\.well-known\/appspecific\/com\.chrome\.devtools\.json)/i, description: 'Attempt to access non-critical configuration file detected', recommendation: 'Verify if access to such files should be blocked.', service: 'http' },
-      { type: 'unauthorized_access', severity: 'medium', regex: /not authorized/i, description: 'Unauthorized access attempt detected', recommendation: 'Check access control policies.', service: 'auth' },
-      { type: 'brute_force', severity: 'medium', regex: /brute force/i, description: 'Brute force attempt detected', recommendation: 'Implement rate limiting.', service: 'auth' },
-      { type: 'failed_login', severity: 'low', regex: /Invalid credentials|failed login/i, description: 'Failed login attempt detected', recommendation: 'Monitor for suspicious activity.', service: 'auth' },
-      { type: 'not_found_404', severity: 'low', regex: /404 Not Found: (GET|POST|PUT|DELETE)\s+\/api\/api\//i, description: 'Invalid API endpoint access attempt detected', recommendation: 'Review for probing attempts and ensure proper routing.', service: 'http' },
-      { type: 'registration_failure', severity: 'low', regex: /(Email|Username) already exists|Registration failed/i, description: 'Registration attempt failed due to existing credentials', recommendation: 'Monitor for automated registration attempts.', service: 'system' },
-      { type: 'log_limit_exceeded', severity: 'low', regex: /Too many log lines.*limiting to/i, description: 'Log file exceeds processing limit', recommendation: 'Optimize log rotation or increase scan limits.', service: 'system' },
+      {
+        type: 'token_issue',
+        severity: 'critical',
+        regex: /invalid token/i,
+        description: 'Invalid or expired token usage detected',
+        recommendation: 'Review token expiration policies.',
+        service: 'auth'
+      },
+      {
+        type: 'attack_attempt',
+        severity: 'critical',
+        regex: /SQL injection|XSS|CSRF/i,
+        description: 'Potential attack attempt detected',
+        recommendation: 'Implement WAF and input sanitization.',
+        service: 'http'
+      },
+      {
+        type: 'command_injection',
+        severity: 'critical',
+        regex:
+          /(sleep\s+\d+|__import__\(\s*['"]subprocess['"]\)|execSync\(\s*['"]sleep\s+\d+['"]\)|%x\(\s*sleep\s+\d+\s*\))/i,
+        description: 'Command injection attempt detected in token or request',
+        recommendation: 'Sanitize all inputs and implement strict validation.',
+        service: 'auth'
+      },
+      {
+        type: 'sensitive_file_access',
+        severity: 'medium',
+        regex:
+          /Blocked access to sensitive path:\s*((?:\/api\/)?(?:\.env|\.git\/config|\.gitignore|\.npmrc|node_modules\/\.package-lock\.json|\.well-known\/security\.txt))/i,
+        description: 'Attempt to access sensitive file detected',
+        recommendation: 'Ensure sensitive files are not exposed and access is blocked.',
+        service: 'http'
+      },
+      {
+        type: 'ip_blocked',
+        severity: 'medium',
+        regex: /IP Blocked/i,
+        description: 'IP blocked due to suspicious activity',
+        recommendation: 'Review blocked IPs for false positives and enhance rate limiting.',
+        service: 'system'
+      },
+      {
+        type: 'auth_failure_401',
+        severity: 'medium',
+        regex: /Authentication Failure - 401/i,
+        description: 'HTTP 401 unauthorized access attempt detected',
+        recommendation: 'Monitor for brute force and review access controls.',
+        service: 'system'
+      },
+      {
+        type: 'db_error',
+        severity: 'medium',
+        regex: /collection\.save failed.*expecting both `_from` and `_to` attributes/i,
+        description: 'Database operation failed due to misconfiguration',
+        recommendation: 'Review ArangoDB edge document configuration.',
+        service: 'database'
+      },
+      {
+        type: 'non_critical_file_access',
+        severity: 'low',
+        regex: /Blocked access to sensitive path:\s*(\/\.well-known\/appspecific\/com\.chrome\.devtools\.json)/i,
+        description: 'Attempt to access non-critical configuration file detected',
+        recommendation: 'Verify if access to such files should be blocked.',
+        service: 'http'
+      },
+      {
+        type: 'unauthorized_access',
+        severity: 'medium',
+        regex: /not authorized/i,
+        description: 'Unauthorized access attempt detected',
+        recommendation: 'Check access control policies.',
+        service: 'auth'
+      },
+      {
+        type: 'brute_force',
+        severity: 'medium',
+        regex: /brute force/i,
+        description: 'Brute force attempt detected',
+        recommendation: 'Implement rate limiting.',
+        service: 'auth'
+      },
+      {
+        type: 'failed_login',
+        severity: 'low',
+        regex: /Invalid credentials|failed login/i,
+        description: 'Failed login attempt detected',
+        recommendation: 'Monitor for suspicious activity.',
+        service: 'auth'
+      },
+      {
+        type: 'not_found_404',
+        severity: 'low',
+        regex: /404 Not Found: (GET|POST|PUT|DELETE)\s+\/api\/api\//i,
+        description: 'Invalid API endpoint access attempt detected',
+        recommendation: 'Review for probing attempts and ensure proper routing.',
+        service: 'http'
+      },
+      {
+        type: 'registration_failure',
+        severity: 'low',
+        regex: /(Email|Username) already exists|Registration failed/i,
+        description: 'Registration attempt failed due to existing credentials',
+        recommendation: 'Monitor for automated registration attempts.',
+        service: 'system'
+      },
+      {
+        type: 'log_limit_exceeded',
+        severity: 'low',
+        regex: /Too many log lines.*limiting to/i,
+        description: 'Log file exceeds processing limit',
+        recommendation: 'Optimize log rotation or increase scan limits.',
+        service: 'system'
+      }
     ];
-    const suspiciousPatterns = [
-      /SQL injection|XSS|CSRF|brute force|command injection|threat detection|ip blocked/i
-    ];
+    const suspiciousPatterns = [/SQL injection|XSS|CSRF|brute force|command injection|threat detection|ip blocked/i];
 
     try {
       console.log(`Starting unified log scan for period ${startDate} to ${endDate}`);
       const allLogFiles = await logsService.getLogFilesInRange(startDate, endDate, true);
-      const validLogFiles = (await Promise.all(allLogFiles.map(async file => {
-        if (file.endsWith('.gz') && !(await this.isGzipValid(file))) return null;
-        if (!file.match(/(combined|error)-\d{4}-\d{2}-\d{2}\.log(\.gz|\.\d+\.gz)?$/)) return null;
-        return file;
-      }))).filter(Boolean).sort((a, b) => {
-        const aDate = a.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
-        const bDate = b.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
-        return bDate.localeCompare(aDate);
-      });
+      const validLogFiles = (
+        await Promise.all(
+          allLogFiles.map(async (file) => {
+            if (file.endsWith('.gz') && !(await this.isGzipValid(file))) return null;
+            if (!file.match(/(combined|error)-\d{4}-\d{2}-\d{2}\.log(\.gz|\.\d+\.gz)?$/)) return null;
+            return file;
+          })
+        )
+      )
+        .filter(Boolean)
+        .sort((a, b) => {
+          const aDate = a.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
+          const bDate = b.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
+          return bDate.localeCompare(aDate);
+        });
 
       console.log(`Found ${validLogFiles.length} valid log files to scan.`);
       const concurrencyLimit = require('os').cpus().length;
@@ -155,12 +259,17 @@ const securityScanService = {
           break;
         }
         const batch = validLogFiles.slice(i, i + concurrencyLimit);
-        const batchPromises = batch.map(file =>
-          this.processFile(file, startTime, { vulnerabilityPatterns, suspiciousPatterns })
-            .catch(err => {
-              logger.error(`Error processing file ${file} in worker: ${err.message}`);
-              return { vulnerabilities: { critical: [], medium: [], low: [] }, failedLogins: [], suspiciousActivities: [], linesProcessed: 0, linesSkipped: 0 };
-            })
+        const batchPromises = batch.map((file) =>
+          this.processFile(file, startTime, { vulnerabilityPatterns, suspiciousPatterns }).catch((err) => {
+            logger.error(`Error processing file ${file} in worker: ${err.message}`);
+            return {
+              vulnerabilities: { critical: [], medium: [], low: [] },
+              failedLogins: [],
+              suspiciousActivities: [],
+              linesProcessed: 0,
+              linesSkipped: 0
+            };
+          })
         );
 
         const results = await Promise.all(batchPromises);
@@ -186,7 +295,9 @@ const securityScanService = {
         console.debug(`Batch processed. Total lines so far: ${totalLinesProcessed}`);
       }
 
-      console.log(`Total lines processed: ${totalLinesProcessed}, Total lines skipped: ${totalLinesSkipped}, time elapsed: ${(Date.now() - startTime) / 1000}s`);
+      console.log(
+        `Total lines processed: ${totalLinesProcessed}, Total lines skipped: ${totalLinesSkipped}, time elapsed: ${(Date.now() - startTime) / 1000}s`
+      );
       const vulnerabilities = { critical: [], medium: [], low: [] };
       for (const issue of finalIssueMap.values()) {
         if (vulnerabilities[issue.severity]) {
@@ -245,14 +356,19 @@ const securityScanService = {
   parseLogLine(line, file, lineNumber, invalidLogStream) {
     function extractUrl(message) {
       const urlMatch = message.match(/https?:\/\/[^\s]+|(GET|POST|PUT|DELETE)\s+([^\s]+)/i);
-      return urlMatch ? (urlMatch[2] || urlMatch[0]) : 'N/A';
+      return urlMatch ? urlMatch[2] || urlMatch[0] : 'N/A';
     }
-    const standardMatch = line.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[(\w+)\]\s+([^\s]+(?:\s+[^\s]+)*)\s+(.+)$/);
+    const standardMatch = line.match(
+      /^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[(\w+)\]\s+([^\s]+(?:\s+[^\s]+)*)\s+(.+)$/
+    );
     if (standardMatch) {
       const [, date, time, level, service, message] = standardMatch;
       const timestamp = DateTime.fromFormat(`${date} ${time}`, 'yyyy-MM-dd HH:mm:ss', { zone: 'utc' });
       if (!timestamp.isValid) {
-        if (invalidLogStream) invalidLogStream.write(`[${DateTime.now().toISO()}] Invalid timestamp in ${file} at line ${lineNumber}: ${line}\n`);
+        if (invalidLogStream)
+          invalidLogStream.write(
+            `[${DateTime.now().toISO()}] Invalid timestamp in ${file} at line ${lineNumber}: ${line}\n`
+          );
         return null;
       }
       return { timestamp: timestamp.toISO(), level, service, message, url: extractUrl(message) };
@@ -262,7 +378,10 @@ const securityScanService = {
       if (jsonLog.timestamp && jsonLog.level && jsonLog.message) {
         const timestamp = DateTime.fromISO(jsonLog.timestamp, { zone: 'utc' });
         if (!timestamp.isValid) {
-          if (invalidLogStream) invalidLogStream.write(`[${DateTime.now().toISO()}] Invalid JSON timestamp in ${file} at line ${lineNumber}: ${line}\n`);
+          if (invalidLogStream)
+            invalidLogStream.write(
+              `[${DateTime.now().toISO()}] Invalid JSON timestamp in ${file} at line ${lineNumber}: ${line}\n`
+            );
           return null;
         }
         return {
@@ -281,12 +400,18 @@ const securityScanService = {
       const [, datetime, message] = fallbackMatch;
       const timestamp = DateTime.fromFormat(datetime, 'yyyy-MM-dd HH:mm:ss', { zone: 'utc' });
       if (!timestamp.isValid) {
-        if (invalidLogStream) invalidLogStream.write(`[${DateTime.now().toISO()}] Invalid fallback timestamp in ${file} at line ${lineNumber}: ${line}\n`);
+        if (invalidLogStream)
+          invalidLogStream.write(
+            `[${DateTime.now().toISO()}] Invalid fallback timestamp in ${file} at line ${lineNumber}: ${line}\n`
+          );
         return null;
       }
       return { timestamp: timestamp.toISO(), level: 'UNKNOWN', service: 'unknown', message, url: extractUrl(message) };
     }
-    if (invalidLogStream) invalidLogStream.write(`[${DateTime.now().toISO()}] Unrecognized log format in ${file} at line ${lineNumber}: ${line}\n`);
+    if (invalidLogStream)
+      invalidLogStream.write(
+        `[${DateTime.now().toISO()}] Unrecognized log format in ${file} at line ${lineNumber}: ${line}\n`
+      );
     return null;
   },
 
@@ -336,13 +461,31 @@ const securityScanService = {
       const response = await axios.get('http://localhost:3000', { validateStatus: () => true });
       const headers = response.headers;
       const headerChecks = [
-        { header: 'content-security-policy', type: 'missing_csp', severity: 'medium', description: 'Missing Content-Security-Policy header', recommendation: 'Implement a strict CSP to prevent XSS attacks.' },
-        { header: 'strict-transport-security', type: 'missing_hsts', severity: 'medium', description: 'Missing Strict-Transport-Security header', recommendation: 'Enable HSTS to enforce HTTPS.' },
-        { header: 'x-frame-options', type: 'missing_frame_options', severity: 'medium', description: 'Missing X-Frame-Options header', recommendation: 'Set X-Frame-Options to prevent clickjacking.' }
+        {
+          header: 'content-security-policy',
+          type: 'missing_csp',
+          severity: 'medium',
+          description: 'Missing Content-Security-Policy header',
+          recommendation: 'Implement a strict CSP to prevent XSS attacks.'
+        },
+        {
+          header: 'strict-transport-security',
+          type: 'missing_hsts',
+          severity: 'medium',
+          description: 'Missing Strict-Transport-Security header',
+          recommendation: 'Enable HSTS to enforce HTTPS.'
+        },
+        {
+          header: 'x-frame-options',
+          type: 'missing_frame_options',
+          severity: 'medium',
+          description: 'Missing X-Frame-Options header',
+          recommendation: 'Set X-Frame-Options to prevent clickjacking.'
+        }
       ];
 
       const now = DateTime.now().toISO();
-      headerChecks.forEach(check => {
+      headerChecks.forEach((check) => {
         if (!headers[check.header]) {
           vulnerabilities[check.severity].push({
             type: check.type,
@@ -362,7 +505,9 @@ const securityScanService = {
         }
       });
 
-      console.log(`Detected header vulnerabilities: Critical=${vulnerabilities.critical.length}, Medium=${vulnerabilities.medium.length}, Low=${vulnerabilities.low.length}`);
+      console.log(
+        `Detected header vulnerabilities: Critical=${vulnerabilities.critical.length}, Medium=${vulnerabilities.medium.length}, Low=${vulnerabilities.low.length}`
+      );
       return vulnerabilities;
     } catch (error) {
       logger.error(`Error in scanForVulnerabilities: ${error.message}`, { stack: error.stack });
@@ -504,7 +649,7 @@ const securityScanService = {
         method: 'options',
         url: fullUrl,
         headers: {
-          'Origin': 'https://example.com',
+          Origin: 'https://example.com',
           'Access-Control-Request-Method': 'GET'
         }
       });
@@ -532,7 +677,15 @@ const securityScanService = {
   async checkHiddenFiles() {
     try {
       const apiUrl = config.api.baseUrl || config.services.api.url;
-      const hiddenFiles = ['/.env', '/.git/config', '/.gitignore', '/.npmrc', '/node_modules/.package-lock.json', '/.well-known/security.txt', '/.well-known/appspecific/com.chrome.devtools.json'];
+      const hiddenFiles = [
+        '/.env',
+        '/.git/config',
+        '/.gitignore',
+        '/.npmrc',
+        '/node_modules/.package-lock.json',
+        '/.well-known/security.txt',
+        '/.well-known/appspecific/com.chrome.devtools.json'
+      ];
       const foundFiles = [];
 
       for (const file of hiddenFiles) {
@@ -569,7 +722,7 @@ const securityScanService = {
   removeDuplicateLogEntries(logEntries) {
     const seen = new Set();
     logEntries.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-    return logEntries.filter(entry => {
+    return logEntries.filter((entry) => {
       const key = `${entry.timestamp}|${entry.message}`;
       if (seen.has(key)) return false;
       seen.add(key);
@@ -580,8 +733,28 @@ const securityScanService = {
   async loginIssues(logsService) {
     if (!logsService) throw new Error('LogsService is required for loginIssues');
     try {
-      const loginKeywords = ['login', 'failed', 'unauthorized', 'disabled', 'expired', 'invalid', 'access denied', 'account'];
-      const suspiciousKeywords = ['suspicious', 'brute force', 'injection', 'attack', 'breach', 'security', 'vulnerability', 'exploit', 'ip blocked', 'threat detection'];
+      const loginKeywords = [
+        'login',
+        'failed',
+        'unauthorized',
+        'disabled',
+        'expired',
+        'invalid',
+        'access denied',
+        'account'
+      ];
+      const suspiciousKeywords = [
+        'suspicious',
+        'brute force',
+        'injection',
+        'attack',
+        'breach',
+        'security',
+        'vulnerability',
+        'exploit',
+        'ip blocked',
+        'threat detection'
+      ];
       const allKeywords = [...new Set([...loginKeywords, ...suspiciousKeywords])];
       console.debug(`Checking logs with keywords: ${allKeywords.join(', ')}`);
 
@@ -606,8 +779,8 @@ const securityScanService = {
           for (const log of results.logs) {
             const messageLower = log.message.toLowerCase();
             const timestamp = `${log.date} ${log.time}`;
-            const loginMatch = loginKeywords.find(keyword => messageLower.includes(keyword.toLowerCase()));
-            const suspiciousMatch = suspiciousKeywords.find(keyword => messageLower.includes(keyword.toLowerCase()));
+            const loginMatch = loginKeywords.find((keyword) => messageLower.includes(keyword.toLowerCase()));
+            const suspiciousMatch = suspiciousKeywords.find((keyword) => messageLower.includes(keyword.toLowerCase()));
 
             if (loginMatch) {
               loginIssues.push({
@@ -656,7 +829,7 @@ const securityScanService = {
     const recommendations = [];
 
     if (loginIssues.count > 0) {
-      const disabledAccountCount = loginIssues.details.filter(issue => issue.message.includes('disabled')).length;
+      const disabledAccountCount = loginIssues.details.filter((issue) => issue.message.includes('disabled')).length;
       if (disabledAccountCount > 0) {
         recommendations.push({
           severity: 'medium',
@@ -678,22 +851,24 @@ const securityScanService = {
         severity: 'critical',
         title: 'Fix Critical Server Errors',
         description: `${vulnerabilities.critical.length} critical server errors detected`,
-        action: 'Investigate and fix server errors immediately to prevent service disruption and potential security breaches'
+        action:
+          'Investigate and fix server errors immediately to prevent service disruption and potential security breaches'
       });
     }
 
     if (vulnerabilities.medium.length > 0) {
-      const sensitiveFileAccess = vulnerabilities.medium.filter(v => v.type === 'sensitive_file_access');
+      const sensitiveFileAccess = vulnerabilities.medium.filter((v) => v.type === 'sensitive_file_access');
       if (sensitiveFileAccess.length > 0) {
         recommendations.push({
           severity: 'medium',
           title: 'Secure Sensitive File Access',
           description: `${sensitiveFileAccess.length} attempts to access sensitive files detected`,
-          action: 'Ensure .env, .git, and other sensitive files are not exposed; implement stricter access controls and consider IP blocking for repeated attempts'
+          action:
+            'Ensure .env, .git, and other sensitive files are not exposed; implement stricter access controls and consider IP blocking for repeated attempts'
         });
       }
 
-      const dbIssues = vulnerabilities.medium.filter(v => v.type.includes('database') || v.type === 'db_error');
+      const dbIssues = vulnerabilities.medium.filter((v) => v.type.includes('database') || v.type === 'db_error');
       if (dbIssues.length > 0) {
         recommendations.push({
           severity: 'medium',
@@ -703,7 +878,7 @@ const securityScanService = {
         });
       }
 
-      const jwtIssues = vulnerabilities.medium.filter(v => v.type.includes('jwt') || v.type === 'token_issue');
+      const jwtIssues = vulnerabilities.medium.filter((v) => v.type.includes('jwt') || v.type === 'token_issue');
       if (jwtIssues.length > 0) {
         recommendations.push({
           severity: 'medium',
@@ -713,7 +888,7 @@ const securityScanService = {
         });
       }
 
-      const headerIssues = vulnerabilities.medium.filter(v => v.type.includes('header'));
+      const headerIssues = vulnerabilities.medium.filter((v) => v.type.includes('header'));
       if (headerIssues.length > 0) {
         recommendations.push({
           severity: 'medium',
@@ -723,7 +898,9 @@ const securityScanService = {
         });
       }
 
-      const leakageIssues = vulnerabilities.medium.filter(v => v.type.includes('leaks') || v.type.includes('disclosure'));
+      const leakageIssues = vulnerabilities.medium.filter(
+        (v) => v.type.includes('leaks') || v.type.includes('disclosure')
+      );
       if (leakageIssues.length > 0) {
         recommendations.push({
           severity: 'medium',
@@ -733,7 +910,7 @@ const securityScanService = {
         });
       }
 
-      const corsIssues = vulnerabilities.medium.filter(v => v.type.includes('cross_domain'));
+      const corsIssues = vulnerabilities.medium.filter((v) => v.type.includes('cross_domain'));
       if (corsIssues.length > 0) {
         recommendations.push({
           severity: 'medium',
@@ -743,7 +920,7 @@ const securityScanService = {
         });
       }
 
-      const ipBlockedIssues = vulnerabilities.medium.filter(v => v.type === 'ip_blocked');
+      const ipBlockedIssues = vulnerabilities.medium.filter((v) => v.type === 'ip_blocked');
       if (ipBlockedIssues.length > 0) {
         recommendations.push({
           severity: 'medium',
@@ -753,7 +930,7 @@ const securityScanService = {
         });
       }
 
-      const authFailureIssues = vulnerabilities.medium.filter(v => v.type === 'auth_failure_401');
+      const authFailureIssues = vulnerabilities.medium.filter((v) => v.type === 'auth_failure_401');
       if (authFailureIssues.length > 0) {
         recommendations.push({
           severity: 'medium',
@@ -765,7 +942,7 @@ const securityScanService = {
     }
 
     if (vulnerabilities.low.length > 0) {
-      const nonCriticalFileAccess = vulnerabilities.low.filter(v => v.type === 'non_critical_file_access');
+      const nonCriticalFileAccess = vulnerabilities.low.filter((v) => v.type === 'non_critical_file_access');
       if (nonCriticalFileAccess.length > 0) {
         recommendations.push({
           severity: 'low',
@@ -775,7 +952,9 @@ const securityScanService = {
         });
       }
 
-      const missingResources = vulnerabilities.low.filter(v => v.type === 'missing_resource' || v.type === 'not_found_404');
+      const missingResources = vulnerabilities.low.filter(
+        (v) => v.type === 'missing_resource' || v.type === 'not_found_404'
+      );
       if (missingResources.length > 0) {
         recommendations.push({
           severity: 'low',
@@ -785,7 +964,7 @@ const securityScanService = {
         });
       }
 
-      const registrationIssues = vulnerabilities.low.filter(v => v.type === 'registration_failure');
+      const registrationIssues = vulnerabilities.low.filter((v) => v.type === 'registration_failure');
       if (registrationIssues.length > 0) {
         recommendations.push({
           severity: 'low',
@@ -795,7 +974,7 @@ const securityScanService = {
         });
       }
 
-      const logLimitIssues = vulnerabilities.low.filter(v => v.type === 'log_limit_exceeded');
+      const logLimitIssues = vulnerabilities.low.filter((v) => v.type === 'log_limit_exceeded');
       if (logLimitIssues.length > 0) {
         recommendations.push({
           severity: 'low',
@@ -869,12 +1048,16 @@ if (!isMainThread) {
 
     const { timestamp, message, url, level } = parsedLog;
 
-    if (/Initiating security scan|Starting comprehensive security scan|Parsed \d+ total log entries|Security scan completed/i.test(message)) {
+    if (
+      /Initiating security scan|Starting comprehensive security scan|Parsed \d+ total log entries|Security scan completed/i.test(
+        message
+      )
+    ) {
       results.linesSkipped++;
       return true;
     }
 
-    patterns.vulnerabilityPatterns.forEach(pattern => {
+    patterns.vulnerabilityPatterns.forEach((pattern) => {
       const match = message.match(pattern.regex);
       if (match) {
         const matchedTerm = match[1] || match[0];
@@ -892,7 +1075,7 @@ if (!isMainThread) {
             url,
             firstSeen: timestamp,
             lastSeen: timestamp,
-            instanceCount: 1,
+            instanceCount: 1
           };
           issueMap.set(aggregationKey, newVuln);
           results.vulnerabilities[pattern.severity].push(newVuln);
@@ -908,7 +1091,7 @@ if (!isMainThread) {
       results.failedLogins.push({ timestamp, level, message });
     }
 
-    if (patterns.suspiciousPatterns.some(pattern => pattern.test(message))) {
+    if (patterns.suspiciousPatterns.some((pattern) => pattern.test(message))) {
       results.suspiciousActivities.push({ timestamp, level, message });
     }
 

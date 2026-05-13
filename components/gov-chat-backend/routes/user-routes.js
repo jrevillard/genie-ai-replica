@@ -35,7 +35,7 @@ const { JIT_FORWARD_FIELDS } = require('../constants/jit-fields');
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB max file size
+    fileSize: 10 * 1024 * 1024 // 10MB max file size
   }
 });
 

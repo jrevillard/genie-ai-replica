@@ -10,8 +10,6 @@
         :confirm-text="newChatDialog.confirmText"
         :cancel-text="newChatDialog.cancelText"
         :secondary-text="newChatDialog.secondaryText"
-        :theme="getCurrentTheme()"
-        :parent-styles="{ maxWidth: '450px' }"
         @confirm="saveAndStartNewChat"
         @cancel="startNewChatConfirmed"
         @secondary="cancelNewChat"
@@ -25,8 +23,6 @@
         :confirm-text="loadConfirmDialog.confirmText"
         :cancel-text="loadConfirmDialog.cancelText"
         :secondary-text="loadConfirmDialog.secondaryText"
-        :theme="getCurrentTheme()"
-        :parent-styles="{ maxWidth: '450px' }"
         @confirm="loadConversationConfirmed"
         @cancel="cancelLoadConversation"
         @secondary="saveAndLoadConversation"
@@ -40,7 +36,7 @@
         <template #body>
           <div class="form-group">
             <label for="exportFilename">{{ translate('chatbot.exportFilename') }}</label>
-            <input
+            <DsInput
               id="exportFilename"
               v-model="exportDialog.filename"
               type="text"
@@ -49,29 +45,28 @@
           </div>
         </template>
         <template #footer>
-          <button class="cancel-btn" @click="exportDialog.visible = false">
+          <DsButton variant="secondary" @click="exportDialog.visible = false">
             {{ translate('common.cancel') }}
-          </button>
-          <button class="primary-btn" :disabled="!exportDialog.filename.trim()" @click="exportChatToPDF">
+          </DsButton>
+          <DsButton variant="primary" :disabled="!exportDialog.filename.trim()" @click="exportChatToPDF">
             {{ translate('chatbot.exportButton') }}
-          </button>
+          </DsButton>
         </template>
       </modal-dialog>
 
       <!-- System Status Panel -->
       <div class="system-status-panel">
         <div class="status-left">
-          <div class="status-indicator" :class="{ online: systemStatus.online }">
-            <div class="status-dot"></div>
-            <span>{{ systemStatus.online ? translate('status.online') : translate('status.offline') }}</span>
-          </div>
+          <DsPill :variant="systemStatus.online ? 'success' : 'danger'">{{
+            systemStatus.online ? translate('analytics.status.online') : translate('analytics.status.offline')
+          }}</DsPill>
           <div v-if="!systemStatus.online && systemStatus.errorMessage" class="status-error-message">
             {{ systemStatus.errorMessage }}
           </div>
         </div>
         <div class="status-metrics">
           <div class="metric">
-            <span class="metric-label">{{ translate('status.lastResponseTime') }}</span>
+            <span class="metric-label">{{ translate('analytics.status.responseTime') }}</span>
             <span class="metric-value">
               {{ systemStatus.lastResponseTime !== null ? systemStatus.lastResponseTime + 'ms' : 'N/A' }}
             </span>
@@ -84,37 +79,43 @@
           <span class="context-title">{{ translate('chatbot.queryContext') }}</span>
         </div>
         <div class="context-items">
-          <div v-for="(item, index) in selectedContextItems" :key="index" class="context-item">
-            <span class="context-text">{{ item.service }}</span>
-            <button
-              class="context-remove-btn"
+          <DsPill v-for="(item, index) in selectedContextItems" :key="index">
+            <span>{{ item.service }}</span>
+            <DsButton
+              variant="ghost"
+              :small="true"
               :aria-label="translate('chatbot.removeItem')"
               @click="removeContextItem(index)"
             >
               ✕
-            </button>
-          </div>
+            </DsButton>
+          </DsPill>
         </div>
       </div>
       <!-- The scrollable chat window -->
       <div ref="chatWindow" class="chat-window" aria-live="polite">
         <div v-for="(msg, index) in chatMessages" :key="index" class="chat-message" :class="msg.sender">
-          <div class="message-bubble">
-            <!-- Render bot messages as sanitized HTML for Markdown, user messages as plain text -->
-            <span v-if="msg.sender === 'user'">{{ msg.content }}</span>
-            <!-- eslint-disable-next-line vue/no-v-html -->
-            <div v-else v-html="renderMarkdown(msg.content)"></div>
+          <div class="message-wrapper">
+            <div class="message-bubble">
+              <!-- Render bot messages as sanitized HTML for Markdown, user messages as plain text -->
+              <span v-if="msg.sender === 'user'">{{ msg.content }}</span>
+              <!-- eslint-disable-next-line vue/no-v-html -->
+              <div v-else v-html="renderMarkdown(msg.content)"></div>
+            </div>
+            <span class="message-time">{{ formatMessageTime(msg.timestamp) }}</span>
           </div>
           <!-- Feedback and confidence score for bot messages -->
           <div v-if="msg.sender === 'bot'" class="bot-message-meta">
             <div v-if="msg.confidenceScore" class="confidence-score">
-              <i class="fas fa-brain"></i>
+              <Brain :size="16" />
               <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
             </div>
             <div class="feedback-trigger">
-              <button @click="openFeedbackDialog(index)">
-                {{ translate('feedback.button') }}
-              </button>
+              <DsPill>
+                <DsButton variant="ghost" :small="true" @click="openFeedbackDialog(index)">
+                  {{ translate('feedback.button') }}
+                </DsButton>
+              </DsPill>
             </div>
           </div>
         </div>
@@ -123,65 +124,69 @@
       </div>
       <!-- Loading spinner with "Thinking..." text (non-streaming fallback only) -->
       <div v-if="isLoading && !isStreaming" class="loading-spinner" aria-label="Processing your request">
-        <i class="fas fa-spinner fa-spin"></i>
+        <Loader2 :size="16" class="animate-spin" />
         <span class="loading-text">Thinking...</span>
       </div>
       <!-- Quick Help Overlay -->
-      <div v-if="showQuickHelp && chatMessages.length <= 1" class="quick-help-overlay">
+      <div v-if="showQuickHelp && selectedContextItems.length === 0" class="quick-help-overlay">
         <div class="quick-help-content">
           <h2 class="quick-help-heading">
             {{ translate('chatbot.whatCanIHelp') }}
           </h2>
 
           <div class="quick-help-grid">
-            <div
+            <DsCard
               v-for="button in quickHelpButtons"
               :key="button.id"
+              variant="flat"
+              padding="md"
+              :hoverable="true"
               class="quick-help-item"
               :class="{ 'just-chat': !button.category }"
               @click="selectQuickHelpOption(button)"
             >
               <img class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
               <div class="quick-help-text">{{ $t(button.textKey) }}</div>
-            </div>
+            </DsCard>
           </div>
         </div>
       </div>
       <!-- Input Area -->
       <div class="chat-input">
-        <textarea
+        <DsInput
           v-model="newMessage"
+          type="textarea"
           class="prompt-textarea"
-          rows="4"
+          :rows="4"
           :placeholder="translate('chatbot.placeholder')"
-          @keyup.enter.exact.prevent="sendMessage"
+          @enter="sendMessage"
           @focus="handleTextareaFocus"
-        ></textarea>
+        />
         <div class="input-actions">
-          <button class="new-chat-btn" :title="translate('chatbot.newChat')" @click="startNewChat">
-            <i class="fas fa-plus"></i>
-          </button>
-          <button
+          <DsButton variant="ghost" :title="translate('chatbot.newChat')" @click="startNewChat">
+            <Plus :size="16" />
+          </DsButton>
+          <DsButton
             v-if="chatMessages.length > 0"
-            class="save-chat-btn"
+            variant="ghost"
             :title="translate('chatbot.saveChat')"
             :disabled="isSaving"
             @click="saveChatToHistory"
           >
-            <i v-if="!isSaving" class="fas fa-save"></i>
-            <i v-else class="fas fa-spinner fa-spin"></i>
-          </button>
-          <button
+            <Save v-if="!isSaving" :size="16" />
+            <Loader2 v-else :size="16" class="animate-spin" />
+          </DsButton>
+          <DsButton
             v-if="chatMessages.length > 0"
-            class="export-chat-btn"
+            variant="ghost"
             :title="translate('chatbot.exportChat')"
             @click="openExportDialog"
           >
-            <i class="fas fa-file-pdf"></i>
-          </button>
-          <button class="send-btn" @click="sendMessage">
+            <FileText :size="16" />
+          </DsButton>
+          <DsButton variant="primary" @click="sendMessage">
             {{ translate('chatbot.sendButton') }}
-          </button>
+          </DsButton>
         </div>
       </div>
       <!-- Feedback Dialog -->
@@ -205,7 +210,7 @@
         <template #body>
           <div class="form-group">
             <label for="chatTitle">{{ translate('chatbot.chatTitle') }}</label>
-            <input
+            <DsInput
               id="chatTitle"
               v-model="saveChatDialog.title"
               type="text"
@@ -215,29 +220,29 @@
           </div>
           <div class="form-group">
             <label for="chatFolder">{{ translate('chatbot.selectFolder') }}</label>
-            <select id="chatFolder" v-model="saveChatDialog.folderId" :disabled="isSaving">
+            <DsSelect id="chatFolder" v-model="saveChatDialog.folderId" :disabled="isSaving">
               <option v-for="folder in folders" :key="folder.id" :value="folder.id">
                 {{ folder.name }}
               </option>
-            </select>
+            </DsSelect>
           </div>
           <!-- Loading Indicator -->
           <div v-if="isSaving" class="saving-indicator">
-            <i class="fas fa-spinner fa-spin"></i>
+            <Loader2 :size="16" class="animate-spin" />
             <span>{{ translate('chatbot.savingConversation') }}</span>
           </div>
         </template>
         <template #footer>
-          <button class="cancel-btn" :disabled="isSaving" @click="saveChatDialog.visible = false">
+          <DsButton variant="secondary" :disabled="isSaving" @click="saveChatDialog.visible = false">
             {{ translate('common.cancel') }}
-          </button>
-          <button class="primary-btn" :disabled="isSaving || !saveChatDialog.title.trim()" @click="handleSaveChat">
+          </DsButton>
+          <DsButton variant="primary" :disabled="isSaving || !saveChatDialog.title.trim()" @click="handleSaveChat">
             <span v-if="isSaving">
-              <i class="fas fa-spinner fa-spin"></i>
+              <Loader2 :size="16" class="animate-spin" />
               {{ translate('chatbot.saving') }}
             </span>
             <span v-else>{{ translate('common.save') }}</span>
-          </button>
+          </DsButton>
         </template>
       </modal-dialog>
     </div>
@@ -245,7 +250,6 @@
     <right-side-bar-component
       :current-chat-id="currentChatId"
       :current-locale="currentLocale"
-      :translations="translations"
       :related-documents="relatedDocuments"
       @load-chat="loadChatFromHistory"
       @open-document="handleOpenDocument"
@@ -255,6 +259,7 @@
 </template>
 
 <script>
+import { Brain, Loader2, Plus, Save, FileText } from 'lucide-vue-next';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -266,6 +271,11 @@ import chatbotService from '../services/chatbotService';
 import serviceTreeService from '../services/serviceTreeService'; // *** NEW: Import serviceTreeService
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import chatHistoryService from '../services/chatHistoryService';
+import DsPill from './ds/Pill.vue';
+import DsButton from './ds/Button.vue';
+import DsCard from './ds/Card.vue';
+import DsInput from './ds/Input.vue';
+import DsSelect from './ds/Select.vue';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import jsPDF from 'jspdf';
@@ -273,10 +283,20 @@ import jsPDF from 'jspdf';
 export default {
   name: 'ChatBotComponent',
   components: {
+    Brain,
+    Loader2,
+    Plus,
+    Save,
+    FileText,
     ChatResponseFeedbackDialog,
     ModalDialog,
     RightSideBarComponent,
-    ConfirmDialog
+    ConfirmDialog,
+    DsPill,
+    DsButton,
+    DsCard,
+    DsInput,
+    DsSelect
   },
 
   data() {
@@ -385,7 +405,6 @@ export default {
           messages: JSON.parse(JSON.stringify(this.chatMessages)),
           contextItems: []
         };
-        console.log(`Reset conversation ID after deletion of chat ${deletedChatId}`);
       }
     });
 
@@ -456,15 +475,17 @@ export default {
   methods: {
     ...mapActions('chatHistory', ['createChat', 'updateChat']),
 
+    formatMessageTime(timestamp) {
+      if (!timestamp) return '';
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    },
+
     // *** UPDATED: Use serviceTreeService to load and transform categories ***
     async loadServiceCategories() {
       try {
         // Use the service which handles transformation and localization
         this.serviceCategories = await serviceTreeService.getAllCategories(this.currentLocale);
-        console.log(
-          '[ChatBotComponent] Service categories loaded for lookup via serviceTreeService:',
-          this.serviceCategories
-        );
       } catch (error) {
         console.error('[ChatBotComponent] Failed to load service categories:', error);
         notificationService.error('Could not load service categories.');
@@ -488,7 +509,6 @@ export default {
         return category.name || `Category ${id}`;
       }
 
-      console.warn(`[ChatBotComponent] Category label for ID "${id}" not found.`);
       return `Category ${id}`; // Fallback
     },
 
@@ -531,16 +551,16 @@ export default {
           Pensiun: 'context.retirement',
           'Lainnya - Pribadi': 'context.personalOther'
         };
-        const translationKey = serviceKeyMap[key] || key;
-        if (typeof translationKey === 'string' && translationKey.trim()) {
-          const translated = this.$t(translationKey);
-          return translated !== translationKey ? translated : key;
+        const mappedKey = serviceKeyMap[key];
+        if (mappedKey) {
+          return this.$t(mappedKey);
         }
-        console.warn(`Invalid translation key: ${key}`);
-        return this.$t('context.fallback') || key || 'Unknown';
-      } catch (error) {
-        console.error(`Translation error for key ${key}:`, error);
-        return this.$t('context.fallback') || key || 'Unknown';
+        if (typeof key === 'string' && key.includes('.')) {
+          return this.$t(key);
+        }
+        return key || '';
+      } catch {
+        return key || '';
       }
     },
 
@@ -556,15 +576,11 @@ export default {
     },
 
     async loadQuickHelpButtons() {
-      console.log('[ChatBotComponent] Loading Quick Help buttons from config');
       try {
         const { loadConfig } = await import('../main.js');
         const config = await loadConfig();
         const buttons = config?.features?.chat?.quickHelp?.buttons || [];
         this.quickHelpButtons = buttons.map((button) => {
-          if (this.$t(button.title) === button.title) {
-            console.warn(`[ChatBotComponent] Missing i18n key: ${button.title}`);
-          }
           return {
             service: this.$t(button.title),
             textKey: button.title,
@@ -575,34 +591,20 @@ export default {
             id: button.id
           };
         });
-        console.log(
-          `[ChatBotComponent] Loaded ${buttons.length} Quick Help buttons:`,
-          buttons.map((b) => ({
-            id: b.id,
-            title: b.title,
-            category: b.category
-          }))
-        );
       } catch (error) {
         console.error('[ChatBotComponent] Failed to load Quick Help config:', error);
         this.quickHelpButtons = [];
       }
     },
 
-    getCurrentTheme() {
-      const documentTheme = document.documentElement.getAttribute('data-theme');
-      const bodyTheme = document.body.getAttribute('data-theme');
-      return documentTheme || bodyTheme || 'light';
-    },
-
     // formatUptime method removed
 
-    handleSidebarToggle(collapsed) {
-      console.log('Sidebar collapsed state:', collapsed);
+    handleSidebarToggle(_collapsed) {
+      // Sidebar toggle state change
     },
 
-    handleOpenDocument(doc) {
-      console.log('Document opened:', doc);
+    handleOpenDocument(_doc) {
+      // Document opened
     },
 
     translate(key) {
@@ -610,10 +612,8 @@ export default {
     },
 
     selectQuickHelpOption(option) {
-      console.log(`[ChatBotComponent] Quick Help button clicked: id=${option.id}, textKey=${option.textKey}`);
       const rawOption = option && option.__v_isReactive ? { ...option } : option || {};
       if (!rawOption.service) {
-        console.error('Invalid quick help option, missing service:', rawOption);
         return;
       }
       const categoryId = rawOption.category || (rawOption.service !== this.$t('quickhelp.justChat') ? 'general' : null);
@@ -629,14 +629,10 @@ export default {
           category: categoryId,
           selected: true
         });
-        console.log(`Added new context item: ${rawOption.service} with category ID ${categoryId}`);
-      } else {
-        console.log(`Context item ${rawOption.service} with category ID ${categoryId} already exists`);
       }
 
       if (rawOption.service !== this.$t('quickhelp.justChat')) {
         this.currentCategoryId = categoryId;
-        console.log(`Set current category ID to ${this.currentCategoryId} from quick help option.`);
       } else {
         this.currentCategoryId = this.currentCategoryId || null;
       }
@@ -659,7 +655,6 @@ export default {
 
     handleTreeNodeSelected(item) {
       if (!item || typeof item !== 'object' || !item.service) {
-        console.warn('Invalid tree node selected:', item);
         return;
       }
 
@@ -674,20 +669,10 @@ export default {
             category: item.category || 'general',
             selected: true
           });
-          console.log(
-            `Added sidebar context item: ${this.safeTranslate(
-              item.service
-            )} with category ID ${item.category || 'general'}`
-          );
           notificationService.info(this.translate('chatbot.contextAdded'), 1500);
           if (!this.currentCategoryId) {
             this.currentCategoryId = item.category || null;
-            console.log(`Set current category ID to ${this.currentCategoryId} from sidebar node.`);
           }
-        } else {
-          console.log(
-            `Context item ${this.safeTranslate(item.service)} with category ID ${item.category} already exists`
-          );
         }
       } else {
         const index = this.selectedContextItems.findIndex(
@@ -695,12 +680,10 @@ export default {
         );
         if (index !== -1) {
           const removedItem = this.selectedContextItems.splice(index, 1)[0];
-          console.log(`Removed sidebar context item: ${removedItem.service} with category ID ${removedItem.category}`);
           notificationService.info(this.translate('chatbot.contextRemoved'), 1500);
           eventBus.$emit('contextItemRemoved', removedItem);
           if (this.selectedContextItems.length === 0) {
             this.currentCategoryId = null;
-            console.log('Cleared current category ID as no context items remain.');
           }
         }
       }
@@ -708,8 +691,7 @@ export default {
 
     removeContextItem(index) {
       if (this.selectedContextItems.length > index) {
-        const removedItem = this.selectedContextItems.splice(index, 1)[0];
-        console.log(`Removed context item: ${removedItem.service} at index ${index}`);
+        this.selectedContextItems.splice(index, 1)[0];
       }
       if (this.selectedContextItems.length === 0 && this.currentCategoryId) {
         const quickHelpOption = this.quickHelpButtons.find((option) => option.category === this.currentCategoryId);
@@ -722,11 +704,6 @@ export default {
               selected: true
             }
           ];
-          console.log(
-            `Restored context item for category ID ${
-              this.currentCategoryId
-            }: ${this.safeTranslate(quickHelpOption.textKey)}`
-          );
         } else {
           this.currentCategoryId = null;
         }
@@ -771,7 +748,6 @@ export default {
         const contextOption = useConversationContext ? 'conversation-with-labels' : 'single-message';
         let queryData;
         const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
-        console.log(`[ChatBotComponent] Resolved Category ID "${this.currentCategoryId}" to Label "${categoryLabel}"`);
         if (contextOption === 'conversation-with-labels') {
           const serviceLabels = this.selectedContextItems.map((item) => item.service);
           const messagesForQuery = this.chatMessages.map((msg) => ({
@@ -807,7 +783,6 @@ export default {
             timestamp: new Date().toISOString()
           };
         }
-        console.log('Submitting streaming query with data:', JSON.stringify(queryData, null, 2));
 
         this.checkContextConfig(queryData.context);
 
@@ -921,7 +896,6 @@ export default {
     async handleFeedbackSubmit(feedback) {
       const queryId = feedback.message.queryId;
       if (!queryId) {
-        console.error('Cannot submit feedback: No queryId found for message');
         notificationService.error(this.translate('chatbot.feedbackMissingQueryId'));
         this.closeFeedbackDialog();
         return;
@@ -932,7 +906,6 @@ export default {
           comment: feedback.text || '',
           providedAt: new Date().toISOString()
         });
-        console.log('Feedback submitted successfully for queryId:', queryId);
         notificationService.success(this.translate('chatbot.feedbackSubmitted'));
       } catch (error) {
         console.error('Error submitting feedback for queryId:', queryId, error);
@@ -952,16 +925,11 @@ export default {
 
     async loadExistingConversation(conversationId) {
       try {
-        console.log(`[DEBUG] Loading conversation ${conversationId} - Starting request...`);
         const conversation = await this.chatHistoryService.getConversation(conversationId);
 
         if (!conversation) {
           throw new Error('Conversation not found');
         }
-
-        // DEBUG: Log the full response from backend
-        console.log('[DEBUG] Conversation loaded successfully:', conversation);
-        console.log('[DEBUG] conversation.files raw data:', conversation.files);
 
         this.conversationId = conversation._key;
         this.currentChatId = conversation._key;
@@ -970,10 +938,7 @@ export default {
 
         // NEW: Populate related documents from history (files property from backend)
         if (conversation.files && Array.isArray(conversation.files)) {
-          console.log(`[DEBUG] Found ${conversation.files.length} files. Mapping to relatedDocuments...`);
-
           this.relatedDocuments = conversation.files.map((file) => {
-            // Debug individual file mapping
             const mapped = {
               id: file.id,
               title: file.documentName || file.fileName || `Source ${file.id}`,
@@ -988,10 +953,7 @@ export default {
             };
             return mapped;
           });
-
-          console.log('[DEBUG] Final mapped relatedDocuments:', this.relatedDocuments);
         } else {
-          console.warn("[DEBUG] No 'files' array found in conversation response or it is empty.");
           this.relatedDocuments = [];
         }
 
@@ -1019,7 +981,6 @@ export default {
 
         this.selectedContextItems = [];
         if (conversation.tags && Array.isArray(conversation.tags)) {
-          console.log(`Conversation tags:`, conversation.tags);
           conversation.tags.forEach((tag) => {
             this.selectedContextItems.push({
               service: this.safeTranslate(tag || `category.${this.currentCategoryId || 'general'}`),
@@ -1035,7 +996,6 @@ export default {
             category: this.currentCategoryId,
             selected: true
           });
-          console.log(`No tags, using fallback category ID: ${this.currentCategoryId}`);
         }
 
         this.lastSavedState = {
@@ -1142,20 +1102,12 @@ export default {
     async handleSaveChat() {
       // Prevent double-save
       if (this.isSaving) {
-        console.log('Save already in progress, ignoring duplicate click');
         return;
       }
 
-      console.log('handleSaveChat called');
       this.isSaving = true;
 
       try {
-        console.log('Saving chat with data:', {
-          title: this.saveChatDialog.title,
-          folderId: this.saveChatDialog.folderId,
-          messages: this.chatMessages
-        });
-
         const currentUser = this.$store.getters.currentUser;
         if (!currentUser || !getUserId(currentUser)) {
           throw new Error('User not authenticated');
@@ -1174,9 +1126,7 @@ export default {
           throw new Error('handleSaveChat should not be called for existing conversations');
         }
 
-        console.log('chatHistoryService.createConversation called with:', conversationData);
         const conversation = await this.chatHistoryService.createConversation(conversationData);
-        console.log('Conversation created:', conversation);
         this.conversationId = conversation._key;
 
         for (const message of this.chatMessages) {
@@ -1184,7 +1134,6 @@ export default {
             (message.sender === 'bot' && !message.queryId) ||
             (message.sender === 'user' && message.content === firstUserMessage && !message.isSaved)
           ) {
-            console.log(`Skipping message: ${message.content}`);
             message.isSaved = true;
             continue;
           }
@@ -1197,8 +1146,6 @@ export default {
               queryId: message.queryId || null,
               metadata: message.metadata || {}
             };
-            console.log('Adding message with data:', messageData);
-            console.log('chatHistoryService.addMessage called with:', messageData);
             await this.chatHistoryService.addMessage(messageData);
             message.isSaved = true;
           }
@@ -1213,29 +1160,14 @@ export default {
             (msg) => msg.sender === 'user' || (msg.sender === 'bot' && msg.queryId)
           ).length
         };
-        console.log('Dispatching createChat with:', chatData);
         await this.$store.dispatch('chatHistory/createChat', chatData);
-        console.log('Vuex chats state after createChat:', this.$store.state.chatHistory.chats);
 
         if (this.saveChatDialog.folderId && this.saveChatDialog.folderId !== 'default') {
-          console.log('chatHistoryService.addConversationToFolder called with:', {
-            folderId: this.saveChatDialog.folderId,
-            conversationId: conversation._key
-          });
           await this.chatHistoryService.addConversationToFolder(this.saveChatDialog.folderId, conversation._key);
-          console.log(`Conversation ${conversation._key} added to folder ${this.saveChatDialog.folderId}`);
-          console.log('Dispatching addChatToFolder with:', {
-            chatId: conversation._key,
-            folderId: this.saveChatDialog.folderId
-          });
           await this.$store.dispatch('chatHistory/addChatToFolder', {
             chatId: conversation._key,
             folderId: this.saveChatDialog.folderId
           });
-          console.log(
-            'Vuex folderChats state after addChatToFolder:',
-            this.$store.state.chatHistory.folderChats[this.saveChatDialog.folderId]
-          );
         }
 
         this.currentChatId = conversation._key;
@@ -1247,7 +1179,6 @@ export default {
         notificationService.success(this.translate('chatbot.chatSaved'));
         this.saveChatDialog.visible = false;
 
-        console.log(`Emitting conversation-saved event for conversation ${conversation._key}`);
         eventBus.$emit('conversation-saved', conversation._key);
       } catch (error) {
         console.error('Error saving chat:', error);
@@ -1259,7 +1190,6 @@ export default {
     },
 
     async updateExistingChat() {
-      console.log('updateExistingChat called');
       try {
         const currentUser = this.$store.getters.currentUser;
         if (!currentUser || !getUserId(currentUser)) {
@@ -1277,16 +1207,10 @@ export default {
           isStarred: false,
           isArchived: false
         };
-        console.log('chatHistoryService.updateConversation called with:', {
-          conversationId: this.conversationId,
-          updateData
-        });
-        const conversation = await this.chatHistoryService.updateConversation(this.conversationId, updateData);
-        console.log('Conversation updated:', conversation);
+        await this.chatHistoryService.updateConversation(this.conversationId, updateData);
 
         for (const message of this.chatMessages) {
           if (message.isSaved) {
-            console.log(`Skipping already saved message: ${message.content}`);
             continue;
           }
           if (message.sender === 'user' || (message.sender === 'bot' && message.queryId)) {
@@ -1297,8 +1221,6 @@ export default {
               queryId: message.queryId || null,
               metadata: message.metadata || {}
             };
-            console.log('Adding message with data:', messageData);
-            console.log('chatHistoryService.addMessage called with:', messageData);
             await this.chatHistoryService.addMessage(messageData);
             message.isSaved = true;
           }
@@ -1710,10 +1632,21 @@ export default {
 </script>
 
 <style scoped>
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .app-container {
   display: flex;
   height: 100vh;
   overflow: hidden;
+  gap: var(--space-sm);
 }
 
 .chatbot-container {
@@ -1728,61 +1661,30 @@ export default {
 
 /* System Status Panel */
 .system-status-panel {
-  background: var(--bg-tertiary, #f8fafc);
-  border-bottom: 1px solid var(--border-light, #e2e8f0);
-  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-light);
+  padding: var(--space-sm) var(--space-md);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.85rem;
-  min-height: 45px; /* Added for consistency */
+  font-size: var(--text-base);
+  min-height: 45px;
 }
 
 .status-left {
   display: flex;
   flex-direction: column; /* Stack status and error */
   align-items: flex-start;
-  gap: 4px; /* Space between status and error */
+  gap: var(--space-xs); /* Space between status and error */
   flex: 1; /* Allow error message to take space */
   overflow: hidden; /* Prevent long errors from breaking layout */
 }
 
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 500;
-  color: var(--text-tertiary, #64748b);
-}
-
-.status-indicator.online {
-  color: var(--status-operational, #10b981);
-}
-
-.status-indicator:not(.online) {
-  color: var(--status-error, #ef4444); /* Red color for offline */
-}
-
-.status-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background-color: var(--text-muted, #cbd5e1);
-}
-
-.status-indicator.online .status-dot {
-  background-color: var(--status-operational, #10b981);
-}
-
-.status-indicator:not(.online) .status-dot {
-  background-color: var(--status-error, #ef4444); /* Red color for offline */
-}
-
 .status-error-message {
-  font-size: 0.75rem;
-  color: var(--status-error, #ef4444);
+  font-size: var(--text-sm);
+  color: var(--danger);
   font-weight: 500;
-  margin-left: 18px; /* Align with status text */
+  margin-left: 18px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1791,8 +1693,8 @@ export default {
 
 .status-metrics {
   display: flex;
-  gap: 20px;
-  padding-left: 16px; /* Add space between error and metric */
+  gap: var(--space-lg);
+  padding-left: var(--space-md); /* Add space between error and metric */
 }
 
 .metric {
@@ -1802,94 +1704,56 @@ export default {
 }
 
 .metric-label {
-  font-size: 0.7rem;
-  color: var(--text-tertiary, #64748b);
+  font-size: var(--text-xs);
+  color: var(--muted-soft);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .metric-value {
   font-weight: 600;
-  color: var(--text-primary, #334155);
+  color: var(--fg);
 }
 
 /* Context Panel Styles */
 .context-panel {
-  background: var(--bg-tertiary, #f5f9ff);
-  border-bottom: 1px solid var(--border-light, #e0e0e0);
-  padding: 8px 10px;
-  font-size: 0.9rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-light);
+  padding: var(--space-sm) var(--space-sm);
+  font-size: var(--text-base);
 }
 
 .context-header {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-sm);
 }
 
 .context-title {
   font-weight: 600;
-  color: var(--text-primary, #4a4a4a);
+  color: var(--fg);
 }
 
 .context-items {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-}
-
-.context-item {
-  display: flex;
-  align-items: center;
-  background: var(--bg-card, #fff);
-  border: 1px solid var(--border-color, #ddd);
-  border-radius: 16px;
-  padding: 4px 8px 4px 10px;
-  font-size: 0.85rem;
-  max-width: 200px;
-  overflow: hidden;
-}
-
-.context-text {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-  margin-right: 4px;
-  color: var(--text-primary, #333);
+  gap: var(--space-sm);
 }
 
 .context-remove-btn {
-  background: none;
-  border: none;
-  color: var(--text-tertiary, #888);
-  font-size: 0.8rem;
-  cursor: pointer;
-  padding: 0;
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-}
-
-.context-remove-btn:hover {
-  color: var(--text-secondary, #555);
-  background: var(--bg-tertiary, #f0f0f0);
 }
 
 /* Chat Window Styles */
 .chat-window {
   flex: 1;
   overflow-y: auto;
-  padding: 10px;
-  background: var(--bg-primary, #fafafa);
+  padding: var(--space-sm);
+  background: var(--surface);
   position: relative;
 }
 
 .chat-message {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-md);
   display: flex;
   align-items: flex-start;
 }
@@ -1903,20 +1767,44 @@ export default {
 }
 
 .message-bubble {
-  background: var(--bg-tertiary, #e5e5ea);
-  color: var(--text-primary, #000);
-  padding: 8px 12px;
-  border-radius: 16px;
-  max-width: 60%;
-  line-height: 1.4;
+  background: var(--bg);
+  color: var(--fg);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  font-size: var(--text-base);
+  line-height: 1.5;
   white-space: pre-wrap;
   word-wrap: break-word;
-  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.1));
 }
 
 .chat-message.user .message-bubble {
-  background: var(--accent-color, #4e97d1);
-  color: var(--text-button-primary, #fff);
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: none;
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+.chat-message.bot .message-bubble {
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.message-wrapper {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-sm);
+  max-width: 85%;
+}
+
+.chat-message.user .message-wrapper {
+  flex-direction: row-reverse;
+}
+
+.message-time {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  white-space: nowrap;
+  padding-bottom: 2px;
 }
 
 /* Markdown Styles within Message Bubble */
@@ -1928,7 +1816,7 @@ export default {
 .message-bubble :deep(h6) {
   font-weight: 600;
   margin: 0.5em 0;
-  color: var(--text-primary, #000);
+  color: var(--fg);
 }
 
 .message-bubble :deep(h1) {
@@ -1952,7 +1840,7 @@ export default {
 
 .message-bubble :deep(p) {
   margin: 0.5em 0;
-  color: var(--text-primary, #000);
+  color: var(--fg);
 }
 
 .message-bubble :deep(ul),
@@ -1963,40 +1851,40 @@ export default {
 
 .message-bubble :deep(li) {
   margin-bottom: 0.3em;
-  color: var(--text-primary, #000);
+  color: var(--fg);
 }
 
 .message-bubble :deep(a) {
-  color: var(--accent-color, #4e97d1);
+  color: var(--accent);
   text-decoration: underline;
 }
 
 .message-bubble :deep(a:hover) {
-  color: var(--accent-hover, #3a7da0);
+  color: var(--accent-hover);
 }
 
 .message-bubble :deep(code) {
-  background: var(--bg-tertiary, #f5f5f5);
+  background: var(--bg);
   padding: 0.2em 0.4em;
-  border-radius: 3px;
-  font-family: monospace;
-  color: var(--text-primary, #000);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  color: var(--fg);
 }
 
 .message-bubble :deep(pre) {
-  background: var(--bg-tertiary, #f5f5f5);
+  background: var(--bg);
   padding: 0.8em;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow-x: auto;
-  font-family: monospace;
-  color: var(--text-primary, #000);
+  font-family: var(--font-mono);
+  color: var(--fg);
 }
 
 .message-bubble :deep(blockquote) {
-  border-left: 3px solid var(--border-color, #ddd);
+  border-left: 3px solid var(--border);
   padding-left: 0.8em;
   margin: 0.5em 0;
-  color: var(--text-secondary, #666);
+  color: var(--muted);
 }
 
 .message-bubble :deep(table) {
@@ -2007,55 +1895,20 @@ export default {
 
 .message-bubble :deep(th),
 .message-bubble :deep(td) {
-  border: 1px solid var(--border-color, #ddd);
+  border: 1px solid var(--border);
   padding: 0.4em 0.8em;
-  color: var(--text-primary, #000);
+  color: var(--fg);
 }
 
 .message-bubble :deep(th) {
-  background: var(--bg-tertiary, #f5f5f5);
+  background: var(--bg);
   font-weight: 600;
 }
 
 .message-bubble :deep(img) {
   max-width: 100%;
   height: auto;
-  border-radius: 4px;
-}
-
-/* Dark Theme Adjustments for Markdown */
-[data-theme='dark'] .message-bubble :deep(h1),
-[data-theme='dark'] .message-bubble :deep(h2),
-[data-theme='dark'] .message-bubble :deep(h3),
-[data-theme='dark'] .message-bubble :deep(h4),
-[data-theme='dark'] .message-bubble :deep(h5),
-[data-theme='dark'] .message-bubble :deep(h6),
-[data-theme='dark'] .message-bubble :deep(p),
-[data-theme='dark'] .message-bubble :deep(li),
-[data-theme='dark'] .message-bubble :deep(th),
-[data-theme='dark'] .message-bubble :deep(td),
-[data-theme='dark'] .message-bubble :deep(code),
-[data-theme='dark'] .message-bubble :deep(pre) {
-  color: var(--text-primary, #ffffff);
-}
-
-[data-theme='dark'] .message-bubble :deep(code),
-[data-theme='dark'] .message-bubble :deep(pre),
-[data-theme='dark'] .message-bubble :deep(th) {
-  background: var(--bg-tertiary, #2d2d2d);
-}
-
-[data-theme='dark'] .message-bubble :deep(blockquote) {
-  color: var(--text-secondary, #cccccc);
-  border-left-color: var(--border-color, #555);
-}
-
-[data-theme='dark'] .message-bubble :deep(a) {
-  color: var(--accent-color, #4e97d1);
-}
-
-[data-theme='dark'] .message-bubble :deep(a:hover) {
-  color: var(--accent-hover, #3a7da0);
+  border-radius: var(--radius-sm);
 }
 
 /* Loading Spinner Styles */
@@ -2067,58 +1920,41 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.8); /* Semi-transparent background for visibility */
-  padding: 10px 20px;
-  border-radius: 8px;
+  gap: var(--space-sm);
+  background: var(--overlay-bg); /* Semi-transparent background for visibility */
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
   z-index: 100; /* Ensure it overlays other content */
 }
 
-.loading-spinner i {
-  font-size: 1.2rem;
-  color: var(--accent-color, #4e97d1); /* Match button colors */
+.loading-spinner :deep(svg) {
+  color: var(--accent); /* Match button colors */
 }
 
 .loading-spinner .loading-text {
-  font-size: 0.95rem;
-  color: var(--text-primary, #333);
+  font-size: var(--text-base);
+  color: var(--fg);
   font-weight: 500;
 }
 
-/* Dark Theme Adjustments for Spinner */
-[data-theme='dark'] .loading-spinner,
-html[data-theme='dark'] .loading-spinner {
-  background: rgba(30, 30, 30, 0.8); /* Darker background for dark mode */
-}
-
-[data-theme='dark'] .loading-spinner i,
-html[data-theme='dark'] .loading-spinner i {
-  color: var(--accent-color, #4e97d1);
-}
-
-[data-theme='dark'] .loading-spinner .loading-text,
-html[data-theme='dark'] .loading-spinner .loading-text {
-  color: var(--text-primary, #ffffff);
-}
-
 .bot-message-meta {
-  margin-left: 8px;
+  margin-left: var(--space-sm);
   align-self: center;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
   align-items: flex-start;
 }
 
 .confidence-score {
-  font-size: 0.75rem;
-  color: var(--text-tertiary, #64748b);
-  background: var(--bg-tertiary, #f8fafc);
-  padding: 3px 6px;
-  border-radius: 4px;
+  font-size: var(--text-sm);
+  color: var(--muted-soft);
+  background: var(--surface);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .feedback-trigger {
@@ -2126,17 +1962,14 @@ html[data-theme='dark'] .loading-spinner .loading-text {
 }
 
 .feedback-trigger button {
-  background: var(--bg-button-secondary, #f0f0f0);
+  background: none;
   border: none;
-  padding: 4px 8px;
-  border-radius: 4px;
   cursor: pointer;
-  font-size: 0.8rem;
-  color: var(--text-button-secondary, #555);
-}
-
-.feedback-trigger button:hover {
-  background: var(--bg-tertiary, #e0e0e0);
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  padding: 0;
 }
 
 /* Quick Help Overlay */
@@ -2146,13 +1979,13 @@ html[data-theme='dark'] .loading-spinner .loading-text {
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--bg-secondary, rgba(250, 250, 250, 0.97));
+  background: var(--surface);
   z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: var(--space-lg);
   overflow-y: auto;
 }
 
@@ -2163,49 +1996,29 @@ html[data-theme='dark'] .loading-spinner .loading-text {
 
 .quick-help-heading {
   text-align: center;
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
   font-weight: 600;
-  margin-bottom: 24px;
-  color: var(--text-primary, #333);
+  margin-bottom: var(--space-lg);
+  color: var(--fg);
 }
 
 .quick-help-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .quick-help-item {
   display: flex;
   align-items: center;
-  padding: 12px 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: var(--shadow-sm);
 }
 
 .quick-help-item:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--border-color);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
-}
-
-.quick-help-item.just-chat {
-  background: var(--bg-card);
-  border-color: var(--accent-color);
-}
-
-.quick-help-item.just-chat:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--accent-hover);
+  --ds-card-border-color: var(--accent-hover);
 }
 
 .quick-help-icon {
-  margin-right: 12px;
+  margin-right: var(--space-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2220,8 +2033,8 @@ html[data-theme='dark'] .loading-spinner .loading-text {
 }
 
 .quick-help-text {
-  font-size: 0.95rem;
-  color: var(--text-primary);
+  font-size: var(--text-base);
+  color: var(--fg);
   font-weight: 500;
 }
 
@@ -2229,140 +2042,28 @@ html[data-theme='dark'] .loading-spinner .loading-text {
 .chat-input {
   display: flex;
   flex-direction: column;
-  background: var(--bg-card, #fff);
-  border-top: 1px solid var(--border-color, #ddd);
-  padding: 8px;
-}
-
-.prompt-textarea {
-  resize: vertical;
-  border: 1px solid var(--border-input, #ddd);
-  border-radius: 4px;
-  padding: 10px;
-  font-size: 1rem;
-  margin-bottom: 8px;
-  max-height: 120px;
-  background-color: var(--bg-input, #fff);
-  color: var(--text-primary, #333);
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border);
+  padding: var(--space-sm);
 }
 
 .input-actions {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-sm);
   align-items: center;
-}
-
-.new-chat-btn {
-  background: var(--bg-button-secondary, #f0f0f0);
-  color: var(--text-button-secondary, #555);
-  border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-right: auto;
-}
-
-.new-chat-btn:hover {
-  background: var(--bg-tertiary, #e0e0e0);
-  color: var(--accent-color, #4e97d1);
-}
-
-.save-chat-btn {
-  background: var(--bg-button-secondary, #f0f0f0);
-  color: var(--text-button-secondary, #555);
-  border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.save-chat-btn:hover {
-  background: var(--bg-tertiary, #e0e0e0);
-}
-
-.export-chat-btn {
-  background: var(--bg-button-secondary, #f0f0f0);
-  color: var(--text-button-secondary, #555);
-  border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.export-chat-btn:hover {
-  background: var(--bg-tertiary, #e0e0e0);
-}
-
-.send-btn {
-  background: var(--accent-color, #4e97d1);
-  color: var(--text-button-primary, #fff);
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.send-btn:hover {
-  background: var(--accent-hover, #3a7da0);
 }
 
 /* Form Styles for Save Dialog */
 .form-group {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-md);
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
   font-weight: 500;
-  color: var(--text-primary, #333);
-}
-
-.form-group input,
-.form-group select {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--border-input, #ddd);
-  border-radius: 4px;
-  font-size: 1rem;
-  background-color: var(--bg-input, #fff);
-  color: var(--text-primary, #333);
-}
-
-.cancel-btn,
-.primary-btn {
-  padding: 8px 16px;
-  border-radius: 4px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color, 0.2s;
-}
-
-.cancel-btn {
-  background: var(--bg-button-secondary, #f5f5f5);
-  border: 1px solid var(--border-color, #ddd);
-  color: var(--text-button-secondary, #666);
-}
-
-.cancel-btn:hover {
-  background-color: var(--bg-tertiary, #f5f5f5);
-}
-
-.primary-btn {
-  background-color: var(--accent-color, #4e97d1);
-  border: none;
-  color: var(--text-button-primary, white);
-}
-
-.primary-btn:hover {
-  background-color: var(--accent-hover, #3a7cb5);
-}
-
-.primary-btn:disabled {
-  background-color: var(--bg-button-secondary, #a9cae8);
-  cursor: not-allowed;
+  color: var(--fg);
 }
 
 /* Responsive Adjustments */
@@ -2374,7 +2075,7 @@ html[data-theme='dark'] .loading-spinner .loading-text {
 
   .prompt-textarea {
     margin-bottom: 0;
-    margin-right: 8px;
+    margin-right: var(--space-sm);
     flex: 1;
   }
 
@@ -2393,7 +2094,7 @@ html[data-theme='dark'] .loading-spinner .loading-text {
   .system-status-panel {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--space-sm);
   }
 
   .status-metrics {
@@ -2408,36 +2109,8 @@ html[data-theme='dark'] .loading-spinner .loading-text {
   }
 
   .quick-help-heading {
-    font-size: 1.4rem;
+    font-size: var(--text-lg);
   }
-}
-
-/* Additional fixes for dark theme visibility */
-[data-theme='dark'] .metric-label,
-[data-theme='dark'] .status-metrics,
-html[data-theme='dark'] .metric-label,
-html[data-theme='dark'] .metric-value {
-  color: rgba(255, 255, 255, 0.8) !important;
-}
-
-[data-theme='dark'] .quick-help-heading,
-html[data-theme='dark'] .quick-help-heading {
-  color: white !important;
-}
-
-[data-theme='dark'] .quick-help-overlay,
-html[data-theme='dark'] .quick-help-overlay {
-  background: var(--bg-primary, #1e1e1e) !important;
-}
-
-[data-theme='dark'] .confidence-score {
-  color: var(--text-tertiary, #a0aec0);
-  background: var(--bg-tertiary, #2d3748);
-}
-
-[data-theme='dark'] .feedback-trigger button {
-  background: var(--bg-button-secondary, #2d3748);
-  color: var(--text-button-secondary, #e2e8f0);
 }
 
 /* Saving Indicator Styles */
@@ -2445,32 +2118,16 @@ html[data-theme='dark'] .quick-help-overlay {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  margin-top: 16px;
-  padding: 12px;
-  background-color: var(--bg-tertiary, #f5f7fa);
-  border-radius: 4px;
-  color: var(--text-secondary, #606266);
-  font-size: 0.95rem;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+  padding: var(--space-md);
+  background-color: var(--bg);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: var(--text-base);
 }
 
-.saving-indicator i {
-  font-size: 16px;
-  color: var(--accent-color, #409eff);
-}
-
-.save-chat-btn:disabled,
-.save-chat-btn[disabled] {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-[data-theme='dark'] .saving-indicator {
-  background-color: var(--bg-tertiary, #2d3748);
-  color: var(--text-secondary, #e2e8f0);
-}
-
-[data-theme='dark'] .saving-indicator i {
-  color: var(--accent-color, #4e97d1);
+.saving-indicator :deep(svg) {
+  color: var(--accent);
 }
 </style>

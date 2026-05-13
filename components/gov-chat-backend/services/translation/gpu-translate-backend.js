@@ -41,7 +41,7 @@ class GpuTranslateBackend {
       const modelToMap = {
         'google/translategemma-4b-it': './language-maps/translategemma-map.js',
         'google/gemma-3-4b-it': './language-maps/gemma-3-map.js',
-        'google/gemma-3-1b-it': './language-maps/gemma-3-map.js',
+        'google/gemma-3-1b-it': './language-maps/gemma-3-map.js'
       };
 
       const mapPath = modelToMap[modelId];
@@ -81,7 +81,6 @@ class GpuTranslateBackend {
       this.initialized = true;
       this.healthCheckPassed = true;
       logger.info('[GPU-BACKEND] Initialized successfully. vLLM service is ready.');
-
     } catch (error) {
       logger.error(`[GPU-BACKEND] Initialization failed: ${error.message}`);
       // Don't throw - allow fallback to CPU backend
@@ -105,7 +104,7 @@ class GpuTranslateBackend {
           port: url.port || this.port,
           path: '/health', // Try health endpoint first
           method: 'GET',
-          timeout: 5000,
+          timeout: 5000
         };
 
         const req = client.request(options, (res) => {
@@ -152,21 +151,25 @@ class GpuTranslateBackend {
           port: url.port || this.port,
           path: '/v1/models',
           method: 'GET',
-          timeout: 5000,
+          timeout: 5000
         };
 
         const req = client.request(options, (res) => {
           let data = '';
-          res.on('data', (chunk) => { data += chunk; });
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
           res.on('end', () => {
             try {
               const parsed = JSON.parse(data);
-              const model = parsed.data?.find(m => m.id === this.modelId);
+              const model = parsed.data?.find((m) => m.id === this.modelId);
               if (model?.max_model_len) {
                 this.maxModelLen = model.max_model_len;
                 logger.info(`[GPU-BACKEND] Model max context length: ${this.maxModelLen} tokens`);
               } else {
-                logger.warn(`[GPU-BACKEND] Model ${this.modelId} not found in /v1/models response, using default max_tokens`);
+                logger.warn(
+                  `[GPU-BACKEND] Model ${this.modelId} not found in /v1/models response, using default max_tokens`
+                );
               }
               resolve();
             } catch (e) {
@@ -180,7 +183,10 @@ class GpuTranslateBackend {
           logger.warn(`[GPU-BACKEND] Failed to fetch model info: ${error.message}`);
           resolve(); // Don't fail init — use default max_tokens
         });
-        req.on('timeout', () => { req.destroy(); resolve(); });
+        req.on('timeout', () => {
+          req.destroy();
+          resolve();
+        });
         req.end();
       });
     } catch (error) {
@@ -253,15 +259,19 @@ class GpuTranslateBackend {
     if (modelId.includes('translategemma')) {
       return {
         model: modelId,
-        messages: [{
-          role: 'user',
-          content: [{
-            type: 'text',
-            source_lang_code: sourceCode,  // ISO 639-1
-            target_lang_code: targetCode,  // ISO 639-1
-            text: text
-          }]
-        }],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                source_lang_code: sourceCode, // ISO 639-1
+                target_lang_code: targetCode, // ISO 639-1
+                text: text
+              }
+            ]
+          }
+        ],
         temperature: 0.0,
         max_tokens: maxTokens
       };
@@ -277,10 +287,12 @@ class GpuTranslateBackend {
 
       return {
         model: modelId,
-        messages: [{
-          role: 'user',
-          content: prompt
-        }],
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
         temperature: 0.3,
         max_tokens: maxTokens
       };
@@ -289,10 +301,12 @@ class GpuTranslateBackend {
     // Default/fallback format (OpenAI-compatible)
     return {
       model: modelId,
-      messages: [{
-        role: 'user',
-        content: `Translate from ${sourceCode} to ${targetCode}: ${text}`
-      }],
+      messages: [
+        {
+          role: 'user',
+          content: `Translate from ${sourceCode} to ${targetCode}: ${text}`
+        }
+      ],
       temperature: 0.3,
       max_tokens: maxTokens
     };
@@ -318,9 +332,9 @@ class GpuTranslateBackend {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(postData),
+          'Content-Length': Buffer.byteLength(postData)
         },
-        timeout: 30000, // 30 second timeout
+        timeout: 30000 // 30 second timeout
       };
 
       const req = client.request(options, (res) => {
@@ -416,7 +430,6 @@ class GpuTranslateBackend {
       logger.info(`[GPU-BACKEND] Translation completed in ${duration}ms (${texts.length} texts)`);
 
       return translatedTexts;
-
     } catch (error) {
       logger.error(`[GPU-BACKEND] Translation failed: ${error.message}`, {
         stack: error.stack,
@@ -441,7 +454,7 @@ class GpuTranslateBackend {
       port: this.port,
       maxModelLen: this.maxModelLen,
       initialized: this.initialized,
-      healthCheckPassed: this.healthCheckPassed,
+      healthCheckPassed: this.healthCheckPassed
     };
   }
 }

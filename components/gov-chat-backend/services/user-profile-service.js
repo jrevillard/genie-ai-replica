@@ -50,10 +50,10 @@ class UserProfileService {
       }
 
       // Strip JIT-provisioned fields — these are managed by Keycloak, not ArangoDB
-      const strippedFields = Object.keys(profileData).filter(k => JIT_PROTECTED_FIELDS.includes(k));
+      const strippedFields = Object.keys(profileData).filter((k) => JIT_PROTECTED_FIELDS.includes(k));
       if (strippedFields.length > 0) {
         logger.warn('UserProfileService.stripped_jit_fields', { userKey, strippedFields });
-        strippedFields.forEach(f => delete profileData[f]);
+        strippedFields.forEach((f) => delete profileData[f]);
       }
 
       const userExists = await this.userExists(userKey);
@@ -73,9 +73,21 @@ class UserProfileService {
       const hasIdentityTravel = !!processedData.identityTravel;
       const hasMuslimPreferences = !!processedData.muslimPreferences;
 
-      logger.debug('UserProfileService.updating_user_document', { userKey, processedKeys: processedKeys.join(','), hasPersonalIdentification, hasIdentityTravel, hasMuslimPreferences });
+      logger.debug('UserProfileService.updating_user_document', {
+        userKey,
+        processedKeys: processedKeys.join(','),
+        hasPersonalIdentification,
+        hasIdentityTravel,
+        hasMuslimPreferences
+      });
 
-      logger.info('UserProfileService.updating_user_document', { userKey, processedKeys, hasPersonalIdentification, hasIdentityTravel, hasMuslimPreferences });
+      logger.info('UserProfileService.updating_user_document', {
+        userKey,
+        processedKeys,
+        hasPersonalIdentification,
+        hasIdentityTravel,
+        hasMuslimPreferences
+      });
       await this.users.update(userKey, processedData);
 
       // Fetch the complete user document after update to ensure all fields are returned
@@ -87,7 +99,9 @@ class UserProfileService {
       const returnedHasIdentityTravel = !!completeUser.identityTravel;
       const returnedHasMuslimPreferences = !!completeUser.muslimPreferences;
       const returnedHasCustomSettings = !!completeUser.customSettings;
-      const personalIdentificationKeys = completeUser.personalIdentification ? Object.keys(completeUser.personalIdentification) : [];
+      const personalIdentificationKeys = completeUser.personalIdentification
+        ? Object.keys(completeUser.personalIdentification)
+        : [];
 
       logger.debug('UserProfileService.user_profile_updated_debug', {
         userKey,
@@ -95,7 +109,7 @@ class UserProfileService {
         hasPersonalIdentification: returnedHasPersonalIdentification,
         hasIdentityTravel: returnedHasIdentityTravel,
         hasMuslimPreferences: returnedHasMuslimPreferences,
-        hasCustomSettings: returnedHasCustomSettings,
+        hasCustomSettings: returnedHasCustomSettings
       });
 
       // Log what we're returning for debugging
@@ -262,13 +276,7 @@ class UserProfileService {
 
     // Step 4: Identify and aggregate custom/unknown sections into customSettings
     // This provides a generic way for any application to extend user profile data
-    const knownSections = new Set([
-      ...sections,
-      '_key',
-      'createdAt',
-      'updatedAt',
-      'email'
-    ]);
+    const knownSections = new Set([...sections, '_key', 'createdAt', 'updatedAt', 'email']);
 
     const customSettings = {};
     for (const key in profileData) {

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class GenieAiConfig {
@@ -38,7 +39,7 @@ class GenieAiConfig {
       }
       _loaded = true;
     } catch (e) {
-      print("Error loading Genie AI Config: $e");
+      debugPrint("Error loading Genie AI Config: $e");
     }
   }
 

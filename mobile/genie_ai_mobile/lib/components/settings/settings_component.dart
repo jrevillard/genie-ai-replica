@@ -9,10 +9,19 @@ import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/services/connectivity_service.dart';
 import 'package:genie_ai_mobile/services/auth/auth_providers.dart';
+import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // Component Imports
 import 'package:genie_ai_mobile/components/shared/language_selector.dart';
+
+// Design System Imports
+import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
+import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
+import 'package:genie_ai_mobile/design_system/components/ds_modal.dart';
+import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
+import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
+import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
 
 class SettingsComponent extends ConsumerStatefulWidget {
   final Map<String, dynamic> user;
@@ -26,16 +35,11 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
   late UserService _userService;
 
   // ===========================================================================
-  // COMPONENT STATE - Mirrored exactly from Vue data()
+  // COMPONENT STATE
   // ===========================================================================
   bool _isLoading = true;
   String? _errorMessage;
-  bool _isThemeReady = false;
 
-  // Settings Object - Logic from settings initialization
-  late String _selectedLanguage;
-  late String _selectedTheme;
-  double _fontSize = 50.0;
   bool _emailUpdates = false;
   bool _soundNotifications = true;
 
@@ -48,56 +52,75 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
     "createdAt": "",
   };
 
-  bool _isDeletingAccount = false;
+  // Debounce timer for font size API persistence
+  Timer? _fontSizeDebounce;
 
   @override
   void initState() {
     super.initState();
     debugPrint("[SETTINGS] Component created, initializing state...");
 
-    _userService = UserService(api: ref.read(apiServiceProvider));
-
-    // Initialize from Global State (ThemeManager)
-    _selectedTheme = ThemeManager().userPreference;
-    _fontSize = ThemeManager().fontSize;
-    _selectedLanguage = "English";
+    _userService = UserService(userApi: ref.read(currentUserApiProvider));
 
     // Logic branch mirroring Vue created() hooks
     _fetchUserData();
-
-    // Handling layout readiness delay
-    Future.delayed(Duration.zero, () {
-      if (mounted) {
-        debugPrint("[SETTINGS] Setting isThemeReady to true for layout...");
-        setState(() => _isThemeReady = true);
-      }
-    });
   }
 
   @override
   void dispose() {
-    debugPrint("[SETTINGS] Component destroying, cleaning up resources...");
+    // Flush any pending font size persistence before closing
+    if (_fontSizeDebounce?.isActive == true) {
+      _fontSizeDebounce!.cancel();
+      _persistSetting({'fontSize': ThemeManager().fontSize.toInt()});
+    }
     super.dispose();
   }
 
   // ===========================================================================
-  // INTERNAL LOGIC METHODS - Mirrored from Vue methods
+  // IMMEDIATE SETTINGS — Native pattern: every change applies + persists instantly
   // ===========================================================================
 
-  /* * REMOVED: This timer forces the theme every 100ms.
-   * We removed it because we want the user to "Preview" the theme change
-   * locally in this dialog BEFORE hitting save.
-  void _startThemeEnforcement() {
-    _themeEnforcementTimer =
-        Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      if (ThemeManager().userPreference != _selectedTheme) {
-        ThemeManager().setTheme(_selectedTheme);
-      }
+  void _onThemeChanged(String theme) {
+    ThemeManager().setTheme(theme);
+    _persistSetting({'theme': theme});
+  }
+
+  void _onFontSizeChanged(double value) {
+    ThemeManager().setFontSize(value);
+    _fontSizeDebounce?.cancel();
+    _fontSizeDebounce = Timer(const Duration(milliseconds: 500), () {
+      _persistSetting({'fontSize': value.toInt()});
     });
   }
-  */
 
-  /// Exhaustive implementation of fetchUserData()
+  void _onLanguageChanged(String languageCode) {
+    // LanguageSelector already calls I18nService().changeLanguage()
+    _persistSetting({'language': languageCode});
+  }
+
+  void _onEmailUpdatesChanged(bool value) {
+    setState(() => _emailUpdates = value);
+    _persistSetting({'emailUpdates': value});
+  }
+
+  void _onSoundNotificationsChanged(bool value) {
+    setState(() => _soundNotifications = value);
+    _persistSetting({'soundNotifications': value});
+  }
+
+  /// Fire-and-forget persistence — no loading state, no snackbar
+  void _persistSetting(Map<String, dynamic> setting) {
+    if (!ConnectivityService().isOnline) return;
+    _userService.updateAccountSettings(setting).catchError((e) {
+      debugPrint("[SETTINGS] Failed to persist ${setting.keys}: $e");
+      return <String, dynamic>{};
+    });
+  }
+
+  // ===========================================================================
+  // INTERNAL LOGIC METHODS
+  // ===========================================================================
+
   Future<void> _fetchUserData() async {
     debugPrint("[SETTINGS] fetchUserData() initiated...");
     setState(() {
@@ -117,9 +140,7 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
       setState(() {
         _userData = {
           "name":
-              userMap['fullName'] ??
-              userMap['name'] ??
-              tr("settings.userName"),
+              userMap['fullName'] ?? userMap['name'] ?? tr("settings.userName"),
           "email": userMap['email'] ?? "",
           "accountType":
               userMap['accountType'] ??
@@ -129,9 +150,22 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
           "createdAt": userMap['createdAt'] ?? "",
         };
 
-        _selectedLanguage = userMap['language'] ?? 'English';
+        if (userMap['language'] != null) {
+          I18nService().changeLanguage(userMap['language']);
+        }
+        // Theme and fontSize are client-authoritative — applied immediately
+        // on user change, not overwritten from server on subsequent fetches.
+        // Only apply on first load if ThemeManager still has defaults.
+        if (userMap['theme'] != null &&
+            ThemeManager().userPreference == 'light' &&
+            userMap['theme'] != 'light') {
+          ThemeManager().setTheme(userMap['theme']);
+        }
         if (userMap['fontSize'] != null) {
-          _fontSize = (userMap['fontSize'] ?? 50.0).toDouble();
+          final serverFontSize = (userMap['fontSize'] ?? 50.0).toDouble();
+          if (ThemeManager().fontSize == 50.0 && serverFontSize != 50.0) {
+            ThemeManager().setFontSize(serverFontSize);
+          }
         }
         _emailUpdates = userMap['emailUpdates'] ?? false;
         _soundNotifications = userMap['soundNotifications'] ?? true;
@@ -148,49 +182,6 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
     }
   }
 
-  /// Exhaustive implementation of save() persistence
-  Future<void> _handleSave() async {
-    debugPrint("[SETTINGS] save() logic initiated...");
-    setState(() => _isLoading = true);
-
-    try {
-      final bool isOnline = ConnectivityService().isOnline;
-
-      if (isOnline) {
-        debugPrint("[SETTINGS] Syncing settings object to API...");
-        await _userService.updateAccountSettings({
-          'theme': _selectedTheme,
-          'language': _selectedLanguage,
-          'fontSize': _fontSize.toInt(),
-          'emailUpdates': _emailUpdates,
-          'soundNotifications': _soundNotifications,
-        });
-      } else {
-        debugPrint("[SETTINGS] Offline mode. Skipping API update.");
-      }
-
-      // Apply Global Changes (Always run locally)
-      ThemeManager().setTheme(_selectedTheme);
-      ThemeManager().setFontSize(_fontSize);
-
-      if (!mounted) return;
-      Navigator.pop(context);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isOnline
-                ? tr("settings.settingsSaved")
-                : tr("settings.settingsSavedOffline"),
-          ),
-        ),
-      );
-    } catch (e) {
-      debugPrint("[SETTINGS] Save operation failed: $e");
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
   // ===========================================================================
   // ACCOUNT MANAGEMENT — mirrors web SettingsComponent pattern
   // ===========================================================================
@@ -201,10 +192,13 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
+        final tokens = ThemeManager().tokens;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+            backgroundColor: tokens.surface,
             content: Text(
               tr("settings.cannotOpenAccountConsole"),
+              style: TextStyle(color: tokens.fg),
             ),
           ),
         );
@@ -217,86 +211,78 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
   // ===========================================================================
 
   void _initiateAccountDeletionFlow() {
-    showDialog(
+    DsModal.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(tr("settings.deleteAccountTitle")),
-        content: Text(
-          tr("settings.confirmDeleteAccount"),
+      title: tr("settings.deleteAccountTitle"),
+      content: Text(tr("settings.confirmDeleteAccount")),
+      actions: [
+        DsButton(
+          key: const Key('settings_delete_cancel_button'),
+          label: tr("settings.cancel"),
+          variant: DsButtonVariant.ghost,
+          onPressed: () => Navigator.pop(context),
         ),
-        actions: [
-          TextButton(
-            key: const Key('settings_delete_cancel_button'),
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(tr("settings.cancel")),
-          ),
-          ElevatedButton(
-            key: const Key('settings_delete_confirm_button'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              setState(() => _isDeletingAccount = true);
-              try {
-                await _userService.deleteAccount();
-                await ref.read(authProvider.notifier).logout();
-                if (mounted) {
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    '/login',
-                    (r) => false,
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  setState(() => _isDeletingAccount = false);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        tr("accountDeletionFailed"),
-                      ),
-                    ),
-                  );
-                }
+        DsButton(
+          key: const Key('settings_delete_confirm_button'),
+          label: tr("settings.permanentlyDeleteAccount"),
+          variant: DsButtonVariant.danger,
+          onPressed: () async {
+            Navigator.pop(context);
+            try {
+              await _userService.deleteAccount();
+              await ref.read(authProvider.notifier).logout();
+              if (mounted) {
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/login',
+                  (r) => false,
+                );
               }
-            },
-            child: Text(
-              tr("settings.permanentlyDeleteAccount"),
-            ),
-          ),
-        ],
-      ),
+            } catch (e) {
+              if (mounted) {
+                final tokens = ThemeManager().tokens;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: tokens.surface,
+                    content: Text(
+                      tr("accountDeletionFailed"),
+                      style: TextStyle(color: tokens.fg),
+                    ),
+                  ),
+                );
+              }
+            }
+          },
+        ),
+      ],
     );
   }
 
   void _showResetDataWorkflow() {
     debugPrint("[SETTINGS] resetUserData workflow triggered...");
-    showDialog(
+    DsModal.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          tr("settings.resetUserDataTitle"),
+      title: tr("settings.resetUserDataTitle"),
+      content: Text(tr("settings.confirmResetUserData")),
+      actions: [
+        DsButton(
+          label: tr("settings.cancel"),
+          variant: DsButtonVariant.ghost,
+          onPressed: () => Navigator.pop(context),
         ),
-        content: Text(
-          tr("settings.confirmResetUserData"),
+        DsButton(
+          label: tr("settings.reset"),
+          variant: DsButtonVariant.primary,
+          onPressed: () async {
+            Navigator.pop(context);
+            setState(() {
+              _isLoading = true;
+            });
+            await _userService.resetUserData();
+            _fetchUserData();
+          },
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(tr("settings.cancel")),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              setState(() {
-                _isLoading = true;
-              });
-              await _userService.resetUserData();
-              _fetchUserData();
-            },
-            child: Text(tr("settings.reset")),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -306,96 +292,67 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
 
   @override
   Widget build(BuildContext context) {
-    // PREVIEW LOGIC: Use local _selectedTheme state instead of Global ThemeManager
-    final bool previewIsDark = _selectedTheme == 'dark';
-
-    // Retrieve theme data corresponding to the SELECTION (Preview), not the current app state
-    final ThemeData previewTheme = previewIsDark
-        ? ThemeManager().darkTheme
-        : ThemeManager().lightTheme;
-
-    // Config-driven colors
-    final Color bgColor = previewTheme.scaffoldBackgroundColor;
-    final Color titleColor =
-        previewTheme.textTheme.bodyLarge?.color ?? Colors.black;
-    final Color primaryColor = previewTheme.primaryColor;
-
-    // Use opacity based on preview mode
-    final Color boxBg = previewIsDark
-        ? Colors.white.withOpacity(0.05)
-        : Colors.black.withOpacity(0.02);
+    final tokens = ThemeManager().tokens;
 
     if (_isLoading) {
       return Container(
-        color: bgColor,
-        child: Center(child: CircularProgressIndicator(color: primaryColor)),
+        color: tokens.bg,
+        child: Center(child: CircularProgressIndicator(color: tokens.accent)),
       );
     }
 
     if (_errorMessage != null) {
-      return Container(color: bgColor, child: _buildErrorState(primaryColor));
+      return Container(
+        color: tokens.bg,
+        child: _buildErrorState(tokens.accent),
+      );
     }
 
-    // RESTORED: Layout Readiness check
-    if (!_isThemeReady) {
-      return Container(color: bgColor);
-    }
+    final Color boxBg = tokens.isDark ? tokens.fg30 : tokens.muted20;
 
-    // REFRESH: Using StreamBuilder to make Settings reactive to Connectivity
     return StreamBuilder<bool>(
       stream: ConnectivityService().isOnlineStream,
       initialData: ConnectivityService().isOnline,
       builder: (context, snapshot) {
         final bool isOnline = snapshot.data ?? true;
 
-        // FIX: Wrapped in MediaQuery with TextScaler to enable real-time font scaling preview
-        return MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(textScaler: TextScaler.linear(_fontSize / 50.0)),
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(16),
-                ),
+        return Material(
+          color: Colors.transparent,
+          child: Container(
+            decoration: BoxDecoration(
+              color: tokens.bg,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(DsRadii.xl),
               ),
-              child: Column(
-                children: [
-                  _buildStickyHeader(primaryColor, titleColor, previewIsDark),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      // UPDATED: Reduced padding for handset screens
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          _buildIdentitySection(primaryColor, titleColor),
-                          const SizedBox(height: 16),
-                          // FIX: Using vertical stack prevents RenderFlex overflows and enables Language Selector visibility
-                          _buildVerticalConfigurationStack(
-                            primaryColor,
-                            titleColor,
-                            boxBg,
-                            previewTheme.cardColor,
-                            isOnline: isOnline,
-                          ),
-                          const SizedBox(height: 16),
-                          _buildAccountManagement(
-                            primaryColor,
-                            titleColor,
-                            previewIsDark,
-                            boxBg,
-                            isOnline: isOnline,
-                          ),
-                          const SizedBox(height: 60),
-                        ],
-                      ),
+            ),
+            child: Column(
+              children: [
+                _buildStickyHeader(tokens),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(DsSpacing.md),
+                    child: Column(
+                      children: [
+                        _buildIdentitySection(tokens),
+                        const SizedBox(height: DsSpacing.md),
+                        _buildVerticalConfigurationStack(
+                          tokens,
+                          boxBg,
+                          tokens.surface,
+                          isOnline: isOnline,
+                        ),
+                        const SizedBox(height: DsSpacing.md),
+                        _buildAccountManagement(
+                          tokens,
+                          boxBg,
+                          isOnline: isOnline,
+                        ),
+                        const SizedBox(height: 60),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         );
@@ -403,76 +360,51 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
     );
   }
 
-  Widget _buildStickyHeader(Color accent, Color titleColor, bool isDark) {
+  Widget _buildStickyHeader(AppTokens tokens) {
     return Container(
-      // UPDATED: Reduced padding for handset screens
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: DsSpacing.md,
+        vertical: DsSpacing.sm,
+      ),
       decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: isDark ? Colors.white10 : Colors.black12),
-        ),
+        border: Border(bottom: BorderSide(color: tokens.borderLight)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // UPDATED: Wrapped title in Flexible to prevent overflow on long translations
           Flexible(
             child: Text(
               tr("settings.title"),
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 22,
+                fontSize: tokens.textLg,
                 fontWeight: FontWeight.bold,
-                color: titleColor,
+                color: tokens.fg,
               ),
             ),
           ),
-          // FIXED: Wrapped buttons Row in Flexible to prevent overflow
           Flexible(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // ADDED: Link to About Screen
-                IconButton(
-                  icon: Icon(Icons.info_outline, color: titleColor),
-                  tooltip: tr("about.title"),
-                  onPressed: () => Navigator.pushNamed(context, '/about'),
-                  padding: const EdgeInsets.all(8),
-                  constraints: const BoxConstraints(),
-                ),
-                const SizedBox(width: 4),
-                // FIXED: Wrapped TextButton in Flexible to handle long translations
-                Flexible(
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      tr("settings.close"),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
+                Tooltip(
+                  message: tr("about.title"),
+                  child: DsButton(
+                    iconOnly: true,
+                    icon: Icons.info_outline,
+                    variant: DsButtonVariant.ghost,
+                    overrideFg: tokens.fg,
+                    onPressed: () => Navigator.pushNamed(context, '/about'),
                   ),
                 ),
-                const SizedBox(width: 4),
-                // FIXED: Wrapped ElevatedButton in Flexible to handle long translations
+                const SizedBox(width: DsSpacing.xs),
                 Flexible(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accent,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      minimumSize: const Size(60, 36),
-                    ),
-                    onPressed: _handleSave,
-                    child: Text(
-                      tr("settings.saveSettings"),
-                      style: const TextStyle(color: Colors.white),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
+                  child: DsButton(
+                    label: tr("settings.close"),
+                    variant: DsButtonVariant.ghost,
+                    onPressed: () => Navigator.pop(context),
+                    small: true,
                   ),
                 ),
               ],
@@ -483,12 +415,9 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
     );
   }
 
-  Widget _buildIdentitySection(Color accent, Color titleColor) {
-    final String rawName =
-        _userData['name'] ?? tr("settings.userName");
-    final String name = rawName.isEmpty
-        ? tr("settings.userName")
-        : rawName;
+  Widget _buildIdentitySection(AppTokens tokens) {
+    final String rawName = _userData['name'] ?? tr("settings.userName");
+    final String name = rawName.isEmpty ? tr("settings.userName") : rawName;
 
     // FIX: Robust type-safe initials logic to resolve dynamic mapping TypeError on Web
     String initials = "?";
@@ -506,17 +435,17 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
       children: [
         CircleAvatar(
           radius: 34,
-          backgroundColor: accent,
+          backgroundColor: tokens.accent,
           child: Text(
             initials,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 24,
+            style: TextStyle(
+              color: tokens.accentFg,
+              fontSize: tokens.textXl,
               fontWeight: FontWeight.bold,
             ),
           ),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: DsSpacing.md),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -524,23 +453,26 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
               Text(
                 name,
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: tokens.textLg,
                   fontWeight: FontWeight.bold,
-                  color: titleColor,
+                  color: tokens.fg,
                 ),
               ),
               // BUG FIX: Rendering hydrated email state
               Text(
                 _userData['email'],
-                style: const TextStyle(color: Colors.grey, fontSize: 14),
+                style: TextStyle(
+                  color: tokens.muted,
+                  fontSize: tokens.textBase,
+                ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: DsSpacing.xs),
               Text(
                 _userData['accountType'],
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: tokens.textSm,
                   fontWeight: FontWeight.w600,
-                  color: accent,
+                  color: tokens.accent,
                 ),
               ),
             ],
@@ -552,8 +484,7 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
 
   // FIX: Stacking configuration elements vertically gives the Language Selector full width
   Widget _buildVerticalConfigurationStack(
-    Color accent,
-    Color titleColor,
+    AppTokens tokens,
     Color boxBg,
     Color dropdownBg, {
     required bool isOnline,
@@ -563,43 +494,62 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
         _buildThemedGroupBox(
           tr("settings.display"),
           boxBg,
-          titleColor,
+          tokens.fg,
+          tokens.textMd,
           [
             _buildItemLabel(
               tr("settings.displayLanguage"),
+              tokens.muted,
+              tokens.textBase,
             ),
-            // UPDATED: Passing titleColor ensures text is visible.
+            // UPDATED: Passing tokens.fg ensures text is visible.
             // UPDATED: Passing dropdownBg ensures menu background matches dialog theme.
-            LanguageSelector(textColor: titleColor, dropdownColor: dropdownBg),
-            const SizedBox(height: 20),
-            _buildItemLabel(tr("settings.theme")),
-            _buildThemeButtonRow(accent),
-            const SizedBox(height: 20),
-            _buildItemLabel(tr("settings.fontSize")),
-            _buildFontSizeSliderControl(accent, titleColor),
+            LanguageSelector(
+              textColor: tokens.fg,
+              dropdownColor: dropdownBg,
+              onChanged: isOnline ? _onLanguageChanged : null,
+            ),
+            const SizedBox(height: DsSpacing.lg),
+            _buildItemLabel(
+              tr("settings.theme"),
+              tokens.muted,
+              tokens.textBase,
+            ),
+            _buildThemeButtonRow(tokens),
+            const SizedBox(height: DsSpacing.lg),
+            _buildItemLabel(
+              tr("settings.fontSize"),
+              tokens.muted,
+              tokens.textBase,
+            ),
+            _buildFontSizeSliderControl(tokens),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: DsSpacing.md),
         _buildThemedGroupBox(
           tr("settings.notifications"),
           boxBg,
-          titleColor,
+          tokens.fg,
+          tokens.textMd,
           [
             // FIX: Passing accent color for switch
             // UPDATED: Disabled if OFFLINE
             _buildToggleRow(
               tr("settings.emailUpdates"),
               _emailUpdates,
-              isOnline ? (v) => setState(() => _emailUpdates = v) : null,
-              accent,
+              isOnline ? _onEmailUpdatesChanged : null,
+              tokens.accent,
+              tokens.fg,
+              tokens.textBase,
             ),
-            const SizedBox(height: 16),
-            // FIX: Passing accent color for switch
+            const SizedBox(height: DsSpacing.md),
             _buildToggleRow(
               tr("settings.soundNotifications"),
               _soundNotifications,
-              (v) => setState(() => _soundNotifications = v),
-              accent,
+              isOnline ? _onSoundNotificationsChanged : null,
+              tokens.accent,
+              tokens.fg,
+              tokens.textBase,
             ),
           ],
         ),
@@ -608,9 +558,7 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
   }
 
   Widget _buildAccountManagement(
-    Color accent,
-    Color titleColor,
-    bool isDark,
+    AppTokens tokens,
     Color boxBg, {
     required bool isOnline,
   }) {
@@ -620,18 +568,17 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
         Text(
           tr("settings.accountManagement"),
           style: TextStyle(
-            fontSize: 18,
+            fontSize: tokens.textMd,
             fontWeight: FontWeight.bold,
-            color: titleColor,
+            color: tokens.fg,
           ),
         ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: boxBg,
-            borderRadius: BorderRadius.circular(10),
-          ),
+        const SizedBox(height: DsSpacing.md),
+        DsCard(
+          variant: DsCardVariant.standard,
+          overrideBg: boxBg,
+          padding: const EdgeInsets.all(DsSpacing.md),
+          radius: DsRadii.lg,
           child: Column(
             children: [
               // 1. Manage My Account — opens Keycloak account console
@@ -639,26 +586,23 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
                 "${tr("settings.manageMyAccount")} →",
                 tr("settings.manageMyAccountDesc"),
                 isOnline ? _openAccountConsole : null,
-                isDark,
                 key: const Key('settings_manage_account_button'),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: DsSpacing.md),
               // 2. Reset User Data
               _buildActionBtnCard(
                 tr("settings.resetUserData"),
                 tr("settings.resetUserDataDesc"),
                 isOnline ? _showResetDataWorkflow : null,
-                isDark,
                 key: const Key('settings_reset_data_button'),
-                overrideColor: Colors.red[800],
+                overrideColor: tokens.danger,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: DsSpacing.md),
               // 3. Delete My Account — real GDPR deletion
               _buildActionBtnCard(
                 tr("settings.deleteAccount"),
                 tr("settings.deleteAccountDesc"),
                 isOnline ? _initiateAccountDeletionFlow : null,
-                isDark,
                 key: const Key('settings_delete_account_button'),
                 isDanger: true,
               ),
@@ -677,13 +621,14 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
     String title,
     Color bg,
     Color titleColor,
+    double titleFontSize,
     List<Widget> children,
   ) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(DsSpacing.lg),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(DsRadii.md),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -691,36 +636,37 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
           Text(
             title,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: titleFontSize,
               fontWeight: FontWeight.bold,
               color: titleColor,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: DsSpacing.lg),
           ...children,
         ],
       ),
     );
   }
 
-  Widget _buildThemeButtonRow(Color accent) {
+  Widget _buildThemeButtonRow(AppTokens tokens) {
+    final isLight = ThemeManager().userPreference != 'dark';
     return Row(
       children: [
         Expanded(
           child: _buildThemeToggleBtn(
             tr("settings.themeLight"),
-            _selectedTheme == 'light',
-            accent,
-            () => setState(() => _selectedTheme = 'light'),
+            isLight,
+            tokens,
+            () => _onThemeChanged('light'),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: DsSpacing.xs),
         Expanded(
           child: _buildThemeToggleBtn(
             tr("settings.themeDark"),
-            _selectedTheme == 'dark',
-            accent,
-            () => setState(() => _selectedTheme = 'dark'),
+            !isLight,
+            tokens,
+            () => _onThemeChanged('dark'),
           ),
         ),
       ],
@@ -730,22 +676,22 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
   Widget _buildThemeToggleBtn(
     String label,
     bool active,
-    Color accent,
+    AppTokens tokens,
     VoidCallback onTap,
   ) {
     return InkWell(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: DsSpacing.xs),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: active ? accent : Colors.grey.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(6),
+          color: active ? tokens.accent : tokens.muted20,
+          borderRadius: BorderRadius.circular(DsRadii.sm),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: active ? Colors.white : Colors.grey,
+            color: active ? tokens.accentFg : tokens.muted,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -753,25 +699,24 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
     );
   }
 
-  Widget _buildFontSizeSliderControl(Color accent, Color titleColor) {
+  Widget _buildFontSizeSliderControl(AppTokens tokens) {
     return Row(
       children: [
         Expanded(
           child: Slider(
-            value: _fontSize,
+            value: ThemeManager().fontSize,
             min: 30,
             max: 100,
-            activeColor: accent,
-            onChanged: (v) => setState(() => _fontSize = v),
+            activeColor: tokens.accent,
+            onChanged: _onFontSizeChanged,
           ),
         ),
-        // FIX: Real-time visual feedback mirrored from Vue rem scaling logic
         Text(
-          "${_fontSize.toInt()}%",
+          "${ThemeManager().fontSize.toInt()}%",
           style: TextStyle(
-            color: titleColor,
+            color: tokens.fg,
             fontWeight: FontWeight.bold,
-            fontSize: 14,
+            fontSize: tokens.textBase,
           ),
         ),
       ],
@@ -783,17 +728,22 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
     bool value,
     Function(bool)? onChanged,
     Color activeColor,
+    Color textColor,
+    double fontSize,
   ) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // UPDATED: Wrapped text in Expanded to prevent overflow on long translations
-        Expanded(child: Text(label, style: const TextStyle(fontSize: 14.5))),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(fontSize: fontSize, color: textColor),
+          ),
+        ),
         Switch(
           value: value,
           onChanged: onChanged,
-          // FIX: Using dynamic active color instead of hardcoded hex
-          activeColor: activeColor,
+          activeThumbColor: activeColor,
         ),
       ],
     );
@@ -802,68 +752,56 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
   Widget _buildActionBtnCard(
     String title,
     String desc,
-    VoidCallback? onTap,
-    bool isDark, {
+    VoidCallback? onTap, {
     Key? key,
     bool isDanger = false,
     Color? overrideColor,
   }) {
-    // Determine the effective background color
-    // FIX: Added '!' to Colors.grey[200] to handle nullability strictness
-    final Color bgColor =
-        overrideColor ??
-        (isDanger ? Colors.red : (isDark ? Colors.white10 : Colors.grey[200]!));
-
-    // Determine the effective text color
-    // If it's a "danger" button OR has an override (which implies a colored button like Dark Red), use White.
-    // Otherwise use black87 (standard buttons)
-    final Color txtColor = (isDanger || overrideColor != null)
-        ? Colors.white
-        : Colors.black87;
+    final tokens = ThemeManager().tokens;
+    final DsButtonVariant variant = isDanger
+        ? DsButtonVariant.danger
+        : DsButtonVariant.secondary;
 
     return Column(
       children: [
-        ElevatedButton(
+        DsButton(
           key: key,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: bgColor,
-            minimumSize: const Size(double.infinity, 50),
-            // VISUAL CUE FOR DISABLED STATE
-            disabledBackgroundColor: bgColor.withOpacity(0.5),
-            disabledForegroundColor: txtColor.withOpacity(0.5),
-          ),
+          label: title,
+          variant: variant,
           onPressed: onTap,
-          child: Text(
-            title,
-            textAlign: TextAlign
-                .center, // UPDATED: Ensure center alignment if wrapping occurs
-            style: TextStyle(color: txtColor, fontWeight: FontWeight.bold),
-          ),
+          overrideBg: overrideColor,
+          overrideFg: overrideColor != null ? tokens.accentFg : null,
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: DsSpacing.xs),
         Text(
           desc,
-          style: const TextStyle(fontSize: 11.5, color: Colors.grey),
+          style: TextStyle(fontSize: tokens.textXs, color: tokens.muted),
           textAlign: TextAlign.center,
         ),
       ],
     );
   }
 
-  Widget _buildItemLabel(String text) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: Text(text, style: const TextStyle(fontSize: 14, color: Colors.grey)),
-  );
+  Widget _buildItemLabel(String text, Color color, double fontSize) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: DsSpacing.xs),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: fontSize, color: color),
+      ),
+    );
+  }
 
   Widget _buildErrorState(Color accent) => Center(
     child: Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(_errorMessage!),
-        const SizedBox(height: 16),
-        ElevatedButton(
+        const SizedBox(height: DsSpacing.md),
+        DsButton(
+          label: tr("settings.retry"),
+          variant: DsButtonVariant.primary,
           onPressed: _fetchUserData,
-          child: Text(tr("settings.retry")),
         ),
       ],
     ),

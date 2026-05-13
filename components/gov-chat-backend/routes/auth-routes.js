@@ -6,7 +6,7 @@ const authController = require('../controllers/authController');
 
 /**
  * @swagger
- * /auth/logout:
+ * /api/auth/logout:
  *   post:
  *     summary: User logout
  *     description: Logout endpoint (Keycloak handles session invalidation server-side)

@@ -43,7 +43,7 @@ async function initWorker() {
         intraOpNumThreads: threads,
         interOpNumThreads: 1,
         graphOptimizationLevel: 'all',
-        logSeverityLevel: 4,
+        logSeverityLevel: 4
       }
     });
 
@@ -51,7 +51,6 @@ async function initWorker() {
     logger.info('[CPU-WORKER] Worker initialized successfully. Model loaded.');
 
     return { success: true };
-
   } catch (error) {
     logger.error(`[CPU-WORKER] Initialization failed: ${error.message}`, { stack: error.stack });
     return { success: false, error: error.message };
@@ -75,13 +74,13 @@ async function handleTranslate(messageId, texts, sourceCode, targetCode) {
 
     const translations = await translator(texts, {
       src_lang: sourceCode,
-      tgt_lang: targetCode,
+      tgt_lang: targetCode
     });
 
     const duration = Date.now() - startTime;
     logger.info(`[CPU-WORKER] Translated ${texts.length} texts in ${duration}ms`);
 
-    const translatedTexts = translations.map(item => item.translation_text);
+    const translatedTexts = translations.map((item) => item.translation_text);
 
     return {
       messageId: messageId,
@@ -89,7 +88,6 @@ async function handleTranslate(messageId, texts, sourceCode, targetCode) {
       translations: translatedTexts,
       duration: duration
     };
-
   } catch (error) {
     logger.error(`[CPU-WORKER] Translation failed: ${error.message}`, {
       stack: error.stack
@@ -138,7 +136,6 @@ parentPort.on('message', async (message) => {
       success: result.success,
       data: result
     });
-
   } catch (error) {
     logger.error(`[CPU-WORKER] Message handler error: ${error.message}`, { stack: error.stack });
 

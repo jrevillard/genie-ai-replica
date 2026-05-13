@@ -5,16 +5,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:genie_ai_mobile/services/api_service.dart';
+import 'package:openapi/api.dart' as openapi;
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
+import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
+import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
+import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
+import 'package:genie_ai_mobile/config/keycloak_config.dart';
+import 'package:genie_ai_mobile/providers/api_providers.dart';
 
 // --- CONDITIONAL IMPORT ---
 import 'package:genie_ai_mobile/components/chat/stub_file_utils.dart'
     if (dart.library.html) 'package:genie_ai_mobile/components/chat/web_file_utils.dart';
 
-class RightSidebarComponent extends StatefulWidget {
+class RightSidebarComponent extends ConsumerStatefulWidget {
   final List<dynamic> relatedDocuments;
   final String? accessToken;
 
@@ -25,12 +32,11 @@ class RightSidebarComponent extends StatefulWidget {
   });
 
   @override
-  State<RightSidebarComponent> createState() => _RightSidebarComponentState();
+  ConsumerState<RightSidebarComponent> createState() =>
+      _RightSidebarComponentState();
 }
 
-class _RightSidebarComponentState extends State<RightSidebarComponent> {
-  final ApiService _api = ApiService();
-
+class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
   List<Map<String, String>> _faqItems = [];
   bool _isLoadingFaq = false;
   String _currentLangCode = 'en';
@@ -72,11 +78,15 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
         markdownContent = baseMarkdown;
       } else {
         try {
-          final response = await _api.post('translate/markdown', {
-            'markdown': baseMarkdown,
-            'source_lang': 'en',
-            'target_lang': _currentLangCode,
-          });
+          final translationApi = ref.read(translationApiProvider);
+          final request = openapi.ApiTranslateMarkdownPostRequest(
+            markdown: baseMarkdown,
+            sourceLang: 'en',
+            targetLang: _currentLangCode,
+          );
+
+          final response = await translationApi
+              .apiTranslateMarkdownPostWithHttpInfo(request);
 
           if (response.statusCode == 200 || response.statusCode == 201) {
             final data = jsonDecode(response.body);
@@ -176,21 +186,32 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
             .toString()
             .toLowerCase();
 
-    if (type == 'pdf' || name.endsWith('.pdf')) return Icons.picture_as_pdf;
-    if (type.contains('word') || name.contains('.doc'))
+    if (type == 'pdf' || name.endsWith('.pdf')) {
+      return Icons.picture_as_pdf;
+    }
+    if (type.contains('word') || name.contains('.doc')) {
       return Icons.description;
-    if (type.contains('excel') || name.contains('.xls'))
+    }
+    if (type.contains('excel') || name.contains('.xls')) {
       return Icons.table_chart;
-    if (type.contains('powerpoint') || name.contains('.ppt'))
+    }
+    if (type.contains('powerpoint') || name.contains('.ppt')) {
       return Icons.slideshow;
+    }
     if (type.contains('image') ||
         name.contains('.jpg') ||
-        name.contains('.png'))
+        name.contains('.png')) {
       return Icons.image;
-    if (type.contains('video')) return Icons.videocam;
-    if (type.contains('audio')) return Icons.audiotrack;
-    if (name.endsWith('.md') || name.endsWith('.txt'))
+    }
+    if (type.contains('video')) {
+      return Icons.videocam;
+    }
+    if (type.contains('audio')) {
+      return Icons.audiotrack;
+    }
+    if (name.endsWith('.md') || name.endsWith('.txt')) {
       return Icons.text_snippet;
+    }
 
     return Icons.insert_drive_file;
   }
@@ -227,13 +248,17 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
     final type = _getDocValue(doc, ['fileType', 'mimeType', 'type', 'format']);
     if (type != null) {
       final s = type.toString();
-      if (s.contains('/')) return s.split('/').last.toUpperCase();
+      if (s.contains('/')) {
+        return s.split('/').last.toUpperCase();
+      }
       return s.toUpperCase();
     }
 
     final String name = (_getDocValue(doc, ['fileName', 'document_name']) ?? '')
         .toString();
-    if (name.contains('.')) return name.split('.').last.toUpperCase();
+    if (name.contains('.')) {
+      return name.split('.').last.toUpperCase();
+    }
 
     return "FILE";
   }
@@ -243,26 +268,29 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
 
     final cat = _getDocValue(doc, ['categoryLabel', 'category']);
     if (cat != null) {
-      if (cat is List)
+      if (cat is List) {
         allLabels.addAll(cat.map((e) => e.toString()));
-      else
+      } else {
         allLabels.add(cat.toString());
+      }
     }
 
     final srv = _getDocValue(doc, ['serviceLabels', 'services']);
     if (srv != null) {
-      if (srv is List)
+      if (srv is List) {
         allLabels.addAll(srv.map((e) => e.toString()));
-      else
+      } else {
         allLabels.add(srv.toString());
+      }
     }
 
     final lbl = _getDocValue(doc, ['labels', 'tags', 'keywords']);
     if (lbl != null) {
-      if (lbl is List)
+      if (lbl is List) {
         allLabels.addAll(lbl.map((e) => e.toString()));
-      else
+      } else {
         allLabels.add(lbl.toString());
+      }
     }
 
     if (allLabels.isEmpty) return tr('sidebar.unknown');
@@ -286,17 +314,31 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
     ])?.toString();
 
     if (fileId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(tr('sidebar.docIdNotFound'))));
+      final tokens = ThemeManager().tokens;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: tokens.surface,
+          content: Text(
+            tr('sidebar.docIdNotFound'),
+            style: TextStyle(color: tokens.fg),
+          ),
+        ),
+      );
       return;
     }
 
     final String? token = widget.accessToken;
     if (token == null || token.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(tr('sidebar.authError'))));
+      final tokens = ThemeManager().tokens;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: tokens.surface,
+          content: Text(
+            tr('sidebar.authError'),
+            style: TextStyle(color: tokens.fg),
+          ),
+        ),
+      );
       return;
     }
 
@@ -308,15 +350,23 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
         docMetadata: doc,
       );
     } else {
-      final String viewUrl = '${_api.baseUrl}/files/$fileId/view';
+      final String viewUrl = '${getConfig().backendUrl}/api/files/$fileId/view';
       final String urlWithToken = '$viewUrl?access_token=$token';
       final Uri uri = Uri.parse(urlWithToken);
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(tr('sidebar.launchError'))));
+        if (!mounted) return;
+        final tokens = ThemeManager().tokens;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: tokens.surface,
+            content: Text(
+              tr('sidebar.launchError'),
+              style: TextStyle(color: tokens.fg),
+            ),
+          ),
+        );
       }
     }
   }
@@ -327,70 +377,70 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
   Widget _buildRightSidebarContent(
     BuildContext context,
     ThemeData theme,
-    Map<String, dynamic> colors,
+    AppTokens tokens,
     bool isDark,
   ) {
     return Material(
-      color: colors['background'],
+      color: tokens.bg,
       child: Container(
         decoration: BoxDecoration(
-          border: Border(left: BorderSide(color: colors['border'])),
+          border: Border(left: BorderSide(color: tokens.border)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Header
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(DsSpacing.md),
               decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: colors['border'])),
+                border: Border(bottom: BorderSide(color: tokens.border)),
               ),
               child: Text(
                 tr('sidebar.title'),
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: colors['text'],
+                  color: tokens.fg,
                 ),
               ),
             ),
 
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(DsSpacing.md),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildSectionTitle(
                       tr('sidebar.relatedDocs'),
                       Icons.description_outlined,
-                      colors,
+                      tokens,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: DsSpacing.sm),
                     if (widget.relatedDocuments.isEmpty)
-                      _buildEmptyState(tr('sidebar.noDocuments'), colors)
+                      _buildEmptyState(tr('sidebar.noDocuments'), tokens)
                     else
                       ...widget.relatedDocuments.map(
-                        (doc) => _buildDocItem(doc, colors, isDark),
+                        (doc) => _buildDocItem(doc, tokens, isDark),
                       ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: DsSpacing.xl),
                     _buildSectionTitle(
                       tr('sidebar.faq'),
                       Icons.help_outline,
-                      colors,
+                      tokens,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: DsSpacing.sm),
                     if (_isLoadingFaq)
                       const Center(
                         child: Padding(
-                          padding: EdgeInsets.all(20.0),
+                          padding: EdgeInsets.all(DsSpacing.lg),
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                       )
                     else if (_faqItems.isEmpty)
-                      _buildEmptyState(tr('sidebar.faqError'), colors)
+                      _buildEmptyState(tr('sidebar.faqError'), tokens)
                     else
                       ..._faqItems.map(
-                        (item) => _buildFaqItem(item, colors, isDark),
+                        (item) => _buildFaqItem(item, tokens, isDark),
                       ),
                   ],
                 ),
@@ -408,7 +458,7 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = ThemeManager().getColors();
+    final tokens = ThemeManager().tokens;
     final isDark = ThemeManager().isDarkMode;
 
     // Check screen width to determine layout mode
@@ -418,7 +468,7 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
     if (isWideScreen) {
       return SizedBox(
         width: 360,
-        child: _buildRightSidebarContent(context, theme, colors, isDark),
+        child: _buildRightSidebarContent(context, theme, tokens, isDark),
       );
     }
 
@@ -455,7 +505,7 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
                 child: _buildRightSidebarContent(
                   context,
                   theme,
-                  colors,
+                  tokens,
                   isDark,
                 ),
               ),
@@ -470,41 +520,37 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
   // WIDGET HELPERS
   // ===========================================================================
 
-  Widget _buildSectionTitle(
-    String title,
-    IconData icon,
-    Map<String, dynamic> colors,
-  ) {
+  Widget _buildSectionTitle(String title, IconData icon, AppTokens tokens) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: colors['text'].withOpacity(0.6)),
-        const SizedBox(width: 8),
+        Icon(icon, size: 18, color: tokens.muted),
+        const SizedBox(width: DsSpacing.sm),
         Text(
           title,
           style: TextStyle(
-            fontSize: 14,
+            fontSize: tokens.textBase,
             fontWeight: FontWeight.bold,
-            color: colors['text'].withOpacity(0.8),
+            color: tokens.fg70,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildEmptyState(String message, Map<String, dynamic> colors) {
+  Widget _buildEmptyState(String message, AppTokens tokens) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(DsSpacing.md),
       decoration: BoxDecoration(
-        color: colors['surface'],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colors['border']),
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(DsRadii.md),
+        border: Border.all(color: tokens.border),
       ),
       child: Text(
         message,
         style: TextStyle(
-          color: colors['text'].withOpacity(0.5),
-          fontSize: 13,
+          color: tokens.mutedSoft,
+          fontSize: tokens.textSm,
           fontStyle: FontStyle.italic,
         ),
         textAlign: TextAlign.center,
@@ -514,7 +560,7 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
 
   Widget _buildDocItem(
     Map<String, dynamic> doc,
-    Map<String, dynamic> colors,
+    AppTokens tokens,
     bool isDark,
   ) {
     final String title =
@@ -537,38 +583,32 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
         _getDocValue(doc, ['id', '_id', 'document_id', 'fileId'])?.toString() ??
         "";
 
-    return Card(
-      elevation: 0,
-      color: colors['surface'],
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: colors['border']),
-      ),
-      margin: const EdgeInsets.only(bottom: 12),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: DsSpacing.md),
       child: InkWell(
         onTap: () => _openDocument(doc),
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
+        borderRadius: BorderRadius.circular(DsRadii.md),
+        child: DsCard(
+          variant: DsCardVariant.outline,
+          overrideBorderColor: tokens.border,
+          overrideBg: tokens.surface,
+          radius: DsRadii.md,
+          padding: const EdgeInsets.all(DsSpacing.sm),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    _getDocumentIcon(doc),
-                    size: 20,
-                    color: colors['primary'],
-                  ),
+                  Icon(_getDocumentIcon(doc), size: 20, color: tokens.accent),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       title,
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        color: colors['text'],
+                        fontSize: tokens.textSm,
+                        color: tokens.fg,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -577,22 +617,22 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
                 ],
               ),
               const Padding(
-                padding: EdgeInsets.symmetric(vertical: 4),
+                padding: EdgeInsets.symmetric(vertical: DsSpacing.xs),
                 child: Divider(height: 1),
               ),
               if (fileName.isNotEmpty && fileName != title)
-                _buildDetailRow("File Name", fileName, colors),
+                _buildDetailRow("File Name", fileName, tokens),
               Row(
                 children: [
                   Expanded(
-                    child: _buildDetailRow("Format", fileFormat, colors),
+                    child: _buildDetailRow("Format", fileFormat, tokens),
                   ),
-                  Expanded(child: _buildDetailRow("Size", fileSize, colors)),
+                  Expanded(child: _buildDetailRow("Size", fileSize, tokens)),
                 ],
               ),
-              if (id.isNotEmpty) _buildDetailRow(tr('sidebar.id'), id, colors),
-              _buildDetailRow(tr('sidebar.labels'), labels, colors),
-              _buildDetailRow(tr('sidebar.confidence'), confidence, colors),
+              if (id.isNotEmpty) _buildDetailRow(tr('sidebar.id'), id, tokens),
+              _buildDetailRow(tr('sidebar.labels'), labels, tokens),
+              _buildDetailRow(tr('sidebar.confidence'), confidence, tokens),
             ],
           ),
         ),
@@ -600,11 +640,7 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
     );
   }
 
-  Widget _buildDetailRow(
-    String label,
-    String value,
-    Map<String, dynamic> colors,
-  ) {
+  Widget _buildDetailRow(String label, String value, AppTokens tokens) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -613,15 +649,15 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
           Text(
             "$label: ",
             style: TextStyle(
-              fontSize: 11,
+              fontSize: tokens.textXs,
               fontWeight: FontWeight.w600,
-              color: colors['text'].withOpacity(0.7),
+              color: tokens.fg70,
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: TextStyle(fontSize: 11, color: colors['text']),
+              style: TextStyle(fontSize: tokens.textXs, color: tokens.fg),
             ),
           ),
         ],
@@ -631,15 +667,15 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
 
   Widget _buildFaqItem(
     Map<String, String> item,
-    Map<String, dynamic> colors,
+    AppTokens tokens,
     bool isDark,
   ) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: DsSpacing.sm),
       decoration: BoxDecoration(
-        color: colors['surface'],
-        border: Border.all(color: colors['border']),
-        borderRadius: BorderRadius.circular(8),
+        color: tokens.surface,
+        border: Border.all(color: tokens.border),
+        borderRadius: BorderRadius.circular(DsRadii.md),
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -648,25 +684,28 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
             data: item['question'] ?? '',
             styleSheet: MarkdownStyleSheet(
               p: TextStyle(
-                fontSize: 13,
+                fontSize: tokens.textSm,
                 fontWeight: FontWeight.w600,
-                color: colors['text'],
+                color: tokens.fg,
               ),
             ),
           ),
-          iconColor: colors['text'].withOpacity(0.5),
-          collapsedIconColor: colors['text'].withOpacity(0.5),
-          backgroundColor: isDark
-              ? Colors.white.withOpacity(0.02)
-              : Colors.grey.withOpacity(0.05),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          iconColor: tokens.fg50,
+          collapsedIconColor: tokens.fg50,
+          backgroundColor: isDark ? tokens.fg30 : tokens.muted20,
+          childrenPadding: const EdgeInsets.fromLTRB(
+            DsSpacing.md,
+            0,
+            DsSpacing.md,
+            DsSpacing.md,
+          ),
           children: [
             MarkdownBody(
               data: item['answer'] ?? '',
               styleSheet: MarkdownStyleSheet(
                 p: TextStyle(
-                  fontSize: 13,
-                  color: colors['text'].withOpacity(0.8),
+                  fontSize: tokens.textSm,
+                  color: tokens.fg70,
                   height: 1.4,
                 ),
               ),

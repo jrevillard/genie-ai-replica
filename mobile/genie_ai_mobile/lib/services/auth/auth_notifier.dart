@@ -12,9 +12,10 @@ import 'auth_state.dart';
 import 'connectivity_checker.dart';
 import 'network_error_classifier.dart';
 import 'token_storage.dart';
-import '../api_service.dart';
+import '../../providers/api_providers.dart';
 import '../i18n_service.dart';
 import '../keycloak/keycloak_service.dart';
+import 'package:openapi/api.dart';
 
 AuthorizationServiceConfiguration _serviceConfiguration(OidcEndpoints e) =>
     AuthorizationServiceConfiguration(
@@ -22,6 +23,18 @@ AuthorizationServiceConfiguration _serviceConfiguration(OidcEndpoints e) =>
       tokenEndpoint: e.tokenEndpoint,
       endSessionEndpoint: e.endSessionEndpoint,
     );
+
+String? _extractSub(String? idToken) {
+  if (idToken == null || idToken.isEmpty) return null;
+  try {
+    final parts = idToken.split('.');
+    if (parts.length != 3) return null;
+    final payload = utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+    return (jsonDecode(payload) as Map<String, dynamic>)['sub'] as String?;
+  } catch (_) {
+    return null;
+  }
+}
 
 enum _FailedOperation { none, authorize, refreshToken, validateTokens }
 
@@ -33,7 +46,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
   late final KeycloakService _keycloakService;
   late final AppAuth _appAuth;
   late final AuthLogger _authLogger;
-  late final ApiService _apiService;
+  late final AuthenticationApi _authenticationApi;
   late final ConnectivityChecker _connectivityChecker;
   final NetworkErrorClassifier _networkErrorClassifier = NetworkErrorClassifier();
 
@@ -49,7 +62,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
     _keycloakService = ref.watch(keycloakServiceProvider);
     _appAuth = ref.watch(appAuthProvider);
     _authLogger = ref.read(authLoggerProvider);
-    _apiService = ref.watch(apiServiceProvider);
+    _authenticationApi = ref.watch(authenticationApiProvider);
     _connectivityChecker = ref.watch(connectivityCheckerProvider);
     WidgetsBinding.instance.addObserver(this);
     ref.onDispose(() {
@@ -120,7 +133,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
 
     if (expiration != null && expiration.isAfter(DateTime.now())) {
       final idToken = await _tokenStorage.getIdToken();
-      final userId = extractIssSub(idToken);
+      final userId = _extractSub(idToken);
       state = AuthState.authenticated(userId: userId);
       _authLogger.logAuthEvent(
         message: 'Authenticated from stored tokens',
@@ -225,8 +238,9 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
         message: 'Authorization successful',
         source: 'AuthNotifier.authorize',
       );
-      final userId = extractIssSub(tokenResponse.idToken);
-      state = AuthState.authenticated(userId: userId);
+      state = AuthState.authenticated(
+        userId: _extractSub(tokenResponse.idToken),
+      );
     } on FlutterAppAuthUserCancelledException {
       if (!ref.mounted) return;
       _lastFailedOperation = _FailedOperation.none;
@@ -425,8 +439,9 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
         message: 'Token refresh successful',
         source: 'AuthNotifier.refreshToken',
       );
-      final userId = extractIssSub(tokenResponse.idToken) ?? state.userId;
-      state = AuthState.authenticated(userId: userId);
+      state = AuthState.authenticated(
+        userId: _extractSub(tokenResponse.idToken),
+      );
     } on FormatException catch (e) {
       _authLogger.logAuthFailure(
         errorCode: 'REFRESH_MALFORMED_RESPONSE',
@@ -499,7 +514,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
     if (!ref.mounted) return;
 
     await Future.wait<void>([
-      _apiService.post('auth/logout', {}).then((_) {}).catchError((_) {}),
+      _authenticationApi.apiAuthLogoutPost().then((_) {}).catchError((_) {}),
       _keycloakService.endSession(idTokenHint: idToken).catchError((_) => false),
     ]);
     if (!ref.mounted) return;
@@ -564,22 +579,5 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
       return;
     }
     await authorize();
-  }
-
-  static String? extractIssSub(String? idToken) {
-    if (idToken == null || idToken.isEmpty) return null;
-    try {
-      final parts = idToken.split('.');
-      if (parts.length < 2) return null;
-      final payload = base64Url.normalize(parts[1]);
-      final json =
-          jsonDecode(utf8.decode(base64Url.decode(payload))) as Map<String, dynamic>;
-      final iss = json['iss'] as String?;
-      final sub = json['sub'] as String?;
-      if (iss == null || sub == null) return null;
-      return '$iss#$sub';
-    } catch (_) {
-      return null;
-    }
   }
 }

@@ -5,24 +5,25 @@
       <!-- Left section with hamburger menu, logo, and title -->
       <div class="nav-left">
         <!-- Hamburger button for sidebar toggle -->
-        <button
+        <DsButton
+          variant="ghost"
           class="icon-btn hamburger-btn"
           :class="{ 'is-active': isSidebarOpen }"
           aria-label="Toggle sidebar"
           @click="toggleSidebar"
         >
           <span class="hamburger-inner"></span>
-        </button>
+        </DsButton>
 
         <!-- Logo container for GENIE.AI configured icon -->
-        <div class="logo-container">
+        <router-link to="/dashboard" class="logo-container">
           <!-- Display SVG icon from config (file or inline) -->
           <img v-if="config.app.icon.type === 'file'" :src="config.app.icon.value" class="govt-logo" alt="App Icon" />
           <!-- eslint-disable-next-line vue/no-v-html -->
           <span v-else class="govt-logo" v-html="config.app.icon.value"></span>
-        </div>
+        </router-link>
         <!-- Title from GENIE.AI config - Hide on mobile -->
-        <h1 class="brand-name hide-on-mobile">{{ config.app.title }}</h1>
+        <router-link to="/dashboard" class="brand-name hide-on-mobile">{{ config.app.title }}</router-link>
 
         <!-- Mobile controls - Only shown on mobile devices -->
         <div class="mobile-controls">
@@ -32,12 +33,13 @@
           </div>
 
           <!-- Analytics button for Mobile -->
-          <button
+          <DsButton
+            variant="ghost"
             class="icon-btn mobile-btn"
             aria-label="Analytics"
             :disabled="!isAdmin"
             :class="{ 'disabled-btn': !isAdmin }"
-            @click="$emit('openAnalytics')"
+            @click="$router.push('/analytics')"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -54,15 +56,16 @@
               <path d="M22 12A10 10 0 0 0 12 2v10z" />
             </svg>
             <span class="tooltip">{{ $t('nav.analytics') }}</span>
-          </button>
+          </DsButton>
 
           <!-- Admin button for Mobile -->
-          <button
+          <DsButton
+            variant="ghost"
             class="icon-btn admin-btn mobile-btn"
             aria-label="Administration"
             :disabled="!isAdmin"
             :class="{ 'disabled-btn': !isAdmin }"
-            @click="$emit('openAdmin')"
+            @click="$router.push('/admin')"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -80,9 +83,14 @@
               <line x1="9" y1="21" x2="9" y2="9" />
             </svg>
             <span class="tooltip">{{ $t('nav.administration') }}</span>
-          </button>
+          </DsButton>
 
-          <button class="icon-btn mobile-btn" aria-label="Settings" @click="$emit('openSettings')">
+          <DsButton
+            variant="ghost"
+            class="icon-btn mobile-btn"
+            aria-label="Settings"
+            @click="$router.push('/settings')"
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="24"
@@ -100,9 +108,14 @@
               />
             </svg>
             <span class="tooltip">{{ $t('nav.settings') }}</span>
-          </button>
+          </DsButton>
 
-          <button class="icon-btn user-btn mobile-btn" aria-label="User profile" @click="$emit('openProfile')">
+          <DsButton
+            variant="ghost"
+            class="icon-btn user-btn mobile-btn"
+            aria-label="User profile"
+            @click="$router.push('/profile')"
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="24"
@@ -118,10 +131,10 @@
               <circle cx="12" cy="7" r="4" />
             </svg>
             <span class="tooltip">{{ $t('nav.userProfile') }}</span>
-          </button>
+          </DsButton>
 
           <!-- ADDED: Logout button for mobile -->
-          <button class="icon-btn logout-btn mobile-btn" aria-label="Log out" @click="handleLogout">
+          <DsButton variant="ghost" class="icon-btn logout-btn mobile-btn" aria-label="Log out" @click="handleLogout">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="24"
@@ -138,7 +151,7 @@
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
             <span class="tooltip">{{ $t('nav.logout') }}</span>
-          </button>
+          </DsButton>
         </div>
       </div>
 
@@ -152,12 +165,13 @@
         </div>
 
         <!-- Analytics button for Desktop -->
-        <button
+        <DsButton
+          variant="ghost"
           class="icon-btn"
           aria-label="Analytics"
           :disabled="!isAdmin"
           :class="{ 'disabled-btn': !isAdmin }"
-          @click="$emit('openAnalytics')"
+          @click="$router.push('/analytics')"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -174,15 +188,16 @@
             <path d="M22 12A10 10 0 0 0 12 2v10z" />
           </svg>
           <span class="tooltip">{{ $t('nav.analytics') }}</span>
-        </button>
+        </DsButton>
 
         <!-- Admin button for Desktop -->
-        <button
+        <DsButton
+          variant="ghost"
           class="icon-btn admin-btn"
           aria-label="Administration"
           :disabled="!isAdmin"
           :class="{ 'disabled-btn': !isAdmin }"
-          @click="$emit('openAdmin')"
+          @click="$router.push('/admin')"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -200,9 +215,9 @@
             <line x1="9" y1="21" x2="9" y2="9" />
           </svg>
           <span class="tooltip">{{ $t('nav.administration') }}</span>
-        </button>
+        </DsButton>
 
-        <button class="icon-btn" aria-label="Settings" @click="$emit('openSettings')">
+        <DsButton variant="ghost" class="icon-btn" aria-label="Settings" @click="$router.push('/settings')">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="24"
@@ -220,9 +235,9 @@
             />
           </svg>
           <span class="tooltip">{{ $t('nav.settings') }}</span>
-        </button>
+        </DsButton>
 
-        <button class="icon-btn user-btn" aria-label="User profile" @click="$emit('openProfile')">
+        <DsButton variant="ghost" class="icon-btn user-btn" aria-label="User profile" @click="$router.push('/profile')">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="24"
@@ -238,10 +253,10 @@
             <circle cx="12" cy="7" r="4" />
           </svg>
           <span class="tooltip">{{ $t('nav.userProfile') }}</span>
-        </button>
+        </DsButton>
 
         <!-- ADDED: Logout button -->
-        <button class="icon-btn logout-btn" aria-label="Log out" @click="handleLogout">
+        <DsButton variant="ghost" class="icon-btn logout-btn" aria-label="Log out" @click="handleLogout">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="24"
@@ -258,7 +273,7 @@
             <line x1="21" y1="12" x2="9" y2="12" />
           </svg>
           <span class="tooltip">{{ $t('nav.logout') }}</span>
-        </button>
+        </DsButton>
       </div>
     </header>
   </div>
@@ -266,11 +281,13 @@
 
 <script>
 import LanguageSelector from '@/components/LanguageSelector.vue';
+import DsButton from './ds/Button.vue';
 
 export default {
   name: 'NavBarComponent',
   components: {
-    LanguageSelector
+    LanguageSelector,
+    DsButton
   },
   props: {
     isSidebarOpen: {
@@ -286,12 +303,12 @@ export default {
       type: Object,
       required: false,
       default: () => ({
-        app: { title: 'Huduma AI', icon: { type: 'file', value: '/config/huduma-icon.svg' } },
-        theme: { navbar: { textColor: '#ffffff' } }
+        app: { title: 'GENIE.AI', icon: { type: 'file', value: '/config/logo-genie-ai.jpeg' } },
+        theme: { navbar: {} }
       })
     }
   },
-  emits: ['toggleSidebar', 'openAnalytics', 'openProfile', 'openSettings', 'logout', 'openAdmin'],
+  emits: ['toggleSidebar', 'logout'],
   data() {
     return {};
   },
@@ -318,8 +335,7 @@ export default {
       try {
         this.$emit('logout');
         await this.$store.dispatch('logout');
-      } catch (error) {
-        console.error('Logout error:', error.message);
+      } catch {
         this.$emit('logout');
       }
     },
@@ -336,15 +352,15 @@ export default {
   position: relative;
 }
 
-/* Navbar styling with GENIE.AI configured gradient and text color */
+/* Navbar styling — flat solid accent background (tech-utility direction) */
 .nav-bar {
   display: flex;
   align-items: center;
-  background: linear-gradient(135deg, var(--navbar-gradient-start, #4e97d1), var(--navbar-gradient-end, #2c5f8a));
-  color: var(--navbar-text-color, #fff);
+  background: var(--navbar-bg, var(--accent));
+  color: var(--navbar-fg, var(--accent-fg));
   height: 60px;
-  padding: 0 16px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
   position: relative;
   z-index: 20;
 }
@@ -371,14 +387,16 @@ export default {
 
 /* Brand name styling */
 .brand-name {
-  margin: 0 0 0 12px;
-  font-size: 1.2rem;
-  font-weight: 600;
+  margin: 0 0 0 var(--space-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: 0.5px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  color: var(--accent-fg);
+  text-decoration: none;
 }
 
 /* Logo styling and animations */
@@ -388,17 +406,16 @@ export default {
   justify-content: center;
   width: 40px;
   height: 40px;
-  margin-left: 8px;
-  background: rgba(255, 255, 255, 0.1);
+  margin-left: var(--space-sm);
+  background-color: var(--accent-muted);
   border-radius: 50%;
 }
 
-/* Adjusted for GENIE.AI configured SVG icon */
 .govt-logo {
   height: 40px;
   width: 40px;
-  color: white;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  border-radius: var(--radius-md);
+  object-fit: cover;
   transition: transform 0.3s ease;
 }
 
@@ -495,42 +512,34 @@ export default {
   transform-origin: center;
 }
 
-/* Button styling */
-.icon-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  cursor: pointer;
+/* Button styling - Layout overrides for icon buttons on accent navbar */
+.nav-bar .icon-btn {
   width: 40px;
   height: 40px;
-  border-radius: 50%;
-  display: flex;
+  margin-left: var(--space-sm);
+  position: relative;
+  padding: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-left: 10px;
-  position: relative;
-  transition: all 0.2s ease;
-  color: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.icon-btn:hover {
-  background-color: rgba(255, 255, 255, 0.25);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
-}
-
-.icon-btn:active {
-  transform: translateY(0);
+  color: var(--accent-fg);
+  --ds-btn-ghost-color: var(--accent-fg);
+  --ds-btn-ghost-hover-color: var(--fg);
+  --ds-btn-ghost-hover-bg: color-mix(in oklch, var(--fg) 15%, transparent);
 }
 
 .icon-btn svg {
   width: 22px;
   height: 22px;
-  transition: transform 0.2s ease;
+  color: var(--ds-btn-ghost-color, var(--accent-fg));
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease;
 }
 
 .icon-btn:hover svg {
   transform: scale(1.1);
+  color: var(--ds-btn-ghost-hover-color, var(--fg));
 }
 
 /* Disabled button styling */
@@ -538,34 +547,11 @@ export default {
 .disabled-btn {
   opacity: 0.5;
   cursor: not-allowed;
-  background: rgba(255, 255, 255, 0.05);
-  box-shadow: none;
-}
-
-.icon-btn:disabled:hover,
-.disabled-btn:hover {
-  transform: none;
-  background: rgba(255, 255, 255, 0.05);
-  box-shadow: none;
-}
-
-.icon-btn:disabled svg,
-.disabled-btn svg {
-  opacity: 0.6;
 }
 
 .icon-btn:disabled:hover svg,
 .disabled-btn:hover svg {
   transform: none;
-}
-
-/* Logout button styling */
-.logout-btn {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.logout-btn:hover {
-  background-color: rgba(239, 68, 68, 0.25); /* Subtle red on hover */
 }
 
 /* Tooltip styling */
@@ -574,11 +560,11 @@ export default {
   bottom: -34px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 5px 10px;
-  border-radius: 4px;
-  font-size: 12px;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-fg);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   white-space: nowrap;
   opacity: 0;
   visibility: hidden;
@@ -587,7 +573,6 @@ export default {
     visibility 0.2s;
   pointer-events: none;
   z-index: 40;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 .tooltip::before {
@@ -598,7 +583,7 @@ export default {
   transform: translateX(-50%) rotate(45deg);
   width: 8px;
   height: 8px;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--tooltip-bg);
 }
 
 .icon-btn:hover .tooltip {
@@ -606,32 +591,24 @@ export default {
   visibility: visible;
 }
 
-/* Hamburger menu styling */
+/* Hamburger menu styling - Layout only, colors handled by DsButton ghost variant */
 .hamburger-btn {
   position: relative;
   width: 40px;
   height: 40px;
   padding: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.hamburger-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
 }
 
 .hamburger-inner {
   position: relative;
   width: 18px;
   height: 2px;
-  background-color: white;
-  transition: background-color 0.3s ease;
+  background-color: var(--accent-fg);
+  transition: background-color 0.2s ease;
 }
 
 .hamburger-inner::before,
@@ -641,8 +618,10 @@ export default {
   left: 0;
   width: 18px;
   height: 2px;
-  background-color: white;
-  transition: transform 0.3s ease;
+  background-color: var(--accent-fg);
+  transition:
+    transform 0.3s ease,
+    background-color 0.2s ease;
 }
 
 .hamburger-inner::before {
@@ -651,6 +630,12 @@ export default {
 
 .hamburger-inner::after {
   bottom: -5px;
+}
+
+.hamburger-btn:hover .hamburger-inner,
+.hamburger-btn:hover .hamburger-inner::before,
+.hamburger-btn:hover .hamburger-inner::after {
+  background-color: var(--fg);
 }
 
 /* Centered X state */
@@ -672,50 +657,20 @@ export default {
 /* Language dropdown styling */
 .language-select-container {
   position: relative;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
-  width: 120px;
-  margin-right: 10px;
-  transition: background-color 0.2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  width: auto;
+  margin-right: var(--space-sm);
+  --ds-select-bg: color-mix(in oklch, var(--accent) 20%, transparent);
+  --ds-select-color: var(--accent-fg);
+  --ds-select-border-color: color-mix(in oklch, var(--accent-fg) 50%, transparent);
 }
 
-.language-select-container:hover {
-  background: rgba(255, 255, 255, 0.25);
+.language-select-container :deep(.ds-select:focus) {
+  border-color: color-mix(in oklch, var(--accent-fg) 70%, transparent);
 }
 
-.language-select-container :deep(select) {
-  width: 100%;
-  padding: 8px 10px;
-  padding-right: 28px;
-  border: none;
-  background: transparent;
-  color: white;
-  font-size: 0.9rem;
-  font-weight: 500;
-  appearance: none;
-  cursor: pointer;
-  height: 36px;
-}
-
-.language-select-container :deep(select option) {
-  background: #4e97d1;
-  color: white;
-  padding: 8px;
-  font-weight: 500;
-}
-
-.select-arrow {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 0;
-  height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 5px solid white;
-  pointer-events: none;
+.language-select-container :deep(option) {
+  background: var(--surface);
+  color: var(--fg);
 }
 
 /* Mobile controls and responsive styles */
@@ -727,14 +682,14 @@ export default {
 
 .mobile-language-select {
   width: 60px;
-  margin-left: 8px;
+  margin-left: var(--space-sm);
   margin-right: 0;
 }
 
 .mobile-btn {
   width: 36px;
   height: 36px;
-  margin-left: 8px;
+  margin-left: var(--space-sm);
 }
 
 .mobile-btn svg {
@@ -755,18 +710,18 @@ export default {
 /* Responsive adjustments */
 @media (max-width: 1024px) {
   .brand-name {
-    font-size: 1.1rem;
+    font-size: var(--text-lg);
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .brand-name {
-    font-size: 1rem;
+    font-size: var(--text-md);
     max-width: 300px;
   }
 
   .icon-btn {
-    margin-left: 8px;
+    margin-left: var(--space-sm);
   }
 }
 
@@ -790,32 +745,22 @@ export default {
   }
 
   .nav-bar {
-    padding: 0 12px;
+    padding: 0 var(--space-md);
   }
 
-  .mobile-language-select :deep(select) {
-    width: 100%;
-    padding: 8px 10px;
-    padding-right: 28px;
-    border: none;
-    background: transparent;
-    color: white;
-    font-size: 0.9rem;
-    font-weight: 500;
-    appearance: none;
-    cursor: pointer;
-    height: 36px;
+  .mobile-language-select {
+    --ds-select-bg: transparent;
+    --ds-select-color: var(--accent-fg);
+    --ds-select-border-color: transparent;
   }
 
-  .mobile-language-select :deep(select option) {
-    background: #4e97d1;
-    color: white;
-    padding: 8px;
-    font-weight: 500;
+  .mobile-language-select :deep(option) {
+    background: var(--accent);
+    color: var(--accent-fg);
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 480px) {
   .govt-logo {
     height: 32px;
     width: 32px;
@@ -853,55 +798,14 @@ export default {
 
   /* Space mobile controls more compactly */
   .mobile-btn {
-    margin-left: 6px;
+    margin-left: var(--space-sm);
     width: 32px;
     height: 32px;
   }
 
   .mobile-language-select {
     width: 50px;
-    margin-left: 6px;
+    margin-left: var(--space-sm);
   }
-}
-
-/* Theme Styles - Dark and System Mode */
-/* Dark mode - applied to both explicit dark theme and system dark mode */
-.nav-bar[data-theme='dark'],
-html[data-theme='dark'] .nav-bar,
-.nav-bar[data-theme='system'].dark-mode,
-html[data-theme='system'].dark-mode .nav-bar {
-  background: linear-gradient(135deg, var(--navbar-gradient-start, #1e3a58), var(--navbar-gradient-end, #0f1c2b));
-}
-
-/* Buttons and Controls - Dark Mode */
-[data-theme='dark'] .icon-btn,
-[data-theme='dark'] .hamburger-btn,
-[data-theme='dark'] .language-select-container,
-html[data-theme='dark'] .icon-btn,
-html[data-theme='dark'] .hamburger-btn,
-html[data-theme='dark'] .language-select-container,
-[data-theme='system'].dark-mode .icon-btn,
-[data-theme='system'].dark-mode .hamburger-btn,
-[data-theme='system'].dark-mode .language-select-container,
-html[data-theme='system'].dark-mode .icon-btn,
-html[data-theme='system'].dark-mode .hamburger-btn,
-html[data-theme='system'].dark-mode .language-select-container {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-/* Button Hover States - Dark Mode */
-[data-theme='dark'] .icon-btn:hover,
-[data-theme='dark'] .hamburger-btn:hover,
-[data-theme='dark'] .language-select-container:hover,
-html[data-theme='dark'] .icon-btn:hover,
-html[data-theme='dark'] .hamburger-btn:hover,
-html[data-theme='dark'] .language-select-container:hover,
-[data-theme='system'].dark-mode .icon-btn:hover,
-[data-theme='system'].dark-mode .hamburger-btn:hover,
-[data-theme='system'].dark-mode .language-select-container:hover,
-html[data-theme='system'].dark-mode .icon-btn:hover,
-html[data-theme='system'].dark-mode .hamburger-btn:hover,
-html[data-theme='system'].dark-mode .language-select-container:hover {
-  background: rgba(255, 255, 255, 0.15);
 }
 </style>

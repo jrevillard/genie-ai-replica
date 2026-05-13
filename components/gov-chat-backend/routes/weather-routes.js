@@ -9,7 +9,7 @@ module.exports = (weatherService) => {
 
   /**
    * @swagger
-   * /weather:
+   * /api/weather:
    *   post:
    *     summary: Get weather data for a location
    *     description: Fetches current weather and forecast for the specified location. Defaults to server location if no coordinates provided.

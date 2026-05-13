@@ -8,30 +8,36 @@ import 'package:genie_ai_mobile/services/genie_ai_config.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
+// Design System Imports
+import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
+import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
+import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
+import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
+
 class OidcLoginScreen extends ConsumerWidget {
   const OidcLoginScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
-    final colors = ThemeManager().getColors();
+    final tokens = ThemeManager().tokens;
 
     return Semantics(
       label: 'Login screen',
       child: Scaffold(
-        backgroundColor: colors['background'],
+        backgroundColor: tokens.bg,
         body: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(DsSpacing.md),
             child: Container(
               constraints: const BoxConstraints(maxWidth: 400),
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.all(DsSpacing.lg),
               decoration: BoxDecoration(
-                color: colors['surface'],
-                borderRadius: BorderRadius.circular(16),
+                color: tokens.surface,
+                borderRadius: BorderRadius.circular(DsRadii.xl),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
+                    color: tokens.muted20,
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -40,9 +46,9 @@ class OidcLoginScreen extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildBranding(colors),
-                  const SizedBox(height: 24),
-                  _buildContent(context, ref, authState, colors),
+                  _buildBranding(tokens),
+                  const SizedBox(height: DsSpacing.lg),
+                  _buildContent(context, ref, authState, tokens),
                 ],
               ),
             ),
@@ -52,7 +58,7 @@ class OidcLoginScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildBranding(Map<String, dynamic> colors) {
+  Widget _buildBranding(AppTokens tokens) {
     return Column(
       children: [
         SizedBox(
@@ -68,17 +74,17 @@ class OidcLoginScreen extends ConsumerWidget {
                   height: 80,
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) {
-                    return const Icon(Icons.error, size: 40);
+                    return Icon(Icons.error, size: 40, color: tokens.danger);
                   },
                 ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: DsSpacing.lg),
         Text(
           GenieAiConfig.title,
           style: TextStyle(
-            fontSize: 28,
+            fontSize: ThemeManager().tokens.text2xl,
             fontWeight: FontWeight.bold,
-            color: colors['text'],
+            color: tokens.fg,
           ),
         ),
       ],
@@ -89,7 +95,7 @@ class OidcLoginScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     AuthState authState,
-    Map<String, dynamic> colors,
+    AppTokens tokens,
   ) {
     switch (authState.status) {
       case AuthStatus.authenticated:
@@ -97,7 +103,7 @@ class OidcLoginScreen extends ConsumerWidget {
         // this branch exists for switch exhaustiveness.
         return const SizedBox.shrink();
       case AuthStatus.unauthenticated:
-        return _buildSignInButton(context, ref, colors);
+        return _buildSignInButton(context, ref);
       case AuthStatus.error:
         return const _AuthErrorWidget();
     }
@@ -106,28 +112,15 @@ class OidcLoginScreen extends ConsumerWidget {
   Widget _buildSignInButton(
     BuildContext context,
     WidgetRef ref,
-    Map<String, dynamic> colors,
   ) {
     return Semantics(
       label: 'Sign in with your institution account',
       button: true,
-      child: ElevatedButton(
+      child: DsButton(
         key: const Key('login_sign_in_button'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: colors['primary'],
-          minimumSize: const Size(double.infinity, 48),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
+        label: 'Sign in',
+        variant: DsButtonVariant.primary,
         onPressed: () => ref.read(authProvider.notifier).authorize(),
-        child: const Text(
-          'Sign in',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
       ),
     );
   }
@@ -141,12 +134,12 @@ class _AuthErrorWidget extends ConsumerWidget {
     final authState = ref.watch(authProvider);
     final message = authState.errorMessage ?? tr('auth.unknownError');
     final retryable = authState.retryable;
-    final theme = Theme.of(context);
+    final tokens = ThemeManager().tokens;
 
     return Semantics(
       label: '${tr('auth.error')}: $message',
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
+        padding: const EdgeInsets.symmetric(horizontal: DsSpacing.xl),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -154,24 +147,29 @@ class _AuthErrorWidget extends ConsumerWidget {
               key: const Key('login_error_icon'),
               retryable ? Icons.wifi_off : Icons.error_outline,
               size: 64,
-              color: theme.colorScheme.error,
+              color: tokens.danger,
               semanticLabel: retryable
                   ? tr('auth.noInternetConnection')
                   : tr('auth.error'),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: DsSpacing.lg),
             Text(
               key: const Key('login_error_message'),
               message,
-              style: theme.textTheme.bodyLarge,
+              style: TextStyle(
+                fontSize: ThemeManager().tokens.textMd,
+                color: tokens.fg,
+              ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: DsSpacing.xl),
             Semantics(
               label: retryable ? tr('auth.retry') : tr('auth.signIn'),
               button: true,
-              child: ElevatedButton(
+              child: DsButton(
                 key: const Key('login_retry_button'),
+                label: retryable ? tr('auth.retry') : tr('auth.signIn'),
+                variant: DsButtonVariant.primary,
                 onPressed: () {
                   if (retryable) {
                     ref.read(authProvider.notifier).retryAuthorize();
@@ -179,7 +177,6 @@ class _AuthErrorWidget extends ConsumerWidget {
                     ref.read(authProvider.notifier).authorize();
                   }
                 },
-                child: Text(retryable ? tr('auth.retry') : tr('auth.signIn')),
               ),
             ),
           ],

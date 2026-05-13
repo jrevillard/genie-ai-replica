@@ -1,1335 +1,398 @@
 <template>
-  <div class="admin-backdrop" @click="$emit('close')"></div>
-
-  <div class="admin-dashboard">
-    <button
-      class="close-dashboard-btn"
-      :aria-label="translate('admin.close', 'Close dashboard')"
-      @click="$emit('close')"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <line x1="18" y1="6" x2="6" y2="18" />
-        <line x1="6" y1="6" x2="18" y2="18" />
-      </svg>
-    </button>
-
-    <div class="dashboard">
-      <div class="sidebar">
-        <div class="logo">
-          <div class="logo-icon">H</div>
-          <span>{{ translate('admin.huduma', 'Huduma AI') }}</span>
-        </div>
-
-        <div class="nav-section">
-          <div class="nav-header">
-            {{ translate('admin.dashboard', 'Dashboard') }}
+  <div class="admin-page">
+    <div class="admin-dashboard">
+      <div class="dashboard">
+        <div class="sidebar">
+          <div class="nav-section">
+            <div class="nav-header">
+              {{ translate('admin.dashboard', 'Dashboard') }}
+            </div>
+            <ul class="nav-items">
+              <li class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'overview' }]"
+                  @click.prevent="setActiveTab('overview')"
+                >
+                  <i>📊</i>
+                  <span>{{ translate('admin.overview', 'Overview') }}</span>
+                </a>
+              </li>
+            </ul>
           </div>
-          <ul class="nav-items">
-            <li class="nav-item">
-              <a href="#" class="nav-link active" @click.prevent="setActiveTab('overview')">
-                <i>📊</i>
-                <span>{{ translate('admin.overview', 'Overview') }}</span>
-              </a>
-            </li>
-          </ul>
-        </div>
 
-        <div class="nav-section">
-          <div class="nav-header">
-            {{ translate('admin.contentManagement', 'CONTENT MANAGEMENT') }}
+          <div class="nav-section">
+            <div class="nav-header">
+              {{ translate('admin.contentManagement', 'CONTENT MANAGEMENT') }}
+            </div>
+            <ul class="nav-items">
+              <li class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'hierarchy' }]"
+                  @click.prevent="setActiveTab('hierarchy')"
+                >
+                  <i>🔀</i>
+                  <span>{{ translate('admin.knowledgeHierarchy', 'Knowledge Hierarchy') }}</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'documents' }]"
+                  @click.prevent="setActiveTab('documents')"
+                >
+                  <i>📂</i>
+                  <span>{{ translate('admin.documentManagement', 'Document Management') }}</span>
+                </a>
+              </li>
+            </ul>
           </div>
-          <ul class="nav-items">
-            <li class="nav-item">
-              <a href="#" class="nav-link" @click.prevent="setActiveTab('hierarchy')">
-                <i>🔀</i>
-                <span>{{ translate('admin.knowledgeHierarchy', 'Knowledge Hierarchy') }}</span>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="#" class="nav-link" @click.prevent="setActiveTab('documents')">
-                <i>📂</i>
-                <span>{{ translate('admin.documentManagement', 'Document Management') }}</span>
-              </a>
-            </li>
-          </ul>
-        </div>
 
-        <div class="nav-section">
-          <div class="nav-header">
-            {{ translate('admin.system', 'System') }}
+          <div class="nav-section">
+            <div class="nav-header">
+              {{ translate('admin.system', 'System') }}
+            </div>
+            <ul class="nav-items">
+              <li class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'database' }]"
+                  @click.prevent="setActiveTab('database')"
+                >
+                  <i>💾</i>
+                  <span>{{ translate('admin.database', 'Database') }}</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'logs' }]"
+                  @click.prevent="setActiveTab('logs')"
+                >
+                  <i>📋</i>
+                  <span>{{ translate('admin.logs', 'Logs') }}</span>
+                </a>
+              </li>
+            </ul>
           </div>
-          <ul class="nav-items">
-            <li class="nav-item">
-              <a href="#" class="nav-link" @click.prevent="setActiveTab('database')">
-                <i>💾</i>
-                <span>{{ translate('admin.database', 'Database') }}</span>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="#" class="nav-link" @click.prevent="setActiveTab('logs')">
-                <i>📋</i>
-                <span>{{ translate('admin.logs', 'Logs') }}</span>
-              </a>
-            </li>
-          </ul>
-        </div>
 
-        <div class="nav-section">
-          <div class="nav-header">
-            {{ translate('admin.settings', 'Settings') }}
-          </div>
-          <ul class="nav-items">
-            <li class="nav-item">
-              <a href="#" class="nav-link" @click.prevent="setActiveTab('users')">
-                <i>👥</i>
-                <span>{{ translate('admin.userManagement', 'User Management') }}</span>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="#" class="nav-link" @click.prevent="setActiveTab('security')">
-                <i>🔒</i>
-                <span>{{ translate('admin.tabs.security', 'Security') }}</span>
-              </a>
-            </li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="main">
-        <div class="header">
-          <h1 class="page-title">
-            {{ translate('admin.systemAdministration', 'System Administration') }}
-          </h1>
-        </div>
-
-        <div class="quick-stats">
-          <div class="stat-card">
-            <div class="stat-title">
-              {{ translate('admin.systemUptime', 'System Uptime') }}
+          <div class="nav-section">
+            <div class="nav-header">
+              {{ translate('admin.settings', 'Settings') }}
             </div>
-            <div class="stat-value">{{ metrics.systemUptime }}%</div>
-            <div class="stat-trend trend-up">
-              <span>↑ 0.2%</span>
-              {{ translate('admin.fromLastMonth', 'from last month') }}
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-title">
-              {{ translate('admin.avgResponseTime', 'Average Response Time') }}
-            </div>
-            <div class="stat-value">{{ metrics.avgResponseTime }}ms</div>
-            <div class="stat-trend trend-down">
-              <span>↓ 12%</span>
-              {{ translate('admin.fromLastMonth', 'from last month') }}
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-title">
-              {{ translate('admin.errorRate', 'Error Rate') }}
-            </div>
-            <div class="stat-value">{{ metrics.errorRate }}%</div>
-            <div class="stat-trend trend-up">
-              <span>↑ 0.01%</span>
-              {{ translate('admin.fromLastMonth', 'from last month') }}
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-title">
-              {{ translate('admin.monthlyActiveUsers', 'Monthly Active Users (MAU)') }}
-            </div>
-            <div class="stat-value">
-              {{ (metrics.monthlyActiveUsers ?? 0).toLocaleString() }}
-            </div>
-            <div class="stat-trend trend-up">
-              <span>↑ 15%</span>
-              {{ translate('admin.fromLastMonth', 'from last month') }}
-            </div>
+            <ul class="nav-items">
+              <li class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'users' }]"
+                  @click.prevent="setActiveTab('users')"
+                >
+                  <i>👥</i>
+                  <span>{{ translate('admin.userManagement', 'User Management') }}</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'security' }]"
+                  @click.prevent="setActiveTab('security')"
+                >
+                  <i>🔒</i>
+                  <span>{{ translate('admin.tabs.security', 'Security') }}</span>
+                </a>
+              </li>
+            </ul>
           </div>
         </div>
 
-        <div class="tabs">
-          <div class="tab-header">
-            <button
-              v-for="tab in tabs"
-              :key="tab.id"
-              class="tab-btn"
-              :class="{ active: activeTab === tab.id }"
-              @click="setActiveTab(tab.id)"
-            >
-              {{ translate(`admin.tabs.${tab.id}`, tab.label) }}
-            </button>
+        <div class="main">
+          <div class="header">
+            <h1 class="page-title">
+              {{ translate('admin.systemAdministration', 'System Administration') }}
+            </h1>
           </div>
 
-          <div class="tab-content">
-            <div class="dashboard-grid">
-              <div v-if="activeTab === 'overview'" class="dashboard-card">
-                <div class="card-header">
-                  <div class="card-title">
-                    {{ translate('admin.systemHealthStatus', 'System Health Status') }}
-                  </div>
-                  <div class="card-actions">
-                    <button class="btn btn-outline" @click="runDiagnostics">
-                      {{ translate('admin.runDiagnostics', 'Run Diagnostics') }}
-                    </button>
-                  </div>
-                </div>
-
-                <div class="health-status">
-                  <div
-                    v-for="service in healthServices"
-                    :key="service.name"
-                    :class="['health-item', `status-${service.status}`]"
-                  >
-                    <div :class="['status-badge', `badge-${service.status}`]"></div>
-                    <span>{{ translate(`admin.services.${service.id}`, service.name) }}</span>
-                  </div>
-                </div>
+          <div class="quick-stats">
+            <div class="stat-card">
+              <div class="stat-title">
+                {{ translate('admin.systemUptime', 'System Uptime') }}
               </div>
-
-              <div v-if="activeTab === 'overview'" class="dashboard-card">
-                <div class="card-header">
-                  <div class="card-title">
-                    {{ translate('admin.resourceUsage', 'Resource Usage') }}
-                  </div>
-                </div>
-
-                <div class="resource-usage">
-                  <div v-for="resource in resourceUsage" :key="resource.id" class="usage-item">
-                    <div class="usage-header">
-                      <div class="usage-label">{{ resource.label }}</div>
-                      <div class="usage-value">{{ resource.value }}%</div>
-                    </div>
-                    <div class="usage-bar">
-                      <div
-                        :class="['usage-fill', `usage-${getUsageLevel(resource.value)}`]"
-                        :style="{ width: `${resource.value}%` }"
-                      ></div>
-                    </div>
-                  </div>
-                </div>
+              <div class="stat-value">{{ metrics.systemUptime }}%</div>
+              <div class="stat-trend trend-up">
+                <span>↑ 0.2%</span>
+                {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">
+                {{ translate('admin.avgResponseTime', 'Average Response Time') }}
+              </div>
+              <div class="stat-value">{{ metrics.avgResponseTime }}ms</div>
+              <div class="stat-trend trend-down">
+                <span>↓ 12%</span>
+                {{ translate('admin.fromLastMonth', 'from last month') }}
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">
+                {{ translate('admin.errorRate', 'Error Rate') }}
+              </div>
+              <div class="stat-value">{{ metrics.errorRate }}%</div>
+              <div class="stat-trend trend-up">
+                <span>↑ 0.01%</span>
+                {{ translate('admin.fromLastMonth', 'from last month') }}
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">
+                {{ translate('admin.monthlyActiveUsers', 'Monthly Active Users (MAU)') }}
+              </div>
+              <div class="stat-value">
+                {{ (metrics.monthlyActiveUsers ?? 0).toLocaleString() }}
+              </div>
+              <div class="stat-trend trend-up">
+                <span>↑ 15%</span>
+                {{ translate('admin.fromLastMonth', 'from last month') }}
+              </div>
+            </div>
+          </div>
 
-              <div v-if="activeTab === 'hierarchy'" class="dashboard-card" style="grid-column: span 2">
-                <div class="card-header">
-                  <div class="card-title">
-                    {{
-                      translate(
-                        'admin.hierarchy.title',
-                        'Knowledge Hierarchy Management (note: always English - add translations)'
-                      )
-                    }}
+          <div class="tabs-card">
+            <DsTabs :tabs="adminTabs" :model-value="activeTab" @update:model-value="setActiveTab">
+              <div class="dashboard-grid">
+                <div v-if="activeTab === 'overview'" class="dashboard-card">
+                  <div class="card-header">
+                    <div class="card-title">
+                      {{ translate('admin.systemHealthStatus', 'System Health Status') }}
+                    </div>
+                    <div class="card-actions">
+                      <DsButton variant="secondary" @click="runDiagnostics">
+                        {{ translate('admin.runDiagnostics', 'Run Diagnostics') }}
+                      </DsButton>
+                    </div>
                   </div>
-                  <div class="card-actions">
-                    <button class="btn btn-primary" @click="showAddCategoryForm">
-                      <span style="display: flex; align-items: center">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          style="margin-right: 4px"
-                        >
-                          <path d="M5 12h14" />
-                          <path d="M12 5v14" />
-                        </svg>
-                        {{ translate('admin.hierarchy.addCategory', 'Add New Category') }}
-                      </span>
-                    </button>
+
+                  <div class="health-status">
+                    <div
+                      v-for="service in healthServices"
+                      :key="service.name"
+                      :class="['health-item', `status-${service.status}`]"
+                    >
+                      <div :class="['status-badge', `badge-${service.status}`]"></div>
+                      <span>{{ translate(`admin.services.${service.id}`, service.name) }}</span>
+                    </div>
                   </div>
                 </div>
 
-                <div class="hierarchy-container">
-                  <div class="hierarchy-tree-panel">
-                    <div v-if="isHierarchyLoading" class="loading-state">
-                      <div class="loading-spinner-small"></div>
-                      <span>{{ translate('admin.hierarchy.loading', 'Loading Hierarchy...') }}</span>
+                <div v-if="activeTab === 'overview'" class="dashboard-card">
+                  <div class="card-header">
+                    <div class="card-title">
+                      {{ translate('admin.resourceUsage', 'Resource Usage') }}
                     </div>
-                    <ul v-else class="hierarchy-list">
-                      <li v-for="category in knowledgeHierarchy" :key="category.id" class="hierarchy-category">
-                        <div class="hierarchy-item">
-                          <span class="item-name">{{ category.nameEN }}</span>
-                          <div class="item-actions">
-                            <button
-                              class="action-btn"
-                              :aria-label="translate('admin.hierarchy.addService', 'Add Service')"
-                              @click="showAddServiceForm(category)"
+                  </div>
+
+                  <div class="resource-usage">
+                    <div v-for="resource in resourceUsage" :key="resource.id" class="usage-item">
+                      <div class="usage-header">
+                        <div class="usage-label">{{ resource.label }}</div>
+                        <div class="usage-value">{{ resource.value }}%</div>
+                      </div>
+                      <div class="usage-bar">
+                        <div
+                          :class="['usage-fill', `usage-${getUsageLevel(resource.value)}`]"
+                          :style="{ width: `${resource.value}%` }"
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="activeTab === 'hierarchy'" class="dashboard-card" style="grid-column: span 2">
+                  <div class="card-header">
+                    <div class="card-title">
+                      {{
+                        translate(
+                          'admin.hierarchy.title',
+                          'Knowledge Hierarchy Management (note: always English - add translations)'
+                        )
+                      }}
+                    </div>
+                    <div class="card-actions">
+                      <DsButton variant="primary" @click="showAddCategoryForm">
+                        <span style="display: flex; align-items: center">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            style="margin-right: 4px"
+                          >
+                            <path d="M5 12h14" />
+                            <path d="M12 5v14" />
+                          </svg>
+                          {{ translate('admin.hierarchy.addCategory', 'Add New Category') }}
+                        </span>
+                      </DsButton>
+                    </div>
+                  </div>
+
+                  <div class="hierarchy-container">
+                    <div class="hierarchy-tree-panel">
+                      <DsStateDisplay v-if="isHierarchyLoading" type="loading">
+                        {{ translate('admin.hierarchy.loading', 'Loading Hierarchy...') }}
+                      </DsStateDisplay>
+                      <ul v-else class="hierarchy-list">
+                        <li v-for="category in knowledgeHierarchy" :key="category.id" class="hierarchy-category">
+                          <div class="hierarchy-item">
+                            <span class="item-name">{{ category.nameEN }}</span>
+                            <div class="item-actions">
+                              <DsButton
+                                variant="ghost"
+                                :aria-label="translate('admin.hierarchy.addService', 'Add Service')"
+                                @click="showAddServiceForm(category)"
+                              >
+                                ➕
+                              </DsButton>
+                              <DsButton
+                                variant="ghost"
+                                :aria-label="translate('admin.hierarchy.editCategory', 'Edit Category')"
+                                @click="showEditForm(category)"
+                              >
+                                ✏️
+                              </DsButton>
+                              <DsButton
+                                variant="ghost"
+                                :aria-label="translate('admin.hierarchy.deleteCategory', 'Delete Category')"
+                                @click="deleteHierarchyItem(category)"
+                              >
+                                🗑️
+                              </DsButton>
+                            </div>
+                          </div>
+                          <ul v-if="category.services && category.services.length > 0" class="hierarchy-services-list">
+                            <li v-for="service in category.services" :key="service.id">
+                              <div class="hierarchy-item service-item">
+                                <span class="item-name">{{ service.nameEN }}</span>
+                                <div class="item-actions">
+                                  <DsButton
+                                    variant="ghost"
+                                    :aria-label="translate('admin.hierarchy.editService', 'Edit Service')"
+                                    @click="showEditForm(service, category)"
+                                  >
+                                    ✏️
+                                  </DsButton>
+                                  <DsButton
+                                    variant="ghost"
+                                    :aria-label="translate('admin.hierarchy.deleteService', 'Delete Service')"
+                                    @click="deleteHierarchyItem(service, category)"
+                                  >
+                                    🗑️
+                                  </DsButton>
+                                </div>
+                              </div>
+                            </li>
+                          </ul>
+                        </li>
+                        <li v-if="knowledgeHierarchy.length === 0">
+                          <DsStateDisplay type="empty">
+                            {{
+                              translate(
+                                'admin.hierarchy.empty',
+                                'No categories found. Click "Add New Category" to start.'
+                              )
+                            }}
+                          </DsStateDisplay>
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div v-if="hierarchyForm.visible" class="hierarchy-form-panel">
+                      <h3 class="form-title">{{ hierarchyForm.title }}</h3>
+                      <div class="form-group">
+                        <label for="hierarchy-name-en">
+                          {{ translate('admin.hierarchy.nameEnLabel', 'Name (English)') }}
+                        </label>
+                        <DsInput id="hierarchy-name-en" v-model="hierarchyForm.nameEN" type="text" />
+                      </div>
+                      <div class="translations-section">
+                        <h4 class="translations-title">
+                          {{ translate('admin.hierarchy.translationsTitle', 'Translations for Display') }}
+                        </h4>
+
+                        <DsStateDisplay v-if="isTranslationsLoading" type="loading">
+                          {{ translate('admin.hierarchy.loadingTranslations', 'Loading translations...') }}
+                        </DsStateDisplay>
+
+                        <div v-else>
+                          <div
+                            v-for="(translation, index) in hierarchyForm.translations"
+                            :key="index"
+                            class="translation-row"
+                          >
+                            <DsSelect
+                              v-model="translation.lang"
+                              class="translation-lang-select"
+                              :placeholder="translate('admin.hierarchy.selectLang', 'Select Language')"
                             >
-                              ➕
-                            </button>
-                            <button
-                              class="action-btn"
-                              :aria-label="translate('admin.hierarchy.editCategory', 'Edit Category')"
-                              @click="showEditForm(category)"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              class="action-btn"
-                              :aria-label="translate('admin.hierarchy.deleteCategory', 'Delete Category')"
-                              @click="deleteHierarchyItem(category)"
+                              <option v-for="lang in availableLanguages" :key="lang.code" :value="lang.code">
+                                {{ lang.name }} ({{ lang.code }})
+                              </option>
+                            </DsSelect>
+                            <DsInput
+                              v-model="translation.text"
+                              type="text"
+                              class="translation-text-input"
+                              :placeholder="translate('admin.hierarchy.translationPlaceholder', 'Enter translation')"
+                            />
+                            <DsButton
+                              variant="danger"
+                              :small="true"
+                              class="translation-delete-btn"
+                              :aria-label="translate('admin.hierarchy.deleteTranslation', 'Delete Translation')"
+                              @click="removeTranslationRow(index)"
                             >
                               🗑️
-                            </button>
+                            </DsButton>
                           </div>
-                        </div>
-                        <ul v-if="category.services && category.services.length > 0" class="hierarchy-services-list">
-                          <li v-for="service in category.services" :key="service.id">
-                            <div class="hierarchy-item service-item">
-                              <span class="item-name">{{ service.nameEN }}</span>
-                              <div class="item-actions">
-                                <button
-                                  class="action-btn"
-                                  :aria-label="translate('admin.hierarchy.editService', 'Edit Service')"
-                                  @click="showEditForm(service, category)"
-                                >
-                                  ✏️
-                                </button>
-                                <button
-                                  class="action-btn"
-                                  :aria-label="translate('admin.hierarchy.deleteService', 'Delete Service')"
-                                  @click="deleteHierarchyItem(service, category)"
-                                >
-                                  🗑️
-                                </button>
-                              </div>
-                            </div>
-                          </li>
-                        </ul>
-                      </li>
-                      <li v-if="knowledgeHierarchy.length === 0" class="empty-hierarchy">
-                        {{
-                          translate('admin.hierarchy.empty', 'No categories found. Click "Add New Category" to start.')
-                        }}
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div v-if="hierarchyForm.visible" class="hierarchy-form-panel">
-                    <h3 class="form-title">{{ hierarchyForm.title }}</h3>
-                    <div class="form-group">
-                      <label for="hierarchy-name-en">
-                        {{ translate('admin.hierarchy.nameEnLabel', 'Name (English)') }}
-                      </label>
-                      <input id="hierarchy-name-en" v-model="hierarchyForm.nameEN" type="text" class="form-input" />
-                    </div>
-                    <div class="translations-section">
-                      <h4 class="translations-title">
-                        {{ translate('admin.hierarchy.translationsTitle', 'Translations for Display') }}
-                      </h4>
-
-                      <div v-if="isTranslationsLoading" class="loading-state" style="padding: 1rem 0">
-                        <div class="loading-spinner-small"></div>
-                        <span>{{ translate('admin.hierarchy.loadingTranslations', 'Loading translations...') }}</span>
-                      </div>
-
-                      <div v-else>
-                        <div
-                          v-for="(translation, index) in hierarchyForm.translations"
-                          :key="index"
-                          class="translation-row"
-                        >
-                          <select v-model="translation.lang" class="translation-lang-select">
-                            <option disabled value="">
-                              {{ translate('admin.hierarchy.selectLang', 'Select Language') }}
-                            </option>
-                            <option v-for="lang in availableLanguages" :key="lang.code" :value="lang.code">
-                              {{ lang.name }} ({{ lang.code }})
-                            </option>
-                          </select>
-                          <input
-                            v-model="translation.text"
-                            type="text"
-                            class="translation-text-input"
-                            :placeholder="translate('admin.hierarchy.translationPlaceholder', 'Enter translation')"
-                          />
-                          <button
-                            class="translation-delete-btn"
-                            :aria-label="translate('admin.hierarchy.deleteTranslation', 'Delete Translation')"
-                            @click="removeTranslationRow(index)"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                        <button class="btn btn-outline btn-sm" @click="addTranslationRow">
-                          {{ translate('admin.hierarchy.addTranslation', '+ Add Translation') }}
-                        </button>
-                      </div>
-                    </div>
-                    <div class="form-actions">
-                      <button class="btn btn-primary" :disabled="!hierarchyForm.nameEN" @click="saveHierarchyItem">
-                        {{ translate('admin.buttons.save', 'Save') }}
-                      </button>
-                      <button class="btn btn-outline" @click="cancelHierarchyForm">
-                        {{ translate('admin.buttons.cancel', 'Cancel') }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div v-if="activeTab === 'documents'" class="dashboard-card" style="grid-column: span 2">
-                <div class="card-header">
-                  <div class="card-title">
-                    {{ translate('admin.documents.title', 'Document Management') }}
-                  </div>
-                  <div class="card-actions">
-                    <button class="btn btn-outline" @click="addFromLink">
-                      {{ translate('admin.documents.addLink', 'Add from Link') }}
-                    </button>
-                    <button class="btn btn-primary" @click="uploadFiles">
-                      {{ translate('admin.documents.uploadFiles', 'Upload Files') }}
-                    </button>
-                  </div>
-                </div>
-
-                <div class="filter-bar">
-                  <div class="search-input-container">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="search-icon"
-                    >
-                      <circle cx="11" cy="11" r="8" />
-                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                    </svg>
-                    <input
-                      v-model="documentSearchTerm"
-                      type="text"
-                      class="search-input"
-                      :placeholder="translate('admin.documents.searchPlaceholder', 'Search by file name...')"
-                    />
-                  </div>
-                  <select v-model="documentFilters.status" class="filter-select">
-                    <option value="all">
-                      {{ translate('admin.documents.allStatuses', 'All Statuses') }}
-                    </option>
-                    <option value="pending">
-                      {{ translate('admin.documents.statusPending', 'Pending') }}
-                    </option>
-                    <option value="ingested">
-                      {{ translate('admin.documents.statusIngested', 'Ingested') }}
-                    </option>
-                    <option value="retracted">
-                      {{ translate('admin.documents.statusRetracted', 'Retracted') }}
-                    </option>
-                  </select>
-                  <div v-if="showIngestButton" class="card-actions">
-                    <button class="btn btn-primary" @click="handleBatchAction('ingest')">
-                      {{ translate('admin.documents.ingestSelected', 'Ingest Selected') }}
-                      ({{ selectedDocuments.length }})
-                    </button>
-                  </div>
-                </div>
-
-                <div class="table-container">
-                  <table class="data-table">
-                    <thead>
-                      <tr>
-                        <th class="col-checkbox">
-                          <input type="checkbox" @change="selectAllDocuments" />
-                        </th>
-
-                        <th class="col-main sortable" @click="sortBy('file_name')">
-                          {{ translate('admin.documents.colFileName', 'File Name') }}
-                          <span v-if="sortKey === 'file_name'" class="sort-arrow">
-                            {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
-                          </span>
-                        </th>
-
-                        <th class="col-status sortable" @click="sortBy('dataprep.status')">
-                          {{ translate('admin.documents.colStatus', 'Status') }}
-                          <span v-if="sortKey === 'dataprep.status'" class="sort-arrow">
-                            {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
-                          </span>
-                        </th>
-
-                        <th class="col-labels">
-                          {{ translate('admin.documents.colLabels', 'Labels') }}
-                        </th>
-
-                        <th class="col-date sortable" @click="sortBy('upload_date')">
-                          {{ translate('admin.documents.colUploadDate', 'Upload Date') }}
-                          <span v-if="sortKey === 'upload_date'" class="sort-arrow">
-                            {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
-                          </span>
-                        </th>
-
-                        <th class="col-size sortable" @click="sortBy('file_size')">
-                          {{ translate('admin.documents.colSize', 'Size') }}
-                          <span v-if="sortKey === 'file_size'" class="sort-arrow">
-                            {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
-                          </span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-if="isDocumentsLoading">
-                        <td colspan="6" class="table-message">
-                          <div class="loading-state">
-                            <div class="loading-spinner-small"></div>
-                            <span>{{ translate('admin.documents.loading', 'Loading documents...') }}</span>
-                          </div>
-                        </td>
-                      </tr>
-
-                      <tr v-if="!isDocumentsLoading && sortedAndFilteredDocuments.length === 0">
-                        <td colspan="6" class="table-message">
-                          {{ translate('admin.documents.empty', 'No documents found.') }}
-                        </td>
-                      </tr>
-
-                      <tr
-                        v-for="doc in sortedAndFilteredDocuments"
-                        :key="doc._key"
-                        class="document-row"
-                        @click="viewDocumentDetails(doc.file_id)"
-                      >
-                        <td @click.stop>
-                          <input v-model="selectedDocuments" type="checkbox" :value="doc._key" />
-                        </td>
-                        <td class="cell-main">{{ doc.file_name }}</td>
-                        <td>
-                          <span :class="['status-tag', getStatusClass(doc)]">
-                            {{ getDisplayStatus(doc) }}
-                          </span>
-                        </td>
-                        <td>
-                          <span v-for="label in doc.labels.slice(0, 2)" :key="label" class="label-tag">
-                            {{ label }}
-                          </span>
-                          <span v-if="doc.labels.length > 2" class="label-tag-more">+{{ doc.labels.length - 2 }}</span>
-                        </td>
-                        <td>
-                          {{ new Date(doc.upload_date).toLocaleDateString() }}
-                        </td>
-                        <td>{{ formatFileSize(doc.file_size) }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <div v-if="documentPagination.total > documentPagination.limit" class="pagination">
-                  <button
-                    class="page-btn"
-                    :disabled="documentPagination.page <= 1"
-                    @click="handleDocumentPagination(documentPagination.page - 1)"
-                  >
-                    « {{ translate('admin.previous', 'Previous') }}
-                  </button>
-
-                  <span class="pagination-info">
-                    {{ translate('admin.showing', 'Showing') }}
-                    {{ (documentPagination.page - 1) * documentPagination.limit + 1 }}-{{
-                      Math.min(documentPagination.page * documentPagination.limit, documentPagination.total)
-                    }}
-                    {{ translate('admin.of', 'of') }}
-                    {{ documentPagination.total }}
-                  </span>
-
-                  <button
-                    class="page-btn"
-                    :disabled="documentPagination.page * documentPagination.limit >= documentPagination.total"
-                    @click="handleDocumentPagination(documentPagination.page + 1)"
-                  >
-                    {{ translate('admin.next', 'Next') }} »
-                  </button>
-                </div>
-              </div>
-
-              <div v-if="activeTab === 'database'" class="dashboard-card" style="grid-column: span 2">
-                <div class="card-header">
-                  <div class="card-title">
-                    {{ translate('admin.databaseManagement', 'Database Management') }}
-                  </div>
-                  <div class="card-actions"></div>
-                </div>
-
-                <div class="db-actions">
-                  <div class="db-action-card" @click="backupDatabase">
-                    <div class="action-icon">💾</div>
-                    <div class="action-title">
-                      {{ translate('admin.dbActions.backup', 'Backup') }}
-                    </div>
-                    <div class="action-desc">
-                      {{ translate('admin.dbActions.backupDesc', 'Create database backup') }}
-                    </div>
-                  </div>
-                  <div class="db-action-card" @click="optimizeDatabase">
-                    <div class="action-icon">📊</div>
-                    <div class="action-title">
-                      {{ translate('admin.dbActions.optimize', 'Optimize') }}
-                    </div>
-                    <div class="action-desc">
-                      {{ translate('admin.dbActions.optimizeDesc', 'Optimize query performance') }}
-                    </div>
-                  </div>
-                </div>
-
-                <div class="db-stats">
-                  <div>
-                    <strong>{{ translate('admin.databaseSize', 'Database Size') }}:</strong>
-                    {{ dbStats.databaseSize }}
-                  </div>
-                  <div>
-                    <strong>{{ translate('admin.totalTables', 'Total Tables') }}:</strong>
-                    {{ dbStats.totalTables }}
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="activeTab === 'logs'" class="dashboard-card" style="grid-column: span 2">
-                <div class="card-header">
-                  <div class="card-title">
-                    {{ translate('admin.logManagement', 'Log Management') }}
-                  </div>
-                  <div class="card-actions">
-                    <button class="btn btn-outline" @click="searchLogs">
-                      <span style="display: flex; align-items: center">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          style="margin-right: 4px"
-                        >
-                          <circle cx="11" cy="11" r="8" />
-                          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                        </svg>
-                        {{ translate('admin.searchLogs', 'Search Logs') }}
-                      </span>
-                    </button>
-                    <button class="btn btn-outline" style="margin-left: 8px" @click="rolloverLogs">
-                      <span style="display: flex; align-items: center">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          style="margin-right: 4px"
-                        >
-                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1 -.57-8.38" />
-                        </svg>
-                        {{ translate('admin.rolloverLogs', 'Rollover Logs') }}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                <div class="logs-summary">
-                  <h3 class="summary-title">
-                    <span class="status-indicator error"></span>
-                    {{ translate('admin.errorLogs', 'Error Logs') }} ({{ translate('admin.today', 'Today') }})
-                  </h3>
-                  <div class="log-summary-table">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>{{ translate('admin.logType', 'Type') }}</th>
-                          <th>
-                            {{ translate('admin.logService', 'Service') }}
-                          </th>
-                          <th>{{ translate('admin.logCount', 'Count') }}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="(log, index) in errorLogsSummary" :key="'error-' + index">
-                          <td>
-                            {{ translate(`admin.logTypes.${log.typeKey}`, log.type) }}
-                          </td>
-                          <td>{{ log.service }}</td>
-                          <td class="log-count">{{ log.count }}</td>
-                        </tr>
-                        <tr v-if="errorLogsSummary.length === 0">
-                          <td colspan="3" class="empty-logs">
-                            {{ translate('admin.noErrorLogs', 'No error logs recorded today.') }}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div class="logs-summary">
-                  <h3 class="summary-title">
-                    <span class="status-indicator warning"></span>
-                    {{ translate('admin.warningLogs', 'Warning Logs') }} ({{ translate('admin.today', 'Today') }})
-                  </h3>
-                  <div class="log-summary-table">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>{{ translate('admin.logType', 'Type') }}</th>
-                          <th>
-                            {{ translate('admin.logService', 'Service') }}
-                          </th>
-                          <th>{{ translate('admin.logCount', 'Count') }}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="(log, index) in warningLogsSummary" :key="'warning-' + index">
-                          <td>
-                            {{ translate(`admin.logTypes.${log.typeKey}`, log.type) }}
-                          </td>
-                          <td>{{ log.service }}</td>
-                          <td class="log-count">{{ log.count }}</td>
-                        </tr>
-                        <tr v-if="warningLogsSummary.length === 0">
-                          <td colspan="3" class="empty-logs">
-                            {{ translate('admin.noWarningLogs', 'No warning logs recorded today.') }}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div v-if="searchResults && searchResults.length > 0" class="logs-summary">
-                  <h3 class="summary-title">
-                    <span class="status-indicator info"></span>
-                    {{ translate('admin.searchResults', 'Latest Search Results') }}
-                    <span class="results-count">
-                      ({{ searchResults.length }} {{ translate('admin.entriesFound', 'entries found') }})
-                    </span>
-                  </h3>
-                  <div class="log-summary-table">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>{{ translate('admin.logTime', 'Time') }}</th>
-                          <th>{{ translate('admin.logLevel', 'Level') }}</th>
-                          <th>
-                            {{ translate('admin.logService', 'Service') }}
-                          </th>
-                          <th>
-                            {{ translate('admin.logMessage', 'Message') }}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="(log, index) in searchResults.slice(0, 5)" :key="'search-' + index">
-                          <td>{{ log.time }}</td>
-                          <td>
-                            <span :class="['log-level', `log-${log.level.toLowerCase()}`]">
-                              {{ translate(`admin.logLevels.${log.level.toLowerCase()}`, log.level) }}
-                            </span>
-                          </td>
-                          <td>{{ log.service }}</td>
-                          <td>{{ log.message }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                    <div v-if="searchResults.length > 5" class="view-more-logs">
-                      <button class="btn btn-outline btn-sm" @click="searchLogs">
-                        {{ translate('admin.viewAllResults', 'View All Results') }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <log-search-dialog
-                  v-if="showLogSearchDialog"
-                  :theme="currentTheme"
-                  @close="showLogSearchDialog = false"
-                  @search-results="handleSearchResults"
-                />
-
-                <div class="logs-info">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="16" x2="12" y2="12" />
-                    <line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
-                  <span>
-                    {{
-                      translate(
-                        'admin.infoLogsNote',
-                        'Info logs are not shown in the summary. Use the search function to view all log types.'
-                      )
-                    }}
-                  </span>
-                </div>
-              </div>
-
-              <div v-if="activeTab === 'security'" class="dashboard-card" style="grid-column: span 2">
-                <div class="card-header">
-                  <div class="card-title">
-                    {{ translate('admin.securityMonitoring', 'Security Monitoring') }}
-                  </div>
-                  <div class="card-actions">
-                    <button
-                      class="btn btn-primary"
-                      :disabled="isLoading && currentOperation === 'runSecurityScan'"
-                      @click="runSecurityScan"
-                    >
-                      <span v-if="isLoading && currentOperation === 'runSecurityScan'">
-                        <span class="loading-indicator-inline"></span>
-                        {{ translate('admin.runningSecurityScan', 'Running Scan...') }}
-                      </span>
-                      <span v-else>
-                        {{ translate('admin.securityScan', 'Security Scan') }}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                <div v-if="isLoading && currentOperation === 'runSecurityScan'" class="loading-state">
-                  <div class="loading-spinner-small"></div>
-                  <span>{{ translate('admin.security.loadingScan', 'Loading scan results...') }}</span>
-                </div>
-
-                <div v-if="!isLoading" class="security-details">
-                  <div>
-                    <strong>{{ translate('admin.lastSecurityScan', 'Last Security Scan') }}:</strong>
-                    {{ securityMetrics.lastScan }}
-                  </div>
-                  <div>
-                    <strong>{{ translate('admin.vulnerabilitiesFound', 'Vulnerabilities Found') }}:</strong>
-                    <span :class="securityMetrics.vulnerabilities.critical > 0 ? 'text-danger' : ''">
-                      {{ securityMetrics.vulnerabilities.critical }}
-                      {{ translate('admin.critical', 'critical') }}
-                    </span>
-                    ,
-                    <span :class="securityMetrics.vulnerabilities.medium > 0 ? 'text-warning' : ''">
-                      {{ securityMetrics.vulnerabilities.medium }}
-                      {{ translate('admin.medium', 'medium') }}
-                    </span>
-                    ,
-                    <span :class="securityMetrics.vulnerabilities.low > 0 ? 'text-info' : ''">
-                      {{ securityMetrics.vulnerabilities.low }}
-                      {{ translate('admin.low', 'low') }}
-                    </span>
-                  </div>
-                </div>
-
-                <div v-if="!isLoading && securityDetails" class="security-findings-section">
-                  <div
-                    v-if="
-                      securityDetails.vulnerabilityDetails &&
-                      securityDetails.vulnerabilityDetails.critical &&
-                      securityDetails.vulnerabilityDetails.critical.length > 0
-                    "
-                    class="vulnerability-section critical-section"
-                  >
-                    <h3 class="section-title">
-                      <span class="severity-indicator critical"></span>
-                      {{ translate('admin.security.criticalVulnerabilities', 'Critical Vulnerabilities') }}
-                    </h3>
-                    <div class="vulnerability-list">
-                      <div
-                        v-for="(vuln, index) in securityDetails.vulnerabilityDetails.critical"
-                        :key="'crit-' + index"
-                        class="vulnerability-card"
-                      >
-                        <div class="vuln-type">{{ vuln.type }}</div>
-                        <div class="vuln-description">
-                          {{ vuln.description }}
-                        </div>
-                        <div class="vuln-detail">
-                          <strong>{{ translate('admin.security.severity', 'Severity') }}:</strong>
-                          {{ vuln.severity }}
-                        </div>
-                        <div class="vuln-detail">
-                          <strong>{{ translate('admin.security.occurrences', 'Occurrences') }}:</strong>
-                          {{ vuln.occurrences }}
-                        </div>
-                        <div v-if="vuln.firstSeen" class="vuln-detail">
-                          <strong>{{ translate('admin.security.firstSeen', 'First Seen') }}:</strong>
-                          {{ vuln.firstSeen }}
-                        </div>
-                        <div v-if="vuln.lastSeen" class="vuln-detail">
-                          <strong>{{ translate('admin.security.lastSeen', 'Last Seen') }}:</strong>
-                          {{ vuln.lastSeen }}
-                        </div>
-                        <div v-if="vuln.matchedTerm" class="vuln-detail">
-                          <strong>{{ translate('admin.security.matchedTerm', 'Matched Term') }}:</strong>
-                          {{ vuln.matchedTerm }}
-                        </div>
-                        <div v-if="vuln.timestamp" class="vuln-detail">
-                          <strong>{{ translate('admin.security.timestamp', 'Timestamp') }}:</strong>
-                          {{ vuln.timestamp }}
-                        </div>
-                        <div v-if="vuln.service" class="vuln-detail">
-                          <strong>{{ translate('admin.security.service', 'Service') }}:</strong>
-                          {{ vuln.service }}
-                        </div>
-                        <div v-if="vuln.lineNumber" class="vuln-detail">
-                          <strong>{{ translate('admin.security.lineNumber', 'Line Number') }}:</strong>
-                          {{ vuln.lineNumber }}
-                        </div>
-                        <div v-if="vuln.url" class="vuln-detail">
-                          <strong>{{ translate('admin.security.url', 'URL') }}:</strong>
-                          {{ vuln.url }}
-                        </div>
-                        <div v-if="vuln.lineNumbers" class="vuln-detail">
-                          <strong>{{ translate('admin.security.lineNumbers', 'Line Numbers') }}:</strong>
-                          {{ vuln.lineNumbers.join(', ') }}
-                        </div>
-                        <div v-if="vuln.recommendation" class="vuln-recommendation">
-                          {{ vuln.recommendation }}
+                          <DsButton variant="secondary" :small="true" @click="addTranslationRow">
+                            {{ translate('admin.hierarchy.addTranslation', '+ Add Translation') }}
+                          </DsButton>
                         </div>
                       </div>
-                    </div>
-                  </div>
-
-                  <div
-                    v-if="
-                      securityDetails.vulnerabilityDetails &&
-                      securityDetails.vulnerabilityDetails.medium &&
-                      securityDetails.vulnerabilityDetails.medium.length > 0
-                    "
-                    class="vulnerability-section medium-section"
-                  >
-                    <h3 class="section-title">
-                      <span class="severity-indicator warning"></span>
-                      {{ translate('admin.security.mediumVulnerabilities', 'Medium Vulnerabilities') }}
-                    </h3>
-                    <div class="vulnerability-list">
-                      <div
-                        v-for="(vuln, index) in securityDetails.vulnerabilityDetails.medium"
-                        :key="'med-' + index"
-                        class="vulnerability-card"
-                      >
-                        <div class="vuln-type">{{ vuln.type }}</div>
-                        <div class="vuln-description">
-                          {{ vuln.description }}
-                        </div>
-                        <div class="vuln-detail">
-                          <strong>{{ translate('admin.security.severity', 'Severity') }}:</strong>
-                          {{ vuln.severity }}
-                        </div>
-                        <div class="vuln-detail">
-                          <strong>{{ translate('admin.security.occurrences', 'Occurrences') }}:</strong>
-                          {{ vuln.occurrences }}
-                        </div>
-                        <div v-if="vuln.firstSeen" class="vuln-detail">
-                          <strong>{{ translate('admin.security.firstSeen', 'First Seen') }}:</strong>
-                          {{ vuln.firstSeen }}
-                        </div>
-                        <div v-if="vuln.lastSeen" class="vuln-detail">
-                          <strong>{{ translate('admin.security.lastSeen', 'Last Seen') }}:</strong>
-                          {{ vuln.lastSeen }}
-                        </div>
-                        <div v-if="vuln.matchedTerm" class="vuln-detail">
-                          <strong>{{ translate('admin.security.matchedTerm', 'Matched Term') }}:</strong>
-                          {{ vuln.matchedTerm }}
-                        </div>
-                        <div v-if="vuln.timestamp" class="vuln-detail">
-                          <strong>{{ translate('admin.security.timestamp', 'Timestamp') }}:</strong>
-                          {{ vuln.timestamp }}
-                        </div>
-                        <div v-if="vuln.service" class="vuln-detail">
-                          <strong>{{ translate('admin.security.service', 'Service') }}:</strong>
-                          {{ vuln.service }}
-                        </div>
-                        <div v-if="vuln.lineNumber" class="vuln-detail">
-                          <strong>{{ translate('admin.security.lineNumber', 'Line Number') }}:</strong>
-                          {{ vuln.lineNumber }}
-                        </div>
-                        <div v-if="vuln.url" class="vuln-detail">
-                          <strong>{{ translate('admin.security.url', 'URL') }}:</strong>
-                          {{ vuln.url }}
-                        </div>
-                        <div v-if="vuln.lineNumbers" class="vuln-detail">
-                          <strong>{{ translate('admin.security.lineNumbers', 'Line Numbers') }}:</strong>
-                          {{ vuln.lineNumbers.join(', ') }}
-                        </div>
-                        <div v-if="vuln.recommendation" class="vuln-recommendation">
-                          {{ vuln.recommendation }}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    v-if="
-                      securityDetails.vulnerabilityDetails &&
-                      securityDetails.vulnerabilityDetails.low &&
-                      securityDetails.vulnerabilityDetails.low.length > 0
-                    "
-                    class="vulnerability-section low-section"
-                  >
-                    <h3 class="section-title">
-                      <span class="severity-indicator info"></span>
-                      {{ translate('admin.security.lowVulnerabilities', 'Low Vulnerabilities') }}
-                    </h3>
-                    <div class="vulnerability-list">
-                      <div
-                        v-for="(vuln, index) in securityDetails.vulnerabilityDetails.low"
-                        :key="'low-' + index"
-                        class="vulnerability-card"
-                      >
-                        <div class="vuln-type">{{ vuln.type }}</div>
-                        <div class="vuln-description">
-                          {{ vuln.description }}
-                        </div>
-                        <div class="vuln-detail">
-                          <strong>{{ translate('admin.security.severity', 'Severity') }}:</strong>
-                          {{ vuln.severity }}
-                        </div>
-                        <div class="vuln-detail">
-                          <strong>{{ translate('admin.security.occurrences', 'Occurrences') }}:</strong>
-                          {{ vuln.occurrences }}
-                        </div>
-                        <div v-if="vuln.firstSeen" class="vuln-detail">
-                          <strong>{{ translate('admin.security.firstSeen', 'First Seen') }}:</strong>
-                          {{ vuln.firstSeen }}
-                        </div>
-                        <div v-if="vuln.lastSeen" class="vuln-detail">
-                          <strong>{{ translate('admin.security.lastSeen', 'Last Seen') }}:</strong>
-                          {{ vuln.lastSeen }}
-                        </div>
-                        <div v-if="vuln.matchedTerm" class="vuln-detail">
-                          <strong>{{ translate('admin.security.matchedTerm', 'Matched Term') }}:</strong>
-                          {{ vuln.matchedTerm }}
-                        </div>
-                        <div v-if="vuln.timestamp" class="vuln-detail">
-                          <strong>{{ translate('admin.security.timestamp', 'Timestamp') }}:</strong>
-                          {{ vuln.timestamp }}
-                        </div>
-                        <div v-if="vuln.service" class="vuln-detail">
-                          <strong>{{ translate('admin.security.service', 'Service') }}:</strong>
-                          {{ vuln.service }}
-                        </div>
-                        <div v-if="vuln.lineNumber" class="vuln-detail">
-                          <strong>{{ translate('admin.security.lineNumber', 'Line Number') }}:</strong>
-                          {{ vuln.lineNumber }}
-                        </div>
-                        <div v-if="vuln.url" class="vuln-detail">
-                          <strong>{{ translate('admin.security.url', 'URL') }}:</strong>
-                          {{ vuln.url }}
-                        </div>
-                        <div v-if="vuln.lineNumbers" class="vuln-detail">
-                          <strong>{{ translate('admin.security.lineNumbers', 'Line Numbers') }}:</strong>
-                          {{ vuln.lineNumbers.join(', ') }}
-                        </div>
-                        <div v-if="vuln.recommendation" class="vuln-recommendation">
-                          {{ vuln.recommendation }}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    v-if="
-                      securityDetails &&
-                      securityDetails.vulnerabilityDetails &&
-                      securityDetails.vulnerabilityDetails.medium &&
-                      securityDetails.vulnerabilityDetails.medium.length > 0
-                    "
-                    class="security-recommendations"
-                  >
-                    <h3 class="section-title">
-                      <span class="severity-indicator info"></span>
-                      {{ translate('admin.securityRecommendations', 'Security Recommendations') }}
-                    </h3>
-                    <div class="recommendations-list">
-                      <div class="recommendation-item severity-medium">
-                        <div class="recommendation-header">
-                          <span class="severity-indicator medium"></span>
-                          <span class="recommendation-title">
-                            {{ translate('admin.security.securityProbeAttempts', 'Security Probe Attempts Detected') }}
-                          </span>
-                        </div>
-                        <div class="recommendation-description">
-                          {{ securityDetails.vulnerabilityDetails.medium.length }}
-                          {{
-                            translate(
-                              'admin.security.sensitiveFileAccess',
-                              'attempts to access sensitive files or endpoints detected'
-                            )
-                          }}
-                        </div>
-                        <div class="recommendation-action">
-                          <strong>{{ translate('admin.security.recommendedAction', 'Recommended Action') }}:</strong>
-                          {{
-                            translate(
-                              'admin.security.rateLimitRecommendation',
-                              'Consider implementing rate limiting, IP blocking for persistent offenders, and ensure proper server hardening is in place'
-                            )
-                          }}
-                        </div>
-                      </div>
-                      <div
-                        v-if="
-                          securityDetails.vulnerabilityDetails.medium.some(
-                            (v) => v.description && v.description.includes('.env')
-                          )
-                        "
-                        class="recommendation-item severity-medium"
-                      >
-                        <div class="recommendation-header">
-                          <span class="severity-indicator medium"></span>
-                          <span class="recommendation-title">
-                            {{ translate('admin.security.envFileAccess', 'Environment File Access Attempts') }}
-                          </span>
-                        </div>
-                        <div class="recommendation-description">
-                          {{
-                            securityDetails.vulnerabilityDetails.medium.filter(
-                              (v) => v.description && v.description.includes('.env')
-                            ).length
-                          }}
-                          {{ translate('admin.security.envFileAccessDesc', 'attempts to access .env files detected') }}
-                        </div>
-                        <div class="recommendation-action">
-                          <strong>{{ translate('admin.security.recommendedAction', 'Recommended Action') }}:</strong>
-                          {{
-                            translate(
-                              'admin.security.envFileRecommendation',
-                              'Ensure environment files are not accessible from web directories and server configurations properly block access to sensitive files'
-                            )
-                          }}
-                        </div>
-                      </div>
-                      <div
-                        v-if="
-                          securityDetails.vulnerabilityDetails.medium.some(
-                            (v) => v.description && v.description.includes('.git')
-                          )
-                        "
-                        class="recommendation-item severity-medium"
-                      >
-                        <div class="recommendation-header">
-                          <span class="severity-indicator medium"></span>
-                          <span class="recommendation-title">
-                            {{ translate('admin.security.gitRepoAccess', 'Git Repository Access Attempts') }}
-                          </span>
-                        </div>
-                        <div class="recommendation-description">
-                          {{
-                            securityDetails.vulnerabilityDetails.medium.filter(
-                              (v) => v.description && v.description.includes('.git')
-                            ).length
-                          }}
-                          {{
-                            translate(
-                              'admin.security.gitRepoAccessDesc',
-                              'attempts to access Git repository files detected'
-                            )
-                          }}
-                        </div>
-                        <div class="recommendation-action">
-                          <strong>{{ translate('admin.security.recommendedAction', 'Recommended Action') }}:</strong>
-                          {{
-                            translate(
-                              'admin.security.gitRepoRecommendation',
-                              'Make sure .git directories are properly secured and not accessible from the web'
-                            )
-                          }}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    v-if="securityDetails.failedLoginDetails && securityDetails.failedLoginDetails.length > 0"
-                    class="vulnerability-section login-section"
-                  >
-                    <h3 class="section-title">
-                      <span class="severity-indicator warning"></span>
-                      {{ translate('admin.security.authenticationIssues', 'Authentication Issues') }}
-                    </h3>
-                    <div class="detail-table">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th style="width: 25%">
-                              {{ translate('admin.security.timestamp', 'Timestamp') }}
-                            </th>
-                            <th style="width: 15%">
-                              {{ translate('admin.security.type', 'Type') }}
-                            </th>
-                            <th>
-                              {{ translate('admin.security.message', 'Message') }}
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr v-for="(issue, index) in securityDetails.failedLoginDetails" :key="'login-' + index">
-                            <td>{{ issue.timestamp }}</td>
-                            <td>
-                              <span v-if="issue.type" :class="['log-level', `log-${issue.type.toLowerCase()}`]">
-                                {{ issue.type }}
-                              </span>
-                            </td>
-                            <td class="log-message-cell">
-                              {{ issue.message }}
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div
-                    v-if="securityDetails.suspiciousDetails && securityDetails.suspiciousDetails.length > 0"
-                    class="vulnerability-section suspicious-section"
-                  >
-                    <h3 class="section-title">
-                      <span class="severity-indicator warning"></span>
-                      {{ translate('admin.security.suspiciousActivityLogs', 'Suspicious Activity Logs') }}
-                    </h3>
-                    <div class="detail-table">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th style="width: 25%">
-                              {{ translate('admin.security.timestamp', 'Timestamp') }}
-                            </th>
-                            <th style="width: 15%">
-                              {{ translate('admin.security.type', 'Type') }}
-                            </th>
-                            <th>
-                              {{ translate('admin.security.message', 'Message') }}
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr
-                            v-for="(activity, index) in securityDetails.suspiciousDetails"
-                            :key="'suspicious-' + index"
-                          >
-                            <td>{{ activity.timestamp }}</td>
-                            <td>
-                              <span v-if="activity.type" :class="['log-level', `log-${activity.type.toLowerCase()}`]">
-                                {{ activity.type }}
-                              </span>
-                            </td>
-                            <td class="log-message-cell">
-                              {{ activity.message }}
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div
-                    v-if="
-                      !isLoading &&
-                      securityDetails &&
-                      (!securityDetails.vulnerabilityDetails ||
-                        (securityDetails.vulnerabilityDetails.critical.length === 0 &&
-                          securityDetails.vulnerabilityDetails.medium.length === 0 &&
-                          securityDetails.vulnerabilityDetails.low.length === 0 &&
-                          (!securityDetails.failedLoginDetails || securityDetails.failedLoginDetails.length === 0)))
-                    "
-                    class="no-vulnerabilities"
-                  >
-                    <div class="empty-state">
-                      <div class="empty-icon">✓</div>
-                      <div class="empty-title">
-                        {{ translate('admin.security.noVulnerabilitiesFound', 'No Vulnerabilities Found') }}
-                      </div>
-                      <div class="empty-description">
-                        {{
-                          translate(
-                            'admin.security.systemSecure',
-                            'Your system appears to be secure. Continue monitoring regularly.'
-                          )
-                        }}
+                      <div class="form-actions">
+                        <DsButton variant="primary" :disabled="!hierarchyForm.nameEN" @click="saveHierarchyItem">
+                          {{ translate('admin.buttons.save', 'Save') }}
+                        </DsButton>
+                        <DsButton variant="secondary" @click="cancelHierarchyForm">
+                          {{ translate('admin.buttons.cancel', 'Cancel') }}
+                        </DsButton>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <div v-if="activeTab === 'users'" class="dashboard-card" style="grid-column: span 2">
-                <div class="card-header">
-                  <div class="card-title">
-                    {{ translate('admin.userManagement', 'User Management') }}
-                  </div>
-                </div>
-
-                <div class="user-stats-summary">
-                  <div class="stats-row">
-                    <div class="stat-item">
-                      <span class="stat-label">{{ translate('admin.totalUsers', 'Total Users') }}:</span>
-                      <span class="stat-value">{{ userStats.totalUsers }}</span>
+                <div v-if="activeTab === 'documents'" class="dashboard-card" style="grid-column: span 2">
+                  <div class="card-header">
+                    <div class="card-title">
+                      {{ translate('admin.documents.title', 'Document Management') }}
                     </div>
-                    <div class="stat-item">
-                      <span class="stat-label">
-                        {{ translate('admin.monthlyActiveUsers', 'Currently Active Users (CAU)') }}:
-                      </span>
-                      <span class="stat-value">{{ userStats.activeUsers }}</span>
-                    </div>
-                    <div class="stat-item">
-                      <span class="stat-label">{{ translate('admin.newUsers', 'New Users (Month)') }}:</span>
-                      <span class="stat-value">{{ userStats.newUsers }}</span>
+                    <div class="card-actions">
+                      <DsButton variant="secondary" @click="addFromLink">
+                        {{ translate('admin.documents.addLink', 'Add from Link') }}
+                      </DsButton>
+                      <DsButton variant="primary" @click="uploadFiles">
+                        {{ translate('admin.documents.uploadFiles', 'Upload Files') }}
+                      </DsButton>
                     </div>
                   </div>
-                </div>
 
-                <div class="search-bar">
-                  <div class="search-input-container">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="search-icon"
-                    >
-                      <circle cx="11" cy="11" r="8" />
-                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                    </svg>
-                    <input
-                      v-model="userSearchTerm"
-                      type="text"
-                      class="search-input"
-                      :placeholder="translate('admin.searchUsers', 'Search users...')"
-                      @keyup.enter="searchUsers"
-                    />
-                    <button
-                      v-if="userSearchTerm"
-                      class="search-clear-btn"
-                      :aria-label="translate('admin.clearSearch', 'Clear search')"
-                      @click="resetUserSearch"
-                    >
+                  <div class="filter-bar">
+                    <div class="search-input-container">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         width="14"
@@ -1340,168 +403,1126 @@
                         stroke-width="2"
                         stroke-linecap="round"
                         stroke-linejoin="round"
+                        class="search-icon"
                       >
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
                       </svg>
-                    </button>
-                  </div>
-
-                  <div class="search-filter">
-                    <select v-model="userSearchField" class="search-field-select">
+                      <DsInput
+                        v-model="documentSearchTerm"
+                        type="search"
+                        class="search-input"
+                        :placeholder="translate('admin.documents.searchPlaceholder', 'Search by file name...')"
+                      />
+                    </div>
+                    <DsSelect
+                      v-model="documentFilters.status"
+                      class="filter-select"
+                      :placeholder="translate('admin.documents.allStatuses', 'All Statuses')"
+                    >
                       <option value="all">
-                        {{ translate('admin.searchFields.all', 'All Fields') }}
+                        {{ translate('admin.documents.allStatuses', 'All Statuses') }}
                       </option>
-                      <option value="name">
-                        {{ translate('admin.searchFields.name', 'Name') }}
+                      <option value="pending">
+                        {{ translate('admin.documents.statusPending', 'Pending') }}
                       </option>
-                      <option value="email">
-                        {{ translate('admin.searchFields.email', 'Email') }}
+                      <option value="ingested">
+                        {{ translate('admin.documents.statusIngested', 'Ingested') }}
                       </option>
-                      <option value="role">
-                        {{ translate('admin.searchFields.role', 'Role') }}
+                      <option value="retracted">
+                        {{ translate('admin.documents.statusRetracted', 'Retracted') }}
                       </option>
-                    </select>
+                    </DsSelect>
+                    <div v-if="showIngestButton" class="card-actions">
+                      <DsButton variant="primary" @click="handleBatchAction('ingest')">
+                        {{ translate('admin.documents.ingestSelected', 'Ingest Selected') }}
+                        ({{ selectedDocuments.length }})
+                      </DsButton>
+                    </div>
                   </div>
 
-                  <div class="search-button">
-                    <button class="btn btn-primary" :disabled="isSearchingUsers" @click="searchUsers">
-                      {{ translate('admin.search', 'Search') }}
-                    </button>
-                  </div>
-                </div>
+                  <div class="table-container">
+                    <table class="data-table">
+                      <thead>
+                        <tr>
+                          <th class="col-checkbox">
+                            <input type="checkbox" @change="selectAllDocuments" />
+                          </th>
 
-                <div v-if="userSearchResults" class="search-results-info">
-                  <span>
-                    {{ userSearchTotal }}
-                    {{ translate('admin.usersFound', 'users found') }}
-                    <button v-if="userSearchResults" class="btn btn-outline btn-sm" @click="resetUserSearch">
-                      {{ translate('admin.showAllUsers', 'Show All Users') }}
-                    </button>
-                  </span>
-                </div>
+                          <th class="col-main sortable" @click="sortBy('file_name')">
+                            {{ translate('admin.documents.colFileName', 'File Name') }}
+                            <span v-if="sortKey === 'file_name'" class="sort-arrow">
+                              {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
+                            </span>
+                          </th>
 
-                <div v-if="isSearchingUsers" class="search-loading">
-                  <div class="loading-spinner-small"></div>
-                  <span>{{ translate('admin.searching', 'Searching...') }}</span>
-                </div>
+                          <th class="col-status sortable" @click="sortBy('dataprep.status')">
+                            {{ translate('admin.documents.colStatus', 'Status') }}
+                            <span v-if="sortKey === 'dataprep.status'" class="sort-arrow">
+                              {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
+                            </span>
+                          </th>
 
-                <table class="log-table">
-                  <thead>
-                    <tr>
-                      <th>{{ translate('admin.userName', 'Name') }}</th>
-                      <th>{{ translate('admin.userEmail', 'Email') }}</th>
-                      <th>{{ translate('admin.userRole', 'Role') }}</th>
-                      <th>{{ translate('admin.userActions', 'Actions') }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="user in displayedUsers" :key="user._key">
-                      <td>{{ user.fullName || user.loginName }}</td>
-                      <td>{{ user.email }}</td>
-                      <td>{{ (user.roles || []).join(', ') || user.role }}</td>
-                      <td>
-                        <a
-                          :href="getUserManageUrl(user)"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="btn btn-outline"
-                          style="padding: 0.25rem 0.5rem; text-decoration: none; display: inline-block"
+                          <th class="col-labels">
+                            {{ translate('admin.documents.colLabels', 'Labels') }}
+                          </th>
+
+                          <th class="col-date sortable" @click="sortBy('upload_date')">
+                            {{ translate('admin.documents.colUploadDate', 'Upload Date') }}
+                            <span v-if="sortKey === 'upload_date'" class="sort-arrow">
+                              {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
+                            </span>
+                          </th>
+
+                          <th class="col-size sortable" @click="sortBy('file_size')">
+                            {{ translate('admin.documents.colSize', 'Size') }}
+                            <span v-if="sortKey === 'file_size'" class="sort-arrow">
+                              {{ sortOrders[sortKey] === 'asc' ? '▲' : '▼' }}
+                            </span>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-if="isDocumentsLoading">
+                          <td colspan="6">
+                            <DsStateDisplay type="loading">
+                              {{ translate('admin.documents.loading', 'Loading documents...') }}
+                            </DsStateDisplay>
+                          </td>
+                        </tr>
+
+                        <tr v-if="!isDocumentsLoading && sortedAndFilteredDocuments.length === 0">
+                          <td colspan="6" class="table-message">
+                            {{ translate('admin.documents.empty', 'No documents found.') }}
+                          </td>
+                        </tr>
+
+                        <tr
+                          v-for="doc in sortedAndFilteredDocuments"
+                          :key="doc._key"
+                          class="document-row"
+                          @click="viewDocumentDetails(doc.file_id)"
                         >
-                          {{ translate('admin.manage', 'Manage') }} →
-                        </a>
-                      </td>
-                    </tr>
-                    <tr v-if="displayedUsers.length === 0">
-                      <td colspan="4" style="text-align: center; padding: 2rem">
-                        <div v-if="isSearchingUsers">
-                          {{ translate('admin.searchingUsers', 'Searching for users...') }}
-                        </div>
-                        <div v-else-if="userSearchResults !== null">
-                          {{ translate('admin.noUsersFound', 'No users found matching your search criteria.') }}
-                        </div>
-                        <div v-else>
-                          {{ translate('admin.noUsers', 'No users available.') }}
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                          <td @click.stop>
+                            <input v-model="selectedDocuments" type="checkbox" :value="doc._key" />
+                          </td>
+                          <td class="cell-main">{{ doc.file_name }}</td>
+                          <td>
+                            <DsStatusTag :variant="getStatusVariant(doc)">
+                              {{ getDisplayStatus(doc) }}
+                            </DsStatusTag>
+                          </td>
+                          <td>
+                            <span v-for="label in doc.labels.slice(0, 2)" :key="label" class="label-tag">
+                              {{ label }}
+                            </span>
+                            <span v-if="doc.labels.length > 2" class="label-tag-more"
+                              >+{{ doc.labels.length - 2 }}</span
+                            >
+                          </td>
+                          <td>
+                            {{ new Date(doc.upload_date).toLocaleDateString() }}
+                          </td>
+                          <td>{{ formatFileSize(doc.file_size) }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div v-if="documentPagination.total > documentPagination.limit" class="pagination">
+                    <DsButton
+                      variant="ghost"
+                      :small="true"
+                      class="page-btn"
+                      :disabled="documentPagination.page <= 1"
+                      @click="handleDocumentPagination(documentPagination.page - 1)"
+                    >
+                      « {{ translate('admin.previous', 'Previous') }}
+                    </DsButton>
 
-                <div v-if="userSearchResults && userSearchTotal > userSearchLimit" class="pagination">
-                  <button
-                    class="page-btn"
-                    :disabled="userSearchOffset === 0"
-                    @click="handleUserSearchPagination(Math.max(0, userSearchOffset - userSearchLimit))"
-                  >
-                    « {{ translate('admin.previous', 'Previous') }}
-                  </button>
+                    <span class="pagination-info">
+                      {{ translate('admin.showing', 'Showing') }}
+                      {{ (documentPagination.page - 1) * documentPagination.limit + 1 }}-{{
+                        Math.min(documentPagination.page * documentPagination.limit, documentPagination.total)
+                      }}
+                      {{ translate('admin.of', 'of') }}
+                      {{ documentPagination.total }}
+                    </span>
 
-                  <span class="pagination-info">
-                    {{ translate('admin.showing', 'Showing') }}
-                    {{ userSearchOffset + 1 }}-{{ Math.min(userSearchOffset + userSearchLimit, userSearchTotal) }}
-                    {{ translate('admin.of', 'of') }} {{ userSearchTotal }}
-                  </span>
+                    <DsButton
+                      variant="ghost"
+                      :small="true"
+                      class="page-btn"
+                      :disabled="documentPagination.page * documentPagination.limit >= documentPagination.total"
+                      @click="handleDocumentPagination(documentPagination.page + 1)"
+                    >
+                      {{ translate('admin.next', 'Next') }} »
+                    </DsButton>
+                  </div>
+                </div>
 
-                  <button
-                    class="page-btn"
-                    :disabled="userSearchOffset + userSearchLimit >= userSearchTotal"
-                    @click="handleUserSearchPagination(userSearchOffset + userSearchLimit)"
-                  >
-                    {{ translate('admin.next', 'Next') }} »
-                  </button>
+                <div v-if="activeTab === 'database'" class="dashboard-card" style="grid-column: span 2">
+                  <div class="card-header">
+                    <div class="card-title">
+                      {{ translate('admin.databaseManagement', 'Database Management') }}
+                    </div>
+                    <div class="card-actions"></div>
+                  </div>
+
+                  <div class="db-actions">
+                    <div class="db-action-card" @click="backupDatabase">
+                      <div class="action-icon">💾</div>
+                      <div class="action-title">
+                        {{ translate('admin.dbActions.backup', 'Backup') }}
+                      </div>
+                      <div class="action-desc">
+                        {{ translate('admin.dbActions.backupDesc', 'Create database backup') }}
+                      </div>
+                    </div>
+                    <div class="db-action-card" @click="optimizeDatabase">
+                      <div class="action-icon">📊</div>
+                      <div class="action-title">
+                        {{ translate('admin.dbActions.optimize', 'Optimize') }}
+                      </div>
+                      <div class="action-desc">
+                        {{ translate('admin.dbActions.optimizeDesc', 'Optimize query performance') }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="db-stats">
+                    <div>
+                      <strong>{{ translate('admin.databaseSize', 'Database Size') }}:</strong>
+                      {{ dbStats.databaseSize }}
+                    </div>
+                    <div>
+                      <strong>{{ translate('admin.totalTables', 'Total Tables') }}:</strong>
+                      {{ dbStats.totalTables }}
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="activeTab === 'logs'" class="dashboard-card" style="grid-column: span 2">
+                  <div class="card-header">
+                    <div class="card-title">
+                      {{ translate('admin.logManagement', 'Log Management') }}
+                    </div>
+                    <div class="card-actions">
+                      <DsButton variant="secondary" @click="searchLogs">
+                        <span style="display: flex; align-items: center">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            style="margin-right: 4px"
+                          >
+                            <circle cx="11" cy="11" r="8" />
+                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                          </svg>
+                          {{ translate('admin.searchLogs', 'Search Logs') }}
+                        </span>
+                      </DsButton>
+                      <DsButton variant="secondary" style="margin-left: 8px" @click="rolloverLogs">
+                        <span style="display: flex; align-items: center">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            style="margin-right: 4px"
+                          >
+                            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1 -.57-8.38" />
+                          </svg>
+                          {{ translate('admin.rolloverLogs', 'Rollover Logs') }}
+                        </span>
+                      </DsButton>
+                    </div>
+                  </div>
+
+                  <div class="logs-summary">
+                    <h3 class="summary-title">
+                      <span class="status-indicator error"></span>
+                      {{ translate('admin.logsSection.errorLogs', 'Error Logs') }} ({{
+                        translate('admin.today', 'Today')
+                      }})
+                    </h3>
+                    <div class="log-summary-table">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>{{ translate('admin.logsSection.logType', 'Type') }}</th>
+                            <th>
+                              {{ translate('admin.logService', 'Service') }}
+                            </th>
+                            <th>{{ translate('admin.logsSection.logCount', 'Count') }}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="(log, index) in errorLogsSummary" :key="'error-' + index">
+                            <td>
+                              {{ log.type }}
+                            </td>
+                            <td>{{ log.service }}</td>
+                            <td class="log-count">{{ log.count }}</td>
+                          </tr>
+                          <tr v-if="errorLogsSummary.length === 0">
+                            <td colspan="3" class="empty-logs">
+                              {{ translate('admin.logsSection.noErrorLogs', 'No error logs recorded today.') }}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div class="logs-summary">
+                    <h3 class="summary-title">
+                      <span class="status-indicator warning"></span>
+                      {{ translate('admin.logsSection.warningLogs', 'Warning Logs') }} ({{
+                        translate('admin.today', 'Today')
+                      }})
+                    </h3>
+                    <div class="log-summary-table">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>{{ translate('admin.logsSection.logType', 'Type') }}</th>
+                            <th>
+                              {{ translate('admin.logService', 'Service') }}
+                            </th>
+                            <th>{{ translate('admin.logsSection.logCount', 'Count') }}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="(log, index) in warningLogsSummary" :key="'warning-' + index">
+                            <td>
+                              {{ log.type }}
+                            </td>
+                            <td>{{ log.service }}</td>
+                            <td class="log-count">{{ log.count }}</td>
+                          </tr>
+                          <tr v-if="warningLogsSummary.length === 0">
+                            <td colspan="3" class="empty-logs">
+                              {{ translate('admin.logsSection.noWarningLogs', 'No warning logs recorded today.') }}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div v-if="searchResults && searchResults.length > 0" class="logs-summary">
+                    <h3 class="summary-title">
+                      <span class="status-indicator info"></span>
+                      {{ translate('admin.searchResults', 'Latest Search Results') }}
+                      <span class="results-count">
+                        ({{ searchResults.length }} {{ translate('admin.entriesFound', 'entries found') }})
+                      </span>
+                    </h3>
+                    <div class="log-summary-table">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>{{ translate('admin.logTime', 'Time') }}</th>
+                            <th>{{ translate('admin.logLevel', 'Level') }}</th>
+                            <th>
+                              {{ translate('admin.logService', 'Service') }}
+                            </th>
+                            <th>
+                              {{ translate('admin.logMessage', 'Message') }}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="(log, index) in searchResults.slice(0, 5)" :key="'search-' + index">
+                            <td>{{ log.time }}</td>
+                            <td>
+                              <span :class="['log-level', `log-${log.level.toLowerCase()}`]">
+                                {{ translate(`admin.logLevels.${log.level.toLowerCase()}`, log.level) }}
+                              </span>
+                            </td>
+                            <td>{{ log.service }}</td>
+                            <td>{{ log.message }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div v-if="searchResults.length > 5" class="view-more-logs">
+                        <DsButton variant="secondary" :small="true" @click="searchLogs">
+                          {{ translate('admin.viewAllResults', 'View All Results') }}
+                        </DsButton>
+                      </div>
+                    </div>
+                  </div>
+
+                  <log-search-dialog
+                    v-if="showLogSearchDialog"
+                    @close="showLogSearchDialog = false"
+                    @search-results="handleSearchResults"
+                  />
+
+                  <div class="logs-info">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="16" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                    <span>
+                      {{
+                        translate(
+                          'admin.logsSection.infoLogsNote',
+                          'Info logs are not shown in the summary. Use the search function to view all log types.'
+                        )
+                      }}
+                    </span>
+                  </div>
+                </div>
+
+                <div v-if="activeTab === 'security'" class="dashboard-card" style="grid-column: span 2">
+                  <div class="card-header">
+                    <div class="card-title">
+                      {{ translate('admin.security.title', 'Security Monitoring') }}
+                    </div>
+                    <div class="card-actions">
+                      <DsButton
+                        variant="primary"
+                        :disabled="isLoading && currentOperation === 'runSecurityScan'"
+                        @click="runSecurityScan"
+                      >
+                        <span v-if="isLoading && currentOperation === 'runSecurityScan'">
+                          <Loader2 :size="14" class="inline-spinner" />
+                          {{ translate('admin.security.runningSecurityScan', 'Running Scan...') }}
+                        </span>
+                        <span v-else>
+                          {{ translate('admin.security.securityScan', 'Security Scan') }}
+                        </span>
+                      </DsButton>
+                    </div>
+                  </div>
+
+                  <DsStateDisplay v-if="isLoading && currentOperation === 'runSecurityScan'" type="loading">
+                    {{ translate('admin.security.loadingScan', 'Loading scan results...') }}
+                  </DsStateDisplay>
+
+                  <div v-if="!isLoading" class="security-details">
+                    <div>
+                      <strong>{{ translate('admin.security.lastSecurityScan', 'Last Security Scan') }}:</strong>
+                      {{ securityMetrics.lastScan }}
+                    </div>
+                    <div>
+                      <strong>{{ translate('admin.security.vulnerabilitiesFound', 'Vulnerabilities Found') }}:</strong>
+                      <span :class="securityMetrics.vulnerabilities.critical > 0 ? 'text-danger' : ''">
+                        {{ securityMetrics.vulnerabilities.critical }}
+                        {{ translate('admin.security.critical', 'critical') }}
+                      </span>
+                      ,
+                      <span :class="securityMetrics.vulnerabilities.medium > 0 ? 'text-warning' : ''">
+                        {{ securityMetrics.vulnerabilities.medium }}
+                        {{ translate('admin.security.medium', 'medium') }}
+                      </span>
+                      ,
+                      <span :class="securityMetrics.vulnerabilities.low > 0 ? 'text-info' : ''">
+                        {{ securityMetrics.vulnerabilities.low }}
+                        {{ translate('admin.security.low', 'low') }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div v-if="!isLoading && securityDetails" class="security-findings-section">
+                    <div
+                      v-if="
+                        securityDetails.vulnerabilityDetails &&
+                        securityDetails.vulnerabilityDetails.critical &&
+                        securityDetails.vulnerabilityDetails.critical.length > 0
+                      "
+                      class="vulnerability-section critical-section"
+                    >
+                      <h3 class="section-title">
+                        <span class="severity-indicator critical"></span>
+                        {{ translate('admin.security.criticalVulnerabilities', 'Critical Vulnerabilities') }}
+                      </h3>
+                      <div class="vulnerability-list">
+                        <div
+                          v-for="(vuln, index) in securityDetails.vulnerabilityDetails.critical"
+                          :key="'crit-' + index"
+                          class="vulnerability-card"
+                        >
+                          <div class="vuln-type">{{ vuln.type }}</div>
+                          <div class="vuln-description">
+                            {{ vuln.description }}
+                          </div>
+                          <div class="vuln-detail">
+                            <strong>{{ translate('admin.security.severity', 'Severity') }}:</strong>
+                            {{ vuln.severity }}
+                          </div>
+                          <div class="vuln-detail">
+                            <strong>{{ translate('admin.security.occurrences', 'Occurrences') }}:</strong>
+                            {{ vuln.occurrences }}
+                          </div>
+                          <div v-if="vuln.firstSeen" class="vuln-detail">
+                            <strong>{{ translate('admin.security.firstSeen', 'First Seen') }}:</strong>
+                            {{ vuln.firstSeen }}
+                          </div>
+                          <div v-if="vuln.lastSeen" class="vuln-detail">
+                            <strong>{{ translate('admin.security.lastSeen', 'Last Seen') }}:</strong>
+                            {{ vuln.lastSeen }}
+                          </div>
+                          <div v-if="vuln.matchedTerm" class="vuln-detail">
+                            <strong>{{ translate('admin.security.matchedTerm', 'Matched Term') }}:</strong>
+                            {{ vuln.matchedTerm }}
+                          </div>
+                          <div v-if="vuln.timestamp" class="vuln-detail">
+                            <strong>{{ translate('admin.security.timestamp', 'Timestamp') }}:</strong>
+                            {{ vuln.timestamp }}
+                          </div>
+                          <div v-if="vuln.service" class="vuln-detail">
+                            <strong>{{ translate('admin.security.service', 'Service') }}:</strong>
+                            {{ vuln.service }}
+                          </div>
+                          <div v-if="vuln.lineNumber" class="vuln-detail">
+                            <strong>{{ translate('admin.security.lineNumber', 'Line Number') }}:</strong>
+                            {{ vuln.lineNumber }}
+                          </div>
+                          <div v-if="vuln.url" class="vuln-detail">
+                            <strong>{{ translate('admin.security.url', 'URL') }}:</strong>
+                            {{ vuln.url }}
+                          </div>
+                          <div v-if="vuln.lineNumbers" class="vuln-detail">
+                            <strong>{{ translate('admin.security.lineNumbers', 'Line Numbers') }}:</strong>
+                            {{ vuln.lineNumbers.join(', ') }}
+                          </div>
+                          <div v-if="vuln.recommendation" class="vuln-recommendation">
+                            {{ vuln.recommendation }}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      v-if="
+                        securityDetails.vulnerabilityDetails &&
+                        securityDetails.vulnerabilityDetails.medium &&
+                        securityDetails.vulnerabilityDetails.medium.length > 0
+                      "
+                      class="vulnerability-section medium-section"
+                    >
+                      <h3 class="section-title">
+                        <span class="severity-indicator warning"></span>
+                        {{ translate('admin.security.mediumVulnerabilities', 'Medium Vulnerabilities') }}
+                      </h3>
+                      <div class="vulnerability-list">
+                        <div
+                          v-for="(vuln, index) in securityDetails.vulnerabilityDetails.medium"
+                          :key="'med-' + index"
+                          class="vulnerability-card"
+                        >
+                          <div class="vuln-type">{{ vuln.type }}</div>
+                          <div class="vuln-description">
+                            {{ vuln.description }}
+                          </div>
+                          <div class="vuln-detail">
+                            <strong>{{ translate('admin.security.severity', 'Severity') }}:</strong>
+                            {{ vuln.severity }}
+                          </div>
+                          <div class="vuln-detail">
+                            <strong>{{ translate('admin.security.occurrences', 'Occurrences') }}:</strong>
+                            {{ vuln.occurrences }}
+                          </div>
+                          <div v-if="vuln.firstSeen" class="vuln-detail">
+                            <strong>{{ translate('admin.security.firstSeen', 'First Seen') }}:</strong>
+                            {{ vuln.firstSeen }}
+                          </div>
+                          <div v-if="vuln.lastSeen" class="vuln-detail">
+                            <strong>{{ translate('admin.security.lastSeen', 'Last Seen') }}:</strong>
+                            {{ vuln.lastSeen }}
+                          </div>
+                          <div v-if="vuln.matchedTerm" class="vuln-detail">
+                            <strong>{{ translate('admin.security.matchedTerm', 'Matched Term') }}:</strong>
+                            {{ vuln.matchedTerm }}
+                          </div>
+                          <div v-if="vuln.timestamp" class="vuln-detail">
+                            <strong>{{ translate('admin.security.timestamp', 'Timestamp') }}:</strong>
+                            {{ vuln.timestamp }}
+                          </div>
+                          <div v-if="vuln.service" class="vuln-detail">
+                            <strong>{{ translate('admin.security.service', 'Service') }}:</strong>
+                            {{ vuln.service }}
+                          </div>
+                          <div v-if="vuln.lineNumber" class="vuln-detail">
+                            <strong>{{ translate('admin.security.lineNumber', 'Line Number') }}:</strong>
+                            {{ vuln.lineNumber }}
+                          </div>
+                          <div v-if="vuln.url" class="vuln-detail">
+                            <strong>{{ translate('admin.security.url', 'URL') }}:</strong>
+                            {{ vuln.url }}
+                          </div>
+                          <div v-if="vuln.lineNumbers" class="vuln-detail">
+                            <strong>{{ translate('admin.security.lineNumbers', 'Line Numbers') }}:</strong>
+                            {{ vuln.lineNumbers.join(', ') }}
+                          </div>
+                          <div v-if="vuln.recommendation" class="vuln-recommendation">
+                            {{ vuln.recommendation }}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      v-if="
+                        securityDetails.vulnerabilityDetails &&
+                        securityDetails.vulnerabilityDetails.low &&
+                        securityDetails.vulnerabilityDetails.low.length > 0
+                      "
+                      class="vulnerability-section low-section"
+                    >
+                      <h3 class="section-title">
+                        <span class="severity-indicator info"></span>
+                        {{ translate('admin.security.lowVulnerabilities', 'Low Vulnerabilities') }}
+                      </h3>
+                      <div class="vulnerability-list">
+                        <div
+                          v-for="(vuln, index) in securityDetails.vulnerabilityDetails.low"
+                          :key="'low-' + index"
+                          class="vulnerability-card"
+                        >
+                          <div class="vuln-type">{{ vuln.type }}</div>
+                          <div class="vuln-description">
+                            {{ vuln.description }}
+                          </div>
+                          <div class="vuln-detail">
+                            <strong>{{ translate('admin.security.severity', 'Severity') }}:</strong>
+                            {{ vuln.severity }}
+                          </div>
+                          <div class="vuln-detail">
+                            <strong>{{ translate('admin.security.occurrences', 'Occurrences') }}:</strong>
+                            {{ vuln.occurrences }}
+                          </div>
+                          <div v-if="vuln.firstSeen" class="vuln-detail">
+                            <strong>{{ translate('admin.security.firstSeen', 'First Seen') }}:</strong>
+                            {{ vuln.firstSeen }}
+                          </div>
+                          <div v-if="vuln.lastSeen" class="vuln-detail">
+                            <strong>{{ translate('admin.security.lastSeen', 'Last Seen') }}:</strong>
+                            {{ vuln.lastSeen }}
+                          </div>
+                          <div v-if="vuln.matchedTerm" class="vuln-detail">
+                            <strong>{{ translate('admin.security.matchedTerm', 'Matched Term') }}:</strong>
+                            {{ vuln.matchedTerm }}
+                          </div>
+                          <div v-if="vuln.timestamp" class="vuln-detail">
+                            <strong>{{ translate('admin.security.timestamp', 'Timestamp') }}:</strong>
+                            {{ vuln.timestamp }}
+                          </div>
+                          <div v-if="vuln.service" class="vuln-detail">
+                            <strong>{{ translate('admin.security.service', 'Service') }}:</strong>
+                            {{ vuln.service }}
+                          </div>
+                          <div v-if="vuln.lineNumber" class="vuln-detail">
+                            <strong>{{ translate('admin.security.lineNumber', 'Line Number') }}:</strong>
+                            {{ vuln.lineNumber }}
+                          </div>
+                          <div v-if="vuln.url" class="vuln-detail">
+                            <strong>{{ translate('admin.security.url', 'URL') }}:</strong>
+                            {{ vuln.url }}
+                          </div>
+                          <div v-if="vuln.lineNumbers" class="vuln-detail">
+                            <strong>{{ translate('admin.security.lineNumbers', 'Line Numbers') }}:</strong>
+                            {{ vuln.lineNumbers.join(', ') }}
+                          </div>
+                          <div v-if="vuln.recommendation" class="vuln-recommendation">
+                            {{ vuln.recommendation }}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      v-if="
+                        securityDetails &&
+                        securityDetails.vulnerabilityDetails &&
+                        securityDetails.vulnerabilityDetails.medium &&
+                        securityDetails.vulnerabilityDetails.medium.length > 0
+                      "
+                      class="security-recommendations"
+                    >
+                      <h3 class="section-title">
+                        <span class="severity-indicator info"></span>
+                        {{ translate('admin.security.securityRecommendations', 'Security Recommendations') }}
+                      </h3>
+                      <div class="recommendations-list">
+                        <div class="recommendation-item severity-medium">
+                          <div class="recommendation-header">
+                            <span class="severity-indicator medium"></span>
+                            <span class="recommendation-title">
+                              {{
+                                translate('admin.security.securityProbeAttempts', 'Security Probe Attempts Detected')
+                              }}
+                            </span>
+                          </div>
+                          <div class="recommendation-description">
+                            {{ securityDetails.vulnerabilityDetails.medium.length }}
+                            {{
+                              translate(
+                                'admin.security.sensitiveFileAccess',
+                                'attempts to access sensitive files or endpoints detected'
+                              )
+                            }}
+                          </div>
+                          <div class="recommendation-action">
+                            <strong>{{ translate('admin.security.recommendedAction', 'Recommended Action') }}:</strong>
+                            {{
+                              translate(
+                                'admin.security.rateLimitRecommendation',
+                                'Consider implementing rate limiting, IP blocking for persistent offenders, and ensure proper server hardening is in place'
+                              )
+                            }}
+                          </div>
+                        </div>
+                        <div
+                          v-if="
+                            securityDetails.vulnerabilityDetails.medium.some(
+                              (v) => v.description && v.description.includes('.env')
+                            )
+                          "
+                          class="recommendation-item severity-medium"
+                        >
+                          <div class="recommendation-header">
+                            <span class="severity-indicator medium"></span>
+                            <span class="recommendation-title">
+                              {{ translate('admin.security.envFileAccess', 'Environment File Access Attempts') }}
+                            </span>
+                          </div>
+                          <div class="recommendation-description">
+                            {{
+                              securityDetails.vulnerabilityDetails.medium.filter(
+                                (v) => v.description && v.description.includes('.env')
+                              ).length
+                            }}
+                            {{
+                              translate('admin.security.envFileAccessDesc', 'attempts to access .env files detected')
+                            }}
+                          </div>
+                          <div class="recommendation-action">
+                            <strong>{{ translate('admin.security.recommendedAction', 'Recommended Action') }}:</strong>
+                            {{
+                              translate(
+                                'admin.security.envFileRecommendation',
+                                'Ensure environment files are not accessible from web directories and server configurations properly block access to sensitive files'
+                              )
+                            }}
+                          </div>
+                        </div>
+                        <div
+                          v-if="
+                            securityDetails.vulnerabilityDetails.medium.some(
+                              (v) => v.description && v.description.includes('.git')
+                            )
+                          "
+                          class="recommendation-item severity-medium"
+                        >
+                          <div class="recommendation-header">
+                            <span class="severity-indicator medium"></span>
+                            <span class="recommendation-title">
+                              {{ translate('admin.security.gitRepoAccess', 'Git Repository Access Attempts') }}
+                            </span>
+                          </div>
+                          <div class="recommendation-description">
+                            {{
+                              securityDetails.vulnerabilityDetails.medium.filter(
+                                (v) => v.description && v.description.includes('.git')
+                              ).length
+                            }}
+                            {{
+                              translate(
+                                'admin.security.gitRepoAccessDesc',
+                                'attempts to access Git repository files detected'
+                              )
+                            }}
+                          </div>
+                          <div class="recommendation-action">
+                            <strong>{{ translate('admin.security.recommendedAction', 'Recommended Action') }}:</strong>
+                            {{
+                              translate(
+                                'admin.security.gitRepoRecommendation',
+                                'Make sure .git directories are properly secured and not accessible from the web'
+                              )
+                            }}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      v-if="securityDetails.failedLoginDetails && securityDetails.failedLoginDetails.length > 0"
+                      class="vulnerability-section login-section"
+                    >
+                      <h3 class="section-title">
+                        <span class="severity-indicator warning"></span>
+                        {{ translate('admin.security.authenticationIssues', 'Authentication Issues') }}
+                      </h3>
+                      <div class="detail-table">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th style="width: 25%">
+                                {{ translate('admin.security.timestamp', 'Timestamp') }}
+                              </th>
+                              <th style="width: 15%">
+                                {{ translate('admin.security.type', 'Type') }}
+                              </th>
+                              <th>
+                                {{ translate('admin.security.message', 'Message') }}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr v-for="(issue, index) in securityDetails.failedLoginDetails" :key="'login-' + index">
+                              <td>{{ issue.timestamp }}</td>
+                              <td>
+                                <span v-if="issue.type" :class="['log-level', `log-${issue.type.toLowerCase()}`]">
+                                  {{ issue.type }}
+                                </span>
+                              </td>
+                              <td class="log-message-cell">
+                                {{ issue.message }}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div
+                      v-if="securityDetails.suspiciousDetails && securityDetails.suspiciousDetails.length > 0"
+                      class="vulnerability-section suspicious-section"
+                    >
+                      <h3 class="section-title">
+                        <span class="severity-indicator warning"></span>
+                        {{ translate('admin.security.suspiciousActivityLogs', 'Suspicious Activity Logs') }}
+                      </h3>
+                      <div class="detail-table">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th style="width: 25%">
+                                {{ translate('admin.security.timestamp', 'Timestamp') }}
+                              </th>
+                              <th style="width: 15%">
+                                {{ translate('admin.security.type', 'Type') }}
+                              </th>
+                              <th>
+                                {{ translate('admin.security.message', 'Message') }}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr
+                              v-for="(activity, index) in securityDetails.suspiciousDetails"
+                              :key="'suspicious-' + index"
+                            >
+                              <td>{{ activity.timestamp }}</td>
+                              <td>
+                                <span v-if="activity.type" :class="['log-level', `log-${activity.type.toLowerCase()}`]">
+                                  {{ activity.type }}
+                                </span>
+                              </td>
+                              <td class="log-message-cell">
+                                {{ activity.message }}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div
+                      v-if="
+                        !isLoading &&
+                        securityDetails &&
+                        (!securityDetails.vulnerabilityDetails ||
+                          (securityDetails.vulnerabilityDetails.critical.length === 0 &&
+                            securityDetails.vulnerabilityDetails.medium.length === 0 &&
+                            securityDetails.vulnerabilityDetails.low.length === 0 &&
+                            (!securityDetails.failedLoginDetails || securityDetails.failedLoginDetails.length === 0)))
+                      "
+                    >
+                      <DsStateDisplay type="empty">
+                        {{ translate('admin.security.noVulnerabilitiesFound', 'No Vulnerabilities Found') }}
+                        <template #action>
+                          <p style="color: var(--muted); max-width: 400px; text-align: center">
+                            {{
+                              translate(
+                                'admin.security.systemSecure',
+                                'Your system appears to be secure. Continue monitoring regularly.'
+                              )
+                            }}
+                          </p>
+                        </template>
+                      </DsStateDisplay>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="activeTab === 'users'" class="dashboard-card" style="grid-column: span 2">
+                  <div class="card-header">
+                    <div class="card-title">
+                      {{ translate('admin.userManagement', 'User Management') }}
+                    </div>
+                  </div>
+
+                  <div class="user-stats-summary">
+                    <div class="stats-row">
+                      <div class="stat-item">
+                        <span class="stat-label"
+                          >{{ translate('admin.userManagementSection.totalUsers', 'Total Users') }}:</span
+                        >
+                        <span class="stat-value">{{ userStats.totalUsers }}</span>
+                      </div>
+                      <div class="stat-item">
+                        <span class="stat-label">
+                          {{ translate('admin.monthlyActiveUsers', 'Currently Active Users (CAU)') }}:
+                        </span>
+                        <span class="stat-value">{{ userStats.activeUsers }}</span>
+                      </div>
+                      <div class="stat-item">
+                        <span class="stat-label"
+                          >{{ translate('admin.userManagementSection.newUsers', 'New Users (Month)') }}:</span
+                        >
+                        <span class="stat-value">{{ userStats.newUsers }}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="search-bar">
+                    <div class="search-input-container">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="search-icon"
+                      >
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                      </svg>
+                      <DsInput
+                        v-model="userSearchTerm"
+                        type="search"
+                        class="search-input"
+                        :placeholder="translate('admin.userManagementSection.searchUsers', 'Search users...')"
+                        @enter="searchUsers"
+                      />
+                      <DsButton
+                        v-if="userSearchTerm"
+                        variant="ghost"
+                        :small="true"
+                        class="search-clear-btn"
+                        :aria-label="translate('admin.clearSearch', 'Clear search')"
+                        @click="resetUserSearch"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </DsButton>
+                    </div>
+
+                    <div class="search-filter">
+                      <DsSelect
+                        v-model="userSearchField"
+                        class="search-field-select"
+                        :placeholder="translate('admin.userManagementSection.searchFields.all', 'All Fields')"
+                      >
+                        <option value="all">
+                          {{ translate('admin.userManagementSection.searchFields.all', 'All Fields') }}
+                        </option>
+                        <option value="name">
+                          {{ translate('admin.userManagementSection.searchFields.name', 'Name') }}
+                        </option>
+                        <option value="email">
+                          {{ translate('admin.userManagementSection.searchFields.email', 'Email') }}
+                        </option>
+                        <option value="role">
+                          {{ translate('admin.userManagementSection.searchFields.role', 'Role') }}
+                        </option>
+                      </DsSelect>
+                    </div>
+
+                    <div class="search-button">
+                      <DsButton variant="primary" :disabled="isSearchingUsers" @click="searchUsers">
+                        {{ translate('admin.userManagementSection.search', 'Search') }}
+                      </DsButton>
+                    </div>
+                  </div>
+
+                  <div v-if="userSearchResults" class="search-results-info">
+                    <span>
+                      {{ userSearchTotal }}
+                      {{ translate('admin.userManagementSection.usersFound', 'users found') }}
+                      <DsButton v-if="userSearchResults" variant="secondary" :small="true" @click="resetUserSearch">
+                        {{ translate('admin.userManagementSection.showAllUsers', 'Show All Users') }}
+                      </DsButton>
+                    </span>
+                  </div>
+
+                  <DsStateDisplay v-if="isSearchingUsers" type="loading">
+                    {{ translate('admin.userManagementSection.searching', 'Searching...') }}
+                  </DsStateDisplay>
+
+                  <table class="log-table">
+                    <thead>
+                      <tr>
+                        <th>{{ translate('admin.userName', 'Name') }}</th>
+                        <th>{{ translate('admin.userEmail', 'Email') }}</th>
+                        <th>{{ translate('admin.userRole', 'Role') }}</th>
+                        <th>{{ translate('admin.userActions', 'Actions') }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="user in displayedUsers" :key="user._key">
+                        <td>{{ user.fullName || user.loginName }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>{{ (user.roles || []).join(', ') || user.role }}</td>
+                        <td>
+                          <DsButton
+                            variant="secondary"
+                            tag="a"
+                            small
+                            :href="getUserManageUrl(user)"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {{ translate('admin.manage', 'Manage') }} →
+                          </DsButton>
+                        </td>
+                      </tr>
+                      <tr v-if="displayedUsers.length === 0">
+                        <td colspan="4" style="text-align: center; padding: 2rem">
+                          <div v-if="isSearchingUsers">
+                            {{ translate('admin.userManagementSection.searchingUsers', 'Searching for users...') }}
+                          </div>
+                          <div v-else-if="userSearchResults !== null">
+                            {{ translate('admin.noUsersFound', 'No users found matching your search criteria.') }}
+                          </div>
+                          <div v-else>
+                            {{ translate('admin.noUsers', 'No users available.') }}
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <div v-if="userSearchResults && userSearchTotal > userSearchLimit" class="pagination">
+                    <DsButton
+                      variant="ghost"
+                      :small="true"
+                      class="page-btn"
+                      :disabled="userSearchOffset === 0"
+                      @click="handleUserSearchPagination(Math.max(0, userSearchOffset - userSearchLimit))"
+                    >
+                      « {{ translate('admin.previous', 'Previous') }}
+                    </DsButton>
+
+                    <span class="pagination-info">
+                      {{ translate('admin.showing', 'Showing') }}
+                      {{ userSearchOffset + 1 }}-{{ Math.min(userSearchOffset + userSearchLimit, userSearchTotal) }}
+                      {{ translate('admin.of', 'of') }} {{ userSearchTotal }}
+                    </span>
+
+                    <DsButton
+                      variant="ghost"
+                      :small="true"
+                      class="page-btn"
+                      :disabled="userSearchOffset + userSearchLimit >= userSearchTotal"
+                      @click="handleUserSearchPagination(userSearchOffset + userSearchLimit)"
+                    >
+                      {{ translate('admin.next', 'Next') }} »
+                    </DsButton>
+                  </div>
                 </div>
               </div>
-            </div>
+            </DsTabs>
           </div>
         </div>
       </div>
+
+      <DsSpinner v-if="isLoading" fixed>
+        <p>
+          {{
+            currentOperation
+              ? translate(`admin.operations.${currentOperation}.loading`, `Processing ${currentOperation}...`)
+              : translate('admin.loading', 'Loading...')
+          }}
+        </p>
+      </DsSpinner>
+
+      <OperationResultsModal
+        v-if="showOperationResults && operationResults"
+        :operation="currentOperation"
+        :results="operationResults"
+        @close="closeOperationResults"
+      />
+
+      <UploadFilesDialog
+        v-if="showUploadDialog"
+        @close="showUploadDialog = false"
+        @files-uploaded="handleFilesUploaded"
+      />
+
+      <AddFromLinkDialog v-if="showLinkDialog" @close="showLinkDialog = false" @link-submitted="handleLinkSubmitted" />
+
+      <FileDetailsDialog
+        v-if="showDetailsDialog"
+        :file-id="selectedFileId"
+        @close="showDetailsDialog = false"
+        @file-updated="handleFileUpdated"
+        @action-triggered="handleFileAction"
+      />
+
+      <ConfirmDialog
+        :visible="confirmDialogState.visible"
+        :title="confirmDialogState.title"
+        :message="confirmDialogState.message"
+        :confirm-text="confirmDialogState.confirmText"
+        :cancel-text="confirmDialogState.cancelText"
+        @confirm="confirmDialogState.onConfirm"
+        @cancel="confirmDialogState.onCancel"
+      />
     </div>
-
-    <div v-if="isLoading" class="loading-overlay">
-      <div class="loading-spinner"></div>
-      <p>
-        {{
-          currentOperation
-            ? translate(`admin.operations.${currentOperation}.loading`, `Processing ${currentOperation}...`)
-            : translate('admin.loading', 'Loading...')
-        }}
-      </p>
-    </div>
-
-    <OperationResultsModal
-      v-if="showOperationResults && operationResults"
-      :operation="currentOperation"
-      :results="operationResults"
-      @close="closeOperationResults"
-    />
-
-    <UploadFilesDialog
-      v-if="showUploadDialog"
-      @close="showUploadDialog = false"
-      @files-uploaded="handleFilesUploaded"
-    />
-
-    <AddFromLinkDialog v-if="showLinkDialog" @close="showLinkDialog = false" @link-submitted="handleLinkSubmitted" />
-
-    <FileDetailsDialog
-      v-if="showDetailsDialog"
-      :file-id="selectedFileId"
-      @close="showDetailsDialog = false"
-      @file-updated="handleFileUpdated"
-      @action-triggered="handleFileAction"
-    />
-
-    <ConfirmDialog
-      :visible="confirmDialogState.visible"
-      :title="confirmDialogState.title"
-      :message="confirmDialogState.message"
-      :confirm-text="confirmDialogState.confirmText"
-      :cancel-text="confirmDialogState.cancelText"
-      :theme="currentTheme"
-      @confirm="confirmDialogState.onConfirm"
-      @cancel="confirmDialogState.onCancel"
-    />
   </div>
 </template>
 
@@ -1515,6 +1536,14 @@ import UploadFilesDialog from './UploadFilesDialog.vue';
 import AddFromLinkDialog from './AddFromLinkDialog.vue';
 import FileDetailsDialog from './FileDetailsDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue'; // IMPORT ConfirmDialog
+import DsButton from './ds/Button.vue';
+import DsInput from './ds/Input.vue';
+import DsStatusTag from './ds/StatusTag.vue';
+import DsSpinner from './ds/Spinner.vue';
+import DsStateDisplay from './ds/StateDisplay.vue';
+import DsTabs from './ds/Tabs.vue';
+import DsSelect from './ds/Select.vue';
+import { Loader2 } from 'lucide-vue-next';
 import { eventBus } from '../eventBus.js';
 import { availableLanguages } from '../config/languageConfig.js';
 import oidcConfig from '../config/oidcConfig.js';
@@ -1530,9 +1559,17 @@ export default {
     UploadFilesDialog,
     AddFromLinkDialog,
     FileDetailsDialog,
-    ConfirmDialog // REGISTER ConfirmDialog
+    ConfirmDialog, // REGISTER ConfirmDialog
+    DsButton,
+    DsInput,
+    DsStatusTag,
+    DsSpinner,
+    DsStateDisplay,
+    DsTabs,
+    DsSelect,
+    Loader2
   },
-  emits: ['close'],
+  emits: [],
   data() {
     return {
       // Properties for the Document Management table
@@ -1698,6 +1735,12 @@ export default {
     };
   },
   computed: {
+    adminTabs() {
+      return this.tabs.map((t) => ({
+        label: this.translate(`admin.tabs.${t.id}`, t.label),
+        value: t.id
+      }));
+    },
     keycloakAdminUrl() {
       const keycloakUrl = window.location.origin + '/auth/admin';
       // Extract realm from runtime OIDC config (authority = "https://host/auth/realms/{realm}")
@@ -1795,7 +1838,6 @@ export default {
   },
   watch: {
     '$i18n.locale'(newLocale) {
-      console.log('Locale changed in AdminDashboard:', newLocale);
       this.currentLocale = newLocale;
       this.$forceUpdate();
     },
@@ -1942,8 +1984,8 @@ export default {
         if (savedLocale) {
           return savedLocale;
         }
-      } catch (e) {
-        console.warn('Error accessing localStorage for language:', e);
+      } catch {
+        // Error accessing localStorage - using default language
       }
 
       // Default to English if nothing else works
@@ -1959,8 +2001,8 @@ export default {
         // Save to localStorage
         try {
           localStorage.setItem('userLocale', this.currentLocale);
-        } catch (e) {
-          console.warn('Error saving language preference:', e);
+        } catch {
+          // Error saving language preference to localStorage
         }
 
         // Force update this component
@@ -2025,7 +2067,6 @@ export default {
       }
 
       // Step 2: Proceed with the tab switch
-      console.log(`[AdminDashboard] Setting active tab to: ${tabId}, current securityDetails:`, this.securityDetails);
       this.activeTab = tabId;
       this.originalHierarchyFormState = null; // Reset form state when leaving the hierarchy tab
 
@@ -2041,7 +2082,6 @@ export default {
         this.loadLogsSummary();
         this.loadLogs();
       } else if (tabId === 'security') {
-        console.log(`[AdminDashboard] Loading security tab, isLoading: ${this.isLoading}`);
         this.loadSecurityMetrics();
       } else if (tabId === 'users') {
         this.loadUserStats();
@@ -2095,8 +2135,6 @@ export default {
             value: data.resourceUsage[id]
           }));
         } else {
-          // Log a warning if data is missing, which helps in debugging
-          console.warn('Received invalid system health data:', data);
           this.showNotification('Failed to parse system health data', 'error');
         }
       } catch (error) {
@@ -2144,7 +2182,6 @@ export default {
         const response = await adminDashboardService.getLogsSummary({
           date: new Date().toISOString().split('T')[0]
         });
-        console.log('[AdminDashboard] Logs summary response:', JSON.stringify(response, null, 2));
 
         if (response && response.data && Array.isArray(response.data.errors) && Array.isArray(response.data.warnings)) {
           this.errorLogsSummary = response.data.errors || [];
@@ -2173,7 +2210,6 @@ export default {
 
     // Security operations (This is a corrected/combined version)
     async runSecurityScan() {
-      console.log('[AdminDashboard] Starting runSecurityScan, isLoading:', this.isLoading);
       if (this.isLoading && this.currentOperation === 'runSecurityScan') return; // Prevent double-click
 
       this.isLoading = true;
@@ -2181,10 +2217,8 @@ export default {
 
       try {
         const response = await adminDashboardService.runSecurityScan();
-        console.log('[AdminDashboard] Security scan API response:', response);
 
         if (response.success) {
-          console.log('[AdminDashboard] Security scan completed successfully:', response.data);
           await this.loadSecurityDetails(); // This fetches all necessary details
           this.securityMetrics.lastScan = this.translate('admin.security.lastScanJustNow', 'Just now'); // Update last scan time
           // Update vulnerability counts from the detailed response
@@ -2203,8 +2237,6 @@ export default {
         } else {
           throw new Error(response.message || 'Security scan failed');
         }
-
-        console.log('[AdminDashboard] After scan, securityDetails:', this.securityDetails);
       } catch (error) {
         console.error('[AdminDashboard] Error running security scan:', error);
         this.showNotification(
@@ -2214,12 +2246,6 @@ export default {
       } finally {
         this.isLoading = false;
         this.currentOperation = null;
-        console.log(
-          '[AdminDashboard] runSecurityScan complete, isLoading:',
-          this.isLoading,
-          'currentOperation:',
-          this.currentOperation
-        );
       }
     },
 
@@ -2245,12 +2271,12 @@ export default {
       // Notify the user about the results
       if (results.length === 0) {
         this.showNotification(
-          this.translate('admin.logSearch.noResultsFound', 'No logs matched your search criteria'),
+          this.translate('admin.logsSection.logSearch.noResultsFound', 'No logs matched your search criteria'),
           'info'
         );
       } else {
         this.showNotification(
-          this.translate('admin.logSearch.resultsFound', `Found {count} log entries`).replace(
+          this.translate('admin.logsSection.logSearch.resultsFound', `Found {count} log entries`).replace(
             '{count}',
             results.length
           ), // Added placeholder replacement
@@ -2278,12 +2304,10 @@ export default {
 
     // Load security metrics
     async loadSecurityMetrics() {
-      console.log('[AdminDashboard] Loading security metrics...');
       try {
         this.isLoading = true;
         const response = await adminDashboardService.getSecurityMetrics();
         if (response && response.data) {
-          console.log('[AdminDashboard] Security metrics loaded successfully:', response.data);
           this.securityMetrics = {
             failedLoginAttempts: response.data.failedLoginAttempts || 0,
             suspiciousActivities: response.data.suspiciousActivities || 0,
@@ -2296,8 +2320,6 @@ export default {
           };
           // Also load the details when metrics are loaded
           await this.loadSecurityDetails();
-        } else {
-          console.warn('[AdminDashboard] Security metrics response missing data property');
         }
       } catch (error) {
         console.error('[AdminDashboard] Error loading security metrics:', error);
@@ -2477,7 +2499,6 @@ export default {
           this.userSearchResults = [...(searchResponse.data.users || [])];
           this.userSearchTotal = searchResponse.data.total || 0;
         } else {
-          console.warn('No data received from searchUsers');
           this.userSearchResults = [];
           this.userSearchTotal = 0;
         }
@@ -2535,11 +2556,9 @@ export default {
 
     // Load detailed security information
     async loadSecurityDetails() {
-      console.log('[AdminDashboard] Starting loadSecurityDetails');
       try {
         this.isLoading = true;
         const response = await adminDashboardService.getSecurityDetails();
-        console.log('[AdminDashboard] Security details API response:', JSON.stringify(response, null, 2));
 
         // Define a helper to map vulnerability details
         const mapVulnerability = (v) => ({
@@ -2594,7 +2613,6 @@ export default {
             ? response.suspiciousDetails.map(mapAndParseLogDetail)
             : []
         };
-        console.log('[AdminDashboard] Security details loaded and parsed successfully:', this.securityDetails);
       } catch (error) {
         console.error('[AdminDashboard] Error loading security details:', error);
         this.securityDetails = {
@@ -2884,34 +2902,29 @@ export default {
     // addFromLink() is now just the action to show the dialog (see below)
 
     viewDocumentDetails(docId) {
-      console.log('Viewing details for doc ID:', docId);
       this.selectedFileId = docId;
       this.showDetailsDialog = true;
     },
 
     // UPDATED: Determine status class based on crawl status first
-    getStatusClass(doc) {
-      // 1. Normalize Access: Handle snake_case, camelCase, or potential array wrapping
+    getStatusVariant(doc) {
       let job = doc.crawl_job || doc.crawlJob;
       if (Array.isArray(job)) job = job.length > 0 ? job[0] : null;
 
-      // 2. Normalize Strings
       const crawlStatus = job?.status ? String(job.status).toLowerCase().trim() : null;
       const dataPrepStatus = doc.dataprep?.status ? String(doc.dataprep.status).toLowerCase().trim() : '';
 
-      // 3. Priority Logic: Crawl Status takes precedence for active/failed states
-      if (crawlStatus === 'crawling') return 'status-ingesting'; // Blue
-      if (crawlStatus === 'failed' || crawlStatus === 'killed') return 'status-error'; // Red
+      if (crawlStatus === 'crawling') return 'info';
+      if (crawlStatus === 'failed' || crawlStatus === 'killed') return 'error';
 
-      // 4. Fallback Logic: DataPrep Status
-      if (dataPrepStatus === 'ingested') return 'status-ingested';
-      if (dataPrepStatus === 'ingesting') return 'status-ingesting';
-      if (dataPrepStatus === 'ingested with warnings') return 'status-ingested-with-warnings';
-      if (dataPrepStatus === 'ingestion error') return 'status-ingestion-error';
-      if (dataPrepStatus === 'pending') return 'status-pending';
-      if (dataPrepStatus === 'retracted') return 'status-retracted';
+      if (dataPrepStatus === 'ingested') return 'success';
+      if (dataPrepStatus === 'ingesting') return 'info';
+      if (dataPrepStatus === 'ingested with warnings') return 'warning';
+      if (dataPrepStatus === 'ingestion error') return 'error';
+      if (dataPrepStatus === 'pending') return 'pending';
+      if (dataPrepStatus === 'retracted') return 'info';
 
-      return '';
+      return 'info';
     },
 
     getDisplayStatus(doc) {
@@ -3015,7 +3028,6 @@ export default {
     refreshDocuments() {
       // In a real application, this would re-fetch the document list from your API
       // this.showNotification("Document list refreshed.", "info"); // Notification is now more specific
-      console.log('Refreshing document list...');
       this.loadDocuments();
     },
 
@@ -3115,120 +3127,27 @@ export default {
 </script>
 
 <style scoped>
-/* Base variables */
-:root {
-  --primary: #3b82f6;
-  --primary-dark: #2563eb;
-  --secondary: #64748b;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --light: #f8fafc;
-  --dark: #1e293b;
-  --border: #e2e8f0;
-
-  /* Theme variables */
-  --bg-dialog: #ffffff;
-  --text-primary: #333333;
-  --text-secondary: #4d4d4d;
-  --text-tertiary: #767676;
-  --text-button-primary: #ffffff;
-  --text-button-secondary: #4d4d4d;
-  --bg-button-secondary: #e9ecef;
-  --border-color: #dcdfe4;
-  --bg-section: rgba(0, 0, 0, 0.02);
-  --bg-danger: #ef4444;
-  --bg-danger-hover: #dc2626;
-  --bg-input: #ffffff;
-  --border-input: #dcdfe4;
-  --switch-track-off: #d0d0d0;
-  --switch-track-on: #3b82f6;
-  --switch-thumb: #ffffff;
-  --slider-track: #e9ecef;
-  --slider-thumb: #3b82f6;
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
-}
-
-/* Dark theme variables */
-[data-theme='dark'],
-.dark-mode {
-  --bg-dialog: #1e293b;
-  --text-primary: #f1f5f9;
-  --text-secondary: #cbd5e1;
-  --text-tertiary: #94a3b8;
-  --text-button-primary: #ffffff;
-  --text-button-secondary: #cbd5e1;
-  --bg-button-secondary: #334155;
-  --border-color: #334155;
-  --bg-section: rgba(255, 255, 255, 0.03);
-  --bg-danger: #ef4444;
-  --bg-danger-hover: #dc2626;
-  --bg-input: #0f172a;
-  --border-input: #334155;
-  --switch-track-off: #475569;
-  --switch-track-on: #3b82f6;
-  --switch-thumb: #ffffff;
-  --slider-track: #334155;
-  --slider-thumb: #3b82f6;
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
-}
-
-/* Ensure consistent styling for sidebar elements in both themes */
-.sidebar .logo {
-  color: #f8fafc;
-}
-
-.sidebar .nav-header {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.sidebar .nav-link {
-  color: #e2e8f0;
-}
-
-.sidebar .nav-link:hover,
-.sidebar .nav-link.active {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: white;
-}
-
-.sidebar .nav-link.active {
-  background-color: var(--primary);
-  color: white;
-}
-
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: var(--font-body);
 }
 
 /* Modal backdrop */
-.admin-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.4);
-  z-index: 999;
+.admin-page {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  display: flex;
 }
 
 /* Admin dashboard container */
 .admin-dashboard {
-  position: fixed;
-  top: 60px; /* Position below navbar - adjust based on your navbar height */
-  left: 50%;
-  transform: translateX(-50%);
-  width: 90%;
-  max-width: 1200px;
-  max-height: calc(100vh - 80px); /* Leave space for navbar and notifications */
-  overflow-y: auto;
-  background-color: var(--bg-dialog);
-  z-index: 1000;
-  border-radius: 8px;
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--surface);
 }
 
 /* Close button */
@@ -3236,75 +3155,37 @@ export default {
   position: absolute;
   top: 8px; /* Move it higher into the top bar */
   right: 16px; /* Position closer to the right edge */
-  background: rgba(0, 0, 0, 0.2);
-  border: none;
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: var(--text-primary);
   z-index: 1100;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-}
-
-.close-dashboard-btn:hover {
-  background: rgba(239, 68, 68, 0.8);
-  color: white;
-  transform: scale(1.1);
+  /* Other styles handled by DsButton */
 }
 
 /* Main layout grid */
 .dashboard {
   display: grid;
-  grid-template-columns: 220px 1fr; /* Slightly smaller sidebar */
-  min-height: auto;
-  max-height: calc(100vh - 80px);
+  grid-template-columns: 220px 1fr;
+  height: calc(100vh - 60px);
+  overflow: hidden;
 }
 
 /* Sidebar */
 .sidebar {
-  background: var(--bg-navbar);
-  color: #f8fafc;
-  padding: 1.5rem 1rem;
-  max-height: calc(100vh - 80px);
+  background: var(--bg-sidebar);
+  color: var(--fg);
+  padding: var(--space-lg) var(--space-md);
+  height: 100%;
   overflow-y: auto;
 }
 
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 2rem;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #f8fafc;
-}
-
-.logo-icon {
-  background-color: var(--primary);
-  color: white;
-  height: 2rem;
-  width: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.375rem;
-}
-
 .nav-section {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--space-lg);
 }
 
 .nav-header {
   text-transform: uppercase;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.7);
-  margin-bottom: 0.5rem;
+  color: var(--muted-soft);
+  margin-bottom: var(--space-sm);
 }
 
 .nav-items {
@@ -3312,37 +3193,40 @@ export default {
 }
 
 .nav-item {
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--space-xs);
 }
 
 .nav-link {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
   text-decoration: none;
-  color: #e2e8f0;
-  border-radius: 0.375rem;
-  transition: all 0.2s;
+  color: var(--fg);
+  opacity: 0.7;
+  border-radius: var(--radius-md);
+  transition: all 0.15s;
   cursor: pointer;
 }
 
-.nav-link:hover,
-.nav-link.active {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: white;
+.nav-link:hover {
+  color: var(--fg);
+  opacity: 1;
+  background-color: var(--bg);
 }
 
 .nav-link.active {
-  background-color: var(--primary);
-  color: white;
+  color: var(--accent);
+  opacity: 1;
+  background-color: var(--accent-muted);
+  font-weight: 600;
 }
 
 /* Main Content */
 .main {
-  padding: 1.5rem;
-  background-color: var(--bg-dialog);
-  max-height: calc(100vh - 80px);
+  padding: var(--space-lg);
+  background-color: var(--surface);
+  height: 100%;
   overflow-y: auto;
 }
 
@@ -3350,20 +3234,20 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--space-lg);
 }
 
 .page-title {
-  font-size: 1.5rem;
+  font-size: var(--text-xl);
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--fg);
 }
 
 /* Rest of the existing styles... */
 .user-menu {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-md);
 }
 
 .notification {
@@ -3376,22 +3260,22 @@ export default {
   top: -5px;
   right: -5px;
   background-color: var(--danger);
-  color: white;
+  color: var(--accent-fg);
   height: 18px;
   width: 18px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 
 .user-avatar {
   height: 2.5rem;
   width: 2.5rem;
   border-radius: 50%;
-  background-color: var(--primary);
-  color: white;
+  background-color: var(--accent);
+  color: var(--accent-fg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3402,36 +3286,36 @@ export default {
 .quick-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
 }
 
 .stat-card {
-  background-color: var(--bg-dialog);
-  border-radius: 0.5rem;
-  padding: 1rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border: 1px solid var(--border-color);
+  background-color: var(--surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
 }
 
 .stat-title {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  margin-bottom: 0.25rem;
+  color: var(--muted);
+  font-size: var(--text-base);
+  margin-bottom: var(--space-xs);
 }
 
 .stat-value {
-  font-size: 1.5rem;
+  font-size: var(--text-xl);
   font-weight: 600;
-  margin-bottom: 0.25rem;
-  color: var(--text-primary);
+  margin-bottom: var(--space-xs);
+  color: var(--fg);
 }
 
 .stat-trend {
   display: flex;
   align-items: center;
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 
 .trend-up {
@@ -3442,137 +3326,82 @@ export default {
   color: var(--danger);
 }
 
-/* Tabs */
-.tabs {
-  background-color: var(--bg-dialog);
-  border-radius: 0.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  margin-bottom: 1rem;
-  border: 1px solid var(--border-color);
+/* Tabs card wrapper */
+.tabs-card {
+  background-color: var(--surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--space-md);
+  border: 1px solid var(--border);
   overflow: hidden;
 }
 
-.tab-header {
-  display: flex;
-  border-bottom: 1px solid var(--border-color);
-  overflow-x: auto;
-  white-space: nowrap;
-}
-
-.tab-btn {
-  padding: 0.75rem 1.25rem;
-  border: none;
-  background: none;
-  font-size: 0.9rem;
-  cursor: pointer;
-  border-bottom: 3px solid transparent;
-  transition: all 0.2s;
-  color: var(--text-secondary);
-}
-
-.tab-btn.active {
-  border-bottom-color: var(--primary);
-  color: var(--primary);
-  font-weight: 600;
-}
-
-.tab-content {
-  padding: 1.25rem;
+.tabs-card :deep(.ds-tabs__content) {
+  padding: var(--space-lg);
 }
 
 /* Dashboard Grid */
 .dashboard-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  gap: var(--space-md);
 }
 
 .dashboard-card {
-  background-color: var(--bg-dialog);
-  border-radius: 0.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  padding: 1rem;
-  margin-bottom: 1rem;
-  border: 1px solid var(--border-color);
+  background-color: var(--surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+  border: 1px solid var(--border);
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-md);
 }
 
 .card-title {
-  font-size: 1rem;
+  font-size: var(--text-md);
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--fg);
 }
 
 .card-actions {
   display: flex;
-  gap: 0.5rem;
-}
-
-.btn {
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.375rem;
-  border: none;
-  font-size: 0.75rem;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: all 0.2s;
-}
-
-.btn-primary {
-  background-color: var(--bg-button-primary) !important;
-  color: var(--text-button-primary) !important;
-}
-
-.btn-primary:hover {
-  background-color: var(--bg-button-primary-hover, #8b3c7a) !important;
-}
-
-.btn-outline {
-  background-color: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-}
-
-.btn-outline:hover {
-  background-color: var(--bg-section);
+  gap: var(--space-sm);
 }
 
 /* Health Status */
 .health-status {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 0.75rem;
+  gap: var(--space-md);
 }
 
 .health-item {
-  padding: 0.5rem;
-  border-radius: 0.375rem;
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
+  gap: var(--space-sm);
+  font-size: var(--text-base);
 }
 
 .status-good {
-  background-color: rgba(16, 185, 129, 0.1);
+  background-color: var(--success-bg);
   color: var(--success);
 }
 
 .status-warning {
-  background-color: rgba(245, 158, 11, 0.1);
+  background-color: var(--warning-bg);
   color: var(--warning);
 }
 
 .status-error {
-  background-color: rgba(239, 68, 68, 0.1);
+  background-color: var(--danger-bg);
   color: var(--danger);
 }
 
@@ -3586,112 +3415,104 @@ export default {
   background-color: var(--success);
 }
 
-.badge-warning {
-  background-color: var(--warning);
-}
-
-.badge-error {
-  background-color: var(--danger);
-}
-
 /* Database Section */
 .db-actions {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
 }
 
 .db-action-card {
-  border: 1px solid var(--border-color);
-  border-radius: 0.375rem;
-  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
   cursor: pointer;
   transition: all 0.2s;
-  background-color: var(--bg-dialog);
-  font-size: 0.8rem;
+  background-color: var(--surface);
+  font-size: var(--text-base);
 }
 
 .db-action-card:hover {
-  border-color: var(--primary);
+  border-color: var(--accent);
 }
 
 .action-icon {
-  margin-bottom: 0.5rem;
-  font-size: 1.25rem;
-  color: var(--primary);
+  margin-bottom: var(--space-sm);
+  font-size: var(--text-lg);
+  color: var(--accent);
 }
 
 .action-title {
   font-weight: 600;
-  margin-bottom: 0.25rem;
-  color: var(--text-primary);
+  margin-bottom: var(--space-xs);
+  color: var(--fg);
 }
 
 .action-desc {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 
 .db-stats {
-  color: var(--text-primary);
-  font-size: 0.8rem;
+  color: var(--fg);
+  font-size: var(--text-base);
 }
 
 /* Log Table */
 .log-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
 }
 
 .log-table th,
 .log-table td {
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-sm) var(--space-md);
   text-align: left;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
 }
 
 .log-table th {
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .log-level {
-  padding: 0.2rem 0.4rem;
-  border-radius: 0.25rem;
-  font-size: 0.7rem;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
   text-transform: uppercase;
   font-weight: 600;
 }
 
 .log-error {
-  background-color: rgba(239, 68, 68, 0.1);
+  background-color: var(--danger-bg);
   color: var(--danger);
 }
 
 .log-warning {
-  background-color: rgba(245, 158, 11, 0.1);
+  background-color: var(--warning-bg);
   color: var(--warning);
 }
 
 .log-info {
-  background-color: rgba(59, 130, 246, 0.1);
-  color: var(--primary);
+  background-color: var(--info-bg);
+  color: var(--accent);
 }
 
 .table-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 0.5rem;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
+  padding-top: var(--space-sm);
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
 
 .pagination {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--space-xs);
 }
 
 .page-btn {
@@ -3700,55 +3521,55 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
   background: none;
   cursor: pointer;
-  color: var(--text-secondary);
-  font-size: 0.8rem;
+  color: var(--muted);
+  font-size: var(--text-base);
 }
 
 .page-btn.active {
-  background-color: var(--primary);
-  color: white;
-  border-color: var(--primary);
+  background-color: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
 }
 
 /* Resource Usage */
 .resource-usage {
-  padding: 0.5rem 0;
+  padding: var(--space-sm) 0;
 }
 
 .usage-item {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-md);
 }
 
 .usage-header {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 0.25rem;
-  font-size: 0.8rem;
+  margin-bottom: var(--space-xs);
+  font-size: var(--text-base);
 }
 
 .usage-label {
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .usage-value {
-  color: var(--text-primary);
+  color: var(--fg);
 }
 
 .usage-bar {
   height: 0.5rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   background-color: var(--border);
   overflow: hidden;
 }
 
 .usage-fill {
   height: 100%;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
 }
 
 .usage-low {
@@ -3766,34 +3587,34 @@ export default {
 /* Feature Flags */
 .feature-list {
   display: grid;
-  gap: 0.75rem;
+  gap: var(--space-md);
 }
 
 .feature-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-dialog);
-  font-size: 0.8rem;
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background-color: var(--surface);
+  font-size: var(--text-base);
 }
 
 .feature-info {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-xs);
 }
 
 .feature-name {
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--fg);
 }
 
 .feature-description {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 
 .toggle {
@@ -3818,7 +3639,7 @@ export default {
   bottom: 0;
   background-color: var(--switch-track-off);
   transition: 0.4s;
-  border-radius: 1.25rem;
+  border-radius: var(--radius-xl);
 }
 
 .slider:before {
@@ -3841,38 +3662,6 @@ input:checked + .slider:before {
   transform: translateX(1.25rem);
 }
 
-/* Loading Overlay */
-.loading-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 1100;
-  color: white;
-}
-
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top-color: var(--primary);
-  animation: spin 1s linear infinite;
-  margin-bottom: 1rem;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* Modal */
 .modal {
   position: fixed;
@@ -3880,7 +3669,7 @@ input:checked + .slider:before {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: var(--overlay-bg);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -3890,54 +3679,54 @@ input:checked + .slider:before {
 .modal-content {
   width: 450px;
   max-width: 90vw;
-  background-color: var(--bg-dialog);
-  border-radius: 0.5rem;
+  background-color: var(--surface);
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
 
 .modal-title {
-  padding: 1rem;
+  padding: var(--space-md);
   margin: 0;
   font-size: 1.15rem;
   font-weight: 600;
-  border-bottom: 1px solid var(--border-color);
-  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  color: var(--fg);
 }
 
 .modal-body {
-  padding: 1.25rem;
-  color: var(--text-primary);
-  font-size: 0.9rem;
+  padding: var(--space-lg);
+  color: var(--fg);
+  font-size: var(--text-base);
 }
 
 .modal-footer {
-  padding: 1rem;
+  padding: var(--space-md);
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  border-top: 1px solid var(--border-color);
+  gap: var(--space-md);
+  border-top: 1px solid var(--border);
 }
 
 .btn-close,
 .btn-save {
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-weight: 500;
   border: none;
   transition: all 0.2s;
-  font-size: 0.9rem;
+  font-size: var(--text-base);
 }
 
 .btn-save {
-  background-color: var(--bg-button-primary);
-  color: var(--text-button-primary);
+  background-color: var(--accent);
+  color: var(--accent-fg);
 }
 
 .btn-close {
-  background-color: var(--bg-button-secondary);
-  color: var(--text-button-secondary);
+  background-color: var(--btn-secondary-bg);
+  color: var(--btn-secondary-fg);
 }
 
 /* Responsive Adjustments */
@@ -4003,11 +3792,11 @@ input:checked + .slider:before {
   .header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.75rem;
+    gap: var(--space-md);
   }
 
   .page-title {
-    font-size: 1.25rem;
+    font-size: var(--text-lg);
   }
 
   .user-menu {
@@ -4015,19 +3804,19 @@ input:checked + .slider:before {
     justify-content: flex-end;
   }
 
-  .tab-header {
+  .tabs-card :deep(.ds-tabs__nav) {
     flex-wrap: wrap;
   }
 
-  .tab-btn {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.8rem;
+  .tabs-card :deep(.ds-tabs__btn) {
+    padding: var(--space-sm) var(--space-md);
+    font-size: var(--text-base);
   }
 
   .card-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.5rem;
+    gap: var(--space-sm);
   }
 
   .card-actions {
@@ -4035,43 +3824,18 @@ input:checked + .slider:before {
   }
 }
 
-/* Ensure text colors in dark mode */
-[data-theme='dark'] .page-title {
-  color: #f8fafc !important; /* Bright white for high contrast */
-}
-
-[data-theme='dark'] .header {
-  color: #f8fafc;
-}
-
-[data-theme='dark'] .card-title {
-  color: #f8fafc !important;
-}
-
-[data-theme='dark'] .stat-title {
-  color: #cbd5e1 !important; /* Slightly softer white for secondary titles */
-}
-
-[data-theme='dark'] .stat-value {
-  color: #f8fafc !important;
-}
-
-[data-theme='dark'] .dashboard-card {
-  color: #f8fafc;
-}
-
 /* Log Summary Styles */
 .logs-summary {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--space-lg);
 }
 
 .summary-title {
   display: flex;
   align-items: center;
-  font-size: 1rem;
+  font-size: var(--text-md);
   font-weight: 600;
-  margin-bottom: 0.75rem;
-  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+  color: var(--fg);
 }
 
 .status-indicator {
@@ -4079,7 +3843,7 @@ input:checked + .slider:before {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  margin-right: 0.5rem;
+  margin-right: var(--space-sm);
 }
 
 .status-indicator.error {
@@ -4093,23 +3857,23 @@ input:checked + .slider:before {
 .log-summary-table table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
+  font-size: var(--text-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .log-summary-table th,
 .log-summary-table td {
-  padding: 0.625rem 0.75rem;
+  padding: var(--space-sm) var(--space-md);
   text-align: left;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
 }
 
 .log-summary-table th {
-  background-color: var(--bg-section);
+  background-color: var(--bg-tertiary);
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .log-summary-table td.log-count {
@@ -4120,40 +3884,29 @@ input:checked + .slider:before {
 .logs-info {
   display: flex;
   align-items: center;
-  padding: 0.75rem;
-  background-color: var(--bg-section);
-  border-radius: 0.375rem;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
+  padding: var(--space-md);
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  color: var(--muted);
 }
 
 .logs-info svg {
-  margin-right: 0.5rem;
-  color: var(--primary);
+  margin-right: var(--space-sm);
+  color: var(--accent);
 }
 
 .empty-logs {
   text-align: center;
-  color: var(--text-tertiary);
-  padding: 1rem;
+  color: var(--muted-soft);
+  padding: var(--space-md);
 }
-
-[data-theme='dark'] .logs-summary h3,
-[data-theme='dark'] .summary-title {
-  color: #f8fafc !important;
-}
-
-[data-theme='dark'] h3 {
-  color: #f8fafc !important;
-}
-
-/* Add these styles to your <style> section in AdminDashboard.vue */
 
 /* Update search bar for better spacing with button */
 .search-bar {
   display: flex;
-  margin-bottom: 1rem;
-  gap: 0.75rem;
+  margin-bottom: var(--space-md);
+  gap: var(--space-md);
   align-items: center;
 }
 
@@ -4162,91 +3915,36 @@ input:checked + .slider:before {
   flex: 1;
 }
 
-.search-button .btn {
-  height: 100%;
-  min-height: 38px;
-}
-
-/* Loading indicator for search */
-.search-loading {
-  display: flex;
-  align-items: center;
-  margin-bottom: 1rem;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-}
-
-.loading-spinner-small {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(0, 0, 0, 0.1);
-  border-radius: 50%;
-  border-top-color: var(--primary);
-  animation: spin 1s linear infinite;
-  margin-right: 0.5rem;
-}
-
 /* Pagination styles */
 .pagination {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 1rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--border-color);
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border);
 }
 
 .pagination-info {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-}
-
-.page-btn {
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--border-color);
-  border-radius: 0.25rem;
-  background-color: var(--bg-button-secondary);
-  color: var(--text-button-secondary);
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.page-btn:hover:not(:disabled) {
-  background-color: var(--bg-section);
-}
-
-.page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-sm {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-  margin-left: 0.5rem;
+  font-size: var(--text-base);
+  color: var(--muted);
 }
 
 /* Make search results info more prominent */
 .search-results-info {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 0.75rem;
-  padding: 0.5rem;
-  background-color: var(--bg-section);
-  border-radius: 0.25rem;
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-}
-
-/* Dark mode specific adjustments */
-[data-theme='dark'] .loading-spinner-small {
-  border-color: rgba(255, 255, 255, 0.1);
-  border-top-color: var(--primary);
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm);
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  color: var(--muted);
 }
 
 /* User Stats Summary */
 .user-stats-summary {
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-md);
 }
 
 .stats-row {
@@ -4254,26 +3952,26 @@ input:checked + .slider:before {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap; /* Allow wrapping on smaller screens */
-  gap: 1rem; /* Add spacing between items */
+  gap: var(--space-md); /* Add spacing between items */
 }
 
 .stat-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem; /* Space between label and value */
+  gap: var(--space-sm); /* Space between label and value */
 }
 
 .stat-label {
-  font-size: 0.875rem;
+  font-size: var(--text-base);
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--muted);
   white-space: nowrap; /* Prevent label from wrapping */
 }
 
 .stat-value {
-  font-size: 1rem;
+  font-size: var(--text-md);
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--fg);
 }
 
 /* Responsive Adjustments */
@@ -4281,7 +3979,7 @@ input:checked + .slider:before {
   .stats-row {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.75rem;
+    gap: var(--space-md);
   }
 
   .stat-item {
@@ -4292,34 +3990,34 @@ input:checked + .slider:before {
 
 @media (max-width: 480px) {
   .stat-label {
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
   }
 
   .stat-value {
-    font-size: 0.875rem;
+    font-size: var(--text-base);
   }
 }
 
 .security-findings-section {
-  margin-top: 1.5rem;
+  margin-top: var(--space-lg);
 }
 
 .vulnerability-section {
-  margin-bottom: 1.5rem;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
+  margin-bottom: var(--space-lg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  padding: 0.75rem 1rem;
+  padding: var(--space-md) var(--space-md);
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--text-md);
   font-weight: 600;
-  background-color: var(--bg-section);
-  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
 }
 
 .severity-indicator {
@@ -4327,7 +4025,7 @@ input:checked + .slider:before {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  margin-right: 0.5rem;
+  margin-right: var(--space-sm);
 }
 
 .severity-indicator.critical {
@@ -4340,92 +4038,92 @@ input:checked + .slider:before {
 }
 
 .severity-indicator.low {
-  background-color: var(--text-tertiary);
+  background-color: var(--muted-soft);
 }
 
 .severity-indicator.info {
-  background-color: var(--primary);
+  background-color: var(--accent);
 }
 
 .vulnerability-list {
-  padding: 1rem;
+  padding: var(--space-md);
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1rem;
+  gap: var(--space-md);
 }
 
 .vulnerability-card {
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  padding: 1rem;
-  background-color: var(--bg-dialog);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-md);
+  background-color: var(--surface);
 }
 
 .vuln-type {
   font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 0.5rem;
+  color: var(--fg);
+  margin-bottom: var(--space-sm);
 }
 
 .vuln-description {
-  color: var(--text-secondary);
-  margin-bottom: 0.75rem;
-  font-size: 0.9rem;
+  color: var(--muted);
+  margin-bottom: var(--space-md);
+  font-size: var(--text-base);
 }
 
 .vuln-detail {
-  font-size: 0.8rem;
-  margin-bottom: 0.5rem;
-  color: var(--text-secondary);
+  font-size: var(--text-base);
+  margin-bottom: var(--space-sm);
+  color: var(--muted);
 }
 
 .vuln-examples {
-  font-size: 0.8rem;
-  margin-bottom: 0.5rem;
-  color: var(--text-secondary);
+  font-size: var(--text-base);
+  margin-bottom: var(--space-sm);
+  color: var(--muted);
 }
 
 .vuln-examples ul {
-  margin-top: 0.25rem;
-  padding-left: 1.5rem;
+  margin-top: var(--space-xs);
+  padding-left: var(--space-lg);
 }
 
 .vuln-examples li {
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--space-xs);
 }
 
 .vuln-recommendation {
-  margin-top: 0.75rem;
-  font-size: 0.8rem;
-  padding: 0.5rem;
-  background-color: var(--bg-section);
-  border-radius: 4px;
-  color: var(--text-primary);
+  margin-top: var(--space-md);
+  font-size: var(--text-base);
+  padding: var(--space-sm);
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
 }
 
 .detail-table {
-  padding: 0 1rem 1rem;
+  padding: 0 var(--space-md) var(--space-md);
   overflow-x: auto;
 }
 
 .detail-table table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   table-layout: fixed;
 }
 
 .detail-table td,
 .detail-table th {
-  padding: 0.75rem 0.5rem;
+  padding: var(--space-md) var(--space-sm);
   text-align: left;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
   vertical-align: top; /* Vertically align all cell content to the top */
 }
 
 .detail-table th {
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 /* NEW: Style for wrapping text in message cells */
@@ -4438,24 +4136,24 @@ input:checked + .slider:before {
 .show-more {
   display: flex;
   justify-content: center;
-  margin-top: 0.5rem;
+  margin-top: var(--space-sm);
 }
 
 .full-list {
-  border-top: 1px dashed var(--border-color);
-  padding-top: 1rem;
+  border-top: 1px dashed var(--border);
+  padding-top: var(--space-md);
 }
 
 .recommendations-list {
-  padding: 1rem;
+  padding: var(--space-md);
 }
 
 .recommendation-item {
-  margin-bottom: 1rem;
-  padding: 1rem;
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-dialog);
+  margin-bottom: var(--space-md);
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background-color: var(--surface);
 }
 
 .recommendation-item.severity-critical {
@@ -4467,66 +4165,32 @@ input:checked + .slider:before {
 }
 
 .recommendation-item.severity-low {
-  border-left: 4px solid var(--text-tertiary);
+  border-left: 4px solid var(--muted-soft);
 }
 
 .recommendation-header {
   display: flex;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-sm);
 }
 
 .recommendation-title {
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--fg);
 }
 
 .recommendation-description {
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  margin-bottom: 0.75rem;
+  font-size: var(--text-base);
+  color: var(--muted);
+  margin-bottom: var(--space-md);
 }
 
 .recommendation-action {
-  font-size: 0.85rem;
-  color: var(--text-primary);
-  background-color: var(--bg-section);
-  padding: 0.5rem;
-  border-radius: 4px;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem 1rem;
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 2.5rem;
-  color: var(--success);
-  margin-bottom: 1rem;
-  height: 60px;
-  width: 60px;
-  border-radius: 50%;
-  background-color: rgba(16, 185, 129, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.empty-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 0.5rem;
-}
-
-.empty-description {
-  color: var(--text-secondary);
-  max-width: 400px;
+  font-size: var(--text-base);
+  color: var(--fg);
+  background-color: var(--bg-tertiary);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
 }
 
 .text-danger {
@@ -4540,33 +4204,14 @@ input:checked + .slider:before {
 }
 
 .text-info {
-  color: var(--primary);
+  color: var(--accent);
   font-weight: 600;
 }
 
-.loading-indicator-inline {
+.inline-spinner {
   display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top-color: white;
   animation: spin 1s linear infinite;
-  margin-right: 8px;
   vertical-align: middle;
-}
-
-/* Dark mode adjustments */
-[data-theme='dark'] .vuln-description,
-[data-theme='dark'] .vuln-detail,
-[data-theme='dark'] .empty-title,
-[data-theme='dark'] .recommendation-title {
-  color: #f1f5f9 !important;
-}
-
-[data-theme='dark'] .empty-description,
-[data-theme='dark'] .recommendation-description {
-  color: #cbd5e1 !important;
 }
 
 @keyframes spin {
@@ -4584,49 +4229,24 @@ input:checked + .slider:before {
   background-color: var(--warning);
 }
 
-.loading-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-}
-
-.loading-spinner-small {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--border-color);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-right: 0.5rem;
-}
-
-[data-theme='dark'] .loading-state {
-  color: var(--text-tertiary);
-}
-
-/* ... at the end of <style scoped> ... */
-
 /* --- STYLES FOR KNOWLEDGE HIERARCHY --- */
 .hierarchy-container {
   display: flex;
-  gap: 1.5rem;
+  gap: var(--space-lg);
   min-height: 400px;
 }
 .hierarchy-tree-panel {
   flex: 1;
-  border: 1px solid var(--border-color);
-  border-radius: 0.375rem;
-  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
   overflow-y: auto;
 }
 .hierarchy-form-panel {
   flex-basis: 350px;
-  padding: 1rem;
-  background-color: var(--bg-section);
-  border-radius: 0.375rem;
+  padding: var(--space-md);
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-md);
 }
 .hierarchy-list,
 .hierarchy-services-list {
@@ -4634,31 +4254,31 @@ input:checked + .slider:before {
   padding-left: 0;
 }
 .hierarchy-services-list {
-  padding-left: 2rem;
-  border-left: 2px solid var(--border-color);
-  margin-left: 0.5rem;
+  padding-left: var(--space-xl);
+  border-left: 2px solid var(--border);
+  margin-left: var(--space-sm);
 }
 .hierarchy-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem;
-  border-radius: 0.25rem;
-  margin-bottom: 0.25rem;
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-xs);
 }
 .hierarchy-item:hover {
-  background-color: var(--bg-section);
+  background-color: var(--bg-tertiary);
 }
 .hierarchy-item .item-name {
   font-weight: 500;
 }
 .hierarchy-item.service-item .item-name {
   font-weight: 400;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 .hierarchy-item .item-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-sm);
   opacity: 0;
   transition: opacity 0.2s ease-in-out;
 }
@@ -4666,176 +4286,100 @@ input:checked + .slider:before {
   opacity: 1;
 }
 .action-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1rem;
 }
 .empty-hierarchy {
   text-align: center;
-  color: var(--text-tertiary);
-  padding: 2rem;
+  color: var(--muted-soft);
+  padding: var(--space-xl);
 }
 .form-title {
-  font-size: 1.1rem;
+  font-size: var(--text-lg);
   font-weight: 600;
-  margin-bottom: 1rem;
-  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+  color: var(--fg);
 }
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-md);
 }
 .form-group label {
   display: block;
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-}
-.form-input {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid var(--border-input);
-  border-radius: 0.25rem;
-  background-color: var(--bg-input);
-  color: var(--text-primary);
+  margin-bottom: var(--space-sm);
+  font-size: var(--text-base);
+  color: var(--muted);
 }
 .form-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-sm);
 }
 
 /* --- STYLES FOR DOCUMENT MANAGEMENT --- */
 .filter-bar {
   display: flex;
-  gap: 1rem;
+  gap: var(--space-md);
   align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border-color);
-}
-.filter-select {
-  padding: 0.5rem;
-  border-radius: 0.25rem;
-  border: 1px solid var(--border-input);
-  background-color: var(--bg-input);
-  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border);
 }
 .document-row {
   cursor: pointer;
 }
 .document-row:hover {
-  background-color: var(--bg-section);
-}
-.status-tag {
-  padding: 0.2rem 0.6rem;
-  border-radius: 1rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: capitalize;
-}
-.status-ingested {
-  background-color: rgba(16, 185, 129, 0.1);
-  color: var(--success);
-}
-.status-ingesting {
-  background-color: rgba(59, 130, 246, 0.1);
-  color: var(--primary);
-}
-.status-ingested-with-warnings {
-  background-color: rgba(245, 158, 11, 0.1);
-  color: var(--warning);
-}
-.status-ingestion-error {
-  background-color: rgba(239, 68, 68, 0.1);
-  color: var(--danger);
-}
-/* NEW: Error status for failed/killed crawls */
-.status-error {
-  background-color: rgba(239, 68, 68, 0.1);
-  color: var(--danger);
-}
-.status-pending {
-  background-color: rgba(22, 72, 144, 0.1);
-  color: var(--secondary);
-}
-.status-retracted {
-  background-color: rgba(100, 116, 139, 0.1);
-  color: var(--secondary);
+  background-color: var(--bg-tertiary);
 }
 .label-tag {
-  background-color: var(--bg-section);
-  padding: 0.2rem 0.5rem;
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
-  margin-right: 0.25rem;
-  color: var(--text-secondary);
+  background-color: var(--bg-tertiary);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  margin-right: var(--space-xs);
+  color: var(--muted);
 }
 .label-tag-more {
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  color: var(--muted-soft);
 }
 .translations-section {
-  margin-top: 1.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border-color);
+  margin-top: var(--space-lg);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border);
 }
 .translations-title {
-  font-size: 0.9rem;
+  font-size: var(--text-base);
   font-weight: 600;
-  color: var(--text-secondary);
-  margin-bottom: 1rem;
+  color: var(--muted);
+  margin-bottom: var(--space-md);
 }
 .translation-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
 }
 .translation-lang-select {
   flex-basis: 150px;
-  padding: 0.5rem;
-  border: 1px solid var(--border-input);
-  border-radius: 0.25rem;
-  background-color: var(--bg-input);
 }
 .translation-text-input {
   flex-grow: 1;
-  padding: 0.5rem;
-  border: 1px solid var(--border-input);
-  border-radius: 0.25rem;
-  background-color: var(--bg-input);
 }
-.translation-delete-btn {
-  background: none;
-  border: none;
-  color: var(--danger, #ef4444);
-  cursor: pointer;
-  font-size: 1.1rem;
-  padding: 0.25rem;
-}
-.btn-sm {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-}
-
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
 }
 
 .data-table th,
 .data-table td {
-  padding: 0.75rem; /* Increased padding for better spacing */
+  padding: var(--space-md); /* Increased padding for better spacing */
   text-align: left;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
   white-space: nowrap; /* Prevent headers from wrapping */
 }
 
 .data-table th {
   font-weight: 600;
-  color: var(--text-secondary);
-  background-color: var(--bg-section);
+  color: var(--muted);
+  background-color: var(--bg-tertiary);
 }
 
 /* Style for the main text column to allow wrapping if needed */
@@ -4849,11 +4393,11 @@ input:checked + .slider:before {
   user-select: none;
 }
 .sortable:hover {
-  background-color: var(--border-color);
+  background-color: var(--border);
 }
 .sort-arrow {
-  margin-left: 5px;
-  color: var(--primary);
+  margin-left: var(--space-xs);
+  color: var(--accent);
 }
 
 /* Column width classes (replace inline styles) */
@@ -4879,7 +4423,7 @@ input:checked + .slider:before {
 /* Style for empty/loading states */
 .table-message {
   text-align: center;
-  padding: 2rem;
-  color: var(--text-tertiary);
+  padding: var(--space-xl);
+  color: var(--muted-soft);
 }
 </style>

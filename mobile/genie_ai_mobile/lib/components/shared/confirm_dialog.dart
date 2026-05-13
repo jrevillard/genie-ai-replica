@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
+import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
+import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
 
 class ConfirmDialog extends StatelessWidget {
@@ -31,8 +35,7 @@ class ConfirmDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!visible) return const SizedBox.shrink();
 
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final tokens = ThemeManager().tokens;
 
     // Resolve translations for defaults
     final String effectiveTitle = title ?? tr('common.confirm');
@@ -48,13 +51,13 @@ class ConfirmDialog extends StatelessWidget {
           child: Container(
             width: 400,
             constraints: const BoxConstraints(maxWidth: 400),
-            margin: const EdgeInsets.all(24),
+            margin: const EdgeInsets.all(DsSpacing.xl),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              color: tokens.surface,
+              borderRadius: BorderRadius.circular(DsRadii.lg),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
+                  color: tokens.scrim,
                   blurRadius: 16,
                   offset: const Offset(0, 4),
                 ),
@@ -66,69 +69,60 @@ class ConfirmDialog extends StatelessWidget {
               children: [
                 // Header
                 Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(DsSpacing.xl),
                   child: Text(
                     effectiveTitle,
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: ThemeManager().tokens.textMd,
                       fontWeight: FontWeight.bold,
-                      color: theme.textTheme.bodyLarge?.color,
+                      color: tokens.fg,
                     ),
                   ),
                 ),
                 // Body
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: DsSpacing.xl),
                   child: Text(
                     effectiveMessage,
                     style: TextStyle(
-                      fontSize: 14,
-                      color: isDark ? Colors.grey[300] : Colors.grey[700],
+                      fontSize: ThemeManager().tokens.textBase,
+                      color: tokens.muted,
                       height: 1.5,
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: DsSpacing.xl),
                 // Footer / Actions
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(DsSpacing.md),
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.black12 : Colors.grey[50],
+                    color: tokens.bg,
                     borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(12),
-                      bottomRight: Radius.circular(12),
+                      bottomLeft: Radius.circular(DsRadii.lg),
+                      bottomRight: Radius.circular(DsRadii.lg),
                     ),
-                    border: Border(top: BorderSide(color: theme.dividerColor)),
+                    border: Border(top: BorderSide(color: tokens.border)),
                   ),
                   child: Wrap(
                     alignment: WrapAlignment.end,
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: DsSpacing.sm,
+                    runSpacing: DsSpacing.sm,
                     children: [
                       if (secondaryText != null)
-                        TextButton(
-                          onPressed: onSecondary,
-                          child: Text(
-                            secondaryText!,
-                            style: TextStyle(color: theme.primaryColor),
-                          ),
+                        DsButton(
+                          label: secondaryText!,
+                          variant: DsButtonVariant.ghost,
+                          onPressed: onSecondary ?? () {},
                         ),
-                      TextButton(
+                      DsButton(
+                        label: effectiveCancelText,
+                        variant: DsButtonVariant.ghost,
                         onPressed: onCancel,
-                        child: Text(
-                          effectiveCancelText,
-                          style: TextStyle(
-                            color: isDark ? Colors.white70 : Colors.grey[700],
-                          ),
-                        ),
                       ),
-                      ElevatedButton(
+                      DsButton(
+                        label: effectiveConfirmText,
+                        variant: DsButtonVariant.primary,
                         onPressed: onConfirm,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.primaryColor,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: Text(effectiveConfirmText),
                       ),
                     ],
                   ),

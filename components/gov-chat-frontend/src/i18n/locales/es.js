@@ -695,6 +695,8 @@ export default {
     weatherLocationLoading: 'Cargando ubicación...',
     weatherErrorDefault: 'No se pueden recuperar los datos del tiempo.',
     weatherGeolocationUnsupported: 'La geolocalización no es compatible con su navegador.',
+    collapse: 'Contraer barra lateral',
+    expand: 'Expandir barra lateral',
     weatherRefresh: 'Actualizar Tiempo',
     weatherConditions: {
       clear: 'Despejado',
@@ -1401,7 +1403,8 @@ export default {
     exportFilenamePlaceholder: 'Ingrese nombre de archivo',
     exportButton: 'Exportar',
     exportSuccess: 'Chat exportado con éxito',
-    exportError: 'Falló la exportación del chat. Por favor, intente nuevamente.'
+    exportError: 'Falló la exportación del chat. Por favor, intente nuevamente.',
+    removeItem: 'Eliminar'
   },
   quickhelp: {
     // Labels (Short for UI)

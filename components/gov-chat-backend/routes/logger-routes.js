@@ -98,28 +98,43 @@ module.exports = () => {
     try {
       const { level, errorMaxSize, combinedMaxSize, errorMaxFiles, combinedMaxFiles, zippedArchive } = req.body;
 
-      if (!level && !errorMaxSize && !combinedMaxSize && !errorMaxFiles && !combinedMaxFiles && zippedArchive === undefined) {
+      if (
+        !level &&
+        !errorMaxSize &&
+        !combinedMaxSize &&
+        !errorMaxFiles &&
+        !combinedMaxFiles &&
+        zippedArchive === undefined
+      ) {
         return res.status(400).json({ success: false, message: 'At least one configuration parameter is required' });
       }
 
       if (level && !['error', 'warn', 'info', 'debug'].includes(level)) {
-        return res.status(400).json({ success: false, message: 'Invalid log level. Must be one of: error, warn, info, debug' });
+        return res
+          .status(400)
+          .json({ success: false, message: 'Invalid log level. Must be one of: error, warn, info, debug' });
       }
 
       const sizeRegex = /^\d+(k|m|g)$/;
       const filesRegex = /^\d+d$/;
 
       if (errorMaxSize && !sizeRegex.test(errorMaxSize)) {
-        return res.status(400).json({ success: false, message: 'Invalid errorMaxSize. Must be in format: 10m, 500k, 1g' });
+        return res
+          .status(400)
+          .json({ success: false, message: 'Invalid errorMaxSize. Must be in format: 10m, 500k, 1g' });
       }
       if (combinedMaxSize && !sizeRegex.test(combinedMaxSize)) {
-        return res.status(400).json({ success: false, message: 'Invalid combinedMaxSize. Must be in format: 10m, 500k, 1g' });
+        return res
+          .status(400)
+          .json({ success: false, message: 'Invalid combinedMaxSize. Must be in format: 10m, 500k, 1g' });
       }
       if (errorMaxFiles && !filesRegex.test(errorMaxFiles)) {
         return res.status(400).json({ success: false, message: 'Invalid errorMaxFiles. Must be in format: 30d, 14d' });
       }
       if (combinedMaxFiles && !filesRegex.test(combinedMaxFiles)) {
-        return res.status(400).json({ success: false, message: 'Invalid combinedMaxFiles. Must be in format: 30d, 14d' });
+        return res
+          .status(400)
+          .json({ success: false, message: 'Invalid combinedMaxFiles. Must be in format: 30d, 14d' });
       }
 
       reconfigureLogger({
@@ -128,7 +143,7 @@ module.exports = () => {
         combinedMaxSize,
         errorMaxFiles,
         combinedMaxFiles,
-        zippedArchive,
+        zippedArchive
       });
 
       res.json({ success: true, message: 'Logger configuration updated successfully' });

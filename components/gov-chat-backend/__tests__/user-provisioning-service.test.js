@@ -7,17 +7,21 @@ const mockDb = {
 };
 const mockGetConnection = jest.fn().mockResolvedValue(mockDb);
 
-jest.mock('../shared-lib', () => ({
-  logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn()
-  },
-  dbService: {
-    getConnection: (...args) => mockGetConnection(...args)
-  }
-}), { virtual: true });
+jest.mock(
+  '../shared-lib',
+  () => ({
+    logger: {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn()
+    },
+    dbService: {
+      getConnection: (...args) => mockGetConnection(...args)
+    }
+  }),
+  { virtual: true }
+);
 
 // Mock arangojs aql template tag
 jest.mock('arangojs', () => ({
@@ -315,9 +319,7 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.provisionUser(decoded);
 
-      expect(logger.info).toHaveBeenCalledWith(
-        expect.stringContaining('User re-activated')
-      );
+      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('User re-activated'));
     });
 
     it('should throw error when ArangoDB query fails', async () => {
@@ -328,8 +330,7 @@ describe('userProvisioningService', () => {
         iss_sub: ISS_SUB
       };
 
-      await expect(userProvisioningService.provisionUser(decoded))
-        .rejects.toThrow('Connection refused');
+      await expect(userProvisioningService.provisionUser(decoded)).rejects.toThrow('Connection refused');
     });
 
     it('should throw error when dbService.getConnection() fails', async () => {
@@ -340,8 +341,7 @@ describe('userProvisioningService', () => {
         iss_sub: ISS_SUB
       };
 
-      await expect(userProvisioningService.provisionUser(decoded))
-        .rejects.toThrow('ArangoDB unreachable');
+      await expect(userProvisioningService.provisionUser(decoded)).rejects.toThrow('ArangoDB unreachable');
     });
 
     it('should update roles from JWT realm_access.roles', async () => {
@@ -482,8 +482,9 @@ describe('userProvisioningService', () => {
         iss_sub: ISS_SUB
       };
 
-      await expect(userProvisioningService.provisionUser(decoded))
-        .rejects.toThrow('User provisioning returned no result');
+      await expect(userProvisioningService.provisionUser(decoded)).rejects.toThrow(
+        'User provisioning returned no result'
+      );
     });
 
     it('should throw when UPSERT returns result without new', async () => {
@@ -494,8 +495,9 @@ describe('userProvisioningService', () => {
         iss_sub: ISS_SUB
       };
 
-      await expect(userProvisioningService.provisionUser(decoded))
-        .rejects.toThrow('User provisioning returned no result');
+      await expect(userProvisioningService.provisionUser(decoded)).rejects.toThrow(
+        'User provisioning returned no result'
+      );
     });
 
     it('should throw when decoded token has no iss_sub', async () => {
@@ -504,8 +506,7 @@ describe('userProvisioningService', () => {
         iss_sub: undefined
       };
 
-      await expect(userProvisioningService.provisionUser(decoded))
-        .rejects.toThrow('Missing iss_sub in decoded token');
+      await expect(userProvisioningService.provisionUser(decoded)).rejects.toThrow('Missing iss_sub in decoded token');
     });
 
     it('should log "User provisioned" for new users', async () => {
@@ -521,9 +522,7 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.provisionUser(decoded);
 
-      expect(logger.info).toHaveBeenCalledWith(
-        expect.stringContaining('User provisioned')
-      );
+      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('User provisioned'));
     });
 
     it('should log "User profile updated" for existing users', async () => {
@@ -539,9 +538,7 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.provisionUser(decoded);
 
-      expect(logger.info).toHaveBeenCalledWith(
-        expect.stringContaining('User profile updated')
-      );
+      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('User profile updated'));
     });
   });
 
@@ -592,9 +589,7 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.markUserAsDeleted(ISS_SUB);
 
-      expect(loggerMock.info).toHaveBeenCalledWith(
-        expect.stringContaining('User marked as deleted')
-      );
+      expect(loggerMock.info).toHaveBeenCalledWith(expect.stringContaining('User marked as deleted'));
     });
 
     it('should log warning when user is not found', async () => {
@@ -602,9 +597,7 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.markUserAsDeleted('nonexistent-user');
 
-      expect(loggerMock.warn).toHaveBeenCalledWith(
-        expect.stringContaining('User not found for deletion marking')
-      );
+      expect(loggerMock.warn).toHaveBeenCalledWith(expect.stringContaining('User not found for deletion marking'));
     });
 
     it('should set deleted, deletedAt, and updatedAt fields', async () => {
@@ -626,15 +619,13 @@ describe('userProvisioningService', () => {
     it('should propagate error when ArangoDB query fails', async () => {
       mockQuery.mockRejectedValueOnce(new Error('Connection refused'));
 
-      await expect(userProvisioningService.markUserAsDeleted(ISS_SUB))
-        .rejects.toThrow('Connection refused');
+      await expect(userProvisioningService.markUserAsDeleted(ISS_SUB)).rejects.toThrow('Connection refused');
     });
 
     it('should propagate error when dbService.getConnection() fails', async () => {
       mockGetConnection.mockRejectedValueOnce(new Error('ArangoDB unreachable'));
 
-      await expect(userProvisioningService.markUserAsDeleted(ISS_SUB))
-        .rejects.toThrow('ArangoDB unreachable');
+      await expect(userProvisioningService.markUserAsDeleted(ISS_SUB)).rejects.toThrow('ArangoDB unreachable');
     });
   });
 });

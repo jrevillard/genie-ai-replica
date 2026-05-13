@@ -740,6 +740,8 @@ export default {
     weatherLocationLoading: 'جاري تحميل الموقع...',
     weatherErrorDefault: 'تعذر استرداد بيانات الطقس.',
     weatherGeolocationUnsupported: 'التحديد الجغرافي غير مدعوم من قبل متصفحك.',
+    collapse: 'طي الشريط الجانبي',
+    expand: 'توسيع الشريط الجانبي',
     weatherRefresh: 'تحديث الطقس',
     weatherConditions: {
       clear: 'صاف',
@@ -1452,7 +1454,8 @@ export default {
     exportFilenamePlaceholder: 'أدخل اسم الملف',
     exportButton: 'تصدير',
     exportSuccess: 'تم تصدير المحادثة بنجاح',
-    exportError: 'فشل تصدير المحادثة. يرجى المحاولة مرة أخرى.'
+    exportError: 'فشل تصدير المحادثة. يرجى المحاولة مرة أخرى.',
+    removeItem: 'إزالة العنصر'
   },
   quickhelp: {
     // Labels (Short for UI)

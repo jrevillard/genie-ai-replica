@@ -33,28 +33,27 @@ class ArangoToArcadeGraphTranslator {
     // Determine traversal direction
     const edgeDirection = (() => {
       switch (options.direction) {
-      case 'inbound':
-        return '<-';
-      case 'any':
-        return '-';
-      case 'outbound':
-      default:
-        return '-'; // Arcade MATCH uses -[edge]-> for outbound
+        case 'inbound':
+          return '<-';
+        case 'any':
+          return '-';
+        case 'outbound':
+        default:
+          return '-'; // Arcade MATCH uses -[edge]-> for outbound
       }
     })();
     const arrow = options.direction === 'inbound' ? '' : '->';
-
 
     // Determine traversal depth
     const minDepth = options.minDepth || 1;
     const maxDepth = options.maxDepth || 1;
     let depthClause = '';
     if (minDepth === 1 && maxDepth === 1) {
-        // No clause needed for default depth of 1
+      // No clause needed for default depth of 1
     } else if (minDepth === maxDepth) {
-        depthClause = `*${minDepth}`;
+      depthClause = `*${minDepth}`;
     } else {
-        depthClause = `*${minDepth}..${maxDepth}`;
+      depthClause = `*${minDepth}..${maxDepth}`;
     }
 
     // Construct the MATCH query
@@ -63,7 +62,7 @@ class ArangoToArcadeGraphTranslator {
     const query = `MATCH {type: V, as: a} ${edgeDirection}[${depthClause}]${arrow}{type: V, as: b} WHERE a._key = :startKey RETURN DISTINCT b`;
 
     logger.debug(`[GRAPH_TRANSLATE] Translated to MATCH query: ${query}`);
-    
+
     // ArcadeDB's MATCH is part of its SQL dialect.
     return { query, params, language: 'sql' };
   }
@@ -82,7 +81,7 @@ class ArangoToArcadeGraphTranslator {
     logger.debug(`[GRAPH_TRANSLATE] Translating addEdgeDefinition for edge: ${edgeDefinition.collection}`);
 
     if (!edgeDefinition.collection) {
-        throw new Error("Edge definition must contain a 'collection' name.");
+      throw new Error("Edge definition must contain a 'collection' name.");
     }
 
     // The primary action is to ensure the Edge Type exists.
@@ -92,8 +91,10 @@ class ArangoToArcadeGraphTranslator {
     // Note: A more advanced implementation could iterate through `from` and `to`
     // collections to create constraints between the vertex and edge types, but
     // that is a more complex schema management task.
-    logger.warn(`[GRAPH_TRANSLATE] Basic translation creates edge type. For full enforcement, manually create constraints in ArcadeDB between vertex types (${edgeDefinition.from.join(', ')}) and edge type ${edgeDefinition.collection}.`);
-    
+    logger.warn(
+      `[GRAPH_TRANSLATE] Basic translation creates edge type. For full enforcement, manually create constraints in ArcadeDB between vertex types (${edgeDefinition.from.join(', ')}) and edge type ${edgeDefinition.collection}.`
+    );
+
     logger.debug(`[GRAPH_TRANSLATE] Translated to SQL command: ${command}`);
     return { command, params: {} };
   }

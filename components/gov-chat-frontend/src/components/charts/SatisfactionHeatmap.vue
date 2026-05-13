@@ -10,22 +10,25 @@
         :series="chartSeries"
       />
     </div>
-    <div v-if="loading" class="loading-overlay">
-      <div class="spinner"></div>
+    <DsSpinner v-if="loading" overlay>
       <span>{{ translate('analytics.status.loading', 'Loading...') }}</span>
-    </div>
-    <div v-if="error" class="error-message">
-      {{ error }}
-    </div>
+    </DsSpinner>
+    <DsStateDisplay v-if="error" type="error" :message="error" />
   </div>
 </template>
 
 <script>
 import analyticsService from '../../services/analyticsService';
 import { useChartTheme } from '../../composables/useChartTheme';
+import DsSpinner from '../ds/Spinner.vue';
+import DsStateDisplay from '../ds/StateDisplay.vue';
 
 export default {
   name: 'SatisfactionHeatmap',
+  components: {
+    DsSpinner,
+    DsStateDisplay
+  },
   props: {
     data: {
       type: Array,
@@ -49,8 +52,8 @@ export default {
     }
   },
   setup() {
-    const { theme, getTheme } = useChartTheme({ listenToSystem: true });
-    return { theme, getTheme };
+    const { theme, getCssVarStrings } = useChartTheme({ listenToSystem: true });
+    return { theme, getCssVarStrings };
   },
   data() {
     return {
@@ -71,7 +74,6 @@ export default {
     data: {
       handler(newData) {
         if (this.externalData && newData && newData.length > 0) {
-          console.log('[SatisfactionHeatmap] Updating chart with new external data:', newData);
           this.chartData = newData;
           this.updateChart();
         }
@@ -81,7 +83,6 @@ export default {
     period: {
       handler() {
         if (!this.externalData) {
-          console.log('[SatisfactionHeatmap] Period changed, fetching new data');
           this.fetchData();
         }
       }
@@ -89,7 +90,6 @@ export default {
     selectedDate: {
       handler() {
         if (!this.externalData) {
-          console.log('[SatisfactionHeatmap] Selected date changed, fetching new data');
           this.fetchData();
         }
       }
@@ -97,7 +97,6 @@ export default {
     renderKey: {
       handler() {
         if (this.chartData && this.chartData.length > 0) {
-          console.log('[SatisfactionHeatmap] Render key changed, updating chart');
           this.updateChart();
         }
       }
@@ -117,14 +116,11 @@ export default {
     );
 
     if (this.externalData && this.data && this.data.length > 0) {
-      console.log('[SatisfactionHeatmap] Using external data:', this.data);
       this.chartData = this.data;
       this.updateChart();
     } else if (!this.externalData) {
-      console.log('[SatisfactionHeatmap] Fetching data from API');
       this.fetchData();
     } else {
-      console.log('[SatisfactionHeatmap] No data provided, chart will be empty');
       this.chartData = [];
       this.updateChart();
     }
@@ -146,87 +142,50 @@ export default {
      * Inject a global stylesheet for chart text based on theme
      */
     injectGlobalStyleForTheme() {
-      if (document.getElementById('satisfaction-heatmap-theme-style')) {
-        return;
+      // Remove existing style if present to allow re-injection on theme change
+      const existingStyle = document.getElementById('satisfaction-heatmap-theme-style');
+      if (existingStyle) {
+        document.head.removeChild(existingStyle);
       }
+
       const styleEl = document.createElement('style');
       styleEl.id = 'satisfaction-heatmap-theme-style';
-      const theme = this.getTheme();
-      if (theme.isDarkMode) {
-        styleEl.textContent = `
-          [data-theme="dark"] .apexcharts-title-text,
-          [data-theme="dark"] .apexcharts-subtitle-text,
-          [data-theme="dark"] .apexcharts-text,
-          [data-theme="dark"] .apexcharts-xaxis-label,
-          [data-theme="dark"] .apexcharts-yaxis-label,
-          [data-theme="dark"] .apexcharts-legend-text {
-            fill: #FFFFFF !important;
-            color: #FFFFFF !important;
-          }
-          .apexcharts-tooltip, .apexcharts-tooltip * {
-            background-color: transparent !important;
-          }
-          .apexcharts-tooltip-box {
-            background-color: rgba(0, 0, 0, 0.55) !important;
-            color: #FFFFFF !important;
-            border: none !important;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3) !important;
-          }
-          .apexcharts-tooltip-title {
-            background-color: rgba(0, 0, 0, 0.55) !important;
-            color: #FFFFFF !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
-          }
-          .apexcharts-tooltip-text-y-label,
-          .apexcharts-tooltip-text-y-value,
-          .apexcharts-tooltip-text-z-label,
-          .apexcharts-tooltip-text-z-value,
-          .apexcharts-tooltip-marker,
-          .apexcharts-tooltip * {
-            color: #FFFFFF !important;
-          }
-        `;
-        console.log('[SatisfactionHeatmap] Injected dark mode style');
-      } else {
-        styleEl.textContent = `
-          [data-theme="light"] .apexcharts-title-text,
-          [data-theme="light"] .apexcharts-subtitle-text,
-          [data-theme="light"] .apexcharts-text,
-          [data-theme="light"] .apexcharts-xaxis-label,
-          [data-theme="light"] .apexcharts-yaxis-label,
-          [data-theme="light"] .apexcharts-legend-text {
-            fill: #333333 !important;
-            color: #333333 !important;
-          }
-          .apexcharts-tooltip, .apexcharts-tooltip * {
-            background-color: transparent !important;
-          }
-          .apexcharts-tooltip-box {
-            background-color: rgba(0, 0, 0, 0.55) !important;
-            color: #FFFFFF !important;
-            border: none !important;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3) !important;
-          }
-          .apexcharts-tooltip-title {
-            background-color: rgba(0, 0, 0, 0.55) !important;
-            color: #FFFFFF !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
-          }
-          .apexcharts-tooltip-text-y-label,
-          .apexcharts-tooltip-text-y-value,
-          .apexcharts-tooltip-text-z-label,
-          .apexcharts-tooltip-text-z-value,
-          .apexcharts-tooltip-marker,
-          .apexcharts-tooltip * {
-            color: #FFFFFF !important;
-          }
-        `;
-        console.log('[SatisfactionHeatmap] Injected light mode style');
-      }
+
+      // Single consolidated style block that works for both light and dark modes
+      styleEl.textContent = `
+        .apexcharts-title-text,
+        .apexcharts-subtitle-text,
+        .apexcharts-text,
+        .apexcharts-xaxis-label,
+        .apexcharts-yaxis-label,
+        .apexcharts-legend-text {
+          fill: var(--fg) !important;
+          color: var(--fg) !important;
+        }
+        .apexcharts-tooltip, .apexcharts-tooltip * {
+          background-color: transparent !important;
+        }
+        .apexcharts-tooltip-box {
+          background-color: var(--fg) !important;
+          color: var(--bg) !important;
+          border: none !important;
+          box-shadow: var(--shadow-lg) !important;
+        }
+        .apexcharts-tooltip-title {
+          background-color: var(--fg) !important;
+          color: var(--bg) !important;
+          border-bottom: 1px solid var(--border) !important;
+        }
+        .apexcharts-tooltip-text-y-label,
+        .apexcharts-tooltip-text-y-value,
+        .apexcharts-tooltip-text-z-label,
+        .apexcharts-tooltip-text-z-value,
+        .apexcharts-tooltip-marker,
+        .apexcharts-tooltip * {
+          color: var(--bg) !important;
+        }
+      `;
       document.head.appendChild(styleEl);
-      console.log('[DEBUG] Injected theme style:', theme.isDarkMode ? 'dark' : 'light');
-      console.log('[DEBUG] Tooltip styles applied with !important');
-      console.log('[DEBUG] Tooltip wrapper background set to transparent');
     },
 
     translate(key, defaultValue) {
@@ -238,8 +197,7 @@ export default {
             return defaultValue;
           }
           return translation;
-        } catch (e) {
-          console.warn(`Translation error for key "${key}":`, e);
+        } catch {
           return defaultValue;
         }
       }
@@ -252,7 +210,6 @@ export default {
 
     async fetchData() {
       if (this.externalData) {
-        console.log('[SatisfactionHeatmap] Skipping fetchData due to externalData=true');
         return;
       }
       this.loading = true;
@@ -260,23 +217,17 @@ export default {
 
       try {
         const locale = this.isI18nReady ? this.$i18n.locale : 'en';
-        console.log(
-          `[SatisfactionHeatmap] Fetching data with period=${this.period}, date=${this.selectedDate}, locale=${locale}`
-        );
         const heatmapData = await analyticsService.getSatisfactionHeatmap(this.period, this.selectedDate, locale);
 
         if (heatmapData && heatmapData.length > 0) {
-          console.log('[SatisfactionHeatmap] Heatmap data received:', heatmapData);
           this.chartData = heatmapData;
           this.updateChart();
         } else {
-          console.warn('[SatisfactionHeatmap] No satisfaction heatmap data returned from API');
           this.chartData = [];
           this.updateChart();
         }
-      } catch (error) {
-        console.error(error, '[SatisfactionHeatmap] Error fetching satisfaction heatmap');
-        this.error = this.translate('analytics.errors.loading', 'Failed to load satisfaction data.');
+      } catch {
+        this.error = this.translate('analytics.error.loading', 'Failed to load satisfaction data.');
         this.chartData = [];
         this.updateChart();
       } finally {
@@ -290,7 +241,7 @@ export default {
     },
 
     enforceColorScheme() {
-      const theme = this.getTheme();
+      const theme = this.getCssVarStrings();
       const textColor = theme.textColor;
       setTimeout(() => {
         const chartContainer = this.$refs.chart;
@@ -315,8 +266,6 @@ export default {
         legendItems.forEach((item) => {
           item.style.color = textColor;
         });
-
-        console.log(`[DEBUG] Enforcing text color: ${textColor}`);
       }, 200);
     },
 
@@ -326,7 +275,7 @@ export default {
         return;
       }
 
-      const theme = this.getTheme();
+      const theme = this.getCssVarStrings();
       const textColor = theme.textColor;
       const backgroundColor = theme.backgroundColor;
       const borderColor = theme.borderColor;
@@ -433,13 +382,12 @@ export default {
             fontSize: '12px'
           },
           custom: ({ series, seriesIndex, dataPointIndex, w }) => {
-            console.log('[DEBUG] Tooltip background set to rgba(0, 0, 0, 0.55)');
             const value = series[seriesIndex][dataPointIndex];
             const category = w.globals.seriesNames[seriesIndex];
             const xLabel = w.globals.labels[dataPointIndex];
             return `
-              <div class="apexcharts-tooltip-box" style="background: rgba(0, 0, 0, 0.55) !important; color: #fff; padding: 8px 10px; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
-                <div style="font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 4px;">
+              <div class="apexcharts-tooltip-box" style="background: var(--fg) !important; color: var(--bg); padding: 8px 10px; border-radius: var(--radius-sm); box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                <div style="font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid var(--border); padding-bottom: 4px;">
                   ${category}
                 </div>
                 <div>
@@ -514,80 +462,32 @@ export default {
   height: 100%;
   min-height: 300px;
   background-color: transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
-.loading-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-secondary, rgba(255, 255, 255, 0.8));
-  z-index: 1;
-}
-
-.spinner {
-  border: 3px solid rgba(0, 0, 0, 0.1);
-  border-radius: 50%;
-  border-top: 3px solid var(--accent-color, #4e97d1);
-  width: 30px;
-  height: 30px;
-  animation: spin 1s linear infinite;
-  margin-bottom: 10px;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.error-message {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-  color: var(--status-outage, #d32f2f);
-}
-
-@media (max-width: 767px) {
+@media (max-width: 768px) {
   .heatmap-wrapper {
     min-height: 400px;
   }
 }
 
-[data-theme='dark'] .spinner {
-  border-color: rgba(255, 255, 255, 0.1);
-  border-top-color: var(--accent-color, #4e97d1);
-}
-
 :deep([data-theme='dark']) .apexcharts-title-text,
 :deep([data-theme='dark']) .apexcharts-subtitle-text {
-  fill: white !important;
+  fill: var(--fg) !important;
 }
 
 :deep([data-theme='dark']) .apexcharts-yaxis-label text,
 :deep([data-theme='dark']) .apexcharts-xaxis-label text {
-  fill: white !important;
+  fill: var(--fg) !important;
 }
 
 :deep([data-theme='dark']) .apexcharts-legend-text {
-  color: white !important;
+  color: var(--fg) !important;
 }
 
 :deep([data-theme='dark']) text,
 :deep([data-theme='dark']) tspan {
-  fill: white !important;
+  fill: var(--fg) !important;
 }
 
 :deep(.apexcharts-tooltip, .apexcharts-tooltip *) {
@@ -595,22 +495,22 @@ export default {
 }
 
 :deep(.apexcharts-tooltip-box) {
-  background-color: rgba(0, 0, 0, 0.55) !important;
-  color: white !important;
+  background-color: var(--fg) !important;
+  color: var(--bg) !important;
   border: none !important;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3) !important;
+  box-shadow: var(--shadow-lg) !important;
 }
 
 :deep(.apexcharts-tooltip-title) {
-  background-color: rgba(0, 0, 0, 0.55) !important;
-  color: white !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+  background-color: var(--fg) !important;
+  color: var(--bg) !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 :deep(.apexcharts-tooltip-text),
 :deep(.apexcharts-tooltip-y-group),
 :deep(.apexcharts-tooltip-text-y-label),
 :deep(.apexcharts-tooltip-text-y-value) {
-  color: white !important;
+  color: var(--bg) !important;
 }
 </style>

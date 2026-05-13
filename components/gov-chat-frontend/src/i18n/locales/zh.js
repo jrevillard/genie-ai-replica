@@ -699,6 +699,8 @@ export default {
     weatherLocationLoading: '正在加载位置...',
     weatherErrorDefault: '无法检索天气数据。',
     weatherGeolocationUnsupported: '您的浏览器不支持地理位置。',
+    collapse: '收起侧边栏',
+    expand: '展开侧边栏',
     weatherRefresh: '刷新天气',
     weatherConditions: {
       clear: '晴朗',
@@ -1339,7 +1341,8 @@ export default {
     exportFilenamePlaceholder: '输入文件名',
     exportButton: '导出',
     exportSuccess: '聊天导出成功',
-    exportError: '导出聊天失败。请重试。'
+    exportError: '导出聊天失败。请重试。',
+    removeItem: '移除'
   },
   quickhelp: {
     // Labels (Short for UI)

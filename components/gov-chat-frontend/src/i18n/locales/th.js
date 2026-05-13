@@ -702,6 +702,8 @@ export default {
     weatherLocationLoading: 'กำลังโหลดตำแหน่ง...',
     weatherErrorDefault: 'ไม่สามารถดึงข้อมูลสภาพอากาศได้',
     weatherGeolocationUnsupported: 'เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่งทางภูมิศาสตร์',
+    collapse: 'ยุบแถบด้านข้าง',
+    expand: 'ขยายแถบด้านข้าง',
     weatherRefresh: 'รีเฟรชสภาพอากาศ',
     weatherConditions: {
       clear: 'แจ่มใส',
@@ -1396,7 +1398,8 @@ export default {
     exportFilenamePlaceholder: 'ป้อนชื่อไฟล์',
     exportButton: 'ส่งออก',
     exportSuccess: 'ส่งออกแชทสำเร็จ',
-    exportError: 'ล้มเหลวในการส่งออกแชท โปรดลองอีกครั้ง'
+    exportError: 'ล้มเหลวในการส่งออกแชท โปรดลองอีกครั้ง',
+    removeItem: 'ลบ'
   },
   quickhelp: {
     // Labels (Short for UI)

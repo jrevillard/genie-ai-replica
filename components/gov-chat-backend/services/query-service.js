@@ -104,49 +104,49 @@ class QueryService {
     let response = `This is a general mock response. You asked about "${lastMessage}" within the context of "${categoryLabel}".`;
     const metadata = {
       source_documents: [],
-      confidence_score: Math.random() * (0.98 - 0.85) + 0.85,
+      confidence_score: Math.random() * (0.98 - 0.85) + 0.85
     };
 
     // Main theme response based on categoryLabel
     switch (categoryLabel) {
-      case "Identity & Civil Registration":
+      case 'Identity & Civil Registration':
         response = `This is a mock response regarding **Identity & Civil Registration**. This category covers services like applying for National IDs, passports, and birth certificates. What specific service do you need help with?`;
         break;
-      case "Taxes & Revenue":
+      case 'Taxes & Revenue':
         response = `This is a mock response for **Taxes & Revenue**. You can get assistance with filing returns, paying taxes, or getting a tax compliance certificate. Please specify what you need.`;
         break;
-      case "Business & Trade":
+      case 'Business & Trade':
         response = `This is a mock response for **Business & Trade**. We can help with business registration, permits, and licenses. How can I assist you today?`;
         break;
-      case "Healthcare & Social Services":
+      case 'Healthcare & Social Services':
         response = `This is a mock response for **Healthcare & Social Services**. This includes finding hospitals, information on national health insurance, and other social programs.`;
         break;
-      case "Education & Learning":
+      case 'Education & Learning':
         response = `This is a mock response for **Education & Learning**. You can find information on public schools, higher education loans, and curriculum details here.`;
         break;
-      case "Transportation & Mobility":
+      case 'Transportation & Mobility':
         response = `This is a mock response for **Transport & Licenses**. This covers driver's licenses, vehicle registration, and public transport information.`;
         break;
-      case "Housing & Urban Development":
+      case 'Housing & Urban Development':
         response = `This is a mock response for **Housing & Urban Development**. Information about affordable housing programs, land rates, and building permits can be found here.`;
         break;
-      case "Employment & Labor Services":
+      case 'Employment & Labor Services':
         response = `This is a mock response for **Employment & Labor Services**. We can provide information on job searching, labor laws, and workplace safety.`;
         break;
-      case "General":
+      case 'General':
         response = `This is a general mock response as no specific category was selected. I can answer questions about a wide range of government services. What would you like to know?`;
         break;
     }
 
     // Add documents based on serviceLabels
     if (serviceLabels && serviceLabels.length > 0) {
-      serviceLabels.forEach(label => {
+      serviceLabels.forEach((label) => {
         if (label.toLowerCase().includes('id')) {
           metadata.source_documents.push({
             document_id: `doc_id_${Math.floor(Math.random() * 1000)}`,
-            url: "http://example.com/docs/id_application_form.pdf",
-            text: "Official form for National ID card application.",
-            categoryLabel: categoryLabel || "Identity & Civil Registration",
+            url: 'http://example.com/docs/id_application_form.pdf',
+            text: 'Official form for National ID card application.',
+            categoryLabel: categoryLabel || 'Identity & Civil Registration',
             serviceLabels: [label],
             score: 0.95
           });
@@ -154,9 +154,9 @@ class QueryService {
         if (label.toLowerCase().includes('birth registration')) {
           metadata.source_documents.push({
             document_id: `doc_birth_${Math.floor(Math.random() * 1000)}`,
-            url: "http://example.com/docs/birth_registration_guide",
-            text: "A step-by-step guide on registering a birth.",
-            categoryLabel: categoryLabel || "Identity & Civil Registration",
+            url: 'http://example.com/docs/birth_registration_guide',
+            text: 'A step-by-step guide on registering a birth.',
+            categoryLabel: categoryLabel || 'Identity & Civil Registration',
             serviceLabels: [label],
             score: 0.98
           });
@@ -164,9 +164,9 @@ class QueryService {
         if (label.toLowerCase().includes('passport')) {
           metadata.source_documents.push({
             document_id: `doc_passport_${Math.floor(Math.random() * 1000)}`,
-            url: "http://example.com/docs/passport_application_ecitizen",
-            text: "Link to the eCitizen portal for passport applications.",
-            categoryLabel: categoryLabel || "Identity & Civil Registration",
+            url: 'http://example.com/docs/passport_application_ecitizen',
+            text: 'Link to the eCitizen portal for passport applications.',
+            categoryLabel: categoryLabel || 'Identity & Civil Registration',
             serviceLabels: [label],
             score: 0.93
           });
@@ -174,9 +174,9 @@ class QueryService {
         if (label.toLowerCase().includes('tax')) {
           metadata.source_documents.push({
             document_id: `doc_tax_${Math.floor(Math.random() * 1000)}`,
-            url: "http://example.com/docs/tax_payment_options",
-            text: "Information on various methods to pay your taxes.",
-            categoryLabel: categoryLabel || "Taxes & Revenue",
+            url: 'http://example.com/docs/tax_payment_options',
+            text: 'Information on various methods to pay your taxes.',
+            categoryLabel: categoryLabel || 'Taxes & Revenue',
             serviceLabels: [label],
             score: 0.91
           });
@@ -184,9 +184,9 @@ class QueryService {
         if (label.toLowerCase().includes('business')) {
           metadata.source_documents.push({
             document_id: `doc_biz_${Math.floor(Math.random() * 1000)}`,
-            url: "http://example.com/docs/business_registration_requirements",
-            text: "Checklist of requirements for starting a new business.",
-            categoryLabel: categoryLabel || "Business & Trade",
+            url: 'http://example.com/docs/business_registration_requirements',
+            text: 'Checklist of requirements for starting a new business.',
+            categoryLabel: categoryLabel || 'Business & Trade',
             serviceLabels: [label],
             score: 0.96
           });
@@ -198,9 +198,9 @@ class QueryService {
     if (metadata.source_documents.length === 0 && serviceLabels && serviceLabels.length > 0) {
       metadata.source_documents.push({
         document_id: `doc_generic_${Math.floor(Math.random() * 1000)}`,
-        url: "http://example.com/docs/general_info",
+        url: 'http://example.com/docs/general_info',
         text: `General information document related to your query about ${serviceLabels.join(', ')}.`,
-        categoryLabel: categoryLabel || "General",
+        categoryLabel: categoryLabel || 'General',
         serviceLabels: serviceLabels,
         score: 0.85
       });
@@ -435,14 +435,15 @@ class QueryService {
           logger.info(`[DEBUG] Validation PASSED: messages array synthesized with 1 item.`);
         } else {
           // Only fail if BOTH messages and text are missing
-          logger.warn('[DEBUG] Validation FAILED: messages array is missing or empty and no legacy "text" field found.');
+          logger.warn(
+            '[DEBUG] Validation FAILED: messages array is missing or empty and no legacy "text" field found.'
+          );
           missingFields.push('messages');
         }
       } else {
         logger.info(`[DEBUG] Validation PASSED: messages array is present with ${queryData.messages.length} items.`);
       }
       // --- FIX: END messages VALIDATION ---
-
 
       // --- FIX: START context VALIDATION ---
       if (!queryData.context) {
@@ -452,22 +453,23 @@ class QueryService {
         logger.info('[DEBUG] Validation PASSED: Default context object supplied.');
       } else {
         logger.info('[DEBUG] Validation PASSED: context object is present.');
-        
+
         // Also validate the internals of the provided context
         if (!Array.isArray(queryData.context.serviceLabels)) {
           logger.warn('[DEBUG] Validation WARNING: context.serviceLabels is not an array. Defaulting to empty array.');
           queryData.context.serviceLabels = [];
         } else {
-          logger.info(`[DEBUG] Validation PASSED: context.serviceLabels is present with labels: ${queryData.context.serviceLabels.join(', ')}.`);
+          logger.info(
+            `[DEBUG] Validation PASSED: context.serviceLabels is present with labels: ${queryData.context.serviceLabels.join(', ')}.`
+          );
         }
-        
+
         if (!queryData.context.categoryLabel) {
-           logger.warn('[DEBUG] Validation WARNING: context.categoryLabel is missing. Defaulting to "General".');
-           queryData.context.categoryLabel = 'General';
+          logger.warn('[DEBUG] Validation WARNING: context.categoryLabel is missing. Defaulting to "General".');
+          queryData.context.categoryLabel = 'General';
         }
       }
       // --- FIX: END context VALIDATION ---
-
 
       if (missingFields.length > 0) {
         const errorMsg = `Missing required query data from frontend. Fields: ${missingFields.join(', ')}`;
@@ -506,7 +508,7 @@ class QueryService {
       }
 
       // Optionally resolve serviceLabels to serviceIds (array)
-      let serviceIds = queryData.serviceId ? [queryData.serviceId] : [];  // Preserve if provided (as single or array)
+      let serviceIds = queryData.serviceId ? [queryData.serviceId] : []; // Preserve if provided (as single or array)
       if (queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0) {
         try {
           const servicesQuery = aql`
@@ -556,7 +558,7 @@ class QueryService {
         const mockData = this.getMockOpeaResponse(queryData);
         opeaResponseContent = mockData.response;
         opeaMetadata = mockData.metadata;
-        opeaResponseTime = (Date.now() - opeaStartTime) + Math.floor(Math.random() * 200); // Simulate network delay
+        opeaResponseTime = Date.now() - opeaStartTime + Math.floor(Math.random() * 200); // Simulate network delay
 
         logger.info(`[DEBUG] Mock response generated in ${opeaResponseTime}ms.`);
         logger.info(`[DEBUG] Mock Response Content: ${opeaResponseContent}`);
@@ -569,7 +571,6 @@ class QueryService {
           metadata: opeaMetadata
         };
         await this.queries.update(queryId, updateData);
-
       } else {
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
         const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
@@ -648,7 +649,6 @@ class QueryService {
         metadata: opeaMetadata,
         responseTime: opeaResponseTime
       };
-
     } catch (error) {
       const totalDuration = Date.now() - startTime;
       logger.error('QueryService.create_query_failed', {
@@ -685,9 +685,13 @@ class QueryService {
       };
 
       // Update the query with feedback
-      const updatedQuery = await this.queries.update(queryId, {
-        userFeedback
-      }, { returnNew: true });
+      const updatedQuery = await this.queries.update(
+        queryId,
+        {
+          userFeedback
+        },
+        { returnNew: true }
+      );
 
       // Update analytics if service is set
       if (this.analyticsService) {
@@ -755,10 +759,14 @@ class QueryService {
     const startTime = Date.now();
     try {
       logger.info('QueryService.mark_as_answered_start', { queryId, responseTime });
-      const updatedQuery = await this.queries.update(queryId, {
-        isAnswered: true,
-        responseTime
-      }, { returnNew: true });
+      const updatedQuery = await this.queries.update(
+        queryId,
+        {
+          isAnswered: true,
+          responseTime
+        },
+        { returnNew: true }
+      );
 
       logger.info('QueryService.query_marked_answered', {
         queryId,
@@ -794,10 +802,14 @@ class QueryService {
       }
 
       // Update the query with response time
-      const updatedQuery = await this.queries.update(queryId, {
-        responseTime,
-        updatedAt: new Date().toISOString()
-      }, { returnNew: true });
+      const updatedQuery = await this.queries.update(
+        queryId,
+        {
+          responseTime,
+          updatedAt: new Date().toISOString()
+        },
+        { returnNew: true }
+      );
 
       logger.info('QueryService.query_response_time_updated', {
         queryId,
@@ -986,7 +998,7 @@ class QueryService {
           RETURN total
       `;
       const countCursor = await this.db.query(countQuery);
-      const totalCount = await countCursor.next() || 0;
+      const totalCount = (await countCursor.next()) || 0;
 
       logger.info('QueryService.search_queries_completed', {
         resultCount: queries.length,
@@ -1076,9 +1088,7 @@ class QueryService {
 
       const lowerQueryText = queryText.toLowerCase();
       const stopWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'with', 'by'];
-      const words = lowerQueryText.split(/\s+/).filter(word =>
-        word.length > 2 && !stopWords.includes(word)
-      );
+      const words = lowerQueryText.split(/\s+/).filter((word) => word.length > 2 && !stopWords.includes(word));
 
       if (words.length === 0) {
         logger.info('QueryService.no_significant_words', { queryText });
@@ -1198,7 +1208,7 @@ class QueryService {
           RETURN total
       `;
       const countCursor = await this.db.query(countQuery);
-      const totalCount = await countCursor.next() || 0;
+      const totalCount = (await countCursor.next()) || 0;
 
       logger.info('QueryService.saved_queries_retrieved', {
         userId,
@@ -1252,21 +1262,17 @@ class QueryService {
       if (recentQueries.length === 0) {
         logger.info('QueryService.no_recent_queries', { userId });
         const popularQueries = await this.getPopularQueries(limit);
-        return popularQueries.map(q => q.text);
+        return popularQueries.map((q) => q.text);
       }
 
-      const categories = recentQueries
-        .filter(q => q.categoryId)
-        .map(q => q.categoryId);
+      const categories = recentQueries.filter((q) => q.categoryId).map((q) => q.categoryId);
 
-      const services = recentQueries
-        .filter(q => q.serviceId)
-        .map(q => q.serviceId);
+      const services = recentQueries.filter((q) => q.serviceId).map((q) => q.serviceId);
 
       if (categories.length === 0 && services.length === 0) {
         logger.info('QueryService.no_categories_or_services', { userId });
         const popularQueries = await this.getPopularQueries(limit);
-        return popularQueries.map(q => q.text);
+        return popularQueries.map((q) => q.text);
       }
 
       const recommendationsQuery = aql`
@@ -1305,7 +1311,7 @@ class QueryService {
           limit
         });
         const popularQueries = await this.getPopularQueries(limit - recommendations.length);
-        return [...recommendations, ...popularQueries.map(q => q.text)];
+        return [...recommendations, ...popularQueries.map((q) => q.text)];
       }
 
       logger.info('QueryService.query_recommendations_found', {
@@ -1321,7 +1327,7 @@ class QueryService {
         stack: error.stack,
         durationMs: Date.now() - startTime
       });
-      return await this.getPopularQueries(limit).then(queries => queries.map(q => q.text));
+      return await this.getPopularQueries(limit).then((queries) => queries.map((q) => q.text));
     }
   }
 
@@ -1382,15 +1388,11 @@ class QueryService {
         throw new NotFoundError('Query not found');
       }
 
-      const conversation = await this.chatHistoryService.createConversationFromQuery(
-        queryId,
-        query.userId,
-        {
-          title: options.title || query.text,
-          responseText: options.responseText,
-          tags: options.tags || []
-        }
-      );
+      const conversation = await this.chatHistoryService.createConversationFromQuery(queryId, query.userId, {
+        title: options.title || query.text,
+        responseText: options.responseText,
+        tags: options.tags || []
+      });
 
       logger.info('QueryService.conversation_created', {
         queryId,
@@ -1462,11 +1464,11 @@ class QueryService {
   }
 
   /**
- * Mark a query as answered
- * @param {String} queryId - Query ID
- * @param {Number} responseTime - Response time in milliseconds
- * @returns {Promise<Object>} Updated query
- */
+   * Mark a query as answered
+   * @param {String} queryId - Query ID
+   * @param {Number} responseTime - Response time in milliseconds
+   * @returns {Promise<Object>} Updated query
+   */
   async markQueryAsAnswered(queryId, responseTime) {
     const startTime = Date.now();
     try {
@@ -1525,14 +1527,17 @@ class QueryService {
         throw new Error('Chat history service is not set');
       }
 
-      const messageCursor = await this.db.query(`
+      const messageCursor = await this.db.query(
+        `
       FOR msg IN messages
         FILTER msg._key == @messageId
         RETURN {
           _key: msg._key,
           conversationId: msg.conversationId
         }
-    `, { messageId });
+    `,
+        { messageId }
+      );
 
       const message = await messageCursor.next();
 
@@ -1541,15 +1546,10 @@ class QueryService {
         throw new NotFoundError('Message not found');
       }
 
-      const link = await this.chatHistoryService.linkQueryToConversation(
-        queryId,
-        message.conversationId,
-        messageId,
-        {
-          responseType: options.responseType || 'primary',
-          confidenceScore: options.confidenceScore || 1.0
-        }
-      );
+      const link = await this.chatHistoryService.linkQueryToConversation(queryId, message.conversationId, messageId, {
+        responseType: options.responseType || 'primary',
+        confidenceScore: options.confidenceScore || 1.0
+      });
 
       logger.info('QueryService.query_linked_to_message', {
         queryId,

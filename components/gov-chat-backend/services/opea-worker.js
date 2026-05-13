@@ -50,7 +50,6 @@ parentPort.on('message', async (task) => {
         responseTime: duration
       }
     });
-
   } catch (error) {
     // Serialize error object safely for transport
     parentPort.postMessage({
@@ -58,10 +57,12 @@ parentPort.on('message', async (task) => {
       error: {
         message: error.message,
         code: error.code || 'UNKNOWN',
-        response: error.response ? {
-          status: error.response.status,
-          data: error.response.data
-        } : null
+        response: error.response
+          ? {
+              status: error.response.status,
+              data: error.response.data
+            }
+          : null
       }
     });
   }

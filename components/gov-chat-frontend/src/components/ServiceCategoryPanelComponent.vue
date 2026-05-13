@@ -35,11 +35,11 @@ export default {
 
 <style scoped>
 .category-panel {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-lg);
 }
 
 .category-panel h4 {
-  margin-bottom: 10px;
+  margin-bottom: var(--space-sm);
 }
 
 .category-panel ul {
@@ -51,60 +51,27 @@ export default {
 .category-panel li {
   display: flex;
   align-items: center;
-  padding: 6px;
-  border-radius: 4px;
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .category-panel li:hover {
-  background: #f2f6f9;
+  background: var(--bg);
 }
 
 .icon {
   width: 24px;
   height: 24px;
-  margin-right: 8px;
+  margin-right: var(--space-sm);
 }
 
 .category-panel h4 {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
+  color: var(--muted);
+  font-size: var(--text-base);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-
-[data-theme='dark'] .category-panel h4,
-html[data-theme='dark'] .category-panel h4 {
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-
-[data-theme='dark'] .toggle-icon {
-  color: rgba(255, 255, 255, 0.6); /* Slightly muted for visual hierarchy */
-}
-
-[data-theme='dark'] .service-tree-list,
-[data-theme='dark'] .service-tree-list * {
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-[data-theme='dark'] .node-name {
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-[data-theme='dark'] .node-label {
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-[data-theme='dark'] .node-label:hover {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-[data-theme='dark'] .toggle-icon {
-  color: rgba(255, 255, 255, 0.6) !important;
-}
-
-[data-theme='dark'] .service-tree-panel h4 {
-  color: rgba(255, 255, 255, 0.7) !important;
 }
 </style>

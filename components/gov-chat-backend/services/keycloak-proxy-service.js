@@ -21,7 +21,6 @@ let cachedToken = null;
  * 2. User's own token (pass-through) — for self-service profile updates via Account API
  */
 const keycloakProxyService = {
-
   // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
@@ -110,7 +109,7 @@ const keycloakProxyService = {
     const options = {
       method,
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       }
     };
@@ -230,7 +229,9 @@ const keycloakProxyService = {
         error: arangoError.message,
         state: 'PARTIAL_ERASURE'
       });
-      throw new Error('Partial erasure: user deleted from Keycloak but ArangoDB erasure failed', { cause: arangoError });
+      throw new Error('Partial erasure: user deleted from Keycloak but ArangoDB erasure failed', {
+        cause: arangoError
+      });
     }
   },
 
@@ -251,7 +252,7 @@ const keycloakProxyService = {
     const response = await fetch(url, {
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(data),

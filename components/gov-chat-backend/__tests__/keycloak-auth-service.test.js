@@ -6,21 +6,21 @@ process.env.KEYCLOAK_REALM = 'genie';
 process.env.KEYCLOAK_CLIENT_ID = 'genie-app';
 process.env.KEYCLOAK_ADDITIONAL_REALMS = '';
 
-const {
-  mockJwtPayload,
-  mockExpiredPayload,
-  generateMockJwtString
-} = require('../test-fixtures/mockJwtPayload');
+const { mockJwtPayload, mockExpiredPayload, generateMockJwtString } = require('../test-fixtures/mockJwtPayload');
 
 // Mock shared-lib
-jest.mock('../shared-lib', () => ({
-  logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn()
-  }
-}), { virtual: true });
+jest.mock(
+  '../shared-lib',
+  () => ({
+    logger: {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn()
+    }
+  }),
+  { virtual: true }
+);
 
 // Store references to mock functions
 // Use var so jest.mock factory (hoisted above) can access them via closures
@@ -76,9 +76,7 @@ describe('keycloakAuthService', () => {
       expect(result).toBeDefined();
       expect(result.iss_sub).toBe(`${mockJwtPayload.iss}#${mockJwtPayload.sub}`);
       // Discovery was called lazily
-      expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8080/realms/genie/.well-known/openid-configuration'
-      );
+      expect(mockFetch).toHaveBeenCalledWith('http://localhost:8080/realms/genie/.well-known/openid-configuration');
       expect(mockJwtVerify).toHaveBeenCalledWith(
         token,
         expect.any(Function),
@@ -110,7 +108,7 @@ describe('keycloakAuthService', () => {
       };
       const token = generateMockJwtString(wrongIssPayload);
 
-      const error = await keycloakAuthService.verifyToken(token).catch(e => e);
+      const error = await keycloakAuthService.verifyToken(token).catch((e) => e);
       expect(error).toMatchObject({
         code: 'TOKEN_INVALID',
         message: 'Unknown issuer'
@@ -196,9 +194,7 @@ describe('keycloakAuthService', () => {
 
       await keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload));
 
-      expect(mockCreateRemoteJWKSet).toHaveBeenCalledWith(
-        expect.objectContaining({ href: mockDiscovery.jwks_uri })
-      );
+      expect(mockCreateRemoteJWKSet).toHaveBeenCalledWith(expect.objectContaining({ href: mockDiscovery.jwks_uri }));
     });
 
     it('should throw TOKEN_INVALID for jwtVerify signature failure (revoked token scenario)', async () => {
@@ -486,7 +482,8 @@ describe('keycloakAuthService', () => {
       const signatureError = new Error('Signature verification failed');
       mockJwtVerify
         .mockRejectedValueOnce(signatureError) // First call: signature fails
-        .mockResolvedValueOnce({ // Second call: succeeds after refresh
+        .mockResolvedValueOnce({
+          // Second call: succeeds after refresh
           payload: mockJwtPayload,
           protectedHeader: { alg: 'RS256' }
         });
@@ -578,12 +575,10 @@ describe('keycloakAuthService', () => {
 
     it('should succeed on retry after force-refresh', async () => {
       const signatureError = new Error('Signature verification failed');
-      mockJwtVerify
-        .mockRejectedValueOnce(signatureError)
-        .mockResolvedValueOnce({
-          payload: mockJwtPayload,
-          protectedHeader: { alg: 'RS256' }
-        });
+      mockJwtVerify.mockRejectedValueOnce(signatureError).mockResolvedValueOnce({
+        payload: mockJwtPayload,
+        protectedHeader: { alg: 'RS256' }
+      });
 
       mockCreateRemoteJWKSet.mockReturnValue(jest.fn());
 
@@ -601,7 +596,9 @@ describe('keycloakAuthService', () => {
       // Mock forceRefresh to throw (network error scenario)
       mockCreateRemoteJWKSet.mockImplementation(() => {
         const fn = jest.fn().mockRejectedValue(new Error('Network error'));
-        fn.forceRefresh = () => { throw new Error('Network error'); };
+        fn.forceRefresh = () => {
+          throw new Error('Network error');
+        };
         return fn;
       });
 
@@ -645,9 +642,9 @@ describe('keycloakAuthService', () => {
 
       await keycloakAuthService.init('http://localhost:8080/realms/genie');
 
-      await expect(
-        keycloakAuthService.init('http://localhost:8080/realms/bad-realm')
-      ).rejects.toThrow('OIDC discovery failed');
+      await expect(keycloakAuthService.init('http://localhost:8080/realms/bad-realm')).rejects.toThrow(
+        'OIDC discovery failed'
+      );
 
       expect(keycloakAuthService.getConfiguredIssuers()).toHaveLength(1);
       expect(keycloakAuthService.getConfiguredIssuers()[0]).toBe(discovery1.issuer);
@@ -770,16 +767,13 @@ describe('keycloakAuthService', () => {
       );
 
       expect(result).toEqual({ active: true, disabled: false });
-      expect(mockAxiosGet).toHaveBeenCalledWith(
-        'http://localhost:8080/realms/genie/protocol/openid-connect/userinfo',
-        {
-          headers: {
-            Authorization: 'Bearer valid-token',
-            Accept: 'application/json'
-          },
-          timeout: 3000
-        }
-      );
+      expect(mockAxiosGet).toHaveBeenCalledWith('http://localhost:8080/realms/genie/protocol/openid-connect/userinfo', {
+        headers: {
+          Authorization: 'Bearer valid-token',
+          Accept: 'application/json'
+        },
+        timeout: 3000
+      });
     });
 
     it('should return null when UserInfo call times out', async () => {

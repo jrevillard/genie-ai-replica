@@ -1,46 +1,34 @@
 // UserProfileComponent.vue with centralized translation function and updated theme variables
 
 <template>
-  <div ref="modalContainer" class="user-profile-modal" :style="dialogThemeStyles" :data-themed="isThemeReady">
-    <div class="overlay" @click="cancel"></div>
-    <div class="modal-content">
-      <h2 :data-themed="isThemeReady">{{ translate('title') }}</h2>
+  <div class="user-profile-page">
+    <div class="profile-content">
+      <h2>{{ translate('title') }}</h2>
 
       <!-- Loading Indicator -->
-      <div v-if="isLoading" class="loading-overlay">
-        <div class="loading-spinner"></div>
+      <DsSpinner v-if="isLoading" overlay>
         <p>{{ translate('loadingProfile', 'Loading user profile...') }}</p>
-      </div>
+      </DsSpinner>
 
       <!-- Error Message -->
-      <div v-else-if="errorMessage" class="error-container">
-        <p class="error-message">{{ errorMessage }}</p>
-        <button class="retry-btn" @click="retryLoading">
-          {{ translate('retryLoading', 'Retry') }}
-        </button>
-      </div>
+      <DsStateDisplay v-else-if="errorMessage" type="error" :message="errorMessage">
+        <template #action>
+          <DsButton variant="secondary" @click="retryLoading">
+            {{ translate('retryLoading', 'Retry') }}
+          </DsButton>
+        </template>
+      </DsStateDisplay>
 
       <!-- Main content - shown when not loading and no errors -->
-      <div v-else>
-        <p class="privacy-info" :data-themed="isThemeReady">
+      <div v-else class="profile-main">
+        <p class="privacy-info">
           {{ translate('privacyInfo') }}
           <a href="#" class="privacy-link">{{ translate('privacyPolicyLink') }}</a>
         </p>
 
         <!-- Tabs -->
-        <div class="tabs">
-          <button
-            v-for="(tab, index) in tabs"
-            :key="index"
-            :class="{ active: activeTab === index }"
-            @click="activeTab = index"
-          >
-            {{ translate(`tabs.tab${index + 1}`) }}
-          </button>
-        </div>
-
-        <!-- Tab content -->
-        <div class="tab-content">
+        <DsTabs v-model="activeTab" :tabs="profileTabs">
+          <!-- Tab content -->
           <!-- Personal Identification Data -->
           <div v-if="activeTab === 0">
             <!-- Profile Icon Section -->
@@ -68,15 +56,30 @@
                   <h4>{{ translate('chooseProfileIcon') }}</h4>
 
                   <div class="icon-tabs">
-                    <button :class="{ active: iconTab === 'preset' }" @click="iconTab = 'preset'">
+                    <DsButton
+                      variant="ghost"
+                      :small="true"
+                      :class="{ active: iconTab === 'preset' }"
+                      @click="iconTab = 'preset'"
+                    >
                       {{ translate('presetIcons') }}
-                    </button>
-                    <button :class="{ active: iconTab === 'upload' }" @click="iconTab = 'upload'">
+                    </DsButton>
+                    <DsButton
+                      variant="ghost"
+                      :small="true"
+                      :class="{ active: iconTab === 'upload' }"
+                      @click="iconTab = 'upload'"
+                    >
                       {{ translate('upload') }}
-                    </button>
-                    <button :class="{ active: iconTab === 'initials' }" @click="iconTab = 'initials'">
+                    </DsButton>
+                    <DsButton
+                      variant="ghost"
+                      :small="true"
+                      :class="{ active: iconTab === 'initials' }"
+                      @click="iconTab = 'initials'"
+                    >
                       {{ translate('initials') }}
-                    </button>
+                    </DsButton>
                   </div>
 
                   <div class="icon-content">
@@ -108,9 +111,9 @@
                         accept="image/*"
                         @change="handleFileUpload"
                       />
-                      <button v-if="uploadedImage" class="btn-confirm" @click="confirmUpload">
+                      <DsButton v-if="uploadedImage" variant="primary" class="btn-confirm" @click="confirmUpload">
                         {{ translate('useThisImage') }}
-                      </button>
+                      </DsButton>
                     </div>
 
                     <!-- Initials Option -->
@@ -130,45 +133,44 @@
                           @click="initialsColor = color"
                         ></div>
                       </div>
-                      <button class="btn-confirm" @click="useInitials">
+                      <DsButton variant="primary" class="btn-confirm" @click="useInitials">
                         {{ translate('useInitials') }}
-                      </button>
+                      </DsButton>
                     </div>
                   </div>
 
                   <div class="icon-selector-footer">
-                    <button class="btn-cancel" @click="closeIconSelector">
+                    <DsButton variant="secondary" class="btn-cancel" @click="closeIconSelector">
                       {{ translate('actions.cancel') }}
-                    </button>
+                    </DsButton>
                   </div>
                 </div>
               </div>
             </div>
-            <div class="field-group">
+            <DsFormGroup>
               <label>{{ translate('fields.fullName') }}</label>
-              <input
+              <DsInput
                 v-model="formData.personalIdentification.fullName"
                 type="text"
                 :placeholder="translate('placeholders.fullName')"
               />
-            </div>
-            <div class="field-group">
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.dob') }}</label>
-              <input v-model="formData.personalIdentification.dob" type="date" />
-            </div>
-            <div class="field-group">
+              <DsInput v-model="formData.personalIdentification.dob" type="date" />
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.gender') }}</label>
-              <select v-model="formData.personalIdentification.gender">
-                <option value="">{{ translate('select') }}</option>
+              <DsSelect v-model="formData.personalIdentification.gender" :placeholder="translate('select')">
                 <option value="male">{{ translate('gender.male') }}</option>
                 <option value="female">{{ translate('gender.female') }}</option>
                 <option value="other">{{ translate('gender.other') }}</option>
                 <option value="prefer-not-to-say">
                   {{ translate('gender.preferNot') }}
                 </option>
-              </select>
-            </div>
-            <div class="field-group">
+              </DsSelect>
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.nationality') }}</label>
               <searchable-country-dropdown
                 ref="nationalityDropdown"
@@ -180,36 +182,36 @@
                 @update:name="updateNationalityName"
                 @change="onNationalityChange"
               />
-            </div>
+            </DsFormGroup>
           </div>
 
           <!-- Civil Registration & Documentation -->
           <div v-else-if="activeTab === 1">
-            <div class="field-group">
+            <DsFormGroup>
               <label>{{ translate('fields.birthCert') }}</label>
-              <input v-model="formData.civilRegistration.birthCert" type="text" />
-            </div>
-            <div class="field-group">
+              <DsInput v-model="formData.civilRegistration.birthCert" type="text" />
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.citizenship') }}</label>
-              <input v-model="formData.civilRegistration.citizenship" type="text" />
-            </div>
-            <div class="field-group">
+              <DsInput v-model="formData.civilRegistration.citizenship" type="text" />
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.immigration') }}</label>
-              <input v-model="formData.civilRegistration.immigration" type="text" />
-            </div>
+              <DsInput v-model="formData.civilRegistration.immigration" type="text" />
+            </DsFormGroup>
           </div>
 
           <!-- Address & Residency Information -->
           <div v-else-if="activeTab === 2">
-            <div class="field-group">
+            <DsFormGroup>
               <label>{{ translate('fields.currentAddress') }}</label>
-              <textarea v-model="formData.addressResidency.currentAddress"></textarea>
-            </div>
-            <div class="field-group">
+              <DsInput v-model="formData.addressResidency.currentAddress" type="textarea" />
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.postalCode') }}</label>
-              <input v-model="formData.addressResidency.postalCode" type="text" />
-            </div>
-            <div class="field-group">
+              <DsInput v-model="formData.addressResidency.postalCode" type="text" />
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.country') }}</label>
               <searchable-country-dropdown
                 ref="countryDropdown"
@@ -221,10 +223,10 @@
                 @update:name="updateCountryName"
                 @change="onCountryChange"
               />
-            </div>
-            <div class="field-group">
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.residencyStatus') }}</label>
-              <select v-model="formData.addressResidency.residencyStatus">
+              <DsSelect v-model="formData.addressResidency.residencyStatus">
                 <option value="citizen">
                   {{ translate('residencyStatuses.citizen') }}
                 </option>
@@ -237,31 +239,31 @@
                 <option value="other">
                   {{ translate('residencyStatuses.other') }}
                 </option>
-              </select>
-            </div>
+              </DsSelect>
+            </DsFormGroup>
           </div>
 
           <!-- Identity & Travel Documents -->
           <div v-else-if="activeTab === 3">
-            <div class="field-group">
+            <DsFormGroup>
               <label>{{ translate('fields.idCard') }}</label>
-              <input v-model="formData.identityDocuments.idCard" type="text" />
-            </div>
-            <div class="field-group">
+              <DsInput v-model="formData.identityDocuments.idCard" type="text" />
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.passport') }}</label>
-              <input v-model="formData.identityDocuments.passport" type="text" />
-            </div>
-            <div class="field-group">
+              <DsInput v-model="formData.identityDocuments.passport" type="text" />
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.driversLicense') }}</label>
-              <input v-model="formData.identityDocuments.driversLicense" type="text" />
-            </div>
+              <DsInput v-model="formData.identityDocuments.driversLicense" type="text" />
+            </DsFormGroup>
           </div>
 
           <!-- Health & Medical Records -->
           <div v-else-if="activeTab === 4">
-            <div class="field-group">
+            <DsFormGroup>
               <label>{{ translate('fields.bloodType') }}</label>
-              <select v-model="formData.healthInfo.bloodType">
+              <DsSelect v-model="formData.healthInfo.bloodType">
                 <option value="a-positive">A+</option>
                 <option value="a-negative">A-</option>
                 <option value="b-positive">B+</option>
@@ -270,159 +272,112 @@
                 <option value="ab-negative">AB-</option>
                 <option value="o-positive">O+</option>
                 <option value="o-negative">O-</option>
-              </select>
-            </div>
-            <div class="field-group">
+              </DsSelect>
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.organDonor') }}</label>
-              <select v-model="formData.healthInfo.organDonor">
+              <DsSelect v-model="formData.healthInfo.organDonor">
                 <option value="yes">{{ translate('yesNo.yes') }}</option>
                 <option value="no">{{ translate('yesNo.no') }}</option>
-              </select>
-            </div>
+              </DsSelect>
+            </DsFormGroup>
           </div>
 
           <!-- Employment & Economic Data -->
           <div v-else-if="activeTab === 5">
-            <div class="field-group">
+            <DsFormGroup>
               <label>{{ translate('fields.eHistory') }}</label>
-              <input v-model="formData.employmentInfo.employmentHistory" type="text" />
-            </div>
-            <div class="field-group">
+              <DsInput v-model="formData.employmentInfo.employmentHistory" type="text" />
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.currentEmployer') }}</label>
-              <input v-model="formData.employmentInfo.currentEmployer" type="text" />
-            </div>
-            <div class="field-group">
+              <DsInput v-model="formData.employmentInfo.currentEmployer" type="text" />
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.tin') }}</label>
-              <input v-model="formData.employmentInfo.taxId" type="text" />
-            </div>
+              <DsInput v-model="formData.employmentInfo.taxId" type="text" />
+            </DsFormGroup>
           </div>
 
           <!-- Education & Academic Records -->
           <div v-else-if="activeTab === 6">
-            <div class="field-group">
+            <DsFormGroup>
               <label>{{ translate('fields.education') }}</label>
-              <div class="select-wrapper">
-                <input
-                  v-if="showEducationSearch"
-                  ref="educationSearchInput"
-                  v-model="educationSearchTerm"
-                  type="text"
-                  class="search-input"
-                  :placeholder="translate('placeholders.searchDisciplines')"
-                  @input="filterEducationOptions"
-                  @blur="handleEducationBlur"
-                  @keydown.enter="selectFirstEducationOption"
-                  @keydown.down="navigateEducationOptions(1)"
-                  @keydown.up="navigateEducationOptions(-1)"
-                />
-                <div v-else class="selected-option" @click="toggleEducationSearch">
-                  {{ formData.educationRecords.education || translate('placeholders.selectDiscipline') }}
-                </div>
-                <div v-if="showEducationSearch" class="options-dropdown">
-                  <div
-                    v-for="(option, index) in filteredEducationOptions"
-                    :key="index"
-                    class="option"
-                    :class="{ active: index === selectedEducationIndex }"
-                    @click="selectEducationOption(option)"
-                    @mouseenter="selectedEducationIndex = index"
-                  >
-                    {{ option }}
-                  </div>
-                  <div v-if="filteredEducationOptions.length === 0" class="no-results">
-                    {{ translate('noMatchingDisciplines') }}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="field-group">
+              <DsCombobox
+                v-model="formData.educationRecords.education"
+                :options="educationOptions"
+                :placeholder="translate('placeholders.selectDiscipline')"
+                :search-placeholder="translate('placeholders.searchDisciplines')"
+                :no-results-text="translate('noMatchingDisciplines')"
+              />
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.degrees') }}</label>
-              <div class="select-wrapper">
-                <input
-                  v-if="showDegreeSearch"
-                  ref="degreeSearchInput"
-                  v-model="degreeSearchTerm"
-                  type="text"
-                  class="search-input"
-                  :placeholder="translate('placeholders.searchDegrees')"
-                  @input="filterDegreeOptions"
-                  @blur="handleDegreeBlur"
-                  @keydown.enter="selectFirstDegreeOption"
-                  @keydown.down="navigateDegreeOptions(1)"
-                  @keydown.up="navigateDegreeOptions(-1)"
-                />
-                <div v-else class="selected-option" @click="toggleDegreeSearch">
-                  {{ formData.educationRecords.degrees || translate('placeholders.selectDegree') }}
-                </div>
-                <div v-if="showDegreeSearch" class="options-dropdown">
-                  <div
-                    v-for="(option, index) in filteredDegreeOptions"
-                    :key="index"
-                    class="option"
-                    :class="{ active: index === selectedDegreeIndex }"
-                    @click="selectDegreeOption(option)"
-                    @mouseenter="selectedDegreeIndex = index"
-                  >
-                    {{ option }}
-                  </div>
-                  <div v-if="filteredDegreeOptions.length === 0" class="no-results">
-                    {{ translate('noMatchingDegrees') }}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="field-group">
+              <DsCombobox
+                v-model="formData.educationRecords.degrees"
+                :options="degreeOptions"
+                :placeholder="translate('placeholders.selectDegree')"
+                :search-placeholder="translate('placeholders.searchDegrees')"
+                :no-results-text="translate('noMatchingDegrees')"
+              />
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.certifications') }}</label>
-              <input v-model="formData.educationRecords.certifications" type="text" />
-            </div>
-            <div class="field-group">
+              <DsInput v-model="formData.educationRecords.certifications" type="text" />
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.academicRecords') }}</label>
-              <textarea v-model="formData.educationRecords.academicRecords"></textarea>
-            </div>
+              <DsInput v-model="formData.educationRecords.academicRecords" type="textarea" />
+            </DsFormGroup>
           </div>
 
           <!-- Financial & Tax Data -->
           <div v-else-if="activeTab === 7">
-            <div class="field-group">
+            <DsFormGroup>
               <label>{{ translate('fields.incomeTax') }}</label>
-              <input v-model="formData.financialInfo.incomeTax" type="text" />
-            </div>
-            <div class="field-group">
+              <DsInput v-model="formData.financialInfo.incomeTax" type="text" />
+            </DsFormGroup>
+            <DsFormGroup>
               <label>{{ translate('fields.bankAccounts') }}</label>
-              <input v-model="formData.financialInfo.bankAccounts" type="text" />
-            </div>
+              <DsInput v-model="formData.financialInfo.bankAccounts" type="text" />
+            </DsFormGroup>
           </div>
-        </div>
+        </DsTabs>
 
         <!-- Action buttons -->
         <div class="actions">
-          <button class="cancel-btn" :disabled="isSubmitting" @click="cancel">
+          <DsButton variant="secondary" :disabled="isSubmitting" @click="$router.back()">
             {{ translate('actions.cancel') }}
-          </button>
-          <button class="save-btn" :disabled="isSubmitting" @click="saveProfile">
+          </DsButton>
+          <DsButton variant="primary" class="save-btn" :disabled="isSubmitting" @click="saveProfile">
             {{ isSubmitting ? translate('actions.saving') : translate('actions.save') }}
-          </button>
+          </DsButton>
         </div>
       </div>
+      <confirm-dialog
+        :visible="showConfirmDialog"
+        :title="translate('confirmSaveTitle')"
+        :message="translate('confirmSave')"
+        :confirm-text="translate('actions.save')"
+        :cancel-text="translate('actions.cancel')"
+        @confirm="confirmSave"
+        @cancel="cancelSave"
+      />
     </div>
-    <confirm-dialog
-      :visible="showConfirmDialog"
-      :title="translate('confirmSaveTitle')"
-      :message="translate('confirmSave')"
-      :confirm-text="translate('actions.save')"
-      :cancel-text="translate('actions.cancel')"
-      :theme="isDarkMode ? 'dark' : 'light'"
-      :parent-styles="dialogThemeStyles"
-      @confirm="confirmSave"
-      @cancel="cancelSave"
-    />
   </div>
 </template>
 
 <script>
 import userProfileService from '@/services/userProfileService';
 import notificationService from '@/services/notificationService';
-import { themeManager } from '@/utils/ThemeManager';
+import DsButton from './ds/Button.vue';
+import DsSpinner from './ds/Spinner.vue';
+import DsStateDisplay from './ds/StateDisplay.vue';
+import DsTabs from './ds/Tabs.vue';
+import DsFormGroup from './ds/FormGroup.vue';
+import DsInput from './ds/Input.vue';
+import DsSelect from './ds/Select.vue';
+import DsCombobox from './ds/Combobox.vue';
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import SearchableCountryDropdown from '@/components/SearchableCountryDropdown.vue';
@@ -431,12 +386,19 @@ export default {
   name: 'UserProfileComponent',
   components: {
     ConfirmDialog,
-    SearchableCountryDropdown
+    SearchableCountryDropdown,
+    DsButton,
+    DsSpinner,
+    DsStateDisplay,
+    DsTabs,
+    DsFormGroup,
+    DsInput,
+    DsSelect,
+    DsCombobox
   },
-  emits: ['cancel', 'save'],
+  emits: ['save'],
   data() {
     return {
-      isThemeReady: false,
       activeTab: 0,
       tabs: [
         { key: 'personalIdentification' },
@@ -498,16 +460,8 @@ export default {
       errorMessage: null,
 
       isSubmitting: false,
-      showEducationSearch: false,
-      educationSearchTerm: '',
       educationOptions: [],
-      filteredEducationOptions: [],
-      selectedEducationIndex: -1,
       degreeOptions: [],
-      showDegreeSearch: false,
-      degreeSearchTerm: '',
-      filteredDegreeOptions: [],
-      selectedDegreeIndex: -1,
       showConfirmDialog: false,
       showIconSelector: false,
       iconTab: 'preset',
@@ -536,49 +490,22 @@ export default {
     };
   },
   computed: {
-    isDarkMode() {
-      // Access a reactive data property so Vue tracks this computed
-      // when themeChange event fires and updateTheme() resets isThemeReady
-      void this.isThemeReady;
-      return (
-        document.documentElement.getAttribute('data-theme') === 'dark' ||
-        document.body.getAttribute('data-theme') === 'dark'
-      );
-    },
-    dialogThemeStyles() {
-      // Reference isThemeReady so Vue re-evaluates on theme changes
-      void this.isThemeReady;
-      const dialogTheme = themeManager.getDialogTheme();
-      return {
-        '--dialog-background': dialogTheme.modal.background,
-        '--dialog-title-color': dialogTheme.modal.titleColor,
-        '--dialog-text-color': dialogTheme.modal.textColor,
-        '--dialog-border-color': dialogTheme.modal.borderColor,
-        '--dialog-box-shadow': dialogTheme.modal.boxShadow,
-        '--dialog-overlay-background': dialogTheme.overlay.background,
-        '--dialog-input-background': dialogTheme.input.background,
-        '--dialog-input-text-color': dialogTheme.input.textColor,
-        '--dialog-input-border-color': dialogTheme.input.borderColor,
-        '--dialog-input-placeholder-color': dialogTheme.input.placeholderColor,
-        '--dialog-tabs-background': dialogTheme.tabs.background,
-        '--dialog-tabs-active-background': dialogTheme.tabs.activeBackground,
-        '--dialog-tabs-text-color': dialogTheme.tabs.textColor,
-        '--dialog-tabs-active-text-color': dialogTheme.tabs.activeTextColor,
-        '--dialog-tabs-border-color': dialogTheme.tabs.borderColor
-      };
+    profileTabs() {
+      return this.tabs.map((tab, index) => ({
+        label: this.translate(`tabs.tab${index + 1}`),
+        value: index
+      }));
     }
   },
   watch: {
     'formData.personalIdentification.nationality': {
-      handler(newVal) {
-        console.log('Nationality model changed to:', newVal);
+      handler() {
         // Rely on SearchableCountryDropdown to emit the name via update:name
       },
       immediate: true
     },
     'formData.addressResidency.country': {
-      handler(newVal) {
-        console.log('Country model changed to:', newVal);
+      handler() {
         // Rely on SearchableCountryDropdown to emit the name via update:name
       },
       immediate: true
@@ -591,15 +518,12 @@ export default {
 
     // Watch for tab changes to ensure dropdown state persists
     activeTab: {
-      handler(newTabIndex, oldTabIndex) {
-        console.log(`Tab changed from ${oldTabIndex} to ${newTabIndex}`);
-
+      handler(newTabIndex) {
         // If we're switching to the Personal Identification tab (0)
         if (newTabIndex === 0 && this.formData.personalIdentification.nationality) {
           this.$nextTick(() => {
             setTimeout(() => {
               if (this.$refs.nationalityDropdown) {
-                console.log('Restoring nationality dropdown after tab switch');
                 this.$refs.nationalityDropdown.manuallySetCountryName(this.formData.personalIdentification.nationality);
               }
             }, 50);
@@ -611,7 +535,6 @@ export default {
           this.$nextTick(() => {
             setTimeout(() => {
               if (this.$refs.countryDropdown) {
-                console.log('Restoring country dropdown after tab switch');
                 this.$refs.countryDropdown.manuallySetCountryName(this.formData.addressResidency.country);
               }
             }, 50);
@@ -621,16 +544,9 @@ export default {
     }
   },
   mounted() {
-    window.addEventListener('themeChange', this.updateTheme);
-    this.$nextTick(() => {
-      this.isThemeReady = true;
-    });
     this.loadEducationOptions();
     this.loadDegreeOptions();
     this.loadUserProfileData();
-  },
-  beforeUnmount() {
-    window.removeEventListener('themeChange', this.updateTheme);
   },
   methods: {
     // Centralized translation function
@@ -654,7 +570,6 @@ export default {
       return result || fallback || key;
     },
     onNationalityChange(code) {
-      console.log('Nationality changed to:', code, 'Type:', typeof code);
       // Only update if we received a valid code
       if (code !== undefined) {
         this.formData.personalIdentification.nationality = code;
@@ -662,7 +577,6 @@ export default {
     },
 
     onCountryChange(code) {
-      console.log('Country changed to:', code, 'Type:', typeof code);
       // Only update if we received a valid code
       if (code !== undefined) {
         this.formData.addressResidency.country = code;
@@ -670,11 +584,9 @@ export default {
     },
 
     updateNationalityName(name) {
-      console.log('Updating nationality name:', name);
       this.nationalityName = name || '';
 
       if (name && !this.formData.personalIdentification.nationality) {
-        console.warn('Country name set but code is missing, attempting to find code');
         // Try to find the code from the name (this could be expanded if needed)
       }
 
@@ -684,17 +596,15 @@ export default {
           localStorage.setItem('user_nationality_name', name);
           localStorage.setItem('user_nationality_code', this.formData.personalIdentification.nationality);
         } catch (e) {
-          console.warn('Could not store nationality in localStorage', e);
+          console.error('Could not store nationality in localStorage', e);
         }
       }
     },
 
     updateCountryName(name) {
-      console.log('Updating country name:', name);
       this.countryName = name || '';
 
       if (name && !this.formData.addressResidency.country) {
-        console.warn('Country name set but code is missing, attempting to find code');
         // Try to find the code from the name (this could be expanded if needed)
       }
 
@@ -704,13 +614,12 @@ export default {
           localStorage.setItem('user_country_name', name);
           localStorage.setItem('user_country_code', this.formData.addressResidency.country);
         } catch (e) {
-          console.warn('Could not store country in localStorage', e);
+          console.error('Could not store country in localStorage', e);
         }
       }
     },
 
     refreshCountryDropdowns() {
-      console.log('Refreshing country dropdowns due to locale change');
       this.$nextTick(() => {
         // Refresh nationality dropdown if it exists
         if (this.$refs.nationalityDropdown) {
@@ -743,20 +652,12 @@ export default {
         const nationalityName = localStorage.getItem('user_nationality_name');
         const countryName = localStorage.getItem('user_country_name');
 
-        console.log('Restoring from localStorage:', {
-          nationalityCode,
-          nationalityName,
-          countryCode,
-          countryName
-        });
-
         // Restore nationality if needed
         if (nationalityCode && this.activeTab === 0 && this.$refs.nationalityDropdown) {
           if (
             !this.formData.personalIdentification.nationality ||
             this.formData.personalIdentification.nationality !== nationalityCode
           ) {
-            console.log('Restoring nationality from localStorage');
             this.formData.personalIdentification.nationality = nationalityCode;
             this.nationalityName = nationalityName || '';
             this.$refs.nationalityDropdown.manuallySetCountryName(nationalityCode);
@@ -766,40 +667,30 @@ export default {
         // Restore country if needed
         if (countryCode && this.activeTab === 2 && this.$refs.countryDropdown) {
           if (!this.formData.addressResidency.country || this.formData.addressResidency.country !== countryCode) {
-            console.log('Restoring country from localStorage');
             this.formData.addressResidency.country = countryCode;
             this.countryName = countryName || '';
             this.$refs.countryDropdown.manuallySetCountryName(countryCode);
           }
         }
       } catch (e) {
-        console.warn('Error restoring country state from localStorage', e);
+        console.error('Error restoring country state from localStorage', e);
       }
     },
 
     updateCountryDisplay() {
       // This function ensures the country dropdowns properly display the correct values
       if (this.formData.personalIdentification.nationality) {
-        console.log('Setting nationality display for:', this.formData.personalIdentification.nationality);
         // The SearchableCountryDropdown component will handle this through its value prop
       }
 
       if (this.formData.addressResidency.country) {
-        console.log('Setting country display for:', this.formData.addressResidency.country);
         // The SearchableCountryDropdown component will handle this through its value prop
       }
     },
-    updateTheme() {
-      this.isThemeReady = false;
-      this.$nextTick(() => {
-        this.isThemeReady = true;
-      });
-    },
     cancel() {
-      this.$emit('cancel');
+      this.$router.back();
     },
     saveProfile() {
-      console.log('Save profile button clicked');
       this.showConfirmDialog = true;
     },
     async confirmSave() {
@@ -808,7 +699,6 @@ export default {
 
       try {
         const validation = this.validateForm();
-        console.log('Form validation result:', validation);
 
         if (!validation.isValid) {
           notificationService.error(this.translate('errors.invalidForm', 'Please fill all required fields'));
@@ -816,36 +706,20 @@ export default {
         }
 
         const profileData = JSON.parse(JSON.stringify(this.formData));
-        console.log('Profile data before submission:', profileData);
-
-        console.log('Country data before submission:', {
-          nationality: profileData.personalIdentification.nationality,
-          nationalityName: this.nationalityName,
-          country: profileData.addressResidency.country,
-          countryName: this.countryName
-        });
 
         if (this.formData.personalIdentification.nationality) {
           profileData.personalIdentification.nationality = this.formData.personalIdentification.nationality;
-          console.log('Explicitly set nationality to:', profileData.personalIdentification.nationality);
-        } else {
-          console.warn('Nationality code is missing from form data');
         }
 
         if (this.formData.addressResidency.country) {
           profileData.addressResidency.country = this.formData.addressResidency.country;
-          console.log('Explicitly set country to:', profileData.addressResidency.country);
-        } else {
-          console.warn('Country code is missing from form data');
         }
 
-        console.log('Profile data being sent to API:', profileData);
-
-        const result = await userProfileService.updateProfile(profileData);
-        console.log('Update profile API response:', result);
+        await userProfileService.updateProfile(profileData);
 
         notificationService.success(this.translate('saveSuccess', 'Profile saved successfully'));
         this.$emit('save', profileData);
+        this.$router.push('/dashboard');
       } catch (error) {
         console.error('Error saving profile:', error);
         notificationService.error(this.translate('errors.savingFailed', 'Failed to save profile'));
@@ -855,7 +729,6 @@ export default {
     },
     cancelSave() {
       this.showConfirmDialog = false;
-      console.log('User cancelled save operation');
     },
     onFileChange(e, section, fieldKey) {
       const file = e.target.files[0];
@@ -934,8 +807,6 @@ export default {
             }
           });
 
-          console.log('Form data after population:', this.formData);
-
           // Store country values to localStorage for tab-switching persistence
           try {
             if (nationalityCode) {
@@ -945,7 +816,7 @@ export default {
               localStorage.setItem('user_country_code', countryCode);
             }
           } catch (e) {
-            console.warn('Could not store country codes in localStorage', e);
+            console.error('Could not store country codes in localStorage', e);
           }
 
           // Ensuring the country dropdowns get initialized with their values
@@ -953,12 +824,10 @@ export default {
             // Set nationality dropdown with a delay to ensure component is mounted
             setTimeout(() => {
               if (nationalityCode && this.$refs.nationalityDropdown) {
-                console.log('Setting nationality dropdown with code:', nationalityCode);
                 this.$refs.nationalityDropdown.manuallySetCountryName(nationalityCode);
               }
 
               if (countryCode && this.$refs.countryDropdown) {
-                console.log('Setting country dropdown with code:', countryCode);
                 this.$refs.countryDropdown.manuallySetCountryName(countryCode);
               }
             }, 300); // Small delay to ensure components are ready
@@ -1009,50 +878,6 @@ export default {
       this.degreeOptions = Array.isArray(defaultOptions) ? defaultOptions : [];
       const locale = this.$i18n ? this.$i18n.locale : 'en';
       this.degreeOptions.sort((a, b) => a.localeCompare(b, locale));
-    },
-    toggleDegreeSearch() {
-      this.showDegreeSearch = true;
-      this.degreeSearchTerm = this.formData.educationRecords.degrees || '';
-      this.filterDegreeOptions();
-      this.$nextTick(() => {
-        if (this.$refs.degreeSearchInput) {
-          this.$refs.degreeSearchInput.focus();
-        }
-      });
-    },
-    filterDegreeOptions() {
-      if (!this.degreeSearchTerm) {
-        this.filteredDegreeOptions = [...this.degreeOptions];
-      } else {
-        const searchTerm = this.degreeSearchTerm.toLowerCase();
-        this.filteredDegreeOptions = this.degreeOptions.filter((option) => option.toLowerCase().includes(searchTerm));
-      }
-      this.selectedDegreeIndex = -1;
-    },
-    selectDegreeOption(option) {
-      this.formData.educationRecords.degrees = option;
-      this.showDegreeSearch = false;
-    },
-    handleDegreeBlur(event) {
-      if (!event.relatedTarget || (event.relatedTarget && !event.relatedTarget.closest('.options-dropdown'))) {
-        setTimeout(() => {
-          this.showDegreeSearch = false;
-        }, 150);
-      }
-    },
-    selectFirstDegreeOption() {
-      if (this.filteredDegreeOptions.length > 0) {
-        this.selectDegreeOption(this.filteredDegreeOptions[0]);
-      }
-    },
-    navigateDegreeOptions(direction) {
-      const optionsLength = this.filteredDegreeOptions.length;
-      if (optionsLength > 0) {
-        this.selectedDegreeIndex = (this.selectedDegreeIndex + direction + optionsLength) % optionsLength;
-        if (this.selectedDegreeIndex >= 0 && this.selectedDegreeIndex < optionsLength) {
-          this.$refs.degreeSearchInput.focus();
-        }
-      }
     },
     loadEducationOptions() {
       const defaultOptions = this.translate('educationOptions', [
@@ -1161,52 +986,6 @@ export default {
       const locale = this.$i18n ? this.$i18n.locale : 'en';
       this.educationOptions.sort((a, b) => a.localeCompare(b, locale));
     },
-    toggleEducationSearch() {
-      this.showEducationSearch = true;
-      this.educationSearchTerm = this.formData.educationRecords.education || '';
-      this.filterEducationOptions();
-      this.$nextTick(() => {
-        if (this.$refs.educationSearchInput) {
-          this.$refs.educationSearchInput.focus();
-        }
-      });
-    },
-    filterEducationOptions() {
-      if (!this.educationSearchTerm) {
-        this.filteredEducationOptions = [...this.educationOptions];
-      } else {
-        const searchTerm = this.educationSearchTerm.toLowerCase();
-        this.filteredEducationOptions = this.educationOptions.filter((option) =>
-          option.toLowerCase().includes(searchTerm)
-        );
-      }
-      this.selectedEducationIndex = -1;
-    },
-    selectEducationOption(option) {
-      this.formData.educationRecords.education = option;
-      this.showEducationSearch = false;
-    },
-    handleEducationBlur(event) {
-      if (!event.relatedTarget || (event.relatedTarget && !event.relatedTarget.closest('.options-dropdown'))) {
-        setTimeout(() => {
-          this.showEducationSearch = false;
-        }, 150);
-      }
-    },
-    selectFirstEducationOption() {
-      if (this.filteredEducationOptions.length > 0) {
-        this.selectEducationOption(this.filteredEducationOptions[0]);
-      }
-    },
-    navigateEducationOptions(direction) {
-      const optionsLength = this.filteredEducationOptions.length;
-      if (optionsLength > 0) {
-        this.selectedEducationIndex = (this.selectedEducationIndex + direction + optionsLength) % optionsLength;
-        if (this.selectedEducationIndex >= 0 && this.selectedEducationIndex < optionsLength) {
-          this.$refs.educationSearchInput.focus();
-        }
-      }
-    },
     openIconSelector() {
       this.showIconSelector = true;
     },
@@ -1267,7 +1046,7 @@ export default {
       ctx.fillStyle = this.initialsColor;
       ctx.fillRect(0, 0, size, size);
 
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = '#ffffff'; // Canvas text color (cannot use CSS vars in canvas context)
       ctx.font = 'bold 80px Arial';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -1282,383 +1061,128 @@ export default {
 
 <style scoped>
 /* Base Modal Styling */
-.user-profile-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 9999;
-  /* Set default colors for light mode regardless of theme detection */
-  color: #333333;
+.user-profile-page {
+  background: var(--bg);
+  color: var(--fg);
+  height: calc(100vh - 60px - var(--space-sm) * 2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-/* Apply theme variables only as overrides */
-.user-profile-modal[data-themed='true'] {
-  color: var(--dialog-text-color, #333333);
+.profile-content {
+  padding: var(--space-lg);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-/* Other existing styles remain unchanged */
-.overlay {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  background-color: var(--dialog-overlay-background, rgba(0, 0, 0, 0.5));
-}
-
-.modal-content {
-  position: relative;
-  background-color: var(--dialog-background, #ffffff);
-  width: 900px;
-  max-width: 90%;
-  margin: 40px auto;
-  padding: 20px;
-  border-radius: 8px;
-  overflow-y: auto;
-  max-height: 90vh;
-  box-shadow: var(--dialog-box-shadow, 0 4px 12px rgba(0, 0, 0, 0.15));
-  border: 1px solid var(--dialog-border-color, #dcdfe4);
+.profile-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Title and Info Styling - add explicit color */
 h2 {
-  color: #333333;
-  margin-bottom: 10px;
-}
-
-h2[data-themed='true'] {
-  color: var(--dialog-title-color, #333333);
+  color: var(--fg);
+  margin-bottom: var(--space-sm);
 }
 
 .privacy-info {
-  font-size: 0.9rem;
-  margin-bottom: 16px;
-  color: #666666;
+  font-size: var(--text-base);
+  margin-bottom: var(--space-md);
+  color: var(--muted);
 }
 
-.privacy-info[data-themed='true'] {
-  color: var(--dialog-text-color, #666666);
+/* Tabs Styling - overrides for DsTabs card-like style */
+.user-profile-page :deep(.ds-tabs) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
-/* Tabs Styling */
-.tabs {
+.user-profile-page :deep(.ds-tabs__nav) {
   display: flex;
   flex-wrap: wrap;
-  margin-bottom: 10px;
-  border-bottom: 1px solid var(--dialog-tabs-border-color, #cccccc);
-  max-height: 120px;
-  overflow-y: auto;
-  background-color: var(--dialog-tabs-background, #ffffff);
+  border-bottom: 1px solid var(--border-light);
 }
 
-.tabs button {
-  margin-right: 4px;
-  padding: 8px 12px;
-  background-color: var(--dialog-tabs-background, #ffffff);
-  color: var(--dialog-tabs-text-color, #000000);
-  border: 1px solid var(--dialog-tabs-border-color, #cccccc);
+.user-profile-page :deep(.ds-tabs__btn) {
+  margin-right: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--border-light);
   border-bottom: none;
-  cursor: pointer;
-  border-radius: 4px 4px 0 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   white-space: nowrap;
 }
 
-.tabs button:hover {
-  background-color: var(--dialog-tabs-hover-background, #f0f0f0);
+.user-profile-page :deep(.ds-tabs__btn:hover) {
+  background-color: var(--bg);
 }
 
-.tabs button.active {
-  background-color: var(--dialog-tabs-active-background, #ffffff);
-  color: var(--dialog-tabs-active-text-color, #000000);
+.user-profile-page :deep(.ds-tabs__btn--active) {
+  background-color: var(--accent-muted);
+  color: var(--fg);
+  border-bottom: 2px solid var(--accent);
   font-weight: bold;
-  border-bottom: 2px solid var(--dialog-tabs-active-background, #ffffff);
 }
 
-/* Field Group Styling */
-.tab-content {
-  border: 1px solid var(--dialog-tabs-border-color, #cccccc);
+/* Tab content area */
+.user-profile-page :deep(.ds-tabs__content) {
+  border: 1px solid var(--border-light);
   border-top: none;
-  padding: 10px;
-  border-radius: 0 0 4px 4px;
-  background-color: var(--dialog-background, #ffffff);
-  min-height: 300px;
-}
-
-.field-group {
-  margin-bottom: 12px;
-  display: flex;
-  flex-direction: column;
-}
-
-.field-group label {
-  margin-bottom: 4px;
-  color: var(--dialog-text-color, #333333);
-}
-
-.field-group input,
-.field-group textarea {
-  padding: 6px;
-  border: 1px solid var(--dialog-input-border-color, #ddd);
-  border-radius: 4px;
-  background-color: var(--dialog-input-background, #ffffff);
-  color: var(--dialog-input-text-color, #333333);
-}
-
-.field-group input::placeholder,
-.field-group textarea::placeholder {
-  color: var(--dialog-input-placeholder-color, #767676);
+  padding: var(--space-sm);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  background-color: var(--surface);
+  overflow-y: auto;
 }
 
 /* Action Buttons Styling */
 .actions {
-  margin-top: 20px;
+  margin-top: var(--space-lg);
   text-align: right;
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-}
-
-.cancel-btn,
-.save-btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.cancel-btn {
-  background-color: var(--bg-button-secondary, #cccccc);
-  color: var(--text-button-secondary, #333333);
-}
-
-.cancel-btn:hover {
-  background-color: var(--bg-button-secondary-hover, #bbbbbb);
-}
-
-.save-btn {
-  background-color: var(--bg-button-primary, #4e97d1);
-  color: var(--text-button-primary, #ffffff);
-}
-
-.save-btn:hover {
-  background-color: var(--bg-button-primary-hover, #3a7da0);
-}
-
-/* Dark Mode Specific Overrides */
-[data-theme='dark'] .user-profile-modal,
-.dark-mode .user-profile-modal {
-  background-color: var(--dialog-background, #2a2a2a);
-  color: var(--dialog-text-color, #f0f0f0);
-}
-
-[data-theme='dark'] h2,
-.dark-mode h2 {
-  color: #ffffff !important;
-}
-
-[data-theme='dark'] .privacy-info,
-.dark-mode .privacy-info {
-  color: rgba(255, 255, 255, 0.8) !important;
-}
-
-/* Loading spinner */
-.loading-overlay {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  min-height: 200px;
-}
-
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid rgba(0, 0, 0, 0.1);
-  border-radius: 50%;
-  border-top-color: var(--bg-button-primary, #4e97d1);
-  animation: spin 1s linear infinite;
-  margin-bottom: 1rem;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Error container */
-.error-container {
-  padding: 2rem;
-  text-align: center;
-}
-
-.error-message {
-  color: #dc3545;
-  margin-bottom: 1rem;
+  gap: var(--space-sm);
+  flex-shrink: 0;
 }
 
 .retry-btn {
-  padding: 0.5rem 1.5rem;
-  background-color: var(--bg-button-secondary, #cccccc);
-  color: var(--text-button-secondary, #333333);
-  border: 1px solid var(--dialog-tabs-border-color, #cccccc);
-  border-radius: 4px;
-  cursor: pointer;
+  /* Layout only - styling handled by DsButton */
 }
 
-.retry-btn:hover {
-  background-color: var(--bg-button-secondary-hover, #bbbbbb);
-}
-
-/* Disabled button styles */
-.save-btn:disabled,
-.cancel-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Searchable dropdown styles */
-.select-wrapper {
-  position: relative;
-  width: 100%;
-}
-
-.search-input {
-  width: 100%;
-  padding: 6px;
-  border: 1px solid var(--dialog-input-border-color, #ddd);
-  border-radius: 4px;
-  background-color: var(--dialog-input-background, #ffffff);
-  color: var(--dialog-input-text-color, #333333);
-}
-
-.selected-option {
-  width: 100%;
-  padding: 6px;
-  border: 1px solid var(--dialog-input-border-color, #ddd);
-  border-radius: 4px;
-  background-color: var(--dialog-input-background, #ffffff);
-  color: var(--dialog-input-text-color, #333333);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  position: relative;
-}
-
-.selected-option:after {
-  content: '▼';
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.8em;
-  color: var(--dialog-input-text-color, #888);
-}
-
-.options-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  max-height: 200px;
-  overflow-y: auto;
-  background-color: var(--dialog-input-background, #ffffff);
-  border: 1px solid var(--dialog-input-border-color, #ddd);
-  border-radius: 0 0 4px 4px;
-  z-index: 10;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.option {
-  padding: 6px 10px;
-  cursor: pointer;
-}
-
-.option:hover,
-.option.active {
-  background-color: var(--bg-button-primary, #4e97d1);
-  color: var(--text-button-primary, #ffffff);
-}
-
-.no-results {
-  padding: 10px;
-  text-align: center;
-  color: #999;
-  font-style: italic;
-}
-
-/* Dark theme adjustments */
-[data-theme='dark'] .options-dropdown,
-.dark-mode .options-dropdown {
-  background-color: var(--dialog-input-background, #333333);
-  border-color: var(--dialog-input-border-color, #3a3a3a);
-}
-
-[data-theme='dark'] .option:hover,
-.dark-mode .option:hover,
-[data-theme='dark'] .option.active,
-.dark-mode .option.active {
-  background-color: var(--bg-button-primary, #4e97d1);
-}
-
-[data-theme='dark'] .no-results,
-.dark-mode .no-results {
-  color: #777;
-}
-
-/* Add these to your UserProfileComponent.vue style section */
-.tabs button.active {
-  border-bottom: 2px solid var(--bg-button-primary, #4e97d1);
-  /* Optional: add a faint background to active tab */
-  background-color: rgba(var(--bg-button-primary-rgb, 78, 151, 209), 0.1);
-}
+/* Disabled button styles are handled by DsButton */
 
 /* Add a subtle border to the sections */
-.tab-content {
-  border-left: 3px solid var(--bg-button-primary, #4e97d1);
-}
-
-/* Add color focus to input fields on focus */
-.field-group input:focus,
-.field-group textarea:focus,
-.field-group select:focus {
-  border-color: var(--bg-button-primary, #4e97d1);
-  box-shadow: 0 0 0 2px rgba(var(--bg-button-primary-rgb, 78, 151, 209), 0.2);
-  outline: none;
-}
 
 /* Better spacing */
-.field-group {
+.user-profile-page :deep(.ds-form-group) {
   margin-bottom: 18px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(125, 125, 125, 0.1);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-light);
 }
 
 /* Improved typography */
-.field-group label {
+.user-profile-page :deep(.ds-form-group label) {
   font-weight: 500;
-  margin-bottom: 6px;
-  font-size: 0.95rem;
-  color: var(--dialog-title-color, #333333);
+  margin-bottom: var(--space-sm);
+  font-size: var(--text-base);
+  color: var(--fg);
 }
 
 /* Make the title more prominent */
 h2 {
-  font-size: 1.75rem;
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--dialog-border-color, #eaeaea);
-  padding-bottom: 12px;
-}
-
-/* Visual feedback on tab hover */
-.tabs button:hover:not(.active) {
-  background-color: rgba(0, 0, 0, 0.05);
-}
-
-[data-theme='dark'] .tabs button:hover:not(.active) {
-  background-color: rgba(255, 255, 255, 0.05);
+  font-size: var(--text-xl);
+  margin-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: var(--space-md);
 }
 
 /* Slight animation on buttons */
@@ -1673,44 +1197,43 @@ h2 {
 }
 
 /* Add icon styles for fields that could benefit from them */
-.field-group input[type='date'] {
+.user-profile-page :deep(.ds-input[type='date']) {
   position: relative;
   padding-right: 30px; /* Space for calendar icon */
 }
 
-/* Add a slight background to the active tab's content area */
-.tab-content {
-  background: linear-gradient(to bottom, rgba(var(--bg-button-primary-rgb, 78, 151, 209), 0.05) 0%, transparent 100px);
-  padding: 15px;
+/* Add a subtle border to the active tab's content area */
+.user-profile-page :deep(.ds-tabs__content) {
+  padding: var(--space-md);
 }
 
 /* Better button styling */
 .save-btn {
-  padding: 10px 24px;
+  padding: var(--space-sm) var(--space-lg);
   font-weight: 500;
   letter-spacing: 0.3px;
 }
 
 .cancel-btn {
   background-color: transparent;
-  border: 1px solid var(--bg-button-secondary, #cccccc);
+  border: 1px solid var(--btn-secondary-bg);
 }
 
 /* Better hover effects */
 .save-btn:hover {
-  background-color: var(--bg-button-primary-hover, #3a7da0);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background-color: var(--accent-hover);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Profile Icon Styles */
 .profile-icon-section {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-lg);
 }
 
 .profile-icon-container {
   display: flex;
   align-items: center;
-  margin-top: 10px;
+  margin-top: var(--space-sm);
 }
 
 .current-icon {
@@ -1720,7 +1243,7 @@ h2 {
   overflow: hidden;
   position: relative;
   cursor: pointer;
-  background-color: var(--bg-button-secondary, #cccccc);
+  background-color: var(--btn-secondary-bg);
 }
 
 .current-icon img {
@@ -1735,9 +1258,9 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
+  font-size: var(--text-2xl);
   font-weight: bold;
-  color: white;
+  color: var(--accent-fg);
 }
 
 .icon-overlay {
@@ -1746,8 +1269,8 @@ h2 {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  color: white;
+  background-color: var(--overlay-bg);
+  color: var(--accent-fg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1766,7 +1289,7 @@ h2 {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: var(--overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1774,40 +1297,53 @@ h2 {
 }
 
 .icon-selector-modal {
-  background-color: var(--dialog-background, #ffffff);
-  border-radius: 8px;
+  background-color: var(--surface);
+  border-radius: var(--radius-lg);
   width: 90%;
   max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
-  padding: 20px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-lg);
 }
 
 .icon-selector-modal h4 {
   margin-top: 0;
-  margin-bottom: 15px;
-  color: var(--dialog-title-color, #333333);
+  margin-bottom: var(--space-md);
+  color: var(--fg);
 }
 
 .icon-tabs {
   display: flex;
-  border-bottom: 1px solid var(--dialog-border-color, #eaeaea);
-  margin-bottom: 15px;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: var(--space-md);
 }
 
 .icon-tabs button {
-  padding: 8px 16px;
+  padding: var(--space-sm) var(--space-md);
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 14px;
-  color: var(--dialog-text-color, #333333);
+  font-size: var(--text-base);
+  color: var(--fg);
 }
 
 .icon-tabs button.active {
-  border-bottom: 2px solid var(--bg-button-primary, #4e97d1);
-  color: var(--bg-button-primary, #4e97d1);
+  border-bottom: 2px solid var(--accent);
+  color: var(--accent);
+}
+
+.upload-zone {
+  border: 2px dashed var(--border-light);
+  border-radius: var(--radius-lg);
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-bottom: var(--space-md);
+  position: relative;
+  color: var(--fg);
 }
 
 .icon-content {
@@ -1818,8 +1354,8 @@ h2 {
 .preset-icons {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 15px;
-  margin-bottom: 15px;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
 }
 
 .preset-icon {
@@ -1840,21 +1376,10 @@ h2 {
 
 .preset-icon.selected,
 .preset-icon:hover {
-  border-color: var(--bg-button-primary, #4e97d1);
+  border-color: var(--accent);
 }
 
 /* Upload Zone */
-.upload-zone {
-  border: 2px dashed var(--dialog-border-color, #ddd);
-  border-radius: 8px;
-  height: 150px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  margin-bottom: 15px;
-  position: relative;
-}
 
 .upload-zone img {
   max-width: 100%;
@@ -1867,11 +1392,11 @@ h2 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 15px;
+  gap: var(--space-md);
 }
 
 .initials-preview {
-  margin-bottom: 10px;
+  margin-bottom: var(--space-sm);
 }
 
 .initials-icon {
@@ -1881,17 +1406,17 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 40px;
+  font-size: var(--text-3xl);
   font-weight: bold;
-  color: white;
+  color: var(--accent-fg);
 }
 
 .color-selector {
   display: flex;
-  gap: 10px;
+  gap: var(--space-sm);
   flex-wrap: wrap;
   justify-content: center;
-  margin-bottom: 15px;
+  margin-bottom: var(--space-md);
 }
 
 .color-option {
@@ -1908,51 +1433,22 @@ h2 {
 }
 
 .color-option.selected {
-  border-color: #ddd;
+  border-color: var(--fg);
   transform: scale(1.1);
 }
 
 .icon-selector-footer {
   display: flex;
   justify-content: flex-end;
-  margin-top: 20px;
+  margin-top: var(--space-lg);
 }
 
 .btn-confirm {
-  background-color: var(--bg-button-primary, #4e97d1);
-  color: var(--text-button-primary, #ffffff);
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
+  /* Layout only - styling handled by DsButton primary */
 }
 
 .btn-cancel {
-  background-color: var(--bg-button-secondary, #cccccc);
-  color: var(--text-button-secondary, #333333);
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-left: 10px;
-}
-
-/* Dark Mode Adjustments */
-[data-theme='dark'] .icon-selector-modal h4,
-[data-theme='dark'] .icon-tabs button {
-  color: var(--dialog-text-color-dark, #ffffff);
-}
-
-[data-theme='dark'] .icon-tabs button.active {
-  color: var(--bg-button-primary, #4e97d1);
-}
-
-[data-theme='dark'] .upload-zone {
-  border-color: var(--dialog-border-color-dark, #444);
-  color: var(--dialog-text-color-dark, #ccc);
-}
-
-[data-theme='dark'] .color-option.selected {
-  border-color: #555;
+  /* Layout only - styling handled by DsButton secondary */
+  margin-left: var(--space-sm);
 }
 </style>

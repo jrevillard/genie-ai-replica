@@ -54,7 +54,6 @@ describe('httpService', () => {
   let mockAxiosInstance;
   let requestHandler;
   let responseSuccessHandler;
-  
 
   beforeEach(() => {
     jest.clearAllMocks();

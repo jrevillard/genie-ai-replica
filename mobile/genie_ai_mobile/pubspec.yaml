@@ -15,6 +15,10 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
+  # OpenAPI generated client
+  openapi:
+    path: openapi_client
+
   # Core networking & utilities
   http: ^1.6.0
   connectivity_plus: ^7.0.0 # Added for Online/Offline features
@@ -59,6 +63,7 @@ dependencies:
   talker_flutter: ^4.5.0
 
   flutter_launcher_icons: ^0.14.4
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:

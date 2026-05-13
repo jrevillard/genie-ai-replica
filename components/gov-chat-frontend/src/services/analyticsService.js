@@ -43,7 +43,6 @@ class AnalyticsService {
   async getUniqueUsersCount(startDate, endDate, locale = null) {
     try {
       const currentLocale = this.getCurrentLocale(locale);
-      console.log(`Directly getting unique users count from ${startDate} to ${endDate} with locale: ${currentLocale}`);
 
       const response = await httpService.get('analytics/metric/uniqueUsers', {
         params: {
@@ -52,8 +51,6 @@ class AnalyticsService {
           locale: currentLocale
         }
       });
-
-      console.log('Unique users direct response:', response.data);
 
       return typeof response.data.value === 'number' ? response.data.value : 0;
     } catch (error) {
@@ -76,8 +73,6 @@ class AnalyticsService {
 
       // Get current locale from parameter, instance, or fallback
       const currentLocale = this.getCurrentLocale(locale);
-
-      console.log(`Fetching dashboard analytics with locale: ${currentLocale}`);
 
       const response = await httpService.get('analytics/dashboard', {
         params: {
@@ -141,11 +136,6 @@ class AnalyticsService {
         }
       });
 
-      console.log(`Response for ${metric}:`, {
-        current: currentResponse.data,
-        previous: previousResponse.data
-      });
-
       return {
         current: currentResponse.data.value,
         previous: previousResponse.data.value
@@ -170,8 +160,6 @@ class AnalyticsService {
       // Get current locale
       const currentLocale = this.getCurrentLocale(locale);
 
-      console.log(`Fetching time series data for ${metricType}, interval ${interval}, locale: ${currentLocale}`);
-
       const response = await httpService.get(`analytics/timeseries/${metricType}`, {
         params: {
           interval,
@@ -182,7 +170,6 @@ class AnalyticsService {
       });
 
       if (!response.data || !Array.isArray(response.data)) {
-        console.warn(`Invalid response format for ${metricType} time series:`, response.data);
         return [];
       }
 
@@ -227,8 +214,7 @@ class AnalyticsService {
         default:
           return date.toLocaleDateString(locale);
       }
-    } catch (error) {
-      console.warn('Error formatting date label:', error);
+    } catch {
       return String(timestamp);
     }
   }
@@ -281,8 +267,7 @@ class AnalyticsService {
         } else {
           dateLabel = item.timestamp;
         }
-      } catch (error) {
-        console.warn(`Error formatting date label for ${item.timestamp}:`, error);
+      } catch {
         dateLabel = item.timestamp;
       }
 
@@ -368,11 +353,8 @@ class AnalyticsService {
 
     if (!data) return defaultData;
 
-    console.log('Dashboard data received:', data);
-
     // Extract the unique users count
     const uniqueUsers = data.users && typeof data.users.activeCount === 'number' ? data.users.activeCount : 0;
-    console.log('Unique users count from API:', uniqueUsers);
 
     // Transform the data from the API response structure
     return {
@@ -470,8 +452,6 @@ class AnalyticsService {
       // Get current locale from parameter, instance, or fallback
       const currentLocale = this.getCurrentLocale(locale);
 
-      console.log(`Fetching satisfaction heatmap with locale: ${currentLocale}`);
-
       // Make API call to get the satisfaction heatmap data
       const response = await httpService.get('analytics/satisfaction/heatmap', {
         params: {
@@ -482,7 +462,6 @@ class AnalyticsService {
       });
 
       if (!response.data || !Array.isArray(response.data)) {
-        console.warn('Invalid response format for satisfaction heatmap:', response.data);
         return [];
       }
 
@@ -508,8 +487,6 @@ class AnalyticsService {
       // Get current locale from parameter, instance, or fallback
       const currentLocale = this.getCurrentLocale(locale);
 
-      console.log(`Fetching satisfaction gauge with locale: ${currentLocale}`, { startDate, endDate });
-
       // Make API call to get the satisfaction gauge data
       const response = await httpService.get('analytics/satisfaction/gauge', {
         params: {
@@ -519,10 +496,7 @@ class AnalyticsService {
         }
       });
 
-      console.log('[SatisfactionGauge] Raw API response:', response);
-
       if (!response.data || typeof response.data.currentValue !== 'number') {
-        console.warn('Invalid gauge data response:', response.data);
         throw new Error(`Invalid gauge data response: ${JSON.stringify(response.data)}`);
       }
 
@@ -533,8 +507,6 @@ class AnalyticsService {
         target: response.data.target || 85,
         historicalData: Array.isArray(response.data.historicalData) ? response.data.historicalData : []
       };
-
-      console.log('[SatisfactionGauge] Processed gauge data:', gaugeData);
 
       return gaugeData;
     } catch (error) {

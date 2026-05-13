@@ -17,17 +17,25 @@ const mockAql = jest.fn((strings, ...values) => {
   return { query, bindVars: {} };
 });
 
-jest.mock('arangojs', () => ({
-  aql: mockAql
-}), { virtual: true });
+jest.mock(
+  'arangojs',
+  () => ({
+    aql: mockAql
+  }),
+  { virtual: true }
+);
 
 // Mock shared-lib
-jest.mock('../shared-lib', () => ({
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
-  dbService: {
-    getConnection: jest.fn()
-  }
-}), { virtual: true });
+jest.mock(
+  '../shared-lib',
+  () => ({
+    logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
+    dbService: {
+      getConnection: jest.fn()
+    }
+  }),
+  { virtual: true }
+);
 
 const keycloakProxyService = require('../services/keycloak-proxy-service');
 const { dbService } = require('../shared-lib');
@@ -98,19 +106,21 @@ describe('keycloak-proxy-service', () => {
     it('should throw on token acquisition failure', async () => {
       keycloakProxyService._clearTokenCache();
       global.fetch = jest.fn().mockResolvedValueOnce({
-        ok: false, status: 401, text: async () => 'Invalid client'
+        ok: false,
+        status: 401,
+        text: async () => 'Invalid client'
       });
 
-      await expect(keycloakProxyService.getServiceAccountToken()).rejects.toThrow('Failed to obtain service account token');
+      await expect(keycloakProxyService.getServiceAccountToken()).rejects.toThrow(
+        'Failed to obtain service account token'
+      );
     });
   });
 
   describe('deleteUser', () => {
     it('should delete from Keycloak and set deleted=true in ArangoDB', async () => {
       keycloakProxyService._clearTokenCache();
-      global.fetch = jest.fn()
-        .mockResolvedValueOnce(mockTokenResponse())
-        .mockResolvedValueOnce(mockOkResponse(204));
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
 
       const db = { query: jest.fn() };
       db.query.mockResolvedValueOnce(mockCursor('uuid-abc')); // UUID resolution
@@ -123,9 +133,7 @@ describe('keycloak-proxy-service', () => {
 
     it('should nullify all PII fields (email, name, sub, iss, iss_sub)', async () => {
       keycloakProxyService._clearTokenCache();
-      global.fetch = jest.fn()
-        .mockResolvedValueOnce(mockTokenResponse())
-        .mockResolvedValueOnce(mockOkResponse(204));
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
 
       const capturedAql = [];
       const db = {
@@ -151,9 +159,7 @@ describe('keycloak-proxy-service', () => {
 
     it('should set roles, active, deleted, and erasedAt', async () => {
       keycloakProxyService._clearTokenCache();
-      global.fetch = jest.fn()
-        .mockResolvedValueOnce(mockTokenResponse())
-        .mockResolvedValueOnce(mockOkResponse(204));
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
 
       const capturedAql = [];
       const db = {
@@ -176,9 +182,7 @@ describe('keycloak-proxy-service', () => {
 
     it('should UNSET personalIdentification custom PII field', async () => {
       keycloakProxyService._clearTokenCache();
-      global.fetch = jest.fn()
-        .mockResolvedValueOnce(mockTokenResponse())
-        .mockResolvedValueOnce(mockOkResponse(204));
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
 
       const capturedAql = [];
       const db = {
@@ -198,9 +202,7 @@ describe('keycloak-proxy-service', () => {
 
     it('should log "User erased" message (distinct from soft-delete)', async () => {
       keycloakProxyService._clearTokenCache();
-      global.fetch = jest.fn()
-        .mockResolvedValueOnce(mockTokenResponse())
-        .mockResolvedValueOnce(mockOkResponse(204));
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204));
 
       const { logger } = require('../shared-lib');
       const db = { query: jest.fn() };
@@ -215,9 +217,7 @@ describe('keycloak-proxy-service', () => {
 
     it('should handle double-erase gracefully (idempotent on 404)', async () => {
       keycloakProxyService._clearTokenCache();
-      global.fetch = jest.fn()
-        .mockResolvedValueOnce(mockTokenResponse())
-        .mockResolvedValueOnce(mockOkResponse(204)); // First delete
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204)); // First delete
 
       const db = { query: jest.fn() };
       db.query.mockResolvedValueOnce(mockCursor('uuid-abc'));
@@ -235,7 +235,8 @@ describe('keycloak-proxy-service', () => {
       db.query.mockResolvedValueOnce(mockCursor('uuid-abc'));
       dbService.getConnection.mockResolvedValue(Promise.resolve(db));
 
-      global.fetch = jest.fn()
+      global.fetch = jest
+        .fn()
         .mockResolvedValueOnce(mockTokenResponse())
         .mockResolvedValueOnce({ ok: false, status: 404, text: async () => 'Not found' });
 
@@ -245,9 +246,7 @@ describe('keycloak-proxy-service', () => {
 
     it('should throw partial erasure error if ArangoDB update fails after Keycloak delete', async () => {
       keycloakProxyService._clearTokenCache();
-      global.fetch = jest.fn()
-        .mockResolvedValueOnce(mockTokenResponse())
-        .mockResolvedValueOnce(mockOkResponse(204)); // Keycloak DELETE succeeds
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse()).mockResolvedValueOnce(mockOkResponse(204)); // Keycloak DELETE succeeds
 
       const db = { query: jest.fn() };
       db.query.mockResolvedValueOnce(mockCursor('uuid-abc'));
@@ -257,14 +256,19 @@ describe('keycloak-proxy-service', () => {
       const { logger } = require('../shared-lib');
 
       // Should throw partial erasure error
-      await expect(keycloakProxyService.deleteUser('user-key')).rejects.toThrow('Partial erasure: user deleted from Keycloak but ArangoDB erasure failed');
+      await expect(keycloakProxyService.deleteUser('user-key')).rejects.toThrow(
+        'Partial erasure: user deleted from Keycloak but ArangoDB erasure failed'
+      );
 
       // Should log the error state
-      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('ArangoDB erasure failed after Keycloak delete'), expect.objectContaining({
-        userKey: 'user-key',
-        state: 'PARTIAL_ERASURE'
-      }));
-  });
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('ArangoDB erasure failed after Keycloak delete'),
+        expect.objectContaining({
+          userKey: 'user-key',
+          state: 'PARTIAL_ERASURE'
+        })
+      );
+    });
   });
 
   // Soft-delete vs Erasure Distinction (documented here for reference)
@@ -281,8 +285,7 @@ describe('keycloak-proxy-service', () => {
 
   describe('updateOwnProfile', () => {
     it('should update profile via Account API with user token', async () => {
-      global.fetch = jest.fn()
-        .mockResolvedValueOnce(mockOkResponse(200));
+      global.fetch = jest.fn().mockResolvedValueOnce(mockOkResponse(200));
 
       await keycloakProxyService.updateOwnProfile('user-access-token', { email: 'new@test.com' });
 
@@ -294,11 +297,11 @@ describe('keycloak-proxy-service', () => {
     });
 
     it('should throw on Account API error', async () => {
-      global.fetch = jest.fn()
-        .mockResolvedValueOnce({ ok: false, status: 409, text: async () => 'Duplicate email' });
+      global.fetch = jest.fn().mockResolvedValueOnce({ ok: false, status: 409, text: async () => 'Duplicate email' });
 
-      await expect(keycloakProxyService.updateOwnProfile('token', { email: 'dup@test.com' }))
-        .rejects.toThrow('Conflict in Keycloak operation');
+      await expect(keycloakProxyService.updateOwnProfile('token', { email: 'dup@test.com' })).rejects.toThrow(
+        'Conflict in Keycloak operation'
+      );
     });
   });
 
@@ -323,7 +326,8 @@ describe('keycloak-proxy-service', () => {
   describe('_adminApiCall', () => {
     it('should lazy-refresh token on 401', async () => {
       keycloakProxyService._clearTokenCache();
-      global.fetch = jest.fn()
+      global.fetch = jest
+        .fn()
         .mockResolvedValueOnce(mockTokenResponse()) // initial token
         .mockResolvedValueOnce({ ok: false, status: 401, text: async () => 'Expired' })
         .mockResolvedValueOnce(mockTokenResponse()) // refreshed token

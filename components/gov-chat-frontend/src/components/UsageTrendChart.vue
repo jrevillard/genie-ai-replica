@@ -1,20 +1,26 @@
-<!-- UsageTrendChart.vue - Updated Version with Translation Support -->
+<!-- UsageTrendChart.vue - ApexCharts Version with Translation Support -->
 <template>
   <div class="usage-trend-chart">
     <div class="chart-header">
       <h3>{{ $t('analytics.usageTrends') }}</h3>
       <div class="chart-controls">
-        <select v-model="selectedPeriod" class="period-selector">
+        <DsSelect v-model="selectedPeriod" class="period-selector">
           <option value="week">{{ $t('analytics.week') }}</option>
           <option value="month">{{ $t('analytics.month') }}</option>
           <option value="quarter">{{ $t('analytics.quarter') }}</option>
           <option value="year">{{ $t('analytics.year') }}</option>
-        </select>
+        </DsSelect>
       </div>
     </div>
 
     <div class="chart-container">
-      <div ref="chartContainer" style="width: 100%; height: 100%"></div>
+      <apexchart
+        v-if="!loading && chartOptions"
+        type="line"
+        height="320"
+        :options="chartOptions"
+        :series="chartSeries"
+      />
       <div v-if="loading" class="chart-loading">
         {{ $t('analytics.loading') }}
       </div>
@@ -42,8 +48,26 @@
 </template>
 
 <script>
+import VueApexCharts from 'vue3-apexcharts';
+import { useChartTheme } from '../../composables/useChartTheme';
+import DsSelect from './ds/Select.vue';
+
 export default {
   name: 'UsageTrendChart',
+
+  components: {
+    apexchart: VueApexCharts,
+    DsSelect
+  },
+
+  setup() {
+    const { theme, isDarkMode, getCssVarStrings } = useChartTheme({
+      onThemeChange: () => {
+        // Chart will automatically update via theme watcher
+      }
+    });
+    return { theme, isDarkMode, getCssVarStrings };
+  },
 
   data() {
     return {
@@ -53,7 +77,8 @@ export default {
       uniqueUsers: 3294,
       averageResponseTime: 2.7,
       satisfactionRate: 0.91,
-      chart: null,
+      chartOptions: null,
+      chartSeries: [],
 
       // Sample chart data (will be translated)
       chartData: {
@@ -164,7 +189,23 @@ export default {
 
   watch: {
     selectedPeriod() {
-      this.renderChart();
+      this.updateChart();
+    },
+    // Watch for theme changes from the composable
+    theme() {
+      this.$nextTick(() => {
+        this.updateChart();
+      });
+    },
+    // Watch for locale changes
+    '$i18n.locale': {
+      handler() {
+        this.$nextTick(() => {
+          this.updateTranslations();
+          this.updateChart();
+        });
+      },
+      immediate: false
     }
   },
 
@@ -173,13 +214,7 @@ export default {
   },
 
   mounted() {
-    this.initChart();
-    window.addEventListener('resize', this.handleResize);
-  },
-
-  beforeUnmount() {
-    window.removeEventListener('resize', this.handleResize);
-    this.disposeChart();
+    this.updateChart();
   },
 
   methods: {
@@ -197,130 +232,150 @@ export default {
         quarter: localeData.quarter,
         year: localeData.year
       };
-
-      // If chart is already initialized, re-render it
-      if (this.chart) {
-        this.renderChart();
-      }
     },
 
-    async initChart() {
-      try {
-        // Import echarts library
-        const echarts = await import('echarts');
-
-        // Render initial chart
-        this.renderChart(echarts);
-      } catch (error) {
-        console.error('Failed to load chart library:', error);
-      }
-    },
-
-    async renderChart(echartLib = null) {
-      if (!this.$refs.chartContainer) return;
+    updateChart() {
+      if (!this.chartData[this.selectedPeriod]) return;
 
       this.loading = true;
 
       // Use a timeout to ensure UI updates before chart rendering
-      setTimeout(async () => {
+      setTimeout(() => {
         try {
-          // Dispose of old chart properly before creating a new one
-          this.disposeChart();
-
-          // Load echarts library if not provided
-          const echarts = echartLib || (await import('echarts'));
-
-          // Create new chart instance
-          this.chart = echarts.init(this.$refs.chartContainer);
-
-          // Get data for the selected period
           const data = this.chartData[this.selectedPeriod];
+          const cssVars = this.getCssVarStrings();
 
-          // Set chart options
-          const option = {
+          // Gradient colors based on theme
+          const lineGradientFrom = this.isDarkMode ? 'rgba(78, 151, 209, 0.6)' : 'rgba(78, 151, 209, 0.5)';
+          const lineGradientTo = this.isDarkMode ? 'rgba(78, 151, 209, 0.1)' : 'rgba(78, 151, 209, 0.05)';
+
+          this.chartOptions = {
+            chart: {
+              type: 'line',
+              background: cssVars.backgroundColor,
+              foreColor: cssVars.textColor,
+              toolbar: {
+                show: false
+              },
+              animations: {
+                enabled: true,
+                easing: 'easeinout',
+                speed: 800
+              }
+            },
+            theme: {
+              mode: this.isDarkMode ? 'dark' : 'light'
+            },
             tooltip: {
-              trigger: 'axis',
-              axisPointer: {
-                type: 'shadow'
+              theme: this.isDarkMode ? 'dark' : 'light',
+              x: {
+                show: true
+              },
+              y: {
+                formatter: function (value) {
+                  return value.toLocaleString();
+                }
               }
             },
             legend: {
-              data: [this.$t('analytics.totalQueries'), this.$t('analytics.uniqueUsers')],
-              bottom: 0
+              position: 'bottom',
+              labels: {
+                colors: cssVars.textColor
+              }
             },
             grid: {
-              left: '3%',
-              right: '4%',
-              bottom: '10%',
-              top: '3%',
-              containLabel: true
-            },
-            xAxis: {
-              type: 'category',
-              data: data.map((item) => item.date),
-              axisTick: {
-                alignWithLabel: true
+              borderColor: cssVars.borderColor,
+              strokeDashArray: 4,
+              padding: {
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 10
               }
             },
-            yAxis: {
-              type: 'value'
-            },
-            series: [
-              {
-                name: this.$t('analytics.totalQueries'),
-                type: 'line',
-                smooth: true,
-                lineStyle: {
-                  width: 3,
-                  shadowColor: 'rgba(0,0,0,0.2)',
-                  shadowBlur: 10,
-                  shadowOffsetY: 10
+            xaxis: {
+              categories: data.map((item) => item.date),
+              labels: {
+                style: {
+                  colors: cssVars.textColor
                 },
-                symbol: 'circle',
-                symbolSize: 8,
-                data: data.map((item) => item.queries),
-                itemStyle: {
-                  color: '#4e97d1'
-                },
-                areaStyle: {
-                  color: {
-                    type: 'linear',
-                    x: 0,
-                    y: 0,
-                    x2: 0,
-                    y2: 1,
-                    colorStops: [
-                      { offset: 0, color: 'rgba(78, 151, 209, 0.5)' },
-                      { offset: 1, color: 'rgba(78, 151, 209, 0.05)' }
-                    ]
-                  }
-                }
+                rotate: 0,
+                rotateAlways: false
               },
-              {
-                name: this.$t('analytics.uniqueUsers'),
-                type: 'bar',
-                barWidth: '40%',
-                data: data.map((item) => item.users),
-                itemStyle: {
-                  color: {
-                    type: 'linear',
-                    x: 0,
-                    y: 0,
-                    x2: 0,
-                    y2: 1,
-                    colorStops: [
-                      { offset: 0, color: '#84d9d2' },
-                      { offset: 1, color: '#07cdae' }
-                    ]
-                  },
-                  borderRadius: [4, 4, 0, 0]
+              axisBorder: {
+                show: false
+              },
+              axisTicks: {
+                show: false
+              }
+            },
+            yaxis: {
+              labels: {
+                style: {
+                  colors: cssVars.mutedColor
+                },
+                formatter: function (value) {
+                  return value.toLocaleString();
                 }
               }
-            ]
+            },
+            stroke: {
+              curve: 'smooth',
+              width: [3, 0]
+            },
+            fill: {
+              type: ['gradient', 'solid'],
+              gradient: {
+                shade: 'light',
+                type: 'vertical',
+                shadeIntensity: 0.5,
+                gradientToColors: undefined,
+                inverseColors: true,
+                opacityFrom: 0.6,
+                opacityTo: 0.1,
+                stops: [0, 90, 100],
+                colorStops: [
+                  { offset: 0, color: lineGradientFrom },
+                  { offset: 100, color: lineGradientTo }
+                ]
+              }
+            },
+            colors: ['#4e97d1', '#07cdae'],
+            dataLabels: {
+              enabled: false
+            },
+            markers: {
+              size: 6,
+              colors: ['#4e97d1'],
+              strokeColors: cssVars.backgroundColor,
+              strokeWidth: 2,
+              hover: {
+                size: 8
+              }
+            },
+            plotOptions: {
+              bar: {
+                borderRadius: 4,
+                columnWidth: '40%',
+                dataLabels: {
+                  position: 'top'
+                }
+              }
+            }
           };
 
-          // Apply the chart configuration
-          this.chart.setOption(option);
+          this.chartSeries = [
+            {
+              name: this.$t('analytics.totalQueries'),
+              type: 'line',
+              data: data.map((item) => item.queries)
+            },
+            {
+              name: this.$t('analytics.uniqueUsers'),
+              type: 'column',
+              data: data.map((item) => item.users)
+            }
+          ];
 
           // Update metrics based on period
           this.totalQueries = data.reduce((sum, item) => sum + item.queries, 0);
@@ -347,34 +402,10 @@ export default {
 
           // End loading state
           this.loading = false;
-        } catch (error) {
-          console.error('Error rendering chart:', error);
+        } catch {
           this.loading = false;
         }
       }, 100);
-    },
-
-    disposeChart() {
-      if (this.chart) {
-        try {
-          this.chart.dispose();
-        } catch (e) {
-          console.warn('Error while disposing chart:', e);
-        }
-        this.chart = null;
-      }
-    },
-
-    handleResize() {
-      if (this.chart) {
-        try {
-          this.chart.resize();
-        } catch (e) {
-          console.warn('Error resizing chart:', e);
-          // If resize fails, try re-rendering
-          this.renderChart();
-        }
-      }
     }
   }
 };
@@ -382,33 +413,24 @@ export default {
 
 <style scoped>
 .usage-trend-chart {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  padding: 16px;
-  margin-bottom: 20px;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-lg);
 }
 
 .chart-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-md);
 }
 
 .chart-header h3 {
   margin: 0;
-  font-size: 1.2rem;
-  color: #333;
-}
-
-.period-selector {
-  padding: 6px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  background: #f5f5f5;
-  cursor: pointer;
+  font-size: var(--text-lg);
+  color: var(--fg);
 }
 
 .chart-container {
@@ -426,39 +448,39 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.8);
-  font-size: 1rem;
-  color: #666;
+  background: color-mix(in oklch, var(--surface) 80%, transparent);
+  font-size: var(--text-md);
+  color: var(--muted);
 }
 
 .chart-metrics {
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
-  margin-top: 16px;
+  margin-top: var(--space-md);
 }
 
 .metric-card {
-  background: #f9f9f9;
-  border-radius: 6px;
-  padding: 12px;
+  background: var(--bg);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
   flex: 1;
   min-width: 120px;
-  margin: 8px;
+  margin: var(--space-sm);
   text-align: center;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-sm);
 }
 
 .metric-value {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
   font-weight: 600;
-  color: #4e97d1;
-  margin-bottom: 4px;
+  color: var(--accent);
+  margin-bottom: var(--space-xs);
 }
 
 .metric-label {
-  font-size: 0.85rem;
-  color: #666;
+  font-size: var(--text-base);
+  color: var(--muted);
 }
 
 @media (max-width: 768px) {
@@ -467,7 +489,7 @@ export default {
   }
 
   .metric-card {
-    margin: 4px 0;
+    margin: var(--space-xs) 0;
   }
 }
 </style>

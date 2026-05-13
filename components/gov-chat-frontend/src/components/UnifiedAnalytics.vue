@@ -1,21 +1,16 @@
 <template>
-  <div class="analytics-modal" :data-theme="theme" @click.self="close">
+  <div class="analytics-page" :data-theme="theme">
     <div :key="'analytics-content-' + currentLocale" class="analytics-content">
       <div class="analytics-header">
-        <h2 style="color: var(--text-primary) !important">
+        <h2>
           {{ $t('analytics.title') }}
         </h2>
-        <button class="close-btn" aria-label="Close" @click="close">×</button>
       </div>
 
       <div class="analytics-body">
         <div v-if="useDynamicData" class="period-selector">
-          <label style="color: var(--text-primary) !important">{{ translate('analytics.period') }}</label>
-          <select
-            v-model="selectedPeriod"
-            style="background-color: var(--bg-dialog) !important"
-            @change="loadAnalytics"
-          >
+          <label for="period-select">{{ translate('analytics.period') }}</label>
+          <DsSelect v-model="selectedPeriod" input-id="period-select" @change="loadAnalytics">
             <option value="daily">
               {{ translate('analytics.periods.daily') }}
             </option>
@@ -28,30 +23,31 @@
             <option value="all-time">
               {{ translate('analytics.periods.allTime') }}
             </option>
-          </select>
+          </DsSelect>
 
           <div v-if="selectedPeriod !== 'all-time'" class="date-picker">
-            <input
+            <label for="date-select" class="sr-only">{{ translate('analytics.period') }}</label>
+            <DsInput
               v-model="selectedDate"
               type="date"
+              input-id="date-select"
               :max="todayStr"
-              style="background-color: var(--bg-dialog) !important"
               @change="loadAnalytics"
             />
           </div>
         </div>
 
-        <div v-if="isLoading" class="loading-container">
-          <div class="spinner"></div>
+        <DsSpinner v-if="isLoading" overlay>
           <p>{{ translate('analytics.loading') }}</p>
-        </div>
+        </DsSpinner>
 
-        <div v-else-if="error" class="error-container">
-          <p class="error-message">{{ error }}</p>
-          <button class="retry-button" @click="loadAnalytics">
-            {{ translate('analytics.retry') }}
-          </button>
-        </div>
+        <DsStateDisplay v-else-if="error" type="error" :message="error">
+          <template #action>
+            <DsButton variant="primary" @click="loadAnalytics">
+              {{ translate('analytics.retry') }}
+            </DsButton>
+          </template>
+        </DsStateDisplay>
 
         <div v-else class="dashboard-content">
           <div class="analytics-section">
@@ -66,7 +62,7 @@
           </div>
 
           <div class="metrics-summary">
-            <div class="metric-card">
+            <DsCard variant="default" padding="md" radius="lg">
               <h3>{{ translate('analytics.metrics.totalQueries') }}</h3>
               <div class="metric-value">
                 {{ formatValue(analytics.totalQueries) }}
@@ -74,9 +70,9 @@
               <div v-if="comparison.totalQueries" class="trend" :class="getTrendClass(comparison.totalQueries)">
                 {{ formatTrend(comparison.totalQueries) }}
               </div>
-            </div>
+            </DsCard>
 
-            <div class="metric-card">
+            <DsCard variant="default" padding="md" radius="lg">
               <h3>{{ translate('analytics.metrics.uniqueUsers') }}</h3>
               <div class="metric-value">
                 {{ formatValue(analytics.uniqueUsers) }}
@@ -84,9 +80,9 @@
               <div v-if="comparison.uniqueUsers" class="trend" :class="getTrendClass(comparison.uniqueUsers)">
                 {{ formatTrend(comparison.uniqueUsers) }}
               </div>
-            </div>
+            </DsCard>
 
-            <div class="metric-card">
+            <DsCard variant="default" padding="md" radius="lg">
               <h3>{{ translate('analytics.metrics.avgResponseTime') }}</h3>
               <div class="metric-value">
                 {{ formatValue(analytics.averageResponseTime, 'milliseconds') }}
@@ -98,9 +94,9 @@
               >
                 {{ formatTrend(comparison.averageResponseTime, true) }}
               </div>
-            </div>
+            </DsCard>
 
-            <div class="metric-card">
+            <DsCard variant="default" padding="md" radius="lg">
               <h3>{{ translate('analytics.metrics.satisfaction') }}</h3>
               <div class="metric-value">
                 {{ formatValue(analytics.satisfactionRate, 'percent') }}
@@ -108,7 +104,7 @@
               <div v-if="comparison.satisfactionRate" class="trend" :class="getTrendClass(comparison.satisfactionRate)">
                 {{ formatTrend(comparison.satisfactionRate) }}
               </div>
-            </div>
+            </DsCard>
           </div>
 
           <div class="satisfaction-charts">
@@ -148,7 +144,7 @@
                 :external-data="true"
               />
               <div v-else class="no-data">
-                {{ translate('analytics.noData') }}
+                {{ translate('analytics.status.noData') }}
               </div>
             </div>
 
@@ -165,7 +161,7 @@
                   {{ translate('analytics.loading') }}
                 </div>
                 <div v-else class="no-data">
-                  {{ translate('analytics.noData') }}
+                  {{ translate('analytics.status.noData') }}
                 </div>
               </div>
             </div>
@@ -183,6 +179,12 @@ import CategoryDistributionChart from './charts/CategoryDistributionChart.vue';
 import SatisfactionGauge from './charts/SatisfactionGauge.vue';
 import SatisfactionHeatmap from './charts/SatisfactionHeatmap.vue';
 import analyticsService from '../services/analyticsService';
+import DsButton from './ds/Button.vue';
+import DsCard from './ds/Card.vue';
+import DsSpinner from './ds/Spinner.vue';
+import DsStateDisplay from './ds/StateDisplay.vue';
+import DsInput from './ds/Input.vue';
+import DsSelect from './ds/Select.vue';
 
 export default {
   name: 'UnifiedAnalytics',
@@ -191,10 +193,16 @@ export default {
     TopQueriesChart,
     CategoryDistributionChart,
     SatisfactionGauge,
-    SatisfactionHeatmap
+    SatisfactionHeatmap,
+    DsButton,
+    DsCard,
+    DsSpinner,
+    DsStateDisplay,
+    DsInput,
+    DsSelect
   },
 
-  emits: ['close'],
+  emits: [],
 
   data() {
     return {
@@ -283,8 +291,7 @@ export default {
           { categoryId: 'cat8', name: 'Others', count: 650, value: 6 }
         ],
         topQueries: []
-      },
-      theme: null
+      }
     };
   },
 
@@ -308,25 +315,6 @@ export default {
     // Initialize static top queries with translated queries
     this.staticData.topQueries = [...this.translatedTopQueries];
 
-    // Detect initial theme, prioritizing localStorage
-    const localStorageTheme = localStorage.getItem('theme') || 'light';
-    const domTheme = document.documentElement.getAttribute('data-theme') || 'light';
-    console.log('[UnifiedAnalytics] LocalStorage theme:', localStorageTheme);
-    console.log('[UnifiedAnalytics] DOM data-theme:', domTheme);
-    if (localStorageTheme !== domTheme) {
-      console.warn(
-        '[UnifiedAnalytics] Theme conflict detected! LocalStorage:',
-        localStorageTheme,
-        'DOM data-theme:',
-        domTheme
-      );
-    }
-    this.theme = localStorageTheme;
-    console.log('[UnifiedAnalytics] Initial theme set to:', this.theme);
-
-    // *** REMOVED getComputedStyle BLOCK FROM created() ***
-    // The previous block was removed here to prevent the DOM access error.
-
     if (this.useDynamicData) {
       this.loadAnalytics();
     } else {
@@ -336,9 +324,6 @@ export default {
     if (this.$i18n) {
       this.currentLocale = this.$i18n.locale;
       this.$watch('$i18n.locale', (newLocale) => {
-        console.log('Locale changed in UnifiedAnalytics:', newLocale);
-
-        // Update current locale
         this.currentLocale = newLocale;
 
         // Update i18n in analytics service
@@ -362,91 +347,18 @@ export default {
   },
 
   mounted() {
-    // Add theme change listener
-    console.log('[UnifiedAnalytics] Adding themeChange event listener...');
     window.addEventListener('themeChange', this.handleThemeChange);
-
-    // Log mounted state
-    console.log('UnifiedAnalytics mounted with locale:', this.currentLocale);
-    console.log('[UnifiedAnalytics] Current theme after mount:', this.theme);
-
-    // *** NEW: Log computed styles after mounting, when DOM is ready ***
-    this.logComputedStyles('Initial Mounted');
-
-    // Add resize listener
     window.addEventListener('resize', this.handleResize);
   },
 
   beforeUnmount() {
-    console.log('[UnifiedAnalytics] Removing themeChange event listener...');
     window.removeEventListener('themeChange', this.handleThemeChange);
     window.removeEventListener('resize', this.handleResize);
   },
 
   methods: {
-    handleThemeChange(event) {
-      console.log('[UnifiedAnalytics] Theme change event received:', event);
-      const newTheme = localStorage.getItem('theme') || document.documentElement.getAttribute('data-theme') || 'light';
-      console.log('[UnifiedAnalytics] Updating theme to:', newTheme);
-      this.theme = newTheme;
-
-      // *** NEW: Log computed styles after theme change ***
-      this.logComputedStyles('After Theme Change');
-
-      // Force chart re-rendering to ensure child charts update
-      console.log('[UnifiedAnalytics] Triggering chart re-render...');
+    handleThemeChange() {
       this.loadAnalytics();
-    },
-
-    // *** NEW METHOD TO SAFELY LOG COMPUTED STYLES ***
-    logComputedStyles(stage) {
-      this.$nextTick(() => {
-        const content = this.$el.querySelector('.analytics-content');
-        const h2 = this.$el.querySelector('h2');
-        const metricValue = this.$el.querySelector('.metric-value');
-
-        if (this.$el) {
-          console.log(
-            `[UnifiedAnalytics] ${stage} Dialog overlay background:`,
-            getComputedStyle(this.$el).backgroundColor
-          );
-          if (content) {
-            console.log(
-              `[UnifiedAnalytics] ${stage} Analytics content background:`,
-              getComputedStyle(content).backgroundColor
-            );
-          } else {
-            console.warn(`[UnifiedAnalytics] ${stage} Analytics content element not found.`);
-          }
-          if (h2) {
-            console.log(`[UnifiedAnalytics] ${stage} Header title color:`, getComputedStyle(h2).color);
-          } else {
-            console.warn(`[UnifiedAnalytics] ${stage} Header h2 element not found.`);
-          }
-          if (metricValue) {
-            console.log(`[UnifiedAnalytics] ${stage} Metric value color:`, getComputedStyle(metricValue).color);
-          } else {
-            console.warn(`[UnifiedAnalytics] ${stage} Metric value element not found.`);
-          }
-        }
-      });
-    },
-    // *** END NEW METHOD ***
-
-    applyTheme() {
-      // Use saved theme preference or data-theme attribute
-      let themeMode = localStorage.getItem('theme') || document.documentElement.getAttribute('data-theme') || 'light';
-      // Validate themeMode
-      if (!['light', 'dark', 'system'].includes(themeMode)) {
-        console.warn(`[UnifiedAnalytics] Invalid themeMode: ${themeMode}, defaulting to light`);
-        themeMode = 'light';
-      }
-      this.theme = themeMode;
-      console.log(`[UnifiedAnalytics] Applied theme: ${themeMode}`);
-      // Force re-render of charts to pick up theme
-      this.$nextTick(() => {
-        this.loadAnalytics();
-      });
     },
 
     translate(key, fallback = '') {
@@ -591,10 +503,6 @@ export default {
       }
     },
 
-    close() {
-      this.$emit('close');
-    },
-
     handleResize() {
       // This will trigger resizing in child components as needed
     },
@@ -654,8 +562,6 @@ export default {
       this.error = null;
 
       try {
-        console.log(`Loading analytics with locale: ${this.currentLocale}`);
-
         const { startDate, endDate } = this.calculateTimeSeriesParams(); // Use same date range as time series
         const analyticsData = await analyticsService.getDashboardAnalytics(
           this.selectedPeriod,
@@ -908,171 +814,77 @@ export default {
 
 <style scoped>
 /* Theme-specific styles */
-.analytics-modal {
-  background: var(--dialog-overlay-background, rgba(0, 0, 0, 0.5)); /* Semi-transparent overlay */
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+.analytics-page {
+  background: var(--bg);
 }
 
 .analytics-content {
-  background: var(--bg-dialog, #ffffff) !important; /* Opaque dialog background */
-  color: var(--text-primary, #333333);
-  border-radius: 8px;
-  width: 90%;
-  max-width: 1200px;
-  max-height: 90vh;
+  background: var(--surface);
+  color: var(--fg);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: var(--space-lg);
   display: flex;
   flex-direction: column;
-  box-shadow: var(--shadow-md, 0 5px 20px rgba(0, 0, 0, 0.2));
-  overflow: hidden;
-}
-
-/* Dark mode overrides */
-[data-theme='dark'] .analytics-modal {
-  --dialog-overlay-background: rgba(0, 0, 0, 0.7);
-  --bg-dialog: #414141;
-  --text-primary: #ffffff;
-  --border-color: #555;
-}
-
-[data-theme='dark'] .analytics-content {
-  background: var(--bg-dialog, #414141) !important; /* Original dark mode color */
+  box-shadow: var(--shadow-md);
 }
 
 .analytics-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color, #eee);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border);
 }
 
 .analytics-header h2 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--text-xl);
 }
 
 .close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: var(--text-secondary, #666);
+  /* Layout only - styling handled by DsButton ghost */
 }
 
 .analytics-body {
-  padding: 20px;
-  overflow-y: auto;
+  position: relative;
+  padding: var(--space-lg);
   flex: 1;
 }
 
 .period-selector {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid var(--border-color, #eee);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border);
 }
 
 .period-selector label {
   font-weight: 600;
 }
 
-.period-selector select,
-.period-selector input {
-  padding: 8px;
-  border: 1px solid var(--border-input, #ddd);
-  border-radius: 4px;
-  background-color: var(--bg-input, white);
-}
-
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  text-align: center;
-  min-height: 300px;
-}
-
-.loading-container p {
-  margin-top: 15px;
-}
-
-.spinner {
-  border: 4px solid rgba(0, 0, 0, 0.1);
-  border-radius: 50%;
-  border-top: 4px solid var(--accent-color, #4e97d1);
-  width: 40px;
-  height: 40px;
-  animation: spin 1s linear infinite;
-  margin-bottom: 20px;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.error-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  text-align: center;
-  min-height: 300px;
-}
-
-.error-message {
-  color: var(--status-outage, #d32f2f);
-  margin-bottom: 20px;
-}
-
-.retry-button {
-  padding: 8px 16px;
-  background-color: var(--bg-button-primary, #4e97d1);
-  color: var(--text-button-primary, white);
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.retry-button:hover {
-  background-color: var(--accent-hover, #3a7da0);
-}
-
 .dashboard-content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-lg);
 }
 
 .analytics-section {
-  margin-bottom: 24px;
-  background: var(--bg-card, white);
-  border-radius: 8px;
-  box-shadow: var(--shadow-sm, 0 2px 12px rgba(0, 0, 0, 0.1));
-  padding: 16px;
+  margin-bottom: var(--space-lg);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-md);
 }
 
 .analytics-section h3 {
   margin-top: 0;
-  margin-bottom: 16px;
-  font-size: 1.2rem;
+  margin-bottom: var(--space-md);
+  font-size: var(--text-lg);
   font-weight: 600;
 }
 
@@ -1080,57 +892,49 @@ export default {
   display: flex;
   justify-content: space-between;
   width: 100%;
-  gap: 15px;
-  margin-bottom: 20px;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
 }
 
-.metric-card {
+.metrics-summary .ds-card {
   flex: 1;
-  background-color: var(--bg-card, white);
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: var(--shadow-sm, 0 2px 4px rgba(0, 0, 0, 0.1));
   text-align: center;
 }
 
-.metric-card h3 {
+.metrics-summary .ds-card h3 {
   margin-top: 0;
-  margin-bottom: 10px;
-  font-size: 14px;
+  margin-bottom: var(--space-sm);
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
 .metric-value {
-  font-size: 24px;
+  font-size: var(--text-xl);
   font-weight: bold;
-  margin-bottom: 5px;
-  text-shadow: 0 0 1px var(--text-primary, rgba(51, 51, 51, 0.2));
+  margin-bottom: var(--space-xs);
+  text-shadow: 0 0 1px var(--fg, rgba(51, 51, 51, 0.2)); /* keep rgba for shadow */
 }
 
 .trend {
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .trend.positive {
-  color: var(--status-operational, #4caf50);
+  color: var(--success);
 }
 
 .trend.negative {
-  color: var(--status-outage, #f44336);
+  color: var(--danger);
 }
 
 .trend.neutral {
-  color: var(--text-secondary, #757575);
-}
-
-[data-theme='dark'] .trend.neutral {
-  color: var(--text-primary, #ffffff);
+  color: var(--muted);
 }
 
 .charts-container {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: var(--space-lg);
 }
 
 .half-width {
@@ -1158,10 +962,10 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--bg-card, rgba(255, 255, 255, 0.8));
+  background-color: var(--surface, rgba(255, 255, 255, 0.8)); /* keep rgba for overlay */
   opacity: 0.8;
-  font-size: 1rem;
-  color: var(--text-primary, #666);
+  font-size: var(--text-md);
+  color: var(--fg);
 }
 
 .no-data {
@@ -1169,60 +973,26 @@ export default {
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: var(--text-tertiary, #757575);
+  color: var(--muted-soft);
   font-style: italic;
 }
 
-[data-theme='dark'] .spinner {
-  border-color: rgba(255, 255, 255, 0.1);
-  border-top-color: var(--accent-color, #4e97d1);
-}
-
-[data-theme='dark'] .chart-container,
-[data-theme='dark'] .metric-card,
-[data-theme='dark'] .analytics-section,
-[data-theme='dark'] .half-width {
-  background-color: var(--bg-card, #414141) !important; /* Original dark mode color */
-}
-
 .satisfaction-charts {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-lg);
 }
 
 .satisfaction-title {
   margin-top: 0;
-  margin-bottom: 16px;
-  font-size: 1.2rem;
+  margin-bottom: var(--space-md);
+  font-size: var(--text-lg);
   font-weight: 600;
 }
 
 .satisfaction-container {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
-  margin-bottom: 10px;
-}
-
-/* Comprehensive dark mode overrides to prevent light mode leakage */
-[data-theme='dark'] .analytics-modal *,
-[data-theme='dark'] .analytics-content *,
-[data-theme='dark'] .analytics-header h2,
-[data-theme='dark'] .analytics-body,
-[data-theme='dark'] .period-selector label,
-[data-theme='dark'] .period-selector select,
-[data-theme='dark'] .period-selector input,
-[data-theme='dark'] .loading-container p,
-[data-theme='dark'] .error-message,
-[data-theme='dark'] .dashboard-content,
-[data-theme='dark'] .analytics-section h3,
-[data-theme='dark'] .metric-card h3,
-[data-theme='dark'] .metric-value,
-[data-theme='dark'] .trend,
-[data-theme='dark'] .satisfaction-title,
-[data-theme='dark'] .no-data,
-[data-theme='dark'] .chart-loading {
-  color: var(--text-primary, #ffffff) !important;
-  background-color: var(--bg-card, #414141) !important;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-sm);
 }
 
 @media (max-width: 768px) {
@@ -1232,7 +1002,7 @@ export default {
   }
 
   .analytics-header h2 {
-    font-size: 1.3rem;
+    font-size: var(--text-lg);
   }
 
   .charts-container {
@@ -1247,19 +1017,24 @@ export default {
     flex-wrap: wrap;
   }
 
-  .metric-card {
+  .metrics-summary .ds-card {
     min-width: calc(50% - 10px);
-  }
-
-  [data-theme='dark'] .metric-card h3,
-  [data-theme='dark'] .metric-value,
-  [data-theme='dark'] .analytics-section h3,
-  [data-theme='dark'] .satisfaction-title {
-    color: var(--text-primary, #ffffff) !important;
   }
 
   .satisfaction-container {
     flex-direction: column;
   }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 </style>

@@ -2,22 +2,28 @@
   <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
     <div class="sidebar-header">
       <h3 v-if="!sidebarCollapsed">{{ $t('sidebar.title') }}</h3>
-      <button class="sidebar-toggle" @click="toggleSidebar">
-        <i class="fas" :class="sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"></i>
-      </button>
+      <DsButton
+        variant="ghost"
+        :small="true"
+        class="sidebar-toggle"
+        :aria-label="sidebarCollapsed ? $t('sidebar.expand') : $t('sidebar.collapse')"
+        @click="toggleSidebar"
+      >
+        <ChevronRight v-if="!sidebarCollapsed" :size="20" /><ChevronLeft v-else :size="20" />
+      </DsButton>
     </div>
 
     <div v-if="!sidebarCollapsed">
       <div class="sidebar-section">
         <h4 class="section-title">
-          <i class="fas fa-file-alt"></i>
+          <FileText :size="16" />
           {{ $t('sidebar.relatedDocs') }}
         </h4>
         <div class="related-documents">
-          <div v-for="doc in relatedDocuments" :key="doc.id" class="document-item">
+          <DsCard v-for="doc in relatedDocuments" :key="doc.id" variant="flat" padding="md" class="document-item">
             <div class="document-header" @click="openDocument(doc)">
               <div class="document-icon">
-                <i :class="documentIconClass(doc)"></i>
+                <component :is="documentIconClass(doc)" :size="20" />
               </div>
               <div class="document-info">
                 <div class="document-title">{{ doc.title }}</div>
@@ -48,15 +54,15 @@
                 <span class="detail-value">{{ formatScore(doc.score) }}</span>
               </div>
             </div>
-          </div>
-          <div v-if="relatedDocuments.length === 0" class="empty-state">
+          </DsCard>
+          <DsStateDisplay v-if="relatedDocuments.length === 0" type="empty">
             {{ $t('sidebar.noDocuments') }}
-          </div>
+          </DsStateDisplay>
         </div>
       </div>
       <div class="sidebar-section">
         <h4 class="section-title">
-          <i class="fas fa-question-circle"></i>
+          <HelpCircle :size="16" />
           {{ $t('sidebar.faq') }}
         </h4>
         <div class="faq-list">
@@ -64,7 +70,7 @@
             <div class="faq-question" :class="{ active: expandedFaqs.includes(index) }" @click="toggleFaq(index)">
               <!-- eslint-disable-next-line vue/no-v-html -->
               <span v-html="faq.question"></span>
-              <i class="fas" :class="expandedFaqs.includes(index) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+              <ChevronUp v-if="expandedFaqs.includes(index)" :size="14" /><ChevronDown v-else :size="14" />
             </div>
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div v-if="expandedFaqs.includes(index)" class="faq-answer" v-html="faq.answer"></div>
@@ -79,9 +85,38 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { formatFileSize } from '../utils/fileUtils.js';
+import {
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  HelpCircle,
+  ChevronUp,
+  ChevronDown,
+  Globe,
+  FileSpreadsheet,
+  FileImage
+} from 'lucide-vue-next';
+import DsCard from './ds/Card.vue';
+import DsButton from './ds/Button.vue';
+import DsStateDisplay from './ds/StateDisplay.vue';
 
 export default {
   name: 'RightSideBarComponent',
+
+  components: {
+    DsButton,
+    DsCard,
+    DsStateDisplay,
+    ChevronLeft,
+    ChevronRight,
+    FileText,
+    HelpCircle,
+    ChevronUp,
+    ChevronDown,
+    Globe,
+    FileSpreadsheet,
+    FileImage
+  },
 
   props: {
     currentChatId: {
@@ -220,31 +255,21 @@ export default {
 
     // Added missing method to fix runtime error
     documentIconClass(doc) {
-      if (!doc) return 'fas fa-file';
-
-      // Check for external web links using the existing helper
-      if (this.isExternalUrl(doc.url)) {
-        return 'fas fa-globe';
-      }
-
-      // Check file extensions if fileName exists
+      if (!doc) return 'FileText';
+      if (this.isExternalUrl(doc.url)) return 'Globe';
       if (doc.fileName) {
-        const lowerName = doc.fileName.toLowerCase();
-        if (lowerName.endsWith('.pdf')) return 'fas fa-file-pdf';
-        if (lowerName.endsWith('.doc') || lowerName.endsWith('.docx')) return 'fas fa-file-word';
-        if (lowerName.endsWith('.xls') || lowerName.endsWith('.xlsx')) return 'fas fa-file-excel';
-        if (lowerName.endsWith('.ppt') || lowerName.endsWith('.pptx')) return 'fas fa-file-powerpoint';
-        if (lowerName.endsWith('.jpg') || lowerName.endsWith('.png') || lowerName.endsWith('.jpeg'))
-          return 'fas fa-file-image';
+        const n = doc.fileName.toLowerCase();
+        if (n.endsWith('.pdf')) return 'FileText';
+        if (n.endsWith('.doc') || n.endsWith('.docx')) return 'FileText';
+        if (n.endsWith('.xls') || n.endsWith('.xlsx')) return 'FileSpreadsheet';
+        if (n.endsWith('.ppt') || n.endsWith('.pptx')) return 'FileText';
+        if (n.endsWith('.jpg') || n.endsWith('.png') || n.endsWith('.jpeg')) return 'FileImage';
       }
-
-      // Default icon
-      return 'fas fa-file-alt';
+      return 'FileText';
     },
 
     async openDocument(doc) {
       if (this.isExternalUrl(doc.url)) {
-        console.log(`Opening external URL: ${doc.url}`);
         window.open(doc.url, '_blank');
         this.$emit('open-document', doc);
         return;
@@ -314,8 +339,8 @@ export default {
 /* Sidebar Styles */
 .sidebar {
   width: 320px;
-  background: var(--bg-sidebar, #f8fafc);
-  border-left: 1px solid var(--border-color, #e2e8f0);
+  background: var(--surface);
+  border-left: 1px solid var(--border);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -328,8 +353,8 @@ export default {
 }
 
 .sidebar-header {
-  padding: 16px;
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -337,80 +362,70 @@ export default {
 }
 
 .sidebar.collapsed .sidebar-header {
-  padding: 16px 0;
+  padding: var(--space-md) 0;
   justify-content: center;
   border-bottom: none;
 }
 
 .sidebar-toggle {
-  background: none;
-  border: none;
-  color: var(--text-tertiary, #64748b);
-  cursor: pointer;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  transition: all 0.2s ease;
   z-index: 10;
 }
 
 .sidebar-toggle:hover {
-  background: var(--bg-tertiary, #e2e8f0);
-  color: var(--text-secondary, #334155);
+  background: var(--bg);
+  color: var(--muted);
 }
 
 .sidebar-section {
-  padding: 16px;
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border);
 }
 
 .section-title {
-  margin: 0 0 16px 0;
-  font-size: 0.95rem;
+  margin: 0 0 var(--space-md) 0;
+  font-size: var(--text-base);
   font-weight: 600;
-  color: var(--text-primary, #475569);
+  color: var(--fg);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .section-title i {
-  font-size: 0.9rem;
-  color: var(--text-tertiary, #64748b);
+  font-size: var(--text-base);
+  color: var(--muted-soft);
 }
 
 .related-documents {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .document-item {
-  background: var(--bg-card, #fff);
-  border-radius: 6px;
-  padding: 12px;
   transition: all 0.2s ease;
-  border: 1px solid var(--border-light, #e5e7eb);
 }
 
 .document-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-md);
   cursor: pointer;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
 }
 
 .document-header:hover {
-  color: var(--accent-color, #4e97d1);
+  color: var(--accent);
 }
 
 .document-icon {
-  font-size: 1.2rem;
-  color: var(--text-tertiary, #64748b);
+  font-size: var(--text-lg);
+  color: var(--muted-soft);
   width: 24px;
   height: 24px;
   display: flex;
@@ -424,9 +439,9 @@ export default {
 }
 
 .document-title {
-  font-size: 0.9rem;
+  font-size: var(--text-base);
   font-weight: 500;
-  color: var(--text-primary, #334155);
+  color: var(--fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -434,8 +449,8 @@ export default {
 }
 
 .document-url-link {
-  font-size: 0.75rem;
-  color: var(--accent-color, #4e97d1);
+  font-size: var(--text-sm);
+  color: var(--accent);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -449,22 +464,22 @@ export default {
 .document-details {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 0.8rem;
-  color: var(--text-secondary, #475569);
-  padding-top: 8px;
-  border-top: 1px solid var(--border-light, #e5e7eb);
+  gap: var(--space-xs);
+  font-size: var(--text-base);
+  color: var(--muted);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-light);
 }
 
 .detail-item {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .detail-label {
   font-weight: 500;
-  color: var(--text-primary, #334155);
+  color: var(--fg);
   white-space: nowrap;
 }
 
@@ -475,27 +490,27 @@ export default {
 }
 
 .detail-value.small-text {
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 
 .faq-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-sm);
 }
 
 .faq-item {
-  border: 1px solid var(--border-light, #e5e7eb);
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .faq-question {
-  padding: 12px;
-  background: var(--bg-card, #fff);
-  font-size: 0.9rem;
+  padding: var(--space-md);
+  background: var(--surface);
+  font-size: var(--text-base);
   font-weight: 500;
-  color: var(--text-primary, #334155);
+  color: var(--fg);
   cursor: pointer;
   display: flex;
   justify-content: space-between;
@@ -504,12 +519,12 @@ export default {
 
 .faq-question:hover,
 .faq-question.active {
-  background: var(--bg-tertiary, #f0f7ff);
+  background: var(--bg);
 }
 
 .faq-question i {
-  font-size: 0.8rem;
-  color: var(--text-tertiary, #64748b);
+  font-size: var(--text-base);
+  color: var(--muted-soft);
   transition: transform 0.2s;
 }
 .faq-question.active i {
@@ -517,11 +532,11 @@ export default {
 }
 
 .faq-answer {
-  padding: 12px;
-  font-size: 0.85rem;
-  color: var(--text-secondary, #475569);
-  background: var(--bg-tertiary, #f8fafc);
-  border-top: 1px solid var(--border-light, #e2e8f0);
+  padding: var(--space-md);
+  font-size: var(--text-base);
+  color: var(--muted);
+  background: var(--bg);
+  border-top: 1px solid var(--border-light);
   line-height: 1.5;
 }
 
@@ -533,15 +548,7 @@ export default {
 }
 .faq-answer :deep(ul),
 .faq-answer :deep(ol) {
-  padding-left: 20px;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 16px;
-  color: var(--text-muted, #94a3b8);
-  font-size: 0.9rem;
-  font-style: italic;
+  padding-left: var(--space-lg);
 }
 
 @media (max-width: 768px) {
@@ -561,36 +568,5 @@ export default {
   .sidebar.collapsed {
     transform: translateX(calc(100% - 50px));
   }
-}
-
-[data-theme='dark'] .section-title,
-html[data-theme='dark'] .section-title {
-  color: rgba(255, 255, 255, 0.9) !important;
-}
-
-[data-theme='dark'] .document-title,
-html[data-theme='dark'] .document-title,
-[data-theme='dark'] .faq-question,
-html[data-theme='dark'] .faq-question,
-[data-theme='dark'] .detail-label,
-html[data-theme='dark'] .detail-label {
-  color: rgba(255, 255, 255, 0.9) !important;
-}
-
-[data-theme='dark'] .detail-value,
-html[data-theme='dark'] .detail-value,
-[data-theme='dark'] .document-meta,
-html[data-theme='dark'] .document-meta {
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-
-[data-theme='dark'] .empty-state,
-html[data-theme='dark'] .empty-state {
-  color: rgba(255, 255, 255, 0.6) !important;
-}
-
-[data-theme='dark'] .sidebar-header h3,
-html[data-theme='dark'] .sidebar-header h3 {
-  color: rgba(255, 255, 255, 0.9) !important;
 }
 </style>

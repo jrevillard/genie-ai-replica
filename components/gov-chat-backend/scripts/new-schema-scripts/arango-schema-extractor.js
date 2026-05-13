@@ -23,14 +23,14 @@ class ArangoSchemaExtractor {
 
   async extractSchema() {
     console.log('Starting schema extraction...');
-    
+
     try {
       await this.extractCollections();
       await this.extractGraphs();
       await this.extractViews();
       await this.extractAnalyzers();
       await this.extractFunctions();
-      
+
       console.log('Schema extraction completed successfully');
       return this.schema;
     } catch (error) {
@@ -41,9 +41,9 @@ class ArangoSchemaExtractor {
 
   async extractCollections() {
     console.log('Extracting collections...');
-    
+
     const collections = await this.db.collections();
-    
+
     for (const collection of collections) {
       if (collection.name.startsWith('_')) {
         continue; // Skip system collections
@@ -53,10 +53,10 @@ class ArangoSchemaExtractor {
         // Get basic collection info and indexes
         const collectionInfo = await collection.get();
         const indexes = await collection.indexes();
-        
+
         // Try to get schema validation using AQL query to system collections
         let schemaInfo = null;
-        
+
         try {
           // Query the _collections system collection for schema information
           const schemaQuery = `
@@ -64,17 +64,17 @@ class ArangoSchemaExtractor {
             FILTER c.name == @collectionName
             RETURN c.schema
           `;
-          
+
           const cursor = await this.db.query(schemaQuery, { collectionName: collection.name });
           const results = await cursor.all();
-          
+
           if (results.length > 0 && results[0]) {
             schemaInfo = results[0];
           }
         } catch (schemaQueryError) {
           console.log(`Schema query failed for ${collection.name}: ${schemaQueryError.message}`);
         }
-        
+
         // If still no schema, try alternative system collection query
         if (!schemaInfo) {
           try {
@@ -83,7 +83,7 @@ class ArangoSchemaExtractor {
               LIMIT 1
               RETURN ATTRIBUTES(doc)
             `;
-            
+
             // This won't get the schema but will help us understand the collection structure
             const cursor = await this.db.query(altQuery, { '@collection': collection.name });
             const results = await cursor.all();
@@ -92,7 +92,7 @@ class ArangoSchemaExtractor {
             console.log(`Alt query failed for ${collection.name}: ${altQueryError.message}`);
           }
         }
-        
+
         // Try using collection properties via arangojs methods
         if (!schemaInfo) {
           try {
@@ -104,7 +104,7 @@ class ArangoSchemaExtractor {
             console.log(`Properties method failed for ${collection.name}: ${propsError.message}`);
           }
         }
-        
+
         console.log(`\nProcessing collection: ${collection.name}`);
         console.log(`Schema validation found:`, !!schemaInfo);
         if (schemaInfo) {
@@ -112,7 +112,7 @@ class ArangoSchemaExtractor {
         } else {
           console.log(`No schema validation rules found for ${collection.name}`);
         }
-        
+
         const collectionSchema = {
           name: collection.name,
           type: collectionInfo.type === 2 ? 'document' : 'edge',
@@ -123,8 +123,8 @@ class ArangoSchemaExtractor {
             computedValues: collectionInfo.computedValues || []
           },
           indexes: indexes
-            .filter(idx => idx.type !== 'primary')
-            .map(idx => ({
+            .filter((idx) => idx.type !== 'primary')
+            .map((idx) => ({
               type: idx.type,
               fields: idx.fields,
               unique: idx.unique || false,
@@ -143,7 +143,7 @@ class ArangoSchemaExtractor {
             }))
         };
 
-        // Add sharding information if available (cluster setup)  
+        // Add sharding information if available (cluster setup)
         if (collectionInfo.shardKeys) {
           collectionSchema.properties.shardKeys = collectionInfo.shardKeys;
           collectionSchema.properties.numberOfShards = collectionInfo.numberOfShards;
@@ -154,13 +154,12 @@ class ArangoSchemaExtractor {
         }
 
         this.schema.collections.push(collectionSchema);
-        
       } catch (error) {
         console.error(`Error processing collection ${collection.name}:`, error.message);
         // Fallback to basic collection info
         const fallbackInfo = await collection.get();
         const indexes = await collection.indexes();
-        
+
         const collectionSchema = {
           name: collection.name,
           type: fallbackInfo.type === 2 ? 'document' : 'edge',
@@ -171,8 +170,8 @@ class ArangoSchemaExtractor {
             computedValues: []
           },
           indexes: indexes
-            .filter(idx => idx.type !== 'primary')
-            .map(idx => ({
+            .filter((idx) => idx.type !== 'primary')
+            .map((idx) => ({
               type: idx.type,
               fields: idx.fields,
               unique: idx.unique || false,
@@ -190,30 +189,30 @@ class ArangoSchemaExtractor {
               inBackground: idx.inBackground || false
             }))
         };
-        
+
         this.schema.collections.push(collectionSchema);
       }
     }
-    
+
     console.log(`Extracted ${this.schema.collections.length} collections`);
-    
+
     // Log schema validation info
-    const collectionsWithSchema = this.schema.collections.filter(c => c.properties.schema);
+    const collectionsWithSchema = this.schema.collections.filter((c) => c.properties.schema);
     if (collectionsWithSchema.length > 0) {
       console.log(`Found ${collectionsWithSchema.length} collections with schema validation:`);
-      collectionsWithSchema.forEach(c => console.log(`  - ${c.name}`));
+      collectionsWithSchema.forEach((c) => console.log(`  - ${c.name}`));
     }
   }
 
   async extractGraphs() {
     console.log('Extracting graphs...');
-    
+
     try {
       const graphs = await this.db.graphs();
-      
+
       for (const graph of graphs) {
         const graphInfo = await graph.get();
-        
+
         const graphSchema = {
           name: graph.name,
           edgeDefinitions: graphInfo.edgeDefinitions,
@@ -226,10 +225,10 @@ class ArangoSchemaExtractor {
             minReplicationFactor: graphInfo.minReplicationFactor
           }
         };
-        
+
         this.schema.graphs.push(graphSchema);
       }
-      
+
       console.log(`Extracted ${this.schema.graphs.length} graphs`);
     } catch (error) {
       console.warn('Error extracting graphs (might not be available):', error.message);
@@ -238,22 +237,22 @@ class ArangoSchemaExtractor {
 
   async extractViews() {
     console.log('Extracting views...');
-    
+
     try {
       const views = await this.db.views();
-      
+
       for (const view of views) {
         const viewInfo = await view.get();
-        
+
         const viewSchema = {
           name: view.name,
           type: viewInfo.type,
           properties: viewInfo.properties || {}
         };
-        
+
         this.schema.views.push(viewSchema);
       }
-      
+
       console.log(`Extracted ${this.schema.views.length} views`);
     } catch (error) {
       console.warn('Error extracting views (might not be available):', error.message);
@@ -262,18 +261,17 @@ class ArangoSchemaExtractor {
 
   async extractAnalyzers() {
     console.log('Extracting analyzers...');
-    
+
     try {
       const result = await this.db.request({
         method: 'GET',
         path: '/_api/analyzer'
       });
-      
-      const customAnalyzers = result.body.result.filter(analyzer => 
-        !analyzer.name.startsWith('_system') && 
-        analyzer.name.includes('::')
+
+      const customAnalyzers = result.body.result.filter(
+        (analyzer) => !analyzer.name.startsWith('_system') && analyzer.name.includes('::')
       );
-      
+
       for (const analyzer of customAnalyzers) {
         const analyzerSchema = {
           name: analyzer.name.split('::')[1], // Remove database prefix
@@ -281,10 +279,10 @@ class ArangoSchemaExtractor {
           properties: analyzer.properties || {},
           features: analyzer.features || []
         };
-        
+
         this.schema.analyzers.push(analyzerSchema);
       }
-      
+
       console.log(`Extracted ${this.schema.analyzers.length} custom analyzers`);
     } catch (error) {
       console.warn('Error extracting analyzers (might not be available):', error.message);
@@ -293,23 +291,23 @@ class ArangoSchemaExtractor {
 
   async extractFunctions() {
     console.log('Extracting AQL user functions...');
-    
+
     try {
       const result = await this.db.request({
         method: 'GET',
         path: '/_api/aqlfunction'
       });
-      
+
       for (const func of result.body.result) {
         const functionSchema = {
           name: func.name,
           code: func.code,
           isDeterministic: func.isDeterministic || false
         };
-        
+
         this.schema.functions.push(functionSchema);
       }
-      
+
       console.log(`Extracted ${this.schema.functions.length} AQL functions`);
     } catch (error) {
       console.warn('Error extracting functions (might not be available):', error.message);
@@ -331,15 +329,16 @@ class ArangoSchemaExtractor {
 function askQuestion(query) {
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout,
+    output: process.stdout
   });
 
-  return new Promise(resolve => rl.question(query, ans => {
-    rl.close();
-    resolve(ans);
-  }));
+  return new Promise((resolve) =>
+    rl.question(query, (ans) => {
+      rl.close();
+      resolve(ans);
+    })
+  );
 }
-
 
 // Main execution block
 async function main() {
@@ -362,7 +361,7 @@ async function main() {
   console.log(`  URL:      ${config.url}`);
   console.log(`  Database: ${config.database}`);
   console.log(`  User:     ${config.auth.username}`);
-  
+
   const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
 
   if (answer.toLowerCase() !== 'y') {
@@ -372,13 +371,12 @@ async function main() {
   // --- End Confirmation Prompt ---
 
   const extractor = new ArangoSchemaExtractor(config);
-  
+
   try {
     await extractor.extractSchema();
     await extractor.saveSchema(outputPath);
-    
+
     console.log(`\nSchema extraction completed! Schema saved to: ${outputPath}`);
-    
   } catch (error) {
     console.error('Schema extraction failed:', error);
     process.exit(1);
@@ -390,4 +388,3 @@ if (require.main === module) {
 }
 
 module.exports = ArangoSchemaExtractor;
-

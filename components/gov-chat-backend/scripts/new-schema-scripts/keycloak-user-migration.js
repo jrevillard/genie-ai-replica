@@ -70,9 +70,7 @@ async function migrateUsersCollection() {
     try {
       const indexes = await collection.getIndexes();
       const legacyEmailIndex = indexes.find(
-        idx => idx.fields.length === 1 &&
-          idx.fields[0] === 'email' &&
-          idx.unique === true
+        (idx) => idx.fields.length === 1 && idx.fields[0] === 'email' && idx.unique === true
       );
 
       if (legacyEmailIndex) {
@@ -106,7 +104,6 @@ async function migrateUsersCollection() {
       name: 'idx_users_email'
     });
     console.log('"email" persistent index is in place.');
-
   } catch (error) {
     console.error('Error during users collection migration:', error);
     throw error;
@@ -125,11 +122,13 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().then(() => {
-    process.exit(0);
-  }).catch(() => {
-    process.exit(1);
-  });
+  main()
+    .then(() => {
+      process.exit(0);
+    })
+    .catch(() => {
+      process.exit(1);
+    });
 }
 
 module.exports = { initializeDatabase, migrateUsersCollection };

@@ -4,17 +4,21 @@
 process.env.SESSION_EXPIRATION_TIME = '1800000'; // 30 minutes
 
 // Mock shared-lib
-jest.mock('../shared-lib', () => ({
-  logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn()
-  },
-  dbService: {
-    getConnection: jest.fn()
-  }
-}), { virtual: true });
+jest.mock(
+  '../shared-lib',
+  () => ({
+    logger: {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn()
+    },
+    dbService: {
+      getConnection: jest.fn()
+    }
+  }),
+  { virtual: true }
+);
 
 // Mock arangojs — capture aql calls
 const mockAqlStrings = [];
@@ -130,7 +134,6 @@ beforeEach(() => {
 });
 
 describe('SessionService', () => {
-
   describe('getActiveSession', () => {
     beforeEach(async () => {
       await sessionService.init();
@@ -267,8 +270,8 @@ describe('SessionService', () => {
       const queryEdgeCursor = createMockCursor(['sessionQueries/edge-1', 'sessionQueries/edge-2']);
       mockDb.query
         .mockResolvedValueOnce(createMockCursor([expiredSession])) // find expired sessions
-        .mockResolvedValueOnce(userSessionEdgeCursor)              // userSessions edge cleanup
-        .mockResolvedValueOnce(queryEdgeCursor);                   // sessionQueries edge cleanup
+        .mockResolvedValueOnce(userSessionEdgeCursor) // userSessions edge cleanup
+        .mockResolvedValueOnce(queryEdgeCursor); // sessionQueries edge cleanup
 
       const result = await sessionService.cleanupExpiredSessions();
 
@@ -283,9 +286,9 @@ describe('SessionService', () => {
 
       // First edge query succeeds, second throws
       mockDb.query
-        .mockResolvedValueOnce(createMockCursor([expiredSession]))  // find expired
-        .mockResolvedValueOnce(createMockCursor(['edge-1']))        // userSessions ok
-        .mockRejectedValueOnce(new Error('collection not found'));  // sessionQueries fails
+        .mockResolvedValueOnce(createMockCursor([expiredSession])) // find expired
+        .mockResolvedValueOnce(createMockCursor(['edge-1'])) // userSessions ok
+        .mockRejectedValueOnce(new Error('collection not found')); // sessionQueries fails
 
       const result = await sessionService.cleanupExpiredSessions();
 
@@ -363,8 +366,8 @@ describe('SessionService', () => {
 
       mockDb.query
         .mockResolvedValueOnce(createMockCursor([expiredSession])) // find expired for cleanup
-        .mockResolvedValueOnce(createMockCursor([]))               // userSessions edges
-        .mockResolvedValueOnce(createMockCursor([]));              // sessionQueries edges
+        .mockResolvedValueOnce(createMockCursor([])) // userSessions edges
+        .mockResolvedValueOnce(createMockCursor([])); // sessionQueries edges
 
       await sessionService.cleanupExpiredSessions();
 
@@ -397,9 +400,7 @@ describe('SessionService', () => {
     });
 
     it('should return 0 when no edges exist', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([]));
 
       const removed = await sessionService._removeSessionEdges('sessions/session-1');
 

@@ -1,24 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:genie_ai_mobile/components/sidebar/service_tree_panel.dart';
 import 'package:genie_ai_mobile/components/sidebar/chat_folders_panel.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N SERVICE
-import 'package:intl/intl.dart';
+import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
+import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
 
 class SidebarComponent extends StatefulWidget {
   final Map<String, dynamic> user;
 
   final Function(Map<String, dynamic>)? onServiceSelected;
   final Function(String)? onConversationSelected;
-  final http.Client? httpClient;
 
   const SidebarComponent({
     super.key,
     required this.user,
     this.onServiceSelected,
     this.onConversationSelected,
-    this.httpClient,
   });
 
   @override
@@ -56,47 +54,43 @@ class _SidebarComponentState extends State<SidebarComponent>
     super.dispose();
   }
 
-  Widget _buildPrimaryTabs(ThemeData theme, Map<String, dynamic> colors) {
-    final bool isDark = ThemeManager().isDarkMode;
-
+  Widget _buildPrimaryTabs(AppTokens tokens) {
     return Container(
       decoration: BoxDecoration(
-        color: colors['surface'], // Dynamic Surface
+        color: tokens.surface,
         border: Border(
           bottom: BorderSide(
-            color: colors['border'], // Dynamic Border
+            color: tokens.border,
             width: 1,
           ),
         ),
       ),
       child: TabBar(
         controller: _tabController,
-        labelColor: theme.primaryColor,
-        unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
-        indicatorColor: theme.primaryColor,
+        labelColor: tokens.accent,
+        unselectedLabelColor: tokens.muted,
+        indicatorColor: tokens.accent,
         indicatorSize: TabBarIndicatorSize.tab,
-        labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: ThemeManager().tokens.textSm),
         tabs: [
           Tab(
             icon: const Icon(Icons.category_outlined, size: 20),
             text: tr(
               "sidebar.governmentServices",
-            ), // "Wissensbereiche" / "Services"
-            iconMargin: const EdgeInsets.only(bottom: 4),
+            ),
+            iconMargin: const EdgeInsets.only(bottom: DsSpacing.xs),
           ),
           Tab(
             icon: const Icon(Icons.history, size: 20),
-            text: tr("sidebar.chatHistory"), // "Chatverlauf" / "History"
-            iconMargin: const EdgeInsets.only(bottom: 4),
+            text: tr("sidebar.chatHistory"),
+            iconMargin: const EdgeInsets.only(bottom: DsSpacing.xs),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSubTabNavigation(ThemeData theme, Map<String, dynamic> colors) {
-    final bool isDark = ThemeManager().isDarkMode;
-
+  Widget _buildSubTabNavigation(AppTokens tokens) {
     final List<Map<String, dynamic>> subTabs = [
       {
         'key': 'all',
@@ -123,17 +117,17 @@ class _SidebarComponentState extends State<SidebarComponent>
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: colors['surface'], // Dynamic Surface
+        color: tokens.surface,
         border: Border(
           bottom: BorderSide(
-            color: colors['border'], // Dynamic Border
+            color: tokens.border,
             width: 1,
           ),
         ),
       ),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: DsSpacing.sm),
         itemCount: subTabs.length,
         itemBuilder: (context, index) {
           final tab = subTabs[index];
@@ -146,11 +140,11 @@ class _SidebarComponentState extends State<SidebarComponent>
               });
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: DsSpacing.md, vertical: DsSpacing.sm),
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(
-                    color: isActive ? theme.primaryColor : Colors.transparent,
+                    color: isActive ? tokens.accent : Colors.transparent,
                     width: 3,
                   ),
                 ),
@@ -161,19 +155,15 @@ class _SidebarComponentState extends State<SidebarComponent>
                   Icon(
                     tab['icon'] as IconData,
                     size: 16,
-                    color: isActive
-                        ? theme.primaryColor
-                        : (isDark ? Colors.white60 : Colors.black54),
+                    color: isActive ? tokens.accent : tokens.fg50,
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: DsSpacing.xs),
                   Text(
                     tab['label'] as String,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: ThemeManager().tokens.textSm,
                       fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
-                      color: isActive
-                          ? theme.primaryColor
-                          : (isDark ? Colors.white70 : Colors.black54),
+                      color: isActive ? tokens.accent : tokens.fg70,
                     ),
                   ),
                 ],
@@ -186,30 +176,28 @@ class _SidebarComponentState extends State<SidebarComponent>
   }
 
   Widget _buildSidebarContent(BuildContext context, ThemeData theme) {
-    final colors = ThemeManager().getColors();
-    final bool isDark = ThemeManager().isDarkMode;
+    final tokens = ThemeManager().tokens;
 
     // FIX: Replaced Container with Material to provide a valid render surface
     // for InkWells and avoid the "render box never laid out" hit test error.
     return Material(
-      color: colors['background'], // Dynamic Background
+      color: tokens.bg,
       child: Column(
         children: [
           // Primary tabs
-          _buildPrimaryTabs(theme, colors),
+          _buildPrimaryTabs(tokens),
 
           // Main expandable content
           Expanded(
             child: Column(
               children: [
                 if (_activeTab == "history")
-                  _buildSubTabNavigation(theme, colors),
+                  _buildSubTabNavigation(tokens),
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
                     children: [
                       ServiceTreePanel(
-                        httpClient: widget.httpClient,
                         onSelectionChange: (selection) {
                           debugPrint(
                             "[SIDEBAR] Service selection changed: $selection",
@@ -234,18 +222,18 @@ class _SidebarComponentState extends State<SidebarComponent>
 
           // Weather footer
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(DsSpacing.md),
             decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: colors['border'])),
+              border: Border(top: BorderSide(color: tokens.border)),
             ),
             child: Row(
               children: [
                 Icon(
                   Icons.wb_sunny_outlined,
                   size: 24,
-                  color: isDark ? Colors.amber[200] : Colors.amber[600],
+                  color: tokens.warning,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: DsSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -254,9 +242,9 @@ class _SidebarComponentState extends State<SidebarComponent>
                       Text(
                         "24°C - ${tr('sidebar.weatherConditions.partlycloudy') != 'sidebar.weatherConditions.partlycloudy' ? tr('sidebar.weatherConditions.partlycloudy') : 'Mostly Sunny'}",
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: ThemeManager().tokens.textSm,
                           fontWeight: FontWeight.w600,
-                          color: colors['text'], // Dynamic Text
+                          color: tokens.fg,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -267,8 +255,8 @@ class _SidebarComponentState extends State<SidebarComponent>
                             ? "Current Location"
                             : tr("sidebar.weatherLocation"),
                         style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          fontSize: ThemeManager().tokens.textXs,
+                          color: tokens.muted,
                         ),
                       ),
                     ],

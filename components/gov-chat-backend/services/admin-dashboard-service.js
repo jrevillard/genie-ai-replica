@@ -75,7 +75,9 @@ class AdminDashboardService {
       const startDate = oneDayAgo.toISOString();
       const oneMonthAgoDate = oneMonthAgo.toISOString();
       const twoMonthsAgoDate = twoMonthsAgo.toISOString();
-      logger.debug(`Date ranges: now=${now.toISOString()}, oneDayAgo=${startDate}, oneMonthAgo=${oneMonthAgoDate}, twoMonthsAgo=${twoMonthsAgoDate}`);
+      logger.debug(
+        `Date ranges: now=${now.toISOString()}, oneDayAgo=${startDate}, oneMonthAgo=${oneMonthAgoDate}, twoMonthsAgo=${twoMonthsAgoDate}`
+      );
 
       const totalTimeSeconds = 30 * 24 * 60 * 60;
       const currentUptimeSeconds = os.uptime();
@@ -83,13 +85,17 @@ class AdminDashboardService {
       if (currentUptimeSeconds < totalTimeSeconds) {
         const downtimePerRebootSeconds = 5 * 60;
         totalDowntimeSeconds = downtimePerRebootSeconds;
-        logger.debug(`System rebooted ${currentUptimeSeconds} seconds ago; assuming ${downtimePerRebootSeconds} seconds of downtime`);
+        logger.debug(
+          `System rebooted ${currentUptimeSeconds} seconds ago; assuming ${downtimePerRebootSeconds} seconds of downtime`
+        );
       } else {
         logger.debug('System has been up for more than 30 days; assuming no downtime in the last 30 days');
       }
 
-      systemUptime = ((totalTimeSeconds - totalDowntimeSeconds) / totalTimeSeconds * 100).toFixed(2);
-      logger.debug(`System Uptime Calculation: totalTimeSeconds=${totalTimeSeconds}, currentUptimeSeconds=${currentUptimeSeconds}, totalDowntimeSeconds=${totalDowntimeSeconds}, systemUptime=${systemUptime}%`);
+      systemUptime = (((totalTimeSeconds - totalDowntimeSeconds) / totalTimeSeconds) * 100).toFixed(2);
+      logger.debug(
+        `System Uptime Calculation: totalTimeSeconds=${totalTimeSeconds}, currentUptimeSeconds=${currentUptimeSeconds}, totalDowntimeSeconds=${totalDowntimeSeconds}, systemUptime=${systemUptime}%`
+      );
 
       const yesterday = new Date(now);
       yesterday.setDate(now.getDate() - 1);
@@ -98,9 +104,9 @@ class AdminDashboardService {
       logger.debug(`Reading log file for error rate: ${logFile}`);
       try {
         const logContent = await fs.readFile(logFile, 'utf8');
-        const logLines = logContent.split('\n').filter(line => line.trim() !== '');
+        const logLines = logContent.split('\n').filter((line) => line.trim() !== '');
         const totalLogs = logLines.length;
-        const errorLogs = logLines.filter(line => line.toUpperCase().includes('[ERROR]')).length;
+        const errorLogs = logLines.filter((line) => line.toUpperCase().includes('[ERROR]')).length;
         errorRate = totalLogs > 0 ? ((errorLogs / totalLogs) * 100).toFixed(2) : 0;
         logger.debug(`Error Rate Calculation: totalLogs=${totalLogs}, errorLogs=${errorLogs}, errorRate=${errorRate}%`);
       } catch (error) {
@@ -108,30 +114,36 @@ class AdminDashboardService {
       }
 
       logger.debug('Fetching unique monthly active users from sessions collection (last 30 days)');
-      const mauCursor = await this.db.query(`
+      const mauCursor = await this.db.query(
+        `
         FOR s IN sessions
         FILTER s.startTime >= @oneMonthAgoDate
         COLLECT userId = s.userId INTO groups
-        RETURN userId`, { oneMonthAgoDate });
+        RETURN userId`,
+        { oneMonthAgoDate }
+      );
       const uniqueUsers = await mauCursor.all();
       activeUsersValue = uniqueUsers.length;
       logger.debug(`Unique Monthly Active Users (MAUs): ${activeUsersValue}`);
 
-      logger.debug('Fetching last month\'s analytics for trend calculation');
-      const lastMonthAnalyticsCursor = await this.db.query(`
+      logger.debug("Fetching last month's analytics for trend calculation");
+      const lastMonthAnalyticsCursor = await this.db.query(
+        `
         FOR a IN analytics
           FILTER a.period == 'monthly' AND a.startDate >= @twoMonthsAgoDate AND a.startDate < @oneMonthAgoDate
           SORT a.startDate DESC
           LIMIT 1
           RETURN a
-      `, { oneMonthAgoDate, twoMonthsAgoDate });
+      `,
+        { oneMonthAgoDate, twoMonthsAgoDate }
+      );
       const lastMonthAnalytics = await lastMonthAnalyticsCursor.next();
       logger.debug(`Last month's analytics data: ${JSON.stringify(lastMonthAnalytics)}`);
 
-      uptimeTrend = lastMonthAnalytics
-        ? (parseFloat(systemUptime) - lastMonthAnalytics.uptime).toFixed(2)
-        : 0;
-      logger.debug(`Uptime Trend Calculation: currentUptime=${systemUptime}, lastMonthUptime=${lastMonthAnalytics?.uptime || 0}, uptimeTrend=${uptimeTrend}%`);
+      uptimeTrend = lastMonthAnalytics ? (parseFloat(systemUptime) - lastMonthAnalytics.uptime).toFixed(2) : 0;
+      logger.debug(
+        `Uptime Trend Calculation: currentUptime=${systemUptime}, lastMonthUptime=${lastMonthAnalytics?.uptime || 0}, uptimeTrend=${uptimeTrend}%`
+      );
 
       logger.debug('Storing current uptime in analytics collection');
       await this.storeAnalyticsData({
@@ -143,61 +155,75 @@ class AdminDashboardService {
       });
 
       logger.debug('Fetching MAUs for the previous 30-day period (two months ago to one month ago)');
-      const previousMauCursor = await this.db.query(`
+      const previousMauCursor = await this.db.query(
+        `
         FOR s IN sessions
         FILTER s.startTime >= @twoMonthsAgoDate AND s.startTime < @oneMonthAgoDate
         COLLECT userId = s.userId INTO groups
-        RETURN userId`, { twoMonthsAgoDate, oneMonthAgoDate });
+        RETURN userId`,
+        { twoMonthsAgoDate, oneMonthAgoDate }
+      );
       const previousUniqueUsers = await previousMauCursor.all();
       const previousMau = previousUniqueUsers.length;
       logger.debug(`Previous MAUs (from ${twoMonthsAgoDate} to ${oneMonthAgoDate}): ${previousMau}`);
 
-      activeUsersTrend = previousMau
-        ? (((activeUsersValue - previousMau) / previousMau) * 100).toFixed(2)
-        : 0;
-      logger.debug(`MAUs Trend Calculation: currentMAUs=${activeUsersValue}, previousMAUs=${previousMau}, activeUsersTrend=${activeUsersTrend}%`);
+      activeUsersTrend = previousMau ? (((activeUsersValue - previousMau) / previousMau) * 100).toFixed(2) : 0;
+      logger.debug(
+        `MAUs Trend Calculation: currentMAUs=${activeUsersValue}, previousMAUs=${previousMau}, activeUsersTrend=${activeUsersTrend}%`
+      );
 
       logger.debug('Fetching average response time from queries collection');
-      const queriesCursor = await this.db.query(`
+      const queriesCursor = await this.db.query(
+        `
         FOR q IN queries
         FILTER q.timestamp >= @startDate
         COLLECT AGGREGATE 
         avgTime = AVERAGE(q.responseTime), 
         count = COUNT()
-        RETURN { avgTime, count }`, { startDate });
-      const queriesStats = await queriesCursor.next() || { avgTime: 0, count: 0 };
+        RETURN { avgTime, count }`,
+        { startDate }
+      );
+      const queriesStats = (await queriesCursor.next()) || { avgTime: 0, count: 0 };
       logger.debug(`Queries stats (in milliseconds): avgTime=${queriesStats.avgTime}, count=${queriesStats.count}`);
 
-      logger.debug('Fetching last month\'s average response time for trend calculation');
-      const lastMonthQueriesCursor = await this.db.query(`
+      logger.debug("Fetching last month's average response time for trend calculation");
+      const lastMonthQueriesCursor = await this.db.query(
+        `
         FOR q IN queries
         FILTER q.timestamp >= @twoMonthsAgoDate AND q.timestamp < @oneMonthAgoDate
         COLLECT AGGREGATE 
         avgTime = AVERAGE(q.responseTime * 1000)
-        RETURN avgTime`, { twoMonthsAgoDate, oneMonthAgoDate });
-      const lastMonthAvgTime = await lastMonthQueriesCursor.next() || 0;
+        RETURN avgTime`,
+        { twoMonthsAgoDate, oneMonthAgoDate }
+      );
+      const lastMonthAvgTime = (await lastMonthQueriesCursor.next()) || 0;
       logger.debug(`Last month's average response time (in milliseconds): ${lastMonthAvgTime}`);
 
       responseTimeTrend = lastMonthAvgTime
         ? (((queriesStats.avgTime - lastMonthAvgTime) / lastMonthAvgTime) * 100).toFixed(2)
         : 0;
-      logger.debug(`Response Time Trend Calculation: currentAvgTime=${queriesStats.avgTime}, lastMonthAvgTime=${lastMonthAvgTime}, responseTimeTrend=${responseTimeTrend}%`);
+      logger.debug(
+        `Response Time Trend Calculation: currentAvgTime=${queriesStats.avgTime}, lastMonthAvgTime=${lastMonthAvgTime}, responseTimeTrend=${responseTimeTrend}%`
+      );
 
-      logger.debug('Fetching last month\'s error rate for trend calculation');
-      const lastMonthErrorRateCursor = await this.db.query(`
+      logger.debug("Fetching last month's error rate for trend calculation");
+      const lastMonthErrorRateCursor = await this.db.query(
+        `
         FOR a IN analytics
           FILTER a.period == 'monthly' AND a.startDate >= @twoMonthsAgoDate AND a.startDate < @oneMonthAgoDate
           SORT a.startDate DESC
           LIMIT 1
           RETURN a.errorRate
-      `, { twoMonthsAgoDate, oneMonthAgoDate });
-      const lastMonthErrorRate = await lastMonthErrorRateCursor.next() || 0;
+      `,
+        { twoMonthsAgoDate, oneMonthAgoDate }
+      );
+      const lastMonthErrorRate = (await lastMonthErrorRateCursor.next()) || 0;
       logger.debug(`Last month's error rate: ${lastMonthErrorRate}`);
 
-      errorRateTrend = lastMonthErrorRate
-        ? (parseFloat(errorRate) - lastMonthErrorRate).toFixed(2)
-        : 0;
-      logger.debug(`Error Rate Trend Calculation: currentErrorRate=${errorRate}, lastMonthErrorRate=${lastMonthErrorRate}, errorRateTrend=${errorRateTrend}%`);
+      errorRateTrend = lastMonthErrorRate ? (parseFloat(errorRate) - lastMonthErrorRate).toFixed(2) : 0;
+      logger.debug(
+        `Error Rate Trend Calculation: currentErrorRate=${errorRate}, lastMonthErrorRate=${lastMonthErrorRate}, errorRateTrend=${errorRateTrend}%`
+      );
 
       logger.debug('Updating analytics with error rate');
       await this.storeAnalyticsData({
@@ -257,24 +283,33 @@ class AdminDashboardService {
     }
     try {
       logger.debug(`Storing analytics data: ${JSON.stringify(data)}`);
-      const existingCursor = await this.db.query(`
+      const existingCursor = await this.db.query(
+        `
         FOR a IN analytics
           FILTER a.period == @period AND a.startDate == @startDate
           LIMIT 1
           RETURN a
-      `, { period: data.period, startDate: data.startDate });
+      `,
+        { period: data.period, startDate: data.startDate }
+      );
 
       const existing = await existingCursor.next();
       if (existing) {
         logger.debug(`Updating existing analytics record with key ${existing._key}`);
-        await this.db.query(`
+        await this.db.query(
+          `
           UPDATE @key WITH @data IN analytics
-        `, { key: existing._key, data });
+        `,
+          { key: existing._key, data }
+        );
       } else {
         logger.debug('Inserting new analytics record');
-        await this.db.query(`
+        await this.db.query(
+          `
           INSERT @data INTO analytics
-        `, { data });
+        `,
+          { data }
+        );
       }
     } catch (error) {
       logger.error(`Error storing analytics data: ${error.message}`);
@@ -481,29 +516,31 @@ class AdminDashboardService {
         logger.debug(`Reading log file: ${logFile}`);
         try {
           const logContent = await fs.readFile(logFile, 'utf8');
-          const logLines = logContent.split('\n').filter(line => line.trim() !== '');
+          const logLines = logContent.split('\n').filter((line) => line.trim() !== '');
           totalLogs += logLines.length;
           logger.debug(`Total log lines in ${logFile}: ${logLines.length}`);
 
-          const parsedLogs = logLines.map(line => {
-            const match = line.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/);
-            if (!match) {
-              logger.debug(`Skipping unparseable log line: ${line}`);
-              return null;
-            }
-            const [, timestamp, level, service, message] = match;
-            const logDate = new Date(timestamp);
+          const parsedLogs = logLines
+            .map((line) => {
+              const match = line.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/);
+              if (!match) {
+                logger.debug(`Skipping unparseable log line: ${line}`);
+                return null;
+              }
+              const [, timestamp, level, service, message] = match;
+              const logDate = new Date(timestamp);
 
-            const parsedLog = {
-              date: logDate.toISOString().split('T')[0],
-              time: logDate.toLocaleTimeString(),
-              level: level.toUpperCase(),
-              service,
-              message,
-              messageKey: message.toLowerCase().replace(/\s+/g, '')
-            };
-            return parsedLog;
-          }).filter(log => log !== null);
+              const parsedLog = {
+                date: logDate.toISOString().split('T')[0],
+                time: logDate.toLocaleTimeString(),
+                level: level.toUpperCase(),
+                service,
+                message,
+                messageKey: message.toLowerCase().replace(/\s+/g, '')
+              };
+              return parsedLog;
+            })
+            .filter((log) => log !== null);
 
           logs = logs.concat(parsedLogs);
         } catch (error) {
@@ -514,12 +551,12 @@ class AdminDashboardService {
       let filteredLogs = logs;
       if (level) {
         logger.debug(`Filtering logs by level: ${level}`);
-        filteredLogs = filteredLogs.filter(log => log.level.toLowerCase() === level.toLowerCase());
+        filteredLogs = filteredLogs.filter((log) => log.level.toLowerCase() === level.toLowerCase());
       }
 
       if (service) {
         logger.debug(`Filtering logs by service: ${service}`);
-        filteredLogs = filteredLogs.filter(log => log.service.toLowerCase().includes(service.toLowerCase()));
+        filteredLogs = filteredLogs.filter((log) => log.service.toLowerCase().includes(service.toLowerCase()));
       }
 
       logger.debug('Sorting logs by date and time (most recent first)');
@@ -611,11 +648,11 @@ class AdminDashboardService {
       let logs = [];
       try {
         const logContent = await fs.readFile(logFile, 'utf8');
-        const logLines = logContent.split('\n').filter(line => line.trim() !== '');
+        const logLines = logContent.split('\n').filter((line) => line.trim() !== '');
 
         logs = logLines
-          .filter(line => line.includes('[DEBUG]') || line.includes('[ERROR]'))
-          .map(line => {
+          .filter((line) => line.includes('[DEBUG]') || line.includes('[ERROR]'))
+          .map((line) => {
             const match = line.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/);
             if (!match) return null;
             const [, timestamp, level, service, message] = match;
@@ -627,7 +664,7 @@ class AdminDashboardService {
               message
             };
           })
-          .filter(log => log !== null);
+          .filter((log) => log !== null);
       } catch (error) {
         logger.error(`Error reading log file ${logFile}: ${error.message}`);
       }
@@ -680,7 +717,9 @@ class AdminDashboardService {
 
       const backupFile = path.join(backupDir, `backup-${timestamp}.json`);
       await fs.writeFile(backupFile, JSON.stringify(backupData, null, 2));
-      logger.debug(`Backup completed: ${totalDocuments} documents across ${Object.keys(backupData).length} collections`);
+      logger.debug(
+        `Backup completed: ${totalDocuments} documents across ${Object.keys(backupData).length} collections`
+      );
 
       const response = {
         status: 'success',
@@ -758,7 +797,7 @@ class AdminDashboardService {
           details: [...vulnerabilities.critical, ...vulnerabilities.medium, ...vulnerabilities.low]
         },
         vulnerabilityDetails: vulnerabilities,
-        failedLoginDetails: vulnerabilities.low.filter(v => v.type === 'failed_login'),
+        failedLoginDetails: vulnerabilities.low.filter((v) => v.type === 'failed_login'),
         suspiciousDetails: vulnerabilities.critical
       };
     } catch (error) {
@@ -824,7 +863,7 @@ class AdminDashboardService {
       logger.debug('Checking network connectivity');
       const networkChecks = [
         { service: 'API Services', status: 'good' },
-        { service: 'Database', status: await this.checkDatabaseHealth() ? 'good' : 'error' },
+        { service: 'Database', status: (await this.checkDatabaseHealth()) ? 'good' : 'error' },
         { service: 'Cache', status: 'good' },
         { service: 'External API', status: 'good' }
       ];
@@ -877,12 +916,13 @@ class AdminDashboardService {
       const logFiles = await fs.readdir(logsDir);
 
       const recentLogFiles = logFiles
-        .filter(filename =>
-          filename === 'combined.log' ||
-          filename === 'error.log' ||
-          /(?:combined|error)-\d{4}-\d{2}-\d{2}\.log/.test(filename)
+        .filter(
+          (filename) =>
+            filename === 'combined.log' ||
+            filename === 'error.log' ||
+            /(?:combined|error)-\d{4}-\d{2}-\d{2}\.log/.test(filename)
         )
-        .map(filename => path.join(logsDir, filename));
+        .map((filename) => path.join(logsDir, filename));
 
       let vulnerabilities = {
         critical: 0,
@@ -898,13 +938,12 @@ class AdminDashboardService {
 
           for (const line of logLines) {
             if (
-              line.includes('[ERROR]') && (
-                line.includes('security breach') ||
+              line.includes('[ERROR]') &&
+              (line.includes('security breach') ||
                 line.includes('unauthorized access') ||
                 line.includes('SQL injection') ||
                 line.includes('XSS attack') ||
-                line.includes('CSRF attack')
-              )
+                line.includes('CSRF attack'))
             ) {
               vulnerabilities.critical++;
               vulnerabilities.details.push({
@@ -912,35 +951,31 @@ class AdminDashboardService {
                 description: 'Potential security breach detected',
                 recommendation: 'Review system logs and strengthen security measures'
               });
-            }
-            else if (
-              (line.includes('[ERROR]') || line.includes('[WARN]')) && (
-                line.includes('invalid token') ||
+            } else if (
+              (line.includes('[ERROR]') || line.includes('[WARN]')) &&
+              (line.includes('invalid token') ||
                 line.includes('expired token') ||
                 line.includes('Authentication failed') ||
                 line.includes('Invalid credentials') ||
-                line.includes('Token has expired')
-              )
+                line.includes('Token has expired'))
             ) {
               vulnerabilities.medium++;
-              if (!vulnerabilities.details.some(d => d.description === 'Authentication issues detected')) {
+              if (!vulnerabilities.details.some((d) => d.description === 'Authentication issues detected')) {
                 vulnerabilities.details.push({
                   type: 'medium',
                   description: 'Authentication issues detected',
                   recommendation: 'Review authentication mechanisms and token lifecycle'
                 });
               }
-            }
-            else if (
-              (line.includes('[WARN]') || line.includes('[INFO]')) && (
-                line.includes('login attempt') ||
+            } else if (
+              (line.includes('[WARN]') || line.includes('[INFO]')) &&
+              (line.includes('login attempt') ||
                 line.includes('password reset') ||
                 line.includes('user not found') ||
-                line.includes('weak password')
-              )
+                line.includes('weak password'))
             ) {
               vulnerabilities.low++;
-              if (!vulnerabilities.details.some(d => d.description === 'Password policy concerns')) {
+              if (!vulnerabilities.details.some((d) => d.description === 'Password policy concerns')) {
                 vulnerabilities.details.push({
                   type: 'low',
                   description: 'Password policy concerns',
@@ -991,7 +1026,9 @@ class AdminDashboardService {
         message: 'Security scan completed successfully'
       };
 
-      logger.info(`Security scan completed: Found ${vulnerabilities.critical} critical, ${vulnerabilities.medium} medium, and ${vulnerabilities.low} low vulnerabilities`);
+      logger.info(
+        `Security scan completed: Found ${vulnerabilities.critical} critical, ${vulnerabilities.medium} medium, and ${vulnerabilities.low} low vulnerabilities`
+      );
       logger.info(`Security Scan Result: ${JSON.stringify(scanResult)}`);
 
       return scanResult;
@@ -1150,7 +1187,9 @@ class AdminDashboardService {
     if (!this.logsService) {
       throw new Error('LogsService not initialized in AdminDashboardService');
     }
-    logger.info(`AdminDashboardService.searchLogs calling LogsService.searchLogs with options: ${JSON.stringify(options)}`);
+    logger.info(
+      `AdminDashboardService.searchLogs calling LogsService.searchLogs with options: ${JSON.stringify(options)}`
+    );
 
     try {
       // Call LogsService.searchLogs()
@@ -1214,7 +1253,7 @@ class ResourceUsageMonitor {
 
   async getResourceUsage() {
     const now = Date.now();
-    if (!this.cachedUsage || (now - this.lastUpdated > this.cacheTimeout)) {
+    if (!this.cachedUsage || now - this.lastUpdated > this.cacheTimeout) {
       this.cachedUsage = {
         cpu: await this.getCpuUsage(),
         memory: await this.getMemoryUsage(),

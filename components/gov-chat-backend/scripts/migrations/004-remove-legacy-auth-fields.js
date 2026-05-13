@@ -17,10 +17,7 @@ const LEGACY_FIELDS = ['loginName', 'role', 'accessToken', 'refreshToken', 'encP
 module.exports = {
   async up(db) {
     for (const field of LEGACY_FIELDS) {
-      const cursor = await db.query(
-        `FOR u IN users FILTER HAS(u, @field) RETURN u._id`,
-        { field }
-      );
+      const cursor = await db.query(`FOR u IN users FILTER HAS(u, @field) RETURN u._id`, { field });
       const ids = await cursor.all();
 
       if (ids.length === 0) {

@@ -19,28 +19,18 @@
         :is-sidebar-open="isSidebarOpen"
         :config="$config"
         @toggle-sidebar="toggleSidebar"
-        @open-analytics="showAnalytics = true"
-        @open-profile="showUserProfile = true"
-        @open-settings="showSettings = true"
         @logout="handleLogout"
-        @open-admin="showAdminDashboard = true"
       />
 
       <div class="main-container">
-        <!-- Sidebar (collapsible) -->
-        <side-bar-component :is-open="isSidebarOpen" />
+        <!-- Sidebar (collapsible, only on routes with showSidebar meta) -->
+        <side-bar-component v-if="showSidebar" :is-open="isSidebarOpen" />
 
         <!-- Main content area with router view -->
         <main class="content-area">
           <router-view />
         </main>
       </div>
-
-      <!-- Modal Dialogs -->
-      <unified-analytics-component v-if="showAnalytics" @close="showAnalytics = false" />
-      <user-profile-component v-if="showUserProfile" @cancel="showUserProfile = false" @save="handleProfileSave" />
-      <settings-component v-if="showSettings" @close="showSettings = false" @theme-changed="handleThemeChange" />
-      <AdminDashboard v-if="showAdminDashboard" @close="showAdminDashboard = false" />
     </template>
 
     <!-- Global notification component -->
@@ -56,10 +46,6 @@
 <script>
 import NavBarComponent from './components/NavBarComponent.vue';
 import SideBarComponent from './components/SideBarComponent.vue';
-import UnifiedAnalyticsComponent from './components/UnifiedAnalytics.vue';
-import UserProfileComponent from './components/UserProfileComponent.vue';
-import SettingsComponent from './components/SettingsComponent.vue';
-import AdminDashboard from './components/AdminDashboard.vue';
 import SplashScreen from './components/SplashScreen.vue';
 import { mapGetters } from 'vuex';
 import { eventBus } from './eventBus.js';
@@ -72,20 +58,12 @@ export default {
   components: {
     NavBarComponent,
     SideBarComponent,
-    UnifiedAnalyticsComponent,
-    UserProfileComponent,
-    SettingsComponent,
-    AdminDashboard,
     SplashScreen
   },
 
   data() {
     return {
       isSidebarOpen: true,
-      showAnalytics: false,
-      showUserProfile: false,
-      showSettings: false,
-      showAdminDashboard: false,
       theme: 'light',
       notification: {
         visible: false,
@@ -98,45 +76,38 @@ export default {
     };
   },
   computed: {
-    // --- ADDED THIS GETTER ---
-    ...mapGetters(['isAuthenticated', 'currentUser'])
+    ...mapGetters(['isAuthenticated', 'currentUser']),
+    showSidebar() {
+      return this.$route.meta.showSidebar !== false;
+    }
   },
   watch: {
     isAuthenticated(newVal) {
       if (newVal) {
-        console.log('isAuthenticated changed to true, loading folders and triggering splash');
         this.loadFoldersOnAuth();
-        // Show splash screen with a slight delay to ensure DOM readiness
-        setTimeout(() => {
-          this.showSplash = true;
-          console.log('Splash screen displayed');
-          // Auto-hide splash after 3 seconds
+        // Show splash screen only once per session
+        if (!sessionStorage.getItem('splashShown')) {
+          sessionStorage.setItem('splashShown', 'true');
           setTimeout(() => {
-            this.showSplash = false;
-            console.log('Splash screen hidden');
-          }, 3000);
-        }, 100);
+            this.showSplash = true;
+            setTimeout(() => {
+              this.showSplash = false;
+            }, 3000);
+          }, 100);
+        }
       }
-    },
-    showSplash(newVal) {
-      console.log('showSplash changed to:', newVal);
     }
   },
   // --- REPLACED YOUR MOUNTED HOOK WITH THIS ---
   async mounted() {
-    console.log('App.vue mounted');
-
     try {
       // Wait for the auth state to be determined (OIDC initialization)
       await this.$store.dispatch('initialize');
-      console.log('initAuth completed, isAuthenticated:', this.isAuthenticated);
 
       // If authenticated, ALSO wait for critical data to load
       // This "await" is critical
       if (this.isAuthenticated) {
-        console.log('User is authenticated, now loading folders...');
         await this.loadFoldersOnAuth();
-        console.log('Folders loaded.');
       }
 
       // Only set loading to false AFTER all essential data is ready
@@ -162,10 +133,12 @@ export default {
     this.checkScreenSize();
     window.addEventListener('resize', this.checkScreenSize);
     this.setupSystemThemeListener();
+    window.addEventListener('themeChange', this.handleThemeChange);
     eventBus.$on('notification:show', this.showNotification);
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.checkScreenSize);
+    window.removeEventListener('themeChange', this.handleThemeChange);
     if (this.systemThemeListener) {
       window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', this.systemThemeListener);
     }
@@ -182,7 +155,6 @@ export default {
         type: payload.type || 'success',
         timer: null
       };
-      console.log('Showing notification:', payload);
       this.notification.timer = setTimeout(() => {
         this.hideNotification();
       }, payload.duration || 3000);
@@ -193,7 +165,6 @@ export default {
         clearTimeout(this.notification.timer);
         this.notification.timer = null;
       }
-      console.log('Notification hidden');
     },
 
     initTheme() {
@@ -214,8 +185,8 @@ export default {
         if (fontSize) {
           document.documentElement.style.fontSize = `${parseInt(fontSize) / 50}rem`;
         }
-      } catch (e) {
-        console.warn('Unable to get font size preference:', e);
+      } catch {
+        // Silently fail - font size is optional
       }
     },
 
@@ -226,21 +197,19 @@ export default {
           const resolved = e.matches ? 'dark' : 'light';
           this.theme = resolved;
           themeManager.setTheme('system');
-          console.log('System theme changed');
         };
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', this.systemThemeListener);
       }
     },
 
-    handleThemeChange(newTheme) {
-      console.log('Theme changed to:', newTheme);
+    handleThemeChange(event) {
+      const newTheme = event?.detail?.theme ?? event;
       this.theme = newTheme;
       try {
         localStorage.setItem('theme', newTheme);
-      } catch (e) {
-        console.warn('Unable to save theme preference:', e);
+      } catch {
+        // Silently fail - theme preference is optional
       }
-      // Let ThemeManager handle DOM attributes and event dispatch
       themeManager.setTheme(newTheme);
       if (newTheme === 'system') {
         this.setupSystemThemeListener();
@@ -256,12 +225,10 @@ export default {
         const user = this.currentUser;
         const userId = getUserId(user);
         if (!userId) {
-          console.warn('loadFoldersOnAuth called, but user not ready.');
           return;
         }
 
         const response = await chatHistoryService.getUserFolders();
-        console.log('loadFoldersOnAuth: getUserFolders response:', response);
         const foldersArray = Array.isArray(response) ? response : response?.folders || [];
         const processedFolders = foldersArray
           .filter((folder) => folder && (folder._key || folder.id))
@@ -280,9 +247,6 @@ export default {
         };
         const allFolders = [defaultFolder, ...processedFolders];
         await this.$store.dispatch('chatHistory/setFolders', allFolders);
-        console.log('loadFoldersOnAuth: Dispatched setFolders with:', allFolders);
-        const vuexFolders = this.$store.getters['chatHistory/getAllFolders'];
-        console.log('loadFoldersOnAuth: Vuex folders after dispatch:', vuexFolders);
       } catch (error) {
         console.error('loadFoldersOnAuth: Error loading folders:', error);
         const defaultFolder = {
@@ -292,7 +256,6 @@ export default {
           createdAt: new Date().toISOString()
         };
         await this.$store.dispatch('chatHistory/setFolders', [defaultFolder]);
-        console.log('loadFoldersOnAuth: Fallback to default folder:', defaultFolder);
         this.showNotification({
           message: 'Failed to load folders. Using default folder.',
           type: 'error',
@@ -318,8 +281,8 @@ export default {
       this.isSidebarOpen = !this.isSidebarOpen;
       try {
         localStorage.setItem('sidebarOpen', this.isSidebarOpen.toString());
-      } catch (e) {
-        console.warn('Unable to save sidebar state:', e);
+      } catch {
+        // Silently fail - sidebar state is optional
       }
     },
 
@@ -327,15 +290,6 @@ export default {
       if (window.innerWidth < 768 && this.isSidebarOpen) {
         this.isSidebarOpen = false;
       }
-    },
-
-    handleProfileSave(profileData) {
-      console.log('Profile saved:', profileData);
-      this.showUserProfile = false;
-    },
-
-    openAdminDashboard() {
-      this.showAdminDashboard = true;
     }
   }
 };
@@ -350,12 +304,11 @@ export default {
 }
 
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-body);
   line-height: 1.6;
-  color: var(--text-primary, #333);
-  background-color: var(--bg-primary, #f5f7fa);
+  color: var(--fg);
+  background-color: var(--bg);
+  overflow: hidden;
 }
 
 /* App layout */
@@ -370,14 +323,15 @@ body {
   display: flex;
   flex: 1;
   overflow: hidden;
+  gap: var(--space-sm);
 }
 
 .content-area {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: var(--space-sm) var(--space-sm) var(--space-sm) 0;
   transition: margin-left 0.3s ease;
-  background-color: var(--bg-primary, #f5f7fa);
+  background-color: var(--bg);
 }
 
 /* Loading screen */
@@ -386,9 +340,9 @@ body {
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background-color: var(--bg-primary, #f5f7fa);
-  color: var(--text-primary, #333);
-  font-size: 1.5rem;
+  background-color: var(--bg);
+  color: var(--fg);
+  font-size: var(--text-xl);
 }
 
 /* Notification styles (fallback for eventBus-based notifications) */
@@ -398,33 +352,33 @@ body {
   left: 0;
   right: 0;
   width: 100%;
-  padding: 16px 20px;
-  color: white;
+  padding: var(--space-md) var(--space-lg);
+  color: var(--accent-fg);
   font-weight: 500;
   line-height: 1.8;
   z-index: 9000; /* Lower than NotificationSystem.vue and SplashScreen.vue */
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-md);
   animation: notification-fadeIn 0.3s ease;
   cursor: pointer;
   text-align: center;
-  border-bottom-left-radius: 6px;
-  border-bottom-right-radius: 6px;
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
 }
 
 .notification.success {
-  background-color: #10b981;
+  background-color: var(--success);
 }
 
 .notification.error {
-  background-color: #ef4444;
+  background-color: var(--danger);
 }
 
 .notification.info {
-  background-color: #3b82f6;
+  background-color: var(--info);
 }
 
 .notification.warning {
-  background-color: #f59e0b;
+  background-color: var(--warning);
 }
 
 @keyframes notification-fadeIn {

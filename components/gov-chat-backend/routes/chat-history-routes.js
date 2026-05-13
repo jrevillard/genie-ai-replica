@@ -18,7 +18,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/conversations:
+   * /api/chat/conversations:
    *   get:
    *     summary: Get user conversations
    *     description: Retrieves all conversations for the authenticated user with pagination and filtering options
@@ -81,7 +81,9 @@ module.exports = (chatHistoryService) => {
       const filterStarred = req.query.filterStarred === 'true';
       const searchTerm = req.query.searchTerm || '';
 
-      logger.info(`Getting conversations for user ${userId} with filters - includeArchived: ${includeArchived}, filterStarred: ${filterStarred}, searchTerm: "${searchTerm}"`);
+      logger.info(
+        `Getting conversations for user ${userId} with filters - includeArchived: ${includeArchived}, filterStarred: ${filterStarred}, searchTerm: "${searchTerm}"`
+      );
 
       const options = {
         limit,
@@ -101,29 +103,29 @@ module.exports = (chatHistoryService) => {
   });
 
   /**
- * @swagger
- * /chat/conversations/{conversationId}:
- *   get:
- *     summary: Get conversation details
- *     description: Retrieves a specific conversation including its messages
- *     tags: [Chat History]
- *     parameters:
- *       - in: path
- *         name: conversationId
- *         required: true
- *         schema:
- *           type: string
- *         description: ID of the conversation to retrieve
- *     responses:
- *       200:
- *         description: Conversation details with messages
- *       401:
- *         description: Unauthorized
- *       404:
- *         description: Conversation not found
- *       500:
- *         description: Server error
- */
+   * @swagger
+   * /api/chat/conversations/{conversationId}:
+   *   get:
+   *     summary: Get conversation details
+   *     description: Retrieves a specific conversation including its messages
+   *     tags: [Chat History]
+   *     parameters:
+   *       - in: path
+   *         name: conversationId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: ID of the conversation to retrieve
+   *     responses:
+   *       200:
+   *         description: Conversation details with messages
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Conversation not found
+   *       500:
+   *         description: Server error
+   */
   router.get('/conversations/:conversationId', async (req, res, next) => {
     try {
       const { conversationId } = req.params;
@@ -145,7 +147,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/conversations:
+   * /api/chat/conversations:
    *   post:
    *     summary: Create a new conversation
    *     description: Creates a new chat conversation
@@ -232,7 +234,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/conversations/{conversationId}:
+   * /api/chat/conversations/{conversationId}:
    *   patch:
    *     summary: Update conversation
    *     description: Updates conversation properties like title, starred status, etc.
@@ -292,8 +294,6 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-
-
       const updateData = { ...req.body, userId: userId };
 
       logger.info(`Updating conversation ${conversationId} with data:`, updateData);
@@ -301,14 +301,16 @@ module.exports = (chatHistoryService) => {
       const updatedConversation = await chatHistoryService.updateConversation(conversationId, updateData);
       res.json(updatedConversation);
     } catch (error) {
-      logger.error(`Error updating conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
+      logger.error(`Error updating conversation ${req.params.conversationId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });
 
   /**
    * @swagger
-   * /chat/conversations/{conversationId}:
+   * /api/chat/conversations/{conversationId}:
    *   delete:
    *     summary: Delete conversation
    *     description: Deletes a conversation and all associated messages
@@ -353,14 +355,16 @@ module.exports = (chatHistoryService) => {
       const result = await chatHistoryService.deleteConversation(conversationId, userId, userKey);
       res.json(result);
     } catch (error) {
-      logger.error(`Error deleting conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
+      logger.error(`Error deleting conversation ${req.params.conversationId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });
 
   /**
    * @swagger
-   * /chat/conversations/{conversationId}/messages:
+   * /api/chat/conversations/{conversationId}/messages:
    *   get:
    *     summary: Get conversation messages
    *     description: Retrieves messages for a specific conversation with pagination
@@ -407,21 +411,25 @@ module.exports = (chatHistoryService) => {
       const offset = parseInt(req.query.offset) || 0;
       const newestFirst = req.query.newestFirst === 'true';
 
-      logger.info(`Getting messages for conversation ${conversationId} with limit ${limit}, offset ${offset}, newestFirst ${newestFirst}`);
+      logger.info(
+        `Getting messages for conversation ${conversationId} with limit ${limit}, offset ${offset}, newestFirst ${newestFirst}`
+      );
 
       const options = { limit, offset, newestFirst };
       const result = await chatHistoryService.getConversationMessages(conversationId, options);
 
       res.json(result);
     } catch (error) {
-      logger.error(`Error getting messages for conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
+      logger.error(`Error getting messages for conversation ${req.params.conversationId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });
 
   /**
    * @swagger
-   * /chat/conversations/{conversationId}/messages:
+   * /api/chat/conversations/{conversationId}/messages:
    *   post:
    *     summary: Add message to conversation
    *     description: Adds a new message to a conversation
@@ -479,9 +487,10 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-
-
-      logger.info(`Raw request body for conversation ${conversationId}:`, req.body ? JSON.stringify(req.body, null, 2) : 'No body');
+      logger.info(
+        `Raw request body for conversation ${conversationId}:`,
+        req.body ? JSON.stringify(req.body, null, 2) : 'No body'
+      );
 
       const { content, sender, queryId, metadata } = req.body || {};
 
@@ -518,27 +527,28 @@ module.exports = (chatHistoryService) => {
       if (sender === 'assistant' && queryId) {
         try {
           await chatHistoryService.db.collection('queries').document(queryId);
-          await chatHistoryService.linkQueryToConversation(
-            queryId,
-            conversationId,
-            message._key,
-            { responseType: 'primary' }
-          );
+          await chatHistoryService.linkQueryToConversation(queryId, conversationId, message._key, {
+            responseType: 'primary'
+          });
         } catch (queryError) {
-          logger.warn(`Skipping query linking due to invalid queryId ${queryId}: ${queryError.message}`, { stack: queryError.stack });
+          logger.warn(`Skipping query linking due to invalid queryId ${queryId}: ${queryError.message}`, {
+            stack: queryError.stack
+          });
         }
       }
 
       res.status(201).json(message);
     } catch (error) {
-      logger.error(`Error adding message to conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
+      logger.error(`Error adding message to conversation ${req.params.conversationId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });
 
   /**
    * @swagger
-   * /chat/conversations/{conversationId}/messages/read:
+   * /api/chat/conversations/{conversationId}/messages/read:
    *   post:
    *     summary: Mark messages as read
    *     description: Marks all or specific messages in a conversation as read
@@ -581,14 +591,16 @@ module.exports = (chatHistoryService) => {
       const result = await chatHistoryService.markMessagesAsRead(conversationId, messageIds);
       res.json(result);
     } catch (error) {
-      logger.error(`Error marking messages as read in conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
+      logger.error(`Error marking messages as read in conversation ${req.params.conversationId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });
 
   /**
    * @swagger
-   * /chat/query/{queryId}/messages:
+   * /api/chat/query/{queryId}/messages:
    *   get:
    *     summary: Get messages for a query
    *     description: Retrieves all messages related to a specific query
@@ -626,7 +638,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/messages/{messageId}/query:
+   * /api/chat/messages/{messageId}/query:
    *   get:
    *     summary: Get originating query for a message
    *     description: Retrieves the query that led to a specific message
@@ -662,14 +674,16 @@ module.exports = (chatHistoryService) => {
 
       res.json(query);
     } catch (error) {
-      logger.error(`Error finding originating query for message ${req.params.messageId}: ${error.message}`, { stack: error.stack });
+      logger.error(`Error finding originating query for message ${req.params.messageId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });
 
   /**
    * @swagger
-   * /chat/query/{queryId}/conversation:
+   * /api/chat/query/{queryId}/conversation:
    *   post:
    *     summary: Create conversation from query
    *     description: Creates a new conversation based on an existing query
@@ -728,22 +742,25 @@ module.exports = (chatHistoryService) => {
 
       logger.info(`Creating conversation from query ${queryId} for user ${userId}`);
 
-      const result = await chatHistoryService.createConversationFromQuery(
-        queryId,
-        userId,
-        { title, responseText, tags, userKey }
-      );
+      const result = await chatHistoryService.createConversationFromQuery(queryId, userId, {
+        title,
+        responseText,
+        tags,
+        userKey
+      });
 
       res.status(201).json(result);
     } catch (error) {
-      logger.error(`Error creating conversation from query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
+      logger.error(`Error creating conversation from query ${req.params.queryId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });
 
   /**
    * @swagger
-   * /chat/search:
+   * /api/chat/search:
    *   get:
    *     summary: Search conversations
    *     description: Searches for conversations containing specific text
@@ -818,7 +835,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/recent:
+   * /api/chat/recent:
    *   get:
    *     summary: Get recent conversations
    *     description: Retrieves recent conversations for the user
@@ -866,7 +883,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/stats:
+   * /api/chat/stats:
    *   get:
    *     summary: Get conversation statistics
    *     description: Retrieves statistics about the user's conversations
@@ -905,7 +922,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/folders:
+   * /api/chat/folders:
    *   get:
    *     summary: Get user folders
    *     description: Retrieves all folders for the authenticated user
@@ -947,7 +964,9 @@ module.exports = (chatHistoryService) => {
       const includeArchived = req.query.includeArchived === 'true';
       const parentFolderId = req.query.parentFolderId || null;
 
-      logger.info(`Getting folders for user ${userId} with filters - includeArchived: ${includeArchived}, parentFolderId: ${parentFolderId || 'root'}`);
+      logger.info(
+        `Getting folders for user ${userId} with filters - includeArchived: ${includeArchived}, parentFolderId: ${parentFolderId || 'root'}`
+      );
 
       const options = {
         includeArchived,
@@ -965,7 +984,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/folders:
+   * /api/chat/folders:
    *   post:
    *     summary: Create a new folder
    *     description: Creates a new folder for organizing conversations
@@ -1028,7 +1047,7 @@ module.exports = (chatHistoryService) => {
         try {
           const parentFolder = await chatHistoryService.getFolder(parentFolderId);
 
-          const ownerCheck = parentFolder.owners.some(owner => owner.iss_sub === userId);
+          const ownerCheck = parentFolder.owners.some((owner) => owner.iss_sub === userId);
           if (!ownerCheck) {
             return res.status(403).json({
               message: 'You do not have permission to create subfolders in this folder'
@@ -1069,7 +1088,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/folders/{folderId}:
+   * /api/chat/folders/{folderId}:
    *   get:
    *     summary: Get folder details
    *     description: Retrieves a specific folder including its conversations
@@ -1112,7 +1131,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/folders/{folderId}:
+   * /api/chat/folders/{folderId}:
    *   patch:
    *     summary: Update folder
    *     description: Updates folder properties
@@ -1173,8 +1192,6 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-
-
       const updateData = { ...req.body, userId: userId };
 
       logger.info(`Updating folder ${folderId} with data:`, updateData);
@@ -1189,7 +1206,7 @@ module.exports = (chatHistoryService) => {
         if (updateData.parentFolderId) {
           try {
             const folderPath = await chatHistoryService.getFolderPath(updateData.parentFolderId);
-            if (folderPath.some(f => f._key === folderId)) {
+            if (folderPath.some((f) => f._key === folderId)) {
               return res.status(400).json({
                 message: 'Cannot move a folder to its own subfolder'
               });
@@ -1210,7 +1227,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/folders/{folderId}:
+   * /api/chat/folders/{folderId}:
    *   delete:
    *     summary: Delete folder
    *     description: Deletes a folder and optionally its contents
@@ -1269,7 +1286,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/folders/search:
+   * /api/chat/folders/search:
    *   get:
    *     summary: Search folders
    *     description: Searches for folders by name or description
@@ -1330,7 +1347,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/folders/reorder:
+   * /api/chat/folders/reorder:
    *   post:
    *     summary: Reorder folders
    *     description: Updates the order of folders at the same level
@@ -1388,7 +1405,9 @@ module.exports = (chatHistoryService) => {
 
       const userKey = req.user._key;
 
-      logger.info(`Reordering ${folderOrders.length} folders for user ${userId} under parent ${parentFolderId || 'root'}`);
+      logger.info(
+        `Reordering ${folderOrders.length} folders for user ${userId} under parent ${parentFolderId || 'root'}`
+      );
 
       const result = await chatHistoryService.reorderFolders(userId, folderOrders, parentFolderId, userKey);
       res.json(result);
@@ -1400,7 +1419,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/folders/{folderId}/path:
+   * /api/chat/folders/{folderId}/path:
    *   get:
    *     summary: Get folder path
    *     description: Retrieves the folder path (breadcrumbs)
@@ -1437,7 +1456,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/folders/{folderId}/conversations/{conversationId}:
+   * /api/chat/folders/{folderId}/conversations/{conversationId}:
    *   post:
    *     summary: Add conversation to folder
    *     description: Adds a conversation to a folder
@@ -1495,7 +1514,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/folders/{folderId}/conversations/{conversationId}:
+   * /api/chat/folders/{folderId}/conversations/{conversationId}:
    *   delete:
    *     summary: Remove conversation from folder
    *     description: Removes a conversation from a folder
@@ -1553,7 +1572,7 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/conversations/{conversationId}/folder:
+   * /api/chat/conversations/{conversationId}/folder:
    *   get:
    *     summary: Get conversation's folder
    *     description: Finds which folder a conversation belongs to
@@ -1592,14 +1611,16 @@ module.exports = (chatHistoryService) => {
         inFolder: true
       });
     } catch (error) {
-      logger.error(`Error finding folder for conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
+      logger.error(`Error finding folder for conversation ${req.params.conversationId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });
 
   /**
    * @swagger
-   * /chat/conversations/{conversationId}/move:
+   * /api/chat/conversations/{conversationId}/move:
    *   post:
    *     summary: Move conversation
    *     description: Moves a conversation from one folder to another
@@ -1653,9 +1674,17 @@ module.exports = (chatHistoryService) => {
 
       const userKey = req.user._key;
 
-      logger.info(`Moving conversation ${conversationId} from folder ${sourceFolderId || 'root'} to ${targetFolderId || 'root'} by user ${userId}`);
+      logger.info(
+        `Moving conversation ${conversationId} from folder ${sourceFolderId || 'root'} to ${targetFolderId || 'root'} by user ${userId}`
+      );
 
-      const result = await chatHistoryService.moveConversation(conversationId, sourceFolderId, targetFolderId, userId, userKey);
+      const result = await chatHistoryService.moveConversation(
+        conversationId,
+        sourceFolderId,
+        targetFolderId,
+        userId,
+        userKey
+      );
       res.json(result);
     } catch (error) {
       logger.error(`Error moving conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });

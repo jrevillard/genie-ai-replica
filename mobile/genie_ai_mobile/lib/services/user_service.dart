@@ -1,16 +1,15 @@
 import 'dart:convert';
-import 'package:genie_ai_mobile/services/api_service.dart';
+import 'package:openapi/api.dart';
 
 class UserService {
-  final ApiService _api;
-  final String _meEndpoint = 'me';
+  final CurrentUserApi _userApi;
 
-  UserService({ApiService? api}) : _api = api ?? ApiService();
+  UserService({required CurrentUserApi userApi}) : _userApi = userApi;
 
   // --- USER DATA & PROFILE ---
 
   Future<Map<String, dynamic>> getCurrentUserInfo() async {
-    final response = await _api.get(_meEndpoint);
+    final response = await _userApi.apiMeGetWithHttpInfo();
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     }
@@ -18,7 +17,7 @@ class UserService {
   }
 
   Future<Map<String, dynamic>> getProfile() async {
-    final response = await _api.get(_meEndpoint);
+    final response = await _userApi.apiMeGetWithHttpInfo();
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     }
@@ -34,17 +33,28 @@ class UserService {
   Future<Map<String, dynamic>> updateAccountSettings(
     Map<String, dynamic> settings,
   ) async {
-    final response = await _api.put(_meEndpoint, settings);
-    return jsonDecode(response.body);
+    final response = await _userApi.apiMePutWithHttpInfo(
+      data: jsonEncode(settings),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to update account settings');
   }
 
   Future<Map<String, dynamic>> resetUserData() async {
-    final response = await _api.post('$_meEndpoint/reset-data', {});
-    return jsonDecode(response.body);
+    final response = await _userApi.apiMeResetDataPostWithHttpInfo();
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to reset user data');
   }
 
   Future<Map<String, dynamic>> deleteAccount() async {
-    final response = await _api.post('$_meEndpoint/delete', {});
-    return jsonDecode(response.body);
+    final response = await _userApi.apiMeDeletePostWithHttpInfo();
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to delete account');
   }
 }

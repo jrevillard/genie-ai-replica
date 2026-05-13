@@ -178,11 +178,8 @@ async function ensureInitialized() {
   if (initialized) return;
 
   // Within cooldown after a failure — skip retry
-  if (initFailedAt && (Date.now() - initFailedAt) < INIT_RETRY_COOLDOWN) {
-    throw new TokenVerificationError(
-      'TOKEN_INVALID',
-      'Authentication service is temporarily unavailable'
-    );
+  if (initFailedAt && Date.now() - initFailedAt < INIT_RETRY_COOLDOWN) {
+    throw new TokenVerificationError('TOKEN_INVALID', 'Authentication service is temporarily unavailable');
   }
 
   // If an init is already in progress, wait for it
@@ -228,10 +225,7 @@ const keycloakAuthService = {
       await ensureInitialized();
     } catch (err) {
       if (err instanceof TokenVerificationError) throw err;
-      throw new TokenVerificationError(
-        'TOKEN_INVALID',
-        'Authentication service is temporarily unavailable'
-      );
+      throw new TokenVerificationError('TOKEN_INVALID', 'Authentication service is temporarily unavailable');
     }
 
     // Extract unverified iss and exp to lookup in trusted issuer map (whitelist)

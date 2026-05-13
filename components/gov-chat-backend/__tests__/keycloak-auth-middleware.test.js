@@ -1,14 +1,18 @@
 'use strict';
 
 // Mock shared-lib (middleware requires it as '../shared-lib' from its location)
-jest.mock('../shared-lib', () => ({
-  logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn()
-  }
-}), { virtual: true });
+jest.mock(
+  '../shared-lib',
+  () => ({
+    logger: {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn()
+    }
+  }),
+  { virtual: true }
+);
 
 // Mock keycloak-auth-service
 const mockVerifyToken = jest.fn();
@@ -163,11 +167,13 @@ describe('keycloakAuthMiddleware.authenticate', () => {
   it('should call Keycloak introspection on TOKEN_EXPIRED and mark user as deleted when disabled', async () => {
     // Create a valid JWT format token for issuer extraction
     const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'test-key' })).toString('base64url');
-    const payload = Buffer.from(JSON.stringify({
-      sub: '12345678-1234-1234-1234-123456789012',
-      iss: 'http://localhost:8080/realms/genie',
-      exp: Math.floor(Date.now() / 1000) - 3600
-    })).toString('base64url');
+    const payload = Buffer.from(
+      JSON.stringify({
+        sub: '12345678-1234-1234-1234-123456789012',
+        iss: 'http://localhost:8080/realms/genie',
+        exp: Math.floor(Date.now() / 1000) - 3600
+      })
+    ).toString('base64url');
     const sig = Buffer.from('mock-signature').toString('base64url');
     const expiredToken = `${header}.${payload}.${sig}`;
 
@@ -181,7 +187,9 @@ describe('keycloakAuthMiddleware.authenticate', () => {
     await keycloakAuthMiddleware.authenticate(req, res, next);
 
     expect(mockCheckUserStatusInKeycloak).toHaveBeenCalledWith(expiredToken, 'http://localhost:8080/realms/genie');
-    expect(mockMarkUserAsDeleted).toHaveBeenCalledWith('http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012');
+    expect(mockMarkUserAsDeleted).toHaveBeenCalledWith(
+      'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012'
+    );
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({
       error: 'TOKEN_EXPIRED',
@@ -192,11 +200,13 @@ describe('keycloakAuthMiddleware.authenticate', () => {
 
   it('should not mark user as deleted when Keycloak introspection returns active user', async () => {
     const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'test-key' })).toString('base64url');
-    const payload = Buffer.from(JSON.stringify({
-      sub: '12345678-1234-1234-1234-123456789012',
-      iss: 'http://localhost:8080/realms/genie',
-      exp: Math.floor(Date.now() / 1000) - 3600
-    })).toString('base64url');
+    const payload = Buffer.from(
+      JSON.stringify({
+        sub: '12345678-1234-1234-1234-123456789012',
+        iss: 'http://localhost:8080/realms/genie',
+        exp: Math.floor(Date.now() / 1000) - 3600
+      })
+    ).toString('base64url');
     const sig = Buffer.from('mock-signature').toString('base64url');
     const expiredToken = `${header}.${payload}.${sig}`;
 
@@ -215,11 +225,13 @@ describe('keycloakAuthMiddleware.authenticate', () => {
 
   it('should not mark user as deleted when Keycloak introspection fails (returns null)', async () => {
     const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'test-key' })).toString('base64url');
-    const payload = Buffer.from(JSON.stringify({
-      sub: '12345678-1234-1234-1234-123456789012',
-      iss: 'http://localhost:8080/realms/genie',
-      exp: Math.floor(Date.now() / 1000) - 3600
-    })).toString('base64url');
+    const payload = Buffer.from(
+      JSON.stringify({
+        sub: '12345678-1234-1234-1234-123456789012',
+        iss: 'http://localhost:8080/realms/genie',
+        exp: Math.floor(Date.now() / 1000) - 3600
+      })
+    ).toString('base64url');
     const sig = Buffer.from('mock-signature').toString('base64url');
     const expiredToken = `${header}.${payload}.${sig}`;
 
@@ -568,7 +580,6 @@ describe('keycloakAuthMiddleware.authenticate', () => {
     expect(req.claims.sub).toBe('12345678');
     expect(req.claims.realm_access).toEqual({ roles: ['user', 'admin'] });
   });
-
 });
 
 describe('requireAdmin', () => {

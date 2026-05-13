@@ -17,7 +17,6 @@ class UserService {
    */
   async resetUserData() {
     try {
-      console.log('Calling reset user data endpoint');
       const response = await httpService.post(`${this.userEndpoint}/reset-data`);
       return response.data;
     } catch (error) {

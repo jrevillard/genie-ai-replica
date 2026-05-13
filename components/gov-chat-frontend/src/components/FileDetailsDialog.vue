@@ -2,9 +2,7 @@
   <Teleport to="body">
     <div class="dialog-backdrop" @click="$emit('close')"></div>
     <div class="dialog-container">
-      <div v-if="isLoading || isFetchingData || isDownloading" class="loading-overlay">
-        <div class="loading-spinner"></div>
-
+      <DsSpinner v-if="isLoading || isFetchingData || isDownloading" overlay size="lg">
         <span v-if="!isDownloading">{{ translate('details.loading', 'Loading File Details...') }}</span>
 
         <template v-else>
@@ -14,14 +12,19 @@
             <div class="progress-fill" :style="{ width: downloadProgress + '%' }"></div>
           </div>
         </template>
-      </div>
+      </DsSpinner>
 
       <template v-if="!isLoading && !isFetchingData && file">
         <div class="dialog-header">
           <h2 class="dialog-title">
             {{ translate('details.title', 'File Details') }}
           </h2>
-          <button class="dialog-close-btn" :aria-label="translate('details.close', 'Close')" @click="$emit('close')">
+          <DsButton
+            variant="ghost"
+            class="dialog-close-btn"
+            :aria-label="translate('details.close', 'Close')"
+            @click="$emit('close')"
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="24"
@@ -36,43 +39,20 @@
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
-          </button>
+          </DsButton>
         </div>
 
-        <div class="tab-nav">
-          <button :class="['tab-btn', { active: activeTab === 'details' }]" @click="activeTab = 'details'">
-            {{ translate('details.tabs.details', 'Details') }}
-          </button>
-          <button
-            v-if="crawlJob"
-            :class="['tab-btn', { active: activeTab === 'dashboard' }]"
-            @click="activeTab = 'dashboard'"
-          >
-            Dashboard
-            <span v-if="crawlJob.status === 'Crawling'" class="live-dot"></span>
-          </button>
-          <button
-            v-if="crawlJob"
-            :class="['tab-btn', { active: activeTab === 'crawlLog' }]"
-            @click="switchToCrawlLogTab"
-          >
-            {{ translate('details.tabs.crawlLog', 'Crawling Log') }}
-          </button>
-          <button
-            v-if="file.dataprep.status?.toLowerCase() !== 'pending'"
-            :class="['tab-btn', { active: activeTab === 'ingestionLog' }]"
-            @click="switchToLogTab"
-          >
-            {{ translate('details.tabs.ingestionLog', 'Ingestion Log') }}
-          </button>
-        </div>
+        <DsTabs v-model="activeTab" :tabs="visibleTabs">
+          <template #tab="{ tab }">
+            <span v-if="tab.value === 'dashboard' && crawlJob?.status === 'Crawling'" class="live-dot"></span>
+            {{ tab.label }}
+          </template>
 
-        <div class="dialog-body">
           <div v-if="activeTab === 'details'" class="tab-content tab-content-details">
             <div class="form-section">
               <div class="form-group">
                 <label for="file-name">{{ translate('details.fileName', 'File Name') }}</label>
-                <input
+                <DsInput
                   id="file-name"
                   v-model="editableFile.file_name"
                   type="text"
@@ -85,7 +65,7 @@
               </div>
               <div class="form-group">
                 <label for="author">{{ translate('details.author', 'Author') }}</label>
-                <input
+                <DsInput
                   id="author"
                   v-model="editableFile.author"
                   type="text"
@@ -133,9 +113,9 @@
             <div class="info-section">
               <div class="info-item">
                 <span class="info-label">{{ translate('details.status', 'Status') }}</span>
-                <span :class="['status-tag', getStatusClass(displayStatus)]">
+                <DsStatusTag :variant="getStatusVariant(displayStatus)">
                   {{ displayStatus }}
-                </span>
+                </DsStatusTag>
               </div>
               <div class="info-item">
                 <span class="info-label">{{ translate('details.fileId', 'File ID') }}</span>
@@ -191,7 +171,7 @@
                   <input id="auto-refresh-toggle" v-model="isAutoRefreshEnabled" type="checkbox" />
                   <label for="auto-refresh-toggle">Auto-refresh every</label>
                 </div>
-                <input
+                <DsInput
                   v-model.number="dashboardRefreshInterval"
                   type="number"
                   min="1"
@@ -200,10 +180,15 @@
                 />
                 <span class="text-sm">seconds</span>
               </div>
-              <button class="btn btn-sm btn-outline" :disabled="isRefreshingDashboard" @click="refreshDashboardData">
-                <span v-if="isRefreshingDashboard" class="btn-spinner"></span>
+              <DsButton
+                variant="secondary"
+                :small="true"
+                :disabled="isRefreshingDashboard"
+                @click="refreshDashboardData"
+              >
+                <DsSpinner v-if="isRefreshingDashboard" size="sm" />
                 Refresh Now
-              </button>
+              </DsButton>
             </div>
 
             <div class="dashboard-grid">
@@ -264,16 +249,16 @@
 
           <div v-if="activeTab === 'crawlLog'" class="tab-content crawl-log-tab">
             <div class="log-actions">
-              <button class="btn btn-outline" :disabled="isCrawlLogLoading" @click="fetchCrawlLogs">
-                <span v-if="isCrawlLogLoading" class="btn-spinner"></span>
+              <DsButton variant="secondary" :disabled="isCrawlLogLoading" @click="fetchCrawlLogs">
+                <DsSpinner v-if="isCrawlLogLoading" size="sm" />
                 {{
                   isCrawlLogLoading ? translate('common.loading', 'Loading...') : translate('common.refresh', 'Refresh')
                 }}
-              </button>
+              </DsButton>
 
-              <button v-if="crawlJob && crawlJob.status === 'Crawling'" class="btn btn-danger" @click="handleKillCrawl">
+              <DsButton v-if="crawlJob && crawlJob.status === 'Crawling'" variant="danger" @click="handleKillCrawl">
                 {{ translate('details.log.killCrawl', 'Kill Crawl Task') }}
-              </button>
+              </DsButton>
             </div>
 
             <div class="log-table-container">
@@ -316,19 +301,19 @@
 
           <div v-if="activeTab === 'ingestionLog'" class="tab-content ingestion-log-tab">
             <div class="log-actions">
-              <button class="btn btn-outline" :disabled="isLogLoading" @click="fetchIngestionLogs">
-                <span v-if="isLogLoading" class="btn-spinner"></span>
+              <DsButton variant="secondary" :disabled="isLogLoading" @click="fetchIngestionLogs">
+                <DsSpinner v-if="isLogLoading" size="sm" />
                 {{ isLogLoading ? translate('common.loading', 'Loading...') : translate('common.refresh', 'Refresh') }}
-              </button>
+              </DsButton>
               <div class="kill-actions">
                 <span class="kill-label">{{ translate('details.log.killActions', 'Kill Actions:') }}</span>
-                <button
-                  class="btn btn-danger"
+                <DsButton
+                  variant="danger"
                   :disabled="file.dataprep.status?.toLowerCase() !== 'ingesting'"
                   @click="handleKillDocument"
                 >
                   {{ translate('details.log.killDocument', 'Kill This Document') }}
-                </button>
+                </DsButton>
               </div>
             </div>
             <div class="log-table-container">
@@ -368,34 +353,35 @@
               </table>
             </div>
           </div>
-        </div>
+        </DsTabs>
 
         <div class="dialog-footer">
-          <button class="btn btn-danger" :disabled="isFileLocked" @click="handleDelete">
+          <DsButton variant="danger" :disabled="isFileLocked" @click="handleDelete">
             {{ translate('common.delete', 'Delete') }}
-          </button>
+          </DsButton>
           <div class="footer-actions">
-            <button class="btn btn-outline" @click="$emit('close')">
+            <DsButton variant="secondary" @click="$emit('close')">
               {{
                 activeTab === 'dashboard' ? translate('common.close', 'Close') : translate('common.cancel', 'Cancel')
               }}
-            </button>
-            <button
-              v-if="activeTab === 'details'"
-              class="btn btn-secondary"
-              :disabled="isSaveDisabled"
-              @click="handleSave"
-            >
+            </DsButton>
+            <DsButton v-if="activeTab === 'details'" variant="primary" :disabled="isSaveDisabled" @click="handleSave">
               {{ translate('details.buttons.saveMetadata', 'Save Metadata') }}
-            </button>
-            <button
+            </DsButton>
+            <DsButton
               v-if="activeTab === 'details'"
-              :class="mainAction.class"
+              :variant="
+                mainAction.class === 'btn btn-primary'
+                  ? 'primary'
+                  : mainAction.class === 'btn btn-success'
+                    ? 'primary'
+                    : 'secondary'
+              "
               :disabled="mainAction.disabled"
               @click="mainAction.handler"
             >
               {{ mainAction.text }}
-            </button>
+            </DsButton>
           </div>
         </div>
       </template>
@@ -420,12 +406,22 @@ import documentFileService from '../services/documentFileService.js';
 import serviceTreeService from '../services/serviceTreeService.js';
 import { eventBus } from '../eventBus.js';
 import ConfirmDialog from './ConfirmDialog.vue';
+import DsButton from './ds/Button.vue';
+import DsStatusTag from './ds/StatusTag.vue';
+import DsSpinner from './ds/Spinner.vue';
+import DsTabs from './ds/Tabs.vue';
+import DsInput from './ds/Input.vue';
 import { formatFileSize } from '../utils/fileUtils.js';
 
 export default {
   name: 'FileDetailsDialog',
   components: {
-    ConfirmDialog
+    ConfirmDialog,
+    DsButton,
+    DsStatusTag,
+    DsSpinner,
+    DsTabs,
+    DsInput
   },
   props: {
     fileId: {
@@ -495,7 +491,17 @@ export default {
     };
   },
   computed: {
-    // --- UPDATED COMPUTED PROPERTY ---
+    visibleTabs() {
+      const tabs = [{ value: 'details', label: this.translate('details.tabs.details', 'Details') }];
+      if (this.crawlJob) {
+        tabs.push({ value: 'dashboard', label: 'Dashboard' });
+        tabs.push({ value: 'crawlLog', label: this.translate('details.tabs.crawlLog', 'Crawling Log') });
+      }
+      if (this.file.dataprep.status?.toLowerCase() !== 'pending') {
+        tabs.push({ value: 'ingestionLog', label: this.translate('details.tabs.ingestionLog', 'Ingestion Log') });
+      }
+      return tabs;
+    },
     areAllLabelsSelected: {
       get() {
         // If there are no labels to select, we aren't "all selected"
@@ -610,8 +616,19 @@ export default {
     }
   },
   watch: {
-    // --- Removed areAllLabelsSelected watcher ---
-    // --- Removed editableFile.labels watcher ---
+    activeTab(val) {
+      if (val === 'crawlLog' && this.crawlLogs.length === 0) {
+        this.fetchCrawlLogs();
+      }
+      if (val === 'ingestionLog' && this.ingestionLogs.length === 0) {
+        this.fetchIngestionLogs();
+      }
+      if (val === 'dashboard') {
+        this.startDashboardTimer();
+      } else {
+        this.stopDashboardTimer();
+      }
+    },
 
     fileId: {
       immediate: true,
@@ -619,13 +636,6 @@ export default {
         if (newId) {
           this.fetchData(newId);
         }
-      }
-    },
-    activeTab(newTab) {
-      if (newTab === 'dashboard') {
-        this.startDashboardTimer();
-      } else {
-        this.stopDashboardTimer();
       }
     },
     isAutoRefreshEnabled(enabled) {
@@ -747,7 +757,7 @@ export default {
           if (crawlResponse && crawlResponse.data) {
             this.crawlJob = crawlResponse.data;
           }
-} catch {
+        } catch {
           // Not a crawl job or not found, ignore
           this.crawlJob = null;
         }
@@ -1316,18 +1326,18 @@ export default {
     },
 
     // --- Util Methods ---
-    getStatusClass(status) {
+    getStatusVariant(status) {
       const lowerStatus = status ? status.toLowerCase() : '';
-      if (lowerStatus === 'ingested') return 'status-ingested';
-      if (lowerStatus === 'pending') return 'status-pending';
-      if (lowerStatus === 'retracted') return 'status-retracted';
-      if (lowerStatus === 'ingesting') return 'status-ingesting';
-      if (lowerStatus === 'ingestion error') return 'status-error';
-      if (lowerStatus === 'ingested with warnings') return 'status-warn';
-      if (lowerStatus === 'crawling') return 'status-ingesting'; // Re-use ingesting color (blue)
-      if (lowerStatus === 'crawl failed') return 'status-error';
-      if (lowerStatus === 'killed') return 'status-error';
-      return 'status-pending';
+      if (lowerStatus === 'ingested') return 'success';
+      if (lowerStatus === 'pending') return 'pending';
+      if (lowerStatus === 'retracted') return 'info';
+      if (lowerStatus === 'ingesting') return 'info';
+      if (lowerStatus === 'crawling') return 'info';
+      if (lowerStatus === 'ingestion error') return 'error';
+      if (lowerStatus === 'ingested with warnings') return 'warning';
+      if (lowerStatus === 'crawl failed') return 'error';
+      if (lowerStatus === 'killed') return 'error';
+      return 'pending';
     },
 
     showNotification(message, type = 'success') {
@@ -1338,38 +1348,13 @@ export default {
 </script>
 
 <style scoped>
-/* Styles for tabs, log table, and new statuses */
-.tab-nav {
-  display: flex;
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
-  padding: 0 1.5rem;
-  flex-shrink: 0;
-}
-.tab-btn {
-  padding: 0.75rem 1rem;
-  border: none;
-  background-color: transparent;
-  cursor: pointer;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  font-weight: 500;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-}
-.tab-btn.active {
-  color: var(--primary, #3b82f6);
-  border-bottom-color: var(--primary, #3b82f6);
-}
-.tab-btn:hover:not(.active) {
-  color: var(--text-primary);
-}
 .live-dot {
   display: inline-block;
   width: 6px;
   height: 6px;
-  background-color: #ef4444;
+  background-color: var(--danger);
   border-radius: 50%;
-  margin-left: 4px;
+  margin-left: var(--space-xs);
   animation: pulse 1.5s infinite;
 }
 @keyframes pulse {
@@ -1384,21 +1369,15 @@ export default {
   }
 }
 
-.dialog-body {
-  padding: 0; /* Remove padding as content will have its own */
+.tab-content {
+  padding: var(--space-lg);
   overflow-y: auto;
-  display: flex; /* Use flex to manage content */
-  flex-direction: column;
 }
 
-.tab-content {
-  padding: 1.5rem;
-  overflow-y: auto;
-}
 .tab-content-details {
   display: grid;
   grid-template-columns: 2fr 1fr;
-  gap: 2rem;
+  gap: var(--space-xl);
 }
 
 /* --- DASHBOARD STYLES --- */
@@ -1406,114 +1385,110 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #f8fafc;
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
-  margin-bottom: 1.5rem;
+  background: var(--bg);
+  padding: var(--space-md) var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  margin-bottom: var(--space-lg);
 }
 .auto-refresh {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  color: #475569;
+  gap: var(--space-sm);
+  font-size: var(--text-base);
+  color: var(--muted);
 }
 .toggle-wrapper {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-sm);
   cursor: pointer;
 }
 .small-input {
   width: 60px;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   text-align: center;
-}
-.btn-sm {
-  padding: 0.4rem 0.8rem;
-  font-size: 0.85rem;
 }
 
 .dashboard-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
 }
 .stat-card {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
   text-align: center;
 }
 .stat-label {
-  font-size: 0.75rem;
-  color: #64748b;
+  font-size: var(--text-sm);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--space-xs);
 }
 .stat-value {
-  font-size: 1.5rem;
+  font-size: var(--text-xl);
   font-weight: 700;
-  color: #334155;
+  color: var(--fg);
 }
 .unit {
-  font-size: 0.9rem;
+  font-size: var(--text-base);
   font-weight: 400;
-  color: #94a3b8;
+  color: var(--muted-soft);
 }
 .stat-subtext {
   display: flex;
   justify-content: center;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
 }
 .err-badge {
-  font-size: 0.7rem;
-  background: #fee2e2;
-  color: #b91c1c;
-  padding: 1px 4px;
-  border-radius: 3px;
+  font-size: var(--text-xs);
+  background: var(--bg);
+  color: var(--danger);
+  padding: 1px var(--space-xs);
+  border-radius: var(--radius-sm);
 }
 .bg-danger-light {
-  background-color: #fef2f2;
-  border-color: #fecaca;
+  background-color: var(--bg);
+  border-color: var(--border-light);
 }
 .text-danger {
-  color: #ef4444;
+  color: var(--danger);
 }
 .text-success {
-  color: #10b981;
+  color: var(--success);
 }
 .text-primary {
-  color: #3b82f6;
+  color: var(--accent);
 }
 
 /* Progress Bar */
 .progress-section {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--space-lg);
 }
 .progress-header {
   display: flex;
   justify-content: space-between;
-  font-size: 0.85rem;
-  color: #475569;
-  margin-bottom: 0.25rem;
+  font-size: var(--text-base);
+  color: var(--muted);
+  margin-bottom: var(--space-xs);
 }
 .progress-bar-bg {
   height: 8px;
-  background: #e2e8f0;
-  border-radius: 4px;
+  background: var(--border-light);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 .progress-bar-fill {
   height: 100%;
-  background: #3b82f6;
+  background: var(--accent);
   transition: width 0.3s ease;
 }
 
@@ -1521,10 +1496,10 @@ export default {
 .efficiency-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: 0.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #e2e8f0;
-  margin-bottom: 1rem;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: var(--space-md);
 }
 .eff-item {
   display: flex;
@@ -1532,13 +1507,13 @@ export default {
   align-items: center;
 }
 .eff-label {
-  font-size: 0.7rem;
-  color: #94a3b8;
+  font-size: var(--text-xs);
+  color: var(--muted-soft);
 }
 .eff-val {
-  font-size: 0.9rem;
+  font-size: var(--text-base);
   font-weight: 600;
-  color: #334155;
+  color: var(--fg);
 }
 
 /* Ingestion/Crawl Log Tab Styles */
@@ -1546,34 +1521,25 @@ export default {
 .crawl-log-tab {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-md);
 }
 .log-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--space-md);
 }
 .kill-actions {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-md);
   flex-wrap: wrap;
 }
 .kill-label {
-  font-size: 0.9rem;
+  font-size: var(--text-base);
   font-weight: 500;
-  color: var(--text-secondary);
-}
-.btn-spinner {
-  width: 1em;
-  height: 1em;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-  margin-right: 0.5em;
+  color: var(--muted);
 }
 .external-icon {
   font-size: 0.9em;
@@ -1581,8 +1547,8 @@ export default {
 }
 
 .log-table-container {
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   overflow-x: auto;
   max-height: 400px;
   overflow-y: auto;
@@ -1593,18 +1559,18 @@ export default {
 }
 .log-table th,
 .log-table td {
-  padding: 0.75rem 1rem;
+  padding: var(--space-md) var(--space-md);
   text-align: left;
-  border-bottom: 1px solid var(--border-color);
-  font-size: 0.9rem;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-base);
 }
 .log-table th {
-  background-color: var(--bg-section);
+  background-color: var(--bg-tertiary);
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 .log-table td {
-  color: var(--text-primary);
+  color: var(--fg);
   vertical-align: top;
 }
 .log-table tr:last-child td {
@@ -1612,28 +1578,28 @@ export default {
 }
 .log-state {
   text-align: center;
-  padding: 2rem;
-  color: var(--text-secondary);
+  padding: var(--space-xl);
+  color: var(--muted);
   font-style: italic;
 }
 .log-level {
   font-weight: 600;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-  font-size: 0.8rem;
+  padding: 0.1rem var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
   white-space: nowrap;
 }
 .log-level-info {
-  color: #3b82f6;
-  background-color: rgba(59, 130, 246, 0.1);
+  color: var(--accent);
+  background-color: var(--info-bg);
 }
 .log-level-warn {
-  color: #f59e0b;
-  background-color: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+  background-color: var(--warning-bg);
 }
 .log-level-error {
-  color: #ef4444;
-  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+  background-color: var(--danger-bg);
 }
 
 /* Base styles from original file */
@@ -1643,7 +1609,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: var(--overlay-bg);
   z-index: 1050;
 }
 .dialog-container {
@@ -1653,77 +1619,36 @@ export default {
   transform: translate(-50%, -50%);
   width: 90%;
   max-width: 800px;
-  background-color: var(--bg-dialog, #fff);
-  border-radius: 8px;
+  background-color: var(--surface);
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   z-index: 1051;
   display: flex;
   flex-direction: column;
   max-height: 90vh;
 }
-.loading-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(255, 255, 255, 0.8);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  min-height: 400px;
-  gap: 1rem;
-  z-index: 10;
-}
-[data-theme='dark'] .loading-overlay {
-  background-color: rgba(30, 41, 59, 0.8);
-  color: var(--text-primary);
-}
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid var(--border-color, rgba(0, 0, 0, 0.1));
-  border-top-color: var(--primary, #3b82f6);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-[data-theme='dark'] .loading-spinner {
-  border: 4px solid rgba(255, 255, 255, 0.2);
-  border-top-color: var(--primary);
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 .dialog-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 .dialog-title {
-  font-size: 1.25rem;
-  color: var(--text-primary, #333);
+  font-size: var(--text-lg);
+  color: var(--fg);
   margin: 0;
 }
 .dialog-close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-secondary);
-  padding: 0.25rem;
-  line-height: 1;
+  /* Layout only - styling handled by DsButton */
 }
 
 /* Responsive grid for smaller screens */
 @media (max-width: 768px) {
   .tab-content-details {
     grid-template-columns: 1fr; /* Stack columns on smaller screens */
-    gap: 1.5rem;
+    gap: var(--space-lg);
   }
   .log-actions {
     flex-direction: column;
@@ -1741,19 +1666,19 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid var(--border-color, #e2e8f0);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
 .footer-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-md);
 }
 .btn {
-  padding: 0.6rem 1rem;
-  border-radius: 0.375rem;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
   border: none;
-  font-size: 0.9rem;
+  font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -1761,166 +1686,115 @@ export default {
   align-items: center;
   justify-content: center;
   line-height: 1.2;
-  gap: 0.5rem; /* Gap between icon/spinner and text */
+  gap: var(--space-sm); /* Gap between icon/spinner and text */
 }
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  background-color: var(--bg-button-disabled, #ccc);
-  border-color: var(--border-button-disabled, #ccc);
-  color: var(--text-button-disabled, #666);
-}
-.btn-primary {
-  background-color: var(--primary, #3b82f6);
-  color: white;
-}
-.btn-primary:hover:not(:disabled) {
-  background-color: var(--primary-dark, #2563eb);
-}
-.btn-secondary {
-  background-color: var(--secondary, #64748b);
-  color: white;
-}
-.btn-secondary:hover:not(:disabled) {
-  background-color: #475569;
+  background-color: var(--muted);
+  border-color: var(--muted);
+  color: var(--muted-soft);
 }
 .btn-success {
-  background-color: var(--success, #10b981);
-  color: white;
+  background-color: var(--success);
+  color: var(--accent-fg);
 }
 .btn-success:hover:not(:disabled) {
-  background-color: #059669;
+  background-color: var(--success);
 }
 .btn-warning {
-  background-color: var(--warning, #f59e0b);
-  color: #1f2937;
+  background-color: var(--warning);
+  color: var(--fg);
 }
 .btn-warning:hover:not(:disabled) {
-  background-color: #d97706;
+  background-color: var(--warning);
 }
 .btn-danger {
-  background-color: var(--danger, #ef4444);
-  color: white;
+  background-color: var(--danger);
+  color: var(--accent-fg);
 }
 .btn-danger:hover:not(:disabled) {
-  background-color: #dc2626;
+  background-color: var(--danger);
 }
 .btn-outline {
   background-color: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  color: var(--muted);
 }
 .btn-outline:hover:not(:disabled) {
-  background-color: var(--bg-section);
-  border-color: var(--border-color-hover, #cbd5e1);
+  background-color: var(--bg-tertiary);
+  border-color: var(--border-light);
 }
 .btn-outline:disabled {
   background-color: transparent;
-  border-color: var(--border-button-disabled, #ccc);
-  color: var(--text-button-disabled, #999);
-}
-[data-theme='dark'] .btn-warning {
-  color: #1f2937;
-}
-[data-theme='dark'] .btn-outline {
-  color: var(--text-secondary-dark, #cbd5e1);
-  border-color: var(--border-color-dark, #4b5563);
-}
-[data-theme='dark'] .btn-outline:hover:not(:disabled) {
-  background-color: var(--bg-section-dark, #374151);
-  border-color: var(--border-color-hover-dark, #6b7280);
-}
-[data-theme='dark'] .btn:disabled {
-  background-color: var(--bg-button-disabled-dark, #4b5563);
-  border-color: var(--border-button-disabled-dark, #4b5563);
-  color: var(--text-button-disabled-dark, #9ca3af);
-}
-[data-theme='dark'] .btn-outline:disabled {
-  background-color: transparent;
-  border-color: var(--border-button-disabled-dark, #4b5563);
-  color: var(--text-button-disabled-dark, #6b7280);
+  border-color: var(--muted);
+  color: var(--muted-soft);
 }
 .form-group {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--space-lg);
 }
 .form-group label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-sm);
   font-weight: 500;
-  color: var(--text-secondary);
-}
-.form-input {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid var(--border-input, var(--border-color));
-  border-radius: 4px;
-  background-color: var(--bg-input, #fff);
-  color: var(--text-primary);
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
-}
-.form-input:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
-}
-.form-input:disabled {
-  background-color: var(--bg-input-disabled, var(--bg-section));
-  color: var(--text-tertiary);
-  cursor: not-allowed;
-  border-color: var(--border-input-disabled, var(--border-color));
+  color: var(--muted);
 }
 .form-input.is-invalid {
-  border-color: var(--danger, #ef4444);
-  box-shadow: 0 0 0 1px var(--danger, #ef4444);
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-muted);
+}
+.form-input:disabled {
+  background-color: var(--bg);
+  color: var(--muted);
+  cursor: not-allowed;
+  border-color: var(--border-light);
+}
+.form-input.is-invalid {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger);
 }
 .info-section {
-  background-color: var(--bg-section);
-  border-radius: 8px;
-  padding: 1.5rem;
-  border: 1px solid var(--border-color);
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  border: 1px solid var(--border);
 }
 .info-item {
   display: flex;
   flex-direction: column;
-  margin-bottom: 1rem;
-  font-size: 0.9rem;
+  margin-bottom: var(--space-md);
+  font-size: var(--text-base);
 }
 .info-label {
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   font-weight: 500;
-  color: var(--text-secondary);
-  margin-bottom: 0.25rem;
+  color: var(--muted);
+  margin-bottom: var(--space-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.info-item > span:not(.info-label):not(.status-tag) {
-  color: var(--text-primary);
+.info-item > span:not(.info-label) {
+  color: var(--fg);
 }
 .info-hash {
   word-break: break-all;
-  font-family: monospace;
-  font-size: 0.85rem;
-  background-color: var(--bg-code, #f3f4f6);
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
-  color: var(--text-code, #374151);
-  border: 1px solid var(--border-code, var(--border-color));
-}
-[data-theme='dark'] .info-hash {
-  background-color: var(--bg-code-dark, #374151);
-  color: var(--text-code-dark, #e5e7eb);
-  border-color: var(--border-code-dark, #4b5563);
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  background-color: var(--bg);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  border: 1px solid var(--border);
 }
 .select-all-container {
   display: flex;
   align-items: center;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-md);
   cursor: pointer;
 }
 .select-all-container input[type='checkbox'] {
-  margin-right: 0.5rem;
+  margin-right: var(--space-sm);
   cursor: pointer;
   height: 1rem;
   width: 1rem;
@@ -1928,127 +1802,63 @@ export default {
 .select-all-container label {
   margin-bottom: 0;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--fg);
   cursor: pointer;
   user-select: none;
 }
 .select-all-container input[type='checkbox']:disabled + label {
-  color: var(--text-tertiary);
+  color: var(--muted-soft);
   cursor: not-allowed;
 }
 .labels-container {
   max-height: 200px;
   overflow-y: auto;
-  border: 1px solid var(--border-input, var(--border-color));
-  padding: 0.75rem;
-  border-radius: 4px;
-  background-color: var(--bg-input, #fff);
+  border: 1px solid var(--border);
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface);
 }
 .loading-state-small {
   font-style: italic;
-  color: var(--text-secondary);
+  color: var(--muted);
   text-align: center;
-  padding: 1rem;
+  padding: var(--space-md);
 }
 .label-category {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-md);
 }
 .label-category strong {
-  font-size: 0.9rem;
-  color: var(--text-primary);
+  font-size: var(--text-base);
+  color: var(--fg);
   display: block;
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--space-xs);
 }
 .label-item {
   display: flex;
   align-items: center;
-  margin-top: 0.5rem;
-  padding-left: 0.5rem;
+  margin-top: var(--space-sm);
+  padding-left: var(--space-sm);
   cursor: pointer;
 }
 .label-item input[type='checkbox'] {
-  margin-right: 0.5rem;
+  margin-right: var(--space-sm);
   cursor: pointer;
   height: 1rem;
   width: 1rem;
 }
 .label-item label {
   margin-bottom: 0;
-  color: var(--text-secondary);
+  color: var(--muted);
   cursor: pointer;
   user-select: none;
-  font-size: 0.9rem;
+  font-size: var(--text-base);
 }
 .label-item input[type='checkbox']:disabled + label {
-  color: var(--text-tertiary);
+  color: var(--muted-soft);
   cursor: not-allowed;
 }
-.status-tag {
-  display: inline-block;
-  padding: 0.2rem 0.6rem;
-  border-radius: 1rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1.2;
-  text-transform: uppercase;
-  border: 1px solid transparent;
-}
-.status-ingested {
-  background-color: rgba(16, 185, 129, 0.1);
-  color: var(--success, #10b981);
-  border-color: rgba(16, 185, 129, 0.3);
-}
-.status-pending {
-  background-color: rgba(245, 158, 11, 0.1);
-  color: var(--warning, #f59e0b);
-  border-color: rgba(245, 158, 11, 0.3);
-}
-.status-retracted {
-  background-color: rgba(100, 116, 139, 0.1);
-  color: var(--secondary, #64748b);
-  border-color: rgba(100, 116, 139, 0.3);
-}
-/* New Statuses */
-.status-ingesting {
-  background-color: rgba(59, 130, 246, 0.1);
-  color: var(--primary, #3b82f6);
-  border-color: rgba(59, 130, 246, 0.3);
-}
-.status-error {
-  background-color: rgba(239, 68, 68, 0.1);
-  color: var(--danger, #ef4444);
-  border-color: rgba(239, 68, 68, 0.3);
-}
-.status-warn {
-  background-color: rgba(245, 158, 11, 0.1);
-  color: var(--warning, #f59e0b);
-  border-color: rgba(245, 158, 11, 0.3);
-}
-
-[data-theme='dark'] .status-ingested {
-  background-color: rgba(16, 185, 129, 0.2);
-  border-color: rgba(16, 185, 129, 0.5);
-}
-[data-theme='dark'] .status-pending,
-[data-theme='dark'] .status-warn {
-  background-color: rgba(245, 158, 11, 0.2);
-  border-color: rgba(245, 158, 11, 0.5);
-}
-[data-theme='dark'] .status-retracted {
-  background-color: rgba(100, 116, 139, 0.2);
-  border-color: rgba(100, 116, 139, 0.5);
-}
-[data-theme='dark'] .status-ingesting {
-  background-color: rgba(59, 130, 246, 0.2);
-  border-color: rgba(59, 130, 246, 0.5);
-}
-[data-theme='dark'] .status-error {
-  background-color: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.5);
-}
-
 .file-view-link {
-  color: var(--primary, #3b82f6);
+  color: var(--accent);
   text-decoration: none;
   font-weight: 500;
   word-break: break-all;
@@ -2057,22 +1867,22 @@ export default {
 }
 .file-view-link:hover {
   text-decoration: underline;
-  color: var(--primary-dark, #2563eb);
+  color: var(--accent-hover);
 }
 .progress-track {
   width: 200px;
   height: 8px;
-  background-color: #e2e8f0;
-  border-radius: 4px;
-  margin-top: 10px;
+  background-color: var(--border-light);
+  border-radius: var(--radius-sm);
+  margin-top: var(--space-sm);
   overflow: hidden;
 }
 .progress-fill {
   height: 100%;
-  background-color: var(--primary, #3b82f6);
+  background-color: var(--accent);
   transition: width 0.2s ease;
 }
 [data-theme='dark'] .progress-track {
-  background-color: #475569;
+  background-color: var(--muted);
 }
 </style>

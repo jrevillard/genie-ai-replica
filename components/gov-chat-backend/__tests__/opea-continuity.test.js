@@ -10,14 +10,18 @@
  */
 
 // Mock shared-lib
-jest.mock('../shared-lib', () => ({
-  logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn()
-  }
-}), { virtual: true });
+jest.mock(
+  '../shared-lib',
+  () => ({
+    logger: {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn()
+    }
+  }),
+  { virtual: true }
+);
 
 // Mock keycloak-auth-service
 const mockVerifyToken = jest.fn();

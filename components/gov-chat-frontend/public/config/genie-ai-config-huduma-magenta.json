@@ -65,33 +65,11 @@
           "type": "string",
           "description": "Primary text color",
           "default": "#333333"
-        },
-        "navbar": {
-          "type": "object",
-          "description": "Navbar-specific styling",
-          "properties": {
-            "gradientStart": {
-              "type": "string",
-              "description": "Start color for navbar gradient",
-              "default": "#4E97D1"
-            },
-            "gradientEnd": {
-              "type": "string",
-              "description": "End color for navbar gradient",
-              "default": "#2C5F8A"
-            },
-            "textColor": {
-              "type": "string",
-              "description": "Navbar text/icon color",
-              "default": "#ffffff"
-            }
-          }
         }
       },
       "required": [
         "primaryColor",
-        "secondaryColor",
-        "navbar"
+        "secondaryColor"
       ]
     },
     "features": {
@@ -238,15 +216,9 @@
     }
   },
   "theme": {
-    "primaryColor": "#7A2A6A",
-    "secondaryColor": "#4D143F",
-    "backgroundColor": "#EAD9E5",
-    "textColor": "#1C1519",
-    "navbar": {
-      "gradientStart": "#6B245C",
-      "gradientEnd": "#3D0F31",
-      "textColor": "#F0E7EC"
-    }
+    "brandColor": "#7A2A6A",
+    "bg": "#EAD9E5",
+    "fg": "#1C1519"
   },
   "features": {
     "chat": {

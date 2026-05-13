@@ -62,8 +62,9 @@ async function main() {
     console.log(`[migrations] Created ${COLLECTION_NAME} collection`);
   }
 
-  const files = fs.readdirSync(MIGRATIONS_DIR)
-    .filter(f => /^\d{3}-.*\.js$/.test(f))
+  const files = fs
+    .readdirSync(MIGRATIONS_DIR)
+    .filter((f) => /^\d{3}-.*\.js$/.test(f))
     .sort();
 
   if (files.length === 0) {
@@ -115,7 +116,7 @@ async function main() {
 
 main()
   .then(() => process.exit(0))
-  .catch(err => {
+  .catch((err) => {
     console.error('[migrations] Fatal error:', err.message);
     process.exit(1);
   });

@@ -1,6 +1,10 @@
 <!-- CategoryDistributionChart.vue -->
 <template>
   <div class="chart-wrapper">
+    <DsSpinner v-if="loading" overlay>
+      <span>{{ $t('analytics.status.loading') }}</span>
+    </DsSpinner>
+    <DsStateDisplay v-if="error" type="error" :message="error" />
     <div ref="chart" class="chart-container">
       <apexchart
         v-if="!loading && !error && chartOptions"
@@ -10,13 +14,6 @@
         :series="chartSeries"
       />
     </div>
-    <div v-if="loading" class="loading-overlay">
-      <div class="spinner"></div>
-      <span>{{ $t('analytics.status.loading') }}</span>
-    </div>
-    <div v-if="error" class="error-message">
-      {{ error }}
-    </div>
   </div>
 </template>
 
@@ -24,9 +21,15 @@
 import analyticsService from '../../services/analyticsService';
 import { serviceTreeService } from '../../services';
 import { useChartTheme } from '../../composables/useChartTheme';
+import DsSpinner from '../ds/Spinner.vue';
+import DsStateDisplay from '../ds/StateDisplay.vue';
 
 export default {
   name: 'CategoryDistributionChart',
+  components: {
+    DsSpinner,
+    DsStateDisplay
+  },
   props: {
     // Data can be provided by parent component
     data: {
@@ -54,10 +57,10 @@ export default {
     }
   },
   setup() {
-    const { theme, getTheme } = useChartTheme({
+    const { theme, getCssVarStrings } = useChartTheme({
       listenToSystem: true
     });
-    return { theme, getTheme };
+    return { theme, getCssVarStrings };
   },
   data() {
     return {
@@ -149,7 +152,6 @@ export default {
      */
     checkMobile() {
       this.isMobile = window.innerWidth < 768;
-      console.log(`[DEBUG] Device detected as ${this.isMobile ? 'mobile' : 'desktop'}`);
     },
 
     /**
@@ -165,13 +167,8 @@ export default {
         // Calculate date range based on period
         analyticsService.calculateDateRange(this.period, this.selectedDate);
 
-        // Get current locale from i18n and ensure it's passed to the service
-        const locale = this.$i18n.locale;
-        console.log(`[DEBUG] fetchData: Current locale is "${locale}"`);
-
         // Make sure analyticsService has the locale information
         if (!analyticsService.$i18n) {
-          console.log(`[DEBUG] Setting i18n instance on analyticsService`);
           analyticsService.$i18n = this.$i18n;
         }
 
@@ -179,28 +176,14 @@ export default {
         const dashboardData = await analyticsService.getDashboardAnalytics(this.period, this.selectedDate);
 
         if (dashboardData && dashboardData.queryDistribution) {
-          // Debug: Log category names from API
-          console.log(
-            `[DEBUG] Category data received from API:`,
-            dashboardData.queryDistribution.map((item) => ({
-              id: item.categoryId,
-              name: item.name,
-              count: item.count
-            }))
-          );
-
           this.chartData = dashboardData.queryDistribution;
           this.updateChart();
 
           // Debug: Check language of received category names
-          this.logCategoryLanguageInfo();
         } else {
-          console.error(`[DEBUG] No queryDistribution in response`);
           this.error = this.$t('analytics.status.noData');
         }
-      } catch (error) {
-        console.error('Error fetching category distribution data:', error);
-        console.log('No category distribution data available from API');
+      } catch {
         this.chartData = [];
         this.updateChart();
       } finally {
@@ -230,13 +213,10 @@ export default {
             let name;
             if (currentLocale === 'fr' && category.nameFR) {
               name = category.nameFR;
-              console.log(`[DEBUG] Using French name for category ${id}: ${name}`);
             } else if (currentLocale === 'sw' && category.nameSW) {
               name = category.nameSW;
-              console.log(`[DEBUG] Using Swahili name for category ${id}: ${name}`);
             } else {
               name = category.nameEN || category.name || null;
-              console.log(`[DEBUG] Using default/English name for category ${id}: ${name}`);
             }
 
             // Store the name with various ID formats for flexible lookup
@@ -268,12 +248,7 @@ export default {
             }
           }
         });
-
-        console.log(
-          `[DEBUG] Loaded ${Object.keys(this.categories).length} category names for locale: ${this.$i18n.locale}`
-        );
-      } catch (error) {
-        console.error('Error loading category names:', error);
+      } catch {
         // Populate with fallback data in case of error
         this.populateFallbackCategories();
       }
@@ -350,7 +325,6 @@ export default {
 
       // Determine the current locale
       const currentLocale = this.$i18n.locale;
-      console.log(`[DEBUG] Using fallback categories for locale: ${currentLocale}`);
 
       // Add entries for each format with the appropriate language
       Object.entries(fallbackCategories).forEach(([id, names]) => {
@@ -446,89 +420,18 @@ export default {
     },
 
     /**
-     * Analyze if category names are in the correct language
-     * Helps debug if the API is returning names in the wrong language
-     */
-    logCategoryLanguageInfo() {
-      if (!this.chartData || !this.chartData.length) {
-        console.log('[DEBUG] No chart data available to check language');
-        return;
-      }
-
-      const locale = this.$i18n.locale;
-      console.log(`[DEBUG] Analyzing category names for locale: "${locale}"`);
-
-      // Simple word patterns to detect language
-      const patterns = {
-        en: ['and', 'of', 'services', 'identity', 'civil', 'education', 'business'],
-        sw: ['na', 'ya', 'huduma', 'utambulisho', 'elimu', 'biashara'],
-        fr: ['et', 'de', 'services', 'identité', 'civil', 'éducation']
-      };
-
-      let matchCount = 0;
-      let totalWithNames = 0;
-
-      this.chartData.forEach((cat) => {
-        if (!cat.name) {
-          console.log(`[DEBUG] Missing name for category: ${cat.categoryId}`);
-          return;
-        }
-
-        totalWithNames++;
-
-        // Check each language
-        const results = {};
-        Object.entries(patterns).forEach(([lang, words]) => {
-          const nameLower = cat.name.toLowerCase();
-          const matches = words.filter((word) => nameLower.includes(word.toLowerCase()));
-          results[lang] = matches.length;
-        });
-
-        // Determine likely language
-        let likelyLang = 'unknown';
-        let highestCount = 0;
-
-        Object.entries(results).forEach(([lang, count]) => {
-          if (count > highestCount) {
-            highestCount = count;
-            likelyLang = lang;
-          }
-        });
-
-        const isMatch = likelyLang === locale;
-        if (isMatch) {
-          matchCount++;
-        }
-
-        console.log(
-          `[DEBUG] Category "${cat.categoryId}" name: "${
-            cat.name
-          }" - likely language: ${likelyLang} (match with current locale: ${isMatch ? 'YES' : 'NO'})`
-        );
-      });
-
-      // Summary statistics
-      if (totalWithNames > 0) {
-        const matchPercent = Math.round((matchCount / totalWithNames) * 100);
-        console.log(
-          `[DEBUG] Language match summary: ${matchCount}/${totalWithNames} (${matchPercent}%) names match current locale "${locale}"`
-        );
-      }
-    },
-
-    /**
      * Get ApexCharts tooltip formatter with transparent black background
      */
     tooltipFormatter(value, opts) {
       const item = this.processedData[opts.dataPointIndex];
       if (!item) return '';
 
-      // Use transparent black background and white text for all themes
-      const bgColor = 'rgba(0, 0, 0, 0.75)';
-      const textColor = '#FFFFFF';
+      // Use theme-aware colors for tooltip
+      const bgColor = 'var(--fg)';
+      const textColor = 'var(--bg)';
 
       return `
-        <div class="apexcharts-tooltip-box" style="background: ${bgColor}; border-radius: 5px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+        <div class="apexcharts-tooltip-box" style="background: ${bgColor}; border-radius: var(--radius-sm); padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
           <div class="apexcharts-tooltip-title" style="color: ${textColor}; font-weight: bold; margin-bottom: 5px;">${
             item.categoryName
           }</div>
@@ -602,16 +505,10 @@ export default {
           const percentage = (value / total) * 100;
 
           // CRITICAL: Prioritize the name directly from the API response
-          const displayName = item.name && item.name !== item.categoryId && !item.name.startsWith('Category ')
-            ? (() => {
-              console.log(`[DEBUG] Using API-provided name: "${item.name}" for ${item.categoryId}`);
-              return item.name;
-            })()
-            : (() => {
-              const lookedUp = this.getCategoryDisplayName(item.categoryId);
-              console.log(`[DEBUG] Using looked-up name: "${lookedUp}" for ${item.categoryId}`);
-              return lookedUp;
-            })();
+          const displayName =
+            item.name && item.name !== item.categoryId && !item.name.startsWith('Category ')
+              ? item.name
+              : this.getCategoryDisplayName(item.categoryId);
 
           return {
             categoryId: item.categoryId,
@@ -642,12 +539,11 @@ export default {
       }
 
       // Get theme information
-      const theme = this.getTheme();
-      console.log(`[DEBUG] Theme detected: ${theme.isDarkMode ? 'dark' : 'light'}`);
+      const theme = this.getCssVarStrings();
 
       // Create explicit center label style based on theme
       const centerLabelStyle = {
-        color: theme.isDarkMode ? '#FFFFFF' : '#333333',
+        color: theme.textColor,
         fontSize: '14px',
         fontWeight: 'bold'
       };
@@ -796,11 +692,8 @@ export default {
       // Apply fixes after chart renders
       this.$nextTick(() => {
         setTimeout(() => {
-          console.log('[DEBUG] Applying direct DOM fixes and custom tooltips');
-
           // Fix center text color
-          const isDark = theme.isDarkMode;
-          const centerColor = isDark ? '#FFFFFF' : '#333333';
+          const centerColor = theme.textColor;
           const centerLabels = document.querySelectorAll('.apexcharts-datalabels-group text');
           centerLabels.forEach((label) => {
             label.setAttribute('fill', centerColor);
@@ -827,16 +720,16 @@ export default {
       tooltip.id = 'chart-custom-tooltip';
       tooltip.style.cssText = `
         position: absolute;
-        background: rgba(0, 0, 0, 0.65);
-        color: white;
+        background: var(--fg);
+        color: var(--bg);
         padding: 10px;
-        border-radius: 4px;
+        border-radius: var(--radius-sm);
         font-size: 12px;
         pointer-events: none;
         z-index: 10000;
         display: none;
         min-width: 160px;
-        box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+        box-shadow: var(--shadow-lg);
       `;
       document.body.appendChild(tooltip);
     },
@@ -879,7 +772,6 @@ export default {
       for (const selector of sliceSelectors) {
         slices = chartContainer.querySelectorAll(selector);
         if (slices.length > 0) {
-          console.log(`[DEBUG] Found ${slices.length} slices using selector: ${selector}`);
           break;
         }
       }
@@ -889,7 +781,6 @@ export default {
         for (const selector of sliceSelectors) {
           slices = document.querySelectorAll(selector);
           if (slices.length > 0) {
-            console.log(`[DEBUG] Found ${slices.length} slices in document using selector: ${selector}`);
             break;
           }
         }
@@ -943,11 +834,7 @@ export default {
             slice.removeAttribute('data-active');
           });
         });
-
-        console.log('[DEBUG] Successfully added tooltip handlers to slices');
       } else {
-        console.log('[DEBUG] No slices found to attach tooltips');
-
         // Last resort: try again after a longer delay
         setTimeout(() => {
           this.addTooltipHandlers();
@@ -972,93 +859,13 @@ export default {
   height: 100%;
   min-height: 400px;
   background-color: transparent;
-  border-radius: 4px;
-}
-
-.loading-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-secondary, rgba(255, 255, 255, 0.8));
-  z-index: 1;
-}
-
-.spinner {
-  border: 3px solid rgba(0, 0, 0, 0.1);
-  border-radius: 50%;
-  border-top: 3px solid var(--accent-color, #4e97d1);
-  width: 30px;
-  height: 30px;
-  animation: spin 1s linear infinite;
-  margin-bottom: 10px;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.error-message {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-  color: var(--status-outage, #d32f2f);
+  border-radius: var(--radius-sm);
 }
 
 /* Mobile-specific styles */
-@media (max-width: 767px) {
+@media (max-width: 768px) {
   .chart-wrapper {
     min-height: 450px;
-  }
-}
-
-/* Fix for legend text in light mode */
-:deep(.apexcharts-legend-text) {
-  color: inherit !important;
-}
-
-/* Force white text ONLY in dark mode for donut center */
-:deep(.dark-theme) .apexcharts-datalabel-label,
-:deep([data-theme='dark']) .apexcharts-datalabel-label,
-:deep(.dark-mode) .apexcharts-datalabel-label,
-:deep(.dark-theme) .apexcharts-datalabel-value,
-:deep([data-theme='dark']) .apexcharts-datalabel-value,
-:deep(.dark-mode) .apexcharts-datalabel-value {
-  fill: white !important;
-}
-
-/* Force dark text ONLY in light mode for donut center */
-:deep([data-theme='light']) .apexcharts-datalabel-label,
-:deep([data-theme='light']) .apexcharts-datalabel-value {
-  fill: #333333 !important;
-}
-
-/* System dark mode preference - ONLY apply in dark mode */
-@media (prefers-color-scheme: dark) {
-  :deep(:not(.light-theme):not([data-theme='light'])) .apexcharts-datalabel-label,
-  :deep(:not(.light-theme):not([data-theme='light'])) .apexcharts-datalabel-value {
-    fill: white !important;
-  }
-}
-
-/* System light mode preference - ONLY apply in light mode */
-@media (prefers-color-scheme: light) {
-  :deep(:not(.dark-theme):not([data-theme='dark'])) .apexcharts-datalabel-label,
-  :deep(:not(.dark-theme):not([data-theme='dark'])) .apexcharts-datalabel-value {
-    fill: #333333 !important;
   }
 }
 </style>

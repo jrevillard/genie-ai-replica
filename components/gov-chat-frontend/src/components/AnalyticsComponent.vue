@@ -1,11 +1,11 @@
-<!-- AnalyticsComponent.vue - Updated Version with Translation Support -->
+<!-- AnalyticsComponent.vue - Updated Version with Translation Support and ApexCharts -->
 <template>
   <div class="analytics-modal" @click.self="close">
     <div class="analytics-content">
       <div class="analytics-header">
         <h2>{{ $t('analytics.title') }}</h2>
 
-        <button class="close-btn" aria-label="Close" @click="close">×</button>
+        <DsButton variant="ghost" class="close-btn" aria-label="Close" @click="close">×</DsButton>
       </div>
 
       <div class="analytics-body">
@@ -41,7 +41,13 @@
         <div class="analytics-section">
           <h3>{{ $t('analytics.serviceUsage') }}</h3>
           <div class="category-chart-container">
-            <div ref="categoryChart" class="category-usage"></div>
+            <apexchart
+              v-if="chartOptions && !loading"
+              type="donut"
+              height="320"
+              :options="chartOptions"
+              :series="chartSeries"
+            />
             <div v-if="loading" class="chart-loading">
               {{ $t('analytics.loading') }}
             </div>
@@ -54,24 +60,44 @@
 
 <script>
 import UsageTrendChart from './UsageTrendChart.vue';
+import { useChartTheme } from '../../composables/useChartTheme';
+import DsButton from './ds/Button.vue';
 
 export default {
   name: 'AnalyticsComponent',
   components: {
+    DsButton,
     UsageTrendChart
   },
 
   emits: ['close'],
 
+  setup() {
+    const { theme, getCssVarStrings } = useChartTheme();
+    return { theme, getCssVarStrings };
+  },
+
   data() {
     return {
       loading: true,
-      chart: null,
 
       // Sample data (will be translated)
       topQueries: [],
-      categoryData: []
+      categoryData: [],
+      chartOptions: null,
+      chartSeries: []
     };
+  },
+
+  watch: {
+    // Watch for theme changes from the composable
+    theme: {
+      handler() {
+        this.$nextTick(() => {
+          this.updateChart();
+        });
+      }
+    }
   },
 
   created() {
@@ -81,9 +107,6 @@ export default {
   },
 
   mounted() {
-    this.initCategoryChart();
-    window.addEventListener('resize', this.handleResize);
-
     // Listen for locale changes
     this.$watch(
       () => this.$i18n.locale,
@@ -97,11 +120,9 @@ export default {
         }
       }
     );
-  },
 
-  beforeUnmount() {
-    window.removeEventListener('resize', this.handleResize);
-    this.disposeChart();
+    // Initialize chart after translations
+    this.updateChart();
   },
 
   methods: {
@@ -170,89 +191,65 @@ export default {
       const locale = this.$i18n.locale || 'en';
       this.categoryData = categoryDataPerLanguage[locale] || categoryDataPerLanguage['en'];
 
-      // If the chart is already rendered, update it
-      if (this.chart) {
-        this.renderCategoryChart();
-      }
+      // Update chart when categories change
+      this.updateChart();
     },
 
-    async initCategoryChart() {
-      try {
-        const echarts = await import('echarts');
-        this.renderCategoryChart(echarts);
-      } catch (error) {
-        console.error('Failed to load chart library:', error);
-        this.loading = false;
+    updateChart() {
+      if (!this.categoryData || this.categoryData.length === 0) {
+        return;
       }
-    },
-
-    async renderCategoryChart(echartLib = null) {
-      if (!this.$refs.categoryChart) return;
 
       this.loading = true;
 
       // Use a timeout to ensure UI updates before chart rendering
-      setTimeout(async () => {
+      setTimeout(() => {
         try {
-          // Dispose of old chart properly before creating a new one
-          this.disposeChart();
+          const theme = this.getCssVarStrings();
 
-          // Load echarts library if not provided
-          const echarts = echartLib || (await import('echarts'));
+          this.chartSeries = this.categoryData.map((item) => item.value);
 
-          // Create new chart instance
-          this.chart = echarts.init(this.$refs.categoryChart);
-
-          // Set chart options
-          const option = {
-            tooltip: {
-              trigger: 'item',
-              formatter: '{a} <br/>{b}: {c} ({d}%)'
+          this.chartOptions = {
+            chart: {
+              type: 'donut',
+              fontFamily: 'inherit',
+              background: 'var(--surface)',
+              foreColor: 'var(--fg)',
+              toolbar: { show: false }
             },
+            labels: this.categoryData.map((item) => item.category),
+            colors: ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452'],
             legend: {
-              orient: 'vertical',
-              right: 10,
-              top: 'center',
-              data: this.categoryData.map((item) => item.category)
+              position: 'right',
+              labels: {
+                colors: 'var(--fg)'
+              }
             },
-            series: [
-              {
-                name: this.$t('analytics.serviceUsage'),
-                type: 'pie',
-                radius: ['50%', '70%'],
-                avoidLabelOverlap: false,
-                label: {
-                  show: false,
-                  position: 'center'
-                },
-                emphasis: {
-                  label: {
+            plotOptions: {
+              pie: {
+                donut: {
+                  size: '60%',
+                  labels: {
                     show: true,
-                    fontSize: '16',
-                    fontWeight: 'bold'
+                    name: {
+                      show: true,
+                      style: { color: 'var(--fg)' }
+                    },
+                    value: {
+                      show: true,
+                      style: { color: 'var(--fg)' }
+                    }
                   }
-                },
-                labelLine: {
-                  show: false
-                },
-                data: this.categoryData.map((item) => ({
-                  name: item.category,
-                  value: item.value
-                })),
-                itemStyle: {
-                  borderRadius: 5,
-                  borderColor: '#fff',
-                  borderWidth: 2
                 }
               }
-            ],
-            color: ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452']
+            },
+            dataLabels: { enabled: false },
+            stroke: { width: 0 },
+            theme: {
+              mode: theme.isDarkMode ? 'dark' : 'light'
+            }
           };
 
-          // Apply the chart configuration
-          this.chart.setOption(option);
-
-          // End loading
           this.loading = false;
         } catch (error) {
           console.error('Error rendering category chart:', error);
@@ -261,31 +258,7 @@ export default {
       }, 100);
     },
 
-    disposeChart() {
-      if (this.chart) {
-        try {
-          this.chart.dispose();
-        } catch (e) {
-          console.warn('Error while disposing chart:', e);
-        }
-        this.chart = null;
-      }
-    },
-
-    handleResize() {
-      if (this.chart) {
-        try {
-          this.chart.resize();
-        } catch (e) {
-          console.warn('Error resizing chart:', e);
-          // If resize fails, try re-rendering
-          this.renderCategoryChart();
-        }
-      }
-    },
-
     close() {
-      this.disposeChart();
       this.$emit('close');
     }
   }
@@ -299,7 +272,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -307,57 +280,49 @@ export default {
 }
 
 .analytics-content {
-  background: white;
-  border-radius: 8px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
   width: 90%;
   max-width: 1200px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
 }
 
 .analytics-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid #eee;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .analytics-header h2 {
   margin: 0;
-  font-size: 1.5rem;
-  color: #000;
+  font-size: var(--text-xl);
+  color: var(--fg);
   font-weight: 600;
 }
 
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #666;
-}
-
 .analytics-body {
-  padding: 20px;
+  padding: var(--space-lg);
   overflow-y: auto;
 }
 
 .analytics-section {
-  margin-bottom: 24px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  padding: 16px;
+  margin-bottom: var(--space-lg);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-md);
 }
 
 .analytics-section h3 {
   margin-top: 0;
-  margin-bottom: 16px;
-  font-size: 1.2rem;
-  color: #000;
+  margin-bottom: var(--space-md);
+  font-size: var(--text-lg);
+  color: var(--fg);
   font-weight: 600;
 }
 
@@ -372,27 +337,22 @@ table {
 
 th {
   text-align: left;
-  padding: 12px;
-  background: #f5f7fa;
-  color: #000;
+  padding: var(--space-md);
+  background: var(--bg);
+  color: var(--fg);
   font-weight: 600;
 }
 
 td {
-  padding: 12px;
-  border-top: 1px solid #eee;
-  color: #000;
+  padding: var(--space-md);
+  border-top: 1px solid var(--border-light);
+  color: var(--fg);
 }
 
 .category-chart-container {
   position: relative;
   width: 100%;
   height: 320px;
-}
-
-.category-usage {
-  width: 100%;
-  height: 100%;
 }
 
 .chart-loading {
@@ -404,9 +364,9 @@ td {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.8);
-  font-size: 1rem;
-  color: #000;
+  background: var(--overlay-bg);
+  font-size: var(--text-md);
+  color: var(--fg);
 }
 
 @media (max-width: 768px) {
@@ -416,7 +376,7 @@ td {
   }
 
   .analytics-header h2 {
-    font-size: 1.3rem;
+    font-size: var(--text-lg);
   }
 }
 </style>

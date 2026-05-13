@@ -1,27 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 
 class LanguageSelector extends StatelessWidget {
   final Color? textColor;
   final Color? dropdownColor;
+  final ValueChanged<String>? onChanged;
 
-  const LanguageSelector({super.key, this.textColor, this.dropdownColor});
+  const LanguageSelector({super.key, this.textColor, this.dropdownColor, this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    debugPrint("[LANG SELECTOR] Build called");
     final i18n = I18nService();
+    final tokens = ThemeManager().tokens;
 
-    final Color displayColor = textColor ?? Colors.white;
-    final Color menuBg = dropdownColor ?? Theme.of(context).cardColor;
+    final Color displayColor = textColor ?? tokens.navbarFg;
+    final Color menuBg = dropdownColor ?? tokens.surface;
 
     return ListenableBuilder(
       listenable: i18n,
       builder: (context, child) {
-        debugPrint(
-          "[LANG SELECTOR] Builder rebuilding. Current I18n Locale: ${i18n.currentLocale.languageCode}",
-        );
-
         return DropdownButtonHideUnderline(
           child: DropdownButton<String>(
             value: i18n.currentLocale.languageCode,
@@ -36,7 +34,7 @@ class LanguageSelector extends StatelessWidget {
                   entry.value,
                   style: TextStyle(
                     color: displayColor,
-                    fontSize: 13,
+                    fontSize: ThemeManager().tokens.textSm,
                     fontWeight: i18n.currentLocale.languageCode == entry.key
                         ? FontWeight.bold
                         : FontWeight.normal,
@@ -45,9 +43,9 @@ class LanguageSelector extends StatelessWidget {
               );
             }).toList(),
             onChanged: (val) {
-              debugPrint("[LANG SELECTOR] User selected: $val");
               if (val != null) {
                 i18n.changeLanguage(val);
+                onChanged?.call(val);
               }
             },
           ),

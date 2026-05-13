@@ -686,6 +686,8 @@ export default {
     chatsMoveWarning: 'All chats in this folder will be moved to the default folder.',
     weatherError: 'Unable to load weather data. Please try again.',
     weatherTitle: 'Weather Forecast',
+    collapse: 'Collapse sidebar',
+    expand: 'Expand sidebar',
     weatherLoading: 'Loading weather data...',
     weatherLocationLoading: 'Loading location...',
     weatherErrorDefault: 'Unable to retrieve weather data.',
@@ -1394,7 +1396,8 @@ export default {
     streamingError: 'Response was interrupted. Please try again.',
     streamTimeout: 'Response timed out. Please try again.',
     translationFailed: 'Translation failed. Showing original response.',
-    generating: 'Generating response...'
+    generating: 'Generating response...',
+    removeItem: 'Remove item'
   },
   quickhelp: {
     // Labels (Short for UI)

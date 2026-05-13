@@ -1,6 +1,6 @@
 const { logger } = require('../shared-lib');
 const nodeCrypto = require('crypto'); // For generating cache key
-const Redis = require('ioredis');  // For Redis cache
+const Redis = require('ioredis'); // For Redis cache
 
 // Import backend modules
 const CpuTranslateBackend = require('./translation/cpu-translate-backend');
@@ -57,7 +57,7 @@ class TranslationService {
         },
         maxRetriesPerRequest: 3,
         // Prevent hanging if Redis is down on startup
-        enableOfflineQueue: false,
+        enableOfflineQueue: false
       });
 
       this.cacheClient.on('error', (err) => {
@@ -121,7 +121,6 @@ class TranslationService {
       }
 
       throw new Error(`Invalid TRANSLATION_BACKEND value: ${translationBackend}. Must be 'cpu', 'gpu', or 'auto'`);
-
     } catch (error) {
       logger.error(`[TRANSLATION-SERVICE] Backend selection failed: ${error.message}`);
       throw error;
@@ -164,7 +163,6 @@ class TranslationService {
 
       this.initialized = true;
       logger.info('[TRANSLATION-SERVICE] Initialized successfully. Backend is ready.');
-
     } catch (error) {
       logger.error(`[TRANSLATION-SERVICE] Initialization failed: ${error.message}`, { stack: error.stack });
       throw error;
@@ -204,7 +202,9 @@ class TranslationService {
       // Check for fallback language
       const fallbackLang = this.backend.getFallbackLanguage(targetLang);
       if (fallbackLang) {
-        logger.warn(`[TRANSLATION-SERVICE] Target language ${targetLang} not directly supported, using fallback ${fallbackLang}`);
+        logger.warn(
+          `[TRANSLATION-SERVICE] Target language ${targetLang} not directly supported, using fallback ${fallbackLang}`
+        );
         // Recursively call translate with fallback language
         return this.translate(texts, sourceLang, fallbackLang);
       }
@@ -218,7 +218,6 @@ class TranslationService {
       // Delegate to backend
       const translatedTexts = await this.backend.translate(texts, sourceLangCode, targetLangCode);
       return translatedTexts;
-
     } catch (error) {
       // If backend is GPU and in auto mode, try falling back to CPU for this request only
       if (this.backendType === 'gpu' && translationBackend === 'auto') {
@@ -279,14 +278,16 @@ class TranslationService {
         }
         logger.info(`[TRANSLATION-CACHE] MISS: No cache in Redis for key ${cacheKey}. Translating...`);
       } catch (error) {
-         logger.warn(`[TRANSLATION-CACHE] Redis GET error. Translating anyway. ${error.message}`);
+        logger.warn(`[TRANSLATION-CACHE] Redis GET error. Translating anyway. ${error.message}`);
       }
     }
     // --- REDIS CACHE LOGIC (END) ---
 
     // --- IN-FLIGHT TRACKING: Check if translation is already in progress ---
     if (this.inFlightTranslations.has(inFlightKey)) {
-      logger.info(`[TRANSLATION-SERVICE] In-flight translation HIT for ${inFlightKey}. Waiting for existing promise...`);
+      logger.info(
+        `[TRANSLATION-SERVICE] In-flight translation HIT for ${inFlightKey}. Waiting for existing promise...`
+      );
       const existingPromise = this.inFlightTranslations.get(inFlightKey);
       return await existingPromise;
     }
@@ -311,7 +312,7 @@ class TranslationService {
           textNodes.push(node);
         });
 
-        const texts = textNodes.map(node => node.value);
+        const texts = textNodes.map((node) => node.value);
         logger.info(`[TRANSLATION-SERVICE] Extracted ${texts.length} text nodes for translation`);
 
         if (texts.length === 0) {
@@ -324,7 +325,9 @@ class TranslationService {
         const batchSize = Math.ceil(texts.length / numBatches);
         const batches = [];
 
-        logger.info(`[TRANSLATION-SERVICE] Splitting ${texts.length} texts into ${numBatches} parallel batches of size ~${batchSize}`);
+        logger.info(
+          `[TRANSLATION-SERVICE] Splitting ${texts.length} texts into ${numBatches} parallel batches of size ~${batchSize}`
+        );
 
         for (let i = 0; i < texts.length; i += batchSize) {
           batches.push(texts.slice(i, i + batchSize));
@@ -344,11 +347,15 @@ class TranslationService {
         const translatedTexts = translatedBatches.flat();
 
         const duration = Date.now() - startTime;
-        logger.info(`[TRANSLATION-SERVICE] All ${batches.length} batches completed in ${duration}ms. Received ${translatedTexts.length} total translations.`);
+        logger.info(
+          `[TRANSLATION-SERVICE] All ${batches.length} batches completed in ${duration}ms. Received ${translatedTexts.length} total translations.`
+        );
 
         // Sanity check
         if (translatedTexts.length !== textNodes.length) {
-          logger.error(`[TRANSLATION-SERVICE] Mismatch in text node count. Original: ${textNodes.length}, Translated: ${translatedTexts.length}. Aborting.`);
+          logger.error(
+            `[TRANSLATION-SERVICE] Mismatch in text node count. Original: ${textNodes.length}, Translated: ${translatedTexts.length}. Aborting.`
+          );
           throw new Error('Translation failed due to text count mismatch.');
         }
 
@@ -361,9 +368,7 @@ class TranslationService {
 
         // Stringify back to markdown
         logger.debug('[TRANSLATION-SERVICE] Converting AST back to markdown...');
-        const translatedMarkdown = this.unified()
-          .use(this.remarkStringify)
-          .stringify(tree);
+        const translatedMarkdown = this.unified().use(this.remarkStringify).stringify(tree);
         logger.debug('[TRANSLATION-SERVICE] Markdown stringification completed');
 
         logger.info('[TRANSLATION-SERVICE] Markdown translation completed successfully');
@@ -381,7 +386,6 @@ class TranslationService {
         // --- REDIS CACHE LOGIC (END) ---
 
         return translatedMarkdown;
-
       } catch (error) {
         // Log the error with full details
         logger.error(`[TRANSLATION-SERVICE] Translation failed: ${error.message}`, {
@@ -392,7 +396,6 @@ class TranslationService {
           duration: Date.now() - startTime
         });
         throw error; // Re-throw to reject the promise
-
       } finally {
         // --- IN-FLIGHT TRACKING: Clean up after completion/failure ---
         this.inFlightTranslations.delete(inFlightKey);
@@ -439,7 +442,7 @@ class TranslationService {
     if (!this.backend) {
       return {
         type: 'none',
-        initialized: false,
+        initialized: false
       };
     }
     return this.backend.getBackendInfo();

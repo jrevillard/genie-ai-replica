@@ -54,10 +54,17 @@ extension View {
         self.shadow(color: style.color, radius: style.radius, x: style.x, y: style.y)
     }
 
-    /// Staggered entrance animation: fade + slide + scale, delayed by index
+    /// Staggered entrance animation: slide + scale, delayed by index.
+    /// Items are always rendered at full opacity — the entrance polish is
+    /// achieved via the offset/scale spring only. The previous version gated
+    /// opacity on `index < visibleCount` so items stayed invisible until
+    /// `visibleCount` was bumped via `onAppear`/`onChange`; that gate was
+    /// brittle (offline RAG could populate `relatedDocs` before/after the
+    /// sidebar's `onAppear` fired) and could leave correct data at opacity 0.
+    /// Visibility is now unconditional; only the entrance motion respects
+    /// `visibleCount`.
     func staggeredAppearance(index: Int, visibleCount: Int, theme: ThemeManager) -> some View {
         self
-            .opacity(index < visibleCount ? 1 : 0)
             .offset(y: index < visibleCount ? 0 : 12)
             .scaleEffect(index < visibleCount ? 1 : 0.95)
             .animation(

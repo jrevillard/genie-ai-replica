@@ -2,6 +2,9 @@
 // Main navigation container with responsive layout
 
 import SwiftUI
+import os
+
+private let contentViewLogger = Logger(subsystem: "com.genieai", category: "content.view")
 
 enum AppRoute: Hashable {
     case login
@@ -15,6 +18,7 @@ struct ContentView: View {
     @Environment(AuthService.self) private var authService
     @Environment(ThemeManager.self) private var theme
     @Environment(ConnectivityService.self) private var connectivity
+    @Environment(RelatedDocsStore.self) private var relatedDocsStore
 
     @State private var navigationPath = NavigationPath()
     @State private var showHistorySheet = false
@@ -25,7 +29,6 @@ struct ContentView: View {
     @State private var showProfile = false
     @State private var currentConversation: Conversation?
     @State private var chatViewKey = UUID()
-    @State private var relatedDocs: [DocumentItem] = []
     @State private var currentAccessToken: String?
     @State private var offlineToastMessage: String?
 
@@ -171,7 +174,7 @@ struct ContentView: View {
                 }
                 .sheet(isPresented: $showInfoSheet) {
                     NavigationStack {
-                        RightSidebarView(relatedDocs: relatedDocs, accessToken: currentAccessToken, showHeader: false)
+                        RightSidebarView(accessToken: currentAccessToken, showHeader: false)
                             .navigationTitle("Info & Resources")
                             .navigationBarTitleDisplayMode(.inline)
                             .toolbar {
@@ -236,7 +239,7 @@ struct ContentView: View {
 
                 Divider()
 
-                RightSidebarView(relatedDocs: relatedDocs, accessToken: currentAccessToken)
+                RightSidebarView(accessToken: currentAccessToken)
                     .frame(width: 280)
             }
             .navigationTitle(ConfigService.shared.appTitle)
@@ -385,24 +388,8 @@ struct ContentView: View {
             initialContextLabels: pendingContextLabels,
             onNewChat: { /* handled by startNewChat */ },
             onRelatedDocumentsUpdate: { docs in
-                // Identify a document by the first non-nil of url / documentId
-                // / title. Deduping by url alone broke for offline RAG, whose
-                // sources have url == nil — after the first response, every
-                // subsequent nil-url doc matched the existing nil entry and
-                // got filtered. Also collapses multiple chunks from the same
-                // PDF (offline returns up to topK chunk-level sources) so the
-                // sidebar shows each source document once.
-                func key(_ d: DocumentItem) -> String {
-                    return d.url ?? d.documentId ?? d.title
-                }
-                let existingKeys = Set(relatedDocs.map(key))
-                var seen = existingKeys
-                var unique: [DocumentItem] = []
-                for d in docs where !seen.contains(key(d)) {
-                    seen.insert(key(d))
-                    unique.append(d)
-                }
-                relatedDocs.append(contentsOf: unique)
+                let appended = relatedDocsStore.append(docs)
+                contentViewLogger.info("onRelatedDocumentsUpdate: incoming=\(docs.count, privacy: .public) appended=\(appended, privacy: .public) total=\(relatedDocsStore.docs.count, privacy: .public) titles=\(relatedDocsStore.docs.map { $0.title }.joined(separator: ","), privacy: .public)")
             }
         )
         .id(chatViewKey)
@@ -413,7 +400,7 @@ struct ContentView: View {
     private func startNewChat() {
         chatViewKey = UUID()
         currentConversation = nil
-        relatedDocs = []
+        relatedDocsStore.clear()
         pendingCategoryId = nil
         pendingCategoryName = nil
         pendingContextLabels = nil
@@ -421,7 +408,7 @@ struct ContentView: View {
 
     private func loadConversation(_ conversation: Conversation) {
         currentConversation = conversation
-        relatedDocs = []
+        relatedDocsStore.clear()
         chatViewKey = UUID()
     }
 

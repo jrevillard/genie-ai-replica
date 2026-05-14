@@ -189,6 +189,7 @@ struct SourcesView: View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(dedupedSources.prefix(3)) { source in
                 if let urlString = source.url, let url = URL(string: urlString) {
+                    // Online source — tappable link to the document URL.
                     Link(destination: url) {
                         HStack(spacing: 4) {
                             Image(systemName: "link")
@@ -198,6 +199,18 @@ struct SourcesView: View {
                         .font(.caption)
                         .foregroundColor(theme.primaryColor)
                     }
+                } else if let label = source.title ?? source.fileName, !label.isEmpty {
+                    // Offline source — no URL because the PDF lives on-device.
+                    // Render as a non-tappable label so the citation is still
+                    // visible under the bubble; otherwise SourcesView would
+                    // silently render nothing for the offline RAG path.
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.text")
+                        Text(label)
+                            .lineLimit(1)
+                    }
+                    .font(.caption)
+                    .foregroundColor(theme.secondaryTextColor)
                 }
             }
         }

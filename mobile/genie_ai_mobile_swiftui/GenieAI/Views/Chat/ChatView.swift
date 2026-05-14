@@ -3,6 +3,9 @@
 
 import SwiftUI
 import PDFKit
+import os
+
+private let chatViewLogger = Logger(subsystem: "com.genieai", category: "chat.view")
 
 struct ChatView: View {
     @Environment(AuthService.self) private var authService
@@ -379,6 +382,7 @@ struct ChatView: View {
                     isLoading = false
 
                     // Update related documents
+                    chatViewLogger.info("Response sources received: count=\(response.sources?.count ?? -1, privacy: .public), callbackBound=\(self.onRelatedDocumentsUpdate != nil, privacy: .public)")
                     if let sources = response.sources, !sources.isEmpty {
                         updateRelatedDocuments(from: sources)
                     }
@@ -403,6 +407,7 @@ struct ChatView: View {
 
     private func updateRelatedDocuments(from sources: [MessageMetadata.DocumentSource]) {
         let newDocs = sources.compactMap { DocumentItem.from($0) }
+        chatViewLogger.info("updateRelatedDocuments: sources=\(sources.count, privacy: .public) docs=\(newDocs.count, privacy: .public) titles=\(newDocs.map { $0.title }.joined(separator: ","), privacy: .public)")
         onRelatedDocumentsUpdate?(newDocs)
     }
 

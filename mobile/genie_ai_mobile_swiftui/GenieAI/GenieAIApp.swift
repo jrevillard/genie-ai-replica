@@ -12,6 +12,7 @@ struct GenieAIApp: App {
     @State private var localRAGBridge = LocalRAGBridge()
     @State private var offlineLibrary = OfflineLibraryService.shared
     @State private var localRAGIndexer: LocalRAGIndexer
+    @State private var relatedDocsStore = RelatedDocsStore()
 
     init() {
         let bridge = LocalRAGBridge()
@@ -31,6 +32,7 @@ struct GenieAIApp: App {
                 .environment(localRAGBridge)
                 .environment(offlineLibrary)
                 .environment(localRAGIndexer)
+                .environment(relatedDocsStore)
                 .environment(\.locale, appLocale.locale)
                 .preferredColorScheme(themeManager.colorScheme)
                 .environment(\.layoutDirection, appLocale.isRtl ? .rightToLeft : .leftToRight)

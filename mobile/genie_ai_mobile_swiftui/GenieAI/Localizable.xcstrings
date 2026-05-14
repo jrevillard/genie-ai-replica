@@ -4,6 +4,16 @@
     "" : {
 
     },
+    "%@ / %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ / %2$@"
+          }
+        }
+      }
+    },
     "%@ %@" : {
       "localizations" : {
         "en" : {
@@ -27662,6 +27672,9 @@
     "Download" : {
 
     },
+    "Download Model" : {
+
+    },
     "Downloaded (%lld)" : {
 
     },
@@ -33708,6 +33721,9 @@
           }
         }
       }
+    },
+    "Finalising…" : {
+
     },
     "Finance" : {
       "extractionState" : "manual",
@@ -45033,6 +45049,9 @@
           }
         }
       }
+    },
+    "Local Model" : {
+
     },
     "Log in" : {
       "extractionState" : "manual",
@@ -59702,6 +59721,9 @@
     "Remove from device" : {
 
     },
+    "Remove from Device" : {
+
+    },
     "Rename Chat" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -66255,6 +66277,9 @@
         }
       }
     },
+    "Switch to Online Mode (top-right wifi icon) to download." : {
+
+    },
     "Switched to Offline Mode" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -70452,6 +70477,9 @@
           }
         }
       }
+    },
+    "Used for offline answers. The download is roughly 1.6 GB and runs over your active network." : {
+
     },
     "Useless" : {
       "extractionState" : "manual",

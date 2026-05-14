@@ -2,12 +2,15 @@
 // Right sidebar with related documents and FAQ
 
 import SwiftUI
+import os
+
+private let sidebarLogger = Logger(subsystem: "com.genieai", category: "sidebar.right")
 
 struct RightSidebarView: View {
     @Environment(ThemeManager.self) private var theme
     @Environment(AppLocaleService.self) private var appLocale
+    @Environment(RelatedDocsStore.self) private var relatedDocsStore
 
-    var relatedDocs: [DocumentItem]
     var accessToken: String?
     var showHeader: Bool = true
 
@@ -15,6 +18,10 @@ struct RightSidebarView: View {
     @State private var isLoadingFaq = false
     @State private var lastFaqLangCode = "en"
     @State private var visibleCount = 0
+
+    /// Convenience accessor — keeps the rest of the body terse and lets us
+    /// swap out the storage without touching every read site.
+    private var relatedDocs: [DocumentItem] { relatedDocsStore.docs }
 
     /// Total number of animatable items (section headers + cards/empty states)
     private var totalItemCount: Int {
@@ -25,6 +32,10 @@ struct RightSidebarView: View {
     }
 
     var body: some View {
+        // Side-effect log inside body — fires on every body re-evaluation so
+        // we can confirm SwiftUI is invalidating this view when its
+        // `relatedDocs` prop changes.
+        let _ = sidebarLogger.info("body render: relatedDocs=\(relatedDocs.count, privacy: .public) visibleCount=\(visibleCount, privacy: .public)")
         VStack(spacing: 0) {
             // Header (hidden when presented in a sheet with its own navigation title)
             if showHeader {
@@ -82,8 +93,22 @@ struct RightSidebarView: View {
         .onChange(of: appLocale.currentLocale) { _, _ in
             Task { await loadFAQ() }
         }
-        .onAppear { triggerStaggeredAnimation() }
+        .onAppear {
+            sidebarLogger.info("onAppear: relatedDocs=\(relatedDocs.count, privacy: .public) visibleCount=\(visibleCount, privacy: .public) totalItemCount=\(totalItemCount, privacy: .public) animationsEnabled=\(theme.animationsEnabled, privacy: .public)")
+            triggerStaggeredAnimation()
+        }
         .onChange(of: faqItems.count) { _, _ in triggerStaggeredAnimation() }
+        // Without this, opening the sidebar BEFORE a query completes sets
+        // visibleCount based on relatedDocs.count == 0. When the response
+        // arrives and relatedDocs becomes [1], totalItemCount happens to
+        // stay the same (empty state collapses to count=1), but the
+        // staggered animation never re-runs to confirm the new DocumentRow's
+        // opacity — and on some SwiftUI builds it ends up stuck at 0. Fire
+        // the animation again whenever the doc list changes.
+        .onChange(of: relatedDocs.count) { _, newCount in
+            sidebarLogger.info("relatedDocs.count changed -> \(newCount, privacy: .public). Re-triggering staggered animation.")
+            triggerStaggeredAnimation()
+        }
     }
 
     // MARK: - Staggered Animation Trigger
@@ -644,45 +669,45 @@ struct FAQRow: View {
 }
 
 #Preview {
-    RightSidebarView(
-        relatedDocs: [
-            DocumentItem(
-                title: "Annual Tax Guidelines 2024",
-                url: "https://example.com/doc.pdf",
-                type: .pdf,
-                fileName: "tax_guide_v3_final.pdf",
-                fileFormat: "PDF",
-                fileSize: 2_500_000,
-                documentId: "doc-123",
-                labels: "Taxation, Finance",
-                confidence: 0.95
-            ),
-            DocumentItem(
-                title: "Service Centre Locations",
-                url: "https://example.com",
-                type: .web,
-                fileName: nil,
-                fileFormat: "HTML",
-                fileSize: nil,
-                documentId: nil,
-                labels: nil,
-                confidence: 0.72
-            ),
-            DocumentItem(
-                title: "Internal Policy Document",
-                url: nil,
-                type: .word,
-                fileName: "internal_policy_v2.docx",
-                fileFormat: "DOCX",
-                fileSize: 450_000,
-                documentId: "doc-456",
-                labels: nil,
-                confidence: nil
-            )
-        ],
-        accessToken: nil
-    )
-    .frame(width: 300)
-    .environment(ThemeManager())
-    .environment(AppLocaleService.shared)
+    let store = RelatedDocsStore()
+    store.docs = [
+        DocumentItem(
+            title: "Annual Tax Guidelines 2024",
+            url: "https://example.com/doc.pdf",
+            type: .pdf,
+            fileName: "tax_guide_v3_final.pdf",
+            fileFormat: "PDF",
+            fileSize: 2_500_000,
+            documentId: "doc-123",
+            labels: "Taxation, Finance",
+            confidence: 0.95
+        ),
+        DocumentItem(
+            title: "Service Centre Locations",
+            url: "https://example.com",
+            type: .web,
+            fileName: nil,
+            fileFormat: "HTML",
+            fileSize: nil,
+            documentId: nil,
+            labels: nil,
+            confidence: 0.72
+        ),
+        DocumentItem(
+            title: "Internal Policy Document",
+            url: nil,
+            type: .word,
+            fileName: "internal_policy_v2.docx",
+            fileFormat: "DOCX",
+            fileSize: 450_000,
+            documentId: "doc-456",
+            labels: nil,
+            confidence: nil
+        )
+    ]
+    return RightSidebarView(accessToken: nil)
+        .frame(width: 300)
+        .environment(ThemeManager())
+        .environment(AppLocaleService.shared)
+        .environment(store)
 }

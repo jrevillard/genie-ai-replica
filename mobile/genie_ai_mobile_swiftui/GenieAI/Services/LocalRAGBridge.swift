@@ -117,13 +117,17 @@ class LocalRAGBridge {
     // citation instructions.
     private static let temperature: Float = 0.2
 
-    // History windowing. Keep at most this many of the most recent
-    // user/assistant messages from the conversation, and truncate each one
-    // to maxHistoryMessageChars so a previous bloated answer doesn't
-    // single-handedly exhaust the model's context window. The retrieved
-    // chunks are the real grounding signal for RAG; the history is only
-    // there for short follow-up phrasing.
-    private static let maxHistoryMessages = 2
+    // History windowing. Keep ONLY the current user question (which is the
+    // last item the SwiftUI side appends to history before submitting). A
+    // 2B-class local model can't reliably ground on KB content when an
+    // intervening assistant turn separates it from the current question —
+    // and any hallucinated [Source: …] that slipped past the rules in a
+    // prior turn actively poisons the next answer. Dropping history puts
+    // the retrieved chunks and the question in the SAME user turn (see the
+    // prompt structure built in LlamaCppProvider.buildPrompt) so the model
+    // attends to both at once. The retrieved chunks are the real grounding
+    // signal for offline RAG; multi-turn coherence is a tolerable casualty.
+    private static let maxHistoryMessages = 1
     private static let maxHistoryMessageChars = 600
 
     private static func trimHistory(_ history: [Message]) -> [Message] {
@@ -146,23 +150,28 @@ class LocalRAGBridge {
     private static let systemPromptTemplate = """
     You are a friendly and polite information assistant.
 
-    Your task is to answer the user's latest question using ONLY the content provided from the knowledge base below. The knowledge base is the ONLY source of truth — your own prior knowledge is irrelevant for this task.
+    Your task is to answer the user's latest question using ONLY the knowledge base content below. Treat the knowledge base as the single source of truth — your own prior knowledge is irrelevant.
 
-    **Strict rules:**
-    - Do NOT invent, assume, or extrapolate information. Every concrete fact in your answer (names, codes, URLs, phone numbers, dates, deadlines, prices, statistics, helpline numbers, organisation names) MUST appear verbatim in one of the retrieved chunks below. If you cannot point to a specific chunk for a fact, do not state that fact.
-    - If the knowledge base content does NOT contain a direct answer to the question, do not invent partial answers, "general guidance", "things to consider", or numbered lists from your training. Reply with one short sentence saying the offline library does not cover this question, and stop.
-    - Cite every fact-bearing statement inline with [Source: <title>] immediately after the statement. The title is shown in the context as `From "<title>"`; copy that title verbatim — never paraphrase, abbreviate, or invent a title.
-    - End your reply with a single line `Sources: <comma-separated list of titles you cited>`. If you cited nothing, write `Sources:` followed by an empty list.
+    **How to read the knowledge base:**
+    - The knowledge base contains numbered chunks like `[1] From "<filename.pdf>" (relevance: X%):`. The `[1]`, `[2]` etc. are just chunk indices, NOT citations. The filename inside the quotes after `From` is the citation title.
+    - Synthesize an answer from whichever chunks discuss the topic of the question. The chunks won't always be phrased as a step-by-step answer — extract the relevant facts (treatments, definitions, recommendations, procedures) and present them clearly.
+    - Abstain ONLY when none of the chunks discuss the topic of the question at all. In that case reply with one short sentence saying the offline library does not cover this question, and write `Sources:` with nothing after it.
 
-    **Example (illustrative — do not reuse content):**
+    **Grounding rules:**
+    - Do NOT invent or extrapolate. Every concrete fact in your answer (names, codes, URLs, phone numbers, dates, prices, statistics, organisation names) MUST appear verbatim in one of the chunks. If you cannot point to a chunk for a fact, do not state that fact.
+    - Cite every fact-bearing statement inline with [Source: <exact filename>] immediately after the statement. Copy the filename verbatim from `From "<filename>"`. Never write `[Source: [1]]`, `[1]`, `[Source: chunk 1]` or abbreviated titles.
+    - End your reply with a single line `Sources: <comma-separated list of filenames you cited>`. Use the exact filenames. No square brackets, no chunk numbers, no duplicates.
+
+    **Example (a question about smoking cessation, citing a real filename):**
     ```
-    Eligible adults can register at the Service Centre on weekdays [Source: example-policy.pdf]. Registration requires a birth certificate [Source: example-policy.pdf].
-    Sources: example-policy.pdf
+    Nicotine replacement therapy products include nicotine gum, patches, lozenges, inhalers, and nasal or mouth sprays [Source: who-treatment-guidelines-tobacco-use.pdf]. Varenicline, NRT, or bupropion are recommended as first-line treatment options [Source: who-treatment-guidelines-tobacco-use.pdf].
+    Sources: who-treatment-guidelines-tobacco-use.pdf
     ```
 
     **Style rules:**
-    - Reply directly as a chat message. Do NOT use letter-style framing: no "Dear …" / "Hello <Name>," opener; no "Best regards", "Sincerely", "[Your Assistant]" or any signoff.
-    - Keep answers informative but concise; expand only when explicitly requested.
+    - Reply directly as a chat message. No "Dear …" / "Hello <Name>," opener; no "Best regards", "Sincerely", or "[Your Assistant]" signoff.
+    - Write in a warm, friendly, conversational tone — like a knowledgeable friend explaining things. Address the reader as "you" where natural. Don't read like an encyclopedia entry: lead with the most useful information first, then explain the options.
+    - Use a couple of short paragraphs or a brief bulleted list when there are multiple options. Don't pad with disclaimers, but a one-line closing encouragement is welcome ("Talk to a healthcare provider to figure out what's right for you," etc.) as long as it doesn't introduce facts the chunks don't support.
 
     Knowledge base content:
     {context}
@@ -360,8 +369,26 @@ class LocalRAGBridge {
             "confidence": ragResponse.confidence
         ]
 
-        // Map RAGSources to DocumentSource-compatible dictionaries
-        let sourceDicts: [[String: Any]] = ragResponse.sources.map { source in
+        // Collapse multiple chunks from the same document into a single
+        // "Relevant Documents" entry — keep the highest-scoring chunk's
+        // metadata (so the snippet and score reflect the best match). The
+        // server-side pipeline returns one entry per source document, and
+        // the chat UI's dedup falls back to documentId before title — but
+        // LocalRAG's chunk-level documentIds are unique per chunk, so
+        // documentId-based dedup wouldn't merge them. Title is a reliable
+        // collapse key here because each indexed document's title is its
+        // filename, which is shared across all of its chunks.
+        var seenTitles = Set<String>()
+        let dedupedSources = ragResponse.sources
+            .sorted { $0.score > $1.score }
+            .filter { source in
+                if seenTitles.contains(source.title) { return false }
+                seenTitles.insert(source.title)
+                return true
+            }
+        Self.logger.info("Deduped sources: \(ragResponse.sources.count) chunk(s) -> \(dedupedSources.count) document(s)")
+
+        let sourceDicts: [[String: Any]] = dedupedSources.map { source in
             var dict: [String: Any] = [
                 "document_id": source.documentId,
                 "title": source.title,

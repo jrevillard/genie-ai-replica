@@ -2,6 +2,7 @@
 // Settings screen for theme, language, account management, and user preferences
 
 import SwiftUI
+import os
 
 struct SettingsView: View {
     @Environment(AuthService.self) private var authService
@@ -692,12 +693,24 @@ struct LocalModelSection: View {
     }
 
     private var downloadButton: some View {
-        Button {
-            model.startDownload()
-        } label: {
-            SwiftUI.Label("Download Model", systemImage: "arrow.down.circle")
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                Logger(subsystem: "com.genieai", category: "model.download")
+                    .info("Download Model tapped (connectivity.isOnline=\(connectivity.isOnline))")
+                model.startDownload()
+            } label: {
+                SwiftUI.Label("Download Model", systemImage: "arrow.down.circle")
+            }
+            .disabled(!connectivity.isOnline)
+            .hapticOnTap(.medium, theme: theme)
+            if !connectivity.isOnline {
+                // The button just looks visually dim when disabled — surface
+                // a friendly reason so the user knows why nothing happens.
+                Text("Switch to Online Mode (top-right wifi icon) to download.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
-        .disabled(!connectivity.isOnline)
     }
 
     private func progressRow(received: Int64, expected: Int64) -> some View {

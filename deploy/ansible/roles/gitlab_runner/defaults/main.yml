@@ -1,0 +1,19 @@
+---
+gitlab_runner_description: "genie-ai-runner"
+gitlab_runner_executor: docker
+gitlab_runner_docker_image: "docker:28"
+gitlab_runner_concurrent: 2
+gitlab_runner_limit: 2
+gitlab_runner_docker_volumes:
+  - "/var/run/docker.sock:/var/run/docker.sock"
+  - "/cache"
+gitlab_runner_tag_list:
+  - docker
+  - genie-ai
+gitlab_runner_run_untagged: false
+gitlab_runner_locked: true
+
+# Security hardening
+gitlab_runner_use_socket_proxy: true
+gitlab_runner_memory_limit: "4g"
+gitlab_runner_cpu_limit: "2.0"

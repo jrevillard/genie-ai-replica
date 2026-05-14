@@ -1,0 +1,26 @@
+services:
+  docker-socket-proxy:
+    image: {{ docker_socket_proxy_image }}
+    container_name: {{ docker_socket_proxy_container }}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:2375:2375"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+      CONTAINERS: "{{ docker_socket_proxy_containers }}"
+      IMAGES: "{{ docker_socket_proxy_images }}"
+      NETWORKS: "{{ docker_socket_proxy_networks }}"
+      VOLUMES: "{{ docker_socket_proxy_volumes }}"
+      EXEC: "{{ docker_socket_proxy_exec }}"
+      POST: "{{ docker_socket_proxy_post }}"
+      TASKS: "{{ docker_socket_proxy_tasks }}"
+      SWARM: "{{ docker_socket_proxy_swarm }}"
+      SECRETS: "{{ docker_socket_proxy_secrets }}"
+      AUTH: "{{ docker_socket_proxy_auth }}"
+      PLUGINS: "{{ docker_socket_proxy_plugins }}"
+      BUILD: "{{ docker_socket_proxy_build }}"
+    labels:
+      managed_by: "ansible-gitlab-runner"
+      purpose: "docker-socket-proxy"

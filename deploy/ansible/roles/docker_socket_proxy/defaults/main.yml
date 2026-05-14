@@ -1,0 +1,18 @@
+---
+docker_socket_proxy_image: "tecnativa/docker-socket-proxy:v0.4.2"
+docker_socket_proxy_container: "docker-socket-proxy"
+
+# Default-deny — only explicitly enabled.
+# 1 = allow, 0 = deny.
+docker_socket_proxy_containers: "1"
+docker_socket_proxy_images: "1"
+docker_socket_proxy_networks: "1"
+docker_socket_proxy_volumes: "1"
+docker_socket_proxy_exec: "1"
+docker_socket_proxy_post: "1"
+docker_socket_proxy_tasks: "0"
+docker_socket_proxy_swarm: "0"
+docker_socket_proxy_secrets: "0"
+docker_socket_proxy_auth: "0"
+docker_socket_proxy_plugins: "0"
+docker_socket_proxy_build: "0"

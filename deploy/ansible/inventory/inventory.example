@@ -36,6 +36,15 @@ genieai-test
 # [swarm_workers]
 # Future: additional worker nodes for multi-node deployments
 
+# --- GitLab Runner (separate inventory file recommended) ---
+# For gitlab-runner.yml playbook: create inventory/gitlab-runner.ini
+#
+# [gitlab_runners]
+# genieai-runner ansible_host=10.0.0.100
+#
+# [all:vars]
+# ansible_user=govstack
+
 # --- Common variables ---
 [all:vars]
 ansible_user=ubuntu

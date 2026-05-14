@@ -72,3 +72,14 @@ self_signed_certs: true
 # =============================================================================
 teardown_remove_volumes: false
 teardown_remove_registry: false
+
+# =============================================================================
+# GITLAB RUNNER
+# =============================================================================
+# gitlab_url is the GitLab instance URL used in config.toml.
+# gitlab_runner_token MUST be set in environment-specific vault files.
+#
+# To disable the socket proxy (mount docker.sock directly):
+#   gitlab_runner_use_socket_proxy: false
+#   in group_vars/gitlab_runners/vars.yml
+gitlab_url: "https://opensource.unicc.org"

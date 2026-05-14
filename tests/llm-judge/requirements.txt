@@ -1,0 +1,9 @@
+# Python deps for the LLM-as-a-judge harness.
+#
+# openai 1.x — used for structured-output evaluation via the
+#   `client.beta.chat.completions.parse(response_format=...)` path. That
+#   path requires the 1.x SDK and gpt-4o-2024-08-06+ as the judge model.
+openai>=1.40.0,<2.0.0
+pydantic>=2.5,<3.0
+PyYAML>=6.0,<7.0
+requests>=2.31,<3.0

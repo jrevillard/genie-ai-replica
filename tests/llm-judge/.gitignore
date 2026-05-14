@@ -1,0 +1,17 @@
+# Reports are run-specific output.
+reports/
+
+# Local corpus files — drop the WHO PDF text in by hand per corpus/README.md.
+# Keep the README itself.
+corpus/*
+!corpus/README.md
+
+# Swift Package Manager build + resolved.
+swift_cli/.build/
+swift_cli/.swiftpm/
+swift_cli/Package.resolved
+
+# Python venv if created locally.
+.venv/
+__pycache__/
+*.pyc

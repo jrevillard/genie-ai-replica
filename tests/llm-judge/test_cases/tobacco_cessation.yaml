@@ -1,0 +1,95 @@
+# Tobacco cessation — positive cases.
+#
+# Corpus expectation: the WHO clinical treatment guideline for tobacco
+# cessation in adults (2024). For server runs, the document is ingested
+# under the "Tobacco Cessation" service label. For mobile runs the same
+# PDF (or its extracted text in tests/llm-judge/corpus/) is indexed by
+# the Swift CLI before queries.
+#
+# Each case has:
+#   id           — stable identifier (used in reports)
+#   question     — what the user types
+#   labels       — context labels to set (mobile: filters retrieval;
+#                  server: passed as context.categoryLabel)
+#   should_abstain — true if the system should refuse / say "not covered";
+#                    false if it must produce a substantive answer
+#   must_mention_one_of — list of substrings; at least one must appear
+#                    (case-insensitive). For groundedness.
+#   must_not_mention — list of substrings; none may appear (case-insens.).
+#                    For hallucination probes (e.g. invented URLs).
+#   must_cite       — true if the answer must include at least one
+#                    [Source: ...] inline citation
+#   notes           — free-form guidance forwarded to the judge.
+
+cases:
+  - id: tobacco-quit-basic
+    question: "How can I quit smoking?"
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "nicotine replacement"
+      - "NRT"
+      - "varenicline"
+      - "bupropion"
+      - "behavioural counselling"
+      - "behavioral counselling"
+    must_not_mention:
+      - "smokefree.gov"
+      - "cancer.gov"
+      - "1-800"
+    must_cite: true
+    notes: >
+      A direct, in-scope question. The answer must surface at least one
+      first-line treatment that appears in the WHO guideline (NRT,
+      varenicline, bupropion, or behavioural counselling) and avoid
+      inventing US-specific helplines/websites.
+
+  - id: tobacco-nrt-products
+    question: "What kinds of nicotine replacement products are available?"
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "gum"
+      - "patch"
+      - "lozenge"
+      - "inhaler"
+      - "spray"
+    must_not_mention: []
+    must_cite: true
+    notes: >
+      The WHO PDF lists NRT product forms verbatim. The answer should
+      enumerate at least one form and cite the source PDF.
+
+  - id: tobacco-first-line-meds
+    question: "Which medications are recommended as first-line treatments to quit smoking?"
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "varenicline"
+      - "NRT"
+      - "bupropion"
+    must_not_mention:
+      - "chantix"   # brand name not used in WHO doc
+    must_cite: true
+    notes: >
+      The WHO guideline phrases this as "Varenicline, NRT or bupropion
+      are recommended as first-line options". The answer should use the
+      generic names, not brand names that don't appear in the corpus.
+
+  - id: tobacco-behavioural-support
+    question: "What kinds of behavioural support help people quit tobacco?"
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "motivational interviewing"
+      - "cognitive behavioural"
+      - "cognitive behavioral"
+      - "relapse prevention"
+      - "group therapy"
+      - "telephone counselling"
+      - "quit line"
+    must_not_mention: []
+    must_cite: true
+    notes: >
+      Several behavioural modalities are named in the glossary section
+      of the WHO guideline. Any one of them is acceptable.

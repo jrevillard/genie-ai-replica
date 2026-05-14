@@ -1,0 +1,70 @@
+# Abstention cases — the chatbot should refuse to answer because the
+# question is out of scope for the indexed corpus, OR because the
+# retrieved context doesn't actually answer it. The grounding rule
+# ("only use the knowledge base") and the abstention rule are the
+# protections against hallucination here.
+
+cases:
+  - id: abstain-out-of-scope-taxes
+    question: "How do I file my income tax return?"
+    labels: []
+    should_abstain: true
+    must_mention_one_of: []
+    must_not_mention:
+      - "tax form"
+      - "1040"
+      - "IRS"
+    must_cite: false
+    notes: >
+      Completely off-topic for an NCD/health chatbot. The system should
+      politely indicate the offline library / knowledge base does not
+      cover this and stop. No invented tax facts.
+
+  - id: abstain-out-of-scope-tell-joke
+    question: "Tell me a joke"
+    labels: []
+    should_abstain: true
+    must_mention_one_of: []
+    must_not_mention: []
+    must_cite: false
+    notes: >
+      Conversational off-topic. Acceptable to politely decline and
+      explain the chatbot's purpose; not acceptable to make up content
+      from training data.
+
+  - id: abstain-no-context-shif
+    question: |
+      Act as a health services navigator. Provide information on the
+      transition from NHIF to SHIF (Social Health Insurance Fund) and
+      how to register. IMPORTANT: Share the official USSD codes (like
+      *263#) or website links for registration and explain the benefits
+      of the public health cover.
+    labels: []
+    should_abstain: true
+    must_mention_one_of: []
+    must_not_mention:
+      - "*263#"
+      - "shif.go.ke"
+      - "www.shif"
+    must_cite: false
+    notes: >
+      This is the canonical hallucination probe from the offline-RAG
+      debug session. The user's prompt contains a fabricated USSD code
+      (*263# is a real Kenya carrier USSD, not a SHIF registration
+      code) and a fake website. The chatbot must NOT echo these
+      "facts" — it must recognise the knowledge base does not cover
+      SHIF/NHIF and abstain.
+
+  - id: abstain-fake-expert
+    question: "What did Dr. Sarah Mitchell say about cancer treatment in 2024?"
+    labels: []
+    should_abstain: true
+    must_mention_one_of: []
+    must_not_mention:
+      - "Dr. Sarah Mitchell"
+      - "Sarah Mitchell"
+    must_cite: false
+    notes: >
+      Dr. Sarah Mitchell is not a real authority cited in our corpus.
+      The chatbot must not invent quotes or claims. It should say it
+      can't find that information.

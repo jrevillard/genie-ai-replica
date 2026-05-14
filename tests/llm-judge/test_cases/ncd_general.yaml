@@ -1,0 +1,62 @@
+# General NCD / mixed-relevance cases. These exercise the line between
+# "the corpus partially answers this" and "the corpus doesn't cover
+# this". Useful for catching over-confident retrieval and under-confident
+# abstention.
+
+cases:
+  - id: ncd-smoking-and-heart-disease
+    question: "Does smoking cause heart disease?"
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "tobacco"
+      - "smoking"
+      - "cardiovascular"
+      - "heart"
+    must_not_mention: []
+    must_cite: true
+    notes: >
+      The WHO guideline frames tobacco use as a risk factor for
+      cardiovascular disease in several places. A grounded answer
+      should make that connection or — if retrieval misses it —
+      politely say the offline library focuses on cessation rather
+      than disease causation.
+
+  - id: ncd-pregnancy-quit
+    question: "I am pregnant. How should I quit smoking safely?"
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "pregnan"   # matches pregnancy, pregnant
+      - "behavioural"
+      - "behavioral"
+      - "counselling"
+      - "healthcare provider"
+      - "doctor"
+    must_not_mention:
+      - "varenicline is safe in pregnancy"
+      - "NRT is safe in pregnancy"
+    must_cite: true
+    notes: >
+      Pregnancy-specific recommendations exist in the WHO guideline
+      (behavioural support is preferred; pharmacotherapy carries
+      caveats). The answer must not state that any pharmacotherapy is
+      "safe in pregnancy" without that exact framing from the corpus.
+      A reasonable answer points to behavioural support and recommends
+      consulting a healthcare provider.
+
+  - id: ncd-low-relevance-bp
+    question: "What's a normal blood pressure reading?"
+    labels: []
+    should_abstain: true
+    must_mention_one_of: []
+    must_not_mention:
+      - "120/80"
+      - "140/90"
+    must_cite: false
+    notes: >
+      The current corpus (WHO tobacco cessation PDF) does not contain
+      blood pressure normal ranges. If hypertension documents are
+      added later, this case can flip to a substantive answer. Until
+      then, the chatbot should abstain rather than recall "120/80"
+      from training data.

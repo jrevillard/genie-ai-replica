@@ -537,6 +537,8 @@
           - keycloak_client_secret is defined and keycloak_client_secret | length > 0
           - keycloak_proxy_client_secret is defined and keycloak_proxy_client_secret | length > 0
           - kc_dataprep_client_secret is defined and kc_dataprep_client_secret | length > 0
+          - kc_mobile_client_id is defined and kc_mobile_client_id | length > 0
+          - kc_mobile_redirect_scheme is defined and kc_mobile_redirect_scheme | length > 0
         fail_msg: >-
           Missing required vault variable(s).
           Edit the vault file for your environment (group_vars/&lt;env&gt;.vault) and set all secrets:
@@ -544,7 +546,7 @@
           postgres_password,
           kong_db_password, keycloak_admin_password, genie_admin_password, genie_admin_email,
           keycloak_db_password, keycloak_client_secret, keycloak_proxy_client_secret,
-          kc_dataprep_client_secret.
+          kc_dataprep_client_secret, kc_mobile_client_id, kc_mobile_redirect_scheme.
         quiet: true
 
     - name: Set swarm registry URL

@@ -303,8 +303,13 @@ class LocalRAGBridge {
         let duration = clock.now - startTime
         let durationMs = Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
         Self.logger.info("Local response: contentLength=\(ragResponse.content.count), confidence=\(ragResponse.confidence, format: .fixed(precision: 2)), sources=\(ragResponse.sources.count), duration=\(durationMs)ms")
-        Self.logger.debug("Local response text: \(ragResponse.content)")
-        Self.logger.debug("Local response sources: \(ragResponse.sources.map { "\($0.title)(\($0.score))" }.joined(separator: ", "))")
+        // Forced .public so the message body is readable in the simulator
+        // console without flipping `sudo log config --mode private_data:on`.
+        // This is debug-tier text — fine to surface during development; if
+        // privacy ever matters here (real device, real users), tighten back
+        // to default privacy.
+        Self.logger.debug("Local response text: \(ragResponse.content, privacy: .public)")
+        Self.logger.debug("Local response sources: \(ragResponse.sources.map { "\($0.title)(\($0.score))" }.joined(separator: ", "), privacy: .public)")
 
         // Map RAGResponse to QueryResponse via JSON roundtrip
         return ragResponseToQueryResponse(ragResponse)

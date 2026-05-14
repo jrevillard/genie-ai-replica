@@ -1,11 +1,3 @@
-# Inventory with real host IPs
-inventory/*.ini
-inventory/*.yml
-!inventory.example
-
-# Vault unencrypted files (never commit unencrypted secrets)
-*.vault.unencrypted
-
 # Vault password files
 .vault-pass-*
 

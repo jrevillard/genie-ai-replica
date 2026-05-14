@@ -1,0 +1,15 @@
+---
+# GENIE.AI - GitLab Runner configuration
+# Non-secret settings for the CI runner environment.
+
+# =============================================================================
+# DOCKER SECURITY
+# =============================================================================
+docker_userns_remap: true
+
+# =============================================================================
+# GITLAB RUNNER TUNING
+# =============================================================================
+# Override defaults from roles/gitlab_runner/defaults/main.yml if needed.
+# gitlab_runner_concurrent: 4   # max parallel jobs across all runners
+# gitlab_runner_limit: 4        # max jobs for this specific runner

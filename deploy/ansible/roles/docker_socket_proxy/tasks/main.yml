@@ -1,0 +1,30 @@
+---
+# Docker Socket Proxy — filters Docker API calls from CI jobs.
+# Deployed via docker compose for simplicity and consistency.
+# See: https://github.com/Tecnativa/docker-socket-proxy
+
+- name: Create socket proxy directory
+  ansible.builtin.file:
+    path: /opt/docker-socket-proxy
+    state: directory
+    mode: "0755"
+
+- name: Deploy socket proxy compose file
+  ansible.builtin.template:
+    src: docker-compose-socket-proxy.yml.j2
+    dest: /opt/docker-socket-proxy/docker-compose.yml
+    mode: "0644"
+  register: proxy_compose
+
+- name: Pull socket proxy image
+  ansible.builtin.command:
+    cmd: docker compose pull
+    chdir: /opt/docker-socket-proxy
+  changed_when: "'Downloaded' in pull_result.stdout or 'Pulled' in pull_result.stdout"
+  register: pull_result
+
+- name: Start socket proxy
+  ansible.builtin.command:
+    cmd: docker compose up -d --remove-orphans
+    chdir: /opt/docker-socket-proxy
+  changed_when: true

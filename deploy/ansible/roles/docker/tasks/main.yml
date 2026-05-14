@@ -1,0 +1,136 @@
+---
+# Docker Engine installation with version pinning.
+# Variables: docker_version_pin, docker_hold_packages (defaults or group_vars).
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install required system packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - wget
+      - gnupg2
+      - ca-certificates
+      - python3-pip
+      - git
+      - apt-transport-https
+    state: present
+
+- name: Install python3-docker (for ansible docker modules)
+  ansible.builtin.apt:
+    name: python3-docker
+    state: present
+
+- name: Ensure Docker GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+    force: true
+
+- name: Remove legacy Docker repository configs
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/docker.list
+    - /etc/apt/keyrings/docker.gpg
+
+- name: Ensure Docker repository (DEB822 format)
+  ansible.builtin.copy:
+    content: |
+      Types: deb
+      URIs: https://download.docker.com/linux/ubuntu
+      Suites: {{ ansible_lsb.codename }}
+      Components: stable
+      Signed-By: /etc/apt/keyrings/docker.asc
+      Architectures: amd64
+    dest: /etc/apt/sources.list.d/docker.sources
+    mode: "0644"
+
+- name: Pin Docker package versions
+  ansible.builtin.copy:
+    content: |
+      Package: docker-ce docker-ce-cli docker-ce-rootless-extras
+      Pin: version {{ docker_version_pin }}
+      Pin-Priority: 900
+    dest: /etc/apt/preferences.d/docker-pin
+    mode: "0644"
+
+- name: Check if Docker packages are up-to-date
+  ansible.builtin.shell: |
+    for pkg in docker-ce docker-ce-cli containerd.io docker-compose-plugin; do
+      installed=$(dpkg-query -W -f='${Version}' "$pkg" 2>/dev/null)
+      candidate=$(apt-cache policy "$pkg" | grep 'Candidate:' | awk '{print $2}')
+      if [ "$installed" != "$candidate" ]; then
+        echo "upgrade"
+        exit 0
+      fi
+    done
+    echo "ok"
+  register: docker_upgrade_check
+  changed_when: false
+
+- name: Unhold Docker packages (allow upgrade)
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: install
+  loop: "{{ docker_hold_packages }}"
+  when: docker_upgrade_check.stdout == "upgrade"
+
+- name: Install Docker Engine (pinned version)
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    update_cache: true
+    state: latest
+  when: docker_upgrade_check.stdout == "upgrade"
+
+- name: Hold Docker packages
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: "{{ docker_hold_packages }}"
+  when: docker_upgrade_check.stdout == "upgrade"
+
+- name: Ensure Docker service is started and enabled
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Add ansible_user to docker group
+  ansible.builtin.user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: true
+
+- name: Ensure dockremap user for userns-remap
+  ansible.builtin.user:
+    name: dockremap
+    system: true
+    shell: /usr/sbin/nologin
+  when: docker_userns_remap | bool
+
+- name: Set subuid/subgid ranges for dockremap
+  ansible.builtin.command:
+    cmd: usermod -v 100000-165535 -w 100000-165535 dockremap
+  when: docker_userns_remap | bool
+  changed_when: false
+
+- name: Configure Docker daemon userns-remap
+  ansible.builtin.copy:
+    content: |
+      {
+        "userns-remap": "default"
+      }
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+  notify: Restart Docker
+  when: docker_userns_remap | bool

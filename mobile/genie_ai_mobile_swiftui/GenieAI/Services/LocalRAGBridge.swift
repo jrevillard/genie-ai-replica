@@ -117,6 +117,25 @@ class LocalRAGBridge {
     // citation instructions.
     private static let temperature: Float = 0.2
 
+    // History windowing. Keep at most this many of the most recent
+    // user/assistant messages from the conversation, and truncate each one
+    // to maxHistoryMessageChars so a previous bloated answer doesn't
+    // single-handedly exhaust the model's context window. The retrieved
+    // chunks are the real grounding signal for RAG; the history is only
+    // there for short follow-up phrasing.
+    private static let maxHistoryMessages = 2
+    private static let maxHistoryMessageChars = 600
+
+    private static func trimHistory(_ history: [Message]) -> [Message] {
+        guard history.count > maxHistoryMessages else { return history }
+        return Array(history.suffix(maxHistoryMessages))
+    }
+
+    private static func truncate(_ text: String, max: Int) -> String {
+        if text.count <= max { return text }
+        return text.prefix(max) + "… [truncated]"
+    }
+
     /// Mirrors the server-side chatqna prompt: ground answers in the
     /// retrieved chunks, cite each fact inline with [Source: <title>], and
     /// abstain when the context is empty instead of falling back to the
@@ -252,13 +271,26 @@ class LocalRAGBridge {
         let clock = ContinuousClock()
         let startTime = clock.now
 
-        // Convert app Messages to LLMMessages
-        let llmMessages = conversationHistory.map { msg in
+        // Trim conversation history before it goes into the prompt. The full
+        // history can easily blow the on-device model's context window —
+        // each retrieved chunk (~1200 chars) plus the system prompt
+        // (~1900 chars) already consumes most of FoundationModels' budget,
+        // so leaving in 2k-char hallucinated assistant replies from
+        // earlier turns will throw "context exceeded" on the next call.
+        //
+        // For a RAG flow the retrieved chunks are the real context anyway,
+        // and conversation history mainly matters for short follow-ups
+        // like "what about for adults?". Keep only the last user/assistant
+        // exchange, and cap each kept message's length so a single bloated
+        // earlier answer can't push us over the limit either.
+        let trimmedHistory = Self.trimHistory(conversationHistory)
+        let llmMessages = trimmedHistory.map { msg in
             LLMMessage(
                 role: msg.role == .user ? .user : .assistant,
-                content: msg.actualContent ?? msg.content
+                content: Self.truncate(msg.actualContent ?? msg.content, max: Self.maxHistoryMessageChars)
             )
         }
+        Self.logger.info("Trimmed history: \(conversationHistory.count) -> \(trimmedHistory.count) message(s)")
 
         let ragQuery = RAGQuery(
             text: query,

@@ -42,6 +42,7 @@ from comps.cores.proto.genieai_api_protocol import (
     RetrievalResponse,
     RetrievalResponseData,
 )
+from comps.retrievers.src.integrations.genieai_retriever_arangodb import GenieaiArangoRetriever  # noqa: F401
 
 logger = CustomLogger("genieai_retriever_microservice")
 logflag = os.getenv("LOGFLAG", False)

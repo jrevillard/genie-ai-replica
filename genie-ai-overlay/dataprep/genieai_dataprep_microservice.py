@@ -11,9 +11,19 @@ document repository ingestion and retraction, using ArangoDB as the backend.
 import asyncio
 import base64
 import fcntl
+import importlib
 import os
 import time
 
+# Register GenieArangoDataprep with OpeaComponentRegistry before loading the base
+# OPEA module (which initializes its own loader at import time and expects the
+# component to already be registered).
+importlib.import_module("integrations.genieai_dataprep_arangodb")
+
+# ruff: noqa: I001
+# Import order matters here: the custom integration must be registered with
+# OpeaComponentRegistry before importing the base OPEA module, which initializes
+# its own loader at import time and expects the component to already be registered.
 import opea_dataprep_microservice as base
 from comps import (
     CustomLogger,
@@ -26,8 +36,6 @@ from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDo
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-# Side-effect: registers GenieArangoDataprep with OpeaComponentRegistry (must precede GenieDataprepLoader)
-from integrations.genieai_dataprep_arangodb import GenieArangoDataprep  # noqa: F401  # isort: skip
 from genieai_dataprep_loader import GenieDataprepLoader
 
 logger = CustomLogger("genie_dataprep_microservice")

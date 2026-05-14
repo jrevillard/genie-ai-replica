@@ -185,6 +185,7 @@ RETENTION_POLICY: Dict[str, Dict[str, object]] = {
         "sweeper_action":       "purge_file",
         "legal_hold_supported": False,
         "field_created_at":     "mtime",
+        "base_path":            "/app/reports/evidence",
         "notes":                "Local file store under evidence_reports/.",
     },
     "evidence_layer_reports": {
@@ -197,6 +198,7 @@ RETENTION_POLICY: Dict[str, Dict[str, object]] = {
         "sweeper_action":       "purge_file",
         "legal_hold_supported": False,
         "field_created_at":     "mtime",
+        "base_path":            "/app/reports/evidence",
         "notes":                "Markdown reports; 1-year retention.",
     },
     "caregiver_uploads": {
@@ -209,6 +211,7 @@ RETENTION_POLICY: Dict[str, Dict[str, object]] = {
         "sweeper_action":       "purge_file",
         "legal_hold_supported": False,
         "field_created_at":     "mtime",
+        "base_path":            "/app/data/caregiver_uploads",
         "notes":                "Caregiver-side bind-mounted dir.",
     },
     "education_certs": {
@@ -221,6 +224,7 @@ RETENTION_POLICY: Dict[str, Dict[str, object]] = {
         "sweeper_action":       None,
         "legal_hold_supported": False,
         "field_created_at":     "mtime",
+        "base_path":            "",
         "notes":                "Lifetime of caregiver verification; manual review.",
     },
 
@@ -235,6 +239,7 @@ RETENTION_POLICY: Dict[str, Dict[str, object]] = {
         "sweeper_action":       "purge_file",
         "legal_hold_supported": False,
         "field_created_at":     "mtime",
+        "base_path":            "/app/training/collected",
         "notes":                "2-year anonymised retention.",
     },
 
@@ -293,9 +298,27 @@ def classes_with_legal_hold() -> List[str]:
     )
 
 
+def legal_hold_schema_statements() -> List[str]:
+    """Return ALTER statements to add `legal_hold BOOLEAN` to each
+    ArcadeDB vertex type that supports it. Run once during deployment
+    bootstrap via ``retention_sweeper.py --bootstrap-schema``."""
+    stmts: List[str] = []
+    seen: set = set()
+    for key in classes_with_legal_hold():
+        entry = RETENTION_POLICY[key]
+        vertex = entry.get("vertex_type")
+        if vertex and vertex not in seen:
+            stmts.append(
+                f"CREATE PROPERTY {vertex}.legal_hold IF NOT EXISTS BOOLEAN"
+            )
+            seen.add(vertex)
+    return stmts
+
+
 __all__ = [
     "RETENTION_POLICY",
     "get_policy",
     "classes_with_sweeper",
     "classes_with_legal_hold",
+    "legal_hold_schema_statements",
 ]

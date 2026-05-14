@@ -9,6 +9,25 @@ from src.services.auth import signup, login, verify_jwt, signup_email, login_ema
 from src.services.otp import send_otp, verify_otp, _normalize_phone
 from src.agent.amina_agent import get_agent
 
+# AUDIT-007: central audit store for auth events.
+try:
+    from src.services import audit_event_store as _aes
+    _AUDIT_STORE_AVAILABLE = True
+except Exception:
+    _aes = None
+    _AUDIT_STORE_AVAILABLE = False
+
+
+def _safe_audit_event(**kwargs) -> None:
+    """Fire-and-forget audit event. Never raises."""
+    if not _AUDIT_STORE_AVAILABLE or _aes is None:
+        return
+    try:
+        _aes.append_event(**kwargs)
+    except Exception:
+        pass
+
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
@@ -109,10 +128,31 @@ async def auth_signup(req: SignupRequest):
     )
 
     if not ok:
+        _safe_audit_event(
+            event_type="auth.signup",
+            actor_type="patient",
+            actor_id=req.phone,
+            subject_type="patient",
+            subject_id=req.phone,
+            action="create",
+            resource="/auth/signup",
+            outcome="failure",
+            reason_code=result.get("error", "unknown")[:64],
+        )
         return AuthResponse(success=False, error=result.get("error"))
 
     # Create a session linked to this patient
     patient_id = result["patient"]["id"]
+    _safe_audit_event(
+        event_type="auth.signup",
+        actor_type="patient",
+        actor_id=patient_id,
+        subject_type="patient",
+        subject_id=patient_id,
+        action="create",
+        resource="/auth/signup",
+        outcome="success",
+    )
     sid = f"s_{patient_id}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
 
     # Pre-seed Redis session + stats
@@ -143,10 +183,31 @@ async def auth_login(req: LoginRequest):
     ok, result = login(phone=req.phone, pin=req.pin)
 
     if not ok:
+        _safe_audit_event(
+            event_type="auth.login",
+            actor_type="patient",
+            actor_id=req.phone,
+            subject_type="patient",
+            subject_id=req.phone,
+            action="login",
+            resource="/auth/login",
+            outcome="failure",
+            reason_code="invalid_credentials",
+        )
         return AuthResponse(success=False, error=result.get("error"))
 
     # Create a fresh session for this login
     patient_id = result["patient"]["id"]
+    _safe_audit_event(
+        event_type="auth.login",
+        actor_type="patient",
+        actor_id=patient_id,
+        subject_type="patient",
+        subject_id=patient_id,
+        action="login",
+        resource="/auth/login",
+        outcome="success",
+    )
     sid = f"s_{patient_id}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
 
     agent = get_agent()
@@ -196,7 +257,28 @@ async def auth_otp_send(req: OtpSendRequest):
     agent = get_agent()
     ok, result = send_otp(req.phone, agent.memory_manager.redis)
     if not ok:
+        _safe_audit_event(
+            event_type="auth.otp.sent",
+            actor_type="patient",
+            actor_id=req.phone,
+            subject_type="patient",
+            subject_id=req.phone,
+            action="create",
+            resource="/auth/otp/send",
+            outcome="failure",
+            reason_code=result.get("error", "unknown")[:64],
+        )
         return {"success": False, "error": result.get("error")}
+    _safe_audit_event(
+        event_type="auth.otp.sent",
+        actor_type="patient",
+        actor_id=req.phone,
+        subject_type="patient",
+        subject_id=req.phone,
+        action="create",
+        resource="/auth/otp/send",
+        outcome="success",
+    )
     return {
         "success": True,
         "message": result.get("message"),
@@ -215,7 +297,29 @@ async def auth_otp_verify(req: OtpVerifyRequest):
 
     ok, result = verify_otp(req.phone, req.otp, mm.redis)
     if not ok:
+        _safe_audit_event(
+            event_type="auth.otp.verified",
+            actor_type="patient",
+            actor_id=req.phone,
+            subject_type="patient",
+            subject_id=req.phone,
+            action="login",
+            resource="/auth/otp/verify",
+            outcome="failure",
+            reason_code=result.get("error", "unknown")[:64],
+        )
         return AuthResponse(success=False, error=result.get("error"))
+
+    _safe_audit_event(
+        event_type="auth.otp.verified",
+        actor_type="patient",
+        actor_id=req.phone,
+        subject_type="patient",
+        subject_id=req.phone,
+        action="login",
+        resource="/auth/otp/verify",
+        outcome="success",
+    )
 
     normalized = result["phone"]
     # Strip + for storage
@@ -315,9 +419,32 @@ async def auth_login_email(req: EmailLoginRequest):
     """Login with email + password."""
     ok, result = login_email(email=req.email, password=req.password)
     if not ok:
+        _safe_audit_event(
+            event_type="auth.login.email",
+            actor_type="patient",
+            actor_id=req.email,
+            subject_type="patient",
+            subject_id=req.email,
+            action="login",
+            resource="/auth/login/email",
+            outcome="failure",
+            reason_code="invalid_credentials",
+        )
         return AuthResponse(success=False, error=result.get("error"))
 
-    sid = await _create_session_for_patient(result["patient"]["id"])
+    patient_id = result["patient"]["id"]
+    _safe_audit_event(
+        event_type="auth.login.email",
+        actor_type="patient",
+        actor_id=patient_id,
+        subject_type="patient",
+        subject_id=patient_id,
+        action="login",
+        resource="/auth/login/email",
+        outcome="success",
+    )
+
+    sid = await _create_session_for_patient(patient_id)
     return AuthResponse(
         success=True, token=result["token"],
         patient=result["patient"], session_id=sid,

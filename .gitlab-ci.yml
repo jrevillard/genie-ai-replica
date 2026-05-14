@@ -80,3 +80,27 @@ gate:
       PY
   rules:
     - if: $CI_COMMIT_BRANCH
+
+# MR-4: Python dependency vulnerability scan (30-day ramp — allow_failure)
+pip-audit:
+  stage: gate
+  image: python:3.12-slim
+  before_script:
+    - pip install --no-cache-dir pip-audit
+  script:
+    - cd haystack-stack/haystack-chatqna
+    - pip-audit -r requirements.txt --desc || true
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+# MR-5: Node dependency vulnerability scan (30-day ramp — allow_failure)
+npm-audit:
+  stage: gate
+  image: node:20-slim
+  script:
+    - cd components/frontend
+    - npm audit --audit-level=moderate || true
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH

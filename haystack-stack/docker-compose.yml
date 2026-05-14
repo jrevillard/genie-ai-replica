@@ -18,6 +18,8 @@ services:
       # OLD (named volume — data lived in Docker Desktop VM on C:):
       # - arcadedb_data:/home/arcadedb/databases
       # NEW (bind mount to E: drive under project tree):
+      # SECURITY (PRIV-005): production MUST use a LUKS2-encrypted host directory.
+      # See docs/compliance/ENCRYPTION_AND_SECURITY_HARDENING.md §16.
       # BUG-039: explicit :rw so the intent is documented; prevents an
       # accidental read-only override from breaking schema migrations.
       - ./data/arcadedb:/home/arcadedb/databases:rw
@@ -131,6 +133,8 @@ services:
       # OLD (named volume — data lived in Docker Desktop VM on C:):
       # - redis_data:/data
       # NEW (bind mount to E: drive under project tree):
+      # SECURITY (PRIV-005): production MUST use a LUKS2-encrypted host directory.
+      # See docs/compliance/ENCRYPTION_AND_SECURITY_HARDENING.md §16.
       # BUG-039: AOF persistence requires :rw; explicit so a future
       # override cannot accidentally make Redis read-only.
       - ./data/redis:/data:rw

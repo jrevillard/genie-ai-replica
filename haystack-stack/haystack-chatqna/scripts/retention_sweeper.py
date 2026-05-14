@@ -140,13 +140,8 @@ def preview_class(
         }
 
     if entry["store"] == "filesystem":
-        return {
-            "data_class":   data_class,
-            "ok":           True,
-            "preview":      "skipped",
-            "reason":       "filesystem_class_not_acted_on_in_phase_9",
-            "policy":       entry,
-        }
+        return preview_filesystem_class(data_class=data_class, rp=rp,
+                                        base_path=None)
     if entry["mechanism"] != "sweeper":
         return {
             "data_class":   data_class,
@@ -297,6 +292,152 @@ def apply_class(
     }
 
 
+# ── Filesystem purger (safety-gated) ─────────────────────────────────
+_ALLOWED_BASE_PATHS: frozenset = frozenset({
+    "/app/reports/evidence",
+    "/app/data/caregiver_uploads",
+    "/app/training/collected",
+})
+
+
+def preview_filesystem_class(
+    *,
+    data_class: str,
+    rp: Any,
+    base_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Dry-run preview for filesystem data classes. Counts expired files
+    by mtime; never deletes anything.
+
+    REFUSES to operate if the resolved base path is not in
+    ``_ALLOWED_BASE_PATHS``.
+    """
+    entry = rp.get_policy(data_class)
+    if entry is None:
+        return {"data_class": data_class, "ok": False,
+                "reason": "unknown_class"}
+
+    if entry["store"] != "filesystem" or entry["mechanism"] != "sweeper":
+        return {"data_class": data_class, "ok": True,
+                "preview": "skipped",
+                "reason": f"store_or_mechanism_mismatch "
+                          f"({entry['store']}/{entry['mechanism']})",
+                "policy": entry}
+
+    effective_path = base_path or entry.get("base_path", "")
+    if effective_path not in _ALLOWED_BASE_PATHS:
+        return {"data_class": data_class, "ok": False,
+                "reason": f"base_path_not_in_allowlist "
+                          f"({effective_path!r})",
+                "policy": entry}
+
+    retention_days = int(entry.get("retention_days") or 0)
+    if retention_days <= 0:
+        return {"data_class": data_class, "ok": True,
+                "preview": "skipped",
+                "reason": "missing_or_zero_retention_days",
+                "policy": entry}
+
+    cutoff_epoch = time.time() - retention_days * 86400
+
+    if not os.path.isdir(effective_path):
+        return {"data_class": data_class, "ok": True,
+                "preview": "ready", "total": 0, "candidates": 0,
+                "sweepable": 0, "base_path": effective_path,
+                "retention_days": retention_days, "policy": entry}
+
+    total = 0
+    candidates = 0
+    try:
+        for _dirpath, _dirnames, filenames in os.walk(effective_path):
+            for fname in filenames:
+                fpath = os.path.join(_dirpath, fname)
+                total += 1
+                try:
+                    if os.path.getmtime(fpath) < cutoff_epoch:
+                        candidates += 1
+                except OSError:
+                    pass
+    except OSError:
+        pass
+
+    return {
+        "data_class":      data_class,
+        "ok":              True,
+        "preview":         "ready",
+        "base_path":       effective_path,
+        "retention_days":  retention_days,
+        "total":           total,
+        "candidates":      candidates,
+        "sweepable":       candidates,
+        "policy":          entry,
+    }
+
+
+def apply_filesystem_class(
+    *,
+    data_class: str,
+    rp: Any,
+    base_path: Optional[str] = None,
+    expected_sweepable: int = 0,
+    drift_pct: float = 5.0,
+) -> Dict[str, Any]:
+    """Actually delete expired files for a filesystem data class.
+
+    Re-previews to get the live count, then checks drift before
+    deleting.
+    """
+    p = preview_filesystem_class(data_class=data_class, rp=rp,
+                                 base_path=base_path)
+    if not p.get("ok"):
+        return {"data_class": data_class, "ok": False,
+                "reason": p.get("reason", "preview_failed")}
+
+    if p.get("preview") != "ready":
+        return {"data_class": data_class, "ok": True, "deleted": 0,
+                "expected": expected_sweepable,
+                "reason": p.get("reason", "preview_skipped")}
+
+    live = int(p.get("sweepable") or 0)
+
+    if expected_sweepable > 0:
+        drift = abs(live - expected_sweepable) / expected_sweepable * 100.0
+        if drift > drift_pct:
+            return {"data_class": data_class, "ok": False,
+                    "reason": f"drift_too_large pct={drift:.1f}",
+                    "expected": expected_sweepable, "live": live}
+
+    if live == 0:
+        return {"data_class": data_class, "ok": True, "deleted": 0,
+                "expected": expected_sweepable}
+
+    entry = rp.get_policy(data_class)
+    retention_days = int(entry.get("retention_days") or 0)
+    cutoff_epoch = time.time() - retention_days * 86400
+    effective_path = base_path or entry.get("base_path", "")
+
+    deleted = 0
+    try:
+        for _dirpath, _dirnames, filenames in os.walk(effective_path):
+            for fname in filenames:
+                fpath = os.path.join(_dirpath, fname)
+                try:
+                    if os.path.getmtime(fpath) < cutoff_epoch:
+                        os.remove(fpath)
+                        deleted += 1
+                except OSError:
+                    pass
+    except OSError:
+        pass
+
+    return {
+        "data_class": data_class,
+        "ok":         True,
+        "deleted":    deleted,
+        "expected":   expected_sweepable,
+    }
+
+
 # ── CLI ──────────────────────────────────────────────────────────────
 def _print_human(results: List[Dict[str, Any]],
                  *,
@@ -315,10 +456,14 @@ def _print_human(results: List[Dict[str, Any]],
             print(f"  {dc:<28s}  skipped: {r.get('reason')}")
             continue
         if mode == "dry-run":
+            held = r.get("legal_hold_count", "-")
+            bp = r.get("base_path", "")
+            store_tag = f"[fs:{bp}] " if bp else ""
             print(
-                f"  {dc:<28s}  total={r['total']:<6d} "
+                f"  {dc:<28s}  {store_tag}"
+                f"total={r['total']:<6d} "
                 f"candidates={r['candidates']:<5d} "
-                f"legal_hold={r['legal_hold_count']:<3d} "
+                f"legal_hold={held!s:<3s} "
                 f"sweepable={r['sweepable']}"
             )
         else:  # apply
@@ -352,10 +497,27 @@ def main() -> int:
                    help="With --apply: expected sweepable count from a "
                         "previous --json dry-run. Required when --apply "
                         "is used.")
+    p.add_argument("--bootstrap-schema", action="store_true",
+                   help="Run legal-hold schema bootstrap (CREATE PROPERTY "
+                        "statements) and exit.")
     args = p.parse_args()
 
     rp = _import_policy()
     runner = _default_query_runner()
+
+    # ── Bootstrap schema path ──────────────────────────────────────
+    if args.bootstrap_schema:
+        stmts = rp.legal_hold_schema_statements()
+        if not stmts:
+            print("[bootstrap-schema] No statements to run.")
+            return 0
+        for stmt in stmts:
+            try:
+                runner(stmt)
+                print(f"[bootstrap-schema] OK   {stmt}")
+            except Exception as exc:
+                print(f"[bootstrap-schema] SKIP {stmt}  ({exc})")
+        return 0
 
     classes = (
         [args.data_class]
@@ -398,10 +560,17 @@ def main() -> int:
 
     apply_results: List[Dict[str, Any]] = []
     for dc in classes:
-        apply_results.append(apply_class(
-            data_class=dc, rp=rp, query_runner=runner,
-            expected_sweepable=args.expected,
-        ))
+        entry = rp.get_policy(dc)
+        if entry and entry.get("store") == "filesystem":
+            apply_results.append(apply_filesystem_class(
+                data_class=dc, rp=rp,
+                expected_sweepable=args.expected,
+            ))
+        else:
+            apply_results.append(apply_class(
+                data_class=dc, rp=rp, query_runner=runner,
+                expected_sweepable=args.expected,
+            ))
     elapsed_ms = int((time.time() - t0) * 1000)
 
     if args.json:

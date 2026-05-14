@@ -60,7 +60,25 @@ from xml.sax.saxutils import escape as xml_escape  # nosemgrep: python.lang.secu
 from fastapi import APIRouter, BackgroundTasks, Form, Header, HTTPException, Request
 from fastapi.responses import Response
 
+# AUDIT-008: central audit store for webhook signature verification.
+try:
+    from src.services import audit_event_store as _aes
+    _AUDIT_STORE_AVAILABLE = True
+except Exception:
+    _aes = None
+    _AUDIT_STORE_AVAILABLE = False
+
 logger = logging.getLogger("twilio_whatsapp")
+
+
+def _safe_audit_event(**kwargs) -> None:
+    """Fire-and-forget audit event. Never raises."""
+    if not _AUDIT_STORE_AVAILABLE or _aes is None:
+        return
+    try:
+        _aes.append_event(**kwargs)
+    except Exception:
+        pass
 
 router = APIRouter(prefix="/twilio/whatsapp", tags=["twilio-whatsapp"])
 
@@ -333,6 +351,16 @@ async def twilio_whatsapp_webhook(
         if not _validate_twilio_signature(full_url, form_dict, x_twilio_signature):
             logger.warning("twilio_whatsapp signature mismatch from %s",
                            _hash_id(From))
+            _safe_audit_event(
+                event_type="channel.webhook.signature.invalid",
+                actor_type="external",
+                subject_type="channel",
+                subject_id="twilio_whatsapp",
+                action="webhook_receive",
+                resource="/api/v1/twilio/whatsapp/webhook",
+                outcome="failure",
+                reason_code="signature_mismatch",
+            )
             raise HTTPException(status_code=403, detail="bad_signature")
 
     sender_log = _hash_id(From)

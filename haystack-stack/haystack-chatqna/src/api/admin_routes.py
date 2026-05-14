@@ -23,7 +23,25 @@ import json
 from src.config import settings, _required_env
 from src.services.auth import verify_jwt
 
+# AUDIT-006: central audit store for admin route access.
+try:
+    from src.services import audit_event_store as _aes
+    _AUDIT_STORE_AVAILABLE = True
+except Exception:
+    _aes = None
+    _AUDIT_STORE_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+
+def _safe_audit_event(**kwargs) -> None:
+    """Fire-and-forget audit event. Never raises."""
+    if not _AUDIT_STORE_AVAILABLE or _aes is None:
+        return
+    try:
+        _aes.append_event(**kwargs)
+    except Exception:
+        pass
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -94,7 +112,26 @@ async def admin_login(req: AdminLoginRequest):
         ADMIN_PASSWORD.encode("utf-8"),
     )
     if user_ok and pass_ok:
+        _safe_audit_event(
+            event_type="admin.auth.login",
+            actor_type="admin",
+            actor_id=req.username,
+            subject_type="system",
+            action="login",
+            resource="/admin/login",
+            outcome="success",
+        )
         return {"success": True, "token": _admin_token(req.username), "role": "admin"}
+    _safe_audit_event(
+        event_type="admin.auth.login",
+        actor_type="admin",
+        actor_id=req.username,
+        subject_type="system",
+        action="login",
+        resource="/admin/login",
+        outcome="failure",
+        reason_code="invalid_credentials",
+    )
     return {"success": False, "error": "Invalid admin credentials"}
 
 
@@ -116,7 +153,16 @@ _STATS_TABLES_ALLOW = (
 
 @router.get("/stats")
 async def admin_stats(request: Request):
-    _verify_admin(request)
+    payload = _verify_admin(request)
+    _safe_audit_event(
+        event_type="admin.stats.read",
+        actor_type="admin",
+        actor_id=payload.get("sub", ""),
+        subject_type="system",
+        action="read",
+        resource="/admin/stats",
+        outcome="success",
+    )
     counts = {}
     for table in _STATS_TABLES_ALLOW:
         if table not in _STATS_TABLES_ALLOW:  # belt + suspenders against future drift
@@ -140,7 +186,16 @@ async def admin_stats(request: Request):
 
 @router.get("/patients")
 async def admin_list_patients(request: Request, limit: int = 50, offset: int = 0, search: str = ""):
-    _verify_admin(request)
+    payload = _verify_admin(request)
+    _safe_audit_event(
+        event_type="admin.patient.list",
+        actor_type="admin",
+        actor_id=payload.get("sub", ""),
+        subject_type="system",
+        action="read",
+        resource="/admin/patients",
+        outcome="success",
+    )
     if search:
         # ArcadeDB SQL: LIKE is case-sensitive; use the OrientDB-style
         # `.toLowerCase()` method on the column so a search for "lamin"
@@ -209,7 +264,17 @@ class PatientUpdateRequest(BaseModel):
 
 @router.put("/patients/{patient_id}")
 async def admin_update_patient(patient_id: str, req: PatientUpdateRequest, request: Request):
-    _verify_admin(request)
+    payload = _verify_admin(request)
+    _safe_audit_event(
+        event_type="admin.patient.update",
+        actor_type="admin",
+        actor_id=payload.get("sub", ""),
+        subject_type="patient",
+        subject_id=patient_id,
+        action="update",
+        resource=f"/admin/patients/{patient_id}",
+        outcome="success",
+    )
     sets = []
     params = {}
     if req.name is not None: sets.append("name = :name"); params["name"] = req.name
@@ -237,7 +302,17 @@ async def admin_update_patient(patient_id: str, req: PatientUpdateRequest, reque
 
 @router.delete("/patients/{patient_id}")
 async def admin_delete_patient(patient_id: str, request: Request):
-    _verify_admin(request)
+    payload = _verify_admin(request)
+    _safe_audit_event(
+        event_type="admin.patient.delete",
+        actor_type="admin",
+        actor_id=payload.get("sub", ""),
+        subject_type="patient",
+        subject_id=patient_id,
+        action="delete",
+        resource=f"/admin/patients/{patient_id}",
+        outcome="success",
+    )
     # Cascade-delete consultations + memories before the patient row.
     # Was previously `except: pass` on each, which silently left orphan
     # rows in ArcadeDB if either delete failed -- the patient
@@ -320,7 +395,16 @@ async def admin_delete_community(rid: str, request: Request):
 
 @router.get("/consultations")
 async def admin_list_consultations(request: Request, patient_id: str = "", limit: int = 50):
-    _verify_admin(request)
+    payload = _verify_admin(request)
+    _safe_audit_event(
+        event_type="admin.consultation.list",
+        actor_type="admin",
+        actor_id=payload.get("sub", ""),
+        subject_type="system",
+        action="read",
+        resource="/admin/consultations",
+        outcome="success",
+    )
     if patient_id:
         r = _sql(
             "SELECT * FROM ConsultationRecord WHERE patient_id = :pid ORDER BY started_at DESC LIMIT :lim",
@@ -349,7 +433,17 @@ async def admin_list_consultations(request: Request, patient_id: str = "", limit
 
 @router.delete("/consultations/{consultation_id}")
 async def admin_delete_consultation(consultation_id: str, request: Request):
-    _verify_admin(request)
+    payload = _verify_admin(request)
+    _safe_audit_event(
+        event_type="admin.consultation.delete",
+        actor_type="admin",
+        actor_id=payload.get("sub", ""),
+        subject_type="consultation",
+        subject_id=consultation_id,
+        action="delete",
+        resource=f"/admin/consultations/{consultation_id}",
+        outcome="success",
+    )
     _sql("DELETE FROM ConsultationRecord WHERE id = :cid", {"cid": consultation_id})
     return {"deleted": True}
 
@@ -456,7 +550,16 @@ async def admin_preview_nudges(request: Request, patient_id: str = ""):
 
 @router.get("/audit")
 async def admin_audit_log(request: Request, limit: int = 50):
-    _verify_admin(request)
+    payload = _verify_admin(request)
+    _safe_audit_event(
+        event_type="admin.audit.read",
+        actor_type="admin",
+        actor_id=payload.get("sub", ""),
+        subject_type="system",
+        action="read",
+        resource="/admin/audit",
+        outcome="success",
+    )
     try:
         r = _sql("SELECT * FROM CommunityAuditLog ORDER BY @rid DESC LIMIT :lim", {"lim": limit})
         return {"logs": _rows(r), "count": len(_rows(r))}
@@ -530,9 +633,20 @@ async def admin_approve_transfer(rid: str, body: TransferApproveRequest, request
     """
     Approve a transfer request: unlink patient from old caregiver, link to new one.
     """
-    _verify_admin(request)
+    payload = _verify_admin(request)
     from src.repositories.caregiver_repo import CaregiverRepository
     import datetime
+
+    _safe_audit_event(
+        event_type="admin.transfer.approve",
+        actor_type="admin",
+        actor_id=payload.get("sub", ""),
+        subject_type="transfer_request",
+        subject_id=rid,
+        action="update",
+        resource=f"/admin/transfer-requests/{rid}/approve",
+        outcome="success",
+    )
 
     redis  = _get_redis()
     repo   = CaregiverRepository()
@@ -594,7 +708,17 @@ class TransferDeclineRequest(BaseModel):
 @router.post("/transfer-requests/{rid}/decline")
 async def admin_decline_transfer(rid: str, body: TransferDeclineRequest, request: Request):
     """Decline a transfer request with an optional reason."""
-    _verify_admin(request)
+    payload = _verify_admin(request)
+    _safe_audit_event(
+        event_type="admin.transfer.decline",
+        actor_type="admin",
+        actor_id=payload.get("sub", ""),
+        subject_type="transfer_request",
+        subject_id=rid,
+        action="update",
+        resource=f"/admin/transfer-requests/{rid}/decline",
+        outcome="success",
+    )
     import datetime
 
     redis = _get_redis()

@@ -37,9 +37,27 @@ from src.services.meta_bridge import (
     verify_xhub_signature,
 )
 
+# AUDIT-008: central audit store for webhook signature verification.
+try:
+    from src.services import audit_event_store as _aes
+    _AUDIT_STORE_AVAILABLE = True
+except Exception:
+    _aes = None
+    _AUDIT_STORE_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/meta", tags=["meta"])
+
+
+def _safe_audit_event(**kwargs) -> None:
+    """Fire-and-forget audit event. Never raises."""
+    if not _AUDIT_STORE_AVAILABLE or _aes is None:
+        return
+    try:
+        _aes.append_event(**kwargs)
+    except Exception:
+        pass
 
 
 # ── WhatsApp ─────────────────────────────────────────────────────────────────
@@ -74,6 +92,16 @@ async def whatsapp_inbound(
     raw = await request.body()
     if not verify_xhub_signature(raw, x_hub_signature_256 or "", WHATSAPP_APP_SECRET):
         logger.warning("whatsapp signature mismatch")
+        _safe_audit_event(
+            event_type="channel.webhook.signature.invalid",
+            actor_type="external",
+            subject_type="channel",
+            subject_id="whatsapp",
+            action="webhook_receive",
+            resource="/api/v1/meta/webhook/whatsapp",
+            outcome="failure",
+            reason_code="signature_mismatch",
+        )
         raise HTTPException(status_code=403, detail="bad signature")
 
     try:
@@ -81,6 +109,16 @@ async def whatsapp_inbound(
     except Exception:
         logger.warning("whatsapp webhook: invalid json body")
         return {"status": "ignored", "reason": "invalid_json"}
+
+    _safe_audit_event(
+        event_type="channel.webhook.signature.valid",
+        actor_type="external",
+        subject_type="channel",
+        subject_id="whatsapp",
+        action="webhook_receive",
+        resource="/api/v1/meta/webhook/whatsapp",
+        outcome="success",
+    )
 
     # Shared inbound -> agent -> outbound pipeline (handle_meta_payload)
     # picks the right adapter from the registry by channel name.
@@ -111,6 +149,16 @@ async def messenger_inbound(
     raw = await request.body()
     if not verify_xhub_signature(raw, x_hub_signature_256 or "", MESSENGER_APP_SECRET):
         logger.warning("messenger signature mismatch")
+        _safe_audit_event(
+            event_type="channel.webhook.signature.invalid",
+            actor_type="external",
+            subject_type="channel",
+            subject_id="messenger",
+            action="webhook_receive",
+            resource="/api/v1/meta/webhook/messenger",
+            outcome="failure",
+            reason_code="signature_mismatch",
+        )
         raise HTTPException(status_code=403, detail="bad signature")
 
     try:
@@ -118,6 +166,16 @@ async def messenger_inbound(
     except Exception:
         logger.warning("messenger webhook: invalid json body")
         return {"status": "ignored", "reason": "invalid_json"}
+
+    _safe_audit_event(
+        event_type="channel.webhook.signature.valid",
+        actor_type="external",
+        subject_type="channel",
+        subject_id="messenger",
+        action="webhook_receive",
+        resource="/api/v1/meta/webhook/messenger",
+        outcome="success",
+    )
 
     # Shared inbound -> agent -> outbound pipeline (handle_meta_payload)
     # picks the right adapter from the registry by channel name.

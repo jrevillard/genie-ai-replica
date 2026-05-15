@@ -1,6 +1,6 @@
 # Story 4.1: Configure pytest and Create Shared Fixtures for OPEA
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -32,35 +32,35 @@ so that all OPEA microservice tests have a consistent mock foundation.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Configure pytest (AC: #1, #2)
-  - [ ] 1.1 Create `genie-ai-overlay/pytest.ini` with testpaths, asyncio_mode, and junitxml addopts
-  - [ ] 1.2 Add `[project.optional-dependencies]` with `test` extra to `genie-ai-overlay/pyproject.toml`
-  - [ ] 1.3 Create `genie-ai-overlay/tests/` directory and empty `tests/__init__.py`
+- [x] Task 1: Configure pytest (AC: #1, #2)
+  - [x] 1.1 Create `genie-ai-overlay/pytest.ini` with testpaths, asyncio_mode, and junitxml addopts
+  - [x] 1.2 Add `[project.optional-dependencies]` with `test` extra to `genie-ai-overlay/pyproject.toml`
+  - [x] 1.3 Create `genie-ai-overlay/tests/` directory and empty `tests/__init__.py`
 
-- [ ] Task 2: Create conftest.py with core mocks (AC: #3, #4, #7, #8)
-  - [ ] 2.1 Create `genie-ai-overlay/tests/conftest.py` with ITU copyright header
-  - [ ] 2.2 Implement `mock_arangodb()` fixture — mock ArangoClient, StandardDatabase, collections, AQL queries
-  - [ ] 2.3 Implement `mock_redis()` fixture — mock Redis client with get/set/delete/exists/expire
-  - [ ] 2.4 Implement `mock_comps()` fixture — mock all comps imports (CustomLogger, OpeaComponent, etc.)
-  - [ ] 2.5 Add `@pytest.fixture(autouse=True)` fixture to set required env vars (ARANGO_URL, ARANGO_DB, etc.) before any test runs
+- [x] Task 2: Create conftest.py with core mocks (AC: #3, #4, #7, #8)
+  - [x] 2.1 Create `genie-ai-overlay/tests/conftest.py` with ITU copyright header
+  - [x] 2.2 Implement `mock_arangodb()` fixture — mock ArangoClient, StandardDatabase, collections, AQL queries
+  - [x] 2.3 Implement `mock_redis()` fixture — mock Redis client with get/set/delete/exists/expire
+  - [x] 2.4 Implement `mock_comps()` fixture — mock all comps imports (CustomLogger, OpeaComponent, etc.)
+  - [x] 2.5 Add `@pytest.fixture(autouse=True)` fixture to set required env vars (ARANGO_URL, ARANGO_DB, etc.) before any test runs
 
-- [ ] Task 3: Create AI service mocks (AC: #5, #6)
-  - [ ] 3.1 Implement `mock_vllm()` fixture — mock vLLM completion responses (streaming and non-streaming)
-  - [ ] 3.2 Implement `mock_tei()` fixture — mock TEI embedding and reranking responses with AsyncMock
+- [x] Task 3: Create AI service mocks (AC: #5, #6)
+  - [x] 3.1 Implement `mock_vllm()` fixture — mock vLLM completion responses (streaming and non-streaming)
+  - [x] 3.2 Implement `mock_tei()` fixture — mock TEI embedding and reranking responses with AsyncMock
 
-- [ ] Task 4: Write fixture self-tests (AC: #10)
-  - [ ] 4.1 Create `genie-ai-overlay/tests/test_conftest_fixtures.py` with ITU copyright header
-  - [ ] 4.2 Test mock_arangodb has collection(), query(), aql.execute() methods
-  - [ ] 4.3 Test mock_redis has get(), set(), delete() methods
-  - [ ] 4.4 Test mock_vllm returns completion objects with correct shape
-  - [ ] 4.5 Test mock_tei returns embedding arrays and reranked documents
-  - [ ] 4.6 Test mock_comps provides CustomLogger with info/error/warning/debug
+- [x] Task 4: Write fixture self-tests (AC: #10)
+  - [x] 4.1 Create `genie-ai-overlay/tests/test_conftest_fixtures.py` with ITU copyright header
+  - [x] 4.2 Test mock_arangodb has collection(), query(), aql.execute() methods
+  - [x] 4.3 Test mock_redis has get(), set(), delete() methods
+  - [x] 4.4 Test mock_vllm returns completion objects with correct shape
+  - [x] 4.5 Test mock_tei returns embedding arrays and reranked documents
+  - [x] 4.6 Test mock_comps provides CustomLogger with info/error/warning/debug
 
-- [ ] Task 5: Verify linting and test execution (AC: #9)
-  - [ ] 5.1 Run `cd genie-ai-overlay && pip install -e ".[test]"` — install test dependencies
-  - [ ] 5.2 Run `cd genie-ai-overlay && python -m pytest tests/ -v` — all self-tests pass
-  - [ ] 5.3 Run `cd genie-ai-overlay && ruff check tests/` — zero lint errors
-  - [ ] 5.4 Run `cd genie-ai-overlay && ruff format --check tests/` — formatting passes
+- [x] Task 5: Verify linting and test execution (AC: #9)
+  - [x] 5.1 Run `cd genie-ai-overlay && pip install -e ".[test]"` — install test dependencies
+  - [x] 5.2 Run `cd genie-ai-overlay && python -m pytest tests/ -v` — all self-tests pass
+  - [x] 5.3 Run `cd genie-ai-overlay && ruff check tests/` — zero lint errors
+  - [x] 5.4 Run `cd genie-ai-overlay && ruff format --check tests/` — formatting passes
 
 ## Dev Notes
 
@@ -310,8 +310,33 @@ This story creates the mock foundation that ALL OPEA test stories (4.2–4.6) de
 
 ### Agent Model Used
 
+Claude Code (GLM-5-turbo)
+
 ### Debug Log References
+
+- Initial attempt used `MagicMock(spec=ArangoClient)` which required importing `arango` — not available in test venv. Fixed by removing spec-based mocks (plain MagicMock).
+- `git stash` doesn't include untracked files — had to manually copy new files from PRD worktree to story worktree.
+- pyproject.toml needed `[project]` section (name, version) and `[tool.setuptools] packages = []` for editable install to work with flat layout.
 
 ### Completion Notes List
 
+- All 10 ACs satisfied: pytest.ini, pyproject.toml test deps, conftest.py with 5 fixtures (mock_arangodb, mock_redis, mock_vllm, mock_tei, mock_comps), autouse env var fixture, ITU copyright headers, Ruff compliance, 28 self-tests passing.
+- comps library mocked via sys.modules pre-population — no pip install needed.
+- Story branch: feat/testing-framework/4-1-configure-pytest-and-create-shared-fixtures-for-opea
+- Added CLAUDE.md in genie-ai-overlay/ for venv/test/lint instructions.
+
+**Murat (Test Architect) review — 3 findings addressed:**
+1. (High) mock_comps was mutating a module-level singleton — fixed: each factory call creates a fresh MagicMock. Test `test_isolation_between_calls` validates no cross-contamination.
+2. (High) Fixtures were not factory functions — fixed: all 5 fixtures now return inner `_factory()` with keyword overrides (cursor_results, get_value, default_text, etc.). 5 new tests cover override paths.
+3. (Medium) pyproject.toml `packages = []` was undocumented — fixed: added `[build-system]` (PEP 517) and header comment explaining why overlay is not a pip-installable package.
+
 ### File List
+
+- `genie-ai-overlay/pytest.ini` — NEW
+- `genie-ai-overlay/pyproject.toml` — MODIFIED (added [project] + [project.optional-dependencies] + [tool.setuptools])
+- `genie-ai-overlay/CLAUDE.md` — NEW
+- `genie-ai-overlay/tests/__init__.py` — NEW
+- `genie-ai-overlay/tests/conftest.py` — NEW
+- `genie-ai-overlay/tests/test_conftest_fixtures.py` — NEW
+- `_bmad-output/implementation-artifacts/4-1-configure-pytest-and-create-shared-fixtures-for-opea.md` — MODIFIED
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — MODIFIED

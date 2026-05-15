@@ -1,3 +1,34 @@
+# pyproject.toml — genie-ai-overlay
+#
+# This overlay is a Docker-deployed collection of OPEA microservices, NOT a
+# pip-installable package.  The [project] section exists solely to declare
+# optional test dependencies via PEP 621.  `pip install -e ".[test]"` will
+# install those dependencies but no source packages (packages = [] is
+# intentional).  Source imports are mocked in conftest.py for local testing.
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "genie-ai-overlay"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "httpx>=0.28",
+    "asgi-lifespan>=2.0",
+]
+
+# Overlay services are Docker-deployed, not pip-installed.
+# Empty packages prevents setuptools auto-discovery errors on flat layout.
+[tool.setuptools]
+packages = []
+
 [tool.ruff]
 target-version = "py310"
 line-length = 120

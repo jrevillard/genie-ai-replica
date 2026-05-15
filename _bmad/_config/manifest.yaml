@@ -1,26 +1,26 @@
 installation:
   version: 6.6.0
   installDate: 2026-04-26T21:02:35.766Z
-  lastUpdated: 2026-05-15T08:33:49.772Z
+  lastUpdated: 2026-05-15T15:49:03.035Z
 modules:
   - name: core
     version: 6.6.0
     installDate: 2026-04-26T21:02:35.007Z
-    lastUpdated: 2026-05-15T08:33:49.660Z
+    lastUpdated: 2026-05-15T15:49:02.902Z
     source: built-in
     npmPackage: null
     repoUrl: null
   - name: bmm
     version: 6.6.0
     installDate: 2026-04-27T10:38:56.912Z
-    lastUpdated: 2026-05-15T08:33:49.661Z
+    lastUpdated: 2026-05-15T15:49:02.903Z
     source: built-in
     npmPackage: null
     repoUrl: null
   - name: cis
     version: v0.2.0
     installDate: 2026-04-27T10:38:57.016Z
-    lastUpdated: 2026-05-15T08:33:49.688Z
+    lastUpdated: 2026-05-15T15:49:02.939Z
     source: external
     npmPackage: bmad-creative-intelligence-suite
     repoUrl: https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite
@@ -29,7 +29,7 @@ modules:
   - name: tea
     version: v1.15.1
     installDate: 2026-04-27T10:38:57.165Z
-    lastUpdated: 2026-05-15T08:33:49.715Z
+    lastUpdated: 2026-05-15T15:49:02.973Z
     source: external
     npmPackage: bmad-method-test-architecture-enterprise
     repoUrl: https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise
@@ -38,7 +38,7 @@ modules:
   - name: bmad-issue-tracking
     version: main
     installDate: 2026-05-13T06:37:29.616Z
-    lastUpdated: 2026-05-15T08:33:49.772Z
+    lastUpdated: 2026-05-15T15:49:03.035Z
     source: custom
     npmPackage: null
     repoUrl: https://github.com/jrevillard/bmad-issue-tracking

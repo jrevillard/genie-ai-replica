@@ -76,20 +76,35 @@ List<FlSpot> _buildSpots(
 
   for (var i = 29; i >= 0; i--) {
     final date = today.subtract(Duration(days: i));
-    final key  = DailyHealthRecord.keyFor(date);
-    final rec  = live[key] ?? mock[key];
-    if (rec == null) continue;
+    final key     = DailyHealthRecord.keyFor(date);
+    final liveRec = live[key];
+    final mockRec = mock[key];
+    if (liveRec == null && mockRec == null) continue;
 
     final x = (29 - i).toDouble();
     final double? y = switch (metric) {
-      HealthTrendMetric.bp      => rec.bp?.systolic.toDouble(),
-      HealthTrendMetric.glucose => rec.glucose,
-      HealthTrendMetric.mood    => rec.mood?.index.toDouble(),
+      HealthTrendMetric.bp      => liveRec?.bp?.systolic.toDouble()  ?? mockRec?.bp?.systolic.toDouble(),
+      HealthTrendMetric.glucose => liveRec?.glucose                   ?? mockRec?.glucose,
+      HealthTrendMetric.mood    => liveRec?.mood?.index.toDouble()    ?? mockRec?.mood?.index.toDouble(),
     };
 
     if (y != null) spots.add(FlSpot(x, y));
   }
 
+  return spots;
+}
+
+/// Ensures at least 2 FlSpots so fl_chart renders a line instead of a dot.
+/// Anchors a flat segment from x=0 using the earliest real point's y-value,
+/// matching the Today tab behaviour where a single value shows as a flat line.
+List<FlSpot> _extendToLine(List<FlSpot> spots) {
+  if (spots.length <= 1) {
+    if (spots.isEmpty) return spots;
+    return [FlSpot(0, spots.first.y), spots.first];
+  }
+  if (spots.first.x > 0) {
+    return [FlSpot(0, spots.first.y), ...spots];
+  }
   return spots;
 }
 
@@ -174,17 +189,20 @@ class HealthTrendsChart extends ConsumerStatefulWidget {
 }
 
 class _HealthTrendsChartState extends ConsumerState<HealthTrendsChart> {
-  final _mockRecords = TrendsMockDataGenerator.generate();
-
   @override
   Widget build(BuildContext context) {
-    final metric       = ref.watch(_selectedMetricProvider);
-    final calState     = ref.watch(healthCalendarProvider);
-    final vitalsLive   = ref.watch(vitalsAsRecordsProvider);
-    // Real data: merge vitals (Log Today) with any records logged directly in
-    // the Progress tab. Progress-tab entries override for the same day.
-    final liveRecords  = {...vitalsLive, ...calState.records};
-    final spots        = _buildSpots(liveRecords, _mockRecords, metric);
+    final metric     = ref.watch(_selectedMetricProvider);
+    final calState   = ref.watch(healthCalendarProvider);
+    final vitalsLive = ref.watch(vitalsAsRecordsProvider);
+    // Real data only — vitals (Today tab) + explicit calendar edits.
+    // Per-field merge so a calendar edit with glucose=null does not erase
+    // a glucose value already logged in the Today tab for the same day.
+    final realData = mergeRecordsPerField(vitalsLive, calState.userRecords);
+    final spots    = _buildSpots(realData, const {}, metric);
+    // _extendToLine ensures fl_chart renders a line even with a single point,
+    // anchoring a flat segment at x=0 with the earliest real value.
+    // Insight is computed from raw spots (real-data count drives "Keep logging!").
+    final dispSpots = _extendToLine(spots);
     final insight  = _computeInsight(spots, metric);
     final color    = _metricColor(metric);
     // ── Single theme read — propagated to every child ──────────────────
@@ -232,7 +250,7 @@ class _HealthTrendsChartState extends ConsumerState<HealthTrendsChart> {
                   : _ExpandedTrends(
                       metric:         metric,
                       color:          color,
-                      spots:          spots,
+                      spots:          dispSpots,
                       insight:        insight,
                       cs:             cs,
                       amina:          amina,
@@ -622,7 +640,7 @@ class _Sparkline extends StatelessWidget {
               // Only the last dot is visible — endpoint indicator.
               dotData: FlDotData(
                 show: true,
-                getDotPainter: (spot, _, __, index) {
+                getDotPainter: (spot, _, _, index) {
                   final isLast = index == spots.length - 1;
                   return FlDotCirclePainter(
                     radius:      isLast ? 3.5 : 0,

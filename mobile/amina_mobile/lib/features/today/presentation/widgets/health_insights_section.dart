@@ -40,7 +40,8 @@ class HealthInsightsSection extends ConsumerWidget {
     final allVitals  = ref.watch(vitalsProvider);
     final hasGlucose = allVitals.any((e) => e.glucose.isNotEmpty);
     final hasBp      = allVitals.any((e) => e.bloodPressure.isNotEmpty);
-    final hasData    = hasGlucose || hasBp;
+    final hasMood    = allVitals.any((e) => e.mood.isNotEmpty);
+    final hasData    = hasGlucose || hasBp || hasMood;
 
     final cs     = Theme.of(context).colorScheme;
     final amina  = Theme.of(context).extension<AminaColors>()!;
@@ -158,54 +159,55 @@ class HealthInsightsSection extends ConsumerWidget {
             ),
 
             // ── Bento pair: Glucose | Heart Score ────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (hasGlucose)
-                      Expanded(
-                        child: _MetricCard(
-                          icon:     Icons.water_drop_rounded,
-                          label:    'Glucose Spikes',
-                          value:    s.glucose.value.toStringAsFixed(0),
-                          unit:     'mg/dL',
-                          severity: s.glucose.severity,
-                          trend:    s.glucose.weekTrend,
-                          cs:       cs,
-                          isDark:   isDark,
-                          onTap:    () => onAskAmina(
-                            'My glucose is ${s.glucose.value.toStringAsFixed(0)} mg/dL. '
-                            'What does this mean and how can I improve it?'),
+            if (hasGlucose || hasBp) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (hasGlucose)
+                        Expanded(
+                          child: _MetricCard(
+                            icon:     Icons.water_drop_rounded,
+                            label:    'Glucose Spikes',
+                            value:    s.glucose.value.toStringAsFixed(0),
+                            unit:     'mg/dL',
+                            severity: s.glucose.severity,
+                            trend:    s.glucose.weekTrend,
+                            cs:       cs,
+                            isDark:   isDark,
+                            onTap:    () => onAskAmina(
+                              'My glucose is ${s.glucose.value.toStringAsFixed(0)} mg/dL. '
+                              'What does this mean and how can I improve it?'),
+                          ),
                         ),
-                      ),
-                    if (hasGlucose && hasBp)
-                      const SizedBox(width: 10),
-                    if (hasBp)
-                      Expanded(
-                        child: _MetricCard(
-                          icon:     Icons.favorite_rounded,
-                          label:    'Heart Score',
-                          value:    '${s.systolic.value.toStringAsFixed(0)}/'
-                                    '${s.diastolic.value.toStringAsFixed(0)}',
-                          unit:     'mmHg',
-                          severity: s.systolic.severity,
-                          trend:    s.systolic.weekTrend,
-                          cs:       cs,
-                          isDark:   isDark,
-                          onTap:    () => onAskAmina(
-                            'My BP is ${s.systolic.value.toStringAsFixed(0)}/'
-                            '${s.diastolic.value.toStringAsFixed(0)} mmHg. '
-                            'How can I lower it naturally?'),
+                      if (hasGlucose && hasBp)
+                        const SizedBox(width: 10),
+                      if (hasBp)
+                        Expanded(
+                          child: _MetricCard(
+                            icon:     Icons.favorite_rounded,
+                            label:    'Heart Score',
+                            value:    '${s.systolic.value.toStringAsFixed(0)}/'
+                                      '${s.diastolic.value.toStringAsFixed(0)}',
+                            unit:     'mmHg',
+                            severity: s.systolic.severity,
+                            trend:    s.systolic.weekTrend,
+                            cs:       cs,
+                            isDark:   isDark,
+                            onTap:    () => onAskAmina(
+                              'My BP is ${s.systolic.value.toStringAsFixed(0)}/'
+                              '${s.diastolic.value.toStringAsFixed(0)} mmHg. '
+                              'How can I lower it naturally?'),
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-
-            const SizedBox(height: 10),
+              const SizedBox(height: 10),
+            ],
 
             // ── AI Insight card ───────────────────────────────────────
             Padding(

@@ -81,7 +81,6 @@ class AuthLocalDatasource {
       prefs.remove(_kIsLoggedIn),
       prefs.remove(_kRememberMe),
       prefs.remove(_kAppMode),
-      prefs.remove('amina_vitals_log'),
       prefs.remove('amina_session_cache_v1'),
     ]);
   }

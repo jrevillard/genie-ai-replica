@@ -9,7 +9,6 @@ import '../../domain/usecases/logout_usecase.dart';
 import '../../domain/usecases/register_usecase.dart';
 import '../../domain/usecases/send_password_reset_usecase.dart';
 import '../../../chats/presentation/providers/chat_messages_provider.dart';
-import '../../../today/presentation/providers/vitals_provider.dart';
 
 // ─── Usecase providers ────────────────────────────────────────────────────────
 
@@ -182,7 +181,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> logout() async {
     await _logout();
     _ref.invalidate(chatSessionsProvider);
-    _ref.invalidate(vitalsProvider);
     state = const AuthState();
   }
 

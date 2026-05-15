@@ -1,8 +1,11 @@
-﻿import 'dart:math' as math;
+﻿import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/models/daily_health_record.dart';
 import '../../../today/presentation/providers/vitals_provider.dart';
+import '../../../../core/providers/current_user_provider.dart';
 
 // ── Mock-data generator ───────────────────────────────────────────────────────
 // Seeded random → deterministic, calendar looks "lived in" from first launch.
@@ -51,22 +54,28 @@ Map<String, DailyHealthRecord> _buildMockRecords() {
 @immutable
 class HealthCalendarState {
   final Map<String, DailyHealthRecord> records;
+  /// Only records the user explicitly saved via the calendar log sheet.
+  /// Does not include mock records.
+  final Map<String, DailyHealthRecord> userRecords;
   final DateTime focusedMonth;     // always day 1 of that month
   final bool     isMonthExpanded;
 
   const HealthCalendarState({
     required this.records,
+    required this.userRecords,
     required this.focusedMonth,
     this.isMonthExpanded = false,
   });
 
   HealthCalendarState copyWith({
     Map<String, DailyHealthRecord>? records,
+    Map<String, DailyHealthRecord>? userRecords,
     DateTime?                       focusedMonth,
     bool?                           isMonthExpanded,
   }) =>
       HealthCalendarState(
         records:         records         ?? this.records,
+        userRecords:     userRecords     ?? this.userRecords,
         focusedMonth:    focusedMonth    ?? this.focusedMonth,
         isMonthExpanded: isMonthExpanded ?? this.isMonthExpanded,
       );
@@ -75,17 +84,64 @@ class HealthCalendarState {
 // ── Notifier ──────────────────────────────────────────────────────────────────
 
 class HealthCalendarNotifier extends StateNotifier<HealthCalendarState> {
-  HealthCalendarNotifier()
-      : super(HealthCalendarState(
-          records: _buildMockRecords(),
+  HealthCalendarNotifier(this._userId)
+      : _mockRecords = _buildMockRecords(),
+        super(HealthCalendarState(
+          records:     _buildMockRecords(),
+          userRecords: const {},
           focusedMonth: DateTime(DateTime.now().year, DateTime.now().month),
-        ));
+        )) {
+    _load();
+  }
+
+  final String _userId;
+  final Map<String, DailyHealthRecord> _mockRecords;
+
+  // Only real user-logged records are persisted — mock is never saved.
+  final Map<String, DailyHealthRecord> _userRecords = {};
+
+  String get _storageKey => 'health_calendar_$_userId';
+
+  Map<String, DailyHealthRecord> get _merged => {
+    ..._mockRecords,
+    ..._userRecords,
+  };
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw   = prefs.getString(_storageKey);
+    if (raw == null) return;
+    try {
+      final list = jsonDecode(raw) as List;
+      for (final item in list) {
+        final record = DailyHealthRecord.fromJson(item as Map<String, dynamic>);
+        _userRecords[record.dateKey] = record;
+      }
+      if (mounted) {
+        state = state.copyWith(
+          records:     Map.unmodifiable(_merged),
+          userRecords: Map.unmodifiable(_userRecords),
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _storageKey,
+      jsonEncode(_userRecords.values.map((r) => r.toJson()).toList()),
+    );
+  }
 
   /// Saves (or replaces) the record for the given day; calendar re-renders.
   void logRecord(DailyHealthRecord record) {
-    final updated = Map<String, DailyHealthRecord>.from(state.records)
-      ..[record.dateKey] = record;
-    state = state.copyWith(records: Map.unmodifiable(updated));
+    _userRecords[record.dateKey] = record;
+    state = state.copyWith(
+      records:     Map.unmodifiable(_merged),
+      userRecords: Map.unmodifiable(_userRecords),
+    );
+    _save();
   }
 
   DailyHealthRecord? recordFor(DateTime date) =>
@@ -109,7 +165,7 @@ class HealthCalendarNotifier extends StateNotifier<HealthCalendarState> {
 
 final healthCalendarProvider =
     StateNotifierProvider<HealthCalendarNotifier, HealthCalendarState>(
-  (_) => HealthCalendarNotifier(),
+  (ref) => HealthCalendarNotifier(ref.watch(currentUserIdProvider)),
 );
 
 // ── Vitals → DailyHealthRecord bridge ────────────────────────────────────────
@@ -162,3 +218,32 @@ final vitalsAsRecordsProvider =
 
   return result;
 });
+
+// ── Per-field merge ───────────────────────────────────────────────────────────
+//
+// Merges two record maps field-by-field so that a null field in [overlay]
+// does NOT erase a non-null field in [base] for the same day.
+// Priority: overlay non-null > base non-null > null.
+
+Map<String, DailyHealthRecord> mergeRecordsPerField(
+  Map<String, DailyHealthRecord> base,
+  Map<String, DailyHealthRecord> overlay,
+) {
+  final result = Map<String, DailyHealthRecord>.of(base);
+  for (final MapEntry(:key, :value) in overlay.entries) {
+    final b = result[key];
+    if (b == null) {
+      result[key] = value;
+    } else {
+      result[key] = DailyHealthRecord(
+        date:            b.date,
+        glucose:         value.glucose         ?? b.glucose,
+        bp:              value.bp              ?? b.bp,
+        mood:            value.mood            ?? b.mood,
+        foodLogged:      value.foodLogged      || b.foodLogged,
+        exerciseMinutes: value.exerciseMinutes ?? b.exerciseMinutes,
+      );
+    }
+  }
+  return result;
+}

@@ -25,6 +25,16 @@ class BloodPressure {
 
   String get label => '$systolic/$diastolic';
 
+  Map<String, dynamic> toJson() => {
+    'systolic':  systolic,
+    'diastolic': diastolic,
+  };
+
+  factory BloodPressure.fromJson(Map<String, dynamic> j) => BloodPressure(
+    systolic:  j['systolic']  as int,
+    diastolic: j['diastolic'] as int,
+  );
+
   @override
   bool operator ==(Object other) =>
       other is BloodPressure &&
@@ -81,6 +91,32 @@ class DailyHealthRecord {
       (hasActivity ? 1 : 0);
 
   // ── Copy ─────────────────────────────────────────────────────────────────
+
+  Map<String, dynamic> toJson() => {
+    'date':            dateKey,
+    if (glucose != null)         'glucose':         glucose,
+    if (bp != null)              'bp':              bp!.toJson(),
+    if (mood != null)            'mood':            mood!.index,
+    'foodLogged':      foodLogged,
+    if (exerciseMinutes != null) 'exerciseMinutes': exerciseMinutes,
+  };
+
+  factory DailyHealthRecord.fromJson(Map<String, dynamic> j) {
+    final bp  = j['bp']  != null
+        ? BloodPressure.fromJson(j['bp'] as Map<String, dynamic>)
+        : null;
+    final mood = j['mood'] != null
+        ? MoodLevel.values[j['mood'] as int]
+        : null;
+    return DailyHealthRecord(
+      date:            DateTime.parse(j['date'] as String),
+      glucose:         (j['glucose'] as num?)?.toDouble(),
+      bp:              bp,
+      mood:            mood,
+      foodLogged:      j['foodLogged'] as bool? ?? false,
+      exerciseMinutes: j['exerciseMinutes'] as int?,
+    );
+  }
 
   DailyHealthRecord copyWith({
     double?        glucose,

@@ -66,10 +66,9 @@ class _AnimatedMicrophoneState extends ConsumerState<AnimatedMicrophone>
     }
 
     try {
-      final token = await ref.read(authLocalDatasourceProvider).getAccessToken() ?? '';
       final transcript = await ref
           .read(chatRepositoryProvider)
-          .transcribeAudio(path, token);
+          .transcribeAudio(path);
 
       if (!mounted) return;
       if (transcript.isNotEmpty) {

@@ -336,13 +336,11 @@ class _DarkField extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
   final String suffix;
-  final TextInputType keyboardType;
 
   const _DarkField({
     required this.controller,
     required this.hint,
     this.suffix = '',
-    this.keyboardType = TextInputType.number,
   });
 
   @override
@@ -350,7 +348,7 @@ class _DarkField extends StatelessWidget {
         height: 52,
         child: TextField(
           controller:   controller,
-          keyboardType: keyboardType,
+          keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           style: const TextStyle(
             color: _kText, fontSize: 17,

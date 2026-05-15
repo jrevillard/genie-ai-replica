@@ -330,7 +330,7 @@ class _ProgressSegment extends StatelessWidget {
             else if (isCurrent)
               AnimatedBuilder(
                 animation: controller,
-                builder: (_, __) => FractionallySizedBox(
+                builder: (_, _) => FractionallySizedBox(
                   widthFactor: controller.value,
                   alignment:   Alignment.centerLeft,
                   child:       Container(color: Colors.white),
@@ -439,46 +439,50 @@ class _SlideContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Hero emoji — scales with text accessibility settings
-          Text(
-            slide.iconEmoji,
-            style: const TextStyle(fontSize: 80),
-          ),
-          const SizedBox(height: 28),
-
-          // Title — large, bold, high-contrast
-          Text(
-            slide.title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize:      26,
-              fontWeight:    FontWeight.w800,
-              color:         Colors.white,
-              letterSpacing: -0.5,
-              height:        1.25,
+    return LayoutBuilder(builder: (_, constraints) {
+      // Poll/CTA slides leave less height for the content area. The threshold
+      // must be above the largest measured CTA Expanded height (358 px on the
+      // test device) and below plain-slide Expanded height (~405 px), so 380
+      // is the sweet spot: compact for poll/CTA, full-size for plain slides.
+      final compact = constraints.maxHeight < 380;
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              slide.iconEmoji,
+              style: TextStyle(fontSize: compact ? 60.0 : 80.0),
             ),
-          ),
-          const SizedBox(height: 16),
+            SizedBox(height: compact ? 14.0 : 28.0),
 
-          // Body — readable for elderly users (16.5 sp)
-          Text(
-            slide.body,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize:      16.5,
-              color:         Colors.white.withValues(alpha: 0.88),
-              height:        1.62,
-              letterSpacing: 0.1,
+            Text(
+              slide.title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize:      26,
+                fontWeight:    FontWeight.w800,
+                color:         Colors.white,
+                letterSpacing: -0.5,
+                height:        1.25,
+              ),
             ),
-          ),
-        ],
-      ),
-    );
+            SizedBox(height: compact ? 10.0 : 16.0),
+
+            Text(
+              slide.body,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize:      16.5,
+                color:         Colors.white.withValues(alpha: 0.88),
+                height:        1.62,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 }
 

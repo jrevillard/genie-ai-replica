@@ -108,9 +108,6 @@ final healthInsightsProvider = Provider<InsightsState>((ref) {
       .where((e) => e.bloodPressure.isNotEmpty)
       .firstOrNull;
 
-  // If neither field has ever been logged, show empty state.
-  if (latestGlucoseEntry == null && latestBpEntry == null) return _kEmpty;
-
   // ── Mood trend (up to 7 most recent entries with a mood) ──────────────────
   final moodEntries = allVitals
       .where((e) => e.mood.isNotEmpty)

@@ -33,13 +33,13 @@ class InsightsNotifier extends StateNotifier<InsightsState> {
 
   void toggleLike(String id) {
     final next = Set<String>.from(state.likedIds);
-    if (next.contains(id)) next.remove(id); else next.add(id);
+    if (next.contains(id)) { next.remove(id); } else { next.add(id); }
     state = state.copyWith(likedIds: Set.unmodifiable(next));
   }
 
   void toggleSave(String id) {
     final next = Set<String>.from(state.savedIds);
-    if (next.contains(id)) next.remove(id); else next.add(id);
+    if (next.contains(id)) { next.remove(id); } else { next.add(id); }
     state = state.copyWith(savedIds: Set.unmodifiable(next));
   }
 

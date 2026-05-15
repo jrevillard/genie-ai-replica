@@ -2,21 +2,24 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../domain/entities/vitals_entry.dart';
+import '../../../../core/providers/current_user_provider.dart';
 
 export '../../domain/entities/vitals_entry.dart';
 
-const _kStorageKey = 'amina_vitals_log';
+String _storageKey(String userId) => 'vitals_$userId';
 
 // ─── Notifier ─────────────────────────────────────────────────────────────────
 
 class VitalsNotifier extends StateNotifier<List<VitalsEntry>> {
-  VitalsNotifier() : super(const []) {
+  VitalsNotifier(this._userId) : super(const []) {
     _load();
   }
 
+  final String _userId;
+
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_kStorageKey);
+    final raw = prefs.getString(_storageKey(_userId));
     if (raw != null) {
       try {
         final entries = (jsonDecode(raw) as List)
@@ -30,7 +33,7 @@ class VitalsNotifier extends StateNotifier<List<VitalsEntry>> {
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-      _kStorageKey,
+      _storageKey(_userId),
       jsonEncode(state.map((e) => e.toJson()).toList()),
     );
   }
@@ -50,7 +53,7 @@ class VitalsNotifier extends StateNotifier<List<VitalsEntry>> {
 
 final vitalsProvider =
     StateNotifierProvider<VitalsNotifier, List<VitalsEntry>>(
-  (ref) => VitalsNotifier(),
+  (ref) => VitalsNotifier(ref.watch(currentUserIdProvider)),
 );
 
 final latestVitalsProvider = Provider<VitalsEntry?>((ref) {

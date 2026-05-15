@@ -51,7 +51,7 @@ class VillageRankCard extends ConsumerWidget {
       ),
       child: async.when(
         loading: () => const _LoadingBody(),
-        error:   (_, __) => _ErrorBody(
+        error:   (_, _) => _ErrorBody(
             onRetry: () => ref.invalidate(villageScoreboardProvider)),
         data:    (d) => _CardBody(scoreboard: d),
       ),

@@ -9,7 +9,6 @@ import '../../domain/entities/assigned_caregiver.dart';
 import '../../domain/entities/caregiver_directory_entry.dart';
 import '../../data/repositories/bantaba_repository_impl.dart';
 import '../providers/caregiver_provider.dart';
-import 'caregiver_health_view.dart';
 
 // Data-identity accent colours — semantic meaning, not theme-adaptive.
 const _kFamilyRose = Color(0xFFE11D48);
@@ -999,11 +998,6 @@ class _MemberRow extends ConsumerWidget {
     final amina = Theme.of(context).extension<AminaColors>()!;
 
     return InkWell(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const CaregiverHealthView(),
-        ),
-      ),
       borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1085,9 +1079,6 @@ class _MemberRow extends ConsumerWidget {
                 ),
               ),
             ),
-
-            Icon(Icons.chevron_right_rounded,
-                color: cs.onSurfaceVariant, size: 20),
           ],
         ),
       ),

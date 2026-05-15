@@ -43,14 +43,25 @@ class HealthTrackerCalendar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state    = ref.watch(healthCalendarProvider);
-    final notifier = ref.read(healthCalendarProvider.notifier);
+    final state      = ref.watch(healthCalendarProvider);
+    final vitalsLive = ref.watch(vitalsAsRecordsProvider);
+    final notifier   = ref.read(healthCalendarProvider.notifier);
+    // Calendar dots — include mock so the calendar looks "lived in" from
+    // the first launch (mock < vitals < user edits, per-field).
+    final mergedRecords = mergeRecordsPerField(
+      mergeRecordsPerField(state.records, vitalsLive),
+      state.userRecords,
+    );
+    // Form pre-fill — real data only (no mock) so saving a single field
+    // never silently overwrites other fields with mock-generated values.
+    final realRecords = mergeRecordsPerField(vitalsLive, state.userRecords);
+
     // ── Single theme read — propagated to every child ──────────────────
     final cs    = Theme.of(context).colorScheme;
     final amina = Theme.of(context).extension<AminaColors>()!;
 
     void onDayTap(DateTime date) {
-      final existing = notifier.recordFor(date);
+      final existing = realRecords[DailyHealthRecord.keyFor(date)];
       showHealthLogSheet(context, date, existing);
     }
 
@@ -72,12 +83,13 @@ class HealthTrackerCalendar extends ConsumerWidget {
                 ? _MonthGrid(
                     key:      const ValueKey('month'),
                     state:    state,
+                    records:  mergedRecords,
                     cs:       cs,
                     onDayTap: onDayTap,
                   )
                 : _WeekStrip(
                     key:      const ValueKey('week'),
-                    state:    state,
+                    records:  mergedRecords,
                     cs:       cs,
                     onDayTap: onDayTap,
                   ),
@@ -267,12 +279,12 @@ class _WeekdayLabels extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _WeekStrip extends StatelessWidget {
-  final HealthCalendarState     state;
-  final void Function(DateTime) onDayTap;
-  final ColorScheme             cs;
+  final Map<String, DailyHealthRecord> records;
+  final void Function(DateTime)        onDayTap;
+  final ColorScheme                    cs;
   const _WeekStrip({
     super.key,
-    required this.state,
+    required this.records,
     required this.onDayTap,
     required this.cs,
   });
@@ -291,7 +303,7 @@ class _WeekStrip extends StatelessWidget {
           return Expanded(
             child: _DayCell(
               date:    date,
-              record:  state.records[DailyHealthRecord.keyFor(date)],
+              record:  records[DailyHealthRecord.keyFor(date)],
               isToday: _sameDay(date, today),
               dimmed:  false,
               cs:      cs,
@@ -309,12 +321,14 @@ class _WeekStrip extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _MonthGrid extends StatelessWidget {
-  final HealthCalendarState     state;
-  final void Function(DateTime) onDayTap;
-  final ColorScheme             cs;
+  final HealthCalendarState            state;
+  final Map<String, DailyHealthRecord> records;
+  final void Function(DateTime)        onDayTap;
+  final ColorScheme                    cs;
   const _MonthGrid({
     super.key,
     required this.state,
+    required this.records,
     required this.onDayTap,
     required this.cs,
   });
@@ -332,7 +346,7 @@ class _MonthGrid extends StatelessWidget {
       for (var day = 1; day <= total; day++)
         _DayCell(
           date:    DateTime(focus.year, focus.month, day),
-          record:  state.records[DailyHealthRecord.keyFor(
+          record:  records[DailyHealthRecord.keyFor(
                        DateTime(focus.year, focus.month, day))],
           isToday: _sameDay(DateTime(focus.year, focus.month, day), today),
           dimmed:  false,
@@ -342,7 +356,7 @@ class _MonthGrid extends StatelessWidget {
     ];
 
     // Pad to complete the last row.
-    while (cells.length % 7 != 0) cells.add(const SizedBox.shrink());
+    while (cells.length % 7 != 0) { cells.add(const SizedBox.shrink()); }
 
     final rows = cells.length ~/ 7;
 

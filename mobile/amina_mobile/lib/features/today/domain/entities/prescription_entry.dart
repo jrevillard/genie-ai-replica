@@ -45,4 +45,26 @@ class PrescriptionEntry {
       );
 
   String get chatSummary => '$medicationName $dosage — $frequency for $duration';
+
+  Map<String, dynamic> toJson() => {
+    'id':             id,
+    'medicationName': medicationName,
+    'dosage':         dosage,
+    'frequency':      frequency,
+    'duration':       duration,
+    'notes':          notes,
+    'dateAdded':      dateAdded.toIso8601String(),
+    'fromScan':       fromScan,
+  };
+
+  factory PrescriptionEntry.fromJson(Map<String, dynamic> j) => PrescriptionEntry(
+    id:             j['id']             as String,
+    medicationName: j['medicationName'] as String,
+    dosage:         j['dosage']         as String,
+    frequency:      j['frequency']      as String,
+    duration:       j['duration']       as String,
+    notes:          j['notes']          as String? ?? '',
+    dateAdded:      DateTime.parse(j['dateAdded'] as String),
+    fromScan:       j['fromScan']       as bool? ?? false,
+  );
 }

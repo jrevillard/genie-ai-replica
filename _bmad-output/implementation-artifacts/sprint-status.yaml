@@ -35,7 +35,6 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-13
-<<<<<<< HEAD
 last_updated: 2026-05-15
 project: genie-ai
 project_key: testing-framework
@@ -79,7 +78,7 @@ development_status:
 
   # Epic 4: OPEA Microservice Test Suite
   epic-4: in-progress
-  4-1-configure-pytest-and-create-shared-fixtures-for-opea: review
+  4-1-configure-pytest-and-create-shared-fixtures-for-opea: done
   4-2-test-retriever-hybrid-search-logic: backlog
   4-3-test-dataprep-extraction-pipeline: backlog
   4-4-test-core-type-definitions-and-api-protocols: backlog

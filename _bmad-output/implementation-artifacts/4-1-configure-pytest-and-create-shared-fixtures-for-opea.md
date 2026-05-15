@@ -1,6 +1,6 @@
 # Story 4.1: Configure pytest and Create Shared Fixtures for OPEA
 
-Status: review
+Status: done
 
 ## Story
 
@@ -340,3 +340,8 @@ Claude Code (GLM-5-turbo)
 - `genie-ai-overlay/tests/test_conftest_fixtures.py` — NEW
 - `_bmad-output/implementation-artifacts/4-1-configure-pytest-and-create-shared-fixtures-for-opea.md` — MODIFIED
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — MODIFIED
+
+### Review Findings
+
+- [x] [Review][Defer] Missing comps submodule mocks for telemetry/retrievers/rerankers paths [conftest.py:14-26] — deferred, pre-existing. Actual service imports (stories 4.2-4.6) may need `comps.cores.telemetry`, `comps.retrievers.src.*`, `comps.rerankings.src.*` added to sys.modules pre-population. Current mock list matches the spec Dev Notes exactly; self-tests pass without these.
+- [x] [Review][Defer] Mock response shapes may need dict-access support for service code [conftest.py:176-244] — deferred, pre-existing. chatqna uses `data["choices"][0]["message"]["content"]` (dict access) while mocks provide attribute access. Stories 4.2-4.6 may need to extend mock helpers to support both access patterns.

@@ -60,7 +60,7 @@ development_status:
   epic-2: in-progress
   2-1-refactor-backend-indexjs-to-export-createapp: done
   2-2-create-backend-test-fixtures-and-shared-mocks: done
-  2-3-test-backend-auth-route-handlers: ready-for-dev
+  2-3-test-backend-auth-route-handlers: review
   2-4-test-backend-chat-route-handlers: backlog
   2-5-test-backend-analytics-and-categories-route-handlers: backlog
   2-6-test-backend-admin-and-files-route-handlers: backlog

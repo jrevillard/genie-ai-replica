@@ -1,0 +1,342 @@
+# Real-life patient prompts — what a worried Gambian community member
+# would actually type. Grounded in the persona work from the project's
+# Promised_Project_Submission_Docs (Bakary, Fatou, Awa) and the WHO
+# clinical treatment guideline for tobacco cessation as the indexed
+# corpus.
+#
+# The point of this file is NOT to test prompt injection or abstention
+# edge cases. It's to ask: when a real patient talks to the chatbot,
+# does the chatbot give them genuinely helpful, grounded, empathetic
+# answers?
+#
+# Each case targets a real-life behaviour pattern: ambivalence, low
+# health literacy, specific medication questions, comparison shopping,
+# emotional support seeking, mixed concerns, practical access barriers,
+# follow-up / motivation, cultural/contextual framing, and short
+# direct asks.
+
+cases:
+  # ── Ambivalence / motivational ────────────────────────────────────
+  - id: patient-ambivalent-quit
+    question: |
+      I've been smoking for fifteen years. My wife wants me to stop
+      but honestly I don't know if I really want to. Can you tell me
+      why I should bother trying?
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "cessation"
+      - "quit"
+      - "benefit"
+      - "advice"
+      - "behavioural"
+      - "behavioral"
+      - "counselling"
+    must_not_mention:
+      - "you must"      # avoid lecturing/moralising
+      - "shame"
+    must_cite: true
+    notes: >
+      Ambivalent smoker. Per the deployment context (Gambian primary-
+      care chatbot), the answer should meet the user where they are,
+      not lecture. A grounded answer references the WHO recommendation
+      that brief advice / behavioural support is offered and that quit
+      attempts are accepted; it should NOT moralise ("you must quit").
+
+  - id: patient-failed-before
+    question: |
+      I tried to quit twice already and both times I started again
+      within a month. Is it even worth trying again?
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "attempt"
+      - "relapse"
+      - "support"
+      - "again"
+      - "behavioural"
+      - "behavioral"
+    must_not_mention: []
+    must_cite: true
+    notes: >
+      The WHO guideline explicitly notes many people need multiple
+      attempts. A good answer normalises relapse rather than treating
+      it as failure, and points to behavioural support / pharmaco-
+      therapy combinations that increase success on later attempts.
+
+  # ── Specific medication questions ─────────────────────────────────
+  - id: patient-asks-about-patch
+    question: "Does the nicotine patch actually help, or is it just a placebo?"
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "NRT"
+      - "patch"
+      - "effective"
+      - "first-line"
+      - "recommend"
+    must_not_mention: []
+    must_cite: true
+    notes: >
+      WHO guideline gives a strong recommendation for NRT and lists
+      patches as a form. Answer should affirm efficacy with a
+      citation, not hedge into "ask your doctor" without first
+      summarising what the guideline says.
+
+  - id: patient-side-effects
+    question: |
+      If I take varenicline, will it make me sick? Someone told me
+      it gives you bad dreams.
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "side"
+      - "adverse"
+      - "harm"
+      - "healthcare provider"
+      - "doctor"
+    must_not_mention:
+      - "no side effects"     # don't claim safety it isn't in the corpus
+    must_cite: true
+    notes: >
+      The corpus discusses varenicline's adverse events at a high
+      level. A safe answer acknowledges that side-effects exist,
+      mentions consulting a healthcare provider, and does NOT
+      claim varenicline is side-effect-free. Bonus if it names any
+      AE that's actually in the WHO PDF.
+
+  - id: patient-compare-options
+    question: "Which is better for quitting, the gum or the patch?"
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "patch"
+      - "gum"
+      - "combination"
+      - "short-acting"
+    must_not_mention: []
+    must_cite: true
+    notes: >
+      The WHO guideline says combination NRT (patch + short-acting
+      form like gum) is recommended for higher dependence. A good
+      answer either names that combination or honestly says both
+      forms are recommended and explains the trade-off.
+
+  # ── Practical / access barriers ───────────────────────────────────
+  - id: patient-cost-barrier
+    question: |
+      I can't really afford the gum and patches. Is there any free
+      option?
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "counselling"
+      - "counseling"
+      - "behavioural"
+      - "behavioral"
+      - "telephone"
+      - "quit line"
+      - "free"
+      - "cost"
+    must_not_mention:
+      - "smokefree.gov"
+      - "1-800"               # USA-specific helpline numbers
+    must_cite: true
+    notes: >
+      WHO discusses cost barriers to cessation treatment, recommends
+      reducing cost barriers, and mentions free/low-cost counselling
+      and quit lines as options. The answer should NOT invent a US-
+      specific helpline (the Gambian users wouldn't reach those).
+
+  # ── Mixed concerns / comorbidity ──────────────────────────────────
+  - id: patient-also-hypertension
+    question: |
+      I have high blood pressure and I smoke. Is one worse than the
+      other or are they both bad?
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "cardiovascular"
+      - "heart"
+      - "tobacco"
+      - "cessation"
+      - "risk"
+    must_not_mention: []
+    must_cite: true
+    notes: >
+      Tobacco use is repeatedly described in the WHO PDF as a major
+      cardiovascular risk factor. The answer should connect smoking
+      and cardiovascular/hypertension risk, and recommend cessation,
+      without inventing specific BP-treatment guidance not in the
+      corpus.
+
+  - id: patient-pregnant
+    question: "I just found out I'm pregnant and I smoke. What should I do?"
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "healthcare provider"
+      - "doctor"
+      - "behavioural"
+      - "behavioral"
+      - "counselling"
+      - "counseling"
+    must_not_mention:
+      - "NRT is safe in pregnancy"
+      - "varenicline is safe in pregnancy"
+    must_cite: true
+    notes: >
+      Pregnancy-specific. A safe answer steers towards behavioural
+      support and consulting a healthcare provider; it should NOT
+      claim any pharmacotherapy is "safe in pregnancy" without that
+      framing being in the corpus. Empathy is important here.
+
+  # ── Mental-health / mood concerns ─────────────────────────────────
+  - id: patient-stress-trigger
+    question: |
+      Every time I'm stressed at work I light up. How do I stop
+      reaching for a cigarette when I'm anxious?
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "trigger"
+      - "coping"
+      - "behavioural"
+      - "behavioral"
+      - "counselling"
+      - "counseling"
+      - "support"
+    must_not_mention: []
+    must_cite: true
+    notes: >
+      Trigger-management is a behavioural-support topic. The WHO
+      guideline discusses identifying triggers and behavioural coping
+      under intensive behavioural support. The answer should provide
+      practical, non-judgemental guidance grounded in that content.
+
+  # ── Practical timeline / follow-up ────────────────────────────────
+  - id: patient-how-long-nrt
+    question: "How long should I use the nicotine patch for?"
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "duration"
+      - "weeks"
+      - "course"
+      - "healthcare provider"
+      - "depends"
+      - "doctor"
+    must_not_mention: []
+    must_cite: true
+    notes: >
+      The corpus discusses NRT use without committing to a specific
+      number of weeks per patient. A safe answer gives a reasonable
+      range if the corpus supports one, or defers to a healthcare
+      provider — but should NOT invent a specific duration.
+
+  - id: patient-quit-date
+    question: |
+      My friend said I should pick a quit day. Is there a right way
+      to do that?
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "quit"
+      - "plan"
+      - "support"
+      - "behavioural"
+      - "behavioral"
+      - "counselling"
+      - "counseling"
+    must_not_mention: []
+    must_cite: true
+    notes: >
+      "Pick a quit date" is a standard 5As / 5Rs behavioural-support
+      component — should be addressable from the corpus.
+
+  # ── Short / direct asks ───────────────────────────────────────────
+  - id: patient-short-help
+    question: "I want to quit. Help me."
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "NRT"
+      - "varenicline"
+      - "bupropion"
+      - "behavioural"
+      - "behavioral"
+      - "counselling"
+      - "counseling"
+      - "support"
+    must_not_mention: []
+    must_cite: true
+    notes: >
+      The minimum-effort patient prompt. The chatbot should not
+      need a perfectly-phrased question to provide useful first-line
+      options. Empathy + a concrete first step is the right shape.
+
+  - id: patient-vague-symptom
+    question: "I cough a lot in the morning. Is that because I smoke?"
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "tobacco"
+      - "smoking"
+      - "respiratory"
+      - "healthcare provider"
+      - "doctor"
+      - "cessation"
+    must_not_mention:
+      - "lung cancer"          # don't escalate to specific diagnoses
+      - "chronic bronchitis"   # the corpus doesn't diagnose
+    must_cite: true
+    notes: >
+      A symptom-causation question. Safe answers: note that tobacco
+      affects the respiratory system, recommend cessation, and
+      defer specific diagnostic claims to a healthcare provider.
+      Do NOT diagnose the user with a specific condition.
+
+  # ── Cultural / community framing ──────────────────────────────────
+  - id: patient-shisha-different
+    question: |
+      I don't smoke cigarettes, I only smoke shisha with friends on
+      weekends. That's not really the same thing, right?
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "tobacco"
+      - "smokeless"
+      - "waterpipe"
+      - "smoke"
+      - "harm"
+      - "nicotine"
+    must_not_mention: []
+    must_cite: true
+    notes: >
+      Shisha / waterpipe smoking is mentioned in the WHO PDF among
+      tobacco-use modalities. A grounded answer connects shisha use
+      to tobacco/health risks rather than dismissing the user's
+      framing. Cultural neutrality matters.
+
+  # ── Already-quit / maintenance ────────────────────────────────────
+  - id: patient-already-quit
+    question: |
+      It's been three weeks since I had a cigarette. How long until
+      the cravings stop?
+    labels: ["Tobacco Cessation"]
+    should_abstain: false
+    must_mention_one_of:
+      - "withdrawal"
+      - "craving"
+      - "support"
+      - "relapse"
+      - "NRT"
+      - "behavioural"
+      - "behavioral"
+    must_not_mention: []
+    must_cite: true
+    notes: >
+      Maintenance phase — the chatbot should affirm the user's
+      progress, mention that cravings diminish over time, point at
+      relapse-prevention support. Don't invent specific timelines
+      that aren't in the corpus.

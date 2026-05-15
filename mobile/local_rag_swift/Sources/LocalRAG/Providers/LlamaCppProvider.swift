@@ -62,9 +62,15 @@ public actor LlamaCppProvider: LLMProvider {
         }
         self.model = loadedModel
 
-        // Create context
+        // Create context. Gemma 2 2B was trained at n_ctx_train=8192;
+        // the prior 4096 setting was leaving ~half the model's natural
+        // window on the floor and forcing context-overflow failures
+        // (llama_decode status 1) the moment we tried topK > 8 with the
+        // 1200-char chunk size LocalRAGBridge uses. 6144 is a middle
+        // ground: enough headroom for topK=10 + system prompt without
+        // doubling the KV-cache memory cost on small devices.
         var contextParams = llama_context_default_params()
-        contextParams.n_ctx = 4096
+        contextParams.n_ctx = 6144
         contextParams.n_batch = 512
 
         guard let ctx = llama_init_from_model(loadedModel, contextParams) else {

@@ -1,6 +1,6 @@
 # Story 2.3: Test Backend Auth Route Handlers
 
-Status: review
+Status: done
 
 ## Story
 
@@ -189,7 +189,7 @@ All existing test files remain unchanged. The new test file is purely additive.
 - Do NOT use ES `import`/`export` — CommonJS only (`require`/`module.exports`)
 - Do NOT create real ArangoDB connections — all DB access must be mocked
 - Do NOT use `ioredis-mock` — not needed for route handler tests
-- Do NOT put `process.env` overrides in test files — use `beforeEach`/`afterEach` if needed
+- Do NOT duplicate `process.env` overrides in test files — use centralized `__tests__/setup-env.js` via `require('../setup-env')`. Per-test env mutations should use `beforeEach`/`afterEach`.
 - Do NOT test the middleware itself — that's Story 2.8. This story tests the route handler's behavior through the middleware.
 
 ### Project Structure Notes
@@ -242,3 +242,12 @@ Claude
 |------|--------|
 | `components/gov-chat-backend/__tests__/routes/auth.test.js` | NEW |
 | `components/gov-chat-backend/__tests__/swagger-config.test.js` | MODIFIED (fixed incomplete `path` mock) |
+
+### Review Findings
+
+- [x] [Review][Decision → Patch] process.env set at module scope contradicts spec anti-pattern — Resolved: extracted to centralized `__tests__/setup-env.js`, used by both `auth.test.js` and `createApp.test.js`. Spec anti-pattern updated.
+- [x] [Review][Decision → Patch] Missing test for null userId / session cleanup skip — Resolved: added test simulating `provisionUser` returning user with `iss_sub: null`, verifying `getUserSessions` is never called.
+- [x] [Review][Patch] Missing test for "Bearer" without token value [auth.test.js] — Added test for `Authorization: Bearer ` (empty token).
+- [x] [Review][Patch] Weak audit log timestamp validation [auth.test.js:~232] — Changed to `toMatch(/^\d{4}-\d{2}-\d{2}T/)` for ISO 8601 validation.
+- [x] [Review][Defer] Unexpected error path in controller not tested [authController.js:41-44] — deferred, pre-existing. The controller's try/catch covers session errors but if `res.json()` or `JSON.stringify()` in the audit log throws, the behavior is untested. Pre-existing controller design.
+- [x] [Review][Defer] Sessions returned without _key property [auth.test.js:~443] — deferred, pre-existing. If `getUserSessions` returns sessions missing `_key`, `endSession(undefined)` would be called. Depends on session-service contract guarantee. Pre-existing service contract assumption.

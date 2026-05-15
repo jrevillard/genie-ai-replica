@@ -1,17 +1,6 @@
 'use strict';
 
-// Set env vars BEFORE any module loading
-process.env.KEYCLOAK_URL = 'https://keycloak.example.com/auth';
-process.env.KEYCLOAK_REALM = 'genie';
-process.env.KEYCLOAK_CLIENT_ID = 'genie-app';
-process.env.PORT = '3000';
-process.env.CORS_ALLOWED_ORIGINS = 'http://localhost:5173';
-process.env.CSP_CONNECT_SRC = "'self' http://localhost:3000 ws://localhost:3000";
-process.env.ARANGO_URL = 'http://localhost:8529';
-process.env.ARANGO_DB = 'genie';
-process.env.ARANGO_USER = 'root';
-process.env.ARANGO_PASSWORD = 'testpass';
-process.env.UPLOAD_DIR = 'Uploads';
+require('../setup-env');
 
 // Mock shared-lib — virtual because it only exists after Docker packaging
 jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
@@ -156,6 +145,15 @@ describe('POST /api/auth/logout', () => {
         details: {}
       });
     });
+
+    it('should return 401 TOKEN_INVALID when Authorization header is "Bearer" with no token', async () => {
+      const response = await request(app)
+        .post('/api/auth/logout')
+        .set('Authorization', 'Bearer ');
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toBe('TOKEN_INVALID');
+    });
   });
 
   // --- Logout success tests (AC: #1, #5, #6) ---
@@ -229,7 +227,7 @@ describe('POST /api/auth/logout', () => {
         userId: mockUser.iss_sub,
         issuer: mockUser.iss
       });
-      expect(parsed.timestamp).toBeDefined();
+      expect(parsed.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     });
   });
 
@@ -272,6 +270,25 @@ describe('POST /api/auth/logout', () => {
       expect(logger.warn).toHaveBeenCalledWith(
         expect.stringContaining('Failed to end sessions on logout')
       );
+    });
+
+    it('should return 200 and skip session cleanup when userId is null', async () => {
+      const token = createValidToken();
+      userProvisioningService.provisionUser.mockResolvedValue({
+        ...mockUser,
+        iss_sub: null
+      });
+
+      const response = await request(app)
+        .post('/api/auth/logout')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        success: true,
+        message: 'Logged out successfully'
+      });
+      expect(sessionService.getUserSessions).not.toHaveBeenCalled();
     });
   });
 });

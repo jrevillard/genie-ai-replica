@@ -103,12 +103,20 @@ describe('Fixtures', () => {
       expect(typeof res.status).toBe('function');
       expect(typeof res.send).toBe('function');
       expect(typeof res.set).toBe('function');
+      expect(typeof res.setHeader).toBe('function');
+      expect(typeof res.getHeader).toBe('function');
       expect(res.status.mockReturnThis).toBeDefined();
     });
 
     it('status returns this for chaining', () => {
       const res = createMockRes();
       const result = res.status(400);
+      expect(result).toBe(res);
+    });
+
+    it('setHeader returns this for chaining', () => {
+      const res = createMockRes();
+      const result = res.setHeader('X-Custom', 'value');
       expect(result).toBe(res);
     });
   });

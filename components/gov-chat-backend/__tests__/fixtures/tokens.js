@@ -22,7 +22,7 @@ function createValidToken(claims = {}) {
     iat: now,
     ...claims
   };
-  return jwt.sign(payload, TEST_JWT_SECRET);
+  return jwt.sign(payload, TEST_JWT_SECRET, { algorithm: 'HS256' });
 }
 
 function createExpiredToken(claims = {}) {
@@ -33,7 +33,7 @@ function createExpiredToken(claims = {}) {
     iat: now - 7200,
     ...claims
   };
-  return jwt.sign(payload, TEST_JWT_SECRET);
+  return jwt.sign(payload, TEST_JWT_SECRET, { algorithm: 'HS256' });
 }
 
 module.exports = { createValidToken, createExpiredToken, TEST_JWT_SECRET };

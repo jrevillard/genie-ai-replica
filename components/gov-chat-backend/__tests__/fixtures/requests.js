@@ -20,7 +20,9 @@ function createMockRes() {
     json: jest.fn(),
     status: jest.fn().mockReturnThis(),
     send: jest.fn(),
-    set: jest.fn().mockReturnThis()
+    set: jest.fn().mockReturnThis(),
+    setHeader: jest.fn().mockReturnThis(),
+    getHeader: jest.fn()
   };
   return res;
 }

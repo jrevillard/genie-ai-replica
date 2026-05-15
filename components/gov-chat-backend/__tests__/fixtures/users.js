@@ -14,14 +14,16 @@ const defaultUser = {
 };
 
 function createMockUser(overrides = {}) {
-  return { ...defaultUser, ...overrides };
+  const safeOverrides = overrides || {};
+  return { ...defaultUser, ...safeOverrides };
 }
 
 function createMockAdmin(overrides = {}) {
+  const safeOverrides = overrides || {};
   return createMockUser({
     realm_roles: ['admin'],
     resource_access: { 'genie-app': { roles: ['admin'] } },
-    ...overrides
+    ...safeOverrides
   });
 }
 

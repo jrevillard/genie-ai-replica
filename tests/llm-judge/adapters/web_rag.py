@@ -25,8 +25,30 @@ from __future__ import annotations
 import time
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from . import SystemResponse, TestCase
+
+
+def _make_session() -> requests.Session:
+    """Session with automatic retries on network blips. The Swarm host
+    is reached over an SSH tunnel which can blink during the run; on a
+    failed request we retry up to 3 times with exponential backoff
+    rather than aborting the whole sweep."""
+    s = requests.Session()
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        backoff_factor=2.0,  # 0s, 2s, 4s
+        status_forcelist=(502, 503, 504),
+        allowed_methods=frozenset(["POST", "GET"]),
+        raise_on_status=False,
+    )
+    s.mount("http://", HTTPAdapter(max_retries=retry))
+    s.mount("https://", HTTPAdapter(max_retries=retry))
+    return s
 
 
 def _format_context(source_documents: list[dict]) -> str:
@@ -59,6 +81,7 @@ class WebRAGAdapter:
         mode: str = "chatqna",
         token: str | None = None,
         timeout_seconds: int = 210,
+        corpus_fallback_dir=None,
     ) -> None:
         if mode not in ("chatqna", "backend"):
             raise ValueError(f"web mode must be 'chatqna' or 'backend' (got {mode!r})")
@@ -70,11 +93,35 @@ class WebRAGAdapter:
         self._mode = mode
         self._token = token
         self._timeout = timeout_seconds
+        # The chatqna service currently strips chunk text from
+        # source_documents and, when it can't authenticate to doc-repo,
+        # returns "error" placeholders for the metadata too. To give the
+        # judge a meaningful retrieved_context anyway, we can fall back to
+        # the full corpus text — the judge can then check whether each
+        # fact in the answer is supported by the corpus the server was
+        # supposed to retrieve from. The fallback is loaded lazily and
+        # cached.
+        self._corpus_fallback_dir = corpus_fallback_dir
+        self._corpus_text_cache: str | None = None
+        self._session = _make_session()
 
     def run(self, cases: list[TestCase]) -> list[SystemResponse]:
         results: list[SystemResponse] = []
         for case in cases:
-            results.append(self._run_one(case))
+            try:
+                results.append(self._run_one(case))
+            except Exception as e:  # noqa: BLE001 — fail-soft per case
+                # A single-case network blip shouldn't kill the whole
+                # sweep. Record it as a synthetic response so the judge
+                # can mark it failed and we keep going.
+                results.append(
+                    SystemResponse(
+                        test_id=case.id,
+                        answer=f"[ADAPTER ERROR] {type(e).__name__}: {e}",
+                        retrieved_context="",
+                        extra={"error": True, "exception": type(e).__name__},
+                    )
+                )
         return results
 
     def _run_one(self, case: TestCase) -> SystemResponse:
@@ -95,7 +142,7 @@ class WebRAGAdapter:
             "user_id": "llm-judge-bench",
         }
         t0 = time.time()
-        resp = requests.post(self._url, json=payload, timeout=self._timeout)
+        resp = self._session.post(self._url, json=payload, timeout=self._timeout)
         duration = time.time() - t0
         return self._parse_response(case, resp, duration)
 
@@ -120,6 +167,53 @@ class WebRAGAdapter:
         )
         duration = time.time() - t0
         return self._parse_response(case, resp, duration)
+
+    def _load_corpus_fallback(self) -> str:
+        if self._corpus_text_cache is not None:
+            return self._corpus_text_cache
+        if self._corpus_fallback_dir is None:
+            self._corpus_text_cache = ""
+            return ""
+        from pathlib import Path
+
+        dir_path = Path(self._corpus_fallback_dir)
+        if not dir_path.exists():
+            self._corpus_text_cache = ""
+            return ""
+        # Per-document truncation. The full WHO PDF is ~62k tokens; if we
+        # forward it verbatim to the judge per query, we hit the model's
+        # tokens-per-minute limit immediately. 60_000 chars ≈ 15k tokens
+        # — enough to cover the recommendations + treatment sections of
+        # the WHO guideline (which is what most of our cases probe). For
+        # corpora that grow beyond what this truncation can hold, switch
+        # the harness to chunk-text retrieval from a real retriever
+        # endpoint instead of corpus_fallback.
+        per_doc_limit = 60_000
+        parts: list[str] = []
+        for f in sorted(dir_path.iterdir()):
+            if f.suffix.lower() not in (".txt", ".md"):
+                continue
+            stem = f.stem
+            title = stem if stem.lower().endswith(".pdf") else f"{stem}.pdf"
+            text = f.read_text(encoding="utf-8", errors="replace")
+            if len(text) > per_doc_limit:
+                text = text[:per_doc_limit] + f"\n\n[... corpus truncated at {per_doc_limit} chars; original length {len(text)}]"
+            parts.append(f'From "{title}" (full corpus fallback):\n{text}')
+        self._corpus_text_cache = "\n\n".join(parts)
+        return self._corpus_text_cache
+
+    def _sources_are_real(self, sources: list[dict]) -> bool:
+        """Return True only if at least one source has plausible metadata.
+        Chatqna without auth returns sentinel "error" strings for every
+        field — see the runtime log finding documented in the README."""
+        if not sources:
+            return False
+        for s in sources:
+            doc = s.get("document_id") or s.get("documentId") or ""
+            name = s.get("document_name") or s.get("title") or ""
+            if doc and doc != "error" and name and name != "error":
+                return True
+        return False
 
     def _parse_response(
         self,
@@ -148,14 +242,27 @@ class WebRAGAdapter:
         metadata = body.get("metadata") or {}
         sources = metadata.get("source_documents") or body.get("sources") or []
 
+        sources_real = self._sources_are_real(sources)
+        if sources_real:
+            retrieved_context = _format_context(sources)
+            ctx_source = "server_sources"
+        else:
+            # Fall back to the full corpus text. This lets the judge
+            # verify grounding against the same documents the server
+            # indexed, at the cost of losing per-chunk score signal.
+            retrieved_context = self._load_corpus_fallback()
+            ctx_source = "corpus_fallback"
+
         return SystemResponse(
             test_id=case.id,
             answer=answer,
-            retrieved_context=_format_context(sources),
+            retrieved_context=retrieved_context,
             extra={
                 "http_status": 200,
                 "duration_sec": round(duration, 3),
                 "source_count": len(sources),
+                "sources_real": sources_real,
+                "context_source": ctx_source,
                 "confidence_score": metadata.get("confidence_score")
                 or body.get("confidence"),
             },

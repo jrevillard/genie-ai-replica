@@ -259,20 +259,77 @@ class Judge:
     def evaluate(self, inp: JudgeInput) -> JudgeResult:
         # Use the structured-outputs path so the judge can't return malformed
         # JSON. gpt-4o-2024-08-06+ supports this via response_format=Verdict.
-        completion = self._client.beta.chat.completions.parse(
-            model=self._model,
-            messages=[
-                {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
-                {"role": "user", "content": _make_user_prompt(inp)},
-            ],
-            response_format=Verdict,
-            temperature=0,
-        )
-        verdict: Verdict = completion.choices[0].message.parsed
-        passed, fails = _derive_pass(inp, verdict)
-        return JudgeResult(
-            test_id=inp.test_id,
-            verdict=verdict,
-            passed=passed,
-            fail_reasons=fails,
-        )
+        # Retry transient errors (TPM throttling, transient 5xx) with
+        # exponential backoff — useful when the test host has flaky
+        # internet or we briefly exceed the OpenAI account's TPM bucket.
+        import time as _time
+
+        backoff = 2.0
+        last_err: Exception | None = None
+        for attempt in range(5):
+            try:
+                completion = self._client.beta.chat.completions.parse(
+                    model=self._model,
+                    messages=[
+                        {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+                        {"role": "user", "content": _make_user_prompt(inp)},
+                    ],
+                    response_format=Verdict,
+                    temperature=0,
+                )
+                verdict: Verdict = completion.choices[0].message.parsed
+                passed, fails = _derive_pass(inp, verdict)
+                return JudgeResult(
+                    test_id=inp.test_id,
+                    verdict=verdict,
+                    passed=passed,
+                    fail_reasons=fails,
+                )
+            except Exception as e:  # noqa: BLE001 — retry anything network-shaped
+                last_err = e
+                msg = str(e).lower()
+                # Only retry on transient signals: rate limit, timeout,
+                # connection-reset, 5xx. Don't retry permanent errors like
+                # invalid API key or 400s.
+                # Catch by message OR by exception class. OpenAI's
+                # APIConnectionError / APITimeoutError are wrappers around
+                # network failures (DNS lookups, TCP resets, TLS
+                # handshakes) that all warrant a retry on flaky links.
+                cls_name = type(e).__name__
+                transient_class = cls_name in (
+                    "APIConnectionError",
+                    "APITimeoutError",
+                    "RateLimitError",
+                    "InternalServerError",
+                )
+                transient_msg = any(
+                    sig in msg
+                    for sig in (
+                        "rate limit",
+                        "rate_limit",
+                        "429",
+                        "timeout",
+                        "timed out",
+                        "connection reset",
+                        "connection aborted",
+                        "connection error",
+                        "remote disconnected",
+                        "name or service not known",
+                        "nodename nor servname",
+                        "temporary failure",
+                        "502",
+                        "503",
+                        "504",
+                    )
+                )
+                transient = transient_class or transient_msg
+                if not transient or attempt == 4:
+                    raise
+                sleep_s = backoff * (2 ** attempt)
+                sys.stderr.write(
+                    f"  [judge] transient error '{type(e).__name__}: {e}' — "
+                    f"retry in {sleep_s:.0f}s (attempt {attempt + 2}/5)\n"
+                )
+                _time.sleep(sleep_s)
+        # Should never reach here.
+        raise RuntimeError(f"Judge exhausted retries: {last_err}")

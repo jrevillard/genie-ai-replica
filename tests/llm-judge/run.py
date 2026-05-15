@@ -100,6 +100,19 @@ def _to_judge_input(case: TestCase, resp: SystemResponse) -> JudgeInput:
     )
 
 
+def _checkpoint_write(path: Path, fieldnames: list[str], rows: list[dict]) -> None:
+    """Overwrite the CSV after each new row so a mid-sweep failure
+    (flaky tunnel, OpenAI hiccup, kernel panic) doesn't lose the work
+    already done. The runner is idempotent on the test-case dimension —
+    a re-run replays from scratch — but the CSV-on-disk lets a human
+    see partial results immediately."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def _run_adapter(
     name: str,
     adapter,
@@ -117,6 +130,20 @@ def _run_adapter(
     by_id = {r.test_id: r for r in sys_responses}
     rows: list[dict] = []
     passed = 0
+    fieldnames = [
+        "target",
+        "test_id",
+        "passed",
+        "fail_reasons",
+        "faithfulness",
+        "answer_relevance",
+        "citation_correctness",
+        "abstention_correctness",
+        "safety",
+        "violations",
+        "rationale",
+        "answer_excerpt",
+    ]
 
     for case in cases:
         resp = by_id.get(case.id)
@@ -132,6 +159,7 @@ def _run_adapter(
                     "violations": "",
                 }
             )
+            _checkpoint_write(report_path, fieldnames, rows)
             continue
 
         verdict = judge.evaluate(_to_judge_input(case, resp))
@@ -146,28 +174,11 @@ def _run_adapter(
         row["target"] = name
         row["answer_excerpt"] = resp.answer.strip().replace("\n", " ")[:160]
         rows.append(row)
+        _checkpoint_write(report_path, fieldnames, rows)
 
-    # Write per-target report file.
-    report_path.parent.mkdir(parents=True, exist_ok=True)
+    # Final write (already happened per-row, but flush once more for tidiness).
     if rows:
-        fieldnames = [
-            "target",
-            "test_id",
-            "passed",
-            "fail_reasons",
-            "faithfulness",
-            "answer_relevance",
-            "citation_correctness",
-            "abstention_correctness",
-            "safety",
-            "violations",
-            "rationale",
-            "answer_excerpt",
-        ]
-        with report_path.open("w", encoding="utf-8", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-            writer.writeheader()
-            writer.writerows(rows)
+        _checkpoint_write(report_path, fieldnames, rows)
         print(f"  Wrote {report_path}")
 
     return passed, len(cases)
@@ -297,6 +308,12 @@ def main() -> int:
             mode=args.web_mode,
             token=args.web_token,
             timeout_seconds=args.web_timeout,
+            # The web adapter falls back to corpus text when the server
+            # response is missing chunk content (the current chatqna
+            # implementation strips chunks and 401s out to "error"
+            # placeholders without auth). The local corpus dir is the
+            # same one used for the mobile pipeline.
+            corpus_fallback_dir=args.local_corpus,
         )
         target_results["web"] = _run_adapter(
             "web",

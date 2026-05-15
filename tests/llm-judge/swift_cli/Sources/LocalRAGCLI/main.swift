@@ -275,5 +275,18 @@ struct LocalRAGCLI {
         }
 
         writeStdoutJSON(CLIOutput(results: results))
+
+        // Bypass C++ static destructors via _exit. The llama.cpp Metal
+        // backend's static destructor asserts on the residency-set count
+        // during process exit when used from a macOS CLI (it expects an
+        // explicit teardown path that only the iOS / mobile lifecycle
+        // takes). The output we care about is already on stdout; skipping
+        // the destructors costs nothing here.
+        //
+        // Note: do NOT call FileHandle.synchronizeFile() on stdout/stderr
+        // here — when those FDs are pipes (which they are under
+        // subprocess.run with capture_output), synchronizeFile can raise
+        // an Objective-C exception that becomes a Swift trap (SIGTRAP).
+        Darwin._exit(0)
     }
 }

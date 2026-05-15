@@ -88,13 +88,53 @@ class LocalRAGAdapter:
         duration = time.time() - t0
 
         if proc.returncode != 0:
-            # Surface the Swift error to the Python caller — most often this
-            # is the model failing to load (wrong path, unsupported arch) or
-            # the corpus directory being unreadable.
+            # Surface both stderr (Swift loader logs) and the LAST 800
+            # chars of stdout (which would normally hold the JSON
+            # results), so we can tell whether the crash was before or
+            # after the queries actually completed.
             sys.stderr.write(proc.stderr)
+            tail = proc.stdout[-800:] if proc.stdout else "(empty)"
+            sys.stderr.write(
+                f"\n--- LocalRAGCLI stdout tail ({len(proc.stdout)} bytes) ---\n"
+                f"{tail}\n"
+                f"--- end stdout tail ---\n"
+            )
+
+            # Fail-soft: if the CLI emitted valid JSON for at least some
+            # queries before crashing during exit cleanup, parse what we
+            # have and return those responses rather than aborting the
+            # whole sweep. The Metal cleanup-on-exit assertion in
+            # ggml-metal-device.m is a known issue when llama.cpp is used
+            # from a short-lived CLI process; treat it as non-fatal as
+            # long as we got the results.
+            if proc.stdout:
+                try:
+                    partial = json.loads(proc.stdout)
+                    if partial.get("results"):
+                        sys.stderr.write(
+                            f"--- Recovered {len(partial['results'])} results "
+                            f"despite exit code {proc.returncode}; continuing ---\n"
+                        )
+                        return [
+                            SystemResponse(
+                                test_id=e["id"],
+                                answer=e.get("answer", ""),
+                                retrieved_context=e.get("retrieved_context", ""),
+                                extra={
+                                    "source_count": e.get("source_count", 0),
+                                    "duration_sec": e.get("duration_sec"),
+                                    "batch_duration_sec": round(duration, 3),
+                                    "cli_exit_code": proc.returncode,
+                                },
+                            )
+                            for e in partial["results"]
+                        ]
+                except json.JSONDecodeError:
+                    pass
+
             raise RuntimeError(
-                f"LocalRAGCLI exited with status {proc.returncode}. "
-                "See stderr above."
+                f"LocalRAGCLI exited with status {proc.returncode} and stdout "
+                "did not contain a recoverable JSON results array. See stderr above."
             )
 
         # The CLI is noisy on stderr (llama.cpp loader logs) but stdout is

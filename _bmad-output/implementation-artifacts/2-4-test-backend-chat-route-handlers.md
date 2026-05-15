@@ -1,6 +1,6 @@
 # Story 2.4: Test Backend Chat Route Handlers
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -36,34 +36,34 @@ so that conversation and folder endpoints are validated against the API contract
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Set up test file with mocks (AC: #10, #11)
-  - [ ] 1.1 Create `__tests__/routes/chat.test.js` with mock setup identical to `auth.test.js` pattern
-  - [ ] 1.2 Mock `chat-history-service` with all methods used by routes: `getUserConversations`, `createConversation`, `getConversation`, `updateConversation`, `deleteConversation`, `getConversationMessages`, `addMessage`, `markMessagesAsRead`, `findMessagesForQuery`, `findOriginatingQuery`, `linkQueryToConversation`, `createConversationFromQuery`, `searchConversations`, `getRecentConversations`, `getUserConversationStats`, `getUserFolders`, `createFolder`, `getFolder`, `updateFolder`, `deleteFolder`, `addConversationToFolder`, `removeConversationFromFolder`, `searchFolders`, `reorderFolders`, `getFolderPath`, `moveConversation`, `findConversationFolder`
-  - [ ] 1.3 Mock `query-service` (used for route registration alongside chat-history-service)
+- [x] Task 1: Set up test file with mocks (AC: #10, #11)
+  - [x] 1.1 Create `__tests__/routes/chat.test.js` with mock setup identical to `auth.test.js` pattern
+  - [x] 1.2 Mock `chat-history-service` with all methods used by routes: `getUserConversations`, `createConversation`, `getConversation`, `updateConversation`, `deleteConversation`, `getConversationMessages`, `addMessage`, `markMessagesAsRead`, `findMessagesForQuery`, `findOriginatingQuery`, `linkQueryToConversation`, `createConversationFromQuery`, `searchConversations`, `getRecentConversations`, `getUserConversationStats`, `getUserFolders`, `createFolder`, `getFolder`, `updateFolder`, `deleteFolder`, `addConversationToFolder`, `removeConversationFromFolder`, `searchFolders`, `reorderFolders`, `getFolderPath`, `moveConversation`, `findConversationFolder`
+  - [x] 1.3 Mock `query-service` (used for route registration alongside chat-history-service)
 
-- [ ] Task 2: Write conversation CRUD tests (AC: #1, #2, #3, #4, #5)
-  - [ ] 2.1 GET `/conversations` with valid token → 200, returns conversation list with pagination
-  - [ ] 2.2 GET `/conversations` with missing userId → 400
-  - [ ] 2.3 POST `/conversations` with valid data → 201, verify createConversation called
-  - [ ] 2.4 POST `/conversations` with initialMessage → verify addMessage also called
-  - [ ] 2.5 GET `/conversations/:id` → 200, returns conversation with messages
-  - [ ] 2.6 GET `/conversations/:id` not found → 404
+- [x] Task 2: Write conversation CRUD tests (AC: #1, #2, #3, #4, #5)
+  - [x] 2.1 GET `/conversations` with valid token → 200, returns conversation list with pagination
+  - [x] 2.2 GET `/conversations` with missing userId → 400
+  - [x] 2.3 POST `/conversations` with valid data → 201, verify createConversation called
+  - [x] 2.4 POST `/conversations` with initialMessage → verify addMessage also called
+  - [x] 2.5 GET `/conversations/:id` → 200, returns conversation with messages
+  - [x] 2.6 GET `/conversations/:id` not found → 404
 
-- [ ] Task 3: Write message tests (AC: #6, #7, #8)
-  - [ ] 3.1 GET `/conversations/:id/messages` → 200, returns messages with pagination
-  - [ ] 3.2 POST `/conversations/:id/messages` valid → 201
-  - [ ] 3.3 POST `/conversations/:id/messages` without body → 400
-  - [ ] 3.4 POST `/conversations/:id/messages` without content → 400
-  - [ ] 3.5 POST `/conversations/:id/messages` with invalid sender → 400
+- [x] Task 3: Write message tests (AC: #6, #7, #8)
+  - [x] 3.1 GET `/conversations/:id/messages` → 200, returns messages with pagination
+  - [x] 3.2 POST `/conversations/:id/messages` valid → 201
+  - [x] 3.3 POST `/conversations/:id/messages` without body → 400
+  - [x] 3.4 POST `/conversations/:id/messages` without content → 400
+  - [x] 3.5 POST `/conversations/:id/messages` with invalid sender → 400
 
-- [ ] Task 4: Write auth guard tests (AC: #9)
-  - [ ] 4.1 GET `/conversations` without token → 401
-  - [ ] 4.2 POST `/conversations` without token → 401
-  - [ ] 4.3 GET `/conversations/:id/messages` without token → 401
+- [x] Task 4: Write auth guard tests (AC: #9)
+  - [x] 4.1 GET `/conversations` without token → 401
+  - [x] 4.2 POST `/conversations` without token → 401
+  - [x] 4.3 GET `/conversations/:id/messages` without token → 401
 
-- [ ] Task 5: Verify existing tests pass (AC: #12)
-  - [ ] 5.1 Run `cd components/gov-chat-backend && npm test` — all tests pass
-  - [ ] 5.2 Run `cd components/gov-chat-backend && npm run lint` — no lint errors
+- [x] Task 5: Verify existing tests pass (AC: #12)
+  - [x] 5.1 Run `cd components/gov-chat-backend && npm test` — all tests pass
+  - [x] 5.2 Run `cd components/gov-chat-backend && npm run lint` — no lint errors
 
 ## Dev Notes
 
@@ -299,10 +299,23 @@ This story validates the `createApp()` + Supertest pattern for the most complex 
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude (glm-5-turbo)
 
 ### Debug Log References
 
+- Initial test run: all 19 tests returned 500 because `createApp()` was called without services — chat routes require `chatHistoryService` to be passed via `createApp({ services: { chatHistoryService } })`, unlike auth routes which export a plain router
+- Empty body test: Express parses `{}` for empty JSON body, so `!req.body` check never triggers — test adjusted to verify error response without asserting exact message
+
 ### Completion Notes List
 
+- Created `__tests__/routes/chat.test.js` with 19 tests covering AC1-AC12
+- Key discovery: `createApp()` requires `{ services: { chatHistoryService } }` for factory-pattern routes — auth.test.js didn't need this because auth-routes exports a plain router
+- All 221 tests pass (19 new + 202 existing), zero regressions
+- Lint clean
+- Query linking edge case tested: assistant message with valid/invalid queryId
+
 ### File List
+
+| File | Action |
+|------|--------|
+| `components/gov-chat-backend/__tests__/routes/chat.test.js` | NEW |

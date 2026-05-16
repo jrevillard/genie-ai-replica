@@ -18,3 +18,12 @@ Items deferred during code reviews. Revisit when the related component is next m
 
 - Missing comps submodule mocks for telemetry/retrievers/rerankers paths — `comps.cores.telemetry`, `comps.retrievers.src.*`, `comps.rerankings.src.*` not in sys.modules pre-population. Current list matches spec Dev Notes exactly; will be needed when stories 4.2-4.6 import actual service modules.
 - Mock response shapes may need dict-access support — chatqna uses `data["choices"][0]["message"]["content"]` (dict access) while mocks provide attribute access only. Stories 4.2-4.6 may need to extend mock helpers for both access patterns.
+
+## Deferred from: code review of 2-4-test-backend-chat-route-handlers (2026-05-15)
+
+- db.collection mock pollution potentielle — `mockReturnValue` persiste après `clearAllMocks`. Pas de failure actuelle car les tests qui utilisent `db.collection` le redéfinissent.
+- Edge cases pagination (valeurs négatives, non-numériques) — `parseInt() || default` gère correctement les cas. Tests défensifs non critiques.
+- Test défaillance addMessage après createConversation — Le route n'a pas de rollback. Edge case d'error propagation pas dans les ACs.
+- AC2 : userId manquant pas testé sur toutes les routes — Bonne pratique défensive mais pas requis par l'AC2 qui cible GET /conversations.
+- AC6 : valeurs par défaut pagination pas testées — Comportement correct via `parseInt() || default`.
+- **SECURITY**: `GET /query/:queryId/messages` has no userId validation — any authenticated user can access messages for any queryId. Pre-existing security gap, not introduced by this story. Route should validate ownership via `extractUserId(req)`.

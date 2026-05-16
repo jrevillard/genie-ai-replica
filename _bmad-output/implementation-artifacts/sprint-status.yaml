@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-13
-last_updated: 2026-05-15
+last_updated: 2026-05-16
 project: genie-ai
 project_key: testing-framework
 tracking_system: file-system
@@ -60,7 +60,7 @@ development_status:
   2-1-refactor-backend-indexjs-to-export-createapp: done
   2-2-create-backend-test-fixtures-and-shared-mocks: done
   2-3-test-backend-auth-route-handlers: done
-  2-4-test-backend-chat-route-handlers: review
+  2-4-test-backend-chat-route-handlers: done
   2-5-test-backend-analytics-and-categories-route-handlers: backlog
   2-6-test-backend-admin-and-files-route-handlers: backlog
   2-7-test-backend-service-layer: backlog

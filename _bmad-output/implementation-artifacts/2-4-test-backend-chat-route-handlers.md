@@ -1,6 +1,6 @@
 # Story 2.4: Test Backend Chat Route Handlers
 
-Status: review
+Status: done
 
 ## Story
 
@@ -313,9 +313,28 @@ Claude (glm-5-turbo)
 - All 221 tests pass (19 new + 202 existing), zero regressions
 - Lint clean
 - Query linking edge case tested: assistant message with valid/invalid queryId
+- Code review: 11 additional tests added for search/recent/stats/query routes (Groups 3-4), AC8 assertion strengthened, AC3 negative case added
+- Final: 30 tests in chat.test.js, 232 total backend tests, zero regressions, lint clean
+- Patch review: 2 userId-missing tests added for /stats and /recent (both routes have extractUserId validation). SECURITY: GET /query/:queryId/messages has no userId validation — deferred as pre-existing.
+- Final: 32 tests in chat.test.js, 234 total backend tests, zero regressions, lint clean
 
 ### File List
 
 | File | Action |
 |------|--------|
 | `components/gov-chat-backend/__tests__/routes/chat.test.js` | NEW |
+
+### Review Findings
+
+- [x] [Review][Patch] Routes search/recent/stats/query non couvertes — Résolu : 11 tests ajoutés pour les 6 routes (search 3, recent 2, stats 1, query/messages 1, messages/query 2, query/conversation 2).
+
+- [x] [Review][Patch] AC8 : assertion faible sur le test "request body missing" [`chat.test.js`:433-442] — Résolu : assertion corrigée en `toEqual({ message: 'Message content is required' })`.
+
+- [x] [Review][Patch] AC3 : pas d'assertion que `addMessage` n'est PAS appelé sans `initialMessage` [`chat.test.js`:259-273] — Résolu : `expect(chatHistoryService.addMessage).not.toHaveBeenCalled()` ajouté.
+
+- [x] [Review][Defer] db.collection mock pollution potentielle [`chat.test.js`:396] — `mockReturnValue` persiste après `clearAllMocks`. Pas de failure actuelle car les tests qui utilisent `db.collection` le redéfinissent. deferred, pre-existing
+- [x] [Review][Defer] Edge cases pagination (valeurs négatives, non-numériques) — `parseInt() || default` gère correctement les cas. Tests défensifs non critiques. deferred, pre-existing
+- [x] [Review][Defer] Test défaillance addMessage après createConversation — Le route n'a pas de rollback. Edge case d'error propagation pas dans les ACs. deferred, pre-existing
+- [x] [Review][Defer] AC2 : userId manquant pas testé sur toutes les routes — Bonne pratique défensive mais pas requis par l'AC2 qui cible GET /conversations. deferred, pre-existing
+- [x] [Review][Defer] AC6 : valeurs par défaut pagination pas testées — Comportement correct via `parseInt() || default`. deferred, pre-existing
+- [x] [Review][Defer] **SECURITY**: `GET /query/:queryId/messages` has no userId validation — any authenticated user can access messages for any queryId. Pre-existing security gap. deferred, pre-existing

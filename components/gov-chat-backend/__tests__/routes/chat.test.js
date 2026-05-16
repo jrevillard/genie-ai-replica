@@ -270,6 +270,7 @@ describe('POST /api/chat/conversations (AC3)', () => {
         title: 'Test Conversation'
       })
     );
+    expect(chatHistoryService.addMessage).not.toHaveBeenCalled();
   });
 
   it('should call addMessage when initialMessage is provided', async () => {
@@ -438,7 +439,7 @@ describe('POST /api/chat/conversations/:conversationId/messages (AC7, AC8)', () 
 
     expect(response.status).toBe(400);
     // Express parses empty JSON body as {} — falls through to content check
-    expect(response.body.message).toBeDefined();
+    expect(response.body).toEqual({ message: 'Message content is required' });
   });
 
   it('should return 400 when content is missing', async () => {
@@ -467,5 +468,215 @@ describe('POST /api/chat/conversations/:conversationId/messages (AC7, AC8)', () 
 
     expect(response.status).toBe(400);
     expect(response.body).toEqual({ message: 'Sender must be either "user" or "assistant"' });
+  });
+});
+
+// ============================================================
+// Utility routes: search, recent, stats
+// ============================================================
+describe('GET /api/chat/search', () => {
+  it('should return 200 with search results', async () => {
+    const searchResults = {
+      conversations: [sampleConversation],
+      pagination: { total: 1, limit: 20, offset: 0 }
+    };
+    chatHistoryService.searchConversations.mockResolvedValue(searchResults);
+
+    const response = await authGet('/api/chat/search?q=test&limit=10&offset=0&includeArchived=true');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(searchResults);
+    expect(chatHistoryService.searchConversations).toHaveBeenCalledWith(
+      mockUser.iss_sub,
+      'test',
+      expect.objectContaining({
+        limit: 10,
+        offset: 0,
+        includeArchived: true,
+        userKey: mockUser._key
+      })
+    );
+  });
+
+  it('should return 400 when search term is missing', async () => {
+    const response = await authGet('/api/chat/search');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: 'Search term is required' });
+  });
+
+  it('should return 400 when userId is missing', async () => {
+    userProvisioningService.provisionUser.mockResolvedValue({
+      ...mockUser,
+      iss_sub: null
+    });
+
+    const response = await authGet('/api/chat/search?q=test');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      success: false,
+      message: 'User ID is required but not found in request'
+    });
+  });
+});
+
+describe('GET /api/chat/recent', () => {
+  it('should return 200 with recent conversations', async () => {
+    const recentConversations = [sampleConversation];
+    chatHistoryService.getRecentConversations.mockResolvedValue(recentConversations);
+
+    const response = await authGet('/api/chat/recent?limit=3');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(recentConversations);
+    expect(chatHistoryService.getRecentConversations).toHaveBeenCalledWith(
+      mockUser.iss_sub,
+      3,
+      mockUser._key
+    );
+  });
+
+  it('should use default limit when not provided', async () => {
+    chatHistoryService.getRecentConversations.mockResolvedValue([]);
+
+    await authGet('/api/chat/recent');
+
+    expect(chatHistoryService.getRecentConversations).toHaveBeenCalledWith(
+      mockUser.iss_sub,
+      5,
+      mockUser._key
+    );
+  });
+
+  it('should return 400 when userId is missing', async () => {
+    userProvisioningService.provisionUser.mockResolvedValue({
+      ...mockUser,
+      iss_sub: null
+    });
+
+    const response = await authGet('/api/chat/recent');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      success: false,
+      message: 'User ID is required but not found in request'
+    });
+  });
+});
+
+describe('GET /api/chat/stats', () => {
+  it('should return 200 with conversation statistics', async () => {
+    const stats = {
+      totalCount: 10,
+      activeCount: 8,
+      archivedCount: 2,
+      starredCount: 3,
+      messageCount: 45
+    };
+    chatHistoryService.getUserConversationStats.mockResolvedValue(stats);
+
+    const response = await authGet('/api/chat/stats');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(stats);
+    expect(chatHistoryService.getUserConversationStats).toHaveBeenCalledWith(
+      mockUser.iss_sub,
+      mockUser._key
+    );
+  });
+
+  it('should return 400 when userId is missing', async () => {
+    userProvisioningService.provisionUser.mockResolvedValue({
+      ...mockUser,
+      iss_sub: null
+    });
+
+    const response = await authGet('/api/chat/stats');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      success: false,
+      message: 'User ID is required but not found in request'
+    });
+  });
+});
+
+// ============================================================
+// Query linking routes
+// ============================================================
+describe('GET /api/chat/query/:queryId/messages', () => {
+  it('should return 200 with messages for a query', async () => {
+    const queryMessages = [
+      { message: sampleMessage, conversation: sampleConversation, responseType: 'primary' }
+    ];
+    chatHistoryService.findMessagesForQuery.mockResolvedValue(queryMessages);
+
+    const response = await authGet('/api/chat/query/q-1/messages');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(queryMessages);
+    expect(chatHistoryService.findMessagesForQuery).toHaveBeenCalledWith('q-1');
+  });
+});
+
+describe('GET /api/chat/messages/:messageId/query', () => {
+  it('should return 200 with originating query', async () => {
+    const originQuery = { _id: 'queries/q-1', _key: 'q-1', text: 'What is AI?' };
+    chatHistoryService.findOriginatingQuery.mockResolvedValue(originQuery);
+
+    const response = await authGet('/api/chat/messages/msg-1/query');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(originQuery);
+    expect(chatHistoryService.findOriginatingQuery).toHaveBeenCalledWith('msg-1');
+  });
+
+  it('should return 404 when no originating query found', async () => {
+    chatHistoryService.findOriginatingQuery.mockResolvedValue(null);
+
+    const response = await authGet('/api/chat/messages/msg-1/query');
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({ message: 'No originating query found for this message' });
+  });
+});
+
+describe('POST /api/chat/query/:queryId/conversation', () => {
+  it('should return 201 and create conversation from query', async () => {
+    const newConversation = { ...sampleConversation, title: 'What is AI?' };
+    chatHistoryService.createConversationFromQuery.mockResolvedValue(newConversation);
+
+    const response = await authPost('/api/chat/query/q-1/conversation', {
+      title: 'What is AI?',
+      tags: ['ai']
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual(newConversation);
+    expect(chatHistoryService.createConversationFromQuery).toHaveBeenCalledWith(
+      'q-1',
+      mockUser.iss_sub,
+      expect.objectContaining({
+        title: 'What is AI?',
+        tags: ['ai'],
+        userKey: mockUser._key
+      })
+    );
+  });
+
+  it('should return 400 when userId is missing', async () => {
+    userProvisioningService.provisionUser.mockResolvedValue({
+      ...mockUser,
+      iss_sub: null
+    });
+
+    const response = await authPost('/api/chat/query/q-1/conversation', {});
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      success: false,
+      message: 'User ID is required but not found in request'
+    });
   });
 });

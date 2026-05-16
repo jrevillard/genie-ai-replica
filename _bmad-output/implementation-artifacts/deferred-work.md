@@ -21,9 +21,13 @@ Items deferred during code reviews. Revisit when the related component is next m
 
 ## Deferred from: code review of 2-4-test-backend-chat-route-handlers (2026-05-15)
 
-- db.collection mock pollution potentielle — `mockReturnValue` persiste après `clearAllMocks`. Pas de failure actuelle car les tests qui utilisent `db.collection` le redéfinissent.
-- Edge cases pagination (valeurs négatives, non-numériques) — `parseInt() || default` gère correctement les cas. Tests défensifs non critiques.
-- Test défaillance addMessage après createConversation — Le route n'a pas de rollback. Edge case d'error propagation pas dans les ACs.
-- AC2 : userId manquant pas testé sur toutes les routes — Bonne pratique défensive mais pas requis par l'AC2 qui cible GET /conversations.
-- AC6 : valeurs par défaut pagination pas testées — Comportement correct via `parseInt() || default`.
+- db.collection mock pollution potential — `mockReturnValue` persists after `clearAllMocks`. No actual failure because tests that use `db.collection` re-define it.
+- Edge cases pagination (negative values, non-numeric) — `parseInt() || default` handles these correctly. Defensive tests not critical.
+- Test failure addMessage after createConversation — The route has no rollback. Error propagation edge case not in ACs.
+- AC2: missing userId not tested on all routes — Good defensive practice but not required by AC2 which targets GET /conversations.
+- AC6: default pagination values not tested — Correct behavior via `parseInt() || default`.
 - **SECURITY**: `GET /query/:queryId/messages` has no userId validation — any authenticated user can access messages for any queryId. Pre-existing security gap, not introduced by this story. Route should validate ownership via `extractUserId(req)`.
+
+## Deferred from: code review of 4-2-test-retriever-hybrid-search-logic (2026-05-16)
+
+- Graph validation unreachable branch in source code — `has_vertex_collection` OR `has_edge_collection` check at line ~583-598 may allow a case where the collection is misconfigured and `db.collection()` raises an unhandled exception. Pre-existing source code issue, not introduced by the tests.

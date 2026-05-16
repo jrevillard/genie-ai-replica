@@ -1,5 +1,5 @@
 # generated: 2026-05-13
-# last_updated: 2026-05-15
+# last_updated: 2026-05-16
 # project: genie-ai
 # project_key: testing-framework
 # tracking_system: file-system
@@ -79,7 +79,7 @@ development_status:
   # Epic 4: OPEA Microservice Test Suite
   epic-4: in-progress
   4-1-configure-pytest-and-create-shared-fixtures-for-opea: done
-  4-2-test-retriever-hybrid-search-logic: backlog
+  4-2-test-retriever-hybrid-search-logic: done
   4-3-test-dataprep-extraction-pipeline: backlog
   4-4-test-core-type-definitions-and-api-protocols: backlog
   4-5-test-reranker-score-validation-and-top-k-constraints: backlog

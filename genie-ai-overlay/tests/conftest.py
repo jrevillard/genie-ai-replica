@@ -12,6 +12,13 @@ import pytest
 # pip-installed locally.
 # ---------------------------------------------------------------------------
 _comps_mock = MagicMock()
+
+# Make @OpeaComponentRegistry.register(...) a no-op identity decorator so
+# that class definitions are returned unchanged when the module is imported.
+_comps_mock.OpeaComponentRegistry.register = lambda *a, **kw: lambda cls: cls
+# Provide a simple base class for OpeaComponent so __init__ accepts any args.
+_comps_mock.OpeaComponent = type("OpeaComponent", (), {"__init__": lambda self, *a, **kw: None})
+
 sys.modules.setdefault("comps", _comps_mock)
 sys.modules.setdefault("comps.cores", MagicMock())
 sys.modules.setdefault("comps.cores.proto", MagicMock())
@@ -24,6 +31,16 @@ sys.modules.setdefault("comps.dataprep.src.genieai_dataprep_utils", MagicMock())
 sys.modules.setdefault("comps.dataprep.src.integrations", MagicMock())
 sys.modules.setdefault("comps.dataprep.src.integrations.arangodb", MagicMock())
 sys.modules.setdefault("comps.dataprep.src.utils", MagicMock())
+
+# Retriever import-time dependencies (langchain, openai, arango)
+sys.modules.setdefault("arango", MagicMock())
+sys.modules.setdefault("arango.database", MagicMock())
+sys.modules.setdefault("langchain_arangodb", MagicMock())
+sys.modules.setdefault("langchain_community", MagicMock())
+sys.modules.setdefault("langchain_community.embeddings", MagicMock())
+sys.modules.setdefault("langchain_huggingface", MagicMock())
+sys.modules.setdefault("langchain_openai", MagicMock())
+sys.modules.setdefault("openai", MagicMock())
 
 
 # ---------------------------------------------------------------------------

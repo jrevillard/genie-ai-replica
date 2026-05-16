@@ -100,6 +100,91 @@ def _to_judge_input(case: TestCase, resp: SystemResponse) -> JudgeInput:
     )
 
 
+def _write_transcript(path: Path, *, target: str, case, response, verdict) -> None:
+    """Dump the full per-case chat transcript as Markdown.
+
+    Captures everything the judge actually saw: the user's question, the
+    chunks the adapter retrieved, the chatbot's complete answer, and the
+    structured verdict (scores + rationale + violations + the
+    deterministic pass/fail derived in `judge._derive_pass`). Each
+    section is a Markdown heading so the files are skimmable in any
+    editor or `gh-pages`-style preview.
+    """
+    v = verdict.verdict  # the pydantic Verdict
+    labels = ", ".join(case.labels) if case.labels else "(none)"
+    expectations = []
+    if case.should_abstain:
+        expectations.append("- expected stance: **abstain**")
+    if case.must_cite:
+        expectations.append("- inline `[Source: …]` citations expected: **yes**")
+    if case.must_mention_one_of:
+        joined = ", ".join(f"`{m}`" for m in case.must_mention_one_of)
+        expectations.append(f"- at least one of these substrings expected: {joined}")
+    if case.must_not_mention:
+        joined = ", ".join(f"`{m}`" for m in case.must_not_mention)
+        expectations.append(f"- forbidden substrings: {joined}")
+    expectations_md = "\n".join(expectations) if expectations else "_(no constraints)_"
+
+    extras = response.extra or {}
+    extras_lines = "\n".join(f"- {k}: {v_!r}" for k, v_ in extras.items()) or "_(none)_"
+    violations_md = (
+        "\n".join(f"- {v_}" for v_ in v.violations)
+        if v.violations
+        else "_(none)_"
+    )
+
+    out = f"""# {target}/{case.id}
+
+**Result:** {'✅ PASS' if verdict.passed else '❌ FAIL'} \
+({'no fails' if not verdict.fail_reasons else '; '.join(verdict.fail_reasons)})
+
+## Test case
+
+- **id:** `{case.id}`
+- **labels:** {labels}
+{expectations_md}
+
+### Notes from the test author
+{case.notes.strip() or "_(none)_"}
+
+## User question
+
+{case.question.strip()}
+
+## Retrieved context (what the chatbot saw)
+
+```
+{response.retrieved_context.strip() or "(no chunks retrieved)"}
+```
+
+## Chatbot answer (verbatim)
+
+{response.answer.strip() or "_(empty)_"}
+
+## Judge verdict
+
+| axis | score |
+|---|---|
+| factuality (hard) | {v.factuality}/5 |
+| groundedness (advisory) | {v.groundedness}/5 |
+| answer_relevance | {v.answer_relevance}/5 |
+| citation_correctness | {v.citation_correctness}/5 |
+| abstention_correctness | {v.abstention_correctness}/5 |
+| safety | {v.safety}/5 |
+
+### Rationale
+{v.rationale.strip()}
+
+### Violations flagged
+{violations_md}
+
+## Adapter extras
+
+{extras_lines}
+"""
+    path.write_text(out, encoding="utf-8")
+
+
 def _checkpoint_write(path: Path, fieldnames: list[str], rows: list[dict]) -> None:
     """Overwrite the CSV after each new row so a mid-sweep failure
     (flaky tunnel, OpenAI hiccup, kernel panic) doesn't lose the work
@@ -146,6 +231,14 @@ def _run_adapter(
         "answer_excerpt",
     ]
 
+    # Per-case transcripts (question + retrieved context + answer +
+    # judge verdict) land in a sibling `transcripts/` directory next
+    # to the CSV so a human can read the actual chat without re-running
+    # the harness. One Markdown file per case, prefixed with the
+    # target name to avoid collisions when both pipelines run.
+    transcript_dir = report_path.parent / "transcripts"
+    transcript_dir.mkdir(parents=True, exist_ok=True)
+
     for case in cases:
         resp = by_id.get(case.id)
         if resp is None:
@@ -170,6 +263,16 @@ def _run_adapter(
         else:
             mark = "✗"
         print(f"  [{mark}] {case.id}: {', '.join(verdict.fail_reasons) or 'pass'}")
+
+        # Write the full transcript before building the CSV row, so even
+        # if CSV writing fails the per-case detail is on disk.
+        _write_transcript(
+            transcript_dir / f"{name}__{case.id}.md",
+            target=name,
+            case=case,
+            response=resp,
+            verdict=verdict,
+        )
 
         row = verdict.as_row()
         row["target"] = name

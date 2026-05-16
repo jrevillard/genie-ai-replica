@@ -193,6 +193,12 @@ class WebRAGAdapter:
         for f in sorted(dir_path.iterdir()):
             if f.suffix.lower() not in (".txt", ".md"):
                 continue
+            # Skip the corpus README documenting how to populate the
+            # directory — it's notes for humans, not retrievable
+            # content, and it pollutes both retrieval (mobile CLI) and
+            # the corpus_fallback context (web adapter) when present.
+            if f.stem.lower() == "readme":
+                continue
             stem = f.stem
             title = stem if stem.lower().endswith(".pdf") else f"{stem}.pdf"
             text = f.read_text(encoding="utf-8", errors="replace")

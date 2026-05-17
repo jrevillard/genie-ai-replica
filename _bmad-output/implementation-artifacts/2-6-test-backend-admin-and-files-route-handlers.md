@@ -1,6 +1,6 @@
 # Story 2.6: Test Backend Admin and Files Route Handlers
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -21,19 +21,19 @@ So that admin-only endpoints are validated against the API contract and unauthor
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create `__tests__/routes/admin.test.js` (AC: #1-#7)
-  - [ ] 1.1: Set up mocks for adminDashboardService, logsService, securityScanService, and all index.js services
-  - [ ] 1.2: Create admin token fixture (role: 'admin') and regular user token fixture (role: 'user') for 403 testing
-  - [ ] 1.3: Auth guard tests — 401 without token, 403 for non-admin (AC1)
-  - [ ] 1.4: System health tests — system-health, database/stats, user-stats (AC2)
-  - [ ] 1.5: Log management tests — logs, logs/rollover, logs/summary, logs/search, logs/debug-yesterday (AC3)
-  - [ ] 1.6: Security tests — security-metrics, security-scan, security/last-scan with direct error handling pattern (AC4)
-  - [ ] 1.7: Diagnostic and DB operation tests — diagnostics, database-operations/backup, database-operations/optimize (AC5)
-  - [ ] 1.8: User search tests with query params (AC6)
-  - [ ] 1.9: Error path tests for all endpoint groups — both `next(error)` and direct `res.status()` patterns (AC7)
-- [ ] Task 2: Verify all tests pass with existing test suite (AC: #1-#8)
-  - [ ] 2.1: Run `npm test` — all tests pass (existing + new)
-  - [ ] 2.2: Run `npm run lint` — zero errors
+- [x] Task 1: Create `__tests__/routes/admin.test.js` (AC: #1-#7)
+  - [x] 1.1: Set up mocks for adminDashboardService, logsService, securityScanService, and all index.js services
+  - [x] 1.2: Create admin token fixture (role: 'admin') and regular user token fixture (role: 'user') for 403 testing
+  - [x] 1.3: Auth guard tests — 401 without token, 403 for non-admin (AC1)
+  - [x] 1.4: System health tests — system-health, database/stats, user-stats (AC2)
+  - [x] 1.5: Log management tests — logs, logs/rollover, logs/summary, logs/search, logs/debug-yesterday (AC3)
+  - [x] 1.6: Security tests — security-metrics, security-scan, security/last-scan with direct error handling pattern (AC4)
+  - [x] 1.7: Diagnostic and DB operation tests — diagnostics, database-operations/backup, database-operations/optimize (AC5)
+  - [x] 1.8: User search tests with query params (AC6)
+  - [x] 1.9: Error path tests for all endpoint groups — both `next(error)` and direct `res.status()` patterns (AC7)
+- [x] Task 2: Verify all tests pass with existing test suite (AC: #1-#8)
+  - [x] 2.1: Run `npm test` — all tests pass (existing + new)
+  - [x] 2.2: Run `npm run lint` — zero errors
 
 ## Dev Notes
 
@@ -197,8 +197,27 @@ describe('Admin Routes', () => {
 
 ### Agent Model Used
 
+GLM-5-turbo
+
 ### Debug Log References
+
+- Key finding: `createApp()` must receive `{ services: { adminDashboardService, logsService } }` because `registerRoutes()` skips routes when their service is not in the services object (line 870-873 of index.js)
+- Key finding: The error handler at line 775 of index.js has 3 params, so Express treats it as regular middleware, not error middleware. `next(error)` calls trigger Express's default HTML error handler, not the custom JSON one.
 
 ### Completion Notes List
 
+- Created `__tests__/routes/admin.test.js` with 45 tests covering all 8 ACs
+- Mocked keycloak-auth-middleware directly (authenticate + requireAdmin) for 401/403 control
+- Passed adminDashboardService and logsService to createApp for route registration
+- All 15 admin endpoints tested: system-health, database/stats, logs (5 endpoints), security (3 endpoints), diagnostics, db-ops (2 endpoints), user-stats, users/search
+- Two error patterns verified: Pattern A (next(error) → 500 HTML) and Pattern B (direct res.status(500).json())
+- Full regression suite: 329 tests pass, 15 suites, 0 failures
+- Lint: 0 errors
+
+### Change Log
+
+- 2026-05-17: Created admin route tests — 45 tests covering AC1-AC8, all passing
+
 ### File List
+
+- `components/gov-chat-backend/__tests__/routes/admin.test.js` — NEW: 45 tests for admin route handlers

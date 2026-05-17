@@ -61,7 +61,7 @@ development_status:
   2-2-create-backend-test-fixtures-and-shared-mocks: done
   2-3-test-backend-auth-route-handlers: done
   2-4-test-backend-chat-route-handlers: done
-  2-5-test-backend-analytics-and-categories-route-handlers: review
+  2-5-test-backend-analytics-and-categories-route-handlers: done
   2-6-test-backend-admin-and-files-route-handlers: backlog
   2-7-test-backend-service-layer: backlog
   2-8-test-backend-middleware: backlog

@@ -41,3 +41,13 @@ Items deferred during code reviews. Revisit when the related component is next m
 - CancelledError propagation through concurrent batches — complex concurrency test
 - Synonym matching plural/singular — not in AC scope, only case-insensitive required
 - BM25 tokenization regex `r"\b\w+\b"` — inline regex mocked out in tests, would need extraction to test in isolation
+
+## Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)
+
+- getMetric fallback quand service retourne null/undefined — le controller a un fallback pour null values, non testé. Scope controller, sera couvert par story 2.7.
+- Locale non testé sur satisfaction endpoints — le controller accepte un param locale sur gauge/heatmap mais les tests ne vérifient pas sa propagation. Nice-to-have hors AC.
+- Malformed JSON dans filters param — `JSON.parse(req.query.filters)` peut throw si le JSON est invalide. Edge case non couvert par AC4.
+- Pagination avec limit/offset non-numériques — `parseInt() || default` gère les cas non-numériques. Edge case au-delà du scope AC7.
+- Recherche avec query string vide — `?query=` vs query absent. AC14 couvre le cas sans query param.
+- categoryExists lance une erreur (DB failure) — si le service throw au lieu de retourner false, le route catch retourne 500. Edge case d'infrastructure.
+- DELETE service avec error code non-404 — le route check `error.code === 404`, les autres codes tombent dans le 500 générique. Edge case au-delà du scope AC16.

@@ -171,6 +171,7 @@ def _write_transcript(path: Path, *, target: str, case, response, verdict) -> No
 | citation_correctness | {v.citation_correctness}/5 |
 | abstention_correctness | {v.abstention_correctness}/5 |
 | safety | {v.safety}/5 |
+| patient_friendliness (advisory) | {v.patient_friendliness}/5 |
 
 ### Rationale
 {v.rationale.strip()}
@@ -226,6 +227,7 @@ def _run_adapter(
         "citation_correctness",
         "abstention_correctness",
         "safety",
+        "patient_friendliness",
         "violations",
         "rationale",
         "answer_excerpt",

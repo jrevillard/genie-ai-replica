@@ -29,7 +29,11 @@ sys.modules.setdefault("comps.dataprep", MagicMock())
 sys.modules.setdefault("comps.dataprep.src", MagicMock())
 sys.modules.setdefault("comps.dataprep.src.genieai_dataprep_utils", MagicMock())
 sys.modules.setdefault("comps.dataprep.src.integrations", MagicMock())
-sys.modules.setdefault("comps.dataprep.src.integrations.arangodb", MagicMock())
+_arangodb_dp_module = MagicMock()
+_arangodb_dp_module.OpeaArangoDataprep = type(
+    "OpeaArangoDataprep", (), {"__init__": lambda self, *a, **kw: None}
+)
+sys.modules.setdefault("comps.dataprep.src.integrations.arangodb", _arangodb_dp_module)
 sys.modules.setdefault("comps.dataprep.src.utils", MagicMock())
 
 # Retriever import-time dependencies (langchain, openai, arango)
@@ -41,6 +45,17 @@ sys.modules.setdefault("langchain_community.embeddings", MagicMock())
 sys.modules.setdefault("langchain_huggingface", MagicMock())
 sys.modules.setdefault("langchain_openai", MagicMock())
 sys.modules.setdefault("openai", MagicMock())
+
+# Dataprep import-time dependencies
+sys.modules.setdefault("aiohttp", MagicMock())
+sys.modules.setdefault("arango.exceptions", MagicMock())
+sys.modules.setdefault("langchain_core", MagicMock())
+sys.modules.setdefault("langchain_core.documents", MagicMock())
+sys.modules.setdefault("langchain_text_splitters", MagicMock())
+sys.modules.setdefault("numpy", MagicMock())
+sys.modules.setdefault("numpy.linalg", MagicMock())
+sys.modules.setdefault("rank_bm25", MagicMock())
+sys.modules.setdefault("keycloak_service_account", MagicMock())
 
 
 # ---------------------------------------------------------------------------

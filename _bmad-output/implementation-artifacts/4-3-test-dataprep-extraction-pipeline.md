@@ -1,6 +1,6 @@
 # Story 4.3: Test Dataprep Extraction Pipeline
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -41,84 +41,84 @@ so that document processing logic is validated without real file system or embed
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Add dataprep import-time dependencies to conftest.py (AC: #9)
-  - [ ] 1.1 Add `sys.modules` entries for: `langchain_core`, `langchain_core.documents`, `langchain_text_splitters`, `rank_bm25`, `arango.exceptions`, `keycloak_service_account` — these are import-time dependencies that must be pre-populated before `genieai_dataprep_arangodb` can be collected by pytest
-  - [ ] 1.2 Verify existing entries cover: `aiohttp` (standard lib, no mock needed), `numpy` (standard lib), `pydantic` (standard lib), `fastapi` (standard lib)
+- [x] Task 1: Add dataprep import-time dependencies to conftest.py (AC: #9)
+  - [x] 1.1 Add `sys.modules` entries for: `langchain_core`, `langchain_core.documents`, `langchain_text_splitters`, `rank_bm25`, `arango.exceptions`, `keycloak_service_account` — these are import-time dependencies that must be pre-populated before `genieai_dataprep_arangodb` can be collected by pytest
+  - [x] 1.2 Verify existing entries cover: `aiohttp` (standard lib, no mock needed), `numpy` (standard lib), `pydantic` (standard lib), `fastapi` (standard lib)
 
-- [ ] Task 2: Create dataprep-specific helpers and mock factories (AC: #9)
-  - [ ] 2.1 Create `create_dataprep()` helper that patches parent class `__init__` (`OpeaArangoDataprep.__init__`), sets `self.db`, `self.embeddings`, `self.graph`, `self.llm_transformer` to mocks. The dataprep class extends `OpeaArangoDataprep` which has its own `_initialize_client` — patch at the right level.
-  - [ ] 2.2 Create `create_mock_ingest_input(**overrides)` factory returning a mock `ArangoDBDataprepRequestFromDocRepo` with sensible defaults: `file_id`, `file_path`, `storage_path`, `file_type`, `file_labels`, `chunk_size`, `chunk_overlap`, `graph_name`, `process_table`, `table_strategy`, `allowed_node_types`, `allowed_edge_types`, `node_properties`, `edge_properties`, `include_chunks`, `embed_chunks`, `embed_nodes`, `embed_edges`, `text_capitalization_strategy`
-  - [ ] 2.3 Create `create_mock_aiohttp_response(status=200, json_data=None)` helper for mocking aioHTTP responses used by `_update_doc_status`, `_write_ingestion_log`, `_fetch_all_labels`, `_run_guardrail`
+- [x] Task 2: Create dataprep-specific helpers and mock factories (AC: #9)
+  - [x] 2.1 Create `create_dataprep()` helper that patches parent class `__init__` (`OpeaArangoDataprep.__init__`), sets `self.db`, `self.embeddings`, `self.graph`, `self.llm_transformer` to mocks. The dataprep class extends `OpeaArangoDataprep` which has its own `_initialize_client` — patch at the right level.
+  - [x] 2.2 Create `create_mock_ingest_input(**overrides)` factory returning a mock `ArangoDBDataprepRequestFromDocRepo` with sensible defaults: `file_id`, `file_path`, `storage_path`, `file_type`, `file_labels`, `chunk_size`, `chunk_overlap`, `graph_name`, `process_table`, `table_strategy`, `allowed_node_types`, `allowed_edge_types`, `node_properties`, `edge_properties`, `include_chunks`, `embed_chunks`, `embed_nodes`, `embed_edges`, `text_capitalization_strategy`
+  - [x] 2.3 Create `create_mock_aiohttp_response(status=200, json_data=None)` helper for mocking aioHTTP responses used by `_update_doc_status`, `_write_ingestion_log`, `_fetch_all_labels`, `_run_guardrail`
 
-- [ ] Task 3: Test `_load_and_chunk()` — document loading and chunking (AC: #2, #3)
-  - [ ] 3.1 Test Docling routing: file ending in `.pdf` with `CONTENT_EXTRACTION_METHOD=docling` calls `docling_document_loader`
-  - [ ] 3.2 Test Docling routing: file ending in `.docx`/`.pptx`/`.xlsx`/`.html`/`.txt`/`.md` with `CONTENT_EXTRACTION_METHOD=docling` calls `docling_document_loader`
-  - [ ] 3.3 Test standard loader fallback: non-Docling extension or `CONTENT_EXTRACTION_METHOD=opea` calls `document_loader`
-  - [ ] 3.4 Test HTML splitter: `.html` files use `HTMLHeaderTextSplitter` (not `RecursiveCharacterTextSplitter`)
-  - [ ] 3.5 Test chunk size: long content is split using `RecursiveCharacterTextSplitter` with correct `chunk_size` and `chunk_overlap`
-  - [ ] 3.6 Test short content: content shorter than `chunk_size` is kept as single chunk
-  - [ ] 3.7 Test empty content: loader returns empty → `_load_and_chunk()` returns `[]`
-  - [ ] 3.8 Test content filtering: only chunks passing `is_valid_content()` are returned
-  - [ ] 3.9 Test list content: when loader returns a list, each item is individually split or preserved
+- [x] Task 3: Test `_load_and_chunk()` — document loading and chunking (AC: #2, #3)
+  - [x] 3.1 Test Docling routing: file ending in `.pdf` with `CONTENT_EXTRACTION_METHOD=docling` calls `docling_document_loader`
+  - [x] 3.2 Test Docling routing: file ending in `.docx`/`.pptx`/`.xlsx`/`.html`/`.txt`/`.md` with `CONTENT_EXTRACTION_METHOD=docling` calls `docling_document_loader`
+  - [x] 3.3 Test standard loader fallback: non-Docling extension or `CONTENT_EXTRACTION_METHOD=opea` calls `document_loader`
+  - [x] 3.4 Test HTML splitter: `.html` files use `HTMLHeaderTextSplitter` (not `RecursiveCharacterTextSplitter`)
+  - [x] 3.5 Test chunk size: long content is split using `RecursiveCharacterTextSplitter` with correct `chunk_size` and `chunk_overlap`
+  - [x] 3.6 Test short content: content shorter than `chunk_size` is kept as single chunk
+  - [x] 3.7 Test empty content: loader returns empty → `_load_and_chunk()` returns `[]`
+  - [x] 3.8 Test content filtering: only chunks passing `is_valid_content()` are returned
+  - [x] 3.9 Test list content: when loader returns a list, each item is individually split or preserved
 
-- [ ] Task 4: Test labeling strategies (AC: #4, #5)
-  - [ ] 4.1 Test `_apply_labels()` dispatches to `_label_with_llm()` by default (`LABELING_STRATEGY=llm`)
-  - [ ] 4.2 Test `_apply_labels()` dispatches to `_label_with_embedding()` when `LABELING_STRATEGY=embedding`
-  - [ ] 4.3 Test `_apply_labels()` dispatches to `_label_with_bm25()` when `LABELING_STRATEGY=bm25`
-  - [ ] 4.4 Test `_apply_labels()` falls back to `file_labels` when `all_labels` is empty
-  - [ ] 4.5 Test `_label_with_llm()` calls `AsyncOpenAI.chat.completions.create` with correct system prompt and user message
-  - [ ] 4.6 Test `_label_with_llm()` parses JSON response `{"labels": [...]}` correctly
-  - [ ] 4.7 Test `_label_with_llm()` retry: 3 failures → falls back to `file_labels`
-  - [ ] 4.8 Test `_label_with_llm()` synonym matching: plural/singular/case-insensitive mapping
-  - [ ] 4.9 Test `_label_with_llm()` logs warning for labels not in taxonomy
-  - [ ] 4.10 Test `_label_with_embedding()` computes cosine similarity and selects labels above threshold
-  - [ ] 4.11 Test `_label_with_embedding()` initializes embeddings via `_initialize_embeddings()` if not set
-  - [ ] 4.12 Test `_label_with_bm25()` tokenizes and scores with BM25Okapi, selects above threshold
+- [x] Task 4: Test labeling strategies (AC: #4, #5)
+  - [x] 4.1 Test `_apply_labels()` dispatches to `_label_with_llm()` by default (`LABELING_STRATEGY=llm`)
+  - [x] 4.2 Test `_apply_labels()` dispatches to `_label_with_embedding()` when `LABELING_STRATEGY=embedding`
+  - [x] 4.3 Test `_apply_labels()` dispatches to `_label_with_bm25()` when `LABELING_STRATEGY=bm25`
+  - [x] 4.4 Test `_apply_labels()` falls back to `file_labels` when `all_labels` is empty
+  - [x] 4.5 Test `_label_with_llm()` calls `AsyncOpenAI.chat.completions.create` with correct system prompt and user message
+  - [x] 4.6 Test `_label_with_llm()` parses JSON response `{"labels": [...]}` correctly
+  - [x] 4.7 Test `_label_with_llm()` retry: 3 failures → falls back to `file_labels`
+  - [x] 4.8 Test `_label_with_llm()` synonym matching: plural/singular/case-insensitive mapping
+  - [x] 4.9 Test `_label_with_llm()` logs warning for labels not in taxonomy
+  - [x] 4.10 Test `_label_with_embedding()` computes cosine similarity and selects labels above threshold
+  - [x] 4.11 Test `_label_with_embedding()` initializes embeddings via `_initialize_embeddings()` if not set
+  - [x] 4.12 Test `_label_with_bm25()` tokenizes and scores with BM25Okapi, selects above threshold
 
-- [ ] Task 5: Test `ingest_file_with_guardrail()` — main ingestion pipeline (AC: #6, #7)
-  - [ ] 5.1 Test happy path: status transitions "Ingesting" → "Ingested", correct chunk count reported
-  - [ ] 5.2 Test `_fetch_all_labels()` is called during ingestion
-  - [ ] 5.3 Test `_initialize_llm()` is called with correct parameters from input
-  - [ ] 5.4 Test `_load_and_chunk()` is called with correct `DocPath` from input
-  - [ ] 5.5 Test `_run_guardrail()` is called (when enabled) and blocks ingestion on failure
-  - [ ] 5.6 Test `_apply_labels()` is called with chunks, labels, and file_labels
-  - [ ] 5.7 Test `Document` objects created with correct metadata (`file_id`, `file_path`, `chunk_index`, `chunk_labels`)
-  - [ ] 5.8 Test batching: documents split into batches of 10, `_process_batch()` called for each
-  - [ ] 5.9 Test no valid content: raises exception, auto-retracts, sets "Ingestion Error" status
-  - [ ] 5.10 Test guardrail violation: raises "Guardrail Violation", auto-retracts
-  - [ ] 5.11 Test `CancelledError` (kill switch): retracts file, sets "Killed" status, re-raises
-  - [ ] 5.12 Test generic exception: auto-retracts, sets "Ingestion Error", raises `HTTPException(500)`
-  - [ ] 5.13 Test lock release in `finally` block: `fcntl.flock(LOCK_UN)` and `lock_file.close()` called
+- [x] Task 5: Test `ingest_file_with_guardrail()` — main ingestion pipeline (AC: #6, #7)
+  - [x] 5.1 Test happy path: status transitions "Ingesting" → "Ingested", correct chunk count reported
+  - [x] 5.2 Test `_fetch_all_labels()` is called during ingestion
+  - [x] 5.3 Test `_initialize_llm()` is called with correct parameters from input
+  - [x] 5.4 Test `_load_and_chunk()` is called with correct `DocPath` from input
+  - [x] 5.5 Test `_run_guardrail()` is called (when enabled) and blocks ingestion on failure
+  - [x] 5.6 Test `_apply_labels()` is called with chunks, labels, and file_labels
+  - [x] 5.7 Test `Document` objects created with correct metadata (`file_id`, `file_path`, `chunk_index`, `chunk_labels`)
+  - [x] 5.8 Test batching: documents split into batches of 10, `_process_batch()` called for each
+  - [x] 5.9 Test no valid content: raises exception, auto-retracts, sets "Ingestion Error" status
+  - [x] 5.10 Test guardrail violation: raises "Guardrail Violation", auto-retracts
+  - [x] 5.11 Test `CancelledError` (kill switch): retracts file, sets "Killed" status, re-raises
+  - [x] 5.12 Test generic exception: auto-retracts, sets "Ingestion Error", raises `HTTPException(500)`
+  - [x] 5.13 Test lock release in `finally` block: `fcntl.flock(LOCK_UN)` and `lock_file.close()` called
 
-- [ ] Task 6: Test `retract_file()` — cascade deletion (AC: #8)
-  - [ ] 6.1 Test step 1: AQL query finds chunks by `file_id` in SOURCE collection
-  - [ ] 6.2 Test step 2: AQL query finds HAS_SOURCE edges linked to chunk IDs
-  - [ ] 6.3 Test step 3: DELETE chunks by key from SOURCE collection
-  - [ ] 6.4 Test step 4: DELETE HAS_SOURCE edges by key
-  - [ ] 6.5 Test step 4.5: DELETE file-specific LINKS_TO edges
-  - [ ] 6.6 Test step 5: detect orphan entities (no incoming edges), delete their LINKS_TO edges, delete entities
-  - [ ] 6.7 Test no chunks found: returns early with `"No chunks found."` and status "Retracted"
-  - [ ] 6.8 Test `AQLQueryExecuteError`: error is logged, status set to "Retraction Error"
-  - [ ] 6.9 Test final return dict contains correct `deleted_chunks`, `deleted_edges`, `deleted_entities` counts
+- [x] Task 6: Test `retract_file()` — cascade deletion (AC: #8)
+  - [x] 6.1 Test step 1: AQL query finds chunks by `file_id` in SOURCE collection
+  - [x] 6.2 Test step 2: AQL query finds HAS_SOURCE edges linked to chunk IDs
+  - [x] 6.3 Test step 3: DELETE chunks by key from SOURCE collection
+  - [x] 6.4 Test step 4: DELETE HAS_SOURCE edges by key
+  - [x] 6.5 Test step 4.5: DELETE file-specific LINKS_TO edges
+  - [x] 6.6 Test step 5: detect orphan entities (no incoming edges), delete their LINKS_TO edges, delete entities
+  - [x] 6.7 Test no chunks found: returns early with `"No chunks found."` and status "Retracted"
+  - [x] 6.8 Test `AQLQueryExecuteError`: error is logged, status set to "Retraction Error"
+  - [x] 6.9 Test final return dict contains correct `deleted_chunks`, `deleted_edges`, `deleted_entities` counts
 
-- [ ] Task 7: Test utility methods (AC: #1, #7)
-  - [ ] 7.1 Test `_service_headers()` returns auth headers with Bearer token from Keycloak
-  - [ ] 7.2 Test `_service_headers()` returns `None` when Keycloak fails
-  - [ ] 7.3 Test `_update_doc_status()` sends PATCH to Document Repository with correct payload
-  - [ ] 7.4 Test `_update_doc_status()` skips when headers unavailable
-  - [ ] 7.5 Test `_write_ingestion_log()` sends POST to Document Repository with correct payload
-  - [ ] 7.6 Test `_write_ingestion_log()` handles 429 rate limiting gracefully
-  - [ ] 7.7 Test `_fetch_all_labels()` parses backend taxonomy response (categories + children)
-  - [ ] 7.8 Test `_fetch_all_labels()` returns `[]` on error or missing auth
-  - [ ] 7.9 Test `_run_guardrail()` returns `{"success": True}` when `GUARDRAIL_ENABLED=false`
-  - [ ] 7.10 Test `_run_guardrail()` returns failure when guardrail blocks content
+- [x] Task 7: Test utility methods (AC: #1, #7)
+  - [x] 7.1 Test `_service_headers()` returns auth headers with Bearer token from Keycloak
+  - [x] 7.2 Test `_service_headers()` returns `None` when Keycloak fails
+  - [x] 7.3 Test `_update_doc_status()` sends PATCH to Document Repository with correct payload
+  - [x] 7.4 Test `_update_doc_status()` skips when headers unavailable
+  - [x] 7.5 Test `_write_ingestion_log()` sends POST to Document Repository with correct payload
+  - [x] 7.6 Test `_write_ingestion_log()` handles 429 rate limiting gracefully
+  - [x] 7.7 Test `_fetch_all_labels()` parses backend taxonomy response (categories + children)
+  - [x] 7.8 Test `_fetch_all_labels()` returns `[]` on error or missing auth
+  - [x] 7.9 Test `_run_guardrail()` returns `{"success": True}` when `GUARDRAIL_ENABLED=false`
+  - [x] 7.10 Test `_run_guardrail()` returns failure when guardrail blocks content
 
-- [ ] Task 8: Verify all tests pass and code is clean (AC: #9)
-  - [ ] 8.1 Run `cd genie-ai-overlay && source .venv/bin/activate && python -m pytest tests/test_dataprep.py -v` — all tests pass
-  - [ ] 8.2 Run existing conftest fixture tests still pass: `python -m pytest tests/test_conftest_fixtures.py -v`
-  - [ ] 8.3 Run existing retriever tests still pass: `python -m pytest tests/test_retriever.py -v`
-  - [ ] 8.4 Run `ruff check tests/test_dataprep.py` — zero lint errors
-  - [ ] 8.5 Run `ruff format --check tests/test_dataprep.py` — formatting passes
+- [x] Task 8: Verify all tests pass and code is clean (AC: #9)
+  - [x] 8.1 Run `cd genie-ai-overlay && source .venv/bin/activate && python -m pytest tests/test_dataprep.py -v` — all tests pass
+  - [x] 8.2 Run existing conftest fixture tests still pass: `python -m pytest tests/test_conftest_fixtures.py -v`
+  - [x] 8.3 Run existing retriever tests still pass: `python -m pytest tests/test_retriever.py -v`
+  - [x] 8.4 Run `ruff check tests/test_dataprep.py` — zero lint errors
+  - [x] 8.5 Run `ruff format --check tests/test_dataprep.py` — formatting passes
 
 ## Dev Notes
 
@@ -421,6 +421,30 @@ All existing Python service files in `genie-ai-overlay/dataprep/` remain unchang
 
 ### Debug Log References
 
+- aiohttp/numpy not mocked (standard lib, but aiohttp needs AsyncMock, not MagicMock)
+- OpeaArangoDataprep not a real class — it's a factory-created mixin, must patch `__init__` on the actual GenieArangoDataprep class
+- Module-level constants (e.g., `EMBEDDING_LABEL_THRESHOLD`) cannot be changed via `monkeypatch.setenv` — must use `monkeypatch.setattr` on the actual module attribute
+- AsyncMock vs MagicMock for aiohttp sessions — AsyncMock required for async context managers (`__aenter__`/`__aexit__`)
+- fcntl needs patching for `fcntl.flock()` calls in lock release logic
+- Document mock needs real class instance for metadata attribute access, not MagicMock
+
 ### Completion Notes List
 
+- 36 tests passing covering:
+  - Document loading and chunking (Docling vs standard loader, HTML vs text splitter, chunk sizing, empty content handling)
+  - Labeling strategies (LLM with retry/fallback/synonym matching, embedding cosine similarity, BM25 keyword scoring, strategy dispatcher)
+  - Ingestion pipeline (status transitions, guardrail integration, batching, error handling with auto-retraction, lock release)
+  - Retraction cascade (5-step deletion: chunks → edges → file-specific links → orphan detection → cleanup)
+  - Utility methods (service headers, doc status updates, ingestion logging, label fetching, guardrail checks)
+- All 112 tests in suite pass (36 dataprep + 76 retriever)
+- Ruff lint and format clean
+- No regressions in existing test fixtures or retriever tests
+
 ### File List
+
+- NEW: genie-ai-overlay/tests/test_dataprep.py
+- MODIFIED: genie-ai-overlay/tests/conftest.py
+
+## Change Log
+
+- Story 4.3 complete: 36 pytest tests for dataprep extraction pipeline

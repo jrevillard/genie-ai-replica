@@ -80,7 +80,7 @@ development_status:
   epic-4: in-progress
   4-1-configure-pytest-and-create-shared-fixtures-for-opea: done
   4-2-test-retriever-hybrid-search-logic: done
-  4-3-test-dataprep-extraction-pipeline: backlog
+  4-3-test-dataprep-extraction-pipeline: review
   4-4-test-core-type-definitions-and-api-protocols: backlog
   4-5-test-reranker-score-validation-and-top-k-constraints: backlog
   4-6-test-chatqna-orchestrator-interface: backlog

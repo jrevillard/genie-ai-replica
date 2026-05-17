@@ -1,5 +1,5 @@
 # generated: 2026-05-13
-# last_updated: 2026-05-16
+# last_updated: 2026-05-18
 # project: genie-ai
 # project_key: testing-framework
 # tracking_system: file-system
@@ -82,7 +82,7 @@ development_status:
   4-2-test-retriever-hybrid-search-logic: done
   4-3-test-dataprep-extraction-pipeline: review
   4-4-test-core-type-definitions-and-api-protocols: done
-  4-5-test-reranker-score-validation-and-top-k-constraints: backlog
+  4-5-test-reranker-score-validation-and-top-k-constraints: done
   4-6-test-chatqna-orchestrator-interface: backlog
   epic-4-retrospective: optional
 

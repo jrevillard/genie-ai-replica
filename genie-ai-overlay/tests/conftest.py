@@ -36,6 +36,48 @@ _arangodb_dp_module.OpeaArangoDataprep = type(
 sys.modules.setdefault("comps.dataprep.src.integrations.arangodb", _arangodb_dp_module)
 sys.modules.setdefault("comps.dataprep.src.utils", MagicMock())
 
+# Core import-time dependency — api_protocol is vendored at top level inside Docker.
+# Must provide real base classes for models that inherit from them, and types that
+# Pydantic can validate.  Using dict for annotation-only types avoids schema errors.
+from pydantic import BaseModel as _PydanticBaseModel
+
+_api_protocol_mock = MagicMock()
+_api_protocol_mock.RetrievalRequest = type("RetrievalRequest", (), {"__init__": lambda self, **kw: None})
+_api_protocol_mock.ArangoDBDataprepRequest = type(
+    "ArangoDBDataprepRequest", (), {"__init__": lambda self, **kw: None}
+)
+# Types used only in annotations — use dict so Pydantic can handle Union with dict
+_api_protocol_mock.ResponseFormat = dict
+_api_protocol_mock.StreamOptions = dict
+_api_protocol_mock.ChatCompletionToolsParam = dict
+_api_protocol_mock.ChatCompletionNamedToolChoiceParam = dict
+_api_protocol_mock.RetrievalResponseData = dict
+_api_protocol_mock.RerankingResponseData = dict
+_api_protocol_mock.EmbeddingResponse = dict
+_api_protocol_mock.UploadFile = dict
+# Re-export typing names that api_protocol brings in
+from typing import Any as _Any, Union as _Union, Literal as _Literal
+_api_protocol_mock.Any = _Any
+_api_protocol_mock.Union = _Union
+_api_protocol_mock.Literal = _Literal
+# Make `from api_protocol import *` work by exposing all public names
+_api_protocol_mock.__all__ = [
+    "RetrievalRequest",
+    "ArangoDBDataprepRequest",
+    "ResponseFormat",
+    "StreamOptions",
+    "ChatCompletionToolsParam",
+    "ChatCompletionNamedToolChoiceParam",
+    "RetrievalResponseData",
+    "RerankingResponseData",
+    "EmbeddingResponse",
+    "UploadFile",
+    "Any",
+    "Union",
+    "Literal",
+]
+sys.modules.setdefault("api_protocol", _api_protocol_mock)
+
 # Retriever import-time dependencies (langchain, openai, arango)
 sys.modules.setdefault("arango", MagicMock())
 sys.modules.setdefault("arango.database", MagicMock())

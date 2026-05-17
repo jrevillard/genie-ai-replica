@@ -381,6 +381,12 @@ Ensure test tokens include `iss_sub` claim (the standard token fixture uses `sub
 
 The controller maps raw time series data to `{ timestamp, dateLabel, value, userCount }`. The `formatDateLabel` mock defaults to returning the timestamp as-is. Test assertions should check this mapped shape, not the raw service response.
 
+**Categories errors:**
+- 400: `{ message: 'Search query is required' }`
+- 400: `{ message: 'Category nameEN is required' }`
+- 404: (via `next(error)` with NotFoundError)
+- 500: `{ message: error.message }`
+
 ### Token Validation Tests (Shared Pattern)
 
 All endpoints require authentication. Reuse the token test pattern from auth.test.js:

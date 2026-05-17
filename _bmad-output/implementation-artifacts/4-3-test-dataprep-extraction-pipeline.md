@@ -448,3 +448,17 @@ All existing Python service files in `genie-ai-overlay/dataprep/` remain unchang
 ## Change Log
 
 - Story 4.3 complete: 36 pytest tests for dataprep extraction pipeline
+
+### Review Findings
+
+- [x] [Review][Patch] CancelledError test now verifies retract_file() was called with correct args `genie-ai-overlay/tests/test_dataprep.py:575`
+- [x] [Review][Patch] Guardrail partial failure test added — verifies fail-fast with chunk_index `genie-ai-overlay/tests/test_dataprep.py:929`
+- [x] [Review][Patch] Sequential chunk_index verification across multiple documents `genie-ai-overlay/tests/test_dataprep.py:658`
+- [x] [Review][Defer] Race condition in ArangoGraph initialization during concurrent batches — deferred, pre-existing production concern
+- [x] [Review][Defer] File lock fileno() edge case — deferred, pre-existing
+- [x] [Review][Defer] Concurrent batch failure scenarios — deferred, complex out-of-scope
+- [x] [Review][Defer] Orphan deletion with circular references — deferred, production edge case
+- [x] [Review][Defer] CancelledError propagation through concurrent batches — deferred
+- [x] [Review][Defer] Synonym matching plural/singular — deferred, not in AC scope
+- [x] [Review][Defer] BM25 tokenization regex inline — deferred, mocked in tests
+- Code review: 0 decision-needed, 3 patched, 7 deferred, 10 dismissed. All 9 AC met. 38/38 tests pass.

@@ -31,3 +31,13 @@ Items deferred during code reviews. Revisit when the related component is next m
 ## Deferred from: code review of 4-2-test-retriever-hybrid-search-logic (2026-05-16)
 
 - Graph validation unreachable branch in source code — `has_vertex_collection` OR `has_edge_collection` check at line ~583-598 may allow a case where the collection is misconfigured and `db.collection()` raises an unhandled exception. Pre-existing source code issue, not introduced by the tests.
+
+## Deferred from: code review of 4-3-test-dataprep-extraction-pipeline (2026-05-17)
+
+- Race condition in ArangoGraph initialization during concurrent batch processing — production code concern in `genieai_dataprep_arangodb.py`
+- File lock `fileno()` edge case when lock_file lacks file descriptor — production code concern
+- Concurrent batch failure scenarios — complex concurrency testing out of scope for this story
+- Orphan deletion with circular entity references — production edge case
+- CancelledError propagation through concurrent batches — complex concurrency test
+- Synonym matching plural/singular — not in AC scope, only case-insensitive required
+- BM25 tokenization regex `r"\b\w+\b"` — inline regex mocked out in tests, would need extraction to test in isolation

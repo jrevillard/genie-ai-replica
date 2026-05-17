@@ -572,11 +572,12 @@ class TestIngestFileWithGuardrail:
             patch.object(dp, "_update_doc_status", new_callable=AsyncMock) as mock_status,
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
             patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, side_effect=asyncio.CancelledError()),
-            patch.object(dp, "retract_file", new_callable=AsyncMock),
+            patch.object(dp, "retract_file", new_callable=AsyncMock) as mock_retract,
             pytest.raises(asyncio.CancelledError),
         ):
             await dp.ingest_file_with_guardrail(inp, lock_file=None)
 
+        mock_retract.assert_called_once_with(file_id="test-file-123", graph_name="GRAPH")
         status_calls = [c.args[1] for c in mock_status.call_args_list]
         assert "Killed" in status_calls
 
@@ -654,6 +655,43 @@ class TestIngestFileWithGuardrail:
         assert doc.metadata["file_id"] == "test-file-123"
         assert doc.metadata["chunk_index"] == 0
         assert doc.metadata["chunk_labels"] == ["Healthcare"]
+
+    @pytest.mark.asyncio
+    async def test_document_metadata_sequential_indices(self):
+        """Multiple documents get sequential chunk_index (0, 1, 2)."""
+        dp = create_dataprep()
+        inp = create_mock_ingest_input()
+
+        captured_docs = []
+
+        async def capture_batch(batch, *args, **kwargs):
+            captured_docs.extend(batch)
+
+        with (
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["A"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["c1", "c2", "c3"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            patch.object(
+                dp,
+                "_apply_labels",
+                new_callable=AsyncMock,
+                return_value=[
+                    {"text": "c1", "labels": ["A"]},
+                    {"text": "c2", "labels": ["B"]},
+                    {"text": "c3", "labels": ["A"]},
+                ],
+            ),
+            patch.object(dp, "_process_batch", new_callable=AsyncMock, side_effect=capture_batch),
+            patch.object(dp_module, "ArangoGraph"),
+            patch.object(dp_module, "Document", side_effect=lambda **kw: type("Doc", (), kw)),
+        ):
+            await dp.ingest_file_with_guardrail(inp, lock_file=None)
+
+        assert len(captured_docs) == 3
+        indices = [doc.metadata["chunk_index"] for doc in captured_docs]
+        assert indices == [0, 1, 2]
 
 
 # ---------------------------------------------------------------------------
@@ -924,3 +962,29 @@ class TestRunGuardrail:
 
         assert result["success"] is False
         assert "Blocked" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_partial_failure_returns_first_blocked(self):
+        """Guardrail passes first chunk, blocks second — fails fast with chunk index."""
+        dp = create_dataprep()
+
+        resp_pass = _mock_aiohttp_response(status=200, json_data={"text": "chunk1"})
+        resp_block = _mock_aiohttp_response(status=200, json_data={"text": "filtered"})
+
+        session = MagicMock()
+        post_mock = session.post
+        post_mock.side_effect = [resp_pass, resp_block]
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch.object(dp_module, "GUARDRAIL_ENABLED", True),
+            patch.object(dp_module, "GUARDRAIL_URL", "http://guardrail:9090/v1/guardrails"),
+            patch.object(dp_module, "aiohttp") as mock_aiohttp,
+        ):
+            mock_aiohttp.ClientTimeout.return_value = MagicMock()
+            mock_aiohttp.ClientSession.return_value = session
+            result = await dp._run_guardrail(["chunk1", "chunk2"])
+
+        assert result["success"] is False
+        assert result["chunk_index"] == 1

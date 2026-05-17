@@ -1,6 +1,6 @@
 # Story 4.4: Test Core Type Definitions and API Protocols
 
-Status: review
+Status: done
 
 ## Story
 
@@ -182,4 +182,15 @@ Claude Opus 4.7 (glm-5-turbo)
 ## Change Log
 
 - 2026-05-17: Story implemented — 54 tests across 9 test classes covering all core type definitions and API protocols. conftest.py enhanced with api_protocol mock for OPEA vendored import support.
+- 2026-05-17: Code review — 5 tests added (59 total). Expanded defaults test to all 13 fields, added OPEA super().__init__() interception tests, added negative validation tests for required fields, added MegaServiceEndpoint __str__ loop test. 2 items deferred (mock limitation).
+
+### Review Findings
+
+- [x] [Review][Patch] RetrievalRequestArangoDB test_defaults_are_none expanded to all 13 fields [tests/test_core.py:139]
+- [x] [Review][Patch] ArangoDBDataprepRequestFromDocRepo OPEA passthrough defaults forwarded to super() [tests/test_core.py:444]
+- [x] [Review][Patch] ArangoDBDataprepRequestFromDocRepo OPEA passthrough custom kwargs forwarded to super() [tests/test_core.py:456]
+- [x] [Review][Patch] Missing negative validation tests: ChatCompletionRequest() without messages, TranslationRequest() without text [tests/test_core.py:387,418]
+- [x] [Review][Patch] MegaServiceEndpoint __str__ loop test for all 26 members [tests/test_core.py:88]
+- [ ] [Review][Defer] RetrievalRequestArangoDB serialization/deserialization (AC #2) — deferred: OPEA mock prevents model_dump(), requires real OPEA deps in Docker
+- [ ] [Review][Defer] RetrievalRequestArangoDB constructor kwargs not verifiable — deferred: mock base swallows kwargs, requires real OPEA deps in Docker
 

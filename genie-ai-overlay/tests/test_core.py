@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 International Telecommunication Union (ITU)
 
+import pytest
+
 from core.constants import (
     MegaServiceEndpoint,
     MicroServiceEndpoint,
@@ -83,6 +85,10 @@ class TestMegaServiceEndpoint:
     def test_member_count(self):
         assert len(MegaServiceEndpoint) == 26
 
+    def test_str_returns_value_for_all_members(self):
+        for member in MegaServiceEndpoint:
+            assert str(member) == member.value, f"{member.name} __str__ does not return its value"
+
 
 # ---------------------------------------------------------------------------
 # Constants: MicroServiceEndpoint
@@ -132,9 +138,22 @@ class TestRetrievalRequestArangoDB:
 
     def test_defaults_are_none(self):
         req = RetrievalRequestArangoDB()
-        assert req.graph_name is None
-        assert req.search_mode is None
-        assert req.context is None
+        for field_name in [
+            "graph_name",
+            "search_start",
+            "search_mode",
+            "num_centroids",
+            "distance_strategy",
+            "use_approx_search",
+            "enable_traversal",
+            "enable_summarizer",
+            "traversal_max_depth",
+            "traversal_max_returned",
+            "traversal_score_threshold",
+            "traversal_query",
+            "context",
+        ]:
+            assert getattr(req, field_name) is None, f"{field_name} should default to None"
 
     def test_has_optional_fields_as_class_annotations(self):
         field_names = {
@@ -330,6 +349,12 @@ class TestChatCompletionRequest:
         assert len(req.documents) == 1
         assert req.chat_template == "{context}\n{question}"
 
+    def test_missing_messages_raises_validation_error(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest()
+
 
 # ---------------------------------------------------------------------------
 # Protocol: TranslationRequest (Pydantic BaseModel — simple)
@@ -353,6 +378,12 @@ class TestTranslationRequest:
         restored = TranslationRequest(**data)
         assert restored.text == "Bonjour"
         assert restored.stream is True
+
+    def test_missing_text_raises_validation_error(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            TranslationRequest()
 
 
 # ---------------------------------------------------------------------------
@@ -381,6 +412,19 @@ class TestArangoDBDataprepRequestFromDocRepo:
         req = ArangoDBDataprepRequestFromDocRepo()
         assert req is not None
 
+    def test_opea_passthrough_defaults_forwarded_to_super(self):
+        received = {}
+        original_init = ArangoDBDataprepRequestFromDocRepo.__bases__[0].__init__
+        ArangoDBDataprepRequestFromDocRepo.__bases__[0].__init__ = lambda self, **kw: received.update(kw)
+        try:
+            ArangoDBDataprepRequestFromDocRepo()
+            assert received["chunk_size"] == 1500
+            assert received["chunk_overlap"] == 100
+            assert received["process_table"] is False
+            assert received["table_strategy"] == "fast"
+        finally:
+            ArangoDBDataprepRequestFromDocRepo.__bases__[0].__init__ = original_init
+
     def test_opea_passthrough_custom_no_error(self):
         req = ArangoDBDataprepRequestFromDocRepo(
             chunk_size=2000,
@@ -390,6 +434,26 @@ class TestArangoDBDataprepRequestFromDocRepo:
             graph_name="TEST_GRAPH",
         )
         assert req is not None
+
+    def test_opea_passthrough_custom_forwarded_to_super(self):
+        received = {}
+        original_init = ArangoDBDataprepRequestFromDocRepo.__bases__[0].__init__
+        ArangoDBDataprepRequestFromDocRepo.__bases__[0].__init__ = lambda self, **kw: received.update(kw)
+        try:
+            ArangoDBDataprepRequestFromDocRepo(
+                chunk_size=2000,
+                chunk_overlap=200,
+                process_table=True,
+                table_strategy="accurate",
+                graph_name="TEST_GRAPH",
+            )
+            assert received["chunk_size"] == 2000
+            assert received["chunk_overlap"] == 200
+            assert received["process_table"] is True
+            assert received["table_strategy"] == "accurate"
+            assert received["graph_name"] == "TEST_GRAPH"
+        finally:
+            ArangoDBDataprepRequestFromDocRepo.__bases__[0].__init__ = original_init
 
     def test_genieai_fields_default_none(self):
         req = ArangoDBDataprepRequestFromDocRepo()

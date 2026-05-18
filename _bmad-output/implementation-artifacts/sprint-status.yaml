@@ -1,5 +1,5 @@
 # generated: 2026-05-13
-# last_updated: 2026-05-19
+# last_updated: 2026-05-18
 # project: genie-ai
 # project_key: testing-framework
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-13
-last_updated: 2026-05-19
+last_updated: 2026-05-18
 project: genie-ai
 project_key: testing-framework
 tracking_system: file-system
@@ -64,7 +64,7 @@ development_status:
   2-5-test-backend-analytics-and-categories-route-handlers: done
   2-6-test-backend-admin-and-files-route-handlers: done
   2-7-test-backend-service-layer: done
-  2-8-test-backend-middleware: ready-for-dev
+  2-8-test-backend-middleware: review
   epic-2-retrospective: optional
 
   # Epic 3: Frontend Component Test Suite

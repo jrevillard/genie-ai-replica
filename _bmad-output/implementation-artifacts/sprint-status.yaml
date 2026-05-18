@@ -64,7 +64,7 @@ development_status:
   2-5-test-backend-analytics-and-categories-route-handlers: done
   2-6-test-backend-admin-and-files-route-handlers: done
   2-7-test-backend-service-layer: done
-  2-8-test-backend-middleware: backlog
+  2-8-test-backend-middleware: ready-for-dev
   epic-2-retrospective: optional
 
   # Epic 3: Frontend Component Test Suite

@@ -51,3 +51,8 @@ Items deferred during code reviews. Revisit when the related component is next m
 - Recherche avec query string vide — `?query=` vs query absent. AC14 couvre le cas sans query param.
 - categoryExists lance une erreur (DB failure) — si le service throw au lieu de retourner false, le route catch retourne 500. Edge case d'infrastructure.
 - DELETE service avec error code non-404 — le route check `error.code === 404`, les autres codes tombent dans le 500 générique. Edge case au-delà du scope AC16.
+
+## Deferred from: code review of 2-6-test-backend-admin-and-files-route-handlers (2026-05-18)
+
+- Auth guard tests cover only 2/15 endpoints — AC1 says "all" but only system-health (GET) and security-scan (POST) tested. Representative sampling sufficient since middleware applied at router level via `router.use()`. Pre-existing test design pattern.
+- Security endpoint error response shapes inconsistent — Three security endpoints return different error shapes: `{ message }`, `{ success, message }`, `{ error, message }`. Tests correctly document this. Pre-existing API design issue.

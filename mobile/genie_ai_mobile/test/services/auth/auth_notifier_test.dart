@@ -7,8 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
-import 'package:genie_ai_mobile/services/api_service.dart';
+import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/auth/app_auth.dart';
+import 'package:openapi/api.dart';
 import 'package:genie_ai_mobile/services/auth/auth_logger.dart';
 import 'package:genie_ai_mobile/services/auth/auth_providers.dart';
 import 'package:genie_ai_mobile/services/auth/auth_state.dart';
@@ -106,29 +107,16 @@ class RecordingAuthLogger extends AuthLogger {
   }
 }
 
-class FakeApiService extends ApiService {
+class FakeAuthenticationApi extends AuthenticationApi {
   bool postLogoutCalled = false;
   bool postLogoutThrows = false;
 
-  FakeApiService() : super(httpClient: _FakeHttpClient());
+  FakeAuthenticationApi() : super();
 
   @override
-  Future<http.Response> post(String endpoint, Map<String, dynamic> data) async {
-    if (endpoint == 'auth/logout') {
-      postLogoutCalled = true;
-      if (postLogoutThrows) throw Exception('Backend logout failed');
-    }
-    return http.Response('{"ok": true}', 200);
-  }
-}
-
-class _FakeHttpClient extends http.BaseClient {
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    return http.StreamedResponse(
-      const Stream.empty(),
-      200,
-    );
+  Future<void> apiAuthLogoutPost() async {
+    if (postLogoutThrows) throw Exception('Backend logout failed');
+    postLogoutCalled = true;
   }
 }
 
@@ -171,14 +159,14 @@ void main() {
   late MockAppAuth mockAppAuth;
   late FakeKeycloakService keycloakService;
   late RecordingAuthLogger recordingLogger;
-  late FakeApiService fakeApiService;
+  late FakeAuthenticationApi fakeAuthenticationApi;
 
   ProviderContainer makeContainer({
     InMemoryTokenStorage? storage,
     MockAppAuth? appAuth,
     FakeKeycloakService? kcService,
     RecordingAuthLogger? logger,
-    FakeApiService? apiService,
+    FakeAuthenticationApi? authenticationApi,
     FakeConnectivityChecker? connectivityChecker,
   }) {
     return ProviderContainer(
@@ -187,7 +175,7 @@ void main() {
         keycloakServiceProvider.overrideWithValue(kcService ?? keycloakService),
         appAuthProvider.overrideWithValue(appAuth ?? mockAppAuth),
         authLoggerProvider.overrideWithValue(logger ?? recordingLogger),
-        apiServiceProvider.overrideWithValue(apiService ?? fakeApiService),
+        authenticationApiProvider.overrideWithValue(authenticationApi ?? fakeAuthenticationApi),
         connectivityCheckerProvider.overrideWithValue(
           connectivityChecker ?? FakeConnectivityChecker(),
         ),
@@ -199,7 +187,7 @@ void main() {
     tokenStorage = InMemoryTokenStorage();
     mockAppAuth = MockAppAuth();
     recordingLogger = RecordingAuthLogger();
-    fakeApiService = FakeApiService();
+    fakeAuthenticationApi = FakeAuthenticationApi();
     keycloakService = FakeKeycloakService(
       keycloakConfig: testConfig,
       endpointsToReturn: testEndpoints,
@@ -844,7 +832,7 @@ void main() {
 
       await container.read(authProvider.notifier).logout();
 
-      expect(fakeApiService.postLogoutCalled, isTrue);
+      expect(fakeAuthenticationApi.postLogoutCalled, isTrue);
       expect(keycloakService.endSessionCalled, isTrue);
       expect(await tokenStorage.getAccessToken(), isNull);
     });
@@ -857,7 +845,10 @@ void main() {
         accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
       );
 
-      fakeApiService.postLogoutThrows = true;
+      fakeAuthenticationApi.postLogoutThrows = true;
+
+      container.read(authProvider.notifier);
+      await Future.delayed(Duration.zero);
 
       await container.read(authProvider.notifier).logout();
 
@@ -876,9 +867,12 @@ void main() {
 
       keycloakService.endSessionResult = false;
 
+      container.read(authProvider.notifier);
+      await Future.delayed(Duration.zero);
+
       await container.read(authProvider.notifier).logout();
 
-      expect(fakeApiService.postLogoutCalled, isTrue);
+      expect(fakeAuthenticationApi.postLogoutCalled, isTrue);
       expect(await tokenStorage.getAccessToken(), isNull);
       expect(container.read(authProvider).status, equals(AuthStatus.unauthenticated));
     });

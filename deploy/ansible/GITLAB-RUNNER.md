@@ -232,6 +232,31 @@ If the runner token is compromised or expired:
 3. Update the vault: `ansible-vault edit group_vars/gitlab_runners/vault.yml --vault-id gitlab@prompt`
 4. Re-deploy: `ansible-playbook -i inventory/gitlab-runner.ini gitlab-runner.yml --tags runner --vault-id gitlab@prompt`
 
+## Network Requirements (MTU/MSS Clamping)
+
+The runner host uses an overlay network with a reduced MTU (e.g. 1342 on OpenStack/Hetzner Cloud). Docker containers default to MTU 1500, which causes large TCP transfers (Flutter SDK downloads, `pub get`) to fail with `Connection reset by peer` after a few minutes. Small requests (HEAD, small GETs) work fine — only sustained large transfers break.
+
+**Fix:** MSS clamping via iptables ensures TCP negotiates the correct segment size through the overlay.
+
+Create `/etc/network/if-pre-up.d/mss-clamp` (mode 0755):
+
+```bash
+#!/bin/bash
+iptables -t mangle -C POSTROUTING -o ens3 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || iptables -t mangle -A POSTROUTING -o ens3 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+```
+
+This rule:
+- Persists across reboots (if-pre-up.d hook)
+- Is idempotent (`-C` checks before `-A` adds)
+- Adjusts `ens3` to match your VM's primary interface name
+
+**Symptoms without it:**
+- `curl: (56) Recv failure: Connection reset by peer` after ~3min on large HTTPS downloads from CI containers
+- `flutter pub get` hanging for 1 hour then timing out
+- Small HTTP/HTTPS requests work fine, only large sustained transfers fail
+
+> **Note:** This must be applied on every runner VM with a non-standard MTU. Check with `ip link show ens3 | grep mtu`.
+
 ## Troubleshooting
 
 ### Runner shows offline in GitLab

@@ -10,7 +10,7 @@
 **GitLab branch:** `Agriculture-AgriPivot-branch`
 **License:** Apache 2.0
 
-**Public URL:** https://164.52.196.146/
+**Public URL:** https://164-52-196-146.sslip.io/
 
 \---
 
@@ -227,7 +227,7 @@ Total reproduction time on a clean A40: approximately 6–8 hours (most of it Do
 ### 6.3 Access
 
 **Public URL (for evaluators):**
-- URL: https://164.52.196.146/
+- URL: https://164-52-196-146.sslip.io/
 - Note: self-signed certificate — click "Advanced" → "Proceed" in your browser
 - Demo credentials: `genie-ai-manager` / *(see Slack channel post)*
 

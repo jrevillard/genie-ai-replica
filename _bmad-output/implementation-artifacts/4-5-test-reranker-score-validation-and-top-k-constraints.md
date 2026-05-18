@@ -10,7 +10,7 @@ so that score boundaries and top-K enforcement are validated.
 
 ## Acceptance Criteria
 
-1. **Given** `genieai_tei_reranker.py` validates scores and enforces top-K constraints, **when** I create `tests/test_reranker.py`, **then** tests verify score validation accepts valid scores (0.0–1.0) and rejects out-of-range values
+1. **Given** `genieai_tei_reranker.py` passes scores through from TEI and enforces top-K constraints, **when** I create `tests/test_reranker.py`, **then** tests verify scores are passed through unchanged and the threshold strategy correctly filters by score boundary
 2. **Given** the reranker supports `top_n` parameter, **when** I run tests, **then** tests verify top-K constraint enforcement returns exactly K results for the "slice" strategy
 3. **Given** the reranker calls the TEI `/rerank` endpoint, **when** I run tests, **then** tests verify TEI service call with correct payload (query + texts)
 4. **Given** TEI service is mocked via conftest fixture, **when** I run tests, **then** all external dependencies are mocked and no real network calls occur
@@ -34,6 +34,7 @@ so that score boundaries and top-K enforcement are validated.
   - [ ] 3.3 Test that slice with `top_n` greater than available docs returns all available docs
   - [ ] 3.4 Test that slice uses `RERANKER_TOP_N` env var default when `top_n` not in input
   - [ ] 3.5 Verify returned results preserve original document text and TEI score
+  - [ ] 3.6 Test that `top_n=0` defaults to 1 (falsy check: `reranker_top_n if reranker_top_n else 1`)
 - [ ] Task 4: Test "threshold" strategy — score boundary validation (AC: #1, #5)
   - [ ] 4.1 Test that threshold strategy returns only documents with score >= `reranking_threshold`
   - [ ] 4.2 Test with all documents above threshold — all returned
@@ -98,6 +99,55 @@ from comps.rerankings.src.integrations.genieai_tei_reranker import GenieTEIReran
 - `integrations` and `integrations.tei` — base class `OpeaTEIReranking` for `GenieTEIReranking`
 - `comps.cores.proto.opea_docarray` — for `SearchedDoc`, `LLMParamsDoc`, `RerankedDoc`, etc.
 - `comps.rerankings` and submodules — only needed if testing the microservice wrapper
+
+### Critical: Mock Input Construction — model_dump() Must Return a Real Dict
+
+The reranker extracts strategy parameters via `input.model_dump(exclude_none=True)` (line 51–55). With MagicMock inputs, `hasattr(mock, "model_dump")` returns `True`, so the code calls `mock.model_dump(exclude_none=True)` — but this returns **another MagicMock**, not a dict. Then `input_dict.get("reranking_strategy", ...)` returns `None` (MagicMock.get doesn't work like dict.get), falling through to env defaults.
+
+**Every mock input MUST configure `model_dump()` to return a real dict:**
+
+```python
+def create_mock_searched_doc(
+    texts=None,
+    initial_query="test query",
+    reranking_strategy=None,
+    reranking_threshold=None,
+    top_n=None,
+):
+    doc = MagicMock()
+    doc.initial_query = initial_query
+    doc.input = initial_query  # fallback for non-SearchedDoc isinstance
+    doc.retrieved_docs = []
+    for text in (texts or ["doc1 text", "doc2 text", "doc3 text"]):
+        mock_doc = MagicMock()
+        mock_doc.text = text
+        doc.retrieved_docs.append(mock_doc)
+
+    # CRITICAL: model_dump must return a real dict
+    dump = {}
+    if reranking_strategy is not None:
+        dump["reranking_strategy"] = reranking_strategy
+    if reranking_threshold is not None:
+        dump["reranking_threshold"] = reranking_threshold
+    if top_n is not None:
+        dump["top_n"] = top_n
+    doc.model_dump = MagicMock(return_value=dump)
+    return doc
+```
+
+### Critical: isinstance(input, SearchedDoc) Routing
+
+Line 65: `query = input.initial_query if isinstance(input, SearchedDoc) else input.input`
+
+`SearchedDoc` is imported from the mocked `comps` module. `isinstance(mock_input, SearchedDoc)` will return `False` because `SearchedDoc` is a MagicMock. This means the code always takes the `else` branch and tries `input.input`.
+
+**Solution**: Set `doc.input = initial_query` on mock inputs (in addition to `doc.initial_query`). This ensures the query is available regardless of which branch `isinstance` takes. Do NOT try to make `isinstance` work — it's unreliable with mocks.
+
+### Critical: Unknown Strategy Uses input.top_n Directly (Not input_dict)
+
+The unknown strategy fallback at line 109 uses `decoded_response[: input.top_n]` — this accesses `input.top_n` as a **direct attribute**, NOT from `input_dict`. This is different from the "slice" strategy which reads `reranker_top_n = input_dict.get("top_n", RERANKER_TOP_N)`.
+
+When testing the unknown strategy, the mock input **must have `top_n` as a settable attribute**, not just in the `model_dump()` dict.
 
 ### Critical: Bypassing __init__ for Testable Instances
 

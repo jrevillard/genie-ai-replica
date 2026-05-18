@@ -1,6 +1,6 @@
 # Story 4.5: Test Reranker Score Validation and Top-K Constraints
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -18,58 +18,58 @@ so that score boundaries and top-K enforcement are validated.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Update conftest.py with reranker-specific mocks (AC: #4)
-  - [ ] 1.1 Add `sys.modules.setdefault("kneed", MagicMock())` and `sys.modules.setdefault("kneed", MagicMock()).KneeLocator = MagicMock()` to the conftest mock block
-  - [ ] 1.2 Add `sys.modules.setdefault("integrations", MagicMock())` and `sys.modules.setdefault("integrations.tei", MagicMock())` for the `from integrations.tei import OpeaTEIReranking` import
-  - [ ] 1.3 Verify `comps.cores.proto.opea_docarray` is already mocked — add specific mock types if needed: `SearchedDoc`, `LLMParamsDoc`, `RerankedDoc`, `SearchedMultimodalDoc`, `LVMVideoDoc`
-  - [ ] 1.4 Verify all existing tests still pass after conftest changes
-- [ ] Task 2: Create helper functions for test setup (AC: #1–5)
-  - [ ] 2.1 Create `create_reranker()` helper that instantiates `GenieTEIReranking.__new__()` with `base_url` set (bypasses `__init__` which calls OPEA parent)
-  - [ ] 2.2 Create `create_mock_searched_doc()` helper returning a mock `GenieSearchedDoc` with `retrieved_docs` list and `initial_query`
-  - [ ] 2.3 Create `create_tei_rerank_response()` helper returning a list of dicts with `index` and `score` fields, simulating TEI `/rerank` response
-  - [ ] 2.4 Create `mock_aiohttp_session()` helper that returns an async context manager mock for `aiohttp.ClientSession()` with configurable response data
-- [ ] Task 3: Test "slice" strategy — top-K enforcement (AC: #2, #5)
-  - [ ] 3.1 Test that slice with `top_n=1` returns exactly 1 result (the highest-scored)
-  - [ ] 3.2 Test that slice with `top_n=3` returns exactly 3 results when 5 documents are available
-  - [ ] 3.3 Test that slice with `top_n` greater than available docs returns all available docs
-  - [ ] 3.4 Test that slice uses `RERANKER_TOP_N` env var default when `top_n` not in input
-  - [ ] 3.5 Verify returned results preserve original document text and TEI score
-  - [ ] 3.6 Test that `top_n=0` defaults to 1 (falsy check: `reranker_top_n if reranker_top_n else 1`)
-- [ ] Task 4: Test "threshold" strategy — score boundary validation (AC: #1, #5)
-  - [ ] 4.1 Test that threshold strategy returns only documents with score >= `reranking_threshold`
-  - [ ] 4.2 Test with all documents above threshold — all returned
-  - [ ] 4.3 Test with all documents below threshold — empty results
-  - [ ] 4.4 Test with mixed scores — only above-threshold returned
-  - [ ] 4.5 Test that threshold uses `RERANKING_THRESHOLD` env var default (0.75) when not in input
-- [ ] Task 5: Test "knee_threshold" strategy — KneeLocator integration (AC: #5)
-  - [ ] 5.1 Test that knee_threshold strategy calls `KneeLocator` with correct params (indices, scores, curve="convex", direction="decreasing")
-  - [ ] 5.2 Test when knee is found — returns docs up to knee+1
-  - [ ] 5.3 Test when knee is None — returns all documents
-  - [ ] 5.4 Verify `kneed` mock is properly configured in conftest
-- [ ] Task 6: Test unknown strategy fallback (AC: #5)
-  - [ ] 6.1 Test that unknown strategy falls back to slice behavior using `input.top_n`
-  - [ ] 6.2 Verify logger.warning is called with the unknown strategy name
-- [ ] Task 7: Test TEI service call payload (AC: #3)
-  - [ ] 7.1 Verify `aiohttp.ClientSession.post()` is called with URL `{base_url}/rerank`
-  - [ ] 7.2 Verify JSON payload contains `query` and `texts` keys
-  - [ ] 7.3 Verify `texts` contains document text strings from `retrieved_docs`
-  - [ ] 7.4 Verify `query` comes from `input.initial_query` for SearchedDoc inputs
-- [ ] Task 8: Test empty/no-docs edge cases (AC: #1)
-  - [ ] 8.1 Test when `retrieved_docs` is empty list — returns empty results (early return)
-  - [ ] 8.2 Test when `retrieved_docs` is None — verify behavior (may raise or return empty)
-- [ ] Task 9: Test output types for different input types (AC: #5)
-  - [ ] 9.1 Test that SearchedDoc input returns `RerankingResponse` with `reranked_docs` list
-  - [ ] 9.2 Test that `RerankingRequest` input returns `RerankingResponse`
-  - [ ] 9.3 Test that `ChatCompletionRequest` input returns the same input with `reranked_docs` and `documents` fields populated
-- [ ] Task 10: Test environment variable defaults (AC: #1–5)
-  - [ ] 10.1 Test `RERANKING_STRATEGY` defaults to "slice"
-  - [ ] 10.2 Test `RERANKING_THRESHOLD` defaults to 0.75
-  - [ ] 10.3 Test `RERANKER_TOP_N` defaults to 1
-  - [ ] 10.4 Test that input-level overrides take precedence over env defaults
-- [ ] Task 11: Run full test suite and validate (AC: #1–5)
-  - [ ] 11.1 Run `python -m pytest tests/ -v` — all tests pass (new + existing)
-  - [ ] 11.2 Run `ruff check tests/test_reranker.py` — clean
-  - [ ] 11.3 Run `ruff format --check tests/test_reranker.py` — clean
+- [x] Task 1: Update conftest.py with reranker-specific mocks (AC: #4)
+  - [x] 1.1 Add `sys.modules.setdefault("kneed", MagicMock())` and `sys.modules.setdefault("kneed", MagicMock()).KneeLocator = MagicMock()` to the conftest mock block
+  - [x] 1.2 Add `sys.modules.setdefault("integrations", MagicMock())` and `sys.modules.setdefault("integrations.tei", MagicMock())` for the `from integrations.tei import OpeaTEIReranking` import
+  - [x] 1.3 Verify `comps.cores.proto.opea_docarray` is already mocked — add specific mock types if needed: `SearchedDoc`, `LLMParamsDoc`, `RerankedDoc`, `SearchedMultimodalDoc`, `LVMVideoDoc`
+  - [x] 1.4 Verify all existing tests still pass after conftest changes
+- [x] Task 2: Create helper functions for test setup (AC: #1–5)
+  - [x] 2.1 Create `create_reranker()` helper that instantiates `GenieTEIReranking.__new__()` with `base_url` set (bypasses `__init__` which calls OPEA parent)
+  - [x] 2.2 Create `create_mock_searched_doc()` helper returning a mock `GenieSearchedDoc` with `retrieved_docs` list and `initial_query`
+  - [x] 2.3 Create `create_tei_rerank_response()` helper returning a list of dicts with `index` and `score` fields, simulating TEI `/rerank` response
+  - [x] 2.4 Create `mock_aiohttp_session()` helper that returns an async context manager mock for `aiohttp.ClientSession()` with configurable response data
+- [x] Task 3: Test "slice" strategy — top-K enforcement (AC: #2, #5)
+  - [x] 3.1 Test that slice with `top_n=1` returns exactly 1 result (the highest-scored)
+  - [x] 3.2 Test that slice with `top_n=3` returns exactly 3 results when 5 documents are available
+  - [x] 3.3 Test that slice with `top_n` greater than available docs returns all available docs
+  - [x] 3.4 Test that slice uses `RERANKER_TOP_N` env var default when `top_n` not in input
+  - [x] 3.5 Verify returned results preserve original document text and TEI score
+  - [x] 3.6 Test that `top_n=0` defaults to 1 (falsy check: `reranker_top_n if reranker_top_n else 1`)
+- [x] Task 4: Test "threshold" strategy — score boundary validation (AC: #1, #5)
+  - [x] 4.1 Test that threshold strategy returns only documents with score >= `reranking_threshold`
+  - [x] 4.2 Test with all documents above threshold — all returned
+  - [x] 4.3 Test with all documents below threshold — empty results
+  - [x] 4.4 Test with mixed scores — only above-threshold returned
+  - [x] 4.5 Test that threshold uses `RERANKING_THRESHOLD` env var default (0.75) when not in input
+- [x] Task 5: Test "knee_threshold" strategy — KneeLocator integration (AC: #5)
+  - [x] 5.1 Test that knee_threshold strategy calls `KneeLocator` with correct params (indices, scores, curve="convex", direction="decreasing")
+  - [x] 5.2 Test when knee is found — returns docs up to knee+1
+  - [x] 5.3 Test when knee is None — returns all documents
+  - [x] 5.4 Verify `kneed` mock is properly configured in conftest
+- [x] Task 6: Test unknown strategy fallback (AC: #5)
+  - [x] 6.1 Test that unknown strategy falls back to slice behavior using `input.top_n`
+  - [x] 6.2 Verify logger.warning is called with the unknown strategy name
+- [x] Task 7: Test TEI service call payload (AC: #3)
+  - [x] 7.1 Verify `aiohttp.ClientSession.post()` is called with URL `{base_url}/rerank`
+  - [x] 7.2 Verify JSON payload contains `query` and `texts` keys
+  - [x] 7.3 Verify `texts` contains document text strings from `retrieved_docs`
+  - [x] 7.4 Verify `query` comes from `input.initial_query` for SearchedDoc inputs
+- [x] Task 8: Test empty/no-docs edge cases (AC: #1)
+  - [x] 8.1 Test when `retrieved_docs` is empty list — returns empty results (early return)
+  - [x] 8.2 Test when `retrieved_docs` is None — verify behavior (may raise or return empty)
+- [x] Task 9: Test output types for different input types (AC: #5)
+  - [x] 9.1 Test that SearchedDoc input returns `RerankingResponse` with `reranked_docs` list
+  - [x] 9.2 Test that `RerankingRequest` input returns `RerankingResponse`
+  - [x] 9.3 Test that `ChatCompletionRequest` input returns the same input with `reranked_docs` and `documents` fields populated
+- [x] Task 10: Test environment variable defaults (AC: #1–5)
+  - [x] 10.1 Test `RERANKING_STRATEGY` defaults to "slice"
+  - [x] 10.2 Test `RERANKING_THRESHOLD` defaults to 0.75
+  - [x] 10.3 Test `RERANKER_TOP_N` defaults to 1
+  - [x] 10.4 Test that input-level overrides take precedence over env defaults
+- [x] Task 11: Run full test suite and validate (AC: #1–5)
+  - [x] 11.1 Run `python -m pytest tests/ -v` — all tests pass (new + existing)
+  - [x] 11.2 Run `ruff check tests/test_reranker.py` — clean
+  - [x] 11.3 Run `ruff format --check tests/test_reranker.py` — clean
 
 ## Dev Notes
 
@@ -286,10 +286,32 @@ Key learnings from Stories 4.1–4.4:
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4 (claude-opus-4-7)
 
 ### Debug Log References
 
+- Fixed isinstance() TypeError with SearchedDoc MagicMock by creating real types via autouse fixture
+- Fixed model_dump() returning MagicMock by explicitly configuring return_value as real dict
+- Fixed RerankingResponse/RerankingResponseData MagicMock by patching with real kwargs-based classes
+- Fixed texts=[] handling in create_mock_searched_doc (was falling through to default via or operator)
+
 ### Completion Notes List
 
+- All 11 tasks completed with 30 tests covering all 5 acceptance criteria
+- conftest.py updated with kneed, integrations.tei, and comps.cores.proto.opea_docarray mocks
+- All 4 strategy paths tested: slice, threshold, knee_threshold, unknown fallback
+- TEI service call payload verified (URL, query, texts)
+- Edge cases covered: empty docs, None docs, top_n=0
+- Output types verified for SearchedDoc, RerankingRequest, ChatCompletionRequest inputs
+- Environment variable defaults and input-level overrides tested
+- 203 total tests pass (173 existing + 30 new), 0 regressions
+- ruff check and ruff format both clean
+
 ### File List
+
+- genie-ai-overlay/tests/conftest.py (modified — added kneed, integrations.tei, opea_docarray mocks)
+- genie-ai-overlay/tests/test_reranker.py (created — 30 tests for GenieTEIReranking)
+
+## Change Log
+
+- 2026-05-18: Story 4.5 implementation complete — 30 tests for reranker score validation and top-K constraints (all ACs satisfied)

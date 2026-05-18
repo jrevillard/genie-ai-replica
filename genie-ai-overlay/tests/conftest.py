@@ -99,6 +99,21 @@ sys.modules.setdefault("numpy.linalg", MagicMock())
 sys.modules.setdefault("rank_bm25", MagicMock())
 sys.modules.setdefault("keycloak_service_account", MagicMock())
 
+# Reranker import-time dependencies
+_kneed_mock = MagicMock()
+_kneed_mock.KneeLocator = MagicMock()
+sys.modules.setdefault("kneed", _kneed_mock)
+
+_integrations_mock = MagicMock()
+_integrations_tei_module = MagicMock()
+_integrations_tei_module.OpeaTEIReranking = type(
+    "OpeaTEIReranking", (), {"__init__": lambda self, *a, **kw: None}
+)
+sys.modules.setdefault("integrations", _integrations_mock)
+sys.modules.setdefault("integrations.tei", _integrations_tei_module)
+
+sys.modules.setdefault("comps.cores.proto.opea_docarray", MagicMock())
+
 
 # ---------------------------------------------------------------------------
 # Autouse fixture — required env vars for every OPEA service

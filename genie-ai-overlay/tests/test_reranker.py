@@ -220,8 +220,30 @@ class TestSliceStrategy:
 
         texts = [doc.text for doc in result.reranked_docs]
         scores = [doc.score for doc in result.reranked_docs]
-        assert "first doc" in texts
-        assert 0.95 in scores
+        assert texts == ["first doc", "second doc"]
+        assert scores == [0.95, 0.82]
+
+    @pytest.mark.asyncio
+    async def test_slice_with_nonsequential_indices_maps_correctly(self):
+        """TEI returns results with shuffled indices — code must map back to original docs."""
+        reranker = create_reranker()
+        # TEI sorted by score: doc2 (0.95) > doc0 (0.82) > doc1 (0.61)
+        tei_response = [{"index": 2, "score": 0.95}, {"index": 0, "score": 0.82}, {"index": 1, "score": 0.61}]
+        input_doc = create_mock_searched_doc(
+            texts=["doc zero", "doc one", "doc two"],
+            reranking_strategy="slice",
+            top_n=2,
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+
+        assert len(result.reranked_docs) == 2
+        assert result.reranked_docs[0].text == "doc two"
+        assert result.reranked_docs[0].score == 0.95
+        assert result.reranked_docs[1].text == "doc zero"
+        assert result.reranked_docs[1].score == 0.82
 
     @pytest.mark.asyncio
     async def test_slice_top_n_zero_defaults_to_one(self):
@@ -247,6 +269,24 @@ class TestSliceStrategy:
 
 class TestThresholdStrategy:
     """Tests for the 'threshold' reranking strategy."""
+
+    @pytest.mark.asyncio
+    async def test_tei_returns_fewer_results_than_input_docs(self):
+        """TEI may return a subset — code should handle missing results gracefully."""
+        reranker = create_reranker()
+        # 5 docs sent, TEI returns only 3
+        tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
+        input_doc = create_mock_searched_doc(
+            texts=["a", "b", "c", "d", "e"],
+            reranking_strategy="slice",
+            top_n=5,
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+
+        assert len(result.reranked_docs) == 3
 
     @pytest.mark.asyncio
     async def test_threshold_returns_only_above(self):
@@ -281,6 +321,24 @@ class TestThresholdStrategy:
             result = await reranker.invoke(input_doc)
 
         assert len(result.reranked_docs) == 3
+
+    @pytest.mark.asyncio
+    async def test_threshold_includes_score_equal_to_threshold(self):
+        """Score exactly at threshold should be included (>= comparison)."""
+        reranker = create_reranker()
+        tei_response = create_tei_rerank_response([0.75, 0.60])
+        input_doc = create_mock_searched_doc(
+            texts=["a", "b"],
+            reranking_strategy="threshold",
+            reranking_threshold=0.75,
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+
+        assert len(result.reranked_docs) == 1
+        assert result.reranked_docs[0].score == 0.75
 
     @pytest.mark.asyncio
     async def test_threshold_all_below_returns_empty(self):
@@ -364,9 +422,8 @@ class TestKneeThresholdStrategy:
             await reranker.invoke(input_doc)
 
         mock_kl.assert_called_once()
-        call_kwargs = mock_kl.call_args
-        assert call_kwargs[1].get("curve") == "convex" or call_kwargs[0][2] == "convex"
-        assert call_kwargs[1].get("direction") == "decreasing" or call_kwargs[0][3] == "decreasing"
+        assert mock_kl.call_args.kwargs["curve"] == "convex"
+        assert mock_kl.call_args.kwargs["direction"] == "decreasing"
 
     @pytest.mark.asyncio
     async def test_knee_found_returns_docs_up_to_cutoff(self):

@@ -1,6 +1,6 @@
 # Story 4.5: Test Reranker Score Validation and Top-K Constraints
 
-Status: review
+Status: done
 
 ## Story
 
@@ -312,6 +312,18 @@ Claude Opus 4 (claude-opus-4-7)
 - genie-ai-overlay/tests/conftest.py (modified — added kneed, integrations.tei, opea_docarray mocks)
 - genie-ai-overlay/tests/test_reranker.py (created — 30 tests for GenieTEIReranking)
 
+## Review Findings
+
+- [x] [Review][Patch] TEI mock only generates sequential indices [test_reranker.py:107-114] — Added `test_slice_with_nonsequential_indices_maps_correctly` with shuffled TEI indices [{index:2, score:0.95}, {index:0, score:0.82}].
+- [x] [Review][Patch] No test for TEI returning fewer results than input docs [test_reranker.py] — Added `test_tei_returns_fewer_results_than_input_docs` (5 docs in, 3 TEI results).
+- [x] [Review][Patch] Weak `in` assertions in text/score preservation test [test_reranker.py:221-224] — Replaced with exact list comparison `==`.
+- [x] [Review][Patch] No boundary test for score == threshold [test_reranker.py:248-317] — Added `test_threshold_includes_score_equal_to_threshold` verifying `>=` behavior.
+- [x] [Review][Patch] Fragile KneeLocator assertion with `or` pattern [test_reranker.py:367-369] — Replaced with direct `mock_kl.call_args.kwargs["curve"]` assertion.
+- [x] [Review][Defer] TEI error handling not tested [genieai_tei_reranker.py:67-71] — deferred, pre-existing. Production code has no try/except around aiohttp call.
+- [x] [Review][Defer] Index out-of-bounds in retrieved_docs lookup [genieai_tei_reranker.py:80] — deferred, pre-existing. No bounds check on TEI-returned indices.
+- [x] [Review][Defer] KneeLocator single-doc/flat-score edge cases [test_reranker.py:344-417] — deferred, nice-to-have not required by AC.
+
 ## Change Log
 
 - 2026-05-18: Story 4.5 implementation complete — 30 tests for reranker score validation and top-K constraints (all ACs satisfied)
+- 2026-05-18: Code review — 5 patch, 3 defer, 6 dismissed

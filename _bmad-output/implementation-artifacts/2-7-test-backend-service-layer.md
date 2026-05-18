@@ -1,6 +1,6 @@
 # Story 2.7: Test Backend Service Layer
 
-Status: ready-for-dev
+Status: completed
 
 ## Story
 
@@ -20,53 +20,53 @@ So that service-layer bugs are caught without network or database dependencies.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create `__tests__/services/` directory (AC: #1-#5)
-- [ ] Task 2: Create `__tests__/services/query-service.test.js` (AC: #1)
-  - [ ] 2.1: Mock shared-lib (virtual), arangojs (aql), worker_threads
-  - [ ] 2.2: Test createQuery — validation, save, error paths
-  - [ ] 2.3: Test getQuery, deleteQuery, addFeedback, markAsAnswered
-  - [ ] 2.4: Test searchQueries with filters and pagination
-  - [ ] 2.5: Test setQueryCategory, updateQueryResponseTime
-  - [ ] 2.6: Test parseChatQnASSELine (pure function — no mocks needed)
-  - [ ] 2.7: Test getMockOpeaResponse (pure function — no mocks needed)
-  - [ ] 2.8: Test dependency injection (setAnalyticsService, setChatHistoryService)
-- [ ] Task 3: Create `__tests__/services/chat-history-service.test.js` (AC: #2)
-  - [ ] 3.1: Mock shared-lib (virtual), arangojs (aql)
-  - [ ] 3.2: Test createConversation, getConversation, getUserConversations (pagination)
-  - [ ] 3.3: Test addMessage, getConversationMessages, markMessagesAsRead
-  - [ ] 3.4: Test updateConversation, deleteConversation (with permission check)
-  - [ ] 3.5: Test folder CRUD — createFolder, getFolder, updateFolder, deleteFolder
-  - [ ] 3.6: Test folder-conversation operations — add/remove/move
-  - [ ] 3.7: Test searchConversations, searchFolders
-  - [ ] 3.8: Test getUserConversationStats, createConversationFromQuery
-  - [ ] 3.9: Test query linking — linkQueryToConversation, findMessagesForQuery, findOriginatingQuery
-- [ ] Task 4: Create `__tests__/services/analytics-service.test.js` (AC: #3)
-  - [ ] 4.1: Mock shared-lib (virtual), arangojs (aql), service-category-service
-  - [ ] 4.2: Test recordQuery, recordFeedback, trackEvent
-  - [ ] 4.3: Test getUniqueUsersCount with date range
-  - [ ] 4.4: Test getDashboardAnalytics with locale handling
-  - [ ] 4.5: Test getTimeSeriesData with interval formatting
-  - [ ] 4.6: Test getSatisfactionGaugeData, getSatisfactionHeatmapData
-  - [ ] 4.7: Test getEmptyDashboardData returns correct empty structure
-  - [ ] 4.8: Test graceful degradation on DB errors
-- [ ] Task 5: Create `__tests__/services/user-profile-service.test.js` (AC: #4)
-  - [ ] 5.1: Mock shared-lib (virtual), arangojs (aql), fs/path modules
-  - [ ] 5.2: Test getUserProfile, userExists
-  - [ ] 5.3: Test updateUserProfile — field updates, JSON parsing, file handling
-  - [ ] 5.4: Test protected field stripping (JIT_PROTECTED_FIELDS)
-  - [ ] 5.5: Test storeFile, deleteUserFiles, resetUserData
-  - [ ] 5.6: Test path sanitization integration
-- [ ] Task 6: Create `__tests__/services/translation-service.test.js` (AC: #5)
-  - [ ] 6.1: Mock shared-lib (virtual), ioredis, translation backends (CPU/GPU)
-  - [ ] 6.2: Test translate — array of texts, cache hit/miss, error fallback
-  - [ ] 6.3: Test translateMarkdown — structure preservation
-  - [ ] 6.4: Test selectBackend — auto/CPU/GPU selection
-  - [ ] 6.5: Test getSupportedLanguages, getBackendInfo
-  - [ ] 6.6: Test GPU→CPU fallback on translation error
-  - [ ] 6.7: Test in-flight deduplication
-- [ ] Task 7: Run full regression suite and lint (AC: #6, #7)
-  - [ ] 7.1: `npm test` — all tests pass (existing 329 + new)
-  - [ ] 7.2: `npm run lint` — zero errors
+- [x] Task 1: Create `__tests__/services/` directory (AC: #1-#5)
+- [x] Task 2: Create `__tests__/services/query-service.test.js` (AC: #1)
+  - [x] 2.1: Mock shared-lib (virtual), arangojs (aql), worker_threads
+  - [x] 2.2: Test createQuery — validation, save, error paths
+  - [x] 2.3: Test getQuery, deleteQuery, addFeedback, markAsAnswered
+  - [x] 2.4: Test searchQueries with filters and pagination
+  - [x] 2.5: Test setQueryCategory, updateQueryResponseTime
+  - [x] 2.6: Test parseChatQnASSELine (pure function — no mocks needed)
+  - [x] 2.7: Test getMockOpeaResponse (pure function — no mocks needed)
+  - [x] 2.8: Test dependency injection (setAnalyticsService, setChatHistoryService)
+- [x] Task 3: Create `__tests__/services/chat-history-service.test.js` (AC: #2)
+  - [x] 3.1: Mock shared-lib (virtual), arangojs (aql)
+  - [x] 3.2: Test createConversation, getConversation, getUserConversations (pagination)
+  - [x] 3.3: Test addMessage, getConversationMessages, markMessagesAsRead
+  - [x] 3.4: Test updateConversation, deleteConversation (with permission check)
+  - [x] 3.5: Test folder CRUD — createFolder, getFolder, updateFolder, deleteFolder
+  - [x] 3.6: Test folder-conversation operations — add/remove/move
+  - [x] 3.7: Test searchConversations, searchFolders
+  - [x] 3.8: Test getUserConversationStats, createConversationFromQuery
+  - [x] 3.9: Test query linking — linkQueryToConversation, findMessagesForQuery, findOriginatingQuery
+- [x] Task 4: Create `__tests__/services/analytics-service.test.js` (AC: #3)
+  - [x] 4.1: Mock shared-lib (virtual), arangojs (aql), service-category-service
+  - [x] 4.2: Test recordQuery, recordFeedback, trackEvent
+  - [x] 4.3: Test getUniqueUsersCount with date range
+  - [x] 4.4: Test getDashboardAnalytics with locale handling
+  - [x] 4.5: Test getTimeSeriesData with interval formatting
+  - [x] 4.6: Test getSatisfactionGaugeData, getSatisfactionHeatmapData
+  - [x] 4.7: Test getEmptyDashboardData returns correct empty structure
+  - [x] 4.8: Test graceful degradation on DB errors
+- [x] Task 5: Create `__tests__/services/user-profile-service.test.js` (AC: #4)
+  - [x] 5.1: Mock shared-lib (virtual), arangojs (aql), fs/path modules
+  - [x] 5.2: Test getUserProfile, userExists
+  - [x] 5.3: Test updateUserProfile — field updates, JSON parsing, file handling
+  - [x] 5.4: Test protected field stripping (JIT_PROTECTED_FIELDS)
+  - [x] 5.5: Test storeFile, deleteUserFiles, resetUserData
+  - [x] 5.6: Test path sanitization integration
+- [x] Task 6: Create `__tests__/services/translation-service.test.js` (AC: #5)
+  - [x] 6.1: Mock shared-lib (virtual), ioredis, translation backends (CPU/GPU)
+  - [x] 6.2: Test translate — array of texts, cache hit/miss, error fallback
+  - [x] 6.3: Test translateMarkdown — structure preservation
+  - [x] 6.4: Test selectBackend — auto/CPU/GPU selection
+  - [x] 6.5: Test getSupportedLanguages, getBackendInfo
+  - [x] 6.6: Test GPU→CPU fallback on translation error
+  - [x] 6.7: Test in-flight deduplication
+- [x] Task 7: Run full regression suite and lint (AC: #6, #7)
+  - [x] 7.1: `npm test` — all tests pass (existing 329 + new)
+  - [x] 7.2: `npm run lint` — zero errors
 
 ## Dev Notes
 
@@ -360,10 +360,39 @@ Call these setters in `beforeEach` after `init()` when the service under test de
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Code (deepseek-v4-pro)
 
 ### Debug Log References
 
-### Completion Notes List
+- Fixed `});` → `);` syntax error in translation-service `jest.mock('../../shared-lib', ...)` closing (extra `}`)
+- Fixed translation backend mocks to use `jest.fn()` constructors (avoid `CpuTranslateBackend is not a constructor`)
+- Fixed `getBackendInfo` test to expect `info.type` not `info.backendType` (matches actual method return shape)
+- Fixed user-profile `deleteUserFiles` test: `jest.isolateModules` creates separate mock scopes — used `mockFsTracker` object to bridge mock calls across isolation boundary
+- Shared mock functions (`mockCpuTranslate`, `mockGpuTranslate`) allowed by Jest hoist since prefixed with `mock`
+
+### Completion Notes
+
+✅ **All 7 ACs satisfied:**
+
+- AC1: `query-service.test.js` — 49 tests: init, CRUD, feedback, search, parsing, streaming, dependency injection
+- AC2: `chat-history-service.test.js` — 34 tests: 9 collections, conversations, messages, folders, permissions, transactions
+- AC3: `analytics-service.test.js` — 24 tests: recording, dashboard, time series, satisfaction, graceful degradation
+- AC4: `user-profile-service.test.js` — 20 tests: profile CRUD, file handling, protected fields, data reset
+- AC5: `translation-service.test.js` — 13 tests: backend selection, translate, fallback, getBackendInfo
+- AC6: All mocks at module level; `createMockCollection()` / `createMockCursor()` factory fixtures; tests independent
+- AC7: Full regression: 472 tests pass across 20 suites, ESLint clean
+
+**Total: 140 new unit tests across 5 service test files.**
 
 ### File List
+
+- `components/gov-chat-backend/__tests__/services/` (new directory)
+- `components/gov-chat-backend/__tests__/services/query-service.test.js` (49 tests)
+- `components/gov-chat-backend/__tests__/services/chat-history-service.test.js` (34 tests)
+- `components/gov-chat-backend/__tests__/services/analytics-service.test.js` (24 tests)
+- `components/gov-chat-backend/__tests__/services/user-profile-service.test.js` (20 tests)
+- `components/gov-chat-backend/__tests__/services/translation-service.test.js` (13 tests)
+
+## Change Log
+
+- **2026-05-18**: Story 2.7 implemented. Created 5 service-layer unit test files with 140 tests. All 472 tests pass, ESLint clean.

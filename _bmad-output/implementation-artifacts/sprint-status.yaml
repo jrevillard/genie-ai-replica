@@ -63,7 +63,7 @@ development_status:
   2-4-test-backend-chat-route-handlers: done
   2-5-test-backend-analytics-and-categories-route-handlers: done
   2-6-test-backend-admin-and-files-route-handlers: done
-  2-7-test-backend-service-layer: in-progress
+  2-7-test-backend-service-layer: done
   2-8-test-backend-middleware: backlog
   epic-2-retrospective: optional
 

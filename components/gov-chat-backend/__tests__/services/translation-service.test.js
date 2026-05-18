@@ -65,20 +65,43 @@ jest.mock('remark-parse', () => ({ default: jest.fn() }), { virtual: true });
 jest.mock('remark-stringify', () => ({ default: jest.fn() }), { virtual: true });
 jest.mock('unist-util-visit', () => ({ visit: jest.fn() }), { virtual: true });
 
+// TODO: translateMarkdown tests are blocked by ESM dynamic imports.
+// The service loads unified/remark-parse/remark-stringify via `await import()`
+// in init(), which jest.mock() cannot intercept. To test properly:
+// 1. Run integration tests in a Docker container with real ESM support, or
+// 2. Refactor the service to accept a markdown processor via dependency injection.
+
 const CpuTranslateBackend = require('../../services/translation/cpu-translate-backend');
 const GpuTranslateBackend = require('../../services/translation/gpu-translate-backend');
 
 let translationService;
+let savedEnvVars;
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockRedis.get.mockResolvedValue(null);
+  savedEnvVars = {};
 
   jest.isolateModules(() => {
     translationService = require('../../services/translation-service');
   });
   translationService.initialized = false;
 });
+
+afterEach(() => {
+  Object.keys(savedEnvVars).forEach((key) => {
+    if (savedEnvVars[key] === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = savedEnvVars[key];
+    }
+  });
+});
+
+function setEnv(key, value) {
+  savedEnvVars[key] = process.env[key];
+  process.env[key] = value;
+}
 
 describe('TranslationService', () => {
   describe('constructor', () => {
@@ -91,7 +114,7 @@ describe('TranslationService', () => {
 
   describe('selectBackend', () => {
     it('should force CPU backend when TRANSLATION_BACKEND=cpu', async () => {
-      process.env.TRANSLATION_BACKEND = 'cpu';
+      setEnv('TRANSLATION_BACKEND', 'cpu');
       jest.isolateModules(() => {
         translationService = require('../../services/translation-service');
       });
@@ -99,11 +122,10 @@ describe('TranslationService', () => {
       translationService.backend = null;
       await translationService.selectBackend();
       expect(translationService.backendType).toBe('cpu');
-      delete process.env.TRANSLATION_BACKEND;
     });
 
     it('should force GPU backend when TRANSLATION_BACKEND=gpu', async () => {
-      process.env.TRANSLATION_BACKEND = 'gpu';
+      setEnv('TRANSLATION_BACKEND', 'gpu');
       jest.isolateModules(() => {
         translationService = require('../../services/translation-service');
       });
@@ -111,11 +133,10 @@ describe('TranslationService', () => {
       translationService.backend = null;
       await translationService.selectBackend();
       expect(translationService.backendType).toBe('gpu');
-      delete process.env.TRANSLATION_BACKEND;
     });
 
     it('should return existing backend if already selected', async () => {
-      process.env.TRANSLATION_BACKEND = 'cpu';
+      setEnv('TRANSLATION_BACKEND', 'cpu');
       jest.isolateModules(() => {
         translationService = require('../../services/translation-service');
       });
@@ -125,24 +146,22 @@ describe('TranslationService', () => {
       const result = await translationService.selectBackend();
       expect(result).toBe(translationService.backend);
       expect(result.translate).toBe(mockCpuTranslate);
-      delete process.env.TRANSLATION_BACKEND;
     });
 
     it('should throw on invalid backend value', async () => {
-      process.env.TRANSLATION_BACKEND = 'invalid';
+      setEnv('TRANSLATION_BACKEND', 'invalid');
       jest.isolateModules(() => {
         translationService = require('../../services/translation-service');
       });
       translationService.initialized = false;
       translationService.backend = null;
       await expect(translationService.selectBackend()).rejects.toThrow('Invalid TRANSLATION_BACKEND');
-      delete process.env.TRANSLATION_BACKEND;
     });
   });
 
   describe('getSupportedLanguages', () => {
     it('should return languages from backend', () => {
-      process.env.TRANSLATION_BACKEND = 'cpu';
+      setEnv('TRANSLATION_BACKEND', 'cpu');
       jest.isolateModules(() => {
         translationService = require('../../services/translation-service');
       });
@@ -151,7 +170,6 @@ describe('TranslationService', () => {
       translationService.backendType = 'cpu';
       const langs = translationService.getSupportedLanguages();
       expect(langs).toEqual({ en: 'English', fr: 'French', es: 'Spanish' });
-      delete process.env.TRANSLATION_BACKEND;
     });
   });
 
@@ -198,7 +216,7 @@ describe('TranslationService', () => {
 
   describe('GPU to CPU fallback', () => {
     it('should fall back to CPU when GPU fails in auto mode', async () => {
-      process.env.TRANSLATION_BACKEND = 'auto';
+      setEnv('TRANSLATION_BACKEND', 'auto');
       jest.isolateModules(() => {
         translationService = require('../../services/translation-service');
       });
@@ -211,11 +229,10 @@ describe('TranslationService', () => {
 
       const result = await translationService.translate(['hello'], 'en', 'fr');
       expect(result).toEqual(['translated text']);
-      delete process.env.TRANSLATION_BACKEND;
     });
 
     it('should throw when both backends fail', async () => {
-      process.env.TRANSLATION_BACKEND = 'auto';
+      setEnv('TRANSLATION_BACKEND', 'auto');
       jest.isolateModules(() => {
         translationService = require('../../services/translation-service');
       });
@@ -231,7 +248,6 @@ describe('TranslationService', () => {
       await expect(translationService.translate(['hello'], 'en', 'fr')).rejects.toThrow(
         'Translation failed on both GPU and CPU'
       );
-      delete process.env.TRANSLATION_BACKEND;
     });
   });
 });

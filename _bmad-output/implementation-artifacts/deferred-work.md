@@ -77,3 +77,11 @@ Items deferred during code reviews. Revisit when the related component is next m
 - 3/5 `add_remote_service*` variants untested — `add_remote_service_faqgen()`, `add_remote_service_without_translation()`, `add_remote_service_genieai()` have zero test coverage
 - Index out-of-bounds in retrieved_docs lookup — `input.retrieved_docs[best_response["index"]]` (genieai_tei_reranker.py:80, 89, 105, 111) has no bounds check. A buggy TEI response with index >= len(retrieved_docs) will crash with IndexError. Pre-existing production code vulnerability.
 - KneeLocator single-doc / flat-score edge cases not tested — When there's only 1 document or all scores are identical, KneeLocator behavior is untested. Nice-to-have, not required by AC.
+
+## Deferred from: code review of 2-7-test-backend-service-layer (2026-05-18)
+
+- Worker thread mock ne simule pas le flux async — le mock Worker fournit `on`/`postMessage`/`terminate` mais ne simule jamais l'émission d'événements. Tests actuels fonctionnent car le code OPEA worker n'est pas appelé directement. Amélioration nice-to-have.
+- Pagination: un seul scénario testé — `searchQueries` testé avec total=25 et pageSize=10. Scénarios limites (exact boundary, zero results) seraient un plus.
+- User profile `process`: couverture indirecte — la méthode `process` (agrégation de custom settings) n'est testée que via `updateUserProfile`. Des tests directs ajouteraient de la robustesse.
+- Translation backend fallback: risque théorique de race — le test de fallback GPU→CPU assigne `translationService.backend` manuellement. Risque théorique si le service cache le backend.
+- Chat history: edge collection query patterns — les patterns de traversal de graphe ArangoDB (edge bidirectionnelle, vérification d'existence d'edge) sont complexes à mocker et ne sont pas testés directement.

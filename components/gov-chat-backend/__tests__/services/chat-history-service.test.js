@@ -297,6 +297,24 @@ describe('ChatHistoryService', () => {
       expect(result).toBeDefined();
       expect(result.success).toBe(true);
     });
+
+    it('should abort transaction when a step fails', async () => {
+      const mockTrx = {
+        step: jest.fn().mockRejectedValue(new Error('step failed')),
+        commit: jest.fn().mockResolvedValue(undefined),
+        abort: jest.fn().mockResolvedValue(undefined)
+      };
+      mockDb.beginTransaction.mockResolvedValue(mockTrx);
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'edge-1' }]))
+        .mockResolvedValueOnce(createMockCursor(['messages/msg-1']))
+        .mockResolvedValue(createMockCursor([]));
+      await expect(
+        chatHistoryService.deleteConversation('conv-1', 'user-1', 'user-1')
+      ).rejects.toThrow();
+      expect(mockTrx.abort).toHaveBeenCalled();
+      expect(mockTrx.commit).not.toHaveBeenCalled();
+    });
   });
 
   describe('folder CRUD', () => {

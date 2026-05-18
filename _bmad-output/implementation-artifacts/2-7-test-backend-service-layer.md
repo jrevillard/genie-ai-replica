@@ -1,6 +1,6 @@
 # Story 2.7: Test Backend Service Layer
 
-Status: review
+Status: done
 
 ## Story
 
@@ -393,6 +393,37 @@ Claude Code (deepseek-v4-pro)
 - `components/gov-chat-backend/__tests__/services/user-profile-service.test.js` (20 tests)
 - `components/gov-chat-backend/__tests__/services/translation-service.test.js` (13 tests)
 
+## Review Findings
+
+### Decision Needed — Resolved
+
+- [x] [Review][Decision→Patch] Analytics service: gestion d'erreurs incohérente → **Bug du service**. Rendre la gestion d'erreurs cohérente (graceful degradation uniforme) + ajuster les tests.
+- [x] [Review][Decision→Patch] Translation service: `translateMarkdown` non testé → **TODO**. Ajouter un commentaire TODO dans le test file documentant la limitation ESM dynamic import.
+- [x] [Review][Decision→Patch] Query service: 8 méthodes publiques non testées → **Dans le scope AC1**. Ajouter les tests manquants pour `saveQueryWithCriteria`, `getSavedQueries`, `getQueryRecommendations`, `getPopularQueries`, `createConversationFromQuery`, `getConversationsForQuery`, `markQueryAsAnswered`, `linkQueryToMessage`.
+
+### Patch
+
+- [x] [Review][Patch] Analytics service: uniformiser la gestion d'erreurs [analytics-service.js + analytics-service.test.js] — getSatisfactionGaugeData now gracefully degrades (returns default structure) instead of throwing.
+- [x] [Review][Patch] Transaction mock ne vérifie pas le rollback [chat-history-service.test.js] — Added test verifying abort() is called on step failure.
+- [x] [Review][Patch] Variables d'environnement sans cleanup robuste [translation-service.test.js] — Added afterEach with savedEnvVars restore + setEnv() helper replacing manual delete.
+- [x] [Review][Patch] Date formatting: assertions trop faibles [analytics-service.test.js] — formatDateLabel now asserts actual format (regex for time components, date components).
+- [x] [Review][Patch] Protected field stripping: `delete` vs `undefined` [user-profile-service.test.js] — Added hasOwnProperty assertions to verify keys are deleted, not just undefined.
+- [x] [Review][Patch] Analytics: IDs de catégorie non réalistes [analytics-service.test.js] — Added test with ArangoDB-style `collection/key` IDs verifying split('/') extraction.
+- [x] [Review][Patch] Analytics: mock `service-category-service` inexact [analytics-service.test.js] — Added `getAllCategoriesWithServices` to mock alongside existing `getCategoryTranslations`.
+- [x] [Review][Patch] setQueryCategory: test négatif manquant pour query inexistante [query-service.test.js] — Added test for NotFoundError when query document doesn't exist.
+- [x] [Review][Patch] Query service: ajouter tests pour 8 méthodes manquantes [query-service.test.js] — 35 new tests added for saveQueryWithCriteria, getSavedQueries, getQueryRecommendations, getPopularQueries, createConversationFromQuery, getConversationsForQuery, markQueryAsAnswered, linkQueryToMessage.
+- [x] [Review][Patch] Translation service: ajouter TODO pour translateMarkdown [translation-service.test.js] — TODO comment added documenting ESM dynamic import limitation.
+
+### Deferred
+
+- [x] [Review][Defer] Worker thread mock ne simule pas le flux async [query-service.test.js] — deferred, pre-existing
+- [x] [Review][Defer] Pagination: un seul scénario testé [query-service.test.js] — deferred, pre-existing
+- [x] [Review][Defer] User profile `process`: couverture indirecte [user-profile-service.test.js] — deferred, pre-existing
+- [x] [Review][Defer] Translation backend fallback: risque théorique de race [translation-service.test.js] — deferred, pre-existing
+- [x] [Review][Defer] Chat history: edge collection query patterns [chat-history-service.test.js] — deferred, pre-existing
+
 ## Change Log
 
 - **2026-05-18**: Story 2.7 implemented. Created 5 service-layer unit test files with 140 tests. All 472 tests pass, ESLint clean.
+- **2026-05-18**: Code review completed. 3 decision-needed, 7 patch, 5 deferred, 3 dismissed.
+- **2026-05-18**: All 10 patches applied. 507 tests pass (35 new), 0 lint errors. Service fix: analytics-service getSatisfactionGaugeData now gracefully degrades.

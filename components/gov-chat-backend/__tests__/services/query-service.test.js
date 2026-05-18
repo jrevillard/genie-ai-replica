@@ -349,6 +349,16 @@ describe('QueryService', () => {
       const result = await queryService.setQueryCategory('query-1', 'cat-1');
       expect(result.categoryId).toBe('cat-1');
     });
+
+    it('should throw when query does not exist', async () => {
+      const notFoundError = new Error('document not found');
+      notFoundError.code = 404;
+      mockQueriesCollection.update.mockRejectedValueOnce(notFoundError);
+      await expect(
+        queryService.setQueryCategory('nonexistent', 'cat-1')
+      ).rejects.toThrow('document not found');
+      expect(mockQueryCategoriesCollection.save).not.toHaveBeenCalled();
+    });
   });
 
   describe('parseChatQnASSELine', () => {
@@ -552,6 +562,441 @@ describe('QueryService', () => {
       mockDb.query.mockRejectedValueOnce(new Error('DB fail'));
       const result = await queryService.getSimilarQueries('tax rate');
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('saveQueryWithCriteria', () => {
+    it('should save query with criteria and metadata', async () => {
+      const queryData = {
+        userId: 'user-1',
+        text: 'test query',
+        categoryId: 'cat-1',
+        serviceId: 'svc-1',
+        criteria: 'tax payment',
+        tags: ['urgent', 'financial'],
+        name: 'Tax Query',
+        description: 'Important tax question'
+      };
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'saved-1' });
+      const result = await queryService.saveQueryWithCriteria(queryData);
+      expect(mockQueriesCollection.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-1',
+          text: 'test query',
+          categoryId: 'cat-1',
+          serviceId: 'svc-1',
+          metadata: {
+            criteria: 'tax payment',
+            tags: ['urgent', 'financial'],
+            isSaved: true,
+            name: 'Tax Query',
+            description: 'Important tax question'
+          }
+        })
+      );
+      expect(result._key).toBe('saved-1');
+    });
+
+    it('should throw when userId is missing', async () => {
+      const queryData = { text: 'test' };
+      await expect(queryService.saveQueryWithCriteria(queryData)).rejects.toThrow(
+        'Missing required query data'
+      );
+    });
+
+    it('should throw when text is missing', async () => {
+      const queryData = { userId: 'user-1' };
+      await expect(queryService.saveQueryWithCriteria(queryData)).rejects.toThrow(
+        'Missing required query data'
+      );
+    });
+
+    it('should use default values for optional fields', async () => {
+      const queryData = {
+        userId: 'user-1',
+        text: 'test query'
+      };
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'saved-2' });
+      await queryService.saveQueryWithCriteria(queryData);
+      expect(mockQueriesCollection.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: {
+            criteria: '',
+            tags: [],
+            isSaved: true,
+            name: expect.stringContaining('Query'),
+            description: ''
+          }
+        })
+      );
+    });
+
+    it('should handle non-array tags by defaulting to empty array', async () => {
+      const queryData = {
+        userId: 'user-1',
+        text: 'test query',
+        tags: 'invalid-tag'
+      };
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'saved-3' });
+      await queryService.saveQueryWithCriteria(queryData);
+      expect(mockQueriesCollection.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            tags: []
+          })
+        })
+      );
+    });
+  });
+
+  describe('getSavedQueries', () => {
+    it('should return saved queries with pagination', async () => {
+      const mockQueries = [
+        { _key: 'q1', text: 'query 1', metadata: { isSaved: true } },
+        { _key: 'q2', text: 'query 2', metadata: { isSaved: true } }
+      ];
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor(mockQueries))
+        .mockResolvedValueOnce(createMockCursor([2]));
+      const result = await queryService.getSavedQueries('user-1', 10, 0);
+      expect(result.queries).toHaveLength(2);
+      expect(result.pagination.total).toBe(2);
+      expect(result.pagination.pages).toBe(1);
+    });
+
+    it('should filter by userId and isSaved flag', async () => {
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([]))
+        .mockResolvedValueOnce(createMockCursor([0]));
+      await queryService.getSavedQueries('user-1');
+      expect(mockDb.query).toHaveBeenCalledTimes(2);
+    });
+
+    it('should handle pagination correctly', async () => {
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([]))
+        .mockResolvedValueOnce(createMockCursor([25]));
+      const result = await queryService.getSavedQueries('user-1', 10, 10);
+      expect(result.pagination.pages).toBe(3);
+      expect(result.pagination.currentPage).toBe(2);
+    });
+
+    it('should propagate DB errors', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('DB error'));
+      await expect(queryService.getSavedQueries('user-1')).rejects.toThrow('DB error');
+    });
+  });
+
+  describe('getQueryRecommendations', () => {
+    it('should return recommendations based on user history', async () => {
+      const recentQueries = [
+        { _key: 'q1', text: 'query 1', categoryId: 'cat-1', serviceId: 'svc-1' },
+        { _key: 'q2', text: 'query 2', categoryId: 'cat-2', serviceId: 'svc-2' }
+      ];
+      const recommendations = ['rec1', 'rec2', 'rec3'];
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor(recentQueries))
+        .mockResolvedValueOnce(createMockCursor(recommendations));
+      const result = await queryService.getQueryRecommendations('user-1', 5);
+      expect(result).toEqual(recommendations);
+    });
+
+    it('should fall back to popular queries when no recent queries exist', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([]));
+      const popularQueries = [
+        { text: 'popular 1', count: 10 },
+        { text: 'popular 2', count: 8 }
+      ];
+      mockDb.query.mockResolvedValueOnce(createMockCursor(popularQueries));
+      const result = await queryService.getQueryRecommendations('user-1', 5);
+      expect(result).toEqual(['popular 1', 'popular 2']);
+    });
+
+    it('should fall back to popular queries on error', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('DB error'));
+      const popularQueries = [{ text: 'popular 1', count: 10 }];
+      mockDb.query.mockResolvedValueOnce(createMockCursor(popularQueries));
+      const result = await queryService.getQueryRecommendations('user-1', 5);
+      expect(result).toEqual(['popular 1']);
+    });
+
+    it('should combine popular queries when insufficient recommendations', async () => {
+      const recentQueries = [{ _key: 'q1', text: 'query 1', categoryId: 'cat-1' }];
+      const recommendations = ['rec1'];
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor(recentQueries))
+        .mockResolvedValueOnce(createMockCursor(recommendations));
+      const popularQueries = [
+        { text: 'popular 1', count: 10 },
+        { text: 'popular 2', count: 8 }
+      ];
+      mockDb.query.mockResolvedValueOnce(createMockCursor(popularQueries));
+      const result = await queryService.getQueryRecommendations('user-1', 5);
+      expect(result.length).toBe(3);
+      expect(result).toContain('rec1');
+      expect(result).toContain('popular 1');
+      expect(result).toContain('popular 2');
+    });
+  });
+
+  describe('getPopularQueries', () => {
+    it('should return popular queries grouped by text', async () => {
+      const popularQueries = [
+        { text: 'tax payment', count: 15 },
+        { text: 'national id', count: 12 },
+        { text: 'business license', count: 8 }
+      ];
+      mockDb.query.mockResolvedValueOnce(createMockCursor(popularQueries));
+      const result = await queryService.getPopularQueries(5);
+      expect(result).toHaveLength(3);
+      expect(result[0].text).toBe('tax payment');
+      expect(result[0].count).toBe(15);
+    });
+
+    it('should return empty array on error', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('DB error'));
+      const result = await queryService.getPopularQueries(5);
+      expect(result).toEqual([]);
+    });
+
+    it('should respect the limit parameter', async () => {
+      const popularQueries = [
+        { text: 'query 1', count: 10 },
+        { text: 'query 2', count: 8 }
+      ];
+      mockDb.query.mockResolvedValueOnce(createMockCursor(popularQueries));
+      const result = await queryService.getPopularQueries(2);
+      expect(result).toHaveLength(2);
+    });
+  });
+
+  describe('createConversationFromQuery', () => {
+    beforeEach(() => {
+      queryService.chatHistoryService = {
+        createConversationFromQuery: jest.fn().mockResolvedValue({
+          conversation: { _key: 'conv-1' }
+        })
+      };
+    });
+
+    it('should create conversation from query', async () => {
+      mockQueriesCollection.document.mockResolvedValueOnce({
+        _key: 'query-1',
+        text: 'test query',
+        userId: 'user-1'
+      });
+      const result = await queryService.createConversationFromQuery('query-1', {
+        title: 'Custom Title',
+        responseText: 'Response',
+        tags: ['tag1']
+      });
+      expect(queryService.chatHistoryService.createConversationFromQuery).toHaveBeenCalledWith(
+        'query-1',
+        'user-1',
+        {
+          title: 'Custom Title',
+          responseText: 'Response',
+          tags: ['tag1']
+        }
+      );
+      expect(result.conversation._key).toBe('conv-1');
+    });
+
+    it('should use query text as default title', async () => {
+      mockQueriesCollection.document.mockResolvedValueOnce({
+        _key: 'query-1',
+        text: 'test query',
+        userId: 'user-1'
+      });
+      await queryService.createConversationFromQuery('query-1');
+      expect(queryService.chatHistoryService.createConversationFromQuery).toHaveBeenCalledWith(
+        'query-1',
+        'user-1',
+        expect.objectContaining({
+          title: 'test query',
+          tags: []
+        })
+      );
+    });
+
+    it('should throw when chatHistoryService is not set', async () => {
+      queryService.chatHistoryService = null;
+      await expect(queryService.createConversationFromQuery('query-1')).rejects.toThrow(
+        'Chat history service is not set'
+      );
+    });
+
+    it('should throw NotFoundError when query does not exist', async () => {
+      mockQueriesCollection.document.mockResolvedValueOnce(null);
+      await expect(queryService.createConversationFromQuery('invalid')).rejects.toThrow(
+        'Query not found'
+      );
+    });
+  });
+
+  describe('getConversationsForQuery', () => {
+    beforeEach(() => {
+      queryService.chatHistoryService = {
+        findMessagesForQuery: jest.fn().mockResolvedValue([
+          {
+            conversation: { _key: 'conv-1', title: 'Conversation 1' },
+            message: { _key: 'msg-1', content: 'Message 1' }
+          },
+          {
+            conversation: { _key: 'conv-1', title: 'Conversation 1' },
+            message: { _key: 'msg-2', content: 'Message 2' }
+          },
+          {
+            conversation: { _key: 'conv-2', title: 'Conversation 2' },
+            message: { _key: 'msg-3', content: 'Message 3' }
+          }
+        ])
+      };
+    });
+
+    it('should return conversations grouped with messages', async () => {
+      const result = await queryService.getConversationsForQuery('query-1');
+      expect(result).toHaveLength(2);
+      expect(result[0].conversation._key).toBe('conv-1');
+      expect(result[0].messages).toHaveLength(2);
+      expect(result[1].conversation._key).toBe('conv-2');
+      expect(result[1].messages).toHaveLength(1);
+    });
+
+    it('should throw when chatHistoryService is not set', async () => {
+      queryService.chatHistoryService = null;
+      await expect(queryService.getConversationsForQuery('query-1')).rejects.toThrow(
+        'Chat history service is not set'
+      );
+    });
+
+    it('should handle empty results', async () => {
+      queryService.chatHistoryService.findMessagesForQuery.mockResolvedValueOnce([]);
+      const result = await queryService.getConversationsForQuery('query-1');
+      expect(result).toEqual([]);
+    });
+
+    it('should handle items without messages', async () => {
+      queryService.chatHistoryService.findMessagesForQuery.mockResolvedValueOnce([
+        {
+          conversation: { _key: 'conv-1', title: 'Conversation 1' },
+          message: null
+        }
+      ]);
+      const result = await queryService.getConversationsForQuery('query-1');
+      expect(result[0].messages).toHaveLength(0);
+    });
+  });
+
+  describe('markQueryAsAnswered', () => {
+    it('should mark query as answered with response time', async () => {
+      mockQueriesCollection.update.mockResolvedValueOnce({
+        _key: 'query-1',
+        isAnswered: true,
+        responseTime: 500
+      });
+      const result = await queryService.markQueryAsAnswered('query-1', 500);
+      expect(mockQueriesCollection.update).toHaveBeenCalledWith(
+        'query-1',
+        expect.objectContaining({
+          isAnswered: true,
+          responseTime: 500,
+          updatedAt: expect.any(String)
+        })
+      );
+      expect(result.isAnswered).toBe(true);
+      expect(result.responseTime).toBe(500);
+    });
+
+    it('should throw on invalid query ID', async () => {
+      await expect(queryService.markQueryAsAnswered('', 100)).rejects.toThrow(
+        'Invalid query ID provided'
+      );
+      await expect(queryService.markQueryAsAnswered('undefined', 100)).rejects.toThrow(
+        'Invalid query ID provided'
+      );
+    });
+
+    it('should throw NotFoundError when query does not exist', async () => {
+      const error = new Error('document not found');
+      error.name = 'ArangoError';
+      error.errorNum = 1202;
+      mockQueriesCollection.update.mockRejectedValueOnce(error);
+      await expect(queryService.markQueryAsAnswered('invalid', 100)).rejects.toThrow(
+        'Query not found'
+      );
+    });
+
+    it('should propagate other errors', async () => {
+      mockQueriesCollection.update.mockRejectedValueOnce(new Error('DB error'));
+      await expect(queryService.markQueryAsAnswered('query-1', 100)).rejects.toThrow('DB error');
+    });
+  });
+
+  describe('linkQueryToMessage', () => {
+    beforeEach(() => {
+      queryService.chatHistoryService = {
+        linkQueryToConversation: jest.fn().mockResolvedValue({
+          _key: 'link-1',
+          queryId: 'query-1',
+          conversationId: 'conv-1'
+        })
+      };
+    });
+
+    it('should link query to message', async () => {
+      mockDb.query.mockResolvedValueOnce(
+        createMockCursor([
+          {
+            _key: 'msg-1',
+            conversationId: 'conv-1'
+          }
+        ])
+      );
+      const result = await queryService.linkQueryToMessage('query-1', 'msg-1', {
+        responseType: 'primary',
+        confidenceScore: 0.95
+      });
+      expect(queryService.chatHistoryService.linkQueryToConversation).toHaveBeenCalledWith(
+        'query-1',
+        'conv-1',
+        'msg-1',
+        {
+          responseType: 'primary',
+          confidenceScore: 0.95
+        }
+      );
+      expect(result._key).toBe('link-1');
+    });
+
+    it('should use default options when not provided', async () => {
+      mockDb.query.mockResolvedValueOnce(
+        createMockCursor([{ _key: 'msg-1', conversationId: 'conv-1' }])
+      );
+      await queryService.linkQueryToMessage('query-1', 'msg-1');
+      expect(queryService.chatHistoryService.linkQueryToConversation).toHaveBeenCalledWith(
+        'query-1',
+        'conv-1',
+        'msg-1',
+        {
+          responseType: 'primary',
+          confidenceScore: 1.0
+        }
+      );
+    });
+
+    it('should throw when chatHistoryService is not set', async () => {
+      queryService.chatHistoryService = null;
+      await expect(
+        queryService.linkQueryToMessage('query-1', 'msg-1')
+      ).rejects.toThrow('Chat history service is not set');
+    });
+
+    it('should throw NotFoundError when message does not exist', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([]));
+      await expect(queryService.linkQueryToMessage('query-1', 'invalid')).rejects.toThrow(
+        'Message not found'
+      );
     });
   });
 });

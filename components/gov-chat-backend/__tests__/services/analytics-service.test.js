@@ -24,6 +24,7 @@ jest.mock('arangojs', () => ({
 
 jest.mock('../../services/service-category-service', () => ({
   init: jest.fn().mockResolvedValue(undefined),
+  getAllCategoriesWithServices: jest.fn().mockResolvedValue([]),
   getCategoryTranslations: jest.fn().mockResolvedValue([])
 }));
 
@@ -204,6 +205,32 @@ describe('AnalyticsService', () => {
       const result = await analyticsService.getDashboardAnalytics();
       expect(result.queries.total).toBe(0);
     });
+
+    it('should handle ArangoDB-style category IDs (collection/key)', async () => {
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([{ test: 'Connection is working' }]))
+        .mockResolvedValueOnce(
+          createMockCursor([
+            {
+              queries: { total: 5, unanswered: 2, answeredPercentage: 60, avgResponseTime: 200 },
+              categories: [
+                { categoryId: 'serviceCategories/cat-123', count: 3, value: 3 },
+                { categoryId: 'serviceCategories/cat-456', count: 2, value: 2 }
+              ],
+              feedback: {
+                total: 0, positive: 0, neutral: 0, negative: 0, positivePercentage: 0, negativePercentage: 0
+              },
+              users: { activeCount: 2 },
+              topQueries: []
+            }
+          ])
+        );
+      const result = await analyticsService.getDashboardAnalytics();
+      expect(result.categories[0].categoryId).toBe('serviceCategories/cat-123');
+      expect(result.categories[0].name).toBe('Category cat-123');
+      expect(result.categories[1].categoryId).toBe('serviceCategories/cat-456');
+      expect(result.categories[1].name).toBe('Category cat-456');
+    });
   });
 
   describe('getTimeSeriesData', () => {
@@ -221,11 +248,14 @@ describe('AnalyticsService', () => {
   });
 
   describe('getSatisfactionGaugeData', () => {
-    it('should throw on DB error (not graceful)', async () => {
+    it('should return default structure on DB error (graceful degradation)', async () => {
       mockDb.query.mockRejectedValue(new Error('DB fail'));
-      await expect(
-        analyticsService.getSatisfactionGaugeData('daily')
-      ).rejects.toThrow('DB fail');
+      const result = await analyticsService.getSatisfactionGaugeData('daily');
+      expect(result.currentValue).toBe(0);
+      expect(result.previousValue).toBe(0);
+      expect(result.changePercentage).toBe(0);
+      expect(result.target).toBe(85);
+      expect(result.historicalData).toEqual([]);
     });
   });
 
@@ -262,15 +292,13 @@ describe('AnalyticsService', () => {
 
     it('should format hourly interval', () => {
       const result = analyticsService.formatDateLabel('2026-01-15T14:30:00Z', 'hourly');
-      expect(result).toBeDefined();
-      expect(typeof result).toBe('string');
-      expect(result.length).toBeGreaterThan(0);
+      expect(result).toMatch(/\d{1,2}:\d{2}/);
     });
 
     it('should format daily interval', () => {
       const result = analyticsService.formatDateLabel('2026-01-15T14:30:00Z', 'daily');
-      expect(result).toBeDefined();
-      expect(typeof result).toBe('string');
+      expect(result).toMatch(/\w+/);
+      expect(result).toMatch(/\d+/);
     });
 
     it('should format weekly interval', () => {

@@ -228,6 +228,8 @@ describe('UserProfileService', () => {
       expect(updateCall[1].email).toBeUndefined();
       expect(updateCall[1].firstName).toBeUndefined();
       expect(updateCall[1].phone).toBe('123');
+      expect(Object.prototype.hasOwnProperty.call(updateCall[1], 'email')).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(updateCall[1], 'firstName')).toBe(false);
     });
   });
 

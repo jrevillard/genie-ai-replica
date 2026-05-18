@@ -48,7 +48,8 @@ else:
     print(sys.argv[1])
 " {branch}
         STORE: story_key
-      - READ: {implementation_artifacts}/sprint-status.yaml
+      - SET: { variable: story_sprint_status_path, value: "{worktree_path}/{implementation_artifacts}/sprint-status.yaml" }
+      - READ: {story_sprint_status_path}
         EXTRACT:
           entries: development_status
       - FILTER:

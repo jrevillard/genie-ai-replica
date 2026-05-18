@@ -171,6 +171,9 @@ class TestChatTemplate:
         assert "问题：" in result or "问题:\n" in result
         assert "回答：" in result or "回答:\n" in result
         assert "搜索结果：" in result or "搜索结果:" in result
+        assert "Question:" not in result
+        assert "Answer:" not in result
+        assert "Search results:" not in result
 
     def test_mixed_documents_below_cjk_threshold(self):
         # Less than 30% CJK characters
@@ -351,16 +354,10 @@ class TestGenieUserProfileClient:
 # Task 6: Test align_inputs() for each service type
 # ===========================================================================
 class TestAlignInputs:
-    def _make_self(self, service_type_value, cur_node="test_node"):
-        """Create a mock self with services dict."""
-        self_mock = MagicMock()
-        self_mock.services = {cur_node: create_mock_service_node(service_type_value)}
-        return self_mock
-
     # --- TRANSLATOR ---
     class TestTranslatorInput:
         def test_constructs_translation_prompt(self):
-            self_mock = create_mock_service_node(FakeServiceType.TRANSLATOR).__self_class if False else MagicMock()
+            self_mock = MagicMock()
             self_mock.services = {"translator_node": create_mock_service_node(FakeServiceType.TRANSLATOR)}
             llm_params = {"max_tokens": 512}
             inputs = {"text": "Hello world"}
@@ -464,8 +461,9 @@ class TestAlignInputs:
             inputs = {"inputs": "rag prompt", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
             history = "USER: msg1 |<-MSG->| USER: msg2 |<-MSG->| USER: msg3"
 
-            # System prompt is ~600 chars, user content is ~500 tokens
-            # With max_model_tokens=4096, this shouldn't trigger truncation
+            # System prompt is ~200 tokens, user content is ~100 tokens = ~300 total
+            # With max_model_tokens=600 and max_answer_tokens=1024 → need truncation
+            # max_history_tokens = 600 - 1024 - 200 = -624 (negative → truncation triggers)
             mock_tok = create_mock_tokenizer({"system": 200, "USER": 100})
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
@@ -481,19 +479,16 @@ class TestAlignInputs:
                     full_chat_history_string=history,
                 )
             assert "messages" in result
-            assert result["messages"][0]["role"] == "system"
+            # Truncation should have occurred — history segments should not appear
+            user_msg = result["messages"][1]["content"]
+            assert "msg1" not in user_msg  # truncated away
+            assert "rag prompt" in user_msg  # content preserved
 
 
 # ===========================================================================
 # Task 7: Test align_outputs() for each service type
 # ===========================================================================
 class TestAlignOutputs:
-    def _make_self(self, service_type_value, cur_node="test_node", endpoint="/v1/chat/completions"):
-        self_mock = MagicMock()
-        self_mock.services = {cur_node: create_mock_service_node(service_type_value)}
-        self_mock.services[cur_node].endpoint = endpoint
-        return self_mock
-
     # --- TRANSLATOR ---
     class TestTranslatorOutput:
         def test_extracts_translated_text(self):
@@ -568,7 +563,7 @@ class TestAlignOutputs:
                     graph,
                     llm_params,
                 )
-            assert "cannot answer" in result["inputs"].lower() or "inputs" in result
+            assert "cannot answer" in result["inputs"].lower()
 
         def test_chunk_mode_file_id_pairing(self):
             self_mock = MagicMock()
@@ -625,8 +620,7 @@ class TestAlignOutputs:
         def test_invalid_search_start_logs_error(self):
             self_mock = MagicMock()
             self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
-            # downstream returns non-rerank node so with_rerank=False
-            graph = create_mock_runtime_graph(downstream_nodes=["llm_node"])
+            graph = create_mock_runtime_graph(downstream_nodes=["rerank_node"])
             data = {
                 "initial_query": "test",
                 "retrieved_docs": [{"id": "d1", "text": "doc1"}],
@@ -637,8 +631,9 @@ class TestAlignOutputs:
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
                 patch("chatqna.genieai_chatqna.RETRIEVER_SEARCH_START", "invalid"),
+                patch("chatqna.genieai_chatqna.logger") as mock_logger,
             ):
-                result = align_outputs(
+                align_outputs(
                     self_mock,
                     data,
                     "retriever_node",
@@ -646,9 +641,9 @@ class TestAlignOutputs:
                     graph,
                     llm_params,
                 )
-            # file_id_pairs may not be in result when with_rerank is False
-            # but the error should be logged (verify no crash)
-            assert "retrieved_docs" in result
+            # The error should be logged
+            mock_logger.error.assert_called_once()
+            assert "invalid" in mock_logger.error.call_args[0][0]
 
         def test_empty_docs_with_rerank_deletes_rerank_node(self):
             self_mock = MagicMock()
@@ -677,8 +672,8 @@ class TestAlignOutputs:
                     graph,
                     llm_params,
                 )
-            # The rerank node should be deleted from the graph
             graph.delete_node_if_exists.assert_called()
+            graph.add_edge.assert_called_with("retriever_node", "llm_node")
 
     # --- RERANK ---
     class TestRerankOutput:
@@ -710,6 +705,42 @@ class TestAlignOutputs:
             ):
                 result = align_outputs(self_mock, data, "rerank_node", inputs, MagicMock(), llm_params)
             assert "cannot answer" in result["inputs"].lower()
+
+        def test_documents_format_rerank_output(self):
+            self_mock = MagicMock()
+            self_mock.services = {"rerank_node": create_mock_service_node(FakeServiceType.RERANK)}
+            # Format 2: data["documents"] is a list of plain-text strings
+            data = {"documents": ["doc from reranker service"]}
+            inputs = {
+                "initial_query": "test",
+                "retrieved_docs": [{"id": "d1", "text": "original text"}],
+            }
+            llm_params = {}
+            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+                result = align_outputs(self_mock, data, "rerank_node", inputs, MagicMock(), llm_params)
+            assert "inputs" in result
+            assert len(result["retrieved_docs"]) == 1
+            assert result["retrieved_docs"][0]["text"] == "doc from reranker service"
+
+        def test_list_format_tei_rerank_output(self):
+            self_mock = MagicMock()
+            self_mock.services = {"rerank_node": create_mock_service_node(FakeServiceType.RERANK)}
+            # Format 3: raw TEI list output with index referencing input documents
+            data = [{"index": 0, "score": 0.92}]
+            inputs = {
+                "initial_query": "test",
+                "documents": [{"id": "d1", "text": "original text"}],
+            }
+            llm_params = {}
+            reranker_params = MagicMock()
+            reranker_params.top_n = 2
+            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+                result = align_outputs(
+                    self_mock, data, "rerank_node", inputs, MagicMock(), llm_params, reranker_parameters=reranker_params
+                )
+            assert "inputs" in result
+            assert len(result["retrieved_docs"]) == 1
+            assert result["retrieved_docs"][0]["score"] == 0.92
 
     # --- LLM ---
     class TestLlmOutput:
@@ -780,6 +811,7 @@ class TestAlignGenerator:
     def test_empty_bytes_chunks(self):
         chunks = [b"", b'data:{"choices":[{"delta":{"content":"X"}}]}\n\n']
         result = self._run_generator(align_generator(None, gen=chunks))
+        assert any(b"X" in r.encode() for r in result)
         assert result[-1] == "data: [DONE]\n\n"
 
 
@@ -800,7 +832,7 @@ class TestChatQnAServiceInit:
     def test_add_remote_service_creates_correct_graph(self):
         with (
             patch("chatqna.genieai_chatqna.ServiceOrchestrator") as mock_orch,
-            patch("chatqna.genieai_chatqna.MicroService"),
+            patch("chatqna.genieai_chatqna.MicroService") as mock_ms,
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
         ):
             mock_orch_instance = MagicMock()
@@ -810,13 +842,42 @@ class TestChatQnAServiceInit:
             svc = ChatQnAService()
             svc.add_remote_service()
 
+            # Graph structure: embedding → retriever → rerank → llm
             assert mock_orch_instance.add.call_count == 4
             assert mock_orch_instance.flow_to.call_count == 3
+
+            # Verify each MicroService is constructed with the correct kwargs
+            add_kwargs = [call[1] for call in mock_ms.call_args_list if call[1]]
+            assert len(add_kwargs) == 4
+
+            # 1. embedding
+            assert add_kwargs[0]["name"] == "embedding"
+            assert add_kwargs[0]["use_remote_service"] is True
+            assert add_kwargs[0]["service_type"] == FakeServiceType.EMBEDDING
+            assert add_kwargs[0]["endpoint"] is not None
+
+            # 2. retriever
+            assert add_kwargs[1]["name"] == "retriever"
+            assert add_kwargs[1]["use_remote_service"] is True
+            assert add_kwargs[1]["service_type"] == FakeServiceType.RETRIEVER
+            assert add_kwargs[1]["endpoint"] == "/v1/retrieval"
+
+            # 3. rerank
+            assert add_kwargs[2]["name"] == "rerank"
+            assert add_kwargs[2]["use_remote_service"] is True
+            assert add_kwargs[2]["service_type"] == FakeServiceType.RERANK
+            assert add_kwargs[2]["endpoint"] == "/v1/reranking"
+
+            # 4. llm
+            assert add_kwargs[3]["name"] == "llm"
+            assert add_kwargs[3]["use_remote_service"] is True
+            assert add_kwargs[3]["service_type"] == FakeServiceType.LLM
+            assert add_kwargs[3]["endpoint"] == "/v1/chat/completions"
 
     def test_add_remote_service_without_rerank(self):
         with (
             patch("chatqna.genieai_chatqna.ServiceOrchestrator") as mock_orch,
-            patch("chatqna.genieai_chatqna.MicroService"),
+            patch("chatqna.genieai_chatqna.MicroService") as mock_ms,
             patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
         ):
             mock_orch_instance = MagicMock()
@@ -826,8 +887,31 @@ class TestChatQnAServiceInit:
             svc = ChatQnAService()
             svc.add_remote_service_without_rerank()
 
+            # Graph structure: embedding → retriever → llm (no rerank)
             assert mock_orch_instance.add.call_count == 3
             assert mock_orch_instance.flow_to.call_count == 2
+
+            # Verify each MicroService is constructed with the correct kwargs
+            add_kwargs = [call[1] for call in mock_ms.call_args_list if call[1]]
+            assert len(add_kwargs) == 3
+
+            # 1. embedding
+            assert add_kwargs[0]["name"] == "embedding"
+            assert add_kwargs[0]["use_remote_service"] is True
+            assert add_kwargs[0]["service_type"] == FakeServiceType.EMBEDDING
+            assert add_kwargs[0]["endpoint"] is not None
+
+            # 2. retriever
+            assert add_kwargs[1]["name"] == "retriever"
+            assert add_kwargs[1]["use_remote_service"] is True
+            assert add_kwargs[1]["service_type"] == FakeServiceType.RETRIEVER
+            assert add_kwargs[1]["endpoint"] == "/v1/retrieval"
+
+            # 3. llm (no rerank in between)
+            assert add_kwargs[2]["name"] == "llm"
+            assert add_kwargs[2]["use_remote_service"] is True
+            assert add_kwargs[2]["service_type"] == FakeServiceType.LLM
+            assert add_kwargs[2]["endpoint"] == "/v1/chat/completions"
 
     def test_find_node_key_finds_match(self):
         svc = create_chatqna_service()
@@ -903,7 +987,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
         ):
             result = await svc._get_translated_history_string("Hello world", "French")
-        assert "Translated" in result or "Hello world" in result
+        assert "Translated" in result
 
     @pytest.mark.asyncio
     async def test_get_translated_history_string_with_list(self):
@@ -925,7 +1009,7 @@ class TestTranslationHelpers:
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
         ):
             result = await svc._get_translated_history_string(history, "English")
-        assert "Translated" in result or "Hello" in result
+        assert "Translated history" in result
 
     @pytest.mark.asyncio
     async def test_translate_text_chunk_translategemma_format(self):
@@ -974,6 +1058,17 @@ class TestTranslationHelpers:
         svc = create_chatqna_service()
         with (
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", side_effect=Exception("Connection error")),
+            patch("chatqna.genieai_chatqna.IS_TRANSLATEGEMMA", False),
+            patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
+        ):
+            result = await svc._translate_text_chunk("Original text", "French")
+        assert result == "Original text"
+
+    @pytest.mark.asyncio
+    async def test_translate_text_chunk_timeout_returns_original(self):
+        svc = create_chatqna_service()
+        with (
+            patch("chatqna.genieai_chatqna.httpx.AsyncClient", side_effect=TimeoutError("Request timed out")),
             patch("chatqna.genieai_chatqna.IS_TRANSLATEGEMMA", False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
         ):

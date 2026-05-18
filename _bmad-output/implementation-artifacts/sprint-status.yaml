@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-13
-last_updated: 2026-05-18
+last_updated: 2026-05-19
 project: genie-ai
 project_key: testing-framework
 tracking_system: file-system
@@ -83,7 +83,7 @@ development_status:
   4-3-test-dataprep-extraction-pipeline: review
   4-4-test-core-type-definitions-and-api-protocols: done
   4-5-test-reranker-score-validation-and-top-k-constraints: done
-  4-6-test-chatqna-orchestrator-interface: review
+  4-6-test-chatqna-orchestrator-interface: done
   epic-4-retrospective: optional
 
   # Epic 5: Document Repository Test Suite

@@ -65,5 +65,15 @@ Items deferred during code reviews. Revisit when the related component is next m
 ## Deferred from: code review of 4-5-test-reranker-score-validation-and-top-k-constraints (2026-05-18)
 
 - TEI error handling not tested — Production code has no try/except around aiohttp call (genieai_tei_reranker.py:67-71). Network errors, HTTP failures, and malformed JSON responses will propagate unhandled. Pre-existing production code gap.
+
+## Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)
+
+- `assert` in production in `align_outputs` RETRIEVER branch (genieai_chatqna.py:575,587) — crashes service on metadata count mismatch rather than graceful degradation
+- `file_metadata["labels"]` unguarded dict access (genieai_chatqna.py:1684) — KeyError if document repository returns unexpected metadata format
+- `runtime_graph.downstream(cur_node)[0]` IndexError (genieai_chatqna.py:604) — crashes when downstream list is empty
+- `assert isinstance(data, list)` in EMBEDDING output (genieai_chatqna.py:550) — production crash on unexpected embedding service response format
+- Bare `dict[key]` access in `align_inputs`/`align_outputs` at multiple locations (lines 367, 395, 420, 515, 516, 537, 551, 760) — KeyError/IndexError on unexpected service data
+- MagicMock truthiness hides parameter fallback logic in `handle_request` — `chat_request.max_tokens if chat_request.max_tokens else 1024` always selects MagicMock (truthy), masking regression in default-value logic
+- 3/5 `add_remote_service*` variants untested — `add_remote_service_faqgen()`, `add_remote_service_without_translation()`, `add_remote_service_genieai()` have zero test coverage
 - Index out-of-bounds in retrieved_docs lookup — `input.retrieved_docs[best_response["index"]]` (genieai_tei_reranker.py:80, 89, 105, 111) has no bounds check. A buggy TEI response with index >= len(retrieved_docs) will crash with IndexError. Pre-existing production code vulnerability.
 - KneeLocator single-doc / flat-score edge cases not tested — When there's only 1 document or all scores are identical, KneeLocator behavior is untested. Nice-to-have, not required by AC.

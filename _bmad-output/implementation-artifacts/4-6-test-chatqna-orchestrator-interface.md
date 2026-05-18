@@ -1,6 +1,6 @@
 # Story 4.6: Test ChatQnA Orchestrator Interface
 
-Status: review
+Status: done
 
 ## Story
 
@@ -488,3 +488,25 @@ glm-5-turbo
 - `genie-ai-overlay/tests/test_chatqna.py` (new — 69 tests)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified — status update)
 - `_bmad-output/implementation-artifacts/4-6-test-chatqna-orchestrator-interface.md` (modified — task completion)
+
+### Review Findings
+
+- [x] [Review][Patch] P1: `test_invalid_search_start_logs_error` never exercises the RETRIEVER_SEARCH_START code path [test_chatqna.py:1171-1197]
+- [x] [Review][Patch] P2: Tautological assertion in abstention test — `or "inputs" in result` always true [test_chatqna.py:1117]
+- [x] [Review][Patch] P3: Translation test assertion vacuously passes on original-text fallback [test_chatqna.py:1452,1473-1474]
+- [x] [Review][Patch] P4: `test_token_limit_truncation` does not verify truncation occurred [test_chatqna.py:1006-1030]
+- [x] [Review][Patch] P5: `test_empty_docs_with_rerank_deletes_rerank_node` does not verify edge rewiring [test_chatqna.py:1226-1227]
+- [x] [Review][Patch] P6: Service graph tests only verify call counts, not call arguments [test_chatqna.py:1359-1360,1375-1376]
+- [x] [Review][Patch] P7: Dead code in `test_constructs_translation_prompt` — `if False` branch [test_chatqna.py:363]
+- [x] [Review][Patch] P8: Dead `_make_self` helpers on TestAlignInputs/TestAlignOutputs [test_chatqna.py:354,491]
+- [x] [Review][Patch] P9: Missing translation timeout test — AC #5 explicitly lists "translation timeout" [test_chatqna.py]
+- [x] [Review][Patch] P10: 2/3 rerank output formats untested — dict with `documents` and list (raw TEI) not covered [test_chatqna.py]
+- [x] [Review][Patch] P11: Chinese template test missing negative assertion for English markers [test_chatqna.py:714]
+- [x] [Review][Patch] P12: `test_empty_bytes_chunks` does not verify valid chunk content was emitted [test_chatqna.py:1326-1329]
+- [x] [Review][Defer] D1: `assert` in production in `align_outputs` RETRIEVER branch (lines 575, 587) — deferred, pre-existing source code issue
+- [x] [Review][Defer] D2: `file_metadata["labels"]` unguarded dict access → KeyError (line 1684) — deferred, pre-existing source code issue
+- [x] [Review][Defer] D3: `runtime_graph.downstream(cur_node)[0]` → IndexError on empty list (line 604) — deferred, pre-existing source code issue
+- [x] [Review][Defer] D4: `assert isinstance(data, list)` in EMBEDDING output → production crash (line 550) — deferred, pre-existing source code issue
+- [x] [Review][Defer] D5: Bare `dict[key]` access in align_inputs/align_outputs → KeyError on unexpected data — deferred, pre-existing source code issue
+- [x] [Review][Defer] D6: MagicMock truthiness hides fallback logic in handle_request — deferred, pattern issue tied to OPEA mocking strategy
+- [x] [Review][Defer] D7: 3/5 `add_remote_service*` variants untested — deferred, out of scope for story 4.6

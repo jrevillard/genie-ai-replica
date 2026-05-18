@@ -56,12 +56,13 @@ void main() {
     });
 
     test('has dev-specific values', () {
-      expect(devConfig.keycloakUrl, equals('https://10.0.2.2:8443/auth'));
+      // devConfig uses dart-defines DEV_SERVER/DEV_PORT (default: localhost/443)
+      expect(devConfig.keycloakUrl, equals('https://localhost:443/auth'));
       expect(devConfig.realm, equals('genie'));
-      expect(devConfig.realmUrl, equals('https://10.0.2.2:8443/auth/realms/genie'));
+      expect(devConfig.realmUrl, equals('https://localhost:443/auth/realms/genie'));
       expect(devConfig.clientId, equals('genie-mobile-dev'));
       expect(devConfig.redirectScheme, equals('com.itu.genieai.dev'));
-      expect(devConfig.backendUrl, equals('https://10.0.2.2:8443/api'));
+      expect(devConfig.backendUrl, equals('https://localhost:443'));
     });
   });
 
@@ -94,12 +95,13 @@ void main() {
     });
 
     test('has e2e-specific values', () {
-      expect(e2eConfig.keycloakUrl, equals('https://localhost:8443/auth'));
+      // e2eConfig is hardcoded to emulator host 10.0.2.2
+      expect(e2eConfig.keycloakUrl, equals('https://10.0.2.2:8443/auth'));
       expect(e2eConfig.realm, equals('genie'));
-      expect(e2eConfig.realmUrl, equals('https://localhost:8443/auth/realms/genie'));
+      expect(e2eConfig.realmUrl, equals('https://10.0.2.2:8443/auth/realms/genie'));
       expect(e2eConfig.clientId, equals('genie-mobile-e2e'));
       expect(e2eConfig.redirectScheme, equals('com.itu.genieai.e2e'));
-      expect(e2eConfig.backendUrl, equals('https://localhost:8443/api'));
+      expect(e2eConfig.backendUrl, equals('https://10.0.2.2:8443'));
       expect(e2eConfig.allowInsecureConnections, isTrue);
     });
   });

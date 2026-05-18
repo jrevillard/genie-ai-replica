@@ -88,8 +88,18 @@ sys.modules.setdefault("langchain_huggingface", MagicMock())
 sys.modules.setdefault("langchain_openai", MagicMock())
 sys.modules.setdefault("openai", MagicMock())
 
+# ChatQnA import-time dependencies
+sys.modules.setdefault("transformers", MagicMock())
+sys.modules.setdefault("langdetect", MagicMock())
+sys.modules.setdefault("keycloak_token_validator", MagicMock())
+
+# aiohttp — already mocked above for dataprep; ensure ClientTimeout is available
+_aiohttp_mock = sys.modules.get("aiohttp", MagicMock())
+_aiohttp_mock.ClientTimeout = MagicMock(return_value=MagicMock())
+sys.modules["aiohttp"] = _aiohttp_mock
+
 # Dataprep import-time dependencies
-sys.modules.setdefault("aiohttp", MagicMock())
+sys.modules.setdefault("aiohttp", _aiohttp_mock)
 sys.modules.setdefault("arango.exceptions", MagicMock())
 sys.modules.setdefault("langchain_core", MagicMock())
 sys.modules.setdefault("langchain_core.documents", MagicMock())

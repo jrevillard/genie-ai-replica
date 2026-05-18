@@ -1,6 +1,6 @@
 # Story 4.6: Test ChatQnA Orchestrator Interface
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -20,99 +20,99 @@ so that the custom OPEA overlay orchestrator is validated without real services.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Update conftest.py with ChatQnA-specific mocks (AC: #7)
-  - [ ] 1.1 Add `sys.modules.setdefault("transformers", MagicMock())` and mock `AutoTokenizer` for the `from transformers import AutoTokenizer` import
-  - [ ] 1.2 Add `sys.modules.setdefault("langdetect", MagicMock())` for the `from langdetect import detect` import
-  - [ ] 1.3 Add `sys.modules.setdefault("keycloak_token_validator", MagicMock())` for the `from keycloak_token_validator import validate_token` import in `handle_request()`
-  - [ ] 1.4 Verify `httpx` is importable (it is a real pip dependency, not vendored) — no mock needed
-  - [ ] 1.5 Verify `aiohttp` is already mocked in conftest (it is) — add `aiohttp.ClientTimeout = MagicMock(return_value=MagicMock())` alongside the existing `sys.modules.setdefault("aiohttp", ...)` so that `aiohttp.ClientTimeout(total=30)` in `GenieUserProfileClient` and `fetch_file_metadata` doesn't fail
-  - [ ] 1.6 Verify all existing tests still pass after conftest changes
-- [ ] Task 2: Create helper functions for test setup (AC: #1–7)
-  - [ ] 2.1 Create `create_chatqna_service()` helper that instantiates `ChatQnAService.__new__()` bypassing `__init__` (which calls OPEA ServiceOrchestrator), then manually sets required attributes
-  - [ ] 2.2 Create `create_mock_request()` helper returning a mock FastAPI `Request` with configurable JSON body and headers
-  - [ ] 2.3 Create `create_mock_chat_request_data()` helper returning a dict matching `ChatCompletionRequest` schema (messages, max_tokens, temperature, stream, etc.)
-  - [ ] 2.4 Create `create_mock_user_profile()` helper returning a realistic user profile dict with fields the `UserContextBuilder` expects
-  - [ ] 2.5 Create `create_mock_aiohttp_response()` helper for mocking aiohttp responses in `GenieUserProfileClient` and `fetch_file_metadata`
-  - [ ] 2.6 Create `create_mock_runtime_graph()` helper with `.downstream()` and `.add_edge()` / `.delete_node_if_exists()` methods
-- [ ] Task 3: Test `ChatTemplate.generate_rag_prompt()` (AC: #1)
-  - [ ] 3.1 Test with English documents — returns English template with context and question
-  - [ ] 3.2 Test with Chinese documents (>30% CJK characters) — returns Chinese template
-  - [ ] 3.3 Test with mixed documents — behavior depends on CJK ratio threshold (0.3)
-  - [ ] 3.4 Test with empty documents list — template renders with empty context
-- [ ] Task 4: Test `UserContextBuilder` — sanitization and enrichment (AC: #2)
-  - [ ] 4.1 Test `_sanitize_data()` removes keys in `SENSITIVE_KEYS` set (email, phoneNumber, ssn, etc.)
-  - [ ] 4.2 Test `_sanitize_data()` recurses into nested dicts and lists
-  - [ ] 4.2b Test `_sanitize_data()` fallback when `SENSITIVE_KEYS` is empty or causes exception — verify hardcoded fallback list is used (lines 213-237)
-  - [ ] 4.3 Test `_parse_dob()` with `YYYY-MM-DD` format
-  - [ ] 4.4 Test `_parse_dob()` with `YYYY.MM.DD` format
-  - [ ] 4.5 Test `_parse_dob()` with invalid string returns None
-  - [ ] 4.6 Test `_calculate_age()` with known birth date
-  - [ ] 4.7 Test `_calculate_age()` with None returns "N/A"
-  - [ ] 4.8 Test `_extract_primitive_fields()` with nested dict/list structure
-  - [ ] 4.9 Test `build_user_context_string()` full pipeline: sanitize → extract → convert DoB → format string
-  - [ ] 4.10 Test `build_user_context_string()` with empty input returns empty string
-  - [ ] 4.11 Test that original input is not mutated (deepcopy behavior)
-- [ ] Task 5: Test `GenieUserProfileClient` (AC: #2, #5)
-  - [ ] 5.1 Test `set_token()` stores the token
-  - [ ] 5.2 Test `get_user_profile()` with valid token returns profile data on 200 response
-  - [ ] 5.3 Test `get_user_profile()` with no token returns None (logs warning)
-  - [ ] 5.4 Test `get_user_profile()` handles 401 response (logs error, returns None)
-  - [ ] 5.5 Test `get_user_profile()` handles 404 response (logs warning, returns None)
-  - [ ] 5.6 Test `get_user_profile()` handles connection exception (logs error, returns None)
-- [ ] Task 6: Test `align_inputs()` for each service type (AC: #1, #3)
-  - [ ] 6.1 Test TRANSLATOR branch: constructs translation prompt messages with correct target language
-  - [ ] 6.2 Test TRANSLATOR branch with `original_language="EN"` sets target to "English"
-  - [ ] 6.3 Test EMBEDDING branch: renames `text` to `input`
-  - [ ] 6.4 Test RETRIEVER branch: merges retriever_parameters and retrieval_context into inputs
-  - [ ] 6.5 Test RERANK branch: merges reranker_parameters into inputs
-  - [ ] 6.6 Test LLM branch: constructs system+user messages, applies user context, handles token limit truncation. **CRITICAL**: Patch `ServiceType` with a real enum via `with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):` — without this, `self.services[cur_node].service_type == ServiceType.LLM` always returns False because `ServiceType` is a MagicMock from conftest. See dev notes "Critical: `align_inputs()` / `align_outputs()`" section for `FakeServiceType` definition.
-- [ ] Task 7: Test `align_outputs()` for each service type (AC: #1, #4)
-  - [ ] 7.1 Test TRANSLATOR output: extracts translated text from choices[0].message.content
-  - [ ] 7.2 Test EMBEDDING output: transforms response to {text, embedding} format
-  - [ ] 7.3 Test RETRIEVER output with rerank downstream: passes docs to rerank with file_id_pairs
-  - [ ] 7.4 Test RETRIEVER output without rerank: builds prompt with abstention when no docs
-  - [ ] 7.5 Test RETRIEVER output file_id pairing for "chunk" search_start mode
-  - [ ] 7.6 Test RETRIEVER output file_id pairing for "node"/"edge" search_start mode with related info
-  - [ ] 7.6b Test RETRIEVER output with invalid `RETRIEVER_SEARCH_START` value (not "node", "edge", or "chunk") — verify error is logged and no file_id_pairs are created
-  - [ ] 7.6c Test RETRIEVER output with empty `retrieved_docs` AND rerank downstream enabled — verify the rerank node is deleted from the runtime graph and edges are rewired (retriever → llm). **CRITICAL**: Patch `RETRIEVER_SEARCH_START` to "chunk" and provide a mock `runtime_graph` with `.downstream()`, `.add_edge()`, `.delete_node_if_exists()` methods.
-  - [ ] 7.7 Test RERANK output: builds reranked docs list with scores, constructs RAG prompt
-  - [ ] 7.8 Test RERANK output with empty docs enforces abstention
-  - [ ] 7.9 Test LLM output (non-streaming): extracts text from choices[0].message.content
-  - [ ] 7.10 Test LLM output (streaming): passes data through unchanged
-- [ ] Task 8: Test `align_generator()` — SSE streaming (AC: #6)
-  - [ ] 8.1 Test with standard SSE chunks: yields `data: repr(content)` lines
-  - [ ] 8.2 Test with "ops" format chunks: yields value from ops[0].value
-  - [ ] 8.3 Test that generator yields `[DONE]` as final chunk
-  - [ ] 8.4 Test with malformed JSON: falls back to yielding raw string
-  - [ ] 8.5 Test with empty bytes chunks (`b''`) — verify generator handles without error and still yields `[DONE]`
-- [ ] Task 9: Test `ChatQnAService` initialization and service graph (AC: #1)
-  - [ ] 9.1 Test `__init__` monkey-patches align_inputs/align_outputs/align_generator onto ServiceOrchestrator
-  - [ ] 9.2 Test `add_remote_service()` creates correct service graph: embedding → retriever → rerank → llm
-  - [ ] 9.3 Test `add_remote_service_without_rerank()` creates graph: embedding → retriever → llm
-  - [ ] 9.4 Test `_find_node_key()` finds correct key prefix in result dict
-  - [ ] 9.5 Test `_find_node_key()` returns None when no match
-- [ ] Task 10: Test translation helpers (AC: #3)
-  - [ ] 10.1 Test `_build_translategemma_prompt()` produces correct prompt format with BOS/EOS tokens
-  - [ ] 10.2 Test `load_language_codes()` loads JSON file correctly
-  - [ ] 10.3 Test `load_language_codes()` returns empty dict on file error
-  - [ ] 10.4 Test `_split_text_into_chunks()` with short text returns single chunk
-  - [ ] 10.5 Test `_split_text_into_chunks()` splits at sentence boundaries
-  - [ ] 10.6 Test `_get_translated_history_string()` with string history delegates to `_translate_text_chunk`
-  - [ ] 10.7 Test `_get_translated_history_string()` with list history flattens and translates
-  - [ ] 10.8 Test `_translate_text_chunk()` uses TranslateGemma format when IS_TRANSLATEGEMMA is true. **CRITICAL**: Patch the module-level constant via `with patch("chatqna.genieai_chatqna.IS_TRANSLATEGEMMA", True):` — this is evaluated once at import, not per-call
-  - [ ] 10.9 Test `_translate_text_chunk()` uses generic chat format when IS_TRANSLATEGEMMA is false. **CRITICAL**: Patch via `with patch("chatqna.genieai_chatqna.IS_TRANSLATEGEMMA", False):`
-  - [ ] 10.10 Test `_translate_text_chunk()` returns original text on error (graceful fallback)
-  - [ ] 10.11 Test `_translate_with_chunking()` splits and reassembles chunks
-- [ ] Task 11: Test `fetch_file_metadata()` (AC: #4, #5)
-  - [ ] 11.1 Test with valid file_id and token returns metadata
-  - [ ] 11.2 Test with empty file_id returns default structure
-  - [ ] 11.3 Test with no token returns None (logs error)
-  - [ ] 11.4 Test with HTTP error returns None (logs error)
-  - [ ] 11.5 Test with connection exception returns None (logs error)
-- [ ] Task 12: Run full test suite and validate (AC: #1–7)
-  - [ ] 12.1 Run `python -m pytest tests/ -v` — all tests pass (new + existing)
-  - [ ] 12.2 Run `ruff check tests/test_chatqna.py` — clean
-  - [ ] 12.3 Run `ruff format --check tests/test_chatqna.py` — clean
+- [x] Task 1: Update conftest.py with ChatQnA-specific mocks (AC: #7)
+  - [x] 1.1 Add `sys.modules.setdefault("transformers", MagicMock())` and mock `AutoTokenizer` for the `from transformers import AutoTokenizer` import
+  - [x] 1.2 Add `sys.modules.setdefault("langdetect", MagicMock())` for the `from langdetect import detect` import
+  - [x] 1.3 Add `sys.modules.setdefault("keycloak_token_validator", MagicMock())` for the `from keycloak_token_validator import validate_token` import in `handle_request()`
+  - [x] 1.4 Verify `httpx` is importable (it is a real pip dependency, not vendored) — no mock needed
+  - [x] 1.5 Verify `aiohttp` is already mocked in conftest (it is) — add `aiohttp.ClientTimeout = MagicMock(return_value=MagicMock())` alongside the existing `sys.modules.setdefault("aiohttp", ...)` so that `aiohttp.ClientTimeout(total=30)` in `GenieUserProfileClient` and `fetch_file_metadata` doesn't fail
+  - [x] 1.6 Verify all existing tests still pass after conftest changes
+- [x] Task 2: Create helper functions for test setup (AC: #1–7)
+  - [x] 2.1 Create `create_chatqna_service()` helper that instantiates `ChatQnAService.__new__()` bypassing `__init__` (which calls OPEA ServiceOrchestrator), then manually sets required attributes
+  - [x] 2.2 Create `create_mock_request()` helper returning a mock FastAPI `Request` with configurable JSON body and headers
+  - [x] 2.3 Create `create_mock_chat_request_data()` helper returning a dict matching `ChatCompletionRequest` schema (messages, max_tokens, temperature, stream, etc.)
+  - [x] 2.4 Create `create_mock_user_profile()` helper returning a realistic user profile dict with fields the `UserContextBuilder` expects
+  - [x] 2.5 Create `create_mock_aiohttp_response()` helper for mocking aiohttp responses in `GenieUserProfileClient` and `fetch_file_metadata`
+  - [x] 2.6 Create `create_mock_runtime_graph()` helper with `.downstream()` and `.add_edge()` / `.delete_node_if_exists()` methods
+- [x] Task 3: Test `ChatTemplate.generate_rag_prompt()` (AC: #1)
+  - [x] 3.1 Test with English documents — returns English template with context and question
+  - [x] 3.2 Test with Chinese documents (>30% CJK characters) — returns Chinese template
+  - [x] 3.3 Test with mixed documents — behavior depends on CJK ratio threshold (0.3)
+  - [x] 3.4 Test with empty documents list — template renders with empty context
+- [x] Task 4: Test `UserContextBuilder` — sanitization and enrichment (AC: #2)
+  - [x] 4.1 Test `_sanitize_data()` removes keys in `SENSITIVE_KEYS` set (email, phoneNumber, ssn, etc.)
+  - [x] 4.2 Test `_sanitize_data()` recurses into nested dicts and lists
+  - [x] 4.2b Test `_sanitize_data()` fallback when `SENSITIVE_KEYS` is empty or causes exception — verify hardcoded fallback list is used (lines 213-237)
+  - [x] 4.3 Test `_parse_dob()` with `YYYY-MM-DD` format
+  - [x] 4.4 Test `_parse_dob()` with `YYYY.MM.DD` format
+  - [x] 4.5 Test `_parse_dob()` with invalid string returns None
+  - [x] 4.6 Test `_calculate_age()` with known birth date
+  - [x] 4.7 Test `_calculate_age()` with None returns "N/A"
+  - [x] 4.8 Test `_extract_primitive_fields()` with nested dict/list structure
+  - [x] 4.9 Test `build_user_context_string()` full pipeline: sanitize → extract → convert DoB → format string
+  - [x] 4.10 Test `build_user_context_string()` with empty input returns empty string
+  - [x] 4.11 Test that original input is not mutated (deepcopy behavior)
+- [x] Task 5: Test `GenieUserProfileClient` (AC: #2, #5)
+  - [x] 5.1 Test `set_token()` stores the token
+  - [x] 5.2 Test `get_user_profile()` with valid token returns profile data on 200 response
+  - [x] 5.3 Test `get_user_profile()` with no token returns None (logs warning)
+  - [x] 5.4 Test `get_user_profile()` handles 401 response (logs error, returns None)
+  - [x] 5.5 Test `get_user_profile()` handles 404 response (logs warning, returns None)
+  - [x] 5.6 Test `get_user_profile()` handles connection exception (logs error, returns None)
+- [x] Task 6: Test `align_inputs()` for each service type (AC: #1, #3)
+  - [x] 6.1 Test TRANSLATOR branch: constructs translation prompt messages with correct target language
+  - [x] 6.2 Test TRANSLATOR branch with `original_language="EN"` sets target to "English"
+  - [x] 6.3 Test EMBEDDING branch: renames `text` to `input`
+  - [x] 6.4 Test RETRIEVER branch: merges retriever_parameters and retrieval_context into inputs
+  - [x] 6.5 Test RERANK branch: merges reranker_parameters into inputs
+  - [x] 6.6 Test LLM branch: constructs system+user messages, applies user context, handles token limit truncation. **CRITICAL**: Patch `ServiceType` with a real enum via `with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):` — without this, `self.services[cur_node].service_type == ServiceType.LLM` always returns False because `ServiceType` is a MagicMock from conftest. See dev notes "Critical: `align_inputs()` / `align_outputs()`" section for `FakeServiceType` definition.
+- [x] Task 7: Test `align_outputs()` for each service type (AC: #1, #4)
+  - [x] 7.1 Test TRANSLATOR output: extracts translated text from choices[0].message.content
+  - [x] 7.2 Test EMBEDDING output: transforms response to {text, embedding} format
+  - [x] 7.3 Test RETRIEVER output with rerank downstream: passes docs to rerank with file_id_pairs
+  - [x] 7.4 Test RETRIEVER output without rerank: builds prompt with abstention when no docs
+  - [x] 7.5 Test RETRIEVER output file_id pairing for "chunk" search_start mode
+  - [x] 7.6 Test RETRIEVER output file_id pairing for "node"/"edge" search_start mode with related info
+  - [x] 7.6b Test RETRIEVER output with invalid `RETRIEVER_SEARCH_START` value (not "node", "edge", or "chunk") — verify error is logged and no file_id_pairs are created
+  - [x] 7.6c Test RETRIEVER output with empty `retrieved_docs` AND rerank downstream enabled — verify the rerank node is deleted from the runtime graph and edges are rewired (retriever → llm). **CRITICAL**: Patch `RETRIEVER_SEARCH_START` to "chunk" and provide a mock `runtime_graph` with `.downstream()`, `.add_edge()`, `.delete_node_if_exists()` methods.
+  - [x] 7.7 Test RERANK output: builds reranked docs list with scores, constructs RAG prompt
+  - [x] 7.8 Test RERANK output with empty docs enforces abstention
+  - [x] 7.9 Test LLM output (non-streaming): extracts text from choices[0].message.content
+  - [x] 7.10 Test LLM output (streaming): passes data through unchanged
+- [x] Task 8: Test `align_generator()` — SSE streaming (AC: #6)
+  - [x] 8.1 Test with standard SSE chunks: yields `data: repr(content)` lines
+  - [x] 8.2 Test with "ops" format chunks: yields value from ops[0].value
+  - [x] 8.3 Test that generator yields `[DONE]` as final chunk
+  - [x] 8.4 Test with malformed JSON: falls back to yielding raw string
+  - [x] 8.5 Test with empty bytes chunks (`b''`) — verify generator handles without error and still yields `[DONE]`
+- [x] Task 9: Test `ChatQnAService` initialization and service graph (AC: #1)
+  - [x] 9.1 Test `__init__` monkey-patches align_inputs/align_outputs/align_generator onto ServiceOrchestrator
+  - [x] 9.2 Test `add_remote_service()` creates correct service graph: embedding → retriever → rerank → llm
+  - [x] 9.3 Test `add_remote_service_without_rerank()` creates graph: embedding → retriever → llm
+  - [x] 9.4 Test `_find_node_key()` finds correct key prefix in result dict
+  - [x] 9.5 Test `_find_node_key()` returns None when no match
+- [x] Task 10: Test translation helpers (AC: #3)
+  - [x] 10.1 Test `_build_translategemma_prompt()` produces correct prompt format with BOS/EOS tokens
+  - [x] 10.2 Test `load_language_codes()` loads JSON file correctly
+  - [x] 10.3 Test `load_language_codes()` returns empty dict on file error
+  - [x] 10.4 Test `_split_text_into_chunks()` with short text returns single chunk
+  - [x] 10.5 Test `_split_text_into_chunks()` splits at sentence boundaries
+  - [x] 10.6 Test `_get_translated_history_string()` with string history delegates to `_translate_text_chunk`
+  - [x] 10.7 Test `_get_translated_history_string()` with list history flattens and translates
+  - [x] 10.8 Test `_translate_text_chunk()` uses TranslateGemma format when IS_TRANSLATEGEMMA is true. **CRITICAL**: Patch the module-level constant via `with patch("chatqna.genieai_chatqna.IS_TRANSLATEGEMMA", True):` — this is evaluated once at import, not per-call
+  - [x] 10.9 Test `_translate_text_chunk()` uses generic chat format when IS_TRANSLATEGEMMA is false. **CRITICAL**: Patch via `with patch("chatqna.genieai_chatqna.IS_TRANSLATEGEMMA", False):`
+  - [x] 10.10 Test `_translate_text_chunk()` returns original text on error (graceful fallback)
+  - [x] 10.11 Test `_translate_with_chunking()` splits and reassembles chunks
+- [x] Task 11: Test `fetch_file_metadata()` (AC: #4, #5)
+  - [x] 11.1 Test with valid file_id and token returns metadata
+  - [x] 11.2 Test with empty file_id returns default structure
+  - [x] 11.3 Test with no token returns None (logs error)
+  - [x] 11.4 Test with HTTP error returns None (logs error)
+  - [x] 11.5 Test with connection exception returns None (logs error)
+- [x] Task 12: Run full test suite and validate (AC: #1–7)
+  - [x] 12.1 Run `python -m pytest tests/ -v` — all tests pass (new + existing)
+  - [x] 12.2 Run `ruff check tests/test_chatqna.py` — clean
+  - [x] 12.3 Run `ruff format --check tests/test_chatqna.py` — clean
 
 ## Dev Notes
 
@@ -468,10 +468,23 @@ Key learnings from previous stories:
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+glm-5-turbo
 
 ### Debug Log References
 
 ### Completion Notes List
 
+- Updated conftest.py with 3 new sys.modules mocks: transformers, langdetect, keycloak_token_validator
+- Added aiohttp.ClientTimeout mock to existing aiohttp mock entry
+- Created test_chatqna.py with 69 tests covering all 7 acceptance criteria
+- Used FakeServiceType enum to bypass ServiceType MagicMock comparison issue
+- Used BrokenSet class to trigger SENSITIVE_KEYS fallback code path
+- Flattened nested test classes to avoid pytest-asyncio setup_method propagation issue
+- Full suite: 275 passed (206 existing + 69 new), 0 failures, 0 regressions
+
 ### File List
+
+- `genie-ai-overlay/tests/conftest.py` (modified — added ChatQnA mocks)
+- `genie-ai-overlay/tests/test_chatqna.py` (new — 69 tests)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified — status update)
+- `_bmad-output/implementation-artifacts/4-6-test-chatqna-orchestrator-interface.md` (modified — task completion)

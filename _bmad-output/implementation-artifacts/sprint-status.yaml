@@ -63,7 +63,7 @@ development_status:
   2-4-test-backend-chat-route-handlers: done
   2-5-test-backend-analytics-and-categories-route-handlers: done
   2-6-test-backend-admin-and-files-route-handlers: done
-  2-7-test-backend-service-layer: backlog
+  2-7-test-backend-service-layer: in-progress
   2-8-test-backend-middleware: backlog
   epic-2-retrospective: optional
 
@@ -83,7 +83,7 @@ development_status:
   4-3-test-dataprep-extraction-pipeline: review
   4-4-test-core-type-definitions-and-api-protocols: done
   4-5-test-reranker-score-validation-and-top-k-constraints: done
-  4-6-test-chatqna-orchestrator-interface: backlog
+  4-6-test-chatqna-orchestrator-interface: review
   epic-4-retrospective: optional
 
   # Epic 5: Document Repository Test Suite

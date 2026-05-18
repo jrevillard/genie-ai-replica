@@ -74,26 +74,30 @@ So that service-layer bugs are caught without network or database dependencies.
 
 This story tests **service layer business logic** directly — no `createApp()`, no supertest, no HTTP. The pattern is fundamentally different from stories 2.3-2.6.
 
-Follow the existing `session-service.test.js` pattern exactly:
+Follow the existing `session-service.test.js` pattern exactly. Note: test files live in `__tests__/services/`, so mock paths are `../../` (one level deeper than root-level tests).
 
 ```javascript
 'use strict';
 
-// 1. Set env vars BEFORE requiring service
-process.env.SESSION_EXPIRATION_TIME = '1800000';
+// 1. Load setup-env OR set env vars BEFORE requiring service
+require('../setup-env');
+// OR manually: process.env.SESSION_EXPIRATION_TIME = '1800000';
 
-// 2. Mock shared-lib with { virtual: true }
-jest.mock('../shared-lib', () => ({
+// 2. Mock dotenv — query/chat/analytics services call require('dotenv').config()
+jest.mock('dotenv', () => ({ config: jest.fn() }));
+
+// 3. Mock shared-lib with { virtual: true } — path is ../../ from __tests__/services/
+jest.mock('../../shared-lib', () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
   dbService: { getConnection: jest.fn() }
 }), { virtual: true });
 
-// 3. Mock arangojs — capture aql for query assertions
+// 4. Mock arangojs — capture aql for query assertions
 jest.mock('arangojs', () => ({
   aql: (strings, ...values) => ({ _aql: true, strings, values })
 }));
 
-// 4. Create mock factories for collection and cursor
+// 5. Create mock factories for collection and cursor
 function createMockCollection() {
   return {
     save: jest.fn().mockResolvedValue({ _key: 'doc-1' }),
@@ -111,7 +115,7 @@ function createMockCursor(results) {
   };
 }
 
-// 5. Setup mock DB in beforeEach with jest.isolateModules to reset singletons
+// 6. Setup mock DB in beforeEach with jest.isolateModules to reset singletons
 let service;
 let mockDb;
 
@@ -121,16 +125,17 @@ beforeEach(() => {
     collection: jest.fn().mockReturnValue(createMockCollection()),
     query: jest.fn()
   };
-  const { dbService } = require('../shared-lib');
+  const { dbService } = require('../../shared-lib');
   dbService.getConnection.mockResolvedValue(mockDb);
 
+  // Services are class instances exported as singletons — isolateModules resets module cache
   jest.isolateModules(() => {
-    service = require('../services/target-service');
+    service = require('../../services/target-service');
   });
   service.initialized = false;
 });
 
-// 6. Call init() before each test group
+// 7. Call init() before each test group
 describe('TargetService', () => {
   beforeEach(async () => {
     await service.init();
@@ -150,11 +155,11 @@ Each service has different dependencies. Mock ONLY what the service actually imp
 
 | Service | Must Mock | Notes |
 |---------|-----------|-------|
-| query-service | shared-lib, arangojs, worker_threads, middleware/errors | `runOPEAWorker` uses Worker threads; inject analyticsService + chatHistoryService |
-| chat-history-service | shared-lib, arangojs, middleware/errors | Inject analyticsService; transaction-based delete |
-| analytics-service | shared-lib, arangojs, service-category-service | Category translation lookups; graceful degradation to empty data |
-| user-profile-service | shared-lib, arangojs, fs, path, middleware/errors | File system operations; JIT_PROTECTED_FIELDS from constants |
-| translation-service | shared-lib, ioredis, translation/*-backend, unified/remark | Redis caching; backend fallback; markdown AST processing |
+| query-service | dotenv, shared-lib, arangojs, worker_threads, middleware/errors | `runOPEAWorker` uses Worker threads; inject analyticsService + chatHistoryService |
+| chat-history-service | dotenv, shared-lib, arangojs, middleware/errors | Inject analyticsService; transaction-based delete |
+| analytics-service | dotenv, shared-lib, arangojs, service-category-service | Category translation lookups; graceful degradation to empty data |
+| user-profile-service | shared-lib, arangojs, fs, path, middleware/errors, path-sanitizer, constants/jit-fields | File system ops in constructor — mock fs BEFORE require; JIT_PROTECTED_FIELDS |
+| translation-service | shared-lib, ioredis, translation/*-backend | Redis caching; backend fallback; **markdown deps loaded via dynamic `await import()` in `init()`** — cannot jest.mock, must mock on instance after init |
 
 ### Pure Functions to Test Without DB Mocks
 
@@ -168,16 +173,23 @@ These methods are pure logic — test them without mocking ArangoDB:
 
 ### Service Export Patterns
 
-Services export singleton objects with methods (NOT classes):
+All services are **class instances exported as singletons** (not plain objects):
 ```javascript
-// services/query-service.js
-const queryService = {
-  init,
-  createQuery,
-  getQuery,
-  // ...
-};
-module.exports = queryService;
+// services/query-service.js — class with module.exports = instance
+class QueryService { ... }
+const instance = new QueryService();
+module.exports = instance;
+
+// services/chat-history-service.js — singleton pattern via static instance
+class ChatHistoryService {
+  constructor() {
+    if (ChatHistoryService.instance) return ChatHistoryService.instance;
+    // ...
+    ChatHistoryService.instance = this;
+  }
+}
+const chatHistoryService = new ChatHistoryService();
+module.exports = chatHistoryService;
 ```
 
 Services maintain state (`initialized` flag, collection references). Use `jest.isolateModules()` to reset singletons between tests. Set `service.initialized = false` in `beforeEach` to allow re-initialization.
@@ -223,7 +235,7 @@ jest.mock('worker_threads', () => ({
 
 ### Redis Mocking (translation-service)
 
-Translation service uses `ioredis` for caching:
+Translation service uses `ioredis` for caching. **Note: Redis client created in constructor** — mock must be in place before requiring:
 ```javascript
 const mockRedis = {
   get: jest.fn().mockResolvedValue(null),
@@ -234,10 +246,23 @@ const mockRedis = {
 jest.mock('ioredis', () => jest.fn().mockImplementation(() => mockRedis));
 ```
 
+Also mock the translation backends (CPU/GPU):
+```javascript
+jest.mock('../../services/translation/cpu-translate-backend', () => ({
+  translate: jest.fn().mockResolvedValue(['translated text']),
+  getSupportedLanguages: jest.fn().mockReturnValue({ en: 'English', fr: 'French' })
+}));
+jest.mock('../../services/translation/gpu-translate-backend', () => ({
+  translate: jest.fn().mockResolvedValue(['translated text']),
+  getSupportedLanguages: jest.fn().mockReturnValue({ en: 'English', fr: 'French' })
+}));
+```
+
 ### File System Mocking (user-profile-service)
 
-User profile service handles file uploads:
+User profile service handles file uploads. **CRITICAL: constructor calls `fs.existsSync` and `fs.mkdirSync`** — the fs mock MUST be declared before `jest.isolateModules()` requires the service:
 ```javascript
+// Mock fs BEFORE requiring service — constructor uses it
 jest.mock('fs', () => ({
   ...jest.requireActual('fs'),
   mkdirSync: jest.fn(),
@@ -247,6 +272,22 @@ jest.mock('fs', () => ({
   readdirSync: jest.fn().mockReturnValue([])
 }));
 ```
+
+### Translation Service Markdown (dynamic imports)
+
+Translation service loads `unified`, `remark-parse`, `remark-stringify` via `await import()` in `init()` (lines 148-157). **Cannot use `jest.mock()` for these** — they are ESM dynamic imports. Instead, mock them on the service instance after `init()`:
+```javascript
+// After service.init(), mock the lazy-loaded markdown processors
+service.unified = jest.fn().mockReturnValue({
+  use: jest.fn().mockReturnThis(),
+  parse: jest.fn().mockReturnValue({ type: 'root', children: [] }),
+  stringify: jest.fn().mockReturnValue('translated markdown')
+});
+service.remarkParse = jest.fn();
+service.remarkStringify = jest.fn();
+```
+
+Or skip `init()` entirely for markdown tests and set up the mock instance manually.
 
 ### Error Handling Patterns
 

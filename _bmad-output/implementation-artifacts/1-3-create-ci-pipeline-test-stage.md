@@ -325,10 +325,10 @@ claude-sonnet-4-6
 
 ### Completion Notes List
 
-- Story 1-1 (JUnit XML reporting) not merged — jest-junit installed via `npm install --no-save jest-junit` in before_script and reporter configured via CLI flags `--reporters=default --reporters=jest-junit`
-- junitreport not in Flutter pubspec.yaml — flutter:test keeps `flutter test --coverage` only, JUnit XML pending story 1-1 merge
-- `.test_node` template mutualizes: `NODE_ENV`, `JEST_JUNIT_OUTPUT_DIR`, jest-junit install, jest runner script, artifacts defaults
-- Jobs use `!reference [.test_node, before_script]` to combine template's jest-junit install with job-specific `cd + npm ci`
+- Story 1-1 merged into PRD — jest-junit configured in each component's jest config, Node.js jobs simply run `npm test`
+- junitreport not in Flutter pubspec.yaml — flutter:test keeps `flutter test --coverage` only, JUnit XML pending story 1-1 adding junitreport
+- `.test_node` template mutualizes: `NODE_ENV: test` and artifacts defaults (`when: always`, `expire_in: 7 days`)
+- Each Node.js job only overrides: `before_script` (cd + npm ci), `script` (npm test), `cache`, `artifacts.reports.junit`, `rules`
 - `flutter:test`: removed duplicate `flutter analyze` (already in `lint:dart`), added main branch rule, added `.gitlab-ci.yml` to changes
 - Cache prefixes use `test-*` (not `lint-*`) to avoid cache pollution between stages
 

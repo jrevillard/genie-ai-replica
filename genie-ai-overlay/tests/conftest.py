@@ -39,7 +39,7 @@ sys.modules.setdefault("comps.dataprep.src.utils", MagicMock())
 # Core import-time dependency — api_protocol is vendored at top level inside Docker.
 # Must provide real base classes for models that inherit from them, and types that
 # Pydantic can validate.  Using dict for annotation-only types avoids schema errors.
-from pydantic import BaseModel as _PydanticBaseModel
+from pydantic import BaseModel as _PydanticBaseModel  # noqa: F401, I001 – needed by OPEA models extending BaseModel at import time
 
 _api_protocol_mock = MagicMock()
 _api_protocol_mock.RetrievalRequest = type("RetrievalRequest", (), {"__init__": lambda self, **kw: None})
@@ -56,7 +56,7 @@ _api_protocol_mock.RerankingResponseData = dict
 _api_protocol_mock.EmbeddingResponse = dict
 _api_protocol_mock.UploadFile = dict
 # Re-export typing names that api_protocol brings in
-from typing import Any as _Any, Union as _Union, Literal as _Literal
+from typing import Any as _Any, Union as _Union, Literal as _Literal  # noqa: I001 – must come after sys.modules mocks
 _api_protocol_mock.Any = _Any
 _api_protocol_mock.Union = _Union
 _api_protocol_mock.Literal = _Literal

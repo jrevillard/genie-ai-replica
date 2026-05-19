@@ -209,7 +209,60 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - `env` (no dot) = committed template; `.env` (with dot) = local secrets
 - Backend has no `src/` subdirectory — files at service root
 - Axios unified at 1.10+ — do not downgrade
-- Jest configured but no test files exist — follow project-context conventions
+- Backend: Jest configured; test files now exist in `__tests__/` — follow existing patterns
+- Frontend: Jest 29.7 + @vue/test-utils configured; 240 service-level tests exist, zero component tests — see Frontend Testing Architecture section
+
+---
+
+## Frontend Testing Architecture
+
+Investigation date: 2026-05-19. Full details in `_bmad-output/implementation-artifacts/investigations/frontend-test-planning-epic3-investigation.md`.
+
+### Component Landscape (51 .vue files)
+
+| Type | Count | Files | Test Approach |
+|------|-------|-------|---------------|
+| Pure Options API | 43 | All DS components (11), most feature components (28), views (2), App.vue, SplashScreen | Standard mount/shallowMount |
+| Mixed (Options API + setup()) | 7 | `AnalyticsComponent`, `UsageTrendChart`, all `charts/*.vue` | Requires composable/chart mocking — defer |
+| `<script setup>` | 0 | — | — |
+
+Single composable: `useChartTheme.js` (theme detection via MutationObserver, consumed by chart components only).
+
+### Vuex Store (2 modules)
+
+- **auth** (not namespaced): state `{isAuthenticated, user, accessToken, error, isInitialized}`, 6 actions (all async, all call `keycloakAuthService`).
+- **chatHistory** (namespaced): state `{folders, chats, folderChats}`, 12 mutations, 12 actions (mostly sync, only `moveChat` calls API). localStorage persistence plugin.
+- **Cross-module**: chatHistory → auth via `rootGetters['auth/currentUser']` (moveChat only).
+
+Store mock factory pattern: shallow clone auth state or `createStore()` with test modules.
+
+### HTTP Service Layer
+
+Base: `httpService.js` — Axios with request interceptor (Bearer token injection), response error interceptor (401 → silent refresh → retry → redirect). All 12 domain services delegate to httpService.
+
+Mock strategy: mock `httpService` at module level to isolate all API-dependent components.
+
+Key services by endpoint count: chatHistoryService (25), documentFileService (16), serviceTreeService (13), adminDashboardService (11), analyticsService (8).
+
+Non-HTTP: `keycloakAuthService` (oidc-client-ts UserManager), `notificationService` (eventBus-based, trivially mockable).
+
+### Existing Test Infrastructure
+
+Jest 29.7 + jsdom + @vue/test-utils 2.4.6 + @vue/vue3-jest — all installed and configured. `src/__tests__/setup.js` for global setup.
+
+**240 tests across 8 files** — all service/utility/store/router layer. Zero component tests.
+
+Established mock patterns: `jest.mock()` hoisting, manual factories (createMockUser, createState), service mocking, axios interceptor mocking, OIDC UserManager mocking, localStorage/sessionStorage mocking, window.APP_CONFIG mocking.
+
+**No coverage reporting configured** — add `collectCoverageFrom` to jest.config.js when needed.
+
+### Epic 3 Priority Targets
+
+1. **DS components** (Button, Input, Modal, Spinner, StatusTag) — establish patterns, no dependencies
+2. **Simple feature components** (ConfirmDialog, ModalDialog, ContextMenu, LanguageSelector) — minimal deps
+3. **Connected components** (ChatBotComponent, NavBarComponent, SideBarComponent) — Vuex + service mocking
+
+**Defer**: 7 chart components (composable + chart library mocking), SSE streaming (native Fetch, not axios), file upload components (FormData complexity).
 
 ---
 
@@ -227,7 +280,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Review quarterly for outdated rules
 - Remove rules that become obvious over time
 
-Last Updated: 2026-03-27
+Last Updated: 2026-05-19
 
 ---
 

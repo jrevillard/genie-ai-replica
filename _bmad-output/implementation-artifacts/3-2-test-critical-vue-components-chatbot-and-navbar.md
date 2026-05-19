@@ -22,7 +22,7 @@ so that the most critical UI interactions are validated.
 
 6. **AC6 — NavBar navigation links render correctly**: All navigation buttons (Analytics, Administration, Settings, Profile, Logout) render based on auth state.
 
-7. **AC7 — Login/Logout button reflects auth status**: When authenticated, the logout button is visible; when unauthenticated, the login button is shown.
+7. **AC7 — Login/Logout button reflects auth status**: When authenticated, the logout button is visible; the logout button is always rendered but admin buttons (Analytics, Administration) are **disabled** (not hidden) for non-admin users via `:disabled="!isAdmin"`.
 
 8. **AC8 — User dropdown appears when authenticated**: When the user is authenticated, the user profile/logout dropdown is visible.
 
@@ -44,8 +44,9 @@ so that the most critical UI interactions are validated.
   - [ ] 2.3 Test: navigation links render correctly (AC6)
   - [ ] 2.4 Test: logout button visible when authenticated (AC7)
   - [ ] 2.5 Test: user dropdown appears when authenticated (AC8)
-  - [ ] 2.6 Test: admin-only buttons hidden for non-admin users (AC6)
+  - [ ] 2.6 Test: admin-only buttons disabled (not hidden) for non-admin users — assert `disabled` attribute, not absence (AC6)
 - [ ] Task 3: Verify and lint (AC: #9)
+  - [ ] 3.0 Run `npm test` in `components/gov-chat-frontend/` before any changes to confirm existing 240 tests pass as baseline
   - [ ] 3.1 All tests pass with `npm test` in `components/gov-chat-frontend/`
   - [ ] 3.2 All test files pass ESLint (`npm run lint`)
 
@@ -63,9 +64,9 @@ so that the most critical UI interactions are validated.
 
 **NavBarComponent.vue** (`src/components/NavBarComponent.vue`, 812 lines):
 - Options API component with 3 props, 2 methods, 1 computed
-- Props: `isSidebarOpen` (Boolean), `sidebarWidth` (Number), `config` (Object)
+- Props: `isSidebarOpen` (Boolean, default: true), `sidebarWidth` (Number, default: 250), `config` (Object, optional — has safe defaults with `app.title`, `app.icon`, `theme.navbar`)
 - Emits: `toggleSidebar`, `logout`
-- Computed `isAdmin()` checks `this.$store.getters['auth/currentUser']` roles
+- Computed `isAdmin()` checks `this.$store.getters.currentUser` (root-level getter — auth module is NOT namespaced)
 - Uses sub-components: `DsButton`, `LanguageSelector`
 - Methods: `handleLogout()` (emits logout + dispatches Vuex `logout`), `toggleSidebar()` (emits toggle)
 
@@ -78,10 +79,11 @@ so that the most critical UI interactions are validated.
 - `@/services/notificationService` — mock `success()`, `error()`, `info()`, `warning()`
 
 **SSE Streaming Mock Strategy:**
-- `submitQueryStream()` uses native `fetch()` (NOT axios) — you MUST mock `global.fetch` or mock the service method directly
-- Recommended: mock the `chatbotService` module method, not global.fetch — cleaner isolation
-- The method returns an object with `onChunk`, `onMetadata`, `onDone`, `onError` callbacks via a controller pattern
-- To simulate streaming: store the callback references, then invoke them manually in tests
+- `submitQueryStream(queryData, callbacks)` — TWO parameters (query data object + callbacks object), NOT one merged object
+- Returns an `AbortController` (not a plain object)
+- Callbacks object has 5 keys: `{ onChunk, onMetadata, onTranslation, onDone, onError }`
+- Uses native `fetch()` (NOT axios) internally — mock at service boundary, not global.fetch
+- `sendMessage()` sets `this.isStreaming = true` and pushes a bot message placeholder to `chatMessages` BEFORE calling `submitQueryStream` — the bot message already exists when callbacks fire
 
 **Vuex Store Mock:**
 - Use `createAuthenticatedState()` and `createUnauthenticatedState()` from `src/__tests__/fixtures/store-state.js` (created in Story 3.1)
@@ -138,27 +140,29 @@ function createChatBotWrapper(storeOverrides = {}) {
 
 ### SSE Streaming Mock Detail
 
-The `sendMessage()` method calls `chatbotService.submitQueryStream()` which returns a stream controller. The pattern is:
+The `sendMessage()` method calls `chatbotService.submitQueryStream(queryData, callbacks)` which returns an `AbortController`. The pattern is:
 
 ```javascript
-const controller = chatbotService.submitQueryStream({
-  query: message,
-  // ... other params
-  onChunk: (chunk) => { /* append to bot message */ },
-  onMetadata: (meta) => { /* store confidence, sources */ },
-  onDone: () => { /* finalize message, set isLoading=false */ },
-  onError: (err) => { /* show error in chat */ },
-});
-this.streamController = controller;
+// Actual call signature — TWO separate parameters
+this.streamController = chatbotService.submitQueryStream(
+  { query, context, contextOption, sessionId, ... },  // queryData
+  {                                                    // callbacks
+    onChunk: (content) => { /* append to bot message */ },
+    onMetadata: (meta) => { /* store confidence, sources */ },
+    onTranslation: (translated) => { /* replace content */ },
+    onDone: (data) => { /* finalize, set isStreaming=false */ },
+    onError: (err) => { /* show error in chat */ },
+  }
+);
 ```
 
-**Mock strategy:** Mock the entire `chatbotService` module. Make `submitQueryStream()` capture the callbacks and return a fake controller. Then in tests, invoke the callbacks manually:
+**Mock strategy:** Mock the entire `chatbotService` module. Make `submitQueryStream()` capture the callbacks and return a fake AbortController. Then in tests, invoke the callbacks manually:
 
 ```javascript
 let capturedCallbacks = {};
-const mockSubmitQueryStream = jest.fn((params) => {
-  capturedCallbacks = { onChunk: params.onChunk, onDone: params.onDone, onError: params.onError, onMetadata: params.onMetadata };
-  return { abort: jest.fn() };
+const mockSubmitQueryStream = jest.fn((_queryData, callbacks) => {
+  capturedCallbacks = callbacks; // { onChunk, onMetadata, onTranslation, onDone, onError }
+  return { abort: jest.fn() };   // AbortController-like
 });
 ```
 
@@ -177,16 +181,16 @@ This gives full control over the streaming lifecycle in tests.
 | AC | What to Test | Key Method | Mock Needed |
 |---|---|---|---|
 | AC1 | Renders with empty messages | initial mount | services mocked, store with empty chatHistory |
-| AC2 | User message appears after submit | `sendMessage()` | `submitQueryStream` mock returning immediately |
+| AC2 | User message appears after submit | `sendMessage()` | `submitQueryStream` mock calling onDone immediately. Note: `sendMessage()` pushes user msg to `chatMessages` first, then a bot placeholder — assert both exist |
 | AC3 | Input cleared after submit | `sendMessage()` | same as AC2 |
-| AC4 | Loading state during response | `sendMessage()` | `submitQueryStream` mock that doesn't call onDone immediately |
+| AC4 | Loading state during response | `sendMessage()` | `submitQueryStream` mock that doesn't call onDone immediately. Note: `isStreaming` is set to `true` BEFORE the call — assert while callbacks are pending |
 | AC5 | Error state on API failure | `sendMessage()` | `submitQueryStream` mock that calls onError |
 
 ### NavBarComponent AC Mapping
 
 | AC | What to Test | Key Element | Mock Needed |
 |---|---|---|---|
-| AC6 | Nav links render | template buttons | store with admin user, store with non-admin user |
+| AC6 | Nav links render | template buttons (admin buttons use `:disabled`, not `v-if`) | store with admin user (enabled), store with non-admin user (disabled) |
 | AC7 | Logout button reflects auth | `handleLogout()` | store auth/unauth states |
 | AC8 | User dropdown when authed | profile section | store with authenticated user |
 

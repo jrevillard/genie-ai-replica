@@ -1,0 +1,247 @@
+# Story 3.2: Test Critical Vue Components — ChatBot and NavBar
+
+Status: ready-for-dev
+
+## Story
+
+As a developer,
+I want component tests for ChatBotComponent and NavBarComponent,
+so that the most critical UI interactions are validated.
+
+## Acceptance Criteria
+
+1. **AC1 — ChatBotComponent renders with empty message list**: When mounted with no messages, the component renders the chat window and input area without errors.
+
+2. **AC2 — User message displayed after submission**: When a user types a message and submits, the message appears in the chat message list.
+
+3. **AC3 — Chat input cleared after submission**: After submitting a message, the input field (`newMessage`) is reset to empty.
+
+4. **AC4 — Loading state shown while awaiting response**: While `chatbotService.submitQueryStream()` is pending, a loading indicator is visible.
+
+5. **AC5 — Error state shown when API call fails**: When the streaming API call fails, an error message is displayed in the chat.
+
+6. **AC6 — NavBar navigation links render correctly**: All navigation buttons (Analytics, Administration, Settings, Profile, Logout) render based on auth state.
+
+7. **AC7 — Login/Logout button reflects auth status**: When authenticated, the logout button is visible; when unauthenticated, the login button is shown.
+
+8. **AC8 — User dropdown appears when authenticated**: When the user is authenticated, the user profile/logout dropdown is visible.
+
+9. **AC9 — All component tests use Options API mount patterns (NFR22)**: Tests use `mount()` or `shallowMount()` from `@vue/test-utils` with proper Options API setup.
+
+## Tasks / Subtasks
+
+- [ ] Task 1: Create ChatBotComponent test file (AC: #1–5)
+  - [ ] 1.1 Create `src/__tests__/components/ChatBotComponent.test.js`
+  - [ ] 1.2 Implement mount helper with all required mock providers (Vuex, i18n, services, eventBus)
+  - [ ] 1.3 Test: renders chat window with empty message list (AC1)
+  - [ ] 1.4 Test: displays user message after submission (AC2)
+  - [ ] 1.5 Test: clears input after submission (AC3)
+  - [ ] 1.6 Test: shows loading state during response (AC4)
+  - [ ] 1.7 Test: shows error state on API failure (AC5)
+- [ ] Task 2: Create NavBarComponent test file (AC: #6–8)
+  - [ ] 2.1 Create `src/__tests__/components/NavBarComponent.test.js`
+  - [ ] 2.2 Implement mount helper with auth store and i18n mocks
+  - [ ] 2.3 Test: navigation links render correctly (AC6)
+  - [ ] 2.4 Test: logout button visible when authenticated (AC7)
+  - [ ] 2.5 Test: user dropdown appears when authenticated (AC8)
+  - [ ] 2.6 Test: admin-only buttons hidden for non-admin users (AC6)
+- [ ] Task 3: Verify and lint (AC: #9)
+  - [ ] 3.1 All tests pass with `npm test` in `components/gov-chat-frontend/`
+  - [ ] 3.2 All test files pass ESLint (`npm run lint`)
+
+## Dev Notes
+
+### Component Analysis
+
+**ChatBotComponent.vue** (`src/components/ChatBotComponent.vue`, 2,441 lines):
+- Options API component with 40+ methods, 35+ data properties
+- Key data: `messages`, `chatMessages`, `newMessage`, `isLoading`, `isStreaming`, `streamController`
+- Key methods for AC coverage: `sendMessage()`, `scrollToBottom()`
+- Uses `chatbotService.submitQueryStream()` for SSE (native Fetch, NOT axios)
+- Subscribes to eventBus events in `created()`: `chat-deleted`, `load-conversation`, `treeNodeSelected`, `open-chat`
+- Dependencies: `chatbotService`, `chatHistoryService`, `serviceTreeService`, `notificationService`, `eventBus`, `marked`, `dompurify`
+
+**NavBarComponent.vue** (`src/components/NavBarComponent.vue`, 812 lines):
+- Options API component with 3 props, 2 methods, 1 computed
+- Props: `isSidebarOpen` (Boolean), `sidebarWidth` (Number), `config` (Object)
+- Emits: `toggleSidebar`, `logout`
+- Computed `isAdmin()` checks `this.$store.getters['auth/currentUser']` roles
+- Uses sub-components: `DsButton`, `LanguageSelector`
+- Methods: `handleLogout()` (emits logout + dispatches Vuex `logout`), `toggleSidebar()` (emits toggle)
+
+### Dependencies That Must Be Mocked
+
+**Services (mock with `jest.mock()` using closure-based refs):**
+- `@/services/chatbotService` — mock `submitQueryStream()` to return a controllable stream object
+- `@/services/chatHistoryService` — mock `getConversation()`, `createConversation()`, `addMessage()`
+- `@/services/serviceTreeService` — mock `getAllCategories()`
+- `@/services/notificationService` — mock `success()`, `error()`, `info()`, `warning()`
+
+**SSE Streaming Mock Strategy:**
+- `submitQueryStream()` uses native `fetch()` (NOT axios) — you MUST mock `global.fetch` or mock the service method directly
+- Recommended: mock the `chatbotService` module method, not global.fetch — cleaner isolation
+- The method returns an object with `onChunk`, `onMetadata`, `onDone`, `onError` callbacks via a controller pattern
+- To simulate streaming: store the callback references, then invoke them manually in tests
+
+**Vuex Store Mock:**
+- Use `createAuthenticatedState()` and `createUnauthenticatedState()` from `src/__tests__/fixtures/store-state.js` (created in Story 3.1)
+- auth module is NOT namespaced (state at root level)
+- chatHistory module IS namespaced (state under `chatHistory` key)
+- NavBarComponent only needs auth module (currentUser getter)
+- ChatBotComponent needs both auth and chatHistory modules
+
+**Event Bus Mock (ChatBotComponent only):**
+- Mock `@/eventBus` — return a mock emitter with `$on`, `$emit`, `$off`
+- ChatBotComponent subscribes in `created()` lifecycle hook — verify subscriptions are registered
+
+**i18n Mock:**
+- Components use `this.$t()` internally (wrapper around `translate()`)
+- Mock in global mount options: `mocks: { $t: (key) => key }`
+- Also mock `$root.$i18n: { locale: 'en' }`
+
+**Stub Child Components:**
+- `shallowMount` automatically stubs child components
+- For `mount`, stub: `DsButton`, `DsModal`, `LanguageSelector`, `lucide-vue-next` icons
+- Use `global.stubs` config
+
+### Mount Helper Pattern
+
+Create a reusable `createChatBotWrapper()` and `createNavBarWrapper()` in each test file following the established pattern:
+
+```javascript
+// Example for ChatBotComponent
+function createChatBotWrapper(storeOverrides = {}) {
+  const store = createStoreMock(storeOverrides);
+  return mount(ChatBotComponent, {
+    global: {
+      plugins: [store],
+      mocks: { $t: (key) => key, $root: { $i18n: { locale: 'en' } } },
+      stubs: { DsButton: true, DsModal: true, /* etc */ },
+    },
+  });
+}
+```
+
+### Established Test Infrastructure (from Story 3.1)
+
+**Available fixtures and mocks — USE THESE, do NOT recreate:**
+- `src/__tests__/mocks/axios.js` — `setSuccessResponse()`, `setErrorResponse()`, `resetAxiosMock()`
+- `src/__tests__/mocks/keycloakAuthService.js` — `createMockKeycloakUser()`, `createMockToken()`, `resetKeycloakMock()`
+- `src/__tests__/fixtures/store-state.js` — `createAuthenticatedState(overrides)`, `createUnauthenticatedState()`
+- `src/__tests__/fixtures/api-responses.js` — response fixtures for chat, categories, user, analytics, documents
+
+**Jest config** (`jest.config.js`):
+- Environment: jsdom
+- Transform: `@vue/vue3-jest` for .vue, `babel-jest` for .js
+- Path alias: `@/` → `src/`
+- Setup: `src/__tests__/setup.js` (mocks console.warn/debug, sets window.APP_CONFIG)
+
+### SSE Streaming Mock Detail
+
+The `sendMessage()` method calls `chatbotService.submitQueryStream()` which returns a stream controller. The pattern is:
+
+```javascript
+const controller = chatbotService.submitQueryStream({
+  query: message,
+  // ... other params
+  onChunk: (chunk) => { /* append to bot message */ },
+  onMetadata: (meta) => { /* store confidence, sources */ },
+  onDone: () => { /* finalize message, set isLoading=false */ },
+  onError: (err) => { /* show error in chat */ },
+});
+this.streamController = controller;
+```
+
+**Mock strategy:** Mock the entire `chatbotService` module. Make `submitQueryStream()` capture the callbacks and return a fake controller. Then in tests, invoke the callbacks manually:
+
+```javascript
+let capturedCallbacks = {};
+const mockSubmitQueryStream = jest.fn((params) => {
+  capturedCallbacks = { onChunk: params.onChunk, onDone: params.onDone, onError: params.onError, onMetadata: params.onMetadata };
+  return { abort: jest.fn() };
+});
+```
+
+This gives full control over the streaming lifecycle in tests.
+
+### Technical Constraints
+
+- **NFR22**: Use Options API mount patterns exclusively — no Composition API test patterns
+- **NFR11**: All test code passes ESLint and Prettier
+- **NFR21**: Test files use `require()`/`module.exports` for Jest CommonJS interop (frontend uses ES modules in source, Jest handles the transform)
+- **NFR7**: Tests must be order-independent (no test depends on side effects from another)
+- **NFR6**: No flaky tests — all mocks are deterministic
+
+### ChatBotComponent AC Mapping
+
+| AC | What to Test | Key Method | Mock Needed |
+|---|---|---|---|
+| AC1 | Renders with empty messages | initial mount | services mocked, store with empty chatHistory |
+| AC2 | User message appears after submit | `sendMessage()` | `submitQueryStream` mock returning immediately |
+| AC3 | Input cleared after submit | `sendMessage()` | same as AC2 |
+| AC4 | Loading state during response | `sendMessage()` | `submitQueryStream` mock that doesn't call onDone immediately |
+| AC5 | Error state on API failure | `sendMessage()` | `submitQueryStream` mock that calls onError |
+
+### NavBarComponent AC Mapping
+
+| AC | What to Test | Key Element | Mock Needed |
+|---|---|---|---|
+| AC6 | Nav links render | template buttons | store with admin user, store with non-admin user |
+| AC7 | Logout button reflects auth | `handleLogout()` | store auth/unauth states |
+| AC8 | User dropdown when authed | profile section | store with authenticated user |
+
+### Files to Create
+
+| File | Purpose |
+|---|---|
+| `src/__tests__/components/ChatBotComponent.test.js` | ChatBotComponent tests (AC1–5) |
+| `src/__tests__/components/NavBarComponent.test.js` | NavBarComponent tests (AC6–8) |
+
+### Files to Read (reference only, do NOT modify)
+
+- `src/components/ChatBotComponent.vue` — component under test
+- `src/components/NavBarComponent.vue` — component under test
+- `src/services/chatbotService.js` — streaming service interface
+- `src/services/chatHistoryService.js` — chat history CRUD
+- `src/services/notificationService.js` — toast notification interface
+- `src/store/modules/auth.js` — auth module structure
+- `src/store/chatHistoryStore.js` — chatHistory module structure
+- `src/__tests__/fixtures/store-state.js` — store state factories (from Story 3.1)
+- `src/__tests__/fixtures/api-responses.js` — API response fixtures (from Story 3.1)
+- `src/__tests__/mocks/axios.js` — axios mock (from Story 3.1)
+- `src/eventBus.js` — event bus interface
+
+### What NOT to Test (Out of Scope)
+
+- SSE streaming internals (native Fetch behavior) — mock at service boundary
+- PDF export (complex jsPDF integration) — defer to later stories
+- Markdown rendering (marked/dompurify) — defer to later stories
+- Quick help overlay interaction — defer to later stories
+- Chat history sidebar interaction — defer to later stories
+- Responsive layout / CSS — not testable with jsdom
+- Streaming abort controller — defer to later stories
+
+### Project Structure Notes
+
+- Test files go in `src/__tests__/components/` following the established convention (NFR12)
+- All existing test files in `src/__tests__/` must continue to pass — do NOT modify them
+- Import fixtures from `src/__tests__/fixtures/` and mocks from `src/__tests__/mocks/` (centralized, per NFR13)
+- The `@/` path alias maps to `src/` via jest.config.js moduleNameMapper
+
+### References
+
+- [Source: _bmad-output/planning-artifacts/epics.md#Story-3.2] — Story definition and ACs
+- [Source: _bmad-output/planning-artifacts/architecture.md#Mock-&-Fixture-Patterns] — Mock patterns
+- [Source: _bmad-output/planning-artifacts/architecture.md#Test-Naming-Patterns] — Naming conventions
+- [Source: _bmad-output/project-context.md#Frontend-Testing-Architecture] — Frontend test infrastructure
+- [Source: _bmad-output/implementation-artifacts/3-1-create-frontend-test-fixtures-and-shared-mocks.md] — Previous story fixtures
+
+## Dev Agent Record
+
+### Agent Model Used
+
+### Debug Log References
+
+### Completion Notes List
+
+### File List

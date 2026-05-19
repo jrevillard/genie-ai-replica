@@ -1,0 +1,41 @@
+{
+  "name": "genieai-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "WhatsApp Bot for the Genie AI NCD Health Assistant",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "seed:templates": "tsx scripts/seed-templates.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.0",
+    "bullmq": "^5.20.0",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.38.0",
+    "fastify": "^5.2.0",
+    "ioredis": "^5.4.0",
+    "pg": "^8.13.0",
+    "pino": "^9.5.0",
+    "undici": "^7.2.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.0",
+    "drizzle-kit": "^0.30.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

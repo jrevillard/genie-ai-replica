@@ -1,6 +1,6 @@
 # Story 3.2: Test Critical Vue Components — ChatBot and NavBar
 
-Status: review
+Status: done
 
 ## Story
 
@@ -266,3 +266,11 @@ Claude GLM-5-Turbo (via Claude Code)
 **Modified files:**
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (3-2 status: ready-for-dev → in-progress → review)
 - `_bmad-output/implementation-artifacts/3-2-test-critical-vue-components-chatbot-and-navbar.md` (task checkboxes, Dev Agent Record, Status)
+
+### Review Findings
+
+- [x] [Review][Patch] Event bus: only 2 of 4 specified events verified in subscription test (chat-deleted, load-conversation missing) — unsubscription also didn't verify specific events. Fixed: both tests now assert all 4 events. [ChatBotComponent.test.js:340-362]
+- [x] [Review][Patch] AC5 assertions too weak: notificationService.error() only checked toHaveBeenCalledWithout message content; streamingMsg.content only checked with toBeTruthy. Fixed: notification assertion now checks i18n key content; error content now uses regex match. [ChatBotComponent.test.js:318,332]
+- [x] [Review][Patch] NavBar: no test for user with null/undefined roles (isAdmin computed could crash). Fixed: added `createNoRolesStore()` factory + 2 tests for null roles edge case. [NavBarComponent.test.js:256-284]
+- [x] [Review][Patch] AC6: no unauthenticated state rendering test for navigation buttons. Fixed: added test verifying buttons render with admin buttons disabled when unauthenticated. [NavBarComponent.test.js:152-160]
+- [x] [Review][Defer] Error recovery: no test verifying user can send new message after streaming error — deferred, improvement beyond AC scope

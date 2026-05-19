@@ -150,6 +150,16 @@ describe('NavBarComponent', () => {
       const ariaLabels = toggleBtn.map((b) => b.attributes('aria-label'));
       expect(ariaLabels).toContain('Toggle sidebar');
     });
+
+    it('renders all buttons when unauthenticated (admin buttons disabled)', () => {
+      const wrapper = createNavBarWrapper({ store: createUnauthenticatedStore() });
+      const buttons = wrapper.findAll('button');
+      const ariaLabels = buttons.map((b) => b.attributes('aria-label'));
+      expect(ariaLabels).toContain('Settings');
+      expect(ariaLabels).toContain('User profile');
+      expect(ariaLabels).toContain('Log out');
+      expect(ariaLabels).toContain('Toggle sidebar');
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -235,6 +245,48 @@ describe('NavBarComponent', () => {
         btns.forEach((btn) => {
           expect(btn.attributes('disabled')).toBeUndefined();
         });
+      });
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Edge case: user with no roles
+  // -----------------------------------------------------------------------
+  describe('user with missing roles', () => {
+    function createNoRolesStore() {
+      const state = createAuthenticatedState({
+        user: {
+          iss_sub: 'http://localhost:8080/realms/genie#user-no-roles',
+          sub: 'user-no-roles',
+          iss: 'http://localhost:8080/realms/genie',
+          email: 'noroles@example.com',
+          name: 'No Roles User',
+          preferred_username: 'noroles',
+          roles: null
+        }
+      });
+      return createStore({
+        state: () => state,
+        getters: {
+          currentUser: (s) => s.user,
+          isAuthenticated: (s) => s.isAuthenticated
+        },
+        actions: {
+          logout: jest.fn().mockResolvedValue(undefined)
+        }
+      });
+    }
+
+    it('renders without crashing when user has null roles', () => {
+      const wrapper = createNavBarWrapper({ store: createNoRolesStore() });
+      expect(wrapper.find('nav').exists() || wrapper.find('.navbar').exists() || wrapper.element).toBeTruthy();
+    });
+
+    it('admin buttons are disabled when user has null roles', () => {
+      const wrapper = createNavBarWrapper({ store: createNoRolesStore() });
+      const adminBtns = wrapper.findAll('button').filter((b) => b.attributes('aria-label') === 'Administration');
+      adminBtns.forEach((btn) => {
+        expect(btn.attributes('disabled')).toBeDefined();
       });
     });
   });

@@ -85,3 +85,7 @@ Items deferred during code reviews. Revisit when the related component is next m
 - User profile `process`: couverture indirecte — la méthode `process` (agrégation de custom settings) n'est testée que via `updateUserProfile`. Des tests directs ajouteraient de la robustesse.
 - Translation backend fallback: risque théorique de race — le test de fallback GPU→CPU assigne `translationService.backend` manuellement. Risque théorique si le service cache le backend.
 - Chat history: edge collection query patterns — les patterns de traversal de graphe ArangoDB (edge bidirectionnelle, vérification d'existence d'edge) sont complexes à mocker et ne sont pas testés directement.
+
+## Deferred from: code review of 3-2-test-critical-vue-components-chatbot-and-navbar (2026-05-19)
+
+- Error recovery: no test verifying user can send a new message after streaming error — improvement beyond AC scope. The current tests verify error display (AC5) but don't confirm the component resets to a usable state after onError. Should add a test that sends a message, triggers onError, then sends another message successfully.

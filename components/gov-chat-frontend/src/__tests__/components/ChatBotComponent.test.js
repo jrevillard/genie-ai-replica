@@ -315,10 +315,10 @@ describe('ChatBotComponent', () => {
       expect(vm.systemStatus.errorMessage).toBe('Stream failed');
       // Bot message should have error content
       const streamingMsg = vm.chatMessages[vm.chatMessages.length - 1];
-      expect(streamingMsg.content).toBeTruthy();
+      expect(streamingMsg.content).toMatch(/error|failed|unavailable/i);
     });
 
-    it('calls notificationService.error on stream error', async () => {
+    it('calls notificationService.error with message on stream error', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
@@ -329,7 +329,7 @@ describe('ChatBotComponent', () => {
       capturedCallbacks.onError(new Error('Stream error'));
       await wrapper.vm.$nextTick();
 
-      expect(mockNotificationError).toHaveBeenCalled();
+      expect(mockNotificationError).toHaveBeenCalledWith(expect.stringContaining('streamingError'));
     });
   });
 
@@ -337,17 +337,23 @@ describe('ChatBotComponent', () => {
   // Event bus subscriptions
   // -----------------------------------------------------------------------
   describe('event bus subscriptions', () => {
-    it('subscribes to eventBus events in created/mounted', () => {
+    it('subscribes to all required eventBus events in created/mounted', () => {
       createChatBotWrapper();
       const events = mockEventBusOn.mock.calls.map((call) => call[0]);
+      expect(events).toContain('chat-deleted');
+      expect(events).toContain('load-conversation');
       expect(events).toContain('treeNodeSelected');
       expect(events).toContain('open-chat');
     });
 
-    it('unsubscribes from eventBus in beforeUnmount', () => {
+    it('unsubscribes from specific eventBus events in beforeUnmount', () => {
       const wrapper = createChatBotWrapper();
       wrapper.unmount();
-      expect(mockEventBusOff).toHaveBeenCalled();
+      const unsubscribedEvents = mockEventBusOff.mock.calls.map((call) => call[0]);
+      expect(unsubscribedEvents).toContain('chat-deleted');
+      expect(unsubscribedEvents).toContain('load-conversation');
+      expect(unsubscribedEvents).toContain('treeNodeSelected');
+      expect(unsubscribedEvents).toContain('open-chat');
     });
   });
 });

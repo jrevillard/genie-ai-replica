@@ -104,3 +104,6 @@ english_g2.zip
 
 # Roo local state
 .roo/
+
+# Swift Package Manager local IDE state (Xcode user-specific schemes etc.)
+**/.swiftpm/xcode/xcuserdata/

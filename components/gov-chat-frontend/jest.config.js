@@ -11,8 +11,18 @@ module.exports = {
     '/node_modules/(?!oidc-client-ts)'
   ],
   moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1',
-    '^@vue/test-utils$': '<rootDir>/node_modules/@vue/test-utils/dist/vue-test-utils.cjs.js'
+    '^@/(.*)$': '<rootDir>/src/$1'
   },
-  setupFiles: ['<rootDir>/src/__tests__/setup.js']
+  setupFiles: ['<rootDir>/src/__tests__/setup.js'],
+  reporters: [
+    'default',
+    ['jest-junit', {
+      outputDirectory: 'reports',
+      outputName: 'jest-frontend.xml',
+      classNameTemplate: '{classname}',
+      titleTemplate: '{title}',
+      ancestorSeparator: ' › ',
+      usePathForSuiteName: true,
+    }],
+  ],
 };

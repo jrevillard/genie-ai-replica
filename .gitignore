@@ -62,6 +62,10 @@ pids
 coverage/
 .nyc_output
 
+# Test report artifacts (CI-generated)
+reports/
+**/reports/
+
 # Dependency directories
 jspm_packages/
 

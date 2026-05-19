@@ -1,6 +1,9 @@
 # Copyright (c) 2024-2026 International Telecommunication Union (ITU)
 
+import os
 import sys
+
+os.makedirs("reports", exist_ok=True)
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

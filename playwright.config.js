@@ -9,7 +9,10 @@ module.exports = defineConfig({
   },
   fullyParallel: false,
   retries: 0,
-  reporter: 'list',
+  reporter: [
+    ['list'],
+    ['junit', { outputFile: 'reports/playwright-report.xml' }],
+  ],
   use: {
     baseURL: 'https://localhost',
     ignoreHTTPSErrors: true,

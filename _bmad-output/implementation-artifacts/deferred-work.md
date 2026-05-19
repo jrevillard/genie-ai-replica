@@ -89,3 +89,7 @@ Items deferred during code reviews. Revisit when the related component is next m
 ## Deferred from: code review of 3-2-test-critical-vue-components-chatbot-and-navbar (2026-05-19)
 
 - Error recovery: no test verifying user can send a new message after streaming error — improvement beyond AC scope. The current tests verify error display (AC5) but don't confirm the component resets to a usable state after onError. Should add a test that sends a message, triggers onError, then sends another message successfully.
+
+## Deferred from: code review of 1-1-configure-junit-xml-reporting-for-all-test-runners (2026-05-19)
+
+- No integration test for report generation — smoke test that verifies JUnit XML files exist and contain valid XML after test runs. Nice-to-have, not a bug.

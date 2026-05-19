@@ -3,6 +3,17 @@ module.exports = {
   testMatch: ['**/__tests__/**/*.test.js'],
   testTimeout: 10000,
   verbose: true,
+  reporters: [
+    'default',
+    ['jest-junit', {
+      outputDirectory: 'reports',
+      outputName: 'jest-docrepo.xml',
+      classNameTemplate: '{classname}',
+      titleTemplate: '{title}',
+      ancestorSeparator: ' › ',
+      usePathForSuiteName: true,
+    }],
+  ],
   collectCoverage: true,
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov'],

@@ -1,6 +1,6 @@
 # Story 3.1: Create Frontend Test Fixtures and Shared Mocks
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -47,6 +47,11 @@ so that all frontend tests use consistent, maintainable test data.
 - [ ] Task 7: Run full regression suite and lint (AC: #5, #6)
   - [ ] 7.1: `npm test` — all 240 existing tests pass
   - [ ] 7.2: `npm run lint` — zero errors across new and existing files
+
+### Review Findings
+
+- [x] [Review][Patch] `resetAxiosMock()` doesn't reset `mockRequestUse`/`mockResponseUse` jest mocks [`src/__tests__/mocks/axios.js:90-103`] — The reset function clears `capturedRequestHandlers`/`capturedResponseHandlers` arrays but does not call `mockRequestUse.mockReset()` or `mockResponseUse.mockReset()`. Tests asserting interceptor registration count (`expect(mockRequestUse).toHaveBeenCalledTimes(N)`) will fail on second+ test because call counts accumulate across `beforeEach` resets.
+- [x] [Review][Patch] `setErrorResponse` produces a plain object, not an Error-like shape [`src/__tests__/mocks/axios.js:72-78`] — Real axios rejects with `AxiosError` (extends `Error`, has `isAxiosError: true`). The mock creates a bare `{ response, message }` object. Tests doing `error instanceof Error` or checking `error.isAxiosError` will fail. Wrap in `new Error()` or add `isAxiosError: true` property.
 
 ## Dev Notes
 

@@ -47,16 +47,24 @@ jest.mock('../../services/service-category-service', () => ({
 }));
 
 // Mock swagger dependencies
-jest.mock('swagger-jsdoc', () => () => ({
-  openapi: '3.0.0',
-  info: {},
-  components: {},
-  security: []
-}), { virtual: true });
-jest.mock('swagger-ui-express', () => ({
-  serve: [],
-  setup: () => (req, res, next) => next()
-}), { virtual: true });
+jest.mock(
+  'swagger-jsdoc',
+  () => () => ({
+    openapi: '3.0.0',
+    info: {},
+    components: {},
+    security: []
+  }),
+  { virtual: true }
+);
+jest.mock(
+  'swagger-ui-express',
+  () => ({
+    serve: [],
+    setup: () => (req, res, next) => next()
+  }),
+  { virtual: true }
+);
 
 // Mock all other services loaded by index.js
 jest.mock('../../services/user-profile-service', () => ({}));
@@ -153,9 +161,7 @@ describe('Auth guard', () => {
 // ============================================================
 describe('GET /api/service-categories/categories (AC10)', () => {
   it('should return 200 with category list', async () => {
-    const categories = [
-      { catKey: 'cat-1', name: 'Health', children: ['service-1'] }
-    ];
+    const categories = [{ catKey: 'cat-1', name: 'Health', children: ['service-1'] }];
     serviceCategoryService.getAllCategoriesWithServices.mockResolvedValue(categories);
 
     const response = await authGet('/api/service-categories/categories');
@@ -240,9 +246,7 @@ describe('GET /api/service-categories/:categoryId/translations (AC13)', () => {
 
 describe('GET /api/service-categories/services/:serviceId/translations (AC13)', () => {
   it('should return 200 with service translations', async () => {
-    const translations = [
-      { lang: 'FR', text: 'Vaccination' }
-    ];
+    const translations = [{ lang: 'FR', text: 'Vaccination' }];
     serviceCategoryService.getServiceTranslations.mockResolvedValue(translations);
 
     const response = await authGet('/api/service-categories/services/svc-1/translations');
@@ -368,7 +372,9 @@ describe('PUT /api/service-categories/:categoryId (AC17)', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(updatedCategory);
-    expect(serviceCategoryService.updateCategoryWithTranslations).toHaveBeenCalledWith('cat-1', { nameEN: 'Health Updated' });
+    expect(serviceCategoryService.updateCategoryWithTranslations).toHaveBeenCalledWith('cat-1', {
+      nameEN: 'Health Updated'
+    });
   });
 });
 
@@ -381,7 +387,9 @@ describe('PUT /api/service-categories/services/:serviceId (AC17)', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(updatedService);
-    expect(serviceCategoryService.updateServiceWithTranslations).toHaveBeenCalledWith('svc-1', { nameEN: 'Vaccination Updated' });
+    expect(serviceCategoryService.updateServiceWithTranslations).toHaveBeenCalledWith('svc-1', {
+      nameEN: 'Vaccination Updated'
+    });
   });
 });
 
@@ -397,7 +405,9 @@ describe('POST /api/service-categories/:categoryId/services (AC21)', () => {
 
     expect(response.status).toBe(201);
     expect(response.body).toEqual(newService);
-    expect(serviceCategoryService.createServiceWithTranslations).toHaveBeenCalledWith('cat-1', { nameEN: 'Emergency Care' });
+    expect(serviceCategoryService.createServiceWithTranslations).toHaveBeenCalledWith('cat-1', {
+      nameEN: 'Emergency Care'
+    });
   });
 });
 

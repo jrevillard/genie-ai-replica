@@ -31,10 +31,7 @@ class DsStateDisplay extends StatelessWidget {
 
     switch (type) {
       case DsStateType.loading:
-        return customChild ??
-            Center(
-              child: DsSpinner(size: DsSpinnerSize.lg),
-            );
+        return customChild ?? Center(child: DsSpinner(size: DsSpinnerSize.lg));
       case DsStateType.empty:
         return Center(
           child: Padding(

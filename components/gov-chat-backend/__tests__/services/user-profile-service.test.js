@@ -209,9 +209,7 @@ describe('UserProfileService', () => {
       const error = new Error('Not found');
       error.code = 404;
       mockUsers.document.mockRejectedValueOnce(error);
-      await expect(
-        userProfileService.updateUserProfile('missing', { phone: '123' })
-      ).rejects.toThrow('not found');
+      await expect(userProfileService.updateUserProfile('missing', { phone: '123' })).rejects.toThrow('not found');
     });
   });
 

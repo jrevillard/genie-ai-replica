@@ -46,16 +46,24 @@ jest.mock('../../services/analytics-service', () => ({
 }));
 
 // Mock swagger dependencies
-jest.mock('swagger-jsdoc', () => () => ({
-  openapi: '3.0.0',
-  info: {},
-  components: {},
-  security: []
-}), { virtual: true });
-jest.mock('swagger-ui-express', () => ({
-  serve: [],
-  setup: () => (req, res, next) => next()
-}), { virtual: true });
+jest.mock(
+  'swagger-jsdoc',
+  () => () => ({
+    openapi: '3.0.0',
+    info: {},
+    components: {},
+    security: []
+  }),
+  { virtual: true }
+);
+jest.mock(
+  'swagger-ui-express',
+  () => ({
+    serve: [],
+    setup: () => (req, res, next) => next()
+  }),
+  { virtual: true }
+);
 
 // Mock all other services loaded by index.js
 jest.mock('../../services/user-profile-service', () => ({}));
@@ -134,7 +142,10 @@ beforeEach(() => {
     previousValue: 80.0,
     changePercentage: 6.25,
     target: 90.0,
-    historicalData: [{ label: 'Jan', value: 80 }, { label: 'Feb', value: 85 }]
+    historicalData: [
+      { label: 'Jan', value: 80 },
+      { label: 'Feb', value: 85 }
+    ]
   });
   analyticsService.getSatisfactionHeatmapData.mockResolvedValue([
     { name: 'Category A', data: [{ x: 'Week 1', y: 85 }] }
@@ -211,11 +222,7 @@ describe('GET /api/analytics/dashboard (AC2)', () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual(dashboardData);
     // Route provides defaults: today's date for startDate, now for endDate, 'en' for locale
-    expect(analyticsService.getDashboardAnalytics).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.any(String),
-      'en'
-    );
+    expect(analyticsService.getDashboardAnalytics).toHaveBeenCalledWith(expect.any(String), expect.any(String), 'en');
   });
 
   it('should return 401 when no token', async () => {
@@ -326,7 +333,9 @@ describe('GET /api/analytics/timeseries/:metricType (AC5)', () => {
       { timestamp: '2025-01-02T00:00:00Z', value: 120, userCount: 60 }
     ]);
 
-    const response = await authGet('/api/analytics/timeseries/queries?interval=daily&startDate=2025-01-01&endDate=2025-01-31');
+    const response = await authGet(
+      '/api/analytics/timeseries/queries?interval=daily&startDate=2025-01-01&endDate=2025-01-31'
+    );
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual([
@@ -341,14 +350,18 @@ describe('GET /api/analytics/timeseries/:metricType (AC5)', () => {
       { timestamp: '2025-01-06T00:00:00Z', value: 50, userCount: 25 }
     ]);
 
-    const response = await authGet('/api/analytics/timeseries/users?interval=weekly&startDate=2025-01-01&endDate=2025-01-31');
+    const response = await authGet(
+      '/api/analytics/timeseries/users?interval=weekly&startDate=2025-01-01&endDate=2025-01-31'
+    );
 
     expect(response.status).toBe(200);
     expect(analyticsService.getTimeSeriesData).toHaveBeenCalledWith('users', 'weekly', '2025-01-01', '2025-01-31');
   });
 
   it('should return 400 for invalid interval', async () => {
-    const response = await authGet('/api/analytics/timeseries/queries?interval=yearly&startDate=2025-01-01&endDate=2025-01-31');
+    const response = await authGet(
+      '/api/analytics/timeseries/queries?interval=yearly&startDate=2025-01-01&endDate=2025-01-31'
+    );
 
     expect(response.status).toBe(400);
     expect(response.body).toEqual({
@@ -383,11 +396,7 @@ describe('POST /api/analytics/events (AC6)', () => {
 
     expect(response.status).toBe(201);
     expect(response.body).toEqual(createdEvent);
-    expect(analyticsService.trackEvent).toHaveBeenCalledWith(
-      mockUser.iss_sub,
-      'pageView',
-      {}
-    );
+    expect(analyticsService.trackEvent).toHaveBeenCalledWith(mockUser.iss_sub, 'pageView', {});
   });
 
   it('should return 400 when eventType missing', async () => {
@@ -462,7 +471,10 @@ describe('GET /api/analytics/satisfaction/gauge (AC8)', () => {
     previousValue: 80.0,
     changePercentage: 6.25,
     target: 90.0,
-    historicalData: [{ label: 'Jan', value: 80 }, { label: 'Feb', value: 85 }]
+    historicalData: [
+      { label: 'Jan', value: 80 },
+      { label: 'Feb', value: 85 }
+    ]
   };
 
   it('should return 200 with gauge data', async () => {
@@ -483,9 +495,7 @@ describe('GET /api/analytics/satisfaction/gauge (AC8)', () => {
 });
 
 describe('GET /api/analytics/satisfaction/heatmap (AC8)', () => {
-  const heatmapData = [
-    { name: 'Category A', data: [{ x: 'Week 1', y: 85 }] }
-  ];
+  const heatmapData = [{ name: 'Category A', data: [{ x: 'Week 1', y: 85 }] }];
 
   it('should return 200 with heatmap array', async () => {
     analyticsService.getSatisfactionHeatmapData.mockResolvedValue(heatmapData);

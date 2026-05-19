@@ -7,7 +7,12 @@ class LanguageSelector extends StatelessWidget {
   final Color? dropdownColor;
   final ValueChanged<String>? onChanged;
 
-  const LanguageSelector({super.key, this.textColor, this.dropdownColor, this.onChanged});
+  const LanguageSelector({
+    super.key,
+    this.textColor,
+    this.dropdownColor,
+    this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {

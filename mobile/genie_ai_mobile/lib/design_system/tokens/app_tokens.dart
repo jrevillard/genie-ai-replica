@@ -79,7 +79,8 @@ class AppTokens {
     double fontScale = 1.0,
   }) {
     final theme = config['theme'] ?? {};
-    final brandColor = ColorUtils.parseHexNullable(theme['brandColor']) ??
+    final brandColor =
+        ColorUtils.parseHexNullable(theme['brandColor']) ??
         const Color(0xFF4682B4);
 
     if (isDark) {
@@ -93,23 +94,28 @@ class AppTokens {
     required Map<String, dynamic> theme,
     required double fontScale,
   }) {
-    final bg = ColorUtils.parseHexNullable(theme['bg']) ??
-        const Color(0xFFF8F9FA);
-    final fg = ColorUtils.parseHexNullable(theme['fg']) ??
-        const Color(0xFF1A1A2E);
+    final bg =
+        ColorUtils.parseHexNullable(theme['bg']) ?? const Color(0xFFF8F9FA);
+    final fg =
+        ColorUtils.parseHexNullable(theme['fg']) ?? const Color(0xFF1A1A2E);
 
     final navbar = theme['navbar'] as Map<String, dynamic>? ?? {};
-    final navbarBg = ColorUtils.parseHexNullable(navbar['background']) ?? brandColor;
+    final navbarBg =
+        ColorUtils.parseHexNullable(navbar['background']) ?? brandColor;
     // Web: --navbar-fg is light text contrasted from brand (l+0.56, low chroma)
-    final navbarFg = ColorUtils.parseHexNullable(navbar['text']) ?? Colors.white;
+    final navbarFg =
+        ColorUtils.parseHexNullable(navbar['text']) ?? Colors.white;
 
     final colors = theme['colors'] as Map<String, dynamic>? ?? {};
     final success =
-        ColorUtils.parseHexNullable(colors['success']) ?? const Color(0xFF10B981);
+        ColorUtils.parseHexNullable(colors['success']) ??
+        const Color(0xFF10B981);
     final warning =
-        ColorUtils.parseHexNullable(colors['warning']) ?? const Color(0xFFF59E0B);
+        ColorUtils.parseHexNullable(colors['warning']) ??
+        const Color(0xFFF59E0B);
     final danger =
-        ColorUtils.parseHexNullable(colors['danger']) ?? const Color(0xFFEF4444);
+        ColorUtils.parseHexNullable(colors['danger']) ??
+        const Color(0xFFEF4444);
     final info =
         ColorUtils.parseHexNullable(colors['info']) ?? const Color(0xFF3B82F6);
 
@@ -148,18 +154,24 @@ class AppTokens {
   }) {
     final navbar = theme['navbar'] as Map<String, dynamic>? ?? {};
     // Web: navbar-bg stays brand in both modes; navbar-fg is dark (l-0.32) in dark
-    final navbarBg = ColorUtils.parseHexNullable(navbar['background']) ?? brandColor;
+    final navbarBg =
+        ColorUtils.parseHexNullable(navbar['background']) ?? brandColor;
     // Web dark: --navbar-fg: oklch(from brand max(calc(l - 0.32), 0.1) c h)
     // Approximation: use a darkened version of the brand color
-    final navbarFg = ColorUtils.parseHexNullable(navbar['text']) ?? ColorUtils.darken(brandColor, 0.25);
+    final navbarFg =
+        ColorUtils.parseHexNullable(navbar['text']) ??
+        ColorUtils.darken(brandColor, 0.25);
 
     final colors = theme['colors'] as Map<String, dynamic>? ?? {};
     final success =
-        ColorUtils.parseHexNullable(colors['success']) ?? const Color(0xFF10B981);
+        ColorUtils.parseHexNullable(colors['success']) ??
+        const Color(0xFF10B981);
     final warning =
-        ColorUtils.parseHexNullable(colors['warning']) ?? const Color(0xFFF59E0B);
+        ColorUtils.parseHexNullable(colors['warning']) ??
+        const Color(0xFFF59E0B);
     final danger =
-        ColorUtils.parseHexNullable(colors['danger']) ?? const Color(0xFFEF4444);
+        ColorUtils.parseHexNullable(colors['danger']) ??
+        const Color(0xFFEF4444);
     final info =
         ColorUtils.parseHexNullable(colors['info']) ?? const Color(0xFF3B82F6);
 
@@ -168,13 +180,37 @@ class AppTokens {
 
     return AppTokens(
       brand: brandColor,
-      bg: ColorUtils.brandTinted(brandColor, lightness: 0.14, saturationMultiplier: 0.25),
+      bg: ColorUtils.brandTinted(
+        brandColor,
+        lightness: 0.14,
+        saturationMultiplier: 0.25,
+      ),
       fg: const Color(0xFFF0F0F0),
-      surface: ColorUtils.brandTinted(brandColor, lightness: 0.22, saturationMultiplier: 0.18),
-      muted: ColorUtils.brandTinted(brandColor, lightness: 0.58, saturationMultiplier: 0.15),
-      mutedSoft: ColorUtils.brandTinted(brandColor, lightness: 0.45, saturationMultiplier: 0.12),
-      border: ColorUtils.brandTinted(brandColor, lightness: 0.30, saturationMultiplier: 0.20),
-      borderLight: ColorUtils.brandTinted(brandColor, lightness: 0.24, saturationMultiplier: 0.18),
+      surface: ColorUtils.brandTinted(
+        brandColor,
+        lightness: 0.22,
+        saturationMultiplier: 0.18,
+      ),
+      muted: ColorUtils.brandTinted(
+        brandColor,
+        lightness: 0.58,
+        saturationMultiplier: 0.15,
+      ),
+      mutedSoft: ColorUtils.brandTinted(
+        brandColor,
+        lightness: 0.45,
+        saturationMultiplier: 0.12,
+      ),
+      border: ColorUtils.brandTinted(
+        brandColor,
+        lightness: 0.30,
+        saturationMultiplier: 0.20,
+      ),
+      borderLight: ColorUtils.brandTinted(
+        brandColor,
+        lightness: 0.24,
+        saturationMultiplier: 0.18,
+      ),
       accent: ColorUtils.lighten(brandColor, 0.20),
       accentHover: ColorUtils.lighten(brandColor, 0.14),
       accentMuted: brandColor.withValues(alpha: 0.15),

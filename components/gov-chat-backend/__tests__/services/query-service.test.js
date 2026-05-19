@@ -183,9 +183,7 @@ describe('QueryService', () => {
     });
 
     it('should continue if edge deletion fails', async () => {
-      mockDb.query
-        .mockRejectedValueOnce(new Error('edge error'))
-        .mockResolvedValueOnce(createMockCursor([]));
+      mockDb.query.mockRejectedValueOnce(new Error('edge error')).mockResolvedValueOnce(createMockCursor([]));
       const result = await queryService.deleteQuery('query-1');
       expect(result).toBeDefined();
       expect(mockQueriesCollection.remove).toHaveBeenCalled();
@@ -249,24 +247,18 @@ describe('QueryService', () => {
     });
 
     it('should throw on negative responseTime', async () => {
-      await expect(queryService.updateQueryResponseTime('query-1', -1)).rejects.toThrow(
-        'Invalid response time'
-      );
+      await expect(queryService.updateQueryResponseTime('query-1', -1)).rejects.toThrow('Invalid response time');
     });
 
     it('should throw on non-number responseTime', async () => {
-      await expect(queryService.updateQueryResponseTime('query-1', 'fast')).rejects.toThrow(
-        'Invalid response time'
-      );
+      await expect(queryService.updateQueryResponseTime('query-1', 'fast')).rejects.toThrow('Invalid response time');
     });
   });
 
   describe('searchQueries', () => {
     it('should return paginated results with no filters', async () => {
       const mockResults = [{ _key: 'q1', text: 'query 1' }];
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor(mockResults))
-        .mockResolvedValueOnce(createMockCursor([1]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor(mockResults)).mockResolvedValueOnce(createMockCursor([1]));
       const result = await queryService.searchQueries({}, 10, 0);
       expect(result.queries).toHaveLength(1);
       expect(result.pagination.total).toBe(1);
@@ -274,17 +266,13 @@ describe('QueryService', () => {
     });
 
     it('should filter by userId', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([0]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
       await queryService.searchQueries({ userId: 'user-1' });
       expect(mockDb.query).toHaveBeenCalledTimes(2);
     });
 
     it('should filter by text, categoryId, and isAnswered', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([0]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
       await queryService.searchQueries({
         text: 'tax',
         categoryId: 'cat-1',
@@ -294,9 +282,7 @@ describe('QueryService', () => {
     });
 
     it('should calculate pagination correctly', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([25]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([25]));
       const result = await queryService.searchQueries({}, 10, 0);
       expect(result.pagination.pages).toBe(3);
       expect(result.pagination.currentPage).toBe(1);
@@ -323,9 +309,7 @@ describe('QueryService', () => {
       mockQueriesCollection.update.mockResolvedValueOnce({
         new: { _key: 'query-1', categoryId: 'cat-2' }
       });
-      mockDb.query.mockResolvedValueOnce(
-        createMockCursor([{ _key: 'edge-1', _from: 'queries/query-1' }])
-      );
+      mockDb.query.mockResolvedValueOnce(createMockCursor([{ _key: 'edge-1', _from: 'queries/query-1' }]));
       const result = await queryService.setQueryCategory('query-1', 'cat-2');
       expect(result.categoryId).toBe('cat-2');
       expect(mockQueryCategoriesCollection.update).toHaveBeenCalled();
@@ -354,9 +338,7 @@ describe('QueryService', () => {
       const notFoundError = new Error('document not found');
       notFoundError.code = 404;
       mockQueriesCollection.update.mockRejectedValueOnce(notFoundError);
-      await expect(
-        queryService.setQueryCategory('nonexistent', 'cat-1')
-      ).rejects.toThrow('document not found');
+      await expect(queryService.setQueryCategory('nonexistent', 'cat-1')).rejects.toThrow('document not found');
       expect(mockQueryCategoriesCollection.save).not.toHaveBeenCalled();
     });
   });
@@ -599,16 +581,12 @@ describe('QueryService', () => {
 
     it('should throw when userId is missing', async () => {
       const queryData = { text: 'test' };
-      await expect(queryService.saveQueryWithCriteria(queryData)).rejects.toThrow(
-        'Missing required query data'
-      );
+      await expect(queryService.saveQueryWithCriteria(queryData)).rejects.toThrow('Missing required query data');
     });
 
     it('should throw when text is missing', async () => {
       const queryData = { userId: 'user-1' };
-      await expect(queryService.saveQueryWithCriteria(queryData)).rejects.toThrow(
-        'Missing required query data'
-      );
+      await expect(queryService.saveQueryWithCriteria(queryData)).rejects.toThrow('Missing required query data');
     });
 
     it('should use default values for optional fields', async () => {
@@ -655,9 +633,7 @@ describe('QueryService', () => {
         { _key: 'q1', text: 'query 1', metadata: { isSaved: true } },
         { _key: 'q2', text: 'query 2', metadata: { isSaved: true } }
       ];
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor(mockQueries))
-        .mockResolvedValueOnce(createMockCursor([2]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor(mockQueries)).mockResolvedValueOnce(createMockCursor([2]));
       const result = await queryService.getSavedQueries('user-1', 10, 0);
       expect(result.queries).toHaveLength(2);
       expect(result.pagination.total).toBe(2);
@@ -665,17 +641,13 @@ describe('QueryService', () => {
     });
 
     it('should filter by userId and isSaved flag', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([0]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
       await queryService.getSavedQueries('user-1');
       expect(mockDb.query).toHaveBeenCalledTimes(2);
     });
 
     it('should handle pagination correctly', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([25]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([25]));
       const result = await queryService.getSavedQueries('user-1', 10, 10);
       expect(result.pagination.pages).toBe(3);
       expect(result.pagination.currentPage).toBe(2);
@@ -790,15 +762,11 @@ describe('QueryService', () => {
         responseText: 'Response',
         tags: ['tag1']
       });
-      expect(queryService.chatHistoryService.createConversationFromQuery).toHaveBeenCalledWith(
-        'query-1',
-        'user-1',
-        {
-          title: 'Custom Title',
-          responseText: 'Response',
-          tags: ['tag1']
-        }
-      );
+      expect(queryService.chatHistoryService.createConversationFromQuery).toHaveBeenCalledWith('query-1', 'user-1', {
+        title: 'Custom Title',
+        responseText: 'Response',
+        tags: ['tag1']
+      });
       expect(result.conversation._key).toBe('conv-1');
     });
 
@@ -828,9 +796,7 @@ describe('QueryService', () => {
 
     it('should throw NotFoundError when query does not exist', async () => {
       mockQueriesCollection.document.mockResolvedValueOnce(null);
-      await expect(queryService.createConversationFromQuery('invalid')).rejects.toThrow(
-        'Query not found'
-      );
+      await expect(queryService.createConversationFromQuery('invalid')).rejects.toThrow('Query not found');
     });
   });
 
@@ -865,9 +831,7 @@ describe('QueryService', () => {
 
     it('should throw when chatHistoryService is not set', async () => {
       queryService.chatHistoryService = null;
-      await expect(queryService.getConversationsForQuery('query-1')).rejects.toThrow(
-        'Chat history service is not set'
-      );
+      await expect(queryService.getConversationsForQuery('query-1')).rejects.toThrow('Chat history service is not set');
     });
 
     it('should handle empty results', async () => {
@@ -909,12 +873,8 @@ describe('QueryService', () => {
     });
 
     it('should throw on invalid query ID', async () => {
-      await expect(queryService.markQueryAsAnswered('', 100)).rejects.toThrow(
-        'Invalid query ID provided'
-      );
-      await expect(queryService.markQueryAsAnswered('undefined', 100)).rejects.toThrow(
-        'Invalid query ID provided'
-      );
+      await expect(queryService.markQueryAsAnswered('', 100)).rejects.toThrow('Invalid query ID provided');
+      await expect(queryService.markQueryAsAnswered('undefined', 100)).rejects.toThrow('Invalid query ID provided');
     });
 
     it('should throw NotFoundError when query does not exist', async () => {
@@ -922,9 +882,7 @@ describe('QueryService', () => {
       error.name = 'ArangoError';
       error.errorNum = 1202;
       mockQueriesCollection.update.mockRejectedValueOnce(error);
-      await expect(queryService.markQueryAsAnswered('invalid', 100)).rejects.toThrow(
-        'Query not found'
-      );
+      await expect(queryService.markQueryAsAnswered('invalid', 100)).rejects.toThrow('Query not found');
     });
 
     it('should propagate other errors', async () => {
@@ -970,9 +928,7 @@ describe('QueryService', () => {
     });
 
     it('should use default options when not provided', async () => {
-      mockDb.query.mockResolvedValueOnce(
-        createMockCursor([{ _key: 'msg-1', conversationId: 'conv-1' }])
-      );
+      mockDb.query.mockResolvedValueOnce(createMockCursor([{ _key: 'msg-1', conversationId: 'conv-1' }]));
       await queryService.linkQueryToMessage('query-1', 'msg-1');
       expect(queryService.chatHistoryService.linkQueryToConversation).toHaveBeenCalledWith(
         'query-1',
@@ -987,16 +943,14 @@ describe('QueryService', () => {
 
     it('should throw when chatHistoryService is not set', async () => {
       queryService.chatHistoryService = null;
-      await expect(
-        queryService.linkQueryToMessage('query-1', 'msg-1')
-      ).rejects.toThrow('Chat history service is not set');
+      await expect(queryService.linkQueryToMessage('query-1', 'msg-1')).rejects.toThrow(
+        'Chat history service is not set'
+      );
     });
 
     it('should throw NotFoundError when message does not exist', async () => {
       mockDb.query.mockResolvedValueOnce(createMockCursor([]));
-      await expect(queryService.linkQueryToMessage('query-1', 'invalid')).rejects.toThrow(
-        'Message not found'
-      );
+      await expect(queryService.linkQueryToMessage('query-1', 'invalid')).rejects.toThrow('Message not found');
     });
   });
 });

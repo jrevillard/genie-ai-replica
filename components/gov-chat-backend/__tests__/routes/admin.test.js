@@ -52,16 +52,24 @@ jest.mock('../../services/security-scan-service', () => ({
 }));
 
 // Mock swagger dependencies
-jest.mock('swagger-jsdoc', () => () => ({
-  openapi: '3.0.0',
-  info: {},
-  components: {},
-  security: []
-}), { virtual: true });
-jest.mock('swagger-ui-express', () => ({
-  serve: [],
-  setup: () => (req, res, next) => next()
-}), { virtual: true });
+jest.mock(
+  'swagger-jsdoc',
+  () => () => ({
+    openapi: '3.0.0',
+    info: {},
+    components: {},
+    security: []
+  }),
+  { virtual: true }
+);
+jest.mock(
+  'swagger-ui-express',
+  () => ({
+    serve: [],
+    setup: () => (req, res, next) => next()
+  }),
+  { virtual: true }
+);
 
 // Mock all other services loaded by index.js
 jest.mock('../../services/user-profile-service', () => ({}));
@@ -315,12 +323,19 @@ describe('AC3: Log management endpoints', () => {
       const results = [{ message: 'found log', level: 'ERROR' }];
       adminService.searchLogs.mockResolvedValue(results);
 
-      const response = await authGet('/api/admin/logs/search?term=error&level=ERROR&service=backend&dateRange=week&startDate=2025-01-01&endDate=2025-01-31');
+      const response = await authGet(
+        '/api/admin/logs/search?term=error&level=ERROR&service=backend&dateRange=week&startDate=2025-01-01&endDate=2025-01-31'
+      );
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual(results);
       expect(adminService.searchLogs).toHaveBeenCalledWith({
-        term: 'error', level: 'ERROR', service: 'backend', dateRange: 'week', startDate: '2025-01-01', endDate: '2025-01-31'
+        term: 'error',
+        level: 'ERROR',
+        service: 'backend',
+        dateRange: 'week',
+        startDate: '2025-01-01',
+        endDate: '2025-01-31'
       });
     });
 
@@ -533,7 +548,10 @@ describe('AC6: User search', () => {
       expect(response.status).toBe(200);
       expect(response.body).toEqual(searchResults);
       expect(adminService.searchUsers).toHaveBeenCalledWith({
-        term: 'john', field: 'name', limit: '10', offset: '0'
+        term: 'john',
+        field: 'name',
+        limit: '10',
+        offset: '0'
       });
     });
 
@@ -544,7 +562,10 @@ describe('AC6: User search', () => {
 
       expect(response.status).toBe(200);
       expect(adminService.searchUsers).toHaveBeenCalledWith({
-        term: undefined, field: undefined, limit: undefined, offset: undefined
+        term: undefined,
+        field: undefined,
+        limit: undefined,
+        offset: undefined
       });
     });
 

@@ -3,17 +3,21 @@
 require('./setup-env');
 
 // Mock shared-lib — must include ALL 4 exports used by index.js
-jest.mock('../shared-lib', () => ({
-  logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn()
-  },
-  dbService: { getConnection: jest.fn() },
-  securityHeaders: (req, res, next) => next(),
-  SecurityMiddleware: { applySecurityMiddleware: jest.fn() }
-}), { virtual: true });
+jest.mock(
+  '../shared-lib',
+  () => ({
+    logger: {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn()
+    },
+    dbService: { getConnection: jest.fn() },
+    securityHeaders: (req, res, next) => next(),
+    SecurityMiddleware: { applySecurityMiddleware: jest.fn() }
+  }),
+  { virtual: true }
+);
 
 // Mock keycloak middleware (imported by index.js)
 jest.mock('../middleware/keycloak-auth-middleware', () => ({

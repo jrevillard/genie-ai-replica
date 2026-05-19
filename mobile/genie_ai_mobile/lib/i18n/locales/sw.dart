@@ -510,7 +510,8 @@ const Map<String, dynamic> swLocale = {
         "Hii itafuta data yako yote ya wasifu na historia ya gumzo.",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "Futa Akaunti",
     "deleteAccountDesc":
         "Hii itafuta akaunti yako na data zote zinazohusiana nayo kabisa.",

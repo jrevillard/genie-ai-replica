@@ -64,7 +64,8 @@ class DsInput extends StatelessWidget {
               : null,
           suffixIcon: suffix,
           filled: true,
-          fillColor: overrideFillColor ?? (tokens.isDark ? tokens.surface : tokens.bg),
+          fillColor:
+              overrideFillColor ?? (tokens.isDark ? tokens.surface : tokens.bg),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(DsRadii.md),
             borderSide: BorderSide(color: tokens.border),

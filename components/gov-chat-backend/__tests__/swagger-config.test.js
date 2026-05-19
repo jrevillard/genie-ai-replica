@@ -82,7 +82,6 @@ jest.mock('body-parser', () => ({
   urlencoded: () => (req, res, next) => next()
 }));
 
-
 const mockUse = jest.fn();
 const mockGet = jest.fn();
 jest.mock('express', () => {
@@ -113,7 +112,11 @@ jest.mock('express', () => {
 
 jest.mock('dotenv', () => ({ config: jest.fn() }));
 jest.mock('fs', () => ({ existsSync: jest.fn(() => false) }));
-jest.mock('path', () => ({ join: jest.fn((...args) => args.join('/')), resolve: jest.fn((...args) => args.join('/')), sep: '/' }));
+jest.mock('path', () => ({
+  join: jest.fn((...args) => args.join('/')),
+  resolve: jest.fn((...args) => args.join('/')),
+  sep: '/'
+}));
 
 // Mock process.exit to prevent test process from being killed
 const originalExit = process.exit;

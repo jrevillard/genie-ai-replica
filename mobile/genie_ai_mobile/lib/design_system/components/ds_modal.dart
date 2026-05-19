@@ -28,12 +28,8 @@ class DsModal extends StatelessWidget {
   }) {
     return showDialog<T>(
       context: context,
-      builder: (_) => DsModal(
-        title: title,
-        content: content,
-        actions: actions,
-        size: size,
-      ),
+      builder: (_) =>
+          DsModal(title: title, content: content, actions: actions, size: size),
     );
   }
 
@@ -94,9 +90,7 @@ class DsModal extends StatelessWidget {
                   DsSpacing.md,
                   DsSpacing.md,
                 ),
-                child: Row(
-                  children: actions!,
-                ),
+                child: Row(children: actions!),
               ),
             ],
           ],

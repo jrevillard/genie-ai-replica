@@ -510,8 +510,7 @@ const Map<String, dynamic> enLocale = {
     "emailAddressPlaceholder": "Your email address",
     "password": "Password",
     "manageMyAccount": "Manage My Account",
-    "manageMyAccountDesc":
-        "Update your email, password, and account settings.",
+    "manageMyAccountDesc": "Update your email, password, and account settings.",
     "cannotOpenAccountConsole":
         "Unable to open account console. Please try again.",
     "resetUserData": "Reset User Data",

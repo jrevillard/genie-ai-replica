@@ -37,14 +37,8 @@ void main() {
     });
 
     test('equality: different fields are not equal', () {
-      const a = AuthState(
-        status: AuthStatus.authenticated,
-        userId: 'user1',
-      );
-      const b = AuthState(
-        status: AuthStatus.authenticated,
-        userId: 'user2',
-      );
+      const a = AuthState(status: AuthStatus.authenticated, userId: 'user1');
+      const b = AuthState(status: AuthStatus.authenticated, userId: 'user2');
       expect(a, isNot(equals(b)));
     });
 
@@ -81,14 +75,17 @@ void main() {
       expect(state.retryable, isFalse);
     });
 
-    test('unauthenticated convenience constructor returns correct defaults', () {
-      const state = AuthState.unauthenticated();
-      expect(state.status, AuthStatus.unauthenticated);
-      expect(state.userId, isNull);
-      expect(state.displayName, isNull);
-      expect(state.errorMessage, isNull);
-      expect(state.retryable, isFalse);
-    });
+    test(
+      'unauthenticated convenience constructor returns correct defaults',
+      () {
+        const state = AuthState.unauthenticated();
+        expect(state.status, AuthStatus.unauthenticated);
+        expect(state.userId, isNull);
+        expect(state.displayName, isNull);
+        expect(state.errorMessage, isNull);
+        expect(state.retryable, isFalse);
+      },
+    );
 
     test('authenticated convenience constructor sets fields', () {
       const state = AuthState.authenticated(

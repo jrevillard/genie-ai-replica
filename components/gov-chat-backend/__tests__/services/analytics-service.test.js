@@ -126,26 +126,20 @@ describe('AnalyticsService', () => {
     it('should save analytics record for a query', async () => {
       const queryDoc = { _key: 'q1', userId: 'u1', text: 'tax', responseTime: 500, isAnswered: true };
       const result = await analyticsService.recordQuery(queryDoc);
-      expect(mockAnalytics.save).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'query', queryId: 'q1' })
-      );
+      expect(mockAnalytics.save).toHaveBeenCalledWith(expect.objectContaining({ type: 'query', queryId: 'q1' }));
       expect(result).toBeDefined();
     });
 
     it('should throw on save failure', async () => {
       mockAnalytics.save.mockRejectedValueOnce(new Error('save fail'));
-      await expect(
-        analyticsService.recordQuery({ _key: 'q1' })
-      ).rejects.toThrow('save fail');
+      await expect(analyticsService.recordQuery({ _key: 'q1' })).rejects.toThrow('save fail');
     });
   });
 
   describe('recordFeedback', () => {
     it('should save analytics record for feedback', async () => {
       const result = await analyticsService.recordFeedback('q1', { rating: 5 });
-      expect(mockAnalytics.save).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'feedback', queryId: 'q1' })
-      );
+      expect(mockAnalytics.save).toHaveBeenCalledWith(expect.objectContaining({ type: 'feedback', queryId: 'q1' }));
       expect(result).toBeDefined();
     });
 
@@ -158,17 +152,13 @@ describe('AnalyticsService', () => {
   describe('trackEvent', () => {
     it('should save event record', async () => {
       const result = await analyticsService.trackEvent('u1', 'page_view', { page: '/home' });
-      expect(mockEvents.save).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: 'u1', eventType: 'page_view' })
-      );
+      expect(mockEvents.save).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u1', eventType: 'page_view' }));
       expect(result).toBeDefined();
     });
 
     it('should use empty eventData by default', async () => {
       const result = await analyticsService.trackEvent('u1', 'login');
-      expect(mockEvents.save).toHaveBeenCalledWith(
-        expect.objectContaining({ data: {} })
-      );
+      expect(mockEvents.save).toHaveBeenCalledWith(expect.objectContaining({ data: {} }));
       expect(result).toBeDefined();
     });
 
@@ -207,24 +197,27 @@ describe('AnalyticsService', () => {
     });
 
     it('should handle ArangoDB-style category IDs (collection/key)', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([{ test: 'Connection is working' }]))
-        .mockResolvedValueOnce(
-          createMockCursor([
-            {
-              queries: { total: 5, unanswered: 2, answeredPercentage: 60, avgResponseTime: 200 },
-              categories: [
-                { categoryId: 'serviceCategories/cat-123', count: 3, value: 3 },
-                { categoryId: 'serviceCategories/cat-456', count: 2, value: 2 }
-              ],
-              feedback: {
-                total: 0, positive: 0, neutral: 0, negative: 0, positivePercentage: 0, negativePercentage: 0
-              },
-              users: { activeCount: 2 },
-              topQueries: []
-            }
-          ])
-        );
+      mockDb.query.mockResolvedValueOnce(createMockCursor([{ test: 'Connection is working' }])).mockResolvedValueOnce(
+        createMockCursor([
+          {
+            queries: { total: 5, unanswered: 2, answeredPercentage: 60, avgResponseTime: 200 },
+            categories: [
+              { categoryId: 'serviceCategories/cat-123', count: 3, value: 3 },
+              { categoryId: 'serviceCategories/cat-456', count: 2, value: 2 }
+            ],
+            feedback: {
+              total: 0,
+              positive: 0,
+              neutral: 0,
+              negative: 0,
+              positivePercentage: 0,
+              negativePercentage: 0
+            },
+            users: { activeCount: 2 },
+            topQueries: []
+          }
+        ])
+      );
       const result = await analyticsService.getDashboardAnalytics();
       expect(result.categories[0].categoryId).toBe('serviceCategories/cat-123');
       expect(result.categories[0].name).toBe('Category cat-123');

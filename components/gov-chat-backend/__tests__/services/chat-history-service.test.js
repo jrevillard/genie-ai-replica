@@ -179,16 +179,12 @@ describe('ChatHistoryService', () => {
         userId: 'user-1',
         title: 'New Chat'
       });
-      expect(mockConversations.save).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'New Chat' })
-      );
+      expect(mockConversations.save).toHaveBeenCalledWith(expect.objectContaining({ title: 'New Chat' }));
       expect(result).toBeDefined();
     });
 
     it('should resolve category name when categoryId is provided', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor(['Taxes']))
-        .mockResolvedValue(createMockCursor([]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor(['Taxes'])).mockResolvedValue(createMockCursor([]));
       const result = await chatHistoryService.createConversation({
         userId: 'user-1',
         categoryId: 'cat-1'
@@ -282,9 +278,7 @@ describe('ChatHistoryService', () => {
   describe('deleteConversation', () => {
     it('should throw ForbiddenError when user lacks permission', async () => {
       mockDb.query.mockResolvedValue(createMockCursor([]));
-      await expect(
-        chatHistoryService.deleteConversation('conv-1', 'user-2', 'user-2')
-      ).rejects.toThrow();
+      await expect(chatHistoryService.deleteConversation('conv-1', 'user-2', 'user-2')).rejects.toThrow();
     });
 
     it('should delete conversation when user has permission', async () => {
@@ -309,9 +303,7 @@ describe('ChatHistoryService', () => {
         .mockResolvedValueOnce(createMockCursor([{ _key: 'edge-1' }]))
         .mockResolvedValueOnce(createMockCursor(['messages/msg-1']))
         .mockResolvedValue(createMockCursor([]));
-      await expect(
-        chatHistoryService.deleteConversation('conv-1', 'user-1', 'user-1')
-      ).rejects.toThrow();
+      await expect(chatHistoryService.deleteConversation('conv-1', 'user-1', 'user-1')).rejects.toThrow();
       expect(mockTrx.abort).toHaveBeenCalled();
       expect(mockTrx.commit).not.toHaveBeenCalled();
     });
@@ -325,9 +317,7 @@ describe('ChatHistoryService', () => {
           userId: 'user-1',
           name: 'My Folder'
         });
-        expect(mockFolders.save).toHaveBeenCalledWith(
-          expect.objectContaining({ name: 'My Folder', userId: 'user-1' })
-        );
+        expect(mockFolders.save).toHaveBeenCalledWith(expect.objectContaining({ name: 'My Folder', userId: 'user-1' }));
         expect(result).toBeDefined();
       });
 
@@ -361,9 +351,7 @@ describe('ChatHistoryService', () => {
     describe('deleteFolder', () => {
       it('should throw ForbiddenError when user lacks permission', async () => {
         mockDb.query.mockResolvedValue(createMockCursor([]));
-        await expect(
-          chatHistoryService.deleteFolder('folder-1', 'user-2', false, 'user-2')
-        ).rejects.toThrow();
+        await expect(chatHistoryService.deleteFolder('folder-1', 'user-2', false, 'user-2')).rejects.toThrow();
       });
     });
   });
@@ -375,9 +363,7 @@ describe('ChatHistoryService', () => {
           .mockResolvedValueOnce(createMockCursor([{ _key: 'uf-1' }])) // folder permission
           .mockResolvedValueOnce(createMockCursor([{ _key: 'uc-1' }])) // conv permission
           .mockResolvedValueOnce(createMockCursor([])); // existing link check
-        const result = await chatHistoryService.addConversationToFolder(
-          'folder-1', 'conv-1', 'user-1', 'user-1'
-        );
+        const result = await chatHistoryService.addConversationToFolder('folder-1', 'conv-1', 'user-1', 'user-1');
         expect(result).toBeDefined();
         expect(mockFolderConversations.save).toHaveBeenCalled();
       });
@@ -388,9 +374,7 @@ describe('ChatHistoryService', () => {
         mockDb.query
           .mockResolvedValueOnce(createMockCursor([{ _key: 'uf-1' }])) // folder permission
           .mockResolvedValueOnce(createMockCursor([{ _key: 'fc-1' }])); // existing link
-        const result = await chatHistoryService.removeConversationFromFolder(
-          'folder-1', 'conv-1', 'user-1', 'user-1'
-        );
+        const result = await chatHistoryService.removeConversationFromFolder('folder-1', 'conv-1', 'user-1', 'user-1');
         expect(result).toBeDefined();
         expect(mockFolderConversations.remove).toHaveBeenCalled();
       });
@@ -401,11 +385,11 @@ describe('ChatHistoryService', () => {
         mockDb.query
           .mockResolvedValueOnce(createMockCursor([{ _key: 'uc-1' }])) // conv permission
           .mockResolvedValueOnce(createMockCursor([{ _key: 'uf-2' }])) // target folder permission
-          .mockResolvedValueOnce(createMockCursor([{ _key: 'fc-1', _from: 'folders/folder-1', _to: 'conversations/conv-1' }])) // existing link
+          .mockResolvedValueOnce(
+            createMockCursor([{ _key: 'fc-1', _from: 'folders/folder-1', _to: 'conversations/conv-1' }])
+          ) // existing link
           .mockResolvedValue(createMockCursor([])); // transaction queries
-        const result = await chatHistoryService.moveConversation(
-          'conv-1', 'folder-1', 'folder-2', 'user-1', 'user-1'
-        );
+        const result = await chatHistoryService.moveConversation('conv-1', 'folder-1', 'folder-2', 'user-1', 'user-1');
         expect(result).toBeDefined();
       });
     });
@@ -413,9 +397,7 @@ describe('ChatHistoryService', () => {
 
   describe('searchConversations', () => {
     it('should return matching conversations', async () => {
-      mockDb.query.mockResolvedValue(
-        createMockCursor([{ _key: 'conv-1', title: 'Tax Question' }])
-      );
+      mockDb.query.mockResolvedValue(createMockCursor([{ _key: 'conv-1', title: 'Tax Question' }]));
       const result = await chatHistoryService.searchConversations('user-1', 'tax');
       expect(result).toBeDefined();
       expect(Array.isArray(result)).toBe(true);
@@ -424,9 +406,7 @@ describe('ChatHistoryService', () => {
 
   describe('searchFolders', () => {
     it('should return matching folders', async () => {
-      mockDb.query.mockResolvedValue(
-        createMockCursor([{ _key: 'folder-1', name: 'Tax Docs' }])
-      );
+      mockDb.query.mockResolvedValue(createMockCursor([{ _key: 'folder-1', name: 'Tax Docs' }]));
       const result = await chatHistoryService.searchFolders('user-1', 'tax');
       expect(result).toBeDefined();
       expect(Array.isArray(result)).toBe(true);
@@ -465,9 +445,7 @@ describe('ChatHistoryService', () => {
           };
           return map[name] || createMockCollection();
         });
-        const result = await chatHistoryService.linkQueryToConversation(
-          'query-1', 'conv-1', 'msg-1'
-        );
+        const result = await chatHistoryService.linkQueryToConversation('query-1', 'conv-1', 'msg-1');
         expect(mockQueryMessages.save).toHaveBeenCalled();
         expect(result).toBeDefined();
       });
@@ -475,9 +453,7 @@ describe('ChatHistoryService', () => {
 
     describe('findMessagesForQuery', () => {
       it('should return messages linked to a query', async () => {
-        mockDb.query.mockResolvedValue(
-          createMockCursor([{ _key: 'msg-1', content: 'Hello' }])
-        );
+        mockDb.query.mockResolvedValue(createMockCursor([{ _key: 'msg-1', content: 'Hello' }]));
         const result = await chatHistoryService.findMessagesForQuery('query-1');
         expect(result).toBeDefined();
         expect(Array.isArray(result)).toBe(true);
@@ -531,17 +507,13 @@ describe('ChatHistoryService', () => {
         if (name === 'queries') return mockQueriesColl;
         return createMockCollection();
       });
-      await expect(
-        chatHistoryService.createConversationFromQuery('missing', 'user-1')
-      ).rejects.toThrow();
+      await expect(chatHistoryService.createConversationFromQuery('missing', 'user-1')).rejects.toThrow();
     });
   });
 
   describe('getRecentConversations', () => {
     it('should return recent conversations for user', async () => {
-      mockDb.query.mockResolvedValue(
-        createMockCursor([{ _key: 'conv-1', title: 'Recent' }])
-      );
+      mockDb.query.mockResolvedValue(createMockCursor([{ _key: 'conv-1', title: 'Recent' }]));
       const result = await chatHistoryService.getRecentConversations('user-1', 5, 'user-1');
       expect(result).toBeDefined();
       expect(Array.isArray(result)).toBe(true);
@@ -550,9 +522,7 @@ describe('ChatHistoryService', () => {
 
   describe('getUserFolders', () => {
     it('should return user folders', async () => {
-      mockDb.query.mockResolvedValue(
-        createMockCursor([{ _key: 'folder-1', name: 'Folder 1' }])
-      );
+      mockDb.query.mockResolvedValue(createMockCursor([{ _key: 'folder-1', name: 'Folder 1' }]));
       const result = await chatHistoryService.getUserFolders('user-1');
       expect(result).toBeDefined();
       expect(Array.isArray(result)).toBe(true);

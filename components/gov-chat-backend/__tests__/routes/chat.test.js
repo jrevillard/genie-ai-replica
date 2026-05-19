@@ -63,16 +63,24 @@ jest.mock('../../services/chat-history-service', () => {
 jest.mock('../../services/query-service', () => ({}));
 
 // Mock swagger dependencies
-jest.mock('swagger-jsdoc', () => () => ({
-  openapi: '3.0.0',
-  info: {},
-  components: {},
-  security: []
-}), { virtual: true });
-jest.mock('swagger-ui-express', () => ({
-  serve: [],
-  setup: () => (req, res, next) => next()
-}), { virtual: true });
+jest.mock(
+  'swagger-jsdoc',
+  () => () => ({
+    openapi: '3.0.0',
+    info: {},
+    components: {},
+    security: []
+  }),
+  { virtual: true }
+);
+jest.mock(
+  'swagger-ui-express',
+  () => ({
+    serve: [],
+    setup: () => (req, res, next) => next()
+  }),
+  { virtual: true }
+);
 
 // Mock all other services loaded by index.js
 jest.mock('../../services/user-profile-service', () => ({}));
@@ -406,12 +414,9 @@ describe('POST /api/chat/conversations/:conversationId/messages (AC7, AC8)', () 
     expect(response.status).toBe(201);
     expect(chatHistoryService.db.collection).toHaveBeenCalledWith('queries');
     expect(mockDoc).toHaveBeenCalledWith('q-1');
-    expect(chatHistoryService.linkQueryToConversation).toHaveBeenCalledWith(
-      'q-1',
-      'conv-1',
-      'msg-2',
-      { responseType: 'primary' }
-    );
+    expect(chatHistoryService.linkQueryToConversation).toHaveBeenCalledWith('q-1', 'conv-1', 'msg-2', {
+      responseType: 'primary'
+    });
   });
 
   it('should skip query linking when queryId is invalid', async () => {
@@ -530,11 +535,7 @@ describe('GET /api/chat/recent', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(recentConversations);
-    expect(chatHistoryService.getRecentConversations).toHaveBeenCalledWith(
-      mockUser.iss_sub,
-      3,
-      mockUser._key
-    );
+    expect(chatHistoryService.getRecentConversations).toHaveBeenCalledWith(mockUser.iss_sub, 3, mockUser._key);
   });
 
   it('should use default limit when not provided', async () => {
@@ -542,11 +543,7 @@ describe('GET /api/chat/recent', () => {
 
     await authGet('/api/chat/recent');
 
-    expect(chatHistoryService.getRecentConversations).toHaveBeenCalledWith(
-      mockUser.iss_sub,
-      5,
-      mockUser._key
-    );
+    expect(chatHistoryService.getRecentConversations).toHaveBeenCalledWith(mockUser.iss_sub, 5, mockUser._key);
   });
 
   it('should return 400 when userId is missing', async () => {
@@ -580,10 +577,7 @@ describe('GET /api/chat/stats', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(stats);
-    expect(chatHistoryService.getUserConversationStats).toHaveBeenCalledWith(
-      mockUser.iss_sub,
-      mockUser._key
-    );
+    expect(chatHistoryService.getUserConversationStats).toHaveBeenCalledWith(mockUser.iss_sub, mockUser._key);
   });
 
   it('should return 400 when userId is missing', async () => {
@@ -607,9 +601,7 @@ describe('GET /api/chat/stats', () => {
 // ============================================================
 describe('GET /api/chat/query/:queryId/messages', () => {
   it('should return 200 with messages for a query', async () => {
-    const queryMessages = [
-      { message: sampleMessage, conversation: sampleConversation, responseType: 'primary' }
-    ];
+    const queryMessages = [{ message: sampleMessage, conversation: sampleConversation, responseType: 'primary' }];
     chatHistoryService.findMessagesForQuery.mockResolvedValue(queryMessages);
 
     const response = await authGet('/api/chat/query/q-1/messages');

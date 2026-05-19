@@ -108,7 +108,9 @@ class DsButton extends StatelessWidget {
         return _ButtonColors(bg: bg ?? t.accent, fg: fg ?? t.accentFg);
       case DsButtonVariant.secondary:
         return _ButtonColors(
-          bg: bg ?? (t.isDark ? const Color(0xFF3A3A3A) : const Color(0xFFE5E7EB)),
+          bg:
+              bg ??
+              (t.isDark ? const Color(0xFF3A3A3A) : const Color(0xFFE5E7EB)),
           fg: fg ?? t.fg,
           border: t.borderLight,
         );

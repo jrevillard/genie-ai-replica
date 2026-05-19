@@ -203,7 +203,8 @@ const Map<String, dynamic> deLocale = {
     "noInternetConnection": "Keine Internetverbindung",
     "networkUnreachable": "Netzwerk nicht erreichbar",
     "authenticationFailed": "Authentifizierung fehlgeschlagen",
-    "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
+    "sessionExpired":
+        "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -513,7 +514,8 @@ const Map<String, dynamic> deLocale = {
         "Dies löscht alle deine Profildaten und den Chatverlauf.",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "Konto löschen",
     "deleteAccountDesc":
         "Dies löscht dein Konto und alle zugehörigen Daten dauerhaft.",

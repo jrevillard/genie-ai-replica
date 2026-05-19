@@ -2,17 +2,21 @@
 
 require('../setup-env');
 
-jest.mock('../../shared-lib', () => ({
-  logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn()
-  },
-  dbService: { getConnection: jest.fn() },
-  securityHeaders: (req, res, next) => next(),
-  SecurityMiddleware: { applySecurityMiddleware: jest.fn() }
-}), { virtual: true });
+jest.mock(
+  '../../shared-lib',
+  () => ({
+    logger: {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn()
+    },
+    dbService: { getConnection: jest.fn() },
+    securityHeaders: (req, res, next) => next(),
+    SecurityMiddleware: { applySecurityMiddleware: jest.fn() }
+  }),
+  { virtual: true }
+);
 
 jest.mock('../../middleware/keycloak-auth-middleware', () => ({
   keycloakAuthMiddleware: { authenticate: (req, res, next) => next() }
@@ -41,9 +45,13 @@ jest.mock('../../services/weather-service', () => ({}));
 jest.mock('../../services/security-scan-service', () => ({}));
 jest.mock('../../services/translation-service', () => ({}));
 jest.mock('../../services/user-provisioning-service', () => ({ initialize: jest.fn() }));
-jest.mock('../../controllers/analyticsController', () => function () {
-  return {};
-});
+jest.mock(
+  '../../controllers/analyticsController',
+  () =>
+    function () {
+      return {};
+    }
+);
 
 const originalExit = process.exit;
 beforeAll(() => {

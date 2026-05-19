@@ -26,16 +26,24 @@ jest.mock('../../services/session-service', () => ({
 }));
 
 // Mock swagger dependencies
-jest.mock('swagger-jsdoc', () => () => ({
-  openapi: '3.0.0',
-  info: {},
-  components: {},
-  security: []
-}), { virtual: true });
-jest.mock('swagger-ui-express', () => ({
-  serve: [],
-  setup: () => (req, res, next) => next()
-}), { virtual: true });
+jest.mock(
+  'swagger-jsdoc',
+  () => () => ({
+    openapi: '3.0.0',
+    info: {},
+    components: {},
+    security: []
+  }),
+  { virtual: true }
+);
+jest.mock(
+  'swagger-ui-express',
+  () => ({
+    serve: [],
+    setup: () => (req, res, next) => next()
+  }),
+  { virtual: true }
+);
 
 // Mock all other services loaded by index.js
 jest.mock('../../services/user-profile-service', () => ({}));
@@ -119,9 +127,7 @@ describe('POST /api/auth/logout', () => {
         Object.assign(new Error('Token expired'), { code: 'TOKEN_EXPIRED' })
       );
 
-      const response = await request(app)
-        .post('/api/auth/logout')
-        .set('Authorization', `Bearer ${expiredToken}`);
+      const response = await request(app).post('/api/auth/logout').set('Authorization', `Bearer ${expiredToken}`);
 
       expect(response.status).toBe(401);
       expect(response.body).toEqual({
@@ -147,9 +153,7 @@ describe('POST /api/auth/logout', () => {
     });
 
     it('should return 401 TOKEN_INVALID when Authorization header is "Bearer" with no token', async () => {
-      const response = await request(app)
-        .post('/api/auth/logout')
-        .set('Authorization', 'Bearer ');
+      const response = await request(app).post('/api/auth/logout').set('Authorization', 'Bearer ');
 
       expect(response.status).toBe(401);
       expect(response.body.error).toBe('TOKEN_INVALID');
@@ -167,19 +171,17 @@ describe('POST /api/auth/logout', () => {
       sessionService.getUserSessions.mockResolvedValue(activeSessions);
       sessionService.endSession.mockResolvedValue({ _key: 'session-1', active: false });
 
-      const response = await request(app)
-        .post('/api/auth/logout')
-        .set('Authorization', `Bearer ${token}`);
+      const response = await request(app).post('/api/auth/logout').set('Authorization', `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
         success: true,
         message: 'Logged out successfully'
       });
-      expect(sessionService.getUserSessions).toHaveBeenCalledWith(
-        mockUser.iss_sub,
-        { legacyKey: mockUser._key, activeOnly: true }
-      );
+      expect(sessionService.getUserSessions).toHaveBeenCalledWith(mockUser.iss_sub, {
+        legacyKey: mockUser._key,
+        activeOnly: true
+      });
       expect(sessionService.endSession).toHaveBeenCalledTimes(2);
       expect(sessionService.endSession).toHaveBeenCalledWith('session-1');
       expect(sessionService.endSession).toHaveBeenCalledWith('session-2');
@@ -189,9 +191,7 @@ describe('POST /api/auth/logout', () => {
       const token = createValidToken();
       sessionService.getUserSessions.mockResolvedValue([]);
 
-      const response = await request(app)
-        .post('/api/auth/logout')
-        .set('Authorization', `Bearer ${token}`);
+      const response = await request(app).post('/api/auth/logout').set('Authorization', `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
@@ -206,9 +206,7 @@ describe('POST /api/auth/logout', () => {
       const token = createValidToken();
       sessionService.getUserSessions.mockResolvedValue([]);
 
-      await request(app)
-        .post('/api/auth/logout')
-        .set('Authorization', `Bearer ${token}`);
+      await request(app).post('/api/auth/logout').set('Authorization', `Bearer ${token}`);
 
       // Verify audit log was written (logger.info called with JSON containing event: 'logout')
       const infoCalls = logger.info.mock.calls;
@@ -237,18 +235,14 @@ describe('POST /api/auth/logout', () => {
       const token = createValidToken();
       sessionService.getUserSessions.mockRejectedValue(new Error('DB connection failed'));
 
-      const response = await request(app)
-        .post('/api/auth/logout')
-        .set('Authorization', `Bearer ${token}`);
+      const response = await request(app).post('/api/auth/logout').set('Authorization', `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
         success: true,
         message: 'Logged out successfully'
       });
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to end sessions on logout')
-      );
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to end sessions on logout'));
     });
 
     it('should return 200 when sessionService.endSession throws for a session', async () => {
@@ -257,9 +251,7 @@ describe('POST /api/auth/logout', () => {
       sessionService.getUserSessions.mockResolvedValue(activeSessions);
       sessionService.endSession.mockRejectedValue(new Error('Write failed'));
 
-      const response = await request(app)
-        .post('/api/auth/logout')
-        .set('Authorization', `Bearer ${token}`);
+      const response = await request(app).post('/api/auth/logout').set('Authorization', `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
@@ -267,9 +259,7 @@ describe('POST /api/auth/logout', () => {
         message: 'Logged out successfully'
       });
       // The error is caught inside the for-loop, logged as warning
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to end sessions on logout')
-      );
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Failed to end sessions on logout'));
     });
 
     it('should return 200 and skip session cleanup when userId is null', async () => {
@@ -279,9 +269,7 @@ describe('POST /api/auth/logout', () => {
         iss_sub: null
       });
 
-      const response = await request(app)
-        .post('/api/auth/logout')
-        .set('Authorization', `Bearer ${token}`);
+      const response = await request(app).post('/api/auth/logout').set('Authorization', `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({

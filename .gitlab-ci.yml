@@ -53,6 +53,7 @@ lint:backend:
     - cd components/gov-chat-backend && npm ci
   script:
     - npm run lint
+    - npm run format:check
   cache:
     key:
       files:
@@ -75,6 +76,7 @@ lint:frontend:
     - cd components/gov-chat-frontend && npm ci
   script:
     - npm run lint
+    - npm run format:check
   cache:
     key:
       files:
@@ -97,6 +99,7 @@ lint:doc-repo:
     - cd components/document-repository && npm ci
   script:
     - npm run lint
+    - npm run format:check
   cache:
     key:
       files:
@@ -138,6 +141,7 @@ lint:dart:
   script:
     - export PATH="$PWD/../../flutter-sdk/bin:$PATH"
     - flutter analyze
+    - dart format --set-exit-if-changed $(find . -name '*.dart' -not -path './openapi_client/*' -not -path './flutter_appauth/*')
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:

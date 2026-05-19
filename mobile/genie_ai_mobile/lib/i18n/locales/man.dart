@@ -510,7 +510,8 @@ const Map<String, dynamic> manLocale = {
         "Nyin be i la moo kumo ani kuma tariku biling kilin na.",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "Akawunto Kilin",
     "deleteAccountDesc": "Nyin be i la akawunto ani kumo biling kilin na fey.",
     "edit": "A ladang",

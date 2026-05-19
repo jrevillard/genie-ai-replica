@@ -3,17 +3,21 @@
 require('../setup-env');
 
 // Mock shared-lib — must include ALL exports used by index.js
-jest.mock('../../shared-lib', () => ({
-  logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn()
-  },
-  dbService: { getConnection: jest.fn() },
-  securityHeaders: (req, res, next) => next(),
-  SecurityMiddleware: { applySecurityMiddleware: jest.fn() }
-}), { virtual: true });
+jest.mock(
+  '../../shared-lib',
+  () => ({
+    logger: {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn()
+    },
+    dbService: { getConnection: jest.fn() },
+    securityHeaders: (req, res, next) => next(),
+    SecurityMiddleware: { applySecurityMiddleware: jest.fn() }
+  }),
+  { virtual: true }
+);
 
 jest.mock('../../middleware/keycloak-auth-middleware', () => ({
   keycloakAuthMiddleware: { authenticate: (req, res, next) => next() }
@@ -42,9 +46,13 @@ jest.mock('../../services/weather-service', () => ({}));
 jest.mock('../../services/security-scan-service', () => ({}));
 jest.mock('../../services/translation-service', () => ({}));
 jest.mock('../../services/user-provisioning-service', () => ({ initialize: jest.fn() }));
-jest.mock('../../controllers/analyticsController', () => function () {
-  return {};
-});
+jest.mock(
+  '../../controllers/analyticsController',
+  () =>
+    function () {
+      return {};
+    }
+);
 
 const originalExit = process.exit;
 beforeAll(() => {
@@ -174,17 +182,13 @@ describe('security middleware', () => {
     });
 
     it('should allow requests from allowed origin', async () => {
-      const res = await request(app)
-        .get('/')
-        .set('Origin', 'http://localhost:5173');
+      const res = await request(app).get('/').set('Origin', 'http://localhost:5173');
       expect(res.status).toBe(200);
       expect(res.headers['access-control-allow-origin']).toBe('http://localhost:5173');
     });
 
     it('should deny requests from disallowed origin', async () => {
-      const res = await request(app)
-        .get('/')
-        .set('Origin', 'http://evil.com');
+      const res = await request(app).get('/').set('Origin', 'http://evil.com');
       expect(res.headers['access-control-allow-origin']).toBeUndefined();
     });
 
@@ -200,9 +204,7 @@ describe('security middleware', () => {
       jest.isolateModules(() => {
         freshApp = require('../../index').createApp({ services: {} });
       });
-      const res = await request(freshApp)
-        .get('/')
-        .set('Origin', 'http://test.example.com');
+      const res = await request(freshApp).get('/').set('Origin', 'http://test.example.com');
       expect(res.status).toBe(200);
       expect(res.headers['access-control-allow-origin']).toBe('http://test.example.com');
     });

@@ -42,9 +42,10 @@ void main() {
       final content = await files.first.readAsString();
       expect(content, contains('level=WARN'));
       expect(content, contains('error_code=REFRESH_FAILED'));
-      expect(content, contains(
-        'keycloak_endpoint=https://keycloak.example.com/realms/genie',
-      ));
+      expect(
+        content,
+        contains('keycloak_endpoint=https://keycloak.example.com/realms/genie'),
+      );
       expect(content, contains('http_status=400'));
       expect(content, contains('network_reachable=true'));
       expect(content, contains('message="Invalid grant"'));
@@ -101,10 +102,7 @@ void main() {
 
   group('AuthLogger daily rotation', () {
     test('log filename includes current date', () async {
-      logger.logAuthEvent(
-        message: 'Test event',
-        source: 'Test',
-      );
+      logger.logAuthEvent(message: 'Test event', source: 'Test');
 
       await logger.flush();
 
@@ -118,19 +116,14 @@ void main() {
           .cast<File>()
           .toList();
       expect(files, hasLength(1));
-      expect(
-        files.first.path,
-        contains('auth_logs_$expectedDate.txt'),
-      );
+      expect(files.first.path, contains('auth_logs_$expectedDate.txt'));
     });
   });
 
   group('AuthLogger 30-day retention', () {
     test('deletes log files older than 30 days on first write', () async {
       // Create a log file dated 31 days ago
-      final oldDate = DateTime.now()
-          .toUtc()
-          .subtract(const Duration(days: 31));
+      final oldDate = DateTime.now().toUtc().subtract(const Duration(days: 31));
       final oldFilename =
           'auth_logs_${oldDate.year}-${oldDate.month.toString().padLeft(2, '0')}-${oldDate.day.toString().padLeft(2, '0')}.txt';
       final oldFile = File('${tempDir.path}/$oldFilename');
@@ -138,9 +131,9 @@ void main() {
       expect(await oldFile.exists(), isTrue);
 
       // Create a log file dated 29 days ago (should be kept)
-      final recentDate = DateTime.now()
-          .toUtc()
-          .subtract(const Duration(days: 29));
+      final recentDate = DateTime.now().toUtc().subtract(
+        const Duration(days: 29),
+      );
       final recentFilename =
           'auth_logs_${recentDate.year}-${recentDate.month.toString().padLeft(2, '0')}-${recentDate.day.toString().padLeft(2, '0')}.txt';
       final recentFile = File('${tempDir.path}/$recentFilename');
@@ -148,10 +141,7 @@ void main() {
       expect(await recentFile.exists(), isTrue);
 
       // Trigger first write which runs retention check
-      logger.logAuthEvent(
-        message: 'Retention test',
-        source: 'Test',
-      );
+      logger.logAuthEvent(message: 'Retention test', source: 'Test');
 
       await logger.flush();
 
@@ -217,10 +207,7 @@ void main() {
       try {
         final customLogger = AuthLogger(logDir: customDir);
 
-        customLogger.logAuthEvent(
-          message: 'Custom dir test',
-          source: 'Test',
-        );
+        customLogger.logAuthEvent(message: 'Custom dir test', source: 'Test');
 
         await customLogger.flush();
 
@@ -241,10 +228,7 @@ void main() {
 
       final nestedLogger = AuthLogger(logDir: nestedDir);
 
-      nestedLogger.logAuthEvent(
-        message: 'Nested dir test',
-        source: 'Test',
-      );
+      nestedLogger.logAuthEvent(message: 'Nested dir test', source: 'Test');
 
       await nestedLogger.flush();
 

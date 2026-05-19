@@ -36,20 +36,20 @@ class AuthState {
       'errorMessage: $errorMessage, retryable: $retryable)';
 
   const AuthState.authenticated({this.userId, this.displayName})
-      : status = AuthStatus.authenticated,
-        errorMessage = null,
-        retryable = false;
+    : status = AuthStatus.authenticated,
+      errorMessage = null,
+      retryable = false;
 
   const AuthState.unauthenticated()
-      : status = AuthStatus.unauthenticated,
-        userId = null,
-        displayName = null,
-        errorMessage = null,
-        retryable = false;
+    : status = AuthStatus.unauthenticated,
+      userId = null,
+      displayName = null,
+      errorMessage = null,
+      retryable = false;
 
   AuthState.error({required String message, this.retryable = false})
-      : status = AuthStatus.error,
-        userId = null,
-        displayName = null,
-        errorMessage = message;
+    : status = AuthStatus.error,
+      userId = null,
+      displayName = null,
+      errorMessage = message;
 }

@@ -32,10 +32,12 @@ class FakeConnectivityChecker implements ConnectivityChecker {
 /// [connectivityCheckerProvider] with it.
 final testProviderOverrides = [
   connectivityCheckerProvider.overrideWithValue(FakeConnectivityChecker()),
-  keycloakServiceProvider.overrideWithValue(KeycloakService(
-    keycloakConfig: e2eConfig,
-    httpClient: InsecureHttpClient(),
-  )),
+  keycloakServiceProvider.overrideWithValue(
+    KeycloakService(
+      keycloakConfig: e2eConfig,
+      httpClient: InsecureHttpClient(),
+    ),
+  ),
 ];
 
 /// TestApp wrapper — accepts an external [container] so tests can

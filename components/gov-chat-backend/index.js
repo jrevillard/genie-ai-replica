@@ -772,7 +772,8 @@ function createApp({ services = {} } = {}) {
   });
 
   // Error handling middleware
-  app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
+  app.use((err, req, res, next) => {
+    // eslint-disable-line no-unused-vars
     logger.error(`Error processing ${req.method} ${req.url}:`, {
       error: err.message || 'Unknown error',
       stack: err.stack || 'No stack trace',
@@ -874,9 +875,7 @@ function registerRoutes(app, services) {
 
     let routeInstance;
     try {
-      logger.debug(
-        `Instantiating route ${config.file} with service: ${service ? service.constructor.name : 'null'}`
-      );
+      logger.debug(`Instantiating route ${config.file} with service: ${service ? service.constructor.name : 'null'}`);
       if (config.file === 'analytics-routes') {
         const AnalyticsController = require('./controllers/analyticsController');
         const analyticsController = new AnalyticsController(service);

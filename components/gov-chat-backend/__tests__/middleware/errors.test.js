@@ -103,11 +103,7 @@ describe('middleware/errors', () => {
 
   describe('instanceof chain', () => {
     it('all subclasses should be instanceof Error and AppError', () => {
-      const errors = [
-        new NotFoundError(),
-        new ForbiddenError(),
-        new ValidationError()
-      ];
+      const errors = [new NotFoundError(), new ForbiddenError(), new ValidationError()];
       for (const err of errors) {
         expect(err).toBeInstanceOf(Error);
         expect(err).toBeInstanceOf(AppError);

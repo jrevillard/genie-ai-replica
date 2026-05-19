@@ -16,10 +16,7 @@ class DialogThemeUtils {
   }
 
   static TextStyle inputStyle() {
-    return TextStyle(
-      color: tokens.fg,
-      backgroundColor: tokens.surface,
-    );
+    return TextStyle(color: tokens.fg, backgroundColor: tokens.surface);
   }
 
   static Color overlayColor() => tokens.scrim;

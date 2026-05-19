@@ -115,7 +115,7 @@ export default {
                   callbacks.onError?.(new Error(data.message || 'Stream error'));
                   return;
               }
-            } catch (e) {
+            } catch {
               // Ignore JSON parse errors for non-data lines
             }
           }

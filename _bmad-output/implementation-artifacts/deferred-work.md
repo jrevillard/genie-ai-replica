@@ -21,23 +21,16 @@ Items deferred during code reviews. Revisit when the related component is next m
 
 ## Deferred from: code review of 2-4-test-backend-chat-route-handlers (2026-05-15)
 
-- db.collection mock pollution potentielle — `mockReturnValue` persiste après `clearAllMocks`. Pas de failure actuelle car les tests qui utilisent `db.collection` le redéfinissent.
-- Edge cases pagination (valeurs négatives, non-numériques) — `parseInt() || default` gère correctement les cas. Tests défensifs non critiques.
-- Test défaillance addMessage après createConversation — Le route n'a pas de rollback. Edge case d'error propagation pas dans les ACs.
-- AC2 : userId manquant pas testé sur toutes les routes — Bonne pratique défensive mais pas requis par l'AC2 qui cible GET /conversations.
-- AC6 : valeurs par défaut pagination pas testées — Comportement correct via `parseInt() || default`.
+- db.collection mock pollution potential — `mockReturnValue` persists after `clearAllMocks`. No actual failure because tests that use `db.collection` re-define it.
+- Edge cases pagination (negative values, non-numeric) — `parseInt() || default` handles these correctly. Defensive tests not critical.
+- Test failure addMessage after createConversation — The route has no rollback. Error propagation edge case not in ACs.
+- AC2: missing userId not tested on all routes — Good defensive practice but not required by AC2 which targets GET /conversations.
+- AC6: default pagination values not tested — Correct behavior via `parseInt() || default`.
 - **SECURITY**: `GET /query/:queryId/messages` has no userId validation — any authenticated user can access messages for any queryId. Pre-existing security gap, not introduced by this story. Route should validate ownership via `extractUserId(req)`.
 
-## Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)
+## Deferred from: code review of 4-2-test-retriever-hybrid-search-logic (2026-05-16)
 
 - Graph validation unreachable branch in source code — `has_vertex_collection` OR `has_edge_collection` check at line ~583-598 may allow a case where the collection is misconfigured and `db.collection()` raises an unhandled exception. Pre-existing source code issue, not introduced by the tests.
-- getMetric fallback quand service retourne null/undefined — le controller a un fallback pour null values, non testé. Scope controller, sera couvert par story 2.7.
-- Locale non testé sur satisfaction endpoints — le controller accepte un param locale sur gauge/heatmap mais les tests ne vérifient pas sa propagation. Nice-to-have hors AC.
-- Malformed JSON dans filters param — `JSON.parse(req.query.filters)` peut throw si le JSON est invalide. Edge case non couvert par AC4.
-- Pagination avec limit/offset non-numériques — `parseInt() || default` gère les cas non-numériques. Edge case au-delà du scope AC7.
-- Recherche avec query string vide — `?query=` vs query absent. AC14 couvre le cas sans query param.
-- categoryExists lance une erreur (DB failure) — si le service throw au lieu de retourner false, le route catch retourne 500. Edge case d'infrastructure.
-- DELETE service avec error code non-404 — le route check `error.code === 404`, les autres codes tombent dans le 500 générique. Edge case au-delà du scope AC16.
 
 ## Deferred from: code review of 4-3-test-dataprep-extraction-pipeline (2026-05-17)
 
@@ -48,6 +41,16 @@ Items deferred during code reviews. Revisit when the related component is next m
 - CancelledError propagation through concurrent batches — complex concurrency test
 - Synonym matching plural/singular — not in AC scope, only case-insensitive required
 - BM25 tokenization regex `r"\b\w+\b"` — inline regex mocked out in tests, would need extraction to test in isolation
+
+## Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)
+
+- getMetric fallback quand service retourne null/undefined — le controller a un fallback pour null values, non testé. Scope controller, sera couvert par story 2.7.
+- Locale non testé sur satisfaction endpoints — le controller accepte un param locale sur gauge/heatmap mais les tests ne vérifient pas sa propagation. Nice-to-have hors AC.
+- Malformed JSON dans filters param — `JSON.parse(req.query.filters)` peut throw si le JSON est invalide. Edge case non couvert par AC4.
+- Pagination avec limit/offset non-numériques — `parseInt() || default` gère les cas non-numériques. Edge case au-delà du scope AC7.
+- Recherche avec query string vide — `?query=` vs query absent. AC14 couvre le cas sans query param.
+- categoryExists lance une erreur (DB failure) — si le service throw au lieu de retourner false, le route catch retourne 500. Edge case d'infrastructure.
+- DELETE service avec error code non-404 — le route check `error.code === 404`, les autres codes tombent dans le 500 générique. Edge case au-delà du scope AC16.
 
 ## Deferred from: code review of 2-6-test-backend-admin-and-files-route-handlers (2026-05-18)
 

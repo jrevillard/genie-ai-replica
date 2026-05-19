@@ -191,6 +191,7 @@ describe('security middleware', () => {
     it('should allow requests with no origin (server-to-server)', async () => {
       const res = await request(app).get('/');
       expect(res.status).toBe(200);
+      expect(res.headers['access-control-allow-origin']).toBeUndefined();
     });
 
     it('should support regex patterns in allowlist', async () => {

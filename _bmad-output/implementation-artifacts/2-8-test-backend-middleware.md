@@ -316,6 +316,29 @@ Claude (claude-sonnet-4-6)
 - `components/gov-chat-backend/__tests__/middleware/security-middleware.test.js` — NEW (17 tests for sensitive paths, formatTimestamps, CORS, debug middleware)
 - `components/gov-chat-backend/__tests__/middleware/error-handler.test.js` — NEW (9 tests for error handler, 404 handler, env exposure)
 
+## Review Findings
+
+### Decision Needed
+
+- [ ] [Review][Decision] Error handler tests use standalone express apps instead of createApp() — error-handler.test.js creates isolated `express()` apps with inline error handlers that mimic index.js behavior, rather than testing the ACTUAL error handler at index.js:775 via `createApp()` + supertest. The dev notes say this was intentional due to the 3-param bug (Express doesn't recognize it as error middleware), but the spec says "test actual behavior." This means: (a) the tests verify expected logic, not actual middleware behavior, (b) if index.js error handler changes, tests won't catch regressions, (c) the 3-param bug is documented but not tested. Decision: accept current approach (inline handler tests verify correct logic patterns) or refactor to test actual handler via createApp()?
+
+### Patch
+
+- [ ] [Review][Patch] process.env.NODE_ENV mutation without guaranteed cleanup [error-handler.test.js:112-128] — Tests mutate NODE_ENV and restore in test body. If assertion throws before restore, env is polluted for subsequent tests. Wrap in try/finally or use afterEach cleanup.
+- [ ] [Review][Patch] CORS no-origin test doesn't validate CORS headers [security-middleware.test.js:195-199] — Test only asserts `res.status).toBe(200)` but never checks `access-control-allow-origin` header. Should assert it's undefined (server-to-server requests don't get CORS headers).
+- [ ] [Review][Patch] Missing assertion that stack traces aren't exposed in error responses [error-handler.test.js] — Error exposure tests verify `error` message field but don't check that `stack` is never leaked in responses. Add `expect(res.body.stack).toBeUndefined()` to both dev/prod tests.
+
+### Deferred
+
+- [x] [Review][Defer] formatTimestamps copied function desync risk [security-middleware.test.js:54-76] — deferred, spec-acknowledged tradeoff. Function not exported; copying is accepted approach. Risk: production changes won't be caught.
+- [x] [Review][Defer] CORS incomplete testing (OPTIONS preflight, credentials, other headers) [security-middleware.test.js] — deferred, enhancement scope. AC2 only requires "allowlist, regex patterns, no-origin."
+- [x] [Review][Defer] Source code robustness issues (null/undefined error handling, circular refs in JSON.stringify, headersSent check, async error safety, statusCode validation) [index.js:775-794] — deferred, pre-existing. These are production code improvements, not test issues.
+- [x] [Review][Defer] CORS allowlist empty string handling and regex validation [index.js:401-436] — deferred, pre-existing. Source code doesn't filter empty strings from `split(',')` or validate regex patterns.
+- [x] [Review][Defer] Weak timestamp boundary tests (9999999999 vs 10000000000) [security-middleware.test.js:149-154] — deferred, nice-to-have. Current tests cover the key cases adequately.
+- [x] [Review][Defer] Inconsistent test isolation patterns across 3 files [error-handler.test.js] — deferred, tied to decision-needed #1. If error-handler tests switch to createApp(), this is resolved.
+- [x] [Review][Defer] Error handler logging verification doesn't match actual handler format [error-handler.test.js:197-211] — deferred, tied to decision-needed #1. Actual handler logs errorType, ip, userAgent, rawError but test only checks error and stack.
+
 ## Change Log
 
 - 2026-05-18: Story 2.8 implementation complete — 43 middleware tests added, all ACs satisfied
+- 2026-05-19: Code review — 1 decision-needed, 3 patches, 7 deferred, 6 dismissed

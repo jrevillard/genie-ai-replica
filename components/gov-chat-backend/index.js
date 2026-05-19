@@ -772,7 +772,7 @@ function createApp({ services = {} } = {}) {
   });
 
   // Error handling middleware
-  app.use((err, req, res) => {
+  app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
     logger.error(`Error processing ${req.method} ${req.url}:`, {
       error: err.message || 'Unknown error',
       stack: err.stack || 'No stack trace',

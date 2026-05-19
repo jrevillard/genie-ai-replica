@@ -31,7 +31,7 @@ variables:
         - mobile/genie_ai_mobile/.dart_tool/
         - .pub-cache/
   before_script:
-    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git
+    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git xz-utils
     - |
       if [ ! -d "flutter-sdk/bin" ]; then
         echo "Installing Flutter ${FLUTTER_VERSION}..."

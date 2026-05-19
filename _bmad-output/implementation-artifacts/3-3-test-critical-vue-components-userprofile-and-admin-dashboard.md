@@ -1,6 +1,6 @@
 # Story 3.3: Test Critical Vue Components — UserProfile and Admin Dashboard
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -26,28 +26,28 @@ so that profile management and admin functionality are validated.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create UserProfileComponent test file (AC: #1–3)
-  - [ ] 1.1 Create `src/__tests__/components/UserProfileComponent.test.js`
-  - [ ] 1.2 Implement mount helper with all required mock providers (i18n, services, router, notificationService)
-  - [ ] 1.3 Test: renders profile data after loading (AC1)
-  - [ ] 1.4 Test: form fields are editable (AC2)
-  - [ ] 1.5 Test: save triggers API call with form data (AC3)
-  - [ ] 1.6 Test: loading state displayed while fetching profile
-  - [ ] 1.7 Test: error state displayed with retry option
-  - [ ] 1.8 Test: cancel button navigates back
-- [ ] Task 2: Create AdminDashboard test file (AC: #4–6)
-  - [ ] 2.1 Create `src/__tests__/components/AdminDashboard.test.js`
-  - [ ] 2.2 Implement mount helper with Vuex store, i18n, and all service mocks
-  - [ ] 2.3 Test: renders main dashboard structure without errors (AC4)
-  - [ ] 2.4 Test: accesses auth state from Vuex store (AC5)
-  - [ ] 2.5 Test: tab navigation switches active tab (AC6)
-  - [ ] 2.6 Test: overview tab renders system health content (AC6)
-  - [ ] 2.7 Test: users tab renders user management UI (AC6)
-  - [ ] 2.8 Test: loading state displayed during data fetch
-- [ ] Task 3: Verify and lint (AC: #7)
-  - [ ] 3.0 Run `npm test` in `components/gov-chat-frontend/` before any changes to confirm existing tests pass as baseline
-  - [ ] 3.1 All tests pass with `npm test` in `components/gov-chat-frontend/`
-  - [ ] 3.2 All test files pass ESLint (`npm run lint`)
+- [x] Task 1: Create UserProfileComponent test file (AC: #1–3)
+  - [x] 1.1 Create `src/__tests__/components/UserProfileComponent.test.js`
+  - [x] 1.2 Implement mount helper with all required mock providers (i18n, services, router, notificationService)
+  - [x] 1.3 Test: renders profile data after loading (AC1)
+  - [x] 1.4 Test: form fields are editable (AC2)
+  - [x] 1.5 Test: save triggers API call with form data (AC3)
+  - [x] 1.6 Test: loading state displayed while fetching profile
+  - [x] 1.7 Test: error state displayed with retry option
+  - [x] 1.8 Test: cancel button navigates back
+- [x] Task 2: Create AdminDashboard test file (AC: #4–6)
+  - [x] 2.1 Create `src/__tests__/components/AdminDashboard.test.js`
+  - [x] 2.2 Implement mount helper with Vuex store, i18n, and all service mocks
+  - [x] 2.3 Test: renders main dashboard structure without errors (AC4)
+  - [x] 2.4 Test: accesses auth state from Vuex store (AC5)
+  - [x] 2.5 Test: tab navigation switches active tab (AC6)
+  - [x] 2.6 Test: overview tab renders system health content (AC6)
+  - [x] 2.7 Test: users tab renders user management UI (AC6)
+  - [x] 2.8 Test: loading state displayed during data fetch
+- [x] Task 3: Verify and lint (AC: #7)
+  - [x] 3.0 Run `npm test` in `components/gov-chat-frontend/` before any changes to confirm existing tests pass as baseline
+  - [x] 3.1 All tests pass with `npm test` in `components/gov-chat-frontend/`
+  - [x] 3.2 All test files pass ESLint (`npm run lint`)
 
 ## Dev Notes
 
@@ -356,10 +356,24 @@ Imports `{ themeManager }` from `@/utils/ThemeManager`. Mock with `{ getCurrentT
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude (glm-5-turbo)
 
 ### Debug Log References
 
+- UserProfileComponent getProfile mock initially used deferred Promise pattern which caused timeout on confirmSave tests — switched updateProfile to mockResolvedValue while keeping getProfile deferred for loading/error tests
+
 ### Completion Notes List
 
+- 22 UserProfileComponent tests: AC1 (profile data display), AC2 (form editing), AC3 (save flow with API call, success/error notifications, navigation), loading state, error+retry, cancel navigation, tab structure
+- 20 AdminDashboard tests: AC4 (mount without errors, default tabs, loadInitialData), AC5 (Vuex auth state, unauthenticated resilience), AC6 (tab navigation, data loading per tab, overview health metrics, users tab), loading state, lifecycle cleanup, keycloakAdminUrl computed
+- All 254 tests pass (212 existing + 42 new), zero regressions
+- ESLint passes on all new files
+- Used closure-based mock pattern, deferred Promise for getProfile (loading/error), immediate mockResolvedValue for updateProfile and admin service calls
+- AdminDashboard searchUsers uses userSearchResults (not userStats.users) — corrected during red phase
+
 ### File List
+
+- `components/gov-chat-frontend/src/__tests__/components/UserProfileComponent.test.js` — NEW (22 tests)
+- `components/gov-chat-frontend/src/__tests__/components/AdminDashboard.test.js` — NEW (20 tests)
+- `_bmad-output/implementation-artifacts/3-3-test-critical-vue-components-userprofile-and-admin-dashboard.md` — MODIFIED (tasks checked, dev record updated)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — MODIFIED (status: in-progress)

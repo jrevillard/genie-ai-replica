@@ -1072,8 +1072,13 @@ class ChatQnAService:
         self.megaservice.flow_to(rerank, llm)
 
     @staticmethod
-    def _build_translategemma_prompt(text: str, source_lang_code: str, target_lang_code: str,
-                                      source_lang_name: str = "English", target_lang_name: str = "English") -> str:
+    def _build_translategemma_prompt(
+        text: str,
+        source_lang_code: str,
+        target_lang_code: str,
+        source_lang_name: str = "English",
+        target_lang_name: str = "English",
+    ) -> str:
         """Build a prompt for TranslateGemma using the completions API.
 
         Duplicated in document-translation/genieai_pdf_translator.py — keep in sync.
@@ -1135,7 +1140,6 @@ class ChatQnAService:
             current_chars += message_chars
         messages_to_process.reverse()
 
-
         flattened_history_parts = []
         for message in messages_to_process:
             role = message.get("role", "unknown").upper()
@@ -1153,14 +1157,14 @@ class ChatQnAService:
                 source_lang_code=source_lang_code,
                 target_lang_code="en",
                 source_lang_name=source_lang_code.upper(),
-                target_lang_name="English"
+                target_lang_name="English",
             )
             payload = {
                 "model": TRANSLATION_MODEL_ID,
                 "prompt": prompt,
                 "temperature": 0.0,
                 "max_tokens": min(max(len(flattened_history_string) // 2, 512), 4096),
-                "repetition_penalty": 1.2
+                "repetition_penalty": 1.2,
             }
             url = TRANSLATION_COMPLETIONS_URL
         else:
@@ -1169,11 +1173,7 @@ class ChatQnAService:
                 f"Preserve the role markers (e.g., 'USER:', 'ASSISTANT:')."
                 f"\n\nHISTORY:\n{flattened_history_string}"
             )
-            payload = {
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0,
-                "stream": False
-            }
+            payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0, "stream": False}
             url = TRANSLATION_LLM_URL
 
         if logflag:
@@ -1261,21 +1261,21 @@ class ChatQnAService:
                 source_lang_code=source_lang_code,
                 target_lang_code=target_lang_code,
                 source_lang_name=source_lang_code.upper(),
-                target_lang_name=target_lang
+                target_lang_name=target_lang,
             )
             payload = {
                 "model": TRANSLATION_MODEL_ID,
                 "prompt": prompt,
                 "temperature": 0.0,
                 "max_tokens": min(max(len(text) // 2, 512), 4096),
-                "repetition_penalty": 1.2
+                "repetition_penalty": 1.2,
             }
             url = TRANSLATION_COMPLETIONS_URL
         else:
             language_notes = {
                 "Sesotho": "NOTE: Sesotho is spoken in Lesotho and South Africa. It is NOT Afrikaans.",
                 "Bengali": "NOTE: Bengali is spoken in Bangladesh and India. It is NOT Hindi.",
-                "Mandinka": "NOTE: Mandinka is spoken in West Africa (Gambia, Senegal, Mali)."
+                "Mandinka": "NOTE: Mandinka is spoken in West Africa (Gambia, Senegal, Mali).",
             }
             note = language_notes.get(target_lang, "")
             if iso_code:
@@ -1291,11 +1291,7 @@ class ChatQnAService:
                     f"{note} Only output the translated text."
                     f"\n\nText: {text}\n\nTranslation:"
                 )
-            payload = {
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0,
-                "stream": False
-            }
+            payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0, "stream": False}
             url = TRANSLATION_LLM_URL
 
         if logflag:
@@ -1330,9 +1326,7 @@ class ChatQnAService:
         # Translate chunks concurrently
         translated_chunks = await asyncio.gather(
             *[
-                self._translate_text_chunk(
-                    chunk, target_lang, iso_code, source_lang_code=source_lang_code
-                )
+                self._translate_text_chunk(chunk, target_lang, iso_code, source_lang_code=source_lang_code)
                 for chunk in chunks
             ]
         )
@@ -1487,8 +1481,7 @@ class ChatQnAService:
                     f"Original language detected: {original_language}. Proceeding with translation of chat history."
                 )
             translated_history_string = await self._get_translated_history_string(
-                full_chat_history, "English",
-                source_lang_code=original_language.lower()
+                full_chat_history, "English", source_lang_code=original_language.lower()
             )
         else:
             # If already English, flatten without translation

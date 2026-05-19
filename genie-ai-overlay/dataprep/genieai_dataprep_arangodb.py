@@ -104,18 +104,20 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     def _log_environment_variables(self):
         """Debug: Print all critical environment variables at startup."""
-        logger.debug(f"GENIE-AI DATAPREP CONFIGURATION: "
-                     f"DOC_REPO={DOCUMENT_REPOSITORY_URL}, "
-                     f"BACKEND={BACKEND_SERVICE_URL}, "
-                     f"GUARDRAIL={GUARDRAIL_ENABLED} ({GUARDRAIL_URL}), "
-                     f"LABELING={LABELING_STRATEGY}, "
-                     f"EMBED_THRESHOLD={EMBEDDING_LABEL_THRESHOLD}, "
-                     f"BM25_THRESHOLD={BM25_LABEL_THRESHOLD}, "
-                     f"EXTRACTION={CONTENT_EXTRACTION_METHOD}, "
-                     f"LLM={os.getenv('VLLM_ENDPOINT')}, "
-                     f"ARANGO_DB={os.getenv('ARANGO_DB')}, "
-                     f"PROMPT_LEN={len(LABEL_SELECTOR_SYSTEM_PROMPT)}, "
-                     f"BATCHES={MAX_CONCURRENT_BATCHES}")
+        logger.debug(
+            f"GENIE-AI DATAPREP CONFIGURATION: "
+            f"DOC_REPO={DOCUMENT_REPOSITORY_URL}, "
+            f"BACKEND={BACKEND_SERVICE_URL}, "
+            f"GUARDRAIL={GUARDRAIL_ENABLED} ({GUARDRAIL_URL}), "
+            f"LABELING={LABELING_STRATEGY}, "
+            f"EMBED_THRESHOLD={EMBEDDING_LABEL_THRESHOLD}, "
+            f"BM25_THRESHOLD={BM25_LABEL_THRESHOLD}, "
+            f"EXTRACTION={CONTENT_EXTRACTION_METHOD}, "
+            f"LLM={os.getenv('VLLM_ENDPOINT')}, "
+            f"ARANGO_DB={os.getenv('ARANGO_DB')}, "
+            f"PROMPT_LEN={len(LABEL_SELECTOR_SYSTEM_PROMPT)}, "
+            f"BATCHES={MAX_CONCURRENT_BATCHES}"
+        )
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
 
@@ -300,10 +302,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         model = os.getenv("VLLM_MODEL_ID")
 
         # Debug: Log what is sent to LLM
-        logger.debug(f"LLM LABELING INPUTS: "
-                     f"taxonomy ({len(all_labels)} labels): {all_labels}, "
-                     f"file_labels: {file_labels}, "
-                     f"system_prompt ({len(LABEL_SELECTOR_SYSTEM_PROMPT)} chars)")
+        logger.debug(
+            f"LLM LABELING INPUTS: "
+            f"taxonomy ({len(all_labels)} labels): {all_labels}, "
+            f"file_labels: {file_labels}, "
+            f"system_prompt ({len(LABEL_SELECTOR_SYSTEM_PROMPT)} chars)"
+        )
 
         # Parallel Processing with Semaphore
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)  # Reuse same concurrency limit or define a new one

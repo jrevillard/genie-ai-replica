@@ -30,9 +30,7 @@ sys.modules.setdefault("comps.dataprep.src", MagicMock())
 sys.modules.setdefault("comps.dataprep.src.genieai_dataprep_utils", MagicMock())
 sys.modules.setdefault("comps.dataprep.src.integrations", MagicMock())
 _arangodb_dp_module = MagicMock()
-_arangodb_dp_module.OpeaArangoDataprep = type(
-    "OpeaArangoDataprep", (), {"__init__": lambda self, *a, **kw: None}
-)
+_arangodb_dp_module.OpeaArangoDataprep = type("OpeaArangoDataprep", (), {"__init__": lambda self, *a, **kw: None})
 sys.modules.setdefault("comps.dataprep.src.integrations.arangodb", _arangodb_dp_module)
 sys.modules.setdefault("comps.dataprep.src.utils", MagicMock())
 
@@ -43,9 +41,7 @@ from pydantic import BaseModel as _PydanticBaseModel  # noqa: F401, I001 – nee
 
 _api_protocol_mock = MagicMock()
 _api_protocol_mock.RetrievalRequest = type("RetrievalRequest", (), {"__init__": lambda self, **kw: None})
-_api_protocol_mock.ArangoDBDataprepRequest = type(
-    "ArangoDBDataprepRequest", (), {"__init__": lambda self, **kw: None}
-)
+_api_protocol_mock.ArangoDBDataprepRequest = type("ArangoDBDataprepRequest", (), {"__init__": lambda self, **kw: None})
 # Types used only in annotations — use dict so Pydantic can handle Union with dict
 _api_protocol_mock.ResponseFormat = dict
 _api_protocol_mock.StreamOptions = dict
@@ -57,6 +53,7 @@ _api_protocol_mock.EmbeddingResponse = dict
 _api_protocol_mock.UploadFile = dict
 # Re-export typing names that api_protocol brings in
 from typing import Any as _Any, Union as _Union, Literal as _Literal  # noqa: I001 – must come after sys.modules mocks
+
 _api_protocol_mock.Any = _Any
 _api_protocol_mock.Union = _Union
 _api_protocol_mock.Literal = _Literal
@@ -116,9 +113,7 @@ sys.modules.setdefault("kneed", _kneed_mock)
 
 _integrations_mock = MagicMock()
 _integrations_tei_module = MagicMock()
-_integrations_tei_module.OpeaTEIReranking = type(
-    "OpeaTEIReranking", (), {"__init__": lambda self, *a, **kw: None}
-)
+_integrations_tei_module.OpeaTEIReranking = type("OpeaTEIReranking", (), {"__init__": lambda self, *a, **kw: None})
 sys.modules.setdefault("integrations", _integrations_mock)
 sys.modules.setdefault("integrations.tei", _integrations_tei_module)
 

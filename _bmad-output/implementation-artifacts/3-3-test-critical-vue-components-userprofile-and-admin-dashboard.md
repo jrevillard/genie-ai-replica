@@ -1,6 +1,6 @@
 # Story 3.3: Test Critical Vue Components — UserProfile and Admin Dashboard
 
-Status: review
+Status: done
 
 ## Story
 
@@ -377,3 +377,11 @@ Claude (glm-5-turbo)
 - `components/gov-chat-frontend/src/__tests__/components/AdminDashboard.test.js` — NEW (20 tests)
 - `_bmad-output/implementation-artifacts/3-3-test-critical-vue-components-userprofile-and-admin-dashboard.md` — MODIFIED (tasks checked, dev record updated)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — MODIFIED (status: in-progress)
+
+### Review Findings
+
+- [x] [Review][Patch] AdminDashboard `resourceUsage` assertion too weak — test checks `length > 0` but should verify the transformed array structure (e.g. `{ id, label, value }` items) to catch regressions in `Object.keys().map()` transformation [AdminDashboard.test.js:~394] — FIXED: assertion now checks full transformed array
+- [x] [Review][Patch] `getUserStats` mock uses wrong field names — mock has `{ sub, name }` but backend returns `{ _key, loginName, fullName }`. While tests don't render user rows, the mock data should match real response shape for accuracy [AdminDashboard.test.js:~32-38] — FIXED: mock data now uses `_key`, `loginName`, `fullName`, `roles`
+- [x] [Review][Defer] Deferred promise + setTimeout(300) not awaited — UserProfileComponent.loadUserProfileData has nested $nextTick + setTimeout(300) for country dropdown; tests never await this, but country dropdown is explicitly out of scope per spec — deferred, pre-existing
+- [x] [Review][Defer] SearchableCountryDropdown stub methods never called — stub defines manuallySetCountryName but the setTimeout(300) prevents it from being called during tests; country dropdown interaction is out of scope per spec — deferred, pre-existing
+- [x] [Review][Defer] AdminDashboard missing error handling edge cases — tests only cover happy path for service responses; null/malformed response handling not tested but beyond current AC scope — deferred, pre-existing

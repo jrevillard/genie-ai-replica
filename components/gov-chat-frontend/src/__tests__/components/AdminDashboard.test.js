@@ -30,8 +30,8 @@ const mockGetUserStats = jest.fn().mockResolvedValue({
   activeUsers: 42,
   newUsers: 12,
   users: [
-    { sub: 'user-1', name: 'User One', email: 'one@test.com' },
-    { sub: 'user-2', name: 'User Two', email: 'two@test.com' }
+    { _key: 'user-1', loginName: 'user1', fullName: 'User One', email: 'one@test.com', roles: [] },
+    { _key: 'user-2', loginName: 'user2', fullName: 'User Two', email: 'two@test.com', roles: [] }
   ]
 });
 
@@ -51,8 +51,8 @@ const mockSearchLogs = jest.fn().mockResolvedValue([]);
 const mockSearchUsers = jest.fn().mockResolvedValue({
   data: {
     users: [
-      { sub: 'user-1', name: 'User One', email: 'one@test.com' },
-      { sub: 'user-2', name: 'User Two', email: 'two@test.com' }
+      { _key: 'user-1', loginName: 'user1', fullName: 'User One', email: 'one@test.com', roles: [] },
+      { _key: 'user-2', loginName: 'user2', fullName: 'User Two', email: 'two@test.com', roles: [] }
     ],
     total: 2
   }
@@ -391,7 +391,12 @@ describe('AdminDashboard', () => {
       await wrapper.vm.$nextTick();
       await wrapper.vm.$nextTick();
 
-      expect(wrapper.vm.resourceUsage.length).toBeGreaterThan(0);
+      expect(wrapper.vm.resourceUsage).toEqual([
+        { id: 'cpu', label: expect.any(String), value: 42 },
+        { id: 'memory', label: expect.any(String), value: 78 },
+        { id: 'storage', label: expect.any(String), value: 92 },
+        { id: 'network', label: expect.any(String), value: 35 }
+      ]);
     });
   });
 

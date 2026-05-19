@@ -204,6 +204,8 @@ export default {
 
     handleThemeChange(event) {
       const newTheme = event?.detail?.theme ?? event;
+      if (this._isApplyingTheme) return;
+      this._isApplyingTheme = true;
       this.theme = newTheme;
       try {
         localStorage.setItem('theme', newTheme);
@@ -217,6 +219,7 @@ export default {
         window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', this.systemThemeListener);
         this.systemThemeListener = null;
       }
+      this._isApplyingTheme = false;
     },
 
     // --- REPLACED YOUR loadFoldersOnAuth METHOD WITH THIS ---

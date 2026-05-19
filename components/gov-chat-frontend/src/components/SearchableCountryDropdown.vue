@@ -3,7 +3,7 @@
     <label v-if="label">{{ label }}</label>
     <DsCombobox
       ref="combobox"
-      :model-value="value"
+      :model-value="modelValue"
       :options="sortedCountries"
       option-label="name"
       option-value="code"
@@ -15,7 +15,7 @@
     <div v-if="debug" class="debug-info">
       <p>
         <strong>Debug:</strong>
-        value: {{ value }}, selectedOption: {{ selectedOption }}
+        value: {{ modelValue }}, selectedOption: {{ selectedOption }}
       </p>
       <p>Countries loaded: {{ allCountries.length }}</p>
       <p>Last update: {{ debugInfo.lastUpdated }}</p>
@@ -32,7 +32,7 @@ export default {
     DsCombobox
   },
   props: {
-    value: {
+    modelValue: {
       type: String,
       default: ''
     },
@@ -57,7 +57,7 @@ export default {
       default: false
     }
   },
-  emits: ['update:name', 'input', 'change'],
+  emits: ['update:modelValue', 'update:name', 'input', 'change'],
   data() {
     return {
       selectedOption: '',
@@ -90,16 +90,16 @@ export default {
   },
   computed: {
     displayCode() {
-      if (!this.value) return '';
-      const countryName = this.getCountryNameByCode(this.value);
-      return countryName || this.value;
+      if (!this.modelValue) return '';
+      const countryName = this.getCountryNameByCode(this.modelValue);
+      return countryName || this.modelValue;
     },
     sortedCountries() {
       return [...this.allCountries];
     }
   },
   watch: {
-    value: {
+    modelValue: {
       handler(newVal, oldVal) {
         this.debugInfo.valueHistory.push(`value changed: ${oldVal} -> ${newVal}`);
 
@@ -126,27 +126,27 @@ export default {
         });
 
         // Try to update selected option if we have a value
-        if (this.value) {
+        if (this.modelValue) {
           this.$nextTick(() => {
-            this.manuallySetCountryName(this.value);
+            this.manuallySetCountryName(this.modelValue);
           });
         }
       }
     }
   },
   created() {
-    this.debugInfo.valueHistory.push(`created: ${this.value}`);
+    this.debugInfo.valueHistory.push(`created: ${this.modelValue}`);
 
     // Load countries first
     this.loadCountries();
   },
   mounted() {
-    this.debugInfo.valueHistory.push(`mounted: ${this.value}`);
+    this.debugInfo.valueHistory.push(`mounted: ${this.modelValue}`);
 
     // Set initial value after mounting
-    if (this.value) {
+    if (this.modelValue) {
       this.$nextTick(() => {
-        this.manuallySetCountryName(this.value);
+        this.manuallySetCountryName(this.modelValue);
       });
     }
 
@@ -182,9 +182,9 @@ export default {
                 }
               });
 
-              if (containsSelf && this.value) {
+              if (containsSelf && this.modelValue) {
                 this.$nextTick(() => {
-                  this.manuallySetCountryName(this.value);
+                  this.manuallySetCountryName(this.modelValue);
                 });
               }
             }
@@ -282,7 +282,7 @@ export default {
     handleSelect(code) {
       const name = this.getCountryNameByCode(code);
       this.selectedOption = name;
-      this.$emit('input', code);
+      this.$emit('update:modelValue', code);
       this.$emit('update:name', name);
       this.$emit('change', code);
     },

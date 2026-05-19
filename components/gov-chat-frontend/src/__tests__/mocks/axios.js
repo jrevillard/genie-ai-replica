@@ -63,10 +63,10 @@ function setSuccessResponse(method, data = {}) {
  */
 function setErrorResponse(method, status, data = {}) {
   const errorData = typeof data === 'string' ? { message: data } : data;
-  method.mockRejectedValue({
-    response: { status, data: errorData },
-    message: 'Request failed with status code ' + status
-  });
+  const error = new Error('Request failed with status code ' + status);
+  error.response = { status, data: errorData };
+  error.isAxiosError = true;
+  method.mockRejectedValue(error);
 }
 
 /**
@@ -78,6 +78,8 @@ function resetAxiosMock() {
   mockAxiosPut.mockReset();
   mockAxiosDelete.mockReset();
   mockAxiosPatch.mockReset();
+  mockRequestUse.mockReset();
+  mockResponseUse.mockReset();
   capturedRequestHandlers.length = 0;
   capturedResponseHandlers.length = 0;
 

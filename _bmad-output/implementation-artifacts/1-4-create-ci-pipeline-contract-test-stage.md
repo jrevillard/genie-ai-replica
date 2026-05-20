@@ -1,6 +1,6 @@
 # Story 1.4: Create CI Pipeline Contract Test Stage
 
-Status: review
+Status: done
 
 ## Story
 

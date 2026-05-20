@@ -11,7 +11,8 @@ module.exports = {
     '/node_modules/(?!oidc-client-ts)'
   ],
   moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1'
+    '^@/(.*)$': '<rootDir>/src/$1',
+    '^@vue/test-utils$': '<rootDir>/node_modules/@vue/test-utils/dist/vue-test-utils.cjs.js'
   },
   setupFiles: ['<rootDir>/src/__tests__/setup.js'],
   reporters: [

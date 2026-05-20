@@ -18,6 +18,11 @@
             "type": "command",
             "command": "FILE=$(jq -r '.tool_input.file_path // .tool_response.filePath') && if echo \"$FILE\" | grep -qE '\\.dart$'; then cd mobile/genie_ai_mobile && dart analyze \"$FILE\" 2>&1 || true; fi",
             "timeout": 60
+          },
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path // .tool_response.filePath') && if echo \"$FILE\" | grep -qE '\\.(js|ts|vue|mjs|cjs)$'; then DIR=$(dirname \"$FILE\") && while [ \"$DIR\" != \"/\" ] && [ ! -f \"$DIR/node_modules/.package-lock.json\" ]; do DIR=$(dirname \"$DIR\"); done && if [ -f \"$DIR/node_modules/.package-lock.json\" ]; then npx prettier --check \"$FILE\" 2>&1 || true; fi; fi",
+            "timeout": 15
           }
         ]
       }

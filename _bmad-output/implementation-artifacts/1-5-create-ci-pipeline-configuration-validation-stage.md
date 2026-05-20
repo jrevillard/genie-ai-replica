@@ -33,8 +33,9 @@ so that configuration drift and missing variables are caught automatically.
   - [ ] Export functions: `parseEnvTemplate(filePath)`, `getRequiredSecrets(parsed)`, `getOptionalVars(parsed)`
 
 - [ ] Task 3: Create `tests/config-validator/validators/parse-compose.js` — docker-compose cross-reference (AC: #2, #4)
-  - [ ] Parse `docker-compose.yaml` extracting all `${VAR}` and `${VAR:-default}` references
-  - [ ] Extract variable name and default value (if any) from each reference
+  - [ ] **IMPORTANT:** `docker-compose.yaml` contains `${VAR:-default}` shell substitution which is NOT valid YAML. Do NOT attempt to parse with js-yaml for variable extraction. Use **regex pattern matching** on raw file content: `/\$\{([A-Z_]+)(?::-([^}]*))?\}/g` to extract variable names and defaults.
+  - [ ] Optionally use `js-yaml` for structure-aware parsing (which services reference which vars) after variable extraction.
+  - [ ] Extract variable name and default value (if any) from each `${VAR}` or `${VAR:-default}` reference
   - [ ] Cross-reference compose vars against env template: flag vars in compose but not in env (orphaned), vars in env but not in compose (undocumented usage)
   - [ ] Validate that defaults in docker-compose match defaults in env template
   - [ ] Export functions: `parseComposeEnvVars(filePath)`, `crossReference(composeVars, envVars)`
@@ -49,10 +50,8 @@ so that configuration drift and missing variables are caught automatically.
 - [ ] Task 5: Create `tests/config-validator/validators/validate-hardware.js` — GPU profile range checks (AC: #4)
   - [ ] Parse `env.t4` and `env.rtx6000` GPU profile files
   - [ ] Define valid ranges for GPU parameters:
-    - `VLLM_GPU_UTILIZATION`: 0.1–0.95
-    - `VLLM_MAX_MODEL_LEN`: 512–8192
-    - `VLLM_MAX_NUM_SEQS`: 1–2048
-    - `VLLM_DTYPE`: one of [half, auto, float16, bfloat16]
+    - **Main LLM:** `VLLM_GPU_UTILIZATION`: 0.1–0.95, `VLLM_MAX_MODEL_LEN`: 512–8192, `VLLM_MAX_NUM_SEQS`: 1–2048, `VLLM_DTYPE`: [half, auto, float16, bfloat16]
+    - **Translation LLM:** `VLLM_TRANSLATION_GPU_UTILIZATION`: 0.1–0.95, `VLLM_TRANSLATION_MAX_MODEL_LEN`: 512–8192, `VLLM_TRANSLATION_MAX_NUM_SEQS`: 1–2048, `VLLM_TRANSLATION_DTYPE`: [half, auto, float16, bfloat16]
   - [ ] Validate GPU profile values fall within ranges
   - [ ] Validate T4 (16GB VRAM) uses conservative settings vs RTX6000 (24GB) uses aggressive settings
   - [ ] Export functions: `validateHardwareProfile(profilePath, profileName)`
@@ -76,10 +75,11 @@ so that configuration drift and missing variables are caught automatically.
   - [ ] `cache`: keyed on `tests/config-validator/package-lock.json` with prefix `config-validate`
   - [ ] `artifacts:reports:junit`: collect `tests/config-validator/reports/jest-config.xml`
   - [ ] `artifacts:when: always` and `expire_in: 7 days`
-  - [ ] `rules:changes`: trigger on `env`, `env.*`, `docker-compose.yaml`, `tests/config-validator/**/*`, `.gitlab-ci.yml` + main branch rule
+  - [ ] `rules:changes`: trigger on `env`, `env.*`, `docker-compose.yaml`, `tests/config-validator/**/*`, `tests/fixtures/config/**/*`, `.gitlab-ci.yml` + main branch rule
   - [ ] Verify stage order: `lint → test → contract → config → e2e`
 
 - [ ] Task 8: Validate end-to-end (AC: all)
+  - [ ] Run `cd tests/config-validator && npm install` locally first to generate `package-lock.json` (CI uses `npm ci` which requires lockfile)
   - [ ] Run `cd tests/config-validator && npm test` locally — all tests pass
   - [ ] Verify JUnit XML is produced at `tests/config-validator/reports/jest-config.xml`
   - [ ] Verify `.gitlab-ci.yml` stages order is correct
@@ -141,8 +141,9 @@ Per [Source: _bmad-output/planning-artifacts/architecture.md], the approach is a
 - **CommonJS only** — use `require()`/`module.exports`, NEVER ES imports [Source: _bmad-output/project-context.md]
 - **Jest** for test runner with `jest-junit` reporter (already configured in other components)
 - **ESLint 10 + Prettier 3** — run `npm run lint` and `npm run format:check` before completing
-- **No external YAML parser** — use a lightweight approach. Prefer `js-yaml` (common in Node.js ecosystem) or parse docker-compose YAML with minimal deps
-- The `env` file uses `KEY=VALUE` format with comments — parse with a simple line-by-line parser (no dotenv needed, this is validation not loading)
+- **No external YAML parser for variable extraction** — `docker-compose.yaml` uses `${VAR:-default}` shell syntax which is NOT valid YAML. Use regex on raw file content (`/\$\{([A-Z_]+)(?::-([^}]*))?\}/g`) to extract variable references. `js-yaml` is optional for structure-aware parsing only.
+- The `env` file uses `KEY=VALUE` format with comments — parse with a simple line-by-line parser (no dotenv needed, this is validation not loading). Handle edge cases: empty-value secrets (`ARANGO_PASSWORD=`), values with spaces/commas (`KONG_ADMIN_LISTEN:-0.0.0.0:8001, 0.0.0.0:8444 ssl`), section headers (`# ========= Section N =========`)
+- **Root package.json workspace integration** — Check if root `package.json` uses npm workspaces. If yes, add `tests/config-validator` to the workspaces array so `npm run lint` and `npm run format` from root cover the config-validator files. If not, ensure local lint/format scripts are in `tests/config-validator/package.json`.
 
 ### File Structure
 
@@ -189,6 +190,20 @@ tests/
 - When `DEPLOY_OPEA=0`: OPEA-related vars (`VLLM_*`, `TEI_*`, `EMBEDDING_*`, `RERANKER_*`, `RETRIEVER_*`, `CHATQNA_*`, etc.) are not required
 - When `DEPLOY_OPEA=1`: all OPEA service vars must be present with valid defaults
 - GPU profile files should only override GPU-specific vars, not service topology vars
+
+**Complete OPEA service topology (controlled by `DEPLOY_OPEA`):**
+| Service Name in docker-compose | Key Env Vars |
+|-------------------------------|-------------|
+| `vllm` | `VLLM_LLM_MODEL_ID`, `VLLM_GPU_UTILIZATION`, `VLLM_MAX_MODEL_LEN`, `VLLM_DTYPE` |
+| `vllm-translation-guardrail` | `VLLM_TRANSLATION_MODEL_ID`, `VLLM_TRANSLATION_GPU_UTILIZATION`, `VLLM_TRANSLATION_MAX_MODEL_LEN` |
+| `tei-embedding-server` | `TEI_EMBEDDING_IMAGE`, `EMBEDDING_MODEL_ID`, `TEI_EMBEDDING_PORT` |
+| `embedding-server` | `EMBEDDING_MODEL_ID`, `EMBEDDING_SERVER_ENDPOINT` |
+| `tei-reranking-server` | `TEI_RERANKING_IMAGE`, `RERANKER_MODEL_ID`, `TEI_RERANKING_MAX_BATCH_TOKENS` |
+| `reranking-server` | `RERANKING_STRATEGY`, `RERANKING_THRESHOLD` |
+| `retriever` | `RETRIEVER_ARANGO_*` (8+ vars), `ARANGO_URL`, `ARANGO_DB` |
+| `dataprep` | `CONTENT_EXTRACTION_METHOD`, `DOCLING_DEVICE`, `DATAPREP_CHUNK_SIZE_*`, `LABELING_STRATEGY` |
+| `chatqna-xeon-backend-server` | `CHATQNA_TYPE`, `CHATQNA_SYSTEM_PROMPT`, `CHATQNA_ENFORCE_ABSTENTION` |
+| `translation` | `VLLM_TRANSLATION_SERVICE_PORT`, `TRANSLATION_CACHE` |
 
 **AC #7 — Performance (<2 minutes):**
 - The validators run file I/O only (no network, no Docker)

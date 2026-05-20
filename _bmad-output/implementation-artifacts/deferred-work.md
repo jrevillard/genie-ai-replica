@@ -8,3 +8,9 @@
 - Deferred promise + setTimeout(300) not awaited — UserProfileComponent.loadUserProfileData has nested $nextTick + setTimeout(300) for country dropdown initialization; tests never await this, but country dropdown interaction is explicitly out of scope per spec "What NOT to Test" section. Revisit if country dropdown tests are added.
 - SearchableCountryDropdown stub methods never called — stub defines manuallySetCountryName/loadCountries methods but setTimeout(300) prevents invocation during tests; country dropdown interaction is explicitly out of scope per spec. Revisit if country dropdown tests are added.
 - AdminDashboard missing error handling edge cases — tests only cover happy path for service responses; null/malformed/missing response handling not tested but beyond current AC scope. Nice-to-have for future hardening.
+
+## Deferred from: code review of 3-4-test-vuex-store-modules (2026-05-20)
+
+- UPDATE_CHAT: chaîne vide traitée comme "pas de changement" — le code source utilise `title || state.chats[chatIndex].title` qui traite `''` comme falsy. Comportement du code source, pas des tests. Pre-existing.
+- Persistence plugin dupliqué au lieu d'être importé — `persistence.test.js` réplique la logique du plugin au lieu d'importer depuis `store/index.js`. Approche délibérée pour isolation; duplication fidèle au source. Pre-existing design choice.
+- Edge cases manquants (null inputs, IDs dupliqués, quota localStorage) — amélioration de couverture future, pas bloquant pour cette story.

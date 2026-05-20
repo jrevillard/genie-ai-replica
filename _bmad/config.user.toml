@@ -10,5 +10,8 @@
 # ─────────────────────────────────────────────────────────────────
 
 [core]
-user_name = "Jerome"
+user_name = "Genie.ai Dev"
 communication_language = "English"
+
+[modules.bmm]
+user_skill_level = "intermediate"

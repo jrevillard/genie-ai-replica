@@ -1,19 +1,53 @@
 installation:
   version: 6.7.1
   installDate: 2026-04-26T21:02:35.766Z
-  lastUpdated: 2026-05-20T09:49:37.218Z
+  lastUpdated: 2026-05-20T11:11:05.461Z
 modules:
   - name: core
     version: 6.7.1
     installDate: 2026-04-26T21:02:35.007Z
-    lastUpdated: 2026-05-20T09:49:37.213Z
+    lastUpdated: 2026-05-20T11:11:05.452Z
     source: built-in
     npmPackage: null
     repoUrl: null
+  - name: bmm
+    version: 6.7.1
+    installDate: 2026-05-20T11:11:05.186Z
+    lastUpdated: 2026-05-20T11:11:05.453Z
+    source: built-in
+    npmPackage: null
+    repoUrl: null
+  - name: tea
+    version: v1.19.0
+    installDate: 2026-05-20T11:11:05.265Z
+    lastUpdated: 2026-05-20T11:11:05.455Z
+    source: external
+    npmPackage: bmad-method-test-architecture-enterprise
+    repoUrl: https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise
+    channel: stable
+    sha: 8734d51f24071ddbcb3617390b5fcddb4128ef77
+  - name: cis
+    version: v0.2.1
+    installDate: 2026-05-20T11:11:05.276Z
+    lastUpdated: 2026-05-20T11:11:05.457Z
+    source: external
+    npmPackage: bmad-creative-intelligence-suite
+    repoUrl: https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite
+    channel: stable
+    sha: 07a8dd03d196a762f21c241d985293fe5b0f90e7
+  - name: wds
+    version: v0.4.3
+    installDate: 2026-05-20T11:11:05.348Z
+    lastUpdated: 2026-05-20T11:11:05.458Z
+    source: external
+    npmPackage: bmad-wds
+    repoUrl: https://github.com/bmad-code-org/bmad-method-wds-expansion
+    channel: stable
+    sha: cc16f09fcfab26d35635af1491f36a38a8431c8d
   - name: bmad-issue-tracking
     version: main
     installDate: 2026-05-13T06:37:29.616Z
-    lastUpdated: 2026-05-20T09:49:37.218Z
+    lastUpdated: 2026-05-20T11:11:05.461Z
     source: custom
     npmPackage: null
     repoUrl: https://github.com/jrevillard/bmad-issue-tracking

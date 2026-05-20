@@ -1,6 +1,6 @@
 # Story 3.4: Test Vuex Store Modules
 
-Status: review
+Status: done
 
 ## Story
 
@@ -375,3 +375,11 @@ Claude Sonnet 4.6 (claude-sonnet-4-6)
 |------|--------|
 | `components/gov-chat-frontend/src/__tests__/store/chatHistory.test.js` | Created — 58 tests for chatHistory Vuex module (AC1-6) |
 | `components/gov-chat-frontend/src/__tests__/store/persistence.test.js` | Created — 6 tests for localStorage persistence plugin (AC8) |
+
+### Review Findings
+
+- [x] [Review][Patch] Test "non-chatHistory mutations" ne déclenche aucune mutation — le test s'intitule "should NOT trigger persistence on non-chatHistory mutations" mais ne commit jamais de mutation non-chatHistory. Il enregistre un subscriber qui n'est jamais déclenché. Fix: ajouter `store.commit('someOtherMutation', {})` pour tester le chemin. [`persistence.test.js:104-119`]
+- [x] [Review][Patch] Test "invalid JSON" ne vérifie pas l'état résultant du store — vérifie seulement que `createTestStore()` ne lance pas d'erreur. Fix: ajouter assertion `expect(store.state.chatHistory.folders).toHaveLength(1)`. [`persistence.test.js:139-143`]
+- [x] [Review][Defer] UPDATE_CHAT: chaîne vide traitée comme "pas de changement" (source code `||` falsy) — comportement du code source, pas des tests [`chatHistoryStore.js:101-102`] — deferred, pre-existing
+- [x] [Review][Defer] Persistence plugin dupliqué au lieu d'être importé — approche délibérée pour isolation; duplication fidèle au source [`persistence.test.js:21-52`] — deferred, pre-existing
+- [x] [Review][Defer] Edge cases manquants (null inputs, IDs dupliqués, quota localStorage) — amélioration de couverture future — deferred, pre-existing

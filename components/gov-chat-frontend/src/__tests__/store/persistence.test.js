@@ -104,18 +104,14 @@ describe('Store persistence plugin (AC8)', () => {
   it('should NOT trigger persistence on non-chatHistory mutations', () => {
     const store = createTestStore();
 
-    // No chatHistory mutations committed — localStorage should remain empty
-    expect(localStorage.getItem('chatHistory')).toBeNull();
+    // Pre-populate localStorage to verify it stays unchanged
+    localStorage.setItem('chatHistory', JSON.stringify({ folders: [], chats: [], folderChats: {} }));
+    const before = localStorage.getItem('chatHistory');
 
-    // Trigger a non-chatHistory mutation via a root-level commit
-    // The store has no matching mutation, so it's a no-op, but the subscriber still fires
-    // Use a mutation that does NOT start with 'chatHistory/'
-    store.subscribe((mutation) => {
-      // Verify our test assumption: only chatHistory/* triggers persistence
-      if (!mutation.type.startsWith('chatHistory/')) {
-        expect(localStorage.getItem('chatHistory')).toBeNull();
-      }
-    });
+    // Commit a non-chatHistory mutation — subscriber fires but persistence is skipped
+    store.commit('auth/setToken', 'dummy-token');
+
+    expect(localStorage.getItem('chatHistory')).toBe(before);
   });
 
   it('should restore state from localStorage on store creation', () => {
@@ -139,7 +135,9 @@ describe('Store persistence plugin (AC8)', () => {
   it('should handle invalid localStorage data gracefully', () => {
     localStorage.setItem('chatHistory', 'not-valid-json');
 
-    expect(() => createTestStore()).not.toThrow();
+    const store = createTestStore();
+    expect(store.state.chatHistory.folders).toHaveLength(1);
+    expect(store.state.chatHistory.folders[0].id).toBe('default');
   });
 
   it('should handle missing localStorage data gracefully', () => {

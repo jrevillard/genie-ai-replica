@@ -1,3 +1,11 @@
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "web"
+
 stages:
   - lint
   - test
@@ -52,6 +60,9 @@ variables:
       paths:
         - mobile/genie_ai_mobile/.dart_tool/
         - .pub-cache/
+      fallback_keys:
+        - "flutter-deps-$CI_DEFAULT_BRANCH"
+        - "flutter-deps-"
   before_script:
     - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git xz-utils
     - |
@@ -77,12 +88,15 @@ lint:backend:
     - npm run lint
     - npm run format:check
   cache:
-    key:
-      files:
-        - components/gov-chat-backend/package-lock.json
-      prefix: lint-backend
-    paths:
-      - components/gov-chat-backend/node_modules/
+    - key:
+        files:
+          - components/gov-chat-backend/package-lock.json
+        prefix: lint-backend
+      paths:
+        - components/gov-chat-backend/node_modules/
+      fallback_keys:
+        - "lint-backend-$CI_DEFAULT_BRANCH"
+        - "lint-backend-"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -100,12 +114,15 @@ lint:frontend:
     - npm run lint
     - npm run format:check
   cache:
-    key:
-      files:
-        - components/gov-chat-frontend/package-lock.json
-      prefix: lint-frontend
-    paths:
-      - components/gov-chat-frontend/node_modules/
+    - key:
+        files:
+          - components/gov-chat-frontend/package-lock.json
+        prefix: lint-frontend
+      paths:
+        - components/gov-chat-frontend/node_modules/
+      fallback_keys:
+        - "lint-frontend-$CI_DEFAULT_BRANCH"
+        - "lint-frontend-"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -123,12 +140,15 @@ lint:doc-repo:
     - npm run lint
     - npm run format:check
   cache:
-    key:
-      files:
-        - components/document-repository/package-lock.json
-      prefix: lint-doc-repo
-    paths:
-      - components/document-repository/node_modules/
+    - key:
+        files:
+          - components/document-repository/package-lock.json
+        prefix: lint-doc-repo
+      paths:
+        - components/document-repository/node_modules/
+      fallback_keys:
+        - "lint-doc-repo-$CI_DEFAULT_BRANCH"
+        - "lint-doc-repo-"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -143,7 +163,13 @@ lint:python:
   stage: lint
   interruptible: true
   before_script:
-    - pip install ruff
+    - pip install --cache-dir .cache/pip ruff
+  cache:
+    - key: lint-python-ruff
+      paths:
+        - .cache/pip/
+      fallback_keys:
+        - lint-python-
   script:
     - ruff check genie-ai-overlay/
     - ruff format --check genie-ai-overlay/
@@ -183,12 +209,15 @@ test:backend:
     - npm test -- --coverage --coverageReporters=text-summary
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   cache:
-    key:
-      files:
-        - components/gov-chat-backend/package-lock.json
-      prefix: test-backend
-    paths:
-      - components/gov-chat-backend/node_modules/
+    - key:
+        files:
+          - components/gov-chat-backend/package-lock.json
+        prefix: test-backend
+      paths:
+        - components/gov-chat-backend/node_modules/
+      fallback_keys:
+        - "test-backend-$CI_DEFAULT_BRANCH"
+        - "test-backend-"
   artifacts:
     reports:
       junit: components/gov-chat-backend/reports/jest-backend.xml
@@ -209,12 +238,15 @@ test:frontend:
     - npm test -- --coverage --coverageReporters=text-summary
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   cache:
-    key:
-      files:
-        - components/gov-chat-frontend/package-lock.json
-      prefix: test-frontend
-    paths:
-      - components/gov-chat-frontend/node_modules/
+    - key:
+        files:
+          - components/gov-chat-frontend/package-lock.json
+        prefix: test-frontend
+      paths:
+        - components/gov-chat-frontend/node_modules/
+      fallback_keys:
+        - "test-frontend-$CI_DEFAULT_BRANCH"
+        - "test-frontend-"
   artifacts:
     reports:
       junit: components/gov-chat-frontend/reports/jest-frontend.xml
@@ -235,12 +267,15 @@ test:doc-repo:
     - npm test -- --coverageReporters=text-summary
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   cache:
-    key:
-      files:
-        - components/document-repository/package-lock.json
-      prefix: test-doc-repo
-    paths:
-      - components/document-repository/node_modules/
+    - key:
+        files:
+          - components/document-repository/package-lock.json
+        prefix: test-doc-repo
+      paths:
+        - components/document-repository/node_modules/
+      fallback_keys:
+        - "test-doc-repo-$CI_DEFAULT_BRANCH"
+        - "test-doc-repo-"
   artifacts:
     reports:
       junit: components/document-repository/reports/jest-docrepo.xml
@@ -264,12 +299,15 @@ contract:backend:
   script:
     - npm run test:contract
   cache:
-    key:
-      files:
-        - components/gov-chat-backend/package-lock.json
-      prefix: contract-backend
-    paths:
-      - components/gov-chat-backend/node_modules/
+    - key:
+        files:
+          - components/gov-chat-backend/package-lock.json
+        prefix: contract-backend
+      paths:
+        - components/gov-chat-backend/node_modules/
+      fallback_keys:
+        - "contract-backend-$CI_DEFAULT_BRANCH"
+        - "contract-backend-"
   artifacts:
     reports:
       junit: components/gov-chat-backend/reports/jest-contract-backend.xml
@@ -291,12 +329,15 @@ contract:doc-repo:
   script:
     - npm run test:contract
   cache:
-    key:
-      files:
-        - components/document-repository/package-lock.json
-      prefix: contract-doc-repo
-    paths:
-      - components/document-repository/node_modules/
+    - key:
+        files:
+          - components/document-repository/package-lock.json
+        prefix: contract-doc-repo
+      paths:
+        - components/document-repository/node_modules/
+      fallback_keys:
+        - "contract-doc-repo-$CI_DEFAULT_BRANCH"
+        - "contract-doc-repo-"
   artifacts:
     reports:
       junit: components/document-repository/reports/jest-contract-docrepo.xml
@@ -324,12 +365,15 @@ test:python:
     - pytest --junitxml=reports/pytest-report.xml --cov --cov-report=term
   coverage: '/^TOTAL\s+\S+\s+\S+\s+(\d+)%/'
   cache:
-    key:
-      files:
-        - genie-ai-overlay/pyproject.toml
-      prefix: test-python
-    paths:
-      - genie-ai-overlay/.venv/
+    - key:
+        files:
+          - genie-ai-overlay/pyproject.toml
+        prefix: test-python
+      paths:
+        - genie-ai-overlay/.venv/
+      fallback_keys:
+        - "test-python-$CI_DEFAULT_BRANCH"
+        - "test-python-"
   artifacts:
     when: always
     expire_in: 7 days
@@ -424,12 +468,15 @@ config:validate:
   script:
     - npm test
   cache:
-    key:
-      files:
-        - tests/config-validator/package-lock.json
-      prefix: config-validate
-    paths:
-      - tests/config-validator/node_modules/
+    - key:
+        files:
+          - tests/config-validator/package-lock.json
+        prefix: config-validate
+      paths:
+        - tests/config-validator/node_modules/
+      fallback_keys:
+        - "config-validate-$CI_DEFAULT_BRANCH"
+        - "config-validate-"
   artifacts:
     when: always
     expire_in: 7 days

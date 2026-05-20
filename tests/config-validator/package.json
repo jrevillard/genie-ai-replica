@@ -1,0 +1,20 @@
+{
+  "name": "genie-ai-config-validator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Configuration validation suite for GENIE.AI CI pipeline",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^9.0.0",
+    "jest": "^29.7.0",
+    "jest-junit": "^16.0.0",
+    "prettier": "^3.0.0"
+  }
+}

@@ -1,6 +1,6 @@
 # Story 1.5: Create CI Pipeline Configuration Validation Stage
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -20,71 +20,71 @@ so that configuration drift and missing variables are caught automatically.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create `tests/config-validator/` suite structure (AC: #1)
-  - [ ] Create `tests/config-validator/package.json` with Jest and dependencies
-  - [ ] Create `tests/config-validator/jest.config.js` with JUnit reporter (reuse pattern from story 1-1)
-  - [ ] Ensure `reports/` output is covered by root `.gitignore` (added in story 1-1)
+- [x] Task 1: Create `tests/config-validator/` suite structure (AC: #1)
+  - [x] Create `tests/config-validator/package.json` with Jest and dependencies
+  - [x] Create `tests/config-validator/jest.config.js` with JUnit reporter (reuse pattern from story 1-1)
+  - [x] Ensure `reports/` output is covered by root `.gitignore` (added in story 1-1)
 
-- [ ] Task 2: Create `tests/config-validator/validators/parse-env.js` — env template parser (AC: #2, #3)
-  - [ ] Parse the `env` file (root, no extension) extracting all variable names, defaults, and sections
-  - [ ] Distinguish required secrets (no default value, or empty default) from optional variables (with defaults)
-  - [ ] Handle comment-based section headers (e.g., `# ========= Section 1 =========`)
-  - [ ] Handle inline comments documenting variables
-  - [ ] Export functions: `parseEnvTemplate(filePath)`, `getRequiredSecrets(parsed)`, `getOptionalVars(parsed)`
+- [x] Task 2: Create `tests/config-validator/validators/parse-env.js` — env template parser (AC: #2, #3)
+  - [x] Parse the `env` file (root, no extension) extracting all variable names, defaults, and sections
+  - [x] Distinguish required secrets (no default value, or empty default) from optional variables (with defaults)
+  - [x] Handle comment-based section headers (e.g., `# ========= Section 1 =========`)
+  - [x] Handle inline comments documenting variables
+  - [x] Export functions: `parseEnvTemplate(filePath)`, `getRequiredSecrets(parsed)`, `getOptionalVars(parsed)`
 
-- [ ] Task 3: Create `tests/config-validator/validators/parse-compose.js` — docker-compose cross-reference (AC: #2, #4)
-  - [ ] **IMPORTANT:** `docker-compose.yaml` contains `${VAR:-default}` shell substitution which is NOT valid YAML. Do NOT attempt to parse with js-yaml for variable extraction. Use **regex pattern matching** on raw file content: `/\$\{([A-Z_]+)(?::-([^}]*))?\}/g` to extract variable names and defaults.
-  - [ ] Optionally use `js-yaml` for structure-aware parsing (which services reference which vars) after variable extraction.
-  - [ ] Extract variable name and default value (if any) from each `${VAR}` or `${VAR:-default}` reference
-  - [ ] Cross-reference compose vars against env template: flag vars in compose but not in env (orphaned), vars in env but not in compose (undocumented usage)
-  - [ ] Validate that defaults in docker-compose match defaults in env template
-  - [ ] Export functions: `parseComposeEnvVars(filePath)`, `crossReference(composeVars, envVars)`
+- [x] Task 3: Create `tests/config-validator/validators/parse-compose.js` — docker-compose cross-reference (AC: #2, #4)
+  - [x] **IMPORTANT:** `docker-compose.yaml` contains `${VAR:-default}` shell substitution which is NOT valid YAML. Do NOT attempt to parse with js-yaml for variable extraction. Use **regex pattern matching** on raw file content: `/\$\{([A-Z_]+)(?::-([^}]*))?\}/g` to extract variable names and defaults.
+  - [x] Optionally use `js-yaml` for structure-aware parsing (which services reference which vars) after variable extraction.
+  - [x] Extract variable name and default value (if any) from each `${VAR}` or `${VAR:-default}` reference
+  - [x] Cross-reference compose vars against env template: flag vars in compose but not in env (orphaned), vars in env but not in compose (undocumented usage)
+  - [x] Validate that defaults in docker-compose match defaults in env template
+  - [x] Export functions: `parseComposeEnvVars(filePath)`, `crossReference(composeVars, envVars)`
 
-- [ ] Task 4: Create `tests/config-validator/validators/validate-features.js` — feature flag interdependency validator (AC: #5)
-  - [ ] Define feature flag dependency map: `DEPLOY_OPEA` controls 13+ services (vllm, tei-embedding, embedding, retriever, reranker, chatqna, dataprep, translation, etc.)
-  - [ ] Validate that when `DEPLOY_OPEA=0`, OPEA-related env vars are not required
-  - [ ] Validate that when `DEPLOY_OPEA=1`, all OPEA service env vars are present
-  - [ ] Check that GPU profile env files override correct variables
-  - [ ] Export functions: `validateFeatureFlags(envVars, featureMap)`
+- [x] Task 4: Create `tests/config-validator/validators/validate-features.js` — feature flag interdependency validator (AC: #5)
+  - [x] Define feature flag dependency map: `DEPLOY_OPEA` controls 13+ services (vllm, tei-embedding, embedding, retriever, reranker, chatqna, dataprep, translation, etc.)
+  - [x] Validate that when `DEPLOY_OPEA=0`, OPEA-related env vars are not required
+  - [x] Validate that when `DEPLOY_OPEA=1`, all OPEA service env vars are present
+  - [x] Check that GPU profile env files override correct variables
+  - [x] Export functions: `validateFeatureFlags(envVars, featureMap)`
 
-- [ ] Task 5: Create `tests/config-validator/validators/validate-hardware.js` — GPU profile range checks (AC: #4)
-  - [ ] Parse `env.t4` and `env.rtx6000` GPU profile files
-  - [ ] Define valid ranges for GPU parameters:
+- [x] Task 5: Create `tests/config-validator/validators/validate-hardware.js` — GPU profile range checks (AC: #4)
+  - [x] Parse `env.t4` and `env.rtx6000` GPU profile files
+  - [x] Define valid ranges for GPU parameters:
     - **Main LLM:** `VLLM_GPU_UTILIZATION`: 0.1–0.95, `VLLM_MAX_MODEL_LEN`: 512–8192, `VLLM_MAX_NUM_SEQS`: 1–2048, `VLLM_DTYPE`: [half, auto, float16, bfloat16]
     - **Translation LLM:** `VLLM_TRANSLATION_GPU_UTILIZATION`: 0.1–0.95, `VLLM_TRANSLATION_MAX_MODEL_LEN`: 512–8192, `VLLM_TRANSLATION_MAX_NUM_SEQS`: 1–2048, `VLLM_TRANSLATION_DTYPE`: [half, auto, float16, bfloat16]
-  - [ ] Validate GPU profile values fall within ranges
-  - [ ] Validate T4 (16GB VRAM) uses conservative settings vs RTX6000 (24GB) uses aggressive settings
-  - [ ] Export functions: `validateHardwareProfile(profilePath, profileName)`
+  - [x] Validate GPU profile values fall within ranges
+  - [x] Validate T4 (16GB VRAM) uses conservative settings vs RTX6000 (24GB) uses aggressive settings
+  - [x] Export functions: `validateHardwareProfile(profilePath, profileName)`
 
-- [ ] Task 6: Create `tests/config-validator/__tests__/config-validation.test.js` — Jest test suite (AC: #1–#6)
-  - [ ] Test: all docker-compose env vars are documented in env template (AC #2)
-  - [ ] Test: required secrets have no undefined defaults (AC #3)
-  - [ ] Test: no orphaned or conflicting configurations (AC #4)
-  - [ ] Test: DEPLOY_OPEA feature flag interdependencies (AC #5)
-  - [ ] Test: GPU profile parameters within valid ranges (AC #4)
-  - [ ] Test: GPU profile defaults in docker-compose match valid ranges
-  - [ ] All tests produce JUnit XML via jest-junit reporter (AC #6)
+- [x] Task 6: Create `tests/config-validator/__tests__/config-validation.test.js` — Jest test suite (AC: #1–#6)
+  - [x] Test: all docker-compose env vars are documented in env template (AC #2)
+  - [x] Test: required secrets have no undefined defaults (AC #3)
+  - [x] Test: no orphaned or conflicting configurations (AC #4)
+  - [x] Test: DEPLOY_OPEA feature flag interdependencies (AC #5)
+  - [x] Test: GPU profile parameters within valid ranges (AC #4)
+  - [x] Test: GPU profile defaults in docker-compose match valid ranges
+  - [x] All tests produce JUnit XML via jest-junit reporter (AC #6)
 
-- [ ] Task 7: Add `config` stage and CI job to `.gitlab-ci.yml` (AC: #1, #6, #7)
-  - [ ] Add `contract` stage before `config` if not already present (depends on story 1-4)
-  - [ ] Add `config` stage after `contract` in stages list
-  - [ ] Create `config:validate` job extending `.node_base`
-  - [ ] Set `stage: config`
-  - [ ] `before_script`: `cd tests/config-validator && npm ci`
-  - [ ] `script`: `npm test`
-  - [ ] `cache`: keyed on `tests/config-validator/package-lock.json` with prefix `config-validate`
-  - [ ] `artifacts:reports:junit`: collect `tests/config-validator/reports/jest-config.xml`
-  - [ ] `artifacts:when: always` and `expire_in: 7 days`
-  - [ ] `rules:changes`: trigger on `env`, `env.*`, `docker-compose.yaml`, `tests/config-validator/**/*`, `tests/fixtures/config/**/*`, `.gitlab-ci.yml` + main branch rule
-  - [ ] Verify stage order: `lint → test → contract → config → e2e`
+- [x] Task 7: Add `config` stage and CI job to `.gitlab-ci.yml` (AC: #1, #6, #7)
+  - [x] Add `contract` stage before `config` if not already present (depends on story 1-4)
+  - [x] Add `config` stage after `contract` in stages list
+  - [x] Create `config:validate` job extending `.node_base`
+  - [x] Set `stage: config`
+  - [x] `before_script`: `cd tests/config-validator && npm ci`
+  - [x] `script`: `npm test`
+  - [x] `cache`: keyed on `tests/config-validator/package-lock.json` with prefix `config-validate`
+  - [x] `artifacts:reports:junit`: collect `tests/config-validator/reports/jest-config.xml`
+  - [x] `artifacts:when: always` and `expire_in: 7 days`
+  - [x] `rules:changes`: trigger on `env`, `env.*`, `docker-compose.yaml`, `tests/config-validator/**/*`, `tests/fixtures/config/**/*`, `.gitlab-ci.yml` + main branch rule
+  - [x] Verify stage order: `lint → test → contract → config → e2e`
 
-- [ ] Task 8: Validate end-to-end (AC: all)
-  - [ ] Run `cd tests/config-validator && npm install` locally first to generate `package-lock.json` (CI uses `npm ci` which requires lockfile)
-  - [ ] Run `cd tests/config-validator && npm test` locally — all tests pass
-  - [ ] Verify JUnit XML is produced at `tests/config-validator/reports/jest-config.xml`
-  - [ ] Verify `.gitlab-ci.yml` stages order is correct
-  - [ ] Run `npm run lint` from root — no lint errors
-  - [ ] Verify execution time is under 2 minutes
+- [x] Task 8: Validate end-to-end (AC: all)
+  - [x] Run `cd tests/config-validator && npm install` locally first to generate `package-lock.json` (CI uses `npm ci` which requires lockfile)
+  - [x] Run `cd tests/config-validator && npm test` locally — all tests pass
+  - [x] Verify JUnit XML is produced at `tests/config-validator/reports/jest-config.xml`
+  - [x] Verify `.gitlab-ci.yml` stages order is correct
+  - [x] Run `npm run lint` from root — no lint errors
+  - [x] Verify execution time is under 2 minutes
 
 ## Dev Notes
 
@@ -225,15 +225,42 @@ tests/
 
 ### Agent Model Used
 
-(incomplete)
+Claude (Anthropic)
 
 ### Debug Log References
 
-- Story 1-4 (`1-4-create-ci-pipeline-contract-test-stage`) is in backlog — the `contract` stage does not yet exist in `.gitlab-ci.yml`
+- Story 1-4 (`1-4-create-ci-pipeline-contract-test-stage`) is in backlog — the `contract` stage does not yet exist in `.gitlab-ci.yml`. Added both `contract` and `config` stages to `.gitlab-ci.yml` per Dev Notes.
 - Story 1-1 added `jest-junit` to all JS components and `reports/` to `.gitignore`
 - Story 1-2 created hidden templates `.node_base` and `.lint_node` in `.gitlab-ci.yml`
 - Story 1-3 created `.test_node` hidden template extending `.node_base`
+- `GENIE_ADMIN_EMAIL` was missing from `env` template but referenced in docker-compose.yaml without default — added to env template as part of validation
+- `TEI_EMBEDDING_PORT` was in OPEA service vars map but commented out in docker-compose.yaml — removed from validator
+- Parse-compose.js filters comment lines to avoid false-positive regex matches from documentation text
 
 ### Completion Notes List
 
+- Implemented 4 validators: parse-env.js, parse-compose.js, validate-features.js, validate-hardware.js
+- 15 Jest tests covering ACs #1–#6, all passing in ~0.5s (well under 2-min NFR)
+- JUnit XML generated at tests/config-validator/reports/jest-config.xml
+- ESLint 9 + Prettier 3 configured locally in config-validator with flat config
+- CI job config:validate extends .node_base, uses npm ci, produces JUnit artifacts
+- Stage order verified: lint → test → contract → config → e2e
+- Comment-line filtering in parse-compose.js prevents false positives from docker-compose.yaml documentation
+
 ### File List
+
+- tests/config-validator/package.json (NEW)
+- tests/config-validator/package-lock.json (NEW)
+- tests/config-validator/jest.config.js (NEW)
+- tests/config-validator/eslint.config.js (NEW)
+- tests/config-validator/validators/parse-env.js (NEW)
+- tests/config-validator/validators/parse-compose.js (NEW)
+- tests/config-validator/validators/validate-features.js (NEW)
+- tests/config-validator/validators/validate-hardware.js (NEW)
+- tests/config-validator/__tests__/config-validation.test.js (NEW)
+- .gitlab-ci.yml (MODIFIED — added contract+config stages and config:validate job)
+- env (MODIFIED — added GENIE_ADMIN_EMAIL)
+
+### Change Log
+
+- 2026-05-20: Story 1-5 implementation complete — configuration validation suite with 4 validators, 15 tests, CI pipeline integration

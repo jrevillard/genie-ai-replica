@@ -375,6 +375,10 @@ KEYCLOAK_ADMIN_PASSWORD=
 # Used by: keycloak-config-cli (creates admin user in GENIE realm)
 GENIE_ADMIN_PASSWORD=
 
+# GENIE realm admin email (REQUIRED — must be a valid email address)
+# Used by: keycloak-config-cli (creates admin user in GENIE realm)
+GENIE_ADMIN_EMAIL=
+
 # Keycloak PostgreSQL password (REQUIRED — must differ from POSTGRES_PASSWORD)
 # Used by: postgres-init (creates dedicated 'keycloak' DB user), keycloak service
 # Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"

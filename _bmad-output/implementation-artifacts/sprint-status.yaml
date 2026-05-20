@@ -87,11 +87,11 @@ development_status:
   epic-4-retrospective: done
 
   # Epic 5: Document Repository Test Suite
-  epic-5: backlog
-  5-1-create-document-repository-test-fixtures-and-mocks: backlog
-  5-2-test-file-upload-download-search-and-delete-endpoints: backlog
-  5-3-test-file-service-business-logic: backlog
-  5-4-test-security-middleware-and-metadata-services: backlog
+  epic-5: done
+  5-1-create-document-repository-test-fixtures-and-mocks: done
+  5-2-test-file-upload-download-search-and-delete-endpoints: done
+  5-3-test-file-service-business-logic: done
+  5-4-test-security-middleware-and-metadata-services: done
   epic-5-retrospective: optional
 
   # Epic 6: Configuration Integrity Validation

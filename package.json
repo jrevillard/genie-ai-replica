@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "prepare": "husky",
     "test:e2e": "npx playwright test tests/e2e/",
     "test:e2e:list": "npx playwright test tests/e2e/ --list",
     "lint": "npm run lint --prefix components/gov-chat-frontend && npm run lint --prefix components/gov-chat-backend && npm run lint --prefix components/document-repository && npm run lint --prefix components/shared/lib",
@@ -15,7 +16,26 @@
     "format:dart:check": "cd mobile/genie_ai_mobile && dart format --set-exit-if-changed ."
   },
   "devDependencies": {
-    "@playwright/test": "^1.51.0"
+    "@playwright/test": "^1.51.0",
+    "husky": "^9.1.0",
+    "lint-staged": "^15.5.0"
+  },
+  "lint-staged": {
+    "components/gov-chat-backend/**/*.{js,vue}": [
+      "components/gov-chat-backend/node_modules/.bin/eslint --fix",
+      "components/gov-chat-backend/node_modules/.bin/prettier --write"
+    ],
+    "components/gov-chat-frontend/src/**/*.{js,vue}": [
+      "components/gov-chat-frontend/node_modules/.bin/eslint --fix",
+      "components/gov-chat-frontend/node_modules/.bin/prettier --write"
+    ],
+    "components/gov-chat-frontend/src/**/*.{json,css,scss}": [
+      "components/gov-chat-frontend/node_modules/.bin/prettier --write"
+    ],
+    "components/document-repository/**/*.{js,vue}": [
+      "components/document-repository/node_modules/.bin/eslint --fix",
+      "components/document-repository/node_modules/.bin/prettier --write"
+    ]
   },
   "dependencies": {
     "archiver": "^7.0.1",

@@ -1,6 +1,6 @@
 # Story 1.5: Create CI Pipeline Configuration Validation Stage
 
-Status: review
+Status: done
 
 ## Story
 
@@ -260,6 +260,13 @@ Claude (Anthropic)
 - tests/config-validator/__tests__/config-validation.test.js (NEW)
 - .gitlab-ci.yml (MODIFIED — added contract+config stages and config:validate job)
 - env (MODIFIED — added GENIE_ADMIN_EMAIL)
+
+### Review Findings
+
+- [x] [Review][Patch] `GENIE_ADMIN_EMAIL` absent du tableau `expectedSecrets` du test [config-validation.test.js:414-430] — Le variable a été ajoutée au template `env` comme secret requis mais n'est pas listée dans le tableau de vérification. La validation fonctionnelle est correcte (`getRequiredSecrets()` la détecte), mais le test ne la vérifie pas explicitement. Fix: ajouter `'GENIE_ADMIN_EMAIL'` au tableau `expectedSecrets`.
+- [x] [Review][Patch] Mot-clé `TELEMETRY` dupliqué dans la condition `altSectionMatch` [parse-env.js:799] — La regex alternative pour les sections contient `/TELEMETRY/i` deux fois. Fix: supprimer la duplication.
+- [x] [Review][Patch] `fs.readFileSync()` sans gestion d'erreur dans 3 validateurs [parse-compose.js:663, parse-env.js:771, validate-hardware.js:1012] — Si un fichier est absent, le validateur crash avec une exception non interceptée au lieu d'un message d'erreur clair. Fix: envelopper les appels dans un try-catch avec un message d'erreur descriptif.
+- [x] [Review][Defer] Détection du nom de profil GPU hardcoded via `endsWith()` [validate-hardware.js:1016-1020] — deferred, pre-existing
 
 ### Change Log
 

@@ -15,7 +15,12 @@ const fs = require('fs');
  * @returns {{ variables: Array<{ name: string, value: string, default: string, section: string, comment: string, commentedOut: boolean }>, sections: string[] }}
  */
 function parseEnvTemplate(filePath) {
-  const content = fs.readFileSync(filePath, 'utf-8');
+  let content;
+  try {
+    content = fs.readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    throw new Error(`Failed to read env template file: ${filePath}: ${err.message}`);
+  }
   const lines = content.split('\n');
 
   const variables = [];
@@ -42,7 +47,6 @@ function parseEnvTemplate(filePath) {
         candidate.match(/GPU/i) ||
         candidate.match(/DOCKER/i) ||
         candidate.match(/PROXY/i) ||
-        candidate.match(/TELEMETRY/i) ||
         candidate.match(/TELEMETRY/i) ||
         candidate.match(/LLM/i) ||
         candidate.match(/IDENTITY/i) ||

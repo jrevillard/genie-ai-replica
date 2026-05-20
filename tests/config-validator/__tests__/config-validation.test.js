@@ -70,6 +70,7 @@ describe('Configuration Validation Suite', () => {
         'EMAIL_PASSWORD',
         'EMAIL_FROM',
         'GENIE_ADMIN_PASSWORD',
+        'GENIE_ADMIN_EMAIL',
         'TRANSLATION_CACHE_PASSWORD'
       ];
 

@@ -15,7 +15,12 @@ const fs = require('fs');
  * @returns {Array<{ name: string, default: string|null, hasDefault: boolean, raw: string }>}
  */
 function parseComposeEnvVars(filePath) {
-  const content = fs.readFileSync(filePath, 'utf-8');
+  let content;
+  try {
+    content = fs.readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    throw new Error(`Failed to read docker-compose file: ${filePath}: ${err.message}`);
+  }
   // Filter out comment lines to avoid false positives from documentation text
   const codeLines = content
     .split('\n')

@@ -34,7 +34,12 @@ const GPU_RANGES = {
  * @returns {{ variables: Array<{ name: string, value: string }>, profileName: string }}
  */
 function parseGpuProfile(profilePath) {
-  const content = fs.readFileSync(profilePath, 'utf-8');
+  let content;
+  try {
+    content = fs.readFileSync(profilePath, 'utf-8');
+  } catch (err) {
+    throw new Error(`Failed to read GPU profile file: ${profilePath}: ${err.message}`);
+  }
   const lines = content.split('\n');
   const variables = [];
 

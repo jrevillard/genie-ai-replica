@@ -272,5 +272,34 @@ describe('serviceTreeService', () => {
       });
       expect(result[1].name).toBe('Education');
     });
+
+    it('returns empty array for empty input', () => {
+      const result = serviceTreeService.transformCategoriesToTreeNodes([]);
+
+      expect(result).toEqual([]);
+    });
+
+    it('throws on null input', () => {
+      expect(() => serviceTreeService.transformCategoriesToTreeNodes(null)).toThrow();
+    });
+
+    it('replaces null children with empty array', () => {
+      const categories = [{ catKey: 'health', name: 'Health', children: null }];
+
+      const result = serviceTreeService.transformCategoriesToTreeNodes(categories);
+
+      expect(result[0].children).toEqual([]);
+      expect(result[0].expanded).toBe(false);
+    });
+
+    it('handles categories with missing name property', () => {
+      const categories = [{ catKey: 'health' }];
+
+      const result = serviceTreeService.transformCategoriesToTreeNodes(categories);
+
+      expect(result[0].catKey).toBe('health');
+      expect(result[0].name).toBeUndefined();
+      expect(result[0].expanded).toBe(false);
+    });
   });
 });

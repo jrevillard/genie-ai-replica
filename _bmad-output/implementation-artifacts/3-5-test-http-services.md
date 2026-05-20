@@ -1,6 +1,6 @@
 # Story 3.5: Test HTTP Services
 
-Status: review
+Status: done
 
 ## Story
 
@@ -335,3 +335,18 @@ Claude (deepseek-v4-pro)
 - `components/gov-chat-frontend/src/__tests__/services/userProfileService.test.js` (new)
 - `components/gov-chat-frontend/src/__tests__/services/serviceTreeService.test.js` (new)
 - `components/gov-chat-frontend/src/__tests__/services/documentFileService.test.js` (new)
+
+## Review Findings
+
+- [x] [Review][Patch] updateProfile multipart/File path untested — `updateProfile()` has a code path detecting `File` objects and converting to `FormData` with multipart headers. No test covers this branch. Add tests for: File in profile data triggers FormData path, multiple files across sections, pure JSON path when no files present. [userProfileService.test.js]
+- [x] [Review][Patch] transformCategoriesToTreeNodes incomplete — Missing tests for: null/undefined input, empty array, categories with null children, missing name property. Also missing assertion for `expanded: false` property added by the transformation. [serviceTreeService.test.js]
+- [x] [Review][Patch] transformDashboardData incomplete assertions — Test checks field lengths but doesn't verify actual transformation logic for all fields. Should add tests for null/missing sub-objects (feedback, queries) to verify defensive handling. [analyticsService.test.js]
+- [x] [Review][Defer] submitQuery edge cases (null queryId, empty response, non-string response) — deferred, pre-existing
+- [x] [Review][Defer] Partial PATCH failure in submitQuery (time recorded but not answered) — deferred, pre-existing
+- [x] [Review][Defer] Missing individual error tests (500/404/401) for every service method — deferred, pre-existing
+- [x] [Review][Defer] Missing pagination edge cases (limit:0, negative offset) — deferred, pre-existing
+- [x] [Review][Defer] Search term special characters and whitespace — deferred, pre-existing
+- [x] [Review][Defer] Missing locale parameter inheritance test — deferred, pre-existing
+- [x] [Review][Defer] Missing folder reorder edge cases (duplicate orders) — deferred, pre-existing
+- [x] [Review][Defer] getComparisonData partial failure — deferred, pre-existing
+- [x] [Review][Defer] getTimeSeriesData/getUniqueUsersCount edge cases (null items, string values) — deferred, pre-existing

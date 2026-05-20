@@ -315,6 +315,63 @@ describe('analyticsService', () => {
 
         expect(result.uniqueUsers).toBe(0);
       });
+
+      it('handles null feedback object', () => {
+        const result = analyticsService.transformDashboardData({
+          queries: { total: 50, avgResponseTime: 1.5 },
+          feedback: null,
+          users: { activeCount: 10 },
+          categories: [],
+          topQueries: []
+        });
+
+        expect(result.satisfactionRate).toBe(0);
+      });
+
+      it('handles null queries object', () => {
+        const result = analyticsService.transformDashboardData({
+          queries: null,
+          feedback: { positivePercentage: 90 },
+          users: { activeCount: 10 },
+          categories: [],
+          topQueries: []
+        });
+
+        expect(result.totalQueries).toBe(0);
+        expect(result.averageResponseTime).toBe(0);
+      });
+
+      it('transforms queryDistribution fields correctly', () => {
+        const raw = {
+          queries: { total: 100, avgResponseTime: 2.0 },
+          feedback: { positivePercentage: 80 },
+          users: { activeCount: 50 },
+          categories: [{ categoryId: 'health', name: 'Health', count: 60 }],
+          topQueries: []
+        };
+
+        const result = analyticsService.transformDashboardData(raw);
+
+        expect(result.queryDistribution).toEqual([
+          { categoryId: 'health', name: 'Health', count: 60 }
+        ]);
+      });
+
+      it('transforms topQueries fields correctly', () => {
+        const raw = {
+          queries: { total: 100, avgResponseTime: 2.0 },
+          feedback: { positivePercentage: 80 },
+          users: { activeCount: 50 },
+          categories: [],
+          topQueries: [{ text: 'How to apply', count: 45, avgTime: 2.3 }]
+        };
+
+        const result = analyticsService.transformDashboardData(raw);
+
+        expect(result.topQueries).toEqual([
+          { text: 'How to apply', count: 45, avgTime: 2.3 }
+        ]);
+      });
     });
 
     describe('formatDateLabel', () => {

@@ -66,5 +66,35 @@ describe('userProfileService', () => {
 
       await expect(userProfileService.updateProfile({ name: 'Test' })).rejects.toThrow('Server error');
     });
+
+    it('sends FormData when profile data contains File objects', async () => {
+      mockPut.mockResolvedValue({ data: { _key: 'users/user-123', name: 'Updated' } });
+
+      const file = new File(['content'], 'id-card.pdf', { type: 'application/pdf' });
+      await userProfileService.updateProfile({
+        personalIdentification: { firstName: 'John', document: file },
+        addressResidency: { city: 'Geneva' }
+      });
+
+      expect(mockPut).toHaveBeenCalledWith('me', expect.any(FormData), {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const formData = mockPut.mock.calls[0][1];
+      expect(formData.get('data')).toBeTruthy();
+    });
+
+    it('sends JSON when profile data has no File objects', async () => {
+      mockPut.mockResolvedValue({ data: { _key: 'users/user-123', name: 'Updated' } });
+
+      await userProfileService.updateProfile({
+        personalIdentification: { firstName: 'John' },
+        addressResidency: { city: 'Geneva' }
+      });
+
+      expect(mockPut).toHaveBeenCalledWith('me', {
+        personalIdentification: { firstName: 'John' },
+        addressResidency: { city: 'Geneva' }
+      });
+    });
   });
 });

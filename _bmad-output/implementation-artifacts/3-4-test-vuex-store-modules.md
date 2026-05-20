@@ -131,11 +131,22 @@ const store = createStore({
 await store.dispatch('chatHistory/moveChat', { chatId: 'c1', fromFolderId: 'f1', toFolderId: 'f2' });
 ```
 
+### chatHistoryStore — Initial State Trap
+
+The default folder's `createdAt` uses `new Date().toISOString()` — a dynamic timestamp. Tests asserting on initial state must either:
+- Use regex/typeof checks: `expect(state.folders[0].createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)`
+- Or ignore the field: `expect(state.folders[0]).toMatchObject({ id: 'default', name: 'All Chats', isDefault: true })`
+
 ### chatHistoryStore — Key Mutation Behaviors to Test
 
 **ADD_FOLDER**: Generates UUID via `uuid.v4()`. Mock `uuid` module to return deterministic IDs:
 ```javascript
-jest.mock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-1') }));
+const mockUuid = jest.fn();
+jest.mock('uuid', () => ({ v4: (...args) => mockUuid(...args) }));
+
+beforeEach(() => {
+  mockUuid.mockReturnValue('test-uuid-1');
+});
 ```
 
 **REMOVE_FOLDER — chat migration**: When deleting a non-default folder, its chats move to default folder. If a chat is already in default, no duplicate added. Deleting the default folder is blocked (no-op).
@@ -162,7 +173,9 @@ jest.mock('@/services/chatHistoryService', () => ({
 ```
 
 `moveConversation(chatId, fromFolderId, toFolderId)` — no meaningful return value needed, just must not throw.
-`getFolder(toFolderId)` — must return `{ conversations: [{ _key: 'chat-id-1' }, ...] }` for the SET_FOLDER_CHATS commit.
+`getFolder(toFolderId)` — must return `{ conversations: [{ _key: 'chat-id-1' }, ...] }` for the SET_FOLDER_CHATS commit. The service wraps the backend response at `response.data`, so mock the resolved value (not the Axios response).
+
+**removeChatFromFolder** — Despite being declared `async`, this action makes **no API calls**. It commits `REMOVE_CHAT_FROM_FOLDER` then ensures the chat remains in the default folder via `ADD_CHAT_TO_FOLDER`. No service mocking needed — only test the commit sequence.
 
 ### Auth Store — Existing Tests and Gaps
 
@@ -181,7 +194,7 @@ jest.mock('@/services/chatHistoryService', () => ({
 - `clearError` mutation: sets error = null
 - `authError` getter: returns message string for object errors, raw string for string errors
 - `lastAuthErrorCode` getter: returns code for object errors, null for string errors
-- `handleApiError` action: parses `{error, message}` response into `{code, message}`, commits setError
+- `handleApiError` action: parses `{error, message}` response into `{code, message}`, commits setError (synchronous — no service calls, no async)
 
 ### Auth Store — Module-Level State Trap
 
@@ -191,14 +204,32 @@ const state = { isAuthenticated: false, user: null, ... };
 export default { state, getters, actions, mutations };
 ```
 
-Vuex uses this as the initial state. When testing mutations directly, **always create a fresh copy** to avoid state leaking between tests:
+Unlike `chatHistoryStore` which uses `state: () => ({...})` (factory function, fresh state per store instance), the auth module shares the same state reference across all store instances. When testing mutations directly, **always create a fresh copy** to avoid state leaking between tests:
 ```javascript
 beforeEach(() => {
   state = { isAuthenticated: false, user: null, accessToken: null, error: null, isInitialized: false };
 });
 ```
 
-The chatHistory module uses `state: () => ({...})` (factory function), so Vuex creates fresh state per store instance — but when testing mutations directly, still create a fresh state object.
+### Auth Store — SessionStorage Mock Setup
+
+The auth module reads `sessionStorage.getItem('genie_post_logout')` in `initialize()`, and writes to it in `logout()`. jsdom provides sessionStorage, but it must be cleared between tests to prevent cross-test contamination:
+```javascript
+beforeEach(() => {
+  sessionStorage.removeItem('genie_post_logout');
+  jest.clearAllMocks();
+});
+```
+
+For `initialize` tests, control the flag explicitly:
+```javascript
+it('should skip session restoration when genie_post_logout is set', async () => {
+  sessionStorage.setItem('genie_post_logout', 'true');
+  await auth.actions.initialize({ commit, state });
+  expect(commit).toHaveBeenCalledWith('clearAuth');
+  expect(commit).toHaveBeenCalledWith('setInitialized');
+});
+```
 
 ### Store Persistence Plugin — Test Strategy
 
@@ -225,20 +256,23 @@ expect(localStorage.getItem('chatHistory')).toContain('Test');
 
 ### Cross-Module Dependency: chatHistory.moveChat → auth
 
-The `moveChat` action accesses `rootGetters['auth/currentUser']`. When testing with `createStore()`, provide a mock auth module:
+The `moveChat` action accesses `rootGetters['auth/currentUser']`. When testing with `createStore()`, provide a mock auth module with the getter matching the real signature:
 ```javascript
 const store = createStore({
   modules: {
     chatHistory: chatHistoryStore,
     auth: {
       namespaced: false,
-      getters: { currentUser: () => ({ sub: 'user-123', name: 'Test' }) }
+      state: { user: { sub: 'user-123', name: 'Test' } },
+      getters: {
+        currentUser: (state) => state.user  // Must match actual getter implementation
+      }
     }
   }
 });
 ```
 
-If `currentUser` is null, `moveChat` throws `Error('User is missing')` — test this error path.
+If `currentUser` is null, `moveChat` throws `Error('User is missing')` — test this error path by setting the auth getter to return null.
 
 ### Dependencies That Must Be Mocked
 

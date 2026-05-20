@@ -352,9 +352,7 @@ describe('analyticsService', () => {
 
         const result = analyticsService.transformDashboardData(raw);
 
-        expect(result.queryDistribution).toEqual([
-          { categoryId: 'health', name: 'Health', count: 60 }
-        ]);
+        expect(result.queryDistribution).toEqual([{ categoryId: 'health', name: 'Health', count: 60 }]);
       });
 
       it('transforms topQueries fields correctly', () => {
@@ -368,9 +366,7 @@ describe('analyticsService', () => {
 
         const result = analyticsService.transformDashboardData(raw);
 
-        expect(result.topQueries).toEqual([
-          { text: 'How to apply', count: 45, avgTime: 2.3 }
-        ]);
+        expect(result.topQueries).toEqual([{ text: 'How to apply', count: 45, avgTime: 2.3 }]);
       });
     });
 

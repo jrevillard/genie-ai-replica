@@ -73,7 +73,7 @@ development_status:
   3-2-test-critical-vue-components-chatbot-and-navbar: done
   3-3-test-critical-vue-components-userprofile-and-admin-dashboard: done
   3-4-test-vuex-store-modules: done
-  3-5-test-http-services: backlog
+  3-5-test-http-services: done
   epic-3-retrospective: optional
 
   # Epic 4: OPEA Microservice Test Suite

@@ -25,3 +25,7 @@
 - Missing folder reorder edge cases (duplicate orders, non-existent folders) — nice-to-have hardening.
 - getComparisonData partial failure (first succeeds, second fails) — returns both null even on partial failure; source edge case.
 - getTimeSeriesData/getUniqueUsersCount edge cases (null items in array, string values) — source data shape edge cases beyond spec scope.
+
+## Deferred from: code review of 1-5-create-ci-pipeline-configuration-validation-stage (2026-05-20)
+
+- GPU profile name detection hardcoded via `endsWith()` in validate-hardware.js:1016-1020 — fragile if new profiles are added; acceptable for current T4/RTX6000 profiles. Pre-existing design choice.

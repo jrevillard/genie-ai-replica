@@ -2,6 +2,7 @@ stages:
   - lint
   - test
   - contract
+  - config
   - e2e
 
 variables:
@@ -412,3 +413,37 @@ patrol:e2e:
       - unknown_failure
   tags:
     - android-emulator
+
+# --- Configuration validation ---
+
+config:validate:
+  extends: .node_base
+  stage: config
+  before_script:
+    - cd tests/config-validator && npm ci
+  script:
+    - npm test
+  cache:
+    key:
+      files:
+        - tests/config-validator/package-lock.json
+      prefix: config-validate
+    paths:
+      - tests/config-validator/node_modules/
+  artifacts:
+    when: always
+    expire_in: 7 days
+    reports:
+      junit: tests/config-validator/reports/jest-config.xml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "env"
+        - "env.*"
+        - "docker-compose.yaml"
+        - "tests/config-validator/**/*"
+        - "tests/fixtures/config/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: on_success

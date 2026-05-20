@@ -1,5 +1,5 @@
 # generated: 2026-05-13
-# last_updated: 2026-05-21
+# last_updated: 2026-05-20
 # project: genie-ai
 # project_key: testing-framework
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-13
-last_updated: 2026-05-21
+last_updated: 2026-05-20
 project: genie-ai
 project_key: testing-framework
 tracking_system: file-system
@@ -74,7 +74,7 @@ development_status:
   3-3-test-critical-vue-components-userprofile-and-admin-dashboard: done
   3-4-test-vuex-store-modules: done
   3-5-test-http-services: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
 
   # Epic 4: OPEA Microservice Test Suite
   epic-4: done

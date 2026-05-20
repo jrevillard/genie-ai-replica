@@ -29,6 +29,8 @@ variables:
 .flutter_base:
   image: debian:bookworm-slim
   interruptible: true
+  variables:
+    PUB_CACHE: $CI_PROJECT_DIR/.pub-cache
   cache:
     - key: "flutter-sdk-${FLUTTER_VERSION}"
       paths:

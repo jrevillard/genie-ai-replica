@@ -282,6 +282,7 @@ flutter:test:
   script:
     - export PATH="$PWD/../../flutter-sdk/bin:$PATH"
     - dart pub global activate junitreport_maintained
+    - export PATH="$PATH:$HOME/.pub-cache/bin"
     - mkdir -p reports
     - flutter test --machine | tojunit --output reports/flutter-report.xml
     - flutter test --coverage

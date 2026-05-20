@@ -18,7 +18,7 @@ so that API communication is validated with mocked responses.
 
 4. **AC4 — Additional service tests cover remaining HTTP services**: `src/__tests__/services/userProfileService.test.js` tests profile CRUD. `src/__tests__/services/serviceTreeService.test.js` tests category/service tree operations. `src/__tests__/services/documentFileService.test.js` tests file upload/download/search/ingest operations.
 
-5. **AC5 — All services use centralized axios mock**: Every test file mocks httpService (axios) via the centralized `src/__tests__/mocks/axios.js` pattern — no inline axios mocks. Mock is reset in `beforeEach()`.
+5. **AC5 — All services mock httpService at module level**: Every test file mocks `@/services/httpService` via closure-based `jest.mock()` — NOT axios directly (axios is already tested in httpService.test.js). Mock is reset in `beforeEach()` via `jest.clearAllMocks()`.
 
 6. **AC6 — Error handling coverage**: Tests verify services handle: successful responses (200), error responses (500), not found (404), and network failures. Services that return fallback values (analyticsService, serviceTreeService) are tested for their fallback behavior.
 
@@ -96,18 +96,15 @@ The epic references "chatService" and "sendMessage" — the real files are `chat
 | userProfileService.js | 120 | 4 | 2 | AC4 — should |
 | serviceTreeService.js | 227 | 13 | 13 | AC4 — should |
 | documentFileService.js | 267 | 16 | 16 | AC4 — should |
-| adminDashboardService.js | 269 | 12 | 11 | AC4 — nice |
-| databaseOperationsService.js | 51 | 3 | 3 | AC4 — nice |
-| fileService.js | 143 | 7 | 5 | AC4 — nice |
-| labelService.js | 74 | 4 | 4 | AC4 — nice |
-| userService.js | 43 | 2 | 2 | AC4 — nice |
-| weatherService.js | 22 | 1 | 1 | AC4 — nice |
+| adminDashboardService.js (and 5 more simpler services) | 602 total | 29 total | 26 total | defer to future story |
 
 ### Mock Strategy — httpService Mocking
 
 All services delegate HTTP calls to `httpService.js`. Mock `httpService` at the module level — NOT axios directly (that's already tested in httpService.test.js).
 
-**Pattern:**
+**Import style to match:** Every service does `import httpService from './httpService'` — default import of a singleton. Calls via `httpService.get()`, `httpService.post()`, etc.
+
+**Mock pattern:**
 ```javascript
 const mockGet = jest.fn();
 const mockPost = jest.fn();
@@ -124,11 +121,32 @@ jest.mock('@/services/httpService', () => ({
 }));
 ```
 
+This works because the mock object replaces the default-exported singleton — `httpService` in the source becomes the mock object, so `httpService.get()` calls `mockGet()`.
+
 **Why mock httpService, not axios:**
 - Services call `httpService.get('/endpoint', params)` — they don't use axios directly
 - httpService already has comprehensive tests covering interceptors, 401 retry, token injection
 - Service tests should validate that the correct httpService method is called with correct args
 - Services receive `response.data` from httpService (not raw axios response)
+
+**Assertion patterns:**
+```javascript
+// Verify endpoint and payload
+expect(mockPost).toHaveBeenCalledWith('/queries', { query: 'test' });
+
+// Simulate success
+mockGet.mockResolvedValue({ conversations: [], total: 0 });
+
+// Simulate error
+mockPost.mockRejectedValue({
+  response: { status: 500, data: { error: 'SERVER_ERROR', message: 'msg' } }
+});
+
+// Verify error fallback (function returns default on catch)
+await expect(service.getSatisfactionGauge()).rejects.toBeDefined(); // throws
+const result = await service.getUniqueUsersCount(); // returns 0 on error
+expect(result).toBe(0);
+```
 
 **Reset in beforeEach:**
 ```javascript
@@ -140,6 +158,15 @@ beforeEach(() => {
 ### chatbotService — Streaming Is Out of Scope
 
 `submitQueryStream()` uses the native Fetch API (not axios/httpService) for SSE streaming. This is complex to mock (ReadableStream, event parsing, callbacks). **Defer streaming tests** — only test `submitQuery()`, `updateQueryResponseTime()`, `markQueryAsAnswered()`, and `submitFeedback()`.
+
+**Even though streaming is deferred, `chatbotService.js` imports `keycloakAuthService` at the file level (line 3).** Jest will fail if this dependency isn't mocked. Add a stub mock for every test file that touches chatbotService:
+
+```javascript
+jest.mock('@/services/keycloakAuthService', () => ({
+  __esModule: true,
+  default: { getAccessToken: jest.fn().mockResolvedValue('mock-token') }
+}));
+```
 
 ### chatHistoryService — Largest Service (540 lines, 27 functions)
 
@@ -185,6 +212,16 @@ Several functions return fallback values on error:
 - `getServiceTranslations()` → `[]`
 
 Test these fallback paths explicitly.
+
+### documentFileService — Double Data Unwrap Trap
+
+`getFileMetadata(fileId)` does `response.data.data` (nested double `.data` property), unlike every other service which returns `response.data`. This is a unique, non-obvious pattern — test that the mock response structure matches what the function expects or the test will silently pass while the real code would fail.
+
+```javascript
+// Correct mock for getFileMetadata:
+mockGet.mockResolvedValue({ data: { _key: 'file-1', filename: 'test.pdf' } });
+// The function returns response.data.data → the inner { _key, filename } object
+```
 
 ### Existing Test Infrastructure to Reuse
 
@@ -240,7 +277,7 @@ Per test file:
 
 ### Technical Constraints
 
-- **NFR22**: Options API only — though these are pure JS service tests, no Vue involved
+- **NFR22**: Options API for Vue components — not applicable to plain JS service tests
 - **NFR11**: All test code passes ESLint and Prettier
 - **NFR7**: Tests must be order-independent (no test depends on side effects from another)
 - **NFR6**: No flaky tests — all mocks are deterministic

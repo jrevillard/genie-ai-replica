@@ -352,8 +352,8 @@ flutter:test:
     - dart pub global activate junitreport_maintained
     - export PATH="$PATH:$PUB_CACHE/bin"
     - mkdir -p reports
-    - flutter test --machine | tojunit --output reports/flutter-report.xml
-    - flutter test --coverage
+    - flutter test --machine --coverage | tojunit --output reports/flutter-report.xml
+    - sed -i 's/\x1b\[[0-9;]*m//g; s/\x1b//g' reports/flutter-report.xml
   artifacts:
     reports:
       junit: mobile/genie_ai_mobile/reports/flutter-report.xml

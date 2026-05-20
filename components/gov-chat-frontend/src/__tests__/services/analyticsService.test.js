@@ -162,8 +162,11 @@ describe('analyticsService', () => {
       it('fetches satisfaction gauge data', async () => {
         mockGet.mockResolvedValue({
           data: {
-            currentValue: 82, previousValue: 78, changePercentage: 5.1,
-            target: 85, historicalData: [{ date: '2026-05-01', value: 80 }]
+            currentValue: 82,
+            previousValue: 78,
+            changePercentage: 5.1,
+            target: 85,
+            historicalData: [{ date: '2026-05-01', value: 80 }]
           }
         });
 
@@ -193,12 +196,14 @@ describe('analyticsService', () => {
 
     describe('getComparisonData', () => {
       it('fetches comparison data for current and previous periods', async () => {
-        mockGet
-          .mockResolvedValueOnce({ data: { value: 100 } })
-          .mockResolvedValueOnce({ data: { value: 80 } });
+        mockGet.mockResolvedValueOnce({ data: { value: 100 } }).mockResolvedValueOnce({ data: { value: 80 } });
 
         const result = await analyticsService.getComparisonData(
-          'totalQueries', 'monthly', '2026-05-19', 'monthly', '2026-04-19'
+          'totalQueries',
+          'monthly',
+          '2026-05-19',
+          'monthly',
+          '2026-04-19'
         );
 
         expect(result).toEqual({ current: 100, previous: 80 });
@@ -208,7 +213,11 @@ describe('analyticsService', () => {
         mockGet.mockRejectedValue(new Error('Server error'));
 
         const result = await analyticsService.getComparisonData(
-          'totalQueries', 'monthly', '2026-05-19', 'monthly', '2026-04-19'
+          'totalQueries',
+          'monthly',
+          '2026-05-19',
+          'monthly',
+          '2026-04-19'
         );
 
         expect(result).toEqual({ current: null, previous: null });
@@ -221,7 +230,10 @@ describe('analyticsService', () => {
 
         const result = await analyticsService.recordQuery({ query: 'test', timestamp: '2026-05-19T00:00:00Z' });
 
-        expect(mockPost).toHaveBeenCalledWith('/api/analytics/query', { query: 'test', timestamp: '2026-05-19T00:00:00Z' });
+        expect(mockPost).toHaveBeenCalledWith('/api/analytics/query', {
+          query: 'test',
+          timestamp: '2026-05-19T00:00:00Z'
+        });
         expect(result).toEqual({ success: true });
       });
 
@@ -259,7 +271,14 @@ describe('analyticsService', () => {
         const raw = {
           queries: { total: 1523, unanswered: 42, answeredPercentage: 97.24, avgResponseTime: 2.8 },
           categories: [{ categoryId: 'health', name: 'Health', count: 312 }],
-          feedback: { total: 891, positive: 723, neutral: 124, negative: 44, positivePercentage: 81.1, negativePercentage: 4.9 },
+          feedback: {
+            total: 891,
+            positive: 723,
+            neutral: 124,
+            negative: 44,
+            positivePercentage: 81.1,
+            negativePercentage: 4.9
+          },
           users: { activeCount: 234 },
           topQueries: [{ text: 'How to apply', count: 45, avgTime: 2.3 }]
         };
@@ -465,10 +484,7 @@ describe('analyticsService', () => {
       });
 
       it('filters out entries without timestamp', () => {
-        const data = [
-          { timestamp: '2026-05-19T00:00:00.000Z', value: 145 },
-          { value: 0 }
-        ];
+        const data = [{ timestamp: '2026-05-19T00:00:00.000Z', value: 145 }, { value: 0 }];
 
         const result = analyticsService.transformTimeSeriesData(data, 'daily');
 

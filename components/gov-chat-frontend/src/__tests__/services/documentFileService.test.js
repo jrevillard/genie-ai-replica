@@ -208,11 +208,13 @@ describe('documentFileService', () => {
         mockPost.mockResolvedValue({ data: { _key: 'file-crawl', status: 'scheduled' } });
 
         const result = await documentFileService.scheduleSiteCrawl({
-          url: 'https://example.com', depth: 3
+          url: 'https://example.com',
+          depth: 3
         });
 
         expect(mockPost).toHaveBeenCalledWith('/files/crawl/schedule', {
-          url: 'https://example.com', depth: 3
+          url: 'https://example.com',
+          depth: 3
         });
         expect(result.status).toBe('scheduled');
       });

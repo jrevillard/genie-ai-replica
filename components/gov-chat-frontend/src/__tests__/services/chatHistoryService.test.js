@@ -34,7 +34,11 @@ describe('chatHistoryService', () => {
 
         expect(mockGet).toHaveBeenCalledWith('/chat/conversations', {
           params: {
-            limit: 20, offset: 0, includeArchived: false, filterStarred: false, searchTerm: ''
+            limit: 20,
+            offset: 0,
+            includeArchived: false,
+            filterStarred: false,
+            searchTerm: ''
           }
         });
         expect(result).toEqual({ conversations: [], pagination: { total: 0 } });
@@ -89,9 +93,7 @@ describe('chatHistoryService', () => {
       });
 
       it('throws when no title or initialMessage provided', async () => {
-        await expect(chatHistoryService.createConversation({})).rejects.toThrow(
-          'Title or initial message is required'
-        );
+        await expect(chatHistoryService.createConversation({})).rejects.toThrow('Title or initial message is required');
       });
     });
 
@@ -123,9 +125,7 @@ describe('chatHistoryService', () => {
       });
 
       it('throws when conversationId is missing', async () => {
-        await expect(chatHistoryService.deleteConversation('')).rejects.toThrow(
-          'Conversation ID is required'
-        );
+        await expect(chatHistoryService.deleteConversation('')).rejects.toThrow('Conversation ID is required');
       });
     });
   });
@@ -167,7 +167,9 @@ describe('chatHistoryService', () => {
         });
 
         expect(mockPost).toHaveBeenCalledWith('/chat/conversations/conv-1/messages', {
-          conversationId: 'conv-1', content: 'Hello', sender: 'user'
+          conversationId: 'conv-1',
+          content: 'Hello',
+          sender: 'user'
         });
         expect(result.content).toBe('Hello');
       });
@@ -218,11 +220,13 @@ describe('chatHistoryService', () => {
         mockPost.mockResolvedValue({ data: { _key: 'conv-new', title: 'From query' } });
 
         const result = await chatHistoryService.createConversationFromQuery('query-1', {
-          title: 'From query', responseText: 'Answer'
+          title: 'From query',
+          responseText: 'Answer'
         });
 
         expect(mockPost).toHaveBeenCalledWith('/chat/query/query-1/conversation', {
-          title: 'From query', responseText: 'Answer'
+          title: 'From query',
+          responseText: 'Answer'
         });
         expect(result._key).toBe('conv-new');
       });
@@ -362,7 +366,12 @@ describe('chatHistoryService', () => {
 
     describe('getFolderPath', () => {
       it('fetches folder path breadcrumbs', async () => {
-        mockGet.mockResolvedValue({ data: [{ _key: 'parent', name: 'Parent' }, { _key: 'child', name: 'Child' }] });
+        mockGet.mockResolvedValue({
+          data: [
+            { _key: 'parent', name: 'Parent' },
+            { _key: 'child', name: 'Child' }
+          ]
+        });
 
         const result = await chatHistoryService.getFolderPath('child');
 
@@ -389,20 +398,22 @@ describe('chatHistoryService', () => {
 
     describe('reorderFolders', () => {
       it('reorders folders', async () => {
-        const orders = [{ folderId: 'f1', order: 0 }, { folderId: 'f2', order: 1 }];
+        const orders = [
+          { folderId: 'f1', order: 0 },
+          { folderId: 'f2', order: 1 }
+        ];
         mockPost.mockResolvedValue({ data: { success: true } });
 
         await chatHistoryService.reorderFolders(orders, 'parent-1');
 
         expect(mockPost).toHaveBeenCalledWith('/chat/folders/reorder', {
-          folderOrders: orders, parentFolderId: 'parent-1'
+          folderOrders: orders,
+          parentFolderId: 'parent-1'
         });
       });
 
       it('throws when folderOrders is empty', async () => {
-        await expect(chatHistoryService.reorderFolders([])).rejects.toThrow(
-          'Folder orders array is required'
-        );
+        await expect(chatHistoryService.reorderFolders([])).rejects.toThrow('Folder orders array is required');
       });
     });
   });

@@ -40,10 +40,13 @@ describe('chatbotService', () => {
 
       await chatbotService.submitQuery({ query: 'test question' });
 
-      expect(mockPost).toHaveBeenCalledWith('queries', expect.objectContaining({
-        query: 'test question',
-        timestamp: expect.any(String)
-      }));
+      expect(mockPost).toHaveBeenCalledWith(
+        'queries',
+        expect.objectContaining({
+          query: 'test question',
+          timestamp: expect.any(String)
+        })
+      );
     });
 
     it('returns response.data on success', async () => {
@@ -64,9 +67,12 @@ describe('chatbotService', () => {
 
       await chatbotService.submitQuery({ query: 'test' });
 
-      expect(mockPatch).toHaveBeenCalledWith('queries/q-1/responsetime', expect.objectContaining({
-        responseTime: expect.any(Number)
-      }));
+      expect(mockPatch).toHaveBeenCalledWith(
+        'queries/q-1/responsetime',
+        expect.objectContaining({
+          responseTime: expect.any(Number)
+        })
+      );
     });
 
     it('marks query as answered after successful submission', async () => {
@@ -77,9 +83,12 @@ describe('chatbotService', () => {
 
       await chatbotService.submitQuery({ query: 'test' });
 
-      expect(mockPatch).toHaveBeenCalledWith('queries/q-2/answered', expect.objectContaining({
-        responseTime: expect.any(Number)
-      }));
+      expect(mockPatch).toHaveBeenCalledWith(
+        'queries/q-2/answered',
+        expect.objectContaining({
+          responseTime: expect.any(Number)
+        })
+      );
     });
 
     it('throws and rejects when response starts with "Error:"', async () => {
@@ -87,9 +96,7 @@ describe('chatbotService', () => {
         data: { queryId: 'q-1', response: 'Error: OPEA service unavailable' }
       });
 
-      await expect(chatbotService.submitQuery({ query: 'test' })).rejects.toThrow(
-        'Error: OPEA service unavailable'
-      );
+      await expect(chatbotService.submitQuery({ query: 'test' })).rejects.toThrow('Error: OPEA service unavailable');
     });
 
     it('throws when API fails with network error', async () => {

@@ -1,6 +1,6 @@
 # Story 3.5: Test HTTP Services
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -24,51 +24,51 @@ so that API communication is validated with mocked responses.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create chatbotService tests (AC: #1)
-  - [ ] 1.1 Create `src/__tests__/services/chatbotService.test.js`
-  - [ ] 1.2 Test `submitQuery(data)` → POST `/queries` with payload
-  - [ ] 1.3 Test `updateQueryResponseTime(queryId, time)` → PATCH `/queries/{id}/responsetime`
-  - [ ] 1.4 Test `markQueryAsAnswered(queryId, time)` → PATCH `/queries/{id}/answered`
-  - [ ] 1.5 Test `submitFeedback(queryId, feedback)` → POST `/queries/{id}/feedback`
-  - [ ] 1.6 Test error handling on API failure (rejects with error)
-  - [ ] 1.7 Test `submitQuery` rejects when response starts with 'Error:'
+- [x] Task 1: Create chatbotService tests (AC: #1)
+  - [x] 1.1 Create `src/__tests__/services/chatbotService.test.js`
+  - [x] 1.2 Test `submitQuery(data)` → POST `/queries` with payload
+  - [x] 1.3 Test `updateQueryResponseTime(queryId, time)` → PATCH `/queries/{id}/responsetime`
+  - [x] 1.4 Test `markQueryAsAnswered(queryId, time)` → PATCH `/queries/{id}/answered`
+  - [x] 1.5 Test `submitFeedback(queryId, feedback)` → POST `/queries/{id}/feedback`
+  - [x] 1.6 Test error handling on API failure (rejects with error)
+  - [x] 1.7 Test `submitQuery` rejects when response starts with 'Error:'
 
-- [ ] Task 2: Create chatHistoryService tests (AC: #2)
-  - [ ] 2.1 Create `src/__tests__/services/chatHistoryService.test.js`
-  - [ ] 2.2 Test `getUserConversations(options)` → GET `/chat/conversations`
-  - [ ] 2.3 Test `createConversation(data)` → POST `/chat/conversations`
-  - [ ] 2.4 Test `getConversationMessages(id, options)` → GET `/chat/conversations/{id}/messages`
-  - [ ] 2.5 Test `addMessage(data)` → POST `/chat/conversations/{id}/messages`
-  - [ ] 2.6 Test `deleteConversation(id)` → DELETE `/chat/conversations/{id}`
-  - [ ] 2.7 Test folder operations: `getUserFolders`, `createFolder`, `updateFolder`, `deleteFolder`
-  - [ ] 2.8 Test `moveConversation(id, from, to)` → POST `/chat/conversations/{id}/move`
-  - [ ] 2.9 Test `searchConversations(term, options)` → GET `/chat/search`
-  - [ ] 2.10 Test `getConversationFolder(id)` returns `{ inFolder: false }` on 404
+- [x] Task 2: Create chatHistoryService tests (AC: #2)
+  - [x] 2.1 Create `src/__tests__/services/chatHistoryService.test.js`
+  - [x] 2.2 Test `getUserConversations(options)` → GET `/chat/conversations`
+  - [x] 2.3 Test `createConversation(data)` → POST `/chat/conversations`
+  - [x] 2.4 Test `getConversationMessages(id, options)` → GET `/chat/conversations/{id}/messages`
+  - [x] 2.5 Test `addMessage(data)` → POST `/chat/conversations/{id}/messages`
+  - [x] 2.6 Test `deleteConversation(id)` → DELETE `/chat/conversations/{id}`
+  - [x] 2.7 Test folder operations: `getUserFolders`, `createFolder`, `updateFolder`, `deleteFolder`
+  - [x] 2.8 Test `moveConversation(id, from, to)` → POST `/chat/conversations/{id}/move`
+  - [x] 2.9 Test `searchConversations(term, options)` → GET `/chat/search`
+  - [x] 2.10 Test `getConversationFolder(id)` returns `{ inFolder: false }` on 404
 
-- [ ] Task 3: Create analyticsService tests (AC: #3)
-  - [ ] 3.1 Create `src/__tests__/services/analyticsService.test.js`
-  - [ ] 3.2 Test `getDashboardAnalytics(period, date, locale)` → GET `/analytics/dashboard`
-  - [ ] 3.3 Test `getTimeSeriesData(metric, interval, start, end, locale)` → GET `/analytics/timeseries/{metric}`
-  - [ ] 3.4 Test `getUniqueUsersCount(start, end, locale)` → GET `/analytics/metric/uniqueUsers`
-  - [ ] 3.5 Test `getSatisfactionHeatmap(period, date, locale)` → GET `/analytics/satisfaction/heatmap`
-  - [ ] 3.6 Test `getSatisfactionGauge(period, date, locale)` → GET `/analytics/satisfaction/gauge`
-  - [ ] 3.7 Test helper: `transformDashboardData(data)` transforms raw API response
-  - [ ] 3.8 Test helper: `formatDateLabel(timestamp, interval)` formats correctly per interval
-  - [ ] 3.9 Test helper: `calculatePercentChange(current, previous)` returns correct percentage
-  - [ ] 3.10 Test error fallbacks: getUniqueUsersCount → 0, getTimeSeriesData → [], getComparisonData → `{current: null, previous: null}`
-  - [ ] 3.11 Test `recordQuery(doc)` → POST `/analytics/query`
-  - [ ] 3.12 Test `recordFeedback(queryId, feedback)` → POST `/analytics/feedback`
+- [x] Task 3: Create analyticsService tests (AC: #3)
+  - [x] 3.1 Create `src/__tests__/services/analyticsService.test.js`
+  - [x] 3.2 Test `getDashboardAnalytics(period, date, locale)` → GET `/analytics/dashboard`
+  - [x] 3.3 Test `getTimeSeriesData(metric, interval, start, end, locale)` → GET `/analytics/timeseries/{metric}`
+  - [x] 3.4 Test `getUniqueUsersCount(start, end, locale)` → GET `/analytics/metric/uniqueUsers`
+  - [x] 3.5 Test `getSatisfactionHeatmap(period, date, locale)` → GET `/analytics/satisfaction/heatmap`
+  - [x] 3.6 Test `getSatisfactionGauge(period, date, locale)` → GET `/analytics/satisfaction/gauge`
+  - [x] 3.7 Test helper: `transformDashboardData(data)` transforms raw API response
+  - [x] 3.8 Test helper: `formatDateLabel(timestamp, interval)` formats correctly per interval
+  - [x] 3.9 Test helper: `calculatePercentChange(current, previous)` returns correct percentage
+  - [x] 3.10 Test error fallbacks: getUniqueUsersCount → 0, getTimeSeriesData → [], getComparisonData → `{current: null, previous: null}`
+  - [x] 3.11 Test `recordQuery(doc)` → POST `/analytics/query`
+  - [x] 3.12 Test `recordFeedback(queryId, feedback)` → POST `/analytics/feedback`
 
-- [ ] Task 4: Create additional service tests (AC: #4)
-  - [ ] 4.1 Create `src/__tests__/services/userProfileService.test.js` — test `getProfile()` → GET `/me`, `updateProfile(data)` → PUT `/me`
-  - [ ] 4.2 Create `src/__tests__/services/serviceTreeService.test.js` — test `getAllCategories()`, `getAdminCategories()`, `searchServices()`, CRUD operations, error fallbacks (empty arrays)
-  - [ ] 4.3 Create `src/__tests__/services/documentFileService.test.js` — test `getFiles()`, `uploadFile()`, `deleteFile()`, `ingestFile()`, crawl operations
+- [x] Task 4: Create additional service tests (AC: #4)
+  - [x] 4.1 Create `src/__tests__/services/userProfileService.test.js` — test `getProfile()` → GET `/me`, `updateProfile(data)` → PUT `/me`
+  - [x] 4.2 Create `src/__tests__/services/serviceTreeService.test.js` — test `getAllCategories()`, `getAdminCategories()`, `searchServices()`, CRUD operations, error fallbacks (empty arrays)
+  - [x] 4.3 Create `src/__tests__/services/documentFileService.test.js` — test `getFiles()`, `uploadFile()`, `deleteFile()`, `ingestFile()`, crawl operations
 
-- [ ] Task 5: Verify and lint (AC: #5, #6)
-  - [ ] 5.0 Run `npm test` before changes to confirm baseline
-  - [ ] 5.1 All tests pass with `npm test` in `components/gov-chat-frontend/`
-  - [ ] 5.2 All test files pass ESLint (`npm run lint`)
-  - [ ] 5.3 Existing tests (240) pass unchanged
+- [x] Task 5: Verify and lint (AC: #5, #6)
+  - [x] 5.0 Run `npm test` before changes to confirm baseline
+  - [x] 5.1 All tests pass with `npm test` in `components/gov-chat-frontend/`
+  - [x] 5.2 All test files pass ESLint (`npm run lint`)
+  - [x] 5.3 Existing tests (240) pass unchanged
 
 ## Dev Notes
 
@@ -306,8 +306,32 @@ Per test file:
 
 ### Agent Model Used
 
+Claude (deepseek-v4-pro)
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- Created `src/__tests__/services/` directory (new)
+- Implemented chatbotService.test.js (12 tests) — submitQuery, updateQueryResponseTime, markQueryAsAnswered, submitFeedback, error handling, Error: prefix rejection
+- Implemented chatHistoryService.test.js (44 tests) — conversations, messages, search, folders (CRUD), folder-conversation operations, 404 fallback for getConversationFolder
+- Implemented analyticsService.test.js (58 tests) — HTTP functions (dashboard, timeseries, uniqueUsers, heatmap, gauge, comparison, recordQuery, recordFeedback), pure helpers (transformDashboardData, formatDateLabel, calculatePercentChange, getWeekNumber, calculateDateRange, formatValue, getTrendColor, transformTimeSeriesData, getCurrentLocale, setI18n), error fallbacks
+- Implemented userProfileService.test.js (5 tests) — getProfile (GET /me), updateProfile (PUT /me), error handling
+- Implemented serviceTreeService.test.js (27 tests) — getAllCategories, getAdminCategories, getCategoryServices, searchServices, translations, CRUD operations, transformCategoriesToTreeNodes, error fallbacks (searchServices, getCategoryTranslations, getServiceTranslations)
+- Implemented documentFileService.test.js (13 tests) — getFiles, getFileMetadata (double data unwrap), uploadFile, uploadLink, updateFile, deleteFile, ingestFile, ingestMultipleFiles, retractMultipleFiles, getIngestionLogs, crawl operations (schedule, job, metrics, logs, kill)
+- All 6 test files mock @/services/httpService at module level via closure-based jest.mock() (AC5)
+- All mocks reset via jest.clearAllMocks() in beforeEach (AC5)
+- Error handling coverage: success (200), server error (500), not found (404), network failures (AC6)
+- Full test suite: 477 tests passing (318 existing + 159 new), 22 suites, 0 regressions
+- ESLint: clean (no errors)
+- Baseline verification: 318 tests → confirmed baseline before any changes (Task 5.0)
+
 ### File List
+
+- `components/gov-chat-frontend/src/__tests__/services/` (new directory)
+- `components/gov-chat-frontend/src/__tests__/services/chatbotService.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/services/chatHistoryService.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/services/analyticsService.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/services/userProfileService.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/services/serviceTreeService.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/services/documentFileService.test.js` (new)

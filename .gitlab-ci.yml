@@ -281,8 +281,13 @@ flutter:test:
   stage: test
   script:
     - export PATH="$PWD/../../flutter-sdk/bin:$PATH"
+    - dart pub global activate junitreport_maintained
+    - mkdir -p reports
+    - flutter test --machine | tojunit --output reports/flutter-report.xml
     - flutter test --coverage
   artifacts:
+    reports:
+      junit: mobile/genie_ai_mobile/reports/flutter-report.xml
     paths:
       - mobile/genie_ai_mobile/coverage/
     when: always

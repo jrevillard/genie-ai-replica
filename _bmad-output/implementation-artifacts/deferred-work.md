@@ -93,3 +93,7 @@ Items deferred during code reviews. Revisit when the related component is next m
 ## Deferred from: code review of 1-1-configure-junit-xml-reporting-for-all-test-runners (2026-05-19)
 
 - No integration test for report generation — smoke test that verifies JUnit XML files exist and contain valid XML after test runs. Nice-to-have, not a bug.
+
+## Deferred from: code review of 1-3-create-ci-pipeline-test-stage (2026-05-19)
+
+- Python venv recreated on every CI run despite cache restoration — `python -m venv .venv` in `before_script` recreates the venv even when cache restores it. Pattern is functional (venv creation is idempotent, pip skips installed packages) but wastes ~5-10s per run. Could be optimized with a conditional check (`if [ ! -d .venv ]; then python -m venv .venv; fi`).

@@ -1,6 +1,6 @@
 # Story 1.3: Create CI Pipeline Test Stage
 
-Status: review
+Status: done
 
 ## Story
 
@@ -326,7 +326,7 @@ claude-sonnet-4-6
 ### Completion Notes List
 
 - Story 1-1 merged into PRD — jest-junit configured in each component's jest config, Node.js jobs simply run `npm test`
-- junitreport not in Flutter pubspec.yaml — flutter:test keeps `flutter test --coverage` only, JUnit XML pending story 1-1 adding junitreport
+- junitreport not in Flutter pubspec.yaml — story 1.1 used `dart pub global activate junitreport_maintained` instead. flutter:test now activates global tool and pipes `--machine | tojunit` for JUnit XML + runs `--coverage`
 - `.test_node` template mutualizes: `NODE_ENV: test` and artifacts defaults (`when: always`, `expire_in: 7 days`)
 - Each Node.js job only overrides: `before_script` (cd + npm ci), `script` (npm test), `cache`, `artifacts.reports.junit`, `rules`
 - `flutter:test`: removed duplicate `flutter analyze` (already in `lint:dart`), added main branch rule, added `.gitlab-ci.yml` to changes
@@ -335,3 +335,8 @@ claude-sonnet-4-6
 ### File List
 
 - `.gitlab-ci.yml` — modified: added `.test_node` template, 4 new test jobs (backend, frontend, doc-repo, python), updated `flutter:test`
+
+### Review Findings
+
+- [x] [Review][Patch] `flutter:test` missing JUnit XML output — story 1-1 used `dart pub global activate junitreport_maintained` (not a pubspec dep). Fixed: added `tojunit` pipe + JUnit artifact.
+- [x] [Review][Defer] Python venv recreated on every CI run despite cache [.gitlab-ci.yml] — deferred, pattern is functional (`python -m venv` is idempotent, pip skips installed packages). Minor cache efficiency concern, not a correctness issue.

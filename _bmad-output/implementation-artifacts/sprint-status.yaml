@@ -46,7 +46,7 @@ development_status:
   epic-1: in-progress
   1-1-configure-junit-xml-reporting-for-all-test-runners: done
   1-2-create-ci-pipeline-lint-stage: done
-  1-3-create-ci-pipeline-test-stage: ready-for-dev
+  1-3-create-ci-pipeline-test-stage: done
   1-4-create-ci-pipeline-contract-test-stage: backlog
   1-5-create-ci-pipeline-configuration-validation-stage: backlog
   1-6-configure-mr-blocking-and-scheduled-jobs: backlog

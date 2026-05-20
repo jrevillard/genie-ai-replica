@@ -10,6 +10,7 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "test": "jest",
+    "test:contract": "jest --testPathPattern='__tests__/routes/'",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.js\"",

@@ -164,3 +164,9 @@ Items deferred during code reviews. Revisit when the related component is next m
 - updateMetadata source has dead code — 'labels' branch in field filter can never execute since 'labels' is not in allowedFields. Pre-existing source code concern.
 - 50MB buffer allocation in oversized buffer test — slow and memory-intensive. Pre-existing test design.
 - AC6 (EICAR fixture from Story 5.1 mocks) NOT SATISFIED — shared mocks imported but unused; each test creates inline mocks instead. AC2 PARTIALLY SATISFIED due to tautological mocking.
+
+## Deferred from: code review of 1-7-configure-ci-caching-and-path-based-triggers (2026-05-21)
+
+- Flutter SDK cache key lacks OS/architecture component — `.flutter_base` template uses `flutter-sdk-${FLUTTER_VERSION}` without `${CI_RUNNER_EXECUTABLE_ARCH}`. Cross-architecture runners could corrupt each other's SDK cache. Pre-existing issue in template not changed in this diff.
+- Patrol E2E cache fallback_keys inheritance — `patrol:e2e` job may override `.flutter_base` cache block instead of extending it, missing the new fallback_keys. Verify at runtime.
+- AC6 pipeline time budget — NFR can only be verified at runtime with actual CI execution. Estimated 4-5 min, well within 10 min budget. No code change needed.

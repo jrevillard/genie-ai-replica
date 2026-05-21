@@ -1,6 +1,6 @@
 # Story 1.7: Configure CI Caching and Path-Based Triggers
 
-Status: review
+Status: done
 
 ## Story
 
@@ -240,3 +240,9 @@ Claude (glm-5-turbo)
 ### File List
 
 - `.gitlab-ci.yml` — Modified: Added `workflow:rules`, pip cache for `lint:python`, `fallback_keys` on all cache entries
+
+### Review Findings
+
+- [x] [Review][Defer] Flutter SDK cache key lacks OS/architecture component [`.flutter_base`] — deferred, pre-existing issue in `.flutter_base` template (not changed in this diff)
+- [x] [Review][Defer] Patrol E2E cache fallback_keys inheritance [`.gitlab-ci.yml`] — deferred, verify at runtime that `patrol:e2e` inherits fallback_keys from `.flutter_base`
+- [x] [Review][Defer] AC6 pipeline time budget — deferred, NFR can only be verified at runtime (estimated 4-5 min, well within 10 min budget)

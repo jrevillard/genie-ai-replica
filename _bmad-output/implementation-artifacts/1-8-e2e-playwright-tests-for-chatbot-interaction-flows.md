@@ -46,7 +46,9 @@ so that critical user journeys through the RAG pipeline are validated in CI.
   - [ ] Add `scheduled:e2e-web` job to `.gitlab-ci.yml` in the `scheduled` stage, with `needs: [scheduled:integration]`
   - [ ] Reuse `scheduled:integration` Docker Compose stack (story 1.6 provides this job — same backend for web + mobile)
   - [ ] Connect CI container to compose network, discover nginx IP (follow `scheduled:e2e-mobile` pattern from story 1.6)
+  - [ ] Update `playwright.config.js` to support `baseURL: process.env.BASE_URL || 'https://localhost'` so CI can override via env var
   - [ ] Set `BASE_URL=https://${NGINX_IP}` env var so Playwright targets the live stack via compose network
+  - [ ] The job needs `docker` CLI access for networking (Phase 1). The `.node_base` image (`node:20-alpine`) does NOT include docker — either install it in `before_script` (`apk add --no-cache docker-cli`) or use a custom image. Follow the same approach as `scheduled:e2e-mobile` which uses `.flutter_base` (debian with docker installed).
   - [ ] `rules: if: $CI_PIPELINE_SOURCE == "schedule"` only — no per-MR trigger for scheduled tier
   - [ ] `retry: max: 2` for flaky tests (same as `scheduled:e2e-mobile`)
   - [ ] NO `allow_failure` — E2E failures are real regressions
@@ -75,13 +77,13 @@ Where the `scheduled` stage contains:
 - `scheduled:e2e-mobile` — Depends on integration + build-apk, runs mobile Patrol tests
 - `scheduled:e2e-web` — **NEW** (this story). Depends on integration, runs Playwright web tests
 
-E2E tests only run on scheduled pipelines and do NOT block MRs. The `workflow:rules` in `.gitlab-ci.yml` already includes `$CI_PIPELINE_SOURCE == "schedule"`.
+E2E tests only run on scheduled pipelines and do NOT block MRs. Note: the current `workflow:rules` (from story 1.7) does NOT include `$CI_PIPELINE_SOURCE == "schedule"` — story 1.6 adds this. Until 1.6 is merged, scheduled pipelines won't reach the `scheduled` stage. This is expected and documented in Dependencies.
 
 ### Existing Infrastructure — Reuse, Do NOT Reinvent
 
 | What | Where | Notes |
 |------|-------|-------|
-| Playwright config | `playwright.config.js` | baseURL: `https://localhost`, chromium only, JUnit reporter already configured, `ignoreHTTPSErrors: true` |
+| Playwright config | `playwright.config.js` | baseURL: `https://localhost` (hardcoded — MUST update to `process.env.BASE_URL \|\| 'https://localhost'` for CI), chromium only, JUnit reporter already configured, `ignoreHTTPSErrors: true` |
 | Auth helpers | `tests/e2e/helpers/auth.js` | `getUserToken()`, `getAdminToken()`, `parseJwtClaims()`, `request()` — reuse for all authenticated API calls |
 | Keycloak admin helpers | `tests/e2e/helpers/keycloak-admin.js` | User/realm management for test setup |
 | Root package.json scripts | `package.json` | `test:e2e` and `test:e2e:list` already configured |
@@ -98,7 +100,7 @@ E2E tests only run on scheduled pipelines and do NOT block MRs. The `workflow:ru
 | Bot message | `.chat-message.bot` | Bot bubble |
 | Message bubble | `.message-bubble` | Text content within message |
 | Loading spinner | `.loading-spinner` | Shown during query processing |
-| Save chat button | `button[title="Save Chat"]` | Triggers save dialog |
+| Save chat button | `.chat-header button` (last in header) or `DsButton[variant="ghost"]` near header | Triggers `saveChatToHistory()` — title is dynamic i18n (`translate('chatbot.saveChat')`), do NOT use `button[title="Save Chat"]`. Recommend adding `data-testid="save-chat-btn"` to the component for stable targeting. |
 | Quick help items | `.quick-help-item` | Suggested prompts overlay |
 | Context panel | `.context-panel` | Selected service pills |
 
@@ -273,7 +275,15 @@ Key alignment with `scheduled:e2e-mobile` (story 1.6):
 - **Schedule-only `rules`** — `if: $CI_PIPELINE_SOURCE == "schedule"` only. No per-MR path-based triggers for this scheduled tier.
 - **`after_script`** — disconnects CI container from compose network (stack teardown is handled by `scheduled:integration`'s cleanup or GitLab's pipeline cleanup)
 
-**Important note on `BASE_URL`:** The `playwright.config.js` currently hardcodes `baseURL: 'https://localhost'`. In CI, we override via `BASE_URL=https://${NGINX_IP}` environment variable. Playwright's config reads `process.env.BASE_URL` if set, or you update the config to support `baseURL: process.env.BASE_URL || 'https://localhost'`. This change is part of Task 5.
+**Important notes:**
+
+1. **`BASE_URL` / `playwright.config.js`:** The config currently hardcodes `baseURL: 'https://localhost'`. Task 5 includes updating it to `baseURL: process.env.BASE_URL || 'https://localhost'`. In CI, we then pass `BASE_URL=https://${NGINX_IP}` so Playwright targets the live stack. Locally it defaults to `https://localhost`.
+
+2. **Docker CLI access:** The `.node_base` template uses `node:20-alpine` which does NOT include docker CLI. The Phase 1 networking steps require docker to discover/connect to the compose network. Options:
+   - Install docker CLI in `before_script`: `apk add --no-cache docker-cli`
+   - Use a custom image with node + docker pre-installed
+   - The runner must have docker socket mounted (same requirement as `scheduled:e2e-mobile`)
+   Recommended: install docker-cli in `before_script` to stay close to `.node_base`.
 
 ### Test File Naming Convention
 

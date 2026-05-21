@@ -401,7 +401,6 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
                 const SizedBox(width: DsSpacing.xs),
                 Flexible(
                   child: DsButton(
-                    key: const Key('settings_close_button'),
                     label: tr("settings.close"),
                     variant: DsButtonVariant.ghost,
                     onPressed: () => Navigator.pop(context),

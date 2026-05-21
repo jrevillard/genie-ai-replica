@@ -61,13 +61,18 @@ void main() {
         // PopupMenu items render in a native overlay — $(#key) finders don't reach them.
         await $('Settings').tap();
 
-        // 3. Scroll to Manage My Account button (bottom of settings screen)
+        // 3. Wait for settings screen to finish loading (API call completes)
+        await $(
+          #settings_close_button,
+        ).waitUntilVisible(timeout: Duration(seconds: 15));
+
+        // 4. Scroll to Manage My Account button (bottom of settings screen)
         await $(#settings_manage_account_button).scrollTo();
         await $(
           #settings_manage_account_button,
         ).waitUntilVisible(timeout: Duration(seconds: 10));
 
-        // 4. Tap Manage My Account — launches Keycloak account console
+        // 5. Tap Manage My Account — launches Keycloak account console
         //    in external browser. We can't verify the browser content
         //    (no session cookie, self-signed cert), so we just verify
         //    the button is tappable and no error snackbar appears.
@@ -130,27 +135,32 @@ void main() {
         // PopupMenu items render in a native overlay — $(#key) finders don't reach them.
         await $('Settings').tap();
 
-        // 3. Scroll to Delete My Account button (bottom of settings screen)
+        // 3. Wait for settings screen to finish loading (API call completes)
+        await $(
+          #settings_close_button,
+        ).waitUntilVisible(timeout: Duration(seconds: 15));
+
+        // 4. Scroll to Delete My Account button (bottom of settings screen)
         await $(#settings_delete_account_button).scrollTo();
         await $(
           #settings_delete_account_button,
         ).waitUntilVisible(timeout: Duration(seconds: 10));
 
-        // 4. Tap Delete My Account — confirmation dialog appears
+        // 5. Tap Delete My Account — confirmation dialog appears
         await $(#settings_delete_account_button).tap();
         await $(
           #settings_delete_confirm_button,
         ).waitUntilVisible(timeout: Duration(seconds: 10));
 
-        // 5. Confirm deletion
+        // 6. Confirm deletion
         await $(#settings_delete_confirm_button).tap();
 
-        // 6. Verify app returns to login screen
+        // 7. Verify app returns to login screen
         await $(
           #login_sign_in_button,
         ).waitUntilVisible(timeout: Duration(seconds: 15));
 
-        // 7. Verify user is actually deleted via Keycloak Admin API
+        // 8. Verify user is actually deleted via Keycloak Admin API
         final newToken = await auth.getAdminToken(
           e2eSecrets.keycloakAdminPassword,
         );

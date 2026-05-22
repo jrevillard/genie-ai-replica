@@ -108,6 +108,7 @@ docker-compose.override.yml
 
 # Claude Code settings
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 
 # Roo local state
 .roo/

@@ -300,7 +300,7 @@ Key alignment with story 1.6 architecture:
 - **`tags: [docker]`** — runner must have docker socket mounted (same as `.e2e_integration_base`)
 - **`apk add docker-cli curl python3`** — `.node_base` (`node:20-alpine`) lacks docker; installed in `before_script`
 - **No `allow_failure`** — tests must pass. E2E failures signal real regressions.
-- **`after_script`** — captures compose logs. Stack teardown is handled at pipeline level (story 1.6 manages this), NOT in individual E2E jobs.
+- **`after_script`** — captures compose logs only. Stack teardown is handled by `scheduled:cleanup` (stage `.post`, story 1.6), NOT in individual E2E jobs. When adding `scheduled:e2e-web`, update `scheduled:cleanup` needs to `[scheduled:e2e-mobile, scheduled:e2e-web]`.
 - **`expire_in: 2 days`** — matches `.e2e_mobile_base` artifact retention
 
 **Important notes:**

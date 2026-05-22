@@ -53,7 +53,7 @@ development_status:
   1-6-configure-mr-blocking-and-scheduled-jobs: done
   1-7-configure-ci-caching-and-path-based-triggers: done
 
-  1-8-e2e-playwright-tests-for-chatbot-interaction-flows: ready-for-dev
+  1-8-e2e-playwright-tests-for-chatbot-interaction-flows: review
   1-9-e2e-playwright-tests-for-document-upload-and-search-flows: backlog
   epic-1-retrospective: optional
 

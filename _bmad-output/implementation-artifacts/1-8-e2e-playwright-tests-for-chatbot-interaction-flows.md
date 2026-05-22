@@ -43,8 +43,10 @@ so that critical user journeys through the RAG pipeline are validated in CI.
   - [ ] Use network interception (`page.route()`) to simulate backend errors
 
 - [ ] Task 5: Add `.e2e_web_base` template + two E2E web jobs to GitLab CI (AC: #5)
+  - [ ] Expand `e2e:integration` `changes` to include web-relevant paths + remove mobile-specific `needs` (see "CRITICAL: e2e:integration changes" in Dev Notes)
+  - [ ] Move `needs: [lint:dart, test:flutter]` from `e2e:integration` to `patrol:e2e` (mobile gates belong on the mobile job, not on shared integration)
   - [ ] Create hidden `.e2e_web_base` template (self-contained, like `.e2e_mobile_base` from story 1.6) with all Playwright logic: docker networking, nginx IP discovery, ROPC setup/cleanup, Playwright install, test execution
-  - [ ] Add `e2e:playwright` job extending `.e2e_web_base` in `e2e` stage, with `needs: [e2e:integration]`, rule: `$CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"` with path-based `changes` for chatbot files
+  - [ ] Add `e2e:playwright` job extending `.e2e_web_base` in `e2e` stage, with `needs: [e2e:integration]`, rule: `$CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"` with path-based `changes` for web files
   - [ ] Add `scheduled:e2e-web` job extending `.e2e_web_base` in `scheduled` stage, with `needs: [scheduled:integration]`, rule: `$CI_PIPELINE_SOURCE == "schedule"`
   - [ ] Reuse integration Docker Compose stack (same backend for web + mobile)
   - [ ] Connect CI container to compose network, discover nginx IP (same pattern as `.e2e_mobile_base`)
@@ -56,7 +58,6 @@ so that critical user journeys through the RAG pipeline are validated in CI.
   - [ ] Add JUnit report artifact for GitLab test reporting
   - [ ] Add `mkdir -p reports` in `before_script`
   - [ ] Follow cache pattern from story 1.7
-  - [ ] Clean up: disconnect from compose network in `after_script`
 
 - [ ] Task 6: Verify and validate (AC: #6)
   - [ ] Run full test suite locally and confirm <30 min
@@ -150,6 +151,8 @@ await page.route('**/api/queries/stream', (route) => {
 
 For testing actual SSE rendering, do NOT mock — instead verify the frontend behavior (text appears in bot bubble, loading spinner disappears).
 
+**Note:** The frontend uses `fetch()` + `ReadableStream` (not `EventSource`) to consume the streaming endpoint. The `text/event-stream` content-type check above may not match the actual response headers. Verify the real content-type before relying on this pattern. The recommended approach is to assert on DOM state (bot bubble text, loading spinner visibility) rather than intercepting the SSE stream.
+
 ### Request Payload for Streaming Query
 
 ```javascript
@@ -203,57 +206,11 @@ The key difference from mobile: no emulator/socat. Playwright runs headless Chro
         - "e2e-playwright-$CI_DEFAULT_BRANCH"
         - "e2e-playwright-"
   script:
-    # --- Phase 1: Connect to compose network + discover nginx IP ---
-    - |
-      COMPOSE_NET=$(docker network ls --filter "label=com.docker.compose.project=ci-${CI_PIPELINE_ID}" --format '{{.Name}}' | head -1)
-      if [ -z "$COMPOSE_NET" ]; then
-        COMPOSE_NET="ci-${CI_PIPELINE_ID}_default"
-      fi
-      echo "Compose network: $COMPOSE_NET"
-      CI_CONTAINER_ID=$(docker ps --filter "label=com.gitlab.gitlab-runner.job.id=$CI_JOB_ID" --format '{{.ID}}' | head -1)
-      if [ -z "$CI_CONTAINER_ID" ]; then
-        CI_CONTAINER_ID=$(docker ps --filter "name=runner" --format '{{.Names}}' | grep "concurrent" | head -1 | sed 's/-predefined$//')
-      fi
-      echo "CI container: $CI_CONTAINER_ID"
-      docker network connect "$COMPOSE_NET" "$CI_CONTAINER_ID" 2>/dev/null || true
-      echo "CI container connected to compose network: $COMPOSE_NET"
-      NGINX_CONTAINER=$(docker ps --filter "name=nginx" --format "{{.Names}}" | grep "ci-" | head -1)
-      if [ -n "$NGINX_CONTAINER" ]; then
-        NGINX_IP=$(docker inspect "$NGINX_CONTAINER" --format "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}" | awk '{print $1}')
-        echo "Nginx container: $NGINX_CONTAINER at $NGINX_IP"
-      else
-        echo "ERROR: No nginx container found in compose stack"
-        exit 1
-      fi
-    # --- Phase 2: ROPC setup for page-level auth ---
-    - |
-      KEYCLOAK_BASE="https://${NGINX_IP}:443"
-      KC_PWD="${KEYCLOAK_ADMIN_PASSWORD}"
-      ADMIN_TOKEN=$(curl -sk -X POST "${KEYCLOAK_BASE}/auth/realms/master/protocol/openid-connect/token" \
-        -d "client_id=admin-cli" -d "username=admin" -d "password=${KC_PWD}" -d "grant_type=password" \
-        2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || true)
-      CLIENT_UUID=""
-      if [ -n "$ADMIN_TOKEN" ]; then
-        CLIENT_UUID=$(curl -sk "${KEYCLOAK_BASE}/auth/admin/realms/genie/clients?clientId=genie-app" \
-          -H "Authorization: Bearer $ADMIN_TOKEN" 2>/dev/null \
-          | python3 -c "import sys,json; clients=json.load(sys.stdin); print(clients[0]['id'] if clients else '')" 2>/dev/null || true)
-        if [ -n "$CLIENT_UUID" ]; then
-          curl -sk -X PUT "${KEYCLOAK_BASE}/auth/admin/realms/genie/clients/${CLIENT_UUID}" \
-            -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-            -d '{"directAccessGrantsEnabled": true}' 2>/dev/null || true
-          echo "ROPC enabled on genie-app"
-        fi
-      fi
-    # --- Phase 3: Run Playwright tests against live stack ---
+    # Phase 1: Connect to compose network + discover nginx IP (same as .e2e_mobile_base)
+    # Phase 2: ROPC setup for page-level auth (same as .e2e_mobile_base)
+    # Phase 3: Run Playwright tests against live stack
     - BASE_URL="https://${NGINX_IP}" npx playwright test tests/e2e/chatbot/
-    # --- Phase 4: ROPC cleanup ---
-    - |
-      if [ -n "$CLIENT_UUID" ] && [ -n "$ADMIN_TOKEN" ]; then
-        curl -sk -X PUT "${KEYCLOAK_BASE}/auth/admin/realms/genie/clients/${CLIENT_UUID}" \
-          -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-          -d '{"directAccessGrantsEnabled": false}' 2>/dev/null || true
-        echo "ROPC disabled on genie-app"
-      fi
+    # Phase 4: ROPC cleanup (same as .e2e_mobile_base)
   after_script:
     - mkdir -p e2e-logs
     - docker compose -p "ci-${CI_PIPELINE_ID}" logs > e2e-logs/docker-compose.log 2>&1 || true
@@ -276,9 +233,8 @@ e2e:playwright:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
       changes:
         - tests/e2e/chatbot/**/*
-        - components/gov-chat-frontend/src/components/ChatBotComponent.vue
-        - components/gov-chat-frontend/src/services/chatbotService.js
-        - components/gov-chat-backend/routes/chat-routes.js
+        - components/gov-chat-frontend/**/*
+        - components/gov-chat-backend/**/*
         - .gitlab-ci.yml
 
 # Playwright E2E — runs on schedule (same pattern as scheduled:e2e-mobile)
@@ -292,6 +248,40 @@ scheduled:e2e-web:
       when: on_success
 ```
 
+**CRITICAL: `e2e:integration` changes must be expanded (Task 5 prerequisite)**
+
+The current `e2e:integration` job only triggers on `changes: mobile/genie_ai_mobile/**`. Since `e2e:playwright` needs `e2e:integration` to spin up the Docker stack, a web-only merge train would skip integration, causing `e2e:playwright` to also be skipped. Two changes are required:
+
+1. **Expand `e2e:integration` `changes`** to include web-relevant paths (component-level globs, matching mobile's approach):
+```yaml
+e2e:integration:
+  extends: .e2e_integration_base
+  stage: e2e
+  resource_group: e2e-runner
+  needs: []   # Remove mobile-specific needs — downstream jobs gate themselves
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
+      changes:
+        - mobile/genie_ai_mobile/**/*
+        - tests/e2e/chatbot/**/*
+        - components/gov-chat-frontend/**/*
+        - components/gov-chat-backend/**/*
+        - .gitlab-ci.yml
+```
+
+2. **Move mobile needs to `patrol:e2e`** where they belong:
+```yaml
+patrol:e2e:
+  extends: .e2e_mobile_base
+  stage: e2e
+  resource_group: e2e-runner
+  needs: [e2e:integration, lint:dart, test:flutter]  # mobile gates here, not on integration
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
+      changes:
+        - mobile/genie_ai_mobile/**/*
+```
+
 Key alignment with story 1.6 architecture:
 - **`.e2e_web_base` hidden template** — self-contained, following `.e2e_mobile_base` pattern
 - **Two jobs extend it** — `e2e:playwright` (merge train) + `scheduled:e2e-web` (schedule), differing only in `stage`, `needs`, and `rules`
@@ -301,7 +291,7 @@ Key alignment with story 1.6 architecture:
 - **`tags: [docker]`** — runner must have docker socket mounted (same as `.e2e_integration_base`)
 - **`apk add docker-cli curl python3`** — `.node_base` (`node:20-alpine`) lacks docker; installed in `before_script`
 - **No `allow_failure`** — tests must pass. E2E failures signal real regressions.
-- **`after_script`** — captures compose logs only. Stack teardown is handled by `scheduled:cleanup` (stage `.post`, story 1.6), NOT in individual E2E jobs. When adding `scheduled:e2e-web`, update `scheduled:cleanup` needs to `[scheduled:e2e-mobile, scheduled:e2e-web]`.
+- **`after_script`** — captures compose logs only. Stack teardown is handled by `.post` cleanup jobs (`e2e:cleanup` for merge trains, `scheduled:cleanup` for schedules). Both are `stage: .post` with `when: always` rules — they run automatically after all other stages. No changes needed to cleanup jobs.
 - **`expire_in: 2 days`** — matches `.e2e_mobile_base` artifact retention
 
 **Important notes:**
@@ -343,7 +333,7 @@ For chatbot tests, use **page-level auth** since we need the full browser sessio
 
 | Dependency | Status | Notes |
 |------------|--------|-------|
-| Story 1.6 (MR blocking, scheduled jobs) | NOT done | Provides `.e2e_integration_base`, `.e2e_mobile_base` templates + `e2e`/`scheduled` stages with merge train + schedule rules. The Playwright jobs extend these patterns. If 1.6 is not merged yet, test code (Tasks 1-4) can be developed independently; CI jobs (Task 5) won't pass until `.e2e_integration_base`, `e2e:integration`, and `scheduled:integration` exist. |
+| Story 1.6 (MR blocking, scheduled jobs) | Done | Provides `.e2e_integration_base`, `.e2e_mobile_base` templates + `e2e`/`scheduled` stages with merge train + schedule rules. All templates and jobs are live in `.gitlab-ci.yml`. This story extends them with `.e2e_web_base`. |
 | Story 1.7 (caching, path triggers) | Done | Use established cache patterns for the new job |
 | Deployed Docker stack | Required for local testing | Full stack: Keycloak + Backend + Frontend + ArangoDB + OPEA services |
 | Test user credentials | Required | `testuser` / `TestPass123!` (same as existing E2E tests) |

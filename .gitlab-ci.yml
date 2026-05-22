@@ -805,15 +805,38 @@ scheduled:e2e-mobile:
       when: on_success
 
 # Web frontend E2E tests (Playwright)
-# TODO: implement in next story — uses same compose stack as scheduled:integration
-# scheduled:e2e-web:
-#   extends: .e2e_web_base
-#   stage: scheduled
-#   needs: [scheduled:integration]
-#   resource_group: e2e-runner
-#   rules:
-#     - if: $CI_PIPELINE_SOURCE == "schedule"
-#       when: on_success
+# Runs against the Docker stack started by scheduled:integration
+scheduled:e2e-web:
+  extends: .node_base
+  stage: scheduled
+  needs: [scheduled:integration]
+  resource_group: e2e-runner
+  allow_failure: true
+  before_script:
+    - npm ci
+    - npx playwright install --with-deps chromium
+  script:
+    - npx playwright test --project=chromium tests/e2e/chatbot/
+  cache:
+    - key:
+        files:
+          - package-lock.json
+        prefix: e2e-playwright
+      paths:
+        - node_modules/
+      fallback_keys:
+        - "e2e-playwright-$CI_DEFAULT_BRANCH"
+        - "e2e-playwright-"
+  artifacts:
+    when: always
+    expire_in: 7 days
+    reports:
+      junit: reports/playwright-report.xml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
 
 # Teardown: clean up compose stack after E2E jobs finish (success or failure).
 # Uses .post — GitLab's built-in final stage (always runs, even on failure).

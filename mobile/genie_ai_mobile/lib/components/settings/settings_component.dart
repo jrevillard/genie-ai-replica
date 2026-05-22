@@ -122,7 +122,10 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
   // ===========================================================================
 
   Future<void> _fetchUserData() async {
-    debugPrint("[SETTINGS] fetchUserData() initiated...");
+    final config = getConfig();
+    debugPrint(
+      "[SETTINGS] fetchUserData() initiated... backendUrl=${config.backendUrl}",
+    );
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -295,16 +298,74 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
     final tokens = ThemeManager().tokens;
 
     if (_isLoading) {
-      return Container(
-        color: tokens.bg,
-        child: Center(child: CircularProgressIndicator(color: tokens.accent)),
+      return Material(
+        color: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            color: tokens.bg,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(DsRadii.xl),
+            ),
+          ),
+          child: Column(
+            children: [
+              _buildStickyHeader(tokens),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(DsSpacing.md),
+                  child: Column(
+                    children: [
+                      Center(
+                        child: CircularProgressIndicator(color: tokens.accent),
+                      ),
+                      const SizedBox(height: DsSpacing.md),
+                      _buildAccountManagement(
+                        tokens,
+                        tokens.isDark ? tokens.fg30 : tokens.muted20,
+                        isOnline: true,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
     if (_errorMessage != null) {
-      return Container(
-        color: tokens.bg,
-        child: _buildErrorState(tokens.accent),
+      return Material(
+        color: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            color: tokens.bg,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(DsRadii.xl),
+            ),
+          ),
+          child: Column(
+            children: [
+              _buildStickyHeader(tokens),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(DsSpacing.md),
+                  child: Column(
+                    children: [
+                      _buildErrorState(tokens.accent),
+                      const SizedBox(height: DsSpacing.md),
+                      _buildAccountManagement(
+                        tokens,
+                        tokens.isDark ? tokens.fg30 : tokens.muted20,
+                        isOnline: true,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -401,6 +462,7 @@ class _SettingsComponentState extends ConsumerState<SettingsComponent> {
                 const SizedBox(width: DsSpacing.xs),
                 Flexible(
                   child: DsButton(
+                    key: const Key('settings_close_button'),
                     label: tr("settings.close"),
                     variant: DsButtonVariant.ghost,
                     onPressed: () => Navigator.pop(context),

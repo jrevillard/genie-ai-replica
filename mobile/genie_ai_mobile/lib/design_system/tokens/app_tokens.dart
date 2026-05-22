@@ -78,7 +78,8 @@ class AppTokens {
     required bool isDark,
     double fontScale = 1.0,
   }) {
-    final theme = config['theme'] ?? {};
+    final theme =
+        (config['theme'] as Map<String, dynamic>?) ?? <String, dynamic>{};
     final brandColor =
         ColorUtils.parseHexNullable(theme['brandColor']) ??
         const Color(0xFF4682B4);

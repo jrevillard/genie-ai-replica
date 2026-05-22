@@ -470,7 +470,7 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 # Password policy (Keycloak policy syntax)
 # Default (in docker-compose.yaml): length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)
 # To simplify: KEYCLOAK_PASSWORD_POLICY=length(8)
-# KEYCLOAK_PASSWORD_POLICY=
+# KEYCLOAK_PASSWORD_POLICY=length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)
 
 # Theme for login, account console, and email (default: genie — custom GENIE.AI theme)
 # KEYCLOAK_THEME=genie

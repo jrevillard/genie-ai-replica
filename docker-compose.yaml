@@ -1220,7 +1220,7 @@ services:
       - KEYCLOAK_LOGIN_WITH_EMAIL=${KEYCLOAK_LOGIN_WITH_EMAIL:-true}
       - KEYCLOAK_DUPLICATE_EMAILS=${KEYCLOAK_DUPLICATE_EMAILS:-false}
       - KEYCLOAK_BRUTE_FORCE=${KEYCLOAK_BRUTE_FORCE:-true}
-      - KEYCLOAK_PASSWORD_POLICY=${KEYCLOAK_PASSWORD_POLICY:-"length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)"}
+      - KEYCLOAK_PASSWORD_POLICY=${KEYCLOAK_PASSWORD_POLICY:-length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)}
       - KEYCLOAK_THEME=${KEYCLOAK_THEME:-genie}
       - KEYCLOAK_I18N_ENABLED=${KEYCLOAK_I18N_ENABLED:-true}
       - KEYCLOAK_LOCALE=${KEYCLOAK_LOCALE:-en}

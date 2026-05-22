@@ -271,6 +271,7 @@ e2e:playwright:
   extends: .e2e_web_base
   stage: e2e
   needs: [e2e:integration]
+  resource_group: e2e-runner
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
       changes:
@@ -285,7 +286,7 @@ scheduled:e2e-web:
   extends: .e2e_web_base
   stage: scheduled
   needs: [scheduled:integration]
-  resource_group: e2e-scheduled
+  resource_group: e2e-runner
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: on_success
@@ -296,7 +297,7 @@ Key alignment with story 1.6 architecture:
 - **Two jobs extend it** — `e2e:playwright` (merge train) + `scheduled:e2e-web` (schedule), differing only in `stage`, `needs`, and `rules`
 - **Merge train rules** — `$CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"` with path-based `changes`, matching `patrol:e2e` pattern
 - **Schedule rules** — `$CI_PIPELINE_SOURCE == "schedule"`, matching `scheduled:e2e-mobile`
-- **`resource_group: e2e-scheduled`** — prevents `scheduled:e2e-web` and `scheduled:e2e-mobile` from running simultaneously (resource contention). GitLab serializes jobs sharing the same resource group.
+- **`resource_group: e2e-runner`** — all E2E jobs share a single resource group (`e2e:integration`, `patrol:e2e`, `scheduled:integration`, `scheduled:e2e-mobile`, and now `e2e:playwright` + `scheduled:e2e-web`). GitLab serializes them to prevent resource contention on the single Docker host.
 - **`tags: [docker]`** — runner must have docker socket mounted (same as `.e2e_integration_base`)
 - **`apk add docker-cli curl python3`** — `.node_base` (`node:20-alpine`) lacks docker; installed in `before_script`
 - **No `allow_failure`** — tests must pass. E2E failures signal real regressions.

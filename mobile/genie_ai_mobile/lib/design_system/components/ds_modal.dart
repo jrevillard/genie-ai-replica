@@ -90,7 +90,9 @@ class DsModal extends StatelessWidget {
                   DsSpacing.md,
                   DsSpacing.md,
                 ),
-                child: Row(children: actions!),
+                child: Row(
+                  children: actions!.map((a) => Expanded(child: a)).toList(),
+                ),
               ),
             ],
           ],

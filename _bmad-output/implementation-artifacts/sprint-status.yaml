@@ -1,5 +1,6 @@
 # generated: 2026-05-13
 # last_updated: 2026-05-21
+
 # project: genie-ai
 # project_key: testing-framework
 # tracking_system: file-system
@@ -49,8 +50,9 @@ development_status:
   1-3-create-ci-pipeline-test-stage: done
   1-4-create-ci-pipeline-contract-test-stage: done
   1-5-create-ci-pipeline-configuration-validation-stage: done
-  1-6-configure-mr-blocking-and-scheduled-jobs: backlog
+  1-6-configure-mr-blocking-and-scheduled-jobs: done
   1-7-configure-ci-caching-and-path-based-triggers: done
+
   1-8-e2e-playwright-tests-for-chatbot-interaction-flows: backlog
   1-9-e2e-playwright-tests-for-document-upload-and-search-flows: backlog
   epic-1-retrospective: optional

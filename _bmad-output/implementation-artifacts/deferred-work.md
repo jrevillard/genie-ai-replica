@@ -34,6 +34,11 @@ Items deferred during code reviews. Revisit when the related component is next m
 
 - GPU profile name detection hardcoded via `endsWith()` in validate-hardware.js:1016-1020 — fragile if new profiles are added; acceptable for current T4/RTX6000 profiles. Pre-existing design choice.
 
+## Deferred from: code review of 1-6-configure-mr-blocking-and-scheduled-jobs (2026-05-20)
+
+- GPU_AVAILABLE variable never set in CI config — follows spec exactly (spec prescribes `$GPU_AVAILABLE` check pattern); variable must be set at runner infrastructure level (runner config.toml or custom environment variable). Not a CI config concern.
+- Missing Keycloak in integration test services — follows spec exactly (spec prescribes `backend frontend arangodb redis`); health check will reveal at runtime if Keycloak is needed. Deliberate minimal first pass per spec.
+
 ## Deferred from: code review of 2-1-refactor-backend-indexjs-to-export-createapp (2026-05-13)
 
 - swaggerSpec/swaggerUi silent failure at module-level — if `swaggerJsdoc()` throws, the spec stays undefined and `/api-docs` silently unavailable. Pre-existing behavior, not introduced by the refactor.
@@ -164,6 +169,10 @@ Items deferred during code reviews. Revisit when the related component is next m
 - updateMetadata source has dead code — 'labels' branch in field filter can never execute since 'labels' is not in allowedFields. Pre-existing source code concern.
 - 50MB buffer allocation in oversized buffer test — slow and memory-intensive. Pre-existing test design.
 - AC6 (EICAR fixture from Story 5.1 mocks) NOT SATISFIED — shared mocks imported but unused; each test creates inline mocks instead. AC2 PARTIALLY SATISFIED due to tautological mocking.
+
+## Deferred from: code review of 1-6-configure-mr-blocking-and-scheduled-jobs round 2 (2026-05-21)
+
+- BUILD API enabled in socket proxy (`docker_socket_proxy_build: "1"`) — security/infrastructure decision enabling docker build through the proxy. Pre-existing configuration choice.
 
 ## Deferred from: code review of 1-7-configure-ci-caching-and-path-based-triggers (2026-05-21)
 

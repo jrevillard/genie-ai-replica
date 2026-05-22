@@ -130,7 +130,7 @@ class I18nService extends ChangeNotifier {
     dynamic current = map;
 
     for (String k in keys) {
-      if (current is Map<String, dynamic> && current.containsKey(k)) {
+      if (current is Map && current.containsKey(k)) {
         current = current[k];
       } else {
         return null;

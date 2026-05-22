@@ -12,7 +12,7 @@ shutdown_timeout = 0
   executor = "{{ gitlab_runner_executor }}"
   limit = {{ gitlab_runner_limit }}
   {% if gitlab_runner_use_socket_proxy %}
-  environment = ["DOCKER_HOST=tcp://127.0.0.1:2375"]
+  environment = ["DOCKER_HOST=tcp://172.17.0.1:2375"]
   {% endif %}
   [runners.docker]
     tls_verify = false
@@ -29,6 +29,8 @@ shutdown_timeout = 0
     memory = "{{ gitlab_runner_memory_limit }}"
     cpus = "{{ gitlab_runner_cpu_limit }}"
     pull_policy = ["if-not-present"]
-    cap_drop = ["ALL"]
+{% if gitlab_runner_kvm_device is defined and gitlab_runner_kvm_device %}
+    devices = ["{{ gitlab_runner_kvm_device }}"]
+{% endif %}
     shm_size = 0
     network_mtu = 0

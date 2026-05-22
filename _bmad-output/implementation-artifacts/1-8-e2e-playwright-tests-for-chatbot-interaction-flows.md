@@ -257,7 +257,6 @@ The key difference from mobile: no emulator/socat. Playwright runs headless Chro
   after_script:
     - mkdir -p e2e-logs
     - docker compose -p "ci-${CI_PIPELINE_ID}" logs > e2e-logs/docker-compose.log 2>&1 || true
-    - docker compose -p "ci-${CI_PIPELINE_ID}" down -v --remove-orphans 2>/dev/null || true
   artifacts:
     when: always
     expire_in: 2 days
@@ -286,6 +285,7 @@ scheduled:e2e-web:
   extends: .e2e_web_base
   stage: scheduled
   needs: [scheduled:integration]
+  resource_group: e2e-scheduled
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: on_success
@@ -296,10 +296,11 @@ Key alignment with story 1.6 architecture:
 - **Two jobs extend it** — `e2e:playwright` (merge train) + `scheduled:e2e-web` (schedule), differing only in `stage`, `needs`, and `rules`
 - **Merge train rules** — `$CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"` with path-based `changes`, matching `patrol:e2e` pattern
 - **Schedule rules** — `$CI_PIPELINE_SOURCE == "schedule"`, matching `scheduled:e2e-mobile`
+- **`resource_group: e2e-scheduled`** — prevents `scheduled:e2e-web` and `scheduled:e2e-mobile` from running simultaneously (resource contention). GitLab serializes jobs sharing the same resource group.
 - **`tags: [docker]`** — runner must have docker socket mounted (same as `.e2e_integration_base`)
 - **`apk add docker-cli curl python3`** — `.node_base` (`node:20-alpine`) lacks docker; installed in `before_script`
 - **No `allow_failure`** — tests must pass. E2E failures signal real regressions.
-- **`after_script`** — captures compose logs + teardown (follows `.e2e_mobile_base` pattern)
+- **`after_script`** — captures compose logs. Stack teardown is handled at pipeline level (story 1.6 manages this), NOT in individual E2E jobs.
 - **`expire_in: 2 days`** — matches `.e2e_mobile_base` artifact retention
 
 **Important notes:**

@@ -81,10 +81,10 @@ test.describe('Conversation history persistence', () => {
     const conversationsResponse = await page.evaluate(async (args) => {
       const res = await fetch(`${args.baseUrl}/api/chat/conversations`, {
         headers: { Authorization: `Bearer ${args.token}` },
-        signal: AbortSignal.timeout(API_TIMEOUT_MS),
+        signal: AbortSignal.timeout(args.timeout),
       });
       return { status: res.status, body: await res.text() };
-    }, { baseUrl: BASE_URL, token });
+    }, { baseUrl: BASE_URL, token, timeout: API_TIMEOUT_MS });
 
     expect(conversationsResponse.status).toBe(200);
 
@@ -109,10 +109,10 @@ test.describe('Conversation history persistence', () => {
     const response = await page.evaluate(async (args) => {
       const res = await fetch(`${args.baseUrl}/api/chat/conversations`, {
         headers: { Authorization: `Bearer ${args.token}` },
-        signal: AbortSignal.timeout(API_TIMEOUT_MS),
+        signal: AbortSignal.timeout(args.timeout),
       });
       return { status: res.status, body: await res.text() };
-    }, { baseUrl: BASE_URL, token });
+    }, { baseUrl: BASE_URL, token, timeout: API_TIMEOUT_MS });
 
     expect(response.status).toBe(200);
 
@@ -142,10 +142,10 @@ test.describe('Conversation history persistence', () => {
     const convResponse = await page.evaluate(async (args) => {
       const res = await fetch(`${args.baseUrl}/api/chat/conversations`, {
         headers: { Authorization: `Bearer ${args.token}` },
-        signal: AbortSignal.timeout(API_TIMEOUT_MS),
+        signal: AbortSignal.timeout(args.timeout),
       });
       return await res.json();
-    }, { baseUrl: BASE_URL, token });
+    }, { baseUrl: BASE_URL, token, timeout: API_TIMEOUT_MS });
 
     const conversations = convResponse.conversations || convResponse;
     const savedConv = conversations.find(
@@ -163,11 +163,11 @@ test.describe('Conversation history persistence', () => {
         `${args.baseUrl}/api/chat/conversations/${args.convId}`,
         {
           headers: { Authorization: `Bearer ${args.token}` },
-          signal: AbortSignal.timeout(API_TIMEOUT_MS),
+          signal: AbortSignal.timeout(args.timeout),
         },
       );
       return await res.json();
-    }, { baseUrl: BASE_URL, token, convId: savedConv._key || savedConv.id });
+    }, { baseUrl: BASE_URL, token, convId: savedConv._key || savedConv.id, timeout: API_TIMEOUT_MS });
 
     // Verify messages exist
     const messages = fullConv.messages || fullConv.data?.messages || [];

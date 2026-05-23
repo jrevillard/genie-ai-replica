@@ -408,7 +408,7 @@ workflow:
       paths:
         - .cache/ms-playwright/
   before_script:
-    - apt-get update && apt-get install -y docker-cli curl python3
+    - apt-get update && apt-get install -y docker.io curl python3
     - mkdir -p reports
     - npm ci
     - npx playwright install --with-deps chromium

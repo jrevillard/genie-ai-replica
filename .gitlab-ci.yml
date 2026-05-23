@@ -134,6 +134,7 @@ workflow:
       # Backend must verify JWTs via JWKS at https://nginx/auth/... which uses
       # a self-signed certificate.  Safe for CI — never use in production.
       echo "NODE_TLS_REJECT_UNAUTHORIZED=0" >> .env
+    - docker compose build frontend
     - docker compose up -d || (docker compose logs --tail=50 > docker-compose-logs.txt 2>&1; cat docker-compose-logs.txt; exit 1)
     - |
       for i in $(seq 1 60); do

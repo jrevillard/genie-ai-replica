@@ -117,7 +117,9 @@ async function getLastBotMessage(page) {
  * dependency on i18n-translated title attributes.
  */
 async function saveChat(page, title) {
-  const button = page.locator('[data-testid="save-chat-btn"]');
+  // data-testid is the primary selector; title attribute as fallback for
+  // pre-built images that don't include the latest data-testid.
+  const button = page.locator('[data-testid="save-chat-btn"], .input-actions button[title="Save Chat"]').first();
   await expect(button).toBeVisible({ timeout: 5000 });
   await button.click();
 

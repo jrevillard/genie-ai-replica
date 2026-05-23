@@ -170,6 +170,7 @@
             v-if="chatMessages.length > 0"
             variant="ghost"
             :title="translate('chatbot.saveChat')"
+            data-testid="save-chat-btn"
             :disabled="isSaving"
             @click="saveChatToHistory"
           >

@@ -11,6 +11,8 @@ const {
 } = require('../helpers/chatbot');
 const { getUserToken } = require('../helpers/auth');
 
+const API_TIMEOUT_MS = 30000;
+
 test.describe('Conversation history persistence', () => {
   let page;
   let context;
@@ -32,15 +34,21 @@ test.describe('Conversation history persistence', () => {
   });
 
   test.afterAll(async () => {
-    // Clean up test conversations to prevent database bloat
     const token = await getUserToken(TEST_USER.username, TEST_USER.password).catch(() => null);
-    if (!token) return;
+    if (!token) {
+      console.warn('cleanup: failed to get token, skipping conversation deletion');
+      return;
+    }
 
     const { request } = require('../helpers/auth');
     for (const convId of createdConversationIds) {
-      await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {});
+      try {
+        await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch (err) {
+        console.error(`cleanup: failed to delete conversation ${convId}: ${err.message}`);
+      }
     }
   });
 
@@ -73,7 +81,7 @@ test.describe('Conversation history persistence', () => {
     const conversationsResponse = await page.evaluate(async (args) => {
       const res = await fetch(`${args.baseUrl}/api/chat/conversations`, {
         headers: { Authorization: `Bearer ${args.token}` },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(API_TIMEOUT_MS),
       });
       return { status: res.status, body: await res.text() };
     }, { baseUrl: BASE_URL, token });
@@ -101,7 +109,7 @@ test.describe('Conversation history persistence', () => {
     const response = await page.evaluate(async (args) => {
       const res = await fetch(`${args.baseUrl}/api/chat/conversations`, {
         headers: { Authorization: `Bearer ${args.token}` },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(API_TIMEOUT_MS),
       });
       return { status: res.status, body: await res.text() };
     }, { baseUrl: BASE_URL, token });
@@ -134,7 +142,7 @@ test.describe('Conversation history persistence', () => {
     const convResponse = await page.evaluate(async (args) => {
       const res = await fetch(`${args.baseUrl}/api/chat/conversations`, {
         headers: { Authorization: `Bearer ${args.token}` },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(API_TIMEOUT_MS),
       });
       return await res.json();
     }, { baseUrl: BASE_URL, token });
@@ -155,7 +163,7 @@ test.describe('Conversation history persistence', () => {
         `${args.baseUrl}/api/chat/conversations/${args.convId}`,
         {
           headers: { Authorization: `Bearer ${args.token}` },
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(API_TIMEOUT_MS),
         },
       );
       return await res.json();

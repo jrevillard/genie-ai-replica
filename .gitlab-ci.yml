@@ -470,10 +470,20 @@ workflow:
         -d '{"directAccessGrantsEnabled": true}'
       echo "ROPC enabled for genie-app client"
       # Create test user for E2E tests (required by loginViaUI and getUserToken)
-      curl -sk -X POST "${KC_URL}/admin/realms/genie/users" \
-        -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-        -d '{"username":"testuser","email":"testuser@e2e.test","emailVerified":true,"firstName":"Test","lastName":"User","enabled":true,"credentials":[{"type":"password","value":"TestPass123!","temporary":false}]}' \
-        2>/dev/null && echo "testuser created" || echo "testuser already exists or creation failed"
+      EXISTING=$(curl -sk "${KC_URL}/admin/realms/genie/users?username=testuser" \
+        -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null)
+      if [ "${EXISTING:-0}" -eq 0 ]; then
+        CREATE_STATUS=$(curl -sk -o /dev/null -w "%{http_code}" -X POST "${KC_URL}/admin/realms/genie/users" \
+          -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+          -d '{"username":"testuser","email":"testuser@e2e.test","emailVerified":true,"firstName":"Test","lastName":"User","enabled":true,"credentials":[{"type":"password","value":"TestPass123!","temporary":false}]}')
+        if [ "$CREATE_STATUS" -ne 201 ]; then
+          echo "ERROR: testuser creation failed (HTTP $CREATE_STATUS)"
+          exit 1
+        fi
+        echo "testuser created (HTTP $CREATE_STATUS)"
+      else
+        echo "testuser already exists"
+      fi
       # Save vars for cleanup in after_script
       echo "E2E_BASE_URL=${E2E_BASE_URL}" > .e2e-ropc-env
       echo "ADMIN_TOKEN=${ADMIN_TOKEN}" >> .e2e-ropc-env

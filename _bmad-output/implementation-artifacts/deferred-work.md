@@ -179,3 +179,10 @@ Items deferred during code reviews. Revisit when the related component is next m
 - Flutter SDK cache key lacks OS/architecture component — `.flutter_base` template uses `flutter-sdk-${FLUTTER_VERSION}` without `${CI_RUNNER_EXECUTABLE_ARCH}`. Cross-architecture runners could corrupt each other's SDK cache. Pre-existing issue in template not changed in this diff.
 - Patrol E2E cache fallback_keys inheritance — `patrol:e2e` job may override `.flutter_base` cache block instead of extending it, missing the new fallback_keys. Verify at runtime.
 - AC6 pipeline time budget — NFR can only be verified at runtime with actual CI execution. Estimated 4-5 min, well within 10 min budget. No code change needed.
+
+## Deferred from: code review of 1-8-e2e-playwright-tests-for-chatbot-interaction-flows (2026-05-21)
+
+- Token expiry in long-running chat sessions — tests run up to 120s but don't handle token expiration mid-stream. Architectural concern beyond E2E test scope; would require Keycloak token refresh in test helpers.
+- CI cache key doesn't include Playwright version — cache uses only `package-lock.json` prefix, same pattern as story 1.7. If Playwright version changes, cached browsers may be incompatible. Follows established project pattern.
+- Hardcoded test user credentials (`testuser/TestPass123!`) — follows existing E2E pattern across all epic1/epic2/epic3 tests. Should come from env vars for multi-environment support but consistent with project convention.
+- AC6 performance not verified — requires running the full suite against deployed stack. 30m timeout is set in CI config but actual execution time can't be verified from diff alone.

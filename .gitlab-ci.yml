@@ -125,6 +125,12 @@ workflow:
           esac
         fi
       done
+    - |
+      # CI runs inside the Docker network — use the nginx service name so
+      # Keycloak advertises URLs resolvable from the CI runner container.
+      # Mobile tests bypass OIDC discovery (direct token injection) so this
+      # only matters for Playwright web E2E.
+      echo "NGINX_PUBLIC_DOMAIN=nginx" >> .env
     - docker compose up -d || (docker compose logs --tail=50 > docker-compose-logs.txt 2>&1; cat docker-compose-logs.txt; exit 1)
     - |
       for i in $(seq 1 60); do
@@ -400,8 +406,15 @@ workflow:
   script:
     - *connect_compose_network
     - |
-      if [ -z "$NGINX_IP" ]; then
-        echo "ERROR: NGINX_IP not discovered — cannot run tests"
+      # Use Docker service name for Keycloak OIDC compatibility.
+      if curl -sk -o /dev/null -w "%{http_code}" https://nginx/api/health 2>/dev/null | grep -qE "^[23]"; then
+        echo "Nginx reachable via service name"
+        E2E_BASE_URL="https://nginx"
+      elif [ -n "$NGINX_IP" ]; then
+        echo "Falling back to NGINX_IP: ${NGINX_IP}"
+        E2E_BASE_URL="https://${NGINX_IP}"
+      else
+        echo "ERROR: Cannot reach nginx - neither service name nor IP"
         exit 1
       fi
       for var in KEYCLOAK_ADMIN_PASSWORD; do
@@ -414,30 +427,31 @@ workflow:
     - |
       # ROPC setup (required by conversation-history tests via getUserToken)
       KC_PWD="${KEYCLOAK_ADMIN_PASSWORD}"
-      ADMIN_TOKEN=$(curl -sk -X POST "https://${NGINX_IP}/auth/realms/master/protocol/openid-connect/token" \
+      ADMIN_TOKEN=$(curl -sk -X POST "${E2E_BASE_URL}/auth/realms/master/protocol/openid-connect/token" \
         -d "client_id=admin-cli" -d "username=admin" -d "password=${KC_PWD}" -d "grant_type=password" \
         | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-      CLIENT_UUID=$(curl -sk "https://${NGINX_IP}/auth/realms/genie/clients?clientId=genie-app" \
+      CLIENT_UUID=$(curl -sk "${E2E_BASE_URL}/auth/realms/genie/clients?clientId=genie-app" \
         -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
-      curl -sk -X PUT "https://${NGINX_IP}/auth/realms/genie/clients/${CLIENT_UUID}" \
+      curl -sk -X PUT "${E2E_BASE_URL}/auth/realms/genie/clients/${CLIENT_UUID}" \
         -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
         -d '{"directAccessGrantsEnabled": true}'
       echo "ROPC enabled for genie-app client"
       # Save vars for cleanup in after_script
-      echo "NGINX_IP=${NGINX_IP}" > .e2e-ropc-env
+      echo "E2E_BASE_URL=${E2E_BASE_URL}" > .e2e-ropc-env
       echo "ADMIN_TOKEN=${ADMIN_TOKEN}" >> .e2e-ropc-env
       echo "CLIENT_UUID=${CLIENT_UUID}" >> .e2e-ropc-env
-    - BASE_URL="https://${NGINX_IP}" npx playwright test tests/e2e/chatbot/ --project=chromium
+    - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ --project=chromium
   after_script:
     - |
-      # ROPC cleanup — CRITICAL: always revert, even on test failure
+      # ROPC cleanup - CRITICAL: always revert, even on test failure
       if [ -f .e2e-ropc-env ]; then
         . ./.e2e-ropc-env
-        curl -sk -X PUT "https://${NGINX_IP}/auth/realms/genie/clients/${CLIENT_UUID}" \
+        curl -sk -X PUT "${E2E_BASE_URL}/auth/realms/genie/clients/${CLIENT_UUID}" \
           -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
           -d '{"directAccessGrantsEnabled": false}' 2>/dev/null && echo "ROPC disabled" || echo "WARNING: ROPC cleanup failed"
         rm -f .e2e-ropc-env
       fi
+
     - mkdir -p e2e-logs
     - docker compose -p "ci-${CI_PIPELINE_ID}" logs > e2e-logs/docker-compose.log 2>&1 || true
   artifacts:

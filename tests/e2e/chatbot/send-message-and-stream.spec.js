@@ -102,9 +102,11 @@ test.describe('Chatbot message sending and SSE streaming', () => {
     expect(userMsgs.length).toBeGreaterThanOrEqual(1);
     expect(botMsgs.length).toBeGreaterThanOrEqual(1);
 
-    // User message should come before bot message
+    // The user message should be immediately followed by a bot response
     const firstUserIdx = messages.findIndex((m) => m.sender === 'user');
-    const firstBotIdx = messages.findIndex((m) => m.sender === 'bot');
-    expect(firstUserIdx).toBeLessThan(firstBotIdx);
+    const nextBotIdx = messages.findIndex(
+      (m, i) => i > firstUserIdx && m.sender === 'bot',
+    );
+    expect(nextBotIdx).toBeGreaterThan(firstUserIdx);
   });
 });

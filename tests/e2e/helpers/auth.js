@@ -1,6 +1,6 @@
 const https = require('https');
 
-const BASE_URL = 'https://localhost';
+const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
 /**
  * Make an HTTPS request ignoring self-signed certificate errors.

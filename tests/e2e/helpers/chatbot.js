@@ -117,12 +117,13 @@ async function getLastBotMessage(page) {
  * dependency on i18n-translated title attributes.
  */
 async function saveChat(page, title) {
-  // Prefer data-testid if the component adds one; fallback to header button
-  const saveButton = page.locator('[data-testid="save-chat-btn"]');
-  const hasTestId = await saveButton.isVisible({ timeout: 1000 }).catch(() => false);
-  const button = hasTestId
+  // The save button is in the .input-actions area, only visible when messages exist.
+  // It has title="Save Chat" (from i18n). Fallback: second button in .input-actions.
+  const saveButton = page.locator('.input-actions button[title="Save Chat"]');
+  const hasTitleButton = await saveButton.isVisible({ timeout: 1000 }).catch(() => false);
+  const button = hasTitleButton
     ? saveButton
-    : page.locator('.chat-header button').last();
+    : page.locator('.input-actions button').nth(1);
   await expect(button).toBeVisible({ timeout: 5000 });
   await button.click();
 
@@ -131,8 +132,8 @@ async function saveChat(page, title) {
   await expect(titleInput).toBeVisible({ timeout: 5000 });
   await titleInput.fill(title);
 
-  // Click save in dialog
-  const confirmButton = page.getByRole('button', { name: /save/i });
+  // Click save in dialog (exact match to avoid "Saved Chats" tab)
+  const confirmButton = page.getByRole('button', { name: /^save$/i });
   await confirmButton.click();
 }
 

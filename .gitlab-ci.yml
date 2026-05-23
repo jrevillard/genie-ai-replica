@@ -438,20 +438,19 @@ workflow:
       done
     - |
       # ROPC setup (required by conversation-history tests via getUserToken)
-      # Use internal Keycloak URL to avoid nginx/Kong routing delays.
-      # The CI container is connected to the compose network, so keycloak:8080 is reachable.
-      KC_INTERNAL_URL="http://keycloak:8080"
+      # All requests go through nginx/Kong — same path as production traffic.
+      KC_URL="${E2E_BASE_URL}/auth"
       KC_PWD="${KEYCLOAK_ADMIN_PASSWORD}"
       ADMIN_TOKEN=""
       CLIENT_UUID=""
-      for i in $(seq 1 60); do
+      for i in $(seq 1 90); do
         if [ -z "$ADMIN_TOKEN" ]; then
-          ADMIN_TOKEN=$(curl -s -X POST "${KC_INTERNAL_URL}/realms/master/protocol/openid-connect/token" \
+          ADMIN_TOKEN=$(curl -sk -X POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
             -d "client_id=admin-cli" -d "username=admin" -d "password=${KC_PWD}" -d "grant_type=password" \
             | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('access_token',''))" 2>/dev/null)
         fi
         if [ -n "$ADMIN_TOKEN" ]; then
-          CLIENT_UUID=$(curl -s "${KC_INTERNAL_URL}/admin/realms/genie/clients?clientId=genie-app" \
+          CLIENT_UUID=$(curl -sk "${KC_URL}/admin/realms/genie/clients?clientId=genie-app" \
             -H "Authorization: Bearer $ADMIN_TOKEN" \
             | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id']) if d else ''" 2>/dev/null || true)
         fi
@@ -459,19 +458,19 @@ workflow:
           echo "Keycloak ready after ${i}s — client UUID: ${CLIENT_UUID}"
           break
         fi
-        echo "Waiting for Keycloak genie-app client... ($i/60)"
+        echo "Waiting for Keycloak via nginx/Kong... ($i/90)"
         sleep 2
       done
       if [ -z "$CLIENT_UUID" ]; then
-        echo "ERROR: genie-app client not found in Keycloak after 120s"
+        echo "ERROR: genie-app client not found via nginx/Kong after 180s"
         exit 1
       fi
-      curl -s -X PUT "${KC_INTERNAL_URL}/admin/realms/genie/clients/${CLIENT_UUID}" \
+      curl -sk -X PUT "${KC_URL}/admin/realms/genie/clients/${CLIENT_UUID}" \
         -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
         -d '{"directAccessGrantsEnabled": true}'
       echo "ROPC enabled for genie-app client"
       # Create test user for E2E tests (required by loginViaUI and getUserToken)
-      curl -s -X POST "${KC_INTERNAL_URL}/admin/realms/genie/users" \
+      curl -sk -X POST "${KC_URL}/admin/realms/genie/users" \
         -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
         -d '{"username":"testuser","email":"testuser@e2e.test","emailVerified":true,"firstName":"Test","lastName":"User","enabled":true,"credentials":[{"type":"password","value":"TestPass123!","temporary":false}]}' \
         2>/dev/null && echo "testuser created" || echo "testuser already exists or creation failed"
@@ -485,7 +484,8 @@ workflow:
       # ROPC cleanup - CRITICAL: always revert, even on test failure
       if [ -f .e2e-ropc-env ]; then
         . ./.e2e-ropc-env
-        curl -s -X PUT "http://keycloak:8080/admin/realms/genie/clients/${CLIENT_UUID}" \
+        KC_URL="${E2E_BASE_URL}/auth"
+        curl -sk -X PUT "${KC_URL}/admin/realms/genie/clients/${CLIENT_UUID}" \
           -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
           -d '{"directAccessGrantsEnabled": false}' 2>/dev/null && echo "ROPC disabled" || echo "WARNING: ROPC cleanup failed"
         rm -f .e2e-ropc-env

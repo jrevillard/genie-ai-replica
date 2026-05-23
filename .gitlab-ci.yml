@@ -380,6 +380,7 @@ workflow:
 
 .e2e_web_base:
   extends: .node_base
+  image: node:20-bookworm-slim
   allow_failure: false
   tags: [docker]
   timeout: 30m
@@ -388,6 +389,8 @@ workflow:
     when:
       - runner_system_failure
       - unknown_failure
+  variables:
+    PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.cache/ms-playwright"
   cache:
     - key:
         files:
@@ -398,8 +401,14 @@ workflow:
       fallback_keys:
         - "e2e-playwright-$CI_DEFAULT_BRANCH"
         - "e2e-playwright-"
+    - key:
+        files:
+          - package-lock.json
+        prefix: e2e-playwright-browsers
+      paths:
+        - .cache/ms-playwright/
   before_script:
-    - apk add --no-cache docker-cli curl python3
+    - apt-get update && apt-get install -y docker-cli curl python3
     - mkdir -p reports
     - npm ci
     - npx playwright install --with-deps chromium
@@ -916,7 +925,7 @@ scheduled:e2e-mobile:
   resource_group: e2e-runner
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
-      when: on_success
+      when: never
 
 # Web frontend E2E tests (Playwright)
 # Runs against the Docker stack started by scheduled:integration

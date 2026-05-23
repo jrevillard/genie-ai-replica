@@ -14,7 +14,7 @@ module.exports = defineConfig({
     ['junit', { outputFile: 'reports/playwright-report.xml' }],
   ],
   use: {
-    baseURL: 'https://localhost',
+    baseURL: process.env.BASE_URL || 'https://localhost',
     ignoreHTTPSErrors: true,
     bypassCSP: true,
     actionTimeout: 15000,

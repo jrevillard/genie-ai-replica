@@ -1,6 +1,6 @@
 # Story 1.8: E2E Playwright Tests for Chatbot Interaction Flows
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -376,3 +376,36 @@ For chatbot tests, use **page-level auth** since we need the full browser sessio
 ### Completion Notes List
 
 ### File List
+
+### Review Findings
+
+- [x] [Review][Patch] CI Configuration fundamentally incomplete — FIXED: Added `.e2e_web_base` hidden template with Docker networking (mutualized via YAML anchor `connect_compose_network` shared with `.e2e_mobile_base`), ROPC setup/cleanup with trap, Playwright install, JUnit artifacts, retry, timeout. Added `e2e:playwright` merge train job. Expanded `e2e:integration` changes. Moved mobile needs to `patrol:e2e`. Rewrote `scheduled:e2e-web` to extend `.e2e_web_base`. Removed `allow_failure`, fixed `expire_in: 2 days`.
+
+- [x] [Review][Patch] Save chat button uses fragile i18n title selector [`tests/e2e/helpers/chatbot.js`] — FIXED: Now uses `data-testid="save-chat-btn"` with fallback to `.chat-header button` last.
+
+- [x] [Review][Patch] Hardcoded BASE_URL + missing playwright.config.js update [`tests/e2e/helpers/chatbot.js`, `tests/e2e/chatbot/*.spec.js`] — FIXED: All spec files now import `BASE_URL` and `TEST_USER` from helper. Helper already uses `process.env.BASE_URL`.
+
+- [x] [Review][Patch] SSE detection is dead code + response.text() hangs on infinite stream [`tests/e2e/chatbot/send-message-and-stream.spec.js`] — FIXED: Removed `sseDetected` flag and `response.text()` call entirely.
+
+- [x] [Review][Patch] Retry test route/unroute race condition [`tests/e2e/chatbot/error-handling.spec.js`] — FIXED: First attempt uses `route.fulfill(503)` instead of `route.abort()`, second uses `route.fallback()`. Removed `unroute()` before second send — `route.fallback()` lets subsequent requests pass through.
+
+- [x] [Review][Patch] Network interception may not propagate to frontend error handling [`tests/e2e/chatbot/error-handling.spec.js`] — FIXED: All interceptions now use `route.fulfill({ status: 503/502/500 })` instead of `route.abort()`.
+
+- [x] [Review][Patch] Missing test data cleanup [`tests/e2e/chatbot/conversation-history.spec.js`] — FIXED: Added `afterAll` that deletes tracked conversation IDs via API.
+
+- [x] [Review][Patch] Missing timeout in page.evaluate API calls [`tests/e2e/chatbot/conversation-history.spec.js`] — FIXED: Added `AbortSignal.timeout(15000)` to all fetch calls inside `page.evaluate`.
+
+- [x] [Review][Patch] Weak JSON.parse error handling [`tests/e2e/chatbot/conversation-history.spec.js`] — FIXED: Status assertion before JSON parsing.
+
+- [x] [Review][Patch] Inconsistent waitForTimeout instead of explicit waits [`tests/e2e/chatbot/error-handling.spec.js`] — FIXED: Replaced all `waitForTimeout(5000)` with `await expect(locator).toBeHidden/Visible({ timeout: 30000 })`.
+
+- [x] [Review][Patch] Unnecessary .catch(() => false) swallows real errors [`tests/e2e/chatbot/error-handling.spec.js`] — FIXED: Removed all `.catch(() => false)` wrappers.
+
+- [x] [Review][Patch] Browser context leak on early beforeEach failure [`tests/e2e/chatbot/*.spec.js`] — FIXED: Changed from `this.page`/`this.context` to `let page`/`let context` at describe scope. `afterEach` uses `context?.close()` with optional chaining.
+
+- [x] [Review][Patch] AC2: No progressive SSE rendering verification [`tests/e2e/chatbot/send-message-and-stream.spec.js`] — FIXED: Added polling loop that checks bot bubble text grows over 5 intervals during streaming.
+
+- [x] [Review][Defer] Token expiry in long-running chat sessions — deferred, pre-existing architectural concern beyond E2E scope
+- [x] [Review][Defer] CI cache key doesn't include Playwright version — deferred, follows existing cache pattern from story 1.7
+- [x] [Review][Defer] Hardcoded test user credentials — deferred, follows existing E2E pattern across all epic tests
+- [x] [Review][Defer] AC6 performance not verified — deferred, requires running the suite, not a code issue

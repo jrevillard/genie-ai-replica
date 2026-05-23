@@ -6,31 +6,45 @@ const {
   waitForBotResponse,
   getMessages,
   saveChat,
+  BASE_URL,
+  TEST_USER,
 } = require('../helpers/chatbot');
 const { getUserToken } = require('../helpers/auth');
 
-const BASE_URL = 'https://localhost';
-const TEST_USER = { username: 'testuser', password: 'TestPass123!' };
-
 test.describe('Conversation history persistence', () => {
+  let page;
+  let context;
+  const createdConversationIds = [];
+
   test.beforeEach(async ({ browser }) => {
-    const context = await browser.newContext({
+    context = await browser.newContext({
       ignoreHTTPSErrors: true,
       bypassCSP: true,
     });
-    this.page = await context.newPage();
-    this.context = context;
+    page = await context.newPage();
 
-    await loginViaUI(this.page);
-    await navigateToChatbot(this.page);
+    await loginViaUI(page);
+    await navigateToChatbot(page);
   });
 
   test.afterEach(async () => {
-    await this.context.close();
+    await context?.close();
+  });
+
+  test.afterAll(async () => {
+    // Clean up test conversations to prevent database bloat
+    const token = await getUserToken(TEST_USER.username, TEST_USER.password).catch(() => null);
+    if (!token) return;
+
+    const { request } = require('../helpers/auth');
+    for (const convId of createdConversationIds) {
+      await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
   });
 
   test('saves a conversation and restores it after page reload', async () => {
-    const page = this.page;
     const userText = 'Tell me about healthcare services';
     const chatTitle = `E2E Test Chat ${Date.now()}`;
 
@@ -54,18 +68,19 @@ test.describe('Conversation history persistence', () => {
     // Navigate to chatbot to load saved chats
     await navigateToChatbot(page);
 
-    // The saved conversation should be accessible via the sidebar/history
-    // Verify by checking the chat history API directly
+    // Verify via the chat history API
     const token = await getUserToken(TEST_USER.username, TEST_USER.password);
     const conversationsResponse = await page.evaluate(async (args) => {
       const res = await fetch(`${args.baseUrl}/api/chat/conversations`, {
         headers: { Authorization: `Bearer ${args.token}` },
+        signal: AbortSignal.timeout(15000),
       });
-      return { status: res.status, data: await res.json() };
+      return { status: res.status, body: await res.text() };
     }, { baseUrl: BASE_URL, token });
 
     expect(conversationsResponse.status).toBe(200);
-    const conversations = conversationsResponse.data;
+
+    const conversations = JSON.parse(conversationsResponse.body);
     expect(Array.isArray(conversations)).toBeTruthy();
 
     // Find our saved conversation
@@ -73,15 +88,19 @@ test.describe('Conversation history persistence', () => {
       (c) => c.title === chatTitle || c.title?.includes(chatTitle),
     );
     expect(saved).toBeTruthy();
+
+    if (saved?._key || saved?.id) {
+      createdConversationIds.push(saved._key || saved.id);
+    }
   });
 
   test('list conversations endpoint returns conversations for authenticated user', async () => {
     const token = await getUserToken(TEST_USER.username, TEST_USER.password);
-    const page = this.page;
 
     const response = await page.evaluate(async (args) => {
       const res = await fetch(`${args.baseUrl}/api/chat/conversations`, {
         headers: { Authorization: `Bearer ${args.token}` },
+        signal: AbortSignal.timeout(15000),
       });
       return { status: res.status, body: await res.text() };
     }, { baseUrl: BASE_URL, token });
@@ -93,7 +112,6 @@ test.describe('Conversation history persistence', () => {
   });
 
   test('messages are restored in correct order when loading a saved conversation', async () => {
-    const page = this.page;
     const userText = 'What education programs exist?';
     const chatTitle = `E2E Order Test ${Date.now()}`;
 
@@ -114,6 +132,7 @@ test.describe('Conversation history persistence', () => {
     const convResponse = await page.evaluate(async (args) => {
       const res = await fetch(`${args.baseUrl}/api/chat/conversations`, {
         headers: { Authorization: `Bearer ${args.token}` },
+        signal: AbortSignal.timeout(15000),
       });
       return await res.json();
     }, { baseUrl: BASE_URL, token });
@@ -123,12 +142,17 @@ test.describe('Conversation history persistence', () => {
     );
     expect(savedConv).toBeTruthy();
 
+    if (savedConv?._key || savedConv?.id) {
+      createdConversationIds.push(savedConv._key || savedConv.id);
+    }
+
     // Fetch full conversation with messages
     const fullConv = await page.evaluate(async (args) => {
       const res = await fetch(
         `${args.baseUrl}/api/chat/conversations/${args.convId}`,
         {
           headers: { Authorization: `Bearer ${args.token}` },
+          signal: AbortSignal.timeout(15000),
         },
       );
       return await res.json();

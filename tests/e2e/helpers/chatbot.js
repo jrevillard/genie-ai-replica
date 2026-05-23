@@ -5,14 +5,10 @@ const TEST_USER = {
   password: 'TestPass123!',
 };
 
-const BASE_URL = 'https://localhost';
+const BASE_URL = process.env.BASE_URL || 'https://localhost';
 
 /**
  * Authenticate via page-level login (Keycloak redirect flow).
- * Navigates to the app, fills Keycloak credentials, waits for dashboard.
- * @param {import('@playwright/test').Page} page
- * @param {object} [user] - Override default test user
- * @returns {Promise<void>}
  */
 async function loginViaUI(page, user = TEST_USER) {
   await page.goto(`${BASE_URL}/`, {
@@ -45,8 +41,6 @@ async function loginViaUI(page, user = TEST_USER) {
 
 /**
  * Navigate to the chatbot view from the dashboard.
- * @param {import('@playwright/test').Page} page
- * @returns {Promise<void>}
  */
 async function navigateToChatbot(page) {
   await page.goto(`${BASE_URL}/chat`, {
@@ -57,10 +51,6 @@ async function navigateToChatbot(page) {
 
 /**
  * Send a message via the chatbot input.
- * Types into the textarea and clicks the send button (or presses Enter).
- * @param {import('@playwright/test').Page} page
- * @param {string} message
- * @returns {Promise<void>}
  */
 async function sendMessage(page, message) {
   const textarea = page.locator('.prompt-textarea');
@@ -72,10 +62,6 @@ async function sendMessage(page, message) {
 /**
  * Wait for a bot response to appear in the chat window.
  * Polls for new bot messages and ensures the loading spinner disappears.
- * @param {import('@playwright/test').Page} page
- * @param {object} [options]
- * @param {number} [options.timeout=60000] - Max wait time in ms
- * @returns {Promise<void>}
  */
 async function waitForBotResponse(page, options = {}) {
   const timeout = options.timeout || 60000;
@@ -95,8 +81,6 @@ async function waitForBotResponse(page, options = {}) {
 
 /**
  * Get all chat messages as an array of { sender, text } objects.
- * @param {import('@playwright/test').Page} page
- * @returns {Promise<Array<{sender: string, text: string}>>}
  */
 async function getMessages(page) {
   const messages = [];
@@ -117,8 +101,6 @@ async function getMessages(page) {
 
 /**
  * Get the last bot message text.
- * @param {import('@playwright/test').Page} page
- * @returns {Promise<string>}
  */
 async function getLastBotMessage(page) {
   const botMessages = page.locator('.chat-message.bot .message-bubble');
@@ -131,14 +113,18 @@ async function getLastBotMessage(page) {
 
 /**
  * Click the save chat button and fill in the save dialog.
- * @param {import('@playwright/test').Page} page
- * @param {string} title - Chat title
- * @returns {Promise<void>}
+ * Uses chat-header button selector (last button in header) to avoid
+ * dependency on i18n-translated title attributes.
  */
 async function saveChat(page, title) {
-  const saveButton = page.locator('button[title="Save Chat"]');
-  await expect(saveButton).toBeVisible({ timeout: 5000 });
-  await saveButton.click();
+  // Prefer data-testid if the component adds one; fallback to header button
+  const saveButton = page.locator('[data-testid="save-chat-btn"]');
+  const hasTestId = await saveButton.isVisible({ timeout: 1000 }).catch(() => false);
+  const button = hasTestId
+    ? saveButton
+    : page.locator('.chat-header button').last();
+  await expect(button).toBeVisible({ timeout: 5000 });
+  await button.click();
 
   // Wait for save dialog
   const titleInput = page.locator('#chatTitle');
@@ -152,8 +138,6 @@ async function saveChat(page, title) {
 
 /**
  * Dismiss the quick-help overlay if present.
- * @param {import('@playwright/test').Page} page
- * @returns {Promise<void>}
  */
 async function dismissQuickHelp(page) {
   const overlay = page.locator('.quick-help-item').first();

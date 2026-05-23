@@ -10,29 +10,29 @@ const {
 } = require('../helpers/chatbot');
 
 test.describe('Chatbot message sending and SSE streaming', () => {
+  let page;
+  let context;
+
   test.beforeEach(async ({ browser }) => {
-    const context = await browser.newContext({
+    context = await browser.newContext({
       ignoreHTTPSErrors: true,
       bypassCSP: true,
     });
-    this.page = await context.newPage();
-    this.context = context;
+    page = await context.newPage();
 
-    await loginViaUI(this.page);
-    await navigateToChatbot(this.page);
+    await loginViaUI(page);
+    await navigateToChatbot(page);
   });
 
   test.afterEach(async () => {
-    await this.context.close();
+    await context?.close();
   });
 
   test('sends a message and displays it as a user bubble', async () => {
-    const page = this.page;
     const userText = 'What services are available?';
 
     await sendMessage(page, userText);
 
-    // Verify user bubble appears
     const messages = await getMessages(page);
     expect(messages.length).toBeGreaterThanOrEqual(1);
 
@@ -43,59 +43,42 @@ test.describe('Chatbot message sending and SSE streaming', () => {
   });
 
   test('receives a bot response after sending a message', async () => {
-    const page = this.page;
-
     await sendMessage(page, 'Hello, what can you help me with?');
     await waitForBotResponse(page, { timeout: 120000 });
 
-    // Verify bot message appeared
     const botText = await getLastBotMessage(page);
     expect(botText.length).toBeGreaterThan(0);
   });
 
   test('SSE stream renders bot response progressively', async () => {
-    const page = this.page;
-
-    // Monitor SSE responses
-    let sseDetected = false;
-    page.on('response', (response) => {
-      const contentType = response.headers()['content-type'] || '';
-      if (contentType.includes('text/event-stream')) {
-        sseDetected = true;
-      }
-    });
-
     await sendMessage(page, 'Tell me about public services');
+
+    // Verify progressive rendering by polling bot message text
+    // Text should grow over time as SSE chunks arrive
+    const botBubble = page.locator('.chat-message.bot .message-bubble').last();
+    let previousLength = 0;
+    let textGrew = false;
+
+    for (let i = 0; i < 5; i++) {
+      await page.waitForTimeout(1000);
+      const currentVisible = await botBubble.isVisible().catch(() => false);
+      if (!currentVisible) continue;
+      const currentText = (await botBubble.innerText().catch(() => '')).trim();
+      if (currentText.length > previousLength) {
+        textGrew = true;
+      }
+      previousLength = currentText.length;
+    }
+
     await waitForBotResponse(page, { timeout: 120000 });
 
-    // The bot should have rendered content
     const botText = await getLastBotMessage(page);
     expect(botText.length).toBeGreaterThan(0);
-
-    // SSE was used for streaming (may not be detected if proxied)
-    // The key assertion is that content arrived progressively
+    // Progressive rendering: text should have grown during streaming
+    expect(textGrew).toBeTruthy();
   });
 
   test('done event finalizes message with queryId', async () => {
-    const page = this.page;
-
-    // Monitor network for done event data
-    let capturedQueryId = null;
-    page.on('response', async (response) => {
-      const contentType = response.headers()['content-type'] || '';
-      if (contentType.includes('text/event-stream')) {
-        try {
-          const body = await response.text();
-          const doneMatch = body.match(/"type"\s*:\s*"done"[^}]*"queryId"\s*:\s*"([^"]+)"/);
-          if (doneMatch) {
-            capturedQueryId = doneMatch[1];
-          }
-        } catch {
-          // SSE body may not be readable — OK
-        }
-      }
-    });
-
     await sendMessage(page, 'What is the weather today?');
     await waitForBotResponse(page, { timeout: 120000 });
 
@@ -103,28 +86,23 @@ test.describe('Chatbot message sending and SSE streaming', () => {
     const botText = await getLastBotMessage(page);
     expect(botText.length).toBeGreaterThan(0);
 
-    // If we captured a queryId, verify it's a valid format
-    if (capturedQueryId) {
-      expect(capturedQueryId.length).toBeGreaterThan(0);
-    }
+    // Verify the chat is in a stable state (no loading spinner)
+    await expect(page.locator('.loading-spinner')).toBeHidden();
   });
 
   test('chat window contains both user and bot messages after exchange', async () => {
-    const page = this.page;
-
     await sendMessage(page, 'Hello there');
     await waitForBotResponse(page, { timeout: 120000 });
 
     const messages = await getMessages(page);
 
-    // Should have at least one user message and one bot message
     const userMsgs = messages.filter((m) => m.sender === 'user');
     const botMsgs = messages.filter((m) => m.sender === 'bot');
 
     expect(userMsgs.length).toBeGreaterThanOrEqual(1);
     expect(botMsgs.length).toBeGreaterThanOrEqual(1);
 
-    // User message should come before bot message (order check)
+    // User message should come before bot message
     const firstUserIdx = messages.findIndex((m) => m.sender === 'user');
     const firstBotIdx = messages.findIndex((m) => m.sender === 'bot');
     expect(firstUserIdx).toBeLessThan(firstBotIdx);

@@ -969,7 +969,7 @@ scheduled:e2e-mobile:
   resource_group: e2e-runner
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
-      when: never
+      when: on_success
 
 # Web frontend E2E tests (Playwright)
 # Runs against the Docker stack started by scheduled:integration

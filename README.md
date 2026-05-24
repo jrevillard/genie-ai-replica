@@ -111,3 +111,13 @@ AMINA ships with a measurable safety perimeter validated against 170 test cases.
 ---
 
 For governance details see [CONTRIBUTING.md](CONTRIBUTING.md), [STANDARDS.md](STANDARDS.md), and the [UNICC code-management process](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md).
+
+
+## License
+
+This project is free software: you can redistribute it and/or modify it under
+the terms of the GNU Lesser General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+See COPYING and COPYING.LESSER for details.

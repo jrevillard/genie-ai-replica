@@ -1,5 +1,5 @@
 # generated: 2026-05-13
-# last_updated: 2026-05-23
+# last_updated: 2026-05-25
 
 # project: genie-ai
 # project_key: testing-framework
@@ -36,7 +36,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-13
-last_updated: 2026-05-23
+last_updated: 2026-05-25
 project: genie-ai
 project_key: testing-framework
 tracking_system: file-system
@@ -54,7 +54,7 @@ development_status:
   1-7-configure-ci-caching-and-path-based-triggers: done
 
   1-8-e2e-playwright-tests-for-chatbot-interaction-flows: done
-  1-9-e2e-playwright-tests-for-document-upload-and-search-flows: backlog
+  1-9-e2e-playwright-tests-for-document-upload-and-search-flows: ready-for-dev
   epic-1-retrospective: optional
 
   # Epic 2: Backend API Test Suite

@@ -24,24 +24,24 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 
 **Functional Requirements:**
 
-46 functional requirements across 10 categories, mapping to the PCCQ testing philosophy:
+46 functional requirements across 10 categories:
 
-| PCCQ Pillar | FRs | Scope |
+| Category | FRs | Scope |
 |---|---|---|
-| **Pipeline** | FR1–FR8 | CI/CD orchestration: lint, unit, contract, config, integration, RAG quality gates |
-| **Contract** | FR9–FR26 | Per-component API and interface verification across all 5 components |
+| **Pipeline** | FR1–FR8 | CI/CD orchestration: lint, unit, config, integration, RAG quality gates |
+| **API Testing** | FR9–FR26 | Per-component API and interface verification across all 5 components |
 | **Configuration** | FR27–FR31 | Env var schema validation, hardware profiles, feature flag interdependencies |
 | **Quality** | FR32–FR35 | RAGAS-based RAG output quality against known document corpora |
 | **Infrastructure** | FR36–FR44 | Test data management, MELT instrumentation, AI-assisted generation |
 | **AI Generation** | FR45–FR46 | AI-leveraged test scaffolding and suggestion from code changes |
 
-The requirements treat each component as an interface with specific environment expectations and output contracts — consistent with the "testing configured deployments" philosophy. No requirement assumes code-level fixed behavior; all account for environment-driven variance.
+The requirements treat each component as an interface with specific environment expectations and output — consistent with the "testing configured deployments" philosophy. No requirement assumes code-level fixed behavior; all account for environment-driven variance.
 
 **Non-Functional Requirements:**
 
 24 NFRs with three hard constraints that shape architecture:
 
-1. **Time budgets** (NFR1–NFR5): Unit+contract <10 min, config <2 min, E2E <30 min, RAG quality <60 min. These force strict parallelization in CI and tiered execution (mandatory gates vs. scheduled).
+1. **Time budgets** (NFR1–NFR5): Unit <10 min, config <2 min, E2E <30 min, RAG quality <60 min. These force strict parallelization in CI and tiered execution (mandatory gates vs. scheduled).
 2. **Determinism** (NFR6–NFR10): Zero flaky tests in mandatory gates, order-independent execution, mocked external dependencies in CI, conditional GPU test skipping. This requires robust fixture isolation and mock architecture.
 3. **Language constraints** (NFR21–NFR24): CommonJS-only backend, Options API-only frontend, ITU copyright headers on Python, Ruff compliance. These constrain test tooling choices and code generation templates.
 
@@ -96,7 +96,7 @@ The `env` template contains 50+ variables across 13 sections with complex interd
 
 2. **Configuration-as-Test-Input** — Every test must account for env var profiles as first-class inputs. The same codebase produces different behavior based on `DEPLOY_OPEA`, GPU profiles, language settings, and document corpora. Test fixtures include env var profiles alongside mocks and stubs.
 
-3. **Custom OPEA Overlay Divergence** — GENIE.AI's hybrid RAG (vector + graph + labels) has no OPEA equivalent. Tests validate against GENIE.AI-specific interfaces, not standard OPEA contracts. OPEA upstream updates may break custom implementations without regression tests catching the breakage.
+3. **Custom OPEA Overlay Divergence** — GENIE.AI's hybrid RAG (vector + graph + labels) has no OPEA equivalent. Tests validate against GENIE.AI-specific interfaces. OPEA upstream updates may break custom implementations without regression tests catching the breakage.
 
 4. **Multi-Language Telemetry Parity** — Node.js (winston JSON) and Python (CustomLogger structured JSON) must share a common log schema for OTel ingestion. Test assertion helpers must validate structured log output from both languages.
 
@@ -193,26 +193,26 @@ No third-party starter template or boilerplate is used. The testing framework is
 - Kubernetes deployment target verification (Sprint 24+)
 - Multi-GPU sharding test coverage (Sprint 24+)
 - Chaos engineering test strategy (Sprint 24+)
-- Pact contract testing for inter-service boundaries (Sprint 24+)
+- Pact contract testing for inter-service boundaries (if needed beyond OpenAPI) (Sprint 24+)
 
 ### CI/CD Pipeline Architecture
 
 **Pipeline Stage Structure:**
 ```
-lint → test → contract → config → (scheduled: integration → e2e) → (manual: rag-quality)
+lint → test → config → (scheduled: integration → e2e) → (manual: rag-quality)
 ```
 
 **Parallel Execution:** All component tests run as parallel jobs within the `test` stage. Path-based `rules:changes` triggers run only affected component tests on MRs, full suite on main branch pushes.
 
 **Caching Strategy:** Cache `node_modules` per component (keyed on `package-lock.json` hash) and Python `.venv` (keyed on `requirements.txt` hash).
 
-**MR Blocking:** Mandatory stages (lint, test, contract, config) block merge requests on failure (FR5). Scheduled and manual stages do not block MRs.
+**MR Blocking:** Mandatory stages (lint, test, config) block merge requests on failure (FR5). Scheduled and manual stages do not block MRs.
 
 **Test Execution Tiers:**
 
 | Tier | Tests | Trigger | Time Budget | GPU |
 |---|---|---|---|---|
-| Mandatory | Lint, Unit (5 components), Contract, Config validation | Every MR + main push | <10 min | No |
+| Mandatory | Lint, Unit (5 components), Config validation | Every MR + main push | <10 min | No |
 | Scheduled | Integration (Docker Compose), E2E (Playwright) | Nightly | <30 min | No |
 | On-demand | RAG quality regression, Performance benchmarks | Manual trigger | <60 min | Yes |
 | Future | K8s deployment, multi-GPU, chaos engineering | TBD | TBD | Yes |
@@ -296,14 +296,14 @@ Covers FR27–FR31. Runs as a Jest test suite or standalone Node.js script in CI
 **Implementation Sequence:**
 1. Backend `createApp()` refactor (prerequisite, unblocks route testing)
 2. pytest configuration for OPEA overlay
-3. GitLab CI pipeline (lint + test + contract + config stages)
+3. GitLab CI pipeline (lint + test + config stages)
 4. Per-component test suites (backend → frontend → doc-repo → OPEA → mobile)
 5. Configuration validation suite
 6. MELT-ready instrumentation hooks
 7. RAG quality fixture structure (Sprint 22) → RAGAS pipeline (Sprint 23)
 
 **Cross-Component Dependencies:**
-- Backend `createApp()` refactor blocks backend route/contract testing
+- Backend `createApp()` refactor blocks backend route testing
 - GitLab CI pipeline depends on jest-junit, junitreport, pytest junitxml being configured
 - OPEA pytest configuration depends on conftest.py mock factories for vendored comps
 - MELT hooks are independent — no dependency on Sprint 23 stack
@@ -777,7 +777,6 @@ genie-ai/                                          # Repository root
 ```
 MR push → lint (parallel: eslint, ruff, flutter analyze)
        → test (parallel: backend, frontend, doc-repo, python, mobile)
-       → contract (API schema validation)
        → config (env validation suite)
        → MR blocked if any mandatory stage fails
 
@@ -848,7 +847,7 @@ tests/melt-helpers/          → imported by any test needing trace context / lo
 
 **Minor Gaps (non-blocking):**
 
-1. **Contract test mechanism underspecified** — FR3 defines contract tests as a CI stage but doesn't specify whether this is OpenAPI schema validation, Supertest shape tests, or both. Resolution: Use Supertest route handler tests (already in `__tests__/routes/`) as the primary contract mechanism. OpenAPI schema validation can be added as a secondary check in Sprint 23.
+1. **Route handler test mechanism clarified** — Route handler tests in `__tests__/routes/` validate API behavior using Supertest. OpenAPI schema validation can be added as a secondary check in Sprint 23.
 
 2. **ioredis-mock and fakeredis missing from dependency additions** — The mock strategy table references these but they weren't listed in the Step 3 dependency additions. Resolution: Add `ioredis-mock` for JS components, `fakeredis` for OPEA Python tests.
 
@@ -887,14 +886,14 @@ tests/melt-helpers/          → imported by any test needing trace context / lo
 **Confidence Level:** High — all requirements covered, no critical gaps, decisions are coherent and mutually compatible.
 
 **Key Strengths:**
-- PCCQ testing philosophy provides a novel but well-defined organizing principle
+- Tiered testing approach provides a well-defined organizing principle
 - Sprint 22/23 MELT bridge pattern enables forward compatibility without coupling
 - Existing test patterns analyzed and extended rather than replaced
 - Hybrid mock architecture balances centralization with test-local flexibility
 - Tiered CI execution respects time budgets while maintaining coverage
 
 **Areas for Future Enhancement:**
-- Contract testing with Pact for inter-service boundaries (Sprint 24+)
+- Pact contract testing for inter-service boundaries (if needed beyond OpenAPI) (Sprint 24+)
 - Kubernetes deployment target verification (Sprint 24+)
 - Chaos engineering tests (Sprint 24+)
 - Automated test generation from OpenAPI specs (Sprint 23+)
@@ -911,5 +910,5 @@ tests/melt-helpers/          → imported by any test needing trace context / lo
 **First Implementation Priority:**
 1. Backend `createApp()` refactor (prerequisite — unblocks all route testing)
 2. pytest configuration for OPEA overlay (zero test infrastructure exists)
-3. GitLab CI pipeline (`.gitlab-ci.yml` with lint → test → contract → config stages)
+3. GitLab CI pipeline (`.gitlab-ci.yml` with lint → test → config stages)
 4. Per-component test suites (following the implementation sequence from Step 4)

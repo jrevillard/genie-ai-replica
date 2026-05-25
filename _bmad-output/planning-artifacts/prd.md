@@ -38,9 +38,9 @@ classification:
     existingCoverage: 'Sparse — backend auth-only, frontend stores-only, OPEA zero, mobile service-layer-only, E2E auth-only, CI/CD zero'
   testingPhilosophy: >
     Interface-based: treat each layer and component as an interface with specific
-    environment and expected outputs. Organized by PCCQ pillars (Pipeline, Contract,
-    Configuration, Quality) rather than traditional test levels. Deterministic scaffolding
-    tests for contracts and configuration; probabilistic quality bounds for RAG outputs.
+    environment and expected outputs. OpenAPI specs serve as the contract source of truth
+    (auto-generated clients for mobile; swagger-jsdoc for backend). Configuration validation
+    as a dedicated CI gate. Probabilistic quality bounds for RAG outputs.
     Existing test strategy covers dataprep, retriever, and LLM validation with RAGAS
     framework metrics. El-Salvador branch as canonical test bed.
 ---
@@ -58,16 +58,16 @@ The primary consumers are the core development and QA team, who must validate th
 
 ### What Makes This Special
 
-The system under test is not code — it is a *configured deployment*. Correctness is defined as: given configuration X and documents Y, the pipeline produces outputs within quality bounds Z across deployment target T. This demands a testing philosophy organized around four pillars rather than traditional test levels:
+The system under test is not code — it is a *configured deployment*. Correctness is defined as: given configuration X and documents Y, the pipeline produces outputs within quality bounds Z across deployment target T. OpenAPI specs serve as the contract source of truth across all components. The testing strategy covers:
 
 - **Pipeline integrity** — data flows correctly through each stage (extraction, chunking, embedding, retrieval, reranking, generation)
-- **Contract verification** — every interface between components honors its API contract
+- **API verification** — route handler tests validate request/response behavior; OpenAPI specs define the contract (auto-generated mobile client, swagger-jsdoc annotations)
 - **Configuration validation** — the massive environment variable surface controls system behavior as documented
 - **Quality assurance** — RAG outputs meet RAGAS-based thresholds (faithfulness, relevance, context precision/recall) against known document sets
 
 An existing test strategy covers the AI/ML pipeline (dataprep extraction fidelity, retriever hybrid search optimization, LLM grounding and parameter tuning) with detailed parameter sweep matrices for GPU profiles. vLLM was selected as the inference engine to support multi-GPU sharding for large LLMs, though multi-GPU testing is out of scope for the current initiative due to resource constraints. The framework targets any CUDA-compatible GPU hardware (H100, A40, H200, RTX 6000 Ada, Tesla T4, and future-compatible devices), with the aspiration of eventual hardware-agnostic support beyond CUDA where technology permits.
 
-This PRD expands the existing AI/ML test foundation floor-to-ceiling: backend API contracts, frontend component behavior, document repository security, mobile service layer, authentication flows, and a CI/CD pipeline that orchestrates everything from zero. AI is leveraged for test generation and maintenance to maximize coverage with limited team resources.
+This PRD expands the existing AI/ML test foundation floor-to-ceiling: backend API route tests, frontend component behavior, document repository security, mobile service layer, authentication flows, and a CI/CD pipeline that orchestrates everything from zero. AI is leveraged for test generation and maintenance to maximize coverage with limited team resources.
 
 ## Project Classification
 
@@ -88,7 +88,7 @@ This PRD expands the existing AI/ML test foundation floor-to-ceiling: backend AP
 ### User Success
 
 - A developer merges a PR and the CI pipeline runs the full test suite automatically, reporting pass/fail across all components within a configured time budget — no manual testing required
-- A QA engineer runs a single command to execute the full verification suite against a local Docker Compose environment, seeing clear pass/fail results for pipeline integrity, contract compliance, configuration validation, and RAG quality thresholds
+- A QA engineer runs a single command to execute the full verification suite against a local Docker Compose environment, seeing clear pass/fail results for API verification, configuration validation, and RAG quality thresholds
 - A deployment engineer for a new country project runs the verification suite against their specific document corpus and configuration, receiving a quality report confirming the deployment is production-ready
 - When tests fail, the developer can trace the failure through the full request path using MELT distributed traces — a single trace ID linking logs across Kong, Backend, ChatQnA, Retriever, and LLM services
 - The team leverages AI-assisted test generation to produce new test cases from code changes, reducing the manual test authoring burden
@@ -103,7 +103,7 @@ This PRD expands the existing AI/ML test foundation floor-to-ceiling: backend AP
 
 ### Technical Success
 
-- CI/CD pipeline runs on every merge request: unit tests, contract tests, and configuration validation as mandatory gates
+- CI/CD pipeline runs on every merge request: unit tests and configuration validation as mandatory gates
 - Integration tests run against deployed infrastructure (Docker Compose baseline) on a scheduled basis
 - RAG quality regression suite produces RAGAS scores against the El-Salvador test bed, flagging degradation before release
 - All 5 components have test coverage: backend (Jest), frontend (Vue Test Utils), OPEA microservices (pytest), document-repository (Jest), mobile (Flutter test)
@@ -128,11 +128,11 @@ The MELT framework (Sprint 23, Issues #354-#361, #589-#591) transforms testing f
 | Metric | Target | Measurement |
 |--------|--------|-------------|
 | Component test coverage (floor-to-ceiling) | All 5 components with test suites | Test files exist and pass for each component |
-| CI pipeline gate coverage | Unit + contract + config validation on every MR | Pipeline runs and blocks on failure |
+| CI pipeline gate coverage | Unit tests + config validation on every MR | Pipeline runs and blocks on failure |
 | RAG quality regression | RAGAS scores within thresholds (Faithfulness >0.95, Relevance >0.85, Context Precision >0.80, Context Recall >0.90) | Automated scoring against El-Salvador test bed |
 | Configuration validation | All env vars documented, defaults validated, interdependencies checked | Static analysis + integration verification |
 | Deployment target verification | Tests pass against Docker Compose baseline | Automated test matrix |
-| Test execution time (unit + contract) | <10 minutes total | CI pipeline timing |
+| Test execution time (unit) | <10 minutes total | CI pipeline timing |
 | E2E test execution time | <30 minutes | CI pipeline timing |
 | MELT-ready test output | Test results consumable as structured events via OTel | Test framework emits OTel-compatible telemetry |
 
@@ -140,8 +140,8 @@ The MELT framework (Sprint 23, Issues #354-#361, #589-#591) transforms testing f
 
 ### MVP - Minimum Viable Product
 
-- CI/CD pipeline (GitLab CI) with unit test, contract test, and configuration validation gates
-- Backend test suite: API route contracts, service layer unit tests, middleware tests
+- CI/CD pipeline (GitLab CI) with unit test and configuration validation gates
+- Backend test suite: API route tests, service layer unit tests, middleware tests
 - Frontend test suite: component tests for critical UI flows, store/service tests
 - OPEA microservice test suite: pytest for retriever, dataprep, reranker, core (interface tests with mocked dependencies)
 - Document-repository test suite: route handler tests, middleware tests
@@ -169,7 +169,7 @@ The MELT framework (Sprint 23, Issues #354-#361, #589-#591) transforms testing f
 - Automated test generation from OpenAPI specs and code changes
 - Chaos engineering tests for deployment resilience
 - SBOM/SLSA compliance test integration
-- Contract testing with Pact for inter-service boundaries
+- Pact contract testing for inter-service boundaries (if needed beyond OpenAPI)
 - MELT-driven continuous quality validation: metrics from test runs feed anomaly detection, alerting on degradation trends, and automated regression detection without explicit test cases
 
 ## User Journeys
@@ -178,7 +178,7 @@ The MELT framework (Sprint 23, Issues #354-#361, #589-#591) transforms testing f
 
 **Alex** is a backend developer who just finished refactoring the ChatQnA service interface. They push to a feature branch and open a merge request.
 
-The CI pipeline triggers automatically. Within minutes, Alex sees the pipeline status: backend unit tests pass, contract tests pass, configuration validation passes. But the OPEA microservice integration test fails — the retriever is returning a different response shape after the refactor. Alex clicks into the failing test, sees the exact assertion that failed and the actual vs. expected response. They fix the interface mismatch, push again, and the full pipeline goes green. They merge with confidence.
+The CI pipeline triggers automatically. Within minutes, Alex sees the pipeline status: backend unit tests pass, configuration validation passes. But the OPEA microservice test fails — the retriever is returning a different response shape after the refactor. Alex clicks into the failing test, sees the exact assertion that failed and the actual vs. expected response. They fix the interface mismatch, push again, and the full pipeline goes green. They merge with confidence.
 
 ### Journey 2: QA Engineer Validates a Release Candidate (Edge Case)
 
@@ -217,7 +217,7 @@ After Sprint 23's MELT rollout, Marcus doesn't just see a timeout. The test fram
 - DPG (Digital Public Goods) compliance — the framework must produce verification artifacts demonstrating reliability for sovereign deployments
 - SBOM/SLSA Level 2 supply chain security (on the roadmap for future sprints)
 - ISO 42001 (AI Management System) alignment from the GovStack AI Readiness Guide
-- OpenAPI 3.1 contract compliance for all service interfaces
+- OpenAPI 3.1 spec compliance for all service interfaces
 - RFC 9457 error format compliance (already enforced — `{ error, message, details }` format)
 
 ### Technical Constraints
@@ -235,7 +235,7 @@ After Sprint 23's MELT rollout, Marcus doesn't just see a timeout. The test fram
 The RAG backend is a custom overlay built on the OPEA framework, deviating significantly from standard OPEA component implementations. GENIE.AI implements a proprietary hybrid RAG approach combining vectors, graph RAG, and labels — with custom ingestion, custom dataprep, and custom retrieval pipelines:
 
 - OPEA ServiceOrchestrator is the orchestration layer, but service implementations are GENIE.AI-specific
-- Contract tests validate against GENIE.AI's custom interfaces, not standard OPEA component contracts
+- Route handler tests validate against GENIE.AI's custom interfaces, not standard OPEA component contracts
 - Hybrid retrieval logic (vector similarity + ArangoDB graph traversal + label-based filtering) is custom with no OPEA equivalent
 - Ingestion and dataprep pipelines use custom extraction, chunking, labeling, and embedding strategies
 - Test coverage treats these custom components as first-class, not assuming OPEA compatibility
@@ -251,9 +251,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 
 ### Detected Innovation Areas
 
-**PCCQ Testing Philosophy** — Organizing tests by *what* they validate (Pipeline, Contract, Configuration, Quality) rather than *where* they run (unit, integration, e2e). Standard test pyramids don't map to systems where the same codebase produces different behavior based on environment variables and document corpora.
-
-**Testing Configured Deployments, Not Code** — The system under test is not code with fixed behavior, but a *configured deployment* where correctness means: given configuration X and documents Y, outputs are within quality bounds Z across deployment target T. Test fixtures must include env var profiles, document corpora, and deployment target configurations alongside code.
+**Testing Configured Deployments, Not Code** — The system under test is not code with fixed behavior, but a *configured deployment* where correctness means: given configuration X and documents Y, outputs are within quality bounds Z across deployment target T. Test fixtures must include env var profiles, document corpora, and deployment target configurations alongside code. OpenAPI specs serve as the interface contract source of truth across all components.
 
 **Probabilistic Quality Gates with RAGAS** — RAGAS metrics (faithfulness >0.95, relevance >0.85, context precision >0.80, context recall >0.90) as automated pass/fail thresholds in a CI pipeline for a government RAG platform. Most RAG deployments rely on manual evaluation; this embeds quality validation into the merge workflow.
 
@@ -268,14 +266,14 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 
 ### Validation Approach
 
-- PCCQ pillars validated through the existing RAGAS-based test strategy for the AI/ML pipeline (dataprep, retriever, LLM)
+- Validation approach verified through the existing RAGAS-based test strategy for the AI/ML pipeline (dataprep, retriever, LLM)
 - Configuration-to-output quality validation proven against the El-Salvador test bed
 - MELT convergence validated through Sprint 23 integration — test telemetry flows through OTel → VictoriaMetrics → Grafana alongside production telemetry
 - AI-generated tests validated against human-authored baselines for coverage parity and false-positive rates
 
 ### Risk Mitigation
 
-- PCCQ is a novel organizing principle — mitigated by mapping each pillar to concrete test types with clear examples
+- OpenAPI specs must be kept in sync with implementation — mitigated by swagger-jsdoc annotations in route files (single source of truth) and auto-generated mobile client
 - RAGAS thresholds are domain-specific — mitigated by starting with conservative thresholds and tuning against real country deployments
 - MELT convergence creates a Sprint 23 dependency — mitigated by designing MELT-ready hooks in Sprint 22 that function independently until Sprint 23's observability stack is available
 - AI-generated tests may produce false positives — mitigated by human review before integration into CI
@@ -286,7 +284,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 
 **Test Framework Architecture:** 5 independent test ecosystems (Jest, pytest, Vue Test Utils, Flutter test, Playwright) orchestrated by a unified CI pipeline. Shared test infrastructure: fixtures, mocks, test data, configuration profiles. MELT-ready instrumentation hooks in all test frameworks. AI-assisted test generation tooling to maximize coverage with limited resources.
 
-**CI/CD Pipeline Architecture:** GitLab CI as pipeline orchestrator. Stages: lint → unit tests (per component) → contract tests → configuration validation → integration tests (scheduled). Mandatory gates on merge requests: lint, unit, contract, config validation. Scheduled gates: integration tests, RAG quality regression. JUnit XML report artifacts for all test runners.
+**CI/CD Pipeline Architecture:** GitLab CI as pipeline orchestrator. Stages: lint → unit tests (per component) → configuration validation → integration tests (scheduled). Mandatory gates on merge requests: lint, unit, config validation. Scheduled gates: integration tests, RAG quality regression. JUnit XML report artifacts for all test runners.
 
 **Configuration Testing Architecture:** Env template schema generation from the `env` file (50+ variables with interdependencies). Hardware profile validation (GPU type → valid parameter ranges for vLLM/TEI). Deployment target validation (Compose vs Swarm vs K8s configuration differences). Feature flag interdependency validation (`DEPLOY_OPEA=0/1` changes expected service topology).
 
@@ -296,7 +294,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 
 ### Component-Specific Test Requirements
 
-**gov-chat-backend (Node.js/Express, CommonJS):** Jest with `__tests__/*.test.js` convention. Supertest for route handler integration tests (requires `createApp()` export from `index.js`). Mock ArangoDB, Redis, Keycloak, and OPEA service calls via `__tests__/mocks/`. API contract tests validating request/response schemas per route.
+**gov-chat-backend (Node.js/Express, CommonJS):** Jest with `__tests__/*.test.js` convention. Supertest for route handler integration tests (requires `createApp()` export from `index.js`). Mock ArangoDB, Redis, Keycloak, and OPEA service calls via `__tests__/mocks/`. Route handler tests validating request/response behavior per route. OpenAPI spec via swagger-jsdoc serves as the API contract.
 
 **gov-chat-frontend (Vue 3, Options API):** Jest + @vue/test-utils with `src/__tests__/*.test.js` convention. Component tests for critical UI flows (ChatBotComponent, NavBarComponent, UserProfileComponent). Vuex store tests (extend existing coverage). Service tests with mocked HTTP responses. Options API constraints: `mount()` with full store setup, no Composition API patterns.
 
@@ -318,14 +316,14 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 
 **MVP Approach:** Platform MVP — deliver the CI/CD pipeline foundation and per-component test suites that establish the quality gate for all merges. Without this, Sprint 24's ChatQnA refactoring and Sprint 23's MELT instrumentation have no regression safety net.
 
-**MVP Philosophy:** The minimum that makes a developer say "I can merge with confidence." Lint passes, unit tests pass, contract tests pass, configuration validation passes — all automated, all on every MR. Anything beyond that is Phase 2.
+**MVP Philosophy:** The minimum that makes a developer say "I can merge with confidence." Lint passes, unit tests pass, configuration validation passes — all automated, all on every MR. Anything beyond that is Phase 2.
 
 ### MVP Feature Set (Phase 1) — Sprint 22
 
 **Core Journeys Supported:** Journey 1 (Developer merges feature), Journey 3 (DevOps onboards country — config validation only)
 
-1. **CI/CD Pipeline (GitLab CI):** Lint, unit test, contract test, configuration validation stages. JUnit XML artifacts. MR blocking on failure.
-2. **Backend Test Suite:** Prerequisite `createApp()` refactor. API route contracts (all route groups). Service layer unit tests (extend beyond auth). Middleware tests.
+1. **CI/CD Pipeline (GitLab CI):** Lint, unit test, configuration validation stages. JUnit XML artifacts. MR blocking on failure.
+2. **Backend Test Suite:** Prerequisite `createApp()` refactor. API route tests (all route groups). Service layer unit tests (extend beyond auth). Middleware tests.
 3. **Frontend Test Suite:** Component tests (ChatBot, NavBar, UserProfile). Vuex store module tests. Service tests with mocked HTTP.
 4. **OPEA Microservice Test Suite:** pytest setup. Retriever interface tests (hybrid search, mocked ArangoDB). Dataprep interface tests (extraction, chunking). Reranker interface tests. Core type/protocol tests. Custom overlay-specific tests.
 5. **Document-Repository Test Suite:** Route handler tests (upload, download, search, delete). Security tests (ClamAV, file type validation). Extended service tests.
@@ -354,7 +352,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 - Automated test generation from OpenAPI specs and code changes
 - Chaos engineering tests for deployment resilience
 - SBOM/SLSA compliance test integration
-- Contract testing with Pact for inter-service boundaries
+- Pact contract testing for inter-service boundaries (if needed beyond OpenAPI)
 - MELT-driven continuous quality validation (anomaly detection, degradation trending)
 
 ### Risk Mitigation Strategy
@@ -366,12 +364,12 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 - **Existing test debt** — Some tests may be outdated after refactoring. Mitigation: assess all existing tests (keep/extend/rewrite) before building new suites.
 
 **Resource Risks:**
-- **Limited team, no dedicated QA** — AI-assisted test generation must compensate. Mitigation: prioritize highest-ROI tests first (config validation, API contracts).
-- **Sprint 22 timeline** — Sprint ends May 31. Mitigation: MVP scope focused on CI pipeline + per-component unit/contract tests; RAG quality and integration tests defer to Sprint 23.
+- **Limited team, no dedicated QA** — AI-assisted test generation must compensate. Mitigation: prioritize highest-ROI tests first (config validation, API route tests).
+- **Sprint 22 timeline** — Sprint ends May 31. Mitigation: MVP scope focused on CI pipeline + per-component unit tests; RAG quality and integration tests defer to Sprint 23.
 
 **Dependency Risks:**
 - **Sprint 23 MELT dependency** — Issue #601 depends on Sprint 22 test instrumentation. Mitigation: MELT-ready hooks in Sprint 22 function independently until Sprint 23's stack is available.
-- **Sprint 24 ChatQnA refactoring** — Issue #599 blocks this work. Mitigation: backend test suite (especially ChatQnA contracts) is an MVP priority.
+- **Sprint 24 ChatQnA refactoring** — Issue #599 blocks this work. Mitigation: backend test suite (especially ChatQnA route tests) is an MVP priority.
 
 ## Functional Requirements
 
@@ -379,8 +377,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 
 - FR1: The CI pipeline runs lint checks across all JavaScript, Python, and Dart components on every merge request
 - FR2: The CI pipeline executes unit tests for all 5 components (backend, frontend, OPEA microservices, document-repository, mobile) on every merge request
-- FR3: The CI pipeline executes contract tests validating API request/response schemas on every merge request
-- FR4: The CI pipeline executes configuration validation tests on every merge request
+- FR3: The CI pipeline executes configuration validation tests on every merge request
 - FR5: The CI pipeline blocks merge requests when any mandatory test stage fails
 - FR6: The CI pipeline produces JUnit XML test reports as artifacts for all test runners
 - FR7: The CI pipeline executes integration tests on a scheduled basis against deployed infrastructure
@@ -388,7 +385,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 
 ### Backend Verification (gov-chat-backend)
 
-- FR9: The test suite validates API route contracts for all route groups (auth, chat, analytics, admin, files, categories)
+- FR9: The test suite validates API route handlers for all route groups (auth, chat, analytics, admin, files, categories)
 - FR10: The test suite verifies service layer business logic for all backend services (not limited to auth)
 - FR11: The test suite validates middleware behavior (authentication, authorization, error handling, rate limiting)
 - FR12: The test suite tests route handlers via HTTP requests against an in-memory Express application
@@ -406,7 +403,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 - FR18: The test suite validates the dataprep extraction pipeline (multi-format parsing, chunking, labeling) with mocked dependencies
 - FR19: The test suite validates the reranker's score validation and top-K constraint enforcement with mocked TEI
 - FR20: The test suite validates core type definitions, protocols, and constants
-- FR21: The test suite validates custom overlay interfaces that deviate from standard OPEA component contracts
+- FR21: The test suite validates custom overlay interfaces that deviate from standard OPEA component interfaces
 
 ### Document Repository Verification
 
@@ -458,7 +455,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 
 ### Performance
 
-- NFR1: Unit and contract test stages complete in under 10 minutes total on every merge request
+- NFR1: Unit test stages complete in under 10 minutes total on every merge request
 - NFR2: Configuration validation completes in under 2 minutes
 - NFR3: Full E2E test suite (Playwright) completes in under 30 minutes
 - NFR4: Individual component test suites execute in isolation without waiting for other components (parallel execution where possible)
@@ -466,7 +463,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 
 ### Reliability & Determinism
 
-- NFR6: All unit and contract tests produce identical results across repeated executions with the same inputs (no flaky tests in mandatory CI gates)
+- NFR6: All unit tests produce identical results across repeated executions with the same inputs (no flaky tests in mandatory CI gates)
 - NFR7: Test execution is independent of execution order — no test depends on side effects from another test
 - NFR8: Tests requiring external services (ArangoDB, Redis, Keycloak, vLLM) use mocked dependencies in CI; real service integration runs only in scheduled pipelines against deployed infrastructure
 - NFR9: GPU-dependent tests are conditionally skipped in CI environments without GPU access, with clear skip reporting

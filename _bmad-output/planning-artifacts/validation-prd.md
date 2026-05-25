@@ -24,6 +24,8 @@ overallStatus: 'Warning'
 **Validation Date:** 2026-05-04
 **Validator:** BMAD Validation Framework
 
+> **Updated 2026-05-25:** The PCCQ testing philosophy and `contract` CI stage have been removed from the PRD. References to "PCCQ pillars" and contract testing in this validation report reflect the original design at the time of writing and are now superseded. The CI pipeline is now `lint → test → config → e2e`.
+
 ## Input Documents
 
 - PRD: `prd.md` (497 lines) ✓

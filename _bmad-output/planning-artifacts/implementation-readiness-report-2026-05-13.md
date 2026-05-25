@@ -18,6 +18,8 @@ documentsIncluded:
 **Date:** 2026-05-13
 **Project:** genie-ai
 
+> **Updated 2026-05-25:** The PCCQ testing philosophy and `contract` CI stage have been removed from the PRD, epics, and architecture documents. References to "PCCQ pillars", "contract tests as a CI gate", and FR3 (contract tests on every MR) in this report reflect the original design at the time of writing and are now superseded. The CI pipeline is now `lint → test → config → e2e`. See prd.md and epics.md for current requirements.
+
 ## Document Inventory
 
 | Document | File | Size | Status |

@@ -2,6 +2,8 @@
 
 Status: done
 
+> **Design Change (2026-05-25):** The `contract` CI stage has been removed from `.gitlab-ci.yml`. The same route handler tests already run in the `test` stage (test:backend, test:doc-repo), making the dedicated contract stage redundant. The `test:contract` npm script remains as a convenience alias for local development. This story was correctly implemented at the time; the design change reflects a simplification of the CI pipeline to `lint → test → config → e2e`.
+
 ## Story
 
 As a developer,

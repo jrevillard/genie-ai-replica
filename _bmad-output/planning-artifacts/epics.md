@@ -17,13 +17,12 @@ This document provides the complete epic and story breakdown for the Testing Fra
 
 - FR1: The CI pipeline runs lint checks across all JavaScript, Python, and Dart components on every merge request
 - FR2: The CI pipeline executes unit tests for all 5 components (backend, frontend, OPEA microservices, document-repository, mobile) on every merge request
-- FR3: The CI pipeline executes contract tests validating API request/response schemas on every merge request
 - FR4: The CI pipeline executes configuration validation tests on every merge request
 - FR5: The CI pipeline blocks merge requests when any mandatory test stage fails
 - FR6: The CI pipeline produces JUnit XML test reports as artifacts for all test runners
 - FR7: The CI pipeline executes integration tests on a scheduled basis against deployed infrastructure
 - FR8: The CI pipeline executes RAG quality regression tests on a scheduled basis
-- FR9: The test suite validates API route contracts for all route groups (auth, chat, analytics, admin, files, categories)
+- FR9: The test suite validates API route handlers for all route groups (auth, chat, analytics, admin, files, categories)
 - FR10: The test suite verifies service layer business logic for all backend services (not limited to auth)
 - FR11: The test suite validates middleware behavior (authentication, authorization, error handling, rate limiting)
 - FR12: The test suite tests route handlers via HTTP requests against an in-memory Express application
@@ -35,7 +34,7 @@ This document provides the complete epic and story breakdown for the Testing Fra
 - FR18: The test suite validates the dataprep extraction pipeline (multi-format parsing, chunking, labeling) with mocked dependencies
 - FR19: The test suite validates the reranker's score validation and top-K constraint enforcement with mocked TEI
 - FR20: The test suite validates core type definitions, protocols, and constants
-- FR21: The test suite validates custom overlay interfaces that deviate from standard OPEA component contracts
+- FR21: The test suite validates custom overlay interfaces that deviate from standard OPEA component interfaces
 - FR22: The test suite validates file upload, download, search, and delete endpoint behavior
 - FR23: The test suite verifies security middleware (ClamAV virus scanning, file type validation, authentication)
 - FR24: The test suite validates metadata and label service business logic
@@ -64,12 +63,12 @@ This document provides the complete epic and story breakdown for the Testing Fra
 
 ### NonFunctional Requirements
 
-- NFR1: Unit and contract test stages complete in under 10 minutes total on every merge request
+- NFR1: Unit test stages complete in under 10 minutes total on every merge request
 - NFR2: Configuration validation completes in under 2 minutes
 - NFR3: Full E2E test suite (Playwright) completes in under 30 minutes
 - NFR4: Individual component test suites execute in isolation without waiting for other components (parallel execution where possible)
 - NFR5: RAG quality regression suite completes in under 60 minutes against a deployed environment
-- NFR6: All unit and contract tests produce identical results across repeated executions with the same inputs (no flaky tests in mandatory CI gates)
+- NFR6: All unit tests produce identical results across repeated executions with the same inputs (no flaky tests in mandatory CI gates)
 - NFR7: Test execution is independent of execution order — no test depends on side effects from another test
 - NFR8: Tests requiring external services (ArangoDB, Redis, Keycloak, vLLM) use mocked dependencies in CI; real service integration runs only in scheduled pipelines against deployed infrastructure
 - NFR9: GPU-dependent tests are conditionally skipped in CI environments without GPU access, with clear skip reporting
@@ -97,10 +96,10 @@ This document provides the complete epic and story breakdown for the Testing Fra
 - pytest must be configured from scratch for `genie-ai-overlay/` — zero test infrastructure exists (5,018 lines of Python untested)
 - GitLab CI pipeline must be built from scratch (no `.gitlab-ci.yml` exists)
 - JUnit XML reporting: `jest-junit` v17 for JS, built-in `junitxml` for pytest, `junitreport` for Flutter, built-in `junit` for Playwright
-- Test execution tiers: mandatory (lint, unit, contract, config on every MR), scheduled (integration, E2E nightly), on-demand (RAG quality, manual GPU)
+- Test execution tiers: mandatory (lint, unit, config on every MR), scheduled (integration, E2E nightly), on-demand (RAG quality, manual GPU)
 - MELT instrumentation hooks must function independently in Sprint 22, consumable by Sprint 23 OTel pipeline without code changes
 - Hybrid mock architecture: centralized shared factories in `__tests__/mocks/` and `tests/conftest.py` + co-located test-specific overrides
-- PCCQ organizing principle: Pipeline, Contract, Configuration, Quality pillars
+- Testing organized by validation concern: pipeline integrity, API verification, configuration validation, quality assurance
 - 80+ new files/directories across 5 components plus shared infrastructure at root `tests/`
 - Implementation sequence: createApp refactor → pytest config → CI pipeline → per-component suites → config validation → MELT hooks → RAG fixtures
 - GitLab Ultimate Epics for grouping, Issues for stories, all in `un/itu/genie-ai` on `opensource.unicc.org`
@@ -115,13 +114,13 @@ None — testing framework has no user-facing UI.
 |---|---|---|
 | FR1 | Epic 1 | CI lint checks on every MR |
 | FR2 | Epic 1 | CI unit tests for all 5 components on every MR |
-| FR3 | Epic 1 | CI contract tests on every MR |
+| FR3 | _(removed)_ | _Contract stage removed — route tests run in test stage_ |
 | FR4 | Epic 1 | CI config validation on every MR |
 | FR5 | Epic 1 | CI blocks MR on failure |
 | FR6 | Epic 1 | JUnit XML test reports |
 | FR7 | Epic 1 | Scheduled integration tests |
 | FR8 | Epic 1 | Scheduled RAG quality tests |
-| FR9 | Epic 2 | Backend route contract tests |
+| FR9 | Epic 2 | Backend route handler tests |
 | FR10 | Epic 2 | Backend service layer tests |
 | FR11 | Epic 2 | Backend middleware tests |
 | FR12 | Epic 2 | Backend HTTP route tests via Supertest |
@@ -176,7 +175,7 @@ Epics are numbered for reference, not for sequential execution. The recommended 
 - Epic 5 Stories 5.1–5.4 (doc-repo tests) — after doc-repo fixtures
 
 **Wave 2 — Cross-cutting and advanced:**
-- Epic 1 Stories 1.4–1.7 (contract stage, config validation, MR blocking, caching) — needs tests from Wave 1
+- Epic 1 Stories 1.4–1.7 (contract stage removed, config validation, MR blocking, caching) — needs tests from Wave 1
 - Epic 6 (config validation) — independent, can start in Wave 0
 - Epic 8 (RAG quality) — needs OPEA fixtures from Epic 4
 - Epic 9 (AI test generation) — needs existing tests from Epics 2–5
@@ -187,8 +186,8 @@ Epics are numbered for reference, not for sequential execution. The recommended 
 ## Epic List
 
 ### Epic 1: Merge with Confidence — CI/CD Pipeline
-The developer merges a feature branch and the CI pipeline automatically runs lint, unit tests, contract tests, and configuration validation across all 5 components, blocking the merge request on failure with clear pass/fail reporting via JUnit XML.
-**FRs covered:** FR1–FR8, FR25–FR26
+The developer merges a feature branch and the CI pipeline automatically runs lint, unit tests, and configuration validation across all 5 components, blocking the merge request on failure with clear pass/fail reporting via JUnit XML.
+**FRs covered:** FR1–FR2, FR4–FR8, FR25–FR26
 **Sprint:** 22 (MVP)
 
 ### Epic 2: Backend API Test Suite
@@ -233,7 +232,7 @@ The developer leverages AI to generate test scaffolding (boilerplate, mock facto
 
 ## Epic 1: Merge with Confidence — CI/CD Pipeline
 
-The developer merges a feature branch and the CI pipeline automatically runs lint, unit tests, contract tests, and configuration validation across all 5 components, blocking the merge request on failure with clear pass/fail reporting via JUnit XML.
+The developer merges a feature branch and the CI pipeline automatically runs lint, unit tests, and configuration validation across all 5 components, blocking the merge request on failure with clear pass/fail reporting via JUnit XML.
 
 ### Story 1.1: Configure JUnit XML Reporting for All Test Runners
 
@@ -308,12 +307,14 @@ So that breaking interface changes are caught before merge.
 
 **Given** the test stage passes and route handler tests exist from Epics 2 and 5
 **When** the contract stage runs
-**Then** a `contract-test` CI stage executes `npm run test:contract` in backend and document-repository
+**Then** a `contract` CI stage executes `npm run test:contract` in backend and document-repository
 **And** the stage runs existing Supertest-based route handler tests that verify request/response schemas
 **And** the stage does NOT write new tests — it orchestrates execution of tests written in Epics 2 and 5
 **And** JUnit XML reports are collected as `artifacts:reports:junit`
 **And** the stage blocks the MR on failure
 **And** path-based `rules:changes` trigger only relevant contract tests on MRs
+
+> **Design Change (2026-05-25):** The `contract` CI stage has been removed from `.gitlab-ci.yml`. The same route handler tests already run in the `test` stage (test:backend, test:doc-repo), making the dedicated contract stage redundant. The `test:contract` npm script remains as a convenience alias for local development. This story was correctly implemented at the time; the design change reflects a simplification of the CI pipeline to `lint → test → config → e2e`.
 
 ### Story 1.5: Create CI Pipeline Configuration Validation Stage
 
@@ -323,7 +324,7 @@ So that configuration drift and missing variables are caught automatically.
 
 **Acceptance Criteria:**
 
-**Given** the contract stage passes
+**Given** the test stage passes
 **When** the config stage runs
 **Then** the configuration validation suite executes in `tests/config-validator/`
 **And** it validates all env vars referenced in `docker-compose.yaml` are documented in the `env` template
@@ -341,7 +342,7 @@ So that every merged change is validated while heavy tests don't slow down revie
 
 **Acceptance Criteria:**
 
-**Given** the `.gitlab-ci.yml` has lint, test, contract, and config stages
+**Given** the `.gitlab-ci.yml` has lint, test, and config stages
 **When** a merge request fails any mandatory stage
 **Then** the MR is blocked and cannot be merged
 **When** the nightly schedule triggers
@@ -447,7 +448,7 @@ So that all backend tests use consistent, maintainable test data.
 
 As a developer,
 I want tests for the authentication route group,
-So that auth endpoints are validated against the API contract.
+So that auth endpoints are validated against the API specification.
 
 **Acceptance Criteria:**
 
@@ -466,7 +467,7 @@ So that auth endpoints are validated against the API contract.
 
 As a developer,
 I want tests for the chat route group,
-So that conversation endpoints are validated against the API contract.
+So that conversation endpoints are validated against the API specification.
 
 **Acceptance Criteria:**
 
@@ -484,7 +485,7 @@ So that conversation endpoints are validated against the API contract.
 
 As a developer,
 I want tests for analytics and categories route groups,
-So that these backend API contracts are fully validated.
+So that these backend API endpoints are fully validated.
 
 **Acceptance Criteria:**
 
@@ -780,7 +781,7 @@ So that all doc-repo tests use consistent, maintainable test data.
 
 As a developer,
 I want route handler tests for all document repository endpoints,
-So that file operations are validated against the API contract.
+So that file operations are validated against the API specification.
 
 **Acceptance Criteria:**
 
@@ -1039,6 +1040,6 @@ So that test coverage gaps are identified automatically.
 **Then** it suggests test cases covering: happy path, error cases, edge cases, boundary values
 **And** suggestions reference specific functions, endpoints, or components being changed
 **When** AI analyzes an API specification (OpenAPI/Swagger)
-**Then** it suggests contract tests for each endpoint with example request/response pairs
+**Then** it suggests route handler tests for each endpoint with example request/response pairs
 **And** suggestions are presented as human-readable descriptions before code generation
 **And** human review is required before suggestions become test code (FR46)

@@ -186,3 +186,12 @@ Items deferred during code reviews. Revisit when the related component is next m
 - CI cache key doesn't include Playwright version — cache uses only `package-lock.json` prefix, same pattern as story 1.7. If Playwright version changes, cached browsers may be incompatible. Follows established project pattern.
 - Hardcoded test user credentials (`testuser/TestPass123!`) — follows existing E2E pattern across all epic1/epic2/epic3 tests. Should come from env vars for multi-environment support but consistent with project convention.
 - AC6 performance not verified — requires running the full suite against deployed stack. 30m timeout is set in CI config but actual execution time can't be verified from diff alone.
+
+## Deferred from: code review round 2 of 1-8-e2e-playwright-tests-for-chatbot-interaction-flows (2026-05-23)
+
+- ADB Keepalive race condition in patrol-wrapper.sh — Phase 1/Phase 2 race on APK file detection. Pre-existing mobile infrastructure.
+- socat process not killed on error — background process leak in mobile E2E CI section. Pre-existing.
+- Fix loop potential infinite loop in patrol-wrapper.sh — no absolute timeout on test_bundle.dart wait. Pre-existing mobile infrastructure.
+- Environment variable validation missing in patrol-wrapper.sh — no validation of empty KC_PWD. Pre-existing mobile infrastructure.
+- Playwright workers: 1 hides concurrency bugs — intentional trade-off for CI stability, serial execution prevents resource contention.
+- Progressive rendering test may flake on slow runners — 5×1s polling window adequate for Docker network but could miss progressive rendering on very slow backends. Passes in CI (1.0m total).

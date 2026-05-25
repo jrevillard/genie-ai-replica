@@ -26,6 +26,12 @@ test.describe('Document Upload', () => {
 
     const fileName = await row.locator('td.cell-main').innerText();
     expect(fileName.trim()).toContain('test-document.txt');
+
+    const statusTag = row.locator('DsStatusTag, .status-tag, [class*="status"]');
+    const statusText = (await statusTag.isVisible())
+      ? (await statusTag.innerText()).trim()
+      : '';
+    expect(statusText.toLowerCase()).toContain('pending');
   });
 
   test('upload a .md file and verify it appears in the document table', async ({ page }) => {
@@ -36,6 +42,12 @@ test.describe('Document Upload', () => {
 
     const fileName = await row.locator('td.cell-main').innerText();
     expect(fileName.trim()).toContain('test-document.md');
+
+    const statusTag = row.locator('DsStatusTag, .status-tag, [class*="status"]');
+    const statusText = (await statusTag.isVisible())
+      ? (await statusTag.innerText()).trim()
+      : '';
+    expect(statusText.toLowerCase()).toContain('pending');
   });
 
   test('upload a .pdf file and verify it appears in the document table', async ({ page }) => {
@@ -46,6 +58,12 @@ test.describe('Document Upload', () => {
 
     const fileName = await row.locator('td.cell-main').innerText();
     expect(fileName.trim()).toContain('test-document.pdf');
+
+    const statusTag = row.locator('DsStatusTag, .status-tag, [class*="status"]');
+    const statusText = (await statusTag.isVisible())
+      ? (await statusTag.innerText()).trim()
+      : '';
+    expect(statusText.toLowerCase()).toContain('pending');
   });
 
   test('reject .exe file and display error message', async ({ page }) => {

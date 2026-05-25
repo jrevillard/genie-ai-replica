@@ -1,6 +1,6 @@
 # Story 1.9: E2E Playwright Tests for Document Upload and Search Flows
 
-Status: review
+Status: done
 
 ## Story
 
@@ -319,6 +319,22 @@ changes:
 - [Source: _bmad-output/implementation-artifacts/1-8-e2e-playwright-tests-for-chatbot-interaction-flows.md] — Previous story with CI patterns, ROPC setup, and review findings
 - [Source: _bmad-output/planning-artifacts/architecture.md] — Test ecosystem coordination, E2E tier details
 - [Source: _bmad-output/planning-artifacts/epics.md] — Story 1.9 AC and requirements
+
+### Review Findings
+
+- [x] [Review][Patch] AC1: Missing "Pending" status assertion in upload tests [upload.spec.js] — AC1 requires "document appears in the document management table with 'Pending' status", but the 3 upload tests only verify the file name. Add a status assertion (e.g., verify the status tag text contains "Pending").
+- [x] [Review][Patch] AC4: Search test doesn't verify non-matching documents filtered out [search.spec.js] — AC4 requires "matching documents are returned in the table and non-matching documents are filtered out". The current test uploads one doc, searches, verifies match — but never checks that non-matching docs are excluded. Fix: upload two docs with different names, search for one, assert only the matching doc appears.
+- [x] [Review][Patch] CI: `2>/dev/null` silences curl errors in admin role assignment [.gitlab-ci.yml:481-495] — The admin role setup commands pipe stderr to /dev/null, making debugging impossible when role assignment fails. Remove `2>/dev/null` from the curl/python pipes (keep `|| true` for pipeline resilience).
+- [x] [Review][Patch] `deleteAllTestDocuments`: `.catch(() => {})` swallows errors silently [documents.js:153] — Cleanup failures go unnoticed. Replace `.catch(() => {})` with `.catch((e) => console.error('Failed to delete file:', f.file_name, e.message))` so failures appear in test output.
+- [x] [Review][Defer] No validation of document content after upload — deferred, pre-existing
+- [x] [Review][Defer] Missing test for concurrent uploads — deferred, pre-existing
+- [x] [Review][Defer] No test for virus scan integration (ClamAV) — deferred, pre-existing
+- [x] [Review][Defer] Missing pagination tests — deferred, pre-existing
+- [x] [Review][Defer] No test with special characters in filenames — deferred, pre-existing
+- [x] [Review][Defer] No test with large files — deferred, pre-existing
+- [x] [Review][Defer] No network failure simulation — deferred, pre-existing
+- [x] [Review][Defer] No verification of detected MIME types — deferred, pre-existing
+- [x] [Review][Defer] afterAll vs afterEach cleanup tradeoff (speed vs isolation) — deferred, design choice
 
 ## Dev Agent Record
 

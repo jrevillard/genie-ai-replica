@@ -22,14 +22,17 @@ test.describe('Document Search', () => {
 
   test('search by partial file name returns matching documents', async ({ page }) => {
     await uploadFile(page, path.join(FIXTURES_DIR, 'test-document.txt'));
-    await waitForDocumentInTable(page, 'test-document.txt');
+    await uploadFile(page, path.join(FIXTURES_DIR, 'test-document.md'));
+    await waitForDocumentInTable(page, 'test-document.md');
 
-    await searchDocuments(page, 'test-document');
+    await searchDocuments(page, 'test-document.txt');
 
     const rows = await getDocumentTableRows(page);
     expect(rows.length).toBeGreaterThanOrEqual(1);
-    const hasMatch = rows.some((r) => r.fileName.includes('test-document'));
+    const hasMatch = rows.some((r) => r.fileName.includes('test-document.txt'));
     expect(hasMatch).toBeTruthy();
+    const hasNonMatch = rows.some((r) => r.fileName.includes('test-document.md'));
+    expect(hasNonMatch).toBeFalsy();
   });
 
   test('search for non-existent file name shows no results message', async ({ page }) => {

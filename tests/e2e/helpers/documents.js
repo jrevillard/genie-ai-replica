@@ -143,7 +143,7 @@ async function deleteAllTestDocuments(prefix = 'test-document') {
     const file_id = f.file_id || f._key || f.id;
     await request('DELETE', `/api/files/${file_id}`, {
       headers: { Authorization: `Bearer ${token}` },
-    }).catch(() => {});
+    }).catch((e) => console.error('Cleanup: failed to delete', f.file_name, e.message));
   }
 }
 

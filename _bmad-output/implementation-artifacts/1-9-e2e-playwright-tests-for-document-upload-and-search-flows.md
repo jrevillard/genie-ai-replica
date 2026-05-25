@@ -199,12 +199,24 @@ The document management UI is in the Admin Dashboard under the "Document Managem
 The upload uses `multipart/form-data` with a hidden `<input type="file" multiple>`:
 
 ```javascript
-// In Playwright: set files on the hidden input
+// In Playwright: set files on the hidden input (Playwright can interact with hidden inputs)
 const fileInput = page.locator('.drop-zone input[type="file"]');
 await fileInput.setInputFiles('/path/to/test-file.txt');
 ```
 
 The dialog then shows the file in the `.file-list`, and the user clicks the "Upload N File(s)" button to confirm.
+
+### UI Component Quirks
+
+1. **DsInput nesting**: The `.search-input` is a DsInput component that wraps a native `<input>`. To type in it, target the inner input: `page.locator('.search-input input')` or use `page.getByPlaceholder('Search by file name...')`.
+
+2. **DsSelect for status filter**: The `.filter-select` renders a native `<select>` element. Use Playwright's `selectOption()`: `page.locator('.filter-select select').selectOption('pending')`.
+
+3. **DsTabs navigation**: The "Document Management" tab is rendered by DsTabs. Click by visible text: `page.getByText('Document Management').click()`. After clicking, wait for the document table to load (loading spinner in `DsStateDisplay`).
+
+4. **Document table loading state**: After navigating to the documents tab, the table shows a loading state (`DsStateDisplay type="loading"`). Wait for loading to disappear before asserting: `await expect(page.locator('.data-table .document-row').first()).toBeVisible({ timeout: 15000 })`.
+
+5. **Upload dialog confirmation**: The upload button text changes dynamically based on file count (`Upload N File(s)`). Target by the `.dialog-footer DsButton[variant="primary"]` selector rather than by text.
 
 ### Test File Naming Convention
 
@@ -231,7 +243,15 @@ Document management requires **page-level auth** (same as chatbot tests) since w
 
 After login, navigate to `BASE_URL/admin` and click the "Document Management" tab.
 
-For API-level cleanup (delete test files), use `getUserToken()` from `tests/e2e/helpers/auth.js` with direct HTTPS requests.
+For API-level cleanup (delete test files), use `getAdminToken()` from `tests/e2e/helpers/auth.js` with the `request()` helper. **Do NOT use `getUserToken()`** — the admin token is needed because `DELETE /api/files/:fileId` requires `Admin` role. The admin token bypasses role checks entirely.
+
+```javascript
+const { getAdminToken, request } = require('../helpers/auth');
+const token = await getAdminToken();
+await request('DELETE', `/api/files/${fileId}`, {
+  headers: { Authorization: `Bearer ${token}` },
+});
+```
 
 ### CI Job Changes
 

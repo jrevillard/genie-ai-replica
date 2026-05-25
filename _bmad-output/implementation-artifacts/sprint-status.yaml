@@ -54,7 +54,7 @@ development_status:
   1-7-configure-ci-caching-and-path-based-triggers: done
 
   1-8-e2e-playwright-tests-for-chatbot-interaction-flows: done
-  1-9-e2e-playwright-tests-for-document-upload-and-search-flows: ready-for-dev
+  1-9-e2e-playwright-tests-for-document-upload-and-search-flows: review
   epic-1-retrospective: optional
 
   # Epic 2: Backend API Test Suite

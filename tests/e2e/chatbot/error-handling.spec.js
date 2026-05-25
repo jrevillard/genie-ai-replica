@@ -43,6 +43,13 @@ test.describe('RAG error handling', () => {
     // Wait for spinner to disappear (frontend handled the error)
     await expect(page.locator('.loading-spinner')).toBeHidden({ timeout: 30000 });
 
+    // Verify error message is displayed to the user (AC4)
+    const statusError = page.locator('.status-error-message');
+    const botBubble = page.locator('.chat-message.bot .message-bubble').last();
+    await expect(
+      statusError.or(botBubble),
+    ).toBeVisible({ timeout: 5000 });
+
     // Input should be usable again after error
     const textarea = page.locator('.prompt-textarea');
     await expect(textarea).toBeVisible({ timeout: 5000 });
@@ -65,6 +72,13 @@ test.describe('RAG error handling', () => {
 
     // Wait for spinner to disappear
     await expect(page.locator('.loading-spinner')).toBeHidden({ timeout: 30000 });
+
+    // Verify error message is displayed (AC4)
+    const statusError = page.locator('.status-error-message');
+    const botBubble = page.locator('.chat-message.bot .message-bubble').last();
+    await expect(
+      statusError.or(botBubble),
+    ).toBeVisible({ timeout: 5000 });
 
     // Verify the chat is not stuck
     const textarea = page.locator('.prompt-textarea');
@@ -125,6 +139,13 @@ test.describe('RAG error handling', () => {
 
     // Wait for spinner to disappear
     await expect(page.locator('.loading-spinner')).toBeHidden({ timeout: 30000 });
+
+    // Verify error message is displayed (AC4)
+    const statusError = page.locator('.status-error-message');
+    const botBubble = page.locator('.chat-message.bot .message-bubble').last();
+    await expect(
+      statusError.or(botBubble),
+    ).toBeVisible({ timeout: 5000 });
 
     // Input should be usable again
     const textarea = page.locator('.prompt-textarea');

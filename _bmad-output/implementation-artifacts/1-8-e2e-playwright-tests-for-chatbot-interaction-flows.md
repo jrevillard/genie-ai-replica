@@ -415,3 +415,17 @@ For chatbot tests, use **page-level auth** since we need the full browser sessio
 - [x] [Review][Defer] CI cache key doesn't include Playwright version — deferred, follows existing cache pattern from story 1.7
 - [x] [Review][Defer] Hardcoded test user credentials — deferred, follows existing E2E pattern across all epic tests
 - [x] [Review][Defer] AC6 performance not verified — deferred, requires running the suite, not a code issue
+
+### Review Findings — Round 2 (2026-05-25)
+
+- [x] [Review][Patch] Error messages not verified in UI [`tests/e2e/chatbot/error-handling.spec.js`] — FIXED: Added `.status-error-message` or bot bubble visibility assertions to all 3 error test cases (503, 502, 500) to satisfy AC4 "error message displayed."
+- [x] [Review][Dismiss] Cleanup failures silenced in afterAll — already handled: `.catch(() => null)` + null check with `console.warn` on line 38-40
+- [x] [Review][Dismiss] Test user creation failures masked — already handled: existence check on line 477-478, HTTP status check on line 483, `exit 1` on failure
+- [x] [Review][Dismiss] waitForBotResponse spinner catch — intentional E2E pattern: spinner may appear/disappear faster than check; `toBeHidden` catches stuck spinner
+- [x] [Review][Dismiss] Keycloak client UUID not validated — already handled: `if [ -z "$CLIENT_UUID" ]; then exit 1` on line 468-470
+- [x] [Review][Defer] ADB Keepalive race condition [`mobile/genie_ai_mobile/patrol-wrapper.sh`] — deferred, pre-existing mobile infrastructure
+- [x] [Review][Defer] socat process not killed on error [`.gitlab-ci.yml`] — deferred, pre-existing mobile E2E infrastructure
+- [x] [Review][Defer] Fix loop potential infinite loop [`mobile/genie_ai_mobile/patrol-wrapper.sh`] — deferred, pre-existing mobile infrastructure
+- [x] [Review][Defer] Environment variable validation missing [`mobile/genie_ai_mobile/patrol-wrapper.sh`] — deferred, pre-existing mobile infrastructure
+- [x] [Review][Defer] Playwright workers: 1 hides concurrency bugs [`playwright.config.js`] — deferred, intentional trade-off for CI stability
+- [x] [Review][Defer] Progressive rendering test may flake on slow runners [`tests/e2e/chatbot/send-message-and-stream.spec.js`] — deferred, passes in CI (1.0m total); 5×1s polling window adequate for Docker network latency

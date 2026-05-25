@@ -21,6 +21,12 @@ if [ -f "$ENV_FILE" ]; then
     KC_PWD=$(grep "^KEYCLOAK_ADMIN_PASSWORD=" "$ENV_FILE" | cut -d= -f2-)
 elif [ -n "$KEYCLOAK_ADMIN_PASSWORD" ]; then
     KC_PWD="$KEYCLOAK_ADMIN_PASSWORD"
+fi
+if [ -z "$KC_PWD" ]; then
+    echo "❌ KEYCLOAK_ADMIN_PASSWORD is empty or not found in $ENV_FILE"
+    exit 1
+fi
+if [ -f "$ENV_FILE" ]; then
     cat > patrol_test/e2e_secrets.dart << SECRETS
 // E2E test secrets — generated from .env by patrol-wrapper.sh. DO NOT COMMIT.
 class E2eSecrets {

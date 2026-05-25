@@ -478,11 +478,26 @@ workflow:
       else
         echo "testuser already exists"
       fi
+      # Assign admin realm role to test user (required for document upload/delete)
+      USER_ID=$(curl -sk "${KC_URL}/admin/realms/genie/users?username=testuser" \
+        -H "Authorization: Bearer $ADMIN_TOKEN" \
+        | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])" || true)
+      ADMIN_ROLE=$(curl -sk "${KC_URL}/admin/realms/genie/roles" \
+        -H "Authorization: Bearer $ADMIN_TOKEN" \
+        | python3 -c "import sys,json; roles=[r for r in json.load(sys.stdin) if r['name']=='admin']; print(roles[0]['id'] if roles else '')" || true)
+      if [ -n "$ADMIN_ROLE" ] && [ -n "$USER_ID" ]; then
+        curl -sk -X POST "${KC_URL}/admin/realms/genie/users/${USER_ID}/role-mappings/realm" \
+          -H "Authorization: Bearer $ADMIN_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "[{\"id\":\"${ADMIN_ROLE}\",\"name\":\"admin\"}]" && echo "Assigned admin role to testuser" || echo "WARNING: admin role assignment failed"
+      else
+        echo "WARNING: Could not assign admin role (role or user not found). Document tests may fail."
+      fi
       # Save vars for cleanup in after_script
       echo "E2E_BASE_URL=${E2E_BASE_URL}" > .e2e-ropc-env
       echo "ADMIN_TOKEN=${ADMIN_TOKEN}" >> .e2e-ropc-env
       echo "CLIENT_UUID=${CLIENT_UUID}" >> .e2e-ropc-env
-    - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ --project=chromium
+    - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ tests/e2e/documents/ --project=chromium
   after_script:
     - |
       # ROPC cleanup - CRITICAL: always revert, even on test failure
@@ -828,8 +843,10 @@ e2e:playwright:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
       changes:
         - tests/e2e/chatbot/**/*
+        - tests/e2e/documents/**/*
         - components/gov-chat-frontend/**/*
         - components/gov-chat-backend/**/*
+        - components/document-repository/**/*
         - .gitlab-ci.yml
 
 # --- Configuration validation ---

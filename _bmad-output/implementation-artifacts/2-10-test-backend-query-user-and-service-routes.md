@@ -11,11 +11,11 @@ So that all API endpoints are reliable and backend coverage reaches professional
 ## Acceptance Criteria
 
 1. **AC1**: Query routes — all 11 endpoints tested via supertest against `createApp()`: PATCH `/:queryId/responsetime`, POST `/stream` (SSE with OPEA streaming toggle), POST `/`, GET `/:queryId`, POST `/:queryId/feedback`, PATCH `/:queryId/answered`, GET `/` (with query params), GET `/:queryId/conversations`, POST `/:queryId/conversation`, POST `/:queryId/link/:messageId`
-2. **AC2**: User routes — all 6 endpoints tested: GET `/api/me`, GET `/api/me/context`, POST `/api/me/reset-data`, POST `/api/me/delete` (GDPR-critical), PUT `/api/me` (multipart + JSON body), catch-all 404
+2. **AC2**: User routes — all 5 endpoints + catch-all 404 tested: GET `/api/me`, GET `/api/me/context`, POST `/api/me/reset-data`, POST `/api/me/delete` (GDPR-critical), PUT `/api/me` (multipart + JSON body), catch-all 404 handler
 3. **AC3**: Service routes — all 3 endpoints tested: GET `/api/services/categories`, GET `/api/services/categories/:categoryId`, GET `/api/services/search`
 4. **AC4**: Translation routes — both endpoints tested: POST `/api/translate`, POST `/api/translate/markdown` with full validation
 5. **AC5**: Logger routes — both admin-only endpoints tested: POST `/api/logger/configure` (with validation), POST `/api/logger/rollover`
-6. **AC6**: Admin controller — all 14 methods tested: `getSystemHealth`, `getDatabaseStats`, `backupDatabase`, `optimizeDatabase`, `getLogs`, `getLogsSummary`, `searchLogs`, `debugYesterdayLogs`, `rolloverLogs`, `getUserStats`, `getSecurityMetrics`, `runSecurityScan`, `runDiagnostics`, `searchUsers`
+6. **AC6**: Admin controller coverage already verified — existing `admin.test.js` (story 2-6) tests all admin routes via createApp/supertest. `adminController.js` is unused by `admin-routes.js` (routes call services directly) — no additional test file needed.
 7. **AC7**: All existing tests pass (734 pre-existing), zero lint errors
 8. **AC8**: Backend coverage increases from ~62% to ~65% (statements)
 
@@ -59,22 +59,7 @@ So that all API endpoints are reliable and backend coverage reaches professional
   - [ ] 5.2 Auth guard tests: 401 without token, 403 non-admin (requireAdmin)
   - [ ] 5.3 POST `/api/logger/configure` — 200 success, 400 no params, 400 invalid level, 400 invalid size format, 400 invalid files format, 500 error
   - [ ] 5.4 POST `/api/logger/rollover` — 200 success, 500 error
-- [ ] Task 6: Create `components/gov-chat-backend/__tests__/controllers/adminController.test.js` (AC6)
-  - [ ] 6.1 Mock setup: AdminDashboardService, LogsService, DatabaseOperationsService (optional), shared-lib (virtual), createMockReq/createMockRes/createMockNext from fixtures
-  - [ ] 6.2 Test `getSystemHealth` — 200 success, 500 error
-  - [ ] 6.3 Test `getDatabaseStats` — 200 success, 500 error
-  - [ ] 6.4 Test `backupDatabase` — 200 success, 500 error
-  - [ ] 6.5 Test `optimizeDatabase` — 200 success, 500 error
-  - [ ] 6.6 Test `getLogs` — 200 success with query params (limit, level, service), 500 error
-  - [ ] 6.7 Test `getLogsSummary` — 200 success, 500 error
-  - [ ] 6.8 Test `searchLogs` — 200 success (direct return, no wrapper), 500 error
-  - [ ] 6.9 Test `debugYesterdayLogs` — 200 success, 500 error
-  - [ ] 6.10 Test `rolloverLogs` — 200 success, 500 error
-  - [ ] 6.11 Test `getUserStats` — 200 success, 500 error
-  - [ ] 6.12 Test `getSecurityMetrics` — 200 success, 500 error
-  - [ ] 6.13 Test `runSecurityScan` — 200 success, 500 error
-  - [ ] 6.14 Test `runDiagnostics` — 200 success, 500 error
-  - [ ] 6.15 Test `searchUsers` — 200 success with query params (limit, offset, term, field), default values, NaN fallback, 500 error
+- [ ] Task 6: Verify admin controller coverage (AC6) — existing `admin.test.js` already covers all admin routes via createApp/supertest. No new file needed.
 - [ ] Task 7: Run coverage report to verify ~65% backend coverage target (AC8)
 - [ ] Task 8: Run full test suite to ensure no regressions (AC7)
 - [ ] Task 9: Run lint and fix any errors (AC7)
@@ -264,6 +249,10 @@ Factory function: `module.exports = () => { ... }` — NO service dependency.
 
 Uses `shared-lib` functions directly: `reconfigureLogger(config)` and `triggerLogRollover()`.
 
+**IMPORTANT**: The existing `__tests__/mocks/shared-lib.js` does NOT export `reconfigureLogger` or `triggerLogRollover`. For logger route tests, you must either:
+1. Add these exports to `__tests__/mocks/shared-lib.js` (preferred — other tests don't use them), OR
+2. Override the shared-lib mock in the logger test file with the additional exports
+
 **Both endpoints require admin** — double middleware: `authenticate` + `requireAdmin`.
 
 **POST `/api/logger/configure`** validation:
@@ -272,31 +261,9 @@ Uses `shared-lib` functions directly: `reconfigureLogger(config)` and `triggerLo
 - 400 if size formats don't match `/^\d+(k|m|g)$/`
 - 400 if files formats don't match `/^\d+d$/`
 
-#### Admin Controller (`controllers/adminController.js`)
+#### Admin Controller (`controllers/adminController.js`) — NOT TESTED IN THIS STORY
 
-**Direct export** (not factory): `module.exports = adminController`.
-
-Does NOT use createApp — test with `createMockReq`/`createMockRes`/`createMockNext` from fixtures.
-
-All 14 methods follow the same pattern:
-```javascript
-async methodName(req, res) {
-  try {
-    const result = await someService.someMethod();
-    res.status(200).json({ success: true, data: result, timestamp: '...' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: '...', error: '...' });
-  }
-}
-```
-
-Exceptions:
-- `searchLogs` returns service result directly (no `{ success, data }` wrapper)
-- `getLogs` defaults `limit=100`
-- `searchUsers` defaults `limit=20, offset=0, field='all'`, uses `parseInt` with NaN fallback
-- `rolloverLogs` returns `{ success: true, message, timestamp }` (no data)
-
-Dependencies: `AdminDashboardService`, `LogsService`, `DatabaseOperationsService` (optional, try-catch fallback).
+**NOTE**: `adminController.js` is unused by `admin-routes.js`. Routes call services directly. Existing `admin.test.js` (story 2-6) already provides comprehensive coverage of all admin endpoints via createApp/supertest. No additional test file needed for this controller.
 
 ### Mock Architecture — Service Dependencies
 
@@ -324,17 +291,16 @@ process.env.CHATQNA_STREAM_TIMEOUT = '3600000';
 
 Current: ~62% statements (after story 2-9).
 Target: ~65% statements.
-6 route test files + 1 controller test file covering ~1500 lines of untested route/controller code.
+5 route test files covering ~1200 lines of untested route code. Admin controller already covered by existing `admin.test.js`.
 
 ### Test Execution Order
 
 Create files in this order (simpler routes first, complex last):
 1. `translation-routes.test.js` (smallest, 2 endpoints)
-2. `logger-routes.test.js` (2 endpoints, admin-only)
+2. `logger-routes.test.js` (2 endpoints, admin-only; also update shared-lib mock)
 3. `service-routes.test.js` (3 endpoints)
-4. `user-routes.test.js` (6 endpoints, multipart)
+4. `user-routes.test.js` (5 endpoints + catch-all, multipart)
 5. `query-routes.test.js` (11 endpoints, SSE streaming)
-6. `adminController.test.js` (14 methods, controller pattern)
 
 ### File Paths
 
@@ -345,8 +311,8 @@ Create files in this order (simpler routes first, complex last):
 | `routes/service-routes.js` | `__tests__/routes/service-routes.test.js` |
 | `routes/translation-routes.js` | `__tests__/routes/translation-routes.test.js` |
 | `routes/logger-routes.js` | `__tests__/routes/logger-routes.test.js` |
-| `controllers/adminController.js` | `__tests__/controllers/adminController.test.js` |
 | `__tests__/setup-env.js` | (existing — read for env vars needed) |
+| `__tests__/mocks/shared-lib.js` | (existing — MUST add `reconfigureLogger` + `triggerLogRollover` exports for logger routes) |
 | `__tests__/fixtures/tokens.js` | (existing — createValidToken, createExpiredToken) |
 | `__tests__/fixtures/users.js` | (existing — createMockUser, createMockAdmin) |
 | `__tests__/fixtures/requests.js` | (existing — createMockReq, createMockRes, createMockNext) |

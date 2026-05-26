@@ -221,3 +221,11 @@ Items deferred during code reviews. Revisit when the related component is next m
   **Testability impact:** No practical difference — `createApp()` + supertest route tests cover both patterns equally. Controller pattern allows isolated unit testing of validation/transformation logic, but route-level integration tests provide the same coverage.
 
   **Recommendation:** Option 3 (accept + cleanup dead code) is the pragmatic choice. Refactoring 10 routes to add controllers (or migrating 2 to remove them) is low-value churn with no testability or reliability improvement.
+
+## Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)
+
+- DsPill/DsStatusTag : couverture minimale, pas de tests d'interaction — pre-existing, AC only requires variants+slots
+- Pas de tests d'accessibilité au-delà de DsModal — pre-existing, broader concern beyond this story scope
+- DsButton : variant invalide non testé — pre-existing, validator warning not in AC
+- DsInput : textarea `rows` — seul un cas testé — pre-existing, single case sufficient for AC
+- DsCombobox : mousedown `.prevent` non testé — pre-existing, JSDOM limitation

@@ -17,6 +17,23 @@ module.exports = {
   collectCoverage: true,
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov'],
+  collectCoverageFrom: [
+    'src/routes/**/*.js',
+    'src/services/**/*.js',
+    'src/middleware/**/*.js',
+    'src/controllers/**/*.js',
+    'src/utils/**/*.js',
+    '!**/node_modules/**',
+    '!**/__tests__/**'
+  ],
+  coverageThreshold: {
+    global: {
+      statements: 55,
+      branches: 50,
+      functions: 55,
+      lines: 55
+    }
+  },
   coveragePathIgnorePatterns: [
     '/node_modules/',
     '/__tests__/'

@@ -24,16 +24,36 @@
     "testPathIgnorePatterns": [
       "/node_modules/"
     ],
+    "collectCoverageFrom": [
+      "routes/**/*.js",
+      "services/**/*.js",
+      "middleware/**/*.js",
+      "controllers/**/*.js",
+      "config/**/*.js",
+      "!**/node_modules/**",
+      "!**/__tests__/**"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 35,
+        "branches": 30,
+        "functions": 35,
+        "lines": 35
+      }
+    },
     "reporters": [
       "default",
-      ["jest-junit", {
-        "outputDirectory": "reports",
-        "outputName": "jest-backend.xml",
-        "classNameTemplate": "{classname}",
-        "titleTemplate": "{title}",
-        "ancestorSeparator": " › ",
-        "usePathForSuiteName": true
-      }]
+      [
+        "jest-junit",
+        {
+          "outputDirectory": "reports",
+          "outputName": "jest-backend.xml",
+          "classNameTemplate": "{classname}",
+          "titleTemplate": "{title}",
+          "ancestorSeparator": " › ",
+          "usePathForSuiteName": true
+        }
+      ]
     ]
   },
   "dependencies": {

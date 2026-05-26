@@ -2093,6 +2093,18 @@ class ChatQnAService:
             retrieved_docs_with_scores = source_node_output.get("retrieved_docs", [])
             retriever_node_output = result_dict.get(retriever_key, {})
             file_id_pairs = retriever_node_output.get("file_id_pairs", {})
+            # Preserve the retriever's original cosine-similarity score keyed by
+            # doc id. The rerank node overwrites doc.score with its own
+            # cross-encoder logit (which is unbounded and renders as ~0% in the
+            # UI), so we look up the pre-rerank cosine here when building source
+            # citations. Falls back to the rerank score if the doc id is absent
+            # from the retriever output (no-rerank path or id-mapping miss).
+            _retriever_docs_for_cosine = retriever_node_output.get("retrieved_docs", [])
+            cosine_score_by_doc_id = {
+                d.get("id", "N/A"): d.get("score", 0.0)
+                for d in _retriever_docs_for_cosine
+                if isinstance(d, dict)
+            }
 
         # Strip leaked conversation markers from the LLM response. The LLM
         # sometimes echoes the internal delimiters and turn markers used
@@ -2156,7 +2168,11 @@ class ChatQnAService:
                 logger.warning(f"Warning: No File ID mapped for Document ID {doc_id_by_orchestrator}.")
                 continue
 
-            score = item.get("score", 0.0)
+            # Prefer the retriever's original cosine-similarity score (bounded
+            # to [0, 1] and meaningful as a % match). Falls back to whatever
+            # score is on the (possibly reranked) item if the doc id isn't in
+            # the cosine map.
+            score = cosine_score_by_doc_id.get(doc_id_by_orchestrator, item.get("score", 0.0))
 
             if file_id in source_documents_file_ids:
                 logger.info(f"Note: Duplicate File ID {file_id} found. Skipping duplicate.")

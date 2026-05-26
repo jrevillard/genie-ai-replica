@@ -123,6 +123,14 @@ Items deferred during code reviews. Revisit when the related component is next m
 - Translation backend fallback: risque théorique de race — le test de fallback GPU→CPU assigne `translationService.backend` manuellement. Risque théorique si le service cache le backend.
 - Chat history: edge collection query patterns — les patterns de traversal de graphe ArangoDB (edge bidirectionnelle, vérification d'existence d'edge) sont complexes à mocker et ne sont pas testés directement.
 
+## Deferred from: code review of 2-9-test-backend-admin-and-security-services (2026-05-26)
+
+- Date calculation in test setup without Date mocking — midnight boundary flakiness risk in logs-service.test.js (new Date() calls without mocking). Extremely unlikely edge case, tests pass in CI.
+- ResourceUsageMonitor 30s cache behavior untested — getResourceUsage() caches for 30s but no test verifies cache hit/miss with mocked Date.now(). AC1 satisfied, nice-to-have hardening.
+- SecurityScanService worker thread / async pattern edge cases — processLogsInParallel() with Worker threads, timeouts, and concurrent file processing has limited edge case coverage. Worker thread mocking is extremely complex, ACs satisfied.
+- LogsService file size limit edge cases — MAX_LOG_FILE_SIZE (20MB) and MAX_LINES_TO_PROCESS (200000) constants exist but edge cases around partial reads and corrupted gzip not fully tested. Happy path tested, hardening beyond AC scope.
+- Date/time edge case coverage — DST transitions, timezone boundaries, leap years not explicitly tested across all services. Luxon handles these, testing is nice-to-have hardening.
+
 ## Deferred from: code review of 3-2-test-critical-vue-components-chatbot-and-navbar (2026-05-19)
 
 - Error recovery: no test verifying user can send a new message after streaming error — improvement beyond AC scope. The current tests verify error display (AC5) but don't confirm the component resets to a usable state after onError. Should add a test that sends a message, triggers onError, then sends another message successfully.

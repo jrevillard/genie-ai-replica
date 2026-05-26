@@ -1,6 +1,6 @@
 # Story 2-9: Test Backend Admin and Security Services
 
-Status: backlog
+Status: done
 
 ## Story
 
@@ -38,3 +38,11 @@ Follow story 2-7 service unit test pattern exactly:
 - Use descriptive test names following `serviceName -> method -> condition` pattern
 
 ## Change Log
+
+### Review Findings
+
+- [x] [Review][Defer] Date calculation in test setup without Date mocking — midnight boundary flakiness risk in logs-service.test.js (new Date() calls without mocking). Deferred: extremely unlikely edge case, tests pass in CI.
+- [x] [Review][Defer] ResourceUsageMonitor 30s cache behavior untested — getResourceUsage() caches for 30s but no test verifies cache hit/miss with mocked Date.now(). Deferred: AC1 satisfied, nice-to-have hardening.
+- [x] [Review][Defer] SecurityScanService worker thread / async pattern edge cases — processLogsInParallel() with Worker threads, timeouts, and concurrent file processing has limited edge case coverage. Deferred: worker thread mocking is extremely complex, ACs satisfied.
+- [x] [Review][Defer] LogsService file size limit edge cases — MAX_LOG_FILE_SIZE (20MB) and MAX_LINES_TO_PROCESS (200000) constants exist but edge cases around partial reads and corrupted gzip not fully tested. Deferred: happy path tested, hardening beyond AC scope.
+- [x] [Review][Defer] Date/time edge case coverage — DST transitions, timezone boundaries, leap years not explicitly tested across all services. Deferred: luxon handles these, testing is nice-to-have hardening.

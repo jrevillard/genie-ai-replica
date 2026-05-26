@@ -432,4 +432,389 @@ describe('UserProfileComponent', () => {
       expect(tabs[0]).toEqual({ label: expect.any(String), value: 0 });
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Task 2a: Form validation
+  // -----------------------------------------------------------------------
+  describe('validateForm', () => {
+    it('returns valid when required fields are filled', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      const result = wrapper.vm.validateForm();
+      expect(result.isValid).toBe(true);
+      expect(Object.keys(result.errors)).toHaveLength(0);
+    });
+
+    it('returns invalid when fullName is empty', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.formData.personalIdentification.fullName = '';
+      const result = wrapper.vm.validateForm();
+      expect(result.isValid).toBe(false);
+      expect(result.errors['personalIdentification.fullName']).toBeTruthy();
+    });
+
+    it('returns invalid when dob is empty', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.formData.personalIdentification.dob = '';
+      const result = wrapper.vm.validateForm();
+      expect(result.isValid).toBe(false);
+      expect(result.errors['personalIdentification.dob']).toBeTruthy();
+    });
+
+    it('isTabComplete returns true for personalIdentification with name and dob', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      const tab = wrapper.vm.tabs[0];
+      expect(wrapper.vm.isTabComplete(0)).toBe(true);
+    });
+
+    it('isTabComplete returns false when fullName is missing', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.formData.personalIdentification.fullName = '';
+      expect(wrapper.vm.isTabComplete(0)).toBe(false);
+    });
+
+    it('isTabComplete returns true for non-personalIdentification tabs', async () => {
+      const wrapper = createUserProfileWrapper();
+      expect(wrapper.vm.isTabComplete(1)).toBe(true);
+      expect(wrapper.vm.isTabComplete(2)).toBe(true);
+    });
+
+    it('isTabComplete returns false for invalid tab index', () => {
+      const wrapper = createUserProfileWrapper();
+      expect(wrapper.vm.isTabComplete(999)).toBe(false);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Task 2b: Country dropdown handlers
+  // -----------------------------------------------------------------------
+  describe('country dropdown handlers', () => {
+    it('onNationalityChange updates nationality when code provided', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.onNationalityChange('FR');
+      expect(wrapper.vm.formData.personalIdentification.nationality).toBe('FR');
+    });
+
+    it('onNationalityChange does not update when code is undefined', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      const original = wrapper.vm.formData.personalIdentification.nationality;
+      wrapper.vm.onNationalityChange(undefined);
+      expect(wrapper.vm.formData.personalIdentification.nationality).toBe(original);
+    });
+
+    it('onCountryChange updates country when code provided', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.onCountryChange('DE');
+      expect(wrapper.vm.formData.addressResidency.country).toBe('DE');
+    });
+
+    it('onCountryChange does not update when code is undefined', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      const original = wrapper.vm.formData.addressResidency.country;
+      wrapper.vm.onCountryChange(undefined);
+      expect(wrapper.vm.formData.addressResidency.country).toBe(original);
+    });
+
+    it('updateNationalityName sets nationalityName', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.updateNationalityName('France');
+      expect(wrapper.vm.nationalityName).toBe('France');
+    });
+
+    it('updateNationalityName saves to localStorage when code present', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.formData.personalIdentification.nationality = 'FR';
+      wrapper.vm.updateNationalityName('France');
+
+      expect(localStorage.getItem('user_nationality_name')).toBe('France');
+      expect(localStorage.getItem('user_nationality_code')).toBe('FR');
+    });
+
+    it('updateNationalityName handles empty name', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.updateNationalityName('');
+      expect(wrapper.vm.nationalityName).toBe('');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Task 2c: Profile icon management
+  // -----------------------------------------------------------------------
+  describe('profile icon management', () => {
+    it('getInitials returns initials from full name', () => {
+      const wrapper = createUserProfileWrapper();
+      expect(wrapper.vm.getInitials('John Doe')).toBe('JD');
+    });
+
+    it('getInitials returns "?" for empty name', () => {
+      const wrapper = createUserProfileWrapper();
+      expect(wrapper.vm.getInitials('')).toBe('?');
+    });
+
+    it('getInitials returns "?" for null/undefined', () => {
+      const wrapper = createUserProfileWrapper();
+      expect(wrapper.vm.getInitials(null)).toBe('?');
+      expect(wrapper.vm.getInitials(undefined)).toBe('?');
+    });
+
+    it('getInitials handles single name', () => {
+      const wrapper = createUserProfileWrapper();
+      expect(wrapper.vm.getInitials('John')).toBe('J');
+    });
+
+    it('getInitials limits to 2 characters', () => {
+      const wrapper = createUserProfileWrapper();
+      expect(wrapper.vm.getInitials('John Ronald Reuel Tolkien')).toBe('JR');
+    });
+
+    it('selectPresetIcon sets profileIcon and closes selector', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.showIconSelector = true;
+      wrapper.vm.selectPresetIcon('icon-1');
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.formData.personalIdentification.profileIcon).toBe('icon-1');
+      expect(wrapper.vm.showIconSelector).toBe(false);
+    });
+
+    it('handleFileUpload rejects non-image files', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      const file = new File(['content'], 'test.pdf', { type: 'application/pdf' });
+      const event = { target: { files: [file] } };
+
+      wrapper.vm.handleFileUpload(event);
+      expect(mockNotificationError).toHaveBeenCalled();
+    });
+
+    it('handleFileUpload rejects files larger than 2MB', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      const largeFile = new File(['x'.repeat(3 * 1024 * 1024)], 'large.jpg', { type: 'image/jpeg' });
+      Object.defineProperty(largeFile, 'size', { value: 3 * 1024 * 1024 });
+      const event = { target: { files: [largeFile] } };
+
+      wrapper.vm.handleFileUpload(event);
+      expect(mockNotificationError).toHaveBeenCalled();
+    });
+
+    it('handleFileUpload does nothing with no file', () => {
+      const wrapper = createUserProfileWrapper();
+      const event = { target: { files: [] } };
+      wrapper.vm.handleFileUpload(event);
+      expect(mockNotificationError).not.toHaveBeenCalled();
+    });
+
+    it('useInitials generates initials-based icon', async () => {
+      // Mock canvas for JSDOM
+      const mockCtx = {
+        fillStyle: '',
+        fillRect: jest.fn(),
+        font: '',
+        textAlign: '',
+        textBaseline: '',
+        fillText: jest.fn()
+      };
+      const originalCreateElement = document.createElement.bind(document);
+      jest.spyOn(document, 'createElement').mockImplementation((tag) => {
+        if (tag === 'canvas') {
+          return {
+            width: 0,
+            height: 0,
+            getContext: () => mockCtx,
+            toDataURL: () => 'data:image/png;base64,mockinitials'
+          };
+        }
+        return originalCreateElement(tag);
+      });
+
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.showIconSelector = true;
+      wrapper.vm.useInitials();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.formData.personalIdentification.profileIcon).toContain('data:image/png');
+      expect(wrapper.vm.showIconSelector).toBe(false);
+      expect(mockCtx.fillText).toHaveBeenCalledWith('JD', 100, 100);
+
+      document.createElement.mockRestore();
+    });
+
+    it('closeIconSelector resets showIconSelector and uploadedImage', async () => {
+      const wrapper = createUserProfileWrapper();
+      wrapper.vm.showIconSelector = true;
+      wrapper.vm.uploadedImage = 'data:image/png;base64,abc';
+
+      wrapper.vm.closeIconSelector();
+
+      expect(wrapper.vm.showIconSelector).toBe(false);
+      expect(wrapper.vm.uploadedImage).toBeNull();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Task 2d: Country state persistence via localStorage
+  // -----------------------------------------------------------------------
+  describe('country state persistence', () => {
+    it('updateNationalityName persists to localStorage', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.formData.personalIdentification.nationality = 'GB';
+      wrapper.vm.updateNationalityName('United Kingdom');
+
+      expect(localStorage.getItem('user_nationality_name')).toBe('United Kingdom');
+      expect(localStorage.getItem('user_nationality_code')).toBe('GB');
+    });
+
+    it('updateCountryName persists to localStorage', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.formData.addressResidency.country = 'CA';
+      wrapper.vm.updateCountryName('Canada');
+
+      expect(localStorage.getItem('user_country_name')).toBe('Canada');
+      expect(localStorage.getItem('user_country_code')).toBe('CA');
+    });
+
+    it('restoreCountryState reads from localStorage without crashing', async () => {
+      localStorage.setItem('user_nationality_code', 'FR');
+      localStorage.setItem('user_country_code', 'DE');
+
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      expect(() => wrapper.vm.restoreCountryState()).not.toThrow();
+
+      localStorage.removeItem('user_nationality_code');
+      localStorage.removeItem('user_country_code');
+    });
+
+    it('restoreCountryState handles empty localStorage gracefully', async () => {
+      localStorage.clear();
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      expect(() => wrapper.vm.restoreCountryState()).not.toThrow();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Task 2e: Submission flow
+  // -----------------------------------------------------------------------
+  describe('submission flow', () => {
+    it('confirmSave sets isSubmitting during API call', async () => {
+      let resolveSave;
+      mockUpdateProfile.mockReturnValueOnce(new Promise((r) => { resolveSave = r; }));
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      const savePromise = wrapper.vm.confirmSave();
+      expect(wrapper.vm.isSubmitting).toBe(true);
+
+      resolveSave({});
+      await savePromise;
+      await wrapper.vm.$nextTick();
+      expect(wrapper.vm.isSubmitting).toBe(false);
+    });
+
+    it('confirmSave shows error on invalid form', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.formData.personalIdentification.fullName = '';
+      await wrapper.vm.confirmSave();
+      await wrapper.vm.$nextTick();
+
+      expect(mockNotificationError).toHaveBeenCalled();
+      expect(wrapper.vm.isSubmitting).toBe(false);
+    });
+
+    it('confirmSave hides confirm dialog on call', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.showConfirmDialog = true;
+      await wrapper.vm.confirmSave();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.showConfirmDialog).toBe(false);
+    });
+  });
 });

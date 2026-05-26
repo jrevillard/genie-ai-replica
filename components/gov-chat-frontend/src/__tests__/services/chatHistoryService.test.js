@@ -492,4 +492,364 @@ describe('chatHistoryService', () => {
       });
     });
   });
+
+  // =========================================================================
+  // Additional Folder Management Tests
+  // =========================================================================
+  describe('Additional Folder Management', () => {
+    describe('createFolder', () => {
+      it('creates folder with name and color', async () => {
+        mockPost.mockResolvedValue({ data: { _key: 'folder-new', name: 'Work', color: '#ff0000' } });
+
+        const result = await chatHistoryService.createFolder({
+          name: 'Work',
+          color: '#ff0000'
+        });
+
+        expect(mockPost).toHaveBeenCalledWith('/chat/folders', { name: 'Work', color: '#ff0000' });
+        expect(result._key).toBe('folder-new');
+      });
+
+      it('creates folder with description and parentFolderId', async () => {
+        mockPost.mockResolvedValue({ data: { _key: 'folder-sub', name: 'Subfolder' } });
+
+        const result = await chatHistoryService.createFolder({
+          name: 'Subfolder',
+          description: 'A subfolder',
+          parentFolderId: 'parent-1'
+        });
+
+        expect(mockPost).toHaveBeenCalledWith('/chat/folders', {
+          name: 'Subfolder',
+          description: 'A subfolder',
+          parentFolderId: 'parent-1'
+        });
+        expect(result._key).toBe('folder-sub');
+      });
+
+      it('throws when name is missing', async () => {
+        await expect(chatHistoryService.createFolder({})).rejects.toThrow('Folder name is required');
+      });
+    });
+
+    describe('updateFolder', () => {
+      it('updates folder name', async () => {
+        mockPatch.mockResolvedValue({ data: { _key: 'folder-1', name: 'Updated Name' } });
+
+        const result = await chatHistoryService.updateFolder('folder-1', { name: 'Updated Name' });
+
+        expect(mockPatch).toHaveBeenCalledWith('/chat/folders/folder-1', { name: 'Updated Name' });
+        expect(result.name).toBe('Updated Name');
+      });
+
+      it('updates folder with multiple fields', async () => {
+        mockPatch.mockResolvedValue({
+          data: {
+            _key: 'folder-1',
+            name: 'Work Updated',
+            color: '#00ff00',
+            icon: 'briefcase'
+          }
+        });
+
+        const result = await chatHistoryService.updateFolder('folder-1', {
+          name: 'Work Updated',
+          color: '#00ff00',
+          icon: 'briefcase'
+        });
+
+        expect(mockPatch).toHaveBeenCalledWith('/chat/folders/folder-1', {
+          name: 'Work Updated',
+          color: '#00ff00',
+          icon: 'briefcase'
+        });
+      });
+
+      it('throws on API failure', async () => {
+        mockPatch.mockRejectedValue(new Error('Server error'));
+
+        await expect(chatHistoryService.updateFolder('folder-1', { name: 'Test' })).rejects.toThrow(
+          'Server error'
+        );
+      });
+    });
+
+    describe('deleteFolder', () => {
+      it('deletes folder without contents by default', async () => {
+        mockDelete.mockResolvedValue({ data: { success: true } });
+
+        const result = await chatHistoryService.deleteFolder('folder-1');
+
+        expect(mockDelete).toHaveBeenCalledWith('/chat/folders/folder-1', {
+          params: { deleteContents: false }
+        });
+        expect(result).toEqual({ success: true });
+      });
+
+      it('deletes folder with contents when specified', async () => {
+        mockDelete.mockResolvedValue({ data: { success: true } });
+
+        const result = await chatHistoryService.deleteFolder('folder-1', true);
+
+        expect(mockDelete).toHaveBeenCalledWith('/chat/folders/folder-1', {
+          params: { deleteContents: true }
+        });
+        expect(result).toEqual({ success: true });
+      });
+
+      it('throws on API failure', async () => {
+        mockDelete.mockRejectedValue(new Error('Server error'));
+
+        await expect(chatHistoryService.deleteFolder('folder-1')).rejects.toThrow('Server error');
+      });
+    });
+
+    describe('reorderFolders', () => {
+      it('reorders folders within parent', async () => {
+        const folderOrders = [
+          { folderId: 'f1', order: 0 },
+          { folderId: 'f2', order: 1 },
+          { folderId: 'f3', order: 2 }
+        ];
+        mockPost.mockResolvedValue({ data: { success: true } });
+
+        const result = await chatHistoryService.reorderFolders(folderOrders, 'parent-1');
+
+        expect(mockPost).toHaveBeenCalledWith('/chat/folders/reorder', {
+          folderOrders,
+          parentFolderId: 'parent-1'
+        });
+        expect(result).toEqual({ success: true });
+      });
+
+      it('reorders root folders when no parentFolderId provided', async () => {
+        const folderOrders = [{ folderId: 'f1', order: 0 }];
+        mockPost.mockResolvedValue({ data: { success: true } });
+
+        await chatHistoryService.reorderFolders(folderOrders);
+
+        expect(mockPost).toHaveBeenCalledWith('/chat/folders/reorder', {
+          folderOrders,
+          parentFolderId: null
+        });
+      });
+
+      it('throws when folderOrders is empty', async () => {
+        await expect(chatHistoryService.reorderFolders([])).rejects.toThrow(
+          'Folder orders array is required'
+        );
+      });
+
+      it('throws when folderOrders is not an array', async () => {
+        await expect(chatHistoryService.reorderFolders(null)).rejects.toThrow(
+          'Folder orders array is required'
+        );
+      });
+    });
+  });
+
+  // =========================================================================
+  // Additional Folder-Conversation Tests
+  // =========================================================================
+  describe('Additional Folder-Conversation Operations', () => {
+    describe('addConversationToFolder', () => {
+      it('adds conversation to folder', async () => {
+        mockPost.mockResolvedValue({ data: { success: true } });
+
+        const result = await chatHistoryService.addConversationToFolder('folder-1', 'conv-1');
+
+        expect(mockPost).toHaveBeenCalledWith('/chat/folders/folder-1/conversations/conv-1');
+        expect(result).toEqual({ success: true });
+      });
+
+      it('throws on API failure', async () => {
+        mockPost.mockRejectedValue(new Error('Server error'));
+
+        await expect(
+          chatHistoryService.addConversationToFolder('folder-1', 'conv-1')
+        ).rejects.toThrow('Server error');
+      });
+    });
+
+    describe('moveConversation', () => {
+      it('moves conversation between folders', async () => {
+        mockPost.mockResolvedValue({ data: { success: true } });
+
+        const result = await chatHistoryService.moveConversation('conv-1', 'folder-a', 'folder-b');
+
+        expect(mockPost).toHaveBeenCalledWith('/chat/conversations/conv-1/move', {
+          sourceFolderId: 'folder-a',
+          targetFolderId: 'folder-b'
+        });
+        expect(result).toEqual({ success: true });
+      });
+
+      it('moves conversation from folder to root', async () => {
+        mockPost.mockResolvedValue({ data: { success: true } });
+
+        const result = await chatHistoryService.moveConversation('conv-1', 'folder-a', null);
+
+        expect(mockPost).toHaveBeenCalledWith('/chat/conversations/conv-1/move', {
+          sourceFolderId: 'folder-a',
+          targetFolderId: null
+        });
+        expect(result).toEqual({ success: true });
+      });
+
+      it('moves conversation from root to folder', async () => {
+        mockPost.mockResolvedValue({ data: { success: true } });
+
+        const result = await chatHistoryService.moveConversation('conv-1', null, 'folder-b');
+
+        expect(mockPost).toHaveBeenCalledWith('/chat/conversations/conv-1/move', {
+          sourceFolderId: null,
+          targetFolderId: 'folder-b'
+        });
+        expect(result).toEqual({ success: true });
+      });
+
+      it('throws on API failure', async () => {
+        mockPost.mockRejectedValue(new Error('Server error'));
+
+        await expect(
+          chatHistoryService.moveConversation('conv-1', 'folder-a', 'folder-b')
+        ).rejects.toThrow('Server error');
+      });
+    });
+
+    describe('removeConversationFromFolder', () => {
+      it('removes conversation from folder', async () => {
+        mockDelete.mockResolvedValue({ data: { success: true } });
+
+        const result = await chatHistoryService.removeConversationFromFolder('conv-1', 'folder-1');
+
+        expect(mockDelete).toHaveBeenCalledWith('/chat/folders/folder-1/conversations/conv-1');
+        expect(result).toEqual({ success: true });
+      });
+
+      it('throws on API failure', async () => {
+        mockDelete.mockRejectedValue(new Error('Server error'));
+
+        await expect(
+          chatHistoryService.removeConversationFromFolder('conv-1', 'folder-1')
+        ).rejects.toThrow('Server error');
+      });
+    });
+  });
+
+  // =========================================================================
+  // Additional Search and Stats Tests
+  // =========================================================================
+  describe('Additional Search and Stats', () => {
+    describe('searchConversations', () => {
+      it('searches with term and default params', async () => {
+        mockGet.mockResolvedValue({ data: { results: [], total: 0 } });
+
+        await chatHistoryService.searchConversations('passport');
+
+        expect(mockGet).toHaveBeenCalledWith('/chat/search', {
+          params: { q: 'passport', limit: 20, offset: 0, includeArchived: false }
+        });
+      });
+
+      it('searches with custom options', async () => {
+        mockGet.mockResolvedValue({ data: { results: [], total: 0 } });
+
+        await chatHistoryService.searchConversations('passport', {
+          limit: 10,
+          offset: 5,
+          includeArchived: true
+        });
+
+        expect(mockGet).toHaveBeenCalledWith('/chat/search', {
+          params: { q: 'passport', limit: 10, offset: 5, includeArchived: true }
+        });
+      });
+
+      it('throws when search term is empty', async () => {
+        await expect(chatHistoryService.searchConversations('')).rejects.toThrow('Search term is required');
+      });
+
+      it('throws on API failure', async () => {
+        mockGet.mockRejectedValue(new Error('Server error'));
+
+        await expect(chatHistoryService.searchConversations('test')).rejects.toThrow('Server error');
+      });
+    });
+
+    describe('searchFolders', () => {
+      it('searches folders by term', async () => {
+        mockGet.mockResolvedValue({ data: { results: [] } });
+
+        await chatHistoryService.searchFolders('work');
+
+        expect(mockGet).toHaveBeenCalledWith('/chat/folders/search', {
+          params: { q: 'work', includeArchived: false }
+        });
+      });
+
+      it('searches folders with includeArchived option', async () => {
+        mockGet.mockResolvedValue({ data: { results: [] } });
+
+        await chatHistoryService.searchFolders('work', { includeArchived: true });
+
+        expect(mockGet).toHaveBeenCalledWith('/chat/folders/search', {
+          params: { q: 'work', includeArchived: true }
+        });
+      });
+
+      it('throws when search term is empty', async () => {
+        await expect(chatHistoryService.searchFolders('')).rejects.toThrow('Search term is required');
+      });
+
+      it('throws on API failure', async () => {
+        mockGet.mockRejectedValue(new Error('Server error'));
+
+        await expect(chatHistoryService.searchFolders('test')).rejects.toThrow('Server error');
+      });
+    });
+
+    describe('getUserConversationStats', () => {
+      it('fetches conversation stats', async () => {
+        mockGet.mockResolvedValue({ data: { totalConversations: 42, totalMessages: 150 } });
+
+        const result = await chatHistoryService.getUserConversationStats();
+
+        expect(mockGet).toHaveBeenCalledWith('/chat/stats');
+        expect(result.totalConversations).toBe(42);
+        expect(result.totalMessages).toBe(150);
+      });
+
+      it('throws on API failure', async () => {
+        mockGet.mockRejectedValue(new Error('Server error'));
+
+        await expect(chatHistoryService.getUserConversationStats()).rejects.toThrow('Server error');
+      });
+    });
+
+    describe('getRecentConversations', () => {
+      it('fetches recent conversations with default limit', async () => {
+        mockGet.mockResolvedValue({ data: { conversations: [] } });
+
+        await chatHistoryService.getRecentConversations();
+
+        expect(mockGet).toHaveBeenCalledWith('/chat/recent', { params: { limit: 5 } });
+      });
+
+      it('fetches recent conversations with custom limit', async () => {
+        mockGet.mockResolvedValue({ data: { conversations: [{ _key: 'conv-1' }] } });
+
+        const result = await chatHistoryService.getRecentConversations(10);
+
+        expect(mockGet).toHaveBeenCalledWith('/chat/recent', { params: { limit: 10 } });
+        expect(result.conversations).toHaveLength(1);
+      });
+
+      it('throws on API failure', async () => {
+        mockGet.mockRejectedValue(new Error('Server error'));
+
+        await expect(chatHistoryService.getRecentConversations()).rejects.toThrow('Server error');
+      });
+    });
+  });
 });

@@ -474,4 +474,749 @@ describe('AdminDashboard', () => {
       expect(url).toContain('/genie/');
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Task 1a: Tab switching — all tabs
+  // -----------------------------------------------------------------------
+  describe('setActiveTab — all tab data loading', () => {
+    it('loads database stats when database tab is activated', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      const dbMock = require('../../services/databaseOperationsService').getDatabaseStats;
+      dbMock.mockClear();
+
+      wrapper.vm.setActiveTab('database');
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.activeTab).toBe('database');
+      expect(dbMock).toHaveBeenCalled();
+    });
+
+    it('loads logs summary and logs when logs tab is activated', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      mockGetLogsSummary.mockClear();
+      mockGetLogs.mockClear();
+
+      wrapper.vm.setActiveTab('logs');
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.activeTab).toBe('logs');
+      expect(mockGetLogsSummary).toHaveBeenCalled();
+      expect(mockGetLogs).toHaveBeenCalled();
+    });
+
+    it('loads knowledge hierarchy when hierarchy tab is activated with empty data', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      const treeMock = require('../../services/serviceTreeService').getAdminCategories;
+      treeMock.mockClear();
+
+      wrapper.vm.knowledgeHierarchy = [];
+      wrapper.vm.setActiveTab('hierarchy');
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.activeTab).toBe('hierarchy');
+      expect(treeMock).toHaveBeenCalled();
+    });
+
+    it('loads documents when documents tab is activated', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      const docMock = require('../../services/documentFileService').getFiles;
+      docMock.mockClear();
+
+      wrapper.vm.setActiveTab('documents');
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.activeTab).toBe('documents');
+      expect(docMock).toHaveBeenCalled();
+    });
+
+    it('does not reload hierarchy if data already exists', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      const treeMock = require('../../services/serviceTreeService').getAdminCategories;
+      treeMock.mockClear();
+      wrapper.vm.knowledgeHierarchy = [{ _key: 'cat-1', nameEN: 'Existing' }];
+
+      wrapper.vm.setActiveTab('hierarchy');
+      await wrapper.vm.$nextTick();
+
+      expect(treeMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Task 1b: Dirty state protection — isFormDirty computed
+  // -----------------------------------------------------------------------
+  describe('isFormDirty computed', () => {
+    it('returns false when no originalHierarchyFormState', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.originalHierarchyFormState = null;
+      expect(wrapper.vm.isFormDirty).toBe(false);
+    });
+
+    it('returns false when form matches original state', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const serialized = JSON.stringify(wrapper.vm.hierarchyForm);
+      wrapper.vm.originalHierarchyFormState = serialized;
+      expect(wrapper.vm.isFormDirty).toBe(false);
+    });
+
+    it('returns true when form differs from original state', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.originalHierarchyFormState = JSON.stringify({ nameEN: 'old' });
+      wrapper.vm.hierarchyForm.nameEN = 'changed';
+      expect(wrapper.vm.isFormDirty).toBe(true);
+    });
+
+    it('setActiveTab shows confirm dialog when hierarchy tab has unsaved changes', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.activeTab = 'hierarchy';
+      wrapper.vm.originalHierarchyFormState = JSON.stringify({ nameEN: 'old' });
+      wrapper.vm.hierarchyForm.nameEN = 'changed';
+
+      wrapper.vm.setActiveTab('users');
+      await wrapper.vm.$nextTick();
+
+      // Tab should NOT switch — confirm dialog is shown instead
+      expect(wrapper.vm.activeTab).toBe('hierarchy');
+      expect(wrapper.vm.confirmDialogState.visible).toBe(true);
+    });
+
+    it('confirm dialog onConfirm proceeds with tab switch', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.activeTab = 'hierarchy';
+      wrapper.vm.originalHierarchyFormState = JSON.stringify({ nameEN: 'old' });
+      wrapper.vm.hierarchyForm.nameEN = 'changed';
+
+      wrapper.vm.setActiveTab('users');
+      await wrapper.vm.$nextTick();
+
+      // Simulate user confirming the dialog
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.activeTab).toBe('users');
+      expect(wrapper.vm.confirmDialogState.visible).toBe(false);
+    });
+
+    it('confirm dialog onCancel keeps user on hierarchy tab', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.activeTab = 'hierarchy';
+      wrapper.vm.originalHierarchyFormState = JSON.stringify({ nameEN: 'old' });
+      wrapper.vm.hierarchyForm.nameEN = 'changed';
+
+      wrapper.vm.setActiveTab('users');
+      await wrapper.vm.$nextTick();
+
+      await wrapper.vm.confirmDialogState.onCancel();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.activeTab).toBe('hierarchy');
+      expect(wrapper.vm.confirmDialogState.visible).toBe(false);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Task 1c: Loading/error states
+  // -----------------------------------------------------------------------
+  describe('error handling', () => {
+    it('loadSystemHealth shows error notification on API failure', async () => {
+      mockGetSystemHealth.mockRejectedValueOnce(new Error('Network error'));
+      const wrapper = createAdminDashboardWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      expect(mockEventBusEmit).toHaveBeenCalledWith(
+        'notification:show',
+        expect.objectContaining({ type: 'error' })
+      );
+    });
+
+    it('loadSystemHealth shows error when response lacks metrics', async () => {
+      mockGetSystemHealth.mockResolvedValueOnce({ noMetrics: true });
+      const wrapper = createAdminDashboardWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      expect(mockEventBusEmit).toHaveBeenCalledWith(
+        'notification:show',
+        expect.objectContaining({ type: 'error' })
+      );
+    });
+
+    it('loadLogsSummary handles invalid response structure', async () => {
+      mockGetLogsSummary.mockResolvedValueOnce({ data: { notAnArray: true } });
+      const wrapper = createAdminDashboardWrapper();
+
+      await wrapper.vm.loadLogsSummary();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.errorLogsSummary).toEqual([]);
+      expect(wrapper.vm.warningLogsSummary).toEqual([]);
+    });
+
+    it('loadLogsSummary handles API error gracefully', async () => {
+      mockGetLogsSummary.mockRejectedValueOnce(new Error('Server error'));
+      const wrapper = createAdminDashboardWrapper();
+
+      await wrapper.vm.loadLogsSummary();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.errorLogsSummary).toEqual([]);
+      expect(wrapper.vm.warningLogsSummary).toEqual([]);
+    });
+
+    it('loadSecurityMetrics resets to defaults on error', async () => {
+      mockGetSecurityMetrics.mockRejectedValueOnce(new Error('Security API down'));
+      mockGetSecurityDetails.mockResolvedValueOnce({});
+      const wrapper = createAdminDashboardWrapper();
+
+      await wrapper.vm.loadSecurityMetrics();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.securityMetrics).toEqual({
+        failedLoginAttempts: 0,
+        suspiciousActivities: 0,
+        lastSecurityScan: 'Never',
+        vulnerabilities: { critical: 0, medium: 0, low: 0 }
+      });
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Task 1d: Multi-column sorting
+  // -----------------------------------------------------------------------
+  describe('sortBy — multi-column sort with toggle', () => {
+    it('toggles order when clicking same column', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.sortKey = 'file_name';
+      wrapper.vm.sortOrders.file_name = 'asc';
+
+      wrapper.vm.sortBy('file_name');
+      expect(wrapper.vm.sortOrders.file_name).toBe('desc');
+    });
+
+    it('sets new sort key when clicking different column', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.sortKey = 'file_name';
+
+      wrapper.vm.sortBy('upload_date');
+      expect(wrapper.vm.sortKey).toBe('upload_date');
+    });
+
+    it('sortedAndFilteredDocuments sorts ascending by default', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', file_name: 'beta', dataprep: { status: 'ready' } },
+        { _key: 'b', file_name: 'alpha', dataprep: { status: 'ready' } }
+      ];
+      wrapper.vm.sortKey = 'file_name';
+      wrapper.vm.sortOrders.file_name = 'asc';
+
+      const sorted = wrapper.vm.sortedAndFilteredDocuments;
+      expect(sorted[0].file_name).toBe('alpha');
+      expect(sorted[1].file_name).toBe('beta');
+    });
+
+    it('sortedAndFilteredDocuments sorts descending', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', file_name: 'alpha', dataprep: { status: 'ready' } },
+        { _key: 'b', file_name: 'beta', dataprep: { status: 'ready' } }
+      ];
+      wrapper.vm.sortKey = 'file_name';
+      wrapper.vm.sortOrders.file_name = 'desc';
+
+      const sorted = wrapper.vm.sortedAndFilteredDocuments;
+      expect(sorted[0].file_name).toBe('beta');
+      expect(sorted[1].file_name).toBe('alpha');
+    });
+
+    it('sortedAndFilteredDocuments handles nested sort keys', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', file_name: 'a', dataprep: { status: 'ready' } },
+        { _key: 'b', file_name: 'b', dataprep: { status: 'ingested' } }
+      ];
+      wrapper.vm.sortKey = 'dataprep.status';
+      wrapper.vm.sortOrders['dataprep.status'] = 'asc';
+
+      const sorted = wrapper.vm.sortedAndFilteredDocuments;
+      expect(sorted[0]._key).toBe('b');
+      expect(sorted[1]._key).toBe('a');
+    });
+
+    it('filteredDocuments returns empty when documents is empty', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [];
+      expect(wrapper.vm.filteredDocuments).toEqual([]);
+    });
+
+    it('filteredDocuments filters by status', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', dataprep: { status: 'ready' } },
+        { _key: 'b', dataprep: { status: 'processing' } }
+      ];
+      wrapper.vm.documentFilters.status = 'ready';
+
+      expect(wrapper.vm.filteredDocuments).toHaveLength(1);
+      expect(wrapper.vm.filteredDocuments[0]._key).toBe('a');
+    });
+
+    it('filteredDocuments returns all when status is "all"', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', dataprep: { status: 'ready' } },
+        { _key: 'b', dataprep: { status: 'processing' } }
+      ];
+      wrapper.vm.documentFilters.status = 'all';
+
+      expect(wrapper.vm.filteredDocuments).toHaveLength(2);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Task 1e: showIngestButton computed
+  // -----------------------------------------------------------------------
+  describe('showIngestButton computed', () => {
+    it('returns false when no documents are selected', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.selectedDocuments = [];
+      expect(wrapper.vm.showIngestButton).toBe(false);
+    });
+
+    it('returns false when selected documents contain ingested status', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'doc-1', dataprep: { status: 'ingested' } }
+      ];
+      wrapper.vm.selectedDocuments = ['doc-1'];
+
+      expect(wrapper.vm.showIngestButton).toBe(false);
+    });
+
+    it('returns true when selected documents are not ingested', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'doc-1', dataprep: { status: 'ready' } }
+      ];
+      wrapper.vm.selectedDocuments = ['doc-1'];
+
+      expect(wrapper.vm.showIngestButton).toBe(true);
+    });
+
+    it('returns false when any selected document has ingested status', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'doc-1', dataprep: { status: 'ready' } },
+        { _key: 'doc-2', dataprep: { status: 'ingested' } }
+      ];
+      wrapper.vm.selectedDocuments = ['doc-1', 'doc-2'];
+
+      expect(wrapper.vm.showIngestButton).toBe(false);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Task 1f: Confirm dialog
+  // -----------------------------------------------------------------------
+  describe('showConfirmDialog / resetConfirmDialog', () => {
+    it('showConfirmDialog sets visible state with custom options', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const onConfirm = jest.fn();
+      const onCancel = jest.fn();
+
+      wrapper.vm.showConfirmDialog({
+        title: 'Delete Item?',
+        message: 'This cannot be undone.',
+        confirmText: 'Delete',
+        cancelText: 'Keep',
+        onConfirm,
+        onCancel
+      });
+
+      expect(wrapper.vm.confirmDialogState.visible).toBe(true);
+      expect(wrapper.vm.confirmDialogState.title).toBe('Delete Item?');
+      expect(wrapper.vm.confirmDialogState.message).toBe('This cannot be undone.');
+      expect(wrapper.vm.confirmDialogState.confirmText).toBe('Delete');
+      expect(wrapper.vm.confirmDialogState.cancelText).toBe('Keep');
+    });
+
+    it('showConfirmDialog uses default text when not provided', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.showConfirmDialog({});
+
+      expect(wrapper.vm.confirmDialogState.visible).toBe(true);
+      expect(wrapper.vm.confirmDialogState.title).toBeTruthy();
+      expect(wrapper.vm.confirmDialogState.message).toBeTruthy();
+    });
+
+    it('resetConfirmDialog resets all state to defaults', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.showConfirmDialog({ title: 'Test', message: 'Test' });
+      expect(wrapper.vm.confirmDialogState.visible).toBe(true);
+
+      wrapper.vm.resetConfirmDialog();
+      expect(wrapper.vm.confirmDialogState.visible).toBe(false);
+      expect(wrapper.vm.confirmDialogState.title).toBe('');
+      expect(wrapper.vm.confirmDialogState.message).toBe('');
+    });
+
+    it('confirm dialog onConfirm callback is called and dialog resets', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      const onConfirm = jest.fn();
+
+      wrapper.vm.showConfirmDialog({ title: 'Test', onConfirm });
+      await wrapper.vm.confirmDialogState.onConfirm();
+
+      expect(onConfirm).toHaveBeenCalled();
+      expect(wrapper.vm.confirmDialogState.visible).toBe(false);
+    });
+
+    it('confirm dialog onCancel callback is called and dialog resets', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      const onCancel = jest.fn();
+
+      wrapper.vm.showConfirmDialog({ title: 'Test', onCancel });
+      await wrapper.vm.confirmDialogState.onCancel();
+
+      expect(onCancel).toHaveBeenCalled();
+      expect(wrapper.vm.confirmDialogState.visible).toBe(false);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Additional computed and method coverage
+  // -----------------------------------------------------------------------
+  describe('displayedUsers computed', () => {
+    it('returns search results when available', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.userSearchResults = [{ _key: 'user-1', loginName: 'search-result' }];
+      expect(wrapper.vm.displayedUsers).toEqual([{ _key: 'user-1', loginName: 'search-result' }]);
+    });
+
+    it('returns empty array when searching with no results yet', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.isSearchingUsers = true;
+      wrapper.vm.userSearchResults = null;
+      expect(wrapper.vm.displayedUsers).toEqual([]);
+    });
+
+    it('returns userStats.users when no search active', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.userSearchResults = null;
+      wrapper.vm.isSearchingUsers = false;
+      wrapper.vm.userStats.users = [{ _key: 'user-1' }];
+      expect(wrapper.vm.displayedUsers).toEqual([{ _key: 'user-1' }]);
+    });
+  });
+
+  describe('getUsageLevel', () => {
+    it('returns "low" for values below 50', () => {
+      const wrapper = createAdminDashboardWrapper();
+      expect(wrapper.vm.getUsageLevel(30)).toBe('low');
+    });
+
+    it('returns "medium" for values between 50 and 79', () => {
+      const wrapper = createAdminDashboardWrapper();
+      expect(wrapper.vm.getUsageLevel(65)).toBe('medium');
+    });
+
+    it('returns "high" for values 80 and above', () => {
+      const wrapper = createAdminDashboardWrapper();
+      expect(wrapper.vm.getUsageLevel(90)).toBe('high');
+    });
+  });
+
+  describe('getUserManageUrl', () => {
+    it('builds URL with user sub when available', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const url = wrapper.vm.getUserManageUrl({ sub: 'user-456' });
+      expect(url).toContain('/user-456/settings');
+    });
+
+    it('falls back to base admin URL when no sub', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const url = wrapper.vm.getUserManageUrl({});
+      expect(url).toBe(wrapper.vm.keycloakAdminUrl);
+    });
+  });
+
+  describe('handleSearchResults', () => {
+    it('shows info notification for empty results', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.handleSearchResults([]);
+      expect(mockEventBusEmit).toHaveBeenCalledWith(
+        'notification:show',
+        expect.objectContaining({ type: 'info' })
+      );
+    });
+
+    it('stores search results and shows success notification', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const results = [{ id: 'log-1', message: 'test', level: 'INFO', time: '12:00', service: 'api' }];
+      wrapper.vm.activeTab = 'logs';
+      wrapper.vm.handleSearchResults(results);
+
+      expect(wrapper.vm.searchResults).toEqual(results);
+      expect(mockEventBusEmit).toHaveBeenCalledWith(
+        'notification:show',
+        expect.objectContaining({ type: 'success' })
+      );
+    });
+
+    it('calls setActiveTab("logs") when not already on logs tab', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const setActiveTabSpy = jest.spyOn(wrapper.vm, 'setActiveTab').mockImplementation(() => {});
+      wrapper.vm.activeTab = 'overview';
+      wrapper.vm.handleSearchResults([{ id: 'log-1', level: 'INFO' }]);
+
+      expect(setActiveTabSpy).toHaveBeenCalledWith('logs');
+      setActiveTabSpy.mockRestore();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // parseLogMessage method
+  // ---------------------------------------------------------------------------
+  describe('parseLogMessage', () => {
+    it('returns UNKNOWN for non-string input (number)', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const result = wrapper.vm.parseLogMessage(123);
+      expect(result).toEqual({ type: 'UNKNOWN', message: '123' });
+    });
+
+    it('returns UNKNOWN for null input', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const result = wrapper.vm.parseLogMessage(null);
+      expect(result).toEqual({ type: 'UNKNOWN', message: 'null' });
+    });
+
+    it('extracts ERROR type from "[ERROR]: something went wrong"', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const result = wrapper.vm.parseLogMessage('[ERROR]: something went wrong');
+      expect(result).toEqual({ type: 'ERROR', message: 'something went wrong' });
+    });
+
+    it('extracts INFO type from "[INFO] status update" (no colon after bracket)', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const result = wrapper.vm.parseLogMessage('[INFO] status update');
+      expect(result).toEqual({ type: 'INFO', message: 'status update' });
+    });
+
+    it('defaults to INFO type for plain string without prefix', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const result = wrapper.vm.parseLogMessage('plain log message');
+      expect(result).toEqual({ type: 'INFO', message: 'plain log message' });
+    });
+
+    it('handles "[WARNING]:" format correctly', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const result = wrapper.vm.parseLogMessage('[WARNING]: this is a warning');
+      expect(result).toEqual({ type: 'WARNING', message: 'this is a warning' });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // getStatusVariant method
+  // ---------------------------------------------------------------------------
+  describe('getStatusVariant', () => {
+    it('returns "info" for crawling status', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { crawlJob: { status: 'crawling' } };
+      expect(wrapper.vm.getStatusVariant(doc)).toBe('info');
+    });
+
+    it('returns "error" for failed crawl status', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { crawlJob: { status: 'failed' } };
+      expect(wrapper.vm.getStatusVariant(doc)).toBe('error');
+    });
+
+    it('returns "error" for killed crawl status', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { crawl_job: { status: 'killed' } };
+      expect(wrapper.vm.getStatusVariant(doc)).toBe('error');
+    });
+
+    it('returns "success" for ingested dataprep', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { dataprep: { status: 'ingested' } };
+      expect(wrapper.vm.getStatusVariant(doc)).toBe('success');
+    });
+
+    it('returns "info" for ingesting dataprep', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { dataprep: { status: 'ingesting' } };
+      expect(wrapper.vm.getStatusVariant(doc)).toBe('info');
+    });
+
+    it('returns "warning" for "ingested with warnings"', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { dataprep: { status: 'ingested with warnings' } };
+      expect(wrapper.vm.getStatusVariant(doc)).toBe('warning');
+    });
+
+    it('returns "error" for "ingestion error"', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { dataprep: { status: 'ingestion error' } };
+      expect(wrapper.vm.getStatusVariant(doc)).toBe('error');
+    });
+
+    it('returns "pending" for pending dataprep', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { dataprep: { status: 'pending' } };
+      expect(wrapper.vm.getStatusVariant(doc)).toBe('pending');
+    });
+
+    it('returns "info" for retracted', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { dataprep: { status: 'retracted' } };
+      expect(wrapper.vm.getStatusVariant(doc)).toBe('info');
+    });
+
+    it('returns "info" as default fallback', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { dataprep: { status: 'unknown status' } };
+      expect(wrapper.vm.getStatusVariant(doc)).toBe('info');
+    });
+
+    it('handles crawl_job as array', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { crawl_job: [{ status: 'crawling' }] };
+      expect(wrapper.vm.getStatusVariant(doc)).toBe('info');
+    });
+
+    it('handles empty crawl_job array', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { crawl_job: [], dataprep: { status: 'ingested' } };
+      expect(wrapper.vm.getStatusVariant(doc)).toBe('success');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // getDisplayStatus method
+  // ---------------------------------------------------------------------------
+  describe('getDisplayStatus', () => {
+    it('returns "Crawling" for crawling status', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { crawlJob: { status: 'crawling' } };
+      expect(wrapper.vm.getDisplayStatus(doc)).toBe('Crawling');
+    });
+
+    it('returns "Crawl Failed" for failed status', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { crawlJob: { status: 'failed' } };
+      expect(wrapper.vm.getDisplayStatus(doc)).toBe('Crawl Failed');
+    });
+
+    it('returns "Crawl Killed" for killed status', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { crawl_job: { status: 'killed' } };
+      expect(wrapper.vm.getDisplayStatus(doc)).toBe('Crawl Killed');
+    });
+
+    it('returns "Crawl Scheduled" for pending crawl', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { crawlJob: { status: 'pending' } };
+      expect(wrapper.vm.getDisplayStatus(doc)).toBe('Crawl Scheduled');
+    });
+
+    it('falls back to dataprep.status when no crawl job', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { dataprep: { status: 'ingested' } };
+      expect(wrapper.vm.getDisplayStatus(doc)).toBe('ingested');
+    });
+
+    it('returns "Unknown" when no dataprep and no crawl job', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = {};
+      expect(wrapper.vm.getDisplayStatus(doc)).toBe('Unknown');
+    });
+
+    it('handles crawl_job as array', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { crawl_job: [{ status: 'crawling' }] };
+      expect(wrapper.vm.getDisplayStatus(doc)).toBe('Crawling');
+    });
+
+    it('handles empty crawl_job array', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const doc = { crawl_job: [], dataprep: { status: 'processing' } };
+      expect(wrapper.vm.getDisplayStatus(doc)).toBe('processing');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // getResourceLabel method
+  // ---------------------------------------------------------------------------
+  describe('getResourceLabel', () => {
+    it('returns default label for "cpu"', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const result = wrapper.vm.getResourceLabel('cpu');
+      expect(result).toBe('CPU Usage');
+    });
+
+    it('returns default label for "memory"', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const result = wrapper.vm.getResourceLabel('memory');
+      expect(result).toBe('Memory Usage');
+    });
+
+    it('returns default label for "storage"', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const result = wrapper.vm.getResourceLabel('storage');
+      expect(result).toBe('Storage Usage');
+    });
+
+    it('returns default label for "network"', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const result = wrapper.vm.getResourceLabel('network');
+      expect(result).toBe('Network Bandwidth');
+    });
+
+    it('returns raw resourceId for unknown resource', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const result = wrapper.vm.getResourceLabel('unknown');
+      expect(result).toBe('unknown');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // viewDocumentDetails, uploadFiles, addFromLink, refreshDocuments methods
+  // ---------------------------------------------------------------------------
+  describe('viewDocumentDetails', () => {
+    it('sets selectedFileId and showDetailsDialog to true', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.viewDocumentDetails('doc-123');
+      expect(wrapper.vm.selectedFileId).toBe('doc-123');
+      expect(wrapper.vm.showDetailsDialog).toBe(true);
+    });
+  });
+
+  describe('uploadFiles', () => {
+    it('sets showUploadDialog to true', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.uploadFiles();
+      expect(wrapper.vm.showUploadDialog).toBe(true);
+    });
+  });
+
+  describe('addFromLink', () => {
+    it('sets showLinkDialog to true', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.addFromLink();
+      expect(wrapper.vm.showLinkDialog).toBe(true);
+    });
+  });
+
+  describe('refreshDocuments', () => {
+    it('calls loadDocuments method', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const loadDocumentsSpy = jest.spyOn(wrapper.vm, 'loadDocuments').mockImplementation(() => {});
+      wrapper.vm.refreshDocuments();
+      expect(loadDocumentsSpy).toHaveBeenCalled();
+      loadDocumentsSpy.mockRestore();
+    });
+  });
 });

@@ -18,7 +18,7 @@ jest.mock('@/services/httpService', () => ({
 // Mock keycloakAuthService — file-level import triggers module load
 jest.mock('@/services/keycloakAuthService', () => ({
   __esModule: true,
-  default: { getAccessToken: jest.fn().mockResolvedValue('mock-token') }
+  default: { getAccessToken: jest.fn().mockReturnValue('mock-token') }
 }));
 
 const chatbotService = require('@/services/chatbotService').default;
@@ -26,6 +26,13 @@ const chatbotService = require('@/services/chatbotService').default;
 describe('chatbotService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Polyfill TextEncoder and TextDecoder for Node.js test environment
+    if (typeof global.TextEncoder === 'undefined') {
+      global.TextEncoder = require('util').TextEncoder;
+    }
+    if (typeof global.TextDecoder === 'undefined') {
+      global.TextDecoder = require('util').TextDecoder;
+    }
   });
 
   // ---------------------------------------------------------------------------
@@ -167,6 +174,279 @@ describe('chatbotService', () => {
       mockPost.mockRejectedValue(new Error('Server error'));
 
       await expect(chatbotService.submitFeedback('q-789', { rating: 1 })).rejects.toThrow('Server error');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // submitQueryStream
+  // ---------------------------------------------------------------------------
+  describe('submitQueryStream', () => {
+    beforeEach(() => {
+      // Mock window.APP_CONFIG
+      global.window = {
+        APP_CONFIG: { apiUrl: 'http://localhost:3000/api' }
+      };
+    });
+
+    afterEach(() => {
+      global.fetch.mockRestore?.();
+      delete global.window;
+    });
+
+    it('creates AbortController and initiates SSE stream with native fetch', () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      const mockReader = {
+        read: jest
+          .fn()
+          .mockResolvedValueOnce({ done: false, value: new Uint8Array([]) })
+          .mockResolvedValueOnce({ done: true })
+      };
+
+      const mockResponse = {
+        ok: true,
+        body: { getReader: () => mockReader }
+      };
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const callbacks = {
+        onChunk: jest.fn(),
+        onMetadata: jest.fn(),
+        onTranslation: jest.fn(),
+        onDone: jest.fn(),
+        onError: jest.fn()
+      };
+
+      const controller = chatbotService.submitQueryStream({ query: 'test' }, callbacks);
+
+      expect(controller).toBeInstanceOf(AbortController);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/queries/stream',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer mock-token'
+          }),
+          signal: controller.signal
+        })
+      );
+    });
+
+    it('calls onChunk callback when receiving chunk data', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      let chunkCallCount = 0;
+      const mockReader = {
+        read: jest.fn().mockImplementation(() => {
+          chunkCallCount++;
+          if (chunkCallCount === 1) {
+            return Promise.resolve({
+              done: false,
+              value: new TextEncoder().encode('data: {"type":"chunk","content":"Hello "}\n\n')
+            });
+          } else if (chunkCallCount === 2) {
+            return Promise.resolve({
+              done: false,
+              value: new TextEncoder().encode('data: {"type":"chunk","content":"World"}\n\n')
+            });
+          } else {
+            return Promise.resolve({ done: true });
+          }
+        })
+      };
+
+      const mockResponse = {
+        ok: true,
+        body: { getReader: () => mockReader }
+      };
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const onChunk = jest.fn();
+      const onDone = jest.fn();
+
+      chatbotService.submitQueryStream({ query: 'test' }, { onChunk, onDone });
+
+      // Wait a bit for async processing
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(onChunk).toHaveBeenCalledWith('Hello ');
+      expect(onChunk).toHaveBeenCalledWith('World');
+    });
+
+    it('calls onMetadata callback when receiving metadata', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      const mockReader = {
+        read: jest
+          .fn()
+          .mockResolvedValueOnce({
+            done: false,
+            value: new TextEncoder().encode('data: {"type":"metadata","queryId":"q-123"}\n\n')
+          })
+          .mockResolvedValueOnce({ done: true })
+      };
+
+      const mockResponse = {
+        ok: true,
+        body: { getReader: () => mockReader }
+      };
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const onMetadata = jest.fn();
+      const onDone = jest.fn();
+
+      chatbotService.submitQueryStream({ query: 'test' }, { onMetadata, onDone });
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(onMetadata).toHaveBeenCalledWith({ type: 'metadata', queryId: 'q-123' });
+    });
+
+    it('calls onTranslation callback when receiving translation', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      const mockReader = {
+        read: jest
+          .fn()
+          .mockResolvedValueOnce({
+            done: false,
+            value: new TextEncoder().encode('data: {"type":"translation","content":"Translated"}\n\n')
+          })
+          .mockResolvedValueOnce({ done: true })
+      };
+
+      const mockResponse = {
+        ok: true,
+        body: { getReader: () => mockReader }
+      };
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const onTranslation = jest.fn();
+      const onDone = jest.fn();
+
+      chatbotService.submitQueryStream({ query: 'test' }, { onTranslation, onDone });
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(onTranslation).toHaveBeenCalledWith('Translated');
+    });
+
+    it('calls onDone callback when stream completes', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      const mockReader = {
+        read: jest
+          .fn()
+          .mockResolvedValueOnce({
+            done: false,
+            value: new TextEncoder().encode('data: {"type":"done"}\n\n')
+          })
+          .mockResolvedValueOnce({ done: true })
+      };
+
+      const mockResponse = {
+        ok: true,
+        body: { getReader: () => mockReader }
+      };
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const onDone = jest.fn();
+
+      chatbotService.submitQueryStream({ query: 'test' }, { onDone });
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(onDone).toHaveBeenCalledWith({ type: 'done' });
+    });
+
+    it('calls onError callback when receiving error from stream', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      const mockReader = {
+        read: jest
+          .fn()
+          .mockResolvedValueOnce({
+            done: false,
+            value: new TextEncoder().encode('data: {"type":"error","message":"Stream failed"}\n\n')
+          })
+          .mockResolvedValueOnce({ done: true })
+      };
+
+      const mockResponse = {
+        ok: true,
+        body: { getReader: () => mockReader }
+      };
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const onError = jest.fn();
+
+      chatbotService.submitQueryStream({ query: 'test' }, { onError });
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    });
+
+    it('calls onError callback when HTTP response is not ok', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      const mockResponse = {
+        ok: false,
+        status: 500,
+        json: async () => ({ message: 'Internal Server Error' })
+      };
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const onError = jest.fn();
+
+      chatbotService.submitQueryStream({ query: 'test' }, { onError });
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    });
+
+    it('handles abort signal and does not call onError', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      const mockReader = {
+        read: jest.fn().mockImplementation(() => {
+          const error = new Error('Aborted');
+          error.name = 'AbortError';
+          return Promise.reject(error);
+        })
+      };
+
+      const mockResponse = {
+        ok: true,
+        body: { getReader: () => mockReader }
+      };
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const onError = jest.fn();
+
+      chatbotService.submitQueryStream({ query: 'test' }, { onError });
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(onError).not.toHaveBeenCalled();
     });
   });
 });

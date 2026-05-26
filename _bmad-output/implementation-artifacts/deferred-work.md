@@ -222,6 +222,16 @@ Items deferred during code reviews. Revisit when the related component is next m
 
   **Recommendation:** Option 3 (accept + cleanup dead code) is the pragmatic choice. Refactoring 10 routes to add controllers (or migrating 2 to remove them) is low-value churn with no testability or reliability improvement.
 
+## Deferred from: code review of story 2-10 (2026-05-26)
+
+- SSE streaming complex error paths untested — query-routes.js has extensive error handling (metadata failures, translation failures during streaming, client disconnect, keepalive timers, res.writableEnded checks) not exercised by tests. Query-routes coverage 74.2% vs 100% for simpler routes. Root cause: complex stream pipeline with axios, SSE protocol, external service calls. Future SSE-specific test story recommended.
+- GDPR delete cascade and idempotency — DELETE /api/me test verifies keycloakProxyService.deleteUser is called but doesn't test cascade cleanup (ArangoDB data, analytics) or idempotency (double-delete). GDPR compliance testing should be a dedicated story.
+- Auth middleware edge cases in route tests — routes check req.user?.iss_sub but tests always mock req.user in beforeEach. Testing middleware-level edge cases (undefined req.user, missing iss_sub) is a middleware testing concern, not route testing.
+- Translation type validation edge cases — empty array for texts[] and empty string for markdown beyond spec AC4 scope.
+- Service locale validation — routes accept any locale without validation. Invalid locales passed to service layer is a service-layer testing concern.
+- Query parameter parseInt edge cases — GET / uses parseInt() for limit/offset without NaN/negative validation. Pre-existing route design.
+- Multipart file upload edge cases — PUT /api/me uses multer with size limits; tests don't cover oversized files, multiple files, invalid types. Multer config testing beyond route scope.
+
 ## Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)
 
 - DsCombobox keyboard navigation tests (ArrowUp/Down, Enter, Escape) — complex interaction testing beyond basic unit scope

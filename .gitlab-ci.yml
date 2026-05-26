@@ -649,7 +649,7 @@ test:backend:
   before_script:
     - cd components/gov-chat-backend && npm ci
   script:
-    - npm test -- --coverage --coverageReporters=text-summary --coverageReporters=cobertura
+    - npm test -- --coverage --coverageReporters=text-summary --coverageReporters=cobertura --runInBand
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   cache:
     - key:

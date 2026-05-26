@@ -1,6 +1,6 @@
 # Story 2.9: Test Backend Admin and Security Services
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -19,31 +19,31 @@ So that these critical system services are reliable and maintainable.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create `__tests__/services/logs-service.test.js` (AC3)
-  - [ ] 1.1 Mock setup: shared-lib (virtual), fs.promises, zlib, path-sanitizer
-  - [ ] 1.2 Test singleton getInstance() and init()
-  - [ ] 1.3 Test pure functions: parseLogs, detectLogLevel, detectService, extractLogs, groupLogs, getDateRange, extractDateFromFilename
-  - [ ] 1.4 Test file operations: fileExists, readLogFile (plain + .gz), getLogFilesInRange
-  - [ ] 1.5 Test high-level methods: searchLogs, getLogsSummary, debugYesterdayLogs
-  - [ ] 1.6 Test error paths for each method
-- [ ] Task 2: Create `__tests__/services/security-scan-service.test.js` (AC2)
-  - [ ] 2.1 Mock setup: shared-lib (virtual), fs.promises, child_process, axios, luxon, config
-  - [ ] 2.2 Test pure functions: parseLogLine (3 formats + invalid), deduplicateVulnerabilities, removeDuplicateLogEntries, generateRecommendations
-  - [ ] 2.3 Test file operations: isGzipValid, getDescriptorCount, checkCachedResults, getLastScanDetails, saveScanResults
-  - [ ] 2.4 Test HTTP security checks: scanForVulnerabilities, checkSecurityHeaders, checkServerLeakage, checkTimestampDisclosure, checkCorsConfiguration, checkHiddenFiles
-  - [ ] 2.5 Test orchestrator methods: runSecurityScan, processLogsInParallel, checkLogsForIssues, checkFailedLogins, checkSuspiciousActivities, loginIssues
-  - [ ] 2.6 Test winston transport methods: closeWinstonTransports, reopenWinstonTransports
-- [ ] Task 3: Create `__tests__/services/admin-dashboard-service.test.js` (AC1)
-  - [ ] 3.1 Mock setup: shared-lib (virtual), arangojs, os, fs.promises, path-sanitizer
-  - [ ] 3.2 Test init(), setLogsService(), setSecurityScanService()
-  - [ ] 3.3 Test DB-dependent methods: getSystemHealth, storeAnalyticsData (insert vs update), getDatabaseStats, getUserStats, searchUsers (field-based filtering), checkDatabaseHealth, backupDatabase, optimizeDatabase
-  - [ ] 3.4 Test delegated methods: getLogs, rolloverLogs, getLogsSummary, debugYesterdayLogs, searchLogs, getSecurityMetrics, runDiagnostics, runSecurityScan
-  - [ ] 3.5 Test ResourceUsageMonitor: getCpuUsage, getMemoryUsage, getStorageUsage, getNetworkUsage, getResourceUsage (caching with 30s timeout)
-  - [ ] 3.6 Test formatTimeAgo utility
-  - [ ] 3.7 Test all error paths (DB not initialized, injected service missing, query failures)
-- [ ] Task 4: Run coverage report to verify ~50% backend coverage target (AC6)
-- [ ] Task 5: Run full test suite to ensure no regressions (AC5)
-- [ ] Task 6: Run lint and fix any errors (AC5)
+- [x] Task 1: Create `__tests__/services/logs-service.test.js` (AC3)
+  - [x] 1.1 Mock setup: shared-lib (virtual), fs.promises, zlib, path-sanitizer
+  - [x] 1.2 Test singleton getInstance() and init()
+  - [x] 1.3 Test pure functions: parseLogs, detectLogLevel, detectService, extractLogs, groupLogs, getDateRange, extractDateFromFilename
+  - [x] 1.4 Test file operations: fileExists, readLogFile (plain + .gz), getLogFilesInRange
+  - [x] 1.5 Test high-level methods: searchLogs, getLogsSummary, debugYesterdayLogs
+  - [x] 1.6 Test error paths for each method
+- [x] Task 2: Create `__tests__/services/security-scan-service.test.js` (AC2)
+  - [x] 2.1 Mock setup: shared-lib (virtual), fs.promises, child_process, axios, luxon, config
+  - [x] 2.2 Test pure functions: parseLogLine (3 formats + invalid), deduplicateVulnerabilities, removeDuplicateLogEntries, generateRecommendations
+  - [x] 2.3 Test file operations: isGzipValid, getDescriptorCount, checkCachedResults, getLastScanDetails, saveScanResults
+  - [x] 2.4 Test HTTP security checks: scanForVulnerabilities, checkSecurityHeaders, checkServerLeakage, checkTimestampDisclosure, checkCorsConfiguration, checkHiddenFiles
+  - [x] 2.5 Test orchestrator methods: runSecurityScan, processLogsInParallel, checkLogsForIssues, checkFailedLogins, checkSuspiciousActivities, loginIssues
+  - [x] 2.6 Test winston transport methods: closeWinstonTransports, reopenWinstonTransports
+- [x] Task 3: Create `__tests__/services/admin-dashboard-service.test.js` (AC1)
+  - [x] 3.1 Mock setup: shared-lib (virtual), arangojs, os, fs.promises, path-sanitizer
+  - [x] 3.2 Test init(), setLogsService(), setSecurityScanService()
+  - [x] 3.3 Test DB-dependent methods: getSystemHealth, storeAnalyticsData (insert vs update), getDatabaseStats, getUserStats, searchUsers (field-based filtering), checkDatabaseHealth, backupDatabase, optimizeDatabase
+  - [x] 3.4 Test delegated methods: getLogs, rolloverLogs, getLogsSummary, debugYesterdayLogs, searchLogs, getSecurityMetrics, runDiagnostics, runSecurityScan
+  - [x] 3.5 Test ResourceUsageMonitor: getCpuUsage, getMemoryUsage, getStorageUsage, getNetworkUsage, getResourceUsage (caching with 30s timeout)
+  - [x] 3.6 Test formatTimeAgo utility
+  - [x] 3.7 Test all error paths (DB not initialized, injected service missing, query failures)
+- [x] Task 4: Run coverage report to verify ~50% backend coverage target (AC6)
+- [x] Task 5: Run full test suite to ensure no regressions (AC5)
+- [x] Task 6: Run lint and fix any errors (AC5)
 
 ## Dev Notes
 
@@ -192,12 +192,35 @@ Three services totaling ~2300 lines of source code. With ~3500-4300 lines of tes
 
 ## Change Log
 
+- 2026-05-26: Created logs-service.test.js (67 tests), security-scan-service.test.js (52 tests), admin-dashboard-service.test.js (65 tests) — 184 new tests total
+- 2026-05-26: Fixed lint error (duplicate key `type` in admin-dashboard-service test mock)
+- 2026-05-26: All 734 backend tests pass, 0 lint errors, services at 62.35% statements (target ~50%)
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
+Claude (Sonnet 4.6)
+
 ### Debug Log References
+
+- Duplicate key `type` lint error at line 440 fixed by consolidating to single `type: 'failed_login'`
 
 ### Completion Notes List
 
+- AC1: AdminDashboardService — all 24 methods tested including ResourceUsageMonitor inner class (getCpuUsage, getMemoryUsage, getStorageUsage, getNetworkUsage, getResourceUsage with 30s cache). 65 tests covering init, DB-dependent queries, delegated methods, error paths. Coverage: 92.42% statements.
+- AC2: SecurityScanService — 52 tests covering all exported functions. Key challenge: axios dual interface (direct call + .get). Used dual mock pattern `const mockAxios = jest.fn(); mockAxios.get = jest.fn()`. Coverage: 61.17% statements (lower due to worker_threads internals not easily mockable without full Worker implementation).
+- AC3: LogsService — 67 tests covering all 14 methods + singleton getInstance(). Key challenge: singleton reset with jest.isolateModules() for each test. Coverage: 69.11% statements.
+- AC4: Mock conventions follow stories 2-7/2-8 pattern (shared-lib virtual, arangojs mock, jest.isolateModules).
+- AC5: All 734 backend tests pass (184 new + 550 existing), zero lint errors.
+- AC6: Backend services at 62.35% statements — exceeds ~50% target significantly.
+
 ### File List
+
+| File | Action |
+|------|--------|
+| `components/gov-chat-backend/__tests__/services/logs-service.test.js` | Created |
+| `components/gov-chat-backend/__tests__/services/security-scan-service.test.js` | Created |
+| `components/gov-chat-backend/__tests__/services/admin-dashboard-service.test.js` | Created |
+| `_bmad-output/implementation-artifacts/2-9-test-backend-admin-and-security-services.md` | Updated (status, tasks, dev record) |
+| `_bmad-output/implementation-artifacts/sprint-status.yaml` | Updated (status → review) |

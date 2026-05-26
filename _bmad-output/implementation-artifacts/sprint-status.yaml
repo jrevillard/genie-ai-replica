@@ -69,7 +69,7 @@ development_status:
   2-6-test-backend-admin-and-files-route-handlers: done
   2-7-test-backend-service-layer: done
   2-8-test-backend-middleware: done
-  2-9-test-backend-admin-and-security-services: backlog
+  2-9-test-backend-admin-and-security-services: ready-for-dev
   2-10-test-backend-query-user-and-service-routes: backlog
   2-11-test-backend-chat-history-completion-and-database-operations: backlog
   epic-2-retrospective: optional

@@ -2,13 +2,8 @@
 
 require('./setup-env');
 
-// Capture swagger-jsdoc and swagger-ui-express setup options
-let capturedSwaggerOptions = null;
-let capturedSetupOptions = null;
-
-// Non-capturing mocks for all dependencies — these are hoisted and apply globally.
-// The swagger-specific capture mocks are set up via jest.doMock() in beforeAll
-// so they take effect after jest.resetModules() clears any cached index.js.
+// Mock only the infrastructure dependencies — no need to mock swagger-jsdoc
+// or swagger-ui-express because we test the exported config objects directly.
 
 jest.mock(
   '../shared-lib',
@@ -103,92 +98,70 @@ jest.mock('path', () => ({
 const originalExit = process.exit;
 beforeAll(() => {
   process.exit = jest.fn();
-
-  // Clear any cached index.js from other test suites, then register
-  // capturing mocks so we can intercept swagger-jsdoc/swagger-ui-express calls.
-  jest.resetModules();
-  jest.doMock('swagger-jsdoc', () => {
-    return (options) => {
-      capturedSwaggerOptions = options;
-      return {
-        openapi: options.definition.openapi,
-        info: options.definition.info,
-        components: options.definition.components,
-        security: options.definition.security,
-        paths: {}
-      };
-    };
-  });
-  jest.doMock('swagger-ui-express', () => ({
-    serve: () => {},
-    setup: (spec, options) => {
-      capturedSetupOptions = options;
-      return () => {};
-    }
-  }));
-  require('../index');
 });
 afterAll(() => {
   process.exit = originalExit;
 });
 
+// Access the exported config objects directly — no capture mocking needed
+const { swaggerOptions, swaggerUiSetupOptions } = require('../index');
+
 describe('Swagger Configuration', () => {
   describe('Security Scheme (Task 1)', () => {
     it('should contain KeycloakOAuth2 security scheme (NOT bearerAuth)', () => {
-      const schemes = capturedSwaggerOptions.definition.components.securitySchemes;
+      const schemes = swaggerOptions.definition.components.securitySchemes;
       expect(schemes.KeycloakOAuth2).toBeDefined();
       expect(schemes.bearerAuth).toBeUndefined();
     });
 
     it('should use oauth2 type with authorizationCode flow (NOT implicit)', () => {
-      const scheme = capturedSwaggerOptions.definition.components.securitySchemes.KeycloakOAuth2;
+      const scheme = swaggerOptions.definition.components.securitySchemes.KeycloakOAuth2;
       expect(scheme.type).toBe('oauth2');
       expect(scheme.flows.authorizationCode).toBeDefined();
       expect(scheme.flows.implicit).toBeUndefined();
     });
 
     it('should point authorizationUrl to Keycloak with correct realm path', () => {
-      const flow = capturedSwaggerOptions.definition.components.securitySchemes.KeycloakOAuth2.flows.authorizationCode;
+      const flow = swaggerOptions.definition.components.securitySchemes.KeycloakOAuth2.flows.authorizationCode;
       expect(flow.authorizationUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth');
     });
 
     it('should point tokenUrl to Keycloak with correct realm path', () => {
-      const flow = capturedSwaggerOptions.definition.components.securitySchemes.KeycloakOAuth2.flows.authorizationCode;
+      const flow = swaggerOptions.definition.components.securitySchemes.KeycloakOAuth2.flows.authorizationCode;
       expect(flow.tokenUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/token');
     });
 
     it('should include openid, profile, and email scopes', () => {
-      const scopes =
-        capturedSwaggerOptions.definition.components.securitySchemes.KeycloakOAuth2.flows.authorizationCode.scopes;
+      const scopes = swaggerOptions.definition.components.securitySchemes.KeycloakOAuth2.flows.authorizationCode.scopes;
       expect(scopes.openid).toBeDefined();
       expect(scopes.profile).toBeDefined();
       expect(scopes.email).toBeDefined();
     });
 
     it('should set global security to KeycloakOAuth2 with openid and profile scopes', () => {
-      const security = capturedSwaggerOptions.definition.security;
+      const security = swaggerOptions.definition.security;
       expect(security).toEqual([{ KeycloakOAuth2: ['openid', 'profile'] }]);
     });
   });
 
   describe('OAuth2 initOAuth Configuration (Task 1)', () => {
     it('should configure swaggerOptions.oauth with clientId from env', () => {
-      expect(capturedSetupOptions).toBeDefined();
-      expect(capturedSetupOptions.swaggerOptions.oauth.clientId).toBe('genie-app');
+      expect(swaggerUiSetupOptions).toBeDefined();
+      expect(swaggerUiSetupOptions.swaggerOptions.oauth.clientId).toBe('genie-app');
     });
 
     it('should enable PKCE with usePkceWithAuthorizationCodeGrant: true', () => {
-      expect(capturedSetupOptions.swaggerOptions.oauth.usePkceWithAuthorizationCodeGrant).toBe(true);
+      expect(swaggerUiSetupOptions.swaggerOptions.oauth.usePkceWithAuthorizationCodeGrant).toBe(true);
     });
 
     it('should set oauth scopes string', () => {
-      expect(capturedSetupOptions.swaggerOptions.oauth.scopes).toBe('openid profile email');
+      expect(swaggerUiSetupOptions.swaggerOptions.oauth.scopes).toBe('openid profile email');
     });
   });
 
   describe('Environment Variable Handling (Task 1)', () => {
     it('should construct URLs using KEYCLOAK_URL and KEYCLOAK_REALM env vars', () => {
-      const flow = capturedSwaggerOptions.definition.components.securitySchemes.KeycloakOAuth2.flows.authorizationCode;
+      const flow = swaggerOptions.definition.components.securitySchemes.KeycloakOAuth2.flows.authorizationCode;
       expect(flow.authorizationUrl).toMatch(
         /^https:\/\/keycloak\.example\.com\/auth\/realms\/genie\/protocol\/openid-connect\/auth$/
       );
@@ -204,8 +177,8 @@ describe('Swagger Configuration', () => {
 
   describe('Swagger Spec Generation (Task 5)', () => {
     it('should generate the Swagger spec without errors', () => {
-      expect(capturedSwaggerOptions).toBeDefined();
-      expect(capturedSwaggerOptions.definition.openapi).toBe('3.0.0');
+      expect(swaggerOptions).toBeDefined();
+      expect(swaggerOptions.definition.openapi).toBe('3.0.0');
     });
   });
 });

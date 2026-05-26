@@ -1,6 +1,6 @@
 # Story 3-7: Test Frontend Design System Components
 
-Status: backlog
+Status: done
 
 ## Story
 
@@ -26,15 +26,15 @@ So that the foundation UI layer is regression-safe before extending it.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create `src/__tests__/components/ds/` directory
-- [ ] Task 2: Create DsButton.test.js (AC1)
-- [ ] Task 3: Create DsCard.test.js (AC2)
-- [ ] Task 4: Create DsModal.test.js (AC3)
-- [ ] Task 5: Create DsInput.test.js (AC4)
-- [ ] Task 6: Create DsSelect.test.js (AC5)
-- [ ] Task 7: Create DsCombobox.test.js (AC6)
-- [ ] Task 8: Create DsFormGroup.test.js, DsPill.test.js, DsSpinner.test.js, DsStatusTag.test.js, DsTabs.test.js, DsStateDisplay.test.js (AC7-12)
-- [ ] Task 9: Run full regression suite and lint
+- [x] Task 1: Create `src/__tests__/components/ds/` directory
+- [x] Task 2: Create DsButton.test.js (AC1)
+- [x] Task 3: Create DsCard.test.js (AC2)
+- [x] Task 4: Create DsModal.test.js (AC3)
+- [x] Task 5: Create DsInput.test.js (AC4)
+- [x] Task 6: Create DsSelect.test.js (AC5)
+- [x] Task 7: Create DsCombobox.test.js (AC6)
+- [x] Task 8: Create DsFormGroup.test.js, DsPill.test.js, DsSpinner.test.js, DsStatusTag.test.js, DsTabs.test.js, DsStateDisplay.test.js (AC7-12)
+- [x] Task 9: Run full regression suite and lint
 
 ## Dev Notes
 
@@ -76,5 +76,24 @@ DS components use CSS custom properties for theming. Tests should NOT assert CSS
 
 Current: functions ~34%
 After: estimated functions ~45% (12 components with 3-5 functions each)
+
+### Review Findings
+
+- [x] [Review][Patch] DsButton: disabled anchor click not blocked — added @click guard + emits declaration
+- [x] [Review][Patch] DsCombobox: missing afterEach cleanup for Teleport DOM
+- [x] [Review][Patch] DsCombobox: setValue replaces direct $emit for realistic user input
+- [x] [Review][Patch] DsCombobox: missing case-insensitive filter test
+- [x] [Review][Patch] DsCombobox: missing custom noResultsText test
+- [x] [Review][Patch] DsModal: missing afterEach body cleanup (innerHTML)
+- [x] [Review][Patch] DsModal: missing body overflow restoration test
+- [x] [Review][Patch] DsSelect: formGroupId should be realistic string, not null
+- [x] [Review][Patch] DsTabs: split modelValue default test into index-based and value-based
+- [x] [Review][Patch] DsFormGroup: use exact formGroupId match instead of regex
+- [x] [Review][Patch] DsButton: missing disabled anchor click test
+- [x] [Review][Defer] DsCombobox: keyboard navigation tests (ArrowUp/Down, Enter, Escape) — deferred, complex interaction testing
+- [x] [Review][Defer] DsCombobox: click-outside close behavior — deferred, requires attachTo + event simulation
+- [x] [Review][Defer] DsModal: focus trap test — deferred, JSDOM lacks focus management
+- [x] [Review][Defer] DsModal: scrollable body overflow-y test — deferred, JSDOM CSS limitation
+- [x] [Review][Defer] DsModal: close-on-Escape keydown test — deferred, event listener lifecycle complexity
 
 ## Change Log

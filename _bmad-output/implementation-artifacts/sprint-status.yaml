@@ -81,8 +81,8 @@ development_status:
   3-3-test-critical-vue-components-userprofile-and-admin-dashboard: done
   3-4-test-vuex-store-modules: done
   3-5-test-http-services: done
-  3-6-test-frontend-services-and-utils: backlog
-  3-7-test-frontend-design-system-components: backlog
+  3-6-test-frontend-services-and-utils: done
+  3-7-test-frontend-design-system-components: done
   3-8-test-frontend-component-branches-and-functions: backlog
   epic-3-retrospective: optional
 

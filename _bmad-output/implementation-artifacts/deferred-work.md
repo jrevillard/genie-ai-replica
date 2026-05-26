@@ -231,3 +231,11 @@ Items deferred during code reviews. Revisit when the related component is next m
 - Service locale validation — routes accept any locale without validation. Invalid locales passed to service layer is a service-layer testing concern.
 - Query parameter parseInt edge cases — GET / uses parseInt() for limit/offset without NaN/negative validation. Pre-existing route design.
 - Multipart file upload edge cases — PUT /api/me uses multer with size limits; tests don't cover oversized files, multiple files, invalid types. Multer config testing beyond route scope.
+
+## Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)
+
+- DsCombobox keyboard navigation tests (ArrowUp/Down, Enter, Escape) — complex interaction testing beyond basic unit scope
+- DsCombobox click-outside close behavior — requires attachTo + event simulation
+- DsModal focus trap test — JSDOM lacks focus management
+- DsModal scrollable body overflow-y test — JSDOM CSS limitation
+- DsModal close-on-Escape keydown test — event listener lifecycle complexity

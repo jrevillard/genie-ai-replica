@@ -42,19 +42,21 @@ So that branches/functions coverage reaches professional levels (~55%).
   - [ ] 3e: Dialog management — feedback, save chat, export
   - [ ] 3f: `hasUnsavedChanges()` computed
 - [ ] Task 4: Create `src/__tests__/components/FileDetailsDialog.test.js` (AC4)
-  - [ ] 4a: Setup mock infrastructure (props, documentFileService, serviceTreeService)
+  - [ ] 4a: Setup mock infrastructure (`fileId` prop, `documentFileService`, `serviceTreeService`), Teleport stub, `jest.useFakeTimers()`
   - [ ] 4b: Tab visibility — test `visibleTabs` computed for different file states
   - [ ] 4c: Label management — test `areAllLabelsSelected` getter/setter, `mapEnglishToLocale`
   - [ ] 4d: File operations — test `handleSave`, `handleIngest`, `handleRetract`, `handleDelete`
   - [ ] 4e: `mainAction` computed — test dynamic button per file status
   - [ ] 4f: `canViewInternalFile`, `isMetadataEditable` computed properties
-  - [ ] 4g: Dashboard timer — test `startDashboardTimer`, auto-refresh toggle
+  - [ ] 4g: Dashboard timer — test `startDashboardTimer` with fake timers, auto-refresh toggle, `afterEach` cleanup
+  - [ ] 4h: Emit events — test `close`, `file-updated`, `action-triggered` emissions
 - [ ] Task 5: Create `src/__tests__/components/LogSearchDialog.test.js` (AC5)
-  - [ ] 5a: Setup mock infrastructure (props, adminDashboardService)
+  - [ ] 5a: Setup mock infrastructure (NO props, `adminDashboardService` mock)
   - [ ] 5b: `performSearch()` — test with preset date range vs custom date range
   - [ ] 5c: `resetSearch()` — verify form reset to defaults
   - [ ] 5d: `exportLogs()` — test CSV generation, field escaping
   - [ ] 5e: Conditional rendering — custom date fields, loading state, export button
+  - [ ] 5f: Emit events — test `close`, `search-completed` emissions
 - [ ] Task 6: Extend `src/__tests__/services/chatbotService.test.js` (AC6)
   - [ ] 6a: `submitQueryStream()` — test onChunk, onMetadata, onTranslation, onDone, onError callbacks
   - [ ] 6b: `updateQueryResponseTime()` — test response time tracking
@@ -148,7 +150,7 @@ Watchers: country dropdown changes, `$i18n.locale`, `activeTab`
 Data: `chatMessages`, `isStreaming`, `streamController`, `streamingQueryId`, `feedbackDialog`, `saveChatDialog`, `exportDialog`, `showQuickHelp`, `systemStatus`, `relatedDocuments`, `hiddenPromptForNextMessage`
 
 Methods:
-- `renderMarkdown(text)` — markdown parsing via `marked` + `DOMPurify`
+- `renderMarkdown(text)` — uses `marked.parse()` + `DOMPurify.sanitize()` — both already mocked in existing test
 - `sendMessage()` — core chat with SSE streaming support
 - `selectQuickHelpOption(option)` — quick help with dual-prompt mechanism
 - `openFeedbackDialog()` / `handleFeedbackSubmit()` — feedback system
@@ -179,7 +181,13 @@ Methods:
 - `startDashboardTimer()` / `refreshDashboardData()` — dashboard timer
 - `fetchCrawlLogs()` / `fetchIngestionLogs()` — log fetching
 
-Props: `visible` (Boolean), `file` (Object, required)
+Props: `fileId` (String, **required**). Note: NO `visible` prop — the component is always rendered; parent controls display.
+
+Emits: `close`, `file-updated`, `action-triggered`
+
+Uses **`<Teleport to="body">`** — tests MUST stub Teleport or use `attachTo: document.body`.
+
+Uses **`setInterval`** for dashboard auto-refresh (default 5s) — tests MUST use `jest.useFakeTimers()` and clear timers in `afterEach` to prevent leaks.
 
 **Mock requirements:** `documentFileService`, `serviceTreeService`, `adminDashboardService` for crawl logs.
 
@@ -193,7 +201,11 @@ Methods:
 - `exportLogs()` — CSV export with proper field escaping
 - `ensureMessageColumnExists()` — DOM manipulation for table column fix
 
-Props: `visible` (Boolean)
+Props: **empty** (`props: {}`) — no props required. Parent controls display, not the component.
+
+Emits: `close`, `search-completed`
+
+Does NOT use Teleport — uses CSS fixed positioning.
 
 **Mock requirements:** `adminDashboardService` for log search/export.
 
@@ -262,19 +274,29 @@ it('shows content when data loaded', () => {
 #### Dialog Component Testing
 
 ```javascript
-// FileDetailsDialog and LogSearchDialog use v-model:visible or visible prop + emit
+// FileDetailsDialog — requires fileId prop (String, required), NOT visible
+// Uses Teleport to body — stub it in tests
+jest.useFakeTimers(); // Required for dashboard timer (setInterval)
+
 const wrapper = mount(FileDetailsDialog, {
-  props: { visible: true, file: mockFile },
+  props: { fileId: 'file-123' },
   global: { plugins: [store, i18n], stubs: { teleport: true } }
 });
 
-// Test conditional rendering based on file.status
-it('shows ingest button for uploaded file', () => {
-  const wrapper = mount(FileDetailsDialog, {
-    props: { visible: true, file: { ...mockFile, status: 'uploaded' } },
-    ...
-  });
-  expect(wrapper.text()).toContain('Ingest');
+afterEach(() => {
+  wrapper.unmount();
+  jest.useRealTimers();
+});
+
+// Test emit events
+it('emits close when close button clicked', async () => {
+  await wrapper.find('.close-btn').trigger('click');
+  expect(wrapper.emitted('close')).toHaveLength(1);
+});
+
+// LogSearchDialog — NO props, NO Teleport
+const wrapper = mount(LogSearchDialog, {
+  global: { plugins: [store, i18n] }
 });
 ```
 
@@ -317,6 +339,20 @@ All existing fixtures are in `src/__tests__/fixtures/`:
 - DsCombobox uses DsInput internally — test through the combobox API, not child component
 - DsSelect `.value` property empty in JSDOM without matching `<option>` — use attribute assertion
 - Always add `afterEach` cleanup for Teleport DOM elements (`document.body.innerHTML = ''`)
+
+### FileDetailsDialog-Specific Notes
+
+- Uses `<Teleport to="body">` — stub with `{ teleport: true }` in mount options
+- Dashboard timer uses `setInterval` (5s default) — MUST use `jest.useFakeTimers()` and restore in `afterEach`
+- Emits `close`, `file-updated`, `action-triggered` — test all three
+- Prop is `fileId` (String, required), NOT `visible` — the component loads file data internally via `documentFileService`
+- Does NOT import `marked` or `DOMPurify`
+
+### LogSearchDialog-Specific Notes
+
+- NO props — `props: {}` — mount without any prop data
+- NO Teleport — uses CSS fixed positioning
+- Emits `close`, `search-completed` — test both
 
 ### Options API Constraint
 

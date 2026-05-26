@@ -6,26 +6,9 @@ require('./setup-env');
 let capturedSwaggerOptions = null;
 let capturedSetupOptions = null;
 
-jest.mock('swagger-jsdoc', () => {
-  return (options) => {
-    capturedSwaggerOptions = options;
-    return {
-      openapi: options.definition.openapi,
-      info: options.definition.info,
-      components: options.definition.components,
-      security: options.definition.security,
-      paths: {}
-    };
-  };
-});
-
-jest.mock('swagger-ui-express', () => ({
-  serve: () => {},
-  setup: (spec, options) => {
-    capturedSetupOptions = options;
-    return () => {};
-  }
-}));
+// Non-capturing mocks for all dependencies — these are hoisted and apply globally.
+// The swagger-specific capture mocks are set up via jest.doMock() in beforeAll
+// so they take effect after jest.resetModules() clears any cached index.js.
 
 jest.mock(
   '../shared-lib',
@@ -53,7 +36,6 @@ jest.mock('../middleware/keycloak-auth-middleware', () => ({
   keycloakAuthMiddleware: (req, res, next) => next()
 }));
 
-// Mock all services with stub methods that index.js expects
 const createServiceMock = () => ({
   initialize: jest.fn(() => Promise.resolve()),
   getHealth: jest.fn(() => Promise.resolve({ status: 'ok' }))
@@ -73,14 +55,6 @@ jest.mock('../services/security-scan-service', () => createServiceMock());
 jest.mock('../services/translation-service', () => createServiceMock());
 jest.mock('../services/keycloak-auth-service', () => createServiceMock());
 jest.mock('../services/user-provisioning-service', () => createServiceMock());
-
-jest.mock('helmet', () => jest.fn(() => (req, res, next) => next()));
-jest.mock('cors', () => jest.fn(() => (req, res, next) => next()));
-jest.mock('morgan', () => jest.fn(() => (req, res, next) => next()));
-jest.mock('body-parser', () => ({
-  json: () => (req, res, next) => next(),
-  urlencoded: () => (req, res, next) => next()
-}));
 
 const mockUse = jest.fn();
 const mockGet = jest.fn();
@@ -110,6 +84,14 @@ jest.mock('express', () => {
   );
 });
 
+jest.mock('helmet', () => jest.fn(() => (req, res, next) => next()));
+jest.mock('cors', () => jest.fn(() => (req, res, next) => next()));
+jest.mock('morgan', () => jest.fn(() => (req, res, next) => next()));
+jest.mock('body-parser', () => ({
+  json: () => (req, res, next) => next(),
+  urlencoded: () => (req, res, next) => next()
+}));
+
 jest.mock('dotenv', () => ({ config: jest.fn() }));
 jest.mock('fs', () => ({ existsSync: jest.fn(() => false) }));
 jest.mock('path', () => ({
@@ -118,20 +100,14 @@ jest.mock('path', () => ({
   sep: '/'
 }));
 
-// Mock process.exit to prevent test process from being killed
 const originalExit = process.exit;
 beforeAll(() => {
   process.exit = jest.fn();
-});
-afterAll(() => {
-  process.exit = originalExit;
-});
 
-// Load index.js in an isolated module registry so that mocks (swagger-jsdoc,
-// swagger-ui-express, express, fs, etc.) are guaranteed fresh even when Jest
-// recycles workers or runs files sequentially in a single process.
-jest.isolateModules(() => {
-  jest.mock('swagger-jsdoc', () => {
+  // Clear any cached index.js from other test suites, then register
+  // capturing mocks so we can intercept swagger-jsdoc/swagger-ui-express calls.
+  jest.resetModules();
+  jest.doMock('swagger-jsdoc', () => {
     return (options) => {
       capturedSwaggerOptions = options;
       return {
@@ -143,7 +119,7 @@ jest.isolateModules(() => {
       };
     };
   });
-  jest.mock('swagger-ui-express', () => ({
+  jest.doMock('swagger-ui-express', () => ({
     serve: () => {},
     setup: (spec, options) => {
       capturedSetupOptions = options;
@@ -151,6 +127,9 @@ jest.isolateModules(() => {
     }
   }));
   require('../index');
+});
+afterAll(() => {
+  process.exit = originalExit;
 });
 
 describe('Swagger Configuration', () => {
@@ -210,7 +189,6 @@ describe('Swagger Configuration', () => {
   describe('Environment Variable Handling (Task 1)', () => {
     it('should construct URLs using KEYCLOAK_URL and KEYCLOAK_REALM env vars', () => {
       const flow = capturedSwaggerOptions.definition.components.securitySchemes.KeycloakOAuth2.flows.authorizationCode;
-      // Verify the pattern: {KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/auth
       expect(flow.authorizationUrl).toMatch(
         /^https:\/\/keycloak\.example\.com\/auth\/realms\/genie\/protocol\/openid-connect\/auth$/
       );
@@ -220,7 +198,6 @@ describe('Swagger Configuration', () => {
     });
 
     it('should use KEYCLOAK_CLIENT_ID env var for OAuth clientId', () => {
-      // Env was set to 'genie-app' at top of file
       expect(process.env.KEYCLOAK_CLIENT_ID).toBe('genie-app');
     });
   });

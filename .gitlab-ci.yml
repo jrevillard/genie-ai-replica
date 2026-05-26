@@ -787,10 +787,15 @@ test:flutter:
     - dart pub global activate junitreport_maintained
     - export PATH="$PATH:$PUB_CACHE/bin"
     - mkdir -p reports
-    - flutter test --machine --coverage | tojunit --output reports/flutter-report.xml
+    - flutter test --machine --coverage > reports/flutter-machine.json 2>&1
+    - cat reports/flutter-machine.json | tojunit --output reports/flutter-report.xml
     - perl -pi -e 's/&#x1[bB];\[[0-9;]*m//g; s/&#27;\[[0-9;]*m//g; s/\x1b\[[0-9;]*m//g; s/&#x1[bB];//g; s/&#27;//g; s/[\x00-\x08\x0b\x0c\x0e-\x1f]//g' reports/flutter-report.xml
     - |
-      awk -F',' '/^LF:/ {lf+=$2} /^LH:/ {lh+=$2} END {if(lf>0) printf "Lines: %.1f%%\n", lh/lf*100}' coverage/lcov.info
+      if [ -f coverage/lcov.info ]; then
+        awk -F',' '/^LF:/ {lf+=$2} /^LH:/ {lh+=$2} END {if(lf>0) printf "Lines: %.1f%%\n", lh/lf*100}' coverage/lcov.info
+      else
+        echo "WARNING: coverage/lcov.info not found — coverage not reported"
+      fi
   coverage: '/^Lines:\s+(\d+\.?\d*)%/'
   artifacts:
     reports:

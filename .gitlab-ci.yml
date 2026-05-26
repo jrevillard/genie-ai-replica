@@ -59,7 +59,7 @@ workflow:
         - "flutter-deps-$CI_DEFAULT_BRANCH"
         - "flutter-deps-"
   before_script:
-    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git xz-utils python3 python3-pip
+    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git xz-utils python3 python3-venv python3-pip
     - |
       if [ ! -d "flutter-sdk/bin" ]; then
         echo "Installing Flutter ${FLUTTER_VERSION}..."

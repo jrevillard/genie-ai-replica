@@ -70,7 +70,7 @@ development_status:
   2-7-test-backend-service-layer: done
   2-8-test-backend-middleware: done
   2-9-test-backend-admin-and-security-services: done
-  2-10-test-backend-query-user-and-service-routes: review
+  2-10-test-backend-query-user-and-service-routes: done
   2-11-test-backend-chat-history-completion-and-database-operations: backlog
   epic-2-retrospective: optional
 

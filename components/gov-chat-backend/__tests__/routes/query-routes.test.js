@@ -41,7 +41,8 @@ jest.mock('../../services/query-service', () => ({
 
 // Mock axios (used directly by query-routes for streaming)
 jest.mock('axios', () => ({
-  post: jest.fn()
+  post: jest.fn(),
+  get: jest.fn()
 }));
 
 // Mock ALL other services loaded by index.js (even unused ones)
@@ -350,6 +351,227 @@ describe('GET /:queryId', () => {
     const response = await authGet('/api/queries/q1');
 
     expect(response.status).toBe(500);
+  });
+
+  // ============================================================
+  // Additional SSE streaming coverage — behavioral tests
+  // ============================================================
+
+  // Helper: set up a working SSE stream pipeline
+  function setupSSEStream() {
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+    return mockStream;
+  }
+
+  describe('SSE stream error after headers sent', () => {
+    it('should return 401 when req.user.iss_sub is missing', async () => {
+      keycloakAuthMiddleware.authenticate.mockImplementation((req, res, next) => {
+        req.user = { _key: 'user-123' }; // missing iss_sub
+        next();
+      });
+
+      const response = await authPost('/api/queries/stream', { sessionId: 's1' });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toBe('UNAUTHENTICATED');
+    });
+  });
+
+  describe('SSE stream data type routing', () => {
+    it('should forward chunk data as SSE events to client', async () => {
+      const mockStream = setupSSEStream();
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      mockStream.push('data: {"type":"chunk","content":"Hello "}\n\n');
+      mockStream.push('data: {"type":"chunk","content":"world"}\n\n');
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(response.text).toContain('"type":"chunk","content":"Hello "');
+      expect(response.text).toContain('"type":"chunk","content":"world"');
+    });
+
+    it('should not forward OPEA error type events to client as chunks', async () => {
+      const mockStream = setupSSEStream();
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      mockStream.push('data: {"type":"error","raw":"bad chunk"}\n\n');
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(response.text).not.toMatch(/data:.*"type":"chunk".*"bad chunk"/);
+    });
+
+    it('should trigger finalizeStreamQuery with accumulated text on done event', async () => {
+      const mockStream = setupSSEStream();
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      mockStream.push('data: {"type":"chunk","content":"Hello world"}\n\n');
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      await responsePromise;
+
+      expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+        'q1',
+        'Hello world',
+        expect.any(Number),
+        expect.objectContaining({ source_documents: [], confidence_score: 0 })
+      );
+    });
+  });
+
+  describe('SSE stream end without explicit done', () => {
+    it('should auto-finalize when stream ends with accumulated text but no done event', async () => {
+      const mockStream = setupSSEStream();
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      mockStream.push('data: {"type":"chunk","content":"Auto finalized"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+        'q1',
+        'Auto finalized',
+        expect.any(Number),
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('SSE metadata retrieval', () => {
+    it('should default to empty metadata when retriever call fails', async () => {
+      const mockStream = setupSSEStream();
+      axios.post
+        .mockResolvedValueOnce({ data: mockStream })
+        .mockRejectedValueOnce(new Error('Retriever unavailable'));
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(response.text).toMatch(/"type":"metadata"/);
+      expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+        'q1',
+        '',
+        expect.any(Number),
+        expect.objectContaining({ source_documents: [], confidence_score: 0 })
+      );
+    });
+  });
+
+  describe('SSE translation', () => {
+    const translationService = require('../../services/translation-service');
+
+    it('should emit translation SSE event for non-EN language', async () => {
+      const mockStream = setupSSEStream();
+      translationService.init.mockResolvedValue(undefined);
+      translationService.translateMarkdown.mockResolvedValue('Bonjour monde');
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }],
+        context: { language: 'FR' }
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"chunk","content":"Hello world"}\n\n');
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(translationService.translateMarkdown).toHaveBeenCalledWith('Hello world', 'en', 'fr');
+      expect(response.text).toContain('"type":"translation","content":"Bonjour monde"');
+    });
+
+    it('should emit TRANSLATION_FAILED error event when translation fails', async () => {
+      const mockStream = setupSSEStream();
+      translationService.init.mockResolvedValue(undefined);
+      translationService.translateMarkdown.mockRejectedValue(new Error('Translation service down'));
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }],
+        context: { language: 'DE' }
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"chunk","content":"Hello"}\n\n');
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(response.text).toContain('TRANSLATION_FAILED');
+      expect(response.text).toContain('"type":"done","queryId":"q1"');
+    });
+  });
+
+  describe('SSE finalize failure resilience', () => {
+    it('should still send done event when finalizeStreamQuery rejects', async () => {
+      const mockStream = setupSSEStream();
+      queryService.finalizeStreamQuery.mockRejectedValue(new Error('DB write failed'));
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"chunk","content":"Hello"}\n\n');
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(response.text).toContain('"type":"done","queryId":"q1"');
+    });
   });
 });
 

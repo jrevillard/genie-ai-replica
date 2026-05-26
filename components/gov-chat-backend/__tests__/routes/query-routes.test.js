@@ -480,9 +480,7 @@ describe('GET /:queryId', () => {
   describe('SSE metadata retrieval', () => {
     it('should default to empty metadata when retriever call fails', async () => {
       const mockStream = setupSSEStream();
-      axios.post
-        .mockResolvedValueOnce({ data: mockStream })
-        .mockRejectedValueOnce(new Error('Retriever unavailable'));
+      axios.post.mockResolvedValueOnce({ data: mockStream }).mockRejectedValueOnce(new Error('Retriever unavailable'));
 
       const responsePromise = authPost('/api/queries/stream', {
         sessionId: 's1',

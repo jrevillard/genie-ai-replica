@@ -127,7 +127,9 @@ describe('Auth guard', () => {
       res.status(401).json({ error: 'TOKEN_INVALID', message: 'Authentication required' });
     });
 
-    const response = await request(app).post('/api/translate').send({ texts: ['hello'], source_lang: 'en', target_lang: 'fr' });
+    const response = await request(app)
+      .post('/api/translate')
+      .send({ texts: ['hello'], source_lang: 'en', target_lang: 'fr' });
     expect(response.status).toBe(401);
   });
 

@@ -322,15 +322,8 @@ describe('PUT /api/me', () => {
     const response = await authPut('/api/me', { firstName: 'New', bio: 'text' });
 
     expect(response.status).toBe(200);
-    expect(keycloakProxyService.updateOwnProfile).toHaveBeenCalledWith(
-      expect.any(String),
-      { firstName: 'New' }
-    );
-    expect(userProfileService.updateUserProfile).toHaveBeenCalledWith(
-      expect.any(String),
-      { bio: 'text' },
-      []
-    );
+    expect(keycloakProxyService.updateOwnProfile).toHaveBeenCalledWith(expect.any(String), { firstName: 'New' });
+    expect(userProfileService.updateUserProfile).toHaveBeenCalledWith(expect.any(String), { bio: 'text' }, []);
   });
 
   it('should return 400 for invalid JSON in multipart data field', async () => {

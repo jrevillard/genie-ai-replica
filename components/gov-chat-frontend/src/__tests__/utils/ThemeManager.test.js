@@ -83,6 +83,9 @@ describe('ThemeManager', () => {
     jest.clearAllMocks();
     mockLocalStorage.clear();
 
+    // Reset window.matchMedia to default mock (returns light mode)
+    Object.defineProperty(window, 'matchMedia', { value: mockMatchMedia, writable: true, configurable: true });
+
     // Reset singleton
     jest.resetModules();
 
@@ -274,6 +277,204 @@ describe('ThemeManager', () => {
       const dialogTheme = tm.getDialogTheme();
 
       expect(dialogTheme.overlay.background).toBe('rgba(0, 0, 0, 0.5)');
+    });
+  });
+
+  describe('detectInitialTheme priority', () => {
+    it('prefers localStorage over DOM classes', () => {
+      mockLocalStorage.getItem.mockReturnValueOnce('light');
+
+      const darkEl = createMockElement();
+      darkEl.classList.add('dark-mode');
+      Object.defineProperty(document, 'documentElement', { value: darkEl, configurable: true });
+
+      jest.resetModules();
+      const tm = require('@/utils/ThemeManager').default;
+
+      expect(tm.currentTheme).toBe('light');
+    });
+
+    it('defaults to light when no indicators present', () => {
+      const tm = ThemeManagerModule.default;
+
+      expect(tm.currentTheme).toBe('light');
+      expect(tm.isDarkMode).toBe(false);
+    });
+
+    it('detects dark theme from DOM dark-mode class', () => {
+      const darkEl = createMockElement();
+      darkEl.classList.add('dark-mode');
+      const bodyEl = createMockElement();
+
+      Object.defineProperty(document, 'documentElement', { value: darkEl, configurable: true });
+      Object.defineProperty(document, 'body', { value: bodyEl, configurable: true });
+
+      jest.resetModules();
+      const tm = require('@/utils/ThemeManager').default;
+
+      expect(tm.currentTheme).toBe('dark');
+      expect(tm.isDarkMode).toBe(true);
+    });
+
+    it('detects dark theme from data-theme attribute', () => {
+      const darkEl = createMockElement();
+      darkEl.setAttribute('data-theme', 'dark');
+      const bodyEl = createMockElement();
+
+      Object.defineProperty(document, 'documentElement', { value: darkEl, configurable: true });
+      Object.defineProperty(document, 'body', { value: bodyEl, configurable: true });
+
+      jest.resetModules();
+      const tm = require('@/utils/ThemeManager').default;
+
+      expect(tm.currentTheme).toBe('dark');
+      expect(tm.isDarkMode).toBe(true);
+    });
+
+    it('detects light theme from DOM light-mode class', () => {
+      const lightEl = createMockElement();
+      lightEl.classList.add('light-mode');
+      const bodyEl = createMockElement();
+
+      Object.defineProperty(document, 'documentElement', { value: lightEl, configurable: true });
+      Object.defineProperty(document, 'body', { value: bodyEl, configurable: true });
+
+      jest.resetModules();
+      const tm = require('@/utils/ThemeManager').default;
+
+      expect(tm.currentTheme).toBe('light');
+      expect(tm.isDarkMode).toBe(false);
+    });
+
+    it('falls back to system preference when no localStorage or DOM indicators', () => {
+      window.matchMedia = jest.fn((query) => ({
+        matches: query.includes('dark'),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        addListener: jest.fn(),
+        removeListener: jest.fn()
+      }));
+
+      const el = createMockElement();
+      Object.defineProperty(document, 'documentElement', { value: el, configurable: true });
+      Object.defineProperty(document, 'body', { value: createMockElement(), configurable: true });
+
+      jest.resetModules();
+      const tm = require('@/utils/ThemeManager').default;
+
+      expect(tm.currentTheme).toBe('dark');
+      expect(tm.isDarkMode).toBe(true);
+    });
+  });
+
+  describe('setupSystemThemeListener', () => {
+    it('registers a change listener on matchMedia', () => {
+      let addedListener = null;
+      window.matchMedia = jest.fn(() => ({
+        matches: false,
+        addEventListener: jest.fn((event, handler) => {
+          if (event === 'change') addedListener = handler;
+        }),
+        removeEventListener: jest.fn(),
+        addListener: jest.fn(),
+        removeListener: jest.fn()
+      }));
+
+      jest.resetModules();
+      require('@/utils/ThemeManager');
+
+      expect(addedListener).not.toBeNull();
+    });
+
+    it('does not override explicit data-theme when system changes', () => {
+      let changeHandler = null;
+      const el = createMockElement();
+      window.matchMedia = jest.fn(() => ({
+        matches: false,
+        addEventListener: jest.fn((event, handler) => {
+          if (event === 'change') changeHandler = handler;
+        }),
+        removeEventListener: jest.fn(),
+        addListener: jest.fn(),
+        removeListener: jest.fn()
+      }));
+      Object.defineProperty(document, 'documentElement', { value: el, configurable: true });
+      Object.defineProperty(document, 'body', { value: createMockElement(), configurable: true });
+
+      jest.resetModules();
+      const tm = require('@/utils/ThemeManager').default;
+
+      el.hasAttribute.mockReturnValue(true);
+
+      const themeBefore = tm.currentTheme;
+      changeHandler({ matches: true });
+
+      expect(tm.currentTheme).toBe(themeBefore);
+    });
+
+    it('updates theme when system preference changes and no explicit theme is set', () => {
+      let changeHandler = null;
+      const el = createMockElement();
+      const bodyEl = createMockElement();
+
+      window.matchMedia = jest.fn(() => ({
+        matches: false,
+        addEventListener: jest.fn((event, handler) => {
+          if (event === 'change') changeHandler = handler;
+        }),
+        removeEventListener: jest.fn(),
+        addListener: jest.fn(),
+        removeListener: jest.fn()
+      }));
+
+      Object.defineProperty(document, 'documentElement', { value: el, configurable: true });
+      Object.defineProperty(document, 'body', { value: bodyEl, configurable: true });
+
+      jest.resetModules();
+      const tm = require('@/utils/ThemeManager').default;
+
+      expect(tm.currentTheme).toBe('light');
+
+      el.hasAttribute.mockReturnValue(false);
+      el.classList.contains.mockReturnValue(false);
+
+      changeHandler({ matches: true });
+
+      expect(tm.currentTheme).toBe('dark');
+      expect(tm.isDarkMode).toBe(true);
+    });
+
+    it('updates to light when system preference changes to light and no explicit theme is set', () => {
+      let changeHandler = null;
+      const el = createMockElement();
+      const bodyEl = createMockElement();
+
+      // Start with dark system preference
+      window.matchMedia = jest.fn(() => ({
+        matches: true,
+        addEventListener: jest.fn((event, handler) => {
+          if (event === 'change') changeHandler = handler;
+        }),
+        removeEventListener: jest.fn(),
+        addListener: jest.fn(),
+        removeListener: jest.fn()
+      }));
+
+      Object.defineProperty(document, 'documentElement', { value: el, configurable: true });
+      Object.defineProperty(document, 'body', { value: bodyEl, configurable: true });
+
+      jest.resetModules();
+      const tm = require('@/utils/ThemeManager').default;
+
+      expect(tm.currentTheme).toBe('dark');
+
+      el.hasAttribute.mockReturnValue(false);
+      el.classList.contains.mockReturnValue(false);
+
+      changeHandler({ matches: false });
+
+      expect(tm.currentTheme).toBe('light');
+      expect(tm.isDarkMode).toBe(false);
     });
   });
 });

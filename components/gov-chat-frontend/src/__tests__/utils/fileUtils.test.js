@@ -35,6 +35,10 @@ describe('fileUtils', () => {
     it('handles values less than 1 byte', () => {
       expect(formatFileSize(0.5)).toBe('0.5 Bytes');
     });
+
+    it('formats terabytes', () => {
+      expect(formatFileSize(1099511627776)).toBe('1 TB');
+    });
   });
 
   describe('isImage', () => {

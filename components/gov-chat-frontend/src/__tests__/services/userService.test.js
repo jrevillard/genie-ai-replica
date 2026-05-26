@@ -21,6 +21,14 @@ describe('userService', () => {
     jest.clearAllMocks();
   });
 
+  describe('singleton pattern', () => {
+    it('exports a singleton instance', () => {
+      const instance1 = require('@/services/userService').default;
+      const instance2 = require('@/services/userService').default;
+      expect(instance1).toBe(instance2);
+    });
+  });
+
   describe('resetUserData', () => {
     it('resets user profile data', async () => {
       const resetResult = { success: true, message: 'Data reset' };

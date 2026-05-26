@@ -36,7 +36,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-13
-last_updated: 2026-05-27
+last_updated: 2026-05-26
 project: genie-ai
 project_key: testing-framework
 tracking_system: file-system
@@ -70,7 +70,7 @@ development_status:
   2-7-test-backend-service-layer: done
   2-8-test-backend-middleware: done
   2-9-test-backend-admin-and-security-services: done
-  2-10-test-backend-query-user-and-service-routes: backlog
+  2-10-test-backend-query-user-and-service-routes: ready-for-dev
   2-11-test-backend-chat-history-completion-and-database-operations: backlog
   epic-2-retrospective: optional
 
@@ -81,7 +81,7 @@ development_status:
   3-3-test-critical-vue-components-userprofile-and-admin-dashboard: done
   3-4-test-vuex-store-modules: done
   3-5-test-http-services: done
-  3-6-test-frontend-services-and-utils: review
+  3-6-test-frontend-services-and-utils: done
   3-7-test-frontend-design-system-components: backlog
   3-8-test-frontend-component-branches-and-functions: backlog
   epic-3-retrospective: optional

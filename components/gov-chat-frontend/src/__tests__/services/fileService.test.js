@@ -33,6 +33,12 @@ describe('fileService', () => {
       expect(mockPost).toHaveBeenCalledWith('files/upload', expect.any(FormData), {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
+
+      const formDataArg = mockPost.mock.calls[0][1];
+      expect(formDataArg.get('file')).toBe(file);
+      expect(formDataArg.get('context')).toBe('document');
+      expect(formDataArg.get('entityId')).toBe('entity-1');
+
       expect(result).toEqual(uploadResult);
     });
 
@@ -57,6 +63,11 @@ describe('fileService', () => {
       expect(mockPost).toHaveBeenCalledWith('files/upload-multiple', expect.any(FormData), {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
+
+      const formDataArg = mockPost.mock.calls[0][1];
+      expect(formDataArg.get('context')).toBe('document');
+      expect(formDataArg.get('entityId')).toBe('entity-1');
+
       expect(result).toEqual(uploadResult);
     });
 

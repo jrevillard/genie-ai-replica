@@ -1,6 +1,6 @@
 # Story 3-6: Test Frontend Services and Utils
 
-Status: backlog
+Status: review
 
 ## Story
 
@@ -22,15 +22,15 @@ So that HTTP interactions and utility logic are verified without API dependencie
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create `src/__tests__/services/adminDashboardService.test.js` (82 lines target)
-- [ ] Task 2: Create `src/__tests__/services/fileService.test.js` (45 lines target)
-- [ ] Task 3: Create `src/__tests__/services/labelService.test.js` (21 lines target)
-- [ ] Task 4: Create `src/__tests__/services/userService.test.js` (11 lines target — GDPR critical)
-- [ ] Task 5: Create `src/__tests__/services/databaseOperationsService.test.js` (12 lines target)
-- [ ] Task 6: Create `src/__tests__/utils/ThemeManager.test.js` (74 lines target)
-- [ ] Task 7: Create `src/__tests__/utils/fileUtils.test.js` (11 lines target)
-- [ ] Task 8: Create `src/__tests__/store/index.test.js` (14 lines target)
-- [ ] Task 9: Run full regression suite and lint
+- [x] Task 1: Create `src/__tests__/services/adminDashboardService.test.js` (82 lines target)
+- [x] Task 2: Create `src/__tests__/services/fileService.test.js` (45 lines target)
+- [x] Task 3: Create `src/__tests__/services/labelService.test.js` (21 lines target)
+- [x] Task 4: Create `src/__tests__/services/userService.test.js` (11 lines target — GDPR critical)
+- [x] Task 5: Create `src/__tests__/services/databaseOperationsService.test.js` (12 lines target)
+- [x] Task 6: Create `src/__tests__/utils/ThemeManager.test.js` (74 lines target)
+- [x] Task 7: Create `src/__tests__/utils/fileUtils.test.js` (11 lines target)
+- [x] Task 8: Create `src/__tests__/store/index.test.js` (14 lines target)
+- [x] Task 9: Run full regression suite and lint
 
 ## Dev Notes
 
@@ -77,4 +77,34 @@ Test without DOM dependencies:
 Current: branches 33.6%, functions 34.6%
 After: estimated branches ~40%, functions ~42%
 
+## Dev Agent Record
+
+### Implementation Plan
+
+Followed existing closure-based mock pattern for all service tests. ThemeManager required DOM mocking (document.documentElement, localStorage, matchMedia). fileUtils tested as pure functions. store/index tested Vuex module registration.
+
+### Debug Log
+
+- ThemeManager singleton pattern required `jest.resetModules()` + fresh import per test to reset `ThemeManager.instance`
+- `window.matchMedia` in jsdom is read-only; used `writable: true, configurable: true` in `Object.defineProperty`
+- fileUtils `isImage(null)` returns `null` (falsy) due to `&&` short-circuit, not `false` — test adjusted to `toBeFalsy()`
+- store persistence plugin tests avoided due to localStorage mock not propagating through Vuex subscribe — existing `persistence.test.js` covers that
+
+### Completion Notes
+
+All 9 ACs satisfied. 590 tests pass (30 suites), zero lint errors. New files: 5 service tests, 2 util tests, 1 store test.
+
+## File List
+
+- `components/gov-chat-frontend/src/__tests__/services/adminDashboardService.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/services/fileService.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/services/labelService.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/services/userService.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/services/databaseOperationsService.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/utils/ThemeManager.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/utils/fileUtils.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/store/index.test.js` (new)
+
 ## Change Log
+
+- 2026-05-26: Story 3-6 complete — 8 test files created covering all frontend services and utils (590 total tests pass, zero lint errors)

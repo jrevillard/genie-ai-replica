@@ -127,8 +127,31 @@ afterAll(() => {
   process.exit = originalExit;
 });
 
-// Load index.js once (triggers swagger-jsdoc mock)
-require('../index');
+// Load index.js in an isolated module registry so that mocks (swagger-jsdoc,
+// swagger-ui-express, express, fs, etc.) are guaranteed fresh even when Jest
+// recycles workers or runs files sequentially in a single process.
+jest.isolateModules(() => {
+  jest.mock('swagger-jsdoc', () => {
+    return (options) => {
+      capturedSwaggerOptions = options;
+      return {
+        openapi: options.definition.openapi,
+        info: options.definition.info,
+        components: options.definition.components,
+        security: options.definition.security,
+        paths: {}
+      };
+    };
+  });
+  jest.mock('swagger-ui-express', () => ({
+    serve: () => {},
+    setup: (spec, options) => {
+      capturedSetupOptions = options;
+      return () => {};
+    }
+  }));
+  require('../index');
+});
 
 describe('Swagger Configuration', () => {
   describe('Security Scheme (Task 1)', () => {

@@ -58,7 +58,7 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2: Backend API Test Suite
-  epic-2: done
+  epic-2: in-progress
   2-1-refactor-backend-indexjs-to-export-createapp: done
   2-2-create-backend-test-fixtures-and-shared-mocks: done
   2-3-test-backend-auth-route-handlers: done
@@ -67,7 +67,10 @@ development_status:
   2-6-test-backend-admin-and-files-route-handlers: done
   2-7-test-backend-service-layer: done
   2-8-test-backend-middleware: done
-  epic-2-retrospective: done
+  2-9-test-backend-admin-and-security-services: backlog
+  2-10-test-backend-query-user-and-service-routes: backlog
+  2-11-test-backend-chat-history-completion-and-database-operations: backlog
+  epic-2-retrospective: optional
 
   # Epic 3: Frontend Component Test Suite
   epic-3: done

@@ -203,3 +203,21 @@ Items deferred during code reviews. Revisit when the related component is next m
 - Environment variable validation missing in patrol-wrapper.sh — no validation of empty KC_PWD. Pre-existing mobile infrastructure.
 - Playwright workers: 1 hides concurrency bugs — intentional trade-off for CI stability, serial execution prevents resource contention.
 - Progressive rendering test may flake on slow runners — 5×1s polling window adequate for Docker network but could miss progressive rendering on very slow backends. Passes in CI (1.0m total).
+
+## Deferred from: story 2-10 checklist review — architecture inconsistency (2026-05-26)
+
+- **Backend controller layer inconsistency** — 2 of 12 route files use the Controller → Service pattern (`auth-routes.js` → `authController.js`, `analytics-routes.js` → `analyticsController.js`), while the other 10 routes call services directly. Additionally, `adminController.js` (314 lines) is dead code — never imported anywhere, superseded by `admin-routes.js` calling services directly after the singleton refactor (commit `cd1e94802`, April 2026).
+
+  **Current state:**
+  - `authController.js` (48 lines) — used by auth-routes, orchestrates logout (multi-service: session-service + audit log)
+  - `analyticsController.js` (253 lines) — used by analytics-routes, provides HTTP validation + data transformation + metric mapping with fallbacks
+  - `adminController.js` (314 lines) — dead code, 0 references in codebase
+
+  **Options to resolve (deferred to future initiative):**
+  1. Standardize to direct service calls — delete all 3 controllers, migrate auth/analytics logic into route files
+  2. Standardize to controller pattern — create 8 missing controllers, reattach adminController
+  3. Accept current mix — document as intentional, delete only dead adminController.js
+
+  **Testability impact:** No practical difference — `createApp()` + supertest route tests cover both patterns equally. Controller pattern allows isolated unit testing of validation/transformation logic, but route-level integration tests provide the same coverage.
+
+  **Recommendation:** Option 3 (accept + cleanup dead code) is the pragmatic choice. Refactoring 10 routes to add controllers (or migrating 2 to remove them) is low-value churn with no testability or reliability improvement.

@@ -1,6 +1,6 @@
 # Story 3-6: Test Frontend Services and Utils
 
-Status: review
+Status: done
 
 ## Story
 
@@ -108,3 +108,19 @@ All 9 ACs satisfied. 590 tests pass (30 suites), zero lint errors. New files: 5 
 ## Change Log
 
 - 2026-05-26: Story 3-6 complete — 8 test files created covering all frontend services and utils (590 total tests pass, zero lint errors)
+- 2026-05-26: Code review — 6 patches applied: singleton test (userService), TB boundary (fileUtils), FormData validation (fileService), localStorage persistence (store/index), ThemeManager detectInitialTheme + setupSystemThemeListener (4 new tests), mock isolation fix (mockReturnValueOnce + matchMedia reset in beforeEach). 607 tests, 0 lint errors.
+
+## Review Findings
+
+### Patches Applied (6)
+
+1. **userService.test.js** — Added singleton pattern test (AC4 requirement)
+2. **fileUtils.test.js** — Added TB boundary test `formatFileSize(1099511627776) → '1 TB'` (AC7)
+3. **fileService.test.js** — Enhanced FormData field validation in uploadFile and uploadMultipleFiles
+4. **store/index.test.js** — Added localStorage persistence plugin tests (5 tests: save on mutation, remove on CLEAR_FOLDERS, skip non-chatHistory, JSON parse error, null value)
+5. **ThemeManager.test.js** — Added 6 tests: dark-mode class detection, data-theme attribute, light-mode class, system preference fallback, system change update, system change to light update. Fixed mock isolation (mockReturnValueOnce + matchMedia reset in shared beforeEach)
+6. **store/index.test.js** — Fixed lint: `catch (e)` → `catch`
+
+### Deferred (8)
+
+See `_bmad-output/implementation-artifacts/deferred-work.md` for full details. Key items: adminDashboardService edge-case tests, databaseOperationsService response unwrapping, fileService additional edge cases, labelService expanded CRUD, ThemeManager getDialogTheme comprehensive, getCssVar unit tests.

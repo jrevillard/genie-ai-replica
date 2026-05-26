@@ -149,9 +149,7 @@ describe('AdminDashboardService', () => {
 
     it('should throw when not initialized', async () => {
       adminDashboardService.db = null;
-      await expect(adminDashboardService.checkDatabaseHealth()).rejects.toThrow(
-        'Database not initialized'
-      );
+      await expect(adminDashboardService.checkDatabaseHealth()).rejects.toThrow('Database not initialized');
     });
   });
 
@@ -174,9 +172,7 @@ describe('AdminDashboardService', () => {
 
     it('should throw when not initialized', async () => {
       adminDashboardService.db = null;
-      await expect(adminDashboardService.getDatabaseStats()).rejects.toThrow(
-        'Database not initialized'
-      );
+      await expect(adminDashboardService.getDatabaseStats()).rejects.toThrow('Database not initialized');
     });
 
     it('should handle query errors', async () => {
@@ -196,7 +192,9 @@ describe('AdminDashboardService', () => {
         .mockResolvedValueOnce(createMockCursor([10]))
         .mockResolvedValueOnce(createMockCursor([5]))
         .mockResolvedValueOnce(
-          createMockCursor([{ _key: 'u1', loginName: 'user1', email: 'u@e.com', fullName: 'User One', roles: ['admin'] }])
+          createMockCursor([
+            { _key: 'u1', loginName: 'user1', email: 'u@e.com', fullName: 'User One', roles: ['admin'] }
+          ])
         );
 
       const result = await adminDashboardService.getUserStats();
@@ -287,9 +285,7 @@ describe('AdminDashboardService', () => {
     });
 
     it('should respect limit and offset', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([100]))
-        .mockResolvedValueOnce(createMockCursor([]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([100])).mockResolvedValueOnce(createMockCursor([]));
 
       const result = await adminDashboardService.searchUsers({ limit: '10', offset: '20' });
       expect(result.limit).toBe(10);
@@ -378,9 +374,7 @@ describe('AdminDashboardService', () => {
     });
 
     it('should respect limit option', async () => {
-      const manyLogs = Array(200)
-        .fill('[2026-05-26T10:00:00.000Z] [INFO] [TestService] Message')
-        .join('\n');
+      const manyLogs = Array(200).fill('[2026-05-26T10:00:00.000Z] [INFO] [TestService] Message').join('\n');
       mockFs.readFile.mockResolvedValueOnce(manyLogs);
       const result = await adminDashboardService.getLogs({ limit: 5 });
       expect(result.logs.length).toBeLessThanOrEqual(5);
@@ -612,9 +606,7 @@ describe('AdminDashboardService', () => {
     });
 
     it('should insert new analytics record', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([]));
 
       await adminDashboardService.storeAnalyticsData({
         period: 'daily',
@@ -644,9 +636,9 @@ describe('AdminDashboardService', () => {
 
     it('should throw when not initialized', async () => {
       adminDashboardService.db = null;
-      await expect(
-        adminDashboardService.storeAnalyticsData({ period: 'daily' })
-      ).rejects.toThrow('Database not initialized');
+      await expect(adminDashboardService.storeAnalyticsData({ period: 'daily' })).rejects.toThrow(
+        'Database not initialized'
+      );
     });
   });
 

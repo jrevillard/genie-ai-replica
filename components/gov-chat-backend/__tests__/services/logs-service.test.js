@@ -245,16 +245,15 @@ describe('LogsService', () => {
     });
 
     it('should handle debug embedded log lines', () => {
-      const lines = ['2026-05-26 10:00:00 [DEBUG]: Skipping unparseable log line: 2026-05-26 10:01:00 [ERROR]: Embedded error'];
+      const lines = [
+        '2026-05-26 10:00:00 [DEBUG]: Skipping unparseable log line: 2026-05-26 10:01:00 [ERROR]: Embedded error'
+      ];
       const result = logsService.parseLogs(lines);
       expect(result.length).toBeGreaterThanOrEqual(1);
     });
 
     it('should handle multiline messages', () => {
-      const lines = [
-        '2026-05-26 10:00:00 [ERROR]: Main error',
-        '{ "stack": "trace" }'
-      ];
+      const lines = ['2026-05-26 10:00:00 [ERROR]: Main error', '{ "stack": "trace" }'];
       const result = logsService.parseLogs(lines);
       expect(result).toHaveLength(1);
       expect(result[0].message).toContain('Main error');
@@ -385,17 +384,13 @@ describe('LogsService', () => {
     });
 
     it('should match WARNING level when filtering WARN', () => {
-      const lines = [
-        '2026-05-26 10:00:00 [WARNING]: Warning message'
-      ];
+      const lines = ['2026-05-26 10:00:00 [WARNING]: Warning message'];
       const result = logsService.extractLogs(lines, 'WARN');
       expect(result).toHaveLength(1);
     });
 
     it('should return empty for no matches', () => {
-      const lines = [
-        '2026-05-26 10:00:00 [INFO]: Info message'
-      ];
+      const lines = ['2026-05-26 10:00:00 [INFO]: Info message'];
       const result = logsService.extractLogs(lines, 'ERROR');
       expect(result).toHaveLength(0);
     });
@@ -452,9 +447,7 @@ describe('LogsService', () => {
       mockFs.access.mockResolvedValue(undefined);
       mockFs.readdir.mockResolvedValueOnce(['combined-2026-05-26.log']);
       mockFs.stat.mockResolvedValue({ size: 100 });
-      mockFs.readFile.mockResolvedValue(
-        '2026-05-26 10:00:00 [INFO]: Info\n2026-05-26 10:01:00 [ERROR]: Error\n'
-      );
+      mockFs.readFile.mockResolvedValue('2026-05-26 10:00:00 [INFO]: Info\n2026-05-26 10:01:00 [ERROR]: Error\n');
 
       const result = await logsService.searchLogs({
         dateRange: 'today',

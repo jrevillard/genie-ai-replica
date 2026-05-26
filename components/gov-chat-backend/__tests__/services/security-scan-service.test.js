@@ -136,9 +136,7 @@ describe('SecurityScanService', () => {
     it('should throw on write error', async () => {
       mockFs.mkdir.mockResolvedValueOnce(undefined);
       mockFs.writeFile.mockRejectedValueOnce(new Error('Disk full'));
-      await expect(
-        securityScanService.saveScanResults({ status: 'completed' })
-      ).rejects.toThrow('Disk full');
+      await expect(securityScanService.saveScanResults({ status: 'completed' })).rejects.toThrow('Disk full');
     });
   });
 
@@ -332,9 +330,7 @@ describe('SecurityScanService', () => {
     });
 
     it('should skip endpoints that fail', async () => {
-      mockAxios.get
-        .mockRejectedValueOnce(new Error('Not found'))
-        .mockResolvedValueOnce({ data: { safe: 'value' } });
+      mockAxios.get.mockRejectedValueOnce(new Error('Not found')).mockResolvedValueOnce({ data: { safe: 'value' } });
 
       const result = await securityScanService.checkTimestampDisclosure();
       expect(result).toEqual([]);
@@ -550,7 +546,13 @@ describe('SecurityScanService', () => {
         searchLogs: jest.fn().mockResolvedValue({
           logs: [
             { message: 'Failed login attempt', level: 'ERROR', date: '2026-05-26', time: '10:00:00', service: 'auth' },
-            { message: 'Suspicious brute force detected', level: 'WARN', date: '2026-05-26', time: '10:01:00', service: 'system' },
+            {
+              message: 'Suspicious brute force detected',
+              level: 'WARN',
+              date: '2026-05-26',
+              time: '10:01:00',
+              service: 'system'
+            },
             { message: 'Normal operation', level: 'INFO', date: '2026-05-26', time: '10:02:00', service: 'system' }
           ]
         })
@@ -600,23 +602,13 @@ describe('SecurityScanService', () => {
     });
 
     it('should parse fallback format', () => {
-      const result = securityScanService.parseLogLine(
-        '2026-05-26 10:00:00 Something happened',
-        'test.log',
-        1,
-        null
-      );
+      const result = securityScanService.parseLogLine('2026-05-26 10:00:00 Something happened', 'test.log', 1, null);
       expect(result).toBeDefined();
       expect(result.level).toBe('UNKNOWN');
     });
 
     it('should return null for unrecognizable lines', () => {
-      const result = securityScanService.parseLogLine(
-        'random text without format',
-        'test.log',
-        1,
-        null
-      );
+      const result = securityScanService.parseLogLine('random text without format', 'test.log', 1, null);
       expect(result).toBeNull();
     });
   });

@@ -9,5 +9,7 @@ module.exports = {
   },
   dbService: { getConnection: jest.fn() },
   securityHeaders: (req, res, next) => next(),
-  SecurityMiddleware: { applySecurityMiddleware: jest.fn() }
+  SecurityMiddleware: { applySecurityMiddleware: jest.fn() },
+  reconfigureLogger: jest.fn(),
+  triggerLogRollover: jest.fn()
 };

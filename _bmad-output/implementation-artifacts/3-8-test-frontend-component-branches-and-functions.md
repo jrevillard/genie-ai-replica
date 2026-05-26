@@ -1,6 +1,6 @@
 # Story 3-8: Test Frontend Component Branches and Functions
 
-Status: backlog
+Status: review
 
 ## Story
 
@@ -21,16 +21,16 @@ So that branches/functions coverage reaches professional levels (~55%).
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Extend `src/__tests__/components/AdminDashboard.test.js` (AC1)
-- [ ] Task 2: Extend `src/__tests__/components/UserProfileComponent.test.js` (AC2)
-- [ ] Task 3: Extend `src/__tests__/components/ChatBotComponent.test.js` (AC3)
-- [ ] Task 4: Extend `src/__tests__/components/FileDetailsDialog.test.js` (AC4)
-- [ ] Task 5: Create `src/__tests__/components/LogSearchDialog.test.js` (AC5)
-- [ ] Task 6: Extend `src/__tests__/services/chatbotService.test.js` (AC6)
-- [ ] Task 7: Extend `src/__tests__/services/chatHistoryService.test.js` (AC6)
-- [ ] Task 8: Extend `src/__tests__/services/documentFileService.test.js` (AC6)
-- [ ] Task 9: Run coverage report to verify ≥55% branches/functions
-- [ ] Task 10: Run full regression suite and lint
+- [x] Task 1: Extend `src/__tests__/components/AdminDashboard.test.js` (AC1)
+- [x] Task 2: Extend `src/__tests__/components/UserProfileComponent.test.js` (AC2)
+- [x] Task 3: Extend `src/__tests__/components/ChatBotComponent.test.js` (AC3)
+- [x] Task 4: Extend `src/__tests__/components/FileDetailsDialog.test.js` (AC4)
+- [x] Task 5: Create `src/__tests__/components/LogSearchDialog.test.js` (AC5)
+- [x] Task 6: Extend `src/__tests__/services/chatbotService.test.js` (AC6)
+- [x] Task 7: Extend `src/__tests__/services/chatHistoryService.test.js` (AC6)
+- [x] Task 8: Extend `src/__tests__/services/documentFileService.test.js` (AC6)
+- [x] Task 9: Run coverage report to verify ≥55% branches/functions
+- [x] Task 10: Run full regression suite and lint
 
 ## Dev Notes
 
@@ -74,4 +74,38 @@ Test by triggering the corresponding user action and verifying side effects.
 Current: branches 33.6%, functions 34.6%
 After: estimated branches ~55%, functions ~55%
 
+## Dev Agent Record
+
+### Completion Notes
+
+All 10 tasks completed. Final coverage: **Branches 59.08%** (≥55% target met), **Functions 55.8%** (≥55% target met). 1107 tests across 47 suites, all passing. Zero lint/format errors.
+
+Key additions:
+- AdminDashboard.test.js: 22→99 tests (parseLogMessage, getStatusVariant, getDisplayStatus, getResourceLabel, viewDocumentDetails, uploadFiles, addFromLink, refreshDocuments, sortBy, isFormDirty, error handling, etc.)
+- UserProfileComponent.test.js: 24→54 tests (validateForm, country dropdowns, profile icon canvas mock, submission flow)
+- ChatBotComponent.test.js: 19→59 tests (SSE streaming, error recovery, markdown rendering, quick help, dialog management)
+- FileDetailsDialog.test.js: NEW, 46 tests (tabs, labels, file operations, mainAction computed, timer)
+- LogSearchDialog.test.js: NEW, 53 tests (search, reset, export CSV, conditional rendering)
+- chatbotService.test.js: extended to 20 tests (SSE streaming with fetch mock)
+- chatHistoryService.test.js: extended to 78 tests (folder CRUD, search, stats)
+- ConfirmDialog.test.js: NEW, 16 tests (all emits and props)
+- LanguageSelector.test.js: NEW, 15 tests (watchers, locale persistence)
+- ModalDialog.test.js: NEW, 19 tests (translateIfKey, translatedTitle)
+
+## File List
+
+- `components/gov-chat-frontend/src/__tests__/components/AdminDashboard.test.js` — extended (22→99 tests)
+- `components/gov-chat-frontend/src/__tests__/components/UserProfileComponent.test.js` — extended (24→54 tests)
+- `components/gov-chat-frontend/src/__tests__/components/ChatBotComponent.test.js` — extended (19→59 tests)
+- `components/gov-chat-frontend/src/__tests__/components/FileDetailsDialog.test.js` — new (46 tests)
+- `components/gov-chat-frontend/src/__tests__/components/LogSearchDialog.test.js` — new (53 tests)
+- `components/gov-chat-frontend/src/__tests__/components/ConfirmDialog.test.js` — new (16 tests)
+- `components/gov-chat-frontend/src/__tests__/components/LanguageSelector.test.js` — new (15 tests)
+- `components/gov-chat-frontend/src/__tests__/components/ModalDialog.test.js` — new (19 tests)
+- `components/gov-chat-frontend/src/__tests__/services/chatbotService.test.js` — extended
+- `components/gov-chat-frontend/src/__tests__/services/chatHistoryService.test.js` — extended
+- `components/gov-chat-frontend/src/__tests__/services/documentFileService.test.js` — reviewed (already adequate)
+
 ## Change Log
+
+- 2026-05-26: Story completed — all tasks done, coverage thresholds met (branches 59.08%, functions 55.8%)

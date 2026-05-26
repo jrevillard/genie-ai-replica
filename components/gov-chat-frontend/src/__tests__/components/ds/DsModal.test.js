@@ -127,10 +127,7 @@ describe('DsModal', () => {
     });
 
     it('renders header slot overriding default title', async () => {
-      const wrapper = await mountAndOpen(
-        { title: 'Default Title' },
-        { header: '<h2>Custom Header</h2>' }
-      );
+      const wrapper = await mountAndOpen({ title: 'Default Title' }, { header: '<h2>Custom Header</h2>' });
       expect(getBody().querySelector('.ds-modal__header h2').textContent).toContain('Custom Header');
       wrapper.unmount();
     });

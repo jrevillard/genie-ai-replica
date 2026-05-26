@@ -80,7 +80,10 @@ describe('DsTabs (AC11)', () => {
     it('no tab is active when modelValue (0) does not match any tab value', () => {
       const wrapper = mount(DsTabs, {
         props: {
-          tabs: [{ label: 'Tab A', value: 'a' }, { label: 'Tab B', value: 'b' }]
+          tabs: [
+            { label: 'Tab A', value: 'a' },
+            { label: 'Tab B', value: 'b' }
+          ]
         }
       });
       const buttons = wrapper.findAll('.ds-tabs__btn');

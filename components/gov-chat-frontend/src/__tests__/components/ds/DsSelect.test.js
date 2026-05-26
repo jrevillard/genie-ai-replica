@@ -74,8 +74,7 @@ describe('DsSelect', () => {
       const wrapper = mountSelect(
         {},
         {
-          default:
-            '<option value="a">Alpha</option><option value="b">Beta</option>'
+          default: '<option value="a">Alpha</option><option value="b">Beta</option>'
         }
       );
       expect(wrapper.findAll('option')).toHaveLength(2);

@@ -18,7 +18,6 @@ const VARIANTS = ['primary', 'secondary', 'ghost', 'danger'];
 export default {
   name: 'DsButton',
   inheritAttrs: false,
-  emits: ['click'],
   props: {
     tag: {
       type: String,
@@ -37,7 +36,8 @@ export default {
       type: Boolean,
       default: false
     }
-  }
+  },
+  emits: ['click']
 };
 </script>
 

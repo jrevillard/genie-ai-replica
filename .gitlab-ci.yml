@@ -59,7 +59,7 @@ workflow:
         - "flutter-deps-$CI_DEFAULT_BRANCH"
         - "flutter-deps-"
   before_script:
-    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git xz-utils
+    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git xz-utils python3 python3-pip
     - |
       if [ ! -d "flutter-sdk/bin" ]; then
         echo "Installing Flutter ${FLUTTER_VERSION}..."
@@ -649,7 +649,7 @@ test:backend:
   before_script:
     - cd components/gov-chat-backend && npm ci
   script:
-    - npm test -- --coverage --coverageReporters=text-summary --runInBand
+    - npm test -- --coverage --coverageReporters=text-summary --coverageReporters=cobertura --runInBand
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   cache:
     - key:
@@ -664,6 +664,9 @@ test:backend:
   artifacts:
     reports:
       junit: components/gov-chat-backend/reports/jest-backend.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: components/gov-chat-backend/coverage/cobertura-coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -678,7 +681,7 @@ test:frontend:
   before_script:
     - cd components/gov-chat-frontend && npm ci
   script:
-    - npm test -- --coverage --coverageReporters=text-summary
+    - npm test -- --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   cache:
     - key:
@@ -693,6 +696,9 @@ test:frontend:
   artifacts:
     reports:
       junit: components/gov-chat-frontend/reports/jest-frontend.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: components/gov-chat-frontend/coverage/cobertura-coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -707,7 +713,7 @@ test:doc-repo:
   before_script:
     - cd components/document-repository && npm ci
   script:
-    - npm test -- --coverageReporters=text-summary
+    - npm test -- --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   cache:
     - key:
@@ -722,6 +728,9 @@ test:doc-repo:
   artifacts:
     reports:
       junit: components/document-repository/reports/jest-docrepo.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: components/document-repository/coverage/cobertura-coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -748,7 +757,7 @@ test:python:
   script:
     - . .venv/bin/activate
     - mkdir -p reports
-    - pytest --junitxml=reports/pytest-report.xml --cov --cov-report=term
+    - pytest --junitxml=reports/pytest-report.xml --cov --cov-report=term --cov-report=cobertura:reports/coverage.xml
   coverage: '/^TOTAL\s+\S+\s+\S+\s+(\d+)%/'
   cache:
     - key:
@@ -765,6 +774,9 @@ test:python:
     expire_in: 7 days
     reports:
       junit: genie-ai-overlay/reports/pytest-report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: genie-ai-overlay/reports/coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -792,10 +804,14 @@ test:flutter:
     - perl -pi -e 's/&#x1[bB];\[[0-9;]*m//g; s/&#27;\[[0-9;]*m//g; s/\x1b\[[0-9;]*m//g; s/&#x1[bB];//g; s/&#27;//g; s/[\x00-\x08\x0b\x0c\x0e-\x1f]//g' reports/flutter-report.xml
     - 'sed -i ''/lib\/i18n\//d'' coverage/lcov.info'
     - 'COV=$(awk ''/^LF:/{lf+=$2} /^LH:/{lh+=$2} END{if(lf>0) printf "%.1f",lh/lf*100}'' FS=: coverage/lcov.info) && echo "Lines: ${COV}%" || echo "No coverage data"'
+    - pip install lcov-cobertura && lcov_cobertura coverage/lcov.info --output reports/coverage-cobertura.xml
   coverage: '/^Lines:\s+(\d+\.?\d*)%/'
   artifacts:
     reports:
       junit: mobile/genie_ai_mobile/reports/flutter-report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: mobile/genie_ai_mobile/reports/coverage-cobertura.xml
     paths:
       - mobile/genie_ai_mobile/coverage/
     when: always

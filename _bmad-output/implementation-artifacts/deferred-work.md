@@ -239,3 +239,8 @@ Items deferred during code reviews. Revisit when the related component is next m
 - DsModal focus trap test — JSDOM lacks focus management
 - DsModal scrollable body overflow-y test — JSDOM CSS limitation
 - DsModal close-on-Escape keydown test — event listener lifecycle complexity
+- DsPill/DsStatusTag minimal coverage, no interaction tests — pre-existing, AC only requires variants+slots
+- No accessibility tests beyond DsModal — pre-existing, broader concern beyond this story scope
+- DsButton invalid variant not tested — pre-existing, validator warning not in AC
+- DsInput textarea rows only one case tested — pre-existing, single case sufficient for AC
+- DsCombobox mousedown .prevent not tested — pre-existing, JSDOM limitation

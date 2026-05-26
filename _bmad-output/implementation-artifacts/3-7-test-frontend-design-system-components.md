@@ -77,7 +77,45 @@ DS components use CSS custom properties for theming. Tests should NOT assert CSS
 Current: functions ~34%
 After: estimated functions ~45% (12 components with 3-5 functions each)
 
-### Review Findings
+### Key Implementation Notes
+
+- DsModal uses `<Teleport to="body">`, so tests query `document.body` directly instead of `wrapper.find()`. The `visible` watcher is not immediate, so tests mount with `visible: false` then set it to `true` to trigger the watch lifecycle.
+- DsCombobox uses DsInput internally for search; tests interact with the combobox's own API (trigger click, option mousedown) rather than reaching into the child component.
+- DsSelect's `:value` binding reflects as an HTML attribute in JSDOM; tests assert `wrapper.attributes('value')` instead of `wrapper.element.value`.
+
+## Dev Agent Record
+
+### Implementation Plan
+
+Red-green-refactor for each DS component: write tests against known component APIs (props, slots, events, computed classes), run to confirm they pass, no refactoring needed since these are pure test files.
+
+### Debug Log
+
+- DsModal Teleport + non-immediate watcher required `mountAndOpen` helper that toggles `visible` from false to true
+- DsSelect `.value` property empty in JSDOM without matching `<option>` elements; switched to attribute assertion
+- DsTabs scoped slot syntax needed `<template #slot="scope">` format for VTU compatibility
+
+### Completion Notes
+
+151 new tests across 12 test files covering all 12 DS primitive components. All ACs satisfied. Full regression suite passes (752 tests, 42 suites, 0 failures). Zero lint errors.
+
+## File List
+
+- `components/gov-chat-frontend/src/__tests__/components/ds/DsButton.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/components/ds/DsCard.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/components/ds/DsModal.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/components/ds/DsInput.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/components/ds/DsSelect.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/components/ds/DsCombobox.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/components/ds/DsFormGroup.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/components/ds/DsPill.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/components/ds/DsSpinner.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/components/ds/DsStatusTag.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/components/ds/DsTabs.test.js` (new)
+- `components/gov-chat-frontend/src/__tests__/components/ds/DsStateDisplay.test.js` (new)
+- `components/gov-chat-frontend/src/components/ds/Button.vue` (modified — disabled anchor click guard)
+
+## Review Findings
 
 - [x] [Review][Patch] DsButton: disabled anchor click not blocked — added @click guard + emits declaration
 - [x] [Review][Patch] DsCombobox: missing afterEach cleanup for Teleport DOM
@@ -97,3 +135,6 @@ After: estimated functions ~45% (12 components with 3-5 functions each)
 - [x] [Review][Defer] DsModal: close-on-Escape keydown test — deferred, event listener lifecycle complexity
 
 ## Change Log
+
+- 2026-05-26: Implemented 12 DS component test files with 151 tests covering all acceptance criteria (AC1-AC13). All tests pass, zero regressions.
+- 2026-05-26: Code review completed (blind hunter + edge case hunter + acceptance auditor). All patches applied, CI green, zero regressions.

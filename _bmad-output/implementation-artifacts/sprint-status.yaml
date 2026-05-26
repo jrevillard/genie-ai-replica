@@ -55,7 +55,7 @@ development_status:
 
   1-8-e2e-playwright-tests-for-chatbot-interaction-flows: done
   1-9-e2e-playwright-tests-for-document-upload-and-search-flows: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   # Epic 2: Backend API Test Suite
   epic-2: done

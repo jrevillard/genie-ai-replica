@@ -485,7 +485,6 @@ describe('UserProfileComponent', () => {
       await wrapper.vm.$nextTick();
       await wrapper.vm.$nextTick();
 
-      const tab = wrapper.vm.tabs[0];
       expect(wrapper.vm.isTabComplete(0)).toBe(true);
     });
 

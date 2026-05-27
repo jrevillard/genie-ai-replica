@@ -365,7 +365,7 @@ describe('chatHistoryService', () => {
           }
         });
 
-        const result = await chatHistoryService.updateFolder('folder-1', {
+        await chatHistoryService.updateFolder('folder-1', {
           name: 'Work Updated',
           color: '#00ff00',
           icon: 'briefcase'

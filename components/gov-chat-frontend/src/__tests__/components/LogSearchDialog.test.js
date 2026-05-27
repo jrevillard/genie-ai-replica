@@ -241,7 +241,7 @@ describe('LogSearchDialog', () => {
       const searchPromise = wrapper.vm.performSearch();
       try {
         await searchPromise; // Wait for the async operation to complete
-      } catch (e) {
+      } catch {
         // Expected to throw
       }
       await wrapper.vm.$nextTick();
@@ -752,7 +752,7 @@ describe('LogSearchDialog', () => {
 
     it('returns translation when available', () => {
       const wrapper = createLogSearchDialogWrapper();
-      wrapper.vm.$i18n = { t: jest.fn((key) => 'Translated Text') };
+      wrapper.vm.$i18n = { t: jest.fn((_key) => 'Translated Text') };
 
       const result = wrapper.vm.translate('valid.key', 'Default');
 

@@ -528,4 +528,231 @@ describe('ChatHistoryService', () => {
       expect(Array.isArray(result)).toBe(true);
     });
   });
+
+  describe('updateQueryResponseTime', () => {
+    it('should update response time for a query', async () => {
+      const mockQueries = createMockCollection();
+      mockQueries.update.mockResolvedValueOnce({
+        new: { _key: 'query-1', responseTime: 2500 }
+      });
+      mockDb.collection.mockImplementation((name) => {
+        if (name === 'queries') return mockQueries;
+        const map = {
+          conversations: mockConversations,
+          messages: mockMessages,
+          userConversations: mockUserConversations,
+          conversationCategories: mockConversationCategories,
+          queryMessages: mockQueryMessages,
+          conversationFiles: mockConversationFiles,
+          folders: mockFolders,
+          userFolders: mockUserFolders,
+          folderConversations: mockFolderConversations
+        };
+        return map[name] || createMockCollection();
+      });
+
+      const result = await chatHistoryService.updateQueryResponseTime('query-1', 2500);
+      expect(result.responseTime).toBe(2500);
+      expect(mockQueries.update).toHaveBeenCalledWith('query-1', expect.objectContaining({ responseTime: 2500 }), {
+        returnNew: true
+      });
+    });
+
+    it('should throw when queryId is missing', async () => {
+      await expect(chatHistoryService.updateQueryResponseTime(null, 1000)).rejects.toThrow(
+        'queryId and responseTime are required'
+      );
+    });
+
+    it('should throw when responseTime is missing', async () => {
+      await expect(chatHistoryService.updateQueryResponseTime('query-1')).rejects.toThrow(
+        'queryId and responseTime are required'
+      );
+    });
+
+    it('should accept zero as valid responseTime', async () => {
+      const mockQueries = createMockCollection();
+      mockQueries.update.mockResolvedValueOnce({ new: { _key: 'query-1', responseTime: 0 } });
+      mockDb.collection.mockImplementation((name) => {
+        if (name === 'queries') return mockQueries;
+        return createMockCollection();
+      });
+
+      const result = await chatHistoryService.updateQueryResponseTime('query-1', 0);
+      expect(result.responseTime).toBe(0);
+    });
+  });
+
+  describe('getConversationOwnerId', () => {
+    it('should return owner user key', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor(['user-1']));
+      const result = await chatHistoryService.getConversationOwnerId('conv-1');
+      expect(result).toBe('user-1');
+    });
+
+    it('should return null when no owner found', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const result = await chatHistoryService.getConversationOwnerId('conv-1');
+      expect(result).toBeNull();
+    });
+
+    it('should return null on database error', async () => {
+      mockDb.query.mockRejectedValue(new Error('DB error'));
+      const result = await chatHistoryService.getConversationOwnerId('conv-1');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('findConversationFolder', () => {
+    it('should return folder containing the conversation', async () => {
+      mockDb.query.mockResolvedValue(
+        createMockCursor([{ _id: 'folders/folder-1', _key: 'folder-1', name: 'My Folder', parentFolderId: null }])
+      );
+      const result = await chatHistoryService.findConversationFolder('conv-1');
+      expect(result).toBeDefined();
+      expect(result._key).toBe('folder-1');
+    });
+
+    it('should return null when conversation is not in any folder', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const result = await chatHistoryService.findConversationFolder('conv-1');
+      expect(result).toBeNull();
+    });
+
+    it('should return null on database error', async () => {
+      mockDb.query.mockRejectedValue(new Error('DB error'));
+      const result = await chatHistoryService.findConversationFolder('conv-1');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getFolderPath', () => {
+    it('should return path for root-level folder', async () => {
+      mockFolders.document.mockResolvedValueOnce({
+        _key: 'folder-1',
+        name: 'Root Folder',
+        parentFolderId: null
+      });
+
+      const result = await chatHistoryService.getFolderPath('folder-1');
+      expect(result).toHaveLength(1);
+      expect(result[0]._key).toBe('folder-1');
+    });
+
+    it('should return full breadcrumb path for nested folder', async () => {
+      mockFolders.document
+        .mockResolvedValueOnce({ _key: 'folder-2', name: 'Child', parentFolderId: 'folder-1' })
+        .mockResolvedValueOnce({ _key: 'folder-1', name: 'Root', parentFolderId: null });
+
+      const result = await chatHistoryService.getFolderPath('folder-2');
+      expect(result).toHaveLength(2);
+      expect(result[0]._key).toBe('folder-1');
+      expect(result[1]._key).toBe('folder-2');
+    });
+
+    it('should throw when folder not found', async () => {
+      mockFolders.document.mockRejectedValue(new Error('Not found'));
+
+      await expect(chatHistoryService.getFolderPath('missing')).rejects.toThrow('Not found');
+    });
+  });
+
+  describe('reorderFolders', () => {
+    it('should reorder folders with valid permissions', async () => {
+      const mockTrx = {
+        step: jest.fn().mockImplementation(async (fn) => fn()),
+        commit: jest.fn().mockResolvedValue(undefined),
+        abort: jest.fn().mockResolvedValue(undefined)
+      };
+      mockDb.beginTransaction.mockResolvedValue(mockTrx);
+
+      // Permission check + parent check for each folder
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'uf-1' }])) // perm folder-1
+        .mockResolvedValueOnce(createMockCursor([null])) // parent of folder-1 (null = root)
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'uf-2' }])) // perm folder-2
+        .mockResolvedValueOnce(createMockCursor([null])); // parent of folder-2 (null = root)
+
+      const result = await chatHistoryService.reorderFolders(
+        'user-1',
+        [
+          { folderId: 'folder-1', order: 1 },
+          { folderId: 'folder-2', order: 2 }
+        ],
+        null,
+        'user-1'
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.updatedFolders).toBe(2);
+      expect(mockTrx.commit).toHaveBeenCalled();
+    });
+
+    it('should throw when folderOrders is not an array', async () => {
+      await expect(chatHistoryService.reorderFolders('user-1', 'invalid', null, 'user-1')).rejects.toThrow(
+        'Invalid folder orders array'
+      );
+    });
+
+    it('should throw when folderOrders is empty', async () => {
+      await expect(chatHistoryService.reorderFolders('user-1', [], null, 'user-1')).rejects.toThrow(
+        'Invalid folder orders array'
+      );
+    });
+
+    it('should throw ForbiddenError when user lacks permission', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])); // no permission
+
+      await expect(
+        chatHistoryService.reorderFolders('user-1', [{ folderId: 'folder-1', order: 1 }], null, 'user-1')
+      ).rejects.toThrow();
+    });
+
+    it('should throw when folder does not belong to parent', async () => {
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'uf-1' }])) // has permission
+        .mockResolvedValueOnce(createMockCursor(['parent-1'])); // has different parent
+
+      await expect(
+        chatHistoryService.reorderFolders('user-1', [{ folderId: 'folder-1', order: 1 }], 'parent-2', 'user-1')
+      ).rejects.toThrow('does not belong to the specified parent folder');
+    });
+
+    it('should abort transaction on step failure', async () => {
+      const mockTrx = {
+        step: jest.fn().mockRejectedValue(new Error('Step failed')),
+        commit: jest.fn().mockResolvedValue(undefined),
+        abort: jest.fn().mockResolvedValue(undefined)
+      };
+      mockDb.beginTransaction.mockResolvedValue(mockTrx);
+
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'uf-1' }])) // perm
+        .mockResolvedValueOnce(createMockCursor([null])); // parent
+
+      await expect(
+        chatHistoryService.reorderFolders('user-1', [{ folderId: 'folder-1', order: 1 }], null, 'user-1')
+      ).rejects.toThrow('Step failed');
+      expect(mockTrx.abort).toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteFolder', () => {
+    it('should delete folder with contents when user has permission', async () => {
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'uf-1' }])) // permission check
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'fc-1', _to: 'conversations/conv-1' }])) // folder conversations
+        .mockResolvedValueOnce(createMockCursor([])) // child folders
+        .mockResolvedValueOnce(createMockCursor([])) // getConversationOwnerId
+        .mockResolvedValue(createMockCursor([])); // deletions
+
+      mockConversations.remove.mockResolvedValueOnce({ _key: 'conv-1' });
+      mockFolders.remove.mockResolvedValueOnce({ _key: 'folder-1' });
+
+      const result = await chatHistoryService.deleteFolder('folder-1', 'user-1', true, 'user-1');
+      expect(result).toBeDefined();
+      expect(result.conversationLinksDeleted).toBe(1);
+      expect(result.success).toBe(true);
+    });
+  });
 });

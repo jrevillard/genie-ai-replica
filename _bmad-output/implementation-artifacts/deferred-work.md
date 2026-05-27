@@ -262,3 +262,13 @@ Items deferred during code reviews. Revisit when the related component is next m
 - AppTokens malformed config edge cases — Tests don't verify behavior with null config, wrong-type values (e.g., `theme: "string"` instead of map), or missing nested keys. `fromConfig()` uses `as Map<String, dynamic>?` casts which could throw on malformed input. Beyond current AC8 scope, deferred to hardening pass.
 - I18nService translate fallback not tested — `tr()` fallback returns the key itself when no translation exists (line 114 of i18n_service.dart). This behavior is never verified in any test. Pre-existing gap, not introduced by this story.
 - ColorUtils.withAlpha boundary values — Only 0.5 and 1.0 alpha values tested; missing 0.0 (fully transparent), negative values, and values > 1.0 to verify clamping. Minor, beyond AC7 scope.
+
+## Deferred from: code review of 2-11-test-backend-chat-history-completion-and-database-operations (2026-05-27)
+
+- Route tests check only HTTP status, not error response body structure — pre-existing test pattern across suite, nice-to-have hardening
+- Weather service tests use hardcoded 2026 dates in mock data — mock data processed as-is by code, no runtime date validation concern
+- deleteFolder cascade test doesn't verify removal calls — test verifies no-throw but not specific side effects
+- Service category test relies on implementation-specific default name 'Category 1' — fragile to implementation changes in category naming logic
+- Weather service missing coordinate boundary tests (±90, ±180) — one out-of-bounds case tested, exact boundary values untested
+- Test isolation: process.exit mock in global scope — pre-existing test infrastructure pattern in chat-history-service tests
+- key-handler edge cases (Unicode, 254-char boundary) not exhaustive despite 100% coverage — additional edge case hardening

@@ -368,6 +368,8 @@ Claude Opus 4.7
 - ✅ language_selector: 4 widget tests — dropdown rendering, supported languages count, onChanged callback, custom textColor/dropdownColor
 - ✅ All 433 tests pass (286 existing + 147 new), 0 regressions
 - ✅ Coverage: 84.0% (up from ~76.9%, +7.1pp — exceeds target of +5pp)
+- ✅ Refactored all 8 DS component source files to add ValueKey to internal widgets (ds-button, ds-card, ds-input, ds-modal, ds-spinner, ds-state-display, confirm-dialog, language-selector)
+- ✅ Converted all 8 widget test files to use find.byKey() exclusively — no find.text(), find.byType(), or find.byIcon() remain. Project rule: all finders must use Key/data-testid
 
 ### File List
 

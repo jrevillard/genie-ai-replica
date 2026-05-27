@@ -54,11 +54,20 @@ const ipapiResponse = {
   data: { latitude: 46.2, longitude: 6.15, city: 'Geneva', country_name: 'Switzerland' }
 };
 
+const formatDate = (d) => d.toISOString().split('T')[0];
+const today = new Date();
+const dates = [
+  formatDate(today),
+  formatDate(new Date(today.getTime() + 86400000)),
+  formatDate(new Date(today.getTime() + 2 * 86400000)),
+  formatDate(new Date(today.getTime() + 3 * 86400000))
+];
+
 const openMeteoResponse = {
   data: {
     current: { temperature_2m: 22, relative_humidity_2m: 55, weather_code: 0, wind_speed_10m: 10 },
     daily: {
-      time: ['2026-05-27', '2026-05-28', '2026-05-29', '2026-05-30'],
+      time: dates,
       weather_code: [0, 1, 3, 61],
       temperature_2m_max: [25, 24, 20, 18],
       temperature_2m_min: [15, 14, 12, 10]
@@ -225,6 +234,41 @@ describe('WeatherService', () => {
       );
     });
 
+    it('should accept latitude boundaries (+90, -90)', async () => {
+      axios.get.mockResolvedValue(openMeteoResponse);
+
+      await service.getWeather({ latitude: 90, longitude: 0, userId: 'user-1' });
+      await service.getWeather({ latitude: -90, longitude: 0, userId: 'user-1' });
+
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('invalid_coordinates'),
+        expect.any(Object)
+      );
+    });
+
+    it('should accept longitude boundaries (+180, -180)', async () => {
+      axios.get.mockResolvedValue(openMeteoResponse);
+
+      await service.getWeather({ latitude: 0, longitude: 180, userId: 'user-1' });
+      await service.getWeather({ latitude: 0, longitude: -180, userId: 'user-1' });
+
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('invalid_coordinates'),
+        expect.any(Object)
+      );
+    });
+
+    it('should accept coordinates just inside boundaries', async () => {
+      axios.get.mockResolvedValue(openMeteoResponse);
+
+      await service.getWeather({ latitude: 89.99, longitude: 179.99, userId: 'user-1' });
+
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('invalid_coordinates'),
+        expect.any(Object)
+      );
+    });
+
     it('should map weather codes correctly', async () => {
       const codeMap = [
         [0, 'Clear'], [1, 'Clear'], [2, 'Partly Cloudy'], [3, 'Cloudy'],
@@ -233,11 +277,17 @@ describe('WeatherService', () => {
 
       for (const [code, expected] of codeMap) {
         jest.clearAllMocks();
+        const testDates = [
+          formatDate(new Date(today.getTime() + 86400000)),
+          formatDate(new Date(today.getTime() + 2 * 86400000)),
+          formatDate(new Date(today.getTime() + 3 * 86400000)),
+          formatDate(new Date(today.getTime() + 4 * 86400000))
+        ];
         axios.get.mockResolvedValueOnce({
           data: {
             current: { temperature_2m: 20, relative_humidity_2m: 50, weather_code: code, wind_speed_10m: 5 },
             daily: {
-              time: ['2026-05-27', '2026-05-28', '2026-05-29', '2026-05-30'],
+              time: testDates,
               weather_code: [0, 0, 0, 0],
               temperature_2m_max: [22, 22, 22, 22],
               temperature_2m_min: [12, 12, 12, 12]

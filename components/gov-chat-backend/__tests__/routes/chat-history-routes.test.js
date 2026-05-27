@@ -149,6 +149,8 @@ describe('PATCH /api/chat/conversations/:conversationId', () => {
 
     const response = await authPatch('/api/chat/conversations/conv-1', { title: 'X' });
     expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toContain('User ID is required');
   });
 
   it('should pass next on service error', async () => {
@@ -181,6 +183,8 @@ describe('DELETE /api/chat/conversations/:conversationId', () => {
 
     const response = await authDelete('/api/chat/conversations/conv-1');
     expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toContain('User ID is required');
   });
 });
 
@@ -234,6 +238,8 @@ describe('GET /api/chat/folders', () => {
 
     const response = await authGet('/api/chat/folders');
     expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toContain('User ID is required');
   });
 });
 
@@ -259,6 +265,7 @@ describe('POST /api/chat/folders', () => {
   it('should return 400 when name is missing', async () => {
     const response = await authPost('/api/chat/folders', {});
     expect(response.status).toBe(400);
+    expect(response.body.message).toBe('Folder name is required');
   });
 
   it('should return 403 when user lacks permission on parent folder', async () => {
@@ -273,6 +280,7 @@ describe('POST /api/chat/folders', () => {
     });
 
     expect(response.status).toBe(403);
+    expect(response.body.message).toContain('permission');
   });
 
   it('should return 404 when parent folder not found', async () => {
@@ -284,6 +292,7 @@ describe('POST /api/chat/folders', () => {
     });
 
     expect(response.status).toBe(404);
+    expect(response.body.message).toBe('Parent folder not found');
   });
 
   it('should return 400 when userId is missing', async () => {
@@ -291,6 +300,8 @@ describe('POST /api/chat/folders', () => {
 
     const response = await authPost('/api/chat/folders', { name: 'Test' });
     expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toContain('User ID is required');
   });
 });
 
@@ -312,6 +323,7 @@ describe('GET /api/chat/folders/:folderId', () => {
 
     const response = await authGet('/api/chat/folders/missing');
     expect(response.status).toBe(404);
+    expect(response.body.message).toBe('Folder not found');
   });
 });
 
@@ -334,6 +346,7 @@ describe('PATCH /api/chat/folders/:folderId', () => {
   it('should return 400 when folder is its own parent', async () => {
     const response = await authPatch('/api/chat/folders/f-1', { parentFolderId: 'f-1' });
     expect(response.status).toBe(400);
+    expect(response.body.message).toBe('A folder cannot be its own parent');
   });
 
   it('should return 400 when creating circular parent reference', async () => {
@@ -341,6 +354,7 @@ describe('PATCH /api/chat/folders/:folderId', () => {
 
     const response = await authPatch('/api/chat/folders/f-1', { parentFolderId: 'f-2' });
     expect(response.status).toBe(400);
+    expect(response.body.message).toBe('Cannot move a folder to its own subfolder');
   });
 
   it('should return 404 when target parent not found', async () => {
@@ -348,6 +362,7 @@ describe('PATCH /api/chat/folders/:folderId', () => {
 
     const response = await authPatch('/api/chat/folders/f-1', { parentFolderId: 'missing' });
     expect(response.status).toBe(404);
+    expect(response.body.message).toBe('Target parent folder not found');
   });
 
   it('should return 400 when userId is missing', async () => {
@@ -355,6 +370,8 @@ describe('PATCH /api/chat/folders/:folderId', () => {
 
     const response = await authPatch('/api/chat/folders/f-1', { name: 'X' });
     expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toContain('User ID is required');
   });
 });
 
@@ -394,6 +411,8 @@ describe('DELETE /api/chat/folders/:folderId', () => {
 
     const response = await authDelete('/api/chat/folders/f-1');
     expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toContain('User ID is required');
   });
 });
 
@@ -419,6 +438,7 @@ describe('GET /api/chat/folders/search', () => {
   it('should return 400 when search term is missing', async () => {
     const response = await authGet('/api/chat/folders/search');
     expect(response.status).toBe(400);
+    expect(response.body.message).toBe('Search term is required');
   });
 
   it('should return 400 when userId is missing', async () => {
@@ -426,6 +446,8 @@ describe('GET /api/chat/folders/search', () => {
 
     const response = await authGet('/api/chat/folders/search?q=test');
     expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toContain('User ID is required');
   });
 });
 
@@ -453,11 +475,13 @@ describe('POST /api/chat/folders/reorder', () => {
   it('should return 400 when folderOrders is missing', async () => {
     const response = await authPost('/api/chat/folders/reorder', {});
     expect(response.status).toBe(400);
+    expect(response.body.message).toBe('Invalid folder orders data');
   });
 
   it('should return 400 when folderOrders is empty', async () => {
     const response = await authPost('/api/chat/folders/reorder', { folderOrders: [] });
     expect(response.status).toBe(400);
+    expect(response.body.message).toBe('Invalid folder orders data');
   });
 
   it('should return 400 when userId is missing', async () => {
@@ -467,6 +491,8 @@ describe('POST /api/chat/folders/reorder', () => {
       folderOrders: [{ folderId: 'f-1', order: 1 }]
     });
     expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toContain('User ID is required');
   });
 });
 
@@ -512,6 +538,8 @@ describe('POST /api/chat/folders/:folderId/conversations/:conversationId', () =>
 
     const response = await authPost('/api/chat/folders/f-1/conversations/conv-1');
     expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toContain('User ID is required');
   });
 });
 
@@ -535,6 +563,8 @@ describe('DELETE /api/chat/folders/:folderId/conversations/:conversationId', () 
 
     const response = await authDelete('/api/chat/folders/f-1/conversations/conv-1');
     expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toContain('User ID is required');
   });
 });
 
@@ -558,6 +588,7 @@ describe('GET /api/chat/conversations/:conversationId/folder', () => {
     const response = await authGet('/api/chat/conversations/conv-1/folder');
 
     expect(response.status).toBe(404);
+    expect(response.body.message).toBe('Conversation not found or not in any folder');
     expect(response.body.inFolder).toBe(false);
   });
 });
@@ -588,5 +619,7 @@ describe('POST /api/chat/conversations/:conversationId/move', () => {
       targetFolderId: 'f-2'
     });
     expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+    expect(response.body.message).toContain('User ID is required');
   });
 });

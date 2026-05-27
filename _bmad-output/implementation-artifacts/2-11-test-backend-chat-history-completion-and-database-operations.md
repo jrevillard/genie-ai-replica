@@ -1,6 +1,6 @@
 # Story 2-11: Test Backend Chat History Completion and Database Operations
 
-Status: review
+Status: done
 
 ## Story
 
@@ -44,6 +44,16 @@ So that backend coverage reaches the professional 70%+ target.
 ## Change Log
 
 - 2026-05-27: All tasks complete. 999 tests pass, 72.75% statements coverage, zero lint errors. Fixed production route ordering bug in chat-history-routes.js.
+
+## Review Findings
+
+- [x] [Review][Patch] Route tests check only HTTP status, not error response body structure [`__tests__/routes/chat-history-routes.test.js`] — fixed: added 34 error body assertions
+- [x] [Review][Patch] Weather service tests use hardcoded 2026 dates in mock data [`__tests__/services/weather-service.test.js`] — fixed: replaced with relative dates
+- [x] [Review][Patch] deleteFolder cascade test doesn't verify removal calls [`__tests__/services/chat-history-service.test.js`] — fixed: verify result properties (conversationLinksDeleted, success)
+- [x] [Review][Defer] Service category test relies on implementation-specific default name 'Category 1' [`__tests__/services/service-category-service.test.js`] — deferred, fragile to implementation changes
+- [x] [Review][Patch] Weather service missing coordinate boundary tests (±90, ±180) [`__tests__/services/weather-service.test.js`] — fixed: added boundary test cases
+- [x] [Review][Defer] Test isolation: process.exit mock in global scope [`__tests__/services/chat-history-service.test.js`] — deferred, pre-existing test infrastructure pattern
+- [x] [Review][Patch] key-handler edge cases (Unicode, 254-char boundary) not exhaustive despite 100% coverage [`__tests__/services/key-handler.test.js`] — fixed: added Unicode and boundary tests
 
 ## Dev Agent Record
 

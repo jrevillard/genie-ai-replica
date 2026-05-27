@@ -71,6 +71,26 @@ describe('key-handler', () => {
       expect(result.length).toBe(254);
     });
 
+    it('should handle Unicode characters (accented)', () => {
+      const result = sanitizeKey('café_ naïve');
+      expect(result).toBe('caf___na_ve');
+    });
+
+    it('should handle Unicode characters (CJK)', () => {
+      const result = sanitizeKey('中文_test');
+      expect(result).toBe('___test');
+    });
+
+    it('should handle Unicode emoji', () => {
+      const result = sanitizeKey('test🎉key');
+      expect(result).toBe('test__key');
+    });
+
+    it('should handle mixed valid/invalid at boundaries', () => {
+      const result = sanitizeKey('abc#123_def!456');
+      expect(result).toBe('abc_123_def!456');
+    });
+
     it('should return a generated key when sanitization results in empty string', () => {
       // Input that becomes empty after removing leading underscores and invalid chars
       const result = sanitizeKey('___');

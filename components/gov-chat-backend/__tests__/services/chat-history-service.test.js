@@ -750,6 +750,8 @@ describe('ChatHistoryService', () => {
 
       const result = await chatHistoryService.deleteFolder('folder-1', 'user-1', true, 'user-1');
       expect(result).toBeDefined();
+      expect(result.conversationLinksDeleted).toBe(1);
+      expect(result.success).toBe(true);
     });
   });
 });

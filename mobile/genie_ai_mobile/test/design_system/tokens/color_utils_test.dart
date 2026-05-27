@@ -134,6 +134,12 @@ void main() {
         final result = ColorUtils.withAlpha(base, 1.0);
         expect(result.a, closeTo(1.0, 0.01));
       });
+
+      test('fully transparent', () {
+        const base = Color(0xFFFF5722);
+        final result = ColorUtils.withAlpha(base, 0.0);
+        expect(result.a, closeTo(0.0, 0.01));
+      });
     });
 
     group('toPdfColor', () {

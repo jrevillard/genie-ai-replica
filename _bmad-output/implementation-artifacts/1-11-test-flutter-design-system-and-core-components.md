@@ -386,3 +386,16 @@ Claude Opus 4.7
 - `mobile/genie_ai_mobile/test/design_system/components/ds_state_display_test.dart` (NEW)
 - `mobile/genie_ai_mobile/test/components/shared/confirm_dialog_test.dart` (NEW)
 - `mobile/genie_ai_mobile/test/components/shared/language_selector_test.dart` (NEW)
+
+### Review Findings
+
+- [x] [Review][Patch] DsButton `iconOnly: true` with `icon: null` — added test documenting fallback behavior (renders ElevatedButton with empty text)
+- [x] [Review][Dismiss] ThemeManager singleton reset — verified `setTheme('light')` already resets all state (currentTheme, userPreference, isDarkMode). False positive.
+- [x] [Review][Patch] Icon-only disabled button test — added `expect(iconButton.onPressed, isNull)` assertion
+- [x] [Review][Patch] DsModal.show() action callbacks — added test verifying action buttons fire via show()
+- [x] [Review][Patch] DsCard Padding ValueKey — added `ValueKey('ds-card-padding')` to Padding widget, updated test to use key-based finder
+- [x] [Review][Patch] ConfirmDialog secondary null callback — added test for secondaryText with null onSecondary
+- [x] [Review][Patch] DsCard onTap null — added test verifying card renders without error when no onTap provided
+- [x] [Review][Defer] AppTokens malformed config edge cases — Tests don't verify behavior with null config, wrong-type values, or missing nested keys. Beyond current AC scope, deferred.
+- [x] [Review][Defer] I18nService translate fallback not tested — The tr() fallback (return key when no translation exists) is never verified. Pre-existing, not part of this story.
+- [x] [Review][Patch] ColorUtils.withAlpha boundary values — added fully transparent (0.0) test

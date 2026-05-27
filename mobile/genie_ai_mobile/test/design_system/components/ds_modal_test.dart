@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_modal.dart';
 
 import '../../helpers/test_app.dart';
@@ -168,6 +169,39 @@ void main() {
           find.byKey(const ValueKey('ds-modal-title')),
         );
         expect(title.data, 'Dialog Title');
+      });
+
+      testWidgets('show() renders actions that fire callbacks', (tester) async {
+        var actionFired = false;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (ctx) => TextButton(
+                  onPressed: () => DsModal.show(
+                    context: ctx,
+                    title: 'Confirm',
+                    content: Text('Body'),
+                    actions: [
+                      DsButton(
+                        key: const ValueKey('show-action'),
+                        label: 'OK',
+                        onPressed: () => actionFired = true,
+                      ),
+                    ],
+                  ),
+                  child: Text('Open', key: const ValueKey('trigger')),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.byKey(const ValueKey('trigger')));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const ValueKey('show-action')));
+        expect(actionFired, isTrue);
       });
     });
   });

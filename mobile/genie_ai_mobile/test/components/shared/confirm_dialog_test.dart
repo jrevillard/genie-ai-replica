@@ -196,6 +196,25 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('confirm-dialog-secondary-btn')));
         expect(secondaryFired, isTrue);
       });
+
+      testWidgets('secondary button with null callback renders and taps without error', (tester) async {
+        await tester.pumpWidget(
+          testApp(
+            ConfirmDialog(
+              visible: true,
+              secondaryText: 'Skip',
+              onConfirm: () {},
+              onCancel: () {},
+            ),
+          ),
+        );
+        final secondaryBtn = tester.widget<DsButton>(
+          find.byKey(const ValueKey('confirm-dialog-secondary-btn')),
+        );
+        expect(secondaryBtn.label, 'Skip');
+        await tester.tap(find.byKey(const ValueKey('confirm-dialog-secondary-btn')));
+        // No crash — null callback falls through to no-op
+      });
     });
   });
 }

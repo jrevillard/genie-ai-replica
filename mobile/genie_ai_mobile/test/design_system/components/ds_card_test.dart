@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
-import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
 import '../../helpers/test_app.dart';
 import '../../helpers/theme_helper.dart';
@@ -74,9 +73,10 @@ void main() {
             DsCard(padding: customPadding, child: SizedBox(key: Key('card-child'))),
           ),
         );
-        final allPadding = tester.widgetList<Padding>(find.byType(Padding));
-        final hasCustom = allPadding.any((p) => p.padding == customPadding);
-        expect(hasCustom, isTrue);
+        final padding = tester.widget<Padding>(
+          find.byKey(const ValueKey('ds-card-padding')),
+        );
+        expect(padding.padding, customPadding);
       });
     });
 
@@ -136,6 +136,15 @@ void main() {
           find.byKey(const ValueKey('card-child')),
         );
         expect(child.data, 'Child Content');
+      });
+    });
+
+    group('onTap', () {
+      testWidgets('renders without error when no onTap provided', (tester) async {
+        await tester.pumpWidget(
+          testApp(DsCard(child: Text('Static', key: const ValueKey('card-child')))),
+        );
+        expect(find.byKey(const ValueKey('ds-card')), findsOneWidget);
       });
     });
   });

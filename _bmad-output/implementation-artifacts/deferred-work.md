@@ -252,3 +252,9 @@ Items deferred during code reviews. Revisit when the related component is next m
 - NotificationService stream controller lifecycle — `_controller` never closed; service design issue beyond test scope. [notification_service_test.dart]
 - ConnectivityService dispose/timer cleanup untested — Timer cancellation and stream closing after dispose requires platform-dependent testing. [connectivity_service_test.dart]
 - Connectivity checker periodic testing + DNS timeout — Periodic checks and DNS timeout scenarios require `connectivity_plus` plugin; not achievable in unit tests. [connectivity_checker_test.dart]
+
+## Deferred from: code review of 1-11-test-flutter-design-system-and-core-components (2026-05-27)
+
+- AppTokens malformed config edge cases — Tests don't verify behavior with null config, wrong-type values (e.g., `theme: "string"` instead of map), or missing nested keys. `fromConfig()` uses `as Map<String, dynamic>?` casts which could throw on malformed input. Beyond current AC8 scope, deferred to hardening pass.
+- I18nService translate fallback not tested — `tr()` fallback returns the key itself when no translation exists (line 114 of i18n_service.dart). This behavior is never verified in any test. Pre-existing gap, not introduced by this story.
+- ColorUtils.withAlpha boundary values — Only 0.5 and 1.0 alpha values tested; missing 0.0 (fully transparent), negative values, and values > 1.0 to verify clamping. Minor, beyond AC7 scope.

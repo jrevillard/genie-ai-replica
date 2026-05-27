@@ -58,7 +58,11 @@ class DsCard extends StatelessWidget {
             ? BorderSide(color: borderColor)
             : BorderSide.none,
       ),
-      child: Padding(padding: effectivePadding, child: child),
+      child: Padding(
+        key: const ValueKey('ds-card-padding'),
+        padding: effectivePadding,
+        child: child,
+      ),
     );
   }
 }

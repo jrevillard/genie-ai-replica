@@ -153,6 +153,10 @@ void main() {
             ),
           ),
         );
+        final iconButton = tester.widget<IconButton>(
+          find.byKey(const ValueKey('ds-button')),
+        );
+        expect(iconButton.onPressed, isNull);
         await tester.tap(find.byKey(const ValueKey('ds-button')));
         expect(pressed, isFalse);
       });
@@ -250,6 +254,17 @@ void main() {
           find.byKey(const ValueKey('ds-button')),
         );
         expect(button, isNotNull);
+        final label = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-button-label')),
+        );
+        expect(label.data, '');
+      });
+
+      testWidgets('iconOnly with null icon renders ElevatedButton fallback', (tester) async {
+        await tester.pumpWidget(
+          testApp(DsButton(iconOnly: true, onPressed: () {})),
+        );
+        expect(find.byKey(const ValueKey('ds-button-sizer')), findsOneWidget);
         final label = tester.widget<Text>(
           find.byKey(const ValueKey('ds-button-label')),
         );

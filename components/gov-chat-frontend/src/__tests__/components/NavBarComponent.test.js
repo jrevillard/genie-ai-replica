@@ -279,7 +279,7 @@ describe('NavBarComponent', () => {
 
     it('renders without crashing when user has null roles', () => {
       const wrapper = createNavBarWrapper({ store: createNoRolesStore() });
-      expect(wrapper.find('nav').exists() || wrapper.find('.navbar').exists() || wrapper.element).toBeTruthy();
+      expect(wrapper.find('[data-test-id="nav-bar"]').exists()).toBe(true);
     });
 
     it('admin buttons are disabled when user has null roles', () => {

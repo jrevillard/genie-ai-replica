@@ -245,6 +245,10 @@ Items deferred during code reviews. Revisit when the related component is next m
 - DsInput textarea rows only one case tested — pre-existing, single case sufficient for AC
 - DsCombobox mousedown .prevent not tested — pre-existing, JSDOM limitation
 
+## Deferred from: code review of story 3-8 (2026-05-27)
+
+- `handleViewInternalFile` method untested in FileDetailsDialog.vue:916-1061 — requires XHR/Blob/new-window mocking beyond JSDOM capabilities, coverage targets met
+
 ## Deferred from: code review of 1-10-test-flutter-service-layer (2026-05-26)
 
 - AppAuth interface-only tests — FlutterAppAuth requires platform channels; only interface contract verifiable in unit tests. Documented limitation in completion notes. [app_auth_test.dart]

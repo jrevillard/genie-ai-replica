@@ -677,16 +677,6 @@ export default {
       }
     },
 
-    updateCountryDisplay() {
-      // This function ensures the country dropdowns properly display the correct values
-      if (this.formData.personalIdentification.nationality) {
-        // The SearchableCountryDropdown component will handle this through its value prop
-      }
-
-      if (this.formData.addressResidency.country) {
-        // The SearchableCountryDropdown component will handle this through its value prop
-      }
-    },
     cancel() {
       this.$router.back();
     },
@@ -729,25 +719,6 @@ export default {
     },
     cancelSave() {
       this.showConfirmDialog = false;
-    },
-    onFileChange(e, section, fieldKey) {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
-      const maxSize = 5 * 1024 * 1024; // 5MB
-
-      if (!allowedTypes.includes(file.type)) {
-        notificationService.error(this.translate('errors.invalidFileType', 'Invalid file type'));
-        return;
-      }
-
-      if (file.size > maxSize) {
-        notificationService.error(this.translate('errors.fileTooLarge', 'File is too large'));
-        return;
-      }
-
-      this.formData[section][fieldKey] = file;
     },
     validateForm() {
       const validations = {

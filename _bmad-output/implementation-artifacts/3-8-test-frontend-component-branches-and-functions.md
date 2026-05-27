@@ -473,6 +473,38 @@ Key additions:
 - [x] [Review][Patch] `isExternalUrl` / `getEnglishLabelNames` methods untested [`FileDetailsDialog.vue:732-737, 827-865`] — fixed
 - [x] [Review][Patch] `$i18n.locale` watcher: locale change triggers data refresh untested [`FileDetailsDialog.vue:655-660`] — fixed
 
+## Dev Agent Record
+
+### Completion Notes
+
+All 10 tasks completed. Final coverage: **Branches 59.08%** (≥55% target met), **Functions 55.8%** (≥55% target met). 1107 tests across 47 suites, all passing. Zero lint/format errors.
+
+Key additions:
+- AdminDashboard.test.js: 22→99 tests (parseLogMessage, getStatusVariant, getDisplayStatus, getResourceLabel, viewDocumentDetails, uploadFiles, addFromLink, refreshDocuments, sortBy, isFormDirty, error handling, etc.)
+- UserProfileComponent.test.js: 24→54 tests (validateForm, country dropdowns, profile icon canvas mock, submission flow)
+- ChatBotComponent.test.js: 19→59 tests (SSE streaming, error recovery, markdown rendering, quick help, dialog management)
+- FileDetailsDialog.test.js: NEW, 46 tests (tabs, labels, file operations, mainAction computed, timer)
+- LogSearchDialog.test.js: NEW, 53 tests (search, reset, export CSV, conditional rendering)
+- chatbotService.test.js: extended to 20 tests (SSE streaming with fetch mock)
+- chatHistoryService.test.js: extended to 78 tests (folder CRUD, search, stats)
+- ConfirmDialog.test.js: NEW, 16 tests (all emits and props)
+- LanguageSelector.test.js: NEW, 15 tests (watchers, locale persistence)
+- ModalDialog.test.js: NEW, 19 tests (translateIfKey, translatedTitle)
+
+## File List
+
+- `components/gov-chat-frontend/src/__tests__/components/AdminDashboard.test.js` — extended (22→99 tests)
+- `components/gov-chat-frontend/src/__tests__/components/UserProfileComponent.test.js` — extended (24→54 tests)
+- `components/gov-chat-frontend/src/__tests__/components/ChatBotComponent.test.js` — extended (19→59 tests)
+- `components/gov-chat-frontend/src/__tests__/components/FileDetailsDialog.test.js` — new (46 tests)
+- `components/gov-chat-frontend/src/__tests__/components/LogSearchDialog.test.js` — new (53 tests)
+- `components/gov-chat-frontend/src/__tests__/components/ConfirmDialog.test.js` — new (16 tests)
+- `components/gov-chat-frontend/src/__tests__/components/LanguageSelector.test.js` — new (15 tests)
+- `components/gov-chat-frontend/src/__tests__/components/ModalDialog.test.js` — new (19 tests)
+- `components/gov-chat-frontend/src/__tests__/services/chatbotService.test.js` — extended
+- `components/gov-chat-frontend/src/__tests__/services/chatHistoryService.test.js` — extended
+- `components/gov-chat-frontend/src/__tests__/services/documentFileService.test.js` — reviewed (already adequate)
+
 ## Change Log
 
 - 2026-05-26: Story created with comprehensive developer context — baseline coverage verified, component structures analyzed, per-file action plan defined.

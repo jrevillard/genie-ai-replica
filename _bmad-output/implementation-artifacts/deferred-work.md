@@ -248,3 +248,11 @@ Items deferred during code reviews. Revisit when the related component is next m
 ## Deferred from: code review of story 3-8 (2026-05-27)
 
 - `handleViewInternalFile` method untested in FileDetailsDialog.vue:916-1061 — requires XHR/Blob/new-window mocking beyond JSDOM capabilities, coverage targets met
+
+## Deferred from: code review of 1-10-test-flutter-service-layer (2026-05-26)
+
+- AppAuth interface-only tests — FlutterAppAuth requires platform channels; only interface contract verifiable in unit tests. Documented limitation in completion notes. [app_auth_test.dart]
+- ConnectivityService concurrent state changes untested — `_isChecking` guard exists but concurrent async testing is complex; better suited for integration tests. [connectivity_service_test.dart]
+- NotificationService stream controller lifecycle — `_controller` never closed; service design issue beyond test scope. [notification_service_test.dart]
+- ConnectivityService dispose/timer cleanup untested — Timer cancellation and stream closing after dispose requires platform-dependent testing. [connectivity_service_test.dart]
+- Connectivity checker periodic testing + DNS timeout — Periodic checks and DNS timeout scenarios require `connectivity_plus` plugin; not achievable in unit tests. [connectivity_checker_test.dart]

@@ -44,7 +44,7 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # Epic 1: Merge with Confidence — CI/CD Pipeline
-  epic-1: done
+  epic-1: in-progress
   1-1-configure-junit-xml-reporting-for-all-test-runners: done
   1-2-create-ci-pipeline-lint-stage: done
   1-3-create-ci-pipeline-test-stage: done
@@ -55,7 +55,7 @@ development_status:
 
   1-8-e2e-playwright-tests-for-chatbot-interaction-flows: done
   1-9-e2e-playwright-tests-for-document-upload-and-search-flows: done
-  1-10-test-flutter-service-layer: backlog
+  1-10-test-flutter-service-layer: done
   1-11-test-flutter-design-system-and-core-components: backlog
   epic-1-retrospective: done
 

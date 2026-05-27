@@ -105,10 +105,12 @@ development_status:
   epic-5-retrospective: optional
 
   # Epic 6: Configuration Integrity Validation
-  epic-6: backlog
-  6-1-build-env-template-parser-and-docker-compose-cross-reference-validator: backlog
-  6-2-build-hardware-profile-and-feature-flag-validators: backlog
-  6-3-create-configuration-validation-test-suite-and-env-profiles: backlog
+  # Implemented via story 1-5 (Epic 1) — validators, tests, and CI stage already exist.
+  # See commit bd3a1c0dc (2026-05-20).
+  epic-6: done
+  6-1-build-env-template-parser-and-docker-compose-cross-reference-validator: done
+  6-2-build-hardware-profile-and-feature-flag-validators: done
+  6-3-create-configuration-validation-test-suite-and-env-profiles: done
   epic-6-retrospective: optional
 
   # Epic 7: MELT-Ready Test Instrumentation

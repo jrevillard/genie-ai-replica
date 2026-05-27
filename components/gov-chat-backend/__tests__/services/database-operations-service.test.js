@@ -49,7 +49,9 @@ beforeEach(() => {
   jest.clearAllMocks();
 
   mockDb = {
-    query: jest.fn().mockResolvedValue({ all: jest.fn().mockResolvedValue([]), next: jest.fn().mockResolvedValue(null) }),
+    query: jest
+      .fn()
+      .mockResolvedValue({ all: jest.fn().mockResolvedValue([]), next: jest.fn().mockResolvedValue(null) }),
     listCollections: jest.fn().mockResolvedValue([]),
     collections: jest.fn().mockResolvedValue([]),
     collection: jest.fn().mockImplementation((name) => createMockCollection(name)),
@@ -193,22 +195,16 @@ describe('DatabaseOperationsService', () => {
 
     it('should include index suggestions for low selectivity hash indexes', async () => {
       const mockColl = createMockCollection('users');
-      mockColl.indexes.mockResolvedValue([
-        { type: 'hash', fields: ['status'], selectivityEstimate: 0.1 }
-      ]);
+      mockColl.indexes.mockResolvedValue([{ type: 'hash', fields: ['status'], selectivityEstimate: 0.1 }]);
       mockDb.collections.mockResolvedValue([mockColl]);
 
       const result = await service.optimizeDatabase();
-      expect(result.results[0].indexSuggestions).toContain(
-        'Low selectivity for hash index on status'
-      );
+      expect(result.results[0].indexSuggestions).toContain('Low selectivity for hash index on status');
     });
 
     it('should include suggestions for complex multi-field skiplist indexes', async () => {
       const mockColl = createMockCollection('messages');
-      mockColl.indexes.mockResolvedValue([
-        { type: 'skiplist', fields: ['a', 'b', 'c', 'd'] }
-      ]);
+      mockColl.indexes.mockResolvedValue([{ type: 'skiplist', fields: ['a', 'b', 'c', 'd'] }]);
       mockDb.collections.mockResolvedValue([mockColl]);
 
       const result = await service.optimizeDatabase();

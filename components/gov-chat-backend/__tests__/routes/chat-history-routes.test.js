@@ -56,17 +56,25 @@ jest.mock('../../services/chat-history-service', () => {
 
 jest.mock('../../services/query-service', () => ({}));
 
-jest.mock('swagger-jsdoc', () => () => ({
-  openapi: '3.0.0',
-  info: {},
-  components: {},
-  security: []
-}), { virtual: true });
+jest.mock(
+  'swagger-jsdoc',
+  () => () => ({
+    openapi: '3.0.0',
+    info: {},
+    components: {},
+    security: []
+  }),
+  { virtual: true }
+);
 
-jest.mock('swagger-ui-express', () => ({
-  serve: [],
-  setup: () => (req, res, next) => next()
-}), { virtual: true });
+jest.mock(
+  'swagger-ui-express',
+  () => ({
+    serve: [],
+    setup: () => (req, res, next) => next()
+  }),
+  { virtual: true }
+);
 
 jest.mock('../../services/user-profile-service', () => ({}));
 jest.mock('../../services/admin-dashboard-service', () => ({}));
@@ -78,11 +86,21 @@ jest.mock('../../services/weather-service', () => ({}));
 jest.mock('../../services/security-scan-service', () => ({}));
 jest.mock('../../services/translation-service', () => ({}));
 
-jest.mock('../../controllers/analyticsController', () => function () { return {}; });
+jest.mock(
+  '../../controllers/analyticsController',
+  () =>
+    function () {
+      return {};
+    }
+);
 
 const originalExit = process.exit;
-beforeAll(() => { process.exit = jest.fn(); });
-afterAll(() => { process.exit = originalExit; });
+beforeAll(() => {
+  process.exit = jest.fn();
+});
+afterAll(() => {
+  process.exit = originalExit;
+});
 
 const { createApp } = require('../../index');
 const request = require('supertest');
@@ -132,7 +150,8 @@ function authDelete(path) {
 describe('PATCH /api/chat/conversations/:conversationId', () => {
   it('should update conversation and return 200', async () => {
     chatHistoryService.updateConversation.mockResolvedValue({
-      _key: 'conv-1', title: 'Updated'
+      _key: 'conv-1',
+      title: 'Updated'
     });
 
     const response = await authPatch('/api/chat/conversations/conv-1', { title: 'Updated' });
@@ -171,11 +190,7 @@ describe('DELETE /api/chat/conversations/:conversationId', () => {
     const response = await authDelete('/api/chat/conversations/conv-1');
 
     expect(response.status).toBe(200);
-    expect(chatHistoryService.deleteConversation).toHaveBeenCalledWith(
-      'conv-1',
-      mockUser.iss_sub,
-      mockUser._key
-    );
+    expect(chatHistoryService.deleteConversation).toHaveBeenCalledWith('conv-1', mockUser.iss_sub, mockUser._key);
   });
 
   it('should return 400 when userId is missing', async () => {
@@ -385,12 +400,7 @@ describe('DELETE /api/chat/folders/:folderId', () => {
     const response = await authDelete('/api/chat/folders/f-1');
 
     expect(response.status).toBe(200);
-    expect(chatHistoryService.deleteFolder).toHaveBeenCalledWith(
-      'f-1',
-      mockUser.iss_sub,
-      false,
-      mockUser._key
-    );
+    expect(chatHistoryService.deleteFolder).toHaveBeenCalledWith('f-1', mockUser.iss_sub, false, mockUser._key);
   });
 
   it('should pass deleteContents=true', async () => {
@@ -398,12 +408,7 @@ describe('DELETE /api/chat/folders/:folderId', () => {
 
     await authDelete('/api/chat/folders/f-1?deleteContents=true');
 
-    expect(chatHistoryService.deleteFolder).toHaveBeenCalledWith(
-      'f-1',
-      mockUser.iss_sub,
-      true,
-      mockUser._key
-    );
+    expect(chatHistoryService.deleteFolder).toHaveBeenCalledWith('f-1', mockUser.iss_sub, true, mockUser._key);
   });
 
   it('should return 400 when userId is missing', async () => {
@@ -459,14 +464,20 @@ describe('POST /api/chat/folders/reorder', () => {
     chatHistoryService.reorderFolders.mockResolvedValue({ updatedFolders: 2, success: true });
 
     const response = await authPost('/api/chat/folders/reorder', {
-      folderOrders: [{ folderId: 'f-1', order: 1 }, { folderId: 'f-2', order: 2 }],
+      folderOrders: [
+        { folderId: 'f-1', order: 1 },
+        { folderId: 'f-2', order: 2 }
+      ],
       parentFolderId: null
     });
 
     expect(response.status).toBe(200);
     expect(chatHistoryService.reorderFolders).toHaveBeenCalledWith(
       mockUser.iss_sub,
-      [{ folderId: 'f-1', order: 1 }, { folderId: 'f-2', order: 2 }],
+      [
+        { folderId: 'f-1', order: 1 },
+        { folderId: 'f-2', order: 2 }
+      ],
       null,
       mockUser._key
     );
@@ -529,7 +540,10 @@ describe('POST /api/chat/folders/:folderId/conversations/:conversationId', () =>
 
     expect(response.status).toBe(200);
     expect(chatHistoryService.addConversationToFolder).toHaveBeenCalledWith(
-      'f-1', 'conv-1', mockUser.iss_sub, mockUser._key
+      'f-1',
+      'conv-1',
+      mockUser.iss_sub,
+      mockUser._key
     );
   });
 
@@ -554,7 +568,10 @@ describe('DELETE /api/chat/folders/:folderId/conversations/:conversationId', () 
 
     expect(response.status).toBe(200);
     expect(chatHistoryService.removeConversationFromFolder).toHaveBeenCalledWith(
-      'f-1', 'conv-1', mockUser.iss_sub, mockUser._key
+      'f-1',
+      'conv-1',
+      mockUser.iss_sub,
+      mockUser._key
     );
   });
 
@@ -607,7 +624,11 @@ describe('POST /api/chat/conversations/:conversationId/move', () => {
 
     expect(response.status).toBe(200);
     expect(chatHistoryService.moveConversation).toHaveBeenCalledWith(
-      'conv-1', 'f-1', 'f-2', mockUser.iss_sub, mockUser._key
+      'conv-1',
+      'f-1',
+      'f-2',
+      mockUser.iss_sub,
+      mockUser._key
     );
   });
 

@@ -228,10 +228,7 @@ describe('WeatherService', () => {
 
       await service.getWeather({ latitude: 200, longitude: -300, userId: 'user-1' });
 
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('invalid_coordinates'),
-        expect.any(Object)
-      );
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('invalid_coordinates'), expect.any(Object));
     });
 
     it('should accept latitude boundaries (+90, -90)', async () => {
@@ -240,10 +237,7 @@ describe('WeatherService', () => {
       await service.getWeather({ latitude: 90, longitude: 0, userId: 'user-1' });
       await service.getWeather({ latitude: -90, longitude: 0, userId: 'user-1' });
 
-      expect(logger.warn).not.toHaveBeenCalledWith(
-        expect.stringContaining('invalid_coordinates'),
-        expect.any(Object)
-      );
+      expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('invalid_coordinates'), expect.any(Object));
     });
 
     it('should accept longitude boundaries (+180, -180)', async () => {
@@ -252,10 +246,7 @@ describe('WeatherService', () => {
       await service.getWeather({ latitude: 0, longitude: 180, userId: 'user-1' });
       await service.getWeather({ latitude: 0, longitude: -180, userId: 'user-1' });
 
-      expect(logger.warn).not.toHaveBeenCalledWith(
-        expect.stringContaining('invalid_coordinates'),
-        expect.any(Object)
-      );
+      expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('invalid_coordinates'), expect.any(Object));
     });
 
     it('should accept coordinates just inside boundaries', async () => {
@@ -263,16 +254,20 @@ describe('WeatherService', () => {
 
       await service.getWeather({ latitude: 89.99, longitude: 179.99, userId: 'user-1' });
 
-      expect(logger.warn).not.toHaveBeenCalledWith(
-        expect.stringContaining('invalid_coordinates'),
-        expect.any(Object)
-      );
+      expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('invalid_coordinates'), expect.any(Object));
     });
 
     it('should map weather codes correctly', async () => {
       const codeMap = [
-        [0, 'Clear'], [1, 'Clear'], [2, 'Partly Cloudy'], [3, 'Cloudy'],
-        [51, 'Drizzle'], [61, 'Rain'], [71, 'Snow'], [95, 'Thunderstorm'], [99, 'Thunderstorm']
+        [0, 'Clear'],
+        [1, 'Clear'],
+        [2, 'Partly Cloudy'],
+        [3, 'Cloudy'],
+        [51, 'Drizzle'],
+        [61, 'Rain'],
+        [71, 'Snow'],
+        [95, 'Thunderstorm'],
+        [99, 'Thunderstorm']
       ];
 
       for (const [code, expected] of codeMap) {
@@ -320,18 +315,13 @@ describe('WeatherService', () => {
       const result = await service.getWeather({ latitude: 46.2, longitude: 6.15 });
 
       expect(result).toBeDefined();
-      expect(logger.error).toHaveBeenCalledWith(
-        expect.stringContaining('record_analytics_failed'),
-        expect.any(Object)
-      );
+      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('record_analytics_failed'), expect.any(Object));
     });
 
     it('should throw when weather API fails', async () => {
       axios.get.mockRejectedValueOnce(new Error('Weather API unavailable'));
 
-      await expect(
-        service.getWeather({ latitude: 46.2, longitude: 6.15 })
-      ).rejects.toThrow('Weather API unavailable');
+      await expect(service.getWeather({ latitude: 46.2, longitude: 6.15 })).rejects.toThrow('Weather API unavailable');
     });
 
     it('should use default server location when serverLocation is null', async () => {

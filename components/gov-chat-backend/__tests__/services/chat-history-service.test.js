@@ -553,11 +553,9 @@ describe('ChatHistoryService', () => {
 
       const result = await chatHistoryService.updateQueryResponseTime('query-1', 2500);
       expect(result.responseTime).toBe(2500);
-      expect(mockQueries.update).toHaveBeenCalledWith(
-        'query-1',
-        expect.objectContaining({ responseTime: 2500 }),
-        { returnNew: true }
-      );
+      expect(mockQueries.update).toHaveBeenCalledWith('query-1', expect.objectContaining({ responseTime: 2500 }), {
+        returnNew: true
+      });
     });
 
     it('should throw when queryId is missing', async () => {
@@ -677,7 +675,10 @@ describe('ChatHistoryService', () => {
 
       const result = await chatHistoryService.reorderFolders(
         'user-1',
-        [{ folderId: 'folder-1', order: 1 }, { folderId: 'folder-2', order: 2 }],
+        [
+          { folderId: 'folder-1', order: 1 },
+          { folderId: 'folder-2', order: 2 }
+        ],
         null,
         'user-1'
       );
@@ -688,15 +689,15 @@ describe('ChatHistoryService', () => {
     });
 
     it('should throw when folderOrders is not an array', async () => {
-      await expect(
-        chatHistoryService.reorderFolders('user-1', 'invalid', null, 'user-1')
-      ).rejects.toThrow('Invalid folder orders array');
+      await expect(chatHistoryService.reorderFolders('user-1', 'invalid', null, 'user-1')).rejects.toThrow(
+        'Invalid folder orders array'
+      );
     });
 
     it('should throw when folderOrders is empty', async () => {
-      await expect(
-        chatHistoryService.reorderFolders('user-1', [], null, 'user-1')
-      ).rejects.toThrow('Invalid folder orders array');
+      await expect(chatHistoryService.reorderFolders('user-1', [], null, 'user-1')).rejects.toThrow(
+        'Invalid folder orders array'
+      );
     });
 
     it('should throw ForbiddenError when user lacks permission', async () => {

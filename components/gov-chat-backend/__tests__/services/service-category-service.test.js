@@ -119,9 +119,7 @@ describe('ServiceCategoryService', () => {
 
   describe('upsertCategories', () => {
     it('should create categories with translations', async () => {
-      const categories = [
-        { name: 'Taxes', catKey: 'taxes', translations: [{ lang: 'fr', text: 'Impots' }] }
-      ];
+      const categories = [{ name: 'Taxes', catKey: 'taxes', translations: [{ lang: 'fr', text: 'Impots' }] }];
 
       const result = await service.upsertCategories(categories, 'en');
 
@@ -136,9 +134,7 @@ describe('ServiceCategoryService', () => {
       const categories = [{}];
 
       await service.upsertCategories(categories);
-      expect(mockServiceCategories.save).toHaveBeenCalledWith(
-        expect.objectContaining({ nameEN: 'Category 1' })
-      );
+      expect(mockServiceCategories.save).toHaveBeenCalledWith(expect.objectContaining({ nameEN: 'Category 1' }));
     });
 
     it('should throw on database error', async () => {
@@ -150,9 +146,7 @@ describe('ServiceCategoryService', () => {
 
   describe('upsertServices', () => {
     it('should create services with translations and edges', async () => {
-      mockServices.save
-        .mockResolvedValueOnce({ _key: 'svc-1' })
-        .mockResolvedValueOnce({ _key: 'svc-2' });
+      mockServices.save.mockResolvedValueOnce({ _key: 'svc-1' }).mockResolvedValueOnce({ _key: 'svc-2' });
 
       const result = await service.upsertServices('cat-1', ['Service A', 'Service B'], 'en');
 
@@ -191,21 +185,19 @@ describe('ServiceCategoryService', () => {
       });
 
       expect(result._key).toBe('svc-new');
-      expect(mockCategoryServices.save).toHaveBeenCalledWith(
-        expect.objectContaining({ order: 3 })
-      );
+      expect(mockCategoryServices.save).toHaveBeenCalledWith(expect.objectContaining({ order: 3 }));
     });
 
     it('should throw ValidationError when nameEN is missing', async () => {
-      await expect(
-        service.createServiceWithTranslations('cat-1', { nameEN: '' })
-      ).rejects.toThrow('nameEN is required');
+      await expect(service.createServiceWithTranslations('cat-1', { nameEN: '' })).rejects.toThrow(
+        'nameEN is required'
+      );
     });
 
     it('should throw ValidationError when nameEN is not a string', async () => {
-      await expect(
-        service.createServiceWithTranslations('cat-1', { nameEN: 123 })
-      ).rejects.toThrow('nameEN is required');
+      await expect(service.createServiceWithTranslations('cat-1', { nameEN: 123 })).rejects.toThrow(
+        'nameEN is required'
+      );
     });
   });
 
@@ -224,17 +216,13 @@ describe('ServiceCategoryService', () => {
     });
 
     it('should throw ValidationError when nameEN is missing', async () => {
-      await expect(
-        service.updateServiceWithTranslations('svc-1', {})
-      ).rejects.toThrow('nameEN is required');
+      await expect(service.updateServiceWithTranslations('svc-1', {})).rejects.toThrow('nameEN is required');
     });
 
     it('should throw when service does not exist', async () => {
       mockServices.document.mockRejectedValue(new Error('Not found'));
 
-      await expect(
-        service.updateServiceWithTranslations('missing', { nameEN: 'Test' })
-      ).rejects.toThrow('Not found');
+      await expect(service.updateServiceWithTranslations('missing', { nameEN: 'Test' })).rejects.toThrow('Not found');
     });
   });
 
@@ -268,9 +256,9 @@ describe('ServiceCategoryService', () => {
 
   describe('getAllCategoriesWithServices', () => {
     it('should return categories with services', async () => {
-      mockDb.query.mockResolvedValue(createMockCursor([
-        { catKey: 'cat-1', catCode: 'taxes', name: 'Taxes', children: ['Tax Filing'] }
-      ]));
+      mockDb.query.mockResolvedValue(
+        createMockCursor([{ catKey: 'cat-1', catCode: 'taxes', name: 'Taxes', children: ['Tax Filing'] }])
+      );
 
       const result = await service.getAllCategoriesWithServices('en');
       expect(result).toHaveLength(1);
@@ -286,14 +274,16 @@ describe('ServiceCategoryService', () => {
 
   describe('getAdminAllCategoriesWithServices', () => {
     it('should return categories with detailed service objects', async () => {
-      mockDb.query.mockResolvedValue(createMockCursor([
-        {
-          catKey: 'cat-1',
-          catCode: 'taxes',
-          name: 'Taxes',
-          children: [{ _key: 'svc-1', name: 'Tax Filing' }]
-        }
-      ]));
+      mockDb.query.mockResolvedValue(
+        createMockCursor([
+          {
+            catKey: 'cat-1',
+            catCode: 'taxes',
+            name: 'Taxes',
+            children: [{ _key: 'svc-1', name: 'Tax Filing' }]
+          }
+        ])
+      );
 
       const result = await service.getAdminAllCategoriesWithServices('en');
       expect(result[0].children[0]).toEqual({ _key: 'svc-1', name: 'Tax Filing' });
@@ -302,9 +292,9 @@ describe('ServiceCategoryService', () => {
 
   describe('getCategoryWithServices', () => {
     it('should return category with services', async () => {
-      mockDb.query.mockResolvedValue(createMockCursor([
-        { catKey: 'cat-1', catCode: 'taxes', name: 'Taxes', children: ['Tax Filing'] }
-      ]));
+      mockDb.query.mockResolvedValue(
+        createMockCursor([{ catKey: 'cat-1', catCode: 'taxes', name: 'Taxes', children: ['Tax Filing'] }])
+      );
 
       const result = await service.getCategoryWithServices('cat-1', 'en');
       expect(result.catKey).toBe('cat-1');
@@ -360,10 +350,16 @@ describe('ServiceCategoryService', () => {
     });
 
     it('should return matching categories and services', async () => {
-      mockDb.query.mockResolvedValue(createMockCursor([{
-        categories: [{ type: 'category', key: 'cat-1', name: 'Taxes' }],
-        services: [{ type: 'service', key: 'svc-1', name: 'Tax Filing', categoryKey: 'cat-1', categoryName: 'Taxes' }]
-      }]));
+      mockDb.query.mockResolvedValue(
+        createMockCursor([
+          {
+            categories: [{ type: 'category', key: 'cat-1', name: 'Taxes' }],
+            services: [
+              { type: 'service', key: 'svc-1', name: 'Tax Filing', categoryKey: 'cat-1', categoryName: 'Taxes' }
+            ]
+          }
+        ])
+      );
 
       const result = await service.searchCategoriesAndServices('tax', 'en');
       expect(result.categories).toHaveLength(1);
@@ -380,10 +376,12 @@ describe('ServiceCategoryService', () => {
 
   describe('getCategoryTranslations', () => {
     it('should return translations for a category', async () => {
-      mockDb.query.mockResolvedValue(createMockCursor([
-        { lang: 'en', text: 'Taxes' },
-        { lang: 'fr', text: 'Impots' }
-      ]));
+      mockDb.query.mockResolvedValue(
+        createMockCursor([
+          { lang: 'en', text: 'Taxes' },
+          { lang: 'fr', text: 'Impots' }
+        ])
+      );
 
       const result = await service.getCategoryTranslations('cat-1');
       expect(result).toHaveLength(2);
@@ -396,9 +394,7 @@ describe('ServiceCategoryService', () => {
 
   describe('getServiceTranslations', () => {
     it('should return translations for a service', async () => {
-      mockDb.query.mockResolvedValue(createMockCursor([
-        { lang: 'en', text: 'Tax Filing' }
-      ]));
+      mockDb.query.mockResolvedValue(createMockCursor([{ lang: 'en', text: 'Tax Filing' }]));
 
       const result = await service.getServiceTranslations('svc-1');
       expect(result).toHaveLength(1);
@@ -448,9 +444,9 @@ describe('ServiceCategoryService', () => {
     });
 
     it('should throw ValidationError when nameEN is missing', async () => {
-      await expect(
-        service.updateCategoryWithTranslations('cat-1', { nameEN: '' })
-      ).rejects.toThrow('nameEN is required');
+      await expect(service.updateCategoryWithTranslations('cat-1', { nameEN: '' })).rejects.toThrow(
+        'nameEN is required'
+      );
     });
   });
 });

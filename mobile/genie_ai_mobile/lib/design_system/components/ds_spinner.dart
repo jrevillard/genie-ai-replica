@@ -23,9 +23,11 @@ class DsSpinner extends StatelessWidget {
     final effectiveColor = color ?? tokens.accent;
     final effectiveStroke = strokeWidth ?? _strokeForSize;
     return SizedBox(
+      key: const ValueKey('ds-spinner-sizer'),
       width: _dimensionForSize,
       height: _dimensionForSize,
       child: CircularProgressIndicator(
+        key: const ValueKey('ds-spinner'),
         color: effectiveColor,
         strokeWidth: effectiveStroke,
       ),

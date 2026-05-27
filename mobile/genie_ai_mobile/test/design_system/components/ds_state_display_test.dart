@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
-import 'package:genie_ai_mobile/design_system/components/ds_spinner.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_state_display.dart';
 
 import '../../helpers/test_app.dart';
@@ -17,7 +16,7 @@ void main() {
         await tester.pumpWidget(
           testApp(DsStateDisplay(type: DsStateType.loading)),
         );
-        expect(find.byType(DsSpinner), findsOneWidget);
+        expect(find.byKey(const ValueKey('ds-state-spinner')), findsOneWidget);
       });
 
       testWidgets('renders customChild when provided', (tester) async {
@@ -25,12 +24,15 @@ void main() {
           testApp(
             DsStateDisplay(
               type: DsStateType.loading,
-              customChild: Text('Loading...'),
+              customChild: Text('Loading...', key: const ValueKey('custom-loader')),
             ),
           ),
         );
-        expect(find.text('Loading...'), findsOneWidget);
-        expect(find.byType(DsSpinner), findsNothing);
+        final child = tester.widget<Text>(
+          find.byKey(const ValueKey('custom-loader')),
+        );
+        expect(child.data, 'Loading...');
+        expect(find.byKey(const ValueKey('ds-state-spinner')), findsNothing);
       });
     });
 
@@ -39,8 +41,14 @@ void main() {
         await tester.pumpWidget(
           testApp(DsStateDisplay(type: DsStateType.empty)),
         );
-        expect(find.byIcon(Icons.inbox_outlined), findsOneWidget);
-        expect(find.text('No data'), findsOneWidget);
+        final icon = tester.widget<Icon>(
+          find.byKey(const ValueKey('ds-state-icon')),
+        );
+        expect(icon.icon, Icons.inbox_outlined);
+        final message = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-state-message')),
+        );
+        expect(message.data, 'No data');
       });
 
       testWidgets('renders custom message', (tester) async {
@@ -52,7 +60,10 @@ void main() {
             ),
           ),
         );
-        expect(find.text('Nothing here'), findsOneWidget);
+        final message = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-state-message')),
+        );
+        expect(message.data, 'Nothing here');
       });
 
       testWidgets('renders action button when provided', (tester) async {
@@ -66,8 +77,11 @@ void main() {
             ),
           ),
         );
-        expect(find.text('Retry'), findsOneWidget);
-        await tester.tap(find.text('Retry'));
+        final actionLabel = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-button-label')),
+        );
+        expect(actionLabel.data, 'Retry');
+        await tester.tap(find.byKey(const ValueKey('ds-state-action')));
         expect(actionFired, isTrue);
       });
     });
@@ -77,8 +91,14 @@ void main() {
         await tester.pumpWidget(
           testApp(DsStateDisplay(type: DsStateType.error)),
         );
-        expect(find.byIcon(Icons.error_outline), findsOneWidget);
-        expect(find.text('Something went wrong'), findsOneWidget);
+        final icon = tester.widget<Icon>(
+          find.byKey(const ValueKey('ds-state-icon')),
+        );
+        expect(icon.icon, Icons.error_outline);
+        final message = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-state-message')),
+        );
+        expect(message.data, 'Something went wrong');
       });
 
       testWidgets('renders custom message', (tester) async {
@@ -90,7 +110,10 @@ void main() {
             ),
           ),
         );
-        expect(find.text('Custom error'), findsOneWidget);
+        final message = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-state-message')),
+        );
+        expect(message.data, 'Custom error');
       });
 
       testWidgets('renders action button', (tester) async {
@@ -104,8 +127,11 @@ void main() {
             ),
           ),
         );
-        expect(find.text('Try Again'), findsOneWidget);
-        await tester.tap(find.text('Try Again'));
+        final actionLabel = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-button-label')),
+        );
+        expect(actionLabel.data, 'Try Again');
+        await tester.tap(find.byKey(const ValueKey('ds-state-action')));
         expect(actionFired, isTrue);
       });
 
@@ -113,11 +139,7 @@ void main() {
         await tester.pumpWidget(
           testApp(DsStateDisplay(type: DsStateType.error)),
         );
-        // Should not find any DsButton in error state without action
-        // The error state without actionLabel/onAction has no DsButton
-        final dsButtons = find.byType(DsButton);
-        // dsButtons evaluates to zero since no actionLabel provided
-        expect(dsButtons.evaluate().isEmpty, isTrue);
+        expect(find.byKey(const ValueKey('ds-state-action')), findsNothing);
       });
     });
 
@@ -131,8 +153,10 @@ void main() {
             ),
           ),
         );
-        expect(find.byIcon(Icons.cloud_off), findsOneWidget);
-        expect(find.byIcon(Icons.inbox_outlined), findsNothing);
+        final icon = tester.widget<Icon>(
+          find.byKey(const ValueKey('ds-state-icon')),
+        );
+        expect(icon.icon, Icons.cloud_off);
       });
 
       testWidgets('overrides default icon for error state', (tester) async {
@@ -144,7 +168,10 @@ void main() {
             ),
           ),
         );
-        expect(find.byIcon(Icons.warning), findsOneWidget);
+        final icon = tester.widget<Icon>(
+          find.byKey(const ValueKey('ds-state-icon')),
+        );
+        expect(icon.icon, Icons.warning);
       });
     });
   });

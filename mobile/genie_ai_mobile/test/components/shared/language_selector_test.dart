@@ -21,14 +21,14 @@ void main() {
       testWidgets('renders with current locale selected', (tester) async {
         await tester.pumpWidget(testApp(LanguageSelector()));
         await tester.pumpAndSettle();
-        expect(find.byType(DropdownButton<String>), findsOneWidget);
+        expect(find.byKey(const ValueKey('language-selector')), findsOneWidget);
       });
 
       testWidgets('all supported languages appear as items', (tester) async {
         await tester.pumpWidget(testApp(LanguageSelector()));
         await tester.pumpAndSettle();
         final dropdown = tester.widget<DropdownButton<String>>(
-          find.byType(DropdownButton<String>),
+          find.byKey(const ValueKey('language-selector')),
         );
         final i18n = I18nService();
         expect(dropdown.items!.length, i18n.supportedLanguages.length);
@@ -44,12 +44,11 @@ void main() {
         await tester.pumpAndSettle();
 
         // Tap the dropdown to open it
-        await tester.tap(find.byType(DropdownButton<String>));
+        await tester.tap(find.byKey(const ValueKey('language-selector')));
         await tester.pumpAndSettle();
 
-        // Find and tap a different language (French)
-        final frenchItem = find.text('French').last;
-        await tester.tap(frenchItem);
+        // Find and tap the French item by key
+        await tester.tap(find.byKey(const ValueKey('lang-item-fr')));
         await tester.pumpAndSettle();
 
         expect(changed, isTrue);
@@ -57,14 +56,16 @@ void main() {
     });
 
     group('custom colors', () {
-      testWidgets('custom textColor applied', (tester) async {
+      testWidgets('custom textColor applied to icon', (tester) async {
         const customColor = Color(0xFF123456);
         await tester.pumpWidget(
           testApp(LanguageSelector(textColor: customColor)),
         );
         await tester.pumpAndSettle();
-        // The icon should use the custom color
-        expect(find.byIcon(Icons.arrow_drop_down), findsOneWidget);
+        final icon = tester.widget<Icon>(
+          find.byKey(const ValueKey('language-selector-icon')),
+        );
+        expect(icon.color, customColor);
       });
 
       testWidgets('custom dropdownColor applied', (tester) async {
@@ -74,7 +75,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         final dropdown = tester.widget<DropdownButton<String>>(
-          find.byType(DropdownButton<String>),
+          find.byKey(const ValueKey('language-selector')),
         );
         expect(dropdown.dropdownColor, customBg);
       });

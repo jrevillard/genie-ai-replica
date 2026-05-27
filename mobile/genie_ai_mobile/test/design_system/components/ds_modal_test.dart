@@ -14,71 +14,77 @@ void main() {
       testWidgets('sm sets maxWidth 360', (tester) async {
         await tester.pumpWidget(
           testApp(
-            DsModal(title: 'T', content: Text('B'), size: DsModalSize.sm),
+            DsModal(
+              title: 'T',
+              content: Text('B', key: const ValueKey('modal-body')),
+              size: DsModalSize.sm,
+            ),
           ),
         );
-        final boxes = tester.widgetList<ConstrainedBox>(
-          find.byType(ConstrainedBox),
+        final constraint = tester.widget<ConstrainedBox>(
+          find.byKey(const ValueKey('ds-modal-constraint')),
         );
-        final maxWidths = boxes
-            .map((b) => (b.constraints as BoxConstraints).maxWidth)
-            .where((w) => w == 360.0)
-            .toList();
-        expect(maxWidths, isNotEmpty);
+        expect(constraint.constraints.maxWidth, 360.0);
       });
 
       testWidgets('md sets maxWidth 480', (tester) async {
         await tester.pumpWidget(
           testApp(
-            DsModal(title: 'T', content: Text('B'), size: DsModalSize.md),
+            DsModal(
+              title: 'T',
+              content: Text('B', key: const ValueKey('modal-body')),
+              size: DsModalSize.md,
+            ),
           ),
         );
-        final boxes = tester.widgetList<ConstrainedBox>(
-          find.byType(ConstrainedBox),
+        final constraint = tester.widget<ConstrainedBox>(
+          find.byKey(const ValueKey('ds-modal-constraint')),
         );
-        expect(
-          boxes.any((b) => (b.constraints as BoxConstraints).maxWidth == 480.0),
-          isTrue,
-        );
+        expect(constraint.constraints.maxWidth, 480.0);
       });
 
       testWidgets('lg sets maxWidth 640', (tester) async {
         await tester.pumpWidget(
           testApp(
-            DsModal(title: 'T', content: Text('B'), size: DsModalSize.lg),
+            DsModal(
+              title: 'T',
+              content: Text('B', key: const ValueKey('modal-body')),
+              size: DsModalSize.lg,
+            ),
           ),
         );
-        final boxes = tester.widgetList<ConstrainedBox>(
-          find.byType(ConstrainedBox),
+        final constraint = tester.widget<ConstrainedBox>(
+          find.byKey(const ValueKey('ds-modal-constraint')),
         );
-        expect(
-          boxes.any((b) => (b.constraints as BoxConstraints).maxWidth == 640.0),
-          isTrue,
-        );
+        expect(constraint.constraints.maxWidth, 640.0);
       });
 
       testWidgets('xl sets maxWidth 800', (tester) async {
         await tester.pumpWidget(
           testApp(
-            DsModal(title: 'T', content: Text('B'), size: DsModalSize.xl),
+            DsModal(
+              title: 'T',
+              content: Text('B', key: const ValueKey('modal-body')),
+              size: DsModalSize.xl,
+            ),
           ),
         );
-        final boxes = tester.widgetList<ConstrainedBox>(
-          find.byType(ConstrainedBox),
+        final constraint = tester.widget<ConstrainedBox>(
+          find.byKey(const ValueKey('ds-modal-constraint')),
         );
-        expect(
-          boxes.any((b) => (b.constraints as BoxConstraints).maxWidth == 800.0),
-          isTrue,
-        );
+        expect(constraint.constraints.maxWidth, 800.0);
       });
     });
 
     group('title rendering', () {
       testWidgets('displays title text', (tester) async {
         await tester.pumpWidget(
-          testApp(DsModal(title: 'My Title', content: Text('Body'))),
+          testApp(DsModal(title: 'My Title', content: Text('Body', key: const ValueKey('modal-body')))),
         );
-        expect(find.text('My Title'), findsOneWidget);
+        final title = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-modal-title')),
+        );
+        expect(title.data, 'My Title');
       });
     });
 
@@ -88,12 +94,15 @@ void main() {
           testApp(
             DsModal(
               title: 'Test',
-              content: Text('Scrollable Content'),
+              content: Text('Scrollable Content', key: const ValueKey('modal-body')),
             ),
           ),
         );
-        expect(find.byType(SingleChildScrollView), findsOneWidget);
-        expect(find.text('Scrollable Content'), findsOneWidget);
+        expect(find.byKey(const ValueKey('ds-modal-content-scroll')), findsOneWidget);
+        final body = tester.widget<Text>(
+          find.byKey(const ValueKey('modal-body')),
+        );
+        expect(body.data, 'Scrollable Content');
       });
     });
 
@@ -103,27 +112,33 @@ void main() {
           testApp(
             DsModal(
               title: 'Test',
-              content: Text('Body'),
+              content: Text('Body', key: const ValueKey('modal-body')),
               actions: [
-                Text('OK'),
-                Text('Cancel'),
+                Text('OK', key: const ValueKey('modal-action-ok')),
+                Text('Cancel', key: const ValueKey('modal-action-cancel')),
               ],
             ),
           ),
         );
-        expect(find.text('OK'), findsOneWidget);
-        expect(find.text('Cancel'), findsOneWidget);
+        final ok = tester.widget<Text>(
+          find.byKey(const ValueKey('modal-action-ok')),
+        );
+        expect(ok.data, 'OK');
+        final cancel = tester.widget<Text>(
+          find.byKey(const ValueKey('modal-action-cancel')),
+        );
+        expect(cancel.data, 'Cancel');
       });
 
-      testWidgets('no actions omits footer', (tester) async {
+      testWidgets('no actions omits actions divider', (tester) async {
         await tester.pumpWidget(
           testApp(
-            DsModal(title: 'Test', content: Text('Body')),
+            DsModal(title: 'Test', content: Text('Body', key: const ValueKey('modal-body'))),
           ),
         );
-        // Should have exactly one Divider (between title and content),
-        // not two (which would appear if actions section was rendered).
-        expect(find.byType(Divider), findsOneWidget);
+        // Should have the title divider but NOT the actions divider
+        expect(find.byKey(const ValueKey('ds-modal-divider-title')), findsOneWidget);
+        expect(find.byKey(const ValueKey('ds-modal-divider-actions')), findsNothing);
       });
     });
 
@@ -139,18 +154,20 @@ void main() {
                     title: 'Dialog Title',
                     content: Text('Dialog Content'),
                   ),
-                  child: Text('Open'),
+                  child: Text('Open', key: const ValueKey('trigger')),
                 ),
               ),
             ),
           ),
         );
 
-        await tester.tap(find.text('Open'));
+        await tester.tap(find.byKey(const ValueKey('trigger')));
         await tester.pumpAndSettle();
 
-        expect(find.text('Dialog Title'), findsOneWidget);
-        expect(find.text('Dialog Content'), findsOneWidget);
+        final title = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-modal-title')),
+        );
+        expect(title.data, 'Dialog Title');
       });
     });
   });

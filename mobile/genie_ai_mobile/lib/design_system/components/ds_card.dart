@@ -49,6 +49,7 @@ class DsCard extends StatelessWidget {
     }
 
     return Card(
+      key: const ValueKey('ds-card'),
       elevation: elevation,
       color: bgColor,
       shape: RoundedRectangleBorder(

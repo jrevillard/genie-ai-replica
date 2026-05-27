@@ -46,8 +46,10 @@ class DsInput extends StatelessWidget {
     final verticalPadding = _verticalPadding;
 
     return SizedBox(
+      key: const ValueKey('ds-input-sizer'),
       height: maxLines > 1 ? null : _height,
       child: TextField(
+        key: const ValueKey('ds-input'),
         controller: controller,
         obscureText: obscureText,
         enabled: enabled,
@@ -60,7 +62,7 @@ class DsInput extends StatelessWidget {
           hintText: placeholder,
           hintStyle: TextStyle(color: tokens.muted, fontSize: _fontSize),
           prefixIcon: prefixIcon != null
-              ? Icon(prefixIcon, color: tokens.muted, size: _fontSize + 4)
+              ? Icon(prefixIcon, color: tokens.muted, size: _fontSize + 4, key: const ValueKey('ds-input-prefix-icon'))
               : null,
           suffixIcon: suffix,
           filled: true,

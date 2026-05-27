@@ -15,7 +15,9 @@ void main() {
         await tester.pumpWidget(
           testApp(DsInput(size: DsInputSize.sm)),
         );
-        final sizedBox = tester.widget<SizedBox>(find.byType(SizedBox).first);
+        final sizedBox = tester.widget<SizedBox>(
+          find.byKey(const ValueKey('ds-input-sizer')),
+        );
         expect(sizedBox.height, 36);
       });
 
@@ -23,7 +25,9 @@ void main() {
         await tester.pumpWidget(
           testApp(DsInput(size: DsInputSize.md)),
         );
-        final sizedBox = tester.widget<SizedBox>(find.byType(SizedBox).first);
+        final sizedBox = tester.widget<SizedBox>(
+          find.byKey(const ValueKey('ds-input-sizer')),
+        );
         expect(sizedBox.height, 44);
       });
 
@@ -31,7 +35,9 @@ void main() {
         await tester.pumpWidget(
           testApp(DsInput(size: DsInputSize.lg)),
         );
-        final sizedBox = tester.widget<SizedBox>(find.byType(SizedBox).first);
+        final sizedBox = tester.widget<SizedBox>(
+          find.byKey(const ValueKey('ds-input-sizer')),
+        );
         expect(sizedBox.height, 52);
       });
     });
@@ -41,7 +47,10 @@ void main() {
         await tester.pumpWidget(
           testApp(DsInput(placeholder: 'Enter name')),
         );
-        expect(find.text('Enter name'), findsOneWidget);
+        final textField = tester.widget<TextField>(
+          find.byKey(const ValueKey('ds-input')),
+        );
+        expect(textField.decoration!.hintText, 'Enter name');
       });
     });
 
@@ -50,7 +59,9 @@ void main() {
         await tester.pumpWidget(
           testApp(DsInput()),
         );
-        final textField = tester.widget<TextField>(find.byType(TextField));
+        final textField = tester.widget<TextField>(
+          find.byKey(const ValueKey('ds-input')),
+        );
         expect(textField.enabled, isTrue);
       });
 
@@ -58,7 +69,9 @@ void main() {
         await tester.pumpWidget(
           testApp(DsInput(enabled: false)),
         );
-        final textField = tester.widget<TextField>(find.byType(TextField));
+        final textField = tester.widget<TextField>(
+          find.byKey(const ValueKey('ds-input')),
+        );
         expect(textField.enabled, isFalse);
       });
     });
@@ -68,7 +81,9 @@ void main() {
         await tester.pumpWidget(
           testApp(DsInput()),
         );
-        final textField = tester.widget<TextField>(find.byType(TextField));
+        final textField = tester.widget<TextField>(
+          find.byKey(const ValueKey('ds-input')),
+        );
         expect(textField.obscureText, isFalse);
       });
 
@@ -76,7 +91,9 @@ void main() {
         await tester.pumpWidget(
           testApp(DsInput(obscureText: true)),
         );
-        final textField = tester.widget<TextField>(find.byType(TextField));
+        final textField = tester.widget<TextField>(
+          find.byKey(const ValueKey('ds-input')),
+        );
         expect(textField.obscureText, isTrue);
       });
     });
@@ -86,7 +103,9 @@ void main() {
         await tester.pumpWidget(
           testApp(DsInput(maxLines: 4)),
         );
-        final sizedBox = tester.widget<SizedBox>(find.byType(SizedBox).first);
+        final sizedBox = tester.widget<SizedBox>(
+          find.byKey(const ValueKey('ds-input-sizer')),
+        );
         expect(sizedBox.height, isNull);
       });
     });
@@ -96,16 +115,22 @@ void main() {
         await tester.pumpWidget(
           testApp(DsInput(prefixIcon: Icons.search)),
         );
-        expect(find.byIcon(Icons.search), findsOneWidget);
+        final icon = tester.widget<Icon>(
+          find.byKey(const ValueKey('ds-input-prefix-icon')),
+        );
+        expect(icon.icon, Icons.search);
       });
     });
 
     group('suffix widget', () {
       testWidgets('renders suffix widget', (tester) async {
         await tester.pumpWidget(
-          testApp(DsInput(suffix: Icon(Icons.clear))),
+          testApp(DsInput(suffix: Icon(Icons.clear, key: const ValueKey('ds-input-suffix')))),
         );
-        expect(find.byIcon(Icons.clear), findsOneWidget);
+        final suffix = tester.widget<Icon>(
+          find.byKey(const ValueKey('ds-input-suffix')),
+        );
+        expect(suffix.icon, Icons.clear);
       });
     });
 
@@ -115,7 +140,7 @@ void main() {
         await tester.pumpWidget(
           testApp(DsInput(onChanged: (_) => changed = true)),
         );
-        await tester.enterText(find.byType(TextField), 'hello');
+        await tester.enterText(find.byKey(const ValueKey('ds-input')), 'hello');
         expect(changed, isTrue);
       });
     });
@@ -126,7 +151,9 @@ void main() {
         await tester.pumpWidget(
           testApp(DsInput(overrideFillColor: customFill)),
         );
-        final textField = tester.widget<TextField>(find.byType(TextField));
+        final textField = tester.widget<TextField>(
+          find.byKey(const ValueKey('ds-input')),
+        );
         expect(textField.decoration!.fillColor, customFill);
       });
 
@@ -135,7 +162,9 @@ void main() {
         await tester.pumpWidget(
           testApp(DsInput(overrideBorderColor: customBorder)),
         );
-        final textField = tester.widget<TextField>(find.byType(TextField));
+        final textField = tester.widget<TextField>(
+          find.byKey(const ValueKey('ds-input')),
+        );
         final focusedBorder =
             textField.decoration!.focusedBorder as OutlineInputBorder;
         expect(focusedBorder.borderSide.color, customBorder);

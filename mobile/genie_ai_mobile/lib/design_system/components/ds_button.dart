@@ -38,8 +38,9 @@ class DsButton extends StatelessWidget {
 
     if (iconOnly && icon != null) {
       return IconButton(
+        key: const ValueKey('ds-button'),
         onPressed: disabled ? null : onPressed,
-        icon: Icon(icon, size: small ? 18 : 24),
+        icon: Icon(icon, size: small ? 18 : 24, key: const ValueKey('ds-button-icon')),
         color: colors.fg,
         style: IconButton.styleFrom(
           backgroundColor: colors.bg,
@@ -52,8 +53,10 @@ class DsButton extends StatelessWidget {
     }
 
     return SizedBox(
+      key: const ValueKey('ds-button-sizer'),
       height: small ? 36 : 48,
       child: ElevatedButton(
+        key: const ValueKey('ds-button'),
         onPressed: disabled ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: colors.bg,
@@ -87,16 +90,16 @@ class DsButton extends StatelessWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: small ? 16 : 20),
+          Icon(icon, size: small ? 16 : 20, key: const ValueKey('ds-button-icon')),
           SizedBox(width: DsSpacing.sm),
-          Flexible(child: Text(label!, style: textStyle)),
+          Flexible(child: Text(label!, style: textStyle, key: const ValueKey('ds-button-label'))),
         ],
       );
     }
     if (icon != null) {
-      return Icon(icon, size: small ? 16 : 20);
+      return Icon(icon, size: small ? 16 : 20, key: const ValueKey('ds-button-icon'));
     }
-    return Text(label ?? '', style: textStyle);
+    return Text(label ?? '', style: textStyle, key: const ValueKey('ds-button-label'));
   }
 
   _ButtonColors _resolveColors(AppTokens t) {

@@ -16,8 +16,14 @@ void main() {
         await tester.pumpWidget(
           testApp(DsButton(label: 'Primary', onPressed: () {})),
         );
-        expect(find.byType(ElevatedButton), findsOneWidget);
-        expect(find.text('Primary'), findsOneWidget);
+        final button = tester.widget<ElevatedButton>(
+          find.byKey(const ValueKey('ds-button')),
+        );
+        expect(button, isNotNull);
+        final label = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-button-label')),
+        );
+        expect(label.data, 'Primary');
       });
 
       testWidgets('secondary renders with border', (tester) async {
@@ -30,8 +36,13 @@ void main() {
             ),
           ),
         );
-        expect(find.text('Secondary'), findsOneWidget);
-        final button = tester.widget<ElevatedButton>(find.byType(ElevatedButton));
+        final label = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-button-label')),
+        );
+        expect(label.data, 'Secondary');
+        final button = tester.widget<ElevatedButton>(
+          find.byKey(const ValueKey('ds-button')),
+        );
         final shape = button.style!.shape?.resolve({});
         expect(shape, isA<RoundedRectangleBorder>());
       });
@@ -46,8 +57,13 @@ void main() {
             ),
           ),
         );
-        expect(find.text('Ghost'), findsOneWidget);
-        final button = tester.widget<ElevatedButton>(find.byType(ElevatedButton));
+        final label = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-button-label')),
+        );
+        expect(label.data, 'Ghost');
+        final button = tester.widget<ElevatedButton>(
+          find.byKey(const ValueKey('ds-button')),
+        );
         final bg =
             button.style!.backgroundColor?.resolve({});
         expect(bg, Colors.transparent);
@@ -63,9 +79,14 @@ void main() {
             ),
           ),
         );
-        expect(find.text('Danger'), findsOneWidget);
+        final label = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-button-label')),
+        );
+        expect(label.data, 'Danger');
         final tokens = ThemeManager().tokens;
-        final button = tester.widget<ElevatedButton>(find.byType(ElevatedButton));
+        final button = tester.widget<ElevatedButton>(
+          find.byKey(const ValueKey('ds-button')),
+        );
         final bg =
             button.style!.backgroundColor?.resolve({});
         expect(bg, tokens.danger);
@@ -77,7 +98,9 @@ void main() {
         await tester.pumpWidget(
           testApp(DsButton(label: 'Test', onPressed: () {})),
         );
-        final sizedBox = tester.widget<SizedBox>(find.byType(SizedBox).first);
+        final sizedBox = tester.widget<SizedBox>(
+          find.byKey(const ValueKey('ds-button-sizer')),
+        );
         expect(sizedBox.height, 48);
       });
 
@@ -85,7 +108,9 @@ void main() {
         await tester.pumpWidget(
           testApp(DsButton(label: 'Test', small: true, onPressed: () {})),
         );
-        final sizedBox = tester.widget<SizedBox>(find.byType(SizedBox).first);
+        final sizedBox = tester.widget<SizedBox>(
+          find.byKey(const ValueKey('ds-button-sizer')),
+        );
         expect(sizedBox.height, 36);
       });
     });
@@ -96,7 +121,7 @@ void main() {
         await tester.pumpWidget(
           testApp(DsButton(label: 'Test', disabled: true, onPressed: () => pressed = true)),
         );
-        await tester.tap(find.text('Test'));
+        await tester.tap(find.byKey(const ValueKey('ds-button')));
         expect(pressed, isFalse);
       });
     });
@@ -106,8 +131,14 @@ void main() {
         await tester.pumpWidget(
           testApp(DsButton(icon: Icons.add, iconOnly: true, onPressed: () {})),
         );
-        expect(find.byType(IconButton), findsOneWidget);
-        expect(find.byIcon(Icons.add), findsOneWidget);
+        final iconButton = tester.widget<IconButton>(
+          find.byKey(const ValueKey('ds-button')),
+        );
+        expect(iconButton, isNotNull);
+        final icon = tester.widget<Icon>(
+          find.byKey(const ValueKey('ds-button-icon')),
+        );
+        expect(icon.icon, Icons.add);
       });
 
       testWidgets('icon-only disabled has null callback', (tester) async {
@@ -122,7 +153,7 @@ void main() {
             ),
           ),
         );
-        await tester.tap(find.byIcon(Icons.add));
+        await tester.tap(find.byKey(const ValueKey('ds-button')));
         expect(pressed, isFalse);
       });
     });
@@ -138,8 +169,14 @@ void main() {
             ),
           ),
         );
-        expect(find.byIcon(Icons.save), findsOneWidget);
-        expect(find.text('Save'), findsOneWidget);
+        final icon = tester.widget<Icon>(
+          find.byKey(const ValueKey('ds-button-icon')),
+        );
+        expect(icon.icon, Icons.save);
+        final label = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-button-label')),
+        );
+        expect(label.data, 'Save');
       });
     });
 
@@ -148,7 +185,10 @@ void main() {
         await tester.pumpWidget(
           testApp(DsButton(label: 'Click Me', onPressed: () {})),
         );
-        expect(find.text('Click Me'), findsOneWidget);
+        final label = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-button-label')),
+        );
+        expect(label.data, 'Click Me');
       });
     });
 
@@ -164,7 +204,9 @@ void main() {
             ),
           ),
         );
-        final button = tester.widget<ElevatedButton>(find.byType(ElevatedButton));
+        final button = tester.widget<ElevatedButton>(
+          find.byKey(const ValueKey('ds-button')),
+        );
         final bg =
             button.style!.backgroundColor?.resolve({});
         expect(bg, customBg);
@@ -181,7 +223,9 @@ void main() {
             ),
           ),
         );
-        final button = tester.widget<ElevatedButton>(find.byType(ElevatedButton));
+        final button = tester.widget<ElevatedButton>(
+          find.byKey(const ValueKey('ds-button')),
+        );
         final fg =
             button.style!.foregroundColor?.resolve({});
         expect(fg, customFg);
@@ -194,15 +238,22 @@ void main() {
         await tester.pumpWidget(
           testApp(DsButton(label: 'Tap', onPressed: () => pressed = true)),
         );
-        await tester.tap(find.text('Tap'));
+        await tester.tap(find.byKey(const ValueKey('ds-button')));
         expect(pressed, isTrue);
       });
     });
 
     group('edge cases', () {
-      testWidgets('no label, no icon renders ElevatedButton with empty Text', (tester) async {
+      testWidgets('no label, no icon renders ElevatedButton with empty text', (tester) async {
         await tester.pumpWidget(testApp(DsButton()));
-        expect(find.byType(ElevatedButton), findsOneWidget);
+        final button = tester.widget<ElevatedButton>(
+          find.byKey(const ValueKey('ds-button')),
+        );
+        expect(button, isNotNull);
+        final label = tester.widget<Text>(
+          find.byKey(const ValueKey('ds-button-label')),
+        );
+        expect(label.data, '');
       });
     });
   });

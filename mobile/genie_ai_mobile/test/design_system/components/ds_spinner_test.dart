@@ -15,21 +15,27 @@ void main() {
     group('dimensions', () {
       testWidgets('sm size uses DsSpacing.md (16)', (tester) async {
         await tester.pumpWidget(testApp(DsSpinner(size: DsSpinnerSize.sm)));
-        final sizedBox = tester.widget<SizedBox>(find.byType(SizedBox).first);
+        final sizedBox = tester.widget<SizedBox>(
+          find.byKey(const ValueKey('ds-spinner-sizer')),
+        );
         expect(sizedBox.width, DsSpacing.md);
         expect(sizedBox.height, DsSpacing.md);
       });
 
       testWidgets('md size uses DsSpacing.lg (24)', (tester) async {
         await tester.pumpWidget(testApp(DsSpinner(size: DsSpinnerSize.md)));
-        final sizedBox = tester.widget<SizedBox>(find.byType(SizedBox).first);
+        final sizedBox = tester.widget<SizedBox>(
+          find.byKey(const ValueKey('ds-spinner-sizer')),
+        );
         expect(sizedBox.width, DsSpacing.lg);
         expect(sizedBox.height, DsSpacing.lg);
       });
 
       testWidgets('lg size uses DsSpacing.xl + DsSpacing.sm (40)', (tester) async {
         await tester.pumpWidget(testApp(DsSpinner(size: DsSpinnerSize.lg)));
-        final sizedBox = tester.widget<SizedBox>(find.byType(SizedBox).first);
+        final sizedBox = tester.widget<SizedBox>(
+          find.byKey(const ValueKey('ds-spinner-sizer')),
+        );
         expect(sizedBox.width, DsSpacing.xl + DsSpacing.sm);
         expect(sizedBox.height, DsSpacing.xl + DsSpacing.sm);
       });
@@ -39,7 +45,7 @@ void main() {
       testWidgets('defaults to tokens.accent', (tester) async {
         await tester.pumpWidget(testApp(DsSpinner()));
         final indicator = tester.widget<CircularProgressIndicator>(
-          find.byType(CircularProgressIndicator),
+          find.byKey(const ValueKey('ds-spinner')),
         );
         expect(indicator.color, ThemeManager().tokens.accent);
       });
@@ -50,7 +56,7 @@ void main() {
           testApp(DsSpinner(color: customColor)),
         );
         final indicator = tester.widget<CircularProgressIndicator>(
-          find.byType(CircularProgressIndicator),
+          find.byKey(const ValueKey('ds-spinner')),
         );
         expect(indicator.color, customColor);
       });
@@ -62,7 +68,7 @@ void main() {
           testApp(DsSpinner(strokeWidth: 5.0)),
         );
         final indicator = tester.widget<CircularProgressIndicator>(
-          find.byType(CircularProgressIndicator),
+          find.byKey(const ValueKey('ds-spinner')),
         );
         expect(indicator.strokeWidth, 5.0);
       });
@@ -71,7 +77,7 @@ void main() {
     group('renders CircularProgressIndicator', () {
       testWidgets('always renders a CircularProgressIndicator', (tester) async {
         await tester.pumpWidget(testApp(DsSpinner()));
-        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        expect(find.byKey(const ValueKey('ds-spinner')), findsOneWidget);
       });
     });
   });

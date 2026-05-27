@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
+import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 
 import '../../helpers/test_app.dart';
@@ -28,9 +29,10 @@ void main() {
             ),
           ),
         );
-        expect(find.byType(SizedBox), findsOneWidget);
-        // SizedBox.shrink has zero size
-        final sizedBox = tester.widget<SizedBox>(find.byType(SizedBox));
+        expect(find.byKey(const ValueKey('confirm-dialog-hidden')), findsOneWidget);
+        final sizedBox = tester.widget<SizedBox>(
+          find.byKey(const ValueKey('confirm-dialog-hidden')),
+        );
         expect(sizedBox.width, 0);
         expect(sizedBox.height, 0);
       });
@@ -47,8 +49,14 @@ void main() {
             ),
           ),
         );
-        expect(find.text('Confirm'), findsOneWidget);
-        expect(find.text('Are you sure?'), findsOneWidget);
+        final title = tester.widget<Text>(
+          find.byKey(const ValueKey('confirm-dialog-title')),
+        );
+        expect(title.data, 'Confirm');
+        final message = tester.widget<Text>(
+          find.byKey(const ValueKey('confirm-dialog-message')),
+        );
+        expect(message.data, 'Are you sure?');
       });
     });
 
@@ -63,9 +71,25 @@ void main() {
             ),
           ),
         );
-        // Default title comes from tr('common.confirm'), message from "Are you sure?"
-        // Default confirm = tr('common.ok'), cancel = tr('common.cancel')
-        expect(find.text('Are you sure?'), findsOneWidget);
+        final expectedTitle = tr('common.confirm');
+        final title = tester.widget<Text>(
+          find.byKey(const ValueKey('confirm-dialog-title')),
+        );
+        expect(title.data, expectedTitle);
+        final message = tester.widget<Text>(
+          find.byKey(const ValueKey('confirm-dialog-message')),
+        );
+        expect(message.data, 'Are you sure?');
+        final expectedOk = tr('common.ok');
+        final expectedCancel = tr('common.cancel');
+        final confirmBtn = tester.widget<DsButton>(
+          find.byKey(const ValueKey('confirm-dialog-confirm-btn')),
+        );
+        expect(confirmBtn.label, expectedOk);
+        final cancelBtn = tester.widget<DsButton>(
+          find.byKey(const ValueKey('confirm-dialog-cancel-btn')),
+        );
+        expect(cancelBtn.label, expectedCancel);
       });
     });
 
@@ -82,8 +106,14 @@ void main() {
             ),
           ),
         );
-        expect(find.text('Delete Item'), findsOneWidget);
-        expect(find.text('This cannot be undone.'), findsOneWidget);
+        final title = tester.widget<Text>(
+          find.byKey(const ValueKey('confirm-dialog-title')),
+        );
+        expect(title.data, 'Delete Item');
+        final message = tester.widget<Text>(
+          find.byKey(const ValueKey('confirm-dialog-message')),
+        );
+        expect(message.data, 'This cannot be undone.');
       });
 
       testWidgets('custom confirmText and cancelText', (tester) async {
@@ -98,8 +128,14 @@ void main() {
             ),
           ),
         );
-        expect(find.text('Yes, Delete'), findsOneWidget);
-        expect(find.text('Keep It'), findsOneWidget);
+        final confirmBtn = tester.widget<DsButton>(
+          find.byKey(const ValueKey('confirm-dialog-confirm-btn')),
+        );
+        expect(confirmBtn.label, 'Yes, Delete');
+        final cancelBtn = tester.widget<DsButton>(
+          find.byKey(const ValueKey('confirm-dialog-cancel-btn')),
+        );
+        expect(cancelBtn.label, 'Keep It');
       });
     });
 
@@ -118,7 +154,7 @@ void main() {
             ),
           ),
         );
-        await tester.tap(find.text('Yes'));
+        await tester.tap(find.byKey(const ValueKey('confirm-dialog-confirm-btn')));
         expect(confirmed, isTrue);
       });
 
@@ -136,7 +172,7 @@ void main() {
             ),
           ),
         );
-        await tester.tap(find.text('Nope'));
+        await tester.tap(find.byKey(const ValueKey('confirm-dialog-cancel-btn')));
         expect(cancelled, isTrue);
       });
 
@@ -153,8 +189,11 @@ void main() {
             ),
           ),
         );
-        expect(find.text('Save Draft'), findsOneWidget);
-        await tester.tap(find.text('Save Draft'));
+        final secondaryBtn = tester.widget<DsButton>(
+          find.byKey(const ValueKey('confirm-dialog-secondary-btn')),
+        );
+        expect(secondaryBtn.label, 'Save Draft');
+        await tester.tap(find.byKey(const ValueKey('confirm-dialog-secondary-btn')));
         expect(secondaryFired, isTrue);
       });
     });

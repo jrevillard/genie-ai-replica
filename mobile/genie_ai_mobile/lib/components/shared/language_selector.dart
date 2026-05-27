@@ -27,13 +27,15 @@ class LanguageSelector extends StatelessWidget {
       builder: (context, child) {
         return DropdownButtonHideUnderline(
           child: DropdownButton<String>(
+            key: const ValueKey('language-selector'),
             value: i18n.currentLocale.languageCode,
             dropdownColor: menuBg,
-            icon: Icon(Icons.arrow_drop_down, color: displayColor),
+            icon: Icon(Icons.arrow_drop_down, color: displayColor, key: const ValueKey('language-selector-icon')),
             isDense: true,
             alignment: AlignmentDirectional.centerEnd,
             items: i18n.supportedLanguages.entries.map((entry) {
               return DropdownMenuItem(
+                key: ValueKey('lang-item-${entry.key}'),
                 value: entry.key,
                 child: Text(
                   entry.value,

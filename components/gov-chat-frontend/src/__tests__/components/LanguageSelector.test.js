@@ -181,32 +181,27 @@ describe('LanguageSelector', () => {
       });
 
       test('handles localStorage errors silently', async () => {
-        // Make localStorage.setItem throw an error
-        const originalSetItem = localStorage.setItem;
-        localStorage.setItem = jest.fn(() => {
+        const setItemSpy = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
           throw new Error('localStorage is full');
         });
 
-        // Suppress console.error for this test
-        const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
-
-        wrapper = mount(LanguageSelector, {
-          global: {
-            stubs,
-            mocks: {
-              $i18n: { ...mockI18n }
+        try {
+          wrapper = mount(LanguageSelector, {
+            global: {
+              stubs,
+              mocks: {
+                $i18n: { ...mockI18n }
+              }
             }
-          }
-        });
+          });
 
-        // This should not throw an error
-        expect(() => {
           wrapper.vm.currentLocale = 'fr';
-        }).not.toThrow();
+          await wrapper.vm.$nextTick();
 
-        // Restore original localStorage.setItem
-        localStorage.setItem = originalSetItem;
-        consoleSpy.mockRestore();
+          expect(wrapper.vm.$i18n.locale).toBe('fr');
+        } finally {
+          setItemSpy.mockRestore();
+        }
       });
 
       test('saves correct locale to localStorage on change', async () => {
@@ -278,6 +273,75 @@ describe('LanguageSelector', () => {
       expect(wrapper.vm.currentLocale).toBe('fr');
       expect(wrapper.vm.$i18n.locale).toBe('fr');
       expect(localStorage.getItem('userLocale')).toBe('fr');
+    });
+  });
+
+  describe('edge cases', () => {
+    test('does not update $i18n.locale when currentLocale is null', async () => {
+      wrapper = mount(LanguageSelector, {
+        global: {
+          stubs,
+          mocks: {
+            $i18n: { ...mockI18n }
+          }
+        }
+      });
+
+      const originalLocale = wrapper.vm.$i18n.locale;
+
+      wrapper.vm.currentLocale = null;
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.$i18n.locale).toBe(originalLocale);
+    });
+
+    test('does not update $i18n.locale when currentLocale is undefined', async () => {
+      wrapper = mount(LanguageSelector, {
+        global: {
+          stubs,
+          mocks: {
+            $i18n: { ...mockI18n }
+          }
+        }
+      });
+
+      const originalLocale = wrapper.vm.$i18n.locale;
+
+      wrapper.vm.currentLocale = undefined;
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.$i18n.locale).toBe(originalLocale);
+    });
+
+    test('shows locale code as fallback when locale not in localeNames', () => {
+      wrapper = mount(LanguageSelector, {
+        global: {
+          stubs,
+          mocks: {
+            $i18n: { locale: 'de', availableLocales: ['en', 'fr', 'de'] }
+          }
+        }
+      });
+
+      const options = wrapper.findAll('option');
+      const germanOption = options.find((o) => o.attributes('value') === 'de');
+      expect(germanOption.text()).toBe('de');
+    });
+
+    test('syncs currentLocale when $i18n.locale watcher fires', () => {
+      wrapper = mount(LanguageSelector, {
+        global: {
+          stubs,
+          mocks: {
+            $i18n: { ...mockI18n }
+          }
+        }
+      });
+
+      expect(wrapper.vm.currentLocale).toBe('en');
+
+      wrapper.vm.$options.watch['$i18n.locale'].call(wrapper.vm, 'fr');
+      expect(wrapper.vm.currentLocale).toBe('fr');
     });
   });
 });

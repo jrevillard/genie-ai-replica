@@ -1,6 +1,6 @@
 <template>
   <div class="admin-page">
-    <div class="admin-dashboard">
+    <div class="admin-dashboard" data-test-id="admin-dashboard">
       <div class="dashboard">
         <div class="sidebar">
           <div class="nav-section">
@@ -1992,30 +1992,6 @@ export default {
       return 'en';
     },
 
-    // Change language
-    changeLanguage() {
-      if (this.$i18n) {
-        // Set the i18n locale
-        this.$i18n.locale = this.currentLocale;
-
-        // Save to localStorage
-        try {
-          localStorage.setItem('userLocale', this.currentLocale);
-        } catch {
-          // Error saving language preference to localStorage
-        }
-
-        // Force update this component
-        this.$forceUpdate();
-      }
-    },
-
-    // Toggle between light and dark theme
-    toggleTheme() {
-      const newTheme = this.currentTheme === 'light' ? 'dark' : 'light';
-      this.applyTheme(newTheme);
-    },
-
     // Apply theme
     applyTheme(theme) {
       // Update local state
@@ -2033,11 +2009,6 @@ export default {
       if (event.detail && event.detail.theme) {
         this.applyTheme(event.detail.theme);
       }
-    },
-
-    // Get current effective theme
-    getCurrentTheme() {
-      return this.currentTheme;
     },
 
     // Set active tab

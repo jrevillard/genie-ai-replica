@@ -441,6 +441,30 @@ describe('FileDetailsDialog', () => {
       expect(wrapper.emitted('file-updated')).toBeTruthy();
     });
 
+    it('handleSave shows error notification and returns false on API failure', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({ labels: ['Service A'] }));
+      mockUpdateFile.mockRejectedValueOnce(new Error('Save failed'));
+      mockEventBusEmit.mockClear();
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.file = createMockFile({ labels: ['Service A'] });
+      wrapper.vm.editableFile.file_name = 'Test File';
+      wrapper.vm.editableFile.author = 'Test Author';
+      wrapper.vm.editableFile.labels = ['Service A'];
+      wrapper.vm.knowledgeHierarchy = createMockHierarchy('en');
+      wrapper.vm.englishKnowledgeHierarchy = createMockHierarchy('en');
+      await wrapper.vm.$nextTick();
+
+      const result = await wrapper.vm.handleSave();
+
+      expect(result).toBe(false);
+      expect(wrapper.emitted('file-updated')).toBeFalsy();
+      // showNotification emits via eventBus with type 'error'
+      expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
+    });
+
     it('handleIngest shows confirmation dialog when labels exist', async () => {
       mockGetFileMetadata.mockResolvedValue(createMockFile({ labels: ['Service A'] }));
       const wrapper = createFileDetailsDialogWrapper();
@@ -695,16 +719,13 @@ describe('FileDetailsDialog', () => {
       await wrapper.vm.$nextTick();
       await wrapper.vm.$nextTick();
 
-      // Mock the refresh method to track calls
-      const originalRefresh = wrapper.vm.refreshDashboardData;
-      wrapper.vm.refreshDashboardData = jest.fn().mockResolvedValue(undefined);
+      const refreshSpy = jest.spyOn(wrapper.vm, 'refreshDashboardData');
 
       wrapper.vm.startDashboardTimer();
 
-      expect(wrapper.vm.refreshDashboardData).toHaveBeenCalledTimes(1);
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
 
-      // Restore original method
-      wrapper.vm.refreshDashboardData = originalRefresh;
+      refreshSpy.mockRestore();
     });
 
     it('dashboard refreshes at interval when auto-refresh enabled', async () => {
@@ -717,20 +738,15 @@ describe('FileDetailsDialog', () => {
 
       wrapper.vm.startDashboardTimer();
 
-      // Mock the refresh method to track calls
-      const originalRefresh = wrapper.vm.refreshDashboardData;
-      wrapper.vm.refreshDashboardData = jest.fn().mockResolvedValue(undefined);
-
-      // Clear initial call
-      wrapper.vm.refreshDashboardData.mockClear();
+      const refreshSpy = jest.spyOn(wrapper.vm, 'refreshDashboardData');
+      refreshSpy.mockClear();
 
       // Advance time by interval
       jest.advanceTimersByTime(5000);
 
-      expect(wrapper.vm.refreshDashboardData).toHaveBeenCalledTimes(1);
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
 
-      // Restore original method
-      wrapper.vm.refreshDashboardData = originalRefresh;
+      refreshSpy.mockRestore();
     });
 
     it('stopDashboardTimer clears interval', async () => {
@@ -793,7 +809,7 @@ describe('FileDetailsDialog', () => {
       await wrapper.vm.$nextTick();
       await wrapper.vm.$nextTick();
 
-      const backdrop = wrapper.find('.dialog-backdrop');
+      const backdrop = wrapper.find('[data-test-id="dialog-backdrop"]');
       await backdrop.trigger('click');
 
       expect(wrapper.emitted('close')).toBeTruthy();
@@ -927,6 +943,581 @@ describe('FileDetailsDialog', () => {
       await wrapper.vm.confirmDialog.onConfirm();
 
       expect(wrapper.emitted('close')).toBeTruthy();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 4j — displayStatus computed (Crawling/Killed branches),
+  //       confirmIngest/confirmRetract/confirmDelete error paths
+  // -------------------------------------------------------------------------
+  describe('4j — displayStatus computed and confirm operation error paths', () => {
+    describe('displayStatus', () => {
+      it('returns Crawling when crawlJob status is Crawling', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.file = createMockFile({ dataprep: { status: 'Pending' } });
+        wrapper.vm.crawlJob = { status: 'Crawling' };
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.vm.displayStatus).toBe('Crawling');
+      });
+
+      it('returns Crawl Failed when crawlJob status is Failed', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.file = createMockFile({ dataprep: { status: 'Pending' } });
+        wrapper.vm.crawlJob = { status: 'Failed' };
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.vm.displayStatus).toBe('Crawl Failed');
+      });
+
+      it('returns Crawl Failed when crawlJob status is Killed', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.file = createMockFile({ dataprep: { status: 'Pending' } });
+        wrapper.vm.crawlJob = { status: 'Killed' };
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.vm.displayStatus).toBe('Crawl Failed');
+      });
+
+      it('falls back to dataprep status when crawlJob succeeded', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.file = createMockFile({ dataprep: { status: 'Ingested' } });
+        wrapper.vm.crawlJob = { status: 'Succeeded' };
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.vm.displayStatus).toBe('Ingested');
+      });
+    });
+
+    describe('confirmIngest error path', () => {
+      it('shows error notification when ingestFile fails', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile({ labels: ['Service A'] }));
+        mockIngestFile.mockRejectedValue(new Error('Ingest service unavailable'));
+
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.file = createMockFile({ labels: ['Service A'] });
+        wrapper.vm.editableFile.labels = ['Service A'];
+        wrapper.vm.knowledgeHierarchy = createMockHierarchy('en');
+        wrapper.vm.englishKnowledgeHierarchy = createMockHierarchy('en');
+        await wrapper.vm.$nextTick();
+
+        mockEventBusEmit.mockClear();
+        await wrapper.vm.confirmIngest();
+
+        expect(mockEventBusEmit).toHaveBeenCalledWith(
+          'notification:show',
+          expect.objectContaining({ type: 'error' })
+        );
+        expect(wrapper.vm.isLoading).toBe(false);
+        expect(wrapper.emitted('close')).toBeFalsy();
+      });
+    });
+
+    describe('confirmRetract error path', () => {
+      it('shows error notification when retractMultipleFiles fails', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile({ dataprep: { status: 'Ingested' } }));
+        mockRetractMultipleFiles.mockRejectedValue(new Error('Retract failed'));
+
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.file = createMockFile({ dataprep: { status: 'Ingested' } });
+        await wrapper.vm.$nextTick();
+
+        mockEventBusEmit.mockClear();
+        await wrapper.vm.confirmRetract();
+
+        expect(mockEventBusEmit).toHaveBeenCalledWith(
+          'notification:show',
+          expect.objectContaining({ type: 'error' })
+        );
+        expect(wrapper.vm.isLoading).toBe(false);
+        expect(wrapper.emitted('close')).toBeFalsy();
+      });
+    });
+
+    describe('confirmDelete error path', () => {
+      it('shows error notification when deleteFile fails', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockDeleteFile.mockRejectedValue(new Error('Delete failed'));
+
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.file = createMockFile();
+        await wrapper.vm.$nextTick();
+
+        mockEventBusEmit.mockClear();
+        await wrapper.vm.confirmDelete();
+
+        expect(mockEventBusEmit).toHaveBeenCalledWith(
+          'notification:show',
+          expect.objectContaining({ type: 'error' })
+        );
+        expect(wrapper.vm.isLoading).toBe(false);
+        expect(wrapper.emitted('close')).toBeFalsy();
+      });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 4i — refreshDashboardData, fetch logs, confirm kills,
+  //       activeTab watcher, isExternalUrl, getEnglishLabelNames, $i18n.locale
+  // -------------------------------------------------------------------------
+  describe('4i — refreshDashboardData, fetchCrawlLogs, fetchIngestionLogs, confirmKillCrawl, confirmKillDocument, activeTab watcher, isExternalUrl, getEnglishLabelNames, $i18n.locale watcher', () => {
+    describe('refreshDashboardData', () => {
+      it('fetches crawl job and metrics on refresh', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockGetCrawlJob.mockResolvedValue({ data: { status: 'Crawling' } });
+        mockGetCrawlMetrics.mockResolvedValue({
+          data: {
+            crawl_rate: 10, queue_size: 5, error_rate: 1,
+            error_counts: { timeout: 2 }, processed: 100, limit: 200,
+            current_depth: 2, max_depth: 5, links_internal: 50,
+            links_external: 10, total_crawled: 80
+          }
+        });
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        await wrapper.vm.refreshDashboardData();
+
+        expect(mockGetCrawlJob).toHaveBeenCalledWith('test-file-123');
+        expect(mockGetCrawlMetrics).toHaveBeenCalledWith('test-file-123');
+        expect(wrapper.vm.crawlJob).toEqual({ status: 'Crawling' });
+        expect(wrapper.vm.crawlStats.crawlRate).toBe(10);
+        expect(wrapper.vm.crawlStats.totalCrawled).toBe(80);
+        expect(wrapper.vm.isRefreshingDashboard).toBe(false);
+      });
+
+      it('returns early if already refreshing', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.isRefreshingDashboard = true;
+        mockGetCrawlJob.mockClear();
+
+        await wrapper.vm.refreshDashboardData();
+
+        expect(mockGetCrawlJob).not.toHaveBeenCalled();
+      });
+
+      it('handles missing data gracefully', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockGetCrawlJob.mockResolvedValue(null);
+        mockGetCrawlMetrics.mockResolvedValue(null);
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        await wrapper.vm.refreshDashboardData();
+
+        expect(wrapper.vm.isRefreshingDashboard).toBe(false);
+      });
+
+      it('handles API errors gracefully', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockGetCrawlJob.mockRejectedValue(new Error('Network error'));
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        await wrapper.vm.refreshDashboardData();
+
+        expect(wrapper.vm.isRefreshingDashboard).toBe(false);
+      });
+    });
+
+    describe('fetchCrawlLogs', () => {
+      it('fetches and stores crawl logs on success', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockGetCrawlLogs.mockResolvedValue({ data: [{ id: 1, message: 'Crawled page' }] });
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        await wrapper.vm.fetchCrawlLogs();
+
+        expect(mockGetCrawlLogs).toHaveBeenCalledWith('test-file-123');
+        expect(wrapper.vm.crawlLogs).toEqual([{ id: 1, message: 'Crawled page' }]);
+        expect(wrapper.vm.isCrawlLogLoading).toBe(false);
+      });
+
+      it('shows error notification on API failure', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockGetCrawlLogs.mockRejectedValue(new Error('Fetch failed'));
+        mockEventBusEmit.mockClear();
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        await wrapper.vm.fetchCrawlLogs();
+
+        expect(wrapper.vm.isCrawlLogLoading).toBe(false);
+        expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
+      });
+    });
+
+    describe('fetchIngestionLogs', () => {
+      it('fetches and stores ingestion logs on success', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockGetIngestionLogs.mockResolvedValue({ data: [{ id: 1, message: 'Ingested' }] });
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        await wrapper.vm.fetchIngestionLogs();
+
+        expect(mockGetIngestionLogs).toHaveBeenCalledWith('test-file-123');
+        expect(wrapper.vm.ingestionLogs).toEqual([{ id: 1, message: 'Ingested' }]);
+        expect(wrapper.vm.isLogLoading).toBe(false);
+      });
+
+      it('shows error notification on API failure', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockGetIngestionLogs.mockRejectedValue(new Error('Fetch failed'));
+        mockEventBusEmit.mockClear();
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        await wrapper.vm.fetchIngestionLogs();
+
+        expect(wrapper.vm.isLogLoading).toBe(false);
+        expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
+      });
+    });
+
+    describe('confirmKillCrawl', () => {
+      it('kills crawl and refreshes data on success', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockKillCrawl.mockResolvedValue({ success: true });
+        mockGetAdminCategories.mockResolvedValue(createMockHierarchy('en'));
+        mockEventBusEmit.mockClear();
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.confirmDialog = { visible: true };
+        await wrapper.vm.confirmKillCrawl();
+
+        expect(mockKillCrawl).toHaveBeenCalledWith('test-file-123');
+        expect(wrapper.vm.confirmDialog.visible).toBe(false);
+        expect(wrapper.vm.isCrawlLogLoading).toBe(false);
+      });
+
+      it('shows error notification on kill failure', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockKillCrawl.mockRejectedValue(new Error('Kill failed'));
+        mockEventBusEmit.mockClear();
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.confirmDialog = { visible: true };
+        await wrapper.vm.confirmKillCrawl();
+
+        expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
+      });
+    });
+
+    describe('confirmKillDocument', () => {
+      it('kills ingestion and schedules log refresh on success', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockKillIngestion.mockResolvedValue({ success: true });
+        mockEventBusEmit.mockClear();
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.confirmDialog = { visible: true };
+        await wrapper.vm.confirmKillDocument();
+
+        expect(mockKillIngestion).toHaveBeenCalledWith('test-file-123');
+        expect(wrapper.vm.confirmDialog.visible).toBe(false);
+        // setTimeout with fetchIngestionLogs is pending
+        expect(wrapper.vm.isLogLoading).toBe(false);
+      });
+
+      it('shows error notification on kill failure', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockKillIngestion.mockRejectedValue(new Error('Kill failed'));
+        mockEventBusEmit.mockClear();
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.confirmDialog = { visible: true };
+        await wrapper.vm.confirmKillDocument();
+
+        expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
+      });
+    });
+
+    describe('activeTab watcher', () => {
+      it('fetches crawl logs when switching to crawlLog tab with empty logs', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockGetCrawlLogs.mockResolvedValue({ data: [] });
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.crawlLogs = [];
+        wrapper.vm.activeTab = 'crawlLog';
+        await wrapper.vm.$nextTick();
+
+        expect(mockGetCrawlLogs).toHaveBeenCalled();
+      });
+
+      it('does not fetch crawl logs when they already exist', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockGetCrawlLogs.mockClear();
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.crawlLogs = [{ id: 1 }];
+        wrapper.vm.activeTab = 'crawlLog';
+        await wrapper.vm.$nextTick();
+
+        // getCrawlLogs may have been called during mount, but not again from watcher
+        const callCount = mockGetCrawlLogs.mock.calls.length;
+        expect(callCount).toBeLessThanOrEqual(1);
+      });
+
+      it('fetches ingestion logs when switching to ingestionLog tab with empty logs', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockGetIngestionLogs.mockResolvedValue({ data: [] });
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.ingestionLogs = [];
+        wrapper.vm.activeTab = 'ingestionLog';
+        await wrapper.vm.$nextTick();
+
+        expect(mockGetIngestionLogs).toHaveBeenCalled();
+      });
+
+      it('starts dashboard timer when switching to dashboard tab', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.activeTab = 'dashboard';
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.vm.dashboardTimer).toBeTruthy();
+      });
+
+      it('stops dashboard timer when switching away from dashboard', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.activeTab = 'dashboard';
+        await wrapper.vm.$nextTick();
+        expect(wrapper.vm.dashboardTimer).toBeTruthy();
+
+        wrapper.vm.activeTab = 'details';
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.vm.dashboardTimer).toBeNull();
+      });
+    });
+
+    describe('isExternalUrl', () => {
+      it('returns false for null url', () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        expect(wrapper.vm.isExternalUrl(null)).toBe(false);
+      });
+
+      it('returns false for empty string', () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        expect(wrapper.vm.isExternalUrl('')).toBe(false);
+      });
+
+      it('returns true for https url', () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        expect(wrapper.vm.isExternalUrl('https://example.com')).toBe(true);
+      });
+
+      it('returns true for http url', () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        expect(wrapper.vm.isExternalUrl('http://example.com')).toBe(true);
+      });
+
+      it('returns false for placeholder urls with HOST', () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        expect(wrapper.vm.isExternalUrl('https://<HOST>:8080/api')).toBe(false);
+      });
+
+      it('returns false for placeholder urls with PORT', () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        expect(wrapper.vm.isExternalUrl('http://localhost:<PORT>/api')).toBe(false);
+      });
+
+      it('returns false for non-http protocols', () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        expect(wrapper.vm.isExternalUrl('ftp://files.example.com')).toBe(false);
+      });
+    });
+
+    describe('getEnglishLabelNames', () => {
+      it('returns empty array when no labels selected', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        const result = wrapper.vm.getEnglishLabelNames([]);
+        expect(result).toEqual([]);
+      });
+
+      it('returns empty array when english hierarchy is empty', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.knowledgeHierarchy = createMockHierarchy('en');
+        wrapper.vm.englishKnowledgeHierarchy = [];
+        const result = wrapper.vm.getEnglishLabelNames(['Service A']);
+        expect(result).toEqual([]);
+      });
+
+      it('maps locale labels to english using hierarchy', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.knowledgeHierarchy = createMockHierarchy('fr');
+        wrapper.vm.englishKnowledgeHierarchy = createMockHierarchy('en');
+
+        const result = wrapper.vm.getEnglishLabelNames(['Service A (fr)']);
+        expect(result).toContain('Service A');
+      });
+
+      it('falls back to direct match when not in locale map', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        // Both hierarchies must be non-empty for method to proceed
+        wrapper.vm.knowledgeHierarchy = createMockHierarchy('fr');
+        wrapper.vm.englishKnowledgeHierarchy = createMockHierarchy('en');
+
+        // 'Service A' is in english hierarchy but not in locale map (fr labels are 'Service A (fr)')
+        const result = wrapper.vm.getEnglishLabelNames(['Service A']);
+        expect(result).toContain('Service A');
+      });
+
+      it('uses original label as fallback when no match found', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.knowledgeHierarchy = createMockHierarchy('fr');
+        wrapper.vm.englishKnowledgeHierarchy = createMockHierarchy('en');
+
+        const result = wrapper.vm.getEnglishLabelNames(['Unknown Label']);
+        expect(result).toContain('Unknown Label');
+      });
+
+      it('deduplicates results', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.knowledgeHierarchy = createMockHierarchy('fr');
+        wrapper.vm.englishKnowledgeHierarchy = createMockHierarchy('en');
+
+        const result = wrapper.vm.getEnglishLabelNames(['Service A', 'Service A']);
+        expect(result.length).toBe(1);
+      });
+    });
+
+    describe('$i18n.locale watcher', () => {
+      it('re-fetches data when locale changes', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        mockGetAdminCategories.mockResolvedValue(createMockHierarchy('en'));
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        const initialFetchCalls = mockGetFileMetadata.mock.calls.length;
+
+        wrapper.vm.$options.watch['$i18n.locale'].call(wrapper.vm, 'fr');
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.vm.currentLocale).toBe('fr');
+        expect(mockGetFileMetadata.mock.calls.length).toBeGreaterThan(initialFetchCalls);
+      });
+
+      it('does not re-fetch when locale is falsy', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        const initialFetchCalls = mockGetFileMetadata.mock.calls.length;
+
+        wrapper.vm.$options.watch['$i18n.locale'].call(wrapper.vm, '');
+        await wrapper.vm.$nextTick();
+
+        expect(mockGetFileMetadata.mock.calls.length).toBe(initialFetchCalls);
+      });
+
+      it('does not re-fetch when locale is same as current', async () => {
+        mockGetFileMetadata.mockResolvedValue(createMockFile());
+        const wrapper = createFileDetailsDialogWrapper();
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        const initialFetchCalls = mockGetFileMetadata.mock.calls.length;
+
+        wrapper.vm.$options.watch['$i18n.locale'].call(wrapper.vm, 'en');
+        await wrapper.vm.$nextTick();
+
+        expect(mockGetFileMetadata.mock.calls.length).toBe(initialFetchCalls);
+      });
     });
   });
 });

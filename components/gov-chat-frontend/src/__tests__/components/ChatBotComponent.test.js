@@ -203,7 +203,7 @@ describe('ChatBotComponent', () => {
   describe('AC1 — renders with empty message list', () => {
     it('renders the chat container without errors', () => {
       const wrapper = createChatBotWrapper();
-      expect(wrapper.find('.chatbot-container').exists()).toBe(true);
+      expect(wrapper.find('[data-test-id="chatbot-container"]').exists()).toBe(true);
     });
 
     it('displays the welcome message in chatMessages', () => {
@@ -614,12 +614,11 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
 
       const xssAttempt = '<script>alert("xss")</script> Hello';
-      const result = vm.renderMarkdown(xssAttempt);
+      vm.renderMarkdown(xssAttempt);
 
-      // DOMPurify should sanitize the HTML (marked won't process script tags as markdown)
-      // The result should be the sanitized version
-      expect(result).toBeDefined();
-      expect(typeof result).toBe('string');
+      // DOMPurify.sanitize must be called on the marked output
+      const DOMPurify = require('dompurify');
+      expect(DOMPurify.sanitize).toHaveBeenCalled();
     });
 
     it('renders markdown lists correctly', () => {
@@ -672,16 +671,14 @@ describe('ChatBotComponent', () => {
         category: 'test-category'
       };
 
-      // Mock sendMessage to prevent actual execution
-      vm.sendMessage = jest.fn();
+      // Prevent sendMessage from running — it clears hiddenPromptForNextMessage
+      const sendMessageSpy = jest.spyOn(vm, 'sendMessage').mockImplementation(() => {});
 
       vm.selectQuickHelpOption(quickHelpOption);
 
-      // The component uses this.$t() to translate the hiddenPromptKey
-      // Since we mock $t to return the key itself, hiddenPromptForNextMessage will be the translated key
-      expect(vm.hiddenPromptForNextMessage).toBeDefined();
       expect(vm.hiddenPromptForNextMessage).toBe('quickhelp.testHidden');
-      expect(vm.sendMessage).toHaveBeenCalled();
+      expect(vm.newMessage).toBe('quickhelp.testVisible');
+      sendMessageSpy.mockRestore();
     });
 
     it('sets visible message from quick help option', () => {
@@ -1143,6 +1140,156 @@ describe('ChatBotComponent', () => {
       vm.selectedContextItems = [{ service: 'Service Name', category: 'new-category' }];
 
       expect(vm.hasUnsavedChanges()).toBe(true);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Streaming content callbacks
+  // -----------------------------------------------------------------------
+  describe('SSE onChunk, onMetadata, onTranslation callbacks', () => {
+    it('accumulates content via onChunk callback', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Chunk test';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      const botMsgIndex = vm.chatMessages.length - 1;
+      capturedCallbacks.onChunk('Hello ');
+      capturedCallbacks.onChunk('World');
+
+      expect(vm.chatMessages[botMsgIndex].content).toContain('Hello World');
+    });
+
+    it('processes metadata with confidence score and response time', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Metadata test';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      const botMsgIndex = vm.chatMessages.length - 1;
+      capturedCallbacks.onMetadata({
+        confidence_score: 0.95,
+        responseTime: 250
+      });
+
+      expect(vm.chatMessages[botMsgIndex].confidenceScore).toBe(0.95);
+      expect(vm.systemStatus.lastResponseTime).toBe(250);
+      expect(vm.systemStatus.online).toBe(true);
+    });
+
+    it('populates relatedDocuments from source_documents metadata', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Sources test';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      capturedCallbacks.onMetadata({
+        source_documents: [
+          { document_id: 'doc-1', document_name: 'Test Doc', url: 'http://example.com/file.pdf', score: 0.9 }
+        ]
+      });
+
+      expect(vm.relatedDocuments.length).toBe(1);
+      expect(vm.relatedDocuments[0].id).toBe('doc-1');
+      expect(vm.relatedDocuments[0].title).toBe('Test Doc');
+      expect(vm.relatedDocuments[0].type).toBe('PDF');
+    });
+
+    it('filters duplicate source documents', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Dup test';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      capturedCallbacks.onMetadata({
+        source_documents: [
+          { document_id: 'doc-1', document_name: 'Doc 1', url: 'http://a.pdf', score: 0.9 }
+        ]
+      });
+      capturedCallbacks.onMetadata({
+        source_documents: [
+          { document_id: 'doc-1', document_name: 'Doc 1', url: 'http://a.pdf', score: 0.9 }
+        ]
+      });
+
+      expect(vm.relatedDocuments.length).toBe(1);
+    });
+
+    it('replaces content via onTranslation callback', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Translation test';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      const botMsgIndex = vm.chatMessages.length - 1;
+      capturedCallbacks.onChunk('Original');
+      capturedCallbacks.onTranslation('Traduction');
+
+      expect(vm.chatMessages[botMsgIndex].content).toBe('Traduction');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // removeContextItem
+  // -----------------------------------------------------------------------
+  describe('removeContextItem', () => {
+    it('removes item at specified index', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.selectedContextItems = [
+        { service: 'Service A', category: 'cat-1' },
+        { service: 'Service B', category: 'cat-2' }
+      ];
+
+      vm.removeContextItem(0);
+
+      expect(vm.selectedContextItems.length).toBe(1);
+      expect(vm.selectedContextItems[0].service).toBe('Service B');
+    });
+
+    it('nullifies currentCategoryId when context becomes empty and no matching quick help', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.currentCategoryId = 'cat-1';
+      vm.selectedContextItems = [{ service: 'Service A', category: 'cat-1' }];
+
+      vm.removeContextItem(0);
+
+      expect(vm.selectedContextItems.length).toBe(0);
+      expect(vm.currentCategoryId).toBeNull();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // formatMessageTime
+  // -----------------------------------------------------------------------
+  describe('formatMessageTime', () => {
+    it('returns formatted time for valid timestamp', () => {
+      const wrapper = createChatBotWrapper();
+      const result = wrapper.vm.formatMessageTime('2024-01-15T14:30:00Z');
+      expect(result).toMatch(/\d{2}:\d{2}/);
+    });
+
+    it('returns empty string for null timestamp', () => {
+      const wrapper = createChatBotWrapper();
+      expect(wrapper.vm.formatMessageTime(null)).toBe('');
+    });
+
+    it('returns empty string for undefined timestamp', () => {
+      const wrapper = createChatBotWrapper();
+      expect(wrapper.vm.formatMessageTime(undefined)).toBe('');
     });
   });
 });

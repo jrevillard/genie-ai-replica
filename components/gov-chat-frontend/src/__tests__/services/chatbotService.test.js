@@ -448,5 +448,124 @@ describe('chatbotService', () => {
 
       expect(onError).not.toHaveBeenCalled();
     });
+
+    it('ignores SSE comment lines', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      const mockReader = {
+        read: jest.fn()
+          .mockResolvedValueOnce({
+            done: false,
+            value: new TextEncoder().encode(': keep-alive\n\ndata: {"type":"chunk","content":"Real data"}\n\n')
+          })
+          .mockResolvedValueOnce({ done: true })
+      };
+
+      mockFetch.mockResolvedValue({ ok: true, body: { getReader: () => mockReader } });
+
+      const onChunk = jest.fn();
+      chatbotService.submitQueryStream({ query: 'test' }, { onChunk });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(onChunk).toHaveBeenCalledWith('Real data');
+      expect(onChunk).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores malformed JSON and processes valid lines', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      const mockReader = {
+        read: jest.fn()
+          .mockResolvedValueOnce({
+            done: false,
+            value: new TextEncoder().encode('data: {invalid json}\n\ndata: {"type":"chunk","content":"Valid"}\n\n')
+          })
+          .mockResolvedValueOnce({ done: true })
+      };
+
+      mockFetch.mockResolvedValue({ ok: true, body: { getReader: () => mockReader } });
+
+      const onChunk = jest.fn();
+      chatbotService.submitQueryStream({ query: 'test' }, { onChunk });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(onChunk).toHaveBeenCalledWith('Valid');
+      expect(onChunk).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls onError when fetch throws non-AbortError', async () => {
+      const mockFetch = jest.fn();
+      global.fetch = mockFetch;
+
+      mockFetch.mockRejectedValue(new Error('Network failure'));
+
+      const onError = jest.fn();
+      chatbotService.submitQueryStream({ query: 'test' }, { onError });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    });
+
+    it('attaches abort controller signal to fetch request', () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        body: { getReader: () => ({ read: jest.fn().mockResolvedValue({ done: true }) }) }
+      });
+      global.fetch = mockFetch;
+
+      const controller = chatbotService.submitQueryStream({ query: 'test' }, {});
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ signal: controller.signal })
+      );
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // submitQuery — branches
+  // -----------------------------------------------------------------------
+  describe('submitQuery — missing queryId and error logging', () => {
+    it('skips updateQueryResponseTime when queryId is absent', async () => {
+      mockPost.mockResolvedValue({
+        data: { response: 'Answer without queryId' }
+      });
+
+      const result = await chatbotService.submitQuery({ query: 'test' });
+
+      expect(mockPatch).not.toHaveBeenCalled();
+      expect(result.response).toBe('Answer without queryId');
+    });
+
+    it('logs error with response data on failure', async () => {
+      const spy = jest.spyOn(console, 'error').mockImplementation();
+      const apiError = new Error('Request failed');
+      apiError.response = { data: { error: 'INVALID_INPUT' } };
+      mockPost.mockRejectedValue(apiError);
+
+      await expect(chatbotService.submitQuery({ query: 'test' })).rejects.toThrow('Request failed');
+
+      expect(spy).toHaveBeenCalledWith(
+        'Error submitting query:',
+        'Request failed',
+        JSON.stringify({ error: 'INVALID_INPUT' }, null, 2)
+      );
+      spy.mockRestore();
+    });
+
+    it('logs error without response data on network failure', async () => {
+      const spy = jest.spyOn(console, 'error').mockImplementation();
+      mockPost.mockRejectedValue(new Error('Network Error'));
+
+      await expect(chatbotService.submitQuery({ query: 'test' })).rejects.toThrow('Network Error');
+
+      expect(spy).toHaveBeenCalledWith('Error submitting query:', 'Network Error', 'No response data');
+      spy.mockRestore();
+    });
   });
 });

@@ -51,6 +51,19 @@ function createLogSearchDialogWrapper() {
 }
 
 // ---------------------------------------------------------------------------
+// Helper: read Blob as string (JSDOM doesn't support Blob.text())
+// ---------------------------------------------------------------------------
+
+function blobToString(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsText(blob);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Helper: create mock log entries
 // ---------------------------------------------------------------------------
 
@@ -183,7 +196,10 @@ describe('LogSearchDialog', () => {
     });
 
     it('sets isSearching to true during async operation', async () => {
-      mockSearchLogs.mockReturnValueOnce(new Promise(() => {}));
+      let resolveHanging;
+      mockSearchLogs.mockReturnValueOnce(new Promise((resolve) => {
+        resolveHanging = resolve;
+      }));
 
       const wrapper = createLogSearchDialogWrapper();
       wrapper.vm.searchParams.dateRange = 'today';
@@ -194,8 +210,9 @@ describe('LogSearchDialog', () => {
       expect(wrapper.vm.isSearching).toBe(true);
       expect(wrapper.vm.hasSearched).toBe(true);
 
-      // Cleanup hanging promise
-      searchPromise.catch(() => {});
+      // Resolve the hanging promise so the test cleans up properly
+      resolveHanging({ data: { logs: [] } });
+      await searchPromise;
     });
 
     it('resets isSearching to false after successful search', async () => {
@@ -381,7 +398,7 @@ describe('LogSearchDialog', () => {
       expect(createObjectURSpy).not.toHaveBeenCalled();
     });
 
-    it('generates CSV with correct headers', async () => {
+    it('generates CSV with correct headers and rows', async () => {
       const wrapper = createLogSearchDialogWrapper();
       wrapper.vm.searchResults = createMockLogs(2);
 
@@ -395,13 +412,15 @@ describe('LogSearchDialog', () => {
 
       expect(global.URL.createObjectURL).toHaveBeenCalled();
       expect(capturedBlob).toBeInstanceOf(Blob);
-
-      // Verify CSV content by checking blob size and type
-      expect(capturedBlob.size).toBeGreaterThan(0);
       expect(capturedBlob.type).toBe('text/csv;charset=utf-8;');
+
+      const csvText = await blobToString(capturedBlob);
+      const lines = csvText.split('\n');
+      expect(lines[0]).toBe('Date,Time,Level,Service,Message');
+      expect(lines.length).toBe(3); // header + 2 rows
     });
 
-    it('escapes double quotes in CSV fields', () => {
+    it('escapes double quotes in CSV fields', async () => {
       const wrapper = createLogSearchDialogWrapper();
       wrapper.vm.searchResults = [
         {
@@ -421,12 +440,13 @@ describe('LogSearchDialog', () => {
 
       wrapper.vm.exportLogs();
 
-      // Verify blob was created with content containing quotes
-      expect(capturedBlob).toBeInstanceOf(Blob);
-      expect(capturedBlob.size).toBeGreaterThan(0);
+      const csvText = await blobToString(capturedBlob);
+      // Double quotes should be escaped as ""
+      expect(csvText).toContain('"API ""Gateway"""');
+      expect(csvText).toContain('"Message with ""quotes"" inside"');
     });
 
-    it('wraps fields containing special characters in quotes', () => {
+    it('wraps service and message fields in quotes', async () => {
       const wrapper = createLogSearchDialogWrapper();
       wrapper.vm.searchResults = [
         {
@@ -446,9 +466,10 @@ describe('LogSearchDialog', () => {
 
       wrapper.vm.exportLogs();
 
-      // Verify blob was created
-      expect(capturedBlob).toBeInstanceOf(Blob);
-      expect(capturedBlob.size).toBeGreaterThan(0);
+      const csvText = await blobToString(capturedBlob);
+      // Service and message are always wrapped in quotes by the component
+      expect(csvText).toContain('"Auth Service"');
+      expect(csvText).toContain('"User login: john@example.com"');
     });
 
     it('generates correct number of CSV rows', () => {
@@ -517,13 +538,13 @@ describe('LogSearchDialog', () => {
       await wrapper.vm.$nextTick();
 
       // Initially, custom date fields should not be visible
-      expect(wrapper.vm.searchParams.dateRange).toBe('today');
+      expect(wrapper.find('[data-test-id="custom-date-range"]').exists()).toBe(false);
 
       // Change to custom
       wrapper.vm.searchParams.dateRange = 'custom';
       await wrapper.vm.$nextTick();
 
-      expect(wrapper.vm.searchParams.dateRange).toBe('custom');
+      expect(wrapper.find('[data-test-id="custom-date-range"]').exists()).toBe(true);
     });
 
     it('hides custom date fields when dateRange is not "custom"', async () => {
@@ -531,60 +552,80 @@ describe('LogSearchDialog', () => {
       wrapper.vm.searchParams.dateRange = 'custom';
 
       await wrapper.vm.$nextTick();
+      expect(wrapper.find('[data-test-id="custom-date-range"]').exists()).toBe(true);
 
       wrapper.vm.searchParams.dateRange = 'week';
       await wrapper.vm.$nextTick();
 
-      expect(wrapper.vm.searchParams.dateRange).toBe('week');
+      expect(wrapper.find('[data-test-id="custom-date-range"]').exists()).toBe(false);
     });
 
     it('shows loading spinner when isSearching is true', async () => {
       const wrapper = createLogSearchDialogWrapper();
-      wrapper.vm.isSearching = true;
 
+      // Component initializes with isSearching=false, spinner should not exist
+      expect(wrapper.html()).not.toContain('ds-spinner');
+
+      wrapper.vm.isSearching = true;
       await wrapper.vm.$nextTick();
 
-      expect(wrapper.vm.isSearching).toBe(true);
+      // DsSpinner auto-stub should render
+      expect(wrapper.html()).toContain('ds-spinner');
     });
 
     it('hides loading spinner when isSearching is false', async () => {
       const wrapper = createLogSearchDialogWrapper();
       wrapper.vm.isSearching = true;
-
       await wrapper.vm.$nextTick();
+
+      expect(wrapper.html()).toContain('ds-spinner');
 
       wrapper.vm.isSearching = false;
       await wrapper.vm.$nextTick();
 
-      expect(wrapper.vm.isSearching).toBe(false);
+      expect(wrapper.html()).not.toContain('ds-spinner');
     });
 
-    it('shows export button when searchResults has items', () => {
-      const wrapper = createLogSearchDialogWrapper();
-      wrapper.vm.searchResults = createMockLogs(3);
-
-      expect(wrapper.vm.searchResults.length).toBeGreaterThan(0);
-    });
-
-    it('hides export button when searchResults is empty', () => {
+    it('shows export button when searchResults has items', async () => {
       const wrapper = createLogSearchDialogWrapper();
       wrapper.vm.searchResults = [];
+      await wrapper.vm.$nextTick();
 
-      expect(wrapper.vm.searchResults.length).toBe(0);
+      // No export button when empty
+      const exportBtnBefore = wrapper.find('[data-test-id="export-csv-btn"]');
+      expect(exportBtnBefore.exists()).toBe(false);
+
+      wrapper.vm.searchResults = createMockLogs(3);
+      await wrapper.vm.$nextTick();
+
+      const exportBtnAfter = wrapper.find('[data-test-id="export-csv-btn"]');
+      expect(exportBtnAfter.exists()).toBe(true);
     });
 
-    it('shows results section when hasSearched is true', () => {
+    it('hides export button when searchResults is empty', async () => {
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchResults = [];
+      await wrapper.vm.$nextTick();
+
+      const exportBtn = wrapper.find('[data-test-id="export-csv-btn"]');
+      expect(exportBtn.exists()).toBe(false);
+    });
+
+    it('shows results section when hasSearched is true', async () => {
       const wrapper = createLogSearchDialogWrapper();
       wrapper.vm.hasSearched = true;
+      wrapper.vm.searchResults = createMockLogs(1);
+      await wrapper.vm.$nextTick();
 
-      expect(wrapper.vm.hasSearched).toBe(true);
+      expect(wrapper.find('[data-test-id="search-results"]').exists()).toBe(true);
     });
 
-    it('hides results section when hasSearched is false', () => {
+    it('hides results section when hasSearched is false', async () => {
       const wrapper = createLogSearchDialogWrapper();
       wrapper.vm.hasSearched = false;
+      await wrapper.vm.$nextTick();
 
-      expect(wrapper.vm.hasSearched).toBe(false);
+      expect(wrapper.find('[data-test-id="search-results"]').exists()).toBe(false);
     });
 
     it('computes hasSearched correctly after performSearch', async () => {
@@ -759,43 +800,6 @@ describe('LogSearchDialog', () => {
     });
   });
 
-  describe('useMockData() method', () => {
-    it('returns array of mock log entries', () => {
-      const wrapper = createLogSearchDialogWrapper();
-
-      const result = wrapper.vm.useMockData();
-
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
-      expect(result[0]).toHaveProperty('time');
-      expect(result[0]).toHaveProperty('level');
-      expect(result[0]).toHaveProperty('service');
-      expect(result[0]).toHaveProperty('message');
-    });
-
-    it('returns logs with various log levels', () => {
-      const wrapper = createLogSearchDialogWrapper();
-
-      const result = wrapper.vm.useMockData();
-      const levels = result.map((log) => log.level);
-
-      expect(levels).toContain('ERROR');
-      expect(levels).toContain('WARN');
-      expect(levels).toContain('INFO');
-    });
-
-    it('returns logs from different services', () => {
-      const wrapper = createLogSearchDialogWrapper();
-
-      const result = wrapper.vm.useMockData();
-      const services = result.map((log) => log.service);
-
-      expect(services).toContain('API Gateway');
-      expect(services).toContain('Auth Service');
-      expect(services).toContain('Database');
-    });
-  });
-
   describe('Component lifecycle and structure', () => {
     it('has correct component name', () => {
       const wrapper = createLogSearchDialogWrapper();
@@ -815,6 +819,71 @@ describe('LogSearchDialog', () => {
       expect(components).toHaveProperty('DsSpinner');
       expect(components).toHaveProperty('DsInput');
       expect(components).toHaveProperty('DsSelect');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // ensureMessageColumnExists, performSearch null normalization
+  // -------------------------------------------------------------------------
+  describe('ensureMessageColumnExists and null normalization', () => {
+    describe('performSearch null normalization', () => {
+      it('normalizes log entries with null fields to defaults', async () => {
+        mockSearchLogs.mockResolvedValueOnce({
+          data: {
+            logs: [
+              { date: null, time: null, level: null, service: null, message: null }
+            ]
+          }
+        });
+
+        const wrapper = createLogSearchDialogWrapper();
+        wrapper.vm.searchParams.dateRange = 'today';
+
+        await wrapper.vm.performSearch();
+        await wrapper.vm.$nextTick();
+
+        const result = wrapper.vm.searchResults[0];
+        expect(result.date).toBeTruthy(); // today's date
+        expect(result.time).toBe('00:00:00');
+        expect(result.level).toBe('INFO');
+        expect(result.service).toBe('System');
+        expect(result.message).toBe('(No message)');
+      });
+
+      it('preserves existing field values', async () => {
+        mockSearchLogs.mockResolvedValueOnce({
+          data: {
+            logs: [
+              { date: '2025-03-15', time: '14:30:00', level: 'ERROR', service: 'API', message: 'timeout' }
+            ]
+          }
+        });
+
+        const wrapper = createLogSearchDialogWrapper();
+        wrapper.vm.searchParams.dateRange = 'today';
+
+        await wrapper.vm.performSearch();
+        await wrapper.vm.$nextTick();
+
+        const result = wrapper.vm.searchResults[0];
+        expect(result.date).toBe('2025-03-15');
+        expect(result.time).toBe('14:30:00');
+        expect(result.level).toBe('ERROR');
+        expect(result.service).toBe('API');
+        expect(result.message).toBe('timeout');
+      });
+
+      it('sets searchResults to empty when response has no data', async () => {
+        mockSearchLogs.mockResolvedValueOnce({});
+
+        const wrapper = createLogSearchDialogWrapper();
+        wrapper.vm.searchParams.dateRange = 'today';
+
+        await wrapper.vm.performSearch();
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.vm.searchResults).toEqual([]);
+      });
     });
   });
 });

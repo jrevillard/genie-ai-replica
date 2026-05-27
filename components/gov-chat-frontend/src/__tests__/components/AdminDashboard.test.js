@@ -254,13 +254,14 @@ describe('AdminDashboard', () => {
   // AC4 — Renders without errors
   // -----------------------------------------------------------------------
   describe('AC4 — renders without errors', () => {
-    it('mounts successfully without throwing', () => {
+    it('mounts successfully and renders dashboard container', () => {
       const wrapper = createAdminDashboardWrapper();
-      expect(wrapper.find('.admin-dashboard').exists() || wrapper.element).toBeTruthy();
+      expect(wrapper.find('[data-test-id="admin-dashboard"]').exists()).toBe(true);
     });
 
-    it('renders the main dashboard structure', () => {
+    it('renders the overview tab by default', () => {
       const wrapper = createAdminDashboardWrapper();
+      expect(wrapper.find('[data-test-id="admin-dashboard"]').exists()).toBe(true);
       expect(wrapper.vm.activeTab).toBe('overview');
     });
 
@@ -269,7 +270,7 @@ describe('AdminDashboard', () => {
       expect(mockGetSystemHealth).toHaveBeenCalledTimes(1);
     });
 
-    it('has the correct default tabs', () => {
+    it('initializes all seven admin tabs', () => {
       const wrapper = createAdminDashboardWrapper();
       const tabIds = wrapper.vm.tabs.map((t) => t.id);
       expect(tabIds).toEqual(['overview', 'hierarchy', 'documents', 'database', 'logs', 'security', 'users']);
@@ -357,11 +358,13 @@ describe('AdminDashboard', () => {
       expect(mockGetSecurityMetrics).toHaveBeenCalled();
     });
 
-    it('adminTabs computed returns formatted tabs', () => {
+    it('adminTabs computed maps each tab to { label, value }', () => {
       const wrapper = createAdminDashboardWrapper();
       const tabs = wrapper.vm.adminTabs;
       expect(tabs.length).toBe(7);
-      expect(tabs[0]).toEqual({ label: expect.any(String), value: 'overview' });
+      expect(tabs[0].value).toBe('overview');
+      expect(tabs[0].label).toBe('System Health'); // translate() returns the fallback label from tabs data
+      expect(tabs.every((t) => typeof t.label === 'string' && typeof t.value === 'string')).toBe(true);
     });
   });
 
@@ -646,12 +649,17 @@ describe('AdminDashboard', () => {
     it('loadLogsSummary handles invalid response structure', async () => {
       mockGetLogsSummary.mockResolvedValueOnce({ data: { notAnArray: true } });
       const wrapper = createAdminDashboardWrapper();
+      mockEventBusEmit.mockClear();
 
       await wrapper.vm.loadLogsSummary();
       await wrapper.vm.$nextTick();
 
       expect(wrapper.vm.errorLogsSummary).toEqual([]);
       expect(wrapper.vm.warningLogsSummary).toEqual([]);
+      expect(mockEventBusEmit).toHaveBeenCalledWith(
+        'notification:show',
+        expect.objectContaining({ type: 'error' })
+      );
     });
 
     it('loadLogsSummary handles API error gracefully', async () => {
@@ -1217,6 +1225,88 @@ describe('AdminDashboard', () => {
       wrapper.vm.refreshDocuments();
       expect(loadDocumentsSpy).toHaveBeenCalled();
       loadDocumentsSpy.mockRestore();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // selectAllDocuments
+  // -----------------------------------------------------------------------
+  describe('selectAllDocuments', () => {
+    it('selects all filtered documents when checked', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'doc-1', dataprep: { status: 'ready' } },
+        { _key: 'doc-2', dataprep: { status: 'pending' } }
+      ];
+      wrapper.vm.selectAllDocuments({ target: { checked: true } });
+      expect(wrapper.vm.selectedDocuments).toEqual(['doc-1', 'doc-2']);
+    });
+
+    it('clears selection when unchecked', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.selectedDocuments = ['doc-1'];
+      wrapper.vm.selectAllDocuments({ target: { checked: false } });
+      expect(wrapper.vm.selectedDocuments).toEqual([]);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // handleDocumentPagination
+  // -----------------------------------------------------------------------
+  describe('handleDocumentPagination', () => {
+    it('updates page and reloads documents for valid page', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documentPagination.total = 30;
+      wrapper.vm.documentPagination.limit = 15;
+      const loadSpy = jest.spyOn(wrapper.vm, 'loadDocuments').mockImplementation(() => {});
+
+      wrapper.vm.handleDocumentPagination(2);
+
+      expect(wrapper.vm.documentPagination.page).toBe(2);
+      expect(loadSpy).toHaveBeenCalled();
+      loadSpy.mockRestore();
+    });
+
+    it('rejects page <= 0', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documentPagination.page = 1;
+      wrapper.vm.handleDocumentPagination(0);
+      expect(wrapper.vm.documentPagination.page).toBe(1);
+    });
+
+    it('rejects page exceeding total pages', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documentPagination.total = 15;
+      wrapper.vm.documentPagination.limit = 15;
+      wrapper.vm.documentPagination.page = 1;
+      wrapper.vm.handleDocumentPagination(3);
+      expect(wrapper.vm.documentPagination.page).toBe(1);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // cancelHierarchyForm
+  // -----------------------------------------------------------------------
+  describe('cancelHierarchyForm', () => {
+    it('closes form immediately when no unsaved changes', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.hierarchyForm.visible = true;
+      wrapper.vm.originalHierarchyFormState = null;
+
+      wrapper.vm.cancelHierarchyForm();
+
+      expect(wrapper.vm.hierarchyForm.visible).toBe(false);
+    });
+
+    it('shows confirm dialog when there are unsaved changes', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.hierarchyForm.visible = true;
+      wrapper.vm.originalHierarchyFormState = JSON.stringify({ nameEN: 'old' });
+      wrapper.vm.hierarchyForm.nameEN = 'changed';
+
+      wrapper.vm.cancelHierarchyForm();
+
+      expect(wrapper.vm.confirmDialogState.visible).toBe(true);
     });
   });
 });

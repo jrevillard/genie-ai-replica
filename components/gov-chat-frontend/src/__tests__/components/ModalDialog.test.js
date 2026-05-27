@@ -8,6 +8,7 @@ describe('ModalDialog', () => {
 
   const stubs = {
     DsModal: {
+      name: 'DsModal',
       template: '<div class="modal-stub"><slot name="header" /><slot /><slot name="footer" /></div>',
       props: ['visible', 'title', 'size']
     },
@@ -120,7 +121,6 @@ describe('ModalDialog', () => {
       await confirmButton.trigger('click');
 
       expect(wrapper.emitted('confirm')).toBeTruthy();
-      expect(wrapper.emitted('confirm')).length?.toBeGreaterThan(0);
     });
 
     test('emits close event on cancel button click', async () => {
@@ -142,10 +142,9 @@ describe('ModalDialog', () => {
       await cancelButton.trigger('click');
 
       expect(wrapper.emitted('close')).toBeTruthy();
-      expect(wrapper.emitted('close')).length?.toBeGreaterThan(0);
     });
 
-    test('emits close event when modal closes', async () => {
+    test('emits close event when DsModal closes', async () => {
       wrapper = mount(ModalDialog, {
         global: {
           stubs,
@@ -155,11 +154,11 @@ describe('ModalDialog', () => {
         }
       });
 
-      // Trigger the close event on the wrapper
-      wrapper.vm.$emit('close');
+      const modal = wrapper.findComponent({ name: 'DsModal' });
+      await modal.vm.$emit('close');
 
       expect(wrapper.emitted('close')).toBeTruthy();
-      expect(wrapper.emitted('close')).length?.toBeGreaterThan(0);
+      expect(wrapper.emitted('close')).toHaveLength(1);
     });
   });
 

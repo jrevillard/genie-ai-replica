@@ -163,7 +163,7 @@ describe('UserProfileComponent', () => {
   // AC1 — Profile data displays after loading
   // -----------------------------------------------------------------------
   describe('AC1 — renders profile data after loading', () => {
-    it('displays full name from loaded profile data', async () => {
+    it('loads full name into formData from API response', async () => {
       const wrapper = createUserProfileWrapper();
       getProfileResolve(mockProfileData);
       await wrapper.vm.$nextTick();
@@ -172,7 +172,7 @@ describe('UserProfileComponent', () => {
       expect(wrapper.vm.formData.personalIdentification.fullName).toBe('John Doe');
     });
 
-    it('displays date of birth from loaded profile data', async () => {
+    it('loads date of birth into formData from API response', async () => {
       const wrapper = createUserProfileWrapper();
       getProfileResolve(mockProfileData);
       await wrapper.vm.$nextTick();
@@ -202,7 +202,7 @@ describe('UserProfileComponent', () => {
   // AC2 — Form fields are editable
   // -----------------------------------------------------------------------
   describe('AC2 — form fields are editable', () => {
-    it('allows modifying fullName via formData', async () => {
+    it('accepts updates to fullName via formData', async () => {
       const wrapper = createUserProfileWrapper();
       getProfileResolve(mockProfileData);
       await wrapper.vm.$nextTick();
@@ -214,7 +214,7 @@ describe('UserProfileComponent', () => {
       expect(wrapper.vm.formData.personalIdentification.fullName).toBe('Jane Doe');
     });
 
-    it('allows modifying address fields', async () => {
+    it('accepts updates to address fields via formData', async () => {
       const wrapper = createUserProfileWrapper();
       getProfileResolve(mockProfileData);
       await wrapper.vm.$nextTick();
@@ -228,7 +228,7 @@ describe('UserProfileComponent', () => {
       expect(wrapper.vm.formData.addressResidency.postalCode).toBe('20002');
     });
 
-    it('allows modifying employment data', async () => {
+    it('accepts updates to employment data via formData', async () => {
       const wrapper = createUserProfileWrapper();
       getProfileResolve(mockProfileData);
       await wrapper.vm.$nextTick();
@@ -341,7 +341,7 @@ describe('UserProfileComponent', () => {
   // Loading state displayed while fetching profile
   // -----------------------------------------------------------------------
   describe('loading state', () => {
-    it('shows loading spinner while fetching profile', () => {
+    it('sets isLoading while fetching profile', () => {
       const wrapper = createUserProfileWrapper();
       // getProfile is pending (never resolved), isLoading should be true
       expect(wrapper.vm.isLoading).toBe(true);
@@ -370,16 +370,22 @@ describe('UserProfileComponent', () => {
       expect(wrapper.vm.errorMessage).toBeTruthy();
     });
 
-    it('retryLoading calls loadUserProfileData again', async () => {
+    it('retryLoading clears error and refetches profile', async () => {
       const wrapper = createUserProfileWrapper();
       getProfileReject(new Error('Network error'));
       await wrapper.vm.$nextTick();
       await wrapper.vm.$nextTick();
 
+      expect(wrapper.vm.errorMessage).toBeTruthy();
+
       mockGetProfile.mockClear();
+      getProfileResolve(mockProfileData);
       wrapper.vm.retryLoading();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
 
       expect(mockGetProfile).toHaveBeenCalledTimes(1);
+      expect(wrapper.vm.errorMessage).toBeFalsy();
     });
   });
 
@@ -425,11 +431,12 @@ describe('UserProfileComponent', () => {
       expect(wrapper.vm.activeTab).toBe(0);
     });
 
-    it('profileTabs computed returns correct tab labels', () => {
+    it('profileTabs computed maps tabs to { label, value } pairs', () => {
       const wrapper = createUserProfileWrapper();
       const tabs = wrapper.vm.profileTabs;
       expect(tabs.length).toBe(8);
-      expect(tabs[0]).toEqual({ label: expect.any(String), value: 0 });
+      expect(tabs[0].value).toBe(0);
+      expect(tabs.every((t) => typeof t.label === 'string' && typeof t.value === 'number')).toBe(true);
     });
   });
 
@@ -815,6 +822,73 @@ describe('UserProfileComponent', () => {
       await wrapper.vm.$nextTick();
 
       expect(wrapper.vm.showConfirmDialog).toBe(false);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // confirmUpload
+  // -----------------------------------------------------------------------
+  describe('confirmUpload', () => {
+    it('sets profile icon to uploaded image and closes selector', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.showIconSelector = true;
+      wrapper.vm.uploadedImage = 'data:image/png;base64,abc123';
+
+      wrapper.vm.confirmUpload();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.formData.personalIdentification.profileIcon).toBe('data:image/png;base64,abc123');
+      expect(wrapper.vm.showIconSelector).toBe(false);
+      expect(wrapper.vm.uploadedImage).toBeNull();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // triggerFileUpload
+  // -----------------------------------------------------------------------
+  describe('triggerFileUpload', () => {
+    it('calls click on fileInput ref', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      // Attach a mock ref directly to the component instance
+      const clickSpy = jest.fn();
+      Object.defineProperty(wrapper.vm.$refs, 'fileInput', {
+        get: () => ({ click: clickSpy }),
+        configurable: true
+      });
+
+      wrapper.vm.triggerFileUpload();
+
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // $i18n.locale watcher
+  // -----------------------------------------------------------------------
+  describe('$i18n.locale watcher', () => {
+    it('reloads education options when locale changes', async () => {
+      const wrapper = createUserProfileWrapper();
+      getProfileResolve(mockProfileData);
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      // Spy on loadEducationOptions before triggering the watcher
+      const loadEducationSpy = jest.spyOn(wrapper.vm, 'loadEducationOptions').mockImplementation(() => {});
+
+      // Directly invoke the watcher handler to test its logic
+      wrapper.vm.$options.watch['$i18n.locale'].call(wrapper.vm);
+      await wrapper.vm.$nextTick();
+
+      expect(loadEducationSpy).toHaveBeenCalled();
+      loadEducationSpy.mockRestore();
     });
   });
 });

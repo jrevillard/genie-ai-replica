@@ -6,8 +6,12 @@ const ConfirmDialog = require('@/components/ConfirmDialog.vue').default;
 describe('ConfirmDialog', () => {
   let wrapper;
 
+  const findButtonByText = (wrapper, text) =>
+    wrapper.findAll('.button-stub').find((b) => b.text() === text);
+
   const stubs = {
     DsModal: {
+      name: 'DsModal',
       template: '<div class="modal-stub"><slot /><slot name="footer" /></div>',
       props: ['visible', 'title', 'size']
     },
@@ -82,10 +86,8 @@ describe('ConfirmDialog', () => {
         }
       });
 
-      // Just verify the button text is correct
-      const buttons = wrapper.findAll('.button-stub');
-      const confirmButton = buttons[buttons.length - 1]; // Last button is confirm
-      expect(confirmButton.text()).toBe('Delete');
+      const confirmButton = findButtonByText(wrapper, 'Delete');
+      expect(confirmButton).toBeTruthy();
     });
 
     test('uses primary variant for confirm button when danger=false', () => {
@@ -100,9 +102,8 @@ describe('ConfirmDialog', () => {
         }
       });
 
-      const buttons = wrapper.findAll('.button-stub');
-      const confirmButton = buttons[buttons.length - 1]; // Last button is confirm
-      expect(confirmButton.text()).toBe('Confirm');
+      const confirmButton = findButtonByText(wrapper, 'Confirm');
+      expect(confirmButton).toBeTruthy();
     });
   });
 
@@ -118,8 +119,7 @@ describe('ConfirmDialog', () => {
         }
       });
 
-      const buttons = wrapper.findAll('.button-stub');
-      const confirmButton = buttons[buttons.length - 1]; // Last button is confirm
+      const confirmButton = findButtonByText(wrapper, 'OK');
 
       await confirmButton.trigger('click');
 
@@ -137,9 +137,7 @@ describe('ConfirmDialog', () => {
         }
       });
 
-      const buttons = wrapper.findAll('.button-stub');
-      // Cancel button is the second-to-last (or first if only 2 buttons)
-      const cancelButton = buttons.length > 2 ? buttons[buttons.length - 2] : buttons[0];
+      const cancelButton = findButtonByText(wrapper, 'Cancel');
 
       await cancelButton.trigger('click');
 
@@ -157,12 +155,27 @@ describe('ConfirmDialog', () => {
         }
       });
 
-      const buttons = wrapper.findAll('.button-stub');
-      const secondaryButton = buttons[0]; // First button is secondary
+      const secondaryButton = findButtonByText(wrapper, 'Learn More');
 
       await secondaryButton.trigger('click');
 
       expect(wrapper.emitted('secondary')).toBeTruthy();
+    });
+
+    test('emits cancel when DsModal closes', async () => {
+      wrapper = mount(ConfirmDialog, {
+        props: {
+          visible: true
+        },
+        global: {
+          stubs
+        }
+      });
+
+      const modal = wrapper.findComponent({ name: 'DsModal' });
+      await modal.vm.$emit('close');
+
+      expect(wrapper.emitted('cancel')).toBeTruthy();
     });
   });
 

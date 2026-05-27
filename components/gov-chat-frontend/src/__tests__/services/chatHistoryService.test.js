@@ -181,98 +181,9 @@ describe('chatHistoryService', () => {
       });
     });
 
-    describe('markMessagesAsRead', () => {
-      it('marks messages as read', async () => {
-        mockPost.mockResolvedValue({ data: { success: true } });
 
-        await chatHistoryService.markMessagesAsRead('conv-1', ['msg-1', 'msg-2']);
 
-        expect(mockPost).toHaveBeenCalledWith('/chat/conversations/conv-1/messages/read', {
-          messageIds: ['msg-1', 'msg-2']
-        });
-      });
-    });
 
-    describe('findMessagesForQuery', () => {
-      it('fetches messages by query id', async () => {
-        mockGet.mockResolvedValue({ data: { messages: [{ _key: 'msg-1' }] } });
-
-        const result = await chatHistoryService.findMessagesForQuery('query-1');
-
-        expect(mockGet).toHaveBeenCalledWith('/chat/query/query-1/messages');
-        expect(result.messages).toHaveLength(1);
-      });
-    });
-
-    describe('findOriginatingQuery', () => {
-      it('fetches originating query for a message', async () => {
-        mockGet.mockResolvedValue({ data: { queryId: 'query-1', text: 'original question' } });
-
-        const result = await chatHistoryService.findOriginatingQuery('msg-1');
-
-        expect(mockGet).toHaveBeenCalledWith('/chat/messages/msg-1/query');
-        expect(result.queryId).toBe('query-1');
-      });
-    });
-
-    describe('createConversationFromQuery', () => {
-      it('creates conversation from existing query', async () => {
-        mockPost.mockResolvedValue({ data: { _key: 'conv-new', title: 'From query' } });
-
-        const result = await chatHistoryService.createConversationFromQuery('query-1', {
-          title: 'From query',
-          responseText: 'Answer'
-        });
-
-        expect(mockPost).toHaveBeenCalledWith('/chat/query/query-1/conversation', {
-          title: 'From query',
-          responseText: 'Answer'
-        });
-        expect(result._key).toBe('conv-new');
-      });
-    });
-  });
-
-  // =========================================================================
-  // Search
-  // =========================================================================
-  describe('Search', () => {
-    describe('searchConversations', () => {
-      it('searches with term and default params', async () => {
-        mockGet.mockResolvedValue({ data: { results: [], total: 0 } });
-
-        await chatHistoryService.searchConversations('passport');
-
-        expect(mockGet).toHaveBeenCalledWith('/chat/search', {
-          params: { q: 'passport', limit: 20, offset: 0, includeArchived: false }
-        });
-      });
-
-      it('throws when search term is empty', async () => {
-        await expect(chatHistoryService.searchConversations('')).rejects.toThrow('Search term is required');
-      });
-    });
-
-    describe('getRecentConversations', () => {
-      it('fetches recent conversations', async () => {
-        mockGet.mockResolvedValue({ data: { conversations: [] } });
-
-        await chatHistoryService.getRecentConversations(5);
-
-        expect(mockGet).toHaveBeenCalledWith('/chat/recent', { params: { limit: 5 } });
-      });
-    });
-
-    describe('getUserConversationStats', () => {
-      it('fetches conversation stats', async () => {
-        mockGet.mockResolvedValue({ data: { totalConversations: 42, totalMessages: 150 } });
-
-        const result = await chatHistoryService.getUserConversationStats();
-
-        expect(mockGet).toHaveBeenCalledWith('/chat/stats');
-        expect(result.totalConversations).toBe(42);
-      });
-    });
   });
 
   // =========================================================================
@@ -316,106 +227,8 @@ describe('chatHistoryService', () => {
       });
     });
 
-    describe('createFolder', () => {
-      it('creates folder with name', async () => {
-        mockPost.mockResolvedValue({ data: { _key: 'folder-new', name: 'Work' } });
 
-        const result = await chatHistoryService.createFolder({ name: 'Work', color: '#ff0000' });
 
-        expect(mockPost).toHaveBeenCalledWith('/chat/folders', { name: 'Work', color: '#ff0000' });
-        expect(result._key).toBe('folder-new');
-      });
-
-      it('throws when name is missing', async () => {
-        await expect(chatHistoryService.createFolder({})).rejects.toThrow('Folder name is required');
-      });
-    });
-
-    describe('updateFolder', () => {
-      it('updates folder fields', async () => {
-        mockPatch.mockResolvedValue({ data: { _key: 'folder-1', name: 'Updated' } });
-
-        const result = await chatHistoryService.updateFolder('folder-1', { name: 'Updated' });
-
-        expect(mockPatch).toHaveBeenCalledWith('/chat/folders/folder-1', { name: 'Updated' });
-        expect(result.name).toBe('Updated');
-      });
-    });
-
-    describe('deleteFolder', () => {
-      it('deletes folder without contents by default', async () => {
-        mockDelete.mockResolvedValue({ data: { success: true } });
-
-        await chatHistoryService.deleteFolder('folder-1');
-
-        expect(mockDelete).toHaveBeenCalledWith('/chat/folders/folder-1', {
-          params: { deleteContents: false }
-        });
-      });
-
-      it('deletes folder with contents when specified', async () => {
-        mockDelete.mockResolvedValue({ data: { success: true } });
-
-        await chatHistoryService.deleteFolder('folder-1', true);
-
-        expect(mockDelete).toHaveBeenCalledWith('/chat/folders/folder-1', {
-          params: { deleteContents: true }
-        });
-      });
-    });
-
-    describe('getFolderPath', () => {
-      it('fetches folder path breadcrumbs', async () => {
-        mockGet.mockResolvedValue({
-          data: [
-            { _key: 'parent', name: 'Parent' },
-            { _key: 'child', name: 'Child' }
-          ]
-        });
-
-        const result = await chatHistoryService.getFolderPath('child');
-
-        expect(mockGet).toHaveBeenCalledWith('/chat/folders/child/path');
-        expect(result).toHaveLength(2);
-      });
-    });
-
-    describe('searchFolders', () => {
-      it('searches folders by term', async () => {
-        mockGet.mockResolvedValue({ data: { results: [] } });
-
-        await chatHistoryService.searchFolders('work');
-
-        expect(mockGet).toHaveBeenCalledWith('/chat/folders/search', {
-          params: { q: 'work', includeArchived: false }
-        });
-      });
-
-      it('throws when search term is empty', async () => {
-        await expect(chatHistoryService.searchFolders('')).rejects.toThrow('Search term is required');
-      });
-    });
-
-    describe('reorderFolders', () => {
-      it('reorders folders', async () => {
-        const orders = [
-          { folderId: 'f1', order: 0 },
-          { folderId: 'f2', order: 1 }
-        ];
-        mockPost.mockResolvedValue({ data: { success: true } });
-
-        await chatHistoryService.reorderFolders(orders, 'parent-1');
-
-        expect(mockPost).toHaveBeenCalledWith('/chat/folders/reorder', {
-          folderOrders: orders,
-          parentFolderId: 'parent-1'
-        });
-      });
-
-      it('throws when folderOrders is empty', async () => {
-        await expect(chatHistoryService.reorderFolders([])).rejects.toThrow('Folder orders array is required');
-      });
-    });
   });
 
   // =========================================================================
@@ -604,48 +417,6 @@ describe('chatHistoryService', () => {
       });
     });
 
-    describe('reorderFolders', () => {
-      it('reorders folders within parent', async () => {
-        const folderOrders = [
-          { folderId: 'f1', order: 0 },
-          { folderId: 'f2', order: 1 },
-          { folderId: 'f3', order: 2 }
-        ];
-        mockPost.mockResolvedValue({ data: { success: true } });
-
-        const result = await chatHistoryService.reorderFolders(folderOrders, 'parent-1');
-
-        expect(mockPost).toHaveBeenCalledWith('/chat/folders/reorder', {
-          folderOrders,
-          parentFolderId: 'parent-1'
-        });
-        expect(result).toEqual({ success: true });
-      });
-
-      it('reorders root folders when no parentFolderId provided', async () => {
-        const folderOrders = [{ folderId: 'f1', order: 0 }];
-        mockPost.mockResolvedValue({ data: { success: true } });
-
-        await chatHistoryService.reorderFolders(folderOrders);
-
-        expect(mockPost).toHaveBeenCalledWith('/chat/folders/reorder', {
-          folderOrders,
-          parentFolderId: null
-        });
-      });
-
-      it('throws when folderOrders is empty', async () => {
-        await expect(chatHistoryService.reorderFolders([])).rejects.toThrow(
-          'Folder orders array is required'
-        );
-      });
-
-      it('throws when folderOrders is not an array', async () => {
-        await expect(chatHistoryService.reorderFolders(null)).rejects.toThrow(
-          'Folder orders array is required'
-        );
-      });
-    });
   });
 
   // =========================================================================
@@ -741,115 +512,29 @@ describe('chatHistoryService', () => {
   // Additional Search and Stats Tests
   // =========================================================================
   describe('Additional Search and Stats', () => {
-    describe('searchConversations', () => {
-      it('searches with term and default params', async () => {
-        mockGet.mockResolvedValue({ data: { results: [], total: 0 } });
 
-        await chatHistoryService.searchConversations('passport');
 
-        expect(mockGet).toHaveBeenCalledWith('/chat/search', {
-          params: { q: 'passport', limit: 20, offset: 0, includeArchived: false }
-        });
-      });
 
-      it('searches with custom options', async () => {
-        mockGet.mockResolvedValue({ data: { results: [], total: 0 } });
+  });
 
-        await chatHistoryService.searchConversations('passport', {
-          limit: 10,
-          offset: 5,
-          includeArchived: true
-        });
+  // -----------------------------------------------------------------------
+  // getUserFolders — empty and undefined params
+  // -----------------------------------------------------------------------
+  describe('getUserFolders — empty and undefined params', () => {
+    it('does not include params when options are empty', async () => {
+      mockGet.mockResolvedValue({ data: { folders: [] } });
 
-        expect(mockGet).toHaveBeenCalledWith('/chat/search', {
-          params: { q: 'passport', limit: 10, offset: 5, includeArchived: true }
-        });
-      });
+      await chatHistoryService.getUserFolders({});
 
-      it('throws when search term is empty', async () => {
-        await expect(chatHistoryService.searchConversations('')).rejects.toThrow('Search term is required');
-      });
-
-      it('throws on API failure', async () => {
-        mockGet.mockRejectedValue(new Error('Server error'));
-
-        await expect(chatHistoryService.searchConversations('test')).rejects.toThrow('Server error');
-      });
+      expect(mockGet).toHaveBeenCalledWith('/chat/folders', { params: {} });
     });
 
-    describe('searchFolders', () => {
-      it('searches folders by term', async () => {
-        mockGet.mockResolvedValue({ data: { results: [] } });
+    it('handles undefined parentFolderId correctly', async () => {
+      mockGet.mockResolvedValue({ data: { folders: [] } });
 
-        await chatHistoryService.searchFolders('work');
+      await chatHistoryService.getUserFolders({ parentFolderId: undefined });
 
-        expect(mockGet).toHaveBeenCalledWith('/chat/folders/search', {
-          params: { q: 'work', includeArchived: false }
-        });
-      });
-
-      it('searches folders with includeArchived option', async () => {
-        mockGet.mockResolvedValue({ data: { results: [] } });
-
-        await chatHistoryService.searchFolders('work', { includeArchived: true });
-
-        expect(mockGet).toHaveBeenCalledWith('/chat/folders/search', {
-          params: { q: 'work', includeArchived: true }
-        });
-      });
-
-      it('throws when search term is empty', async () => {
-        await expect(chatHistoryService.searchFolders('')).rejects.toThrow('Search term is required');
-      });
-
-      it('throws on API failure', async () => {
-        mockGet.mockRejectedValue(new Error('Server error'));
-
-        await expect(chatHistoryService.searchFolders('test')).rejects.toThrow('Server error');
-      });
-    });
-
-    describe('getUserConversationStats', () => {
-      it('fetches conversation stats', async () => {
-        mockGet.mockResolvedValue({ data: { totalConversations: 42, totalMessages: 150 } });
-
-        const result = await chatHistoryService.getUserConversationStats();
-
-        expect(mockGet).toHaveBeenCalledWith('/chat/stats');
-        expect(result.totalConversations).toBe(42);
-        expect(result.totalMessages).toBe(150);
-      });
-
-      it('throws on API failure', async () => {
-        mockGet.mockRejectedValue(new Error('Server error'));
-
-        await expect(chatHistoryService.getUserConversationStats()).rejects.toThrow('Server error');
-      });
-    });
-
-    describe('getRecentConversations', () => {
-      it('fetches recent conversations with default limit', async () => {
-        mockGet.mockResolvedValue({ data: { conversations: [] } });
-
-        await chatHistoryService.getRecentConversations();
-
-        expect(mockGet).toHaveBeenCalledWith('/chat/recent', { params: { limit: 5 } });
-      });
-
-      it('fetches recent conversations with custom limit', async () => {
-        mockGet.mockResolvedValue({ data: { conversations: [{ _key: 'conv-1' }] } });
-
-        const result = await chatHistoryService.getRecentConversations(10);
-
-        expect(mockGet).toHaveBeenCalledWith('/chat/recent', { params: { limit: 10 } });
-        expect(result.conversations).toHaveLength(1);
-      });
-
-      it('throws on API failure', async () => {
-        mockGet.mockRejectedValue(new Error('Server error'));
-
-        await expect(chatHistoryService.getRecentConversations()).rejects.toThrow('Server error');
-      });
+      expect(mockGet).toHaveBeenCalledWith('/chat/folders', { params: {} });
     });
   });
 });

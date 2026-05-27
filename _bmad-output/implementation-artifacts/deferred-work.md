@@ -244,3 +244,7 @@ Items deferred during code reviews. Revisit when the related component is next m
 - DsButton invalid variant not tested — pre-existing, validator warning not in AC
 - DsInput textarea rows only one case tested — pre-existing, single case sufficient for AC
 - DsCombobox mousedown .prevent not tested — pre-existing, JSDOM limitation
+
+## Deferred from: code review of story 3-8 (2026-05-27)
+
+- `handleViewInternalFile` method untested in FileDetailsDialog.vue:916-1061 — requires XHR/Blob/new-window mocking beyond JSDOM capabilities, coverage targets met

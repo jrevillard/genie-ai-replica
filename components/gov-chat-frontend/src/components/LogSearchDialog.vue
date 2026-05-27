@@ -145,7 +145,7 @@
           </div>
 
           <!-- Custom date range picker -->
-          <div v-if="searchParams.dateRange === 'custom'" class="search-row custom-date-range">
+          <div v-if="searchParams.dateRange === 'custom'" class="search-row custom-date-range" data-test-id="custom-date-range">
             <div class="search-field">
               <label for="startDate">{{ translate('admin.logSearch.startDate', 'Start Date') }}</label>
               <DsInput id="startDate" v-model="searchParams.startDate" type="date" />
@@ -158,7 +158,7 @@
         </div>
 
         <!-- Search results -->
-        <div v-if="hasSearched" class="search-results">
+        <div v-if="hasSearched" class="search-results" data-test-id="search-results">
           <div class="results-header">
             <h3>
               {{ translate('admin.logSearch.results', 'Search Results') }}
@@ -205,7 +205,7 @@
       <div class="modal-footer">
         <div style="display: flex; justify-content: space-between; width: 100%">
           <div>
-            <DsButton v-if="searchResults.length > 0" variant="secondary" @click="exportLogs">
+            <DsButton v-if="searchResults.length > 0" variant="secondary" data-test-id="export-csv-btn" @click="exportLogs">
               {{ translate('admin.logSearch.export', 'Export CSV') }}
             </DsButton>
           </div>
@@ -401,64 +401,6 @@ export default {
       } catch (error) {
         console.error('Error exporting logs:', error);
       }
-    },
-    useMockData() {
-      return [
-        {
-          time: '10:42:15',
-          level: 'ERROR',
-          service: 'API Gateway',
-          message: 'Connection timeout to external provider'
-        },
-        {
-          time: '09:36:22',
-          level: 'ERROR',
-          service: 'API Gateway',
-          message: 'Connection timeout to external provider'
-        },
-        {
-          time: '08:17:45',
-          level: 'ERROR',
-          service: 'Data Service',
-          message: 'Database query failed: connection refused'
-        },
-        {
-          time: '10:38:22',
-          level: 'WARN',
-          service: 'Storage',
-          message: 'Disk space below 10% threshold'
-        },
-        {
-          time: '11:15:33',
-          level: 'WARN',
-          service: 'Database',
-          message: 'Slow query detected (2.5s): SELECT * FROM large_table WHERE...'
-        },
-        {
-          time: '10:05:19',
-          level: 'INFO',
-          service: 'Auth Service',
-          message: 'User role updated for admin@huduma.ai'
-        },
-        {
-          time: '10:12:44',
-          level: 'INFO',
-          service: 'Data Service',
-          message: 'Automatic backup completed successfully'
-        },
-        {
-          time: '11:30:12',
-          level: 'WARN',
-          service: 'External API',
-          message: 'Rate limit approaching (80% of quota used)'
-        },
-        {
-          time: '09:45:23',
-          level: 'INFO',
-          service: 'Cache',
-          message: 'Cache flush completed (10,243 entries cleared)'
-        }
-      ];
     }
   }
 };

@@ -1,7 +1,7 @@
 <template>
   <div class="app-container">
     <!-- Main chatbot container -->
-    <div class="chatbot-container">
+    <div class="chatbot-container" data-test-id="chatbot-container">
       <!-- New Chat Confirmation Dialog -->
       <ConfirmDialog
         :visible="showNewChatConfirm"
@@ -303,7 +303,6 @@ export default {
   data() {
     return {
       conversationId: null,
-      messages: [],
       chatMessages: [],
       newMessage: '',
       selectedContextItems: [],

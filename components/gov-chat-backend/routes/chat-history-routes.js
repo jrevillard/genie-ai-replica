@@ -1086,6 +1086,141 @@ module.exports = (chatHistoryService) => {
     }
   });
 
+  // Specific folder routes MUST come before /folders/:folderId to avoid parameterized match
+
+  /**
+   * @swagger
+   * /api/chat/folders/search:
+   *   get:
+   *     summary: Search folders
+   *     description: Searches for folders by name or description
+   *     tags: [Chat History]
+   *     parameters:
+   *       - in: query
+   *         name: q
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Search term
+   *       - in: query
+   *         name: includeArchived
+   *         schema:
+   *           type: boolean
+   *           default: false
+   *         description: Whether to include archived folders
+   *     responses:
+   *       200:
+   *         description: Search results
+   *       401:
+   *         description: Unauthorized
+   *       500:
+   *         description: Server error
+   */
+  router.get('/folders/search', async (req, res, next) => {
+    try {
+      const userId = extractUserId(req);
+
+      if (!userId) {
+        logger.warn('No userId available in request');
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
+        });
+      }
+
+      const userKey = req.user._key;
+
+      const searchTerm = req.query.q || '';
+      const includeArchived = req.query.includeArchived === 'true';
+
+      if (!searchTerm) {
+        return res.status(400).json({ message: 'Search term is required' });
+      }
+
+      logger.info(`Searching folders for user ${userId} with term "${searchTerm}"`);
+
+      const options = { includeArchived, userKey };
+      const results = await chatHistoryService.searchFolders(userId, searchTerm, options);
+
+      res.json(results);
+    } catch (error) {
+      logger.error(`Error searching folders: ${error.message}`, { stack: error.stack });
+      next(error);
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/chat/folders/reorder:
+   *   post:
+   *     summary: Reorder folders
+   *     description: Updates the order of folders at the same level
+   *     tags: [Chat History]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - folderOrders
+   *             properties:
+   *               folderOrders:
+   *                 type: array
+   *                 items:
+   *                   type: object
+   *                   properties:
+   *                     folderId:
+   *                       type: string
+   *                     order:
+   *                       type: integer
+   *               parentFolderId:
+   *                 type: string
+   *                 description: Parent folder ID (null for root folders)
+   *     responses:
+   *       200:
+   *         description: Folders reordered successfully
+   *       401:
+   *         description: Unauthorized
+   *       403:
+   *         description: Forbidden - user doesn't have permission
+   *       400:
+   *         description: Invalid request data
+   *       500:
+   *         description: Server error
+   */
+  router.post('/folders/reorder', async (req, res, next) => {
+    try {
+      const { folderOrders, parentFolderId } = req.body;
+
+      if (!Array.isArray(folderOrders) || folderOrders.length === 0) {
+        return res.status(400).json({ message: 'Invalid folder orders data' });
+      }
+
+      const userId = extractUserId(req);
+
+      if (!userId) {
+        logger.warn('No userId available in request');
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
+        });
+      }
+
+      const userKey = req.user._key;
+
+      logger.info(
+        `Reordering ${folderOrders.length} folders for user ${userId} under parent ${parentFolderId || 'root'}`
+      );
+
+      const result = await chatHistoryService.reorderFolders(userId, folderOrders, parentFolderId, userKey);
+      res.json(result);
+    } catch (error) {
+      logger.error(`Error reordering folders: ${error.message}`, { stack: error.stack });
+      next(error);
+    }
+  });
+
   /**
    * @swagger
    * /api/chat/folders/{folderId}:
@@ -1280,139 +1415,6 @@ module.exports = (chatHistoryService) => {
       res.json(result);
     } catch (error) {
       logger.error(`Error deleting folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-      next(error);
-    }
-  });
-
-  /**
-   * @swagger
-   * /api/chat/folders/search:
-   *   get:
-   *     summary: Search folders
-   *     description: Searches for folders by name or description
-   *     tags: [Chat History]
-   *     parameters:
-   *       - in: query
-   *         name: q
-   *         required: true
-   *         schema:
-   *           type: string
-   *         description: Search term
-   *       - in: query
-   *         name: includeArchived
-   *         schema:
-   *           type: boolean
-   *           default: false
-   *         description: Whether to include archived folders
-   *     responses:
-   *       200:
-   *         description: Search results
-   *       401:
-   *         description: Unauthorized
-   *       500:
-   *         description: Server error
-   */
-  router.get('/folders/search', async (req, res, next) => {
-    try {
-      const userId = extractUserId(req);
-
-      if (!userId) {
-        logger.warn('No userId available in request');
-        return res.status(400).json({
-          success: false,
-          message: 'User ID is required but not found in request'
-        });
-      }
-
-      const userKey = req.user._key;
-
-      const searchTerm = req.query.q || '';
-      const includeArchived = req.query.includeArchived === 'true';
-
-      if (!searchTerm) {
-        return res.status(400).json({ message: 'Search term is required' });
-      }
-
-      logger.info(`Searching folders for user ${userId} with term "${searchTerm}"`);
-
-      const options = { includeArchived, userKey };
-      const results = await chatHistoryService.searchFolders(userId, searchTerm, options);
-
-      res.json(results);
-    } catch (error) {
-      logger.error(`Error searching folders: ${error.message}`, { stack: error.stack });
-      next(error);
-    }
-  });
-
-  /**
-   * @swagger
-   * /api/chat/folders/reorder:
-   *   post:
-   *     summary: Reorder folders
-   *     description: Updates the order of folders at the same level
-   *     tags: [Chat History]
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             required:
-   *               - folderOrders
-   *             properties:
-   *               folderOrders:
-   *                 type: array
-   *                 items:
-   *                   type: object
-   *                   properties:
-   *                     folderId:
-   *                       type: string
-   *                     order:
-   *                       type: integer
-   *               parentFolderId:
-   *                 type: string
-   *                 description: Parent folder ID (null for root folders)
-   *     responses:
-   *       200:
-   *         description: Folders reordered successfully
-   *       401:
-   *         description: Unauthorized
-   *       403:
-   *         description: Forbidden - user doesn't have permission
-   *       400:
-   *         description: Invalid request data
-   *       500:
-   *         description: Server error
-   */
-  router.post('/folders/reorder', async (req, res, next) => {
-    try {
-      const { folderOrders, parentFolderId } = req.body;
-
-      if (!Array.isArray(folderOrders) || folderOrders.length === 0) {
-        return res.status(400).json({ message: 'Invalid folder orders data' });
-      }
-
-      const userId = extractUserId(req);
-
-      if (!userId) {
-        logger.warn('No userId available in request');
-        return res.status(400).json({
-          success: false,
-          message: 'User ID is required but not found in request'
-        });
-      }
-
-      const userKey = req.user._key;
-
-      logger.info(
-        `Reordering ${folderOrders.length} folders for user ${userId} under parent ${parentFolderId || 'root'}`
-      );
-
-      const result = await chatHistoryService.reorderFolders(userId, folderOrders, parentFolderId, userKey);
-      res.json(result);
-    } catch (error) {
-      logger.error(`Error reordering folders: ${error.message}`, { stack: error.stack });
       next(error);
     }
   });

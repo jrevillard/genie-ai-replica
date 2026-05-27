@@ -71,7 +71,7 @@ development_status:
   2-8-test-backend-middleware: done
   2-9-test-backend-admin-and-security-services: done
   2-10-test-backend-query-user-and-service-routes: done
-  2-11-test-backend-chat-history-completion-and-database-operations: ready-for-dev
+  2-11-test-backend-chat-history-completion-and-database-operations: review
   epic-2-retrospective: optional
 
   # Epic 3: Frontend Component Test Suite

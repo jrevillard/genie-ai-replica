@@ -36,7 +36,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-13
-last_updated: 2026-05-26
+last_updated: 2026-05-27
 project: genie-ai
 project_key: testing-framework
 tracking_system: file-system
@@ -56,7 +56,7 @@ development_status:
   1-8-e2e-playwright-tests-for-chatbot-interaction-flows: done
   1-9-e2e-playwright-tests-for-document-upload-and-search-flows: done
   1-10-test-flutter-service-layer: done
-  1-11-test-flutter-design-system-and-core-components: backlog
+  1-11-test-flutter-design-system-and-core-components: ready-for-dev
   epic-1-retrospective: done
 
   # Epic 2: Backend API Test Suite

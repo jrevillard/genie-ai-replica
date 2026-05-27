@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 /// Minimal config map that produces valid light-mode tokens.
 const Map<String, dynamic> lightConfig = {
   'theme': <String, dynamic>{},

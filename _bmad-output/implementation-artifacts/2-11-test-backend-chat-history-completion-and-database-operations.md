@@ -15,7 +15,7 @@ So that backend coverage reaches the professional 70%+ target.
 3. **AC3**: Database operations service has complete test coverage for backup, restore, and optimize with mocked ArangoDB
 4. **AC4**: Service category service has complete test coverage for category CRUD, translations, and initialization with mocked ArangoDB
 5. **AC5**: Weather service has complete test coverage for weather data fetching with mocked HTTP client
-6. **AC6**: Key handler has complete test coverage for ArangoDB key sanitization (pure function, no mocks needed)
+6. **AC6**: Key handler has complete test coverage for ArangoDB key sanitization (mock `uuid` for deterministic generateKey tests)
 7. **AC7**: All existing tests pass, zero lint errors
 8. **AC8**: Backend coverage reaches ~72% (statements), exceeding 70% professional target
 
@@ -45,9 +45,9 @@ So that backend coverage reaches the professional 70%+ target.
 
 - [ ] Task 4: Create service-category-service.test.js (AC: #4)
   - [ ] 4.1 Create `__tests__/services/service-category-service.test.js`
-  - [ ] 4.2 Test CRUD: createCategory, upsertCategories, upsertServices, deleteCategory, deleteService
+  - [ ] 4.2 Test CRUD: createCategory, createServiceWithTranslations, upsertCategories, upsertServices, deleteCategory, deleteService
   - [ ] 4.3 Test translations: getCategoryTranslations, getServiceTranslations, updateCategoryWithTranslations, updateServiceWithTranslations
-  - [ ] 4.4 Test queries: getAllCategoriesWithServices, getAdminAllCategoriesWithServices, searchCategoriesAndServices
+  - [ ] 4.4 Test queries: getAllCategoriesWithServices, getAdminAllCategoriesWithServices, getCategoryWithServices, searchCategoriesAndServices
   - [ ] 4.5 Test helpers: categoryExists
 
 - [ ] Task 5: Create weather-service.test.js (AC: #5)
@@ -58,9 +58,10 @@ So that backend coverage reaches the professional 70%+ target.
 
 - [ ] Task 6: Create key-handler.test.js (AC: #6)
   - [ ] 6.1 Create `__tests__/services/key-handler.test.js`
-  - [ ] 6.2 Test sanitizeKey: special chars, leading numbers, length limits, prefix handling
-  - [ ] 6.3 Test generateKey: format, uniqueness, prefix
-  - [ ] 6.4 Test processDocument: _key sanitization, system field removal (_id, _rev)
+  - [ ] 6.2 Mock `uuid` module for deterministic generateKey tests
+  - [ ] 6.3 Test sanitizeKey: special chars, leading numbers, length limits, prefix handling
+  - [ ] 6.4 Test generateKey: format, uniqueness, prefix
+  - [ ] 6.5 Test processDocument: _key sanitization, system field removal (_id, _rev)
 
 - [ ] Task 7: Verify all tests pass and coverage target (AC: #7, #8)
   - [ ] 7.1 Run full test suite from `components/gov-chat-backend/` — all existing + new tests pass
@@ -78,6 +79,17 @@ So that backend coverage reaches the professional 70%+ target.
 - **process.exit override**: `beforeAll(() => { process.exit = jest.fn(); })` in every route test file
 - **Error format**: `{ error, message, details }` (RFC 9457) for route error responses
 - **Controller -> Service pattern**: Controllers handle HTTP, Services contain business logic
+- **Singleton service reset**: All service singletons (chat-history, database-operations, service-category, weather) need `jest.isolateModules()` + `delete Service.instance` in `beforeEach` to prevent state pollution. Key-handler is the exception (pure functions, no singleton).
+
+### Mock Complexity by Service
+
+| Service | Mock Level | Key Mocks Needed |
+|---------|-----------|-----------------|
+| key-handler | Simple | `uuid` only |
+| weather-service | Medium | `axios` (3 endpoints), `dbService`, optional `analyticsService` |
+| service-category-service | Medium | `dbService` with 6 collection mocks, `jest.isolateModules()` |
+| database-operations-service | Complex | `dbService`, `fs.promises` (mkdir/stat/unlink), `fs.createWriteStream`, `zlib`, `stream` |
+| chat-history-service | Complex | `dbService` with 9 collection mocks, `analyticsService`, `jest.isolateModules()` |
 
 ### Files to Extend (DO NOT recreate)
 
@@ -93,9 +105,9 @@ So that backend coverage reaches the professional 70%+ target.
 | `__tests__/services/database-operations-service.test.js` | `services/database-operations-service.js` | 362 | Service test from story 2-7 |
 | `__tests__/services/service-category-service.test.js` | `services/service-category-service.js` | 931 | Service test from story 2-7 |
 | `__tests__/services/weather-service.test.js` | `services/weather-service.js` | 233 | Service test + axios mock |
-| `__tests__/services/key-handler.test.js` | `services/key-handler.js` | 81 | Pure function tests, no mocking |
+| `__tests__/services/key-handler.test.js` | `services/key-handler.js` | 81 | Mock uuid for generateKey, test edge cases directly |
 
-**Why a separate chat-history-routes test file?** The existing `routes/chat.test.js` covers basic conversation/message routes (story 2-4). The `chat-history-routes.js` is a separate 1697-line route module with 26+ endpoints. It deserves its own test file following the same pattern as other route test files (query-routes, user-routes, etc.).
+**Why a separate chat-history-routes test file?** The existing `routes/chat.test.js` covers basic conversation/message routes (story 2-4). The `chat-history-routes.js` is a separate 1697-line route module with 35 route handlers. It deserves its own test file following the same pattern as other route test files (query-routes, user-routes, etc.).
 
 ### Route Test Boilerplate (copy from story 2-10)
 
@@ -194,95 +206,134 @@ function authDelete(path) {
 | weather-service | Throws all errors, returns 'Unknown' for city lookup fail | `expect(fn).rejects.toThrow()` + fallback |
 | key-handler | Throws on invalid input | `expect(fn).toThrow()` |
 
-### chat-history-routes.js — Complete Route Map (26 endpoints)
+### chat-history-routes.js — Complete Route Map (35 endpoints)
 
-Route module uses factory pattern: `module.exports = (chatHistoryService) => router`. All routes require auth. `extractUserId(req)` reads `req.user.iss_sub`.
+Route module uses factory pattern: `module.exports = (chatHistoryService) => router`. All routes require auth via `router.use(keycloakAuthMiddleware.authenticate)`. `extractUserId(req)` reads `req.user.iss_sub`. Routes also access `req.user._key`.
 
-**Conversation Management:**
-- `GET /` — list conversations (paginated: limit, offset, includeArchived, filterStarred)
-- `POST /` — create conversation (body: title, category)
-- `GET /:conversationId` — get single conversation
-- `PATCH /:conversationId` — update conversation (body: title, isStarred, isArchived, category, tags)
-- `DELETE /:conversationId` — delete conversation
+**Route Error Patterns** — two distinct patterns (test both):
+- **Direct responses**: `res.status(400/403/404).json({ message })` for validation/auth errors
+- **next(error)**: for service layer errors caught in try-catch, handled by global error middleware
 
-**Message Management:**
-- `GET /:conversationId/messages` — get messages (paginated)
-- `POST /:conversationId/messages` — add message (body: content, sender, files)
-- `POST /:conversationId/messages/read` — mark messages read (body: messageIds)
+**Route Validation Gotchas:**
+- **Folder circular reference prevention**: folder PATCH checks `parentFolderId !== folderId`
+- **Parent ownership validation**: folder creation validates `owners.some((owner) => owner.iss_sub === userId)`
+- **Order calculation**: new folders get `order = existingFolders.length` automatically
+- **Query linking silent failure**: when adding assistant messages with `queryId`, linking silently catches errors if query doesn't exist
 
-**Query Integration:**
-- `GET /query/:queryId/messages` — find messages for query
-- `GET /messages/:messageId/query` — find originating query
+**Conversation Management (11 endpoints):**
+- `GET /conversations` — list conversations (paginated: limit, offset, includeArchived, filterStarred)
+- `POST /conversations` — create conversation (body: title, category)
+- `GET /conversations/:conversationId` — get single conversation
+- `PATCH /conversations/:conversationId` — update conversation (body: title, isStarred, isArchived, category, tags)
+- `DELETE /conversations/:conversationId` — delete conversation
+- `GET /conversations/:conversationId/messages` — get messages (paginated)
+- `POST /conversations/:conversationId/messages` — add message (body: content, sender, files)
+- `POST /conversations/:conversationId/messages/read` — mark messages read (body: messageIds)
+- `GET /conversations/:conversationId/folder` — find conversation's parent folder
+- `POST /conversations/:conversationId/move` — move conversation (body: sourceFolderId, targetFolderId)
 - `POST /query/:queryId/conversation` — create conversation from query
 
-**Utility:**
+**Query/Message Linking (2 endpoints):**
+- `GET /query/:queryId/messages` — find messages for query
+- `GET /messages/:messageId/query` — find originating query
+
+**Utility (3 endpoints):**
 - `GET /search` — search conversations (query param: q)
 - `GET /recent` — recent conversations (query param: limit)
 - `GET /stats` — user conversation statistics
 
-**Folder CRUD:**
+**Folder CRUD (6 endpoints):**
 - `GET /folders` — list user folders
 - `POST /folders` — create folder (body: name, parentId)
 - `GET /folders/:folderId` — get folder details
-- `PATCH /folders/:folderId` — update folder (body: name)
+- `PATCH /folders/:folderId` — update folder (body: name, parentFolderId)
 - `DELETE /folders/:folderId` — delete folder (query param: deleteContents)
 - `GET /folders/search` — search folders (query param: q)
 
-**Folder Organization:**
+**Folder Organization (2 endpoints):**
 - `POST /folders/reorder` — reorder folders (body: folderOrders, parentFolderId)
 - `GET /folders/:folderId/path` — get folder breadcrumb path
 
-**Folder-Conversation:**
+**Folder-Conversation (2 endpoints):**
 - `POST /folders/:folderId/conversations/:conversationId` — add conversation to folder
 - `DELETE /folders/:folderId/conversations/:conversationId` — remove conversation from folder
-- `GET /conversations/:conversationId/folder` — find conversation's parent folder
-- `POST /conversations/:conversationId/move` — move conversation (body: sourceFolderId, targetFolderId)
 
 ### database-operations-service.js (362 lines)
 
 **Singleton** with 4 methods. Returns error objects `{ success: false }`, does NOT throw.
 
-- `backupDatabase()` — iterates non-system collections, exports JSON, optional gzip, cleanup old backups
-- `optimizeDatabase()` — iterates collections, calls compact, analyzes indexes
-- `getDatabaseStats()` — aggregates collection figures (document count, size)
+- `backupDatabase()` — iterates non-system collections (skips `isSystem: true`), exports JSON/NDJSON, optional gzip via `zlib.createGzip()`, cleanup old backups by mtime
+- `optimizeDatabase()` — iterates collections, calls compact, analyzes indexes; individual collection failures captured in results array, does NOT abort
+- `getDatabaseStats()` — aggregates collection figures (document count, size); uses `db.route('/_api/statistics').get()` for server stats
 - `_formatSize(bytes)` — private helper, test via getDatabaseStats
 
-**Env vars**: `BACKUP_DIR` (default: './backups'), `MAX_BACKUPS` (default: 5), `BACKUP_FORMAT` (default: 'json')
+**Env vars**: `BACKUP_DIR` (default: './backups'), `MAX_BACKUPS` (default: 5), `BACKUP_FORMAT` (default: 'json'), `COMPRESS_BACKUPS`, `APP_NAME`
 
-**Mock strategy**: Mock `dbService.getConnection()` returning mock db with `collection()` returning mock collections with `all()`, `export()`, `figures()`. Mock `fs` for file operations.
+**Mock strategy**:
+- `dbService.getConnection('default')` returning mock db with `collection()`, `listCollections()`, `query()`
+- Mock collections with `all()`, `export()`, `figures()`, `compact()`
+- `fs.promises` for `mkdir`, `stat`, `unlink` (directory operations)
+- `fs.createWriteStream` for backup file writes
+- `zlib.createGzip()` for compression testing (mock `stream.pipeline` or use `Readable.from()`)
+- **Singleton reset**: use `jest.isolateModules()` + delete `instance` to prevent state pollution between tests
 
 ### service-category-service.js (931 lines)
 
-**Singleton** with 5 collections: `serviceCategories`, `services`, `categoryServices`, `serviceCategoryTranslations`, `serviceTranslations`.
+**Singleton** with 6 collections: `serviceCategories`, `services`, `categoryServices`, `serviceCategoryTranslations`, `serviceTranslations`, and edge collection `serviceCategoryTranslationsEdge`.
 
-16 public methods:
+18 public methods:
 - Bulk upsert: `upsertCategories`, `upsertServices`
 - CRUD: `createCategory`, `createServiceWithTranslations`, `updateCategoryWithTranslations`, `updateServiceWithTranslations`, `deleteCategory`, `deleteService`
 - Queries: `getAllCategoriesWithServices`, `getAdminAllCategoriesWithServices`, `getCategoryWithServices`, `searchCategoriesAndServices`
 - Translations: `getCategoryTranslations`, `getServiceTranslations`
-- Helpers: `categoryExists`
+- Helpers: `categoryExists`, `init`
 
-Translation pattern: docs in separate collections linked by `categoryKey`/`serviceKey` + `locale`. `_getTranslatedName` private helper resolves locale names.
+Edge cases to test:
+- `createCategory` auto-calculates `order = max(existing) + 1`
+- `upsertServices` continues on individual service failures (doesn't abort)
+- Non-EN translation cleanup: deletes all non-EN translations before re-adding
+- Locale conversion: all locales converted to uppercase
+- `categoryExists` returns `false` (not throws) when category not found
+- `searchCategoriesAndServices` returns `[]` when no query provided (no error thrown)
+
+**Singleton reset**: use `jest.isolateModules()` + delete `instance` to prevent state pollution between tests.
 
 ### weather-service.js (233 lines)
 
 **Singleton** with 3 methods + `setAnalyticsService` injection.
 
-- `init()` — fetches server location from `https://ipapi.co/json/`
-- `getCityName(lat, lon)` — reverse geocoding via OpenStreetMap Nominatim, returns 'Unknown' on failure
-- `getWeather(locationData)` — fetches from Open-Meteo API, weather code mapping
+- `init()` — fetches server location from `https://ipapi.co/json/` (5s timeout); falls back to `(0, 0)` on rate limit/failure
+- `getCityName(lat, lon)` — reverse geocoding via `https://nominatim.openstreetmap.org/reverse` (5s timeout), returns 'Unknown' on failure
+- `getWeather(locationData)` — fetches from `https://api.open-meteo.com/v1/forecast` (5s timeout); validates coordinates (falls back to server location on invalid); rounds to 4 decimal places; saves to `weatherRequests` collection
 
-**External APIs**: mock `axios` at module level (`jest.mock('axios')`) for all HTTP calls.
+**External APIs** — mock `axios` at module level (`jest.mock('axios')`) for all three endpoints:
+- `ipapi.co/json/` — server geolocation (called in `init()`)
+- `nominatim.openstreetmap.org/reverse` — reverse geocoding (called in `getCityName()`)
+- `api.open-meteo.com/v1/forecast` — weather data (called in `getWeather()`)
+
+**WMO weather code mapping** (test with these values):
+- 0-3: Clear/Clouds
+- 45, 48: Fog
+- 51-57: Drizzle
+- 61-65, 66-67: Rain
+- 71-77: Snow
+- 80-82: Rain showers
+- 85-86: Snow showers
+- 95-99: Thunderstorm
+
+**Analytics**: optional — `setAnalyticsService` injects analytics; failures logged but swallowed (non-blocking). Also needs `dbService.getConnection()` mock for `weatherRequests` collection.
+
+**Singleton reset**: use `jest.isolateModules()` + delete `instance` to prevent state pollution between tests.
 
 ### key-handler.js (81 lines)
 
 **Pure utility** — no class, no DB, no singletons. 3 exported functions:
 
-- `sanitizeKey(key, prefix)` — strips invalid chars, valid ArangoDB key (no leading digit, alphanumeric + `-` + `_`, max 254 chars)
-- `generateKey(prefix)` — creates `{prefix}-{timestamp}-{uuid}` format
-- `processDocument(doc, prefix)` — ensures valid _key, removes _id/_rev
+- `sanitizeKey(key, prefix)` — strips invalid chars, valid ArangoDB key (no leading digit, alphanumeric + `-` + `_`, max 254 chars). Leading underscores stripped. Special chars become underscores.
+- `generateKey(prefix)` — creates `{prefix}-{timestamp}-{uuid}` format using `require('uuid').v4`
+- `processDocument(doc, prefix)` — ensures valid _key, removes _id/_rev; throws on null/undefined input; empty string keys trigger generation
 
-**No mocking needed** — test all edge cases directly.
+**Mock `uuid`** for deterministic `generateKey` tests: `jest.mock('uuid', () => ({ v4: jest.fn() }))`. `sanitizeKey` and `processDocument` edge cases can be tested without mocking.
 
 ### Previous Story Learnings (Story 2-10)
 

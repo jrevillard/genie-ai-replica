@@ -781,7 +781,11 @@ describe('UserProfileComponent', () => {
   describe('submission flow', () => {
     it('confirmSave sets isSubmitting during API call', async () => {
       let resolveSave;
-      mockUpdateProfile.mockReturnValueOnce(new Promise((r) => { resolveSave = r; }));
+      mockUpdateProfile.mockReturnValueOnce(
+        new Promise((r) => {
+          resolveSave = r;
+        })
+      );
       const wrapper = createUserProfileWrapper();
       getProfileResolve(mockProfileData);
       await wrapper.vm.$nextTick();

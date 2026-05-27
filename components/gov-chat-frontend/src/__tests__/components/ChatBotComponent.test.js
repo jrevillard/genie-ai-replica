@@ -1210,14 +1210,10 @@ describe('ChatBotComponent', () => {
       await wrapper.vm.$nextTick();
 
       capturedCallbacks.onMetadata({
-        source_documents: [
-          { document_id: 'doc-1', document_name: 'Doc 1', url: 'http://a.pdf', score: 0.9 }
-        ]
+        source_documents: [{ document_id: 'doc-1', document_name: 'Doc 1', url: 'http://a.pdf', score: 0.9 }]
       });
       capturedCallbacks.onMetadata({
-        source_documents: [
-          { document_id: 'doc-1', document_name: 'Doc 1', url: 'http://a.pdf', score: 0.9 }
-        ]
+        source_documents: [{ document_id: 'doc-1', document_name: 'Doc 1', url: 'http://a.pdf', score: 0.9 }]
       });
 
       expect(vm.relatedDocuments.length).toBe(1);

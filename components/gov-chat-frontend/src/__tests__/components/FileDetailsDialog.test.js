@@ -123,9 +123,7 @@ function createMockHierarchy(locale = 'en') {
     {
       catKey: 'cat2',
       name: locale === 'en' ? 'Category 2' : 'Catégorie 2',
-      children: [
-        { _key: 'srv4', name: locale === 'en' ? 'Service D' : 'Service D (fr)' }
-      ]
+      children: [{ _key: 'srv4', name: locale === 'en' ? 'Service D' : 'Service D (fr)' }]
     }
   ];
 }
@@ -163,7 +161,8 @@ function createFileDetailsDialogWrapper(overrides = {}) {
           props: ['tabs', 'modelValue']
         },
         DsInput: {
-          template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" :disabled="disabled" />',
+          template:
+            '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" :disabled="disabled" />',
           props: ['modelValue', 'type', 'placeholder', 'disabled']
         },
         DsStatusTag: {
@@ -175,7 +174,8 @@ function createFileDetailsDialogWrapper(overrides = {}) {
           props: ['size', 'overlay']
         },
         ConfirmDialog: {
-          template: '<div v-if="visible" class="confirm-dialog" @click="$emit(\'confirm\')" @click.right="$emit(\'cancel\')"></div>',
+          template:
+            '<div v-if="visible" class="confirm-dialog" @click="$emit(\'confirm\')" @click.right="$emit(\'cancel\')"></div>',
           props: ['visible', 'title', 'message', 'confirmText', 'cancelText', 'secondaryText'],
           emits: ['confirm', 'cancel', 'secondary']
         }
@@ -266,8 +266,8 @@ describe('FileDetailsDialog', () => {
 
       const tabs = wrapper.vm.visibleTabs;
       expect(tabs.length).toBeGreaterThanOrEqual(2);
-      expect(tabs.some(t => t.value === 'dashboard')).toBe(true);
-      expect(tabs.some(t => t.value === 'crawlLog')).toBe(true);
+      expect(tabs.some((t) => t.value === 'dashboard')).toBe(true);
+      expect(tabs.some((t) => t.value === 'crawlLog')).toBe(true);
     });
 
     it('shows IngestionLog tab when status is not pending', async () => {
@@ -280,7 +280,7 @@ describe('FileDetailsDialog', () => {
       await wrapper.vm.$nextTick();
 
       const tabs = wrapper.vm.visibleTabs;
-      expect(tabs.some(t => t.value === 'ingestionLog')).toBe(true);
+      expect(tabs.some((t) => t.value === 'ingestionLog')).toBe(true);
     });
 
     it('does not show IngestionLog tab when status is pending', async () => {
@@ -293,7 +293,7 @@ describe('FileDetailsDialog', () => {
       await wrapper.vm.$nextTick();
 
       const tabs = wrapper.vm.visibleTabs;
-      expect(tabs.some(t => t.value === 'ingestionLog')).toBe(false);
+      expect(tabs.some((t) => t.value === 'ingestionLog')).toBe(false);
     });
   });
 
@@ -316,7 +316,9 @@ describe('FileDetailsDialog', () => {
     });
 
     it('areAllLabelsSelected getter returns true when all labels selected', async () => {
-      mockGetFileMetadata.mockResolvedValue(createMockFile({ labels: ['Service A', 'Service B', 'Service C', 'Service D'] }));
+      mockGetFileMetadata.mockResolvedValue(
+        createMockFile({ labels: ['Service A', 'Service B', 'Service C', 'Service D'] })
+      );
       const wrapper = createFileDetailsDialogWrapper();
       await wrapper.vm.$nextTick();
       await wrapper.vm.$nextTick();
@@ -361,7 +363,9 @@ describe('FileDetailsDialog', () => {
     });
 
     it('areAllLabelsSelected setter clears all labels when set to false', async () => {
-      mockGetFileMetadata.mockResolvedValue(createMockFile({ labels: ['Service A', 'Service B', 'Service C', 'Service D'] }));
+      mockGetFileMetadata.mockResolvedValue(
+        createMockFile({ labels: ['Service A', 'Service B', 'Service C', 'Service D'] })
+      );
       const wrapper = createFileDetailsDialogWrapper();
       await wrapper.vm.$nextTick();
       await wrapper.vm.$nextTick();
@@ -380,9 +384,7 @@ describe('FileDetailsDialog', () => {
     it('mapEnglishToLocale maps English labels to locale labels', async () => {
       const frenchHierarchy = createMockHierarchy('fr');
       mockGetFileMetadata.mockResolvedValue(createMockFile({ labels: ['Service A', 'Service B'] }));
-      mockGetAdminCategories
-        .mockResolvedValueOnce(frenchHierarchy)
-        .mockResolvedValueOnce(createMockHierarchy('en'));
+      mockGetAdminCategories.mockResolvedValueOnce(frenchHierarchy).mockResolvedValueOnce(createMockHierarchy('en'));
 
       const wrapper = createFileDetailsDialogWrapper();
       await wrapper.vm.$nextTick();
@@ -821,7 +823,7 @@ describe('FileDetailsDialog', () => {
       await wrapper.vm.$nextTick();
       await wrapper.vm.$nextTick();
 
-      const closeButton = wrapper.findAll('.ds-button').find(btn => btn.text() === 'Close');
+      const closeButton = wrapper.findAll('.ds-button').find((btn) => btn.text() === 'Close');
 
       if (closeButton) {
         await closeButton.trigger('click');
@@ -1023,10 +1025,7 @@ describe('FileDetailsDialog', () => {
         mockEventBusEmit.mockClear();
         await wrapper.vm.confirmIngest();
 
-        expect(mockEventBusEmit).toHaveBeenCalledWith(
-          'notification:show',
-          expect.objectContaining({ type: 'error' })
-        );
+        expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
         expect(wrapper.vm.isLoading).toBe(false);
         expect(wrapper.emitted('close')).toBeFalsy();
       });
@@ -1047,10 +1046,7 @@ describe('FileDetailsDialog', () => {
         mockEventBusEmit.mockClear();
         await wrapper.vm.confirmRetract();
 
-        expect(mockEventBusEmit).toHaveBeenCalledWith(
-          'notification:show',
-          expect.objectContaining({ type: 'error' })
-        );
+        expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
         expect(wrapper.vm.isLoading).toBe(false);
         expect(wrapper.emitted('close')).toBeFalsy();
       });
@@ -1071,10 +1067,7 @@ describe('FileDetailsDialog', () => {
         mockEventBusEmit.mockClear();
         await wrapper.vm.confirmDelete();
 
-        expect(mockEventBusEmit).toHaveBeenCalledWith(
-          'notification:show',
-          expect.objectContaining({ type: 'error' })
-        );
+        expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
         expect(wrapper.vm.isLoading).toBe(false);
         expect(wrapper.emitted('close')).toBeFalsy();
       });
@@ -1092,10 +1085,17 @@ describe('FileDetailsDialog', () => {
         mockGetCrawlJob.mockResolvedValue({ data: { status: 'Crawling' } });
         mockGetCrawlMetrics.mockResolvedValue({
           data: {
-            crawl_rate: 10, queue_size: 5, error_rate: 1,
-            error_counts: { timeout: 2 }, processed: 100, limit: 200,
-            current_depth: 2, max_depth: 5, links_internal: 50,
-            links_external: 10, total_crawled: 80
+            crawl_rate: 10,
+            queue_size: 5,
+            error_rate: 1,
+            error_counts: { timeout: 2 },
+            processed: 100,
+            limit: 200,
+            current_depth: 2,
+            max_depth: 5,
+            links_internal: 50,
+            links_external: 10,
+            total_crawled: 80
           }
         });
         const wrapper = createFileDetailsDialogWrapper();

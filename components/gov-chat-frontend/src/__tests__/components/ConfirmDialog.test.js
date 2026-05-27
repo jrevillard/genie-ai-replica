@@ -6,8 +6,7 @@ const ConfirmDialog = require('@/components/ConfirmDialog.vue').default;
 describe('ConfirmDialog', () => {
   let wrapper;
 
-  const findButtonByText = (wrapper, text) =>
-    wrapper.findAll('.button-stub').find((b) => b.text() === text);
+  const findButtonByText = (wrapper, text) => wrapper.findAll('.button-stub').find((b) => b.text() === text);
 
   const stubs = {
     DsModal: {

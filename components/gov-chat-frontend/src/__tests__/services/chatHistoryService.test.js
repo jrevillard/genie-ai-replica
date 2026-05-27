@@ -180,10 +180,6 @@ describe('chatHistoryService', () => {
         );
       });
     });
-
-
-
-
   });
 
   // =========================================================================
@@ -226,9 +222,6 @@ describe('chatHistoryService', () => {
         expect(result.name).toBe('Work');
       });
     });
-
-
-
   });
 
   // =========================================================================
@@ -381,9 +374,7 @@ describe('chatHistoryService', () => {
       it('throws on API failure', async () => {
         mockPatch.mockRejectedValue(new Error('Server error'));
 
-        await expect(chatHistoryService.updateFolder('folder-1', { name: 'Test' })).rejects.toThrow(
-          'Server error'
-        );
+        await expect(chatHistoryService.updateFolder('folder-1', { name: 'Test' })).rejects.toThrow('Server error');
       });
     });
 
@@ -416,7 +407,6 @@ describe('chatHistoryService', () => {
         await expect(chatHistoryService.deleteFolder('folder-1')).rejects.toThrow('Server error');
       });
     });
-
   });
 
   // =========================================================================
@@ -436,9 +426,7 @@ describe('chatHistoryService', () => {
       it('throws on API failure', async () => {
         mockPost.mockRejectedValue(new Error('Server error'));
 
-        await expect(
-          chatHistoryService.addConversationToFolder('folder-1', 'conv-1')
-        ).rejects.toThrow('Server error');
+        await expect(chatHistoryService.addConversationToFolder('folder-1', 'conv-1')).rejects.toThrow('Server error');
       });
     });
 
@@ -482,9 +470,9 @@ describe('chatHistoryService', () => {
       it('throws on API failure', async () => {
         mockPost.mockRejectedValue(new Error('Server error'));
 
-        await expect(
-          chatHistoryService.moveConversation('conv-1', 'folder-a', 'folder-b')
-        ).rejects.toThrow('Server error');
+        await expect(chatHistoryService.moveConversation('conv-1', 'folder-a', 'folder-b')).rejects.toThrow(
+          'Server error'
+        );
       });
     });
 
@@ -501,9 +489,9 @@ describe('chatHistoryService', () => {
       it('throws on API failure', async () => {
         mockDelete.mockRejectedValue(new Error('Server error'));
 
-        await expect(
-          chatHistoryService.removeConversationFromFolder('conv-1', 'folder-1')
-        ).rejects.toThrow('Server error');
+        await expect(chatHistoryService.removeConversationFromFolder('conv-1', 'folder-1')).rejects.toThrow(
+          'Server error'
+        );
       });
     });
   });
@@ -511,11 +499,7 @@ describe('chatHistoryService', () => {
   // =========================================================================
   // Additional Search and Stats Tests
   // =========================================================================
-  describe('Additional Search and Stats', () => {
-
-
-
-  });
+  describe('Additional Search and Stats', () => {});
 
   // -----------------------------------------------------------------------
   // getUserFolders — empty and undefined params

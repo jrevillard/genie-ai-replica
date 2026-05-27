@@ -16,7 +16,8 @@ describe('LanguageSelector', () => {
 
   const stubs = {
     DsSelect: {
-      template: '<select :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>',
+      template:
+        '<select :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>',
       props: ['modelValue']
     }
   };

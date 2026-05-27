@@ -197,9 +197,11 @@ describe('LogSearchDialog', () => {
 
     it('sets isSearching to true during async operation', async () => {
       let resolveHanging;
-      mockSearchLogs.mockReturnValueOnce(new Promise((resolve) => {
-        resolveHanging = resolve;
-      }));
+      mockSearchLogs.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveHanging = resolve;
+        })
+      );
 
       const wrapper = createLogSearchDialogWrapper();
       wrapper.vm.searchParams.dateRange = 'today';
@@ -275,10 +277,7 @@ describe('LogSearchDialog', () => {
     });
 
     it('normalizes log entries with default values', async () => {
-      const incompleteLogs = [
-        { time: '10:00:00', level: 'INFO', service: 'API' },
-        { time: '11:00:00' }
-      ];
+      const incompleteLogs = [{ time: '10:00:00', level: 'INFO', service: 'API' }, { time: '11:00:00' }];
       mockSearchLogs.mockResolvedValueOnce({
         data: { logs: incompleteLogs }
       });
@@ -830,9 +829,7 @@ describe('LogSearchDialog', () => {
       it('normalizes log entries with null fields to defaults', async () => {
         mockSearchLogs.mockResolvedValueOnce({
           data: {
-            logs: [
-              { date: null, time: null, level: null, service: null, message: null }
-            ]
+            logs: [{ date: null, time: null, level: null, service: null, message: null }]
           }
         });
 
@@ -853,9 +850,7 @@ describe('LogSearchDialog', () => {
       it('preserves existing field values', async () => {
         mockSearchLogs.mockResolvedValueOnce({
           data: {
-            logs: [
-              { date: '2025-03-15', time: '14:30:00', level: 'ERROR', service: 'API', message: 'timeout' }
-            ]
+            logs: [{ date: '2025-03-15', time: '14:30:00', level: 'ERROR', service: 'API', message: 'timeout' }]
           }
         });
 

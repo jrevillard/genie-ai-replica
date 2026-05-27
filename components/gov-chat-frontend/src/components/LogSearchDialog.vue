@@ -145,7 +145,11 @@
           </div>
 
           <!-- Custom date range picker -->
-          <div v-if="searchParams.dateRange === 'custom'" class="search-row custom-date-range" data-test-id="custom-date-range">
+          <div
+            v-if="searchParams.dateRange === 'custom'"
+            class="search-row custom-date-range"
+            data-test-id="custom-date-range"
+          >
             <div class="search-field">
               <label for="startDate">{{ translate('admin.logSearch.startDate', 'Start Date') }}</label>
               <DsInput id="startDate" v-model="searchParams.startDate" type="date" />
@@ -205,7 +209,12 @@
       <div class="modal-footer">
         <div style="display: flex; justify-content: space-between; width: 100%">
           <div>
-            <DsButton v-if="searchResults.length > 0" variant="secondary" data-test-id="export-csv-btn" @click="exportLogs">
+            <DsButton
+              v-if="searchResults.length > 0"
+              variant="secondary"
+              data-test-id="export-csv-btn"
+              @click="exportLogs"
+            >
               {{ translate('admin.logSearch.export', 'Export CSV') }}
             </DsButton>
           </div>

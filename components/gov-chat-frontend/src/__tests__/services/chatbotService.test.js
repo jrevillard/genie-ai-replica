@@ -272,7 +272,7 @@ describe('chatbotService', () => {
       chatbotService.submitQueryStream({ query: 'test' }, { onChunk, onDone });
 
       // Wait a bit for async processing
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(onChunk).toHaveBeenCalledWith('Hello ');
       expect(onChunk).toHaveBeenCalledWith('World');
@@ -304,7 +304,7 @@ describe('chatbotService', () => {
 
       chatbotService.submitQueryStream({ query: 'test' }, { onMetadata, onDone });
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(onMetadata).toHaveBeenCalledWith({ type: 'metadata', queryId: 'q-123' });
     });
@@ -335,7 +335,7 @@ describe('chatbotService', () => {
 
       chatbotService.submitQueryStream({ query: 'test' }, { onTranslation, onDone });
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(onTranslation).toHaveBeenCalledWith('Translated');
     });
@@ -365,7 +365,7 @@ describe('chatbotService', () => {
 
       chatbotService.submitQueryStream({ query: 'test' }, { onDone });
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(onDone).toHaveBeenCalledWith({ type: 'done' });
     });
@@ -395,7 +395,7 @@ describe('chatbotService', () => {
 
       chatbotService.submitQueryStream({ query: 'test' }, { onError });
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(onError).toHaveBeenCalledWith(expect.any(Error));
     });
@@ -416,7 +416,7 @@ describe('chatbotService', () => {
 
       chatbotService.submitQueryStream({ query: 'test' }, { onError });
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(onError).toHaveBeenCalledWith(expect.any(Error));
     });
@@ -444,7 +444,7 @@ describe('chatbotService', () => {
 
       chatbotService.submitQueryStream({ query: 'test' }, { onError });
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(onError).not.toHaveBeenCalled();
     });
@@ -454,7 +454,8 @@ describe('chatbotService', () => {
       global.fetch = mockFetch;
 
       const mockReader = {
-        read: jest.fn()
+        read: jest
+          .fn()
           .mockResolvedValueOnce({
             done: false,
             value: new TextEncoder().encode(': keep-alive\n\ndata: {"type":"chunk","content":"Real data"}\n\n')
@@ -478,7 +479,8 @@ describe('chatbotService', () => {
       global.fetch = mockFetch;
 
       const mockReader = {
-        read: jest.fn()
+        read: jest
+          .fn()
           .mockResolvedValueOnce({
             done: false,
             value: new TextEncoder().encode('data: {invalid json}\n\ndata: {"type":"chunk","content":"Valid"}\n\n')

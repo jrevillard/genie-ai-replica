@@ -628,10 +628,7 @@ describe('AdminDashboard', () => {
       await wrapper.vm.$nextTick();
       await wrapper.vm.$nextTick();
 
-      expect(mockEventBusEmit).toHaveBeenCalledWith(
-        'notification:show',
-        expect.objectContaining({ type: 'error' })
-      );
+      expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
     });
 
     it('loadSystemHealth shows error when response lacks metrics', async () => {
@@ -640,10 +637,7 @@ describe('AdminDashboard', () => {
       await wrapper.vm.$nextTick();
       await wrapper.vm.$nextTick();
 
-      expect(mockEventBusEmit).toHaveBeenCalledWith(
-        'notification:show',
-        expect.objectContaining({ type: 'error' })
-      );
+      expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
     });
 
     it('loadLogsSummary handles invalid response structure', async () => {
@@ -656,10 +650,7 @@ describe('AdminDashboard', () => {
 
       expect(wrapper.vm.errorLogsSummary).toEqual([]);
       expect(wrapper.vm.warningLogsSummary).toEqual([]);
-      expect(mockEventBusEmit).toHaveBeenCalledWith(
-        'notification:show',
-        expect.objectContaining({ type: 'error' })
-      );
+      expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'error' }));
     });
 
     it('loadLogsSummary handles API error gracefully', async () => {
@@ -795,9 +786,7 @@ describe('AdminDashboard', () => {
 
     it('returns false when selected documents contain ingested status', () => {
       const wrapper = createAdminDashboardWrapper();
-      wrapper.vm.documents = [
-        { _key: 'doc-1', dataprep: { status: 'ingested' } }
-      ];
+      wrapper.vm.documents = [{ _key: 'doc-1', dataprep: { status: 'ingested' } }];
       wrapper.vm.selectedDocuments = ['doc-1'];
 
       expect(wrapper.vm.showIngestButton).toBe(false);
@@ -805,9 +794,7 @@ describe('AdminDashboard', () => {
 
     it('returns true when selected documents are not ingested', () => {
       const wrapper = createAdminDashboardWrapper();
-      wrapper.vm.documents = [
-        { _key: 'doc-1', dataprep: { status: 'ready' } }
-      ];
+      wrapper.vm.documents = [{ _key: 'doc-1', dataprep: { status: 'ready' } }];
       wrapper.vm.selectedDocuments = ['doc-1'];
 
       expect(wrapper.vm.showIngestButton).toBe(true);
@@ -954,10 +941,7 @@ describe('AdminDashboard', () => {
     it('shows info notification for empty results', () => {
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.handleSearchResults([]);
-      expect(mockEventBusEmit).toHaveBeenCalledWith(
-        'notification:show',
-        expect.objectContaining({ type: 'info' })
-      );
+      expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'info' }));
     });
 
     it('stores search results and shows success notification', () => {
@@ -967,10 +951,7 @@ describe('AdminDashboard', () => {
       wrapper.vm.handleSearchResults(results);
 
       expect(wrapper.vm.searchResults).toEqual(results);
-      expect(mockEventBusEmit).toHaveBeenCalledWith(
-        'notification:show',
-        expect.objectContaining({ type: 'success' })
-      );
+      expect(mockEventBusEmit).toHaveBeenCalledWith('notification:show', expect.objectContaining({ type: 'success' }));
     });
 
     it('calls setActiveTab("logs") when not already on logs tab', () => {

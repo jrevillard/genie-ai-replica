@@ -1,6 +1,6 @@
 # Story 1.11: Test Flutter Design System and Core Components
 
-Status: review
+Status: done
 
 ## Story
 

@@ -64,8 +64,7 @@ void main() {
         final button = tester.widget<ElevatedButton>(
           find.byKey(const ValueKey('ds-button')),
         );
-        final bg =
-            button.style!.backgroundColor?.resolve({});
+        final bg = button.style!.backgroundColor?.resolve({});
         expect(bg, Colors.transparent);
       });
 
@@ -87,8 +86,7 @@ void main() {
         final button = tester.widget<ElevatedButton>(
           find.byKey(const ValueKey('ds-button')),
         );
-        final bg =
-            button.style!.backgroundColor?.resolve({});
+        final bg = button.style!.backgroundColor?.resolve({});
         expect(bg, tokens.danger);
       });
     });
@@ -119,7 +117,13 @@ void main() {
       testWidgets('onPressed is null when disabled', (tester) async {
         var pressed = false;
         await tester.pumpWidget(
-          testApp(DsButton(label: 'Test', disabled: true, onPressed: () => pressed = true)),
+          testApp(
+            DsButton(
+              label: 'Test',
+              disabled: true,
+              onPressed: () => pressed = true,
+            ),
+          ),
         );
         await tester.tap(find.byKey(const ValueKey('ds-button')));
         expect(pressed, isFalse);
@@ -165,13 +169,7 @@ void main() {
     group('icon + label', () {
       testWidgets('renders Row with Icon and Text', (tester) async {
         await tester.pumpWidget(
-          testApp(
-            DsButton(
-              icon: Icons.save,
-              label: 'Save',
-              onPressed: () {},
-            ),
-          ),
+          testApp(DsButton(icon: Icons.save, label: 'Save', onPressed: () {})),
         );
         final icon = tester.widget<Icon>(
           find.byKey(const ValueKey('ds-button-icon')),
@@ -201,18 +199,13 @@ void main() {
         const customBg = Color(0xFF123456);
         await tester.pumpWidget(
           testApp(
-            DsButton(
-              label: 'Custom',
-              overrideBg: customBg,
-              onPressed: () {},
-            ),
+            DsButton(label: 'Custom', overrideBg: customBg, onPressed: () {}),
           ),
         );
         final button = tester.widget<ElevatedButton>(
           find.byKey(const ValueKey('ds-button')),
         );
-        final bg =
-            button.style!.backgroundColor?.resolve({});
+        final bg = button.style!.backgroundColor?.resolve({});
         expect(bg, customBg);
       });
 
@@ -220,18 +213,13 @@ void main() {
         const customFg = Color(0xFF654321);
         await tester.pumpWidget(
           testApp(
-            DsButton(
-              label: 'Custom',
-              overrideFg: customFg,
-              onPressed: () {},
-            ),
+            DsButton(label: 'Custom', overrideFg: customFg, onPressed: () {}),
           ),
         );
         final button = tester.widget<ElevatedButton>(
           find.byKey(const ValueKey('ds-button')),
         );
-        final fg =
-            button.style!.foregroundColor?.resolve({});
+        final fg = button.style!.foregroundColor?.resolve({});
         expect(fg, customFg);
       });
     });
@@ -248,7 +236,9 @@ void main() {
     });
 
     group('edge cases', () {
-      testWidgets('no label, no icon renders ElevatedButton with empty text', (tester) async {
+      testWidgets('no label, no icon renders ElevatedButton with empty text', (
+        tester,
+      ) async {
         await tester.pumpWidget(testApp(DsButton()));
         final button = tester.widget<ElevatedButton>(
           find.byKey(const ValueKey('ds-button')),
@@ -260,7 +250,9 @@ void main() {
         expect(label.data, '');
       });
 
-      testWidgets('iconOnly with null icon renders ElevatedButton fallback', (tester) async {
+      testWidgets('iconOnly with null icon renders ElevatedButton fallback', (
+        tester,
+      ) async {
         await tester.pumpWidget(
           testApp(DsButton(iconOnly: true, onPressed: () {})),
         );

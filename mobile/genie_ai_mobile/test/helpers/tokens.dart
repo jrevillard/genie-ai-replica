@@ -1,27 +1,18 @@
 /// Minimal config map that produces valid light-mode tokens.
-const Map<String, dynamic> lightConfig = {
-  'theme': <String, dynamic>{},
-};
+const Map<String, dynamic> lightConfig = {'theme': <String, dynamic>{}};
 
 /// Minimal config map that produces valid dark-mode tokens.
-const Map<String, dynamic> darkConfig = {
-  'theme': <String, dynamic>{},
-};
+const Map<String, dynamic> darkConfig = {'theme': <String, dynamic>{}};
 
 /// Config with a custom brand color.
 const Map<String, dynamic> customBrandConfig = {
-  'theme': {
-    'brandColor': '#FF5722',
-  },
+  'theme': {'brandColor': '#FF5722'},
 };
 
 /// Config with custom navbar colors.
 const Map<String, dynamic> customNavbarConfig = {
   'theme': {
-    'navbar': {
-      'background': '#333333',
-      'text': '#FFFFFF',
-    },
+    'navbar': {'background': '#333333', 'text': '#FFFFFF'},
   },
 };
 
@@ -40,8 +31,6 @@ const Map<String, dynamic> customColorsConfig = {
 /// Config with custom typography scale.
 const Map<String, dynamic> customTypographyConfig = {
   'theme': {
-    'typography': {
-      'fontScale': 1.5,
-    },
+    'typography': {'fontScale': 1.5},
   },
 };

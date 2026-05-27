@@ -62,7 +62,12 @@ class DsInput extends StatelessWidget {
           hintText: placeholder,
           hintStyle: TextStyle(color: tokens.muted, fontSize: _fontSize),
           prefixIcon: prefixIcon != null
-              ? Icon(prefixIcon, color: tokens.muted, size: _fontSize + 4, key: const ValueKey('ds-input-prefix-icon'))
+              ? Icon(
+                  prefixIcon,
+                  color: tokens.muted,
+                  size: _fontSize + 4,
+                  key: const ValueKey('ds-input-prefix-icon'),
+                )
               : null,
           suffixIcon: suffix,
           filled: true,

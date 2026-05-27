@@ -30,7 +30,11 @@ class LanguageSelector extends StatelessWidget {
             key: const ValueKey('language-selector'),
             value: i18n.currentLocale.languageCode,
             dropdownColor: menuBg,
-            icon: Icon(Icons.arrow_drop_down, color: displayColor, key: const ValueKey('language-selector-icon')),
+            icon: Icon(
+              Icons.arrow_drop_down,
+              color: displayColor,
+              key: const ValueKey('language-selector-icon'),
+            ),
             isDense: true,
             alignment: AlignmentDirectional.centerEnd,
             items: i18n.supportedLanguages.entries.map((entry) {

@@ -9,10 +9,7 @@ void main() {
       late AppTokens tokens;
 
       setUp(() {
-        tokens = AppTokens.fromConfig(
-          config: const {},
-          isDark: false,
-        );
+        tokens = AppTokens.fromConfig(config: const {}, isDark: false);
       });
 
       test('isDark is false', () {
@@ -67,10 +64,7 @@ void main() {
       late AppTokens tokens;
 
       setUp(() {
-        tokens = AppTokens.fromConfig(
-          config: const {},
-          isDark: true,
-        );
+        tokens = AppTokens.fromConfig(config: const {}, isDark: true);
       });
 
       test('isDark is true', () {
@@ -129,10 +123,7 @@ void main() {
         tokens = AppTokens.fromConfig(
           config: const {
             'theme': {
-              'navbar': {
-                'background': '#333333',
-                'text': '#FFFFFF',
-              },
+              'navbar': {'background': '#333333', 'text': '#FFFFFF'},
             },
           },
           isDark: false,

@@ -12,9 +12,7 @@ void main() {
   group('DsInput', () {
     group('sizes', () {
       testWidgets('sm has height 36', (tester) async {
-        await tester.pumpWidget(
-          testApp(DsInput(size: DsInputSize.sm)),
-        );
+        await tester.pumpWidget(testApp(DsInput(size: DsInputSize.sm)));
         final sizedBox = tester.widget<SizedBox>(
           find.byKey(const ValueKey('ds-input-sizer')),
         );
@@ -22,9 +20,7 @@ void main() {
       });
 
       testWidgets('md has height 44', (tester) async {
-        await tester.pumpWidget(
-          testApp(DsInput(size: DsInputSize.md)),
-        );
+        await tester.pumpWidget(testApp(DsInput(size: DsInputSize.md)));
         final sizedBox = tester.widget<SizedBox>(
           find.byKey(const ValueKey('ds-input-sizer')),
         );
@@ -32,9 +28,7 @@ void main() {
       });
 
       testWidgets('lg has height 52', (tester) async {
-        await tester.pumpWidget(
-          testApp(DsInput(size: DsInputSize.lg)),
-        );
+        await tester.pumpWidget(testApp(DsInput(size: DsInputSize.lg)));
         final sizedBox = tester.widget<SizedBox>(
           find.byKey(const ValueKey('ds-input-sizer')),
         );
@@ -44,9 +38,7 @@ void main() {
 
     group('placeholder text', () {
       testWidgets('displays hint text', (tester) async {
-        await tester.pumpWidget(
-          testApp(DsInput(placeholder: 'Enter name')),
-        );
+        await tester.pumpWidget(testApp(DsInput(placeholder: 'Enter name')));
         final textField = tester.widget<TextField>(
           find.byKey(const ValueKey('ds-input')),
         );
@@ -56,9 +48,7 @@ void main() {
 
     group('enabled/disabled', () {
       testWidgets('enabled by default', (tester) async {
-        await tester.pumpWidget(
-          testApp(DsInput()),
-        );
+        await tester.pumpWidget(testApp(DsInput()));
         final textField = tester.widget<TextField>(
           find.byKey(const ValueKey('ds-input')),
         );
@@ -66,9 +56,7 @@ void main() {
       });
 
       testWidgets('disabled state', (tester) async {
-        await tester.pumpWidget(
-          testApp(DsInput(enabled: false)),
-        );
+        await tester.pumpWidget(testApp(DsInput(enabled: false)));
         final textField = tester.widget<TextField>(
           find.byKey(const ValueKey('ds-input')),
         );
@@ -78,9 +66,7 @@ void main() {
 
     group('obscureText', () {
       testWidgets('defaults to false', (tester) async {
-        await tester.pumpWidget(
-          testApp(DsInput()),
-        );
+        await tester.pumpWidget(testApp(DsInput()));
         final textField = tester.widget<TextField>(
           find.byKey(const ValueKey('ds-input')),
         );
@@ -88,9 +74,7 @@ void main() {
       });
 
       testWidgets('obscure mode enabled', (tester) async {
-        await tester.pumpWidget(
-          testApp(DsInput(obscureText: true)),
-        );
+        await tester.pumpWidget(testApp(DsInput(obscureText: true)));
         final textField = tester.widget<TextField>(
           find.byKey(const ValueKey('ds-input')),
         );
@@ -100,9 +84,7 @@ void main() {
 
     group('multiline', () {
       testWidgets('multiline has unconstrained height', (tester) async {
-        await tester.pumpWidget(
-          testApp(DsInput(maxLines: 4)),
-        );
+        await tester.pumpWidget(testApp(DsInput(maxLines: 4)));
         final sizedBox = tester.widget<SizedBox>(
           find.byKey(const ValueKey('ds-input-sizer')),
         );
@@ -112,9 +94,7 @@ void main() {
 
     group('prefix icon', () {
       testWidgets('renders prefix icon', (tester) async {
-        await tester.pumpWidget(
-          testApp(DsInput(prefixIcon: Icons.search)),
-        );
+        await tester.pumpWidget(testApp(DsInput(prefixIcon: Icons.search)));
         final icon = tester.widget<Icon>(
           find.byKey(const ValueKey('ds-input-prefix-icon')),
         );
@@ -125,7 +105,11 @@ void main() {
     group('suffix widget', () {
       testWidgets('renders suffix widget', (tester) async {
         await tester.pumpWidget(
-          testApp(DsInput(suffix: Icon(Icons.clear, key: const ValueKey('ds-input-suffix')))),
+          testApp(
+            DsInput(
+              suffix: Icon(Icons.clear, key: const ValueKey('ds-input-suffix')),
+            ),
+          ),
         );
         final suffix = tester.widget<Icon>(
           find.byKey(const ValueKey('ds-input-suffix')),
@@ -157,7 +141,9 @@ void main() {
         expect(textField.decoration!.fillColor, customFill);
       });
 
-      testWidgets('overrideBorderColor is applied to focused border', (tester) async {
+      testWidgets('overrideBorderColor is applied to focused border', (
+        tester,
+      ) async {
         const customBorder = Color(0xFF654321);
         await tester.pumpWidget(
           testApp(DsInput(overrideBorderColor: customBorder)),

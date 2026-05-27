@@ -33,7 +33,8 @@ class ConfirmDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!visible) return const SizedBox.shrink(key: ValueKey('confirm-dialog-hidden'));
+    if (!visible)
+      return const SizedBox.shrink(key: ValueKey('confirm-dialog-hidden'));
 
     final tokens = ThemeManager().tokens;
 

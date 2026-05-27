@@ -86,7 +86,10 @@ class DsModal extends StatelessWidget {
               ),
             ),
             if (actions != null && actions!.isNotEmpty) ...[
-              const Divider(height: 1, key: ValueKey('ds-modal-divider-actions')),
+              const Divider(
+                height: 1,
+                key: ValueKey('ds-modal-divider-actions'),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   DsSpacing.md,

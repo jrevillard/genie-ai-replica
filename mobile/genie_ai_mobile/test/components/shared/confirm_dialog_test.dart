@@ -22,14 +22,13 @@ void main() {
       testWidgets('visible: false renders SizedBox.shrink', (tester) async {
         await tester.pumpWidget(
           testApp(
-            ConfirmDialog(
-              visible: false,
-              onConfirm: () {},
-              onCancel: () {},
-            ),
+            ConfirmDialog(visible: false, onConfirm: () {}, onCancel: () {}),
           ),
         );
-        expect(find.byKey(const ValueKey('confirm-dialog-hidden')), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('confirm-dialog-hidden')),
+          findsOneWidget,
+        );
         final sizedBox = tester.widget<SizedBox>(
           find.byKey(const ValueKey('confirm-dialog-hidden')),
         );
@@ -61,14 +60,12 @@ void main() {
     });
 
     group('default i18n texts', () {
-      testWidgets('uses i18n for default texts when no custom provided', (tester) async {
+      testWidgets('uses i18n for default texts when no custom provided', (
+        tester,
+      ) async {
         await tester.pumpWidget(
           testApp(
-            ConfirmDialog(
-              visible: true,
-              onConfirm: () {},
-              onCancel: () {},
-            ),
+            ConfirmDialog(visible: true, onConfirm: () {}, onCancel: () {}),
           ),
         );
         final expectedTitle = tr('common.confirm');
@@ -154,7 +151,9 @@ void main() {
             ),
           ),
         );
-        await tester.tap(find.byKey(const ValueKey('confirm-dialog-confirm-btn')));
+        await tester.tap(
+          find.byKey(const ValueKey('confirm-dialog-confirm-btn')),
+        );
         expect(confirmed, isTrue);
       });
 
@@ -172,11 +171,15 @@ void main() {
             ),
           ),
         );
-        await tester.tap(find.byKey(const ValueKey('confirm-dialog-cancel-btn')));
+        await tester.tap(
+          find.byKey(const ValueKey('confirm-dialog-cancel-btn')),
+        );
         expect(cancelled, isTrue);
       });
 
-      testWidgets('secondary button renders and fires callback', (tester) async {
+      testWidgets('secondary button renders and fires callback', (
+        tester,
+      ) async {
         var secondaryFired = false;
         await tester.pumpWidget(
           testApp(
@@ -193,28 +196,35 @@ void main() {
           find.byKey(const ValueKey('confirm-dialog-secondary-btn')),
         );
         expect(secondaryBtn.label, 'Save Draft');
-        await tester.tap(find.byKey(const ValueKey('confirm-dialog-secondary-btn')));
+        await tester.tap(
+          find.byKey(const ValueKey('confirm-dialog-secondary-btn')),
+        );
         expect(secondaryFired, isTrue);
       });
 
-      testWidgets('secondary button with null callback renders and taps without error', (tester) async {
-        await tester.pumpWidget(
-          testApp(
-            ConfirmDialog(
-              visible: true,
-              secondaryText: 'Skip',
-              onConfirm: () {},
-              onCancel: () {},
+      testWidgets(
+        'secondary button with null callback renders and taps without error',
+        (tester) async {
+          await tester.pumpWidget(
+            testApp(
+              ConfirmDialog(
+                visible: true,
+                secondaryText: 'Skip',
+                onConfirm: () {},
+                onCancel: () {},
+              ),
             ),
-          ),
-        );
-        final secondaryBtn = tester.widget<DsButton>(
-          find.byKey(const ValueKey('confirm-dialog-secondary-btn')),
-        );
-        expect(secondaryBtn.label, 'Skip');
-        await tester.tap(find.byKey(const ValueKey('confirm-dialog-secondary-btn')));
-        // No crash — null callback falls through to no-op
-      });
+          );
+          final secondaryBtn = tester.widget<DsButton>(
+            find.byKey(const ValueKey('confirm-dialog-secondary-btn')),
+          );
+          expect(secondaryBtn.label, 'Skip');
+          await tester.tap(
+            find.byKey(const ValueKey('confirm-dialog-secondary-btn')),
+          );
+          // No crash — null callback falls through to no-op
+        },
+      );
     });
   });
 }

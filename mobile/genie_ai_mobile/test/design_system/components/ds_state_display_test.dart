@@ -23,7 +23,10 @@ void main() {
           testApp(
             DsStateDisplay(
               type: DsStateType.loading,
-              customChild: Text('Loading...', key: const ValueKey('custom-loader')),
+              customChild: Text(
+                'Loading...',
+                key: const ValueKey('custom-loader'),
+              ),
             ),
           ),
         );
@@ -53,10 +56,7 @@ void main() {
       testWidgets('renders custom message', (tester) async {
         await tester.pumpWidget(
           testApp(
-            DsStateDisplay(
-              type: DsStateType.empty,
-              message: 'Nothing here',
-            ),
+            DsStateDisplay(type: DsStateType.empty, message: 'Nothing here'),
           ),
         );
         final message = tester.widget<Text>(
@@ -103,10 +103,7 @@ void main() {
       testWidgets('renders custom message', (tester) async {
         await tester.pumpWidget(
           testApp(
-            DsStateDisplay(
-              type: DsStateType.error,
-              message: 'Custom error',
-            ),
+            DsStateDisplay(type: DsStateType.error, message: 'Custom error'),
           ),
         );
         final message = tester.widget<Text>(
@@ -146,10 +143,7 @@ void main() {
       testWidgets('overrides default icon for empty state', (tester) async {
         await tester.pumpWidget(
           testApp(
-            DsStateDisplay(
-              type: DsStateType.empty,
-              icon: Icons.cloud_off,
-            ),
+            DsStateDisplay(type: DsStateType.empty, icon: Icons.cloud_off),
           ),
         );
         final icon = tester.widget<Icon>(
@@ -160,12 +154,7 @@ void main() {
 
       testWidgets('overrides default icon for error state', (tester) async {
         await tester.pumpWidget(
-          testApp(
-            DsStateDisplay(
-              type: DsStateType.error,
-              icon: Icons.warning,
-            ),
-          ),
+          testApp(DsStateDisplay(type: DsStateType.error, icon: Icons.warning)),
         );
         final icon = tester.widget<Icon>(
           find.byKey(const ValueKey('ds-state-icon')),

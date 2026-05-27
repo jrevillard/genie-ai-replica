@@ -80,7 +80,12 @@ void main() {
     group('title rendering', () {
       testWidgets('displays title text', (tester) async {
         await tester.pumpWidget(
-          testApp(DsModal(title: 'My Title', content: Text('Body', key: const ValueKey('modal-body')))),
+          testApp(
+            DsModal(
+              title: 'My Title',
+              content: Text('Body', key: const ValueKey('modal-body')),
+            ),
+          ),
         );
         final title = tester.widget<Text>(
           find.byKey(const ValueKey('ds-modal-title')),
@@ -95,11 +100,17 @@ void main() {
           testApp(
             DsModal(
               title: 'Test',
-              content: Text('Scrollable Content', key: const ValueKey('modal-body')),
+              content: Text(
+                'Scrollable Content',
+                key: const ValueKey('modal-body'),
+              ),
             ),
           ),
         );
-        expect(find.byKey(const ValueKey('ds-modal-content-scroll')), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('ds-modal-content-scroll')),
+          findsOneWidget,
+        );
         final body = tester.widget<Text>(
           find.byKey(const ValueKey('modal-body')),
         );
@@ -134,12 +145,21 @@ void main() {
       testWidgets('no actions omits actions divider', (tester) async {
         await tester.pumpWidget(
           testApp(
-            DsModal(title: 'Test', content: Text('Body', key: const ValueKey('modal-body'))),
+            DsModal(
+              title: 'Test',
+              content: Text('Body', key: const ValueKey('modal-body')),
+            ),
           ),
         );
         // Should have the title divider but NOT the actions divider
-        expect(find.byKey(const ValueKey('ds-modal-divider-title')), findsOneWidget);
-        expect(find.byKey(const ValueKey('ds-modal-divider-actions')), findsNothing);
+        expect(
+          find.byKey(const ValueKey('ds-modal-divider-title')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('ds-modal-divider-actions')),
+          findsNothing,
+        );
       });
     });
 

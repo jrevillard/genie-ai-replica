@@ -31,7 +31,9 @@ void main() {
         expect(sizedBox.height, DsSpacing.lg);
       });
 
-      testWidgets('lg size uses DsSpacing.xl + DsSpacing.sm (40)', (tester) async {
+      testWidgets('lg size uses DsSpacing.xl + DsSpacing.sm (40)', (
+        tester,
+      ) async {
         await tester.pumpWidget(testApp(DsSpinner(size: DsSpinnerSize.lg)));
         final sizedBox = tester.widget<SizedBox>(
           find.byKey(const ValueKey('ds-spinner-sizer')),
@@ -52,9 +54,7 @@ void main() {
 
       testWidgets('custom color override', (tester) async {
         const customColor = Color(0xFF123456);
-        await tester.pumpWidget(
-          testApp(DsSpinner(color: customColor)),
-        );
+        await tester.pumpWidget(testApp(DsSpinner(color: customColor)));
         final indicator = tester.widget<CircularProgressIndicator>(
           find.byKey(const ValueKey('ds-spinner')),
         );
@@ -64,9 +64,7 @@ void main() {
 
     group('strokeWidth', () {
       testWidgets('custom strokeWidth override', (tester) async {
-        await tester.pumpWidget(
-          testApp(DsSpinner(strokeWidth: 5.0)),
-        );
+        await tester.pumpWidget(testApp(DsSpinner(strokeWidth: 5.0)));
         final indicator = tester.widget<CircularProgressIndicator>(
           find.byKey(const ValueKey('ds-spinner')),
         );

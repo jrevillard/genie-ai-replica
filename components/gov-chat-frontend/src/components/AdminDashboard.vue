@@ -74,6 +74,16 @@
                   <span>{{ translate('admin.logs', 'Logs') }}</span>
                 </a>
               </li>
+              <li class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'queryInspector' }]"
+                  @click.prevent="setActiveTab('queryInspector')"
+                >
+                  <i>🔍</i>
+                  <span>{{ translate('admin.queryInspector', 'Query Inspector') }}</span>
+                </a>
+              </li>
             </ul>
           </div>
 
@@ -795,6 +805,15 @@
                       }}
                     </span>
                   </div>
+                </div>
+
+                <div v-if="activeTab === 'queryInspector'" class="dashboard-card" style="grid-column: span 2">
+                  <div class="card-header">
+                    <div class="card-title">
+                      {{ translate('admin.queryInspector', 'Query Inspector') }}
+                    </div>
+                  </div>
+                  <QueryInspector />
                 </div>
 
                 <div v-if="activeTab === 'security'" class="dashboard-card" style="grid-column: span 2">
@@ -1536,6 +1555,7 @@ import UploadFilesDialog from './UploadFilesDialog.vue';
 import AddFromLinkDialog from './AddFromLinkDialog.vue';
 import FileDetailsDialog from './FileDetailsDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue'; // IMPORT ConfirmDialog
+import QueryInspector from './admin/QueryInspector/QueryInspector.vue';
 import DsButton from './ds/Button.vue';
 import DsInput from './ds/Input.vue';
 import DsStatusTag from './ds/StatusTag.vue';
@@ -1560,6 +1580,7 @@ export default {
     AddFromLinkDialog,
     FileDetailsDialog,
     ConfirmDialog, // REGISTER ConfirmDialog
+    QueryInspector,
     DsButton,
     DsInput,
     DsStatusTag,
@@ -1605,6 +1626,7 @@ export default {
         { id: 'documents', label: 'Document Management' },
         { id: 'database', label: 'Database' },
         { id: 'logs', label: 'Logs' },
+        { id: 'queryInspector', label: 'Query Inspector' },
         { id: 'security', label: 'Security' },
         { id: 'users', label: 'Users' }
       ],

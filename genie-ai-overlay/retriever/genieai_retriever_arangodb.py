@@ -489,6 +489,14 @@ class GenieaiArangoRetriever(OpeaComponent):
 
         start = time.time()
 
+        # OpenTelemetry span for retrieval operation
+        from tracing import get_tracer
+
+        tracer = get_tracer("retriever.arangodb")
+        span = tracer.start_span("retriever.hybrid_search")
+        span.set_attribute("rag.search_mode", ARANGO_SEARCH_MODE)
+        span.set_attribute("rag.top_k", input.k if hasattr(input, "k") else 0)
+
         #################
         # Process Input #
         #################
@@ -850,5 +858,8 @@ class GenieaiArangoRetriever(OpeaComponent):
         finish = time.time()
         if logflag:
             logger.info(f"Retreiver logic completion time: {finish - start:.4f} seconds")
+
+        span.set_attribute("rag.chunk_count", len(search_res))
+        span.end()
 
         return search_res

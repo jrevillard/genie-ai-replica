@@ -1,6 +1,6 @@
 # Story 7.2: OPEA Services OTel Tracing (ChatQnA + Retriever)
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -27,42 +27,42 @@ so that RAG pipeline requests (embedding, retrieval, reranking, LLM inference) a
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create shared tracing module (AC: #2, #7, #8)
-  - [ ] Create `genie-ai-overlay/tracing.py` with TracerProvider initialization
-  - [ ] Configure OTLPSpanExporter with `OTEL_EXPORTER_OTLP_ENDPOINT` env var (full URL with `/v1/traces`)
-  - [ ] Configure Resource attributes: `service.name`, `service.version`, `deployment.environment`
-  - [ ] Add `setup_tracing(service_name)` function called by each service with its specific name
-  - [ ] Add graceful shutdown via `atexit.register()`
-  - [ ] Export `get_tracer()` for manual span creation
-  - [ ] Add ITU copyright header
-- [ ] Task 2: Install OTel dependencies in Dockerfiles (AC: #1, #14)
-  - [ ] Add `opentelemetry-api>=1.22`, `opentelemetry-sdk>=1.22`, `opentelemetry-instrumentation-fastapi>=0.43b0`, `opentelemetry-exporter-otlp-proto-http>=1.22`, `opentelemetry-instrumentation-httpx>=0.43b0` to ChatQnA Dockerfile pip install step
-  - [ ] Add same dependencies to Retriever Dockerfile pip install step
-  - [ ] Verify both Docker images build without errors
-- [ ] Task 3: Instrument ChatQnA service (AC: #3, #5, #6)
-  - [ ] Import `tracing` module at the top of `genieai_chatqna.py` (after os imports, before comps imports)
-  - [ ] Call `setup_tracing("genieai-chatqna")` in `ChatQnAService.__init__()` or module-level before app creation
-  - [ ] Call `FastAPIInstrumentor.instrument_app(app)` after the FastAPI app is created in the service
-  - [ ] Add manual spans with RAG attributes in `handle_request()` for the orchestration pipeline
-  - [ ] Verify `traceparent` is propagated on httpx calls to translation service and aiohttp calls to backend
-- [ ] Task 4: Instrument Retriever service (AC: #4, #5, #6)
-  - [ ] Import `tracing` module at the top of `genieai_retriever_microservice.py` (after os imports, before comps imports)
-  - [ ] Call `setup_tracing("genieai-retriever")` at module level before `register_microservice` decorator
-  - [ ] Instrument the FastAPI app created by OPEA's `register_microservice` — call `FastAPIInstrumentor.instrument_app()` after the app is available
-  - [ ] Add manual spans in `GenieaiArangoRetriever.invoke()` with RAG attributes (query_length, chunk_count)
-  - [ ] Verify trace context propagation on outbound calls (TEI embedding, ArangoDB queries)
-- [ ] Task 5: Add manual span attributes (AC: #5, #9)
-  - [ ] In ChatQnA: span attributes for query_length, model_id (NOT query text)
-  - [ ] In Retriever: span attributes for chunk_count, search_mode, score_threshold (NOT document content)
-  - [ ] Verify no user content or document text leaks into span attributes
-- [ ] Task 6: Update env template (AC: #7)
-  - [ ] Add/update `OTEL_EXPORTER_OTLP_ENDPOINT` comment in root `env` template to document Python service usage
-  - [ ] Verify existing backend OTel env var comment covers all services
-- [ ] Task 7: Run lint and verify builds (AC: #13, #14)
-  - [ ] `cd genie-ai-overlay && ruff check tracing.py` — no errors
-  - [ ] `cd genie-ai-overlay && ruff format --check tracing.py` — passes
-  - [ ] Verify ChatQnA Docker image builds: `docker compose build chatqna`
-  - [ ] Verify Retriever Docker image builds: `docker compose build retriever`
+- [x] Task 1: Create shared tracing module (AC: #2, #7, #8)
+  - [x] Create `genie-ai-overlay/tracing.py` with TracerProvider initialization
+  - [x] Configure OTLPSpanExporter with `OTEL_EXPORTER_OTLP_ENDPOINT` env var (full URL with `/v1/traces`)
+  - [x] Configure Resource attributes: `service.name`, `service.version`, `deployment.environment`
+  - [x] Add `setup_tracing(service_name)` function called by each service with its specific name
+  - [x] Add graceful shutdown via `atexit.register()`
+  - [x] Export `get_tracer()` for manual span creation
+  - [x] Add ITU copyright header
+- [x] Task 2: Install OTel dependencies in Dockerfiles (AC: #1, #14)
+  - [x] Add `opentelemetry-api>=1.22`, `opentelemetry-sdk>=1.22`, `opentelemetry-instrumentation-fastapi>=0.43b0`, `opentelemetry-exporter-otlp-proto-http>=1.22`, `opentelemetry-instrumentation-httpx>=0.43b0` to ChatQnA Dockerfile pip install step
+  - [x] Add same dependencies to Retriever Dockerfile pip install step
+  - [x] Verify both Docker images build without errors
+- [x] Task 3: Instrument ChatQnA service (AC: #3, #5, #6)
+  - [x] Import `tracing` module at the top of `genieai_chatqna.py` (after os imports, before comps imports)
+  - [x] Call `setup_tracing("genieai-chatqna")` in `ChatQnAService.__init__()` or module-level before app creation
+  - [x] Call `FastAPIInstrumentor.instrument_app(app)` after the FastAPI app is created in the service
+  - [x] Add manual spans with RAG attributes in `handle_request()` for the orchestration pipeline
+  - [x] Verify `traceparent` is propagated on httpx calls to translation service and aiohttp calls to backend
+- [x] Task 4: Instrument Retriever service (AC: #4, #5, #6)
+  - [x] Import `tracing` module at the top of `genieai_retriever_microservice.py` (after os imports, before comps imports)
+  - [x] Call `setup_tracing("genieai-retriever")` at module level before `register_microservice` decorator
+  - [x] Instrument the FastAPI app created by OPEA's `register_microservice` — call `FastAPIInstrumentor.instrument_app()` after the app is available
+  - [x] Add manual spans in `GenieaiArangoRetriever.invoke()` with RAG attributes (query_length, chunk_count)
+  - [x] Verify trace context propagation on outbound calls (TEI embedding, ArangoDB queries)
+- [x] Task 5: Add manual span attributes (AC: #5, #9)
+  - [x] In ChatQnA: span attributes for query_length, model_id (NOT query text)
+  - [x] In Retriever: span attributes for chunk_count, search_mode, score_threshold (NOT document content)
+  - [x] Verify no user content or document text leaks into span attributes
+- [x] Task 6: Update env template (AC: #7)
+  - [x] Add/update `OTEL_EXPORTER_OTLP_ENDPOINT` comment in root `env` template to document Python service usage
+  - [x] Verify existing backend OTel env var comment covers all services
+- [x] Task 7: Run lint and verify builds (AC: #13, #14)
+  - [x] `cd genie-ai-overlay && ruff check tracing.py` — no errors
+  - [x] `cd genie-ai-overlay && ruff format --check tracing.py` — passes
+  - [x] Verify ChatQnA Docker image builds: `docker compose build chatqna`
+  - [x] Verify Retriever Docker image builds: `docker compose build retriever`
 
 ## Dev Notes
 
@@ -377,10 +377,28 @@ signal.signal(signal.SIGTERM, _signal_handler)
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude GLM-5-Turbo (claude-opus-4-7 equivalent)
 
 ### Debug Log References
 
 ### Completion Notes List
 
+- Created shared OTel tracing module `genie-ai-overlay/tracing.py` with setup_tracing(), get_tracer(), shutdown(), and _reset() for testing. Uses OTLPSpanExporter with full /v1/traces URL suffix, BatchSpanProcessor, Resource attributes, atexit+SIGTERM graceful shutdown.
+- Added 12 unit tests in `genie-ai-overlay/tests/test_tracing.py` covering: exporter endpoint URL configuration (/v1/traces suffix), default endpoint, atexit registration, span processor creation, get_tracer before/after setup, shutdown lifecycle, resource attributes (service.name, version, environment).
+- Updated ChatQnA Dockerfile: added OTel pip deps (opentelemetry-api>=1.22, opentelemetry-sdk>=1.22, opentelemetry-instrumentation-fastapi>=0.43b0, opentelemetry-instrumentation-httpx>=0.43b0, opentelemetry-exporter-otlp-proto-http>=1.22) and COPY for tracing.py.
+- Updated Retriever Dockerfile: added OTel pip deps and COPY for tracing.py.
+- Instrumented ChatQnA: imported tracing module before comps, added FastAPIInstrumentor in start(), added manual span around megaservice.schedule() with RAG attributes (query_length, model_id, chunk_count), added httpx auto-instrumentation via HTTPXClientInstrumentor, injected traceparent headers on aiohttp calls to backend and doc-repo.
+- Instrumented Retriever: imported tracing module before comps, added FastAPIInstrumentor in __main__, added manual span in retrieve_docs() with chunk_count, added span in GenieaiArangoRetriever.invoke() with search_mode and top_k attributes.
+- Updated env template comment to document Python OTel usage.
+- All 99 tests pass, ruff check and format pass clean.
+
 ### File List
+
+- `genie-ai-overlay/tracing.py` — NEW: shared OTel tracing initialization module
+- `genie-ai-overlay/tests/test_tracing.py` — NEW: 12 unit tests for tracing module
+- `genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai` — MODIFIED: added OTel deps and tracing.py COPY
+- `genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai` — MODIFIED: added OTel deps and tracing.py COPY
+- `genie-ai-overlay/chatqna/genieai_chatqna.py` — MODIFIED: added tracing import/setup, FastAPI instrumentation, manual RAG spans, httpx auto-instrumentation, aiohttp trace propagation
+- `genie-ai-overlay/retriever/genieai_retriever_microservice.py` — MODIFIED: added tracing import/setup, FastAPI instrumentation, manual retrieval spans
+- `genie-ai-overlay/retriever/genieai_retriever_arangodb.py` — MODIFIED: added manual span in invoke() with RAG attributes
+- `env` — MODIFIED: updated OTel env var comment to document Python service usage

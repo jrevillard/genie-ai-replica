@@ -64,9 +64,16 @@ COPY --chmod=0755 genie-ai-overlay/chatqna/entrypoint.sh /app/ChatQnA/entrypoint
 
 # Step C: Install dependencies
 # Install extra dependencies from our original Dockerfile_genieai
-RUN pip install --no-cache-dir langdetect transformers "python-jose[cryptography]"
+RUN pip install --no-cache-dir langdetect transformers "python-jose[cryptography]" \
+    "opentelemetry-api>=1.22" "opentelemetry-sdk>=1.22" \
+    "opentelemetry-instrumentation-fastapi>=0.43b0" \
+    "opentelemetry-instrumentation-httpx>=0.43b0" \
+    "opentelemetry-exporter-otlp-proto-http>=1.22"
 
 # Step D: "Overlay" our custom GENIE-AI "glue" files
+# Copy the shared OTel tracing module (importable from PYTHONPATH=/app)
+COPY genie-ai-overlay/tracing.py /app/tracing.py
+
 # --- FIX: Copy the original api_protocol.py to /app to make it importable as top-level 'api_protocol' ---
 # This path '/home/user/comps/...' will now be correct
 RUN cp /home/user/comps/cores/proto/api_protocol.py /app/api_protocol.py

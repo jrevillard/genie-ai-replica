@@ -52,6 +52,15 @@ RUN mv /app/comps/cores/proto/docarray.py /app/comps/cores/proto/opea_docarray.p
     sed -i 's/from \.\.proto.docarray import/from \.\.proto.opea_docarray import/' /app/comps/cores/mega/orchestrator.py && \
     sed -i 's/from \.\.proto.docarray import/from \.\.proto.opea_docarray import/' /app/comps/cores/mega/micro_service.py
 
+# Step D.5: Copy shared OTel tracing module (importable from PYTHONPATH=/app)
+COPY genie-ai-overlay/tracing.py /app/tracing.py
+
+# Step D.6: Install OpenTelemetry dependencies for distributed tracing
+RUN pip install --no-cache-dir \
+    "opentelemetry-api>=1.22" "opentelemetry-sdk>=1.22" \
+    "opentelemetry-instrumentation-fastapi>=0.43b0" \
+    "opentelemetry-exporter-otlp-proto-http>=1.22"
+
 # Step E: "Overlay" custom GENIE-AI files
 # 1. Place the custom reranker class into the integrations folder
 COPY genie-ai-overlay/reranker/genieai_tei_reranker.py /app/comps/rerankings/src/integrations/genieai_tei_reranker.py

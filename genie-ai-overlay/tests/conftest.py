@@ -19,6 +19,11 @@ _comps_mock = MagicMock()
 # Make @OpeaComponentRegistry.register(...) a no-op identity decorator so
 # that class definitions are returned unchanged when the module is imported.
 _comps_mock.OpeaComponentRegistry.register = lambda *a, **kw: lambda cls: cls
+# Make @register_microservice(...) a no-op identity decorator so that
+# endpoint functions remain callable in tests (not replaced by MagicMock).
+_comps_mock.register_microservice = lambda *a, **kw: lambda f: f
+# Make @register_statistics(...) a no-op identity decorator.
+_comps_mock.register_statistics = lambda *a, **kw: lambda f: f
 # Provide a simple base class for OpeaComponent so __init__ accepts any args.
 _comps_mock.OpeaComponent = type("OpeaComponent", (), {"__init__": lambda self, *a, **kw: None})
 
@@ -133,6 +138,32 @@ sys.modules.setdefault("integrations", _integrations_mock)
 sys.modules.setdefault("integrations.tei", _integrations_tei_module)
 
 sys.modules.setdefault("comps.cores.proto.opea_docarray", MagicMock())
+
+# Reranker microservice telemetry import — opea_telemetry must be a passthrough decorator
+sys.modules.setdefault("comps.cores.telemetry", MagicMock())
+_opea_telemetry_module = MagicMock()
+_opea_telemetry_module.opea_telemetry = lambda f: f
+sys.modules.setdefault("comps.cores.telemetry.opea_telemetry", _opea_telemetry_module)
+
+# Reranker microservice component import chain
+sys.modules.setdefault("comps.rerankings", MagicMock())
+sys.modules.setdefault("comps.rerankings.src", MagicMock())
+sys.modules.setdefault("comps.rerankings.src.integrations", MagicMock())
+# Register GenieTEIReranking with the integrations namespace
+_reranker_integration = MagicMock()
+sys.modules.setdefault("comps.rerankings.src.integrations.genieai_tei_reranker", _reranker_integration)
+
+# Dataprep microservice base module import (opea_dataprep_microservice)
+_opea_dp_base = MagicMock()
+_opea_dp_base.create_upload_folder = MagicMock()
+_opea_dp_base.opea_microservices = MagicMock()
+sys.modules.setdefault("opea_dataprep_microservice", _opea_dp_base)
+
+# Dataprep loader mock
+sys.modules.setdefault("genieai_dataprep_loader", MagicMock())
+
+# Dataprep microservice importlib.import_module("integrations.genieai_dataprep_arangodb")
+sys.modules.setdefault("integrations.genieai_dataprep_arangodb", MagicMock())
 
 
 # ---------------------------------------------------------------------------

@@ -285,3 +285,4 @@ Items deferred during code reviews. Revisit when the related component is next m
 - OTLP URL double `/v1/traces` if operator sets wrong env var — `rstrip('/')` handles trailing slash but not duplicate path. Operator error, documented in env template. Not worth adding runtime detection.
 - Chunk count stays 0 if OPEA response format changes — telemetry robustness concern, not functional. Fallback to 0 is safe.
 - Streaming responses close orchestration span before first token — known limitation of current span model. Streaming trace correlation would need a different span architecture (event-based spans).
+

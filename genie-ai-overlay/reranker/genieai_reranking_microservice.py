@@ -5,6 +5,14 @@
 import os
 import time
 
+from opentelemetry.trace import Status, StatusCode
+
+from tracing import get_tracer, setup_tracing
+
+setup_tracing("genieai-reranker")
+
+tracer = get_tracer(__name__)
+
 from comps import (
     CustomLogger,
     OpeaComponentLoader,
@@ -53,23 +61,41 @@ async def reranking(
     if logflag:
         logger.info(f"Input received: {input}")
 
-    try:
-        # Use the loader to invoke the component
-        reranking_response = await loader.invoke(input)
+    reranking_strategy = os.getenv("RERANKING_STRATEGY", "slice")
+    input_doc_count = len(input.retrieved_docs) if hasattr(input, "retrieved_docs") and input.retrieved_docs else 0
 
-        # Log the result if logging is enabled
-        if logflag:
-            logger.info(f"Output received: {reranking_response}")
+    with tracer.start_as_current_span("reranker.rerank") as span:
+        span.set_attribute("reranker.strategy", reranking_strategy)
+        span.set_attribute("reranker.input_doc_count", input_doc_count)
 
-        # Record statistics
-        statistics_dict["opea_service@reranking"].append_latency(time.time() - start, None)
-        return reranking_response
+        try:
+            # Use the loader to invoke the component
+            reranking_response = await loader.invoke(input)
 
-    except Exception as e:
-        logger.error(f"Error during reranking invocation: {e}")
-        raise
+            output_doc_count = 0
+            if hasattr(reranking_response, "reranked_docs") and reranking_response.reranked_docs:
+                output_doc_count = len(reranking_response.reranked_docs)
+            span.set_attribute("reranker.output_doc_count", output_doc_count)
+
+            # Log the result if logging is enabled
+            if logflag:
+                logger.info(f"Output received: {reranking_response}")
+
+            # Record statistics
+            statistics_dict["opea_service@reranking"].append_latency(time.time() - start, None)
+            return reranking_response
+
+        except Exception as e:
+            span.record_exception(e)
+            span.set_status(Status(StatusCode.ERROR, str(e)))
+            logger.error(f"Error during reranking invocation: {e}")
+            raise
 
 
 if __name__ == "__main__":
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
     opea_microservices["opea_service@reranking"].start()
+    app = opea_microservices["opea_service@reranking"]
+    FastAPIInstrumentor.instrument_app(app._app if hasattr(app, "_app") else app)
     logger.info("OPEA Reranking Microservice is starting...")

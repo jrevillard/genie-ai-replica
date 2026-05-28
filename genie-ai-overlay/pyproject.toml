@@ -23,6 +23,8 @@ test = [
     "pytest-cov>=6.0",
     "httpx>=0.28",
     "asgi-lifespan>=2.0",
+    "opentelemetry-api>=1.22",
+    "opentelemetry-sdk>=1.22",
 ]
 
 # Overlay services are Docker-deployed, not pip-installed.

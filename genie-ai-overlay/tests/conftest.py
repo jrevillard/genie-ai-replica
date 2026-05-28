@@ -114,13 +114,9 @@ _kneed_mock = MagicMock()
 _kneed_mock.KneeLocator = MagicMock()
 sys.modules.setdefault("kneed", _kneed_mock)
 
-# OpenTelemetry — mocked for test collection; real deps only in Dockerfiles
-sys.modules.setdefault("opentelemetry", MagicMock())
-sys.modules.setdefault("opentelemetry.trace", MagicMock())
-sys.modules.setdefault("opentelemetry.sdk", MagicMock())
-sys.modules.setdefault("opentelemetry.sdk.trace", MagicMock())
-sys.modules.setdefault("opentelemetry.sdk.trace.export", MagicMock())
-sys.modules.setdefault("opentelemetry.sdk.resources", MagicMock())
+# OpenTelemetry — only mock exporter and instrumentation packages.
+# Core packages (opentelemetry-api, opentelemetry-sdk) are in pyproject.toml test deps.
+# The exporter and instrumentation packages are Dockerfile-only.
 sys.modules.setdefault("opentelemetry.exporter", MagicMock())
 sys.modules.setdefault("opentelemetry.exporter.otlp", MagicMock())
 sys.modules.setdefault("opentelemetry.exporter.otlp.proto", MagicMock())
@@ -129,7 +125,6 @@ sys.modules.setdefault("opentelemetry.exporter.otlp.proto.http.trace_exporter", 
 sys.modules.setdefault("opentelemetry.instrumentation", MagicMock())
 sys.modules.setdefault("opentelemetry.instrumentation.fastapi", MagicMock())
 sys.modules.setdefault("opentelemetry.instrumentation.httpx", MagicMock())
-sys.modules.setdefault("opentelemetry.propagate", MagicMock())
 
 _integrations_mock = MagicMock()
 _integrations_tei_module = MagicMock()

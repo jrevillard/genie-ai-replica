@@ -901,60 +901,102 @@ So that configuration validation runs in CI and profiles can validate specific d
 **And** `gpu-rtx6000.env` contains RTX 6000 GPU-specific overrides
 **And** `no-opea.env` contains `DEPLOY_OPEA=0` with minimal config
 
-## Epic 7: MELT-Ready Test Instrumentation
+## Epic 7: Application Observability — OTel Instrumentation
 
-The developer can trace test failures through structured log assertions and mock trace context, while Sprint 23's MELT observability platform can consume test telemetry without code changes.
+The developer instruments Express backend and OPEA (FastAPI) services with OpenTelemetry SDKs, establishing distributed tracing and structured logging that enables end-to-end request tracing across the full stack. Deploy an OTel Collector + VictoriaMetrics + Grafana stack for telemetry visualization.
 
-### Story 7.1: Create Structured Test Output and Trace Context Helpers
+### Story 7.1: Express Backend OTel Tracing Foundation
 
 As a developer,
-I want test framework helpers that produce structured output and mock trace IDs,
-So that Sprint 23's MELT platform can consume test telemetry without code changes.
+I want the Express backend instrumented with OpenTelemetry tracing,
+So that every HTTP request, database query, and external API call produces distributed trace spans.
 
 **Acceptance Criteria:**
 
-**Given** Sprint 23's MELT framework (VictoriaMetrics + Grafana + OTel) won't exist until Sprint 23
-**When** I create `tests/melt-helpers/trace-context.js`
-**Then** the helper generates deterministic mock trace IDs for JS test correlation
-**And** the helper is usable in Jest `beforeEach()` to set trace context per test
-**When** I create `tests/melt-helpers/trace-context.py`
-**Then** the helper generates mock trace context (trace_id, span_id) as pytest fixtures
-**And** the fixture is usable via `@pytest.fixture` decorator
-**And** trace IDs are deterministic and reproducible (NFR10)
-**And** no Sprint 22 code imports or depends on MELT libraries
+**When** I add `@opentelemetry/api`, `@opentelemetry/sdk-node`, and `@opentelemetry/auto-instrumentations-node` to the backend
+**Then** all Express route handlers automatically produce HTTP spans
+**And** ArangoDB queries produce database spans with collection and query type attributes
+**And** outbound HTTP calls (to OPEA services, Keycloak) produce client-side spans
+**And** spans include `service.name = "genie-backend"`, `service.version`, and `deployment.environment` resource attributes
+**And** the SDK exports traces via OTLP to a configurable endpoint (`OTEL_EXPORTER_OTLP_ENDPOINT`)
+**And** trace context is propagated via W3C `traceparent` headers on all outbound requests
+**And** the instrumentation is bootstrap-safe (graceful degradation if collector is unavailable)
+**And** PII (user emails, query content) is sanitized from span attributes before export
 
-### Story 7.2: Create Structured Log Assertion Helpers
+### Story 7.2: OPEA Services OTel Tracing (ChatQnA + Retriever)
 
 As a developer,
-I want assertion helpers that validate structured JSON log output from services under test,
-So that test failures can be traced to specific log entries.
+I want the ChatQnA and Retriever FastAPI services instrumented with OpenTelemetry,
+So that RAG pipeline requests (embedding, retrieval, reranking, LLM inference) are traced end-to-end.
 
 **Acceptance Criteria:**
 
-**When** I create `tests/melt-helpers/log-assertions.js`
-**Then** `expectLogged(loggerMock, level, message)` asserts the logger was called with matching structured fields
-**And** the helper works with winston JSON log format
-**When** I create `tests/melt-helpers/log-assertions.py`
-**Then** `assert_logged(caplog, level, message)` asserts log records match the expected level and contain the message
-**And** the helper works with Python's `logging` and `CustomLogger` structured format
-**And** both helpers are importable by any component's test suite
+**When** I add `opentelemetry-api`, `opentelemetry-sdk`, and `opentelemetry-instrumentation-fastapi` to the ChatQnA service
+**Then** ChatQnA HTTP endpoints produce server-side spans with `service.name = "chatqna"`
+**And** the retriever service produces server-side spans with `service.name = "retriever"`
+**And** spans include RAG-specific attributes: `rag.query_length`, `rag.chunk_count`, `rag.model_id`
+**And** the SDK exports traces via OTLP to a configurable endpoint
+**And** trace context is propagated via W3C `traceparent` headers on inter-service calls
+**And** the instrumentation does not alter existing API contracts or response formats
+**And** the instrumentation adds <5ms latency overhead per request (NFR threshold)
+**And** no user query content or document text is included in span attributes (PII protection)
 
-### Story 7.3: Create MELT Provider API Query Interface and Grafana Dashboard Specs
+### Story 7.3: OPEA Services OTel Tracing (Dataprep + Reranker)
 
 As a developer,
-I want documentation for how Sprint 23 will consume test telemetry and display test health,
-So that the MELT integration path is clear and unambiguous.
+I want the Dataprep and Reranker FastAPI services instrumented with OpenTelemetry,
+So that document ingestion and result reranking are visible in distributed traces.
 
 **Acceptance Criteria:**
 
-**When** I document the MELT Provider API query interface
-**Then** the spec defines how Sprint 23 queries test results via MELTService (no Sprint 22 implementation)
-**And** the spec defines how OTel ingests JUnit XML and JSON test results
-**And** the spec defines how trace context links test spans to service spans
-**When** I document the Grafana dashboard spec
-**Then** the spec defines Test Health panels: pass rate, execution time trends, flaky test detection
-**And** the spec defines how Test Health dashboards sit alongside Service Health dashboards
-**And** both specs are stored as markdown in `tests/melt-helpers/` for Sprint 23 reference
+**When** I add OpenTelemetry instrumentation to the Dataprep service
+**Then** Dataprep endpoints produce server-side spans with `service.name = "dataprep"`
+**And** spans include ingestion attributes: `dataprep.file_type`, `dataprep.chunk_count`, `dataprep.file_size_bytes`
+**When** I add OpenTelemetry instrumentation to the Reranker service
+**Then** Reranker endpoints produce server-side spans with `service.name = "reranker"`
+**And** spans include reranking attributes: `reranker.top_k`, `reranker.score_threshold`, `reranker.model_id`
+**And** both services export traces via OTLP to the same configurable endpoint
+**And** trace context propagation is consistent with stories 7.1 and 7.2
+**And** file content and document text are excluded from span attributes (PII protection)
+**And** the instrumentation adds <5ms latency overhead per request
+
+### Story 7.4: End-to-End Trace Propagation and Log Correlation
+
+As a developer,
+I want trace context propagated across all services and correlated with structured logs,
+So that I can trace a user request from frontend → backend → OPEA services and find related log entries.
+
+**Acceptance Criteria:**
+
+**When** a request arrives at the Express backend with a `traceparent` header
+**Then** the backend preserves and propagates the trace context to all downstream OPEA service calls
+**And** the backend includes `trace_id` and `span_id` in all winston structured log entries
+**When** a request flows through ChatQnA → Retriever → Reranker → LLM
+**Then** the full chain shares a single `trace_id` visible in all service logs and spans
+**And** Python services include `trace_id` and `span_id` in CustomLogger output
+**And** log entries are JSON-structured with consistent fields: `timestamp`, `level`, `service`, `trace_id`, `span_id`, `message`
+**And** the backend sends `traceparent` header on all outbound HTTP calls to OPEA services
+**And** Grafana can correlate traces to logs using `trace_id` as the join key
+
+### Story 7.5: Deploy Observability Stack (Collector + VictoriaMetrics + Grafana)
+
+As a developer,
+I want an OTel Collector, VictoriaMetrics, and Grafana deployed alongside the application,
+So that telemetry data is collected, stored, and visualized without external SaaS dependencies.
+
+**Acceptance Criteria:**
+
+**When** I add OTel Collector, VictoriaMetrics, and Grafana services to docker-compose.yaml
+**Then** the Collector receives OTLP traces from all instrumented services (stories 7.1–7.4)
+**And** VictoriaMetrics stores trace metrics with configurable retention (default 30 days)
+**And** Grafana queries VictoriaMetrics as its datasource
+**And** a pre-configured dashboard shows: request rate, error rate, latency percentiles (p50, p95, p99) per service
+**And** a pre-configured dashboard shows: RAG pipeline trace waterfall (backend → embedding → retrieval → reranking → LLM)
+**And** the Collector is configured with a healthcheck endpoint
+**And** Grafana is accessible on an internal port (not exposed to the public internet)
+**And** Grafana requires authentication (admin credentials from `.env`)
+**And** all observability services are disabled by default (enabled via `ENABLE_OBSERVABILITY=true` in `.env`)
+**And** network policies restrict observability traffic to application services only (no external egress)
 
 ## Epic 8: RAG Quality Assurance
 

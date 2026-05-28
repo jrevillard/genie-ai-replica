@@ -113,11 +113,13 @@ development_status:
   6-3-create-configuration-validation-test-suite-and-env-profiles: done
   epic-6-retrospective: optional
 
-  # Epic 7: MELT-Ready Test Instrumentation
+  # Epic 7: Application Observability — OTel Instrumentation
   epic-7: backlog
-  7-1-create-structured-test-output-and-trace-context-helpers: backlog
-  7-2-create-structured-log-assertion-helpers: backlog
-  7-3-create-melt-provider-api-query-interface-and-grafana-dashboard-specs: backlog
+  7-1-express-backend-otel-tracing-foundation: backlog
+  7-2-opea-services-otel-tracing-chatqna-retriever: backlog
+  7-3-opea-services-otel-tracing-dataprep-reranker: backlog
+  7-4-end-to-end-trace-propagation-and-log-correlation: backlog
+  7-5-deploy-observability-stack-collector-victoriametrics-grafana: backlog
   epic-7-retrospective: optional
 
   # Epic 8: RAG Quality Assurance

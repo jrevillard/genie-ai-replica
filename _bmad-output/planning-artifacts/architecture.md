@@ -266,18 +266,22 @@ A single validation script that:
 
 Covers FR27–FR31. Runs as a Jest test suite or standalone Node.js script in CI.
 
-### MELT Instrumentation Architecture
+### Application Observability Architecture (OpenTelemetry)
 
-**Sprint 22/23 Bridge Pattern:**
+**OTel Collector Architecture:**
 
-| Hook | Sprint 22 (Independent) | Sprint 23 (MELT Integration) |
+| Component | Role | SDK |
 |---|---|---|
-| Test results | JUnit XML + JSON test results | OTel exporter ingests into VictoriaMetrics |
-| Trace context | Test fixtures generate/mock trace IDs | Real OTel trace context from Collector |
-| Log assertions | JSON log assertion helpers (Jest/pytest) | MELT Provider API for log queries |
-| Metrics | Execution time + pass/fail in JUnit XML | VictoriaMetrics metrics from OTel |
+| Express Backend | HTTP spans, DB spans, outbound spans | `@opentelemetry/sdk-node` + auto-instrumentations |
+| ChatQnA (FastAPI) | RAG pipeline spans (embedding, retrieval, LLM) | `opentelemetry-instrumentation-fastapi` |
+| Retriever (FastAPI) | Hybrid search spans (vector + graph) | `opentelemetry-instrumentation-fastapi` |
+| Dataprep (FastAPI) | Document ingestion spans (chunking, embedding) | `opentelemetry-instrumentation-fastapi` |
+| Reranker (FastAPI) | Score validation spans | `opentelemetry-instrumentation-fastapi` |
+| OTel Collector | Receives OTLP, exports to VictoriaMetrics | Standard OTel Collector image |
+| VictoriaMetrics | Stores trace metrics | `victoriametrics/victoria-metrics` |
+| Grafana | Dashboard visualization | `grafana/grafana` |
 
-**Key Principle:** Sprint 22 hooks emit data in formats Sprint 23 can ingest without code changes. No Sprint 22 code imports or depends on MELT libraries.
+**Key Principle:** OTel SDK code is deployment-agnostic — works identically in Docker Compose, Docker Swarm, and Kubernetes. Only the Collector deployment config changes between environments.
 
 ### RAG Quality Test Architecture (Designed Sprint 22, Built Sprint 23)
 
@@ -299,14 +303,14 @@ Covers FR27–FR31. Runs as a Jest test suite or standalone Node.js script in CI
 3. GitLab CI pipeline (lint + test + config stages)
 4. Per-component test suites (backend → frontend → doc-repo → OPEA → mobile)
 5. Configuration validation suite
-6. MELT-ready instrumentation hooks
+6. Application OTel instrumentation (distributed tracing, log correlation, observability stack)
 7. RAG quality fixture structure (Sprint 22) → RAGAS pipeline (Sprint 23)
 
 **Cross-Component Dependencies:**
 - Backend `createApp()` refactor blocks backend route testing
 - GitLab CI pipeline depends on jest-junit, junitreport, pytest junitxml being configured
 - OPEA pytest configuration depends on conftest.py mock factories for vendored comps
-- MELT hooks are independent — no dependency on Sprint 23 stack
+- OTel instrumentation is independent — no dependency on Sprint 23 MELT Provider API; OTel Collector runs locally
 - RAG quality architecture is independent — fixture structure in Sprint 22, execution in Sprint 23
 
 ## Implementation Patterns & Consistency Rules
@@ -475,22 +479,71 @@ skipIfNoGPU('should produce embeddings with real TEI', async () => {
 });
 ```
 
-### MELT Instrumentation Patterns
+### OTel Instrumentation Patterns
 
-**Trace ID in test fixtures:**
+**Express backend tracing setup:**
 ```javascript
-// JavaScript — generate mock trace ID for test correlation
-const TEST_TRACE_ID = `test-${expect.getState().currentTestName}-${Date.now()}`;
+// tracing.js — Node.js OTel SDK initialization
+const { NodeSDK } = require('@opentelemetry/sdk-node');
+const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
+const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
+const { Resource } = require('@opentelemetry/resources');
+const { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } = require('@opentelemetry/semantic-conventions');
+
+const sdk = new NodeSDK({
+  resource: new Resource({
+    [ATTR_SERVICE_NAME]: 'genie-backend',
+    [ATTR_SERVICE_VERSION]: process.env.npm_package_version || '1.0.0',
+  }),
+  traceExporter: new OTLPTraceExporter({
+    url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector:4318/v1/traces',
+  }),
+  instrumentations: [getNodeAutoInstrumentations()],
+});
+sdk.start();
 ```
 
+**FastAPI service tracing setup:**
 ```python
-# Python — trace context in test metadata
-@pytest.fixture
-def trace_context():
-    return {"trace_id": f"test-{uuid.uuid4()}", "span_id": f"span-{uuid.uuid4()}"}
+# tracing.py — Python OTel SDK initialization
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+resource = Resource.create({SERVICE_NAME: "chatqna"})
+provider = TracerProvider(resource=resource)
+provider.add_span_processor(BatchSpanProcessor(
+    OTLPSpanExporter(endpoint=f"{os.getenv('OTEL_EXPORTER_OTLP_ENDPOINT', 'http://otel-collector:4318')}/v1/traces")
+))
+trace.set_tracer_provider(provider)
+FastAPIInstrumentor.instrument_app(app)
 ```
 
-**Structured log assertion helpers:**
+**Log-trace correlation (winston):**
+```javascript
+// Adds trace_id and span_id to all winston log entries
+const { trace, context } = require('@opentelemetry/api');
+const span = trace.getSpan(context.active());
+if (span) {
+  const { traceId, spanId } = span.spanContext();
+  // Inject into winston metadata
+}
+```
+
+**Log-trace correlation (Python CustomLogger):**
+```python
+# Injects trace_id and span_id into log records
+from opentelemetry import trace
+span = trace.get_current_span()
+if span.is_recording():
+    ctx = span.get_span_context()
+    extra = {"trace_id": format(ctx.trace_id, "032x"), "span_id": format(ctx.span_id, "016x")}
+```
+
+**Structured log assertion helpers (kept for test suites):**
 ```javascript
 function expectLogged(loggerMock, level, message) {
   expect(loggerMock).toHaveBeenCalledWith(
@@ -613,11 +666,9 @@ genie-ai/                                          # Repository root
 │   │   ├── generate-report.py                     # ← NEW: JSON + JUnit report generator
 │   │   └── README.md                              # ← NEW: usage documentation
 │   │
-│   ├── melt-helpers/                              # ← NEW: MELT instrumentation hooks
-│   │   ├── trace-context.js                       # ← NEW: trace ID generation for JS tests
-│   │   ├── trace-context.py                       # ← NEW: trace ID generation for Python tests
-│   │   ├── log-assertions.js                      # ← NEW: structured log assertion helpers
-│   │   └── log-assertions.py                      # ← NEW: structured log assertion helpers
+│   ├── log-assertions/                            # ← NEW: structured log assertion helpers
+│   │   ├── log-assertions.js                      # ← NEW: structured log assertion helpers (JS)
+│   │   └── log-assertions.py                      # ← NEW: structured log assertion helpers (Python)
 │   │
 │   └── rag-benchmarks/                            # EXISTING: existing benchmark suite
 │       └── ...

@@ -109,19 +109,19 @@ This PRD expands the existing AI/ML test foundation floor-to-ceiling: backend AP
 - All 5 components have test coverage: backend (Jest), frontend (Vue Test Utils), OPEA microservices (pytest), document-repository (Jest), mobile (Flutter test)
 - Test execution is deterministic and reproducible — same inputs produce same results across runs
 - The test framework is adaptable to future GPU hardware and multi-GPU sharding configurations without architectural rework
-- Test instrumentation interoperates with the MELT Provider API (Sprint 23) — test frameworks consume structured JSON logs, distributed trace context, and metrics from the same telemetry pipeline that powers production observability
+- Application services emit distributed traces and correlated structured logs via OpenTelemetry — enabling end-to-end request tracing from backend through OPEA pipeline
 
-### MELT Integration (Testing x Observability Synergy)
+### Application Observability Foundation (OTel Instrumentation)
 
-The MELT framework (Sprint 23, Issues #354-#361, #589-#591) transforms testing from pass/fail assertions into full-lifecycle quality intelligence:
+The testing framework initiative instruments application services with OpenTelemetry, establishing the foundation for production observability:
 
-**Testing enables MELT:** Test execution produces structured telemetry (results as events, assertion counts as metrics, traces as spans) feeding the same VictoriaMetrics + Grafana stack used for production monitoring.
+**Service instrumentation:** Express backend and OPEA (FastAPI) services are instrumented with OTel SDKs, producing distributed traces for every HTTP request, database query, and inter-service call. This is real production telemetry — not test fixtures.
 
-**MELT enables testing:** Distributed traces turn a failing E2E test from "request timed out" into "retriever span took 12s because ArangoDB query hit graph traversal depth 4." Structured JSON logs enable programmatic log assertion — assert on structure, not parse plain text.
+**End-to-end tracing:** A user request flowing from backend → ChatQnA → Retriever → Reranker → LLM produces a single distributed trace with correlated spans. Structured logs include `trace_id` and `span_id` for log-trace correlation.
 
-**MELT Provider API as test utility:** Test suites query MELTService post-execution to verify error logs were emitted for expected failures, trace spans completed within latency thresholds, and metrics stayed within bounds.
+**Self-hosted stack:** OTel Collector, VictoriaMetrics, and Grafana are deployed alongside the application (disabled by default, enabled via `ENABLE_OBSERVABILITY=true`). No external SaaS dependency.
 
-**Dependency alignment:** Issue #601 depends on "Sprint 22 test framework (test instrumentation)." The testing framework must establish instrumentation hooks that Sprint 23 builds upon — test fixtures producing trace context, assertion helpers validating log output, metric collection patterns feeding VictoriaMetrics.
+**Sprint 23 alignment:** The MELT Provider API (Sprint 23, Issues #354-#361, #589-#591) builds on this foundation to add metrics, dashboards, and alerting. Issue #601 depends on the OTel instrumentation established here.
 
 ### Measurable Outcomes
 
@@ -134,7 +134,7 @@ The MELT framework (Sprint 23, Issues #354-#361, #589-#591) transforms testing f
 | Deployment target verification | Tests pass against Docker Compose baseline | Automated test matrix |
 | Test execution time (unit) | <10 minutes total | CI pipeline timing |
 | E2E test execution time | <30 minutes | CI pipeline timing |
-| MELT-ready test output | Test results consumable as structured events via OTel | Test framework emits OTel-compatible telemetry |
+| Application observability | Services emit OTel-compatible traces and metrics | OTel SDK instrumented in Express and FastAPI services |
 
 ## Product Scope
 
@@ -147,7 +147,7 @@ The MELT framework (Sprint 23, Issues #354-#361, #589-#591) transforms testing f
 - Document-repository test suite: route handler tests, middleware tests
 - Configuration validation suite: env template schema validation, docker-compose var coverage
 - Mobile test suite: existing service-layer tests integrated into CI
-- Test instrumentation patterns: structured log assertions, trace context propagation in test fixtures (MELT-ready hooks for Sprint 23)
+- Application OTel instrumentation: distributed traces from Express backend and OPEA services, log-trace correlation, self-hosted Collector + VictoriaMetrics + Grafana stack
 
 ### Growth Features (Post-MVP)
 
@@ -438,13 +438,16 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 - FR38: The framework provides controlled ArangoDB test database states (graph structures, vector embeddings) for integration tests
 - FR39: The framework provides environment-specific configuration profiles for different deployment targets and GPU hardware
 
-### MELT Integration (Sprint 23 Evolution)
+### Application Observability (OTel Instrumentation)
 
-- FR40: The test framework produces structured output (JSON, JUnit XML) consumable by the OpenTelemetry pipeline
-- FR41: The test framework propagates OTel trace context in test fixtures for distributed trace correlation
-- FR42: The test framework provides assertion helpers for validating structured JSON log output from services under test
-- FR43: Test execution results are queryable via the MELT Provider API for post-test diagnostics
-- FR44: Test health metrics (pass rates, execution times, flaky test detection) are visualizable in Grafana dashboards
+- FR40: Application services (Express backend, FastAPI/OPEA) emit distributed traces via OpenTelemetry SDK, producing spans for HTTP requests, database queries, and inter-service calls
+- FR41: Trace context is propagated across services via W3C `traceparent` headers, enabling end-to-end request tracing from backend through the RAG pipeline
+- FR42: The framework provides assertion helpers for validating structured JSON log output from services under test
+
+### Vision: MELT Provider Integration (Sprint 23)
+
+- FR43: Application telemetry is queryable via the MELT Provider API for production diagnostics (requires Sprint 23 MELT Provider API)
+- FR44: Service health metrics (request rates, error rates, latency percentiles) are visualizable in Grafana dashboards (requires Sprint 23 dashboard framework)
 
 ### AI-Assisted Test Generation
 
@@ -483,7 +486,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 - NFR17: All test runners produce JUnit XML reports in a format consumable by GitLab CI test reporting
 - NFR18: The test framework supports execution in Docker Compose, Docker Swarm, and Kubernetes environments
 - NFR19: Python tests run on Python 3.10+; Node.js tests run on Node.js 18+; Dart tests run on Flutter 3.10+
-- NFR20: Test output formats are compatible with OpenTelemetry ingestion (structured JSON, trace context propagation) for MELT integration in Sprint 23
+- NFR20: Application services emit OTel-compatible telemetry (traces via OTLP protocol) consumable by standard observability tools (Grafana, VictoriaMetrics, Jaeger)
 
 ### Language & Framework Constraints
 

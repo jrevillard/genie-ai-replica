@@ -10,6 +10,11 @@ import re
 from typing import Any
 
 import aiohttp
+from opentelemetry import propagate
+
+from tracing import get_tracer
+
+tracer = get_tracer(__name__)
 
 # Import exceptions for robust error handling
 from arango.exceptions import AQLQueryExecuteError
@@ -146,6 +151,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             payload["chunk_count"] = chunk_count
 
         try:
+            propagate.inject(headers)
             # Also apply semaphore here to be safe
             async with (
                 self._log_semaphore,
@@ -172,6 +178,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             "message": message,
         }
         try:
+            propagate.inject(headers)
             # FIX: Limit concurrency of log writes to prevent 429 flooding
             async with (
                 self._log_semaphore,
@@ -199,6 +206,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         url = f"{BACKEND_SERVICE_URL}/api/service-categories/categories"
 
         try:
+            propagate.inject(headers)
             async with (
                 self._log_semaphore,
                 aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
@@ -259,20 +267,23 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 separators=get_separators(),
             )
 
-        if isinstance(content, list):
-            raw_chunks = []
-            for item in content:
-                item_str = str(item)
-                if len(item_str) > doc_path.chunk_size:
-                    raw_chunks.extend(text_splitter.split_text(item_str))
-                else:
-                    raw_chunks.append(item_str)
-            plain_chunks = raw_chunks
-        else:
-            docs = text_splitter.create_documents([content])
-            plain_chunks = [d.page_content for d in docs]
+        with tracer.start_as_current_span("dataprep.chunking") as span:
+            if isinstance(content, list):
+                raw_chunks = []
+                for item in content:
+                    item_str = str(item)
+                    if len(item_str) > doc_path.chunk_size:
+                        raw_chunks.extend(text_splitter.split_text(item_str))
+                    else:
+                        raw_chunks.append(item_str)
+                plain_chunks = raw_chunks
+            else:
+                docs = text_splitter.create_documents([content])
+                plain_chunks = [d.page_content for d in docs]
 
-        valid_chunks = [c for c in plain_chunks if is_valid_content(c)]
+            valid_chunks = [c for c in plain_chunks if is_valid_content(c)]
+            span.set_attribute("dataprep.chunk_count", len(valid_chunks))
+
         return valid_chunks
 
     async def _run_guardrail(self, plain_chunks: list[str]) -> dict[str, Any]:

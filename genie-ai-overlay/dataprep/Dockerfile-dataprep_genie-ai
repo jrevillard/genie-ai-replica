@@ -80,6 +80,15 @@ RUN pip install --no-cache-dir -r ${REQ_PATH}
 # **UPDATED**: Added 'docling' and 'opencv-python-headless' which are required by the new utils/arangodb code.
 RUN pip install --no-cache-dir rank_bm25 docling opencv-python-headless hf_xet "python-jose[cryptography]"
 
+# Step F.5: Copy shared OTel tracing module (importable from PYTHONPATH=/app)
+COPY genie-ai-overlay/tracing.py /app/tracing.py
+
+# Step F.6: Install OpenTelemetry dependencies for distributed tracing
+RUN pip install --no-cache-dir \
+    "opentelemetry-api>=1.22" "opentelemetry-sdk>=1.22" \
+    "opentelemetry-instrumentation-fastapi>=0.43b0" \
+    "opentelemetry-exporter-otlp-proto-http>=1.22"
+
 # Step G: Pre-install EasyOCR models (auto-download during build)
 # This prevents the service from hanging on its one-time model download at runtime.
 RUN mkdir -p /tmp/easyocr /home/user/.EasyOCR/model /home/user/.EasyOCR/config && \

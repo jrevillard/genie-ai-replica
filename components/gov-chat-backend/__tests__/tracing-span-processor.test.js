@@ -23,19 +23,19 @@ class PIIRedactionProcessor {
   }
 
   onEnd(span) {
-      try {
-        const attrs = span.attributes;
-        if (attrs) {
-          const redacted = redactAttributes(attrs);
-          for (const [key, value] of Object.entries(redacted)) {
-            span.setAttribute(key, value);
-          }
+    try {
+      const attrs = span.attributes;
+      if (attrs) {
+        const redacted = redactAttributes(attrs);
+        for (const [key, value] of Object.entries(redacted)) {
+          span.setAttribute(key, value);
         }
-      } catch {
-        // Redaction failure must not block span export
       }
-      this._delegate.onEnd(span);
+    } catch {
+      // Redaction failure must not block span export
     }
+    this._delegate.onEnd(span);
+  }
 
   async shutdown() {
     return this._delegate.shutdown();

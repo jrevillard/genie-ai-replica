@@ -65,13 +65,9 @@ describe('tracing-db.js span lifecycle (with mock tracer)', () => {
   it('sets span status to ERROR on query failure', async () => {
     const queryFn = jest.fn().mockRejectedValue(new Error('db timeout'));
 
-    await expect(
-      traceQueryMocked(queryFn, { collection: 'users', operation: 'FOR' })
-    ).rejects.toThrow('db timeout');
+    await expect(traceQueryMocked(queryFn, { collection: 'users', operation: 'FOR' })).rejects.toThrow('db timeout');
 
-    expect(mockSpan.setStatus).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'db timeout' })
-    );
+    expect(mockSpan.setStatus).toHaveBeenCalledWith(expect.objectContaining({ message: 'db timeout' }));
     expect(mockSpan.recordException).toHaveBeenCalled();
     expect(mockSpan.end).toHaveBeenCalled();
   });

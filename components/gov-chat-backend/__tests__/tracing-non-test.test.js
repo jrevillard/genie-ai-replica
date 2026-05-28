@@ -114,7 +114,11 @@ describe('tracing.js non-test branch', () => {
     it('exits via timeout when sdk.shutdown() hangs', async () => {
       jest.useFakeTimers();
       let resolveShutdown;
-      mockShutdown.mockReturnValue(new Promise((r) => { resolveShutdown = r; }));
+      mockShutdown.mockReturnValue(
+        new Promise((r) => {
+          resolveShutdown = r;
+        })
+      );
 
       const handler = process.listeners('SIGTERM').find((h) => h.name === 'gracefulShutdown');
       if (handler) {

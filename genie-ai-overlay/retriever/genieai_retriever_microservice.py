@@ -5,6 +5,10 @@
 import os
 import time
 
+from tracing import get_tracer, setup_tracing
+
+setup_tracing("genieai-retriever")
+
 # import for retrievers component registration
 # from integrations.elasticsearch import OpeaElasticsearchRetriever
 # from integrations.mariadb import OpeaMARIADBVectorRetriever
@@ -83,9 +87,16 @@ async def retrieve_docs(
         logger.info(f"[ retrieval ] input: {input}")
 
     try:
-        response = await loader.invoke(input)
-        if logflag:
-            logger.debug(f"[ retrieval ] Retriever component response: {response}")
+        tracer = get_tracer("retriever.retrieve")
+        with tracer.start_as_current_span("retriever.hybrid_search") as span:
+            response = await loader.invoke(input)
+
+            # Set RAG attributes (metadata only — no PII)
+            if isinstance(response, list):
+                span.set_attribute("rag.chunk_count", len(response))
+
+            if logflag:
+                logger.debug(f"[ retrieval ] Retriever component response: {response}")
 
         retrieved_docs = []
         if isinstance(input, (EmbedDoc, EmbedMultimodalDoc)):
@@ -131,4 +142,11 @@ async def retrieve_docs(
 
 if __name__ == "__main__":
     logger.info("Retriever Microservice is starting...")
-    opea_microservices["opea_service@retrievers"].start()
+    service = opea_microservices["opea_service@retrievers"]
+
+    # OpenTelemetry FastAPI auto-instrumentation
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+    FastAPIInstrumentor.instrument_app(service._app)
+
+    service.start()

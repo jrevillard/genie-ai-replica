@@ -9,8 +9,16 @@ import os
 import re
 from datetime import date, datetime
 
+from tracing import get_tracer, setup_tracing
+
+setup_tracing("genieai-chatqna")
+
 import aiohttp  # for async http requests
 import httpx
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+HTTPXClientInstrumentor().instrument()
+
 from comps import CustomLogger, MegaServiceEndpoint, MicroService, ServiceOrchestrator, ServiceRoleType, ServiceType
 from comps.cores.proto.docarray import LLMParams, RerankerParms, RetrieverParms
 from comps.cores.proto.genieai_api_protocol import (
@@ -175,6 +183,11 @@ class GenieUserProfileClient:
         url = f"{BACKEND_SERVICE_URL}/api/me/context"
 
         headers = {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
+
+        # Inject W3C traceparent for distributed tracing
+        from opentelemetry.propagate import inject
+
+        inject(headers)
 
         try:
             _timeout = aiohttp.ClientTimeout(total=30)
@@ -835,6 +848,11 @@ class ChatQnAService:
 
         file_get_metadata_url = f"{DOC_REPO_URL}/api/files/{file_id}"
         headers = {"Authorization": f"Bearer {token}"}
+
+        # Inject W3C traceparent for distributed tracing
+        from opentelemetry.propagate import inject
+
+        inject(headers)
 
         try:
             async with (
@@ -1573,16 +1591,37 @@ class ChatQnAService:
             else RERANKING_THRESHOLD,
         )
 
-        result_dict, runtime_graph = await self.megaservice.schedule(
-            initial_inputs={"text": last_translated_message_content},
-            llm_parameters=parameters,
-            retriever_parameters=retriever_parameters,
-            reranker_parameters=reranker_parameters,
-            full_chat_history_string=translated_history_string,
-            retrieval_context=retrieval_context,
-            original_language=original_language,
-            user_details=user_details,
-        )
+        # RAG orchestration with tracing span
+        tracer = get_tracer("chatqna.orchestrate")
+        with tracer.start_as_current_span("chatqna.orchestrate") as span:
+            span.set_attribute("rag.query_length", len(last_translated_message_content))
+            span.set_attribute("rag.model_id", LLM_MODEL)
+
+            try:
+                result_dict, runtime_graph = await self.megaservice.schedule(
+                    initial_inputs={"text": last_translated_message_content},
+                    llm_parameters=parameters,
+                    retriever_parameters=retriever_parameters,
+                    reranker_parameters=reranker_parameters,
+                    full_chat_history_string=translated_history_string,
+                    retrieval_context=retrieval_context,
+                    original_language=original_language,
+                    user_details=user_details,
+                )
+
+                # Count retrieved documents from result
+                chunk_count = 0
+                for _key, val in result_dict.items():
+                    if hasattr(val, "retrieved_docs"):
+                        chunk_count = len(val.retrieved_docs)
+                        break
+                span.set_attribute("rag.chunk_count", chunk_count)
+            except Exception as e:
+                from opentelemetry.trace import StatusCode
+
+                span.set_status(StatusCode.ERROR)
+                span.record_exception(e)
+                raise
 
         if logflag:
             logger.debug(f"\nResult Dict: {result_dict}")
@@ -1767,6 +1806,11 @@ class ChatQnAService:
         )
 
         self.service.add_route(self.endpoint, self.handle_request, methods=["POST"])
+
+        # OpenTelemetry FastAPI auto-instrumentation
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+        FastAPIInstrumentor.instrument_app(self.service._app)
 
         self.service.start()
 

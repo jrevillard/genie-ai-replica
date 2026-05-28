@@ -117,7 +117,7 @@ development_status:
   # Epic 7: Application Observability — OTel Instrumentation
   epic-7: in-progress
   7-1-express-backend-otel-tracing-foundation: done
-  7-2-opea-services-otel-tracing-chatqna-retriever: backlog
+  7-2-opea-services-otel-tracing-chatqna-retriever: done
   7-3-opea-services-otel-tracing-dataprep-reranker: backlog
   7-4-end-to-end-trace-propagation-and-log-correlation: backlog
   7-5-deploy-observability-stack-collector-victoriametrics-grafana: backlog

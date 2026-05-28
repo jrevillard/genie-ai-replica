@@ -1597,24 +1597,31 @@ class ChatQnAService:
             span.set_attribute("rag.query_length", len(last_translated_message_content))
             span.set_attribute("rag.model_id", LLM_MODEL)
 
-            result_dict, runtime_graph = await self.megaservice.schedule(
-                initial_inputs={"text": last_translated_message_content},
-                llm_parameters=parameters,
-                retriever_parameters=retriever_parameters,
-                reranker_parameters=reranker_parameters,
-                full_chat_history_string=translated_history_string,
-                retrieval_context=retrieval_context,
-                original_language=original_language,
-                user_details=user_details,
-            )
+            try:
+                result_dict, runtime_graph = await self.megaservice.schedule(
+                    initial_inputs={"text": last_translated_message_content},
+                    llm_parameters=parameters,
+                    retriever_parameters=retriever_parameters,
+                    reranker_parameters=reranker_parameters,
+                    full_chat_history_string=translated_history_string,
+                    retrieval_context=retrieval_context,
+                    original_language=original_language,
+                    user_details=user_details,
+                )
 
-            # Count retrieved documents from result
-            chunk_count = 0
-            for _key, val in result_dict.items():
-                if hasattr(val, "retrieved_docs"):
-                    chunk_count = len(val.retrieved_docs)
-                    break
-            span.set_attribute("rag.chunk_count", chunk_count)
+                # Count retrieved documents from result
+                chunk_count = 0
+                for _key, val in result_dict.items():
+                    if hasattr(val, "retrieved_docs"):
+                        chunk_count = len(val.retrieved_docs)
+                        break
+                span.set_attribute("rag.chunk_count", chunk_count)
+            except Exception as e:
+                from opentelemetry.trace import StatusCode
+
+                span.set_status(StatusCode.ERROR)
+                span.record_exception(e)
+                raise
 
         if logflag:
             logger.debug(f"\nResult Dict: {result_dict}")

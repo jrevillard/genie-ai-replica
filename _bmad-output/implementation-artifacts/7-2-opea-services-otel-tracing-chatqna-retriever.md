@@ -1,6 +1,6 @@
 # Story 7.2: OPEA Services OTel Tracing (ChatQnA + Retriever)
 
-Status: review
+Status: done
 
 ## Story
 
@@ -402,3 +402,13 @@ Claude GLM-5-Turbo (claude-opus-4-7 equivalent)
 - `genie-ai-overlay/retriever/genieai_retriever_microservice.py` — MODIFIED: added tracing import/setup, FastAPI instrumentation, manual retrieval spans
 - `genie-ai-overlay/retriever/genieai_retriever_arangodb.py` — MODIFIED: added manual span in invoke() with RAG attributes
 - `env` — MODIFIED: updated OTel env var comment to document Python service usage
+
+### Review Findings
+
+- [x] [Review][Patch] Span leak in ArangoDB Retriever — `start_span()` without try/finally in `invoke()`. If an exception occurs between `start_span()` and `span.end()`, the span is never ended, causing memory leaks and incomplete traces. Fix: use `tracer.start_as_current_span()` as context manager or wrap in try/finally. [`genie-ai-overlay/retriever/genieai_retriever_arangodb.py`]
+- [x] [Review][Patch] Missing error span attributes — ChatQnA orchestration span does not record exception details or error status when `megaservice.schedule()` throws. Spans close without error context, making troubleshooting difficult. Fix: add `span.record_exception(e)` and `span.set_status(StatusCode.ERROR, str(e))` in except block. [`genie-ai-overlay/chatqna/genieai_chatqna.py`]
+- [x] [Review][Defer] TEI embedding calls from Retriever lack trace propagation — OPEA framework internal HTTP client not instrumented; out of scope for this story. [`genie-ai-overlay/retriever/`] — deferred, OPEA framework limitation
+- [x] [Review][Defer] Test mocks don't verify actual span export — unit tests mock OTLPSpanExporter, giving false confidence; testing philosophy concern. [`genie-ai-overlay/tests/test_tracing.py`] — deferred, testing philosophy
+- [x] [Review][Defer] OTLP URL double `/v1/traces` if operator sets wrong env var — `rstrip('/')` handles trailing slash but not duplicate path. [`genie-ai-overlay/tracing.py`] — deferred, operator error documented
+- [x] [Review][Defer] Chunk count stays 0 if OPEA response format changes — telemetry robustness, not functional. [`genie-ai-overlay/chatqna/genieai_chatqna.py`] — deferred, telemetry
+- [x] [Review][Defer] Streaming responses close span before first token — known limitation of current span model. [`genie-ai-overlay/chatqna/genieai_chatqna.py`] — deferred, known limitation

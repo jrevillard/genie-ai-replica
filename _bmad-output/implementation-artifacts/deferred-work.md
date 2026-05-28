@@ -277,3 +277,11 @@ Items deferred during code reviews. Revisit when the related component is next m
 - Weather service missing coordinate boundary tests (±90, ±180) — one out-of-bounds case tested, exact boundary values untested
 - Test isolation: process.exit mock in global scope — pre-existing test infrastructure pattern in chat-history-service tests
 - key-handler edge cases (Unicode, 254-char boundary) not exhaustive despite 100% coverage — additional edge case hardening
+
+## Deferred from: code review of 7-2-opea-services-otel-tracing-chatqna-retriever (2026-05-28)
+
+- TEI embedding calls from Retriever lack trace propagation — OPEA framework internal HTTP client not instrumented; httpx auto-instrumentation only in ChatQnA. Out of scope for this story, requires OPEA-level instrumentation.
+- Test mocks don't verify actual span export behavior — unit tests mock OTLPSpanExporter at class level, giving false confidence in URL construction. Testing philosophy concern; integration test with real collector would be separate effort.
+- OTLP URL double `/v1/traces` if operator sets wrong env var — `rstrip('/')` handles trailing slash but not duplicate path. Operator error, documented in env template. Not worth adding runtime detection.
+- Chunk count stays 0 if OPEA response format changes — telemetry robustness concern, not functional. Fallback to 0 is safe.
+- Streaming responses close orchestration span before first token — known limitation of current span model. Streaming trace correlation would need a different span architecture (event-based spans).

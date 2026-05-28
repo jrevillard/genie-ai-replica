@@ -2,6 +2,7 @@ require('dotenv').config();
 const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
 const { NotFoundError, ForbiddenError } = require('../middleware/errors');
+const { traceQuery } = require('../tracing-db');
 
 //const initDB = dbService.getConnection();
 
@@ -78,11 +79,15 @@ class ChatHistoryService {
       // Fetch category name if categoryId is provided
       let categoryName = '';
       if (conversationData.categoryId) {
-        const categoryQuery = await this.db.query(aql`
-          FOR cat IN serviceCategories
-            FILTER cat._key == ${conversationData.categoryId}
-            RETURN cat.nameEN
-        `);
+        const categoryQuery = await traceQuery(
+          () =>
+            this.db.query(aql`
+              FOR cat IN serviceCategories
+                FILTER cat._key == ${conversationData.categoryId}
+                RETURN cat.nameEN
+            `),
+          { collection: 'serviceCategories', operation: 'FILTER' }
+        );
         categoryName = (await categoryQuery.next()) || '';
         logger.info(`Resolved categoryId ${conversationData.categoryId} to name: ${categoryName}`);
       }
@@ -95,11 +100,15 @@ class ChatHistoryService {
       const generatedKey = `${timestamp}${randomSuffix}`; // e.g., "1747653190597"
 
       // Compute messageCount by counting existing messages for this conversation
-      const messageCountQuery = await this.db.query(aql`
-        FOR msg IN messages
-          FILTER msg.conversationId == ${generatedKey}
-          RETURN msg
-      `);
+      const messageCountQuery = await traceQuery(
+        () =>
+          this.db.query(aql`
+            FOR msg IN messages
+              FILTER msg.conversationId == ${generatedKey}
+              RETURN msg
+          `),
+        { collection: 'messages', operation: 'FILTER' }
+      );
       const messages = await messageCountQuery.all();
       const messageCount = messages.length;
       logger.info(`Computed messageCount for conversation ${generatedKey}: ${messageCount}`);
@@ -498,7 +507,10 @@ class ChatHistoryService {
 
       // Log and execute the query
       logger.info(`Executing simplified query for user path: ${userIdWithPrefix}`);
-      const cursor = await this.db.query(query);
+      const cursor = await traceQuery(() => this.db.query(query), {
+        collection: 'conversations',
+        operation: 'FOR'
+      });
       const conversations = await cursor.all();
       logger.info(`Found ${conversations.length} conversations for user ${userIdWithPrefix}`);
 

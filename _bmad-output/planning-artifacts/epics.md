@@ -151,11 +151,11 @@ None — testing framework has no user-facing UI.
 | FR37 | Epic 8 | Multi-format document corpora |
 | FR38 | Epic 8 | ArangoDB test database states |
 | FR39 | Epic 6 | Environment-specific config profiles |
-| FR40 | Epic 7 | Structured JSON/JUnit output |
-| FR41 | Epic 7 | OTel trace context propagation |
+| FR40 | Epic 7 | OTel distributed traces from application services |
+| FR41 | Epic 7 | W3C traceparent propagation across services |
 | FR42 | Epic 7 | Structured log assertion helpers |
-| FR43 | Epic 7 | MELT Provider API queryability |
-| FR44 | Epic 7 | Grafana test health dashboards |
+| FR43 | Sprint 23 | MELT Provider API queryability (Vision) |
+| FR44 | Sprint 23 | Grafana service health dashboards (Vision) |
 | FR45 | Epic 9 | AI test scaffolding generation |
 | FR46 | Epic 9 | AI test case suggestions |
 
@@ -165,7 +165,7 @@ Epics are numbered for reference, not for sequential execution. The recommended 
 
 **Wave 0 — Foundation (must complete first):**
 - Epic 1 Stories 1.1–1.3 (JUnit reporting, lint stage, test stage) — CI infrastructure
-- Epic 7 Stories 7.1–7.2 (trace context helpers, log assertions) — test utilities imported by Epics 3–6
+- Epic 7 Stories 7.1–7.2 (OTel tracing foundation, OPEA tracing) — application observability; no dependency on test epics
 - Story 2.2 (backend fixtures) and Story 4.1 (OPEA pytest config + fixtures) — shared mock infrastructure
 
 **Wave 1 — Core tests (parallel across components):**

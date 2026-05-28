@@ -51,12 +51,16 @@ if (process.env.NODE_ENV === 'test') {
     }
 
     onEnd(span) {
-      const attrs = span.attributes;
-      if (attrs) {
-        const redacted = redactAttributes(attrs);
-        for (const [key, value] of Object.entries(redacted)) {
-          span.setAttribute(key, value);
+      try {
+        const attrs = span.attributes;
+        if (attrs) {
+          const redacted = redactAttributes(attrs);
+          for (const [key, value] of Object.entries(redacted)) {
+            span.setAttribute(key, value);
+          }
         }
+      } catch {
+        // Redaction failure must not block span export
       }
       this._delegate.onEnd(span);
     }
@@ -102,12 +106,19 @@ if (process.env.NODE_ENV === 'test') {
   sdk.start();
 
   // Graceful shutdown
+  const SHUTDOWN_TIMEOUT_MS = 5000;
   const gracefulShutdown = async () => {
+    let flushed = false;
+    const timeout = setTimeout(() => {
+      if (!flushed) process.exit(0);
+    }, SHUTDOWN_TIMEOUT_MS);
     try {
       await sdk.shutdown();
+      flushed = true;
     } catch {
       // Shutdown errors are non-fatal — best-effort flush
     }
+    clearTimeout(timeout);
     process.exit(0);
   };
 

@@ -1,6 +1,6 @@
 # Story 7.1: Express Backend OTel Tracing Foundation
 
-Status: review
+Status: done
 
 ## Story
 
@@ -56,6 +56,14 @@ so that every HTTP request, database query, and external API call produces distr
   - [x] `cd components/gov-chat-backend && npm test` — all 999 tests pass
   - [x] `npm run lint` — no errors
   - [x] `npm run format:check` — no formatting issues
+
+### Review Findings
+
+- [x] [Review][Patch] DB error spans miss setStatus(ERROR) — `tracing-db.js` catch block calls `recordException` but never sets `span.setStatus({ code: SpanStatusCode.ERROR })`, leaving error spans with status UNSET in trace backends. Blind Hunter + Edge Case Hunter agree.
+- [x] [Review][Patch] Graceful shutdown lacks timeout and silent catch — `tracing.js` shutdown handler has no timeout protection (sdk.shutdown() could hang indefinitely) and the empty catch block swallows errors silently. Add a 5s timeout and log a warning on flush failure.
+- [x] [Review][Patch] PIIRedactionProcessor has no try-catch — `tracing.js` onEnd() method does not protect the redaction loop with try-catch. A thrown exception in redactAttributes() would crash the entire span export pipeline. Wrap in defensive try-catch.
+- [x] [Review][Defer] OTel Collector absent from docker-compose — deferred, pre-existing. Scope of story 7-5 (deploy observability stack).
+- [x] [Review][Defer] npm_package_version fallback to 1.0.0 — deferred, pre-existing. Works in Docker containers via npm start; fallback is acceptable outside containers.
 
 ## Dev Notes
 

@@ -1,4 +1,5 @@
 const { getTracer } = require('./tracing');
+const { SpanStatusCode } = require('@opentelemetry/api');
 
 function traceQuery(queryFn, { collection, operation }) {
   const tracer = getTracer();
@@ -14,6 +15,7 @@ function traceQuery(queryFn, { collection, operation }) {
       return result;
     })
     .catch((err) => {
+      span.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
       span.recordException(err);
       span.end();
       throw err;

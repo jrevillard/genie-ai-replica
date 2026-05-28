@@ -97,13 +97,41 @@ describe('tracing.js non-test branch', () => {
   });
 
   describe('graceful shutdown', () => {
+    beforeEach(() => {
+      process.exit.mockClear();
+    });
+
     it('calls sdk.shutdown() and process.exit(0) on signal', async () => {
       mockShutdown.mockResolvedValueOnce(undefined);
-      // Find the SIGTERM handler
       const handler = process.listeners('SIGTERM').find((h) => h.name === 'gracefulShutdown');
       if (handler) {
         await handler('SIGTERM');
         expect(mockShutdown).toHaveBeenCalled();
+        expect(process.exit).toHaveBeenCalledWith(0);
+      }
+    });
+
+    it('exits via timeout when sdk.shutdown() hangs', async () => {
+      jest.useFakeTimers();
+      let resolveShutdown;
+      mockShutdown.mockReturnValue(new Promise((r) => { resolveShutdown = r; }));
+
+      const handler = process.listeners('SIGTERM').find((h) => h.name === 'gracefulShutdown');
+      if (handler) {
+        handler('SIGTERM');
+        jest.advanceTimersByTime(5000);
+        expect(process.exit).toHaveBeenCalledWith(0);
+        resolveShutdown();
+      }
+      jest.useRealTimers();
+    });
+
+    it('clears timeout on successful shutdown', async () => {
+      mockShutdown.mockResolvedValueOnce(undefined);
+      const handler = process.listeners('SIGTERM').find((h) => h.name === 'gracefulShutdown');
+      if (handler) {
+        await handler('SIGTERM');
+        expect(process.exit).toHaveBeenCalledTimes(1);
         expect(process.exit).toHaveBeenCalledWith(0);
       }
     });

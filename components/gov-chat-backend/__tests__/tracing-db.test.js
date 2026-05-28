@@ -35,3 +35,56 @@ describe('tracing-db.js', () => {
     expect(r2).toBe('result2');
   });
 });
+
+describe('tracing-db.js span lifecycle (with mock tracer)', () => {
+  let traceQueryMocked;
+  let mockSpan;
+
+  beforeAll(() => {
+    mockSpan = {
+      setAttribute: jest.fn(),
+      setStatus: jest.fn(),
+      recordException: jest.fn(),
+      end: jest.fn()
+    };
+    const mockTracer = { startSpan: jest.fn().mockReturnValue(mockSpan) };
+
+    jest.isolateModules(() => {
+      jest.doMock('../tracing', () => ({ getTracer: () => mockTracer }));
+      traceQueryMocked = require('../tracing-db').traceQuery;
+    });
+  });
+
+  beforeEach(() => {
+    mockSpan.setAttribute.mockClear();
+    mockSpan.setStatus.mockClear();
+    mockSpan.recordException.mockClear();
+    mockSpan.end.mockClear();
+  });
+
+  it('sets span status to ERROR on query failure', async () => {
+    const queryFn = jest.fn().mockRejectedValue(new Error('db timeout'));
+
+    await expect(
+      traceQueryMocked(queryFn, { collection: 'users', operation: 'FOR' })
+    ).rejects.toThrow('db timeout');
+
+    expect(mockSpan.setStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'db timeout' })
+    );
+    expect(mockSpan.recordException).toHaveBeenCalled();
+    expect(mockSpan.end).toHaveBeenCalled();
+  });
+
+  it('sets db attributes on successful query', async () => {
+    const queryFn = jest.fn().mockResolvedValue('ok');
+
+    await traceQueryMocked(queryFn, { collection: 'messages', operation: 'INSERT' });
+
+    expect(mockSpan.setAttribute).toHaveBeenCalledWith('db.system', 'arangodb');
+    expect(mockSpan.setAttribute).toHaveBeenCalledWith('db.collection', 'messages');
+    expect(mockSpan.setAttribute).toHaveBeenCalledWith('db.operation', 'INSERT');
+    expect(mockSpan.end).toHaveBeenCalled();
+    expect(mockSpan.setStatus).not.toHaveBeenCalled();
+  });
+});

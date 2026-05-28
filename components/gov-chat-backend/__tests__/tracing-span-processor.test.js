@@ -23,15 +23,19 @@ class PIIRedactionProcessor {
   }
 
   onEnd(span) {
-    const attrs = span.attributes;
-    if (attrs) {
-      const redacted = redactAttributes(attrs);
-      for (const [key, value] of Object.entries(redacted)) {
-        span.setAttribute(key, value);
+      try {
+        const attrs = span.attributes;
+        if (attrs) {
+          const redacted = redactAttributes(attrs);
+          for (const [key, value] of Object.entries(redacted)) {
+            span.setAttribute(key, value);
+          }
+        }
+      } catch {
+        // Redaction failure must not block span export
       }
+      this._delegate.onEnd(span);
     }
-    this._delegate.onEnd(span);
-  }
 
   async shutdown() {
     return this._delegate.shutdown();
@@ -150,6 +154,17 @@ describe('PIIRedactionProcessor', () => {
       const span = createMockSpan({ key: 'value' });
       processor.onEnd(span);
       expect(processor._delegate.onEnd).toHaveBeenCalledTimes(1);
+    });
+
+    it('delegates onEnd even when redactAttributes throws', () => {
+      const span = {
+        attributes: { password: 'secret' },
+        setAttribute: jest.fn().mockImplementation(() => {
+          throw new Error('setAttribute exploded');
+        })
+      };
+      processor.onEnd(span);
+      expect(processor._delegate.onEnd).toHaveBeenCalledWith(span);
     });
   });
 

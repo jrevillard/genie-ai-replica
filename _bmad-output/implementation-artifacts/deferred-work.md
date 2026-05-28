@@ -2,6 +2,11 @@
 
 Items deferred during code reviews. Revisit when the related component is next modified.
 
+## Deferred from: code review of 7-1-express-backend-otel-tracing-foundation (2026-05-28)
+
+- OTel Collector absent from docker-compose — the env template references `otel-collector:4318` but no service is defined yet. Scope of story 7-5 (deploy observability stack).
+- `npm_package_version` fallback to `1.0.0` — only set when running via `npm start`; direct `node index.js` falls back. Acceptable in Docker containers; limitation documented.
+
 ## Deferred from: code review of 1-3-create-ci-pipeline-test-stage (2026-05-19)
 
 - Python venv recreated on every CI run despite cache restoration — `python -m venv .venv` in `before_script` recreates the venv even when cache restores it. Pattern is functional (venv creation is idempotent, pip skips installed packages) but wastes ~5-10s per run. Could be optimized with a conditional check (`if [ ! -d .venv ]; then python -m venv .venv; fi`).

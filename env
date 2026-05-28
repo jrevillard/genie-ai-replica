@@ -542,6 +542,9 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 # OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=grpc://127.0.0.1:4317
 # TELEMETRY_ENDPOINT=http://127.0.0.1:4318/v1/traces
 
+# OpenTelemetry — distributed tracing endpoint (optional, defaults to collector service)
+# OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+
 # =============================================================================
 # SECTION 13: DOCKER SWARM MULTI-NODE (OPTIONAL)
 # =============================================================================

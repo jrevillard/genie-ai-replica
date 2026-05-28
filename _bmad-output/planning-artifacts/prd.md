@@ -158,8 +158,8 @@ The testing framework initiative instruments application services with OpenTelem
 - AI-assisted test generation and maintenance tooling
 - Kubernetes deployment target verification
 - Performance benchmarking (latency, throughput) per the existing test strategy
-- MELT-powered test diagnostics: query traces/logs/metrics from test runs via MELT Provider API
-- Test health dashboards in Grafana alongside service health dashboards
+- MELT Provider API integration: query traces/logs/metrics programmatically for advanced diagnostics (Sprint 23)
+- Advanced Grafana dashboards: alerting, anomaly detection, SLI/SLO tracking (Sprint 23)
 
 ### Vision (Future)
 
@@ -190,15 +190,15 @@ The CI pipeline triggers automatically. Within minutes, Alex sees the pipeline s
 
 Priya follows the installation guide, configures the `.env` file for the A40 profile, and runs the configuration validation suite. It flags two issues: `VLLM_MAX_MODEL_LEN` is set to 32768 (too high for the A40's 48GB with the selected model), and `DOCUMENT_INGESTION_LANGUAGE` is set to `en` but the document corpus includes local-language files. Priya corrects both, validation passes, and she proceeds with document ingestion and quality verification.
 
-### Journey 4: Developer Debugs a Multi-Service Failure (MELT-Enabled Troubleshooting)
+### Journey 4: Developer Debugs a Multi-Service Failure (OTel-Enabled Troubleshooting)
 
-**Marcus** sees that an E2E test for the full RAG pipeline is failing intermittently — "request timed out after 30s."
+**Marcus** sees that a RAG pipeline request is timing out — "request timed out after 30s."
 
-After Sprint 23's MELT rollout, Marcus doesn't just see a timeout. The test framework captures the OTel trace context from the failed request. Marcus queries the MELT Provider API and sees the full trace waterfall: Kong forwarded in 5ms, Backend processed in 12ms, ChatQnA received the request, but the Retriever span shows a 28s ArangoDB query hitting a graph traversal depth of 4. The test fixture had stale test data that created an unexpectedly deep graph. Marcus updates the fixture, the test passes consistently, and the trace data is archived as part of the test report.
+With OTel instrumentation in place, Marcus opens Grafana and queries the trace by timeframe. He sees the full trace waterfall: Backend processed in 12ms, ChatQnA received the request, but the Retriever span shows a 28s ArangoDB query hitting a graph traversal depth of 4. The correlated structured logs confirm the slow query pattern. Marcus identifies the query optimization needed, deploys the fix, and verifies the trace latency drops to normal.
 
-### Journey 5: Team Lead Reviews Test Health Dashboard (MELT-Enabled Visibility)
+### Journey 5: Team Lead Reviews Service Health Dashboard (OTel-Enabled Visibility)
 
-**David** opens Grafana and sees the Test Health dashboard alongside Service Health — one pane of glass. The dashboard shows: 847 tests across 5 components, 99.4% pass rate over 7 days. One test is flaky — `retriever-hybrid-search` fails intermittently on Friday afternoons. The error logs panel shows the failure correlates with ArangoDB compaction cycles. David creates a task to add a retry decorator and isolate the test from compaction timing.
+**David** opens Grafana and sees the Service Health dashboard — one pane of glass for all GENIE.AI services. The dashboard shows: request rates, error rates, and latency percentiles per service. The backend service shows elevated p99 latency. The trace waterfall reveals the Retriever span takes 28s on certain queries due to ArangoDB graph traversal depth. David checks the structured logs correlated by trace_id and confirms the pattern. He files a task to optimize the traversal query.
 
 ### Journey Requirements Summary
 
@@ -227,7 +227,7 @@ After Sprint 23's MELT rollout, Marcus doesn't just see a timeout. The test fram
 - vLLM/TEI GPU-dependent services — tests account for GPU availability in CI (mock or conditional skip)
 - Kong API gateway — tests validate routing, rate limiting, and OTel plugin behavior
 - Docker Swarm placement constraints (`gateway=true`, `gpu=true`, `genieai=true` labels)
-- OpenTelemetry Collector as universal telemetry pipeline — test instrumentation is OTel-compatible
+- OpenTelemetry Collector as universal telemetry pipeline — application services emit OTel-compatible traces and metrics
 - Multi-language telemetry parity — Node.js and Python JSON logs share a common schema for OTel ingestion
 
 ### GENIE.AI Overlay Architecture
@@ -255,34 +255,34 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 
 **Probabilistic Quality Gates with RAGAS** — RAGAS metrics (faithfulness >0.95, relevance >0.85, context precision >0.80, context recall >0.90) as automated pass/fail thresholds in a CI pipeline for a government RAG platform. Most RAG deployments rely on manual evaluation; this embeds quality validation into the merge workflow.
 
-**MELT x Testing Convergence** — Test framework and MELT observability platform share the same telemetry pipeline (OTel → VictoriaMetrics → Grafana). Test results are MELT events, test traces are MELT spans, test metrics are MELT metrics. Test health and service health share one pane of glass.
+**OTel Observability Foundation** — Application services (Express backend, OPEA FastAPI) emit distributed traces and structured logs via OpenTelemetry SDKs. The same telemetry pipeline (OTel Collector → VictoriaMetrics → Grafana) provides both real-time service health and request-level debugging across the full stack.
 
 **AI-Leveraged Test Generation** — Using AI to generate and maintain tests across 5 components, 3 languages, and 3 deployment targets to compensate for limited team resources.
 
 ### Delivery Timeline
 
-- **Sprint 22 (current):** Testing framework foundation — CI/CD pipeline, component test suites, configuration validation, MELT-ready instrumentation hooks
-- **Sprint 23 (next):** Evolve alongside MELT observability platform — MELT-powered test diagnostics, Grafana test health dashboards, OTel trace context integration, AI-assisted test generation tooling
+- **Sprint 22 (current):** Testing framework foundation — CI/CD pipeline, component test suites, configuration validation, application OTel instrumentation
+- **Sprint 23 (next):** Evolve alongside MELT observability platform — MELT Provider API, advanced Grafana dashboards, alerting, AI-assisted test generation tooling
 
 ### Validation Approach
 
 - Validation approach verified through the existing RAGAS-based test strategy for the AI/ML pipeline (dataprep, retriever, LLM)
 - Configuration-to-output quality validation proven against the El-Salvador test bed
-- MELT convergence validated through Sprint 23 integration — test telemetry flows through OTel → VictoriaMetrics → Grafana alongside production telemetry
+- OTel observability validated through distributed tracing from backend through RAG pipeline — traces flow through OTel Collector → VictoriaMetrics → Grafana
 - AI-generated tests validated against human-authored baselines for coverage parity and false-positive rates
 
 ### Risk Mitigation
 
 - OpenAPI specs must be kept in sync with implementation — mitigated by swagger-jsdoc annotations in route files (single source of truth) and auto-generated mobile client
 - RAGAS thresholds are domain-specific — mitigated by starting with conservative thresholds and tuning against real country deployments
-- MELT convergence creates a Sprint 23 dependency — mitigated by designing MELT-ready hooks in Sprint 22 that function independently until Sprint 23's observability stack is available
+- OTel instrumentation creates a Sprint 23 dependency for advanced features — mitigated by deploying a self-hosted Collector + VictoriaMetrics + Grafana stack in Sprint 22 that functions independently; Sprint 23 builds the MELT Provider API and advanced dashboards on top
 - AI-generated tests may produce false positives — mitigated by human review before integration into CI
 
 ## Platform Infrastructure Specific Requirements
 
 ### Technical Architecture
 
-**Test Framework Architecture:** 5 independent test ecosystems (Jest, pytest, Vue Test Utils, Flutter test, Playwright) orchestrated by a unified CI pipeline. Shared test infrastructure: fixtures, mocks, test data, configuration profiles. MELT-ready instrumentation hooks in all test frameworks. AI-assisted test generation tooling to maximize coverage with limited resources.
+**Test Framework Architecture:** 5 independent test ecosystems (Jest, pytest, Vue Test Utils, Flutter test, Playwright) orchestrated by a unified CI pipeline. Shared test infrastructure: fixtures, mocks, test data, configuration profiles. Application OTel instrumentation in Express and FastAPI services. AI-assisted test generation tooling to maximize coverage with limited resources.
 
 **CI/CD Pipeline Architecture:** GitLab CI as pipeline orchestrator. Stages: lint → unit tests (per component) → configuration validation → integration tests (scheduled). Mandatory gates on merge requests: lint, unit, config validation. Scheduled gates: integration tests, RAG quality regression. JUnit XML report artifacts for all test runners.
 
@@ -329,7 +329,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 5. **Document-Repository Test Suite:** Route handler tests (upload, download, search, delete). Security tests (ClamAV, file type validation). Extended service tests.
 6. **Configuration Validation Suite:** Env template schema validation. Docker-compose var coverage. Hardware profile parameter ranges. Feature flag interdependencies.
 7. **Mobile Test Suite:** Existing ~104 service-layer tests integrated into CI.
-8. **MELT-Ready Instrumentation Hooks:** Structured test output formats (JSON, JUnit XML). Trace context propagation patterns in fixtures. Log assertion helpers.
+8. **Application OTel Instrumentation:** Distributed traces from Express backend and OPEA services. Log-trace correlation. Self-hosted Collector + VictoriaMetrics + Grafana.
 
 ### Post-MVP Features (Phase 2) — Sprint 23
 
@@ -339,8 +339,8 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 - Integration tests against deployed Docker Compose environment
 - Swarm deployment target verification
 - E2E Playwright expansion (chatbot, document upload, admin flows)
-- MELT-powered test diagnostics (query traces/logs/metrics via MELT Provider API)
-- Test health dashboards in Grafana alongside service health
+- MELT Provider API integration (query traces/logs/metrics programmatically for advanced diagnostics)
+- Advanced service health dashboards in Grafana with alerting and SLI/SLO tracking
 - AI-assisted test generation and maintenance tooling
 - Performance benchmarking per existing test strategy
 
@@ -368,7 +368,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 - **Sprint 22 timeline** — Sprint ends May 31. Mitigation: MVP scope focused on CI pipeline + per-component unit tests; RAG quality and integration tests defer to Sprint 23.
 
 **Dependency Risks:**
-- **Sprint 23 MELT dependency** — Issue #601 depends on Sprint 22 test instrumentation. Mitigation: MELT-ready hooks in Sprint 22 function independently until Sprint 23's stack is available.
+- **Sprint 23 MELT Provider dependency** — Issue #601 (Sprint 23) depends on Sprint 22 OTel instrumentation. Mitigation: OTel SDK code in Sprint 22 is deployment-agnostic and functions independently; Sprint 23 builds the MELT Provider API and advanced dashboards on top.
 - **Sprint 24 ChatQnA refactoring** — Issue #599 blocks this work. Mitigation: backend test suite (especially ChatQnA route tests) is an MVP priority.
 
 ## Functional Requirements

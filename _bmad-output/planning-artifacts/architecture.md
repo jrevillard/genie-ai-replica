@@ -92,7 +92,7 @@ The `env` template contains 50+ variables across 13 sections with complex interd
 
 ### Cross-Cutting Concerns Identified
 
-1. **MELT Observability Integration** — Test instrumentation must emit OTel-compatible telemetry from Sprint 22, functioning independently until Sprint 23's VictoriaMetrics + Grafana stack is available. Shared schema for Node.js and Python JSON logs. Trace context propagation in test fixtures. Issue #601 (Sprint 23) depends on Sprint 22 test instrumentation.
+1. **Application Observability (OTel)** — Application services (Express backend, FastAPI/OPEA) emit OTel-compatible distributed traces and structured logs from Sprint 22. W3C traceparent header propagation links spans across services. Shared JSON log schema includes `trace_id` and `span_id` for log-trace correlation. Issue #601 (Sprint 23) builds the MELT Provider API on top of this foundation.
 
 2. **Configuration-as-Test-Input** — Every test must account for env var profiles as first-class inputs. The same codebase produces different behavior based on `DEPLOY_OPEA`, GPU profiles, language settings, and document corpora. Test fixtures include env var profiles alongside mocks and stubs.
 
@@ -184,7 +184,7 @@ No third-party starter template or boilerplate is used. The testing framework is
 - Configuration validation approach (hybrid programmatic)
 
 **Important Decisions (Shape Architecture):**
-- MELT instrumentation hook design (Sprint 22/23 bridge)
+- OTel instrumentation architecture (application services + Collector stack)
 - RAG quality test architecture (designed Sprint 22, built Sprint 23)
 - Test data management and fixture locations
 - External service mock strategy
@@ -813,13 +813,13 @@ genie-ai/                                          # Repository root
 | FR1–FR8 (CI/CD) | `.gitlab-ci.yml` | Per-component jest configs, pytest.ini |
 | FR9–FR12 (Backend) | `components/gov-chat-backend/__tests__/routes/`, `services/`, `middleware/` | `tests/fixtures/jwt/` |
 | FR13–FR16 (Frontend) | `components/gov-chat-frontend/src/__tests__/components/`, `services/`, `store/` | `tests/fixtures/jwt/` |
-| FR17–FR21 (OPEA) | `genie-ai-overlay/tests/` | `tests/fixtures/arangodb/`, `tests/melt-helpers/` |
+| FR17–FR21 (OPEA) | `genie-ai-overlay/tests/` | `tests/fixtures/arangodb/` |
 | FR22–FR24 (Doc-repo) | `components/document-repository/__tests__/routes/`, `services/` | `__tests__/fixtures/` |
 | FR25–FR26 (Mobile) | `mobile/genie_ai_mobile/test/` (existing) | `test/fixtures/` |
 | FR27–FR31 (Config) | `tests/config-validator/` | `tests/fixtures/config/` |
 | FR32–FR35 (RAG Quality) | `tests/rag-quality/` | `tests/fixtures/corpora/` |
 | FR36–FR39 (Test Data) | `tests/fixtures/` | Per-component fixture directories |
-| FR40–FR44 (MELT) | `tests/melt-helpers/` | Per-component test files |
+| FR40–FR42 (Observability) | OTel SDK in app services + Collector stack | Grafana dashboards |
 | FR45–FR46 (AI Generation) | AI agent tooling, not file-structured | All component test directories |
 
 ### Integration Points
@@ -843,18 +843,18 @@ tests/fixtures/jwt/          → consumed by backend, frontend, doc-repo tests (
 tests/fixtures/arangodb/     → consumed by OPEA tests (mocked DB responses)
 tests/fixtures/config/       → consumed by config-validator (env profiles)
 tests/fixtures/corpora/      → consumed by rag-quality (document test bed)
-tests/melt-helpers/          → imported by any test needing trace context / log assertions
+tests/log-assertions/        → imported by any test needing structured log assertions
 ```
 
 ## Architecture Validation Results
 
 ### Coherence Validation
 
-**Decision Compatibility:** All technology choices work together without conflicts. Jest 29.x across 3 JS components is version-consistent. pytest 9.x is the standard for Python/FastAPI. JUnit XML is a universal format consumable by all runners and GitLab CI. MELT hooks are designed to be independent of the Sprint 23 stack — no version coupling. The Node.js config validator can parse both `env` (plain text) and `docker-compose.yaml` (YAML) without cross-language dependencies.
+**Decision Compatibility:** All technology choices work together without conflicts. Jest 29.x across 3 JS components is version-consistent. pytest 9.x is the standard for Python/FastAPI. JUnit XML is a universal format consumable by all runners and GitLab CI. OTel SDK code is deployment-agnostic — works identically in Docker Compose, Docker Swarm, and Kubernetes. The Node.js config validator can parse both `env` (plain text) and `docker-compose.yaml` (YAML) without cross-language dependencies.
 
 **Pattern Consistency:** AAA structure defined for all 3 languages. Naming conventions are per-language but follow the same hierarchy principle (module → method → scenario). Mock patterns use the appropriate idiom for each ecosystem (closure-based refs for Jest, conftest.py fixtures for pytest, fake classes for Dart). Assertion patterns are cross-referenced in a comparison table. No contradictions between patterns.
 
-**Structure Alignment:** The project structure places new test files within existing component directories, respecting current conventions. Shared infrastructure (`tests/fixtures/`, `tests/config-validator/`, `tests/melt-helpers/`, `tests/rag-quality/`) lives at root level, accessible by all components without cross-component imports. CI pipeline is the only cross-component orchestrator.
+**Structure Alignment:** The project structure places new test files within existing component directories, respecting current conventions. Shared infrastructure (`tests/fixtures/`, `tests/config-validator/`, `tests/log-assertions/`, `tests/rag-quality/`) lives at root level, accessible by all components without cross-component imports. CI pipeline is the only cross-component orchestrator.
 
 ### Requirements Coverage Validation
 
@@ -871,7 +871,7 @@ tests/melt-helpers/          → imported by any test needing trace context / lo
 | FR27–FR31 | Config Validation | `tests/config-validator/` with 4 validation modules |
 | FR32–FR35 | RAG Quality | `tests/rag-quality/` with RAGAS pipeline (Sprint 23) |
 | FR36–FR39 | Test Data | `tests/fixtures/` with 5 fixture categories |
-| FR40–FR44 | MELT Integration | `tests/melt-helpers/` with Sprint 22/23 bridge pattern |
+| FR40–FR42 | Application Observability | OTel SDK in Express + FastAPI services, Collector + VictoriaMetrics + Grafana stack |
 | FR45–FR46 | AI Generation | AI-Generated Test Rules (8 mandatory rules) |
 
 **Non-Functional Requirements Coverage:** All 24 NFRs addressed:
@@ -922,7 +922,7 @@ tests/melt-helpers/          → imported by any test needing trace context / lo
 - [x] Naming conventions established (4 languages)
 - [x] Structure patterns defined (AAA, mock factories, fixtures)
 - [x] Communication patterns specified (assertion cross-reference)
-- [x] Process patterns documented (skip patterns, MELT hooks)
+- [x] Process patterns documented (skip patterns, OTel instrumentation)
 
 **Project Structure**
 - [x] Complete directory structure defined (80+ new files)
@@ -938,7 +938,7 @@ tests/melt-helpers/          → imported by any test needing trace context / lo
 
 **Key Strengths:**
 - Tiered testing approach provides a well-defined organizing principle
-- Sprint 22/23 MELT bridge pattern enables forward compatibility without coupling
+- OTel SDK code is deployment-agnostic, enabling forward compatibility from Docker Compose to Kubernetes without changes
 - Existing test patterns analyzed and extended rather than replaced
 - Hybrid mock architecture balances centralization with test-local flexibility
 - Tiered CI execution respects time budgets while maintaining coverage

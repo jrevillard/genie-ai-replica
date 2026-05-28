@@ -82,7 +82,7 @@ This document provides the complete epic and story breakdown for the Testing Fra
 - NFR17: All test runners produce JUnit XML reports in a format consumable by GitLab CI test reporting
 - NFR18: The test framework supports execution in Docker Compose, Docker Swarm, and Kubernetes environments
 - NFR19: Python tests run on Python 3.10+; Node.js tests run on Node.js 18+; Dart tests run on Flutter 3.10+
-- NFR20: Test output formats are compatible with OpenTelemetry ingestion (structured JSON, trace context propagation) for MELT integration in Sprint 23
+- NFR20: Application services emit OTel-compatible telemetry (traces via OTLP protocol) consumable by standard observability tools (Grafana, VictoriaMetrics, Jaeger)
 - NFR21: Backend tests use CommonJS module syntax exclusively (no ESM imports)
 - NFR22: Frontend component tests use Options API exclusively (no Composition API patterns)
 - NFR23: Python test files include ITU copyright headers as required by project convention
@@ -101,7 +101,7 @@ This document provides the complete epic and story breakdown for the Testing Fra
 - Hybrid mock architecture: centralized shared factories in `__tests__/mocks/` and `tests/conftest.py` + co-located test-specific overrides
 - Testing organized by validation concern: pipeline integrity, API verification, configuration validation, quality assurance
 - 80+ new files/directories across 5 components plus shared infrastructure at root `tests/`
-- Implementation sequence: createApp refactor → pytest config → CI pipeline → per-component suites → config validation → MELT hooks → RAG fixtures
+- Implementation sequence: createApp refactor → pytest config → CI pipeline → per-component suites → config validation → OTel instrumentation → RAG fixtures
 - GitLab Ultimate Epics for grouping, Issues for stories, all in `un/itu/genie-ai` on `opensource.unicc.org`
 
 ### UX Design Requirements
@@ -215,10 +215,10 @@ The DevOps engineer runs the configuration validation suite and sees clear pass/
 **FRs covered:** FR27–FR31, FR39
 **Sprint:** 22 (MVP)
 
-### Epic 7: MELT-Ready Test Instrumentation
-The developer can trace test failures through structured log assertions and mock trace context, while Sprint 23's MELT observability platform can consume test telemetry without code changes.
-**FRs covered:** FR40–FR44
-**Sprint:** 22 (hooks) → 23 (MELT integration)
+### Epic 7: Application Observability — OTel Instrumentation
+The developer instruments Express backend and OPEA (FastAPI) services with OpenTelemetry SDKs, establishing distributed tracing and structured logging that enables end-to-end request tracing across the full stack.
+**FRs covered:** FR40–FR42
+**Sprint:** 22 (MVP)
 
 ### Epic 8: RAG Quality Assurance
 The QA engineer runs the RAG quality regression suite against a curated document corpus, sees RAGAS metrics compared against configurable thresholds, and flags quality degradation before release.

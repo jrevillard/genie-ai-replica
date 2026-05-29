@@ -7,7 +7,7 @@ import time
 
 from opentelemetry.trace import Status, StatusCode
 
-from tracing import get_tracer, setup_tracing
+from tracing import get_tracer, setup_trace_logging, setup_tracing
 
 setup_tracing("genieai-reranker")
 
@@ -28,6 +28,7 @@ from comps.cores.telemetry.opea_telemetry import opea_telemetry
 from comps.rerankings.src.integrations.genieai_tei_reranker import GenieTEIReranking  # noqa: F401
 
 logger = CustomLogger("opea_reranking_microservice")
+setup_trace_logging("opea_reranking_microservice")
 logflag = os.getenv("LOGFLAG", False)
 
 

@@ -19,7 +19,7 @@ from kneed import KneeLocator
 from opentelemetry import propagate
 from opentelemetry.trace import Status, StatusCode
 
-from tracing import get_tracer
+from tracing import get_tracer, setup_trace_logging
 
 tracer = get_tracer(__name__)
 
@@ -32,6 +32,7 @@ class GenieSearchedDoc(SearchedDoc):
 
 
 logger = CustomLogger("genie_tei_reranking")
+setup_trace_logging("genie_tei_reranking")
 logflag = os.getenv("LOGFLAG", False)
 
 RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice")  # slice, threshold, knee_threshold

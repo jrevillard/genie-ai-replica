@@ -61,6 +61,7 @@ pids
 # Coverage directory
 coverage/
 .nyc_output
+.coverage
 
 # Test report artifacts (CI-generated)
 reports/

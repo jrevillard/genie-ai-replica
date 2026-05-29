@@ -9,7 +9,7 @@ import os
 import re
 from datetime import date, datetime
 
-from tracing import get_tracer, setup_tracing
+from tracing import get_tracer, setup_trace_logging, setup_tracing
 
 setup_tracing("genieai-chatqna")
 
@@ -30,6 +30,7 @@ from langdetect import detect
 from transformers import AutoTokenizer
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
+setup_trace_logging("GENIE.AI_CHATQNA")
 logflag = os.getenv("LOGFLAG", True)
 
 

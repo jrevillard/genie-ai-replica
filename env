@@ -544,6 +544,7 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 
 # OpenTelemetry — distributed tracing endpoint (optional, defaults to collector service)
 # Used by: Node.js backend (OTLP/HTTP), Python OPEA services (OTLP/HTTP with /v1/traces)
+# Enables log-trace correlation: all service logs include trace_id/span_id for Grafana
 # OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 
 # =============================================================================

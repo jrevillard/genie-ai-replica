@@ -16,6 +16,7 @@ imports that might initialize HTTP clients.
 
 import atexit
 import contextlib
+import logging
 import os
 import signal
 import sys
@@ -27,6 +28,52 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 _provider = None
+
+ZEROED_TRACE_ID = "0" * 32
+ZEROED_SPAN_ID = "0" * 16
+
+
+def get_trace_context():
+    """Return a dict with trace_id and span_id from the active OTel span.
+
+    Returns zeroed IDs when no span is active or the span is not recording.
+    """
+    span = trace.get_current_span()
+    if span and span.is_recording():
+        ctx = span.get_span_context()
+        return {
+            "trace_id": format(ctx.trace_id, "032x"),
+            "span_id": format(ctx.span_id, "016x"),
+        }
+    return {"trace_id": ZEROED_TRACE_ID, "span_id": ZEROED_SPAN_ID}
+
+
+class TraceContextFilter(logging.Filter):
+    """Python logging Filter that injects trace_id, span_id, and service into every log record."""
+
+    def __init__(self, service_name="unknown"):
+        super().__init__()
+        self.service_name = service_name
+
+    def filter(self, record):
+        ctx = get_trace_context()
+        record.trace_id = ctx["trace_id"]
+        record.span_id = ctx["span_id"]
+        record.service = self.service_name
+        return True
+
+
+def setup_trace_logging(logger_name):
+    """Add TraceContextFilter to the named Python logger (idempotent).
+
+    Call after creating the service logger (e.g. CustomLogger) to enable
+    automatic trace context injection on all log entries.
+    """
+    logger = logging.getLogger(logger_name)
+    for f in logger.filters:
+        if isinstance(f, TraceContextFilter):
+            return
+    logger.addFilter(TraceContextFilter(service_name=logger_name))
 
 
 def setup_tracing(service_name: str) -> None:

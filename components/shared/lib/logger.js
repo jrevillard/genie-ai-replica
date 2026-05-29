@@ -3,6 +3,23 @@ const DailyRotateFile = require('winston-daily-rotate-file');
 const fs = require('fs');
 const path = require('path');
 
+const { trace, context } = require('@opentelemetry/api');
+
+// Winston format that injects trace_id, span_id, and service from the active OTel span
+const traceFormat = format((info) => {
+  const span = trace.getSpan(context.active());
+  if (span) {
+    const { traceId, spanId } = span.spanContext();
+    info.trace_id = traceId;
+    info.span_id = spanId;
+  } else {
+    info.trace_id = '00000000000000000000000000000000';
+    info.span_id = '0000000000000000';
+  }
+  info.service = process.env.SERVICE_NAME || 'genie-backend';
+  return info;
+});
+
 // Default log format
 const logFormat = format.printf(({ level, message, timestamp }) => {
   return `${timestamp} [${level.toUpperCase()}]: ${message}`;
@@ -14,6 +31,7 @@ const loggerConfig = {
   format: format.combine(
     format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     format.errors({ stack: true }),
+    traceFormat(),
     logFormat
   ),
   transports: [
@@ -160,6 +178,7 @@ const flushLogs = () => {
 // Export the logger and the functions
 module.exports = {
   logger,
+  traceFormat: traceFormat(),
   reconfigureLogger,
   triggerLogRollover,
   cleanupCombinedLog,

@@ -12,7 +12,7 @@ from typing import Any
 import aiohttp
 from opentelemetry import propagate
 
-from tracing import get_tracer
+from tracing import get_tracer, setup_trace_logging
 
 tracer = get_tracer(__name__)
 
@@ -42,6 +42,7 @@ from pydantic import ValidationError  # Import Pydantic validation error
 from rank_bm25 import BM25Okapi
 
 logger = CustomLogger("GENIE_DATAPREP_ARANGODB")
+setup_trace_logging("GENIE_DATAPREP_ARANGODB")
 logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 
 # --- GENIE-Specific Configuration ---

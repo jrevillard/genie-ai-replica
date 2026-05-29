@@ -139,3 +139,21 @@ class TestResourceAttributes:
 
             resource = mock_tp.call_args[1]["resource"]
             assert resource.attributes["service.version"] == "2.5.0"
+
+
+class TestSigtermHandler:
+    """Tests for _sigterm_handler."""
+
+    def test_calls_shutdown_and_exits(self, monkeypatch):
+        """_sigterm_handler must call shutdown() then sys.exit(0)."""
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+        with (
+            patch.object(tracing, "OTLPSpanExporter"),
+        ):
+            tracing.setup_tracing("test-service")
+
+        with patch.object(tracing, "shutdown") as mock_shutdown:
+            with pytest.raises(SystemExit) as exc_info:
+                tracing._sigterm_handler(None, None)
+            mock_shutdown.assert_called_once()
+            assert exc_info.value.code == 0

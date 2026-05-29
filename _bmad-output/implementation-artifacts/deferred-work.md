@@ -286,3 +286,7 @@ Items deferred during code reviews. Revisit when the related component is next m
 - Chunk count stays 0 if OPEA response format changes — telemetry robustness concern, not functional. Fallback to 0 is safe.
 - Streaming responses close orchestration span before first token — known limitation of current span model. Streaming trace correlation would need a different span architecture (event-based spans).
 
+## Deferred from: code review of 7-4-end-to-end-trace-propagation-and-log-correlation (2026-05-29)
+
+- Full-chain trace ID integration test (AC5) — requires running services (Backend → ChatQnA → Retriever → Reranker → LLM) to verify a single trace_id propagates across the entire chain. Unit tests verify individual service propagation; end-to-end integration testing deferred to a dedicated observability integration test story.
+

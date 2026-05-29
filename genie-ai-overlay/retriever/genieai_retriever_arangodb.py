@@ -17,6 +17,8 @@ from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
+from tracing import setup_trace_logging
+
 from .config import (
     ARANGO_DB,
     ARANGO_DISTANCE_STRATEGY,
@@ -66,6 +68,7 @@ class GenieEmbedDoc(EmbedDoc):
 
 
 logger = CustomLogger("genieai_retriever_arangodb")
+setup_trace_logging("genieai_retriever_arangodb")
 logflag = os.getenv("LOGFLAG", False)
 
 ARANGO_TEXT_FIELD = "text"

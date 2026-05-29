@@ -17,7 +17,7 @@ import time
 
 from opentelemetry.trace import Status, StatusCode
 
-from tracing import get_tracer, setup_tracing
+from tracing import get_tracer, setup_trace_logging, setup_tracing
 
 setup_tracing("genieai-dataprep")
 
@@ -47,6 +47,7 @@ from pydantic import BaseModel
 from genieai_dataprep_loader import GenieDataprepLoader
 
 logger = CustomLogger("genie_dataprep_microservice")
+setup_trace_logging("genie_dataprep_microservice")
 logflag = os.getenv("LOGFLAG", False)
 upload_folder = "./uploaded_files/"
 LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"

@@ -24,12 +24,18 @@
     "testPathIgnorePatterns": [
       "/node_modules/"
     ],
+    "moduleNameMapper": {
+      "^winston$": "<rootDir>/node_modules/winston",
+      "^winston-daily-rotate-file$": "<rootDir>/node_modules/winston-daily-rotate-file",
+      "^@opentelemetry/api$": "<rootDir>/node_modules/@opentelemetry/api"
+    },
     "collectCoverageFrom": [
       "routes/**/*.js",
       "services/**/*.js",
       "middleware/**/*.js",
       "controllers/**/*.js",
       "config/**/*.js",
+      "../../shared/lib/logger.js",
       "!**/node_modules/**",
       "!**/__tests__/**"
     ],

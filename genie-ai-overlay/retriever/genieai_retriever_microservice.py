@@ -5,7 +5,7 @@
 import os
 import time
 
-from tracing import get_tracer, setup_tracing
+from tracing import get_tracer, setup_trace_logging, setup_tracing
 
 setup_tracing("genieai-retriever")
 
@@ -49,6 +49,7 @@ from comps.cores.proto.genieai_api_protocol import (
 from comps.retrievers.src.integrations.genieai_retriever_arangodb import GenieaiArangoRetriever  # noqa: F401
 
 logger = CustomLogger("genieai_retriever_microservice")
+setup_trace_logging("genieai_retriever_microservice")
 logflag = os.getenv("LOGFLAG", False)
 
 

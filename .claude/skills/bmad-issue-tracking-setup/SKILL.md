@@ -58,11 +58,12 @@ cp -f <path>/*.toml _bmad/custom/
 - `bmad-correct-course.toml` (requires BMM 6.4.0+)
 - `bmad-create-architecture.toml` (requires BMM 6.4.0+)
 - `bmad-create-epics-and-stories.toml` (requires BMM 6.4.0+)
-- `bmad-create-prd.toml` (requires BMM 6.4.0+)
+- `bmad-create-prd.toml` (requires BMM 6.4.0+, superseded by bmad-prd.toml on BMM 6.8.0+)
 - `bmad-create-story.toml` (requires BMM 6.4.0+)
 - `bmad-create-ux-design.toml` (requires BMM 6.4.0+)
 - `bmad-dev-story.toml` (requires BMM 6.4.0+)
-- `bmad-edit-prd.toml` (requires BMM 6.4.0+)
+- `bmad-edit-prd.toml` (requires BMM 6.4.0+, superseded by bmad-prd.toml on BMM 6.8.0+)
+- `bmad-prd.toml` (requires BMM 6.8.0+)
 - `bmad-retrospective.toml` (requires BMM 6.4.0+)
 - `bmad-sprint-planning.toml` (requires BMM 6.4.0+)
 - `bmad-sprint-status.toml` (requires BMM 6.4.0+)
@@ -115,6 +116,8 @@ cp -rf <path>/workflows/* _bmad/_config/custom/workflows/
 - `_bmad/_config/custom/workflows/correct-course/complete.yaml`
 - `_bmad/_config/custom/workflows/create-epics-and-stories/activation.yaml`
 - `_bmad/_config/custom/workflows/create-epics-and-stories/complete.yaml`
+- `_bmad/_config/custom/workflows/bmad-prd/activation.yaml`
+- `_bmad/_config/custom/workflows/bmad-prd/complete.yaml`
 - `_bmad/_config/custom/workflows/create-prd/activation.yaml`
 - `_bmad/_config/custom/workflows/create-prd/complete.yaml`
 - `_bmad/_config/custom/workflows/create-story/activation.yaml`

@@ -998,6 +998,118 @@ So that telemetry data is collected, stored, and visualized without external Saa
 **And** all observability services are disabled by default (enabled via `ENABLE_OBSERVABILITY=true` in `.env`)
 **And** network policies restrict observability traffic to application services only (no external egress)
 
+### Story 7.6: Deploy VictoriaLogs for Centralized Log Aggregation
+
+As a developer,
+I want service logs aggregated in VictoriaLogs and accessible via Grafana behind Kong with Keycloak SSO,
+So that I can query, filter, and correlate logs across all services without exposing observability endpoints directly.
+
+**Acceptance Criteria:**
+
+**When** I add VictoriaLogs to docker-compose.yaml (profile `observability`, `ENABLE_OBSERVABILITY`)
+**Then** VictoriaLogs stores logs with configurable retention (default 30 days, variable `VICTORIALOGS_RETENTION`)
+**And** Docker stdout logs are captured via Docker log driver (json-file) and ingested into VictoriaLogs
+**And** the existing winston log format (`YYYY-MM-DD HH:mm:ss [LEVEL]: message`) is **preserved** — no change to `components/shared/lib/logger.js` format (frontend `LogSearchDialog.vue` depends on it)
+**And** `trace_id` is indexed in VictoriaLogs for query performance (verified via API query returning results in < 1 second)
+**And** Grafana datasource VictoriaLogs is provisioned (read-only, no admin write via Grafana)
+**And** Grafana removes direct host port exposure — accessible only via Kong route (e.g., `/grafana`)
+**And** Grafana authenticates via Keycloak OIDC (generic OAuth2 provider) — no shared admin password
+**And** a pre-configured dashboard shows service logs with filters by service, level, and `trace_id`
+**And** Grafana can correlate logs to traces using `trace_id` as the join key
+**And** a Playwright test verifies `LogSearchDialog.vue` still parses logs correctly after VictoriaLogs deployment
+**And** all observability services remain on the internal Docker network (`genieai_network`) — no external egress
+
+### Story 7.7: Deploy VictoriaTraces for Distributed Trace Storage
+
+As a developer,
+I want distributed traces stored in VictoriaTraces instead of the current stdout debug dump,
+So that I can query, visualize, and analyze full distributed traces across the entire stack.
+
+**Acceptance Criteria:**
+
+**When** I add VictoriaTraces to docker-compose.yaml (profile `observability`, `ENABLE_OBSERVABILITY`)
+**Then** VictoriaTraces stores traces with configurable retention (default 30 days, variable `VICTORIATRACES_RETENTION`)
+**And** the OTel Collector `traces` pipeline exporter is changed from `debug` to `otlphttp` pointing to VictoriaTraces
+**And** the Collector includes a buffer strategy (file-based `sending_queue`) for resilience when VictoriaTraces is temporarily unavailable
+**And** trace sampling rate is configurable (default 100%, variable `OTEL_TRACES_SAMPLER_RATE`, documented in `configs/otel/README.md`)
+**And** Grafana datasource VictoriaTraces is provisioned
+**And** a pre-configured Trace Explorer dashboard shows trace waterfall with service map, span details, and latency breakdown
+**And** VictoriaTraces is healthchecked and has a volume for persistent storage
+**And** existing Grafana dashboards from Story 7.5 (service-health, rag-pipeline-trace-waterfall) query VictoriaTraces instead of the deprecated debug exporter
+
+### Story 7.8: Instrument Application Metrics
+
+As a developer,
+I want custom metrics instrumented in application services and exported to VictoriaMetrics,
+So that Grafana dashboards show real-time service health beyond trace-derived metrics.
+
+**Acceptance Criteria:**
+
+**When** I add `@opentelemetry/sdk-metrics` to the Express backend
+**Then** HTTP counters are emitted per route and status code (e.g., `http_requests_total{route="/api/chat/:conversationId", status="200"}`)
+**And** latency histograms are emitted per route with buckets for p50, p95, p99
+**And** routes use template patterns (`/api/users/:id`) not dynamic values to prevent cardinality explosion
+**And** a PII allowlist is enforced: `user_id`, `email`, `query_text`, `document_text` are **never** included in metric attributes
+**When** I add `opentelemetry-sdk-metrics` to OPEA Python services (ChatQnA, Retriever, Dataprep, Reranker)
+**Then** RAG-specific counters are emitted: embeddings, retrievals, reranks per service
+**And** latency histograms are emitted for LLM inference, embedding generation, and retrieval
+**And** metrics are exported via OTLP to the Collector → `metrics` pipeline → VictoriaMetrics (pipeline already exists from Story 7.5)
+**And** a Grafana dashboard shows: request rate, error rate, latency percentiles per service, RAG pipeline throughput
+**And** a k6 benchmark validates that metrics SDK overhead is measured under realistic load (100 req/s)
+**And** an automated test verifies that no PII patterns (email, user_id) appear in emitted metric attributes
+
+### Story 7.9: Kong OTel Tracing
+
+As a developer,
+I want the Kong API gateway instrumented with OpenTelemetry tracing,
+So that distributed traces cover the full request path from gateway through backend to OPEA services.
+
+**Acceptance Criteria:**
+
+**When** I configure the Kong `opentelemetry` plugin
+**Then** Kong emits spans for each proxied request with `service.name = "kong-gateway"`
+**And** spans include gateway-specific attributes: `kong.route`, `kong.consumer`, `http.method`, `http.status_code`
+**And** Kong propagates the `traceparent` header to upstream services (backend)
+**And** traces flow: Kong → backend → OPEA services sharing a single `trace_id`
+**And** authentication and rate limiting spans are visible in the trace waterfall
+**And** Kong exports traces via OTLP to the Collector (same endpoint as other services)
+**And** the instrumentation adds < 2ms latency overhead per request at the gateway level
+**And** existing Kong plugins (auth, rate limiting, CORS) continue to function without modification
+
+### Story 7.10: E2E MELT Correlation Test
+
+As a developer,
+I want an end-to-end test that validates logs, traces, and metrics are correlated across the full stack,
+So that I can verify the MELT observability promise holds under real conditions.
+
+**Acceptance Criteria:**
+
+**When** I run the E2E MELT correlation test suite
+**Then** a known error is generated (e.g., invalid embedding request) that produces a log, a trace, and a metric
+**And** the test verifies the same `trace_id` appears in VictoriaLogs (log), VictoriaTraces (trace), and VictoriaMetrics (metric)
+**And** Grafana dashboards show the correlated data (log → trace → metric for the same request)
+**And** a chaos test stops VictoriaLogs, verifies the Collector buffers logs, and reconnects without data loss
+**And** a chaos test stops VictoriaTraces, verifies the Collector buffers traces, and reconnects without data loss
+**And** a Playwright test verifies `LogSearchDialog.vue` parses logs correctly from the full stack
+**And** a k6 load test measures Collector overhead under 100 req/s sustained load
+
+### Story 7.11: Observability SLOs
+
+As a developer,
+I want alerting and SLOs configured for the observability stack itself,
+So that I know the monitoring system is healthy and not silently losing data.
+
+**Acceptance Criteria:**
+
+**When** I configure alerting rules in Grafana
+**Then** an alert fires when the OTel Collector is down (ingestion rate = 0 for > 2 minutes)
+**And** an alert fires when VictoriaMetrics storage usage exceeds 90% of capacity
+**And** an alert fires when VictoriaLogs ingestion rate drops below expected threshold
+**And** an alert fires when VictoriaTraces ingestion rate drops below expected threshold
+**And** alerts are routed via Grafana notification channels (configurable, e.g., webhook, email)
+**And** a Grafana dashboard shows observability stack health: ingestion rates, storage usage, query latency
+**And** retention policies are documented per data type (logs, traces, metrics) with configurable variables in `.env`
+
 ## Epic 8: RAG Quality Assurance
 
 The QA engineer runs the RAG quality regression suite against a curated document corpus, sees RAGAS metrics compared against configurable thresholds, and flags quality degradation before release.

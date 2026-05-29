@@ -20,6 +20,7 @@ All services run on a single host. Two deployment profiles are available:
 |---------|---------|----------|
 | **Core** | `docker compose up -d` | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Kong, NGINX |
 | **Full (OPEA)** | `docker compose --profile opea up -d` | Core + vLLM, TEI, Retriever, Dataprep, ChatQnA, Translation |
+| **Observability** | `docker compose --profile observability up -d` | Core + OTel Collector, VictoriaMetrics, Grafana |
 
 ## Step 1: Clone Repository
 
@@ -88,6 +89,14 @@ For OPEA/GPU services, also set:
 
 ```bash
 HUGGING_FACE_HUB_TOKEN=<hf-token>
+```
+
+For observability (optional), also set:
+
+```bash
+ENABLE_OBSERVABILITY=true
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=<strong-password>
 ```
 
 See the `env` template for the full list of variables and their descriptions.
@@ -186,6 +195,24 @@ For RTX 6000 ADA (24GB VRAM):
 ```bash
 docker compose --env-file .env --env-file env.rtx6000 --profile opea up -d
 ```
+
+### 6e. Start with observability stack
+
+To add the OTel Collector, VictoriaMetrics, and Grafana monitoring stack:
+
+```bash
+docker compose --profile observability up -d
+```
+
+Combine with OPEA for the full stack plus observability:
+
+```bash
+docker compose --profile opea --profile observability up -d
+```
+
+Access Grafana at `http://localhost:3002` (or `${GRAFANA_PORT}` from `.env`). Two dashboards are pre-configured: **Service Health** and **RAG Pipeline Trace Waterfall**.
+
+See `configs/otel/README.md` for Collector configuration details.
 
 ## Step 7: Post-Deploy — Kong Configuration
 

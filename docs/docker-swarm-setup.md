@@ -21,7 +21,7 @@ GENIE.AI services are placed on nodes using three labels:
 | Placement | Constraint | Services |
 |-----------|------------|----------|
 | **Gateway** (label) | `node.labels.gateway == true` | Kong, NGINX, PostgreSQL |
-| **GENIE.AI** (label) | `node.labels.genieai == true` | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Keycloak |
+| **GENIE.AI** (label) | `node.labels.genieai == true` | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Keycloak, OTel Collector, VictoriaMetrics, Grafana |
 | **GPU** (label) | `node.labels.gpu == true` | vLLM, TEI embedding, TEI reranking, Retriever, Dataprep, ChatQnA, Translation, Guardrail |
 
 All three labels (`gateway=true`, `genieai=true`, `gpu=true`) must be applied manually to the target nodes. A single node can have multiple labels.
@@ -275,6 +275,9 @@ docker pull opea/embedding:latest
 docker pull opea/chatqna-ui:latest
 docker pull opea/nginx:latest
 docker pull ghcr.io/huggingface/text-embeddings-inference:1.9.3
+docker pull otel/opentelemetry-collector-contrib:0.152.0
+docker pull victoriametrics/victoria-metrics:v1.138.0
+docker pull grafana/grafana:12.4
 docker pull nginx:alpine
 docker pull quay.io/keycloak/keycloak:26.6.1
 docker pull adorsys/keycloak-config-cli:6.5.0-26
@@ -332,6 +335,14 @@ To skip OPEA/AI services (no GPU required), set in `.env`:
 
 ```bash
 DEPLOY_OPEA=0
+```
+
+To enable the observability stack (OTel Collector, VictoriaMetrics, Grafana), set in `.env`:
+
+```bash
+ENABLE_OBSERVABILITY=1
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=<strong-password>
 ```
 
 ### Kong trusted IPs (required for Swarm)
@@ -563,6 +574,8 @@ docker volume rm genieai_postgres_data
 docker volume rm genieai_redis_data
 docker volume rm genieai_doc_repo_uploads
 docker volume rm genieai_arango_data
+docker volume rm genieai_vm-data
+docker volume rm genieai_grafana-data
 
 # Remove local registry (if no longer needed)
 docker stop registry && docker rm registry

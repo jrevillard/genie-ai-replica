@@ -290,3 +290,15 @@ Items deferred during code reviews. Revisit when the related component is next m
 
 - Full-chain trace ID integration test (AC5) — requires running services (Backend → ChatQnA → Retriever → Reranker → LLM) to verify a single trace_id propagates across the entire chain. Unit tests verify individual service propagation; end-to-end integration testing deferred to a dedicated observability integration test story.
 
+## Deferred from: code review of 7-5-deploy-observability-stack-collector-victoriametrics-grafana (2026-05-29)
+
+- Dashboard metric names may not match OTel→Prometheus conversion — `http_server_duration_*` in dashboards should match OTel→Prometheus remote write conversion (`http.server.duration` → `http_server_duration_*`). Likely correct but verify after first deploy by querying VictoriaMetrics `api/v1/label/__name__/values`.
+- Prometheus Remote Write / batch processor tuning under high load — out of MVP scope per spec ("basic batch processor only"). Revisit if Collector OOM or data loss observed in production.
+- No volume backup/retention policy documentation — `vm-data` and `grafana-data` volumes lack backup procedures. Operational concern for production deployments.
+- Dashboard JSON lacks schema validation in CI — complex manually-created JSON files not validated against Grafana schema. Pre-commit hook or CI step would catch malformed dashboards before deploy.
+- Dashboard variable query fails when no metrics exist (fresh deploy) — `label_values(http_server_duration_count, service_name)` returns error before first request. Expected Grafana behavior, resolves once traffic flows.
+- Volume name collision in Swarm multi-node deployment — named volumes `vm-data`/`grafana-data` have no node placement constraints. Spec is single-node; multi-node would need volume driver or placement constraints.
+- Dashboard refresh interval (10s) may overload VictoriaMetrics with many concurrent users — low risk for MVP single-team usage. Consider increasing to 30s for production.
+- Missing depends_on for Grafana→VictoriaMetrics in compose mode — nice-to-have startup ordering; services work without it. Swarm ignores depends_on.
+- OTel Collector logging exporter generates high stdout volume under load — `loglevel: info` intentional per spec (Option A MVP: traces logged to stdout). Consider `warn` for production with separate trace backend.
+

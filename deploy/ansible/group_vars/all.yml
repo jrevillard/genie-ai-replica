@@ -35,6 +35,9 @@ stack_name: genieai
 compose_file: docker-compose.yaml
 deploy_stabilization_timeout: 900
 deploy_opea: "1"
+enable_observability: "0"
+grafana_admin_user: "admin"
+victoriametrics_retention: "30d"
 registry_port: "5000"
 
 # =============================================================================

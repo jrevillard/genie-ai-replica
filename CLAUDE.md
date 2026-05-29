@@ -243,6 +243,13 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `HUGGING_FACE_HUB_TOKEN` - Required for pulling models
 - `VLLM_API_KEY` - Optional, if required by your vLLM deployment
 
+**Observability (optional, Section 12C):**
+- `ENABLE_OBSERVABILITY` - Enable observability stack (default: false)
+- `GRAFANA_ADMIN_USER` - Grafana admin username (default: admin)
+- `GRAFANA_ADMIN_PASSWORD` - Grafana admin password (required when enabled)
+- `GRAFANA_PORT` - Grafana host port (default: 3002, avoids Backend port conflict)
+- `VICTORIAMETRICS_RETENTION` - Metric retention period (default: 30d)
+
 **Prompts (Two-tier priority):**
 
 LLM prompts use a simple two-tier priority system:
@@ -280,6 +287,25 @@ To change built-in defaults, edit the Python code:
 
 ## i18n System
 
+## Observability Stack (Optional)
+
+The observability stack (OTel Collector + VictoriaMetrics + Grafana) is **disabled by default**. Enable via:
+
+- **Docker Compose**: `docker compose --profile observability up -d`
+- **Docker Swarm**: `ENABLE_OBSERVABILITY=1` in `.env`
+- **Ansible**: `enable_observability: "1"` in `group_vars/all.yml`
+
+**Configuration variables** (`.env` Section 12C):
+- `ENABLE_OBSERVABILITY` — Enable/disable the stack (default: false)
+- `GRAFANA_ADMIN_USER` — Grafana admin username (default: admin)
+- `GRAFANA_ADMIN_PASSWORD` — Grafana admin password (required when enabled)
+- `GRAFANA_PORT` — Host port for Grafana access (default: 3002, avoids conflict with Backend port 3000)
+- `VICTORIAMETRICS_RETENTION` — Data retention period (default: 30d)
+
+**Config files**: `configs/otel/` (Collector config), `configs/grafana/provisioning/` (datasources + dashboards)
+
+## i18n System
+
 - English (`nameEN`) is the source of truth for RAG compatibility
 - Translations stored in dedicated collections (`serviceCategoryTranslations`, etc.)
 - Translation keys follow pattern: `${sourceKey}_${languageCode}`
@@ -294,7 +320,8 @@ To change built-in defaults, edit the Python code:
 
 The compose file supports two deployment modes:
 - **Single-node**: `docker compose up -d` (core services) or `docker compose --profile opea up -d` (full stack)
-- **Docker Swarm**: `docker stack deploy` with Ansible (full stack, OPEA controlled by `DEPLOY_OPEA` env var)
+- **Single-node**: `docker compose --profile observability up -d` (core + observability)
+- **Docker Swarm**: `docker stack deploy` with Ansible (full stack, OPEA controlled by `DEPLOY_OPEA` env var, observability by `ENABLE_OBSERVABILITY`)
 
 **GPU Configuration**: Use GPU-specific env files with your .env:
 ```bash
@@ -320,9 +347,13 @@ docker-compose.yaml (root - single source of truth, dual-mode)
 │   ├── ArangoDB
 │   ├── Redis
 │   └── Document Repository
-└── Layer 3: API Gateway
-    ├── Kong
-    └── NGINX
+├── Layer 3: API Gateway
+│   ├── Kong
+│   └── NGINX
+└── Layer 4: Observability (profiles: [observability], ENABLE_OBSERVABILITY)
+    ├── OTel Collector (trace/metric collection)
+    ├── VictoriaMetrics (metric storage)
+    └── Grafana (dashboards)
 ```
 
 ### Usage

@@ -40,7 +40,7 @@ so that I can query, filter, and correlate logs across all services without expo
 - [ ] Task 2: Update OTel Collector config for log ingestion (AC: #2)
   - [ ] Add `filelog` receiver to `configs/otel/otel-collector-config.yaml` that reads Docker container logs
   - [ ] Add `logs` pipeline: `filelog` → `batch` → `otlphttp` exporter to VictoriaLogs
-  - [ ] Mount Docker log directory `/var/lib/docker/containers` (read-only) into the Collector service
+  - [ ] Add Docker log directory volume mount to otel-collector service in docker-compose.yaml: `/var/lib/docker/containers:/var/lib/docker/containers:ro`
   - [ ] Test that the Collector can parse Docker JSON log lines and forward to VictoriaLogs
 
 - [ ] Task 3: Install VictoriaLogs Grafana plugin and provision datasource (AC: #5)
@@ -50,6 +50,7 @@ so that I can query, filter, and correlate logs across all services without expo
 
 - [ ] Task 4: Remove Grafana direct host port exposure (AC: #6)
   - [ ] Remove `ports:` section from `grafana` service in docker-compose.yaml
+  - [ ] Add a commented-out `ports:` block showing how to restore direct access for local debugging: `# ports: - "${GRAFANA_PORT:-3002}:3000"`
   - [ ] Update documentation to reflect Grafana is now accessed via Kong route only
 
 - [ ] Task 5: Add Grafana service and route to Kong config (AC: #7)
@@ -230,11 +231,11 @@ grafana:
     - GF_AUTH_GENERIC_OAUTH_CLIENT_ID=${KC_GRAFANA_CLIENT_ID:-grafana}
     - GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=${KC_GRAFANA_CLIENT_SECRET}
     - GF_AUTH_GENERIC_OAUTH_SCOPES=openid profile email
-    - GF_AUTH_GENERIC_OAUTH_AUTH_URL=${KEYCLOAK_URL:-http://keycloak:8080}/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/auth
-    - GF_AUTH_GENERIC_OAUTH_TOKEN_URL=${KEYCLOAK_URL:-http://keycloak:8080}/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/token
-    - GF_AUTH_GENERIC_OAUTH_API_URL=${KEYCLOAK_URL:-http://keycloak:8080}/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/userinfo
-    # Root URL must match the Kong route
-    - GF_SERVER_ROOT_URL=${NGINX_PUBLIC_DOMAIN:-https://localhost}/grafana/
+    - GF_AUTH_GENERIC_OAUTH_AUTH_URL=${KC_PUBLIC_ORIGIN}/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/auth
+    - GF_AUTH_GENERIC_OAUTH_TOKEN_URL=${KC_PUBLIC_ORIGIN}/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/token
+    - GF_AUTH_GENERIC_OAUTH_API_URL=${KC_PUBLIC_ORIGIN}/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/userinfo
+    # Root URL must match the Kong route (full URL with scheme and port)
+    - GF_SERVER_ROOT_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/grafana/
     - GF_SERVER_SERVE_FROM_SUB_PATH=true
 ```
 
@@ -255,7 +256,7 @@ grafana:
     {
       "name": "grafana",
       "service": {"name": "grafana"},
-      "paths": ["/grafana"],
+      "paths": ["/grafana/"],
       "strip_path": true,
       "preserve_host": false
     }

@@ -3,10 +3,9 @@
 
 
 import asyncio
-
-# Note:- imorted the os package
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 import cv2
 import easyocr
@@ -30,6 +29,10 @@ from docling.document_converter import (
 
 logger = CustomLogger("genie-ai_prepare_doc_util")
 logflag = os.getenv("LOGFLAG", False)
+
+# Remote docling-serve endpoint (when set, document processing is delegated to remote GPU node)
+DOCLING_ENDPOINT = os.getenv("DOCLING_ENDPOINT", "")
+DOCLING_ENDPOINT_TIMEOUT = int(os.getenv("DOCLING_ENDPOINT_TIMEOUT", 120))
 
 reader = easyocr.Reader(["en"])  # Can add more languages later
 
@@ -71,11 +74,46 @@ except ImportError:
 
 ### Docling document loader ############################################################
 # Serves as a more heavy and robust tool for extracting content from more complex PDF files
+
+async def _load_with_docling_remote(doc_path: str) -> str:
+    """
+    Asynchronously sends a document to a remote docling-serve endpoint
+    and returns the extracted Markdown content.
+
+    Requires DOCLING_ENDPOINT env var to be set (e.g. https://gpu-host:9404).
+    """
+    import aiohttp
+
+    logger.info(f"Processing document via remote docling-serve: {doc_path}")
+
+    # Read file bytes before entering async context to avoid handle leak
+    with open(doc_path, "rb") as f:
+        file_bytes = f.read()
+
+    timeout = aiohttp.ClientTimeout(total=DOCLING_ENDPOINT_TIMEOUT)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        data = aiohttp.FormData()
+        data.add_field("files", file_bytes, filename=Path(doc_path).name)
+
+        async with session.post(
+            f"{DOCLING_ENDPOINT}/convert/document",
+            data=data,
+        ) as resp:
+            resp.raise_for_status()
+            result = await resp.text()
+            return result
+
+
 async def load_with_docling(doc_path: str) -> str:
     """
     Asynchronously processes any Docling-supported file (PDF, DOCX, PPTX,
     HTML, images, etc.) and returns its content as RAG-ready Markdown.
+
+    When DOCLING_ENDPOINT is set, delegates to a remote docling-serve instance.
+    Otherwise, uses the in-process converter.
     """
+    if DOCLING_ENDPOINT:
+        return await _load_with_docling_remote(doc_path)
 
     def process_doc():
         # .convert() handles parsing, layout analysis, table extraction, and OCR

@@ -78,7 +78,7 @@ RUN pip install --no-cache-dir -r ${REQ_PATH}
 
 # Step F: Install overlay-specific dependencies
 # **UPDATED**: Added 'docling' and 'opencv-python-headless' which are required by the new utils/arangodb code.
-RUN pip install --no-cache-dir rank_bm25 docling opencv-python-headless hf_xet "python-jose[cryptography]"
+RUN pip install --no-cache-dir rank_bm25 docling opencv-python-headless hf_xet "python-jose[cryptography]" aiohttp
 
 # Step F.5: Copy shared OTel tracing module (importable from PYTHONPATH=/app)
 COPY genie-ai-overlay/tracing.py /app/tracing.py

@@ -1,0 +1,22 @@
+$ANSIBLE_VAULT;1.1;AES256
+# GPU Node Secrets (Ansible Vault — encrypted)
+#
+# Usage:
+#   1. Copy to group_vars/gpu.vault
+#   2. Encrypt: ansible-vault encrypt group_vars/gpu.vault --vault-id gpu@prompt
+#   3. Edit:    ansible-vault edit group_vars/gpu.vault --vault-id gpu@prompt
+#
+# Required variables:
+
+hugging_face_hub_token: hf_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+certbot_email: admin@example.com
+
+# API keys for nginx proxy authentication.
+# Each entry has a `key` field; the `name` is for documentation only.
+# One key per GENIE.AI instance — shared across all 5 GPU services.
+gpu_api_keys:
+  - key: "your-secret-api-key-here"
+    name: "genieai-instance-1"
+  # - key: "another-secret-key"
+  #   name: "genieai-instance-2"

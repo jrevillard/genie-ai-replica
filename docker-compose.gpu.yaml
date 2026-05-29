@@ -1,0 +1,203 @@
+# =============================================================================
+# GENIE.AI - GPU Node Docker Compose (standalone)
+# =============================================================================
+#
+# Dedicated GPU node for AI model services, deployed behind nginx with
+# TLS termination and API key authentication.
+#
+# Usage:
+#   docker compose -f docker-compose.gpu.yaml up -d                    # Core GPU services
+#   docker compose -f docker-compose.gpu.yaml --profile letsencrypt up -d  # + certbot
+#
+# Services:
+#   Port 9400 - vLLM (LLM inference)
+#   Port 9401 - vLLM (Translation model)
+#   Port 9402 - TEI (Embedding)
+#   Port 9403 - TEI (Reranker)
+#   Port 9404 - docling-serve (Document extraction)
+#
+# All ports are exposed on the host for nginx to proxy.
+# nginx handles TLS termination and API key authentication.
+# =============================================================================
+
+volumes:
+  gpu_ssl:
+  certbot_webroot_gpu:
+  certbot_etc_gpu:
+  hf_cache:
+
+networks:
+  gpu_network:
+
+services:
+
+  # ===========================================================================
+  # AI Model Services
+  # ===========================================================================
+
+  vllm-llm:
+    restart: unless-stopped
+    image: vllm/vllm-openai:latest
+    command: >
+      --model ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.4}
+      --served-model-name ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      --max_model_len ${VLLM_MAX_MODEL_LEN:-2048}
+      --max_num_seqs ${VLLM_MAX_NUM_SEQS:-64}
+      --dtype=${VLLM_DTYPE:-half}
+      --enforce-eager
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - VLLM_ATTENTION_BACKEND=TORCH_SDPA
+      - VLLM_USE_FLASHINFER_SAMPLER=0
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - gpu_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  vllm-translation:
+    restart: unless-stopped
+    image: vllm/vllm-openai:v0.10.0
+    command: >
+      --model ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
+      --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTILIZATION:-0.3}
+      --served-model-name ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
+      --max_model_len ${VLLM_TRANSLATION_MAX_MODEL_LEN:-2048}
+      --dtype=${VLLM_TRANSLATION_DTYPE:-auto}
+      --port 8000
+      --no-enable-chunked-prefill
+      --max-num-seqs ${VLLM_TRANSLATION_MAX_NUM_SEQS:-16}
+      --chat-template-content-format openai
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - gpu_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 300s
+
+  tei-embedding:
+    restart: unless-stopped
+    image: ghcr.io/huggingface/text-embeddings-inference:1.9.3
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID:-BAAI/bge-base-en-v1.5} --auto-truncate"
+    volumes:
+      - ${DATA_DIR:-./data}/huggingface:/data
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - RUST_BACKTRACE=${RUST_BACKTRACE:-}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 10s
+      timeout: 6s
+      retries: 48
+    networks:
+      - gpu_network
+
+  tei-reranker:
+    restart: unless-stopped
+    image: ghcr.io/huggingface/text-embeddings-inference:1.9.3
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID:-cross-encoder/ms-marco-MiniLM-L-6-v2} --max-batch-tokens ${TEI_RERANKING_MAX_BATCH_TOKENS:-1024} --max-concurrent-requests ${TEI_RERANKING_MAX_CONCURRENT_REQUESTS:-8} --auto-truncate"
+    volumes:
+      - ${DATA_DIR:-./data}/huggingface:/data
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - RUST_BACKTRACE=${RUST_BACKTRACE:-}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 10s
+      timeout: 6s
+      retries: 48
+    networks:
+      - gpu_network
+
+  docling-serve:
+    restart: unless-stopped
+    image: ghcr.io/institute-of-data-science/docling-serve:latest
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    networks:
+      - gpu_network
+
+  # ===========================================================================
+  # nginx Reverse Proxy (TLS + API Key Auth)
+  # ===========================================================================
+
+  nginx-gpu:
+    restart: unless-stopped
+    image: nginx:1.28-alpine
+    ports:
+      - "9400:9400"
+      - "9401:9401"
+      - "9402:9402"
+      - "9403:9403"
+      - "9404:9404"
+      - "80:80"
+    volumes:
+      - ./configs/nginx-gpu/gpu-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./configs/nginx-gpu/api_keys.map:/etc/nginx/api_keys.map:ro
+      - gpu_ssl:/etc/nginx/ssl
+      - certbot_webroot_gpu:/var/www/certbot:ro
+    depends_on:
+      vllm-llm:
+        condition: service_healthy
+      vllm-translation:
+        condition: service_healthy
+      tei-embedding:
+        condition: service_healthy
+      tei-reranker:
+        condition: service_healthy
+      docling-serve:
+        condition: service_healthy
+    networks:
+      - gpu_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================================================
+  # Let's Encrypt Certificate Management (optional)
+  # ===========================================================================
+  # Activated via: --profile letsencrypt
+  # Requires: CERTBOT_EMAIL set in .env
+
+  certbot-gpu:
+    profiles: [letsencrypt]
+    restart: "no"
+    image: certbot/certbot:latest
+    entrypoint: ["/certbot-entrypoint.sh"]
+    environment:
+      - CERTBOT_EMAIL=${CERTBOT_EMAIL:-}
+      - NGINX_PUBLIC_DOMAIN=${GPU_PUBLIC_DOMAIN:-gpu.localhost}
+    volumes:
+      - ./api-gateway-solution/certbot/entrypoint.sh:/certbot-entrypoint.sh:ro
+      - certbot_webroot_gpu:/var/www/certbot
+      - certbot_etc_gpu:/etc/letsencrypt
+      - gpu_ssl:/secrets/ssl
+    depends_on:
+      nginx-gpu:
+        condition: service_healthy
+    networks:
+      - gpu_network

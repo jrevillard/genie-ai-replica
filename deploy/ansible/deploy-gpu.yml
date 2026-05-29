@@ -1,0 +1,297 @@
+---
+# GENIE.AI - GPU Node Deployment Playbook
+#
+# Usage:
+#   ansible-playbook -i inventory/gpu.ini deploy-gpu.yml --vault-id gpu@prompt
+#
+# Tagged re-runs:
+#   ansible-playbook -i inventory/gpu.ini deploy-gpu.yml --tags install --vault-id gpu@prompt
+#   ansible-playbook -i inventory/gpu.ini deploy-gpu.yml --tags prepare --vault-id gpu@prompt
+#   ansible-playbook -i inventory/gpu.ini deploy-gpu.yml --tags deploy --vault-id gpu@prompt
+#
+# Tags:
+#   install  - Docker, NVIDIA Container Toolkit
+#   prepare  - Directories, template rendering (nginx config, API keys, compose)
+#   deploy   - Compose up, smoke tests
+
+- name: GPU Node - Detect environment
+  hosts: gpu_nodes
+  gather_facts: false
+  tasks:
+    - name: Display GPU node deployment target
+      ansible.builtin.debug:
+        msg: "GPU Node: {{ inventory_hostname }} ({{ ansible_host }})"
+
+- name: GPU Node - Docker installation
+  hosts: gpu_nodes
+  tags: [install]
+  become: true
+  roles:
+    - role: docker
+
+- name: GPU Node - NVIDIA Container Toolkit
+  hosts: gpu_nodes
+  tags: [install]
+  become: true
+  tasks:
+    - name: Ensure NVIDIA Container Toolkit GPG key
+      ansible.builtin.get_url:
+        url: https://nvidia.github.io/libnvidia-container/gpgkey
+        dest: /etc/apt/keyrings/nvidia-container-toolkit.asc
+        mode: '0644'
+        force: true
+
+    - name: Ensure NVIDIA Container Toolkit repository (DEB822 format)
+      ansible.builtin.copy:
+        content: |
+          Types: deb
+          URIs: https://nvidia.github.io/libnvidia-container/stable/deb/amd64
+          Suites: /
+          Components:
+          Signed-By: /etc/apt/keyrings/nvidia-container-toolkit.asc
+        dest: /etc/apt/sources.list.d/nvidia-container-toolkit.sources
+        mode: '0644'
+
+    - name: Pin NVIDIA toolkit package versions
+      ansible.builtin.copy:
+        content: |
+          Package: nvidia-container-toolkit nvidia-container-toolkit-base libnvidia-container-tools libnvidia-container1
+          Pin: version {{ nvidia_version_pin | default('1.18.*') }}
+          Pin-Priority: 900
+        dest: /etc/apt/preferences.d/nvidia-toolkit-pin
+        mode: '0644'
+
+    - name: Install NVIDIA Container Toolkit
+      ansible.builtin.apt:
+        name: nvidia-container-toolkit
+        update_cache: true
+        state: latest
+
+    - name: Hold NVIDIA toolkit packages
+      ansible.builtin.dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop:
+        - nvidia-container-toolkit
+        - nvidia-container-toolkit-base
+        - libnvidia-container-tools
+        - libnvidia-container1
+
+    - name: Configure Docker daemon for NVIDIA runtime
+      block:
+        - name: Read existing daemon.json
+          ansible.builtin.slurp:
+            src: /etc/docker/daemon.json
+          register: daemon_json_existing
+          failed_when: false
+
+        - name: Set daemon.json content (merge NVIDIA config)
+          ansible.builtin.set_fact:
+            daemon_json_final: >-
+              {{ (daemon_json_existing.content | b64decode | from_json
+                  if daemon_json_existing is succeeded else {})
+                | combine({'runtimes': {'nvidia': {
+                  'path': 'nvidia-container-runtime',
+                  'runtimeArgs': []
+                }}, 'default-runtime': 'nvidia'}) }}
+
+        - name: Write merged daemon.json
+          ansible.builtin.copy:
+            content: "{{ daemon_json_final | to_nice_json }}"
+            dest: /etc/docker/daemon.json
+            mode: '0644'
+          notify: Restart Docker
+
+    - name: Enable NVIDIA GPU access for unprivileged containers
+      ansible.builtin.lineinfile:
+        path: /etc/nvidia-container-runtime/config.toml
+        regexp: '^#?accept-nvidia-visible-devices-envvar-when-unprivileged'
+        line: accept-nvidia-visible-devices-envvar-when-unprivileged = true
+        state: present
+      notify: Restart Docker
+
+    - name: Verify NVIDIA runtime
+      ansible.builtin.command: docker info --format '{{ "{{" }}.Runtimes{{ "}}" }}'
+      register: nvidia_verify
+      failed_when: "'nvidia' not in nvidia_verify.stdout"
+      changed_when: false
+
+  handlers:
+    - name: Restart Docker
+      ansible.builtin.systemd:
+        name: docker
+        state: restarted
+
+- name: GPU Node - Project preparation and template rendering
+  hosts: gpu_nodes
+  tags: [prepare]
+  become: true
+  tasks:
+    - name: Validate required vault variables
+      ansible.builtin.assert:
+        that:
+          - hugging_face_hub_token is defined and hugging_face_hub_token | length > 0
+          - gpu_api_keys is defined and gpu_api_keys | length > 0
+        fail_msg: >-
+          Missing required vault variable(s).
+          Edit group_vars/gpu.vault and set:
+          hugging_face_hub_token, gpu_api_keys.
+        quiet: true
+
+    - name: Ensure project directories exist
+      ansible.builtin.file:
+        path: "{{ gpu_deploy_dir }}/{{ item }}"
+        state: directory
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      loop:
+        - "{{ gpu_data_dir }}"
+        - "{{ gpu_data_dir }}/huggingface"
+        - "{{ gpu_generated_dir }}"
+
+    - name: Render nginx proxy configuration
+      ansible.builtin.template:
+        src: templates/gpu-proxy.conf.j2
+        dest: "{{ gpu_deploy_dir }}/{{ gpu_generated_dir }}/gpu-proxy.conf"
+        mode: '0644'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Render API keys map
+      ansible.builtin.template:
+        src: templates/api_keys.map.j2
+        dest: "{{ gpu_deploy_dir }}/{{ gpu_generated_dir }}/api_keys.map"
+        mode: '0600'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      no_log: true
+
+    - name: Render docker-compose.gpu.yaml from template
+      ansible.builtin.template:
+        src: templates/docker-compose.gpu.yaml.j2
+        dest: "{{ gpu_deploy_dir }}/docker-compose.gpu.yaml"
+        mode: '0644'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+- name: GPU Node - Deploy services
+  hosts: gpu_nodes
+  tags: [deploy]
+  become: true
+  tasks:
+    - name: Validate GPU compose configuration
+      ansible.builtin.shell: >
+        docker compose
+        {% if gpu_env_file is defined and gpu_env_file | length > 0 %}--env-file {{ gpu_deploy_dir }}/{{ gpu_env_file }}{% endif %}
+        -f {{ gpu_deploy_dir }}/docker-compose.gpu.yaml config --quiet
+      args:
+        chdir: "{{ gpu_deploy_dir }}"
+      register: compose_validate
+      changed_when: false
+      failed_when: compose_validate.rc != 0
+
+    - name: Deploy GPU node services
+      ansible.builtin.shell: >
+        docker compose
+        {% if gpu_env_file is defined and gpu_env_file | length > 0 %}--env-file {{ gpu_deploy_dir }}/{{ gpu_env_file }}{% endif %}
+        -f {{ gpu_deploy_dir }}/docker-compose.gpu.yaml
+        up -d
+      args:
+        chdir: "{{ gpu_deploy_dir }}"
+      register: compose_deploy
+      changed_when: "'Started' in compose_deploy.stdout or 'Created' in compose_deploy.stdout"
+
+    - name: Deploy output
+      ansible.builtin.debug:
+        var: compose_deploy.stdout_lines
+
+- name: GPU Node - Smoke tests
+  hosts: gpu_nodes
+  tags: [deploy]
+  become: true
+  tasks:
+    - name: Wait for vLLM LLM health (port {{ gpu_llm_port | default('9400') }})
+      ansible.builtin.uri:
+        url: "https://localhost:{{ gpu_llm_port | default('9400') }}/health"
+        method: GET
+        validate_certs: false
+        headers:
+          X-API-Key: "{{ gpu_api_keys[0].key }}"
+      register: health_llm
+      until: health_llm.status == 200
+      retries: 30
+      delay: 15
+
+    - name: Wait for vLLM Translation health (port {{ gpu_translation_port | default('9401') }})
+      ansible.builtin.uri:
+        url: "https://localhost:{{ gpu_translation_port | default('9401') }}/health"
+        method: GET
+        validate_certs: false
+        headers:
+          X-API-Key: "{{ gpu_api_keys[0].key }}"
+      register: health_translation
+      until: health_translation.status == 200
+      retries: 30
+      delay: 15
+
+    - name: Wait for TEI Embedding health (port {{ gpu_embedding_port | default('9402') }})
+      ansible.builtin.uri:
+        url: "https://localhost:{{ gpu_embedding_port | default('9402') }}/health"
+        method: GET
+        validate_certs: false
+        headers:
+          X-API-Key: "{{ gpu_api_keys[0].key }}"
+      register: health_embedding
+      until: health_embedding.status == 200
+      retries: 30
+      delay: 15
+
+    - name: Wait for TEI Reranker health (port {{ gpu_reranker_port | default('9403') }})
+      ansible.builtin.uri:
+        url: "https://localhost:{{ gpu_reranker_port | default('9403') }}/health"
+        method: GET
+        validate_certs: false
+        headers:
+          X-API-Key: "{{ gpu_api_keys[0].key }}"
+      register: health_reranker
+      until: health_reranker.status == 200
+      retries: 30
+      delay: 15
+
+    - name: Wait for docling-serve health (port {{ gpu_docling_port | default('9404') }})
+      ansible.builtin.uri:
+        url: "https://localhost:{{ gpu_docling_port | default('9404') }}/health"
+        method: GET
+        validate_certs: false
+        headers:
+          X-API-Key: "{{ gpu_api_keys[0].key }}"
+      register: health_docling
+      until: health_docling.status == 200
+      retries: 30
+      delay: 15
+
+    - name: Verify 401 rejection without API key
+      ansible.builtin.uri:
+        url: "https://localhost:{{ gpu_llm_port | default('9400') }}/health"
+        method: GET
+        validate_certs: false
+      register: auth_reject
+      failed_when: auth_reject.status != 401
+
+    - name: Deployment summary
+      ansible.builtin.shell: |
+        echo ""
+        echo "============================================="
+        echo "GPU Node deployment complete"
+        echo "============================================="
+        echo "vLLM LLM:         {{ health_llm.status }}"
+        echo "vLLM Translation: {{ health_translation.status }}"
+        echo "TEI Embedding:    {{ health_embedding.status }}"
+        echo "TEI Reranker:     {{ health_reranker.status }}"
+        echo "docling-serve:    {{ health_docling.status }}"
+        echo "Auth (401 test):  {{ auth_reject.status }}"
+        echo "Domain:           {{ gpu_public_domain }}"
+        echo "============================================="
+        echo ""
+      changed_when: false

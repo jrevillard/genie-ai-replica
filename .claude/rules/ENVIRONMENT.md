@@ -71,6 +71,14 @@ In Swarm mode, only nginx and ArangoDB are exposed on the host. All other servic
 | ChatQnA | 8888 |
 | Translation | 9031 |
 
+### Internal — Observability (`ENABLE_OBSERVABILITY` controlled, container-only)
+| Service | Port | Notes |
+|---------|------|-------|
+| OTel Collector (OTLP HTTP) | 4318 | Receives traces/metrics from app services |
+| OTel Collector (healthcheck) | 13133 | Internal only |
+| VictoriaMetrics | 8428 | Internal only, Grafana queries this |
+| Grafana | 3000 (host: `${GRAFANA_PORT:-3002}`) | Internal only, admin auth required |
+
 ### Disabled (`replicas: 0`, not running)
 | Service | Port | Reason |
 |---------|------|--------|

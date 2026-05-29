@@ -7,6 +7,7 @@
 # 1. Single-node (docker compose up):
 #      docker compose up -d                    # Core services only (no OPEA)
 #      docker compose --profile opea up -d     # Full stack with OPEA/GPU
+#      docker compose --profile observability up -d  # Core + Observability stack
 #
 # 2. Docker Swarm (docker stack deploy):
 #      docker stack deploy -c <resolved> <stack>
@@ -19,6 +20,8 @@
 #   - depends_on is for compose up ordering; Swarm ignores it
 #   - restart: is for compose up; Swarm uses deploy.restart_policy
 #   - profiles: [opea] controls OPEA services in compose up; Swarm ignores profiles
+#   - profiles: [observability] controls Observability stack in compose up; Swarm ignores
+#     them and uses ENABLE_OBSERVABILITY env var instead (default: 0 = disabled)
 #   - build: enables local builds (docker compose up); Swarm ignores it and uses image:
 #   - GPU access via NVIDIA_VISIBLE_DEVICES env var (no runtime: nvidia)
 #
@@ -52,6 +55,8 @@ volumes:
   backend_data:
   certbot-webroot:
   certbot-etc:
+  vm-data:
+  grafana-data:
 
 services:
 
@@ -1254,6 +1259,101 @@ services:
         condition: on-failure
         delay: 10s
         max_attempts: 10
+
+  # ===========================================================================
+  # Observability Stack (node.labels.genieai == true)
+  # ===========================================================================
+  # Disabled by default. Enable via:
+  #   docker compose: --profile observability flag
+  #   Docker Swarm:   ENABLE_OBSERVABILITY=1 in .env
+  # ===========================================================================
+
+  otel-collector:
+    profiles: [observability]
+    restart: unless-stopped
+    image: otel/opentelemetry-collector-contrib:0.152.0
+    # Distroless image — no shell/wget for Docker healthcheck.
+    # Rely on restart policy + health_check extension (port 13133) for programmatic probes.
+    volumes:
+      - ./configs/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    networks:
+      - genieai_network
+    deploy:
+      replicas: ${ENABLE_OBSERVABILITY:-0}
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+
+  victoriametrics:
+    profiles: [observability]
+    restart: unless-stopped
+    image: victoriametrics/victoria-metrics:v1.138.0
+    command:
+      - "--storageDataPath=/var/lib/victoria-metrics"
+      - "--retentionPeriod=${VICTORIAMETRICS_RETENTION:-30d}"
+      - "--httpListenAddr=:8428"
+    volumes:
+      - vm-data:/var/lib/victoria-metrics
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8428/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - genieai_network
+    deploy:
+      replicas: ${ENABLE_OBSERVABILITY:-0}
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+
+  grafana:
+    profiles: [observability]
+    restart: unless-stopped
+    image: grafana/grafana:12.4
+    depends_on:
+      victoriametrics:
+        condition: service_healthy
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_SERVER_HTTP_PORT=3000
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/service-health.json
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
+    # Internal only — accessible on Docker network or via host port mapping
+    # Host port avoids conflict with Backend (port 3000) by mapping to GRAFANA_PORT
+    ports:
+      - "${GRAFANA_PORT:-3002}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - genieai_network
+    deploy:
+      replicas: ${ENABLE_OBSERVABILITY:-0}
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
 
 networks:
   genieai_network:

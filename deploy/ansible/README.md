@@ -147,6 +147,7 @@ Set in `group_vars/<env>/vault.yml`:
 | `kc_dataprep_client_secret` | Dataprep service account secret (client_credentials grant) |
 | `email_password` | SMTP password |
 | `hugging_face_hub_token` | Hugging Face Hub token |
+| `grafana_admin_password` | Grafana admin password (required when `enable_observability=1`) |
 
 ## Environment Variables (Non-Secret)
 
@@ -157,6 +158,9 @@ Set in `group_vars/<env>/vars.yml`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `deploy_opea` | `1` | Deploy OPEA/AI services (GPU) |
+| `enable_observability` | `0` | Deploy OTel Collector + VictoriaMetrics + Grafana |
+| `grafana_admin_user` | `admin` | Grafana admin username |
+| `victoriametrics_retention` | `30d` | VictoriaMetrics data retention period |
 | `gpu_env_file` | `env.t4` | GPU defaults file (empty = none). Loaded first; Ansible `.env` takes precedence. |
 
 ### API Gateway (NGINX)

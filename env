@@ -548,6 +548,24 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 # OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 
 # =============================================================================
+# SECTION 12C: OBSERVABILITY STACK (OPTIONAL)
+# =============================================================================
+# Deploy OTel Collector + VictoriaMetrics + Grafana alongside the application.
+# Enable via: docker compose --profile observability up -d
+#   or Swarm:  ENABLE_OBSERVABILITY=1 in .env
+#   or Ansible: enable_observability: "1" in group_vars/all.yml
+#
+# Uncomment to override defaults (all have sensible defaults in docker-compose):
+# ENABLE_OBSERVABILITY=false
+# GRAFANA_ADMIN_USER=admin
+# GRAFANA_PORT=3002
+# VICTORIAMETRICS_RETENTION=30d
+
+# Grafana admin password (required secret, no default)
+# Used by: grafana service
+GRAFANA_ADMIN_PASSWORD=
+
+# =============================================================================
 # SECTION 13: DOCKER SWARM MULTI-NODE (OPTIONAL)
 # =============================================================================
 # Override these variables when deploying with Docker Swarm (docker stack deploy).

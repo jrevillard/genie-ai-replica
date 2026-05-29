@@ -646,6 +646,10 @@ KC_GRAFANA_CLIENT_SECRET=
 #   DNS hostname or IP of the remote GPU node.
 #   All services below derive their URLs from this variable.
 #
+# GPU_PUBLIC_DOMAIN=gpu.example.com
+#   Public domain for the GPU node (used by certbot for TLS certificates).
+#   Typically same as GPU_NODE_HOST. Set on the GPU node in .env.
+#
 # VLLM_ENDPOINT=https://${GPU_NODE_HOST}:9400/v1
 # TRANSLATION_VLLM_ENDPOINT=https://${GPU_NODE_HOST}:9401/v1
 # EMBEDDING_SERVICE_URL=https://${GPU_NODE_HOST}:9402

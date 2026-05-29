@@ -896,6 +896,7 @@ config:validate:
         - "env"
         - "env.*"
         - "docker-compose.yaml"
+        - "docker-compose.gpu.yaml"
         - "tests/config-validator/**/*"
         - "tests/fixtures/config/**/*"
         - ".gitlab-ci.yml"

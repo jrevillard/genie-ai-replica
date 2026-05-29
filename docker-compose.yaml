@@ -57,6 +57,20 @@ volumes:
   certbot-etc:
   vm-data:
   grafana-data:
+  vlogs-data:
+
+# Fluentd logging driver configuration for centralized log aggregation.
+# All services forward stdout/stderr to the OTel Collector's fluentforward
+# receiver (port 24224). Docker dual logging (20.10+) keeps `docker logs`
+# functional alongside the fluentd driver. When observability is disabled,
+# the collector is not running; fluentd-async prevents container startup
+# failures and Docker silently retries in the background.
+x-logging: &fluent-logging
+  driver: fluentd
+  options:
+    fluentd-address: "localhost:24224"
+    fluentd-async: "true"
+    tag: "genie.{{.Name}}"
 
 services:
 
@@ -65,6 +79,7 @@ services:
   # ===========================================================================
 
   postgres:
+    logging: *fluent-logging
     image: postgres:13
     networks:
       - genieai_network
@@ -95,6 +110,7 @@ services:
 
   # Kong database migrations (one-shot init, runs automatically on first start)
   kong-migrations:
+    logging: *fluent-logging
     image: kong:latest
     restart: "no"
     depends_on:
@@ -127,6 +143,7 @@ services:
 
   # Kong routes/services/plugins configuration (one-shot init, runs after Kong is ready)
   kong-config:
+    logging: *fluent-logging
     restart: "no"
     depends_on:
       kong:
@@ -152,6 +169,7 @@ services:
         max_attempts: 5
 
   kong:
+    logging: *fluent-logging
     depends_on:
       postgres:
         condition: service_healthy
@@ -206,6 +224,7 @@ services:
         max_attempts: 10
 
   nginx:
+    logging: *fluent-logging
     depends_on:
       kong:
         condition: service_healthy
@@ -260,6 +279,7 @@ services:
   # Requires: CERTBOT_EMAIL set in .env
 
   certbot:
+    logging: *fluent-logging
     profiles: [letsencrypt]
     restart: unless-stopped
     image: certbot/certbot:latest
@@ -290,6 +310,7 @@ services:
   # ===========================================================================
 
   frontend:
+    logging: *fluent-logging
     restart: unless-stopped
     build: components/gov-chat-frontend/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-frontend:latest
@@ -320,6 +341,7 @@ services:
         max_attempts: 10
 
   redis-cache:
+    logging: *fluent-logging
     restart: unless-stopped
     image: redis:7-alpine
     # Internal only - no host port mapping needed
@@ -348,6 +370,7 @@ services:
         max_attempts: 10
 
   db-migrations:
+    logging: *fluent-logging
     restart: "no"
     depends_on:
       arango-vector-db:
@@ -374,6 +397,7 @@ services:
         max_attempts: 3
 
   backend:
+    logging: *fluent-logging
     depends_on:
       arango-vector-db:
         condition: service_healthy
@@ -462,6 +486,7 @@ services:
         max_attempts: 10
 
   document-repository:
+    logging: *fluent-logging
     depends_on:
       arango-vector-db:
         condition: service_healthy
@@ -506,6 +531,7 @@ services:
         max_attempts: 10
 
   clamav:
+    logging: *fluent-logging
     restart: unless-stopped
     image: clamav/clamav
     # Internal only
@@ -530,6 +556,7 @@ services:
         max_attempts: 10
 
   arango-vector-db:
+    logging: *fluent-logging
     restart: unless-stopped
     image: arangodb/arangodb:3.12.4
     ports:
@@ -566,6 +593,7 @@ services:
   # ===========================================================================
 
   vllm:
+    logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
     image: vllm/vllm-openai:latest
@@ -606,6 +634,7 @@ services:
         max_attempts: 30
 
   textgen:
+    logging: *fluent-logging
     profiles: [opea]
     depends_on:
       vllm:
@@ -637,6 +666,7 @@ services:
         max_attempts: 30
 
   vllm-translation-guardrail:
+    logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
     image: vllm/vllm-openai:v0.10.0
@@ -680,6 +710,7 @@ services:
         max_attempts: 30
 
   translation:
+    logging: *fluent-logging
     profiles: [opea]
     depends_on:
       vllm-translation-guardrail:
@@ -711,6 +742,7 @@ services:
         max_attempts: 30
 
   guardrail:
+    logging: *fluent-logging
     profiles: [opea]
     depends_on:
       vllm-translation-guardrail:
@@ -744,6 +776,7 @@ services:
         max_attempts: 30
 
   tei:
+    logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
     image: ${TEI_EMBEDDING_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:1.9.3}
@@ -775,6 +808,7 @@ services:
         max_attempts: 30
 
   embedding:
+    logging: *fluent-logging
     profiles: [opea]
     depends_on:
       tei:
@@ -807,6 +841,7 @@ services:
         max_attempts: 30
 
   tei_reranker:
+    logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
     image: ${TEI_RERANKING_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:1.9.3}
@@ -838,6 +873,7 @@ services:
         max_attempts: 30
 
   reranker:
+    logging: *fluent-logging
     profiles: [opea]
     depends_on:
       tei_reranker:
@@ -875,6 +911,7 @@ services:
         max_attempts: 30
 
   dataprep-arango-service:
+    logging: *fluent-logging
     profiles: [opea]
     depends_on:
       arango-vector-db:
@@ -940,6 +977,7 @@ services:
         max_attempts: 30
 
   retriever-arango-service:
+    logging: *fluent-logging
     profiles: [opea]
     depends_on:
       arango-vector-db:
@@ -1002,6 +1040,7 @@ services:
         max_attempts: 30
 
   chatqna-xeon-backend-server:
+    logging: *fluent-logging
     profiles: [opea]
     depends_on:
       embedding:
@@ -1061,6 +1100,7 @@ services:
   # OPEA UI/Nginx - disabled by default via profiles: [opea] (compose up) / replicas: 0 (Swarm).
   # Activate for OPEA debugging: compose up --profile opea / Swarm: change replicas to 1.
   chatqna-xeon-ui-server:
+    logging: *fluent-logging
     profiles: [opea]
     restart: "no"
     image: opea/chatqna-ui:latest
@@ -1088,6 +1128,7 @@ services:
         max_attempts: 30
 
   chatqna-xeon-nginx-server:
+    logging: *fluent-logging
     profiles: [opea]
     restart: "no"
     image: opea/nginx:latest
@@ -1122,6 +1163,7 @@ services:
 
   # PostgreSQL initialization (creates dedicated databases and users for each service)
   postgres-init:
+    logging: *fluent-logging
     build: configs/postgres/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-postgres-init:latest
     environment:
@@ -1146,6 +1188,7 @@ services:
 
   # Keycloak Identity Provider
   keycloak:
+    logging: *fluent-logging
     build: configs/keycloak/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-keycloak:latest
     environment:
@@ -1196,6 +1239,7 @@ services:
 
   # Keycloak realm configuration via keycloak-config-cli (runs once after Keycloak is healthy)
   keycloak-config:
+    logging: *fluent-logging
     build:
       context: configs/keycloak/
       dockerfile: Dockerfile.config-cli
@@ -1215,6 +1259,8 @@ services:
       - GENIE_ADMIN_EMAIL=${GENIE_ADMIN_EMAIL}
       - KC_PROXY_CLIENT_SECRET=${KEYCLOAK_PROXY_CLIENT_SECRET}
       - KC_DATAPREP_CLIENT_SECRET=${KC_DATAPREP_CLIENT_SECRET}
+      - KC_GRAFANA_CLIENT_ID=${KC_GRAFANA_CLIENT_ID:-grafana}
+      - KC_GRAFANA_CLIENT_SECRET=${KC_GRAFANA_CLIENT_SECRET}
       - KC_MOBILE_CLIENT_ID=${KC_MOBILE_CLIENT_ID}
       - KC_MOBILE_REDIRECT_SCHEME=${KC_MOBILE_REDIRECT_SCHEME}
       - KC_PUBLIC_ORIGIN=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}
@@ -1272,6 +1318,11 @@ services:
     profiles: [observability]
     restart: unless-stopped
     image: otel/opentelemetry-collector-contrib:0.152.0
+    # Expose fluentforward receiver on localhost so the Docker daemon can
+    # send container logs via the fluentd logging driver. Binding to
+    # 127.0.0.1 prevents external access (no unauthenticated log injection).
+    ports:
+      - "127.0.0.1:24224:24224"
     # Distroless image — no shell/wget for Docker healthcheck.
     # Rely on restart policy + health_check extension (port 13133) for programmatic probes.
     volumes:
@@ -1279,16 +1330,17 @@ services:
     networks:
       - genieai_network
     deploy:
-      replicas: ${ENABLE_OBSERVABILITY:-0}
-      placement:
-        constraints:
-          - node.labels.genieai == true
+      # Global mode: one collector per Swarm node. No placement constraint —
+      # must run on ALL node types (gateway, genieai, gpu) to collect logs
+      # from every service via the fluentd logging driver (localhost:24224).
+      mode: global
       restart_policy:
         condition: on-failure
         delay: 5s
         max_attempts: 5
 
   victoriametrics:
+    logging: *fluent-logging
     profiles: [observability]
     restart: unless-stopped
     image: victoriametrics/victoria-metrics:v1.138.0
@@ -1316,12 +1368,44 @@ services:
         delay: 5s
         max_attempts: 5
 
+  victorialogs:
+    logging: *fluent-logging
+    profiles: [observability]
+    restart: unless-stopped
+    image: victoriametrics/victoria-logs:v1.50.0
+    command:
+      - "--storageDataPath=/var/lib/victoria-logs"
+      - "--retentionPeriod=${VICTORIALOGS_RETENTION:-30d}"
+      - "--httpListenAddr=:9428"
+    volumes:
+      - vlogs-data:/var/lib/victoria-logs
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9428/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - genieai_network
+    deploy:
+      replicas: ${ENABLE_OBSERVABILITY:-0}
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+
   grafana:
+    logging: *fluent-logging
     profiles: [observability]
     restart: unless-stopped
     image: grafana/grafana:12.4
     depends_on:
       victoriametrics:
+        condition: service_healthy
+      victorialogs:
         condition: service_healthy
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
@@ -1329,14 +1413,27 @@ services:
       - GF_SERVER_HTTP_PORT=3000
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/service-health.json
+      - GF_INSTALL_PLUGINS=victoriametrics-logs-datasource
+      - GF_SERVER_ROOT_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}:${NGINX_HTTPS_PORT:-443}/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_AUTH_GENERIC_OAUTH_ENABLED=true
+      - GF_AUTH_GENERIC_OAUTH_NAME=Keycloak
+      - GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP=true
+      - GF_AUTH_GENERIC_OAUTH_CLIENT_ID=${KC_GRAFANA_CLIENT_ID:-grafana}
+      - GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=${KC_GRAFANA_CLIENT_SECRET}
+      - GF_AUTH_GENERIC_OAUTH_SCOPES=openid profile email
+      - GF_AUTH_GENERIC_OAUTH_AUTH_URL=${KC_PUBLIC_ORIGIN}/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/auth
+      - GF_AUTH_GENERIC_OAUTH_TOKEN_URL=${KC_PUBLIC_ORIGIN}/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/token
+      - GF_AUTH_GENERIC_OAUTH_API_URL=${KC_PUBLIC_ORIGIN}/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/userinfo
     volumes:
       - grafana-data:/var/lib/grafana
       - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
-    # Internal only — accessible on Docker network or via host port mapping
-    # Host port avoids conflict with Backend (port 3000) by mapping to GRAFANA_PORT
-    ports:
-      - "${GRAFANA_PORT:-3002}:3000"
+    # Grafana is now accessible only via Kong route (/grafana/).
+    # For local debugging, uncomment the port mapping below:
+    # ports:
+    #   - "${GRAFANA_PORT:-3002}:3000"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/api/health"]
       interval: 10s

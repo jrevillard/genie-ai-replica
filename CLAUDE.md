@@ -289,18 +289,24 @@ To change built-in defaults, edit the Python code:
 
 ## Observability Stack (Optional)
 
-The observability stack (OTel Collector + VictoriaMetrics + Grafana) is **disabled by default**. Enable via:
+The observability stack (OTel Collector + VictoriaMetrics + VictoriaLogs + Grafana) is **disabled by default**. Enable via:
 
 - **Docker Compose**: `docker compose --profile observability up -d`
-- **Docker Swarm**: `ENABLE_OBSERVABILITY=1` in `.env`
+- **Docker Swarm**: `ENABLE_OBSERVABILITY=1` in `.env` (MUST be `0` or `1`, not `true`/`false`)
 - **Ansible**: `enable_observability: "1"` in `group_vars/all.yml`
 
+All services use the **fluentd logging driver** to forward container logs to the OTel Collector's `fluent_forward` receiver (port 24224, localhost only). Docker dual logging (20.10+) keeps `docker logs` functional. The Collector runs in `mode: global` without placement constraint, ensuring one Collector on every Swarm node (gateway, genieai, gpu) — all service logs are collected regardless of node type.
+
 **Configuration variables** (`.env` Section 12C):
-- `ENABLE_OBSERVABILITY` — Enable/disable the stack (default: false)
+- `ENABLE_OBSERVABILITY` — Enable/disable the stack (default: `0`, MUST be `0` or `1`)
 - `GRAFANA_ADMIN_USER` — Grafana admin username (default: admin)
 - `GRAFANA_ADMIN_PASSWORD` — Grafana admin password (required when enabled)
-- `GRAFANA_PORT` — Host port for Grafana access (default: 3002, avoids conflict with Backend port 3000)
-- `VICTORIAMETRICS_RETENTION` — Data retention period (default: 30d)
+- `VICTORIALOGS_RETENTION` — Log retention period (default: 30d)
+- `KC_GRAFANA_CLIENT_ID` — Keycloak OIDC client ID for Grafana SSO (default: grafana)
+- `KC_GRAFANA_CLIENT_SECRET` — Keycloak OIDC client secret (required when enabled)
+- `VICTORIAMETRICS_RETENTION` — Metric retention period (default: 30d)
+
+Grafana is accessible via Kong route `/grafana/` with Keycloak OIDC SSO (no direct host port).
 
 **Config files**: `configs/otel/` (Collector config), `configs/grafana/provisioning/` (datasources + dashboards)
 
@@ -351,9 +357,10 @@ docker-compose.yaml (root - single source of truth, dual-mode)
 │   ├── Kong
 │   └── NGINX
 └── Layer 4: Observability (profiles: [observability], ENABLE_OBSERVABILITY)
-    ├── OTel Collector (trace/metric collection)
+    ├── OTel Collector (trace/metric/log collection)
     ├── VictoriaMetrics (metric storage)
-    └── Grafana (dashboards)
+    ├── VictoriaLogs (log storage)
+    └── Grafana (dashboards, via Kong /grafana/ with Keycloak SSO)
 ```
 
 ### Usage

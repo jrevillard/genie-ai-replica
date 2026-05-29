@@ -3,12 +3,16 @@
 # =============================================================================
 # Receives OTLP traces from instrumented services (backend, chatqna, retriever,
 # dataprep, reranker) and exports metrics to VictoriaMetrics.
+# Receives container logs via Docker fluentd logging driver and forwards to
+# VictoriaLogs.
 #
 # Receivers:
 #   - OTLP HTTP (port 4318): standard OTLP/HTTP from SDK auto-instrumentation
+#   - fluent_forward (port 24224): receives logs from Docker fluentd logging driver
 #
 # Exporters:
 #   - prometheusremotewrite (port 8428): exports OTel metrics to VictoriaMetrics
+#   - otlp/http (port 9428): exports logs to VictoriaLogs via OTLP HTTP
 #   - debug: logs traces to collector stdout (debugging / stdout aggregation)
 #
 # Extensions:
@@ -17,10 +21,12 @@
 # Pipeline:
 #   metrics: otlp → batch → prometheusremotewrite
 #   traces:  otlp → batch → debug
+#   logs:    fluent_forward → batch → otlp/http
 #
-# Note: VictoriaMetrics is a metrics backend, not a trace store.
-# Trace-derived metrics (latency histograms, request counts) are exported.
-# Full trace storage (Jaeger/Tempo) is deferred to the MELT initiative.
+# Note: Docker services use the fluentd logging driver (driver: fluentd)
+# configured in docker-compose.yaml. Docker sends container stdout/stderr to
+# the collector's fluent_forward receiver on port 24224. Dual logging (Docker
+# 20.10+) keeps `docker logs` functional alongside the fluentd driver.
 # =============================================================================
 
 extensions:
@@ -32,6 +38,8 @@ receivers:
     protocols:
       http:
         endpoint: 0.0.0.0:4318
+  fluent_forward:
+    endpoint: 0.0.0.0:24224
 
 processors:
   batch:
@@ -54,6 +62,16 @@ exporters:
     timeout: 15s
   debug:
     verbosity: basic
+  otlp/http:
+    logs_endpoint: http://victorialogs:9428/insert/opentelemetry/v1/logs
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
 
 service:
   extensions:
@@ -73,3 +91,10 @@ service:
         - batch
       exporters:
         - debug
+    logs:
+      receivers:
+        - fluent_forward
+      processors:
+        - batch
+      exporters:
+        - otlp/http

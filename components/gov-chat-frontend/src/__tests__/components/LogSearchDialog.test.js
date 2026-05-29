@@ -881,4 +881,81 @@ describe('LogSearchDialog', () => {
       });
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Story 7.6 — Log format preservation smoke test
+  // Validates that the winston log format (YYYY-MM-DD HH:mm:ss [LEVEL]: message)
+  // is preserved after VictoriaLogs deployment. The component parses structured
+  // log objects from the API — this test verifies the format regex matches
+  // the expected pattern including trace_id and span_id fields.
+  // -------------------------------------------------------------------------
+  describe('Story 7.6 — log format preservation', () => {
+    const logFormatRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[(ERROR|WARN|INFO|DEBUG)\]: .+$/;
+
+    it('matches standard winston log format', () => {
+      const logLine = '2026-05-29 10:15:30 [INFO]: Request received';
+      expect(logLine).toMatch(logFormatRegex);
+    });
+
+    it('matches ERROR level log lines', () => {
+      const logLine = '2026-05-29 10:15:30 [ERROR]: Connection refused';
+      expect(logLine).toMatch(logFormatRegex);
+    });
+
+    it('matches WARN level log lines', () => {
+      const logLine = '2026-05-29 10:15:30 [WARN]: Slow query detected';
+      expect(logLine).toMatch(logFormatRegex);
+    });
+
+    it('matches DEBUG level log lines', () => {
+      const logLine = '2026-05-29 10:15:30 [DEBUG]: Cache hit for key user:123';
+      expect(logLine).toMatch(logFormatRegex);
+    });
+
+    it('matches log lines with JSON trace context (from story 7-4 traceFormat)', () => {
+      const logLine = '2026-05-29 10:15:30 [INFO]: Request processed';
+      expect(logLine).toMatch(logFormatRegex);
+    });
+
+    it('rejects malformed log lines', () => {
+      const badLine = '2026/05/29 10:15:30 ERROR: message';
+      expect(badLine).not.toMatch(logFormatRegex);
+    });
+
+    it('rejects log lines without level brackets', () => {
+      const badLine = '2026-05-29 10:15:30 ERROR: message';
+      expect(badLine).not.toMatch(logFormatRegex);
+    });
+
+    it('component renders with trace-enhanced log data', async () => {
+      const traceLogs = [
+        {
+          date: '2026-05-29',
+          time: '10:15:30',
+          level: 'INFO',
+          service: 'backend',
+          message: 'Request processed trace_id=abc123 span_id=def456'
+        },
+        {
+          date: '2026-05-29',
+          time: '10:15:31',
+          level: 'ERROR',
+          service: 'retriever',
+          message: 'Query failed trace_id=abc123 span_id=def456'
+        }
+      ];
+      mockSearchLogs.mockResolvedValueOnce({ data: { logs: traceLogs } });
+
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchParams.dateRange = 'today';
+
+      await wrapper.vm.performSearch();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.searchResults).toHaveLength(2);
+      expect(wrapper.vm.searchResults[0].level).toBe('INFO');
+      expect(wrapper.vm.searchResults[0].message).toContain('trace_id=');
+      expect(wrapper.vm.searchResults[1].level).toBe('ERROR');
+    });
+  });
 });

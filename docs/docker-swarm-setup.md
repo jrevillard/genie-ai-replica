@@ -21,7 +21,7 @@ GENIE.AI services are placed on nodes using three labels:
 | Placement | Constraint | Services |
 |-----------|------------|----------|
 | **Gateway** (label) | `node.labels.gateway == true` | Kong, NGINX, PostgreSQL |
-| **GENIE.AI** (label) | `node.labels.genieai == true` | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Keycloak, OTel Collector, VictoriaMetrics, Grafana |
+| **GENIE.AI** (label) | `node.labels.genieai == true` | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Keycloak, OTel Collector (global mode), VictoriaMetrics, VictoriaLogs, Grafana |
 | **GPU** (label) | `node.labels.gpu == true` | vLLM, TEI embedding, TEI reranking, Retriever, Dataprep, ChatQnA, Translation, Guardrail |
 
 All three labels (`gateway=true`, `genieai=true`, `gpu=true`) must be applied manually to the target nodes. A single node can have multiple labels.
@@ -337,13 +337,27 @@ To skip OPEA/AI services (no GPU required), set in `.env`:
 DEPLOY_OPEA=0
 ```
 
-To enable the observability stack (OTel Collector, VictoriaMetrics, Grafana), set in `.env`:
+To enable the observability stack (OTel Collector, VictoriaMetrics, VictoriaLogs, Grafana), set in `.env`:
 
 ```bash
 ENABLE_OBSERVABILITY=1
 GRAFANA_ADMIN_USER=admin
 GRAFANA_ADMIN_PASSWORD=<strong-password>
+KC_GRAFANA_CLIENT_ID=grafana
+KC_GRAFANA_CLIENT_SECRET=<strong-secret>
 ```
+
+**Note:** `ENABLE_OBSERVABILITY` must be `0` or `1`, not `true`/`false`.
+
+### Observability stack details
+
+When `ENABLE_OBSERVABILITY=1`:
+
+- **Log collection**: All services use the fluentd logging driver (`driver: fluentd`) to forward container logs to the OTel Collector's `fluent_forward` receiver on port 24224 (localhost only). Docker dual logging (20.10+) keeps `docker logs` functional.
+- **Collector placement**: The OTel Collector runs in `mode: global` with placement constraint `node.labels.genieai == true`, ensuring one Collector instance per application node (multi-node Swarm compatible).
+- **Grafana access**: Accessible via Kong route `/grafana/` with Keycloak OIDC SSO (no direct host port exposure). Three dashboards are pre-configured: **Service Health**, **RAG Pipeline Trace Waterfall**, and **Service Logs**.
+
+See `configs/otel/README.md` for Collector configuration details.
 
 ### Kong trusted IPs (required for Swarm)
 

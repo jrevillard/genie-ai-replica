@@ -75,6 +75,7 @@ except ImportError:
 ### Docling document loader ############################################################
 # Serves as a more heavy and robust tool for extracting content from more complex PDF files
 
+
 async def _load_with_docling_remote(doc_path: str) -> str:
     """
     Asynchronously sends a document to a remote docling-serve endpoint

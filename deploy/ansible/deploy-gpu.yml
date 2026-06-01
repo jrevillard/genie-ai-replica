@@ -180,14 +180,6 @@
   tags: [deploy]
   become: true
   tasks:
-    - name: Login to GitHub Container Registry
-      community.docker.docker_login:
-        registry_url: ghcr.io
-        username: "{{ ghcr_io_username | default('') }}"
-        password: "{{ ghcr_io_token }}"
-      when: ghcr_io_token is defined and ghcr_io_token | length > 0
-      no_log: true
-
     - name: Validate GPU compose configuration
       ansible.builtin.shell: >
         docker compose

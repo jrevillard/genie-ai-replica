@@ -54,6 +54,24 @@
       "tls_verify_depth": null,
       "ca_certificates": null,
       "tags": ["new"]
+    },
+    {
+      "name": "grafana",
+      "id": "c7d8e9f0-a1b2-4c3d-8e4f-5a6b7c8d9e0f",
+      "protocol": "http",
+      "host": "grafana",
+      "port": 3000,
+      "path": null,
+      "connect_timeout": 60000,
+      "read_timeout": 60000,
+      "write_timeout": 60000,
+      "retries": 5,
+      "enabled": true,
+      "client_certificate": null,
+      "tls_verify": null,
+      "tls_verify_depth": null,
+      "ca_certificates": null,
+      "tags": ["new"]
     }
   ],
   "routes": [
@@ -654,6 +672,19 @@
       "protocols": ["http", "https"],
       "methods": null,
       "hosts": null,
+      "headers": null,
+      "snis": null,
+      "sources": null,
+      "destinations": null,
+      "tags": ["new"]
+    },
+    {
+      "name": "grafana-route",
+      "id": "d8e9f0a1-b2c3-4d4e-8f5a-6b7c8d9e0f1a",
+      "service": {"name": "grafana"},
+      "paths": ["/grafana"],
+      "strip_path": false,
+      "preserve_host": true,
       "headers": null,
       "snis": null,
       "sources": null,

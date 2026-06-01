@@ -1,0 +1,209 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "title": "Service Logs",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 20,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "preformatted": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "${datasource}"
+          },
+          "expr": "container_name:~\"$service\" _msg:~\"$level\" $filter",
+          "refId": "A"
+        }
+      ],
+      "title": "Logs",
+      "type": "logs"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "genieai",
+    "observability",
+    "logs"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Datasource",
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "victoriametrics-logs-datasource",
+        "queryValue": "",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "victoriametrics-logs-datasource",
+          "uid": "${datasource}"
+        },
+        "hide": 0,
+        "includeAll": true,
+        "label": "Service",
+        "multi": false,
+        "name": "service",
+        "options": [],
+        "query": {
+          "type": "fieldValue",
+          "field": "container_name",
+          "query": "*"
+        },
+        "refresh": 2,
+        "regex": ".*-([a-z]+(?:-[a-z]+)*)-\\d$",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "hide": 0,
+        "includeAll": true,
+        "label": "Level",
+        "multi": false,
+        "name": "level",
+        "options": [
+          {
+            "selected": false,
+            "text": "ERROR",
+            "value": "ERROR"
+          },
+          {
+            "selected": false,
+            "text": "WARN",
+            "value": "WARN"
+          },
+          {
+            "selected": false,
+            "text": "INFO",
+            "value": "INFO"
+          },
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          }
+        ],
+        "query": "ERROR,WARN,INFO,DEBUG",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "victoriametrics-logs-datasource",
+          "uid": "${datasource}"
+        },
+        "hide": 0,
+        "includeAll": true,
+        "label": "Trace ID",
+        "multi": false,
+        "name": "trace_id",
+        "options": [],
+        "query": {
+          "type": "fieldValue",
+          "field": "_msg",
+          "query": "_msg:~\"trace_id=\""
+        },
+        "refresh": 2,
+        "regex": ".*trace_id=\"([^\"]+)\".*",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "hide": 0,
+        "label": "Filter",
+        "name": "filter",
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Service Logs",
+  "uid": "genieai-service-logs",
+  "version": 0
+}

@@ -38,6 +38,7 @@ deploy_opea: "1"
 enable_observability: "0"
 grafana_admin_user: "admin"
 victoriametrics_retention: "30d"
+victorialogs_retention: "30d"
 registry_port: "5000"
 
 # =============================================================================

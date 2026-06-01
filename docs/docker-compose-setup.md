@@ -20,7 +20,7 @@ All services run on a single host. Two deployment profiles are available:
 |---------|---------|----------|
 | **Core** | `docker compose up -d` | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Kong, NGINX |
 | **Full (OPEA)** | `docker compose --profile opea up -d` | Core + vLLM, TEI, Retriever, Dataprep, ChatQnA, Translation |
-| **Observability** | `docker compose --profile observability up -d` | Core + OTel Collector, VictoriaMetrics, Grafana |
+| **Observability** | `docker compose --profile observability up -d` | Core + OTel Collector, VictoriaMetrics, VictoriaLogs, Grafana |
 
 ## Step 1: Clone Repository
 
@@ -94,10 +94,14 @@ HUGGING_FACE_HUB_TOKEN=<hf-token>
 For observability (optional), also set:
 
 ```bash
-ENABLE_OBSERVABILITY=true
+ENABLE_OBSERVABILITY=1
 GRAFANA_ADMIN_USER=admin
 GRAFANA_ADMIN_PASSWORD=<strong-password>
+KC_GRAFANA_CLIENT_ID=grafana
+KC_GRAFANA_CLIENT_SECRET=<strong-secret>
 ```
+
+**Note:** `ENABLE_OBSERVABILITY` must be `0` or `1`, not `true`/`false`.
 
 See the `env` template for the full list of variables and their descriptions.
 
@@ -198,7 +202,7 @@ docker compose --env-file .env --env-file env.rtx6000 --profile opea up -d
 
 ### 6e. Start with observability stack
 
-To add the OTel Collector, VictoriaMetrics, and Grafana monitoring stack:
+To add the OTel Collector, VictoriaMetrics, VictoriaLogs, and Grafana monitoring stack:
 
 ```bash
 docker compose --profile observability up -d
@@ -210,7 +214,9 @@ Combine with OPEA for the full stack plus observability:
 docker compose --profile opea --profile observability up -d
 ```
 
-Access Grafana at `http://localhost:3002` (or `${GRAFANA_PORT}` from `.env`). Two dashboards are pre-configured: **Service Health** and **RAG Pipeline Trace Waterfall**.
+**Log collection**: All services use the fluentd logging driver (`driver: fluentd`) to forward container logs to the OTel Collector's `fluent_forward` receiver on port 24224 (localhost only). Docker dual logging (20.10+) keeps `docker logs` functional.
+
+Access Grafana via Kong at `https://<domain>/grafana/` (requires Keycloak OIDC login). Three dashboards are pre-configured: **Service Health**, **RAG Pipeline Trace Waterfall**, and **Service Logs**.
 
 See `configs/otel/README.md` for Collector configuration details.
 

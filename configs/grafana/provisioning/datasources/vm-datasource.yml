@@ -10,3 +10,8 @@ datasources:
     jsonData:
       timeInterval: "15s"
       httpMethod: POST
+    links:
+      - title: "View logs"
+        type: datasources
+        datasourceUid: PD775F2863313E6C7
+        url: "/d/genieai-service-logs/service-logs?var-datasource=PD775F2863313E6C7&var-service=${__field.labels.service_name}&var-level=%24__all&var-filter=&from=${__from}&to=${__to}"

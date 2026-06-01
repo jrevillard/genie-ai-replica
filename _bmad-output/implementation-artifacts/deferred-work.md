@@ -2,6 +2,17 @@
 
 Items deferred during code reviews. Revisit when the related component is next modified.
 
+## Deferred from: code review of 7-6-deploy-victorialogs-centralized-log-aggregation (2026-05-29)
+
+- Fluentd driver drops logs when Collector is down — inherent tradeoff; dual logging keeps docker logs functional. No fallback mechanism.
+- CSP headers may block Grafana WebSocket — nginx CSP `connect-src` for `/grafana/` location may not include `ws://`/`wss://` protocols needed for live dashboard updates. Needs runtime verification.
+- OTel Collector global mode without resource limits — no CPU/memory limits on global-mode Collector instances could cause resource pressure on multi-node Swarm with many services.
+- VictoriaTraces datasource reference in vlogs-datasource.yml — `derivedFields.datasourceUid: victoriatraces` references a datasource that doesn't exist yet (story 7.7). Trace ID link-outs will show "datasource not found" until story 7.7 is deployed.
+- Volume backup/cleanup strategy for VictoriaLogs — named volume `vlogs-data` has no documented backup procedure. VictoriaLogs retention flag controls soft deletion only; compaction may be needed for disk reclaim.
+- Dashboard variable refresh 2s too aggressive — service/level/trace_id variables refresh every 2s which creates unnecessary query load on VictoriaLogs with multiple concurrent dashboard users.
+- Dashboard _stream_ shows `genie.` prefix — fluentd tag is `genie.{{.Name}}` so dropdown shows `genie.backend` instead of `backend`. Filter works but UX is suboptimal. Could strip prefix in dashboard variable regex.
+- ENABLE_OBSERVABILITY type not enforceable in YAML — setting `true` instead of `1` causes Swarm replicas failure. Documented in env file but not enforceable.
+
 ## Deferred from: code review of 7-1-express-backend-otel-tracing-foundation (2026-05-28)
 
 - OTel Collector absent from docker-compose — the env template references `otel-collector:4318` but no service is defined yet. Scope of story 7-5 (deploy observability stack).

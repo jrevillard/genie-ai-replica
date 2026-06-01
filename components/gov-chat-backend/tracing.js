@@ -28,6 +28,8 @@ if (process.env.NODE_ENV === 'test') {
 } else {
   const { NodeSDK } = require('@opentelemetry/sdk-node');
   const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
+  const { OTLPMetricExporter } = require('@opentelemetry/exporter-metrics-otlp-http');
+  const { PeriodicExportingMetricReader } = require('@opentelemetry/sdk-metrics');
   const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
   const {
     ATTR_SERVICE_NAME,
@@ -84,6 +86,15 @@ if (process.env.NODE_ENV === 'test') {
     url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector:4318'
   });
 
+  // Metrics exporter — sends OTel HTTP metrics to VictoriaMetrics via Collector
+  const metricExporter = new OTLPMetricExporter({
+    url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector:4318/v1/metrics'
+  });
+  const metricReader = new PeriodicExportingMetricReader({
+    exporter: metricExporter,
+    exportIntervalMillis: 15000
+  });
+
   // Create SDK with auto-instrumentations
   const sdk = new NodeSDK({
     resource: resourceFromAttributes({
@@ -92,6 +103,7 @@ if (process.env.NODE_ENV === 'test') {
       [ATTR_DEPLOYMENT_ENVIRONMENT]: deploymentEnvironment
     }),
     traceExporter: exporter,
+    metricReader: metricReader,
     instrumentations: [
       getNodeAutoInstrumentations({
         '@opentelemetry/instrumentation-fs': { enabled: false },

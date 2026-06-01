@@ -550,20 +550,34 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 # =============================================================================
 # SECTION 12C: OBSERVABILITY STACK (OPTIONAL)
 # =============================================================================
-# Deploy OTel Collector + VictoriaMetrics + Grafana alongside the application.
+# Deploy OTel Collector + VictoriaMetrics + VictoriaLogs + Grafana alongside the application.
+# All services use the fluentd logging driver to forward container logs to the
+# OTel Collector's fluent_forward receiver (port 24224, localhost only).
+# Docker dual logging (20.10+) keeps `docker logs` functional.
 # Enable via: docker compose --profile observability up -d
-#   or Swarm:  ENABLE_OBSERVABILITY=1 in .env
+#   or Swarm:  ENABLE_OBSERVABILITY=1 in .env (MUST be 0 or 1, not true/false)
 #   or Ansible: enable_observability: "1" in group_vars/all.yml
 #
 # Uncomment to override defaults (all have sensible defaults in docker-compose):
-# ENABLE_OBSERVABILITY=false
+# ENABLE_OBSERVABILITY=0
 # GRAFANA_ADMIN_USER=admin
 # GRAFANA_PORT=3002
 # VICTORIAMETRICS_RETENTION=30d
+# VICTORIALOGS_RETENTION=30d
 
 # Grafana admin password (required secret, no default)
 # Used by: grafana service
 GRAFANA_ADMIN_PASSWORD=
+
+# Grafana OIDC client (required secret, no default)
+# Used by: keycloak-config service (creates grafana OIDC client), grafana service (OAuth)
+KC_GRAFANA_CLIENT_ID=grafana
+KC_GRAFANA_CLIENT_SECRET=
+
+# Grafana OAuth configuration (override defaults in docker-compose):
+# GF_AUTH_GENERIC_OAUTH_ENABLED=true
+# GF_AUTH_GENERIC_OAUTH_NAME=Keycloak
+# GF_AUTH_GENERIC_OAUTH_SCOPES=openid profile email
 
 # =============================================================================
 # SECTION 13: DOCKER SWARM MULTI-NODE (OPTIONAL)

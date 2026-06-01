@@ -13,8 +13,8 @@
 #
 # Exporters:
 #   - prometheusremotewrite (port 8428): exports OTel metrics to VictoriaMetrics
-#   - victoriatraces (port 10428): exports traces to VictoriaTraces via OTLP HTTP
-#   - otlphttp (port 9428): exports logs to VictoriaLogs via OTLP HTTP
+#   - otlphttp/victoriatraces (port 10428): exports traces to VictoriaTraces via OTLP HTTP
+#   - otlp_http (port 9428): exports logs to VictoriaLogs via OTLP HTTP
 #
 # Extensions:
 #   - health_check (port 13133): Docker healthcheck endpoint
@@ -48,7 +48,7 @@ processors:
     send_batch_size: 1024
     send_batch_max_size: 2048
   probabilistic_sampler:
-    sampling_percentage: ${OTEL_TRACES_SAMPLER_RATE:1.0}
+    sampling_percentage: ${OTEL_TRACES_SAMPLER_RATE}
 
 exporters:
   prometheusremotewrite:
@@ -63,13 +63,12 @@ exporters:
       max_interval: 30s
       max_elapsed_time: 300s
     timeout: 15s
-  victoriatraces:
-    traces_endpoint: http://victoriatraces:10428/insert/opentelemetry/v1/traces
+  otlphttp/victoriatraces:
+    endpoint: http://victoriatraces:10428/insert/opentelemetry
     sending_queue:
       enabled: true
       num_consumers: 10
       queue_size: 5000
-      storage: file
     retry_on_failure:
       enabled: true
       initial_interval: 5s
@@ -77,7 +76,7 @@ exporters:
       max_elapsed_time: 300s
     timeout: 15s
   otlp_http:
-    logs_endpoint: http://victorialogs:9428/insert/opentelemetry/v1/logs
+    endpoint: http://victorialogs:9428/insert/opentelemetry/v1/logs
     sending_queue:
       enabled: true
       num_consumers: 10
@@ -105,7 +104,7 @@ service:
         - probabilistic_sampler
         - batch
       exporters:
-        - victoriatraces
+        - otlphttp/victoriatraces
     logs:
       receivers:
         - fluent_forward

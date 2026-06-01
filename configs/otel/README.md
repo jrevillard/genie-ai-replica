@@ -21,7 +21,7 @@ Docker Container Logs (fluentd logging driver)
 
 Traces are exported to VictoriaTraces via OTLP HTTP. VictoriaTraces stores distributed traces and provides Jaeger Query Service JSON APIs for Grafana integration.
 
-**File-based sending queue**: The VictoriaTraces exporter uses persistent disk storage (`otel-queue` volume mounted at `/var/lib/otelcol`) to buffer traces when VictoriaTraces is temporarily unavailable. This prevents data loss during restarts or brief outages.
+**Sending queue**: The VictoriaTraces exporter uses an in-memory sending queue to buffer traces when VictoriaTraces is temporarily unavailable. Note: the OTel Collector's file-based queue (`storage: file`) requires the `file_storage` extension which is not available in the distroless Collector image. The queue is memory-only — traces queued at Collector restart are lost. The `otel-queue` volume is retained for future use when file-based queue support is added.
 
 **Sampling**: A `probabilistic_sampler` processor controls trace sampling rate. Default 100% (all traces stored) for MVP, configurable via `OTEL_TRACES_SAMPLER_RATE` env var (0.0-100.0).
 
@@ -62,7 +62,7 @@ Docker sends container stdout/stderr to the Collector's `fluent_forward` receive
 
 ### Exporters
 - **prometheusremotewrite** — Exports Prometheus-compatible metrics to VictoriaMetrics at `http://victoriametrics:8428/api/v1/write`
-- **victoriatraces** — Exports traces to VictoriaTraces at `http://victoriatraces:10428/insert/opentelemetry/v1/traces` with file-based sending queue and retry
+- **victoriatraces** — Exports traces to VictoriaTraces at `http://victoriatraces:10428/insert/opentelemetry/v1/traces` with in-memory sending queue and retry (protobuf encoding)
 - **otlp/http** — Exports logs to VictoriaLogs at `http://victorialogs:9428/insert/opentelemetry/v1/logs`
 
 ### Extensions
@@ -88,20 +88,22 @@ The `probabilistic_sampler` processor controls what percentage of traces are sto
 - `OTEL_TRACES_SAMPLER_RATE=1.0` — Store all traces (default, recommended for development)
 - `OTEL_TRACES_SAMPLER_RATE=0.1` — Store 10% of traces (recommended for high-volume production)
 
-## File-Based Sending Queue
+## Sending Queue
 
-The VictoriaTraces exporter uses a persistent file-based queue for resilience:
+The VictoriaTraces exporter uses an in-memory sending queue for resilience:
 
 | Setting | Value | Description |
 |---------|-------|-------------|
-| `storage` | file | Disk-backed queue (persists across Collector restarts) |
 | `num_consumers` | 10 | Concurrent senders |
 | `queue_size` | 5000 | Max queued batches |
 | `retry.initial_interval` | 5s | Initial retry delay |
 | `retry.max_interval` | 30s | Max retry delay |
 | `retry.max_elapsed_time` | 300s | Total retry budget |
+| `timeout` | 15s | Request timeout |
 
-The queue uses the `otel-queue` Docker volume mounted at `/var/lib/otelcol` on the Collector service.
+**Note:** File-based queue (`storage: file`) requires the `file_storage` extension which is not available in the distroless Collector image. The `otel-queue` volume is mounted at `/var/lib/otelcol` for future use.
+
+**Note:** VictoriaTraces v0.9.1 only supports **protobuf** encoding for OTLP ingestion. JSON payloads are silently accepted (HTTP 200) but discarded. The OTel Collector uses protobuf by default.
 
 ## Customization
 

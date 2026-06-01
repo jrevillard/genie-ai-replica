@@ -21,8 +21,12 @@ const traceFormat = format((info) => {
 });
 
 // Default log format
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+const logFormat = format.printf(({ level, message, timestamp, trace_id, span_id }) => {
+  const base = `${timestamp} [${level.toUpperCase()}]: ${message}`;
+  if (trace_id && trace_id !== '00000000000000000000000000000000') {
+    return `${base} trace_id="${trace_id}" span_id="${span_id}"`;
+  }
+  return base;
 });
 
 // Default configuration for the logger

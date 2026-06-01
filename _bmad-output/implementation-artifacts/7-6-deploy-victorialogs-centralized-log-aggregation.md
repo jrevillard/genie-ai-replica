@@ -4,7 +4,7 @@ baseline_commit: b0359d4b35f8259e5c384fa24f6bcef7f3051c96
 
 # Story 7.6: Deploy VictoriaLogs for Centralized Log Aggregation
 
-Status: review
+Status: done
 
 ## Story
 
@@ -525,3 +525,16 @@ Claude Opus 4.7 (glm-5-turbo)
 - 2026-05-29: Deployment test — fixed VictoriaLogs image (v1.4.0→v1.50.0), ENABLE_OBSERVABILITY type (true→1), replaced filelog with fluent_forward receiver (no root required), added fluentd logging driver to all services, Collector global mode without placement constraint (multi-node compatible)
 
 ### Review Findings
+
+- [x] [Review][Patch] trace_id appended to log printf — Fixed: `logFormat` now appends `trace_id="..." span_id="..."` when active OTel span exists. Zero trace_id (no span) produces original format unchanged. Backward-compatible with logs-service.js parser. [components/shared/lib/logger.js:24-31]
+- [x] [Review][Patch] Grafana OAuth restricted to realm admins — Fixed: added `roles` scope + `role_attribute_path` JMESPath expression mapping Keycloak `admin` realm role to Grafana Admin. Non-admin users get Viewer role. [docker-compose.yaml:1426-1427]
+- [x] [Review][Patch] KC_PUBLIC_ORIGIN consumed without default in Grafana — Fixed during review: replaced `${KC_PUBLIC_ORIGIN}` with inline `https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}` pattern matching all other services. [docker-compose.yaml:1429-1431]
+- [x] [Review][Defer] Fluentd driver drops logs when Collector is down [docker-compose.yaml:68-75] — deferred, inherent tradeoff; dual logging keeps docker logs functional
+- [x] [Review][Defer] CSP headers may block Grafana WebSocket [api-gateway-solution/nginx/conf/default.conf.template] — deferred, needs runtime verification
+- [x] [Review][Defer] OTel Collector global mode without resource limits [docker-compose.yaml] — deferred, operational tuning for multi-node
+- [x] [Review][Defer] VictoriaTraces datasource reference in vlogs-datasource.yml [configs/grafana/provisioning/datasources/vlogs-datasource.yml] — deferred, intentional per AC10, prepared for story 7.7
+- [x] [Review][Defer] Volume backup/cleanup strategy for VictoriaLogs [docker-compose.yaml] — deferred, operational concern
+- [x] [Review][Defer] Dashboard variable refresh 2s too aggressive [configs/grafana/provisioning/dashboards/service-logs.json] — deferred, operational tuning
+- [x] [Review][Defer] Dashboard _stream_ shows genie. prefix (UX) [configs/grafana/provisioning/dashboards/service-logs.json] — deferred, cosmetic; filter works but dropdown shows genie.backend instead of backend
+- [x] [Review][Defer] ENABLE_OBSERVABILITY type not enforceable in YAML [env] — deferred, documented in env file (MUST be 0 or 1)
+- [x] [Review][Defer] Structured JSON logging migration — deferred to dedicated story. Analysis: requires rewriting logs-service.js (3 regex parsers), updating LogSearchDialog.test.js, logger-functions.test.js, AdminDashboard.vue parseLogMessage(). Full impact documented in deferred-work.md.

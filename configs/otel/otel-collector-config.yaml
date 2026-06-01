@@ -12,7 +12,7 @@
 #
 # Exporters:
 #   - prometheusremotewrite (port 8428): exports OTel metrics to VictoriaMetrics
-#   - otlp/http (port 9428): exports logs to VictoriaLogs via OTLP HTTP
+#   - otlphttp (port 9428): exports logs to VictoriaLogs via OTLP HTTP
 #   - debug: logs traces to collector stdout (debugging / stdout aggregation)
 #
 # Extensions:
@@ -21,7 +21,7 @@
 # Pipeline:
 #   metrics: otlp → batch → prometheusremotewrite
 #   traces:  otlp → batch → debug
-#   logs:    fluent_forward → batch → otlp/http
+#   logs:    fluent_forward → batch → otlphttp
 #
 # Note: Docker services use the fluentd logging driver (driver: fluentd)
 # configured in docker-compose.yaml. Docker sends container stdout/stderr to
@@ -62,7 +62,7 @@ exporters:
     timeout: 15s
   debug:
     verbosity: basic
-  otlp/http:
+  otlp_http:
     logs_endpoint: http://victorialogs:9428/insert/opentelemetry/v1/logs
     sending_queue:
       enabled: true
@@ -97,4 +97,4 @@ service:
       processors:
         - batch
       exporters:
-        - otlp/http
+        - otlp_http

@@ -1,30 +1,22 @@
 {
   "annotations": {
-    "list": [
-      {
-        "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "name": "Annotations & Alerts",
-        "type": "dashboard"
-      }
-    ]
+    "list": []
   },
-  "description": "GENIE.AI Service Logs — centralized log viewer with filters for service name, log level, and trace_id",
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 1,
+  "graphTooltip": 0,
   "id": null,
   "links": [],
+  "liveNow": false,
   "panels": [
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "title": "Service Logs",
       "type": "row"
@@ -34,12 +26,17 @@
         "type": "victoriametrics-logs-datasource",
         "uid": "${datasource}"
       },
-      "gridPos": { "h": 20, "w": 24, "x": 0, "y": 1 },
+      "gridPos": {
+        "h": 20,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
       "id": 2,
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": true,
-        "preformatted": true,
+        "preformatted": false,
         "showLabels": false,
         "showTime": true,
         "sortOrder": "Descending",
@@ -51,7 +48,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "${datasource}"
           },
-          "expr": "_stream_!=\"\" AND _stream_=\"$service\" AND log=~\"\\\\[$level\\\\]\"$filter_trace_id",
+          "expr": "container_name:~\"$service\" _msg:~\"$level\" $filter",
           "refId": "A"
         }
       ],
@@ -59,8 +56,14 @@
       "type": "logs"
     }
   ],
-  "schemaVersion": 39,
-  "tags": ["genie-ai", "observability", "logs"],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "genieai",
+    "observability",
+    "logs"
+  ],
   "templating": {
     "list": [
       {
@@ -79,77 +82,128 @@
         "type": "datasource"
       },
       {
-        "current": {},
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
         "datasource": {
           "type": "victoriametrics-logs-datasource",
           "uid": "${datasource}"
         },
-        "definition": "",
         "hide": 0,
         "includeAll": true,
         "label": "Service",
         "multi": false,
         "name": "service",
         "options": [],
-        "query": "_stream_:~\".*\"",
+        "query": {
+          "type": "fieldValue",
+          "field": "container_name",
+          "query": "*"
+        },
         "refresh": 2,
-        "regex": "",
+        "regex": ".*-([a-z]+(?:-[a-z]+)*)-\\d$",
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
       },
       {
-        "current": { "selected": true, "text": "All", "value": "$__all" },
-        "datasource": {
-          "type": "victoriametrics-logs-datasource",
-          "uid": "${datasource}"
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
         },
-        "definition": "",
         "hide": 0,
         "includeAll": true,
-        "label": "Log Level",
+        "label": "Level",
         "multi": false,
         "name": "level",
         "options": [
-          { "selected": false, "text": "ERROR", "value": "ERROR" },
-          { "selected": false, "text": "WARN", "value": "WARN" },
-          { "selected": false, "text": "INFO", "value": "INFO" },
-          { "selected": false, "text": "DEBUG", "value": "DEBUG" }
+          {
+            "selected": false,
+            "text": "ERROR",
+            "value": "ERROR"
+          },
+          {
+            "selected": false,
+            "text": "WARN",
+            "value": "WARN"
+          },
+          {
+            "selected": false,
+            "text": "INFO",
+            "value": "INFO"
+          },
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          }
         ],
-        "query": "",
-        "refresh": 2,
-        "regex": "",
+        "query": "ERROR,WARN,INFO,DEBUG",
         "skipUrlSync": false,
-        "sort": 1,
         "type": "custom"
       },
       {
-        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
         "datasource": {
           "type": "victoriametrics-logs-datasource",
           "uid": "${datasource}"
         },
-        "definition": "",
         "hide": 0,
         "includeAll": true,
-        "includeAllValue": "",
         "label": "Trace ID",
         "multi": false,
         "name": "trace_id",
         "options": [],
-        "query": "_stream_:~\".*\"",
+        "query": {
+          "type": "fieldValue",
+          "field": "_msg",
+          "query": "_msg:~\"trace_id=\""
+        },
         "refresh": 2,
-        "regex": "/.*trace_id=\"([^\"]+)\".*/",
+        "regex": ".*trace_id=\"([^\"]+)\".*",
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "hide": 0,
+        "label": "Filter",
+        "name": "filter",
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
       }
     ]
   },
-  "time": { "from": "now-1h", "to": "now" },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "timepicker": {},
-  "timezone": "",
+  "timezone": "browser",
   "title": "Service Logs",
-  "uid": "service-logs",
+  "uid": "genieai-service-logs",
   "version": 0
 }

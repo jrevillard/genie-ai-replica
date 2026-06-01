@@ -93,7 +93,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-genieai}"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-genieai}", "-d", "${POSTGRES_DB:-kong}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -1410,6 +1410,9 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_SECURITY_CSRF_TRUSTED_ORIGINS=https://${NGINX_PUBLIC_DOMAIN:-localhost}:${NGINX_HTTPS_PORT:-443}
+      - GF_SECURITY_COOKIE_SAMESITE=none
+      - GF_SECURITY_COOKIE_SECURE=true
       - GF_SERVER_HTTP_PORT=3000
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_AUTH_ANONYMOUS_ENABLED=false
@@ -1423,10 +1426,14 @@ services:
       - GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP=true
       - GF_AUTH_GENERIC_OAUTH_CLIENT_ID=${KC_GRAFANA_CLIENT_ID:-grafana}
       - GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=${KC_GRAFANA_CLIENT_SECRET}
-      - GF_AUTH_GENERIC_OAUTH_SCOPES=openid profile email
-      - GF_AUTH_GENERIC_OAUTH_AUTH_URL=${KC_PUBLIC_ORIGIN}/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/auth
-      - GF_AUTH_GENERIC_OAUTH_TOKEN_URL=${KC_PUBLIC_ORIGIN}/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/token
-      - GF_AUTH_GENERIC_OAUTH_API_URL=${KC_PUBLIC_ORIGIN}/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/userinfo
+      - GF_AUTH_GENERIC_OAUTH_SCOPES=openid profile email roles
+      - GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH=contains(realm_access.roles[*], 'admin') && 'Admin' || 'Viewer'
+      - GF_AUTH_GENERIC_OAUTH_USE_PKCE=false
+      # Auth URL: browser redirect (external, through nginx/Kong)
+      - GF_AUTH_GENERIC_OAUTH_AUTH_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/auth
+      # Token/API URLs: Grafana backend calls (internal Docker network, bypasses nginx)
+      - GF_AUTH_GENERIC_OAUTH_TOKEN_URL=http://keycloak:8080/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/token
+      - GF_AUTH_GENERIC_OAUTH_API_URL=http://keycloak:8080/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/userinfo
     volumes:
       - grafana-data:/var/lib/grafana
       - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro

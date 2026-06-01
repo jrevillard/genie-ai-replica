@@ -389,17 +389,20 @@ glm-5-turbo
 - OTel Collector config uses `${OTEL_TRACES_SAMPLER_RATE:1.0}` syntax (colon default, not dash) — matches OTel confmap provider convention
 - OTel confmap does NOT support `${VAR:-default}` or `${VAR:default}` syntax — use pure `${VAR}` only, default via docker-compose env
 - OTel Collector infers exporter type from key name prefix — custom names like `victoriatraces` are "unknown type". Use `otlphttp/name` format (type/name)
-- `otlphttp` exporter (deprecated alias) auto-appends `/v1/{signal}` to endpoint URL. So endpoint `http://victoriatraces:10428/insert/opentelemetry` resolves to `http://victoriatraces:10428/insert/opentelemetry/v1/traces` (correct for VictoriaTraces)
-- `otlp_http` (non-deprecated) exporter — tested but VictoriaTraces query returned 0 traces (vs `otlphttp` which worked). Keeping `otlphttp` until `otlp_http` behavior is verified in a future story
-- File-based `sending_queue.storage: file` requires `file_storage` extension configured — NOT available in distroless Collector image. Queue is memory-only (trade-off from AC3)
-- VictoriaTraces v0.9.1 OTLP endpoint only supports **protobuf** encoding, NOT JSON. JSON payloads are silently accepted (HTTP 200) but discarded. OTel Collector uses protobuf by default, so the Collector→VictoriaTraces path works correctly
+- `otlphttp` and `otlp_http` exporters are the SAME component — same behavior, same endpoint URL construction (`endpoint` + `/v1/{signal}`). The deprecated alias issues a warning at startup; `otlp_http` is the canonical name
+- Both auto-append `/v1/{signal}` to the endpoint URL. So endpoint `http://victoriatraces:10428/insert/opentelemetry` → `http://victoriatraces:10428/insert/opentelemetry/v1/traces`
+- File-based `sending_queue.storage: file` requires `file_storage` extension configured in Collector config + service.extensions. Available in otelcol-contrib distroless image
+- `file_storage` directory must exist and be writable by Collector process (UID 10001). Requires init container (`otel-collector-init`) to create directory with `chown 10001:10001` before Collector starts
+- Init container runs in `mode: global` + `condition: none` for Swarm parity with Collector's global placement
+- VictoriaTraces v0.9.1 OTLP endpoint only supports **protobuf** encoding, NOT JSON. JSON payloads silently accepted (HTTP 200) but discarded
 - VictoriaTraces Jaeger service query (`/select/jaeger/api/traces?service=X`) may have indexing delay. Trace query by traceID (`/select/jaeger/api/traces/{traceID}`) returns immediately
 
 ### Completion Notes List
 
 - ✅ VictoriaTraces service added to docker-compose.yaml following VictoriaLogs dual-mode pattern exactly
-- ✅ OTel Collector traces pipeline: debug → probabilistic_sampler → batch → victoriatraces (otlphttp with file-based queue)
-- ✅ File-based sending_queue on Collector: otel-queue volume at /var/lib/otelcol for resilience
+- ✅ OTel Collector traces pipeline: debug → probabilistic_sampler → batch → otlp_http/victoriatraces (non-deprecated exporter)
+- ✅ File-based sending_queue on Collector: file_storage extension + otel-queue volume at /var/lib/otelcol
+- ✅ Init container (otel-collector-init) for volume permission setup: global mode for Swarm, depends_on for compose
 - ✅ Grafana Jaeger datasource provisioned with uid=victoriatraces (matches vlogs-datasource.yml derivedFields reference)
 - ✅ Trace Explorer dashboard created with trace search panel and service overview (metric-based)
 - ✅ "View Traces" link panel added to service-health.json dashboard
@@ -417,7 +420,7 @@ glm-5-turbo
 
 | File | Action |
 |------|--------|
-| `docker-compose.yaml` | Modified (VictoriaTraces service, OTel Collector env var, otel-queue volume, vtraces-data volume, Grafana depends_on victoriaTraces) |
+| `docker-compose.yaml` | Modified (VictoriaTraces service, OTel Collector env var, otel-queue volume, vtraces-data volume, otel-collector-init service, Grafana depends_on victoriaTraces) |
 | `configs/otel/otel-collector-config.yaml` | Modified (victoriatraces exporter, probabilistic_sampler, traces pipeline update, debug exporter removed) |
 | `configs/otel/README.md` | Modified (traces pipeline docs, sampling docs, sending_queue docs) |
 | `configs/grafana/provisioning/datasources/vtraces-datasource.yml` | Created (Jaeger datasource pointing to VictoriaTraces) |
@@ -426,10 +429,12 @@ glm-5-turbo
 | `env` | Modified (VICTORIATRACES_RETENTION, OTEL_TRACES_SAMPLER_RATE in Section 12C) |
 | `deploy/ansible/group_vars/all.yml` | Modified (victoriatraces_retention: "30d") |
 | `deploy/ansible/templates/env.j2` | Modified (VICTORIATRACES_RETENTION in Section 12C) |
+| `deploy/ansible/deploy.yml` | Modified (otel-collector-init added to init service exclusion list for Swarm healthcheck) |
 | `CLAUDE.md` | Modified (observability section, deployment architecture diagram, config variables) |
 | `.claude/rules/ENVIRONMENT.md` | Modified (VictoriaTraces port 10428 in observability ports table) |
 
 ### Change Log
 
 - 2026-06-01: Implemented VictoriaTraces distributed trace storage (all 14 ACs satisfied, 9 tasks completed)
-- 2026-06-01: Deployment test passed — all 15 services running, end-to-end trace pipeline verified (Collector → VictoriaTraces protobuf → Jaeger Query API). Fixed OTel config issues: exporter type inference, env var syntax, file-based queue limitation, protobuf-only requirement.
+- 2026-06-01: Deployment test passed — all 15 services running, end-to-end trace pipeline verified (Collector → VictoriaTraces protobuf → Jaeger Query API). Fixed OTel config issues: exporter type inference, env var syntax, file_storage extension init container, protobuf-only requirement.
+- 2026-06-01: Root cause fixes — switched to `otlp_http` exporter (non-deprecated), added `file_storage` extension with init container for volume permissions (UID 10001), added init service to Ansible healthcheck exclusion list.

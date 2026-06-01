@@ -21,7 +21,7 @@ Docker Container Logs (fluentd logging driver)
 
 Traces are exported to VictoriaTraces via OTLP HTTP. VictoriaTraces stores distributed traces and provides Jaeger Query Service JSON APIs for Grafana integration.
 
-**Sending queue**: The VictoriaTraces exporter uses an in-memory sending queue to buffer traces when VictoriaTraces is temporarily unavailable. Note: the OTel Collector's file-based queue (`storage: file`) requires the `file_storage` extension which is not available in the distroless Collector image. The queue is memory-only — traces queued at Collector restart are lost. The `otel-queue` volume is retained for future use when file-based queue support is added.
+**Sending queue**: The VictoriaTraces exporter uses a file-based sending queue persisted to the `otel-queue` volume (`/var/lib/otelcol/file_storage/victoriatraces`). A one-shot `otel-collector-init` container sets correct volume ownership for the nonroot Collector process (UID 10001). In compose mode, ordering is ensured via `depends_on`; in Swarm mode, the Collector's restart policy handles the startup race.
 
 **Sampling**: A `probabilistic_sampler` processor controls trace sampling rate. Default 100% (all traces stored) for MVP, configurable via `OTEL_TRACES_SAMPLER_RATE` env var (0.0-100.0).
 
@@ -62,7 +62,7 @@ Docker sends container stdout/stderr to the Collector's `fluent_forward` receive
 
 ### Exporters
 - **prometheusremotewrite** — Exports Prometheus-compatible metrics to VictoriaMetrics at `http://victoriametrics:8428/api/v1/write`
-- **victoriatraces** — Exports traces to VictoriaTraces at `http://victoriatraces:10428/insert/opentelemetry/v1/traces` with in-memory sending queue and retry (protobuf encoding)
+- **otlp_http/victoriatraces** — Exports traces to VictoriaTraces at `http://victoriatraces:10428/insert/opentelemetry/v1/traces` with file-based sending queue and retry (protobuf encoding)
 - **otlp/http** — Exports logs to VictoriaLogs at `http://victorialogs:9428/insert/opentelemetry/v1/logs`
 
 ### Extensions
@@ -90,10 +90,11 @@ The `probabilistic_sampler` processor controls what percentage of traces are sto
 
 ## Sending Queue
 
-The VictoriaTraces exporter uses an in-memory sending queue for resilience:
+The VictoriaTraces exporter uses a file-based sending queue for resilience:
 
 | Setting | Value | Description |
 |---------|-------|-------------|
+| `storage` | `file_storage/victoriatraces` | File-backed queue (persists across Collector restarts) |
 | `num_consumers` | 10 | Concurrent senders |
 | `queue_size` | 5000 | Max queued batches |
 | `retry.initial_interval` | 5s | Initial retry delay |
@@ -101,7 +102,12 @@ The VictoriaTraces exporter uses an in-memory sending queue for resilience:
 | `retry.max_elapsed_time` | 300s | Total retry budget |
 | `timeout` | 15s | Request timeout |
 
-**Note:** File-based queue (`storage: file`) requires the `file_storage` extension which is not available in the distroless Collector image. The `otel-queue` volume is mounted at `/var/lib/otelcol` for future use.
+The queue uses the `file_storage/victoriatraces` extension which writes to the `otel-queue` Docker volume mounted at `/var/lib/otelcol`. A one-shot init container (`otel-collector-init`) creates the directory structure with correct ownership (UID 10001) before the Collector starts.
+
+**Compose mode:** The Collector waits for the init container via `depends_on: condition: service_completed_successfully`.
+**Swarm mode:** Ansible removes `depends_on` — the Collector's `restart_policy: on-failure` handles the race condition. The init container runs in `mode: global` with `restart_policy: condition: none` (one-shot on every node).
+
+**Note:** VictoriaTraces v0.9.1 only supports **protobuf** encoding for OTLP ingestion. JSON payloads are silently accepted (HTTP 200) but discarded. The OTel Collector uses protobuf by default.
 
 **Note:** VictoriaTraces v0.9.1 only supports **protobuf** encoding for OTLP ingestion. JSON payloads are silently accepted (HTTP 200) but discarded. The OTel Collector uses protobuf by default.
 

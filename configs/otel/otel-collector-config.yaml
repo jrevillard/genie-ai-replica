@@ -13,16 +13,17 @@
 #
 # Exporters:
 #   - prometheusremotewrite (port 8428): exports OTel metrics to VictoriaMetrics
-#   - otlphttp/victoriatraces (port 10428): exports traces to VictoriaTraces via OTLP HTTP
+#   - otlp_http/victoriatraces (port 10428): exports traces to VictoriaTraces via OTLP HTTP
 #   - otlp_http (port 9428): exports logs to VictoriaLogs via OTLP HTTP
 #
 # Extensions:
 #   - health_check (port 13133): Docker healthcheck endpoint
+#   - file_storage (persistent queue for trace export resilience)
 #
 # Pipeline:
 #   metrics: otlp → batch → prometheusremotewrite
 #   traces:  otlp → probabilistic_sampler → batch → victoriatraces
-#   logs:    fluent_forward → batch → otlphttp
+#   logs:    fluent_forward → batch → otlp_http
 #
 # Note: Docker services use the fluentd logging driver (driver: fluentd)
 # configured in docker-compose.yaml. Docker sends container stdout/stderr to
@@ -33,6 +34,9 @@
 extensions:
   health_check:
     endpoint: 0.0.0.0:13133
+  file_storage/victoriatraces:
+    directory: /var/lib/otelcol/file_storage/victoriatraces
+    timeout: 10s
 
 receivers:
   otlp:
@@ -63,12 +67,13 @@ exporters:
       max_interval: 30s
       max_elapsed_time: 300s
     timeout: 15s
-  otlphttp/victoriatraces:
+  otlp_http/victoriatraces:
     endpoint: http://victoriatraces:10428/insert/opentelemetry
     sending_queue:
       enabled: true
       num_consumers: 10
       queue_size: 5000
+      storage: file_storage/victoriatraces
     retry_on_failure:
       enabled: true
       initial_interval: 5s
@@ -89,6 +94,7 @@ exporters:
 service:
   extensions:
     - health_check
+    - file_storage/victoriatraces
   pipelines:
     metrics:
       receivers:
@@ -104,7 +110,7 @@ service:
         - probabilistic_sampler
         - batch
       exporters:
-        - otlphttp/victoriatraces
+        - otlp_http/victoriatraces
     logs:
       receivers:
         - fluent_forward

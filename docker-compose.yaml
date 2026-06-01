@@ -1316,6 +1316,26 @@ services:
   #   Docker Swarm:   ENABLE_OBSERVABILITY=1 in .env
   # ===========================================================================
 
+  # One-shot init container: sets otel-queue volume ownership for the nonroot
+  # Collector process (UID 10001). Runs before otel-collector in compose mode.
+  # In Swarm mode, depends_on is removed by Ansible — the Collector's
+  # restart policy handles the race condition until init completes.
+  otel-collector-init:
+    profiles: [observability]
+    image: busybox:latest
+    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && chown -R 10001:10001 /var/lib/otelcol"]
+    volumes:
+      - otel-queue:/var/lib/otelcol
+    networks:
+      - genieai_network
+    deploy:
+      # Global mode: runs once on every Swarm node (matches otel-collector's
+      # global placement) to set volume permissions before Collector starts.
+      # In compose mode, depends_on ensures ordering instead.
+      mode: global
+      restart_policy:
+        condition: none
+
   otel-collector:
     profiles: [observability]
     restart: unless-stopped
@@ -1332,6 +1352,9 @@ services:
     volumes:
       - ./configs/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
       - otel-queue:/var/lib/otelcol
+    depends_on:
+      otel-collector-init:
+        condition: service_completed_successfully
     networks:
       - genieai_network
     deploy:

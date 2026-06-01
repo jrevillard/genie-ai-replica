@@ -698,6 +698,7 @@
         | reject('search', 'postgres-init')
         | reject('search', 'keycloak-config')
         | reject('search', 'db-migrations')
+        | reject('search', 'otel-collector-init')
         | reject('search', '0/0')
         | select('search', '0/')
         | length == 0

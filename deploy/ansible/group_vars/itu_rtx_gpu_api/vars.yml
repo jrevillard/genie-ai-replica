@@ -1,0 +1,7 @@
+---
+# ITU RTX GPU API Node configuration
+# Non-secret variables for the GPU node on 10.0.0.110
+
+gpu_public_domain: 10.0.0.110
+
+certbot_email: admin@assembly.govstack.global

@@ -18,9 +18,9 @@ services:
     restart: unless-stopped
     image: {{ vllm_llm_image | default('vllm/vllm-openai:latest') }}
     command: >
-      --model {{ vllm_llm_model_id | default('meta-llama/Meta-Llama-3.1-8B-Instruct') }}
+      --model {{ vllm_llm_model_id | default('ibm-granite/granite-3.3-2b-instruct') }}
       --gpu_memory_utilization {{ vllm_gpu_utilization | default('0.4') }}
-      --served-model-name {{ vllm_llm_model_id | default('meta-llama/Meta-Llama-3.1-8B-Instruct') }}
+      --served-model-name {{ vllm_llm_model_id | default('ibm-granite/granite-3.3-2b-instruct') }}
       --max_model_len {{ vllm_max_model_len | default('2048') }}
       --max_num_seqs {{ vllm_max_num_seqs | default('64') }}
       --dtype={{ vllm_dtype | default('half') }}

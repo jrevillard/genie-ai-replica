@@ -149,6 +149,29 @@
         - "{{ gpu_data_dir }}"
         - "{{ gpu_data_dir }}/huggingface"
         - "{{ gpu_generated_dir }}"
+        - ssl
+
+    - name: Generate self-signed SSL certificate
+      ansible.builtin.command:
+        cmd: >
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048
+          -keyout {{ gpu_deploy_dir }}/ssl/server.key
+          -out {{ gpu_deploy_dir }}/ssl/server.crt
+          -subj "/CN={{ gpu_public_domain }}"
+        creates: "{{ gpu_deploy_dir }}/ssl/server.crt"
+      register: gpu_self_signed
+
+    - name: Copy SSL certificates to Docker volume
+      ansible.builtin.copy:
+        src: "{{ gpu_deploy_dir }}/ssl/{{ item }}"
+        dest: "{{ gpu_deploy_dir }}/ssl/{{ item }}"
+        mode: '0644'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        remote_src: true
+      loop:
+        - server.crt
+        - server.key
 
     - name: Render nginx proxy configuration
       ansible.builtin.template:

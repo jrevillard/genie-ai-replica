@@ -82,11 +82,11 @@ The `probabilistic_sampler` processor controls what percentage of traces are sto
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OTEL_TRACES_SAMPLER_RATE` | `1.0` | Sampling rate (0.0 = 0%, 1.0 = 100%) |
+| `OTEL_TRACES_SAMPLER_RATE` | `100.0` | Sampling percentage (0.0 = 0%, 100.0 = 100%) |
 
 **Examples:**
-- `OTEL_TRACES_SAMPLER_RATE=1.0` — Store all traces (default, recommended for development)
-- `OTEL_TRACES_SAMPLER_RATE=0.1` — Store 10% of traces (recommended for high-volume production)
+- `OTEL_TRACES_SAMPLER_RATE=100.0` — Store all traces (default, recommended for development)
+- `OTEL_TRACES_SAMPLER_RATE=10.0` — Store 10% of traces (recommended for high-volume production)
 
 ## Sending Queue
 

@@ -1348,7 +1348,7 @@ services:
     # Distroless image — no shell/wget for Docker healthcheck.
     # Rely on restart policy + health_check extension (port 13133) for programmatic probes.
     environment:
-      - OTEL_TRACES_SAMPLER_RATE=${OTEL_TRACES_SAMPLER_RATE:-1.0}
+      - OTEL_TRACES_SAMPLER_RATE=${OTEL_TRACES_SAMPLER_RATE:-100.0}
     volumes:
       - ./configs/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
       - otel-queue:/var/lib/otelcol

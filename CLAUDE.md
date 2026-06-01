@@ -251,7 +251,7 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `VICTORIAMETRICS_RETENTION` - Metric retention period (default: 30d)
 - `VICTORIALOGS_RETENTION` - Log retention period (default: 30d)
 - `VICTORIATRACES_RETENTION` - Trace retention period (default: 30d)
-- `OTEL_TRACES_SAMPLER_RATE` - Trace sampling rate (default: 1.0 = 100%)
+- `OTEL_TRACES_SAMPLER_RATE` - Trace sampling percentage (default: 100.0 = 100%)
 
 **Prompts (Two-tier priority):**
 

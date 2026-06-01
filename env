@@ -565,7 +565,7 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 # VICTORIAMETRICS_RETENTION=30d
 # VICTORIALOGS_RETENTION=30d
 # VICTORIATRACES_RETENTION=30d
-# OTEL_TRACES_SAMPLER_RATE=1.0
+# OTEL_TRACES_SAMPLER_RATE=100.0
 
 # Grafana admin password (required secret, no default)
 # Used by: grafana service

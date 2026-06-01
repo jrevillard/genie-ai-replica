@@ -249,6 +249,9 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `GRAFANA_ADMIN_PASSWORD` - Grafana admin password (required when enabled)
 - `GRAFANA_PORT` - Grafana host port (default: 3002, avoids Backend port conflict)
 - `VICTORIAMETRICS_RETENTION` - Metric retention period (default: 30d)
+- `VICTORIALOGS_RETENTION` - Log retention period (default: 30d)
+- `VICTORIATRACES_RETENTION` - Trace retention period (default: 30d)
+- `OTEL_TRACES_SAMPLER_RATE` - Trace sampling rate (default: 1.0 = 100%)
 
 **Prompts (Two-tier priority):**
 
@@ -302,6 +305,8 @@ All services use the **fluentd logging driver** to forward container logs to the
 - `GRAFANA_ADMIN_USER` — Grafana admin username (default: admin)
 - `GRAFANA_ADMIN_PASSWORD` — Grafana admin password (required when enabled)
 - `VICTORIALOGS_RETENTION` — Log retention period (default: 30d)
+- `VICTORIATRACES_RETENTION` — Trace retention period (default: 30d)
+- `OTEL_TRACES_SAMPLER_RATE` — Trace sampling rate (default: 1.0 = 100%)
 - `KC_GRAFANA_CLIENT_ID` — Keycloak OIDC client ID for Grafana SSO (default: grafana)
 - `KC_GRAFANA_CLIENT_SECRET` — Keycloak OIDC client secret (required when enabled)
 - `VICTORIAMETRICS_RETENTION` — Metric retention period (default: 30d)
@@ -360,6 +365,7 @@ docker-compose.yaml (root - single source of truth, dual-mode)
     ├── OTel Collector (trace/metric/log collection)
     ├── VictoriaMetrics (metric storage)
     ├── VictoriaLogs (log storage)
+    ├── VictoriaTraces (distributed trace storage)
     └── Grafana (dashboards, via Kong /grafana/ with Keycloak SSO)
 ```
 

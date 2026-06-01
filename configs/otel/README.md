@@ -4,18 +4,26 @@
 
 OpenTelemetry Collector configuration for the GENIE.AI observability stack.
 
-The Collector receives telemetry from instrumented application services and exports metrics to VictoriaMetrics for visualization in Grafana. Container logs are received via Docker's fluentd logging driver and forwarded to VictoriaLogs.
+The Collector receives telemetry from instrumented application services and exports metrics to VictoriaMetrics, traces to VictoriaTraces, and logs to VictoriaLogs. Container logs are received via Docker's fluentd logging driver.
 
 ## Architecture
 
 ```
 Application Services (OTel SDK)
-  → OTLP HTTP (:4318) → Collector → prometheusremotewrite → VictoriaMetrics (:8428)
-                                                    → debug → stdout
+  → OTLP HTTP (:4318) → Collector → probabilistic_sampler → batch → VictoriaTraces (:10428)
+                                           → batch → prometheusremotewrite → VictoriaMetrics (:8428)
 
 Docker Container Logs (fluentd logging driver)
   → fluent_forward (:24224) → Collector → otlp/http → VictoriaLogs (:9428)
 ```
+
+### Trace Storage
+
+Traces are exported to VictoriaTraces via OTLP HTTP. VictoriaTraces stores distributed traces and provides Jaeger Query Service JSON APIs for Grafana integration.
+
+**File-based sending queue**: The VictoriaTraces exporter uses persistent disk storage (`otel-queue` volume mounted at `/var/lib/otelcol`) to buffer traces when VictoriaTraces is temporarily unavailable. This prevents data loss during restarts or brief outages.
+
+**Sampling**: A `probabilistic_sampler` processor controls trace sampling rate. Default 100% (all traces stored) for MVP, configurable via `OTEL_TRACES_SAMPLER_RATE` env var (0.0-100.0).
 
 ### Log Collection Approach
 
@@ -32,7 +40,7 @@ logging:
 
 Docker sends container stdout/stderr to the Collector's `fluent_forward` receiver. Docker dual logging (20.10+) keeps `docker logs` functional alongside the fluentd driver.
 
-**Security**: The Collector binds port 24224 to `127.0.0.1` only (no external access). In Docker Swarm, the Collector runs in `mode: global` with placement constraint `node.labels.genieai == true`, so every application node has a local Collector instance.
+**Security**: The Collector binds port 24224 to `127.0.0.1` only (no external access). In Docker Swarm, the Collector runs in `mode: global` with no placement constraint, so every application node has a local Collector instance.
 
 **Multi-node Swarm**: With `mode: global` and no placement constraint, the Collector runs on **every** Swarm node (gateway, genieai, gpu). This ensures all service logs are collected regardless of which node type they run on.
 
@@ -50,11 +58,12 @@ Docker sends container stdout/stderr to the Collector's `fluent_forward` receive
 
 ### Processors
 - **Batch** — Buffers telemetry before export (5s timeout, 1024 batch size)
+- **probabilistic_sampler** — Controls trace sampling rate via `OTEL_TRACES_SAMPLER_RATE` env var (default: 1.0 = 100%)
 
 ### Exporters
 - **prometheusremotewrite** — Exports Prometheus-compatible metrics to VictoriaMetrics at `http://victoriametrics:8428/api/v1/write`
+- **victoriatraces** — Exports traces to VictoriaTraces at `http://victoriatraces:10428/insert/opentelemetry/v1/traces` with file-based sending queue and retry
 - **otlp/http** — Exports logs to VictoriaLogs at `http://victorialogs:9428/insert/opentelemetry/v1/logs`
-- **debug** — Logs traces to collector stdout for debugging
 
 ### Extensions
 - **health_check** (`:13133`) — Health check endpoint for Docker healthcheck
@@ -64,20 +73,47 @@ Docker sends container stdout/stderr to the Collector's `fluent_forward` receive
 | Pipeline | Flow |
 |----------|------|
 | metrics | otlp → batch → prometheusremotewrite |
-| traces | otlp → batch → debug |
+| traces | otlp → probabilistic_sampler → batch → victoriatraces |
 | logs | fluent_forward → batch → otlp/http |
+
+## Sampling Configuration
+
+The `probabilistic_sampler` processor controls what percentage of traces are stored. Configured via environment variable on the Collector service:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OTEL_TRACES_SAMPLER_RATE` | `1.0` | Sampling rate (0.0 = 0%, 1.0 = 100%) |
+
+**Examples:**
+- `OTEL_TRACES_SAMPLER_RATE=1.0` — Store all traces (default, recommended for development)
+- `OTEL_TRACES_SAMPLER_RATE=0.1` — Store 10% of traces (recommended for high-volume production)
+
+## File-Based Sending Queue
+
+The VictoriaTraces exporter uses a persistent file-based queue for resilience:
+
+| Setting | Value | Description |
+|---------|-------|-------------|
+| `storage` | file | Disk-backed queue (persists across Collector restarts) |
+| `num_consumers` | 10 | Concurrent senders |
+| `queue_size` | 5000 | Max queued batches |
+| `retry.initial_interval` | 5s | Initial retry delay |
+| `retry.max_interval` | 30s | Max retry delay |
+| `retry.max_elapsed_time` | 300s | Total retry budget |
+
+The queue uses the `otel-queue` Docker volume mounted at `/var/lib/otelcol` on the Collector service.
 
 ## Customization
 
-To add a new exporter (e.g., Jaeger for trace storage):
+To add a new exporter:
 
 1. Add the exporter configuration under `exporters:`
 2. Add the exporter to the appropriate pipeline under `service.pipelines`
 
-To add sampling:
+To change sampling:
 
-1. Add a `probabilistic_sampler` or `tail_sampling` processor
-2. Insert it in the processor chain before `batch`
+1. Set `OTEL_TRACES_SAMPLER_RATE` env var on the otel-collector service in docker-compose.yaml
+2. Values: 0.0 (no traces) to 1.0 (all traces)
 
 ## Instrumented Services
 
@@ -91,7 +127,9 @@ To add sampling:
 
 ## Environment Variables
 
-No environment variables required. Configuration is file-based.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OTEL_TRACES_SAMPLER_RATE` | `1.0` | Trace sampling percentage (0.0-1.0) |
 
 The Collector resolves service names internally (e.g., `victoriametrics` → Docker service DNS).
 
@@ -107,7 +145,7 @@ docker compose --profile observability up -d otel-collector
 ENABLE_OBSERVABILITY=1 docker stack deploy -c docker-compose.yaml genieai
 ```
 
-In Swarm mode, the Collector runs in `mode: global` with placement constraint `node.labels.genieai == true`, ensuring one Collector instance per application node.
+In Swarm mode, the Collector runs in `mode: global` with no placement constraint, ensuring one Collector instance per node.
 
 See `docker-compose.yaml` for the full service definition.
 

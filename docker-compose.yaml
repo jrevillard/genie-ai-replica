@@ -58,6 +58,8 @@ volumes:
   vm-data:
   grafana-data:
   vlogs-data:
+  vtraces-data:
+  otel-queue:
 
 # Fluentd logging driver configuration for centralized log aggregation.
 # All services forward stdout/stderr to the OTel Collector's fluentforward
@@ -1325,8 +1327,11 @@ services:
       - "127.0.0.1:24224:24224"
     # Distroless image — no shell/wget for Docker healthcheck.
     # Rely on restart policy + health_check extension (port 13133) for programmatic probes.
+    environment:
+      - OTEL_TRACES_SAMPLER_RATE=${OTEL_TRACES_SAMPLER_RATE:-1.0}
     volumes:
       - ./configs/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - otel-queue:/var/lib/otelcol
     networks:
       - genieai_network
     deploy:
@@ -1397,6 +1402,35 @@ services:
         delay: 5s
         max_attempts: 5
 
+  victoriatraces:
+    logging: *fluent-logging
+    profiles: [observability]
+    restart: unless-stopped
+    image: victoriametrics/victoria-traces:v0.9.1
+    command:
+      - "--storageDataPath=/var/lib/victoria-traces"
+      - "--retentionPeriod=${VICTORIATRACES_RETENTION:-30d}"
+      - "--httpListenAddr=:10428"
+    volumes:
+      - vtraces-data:/var/lib/victoria-traces
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:10428/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - genieai_network
+    deploy:
+      replicas: ${ENABLE_OBSERVABILITY:-0}
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+
   grafana:
     logging: *fluent-logging
     profiles: [observability]
@@ -1406,6 +1440,8 @@ services:
       victoriametrics:
         condition: service_healthy
       victorialogs:
+        condition: service_healthy
+      victoriatraces:
         condition: service_healthy
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}

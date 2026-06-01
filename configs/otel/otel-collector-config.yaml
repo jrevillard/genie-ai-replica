@@ -5,6 +5,7 @@
 # dataprep, reranker) and exports metrics to VictoriaMetrics.
 # Receives container logs via Docker fluentd logging driver and forwards to
 # VictoriaLogs.
+# Exports traces to VictoriaTraces for distributed trace storage and query.
 #
 # Receivers:
 #   - OTLP HTTP (port 4318): standard OTLP/HTTP from SDK auto-instrumentation
@@ -12,15 +13,15 @@
 #
 # Exporters:
 #   - prometheusremotewrite (port 8428): exports OTel metrics to VictoriaMetrics
+#   - victoriatraces (port 10428): exports traces to VictoriaTraces via OTLP HTTP
 #   - otlphttp (port 9428): exports logs to VictoriaLogs via OTLP HTTP
-#   - debug: logs traces to collector stdout (debugging / stdout aggregation)
 #
 # Extensions:
 #   - health_check (port 13133): Docker healthcheck endpoint
 #
 # Pipeline:
 #   metrics: otlp → batch → prometheusremotewrite
-#   traces:  otlp → batch → debug
+#   traces:  otlp → probabilistic_sampler → batch → victoriatraces
 #   logs:    fluent_forward → batch → otlphttp
 #
 # Note: Docker services use the fluentd logging driver (driver: fluentd)
@@ -46,6 +47,8 @@ processors:
     timeout: 5s
     send_batch_size: 1024
     send_batch_max_size: 2048
+  probabilistic_sampler:
+    sampling_percentage: ${OTEL_TRACES_SAMPLER_RATE:1.0}
 
 exporters:
   prometheusremotewrite:
@@ -60,8 +63,19 @@ exporters:
       max_interval: 30s
       max_elapsed_time: 300s
     timeout: 15s
-  debug:
-    verbosity: basic
+  victoriatraces:
+    traces_endpoint: http://victoriatraces:10428/insert/opentelemetry/v1/traces
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+      storage: file
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    timeout: 15s
   otlp_http:
     logs_endpoint: http://victorialogs:9428/insert/opentelemetry/v1/logs
     sending_queue:
@@ -88,9 +102,10 @@ service:
       receivers:
         - otlp
       processors:
+        - probabilistic_sampler
         - batch
       exporters:
-        - debug
+        - victoriatraces
     logs:
       receivers:
         - fluent_forward

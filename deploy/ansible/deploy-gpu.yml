@@ -15,7 +15,7 @@
 #   deploy   - Compose up, smoke tests
 
 - name: GPU Node - Detect environment
-  hosts: gpu_nodes
+  hosts: itu_rtx_gpu_api
   gather_facts: false
   tasks:
     - name: Display GPU node deployment target
@@ -23,14 +23,14 @@
         msg: "GPU Node: {{ inventory_hostname }} ({{ ansible_host }})"
 
 - name: GPU Node - Docker installation
-  hosts: gpu_nodes
+  hosts: itu_rtx_gpu_api
   tags: [install]
   become: true
   roles:
     - role: docker
 
 - name: GPU Node - NVIDIA Container Toolkit
-  hosts: gpu_nodes
+  hosts: itu_rtx_gpu_api
   tags: [install]
   become: true
   tasks:
@@ -123,7 +123,7 @@
         state: restarted
 
 - name: GPU Node - Project preparation and template rendering
-  hosts: gpu_nodes
+  hosts: itu_rtx_gpu_api
   tags: [prepare]
   become: true
   tasks:
@@ -134,7 +134,7 @@
           - gpu_api_keys is defined and gpu_api_keys | length > 0
         fail_msg: >-
           Missing required vault variable(s).
-          Edit group_vars/gpu.vault and set:
+          Edit group_vars/itu_rtx_gpu_api/vault.yml and set:
           hugging_face_hub_token, gpu_api_keys.
         quiet: true
 
@@ -176,7 +176,7 @@
         group: "{{ ansible_user }}"
 
 - name: GPU Node - Deploy services
-  hosts: gpu_nodes
+  hosts: itu_rtx_gpu_api
   tags: [deploy]
   become: true
   tasks:
@@ -207,7 +207,7 @@
         var: compose_deploy.stdout_lines
 
 - name: GPU Node - Smoke tests
-  hosts: gpu_nodes
+  hosts: itu_rtx_gpu_api
   tags: [deploy]
   become: true
   tasks:

@@ -47,6 +47,14 @@ jest.mock('@opentelemetry/resources', () => ({
   resourceFromAttributes: jest.fn().mockReturnValue({})
 }));
 
+jest.mock('@opentelemetry/exporter-metrics-otlp-http', () => ({
+  OTLPMetricExporter: jest.fn().mockImplementation(() => ({}))
+}));
+
+jest.mock('@opentelemetry/sdk-metrics', () => ({
+  PeriodicExportingMetricReader: jest.fn().mockImplementation(() => ({}))
+}));
+
 describe('tracing.js non-test branch', () => {
   const originalEnv = process.env.NODE_ENV;
   const originalExit = process.exit;

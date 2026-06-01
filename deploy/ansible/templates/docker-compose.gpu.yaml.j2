@@ -106,7 +106,7 @@ services:
 
   docling-serve:
     restart: unless-stopped
-    image: {{ docling_serve_image | default('ghcr.io/institute-of-data-science/docling-serve:latest') }}
+    image: {{ docling_serve_image | default('ghcr.io/ds4sd/docling-serve:latest') }}
     environment:
       - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}
     healthcheck:

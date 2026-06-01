@@ -108,7 +108,7 @@ vllm_llm_image: vllm/vllm-openai:latest
 vllm_translation_image: vllm/vllm-openai:v0.10.0
 tei_embedding_image: ghcr.io/huggingface/text-embeddings-inference:1.9.3
 tei_reranker_image: ghcr.io/huggingface/text-embeddings-inference:1.9.3
-docling_serve_image: ghcr.io/institute-of-data-science/docling-serve:latest
+docling_serve_image: ghcr.io/ds4sd/docling-serve:latest
 nginx_image: nginx:1.28-alpine
 
 vllm_llm_model_id: meta-llama/Meta-Llama-3.1-8B-Instruct

@@ -180,7 +180,7 @@
         mode: '0644'
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
-      notify: Restart nginx-gpu
+      notify: Reload nginx-gpu
 
     - name: Render API keys map
       ansible.builtin.template:
@@ -189,7 +189,7 @@
         mode: '0600'
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
-      notify: Restart nginx-gpu
+      notify: Reload nginx-gpu
       no_log: true
 
     - name: Render docker-compose.gpu.yaml from template
@@ -199,14 +199,14 @@
         mode: '0644'
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
-      notify: Restart nginx-gpu
 
   handlers:
-    - name: Restart nginx-gpu
+    - name: Reload nginx-gpu
       ansible.builtin.shell: >
-        docker compose -f {{ gpu_deploy_dir }}/docker-compose.gpu.yaml restart nginx-gpu
-      register: restart_nginx
-      changed_when: "'Restarting' in restart_nginx.stdout"
+        docker compose -f {{ gpu_deploy_dir }}/docker-compose.gpu.yaml exec -T nginx-gpu nginx -s reload
+      changed_when: true
+      # Silently skip if container not running yet (first deploy)
+      failed_when: false
 
 - name: GPU Node - Deploy services
   hosts: itu_rtx_gpu_api

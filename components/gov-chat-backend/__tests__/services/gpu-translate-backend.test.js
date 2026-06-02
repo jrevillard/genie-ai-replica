@@ -118,4 +118,43 @@ describe('GpuTranslateBackend', () => {
       expect(capturedOptions.path).toBe('/health');
     });
   });
+
+  describe('remote GPU node endpoint with path prefix', () => {
+    it('should prepend endpoint path to health check path', async () => {
+      process.env.VLLM_TRANSLATION_ENDPOINT = 'https://gpu-node.example.com/translation';
+      const instance = new GpuTranslateBackend();
+      await instance.healthCheck();
+      expect(capturedOptions.hostname).toBe('gpu-node.example.com');
+      expect(capturedOptions.port).toBe(443);
+      expect(capturedOptions.path).toBe('/translation/health');
+    });
+
+    it('should prepend endpoint path to model info path', async () => {
+      process.env.VLLM_TRANSLATION_ENDPOINT = 'https://gpu-node.example.com/translation';
+      mockResponseData = JSON.stringify({ data: [{ id: 'google/gemma-3-4b-it', max_model_len: 8192 }] });
+      const instance = new GpuTranslateBackend();
+      await instance.fetchModelInfo();
+      expect(capturedOptions.path).toBe('/translation/v1/models');
+    });
+
+    it('should prepend endpoint path to chat completions path', async () => {
+      process.env.VLLM_TRANSLATION_ENDPOINT = 'https://gpu-node.example.com/translation';
+      mockResponseData = JSON.stringify({
+        choices: [{ message: { content: 'traduit' } }]
+      });
+      const instance = new GpuTranslateBackend();
+      instance.initialized = true;
+      await instance.callVllmService({
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+      expect(capturedOptions.path).toBe('/translation/v1/chat/completions');
+    });
+
+    it('should strip trailing slash from endpoint path', async () => {
+      process.env.VLLM_TRANSLATION_ENDPOINT = 'https://gpu-node.example.com/translation/';
+      const instance = new GpuTranslateBackend();
+      await instance.healthCheck();
+      expect(capturedOptions.path).toBe('/translation/health');
+    });
+  });
 });

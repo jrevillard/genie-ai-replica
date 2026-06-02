@@ -692,6 +692,11 @@ KC_GRAFANA_CLIENT_SECRET=
 #   via sitecustomize.py — no volume mounts needed. Default: 0 (verify certs).
 #   When using Let's Encrypt or a recognized CA, leave at 0 (default).
 #
+# KEYCLOAK_SSL_SKIP_VERIFY=0
+#   Set to 1 to disable SSL certificate verification for dataprep's Keycloak
+#   service account token fetch. Required when Keycloak uses a self-signed
+#   certificate. Independent of OPEA_SSL_SKIP_VERIFY. Default: 0 (verify certs).
+#
 # OPEA_API_KEY=<key>
 #   API key injected into all outbound HTTP calls from OPEA services via
 #   X-API-Key header. Baked into Docker images via sitecustomize.py.

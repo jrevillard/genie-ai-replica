@@ -26,6 +26,22 @@ if _SSL_SKIP:
 
     ssl.create_default_context = lambda *a, **kw: _unverified
 
+    # aiohttp: ClientSession creates TCPConnector internally;
+    # patch the constructor to inject ssl=False into the connector.
+    try:
+        import aiohttp
+
+        _orig_session_init = aiohttp.ClientSession.__init__
+
+        def _patched_session_init(self, *args, **kwargs):
+            if "connector" not in kwargs:
+                kwargs["connector"] = aiohttp.TCPConnector(ssl=False)
+            return _orig_session_init(self, *args, **kwargs)
+
+        aiohttp.ClientSession.__init__ = _patched_session_init
+    except ImportError:
+        pass
+
 
 # --- API key header injection ---
 def _get_headers(kwargs):

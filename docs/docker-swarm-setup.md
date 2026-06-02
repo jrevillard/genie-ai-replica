@@ -795,6 +795,10 @@ override endpoints.
 via a runtime patch (`configs/ssl/sitecustomize.py`). Only use with self-signed
 certs. Omit if the GPU node uses Let's Encrypt or a public CA.
 
+`KEYCLOAK_SSL_SKIP_VERIFY=1` independently disables SSL verification for
+dataprep's Keycloak service account token fetch. Set this if Keycloak uses a
+self-signed certificate.
+
 `OPEA_API_KEY` injects an `X-API-Key` header into all outbound HTTP calls from
 OPEA services (httpx, aiohttp, requests). Typically set to the same value as
 `VLLM_API_KEY`. These vars are independent of `gpu_node_host`.

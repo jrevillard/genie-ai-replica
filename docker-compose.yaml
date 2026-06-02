@@ -975,6 +975,9 @@ services:
       VLLM_API_KEY: ${VLLM_API_KEY:-}
       OPEA_SSL_SKIP_VERIFY: ${OPEA_SSL_SKIP_VERIFY:-0}
       OPEA_API_KEY: ${OPEA_API_KEY:-}
+      KEYCLOAK_SSL_SKIP_VERIFY: ${KEYCLOAK_SSL_SKIP_VERIFY:-0}
+    extra_hosts:
+      - "localhost:host-gateway"
     networks:
       - genieai_network
     healthcheck:

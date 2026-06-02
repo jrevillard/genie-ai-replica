@@ -112,6 +112,11 @@ vllm_api_key: ""
 opea_ssl_skip_verify: ""
 opea_api_key: ""
 
+# Keycloak SSL verification (independent of OPEA settings)
+# Set to "1" when Keycloak uses a self-signed certificate.
+# Only affects dataprep's Keycloak service account token fetch.
+keycloak_ssl_skip_verify: ""
+
 vllm_llm_image: vllm/vllm-openai:latest
 vllm_translation_image: vllm/vllm-openai:v0.10.0
 tei_embedding_image: ghcr.io/huggingface/text-embeddings-inference:1.9.3

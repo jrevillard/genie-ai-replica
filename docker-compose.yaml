@@ -921,7 +921,7 @@ services:
       DATAPREP_COMPONENT_NAME: GENIE_DATAPREP_ARANGODB
       VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
-      TEI_EMBEDDING_ENDPOINT: http://tei:80
+      TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
       ARANGO_URL: http://arango-vector-db:8529
       ARANGO_DB: ${ARANGO_DB:-genie-ai}
@@ -1059,6 +1059,8 @@ services:
       RERANK_SERVER_PORT: 8000
       LLM_SERVER_HOST_IP: vllm
       LLM_SERVER_PORT: 8000
+      VLLM_LLM_ENDPOINT: ${VLLM_ENDPOINT:-}
+      VLLM_TRANSLATION_ENDPOINT: ${TRANSLATION_VLLM_ENDPOINT:-}
       GUARDRAIL_SERVICE_HOST_IP: guardrail
       GUARDRAIL_SERVICE_PORT: 9090
       TRANSLATION_SERVICE_HOST_IP: vllm-translation-guardrail
@@ -1070,6 +1072,7 @@ services:
       KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
+      OPENAI_API_KEY: ${VLLM_API_KEY:-}
     networks:
       - genieai_network
     healthcheck:

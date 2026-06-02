@@ -63,6 +63,20 @@ RERANK_SERVER_HOST_IP = os.getenv("RERANK_SERVER_HOST_IP", "0.0.0.0")
 RERANK_SERVER_PORT = int(os.getenv("RERANK_SERVER_PORT", 80))
 LLM_SERVER_HOST_IP = os.getenv("LLM_SERVER_HOST_IP", "0.0.0.0")
 LLM_SERVER_PORT = int(os.getenv("LLM_SERVER_PORT", 80))
+LLM_SERVER_PROTOCOL = "http"
+# When VLLM_LLM_ENDPOINT is set (e.g. https://gpu-host/llm for remote GPU node),
+# override host/port/protocol so MicroService constructs the correct URL.
+_VLLM_LLM_ENDPOINT = os.getenv("VLLM_LLM_ENDPOINT", "")
+if _VLLM_LLM_ENDPOINT:
+    from urllib.parse import urlparse
+
+    _parsed = urlparse(_VLLM_LLM_ENDPOINT)
+    LLM_SERVER_HOST_IP = _parsed.hostname or LLM_SERVER_HOST_IP
+    LLM_SERVER_PORT = _parsed.port or 443
+    LLM_SERVER_PROTOCOL = _parsed.scheme or "https"
+    LLM_SERVER_ENDPOINT_PREFIX = _parsed.path.rstrip("/") or ""
+else:
+    LLM_SERVER_ENDPOINT_PREFIX = ""
 LLM_MODEL = os.getenv("LLM_MODEL", "ibm-granite/granite-3.3-2b-instruct")
 LLM_TRANS_MODEL = os.getenv("LLM_TRANS_MODEL", "google/gemma-3-1b-it")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
@@ -909,8 +923,9 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
+            protocol=LLM_SERVER_PROTOCOL,
             api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -943,8 +958,9 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
+            protocol=LLM_SERVER_PROTOCOL,
             api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -985,7 +1001,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            endpoint="/v1/faqgen",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/faqgen",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -1031,8 +1048,9 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
+            protocol=LLM_SERVER_PROTOCOL,
             api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -1079,8 +1097,9 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
+            protocol=LLM_SERVER_PROTOCOL,
             api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )

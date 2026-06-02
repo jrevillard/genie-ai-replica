@@ -782,13 +782,22 @@ Set in the app node's `.env` (Section 14):
 GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
 GPU_MODEL_REPLICAS=0                # Skip local GPU containers (vllm, tei, etc.)
 VLLM_API_KEY=<your-api-key>         # API key from the GPU node administrator
-NODE_TLS_REJECT_UNAUTHORIZED=0      # If the GPU node uses a self-signed certificate
+OPEA_SSL_SKIP_VERIFY=1              # If GPU node uses self-signed certs
+OPEA_API_KEY=<your-api-key>         # Same as VLLM_API_KEY (injected into OPEA services)
 ```
 
 `GPU_MODEL_REPLICAS=0` tells Swarm to deploy 0 replicas of GPU-heavy containers
 (vllm, tei, tei_reranker, vllm-translation-guardrail). Orchestrators (ChatQnA,
 Retriever, Dataprep) still deploy and connect to the remote GPU node via the
 override endpoints.
+
+`OPEA_SSL_SKIP_VERIFY=1` disables SSL certificate verification in OPEA services
+via a runtime patch (`configs/ssl/sitecustomize.py`). Only use with self-signed
+certs. Omit if the GPU node uses Let's Encrypt or a public CA.
+
+`OPEA_API_KEY` injects an `X-API-Key` header into all outbound HTTP calls from
+OPEA services (httpx, aiohttp, requests). Typically set to the same value as
+`VLLM_API_KEY`. These vars are independent of `gpu_node_host`.
 
 **Warning:** `DEPLOY_OPEA` must remain `1` — it controls the orchestrator services.
 Setting `DEPLOY_OPEA=0` disables ALL OPEA services (including orchestrators) and

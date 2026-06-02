@@ -211,7 +211,8 @@ To connect to a remote GPU node, set in `.env`:
 ```bash
 GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
 VLLM_API_KEY=<your-api-key>         # API key from the GPU node administrator
-NODE_TLS_REJECT_UNAUTHORIZED=0      # If the GPU node uses a self-signed certificate
+OPEA_SSL_SKIP_VERIFY=1              # If GPU node uses self-signed certs
+OPEA_API_KEY=<your-api-key>         # Same as VLLM_API_KEY (injected into OPEA services)
 ```
 
 Then deploy orchestrators only (GPU models are skipped):
@@ -219,8 +220,10 @@ Then deploy orchestrators only (GPU models are skipped):
 docker compose --profile opea up -d
 ```
 
-If the GPU node uses a self-signed certificate, see `env` Section 14 for
-alternative TLS options (trusting the certificate instead of disabling verification).
+> **Note:** `OPEA_SSL_SKIP_VERIFY=1` disables SSL certificate verification in OPEA
+> services via a runtime patch (`configs/ssl/sitecustomize.py`). Only use with self-signed
+> certs. Omit this variable if the GPU node uses Let's Encrypt or a public CA.
+> `OPEA_API_KEY` injects an `X-API-Key` header into all outbound HTTP calls from OPEA services.
 
 ### 6f. Start with observability stack
 

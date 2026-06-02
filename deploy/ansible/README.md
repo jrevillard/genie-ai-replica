@@ -478,6 +478,8 @@ All services are behind nginx with TLS termination and API key authentication on
 | `gpu_env_file` | `""` | GPU defaults file (empty = none) |
 | `gpu_node_host` | `""` | Remote GPU node hostname/IP (set in app node env to route AI services) |
 | `vllm_api_key` | `""` | API key for GPU node nginx auth (set in app node vault) |
+| `opea_ssl_skip_verify` | `""` | Disable SSL cert verification for OPEA services (`"1"` for self-signed certs, empty = verify) |
+| `opea_api_key` | `""` | API key injected into OPEA outbound HTTP calls (typically same as `vllm_api_key`) |
 
 #### Connect the App Node to the GPU Node
 
@@ -493,10 +495,13 @@ For manual setup (Compose mode), set in `.env` (Section 14):
 GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
 GPU_MODEL_REPLICAS=0                # Skip local GPU containers
 VLLM_API_KEY=<your-api-key>         # API key from GPU node
-NODE_TLS_REJECT_UNAUTHORIZED=0      # If GPU node uses self-signed certs
+OPEA_SSL_SKIP_VERIFY=1              # If GPU node uses self-signed certs
+OPEA_API_KEY=<your-api-key>         # Same as VLLM_API_KEY (injected into OPEA services)
 ```
 
-If the GPU node uses a self-signed certificate, see `env` Section 14 for TLS options.
+> **Note:** `OPEA_SSL_SKIP_VERIFY` and `OPEA_API_KEY` are independent of `gpu_node_host`.
+> They control runtime patches baked into OPEA Docker images via `sitecustomize.py`.
+> Use `OPEA_SSL_SKIP_VERIFY=1` only with self-signed certs — omit for Let's Encrypt or public CAs.
 
 ## Port Configuration
 

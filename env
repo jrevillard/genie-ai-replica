@@ -684,4 +684,16 @@ KC_GRAFANA_CLIENT_SECRET=
 #     Copy gpu-node.crt from the GPU node and set:
 #     NODE_EXTRA_CA_CERTS=/path/to/gpu-node.crt      (Node.js)
 #     REQUESTS_CA_BUNDLE=/path/to/gpu-node.crt         (Python)
+#
+# OPEA_SSL_SKIP_VERIFY=0
+#   Set to 1 to disable SSL certificate verification in OPEA Python services
+#   (embedding, reranker, textgen, chatqna, retriever, dataprep). Required when
+#   the remote GPU node uses a self-signed certificate. Baked into Docker images
+#   via sitecustomize.py — no volume mounts needed. Default: 0 (verify certs).
+#   When using Let's Encrypt or a recognized CA, leave at 0 (default).
+#
+# OPEA_API_KEY=<key>
+#   API key injected into all outbound HTTP calls from OPEA services via
+#   X-API-Key header. Baked into Docker images via sitecustomize.py.
+#   Typically set to the same value as VLLM_API_KEY. Default: empty (no injection).
 

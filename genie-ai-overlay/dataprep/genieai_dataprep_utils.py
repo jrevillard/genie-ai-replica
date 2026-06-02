@@ -91,8 +91,10 @@ async def _load_with_docling_remote(doc_path: str) -> str:
     with open(doc_path, "rb") as f:
         file_bytes = f.read()
 
+    _skip_ssl = os.getenv("OPEA_SSL_SKIP_VERIFY", "") == "1"
+    connector = aiohttp.TCPConnector(ssl=not _skip_ssl)
     timeout = aiohttp.ClientTimeout(total=DOCLING_ENDPOINT_TIMEOUT)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
         data = aiohttp.FormData()
         data.add_field("files", file_bytes, filename=Path(doc_path).name)
 

@@ -31,7 +31,7 @@
     },
     {
       "datasource": {
-        "type": "jaeger",
+        "type": "tempo",
         "uid": "${DS_VICTORIATRACES}"
       },
       "fieldConfig": {
@@ -57,10 +57,12 @@
       },
       "targets": [
         {
-          "datasource": { "type": "jaeger", "uid": "${DS_VICTORIATRACES}" },
+          "datasource": { "type": "tempo", "uid": "${DS_VICTORIATRACES}" },
           "query": "",
           "refId": "A",
-          "type": "search"
+          "queryType": "search",
+          "maxTraces": 1000,
+          "limit": 20
         }
       ],
       "title": "Search Traces",
@@ -75,8 +77,8 @@
     },
     {
       "datasource": {
-        "type": "jaeger",
-        "uid": "${DS_VICTORIATRACES}"
+        "type": "prometheus",
+        "uid": "${DS_VICTORIAMETRICS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -194,22 +196,22 @@
   "templating": {
     "list": [
       {
-        "current": { "selected": true, "text": "VictoriaTraces", "value": "VictoriaTraces" },
+        "current": { "selected": true, "text": "VictoriaTraces", "value": "victoriatraces" },
         "hide": 0,
         "includeAll": false,
         "label": "Trace Datasource",
         "multi": false,
         "name": "DS_VICTORIATRACES",
         "options": [],
-        "query": "jaeger",
-        "queryValue": "",
+        "query": "tempo",
+        "queryValue": "victoriatraces",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
         "type": "datasource"
       },
       {
-        "current": { "selected": true, "text": "VictoriaMetrics", "value": "VictoriaMetrics" },
+        "current": { "selected": true, "text": "VictoriaMetrics", "value": "P4169E866C3094E38" },
         "hide": 0,
         "includeAll": false,
         "label": "Metrics Datasource",
@@ -217,7 +219,7 @@
         "name": "DS_VICTORIAMETRICS",
         "options": [],
         "query": "prometheus",
-        "queryValue": "",
+        "queryValue": "P4169E866C3094E38",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,

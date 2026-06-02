@@ -83,7 +83,7 @@ if (process.env.NODE_ENV === 'test') {
 
   // Create exporter
   const exporter = new OTLPTraceExporter({
-    url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector:4318'
+    url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector:4318/v1/traces'
   });
 
   // Metrics exporter — sends OTel HTTP metrics to VictoriaMetrics via Collector

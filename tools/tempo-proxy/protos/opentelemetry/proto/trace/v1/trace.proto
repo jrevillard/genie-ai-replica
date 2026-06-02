@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package opentelemetry.proto.trace.v1;
+
+import "opentelemetry/proto/common/v1/common.proto";
+import "opentelemetry/proto/resource/v1/resource.proto";
+
+option java_multiple_files = true;
+option java_package = "io.opentelemetry.proto.trace.v1";
+option go_package = "go.opentelemetry.io/proto/otlp/trace/v1";
+
+enum SpanKind {
+  SPAN_KIND_UNSPECIFIED = 0;
+  SPAN_KIND_INTERNAL = 1;
+  SPAN_KIND_SERVER = 2;
+  SPAN_KIND_CLIENT = 3;
+  SPAN_KIND_PRODUCER = 4;
+  SPAN_KIND_CONSUMER = 5;
+}
+
+enum StatusCode {
+  STATUS_CODE_UNSET = 0;
+  STATUS_CODE_OK = 1;
+  STATUS_CODE_ERROR = 2;
+}
+
+message Status {
+  string message = 1;
+  StatusCode code = 2;
+}
+
+message Span {
+  bytes trace_id = 1;
+  bytes span_id = 2;
+  string trace_state = 3;
+  bytes parent_span_id = 4;
+  string name = 5;
+  SpanKind kind = 6;
+  uint64 start_time_unix_nano = 7;
+  uint64 end_time_unix_nano = 8;
+  repeated opentelemetry.proto.common.v1.KeyValue attributes = 9;
+  uint32 dropped_attributes_count = 10;
+  repeated SpanEvent events = 11;
+  repeated SpanLink links = 12;
+  Status status = 13;
+}
+
+message SpanEvent {
+  uint64 time_unix_nano = 1;
+  string name = 2;
+  repeated opentelemetry.proto.common.v1.KeyValue attributes = 3;
+  uint32 dropped_attributes_count = 4;
+}
+
+message SpanLink {
+  bytes trace_id = 1;
+  bytes span_id = 2;
+  string trace_state = 3;
+  repeated opentelemetry.proto.common.v1.KeyValue attributes = 4;
+  uint32 dropped_attributes_count = 5;
+}
+
+message ScopeSpans {
+  opentelemetry.proto.common.v1.InstrumentationScope scope = 1;
+  repeated Span spans = 2;
+  string schema_url = 3;
+}
+
+message ResourceSpans {
+  opentelemetry.proto.resource.v1.Resource resource = 1;
+  repeated ScopeSpans scope_spans = 2;
+  string schema_url = 3;
+}

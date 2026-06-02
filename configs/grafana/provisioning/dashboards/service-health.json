@@ -288,8 +288,8 @@
     },
     {
       "datasource": {
-        "type": "jaeger",
-        "uid": "victoriatraces"
+        "type": "prometheus",
+        "uid": "${DS_VICTORIAMETRICS}"
       },
       "fieldConfig": {
         "defaults": {

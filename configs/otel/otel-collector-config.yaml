@@ -81,7 +81,7 @@ exporters:
       max_elapsed_time: 300s
     timeout: 15s
   otlp_http:
-    endpoint: http://victorialogs:9428/insert/opentelemetry/v1/logs
+    endpoint: http://victorialogs:9428/insert/opentelemetry
     sending_queue:
       enabled: true
       num_consumers: 10

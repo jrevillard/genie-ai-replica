@@ -2,12 +2,14 @@ apiVersion: 1
 
 datasources:
   - name: VictoriaTraces
-    type: jaeger
+    type: tempo
     access: proxy
-    url: http://victoriatraces:10428/select/jaeger
+    url: http://tempo-proxy:10429
     uid: victoriatraces
     editable: false
     jsonData:
+      search:
+        type: jaeger
       traceQuery:
         maxTraces: 1000
         maxDuration: 60m

@@ -748,7 +748,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	services := getServiceNames()
 	if service == "" {
-		services = []string{""} // empty string = fetch all
+		// No specific service — iterate over all known services (skip empty)
 	} else {
 		services = []string{service}
 	}
@@ -789,7 +789,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 				jaegerParams.Set("operation", operation)
 			}
 			var tResult traceResult
-			code, err := httpGetJSON(victoriaTracesURL+"/select/jaeger/api/traces?"+jaegerParams.Encode(), 15*time.Second, &tResult)
+			code, err := httpGetJSON(victoriaTracesURL+"/select/jaeger/api/traces?"+jaegerParams.Encode(), 30*time.Second, &tResult)
 			if err == nil && code == http.StatusOK && len(tResult.Data) > 0 {
 				traces := jaegerSearchToTempoTraces(tResult.Data)
 				mu.Lock()

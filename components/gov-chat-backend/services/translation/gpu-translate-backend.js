@@ -116,8 +116,8 @@ class GpuTranslateBackend {
       return new Promise((resolve, reject) => {
         const options = {
           hostname: url.hostname,
-          port: url.port || this.port,
-          path: '/health', // Try health endpoint first
+          port: url.port || (url.protocol === 'https:' ? 443 : 80),
+          path: '/health',
           method: 'GET',
           headers: this._buildHeaders(),
           timeout: 5000
@@ -129,7 +129,6 @@ class GpuTranslateBackend {
             resolve(true);
           } else {
             logger.warn(`[GPU-BACKEND] Health check returned status ${res.statusCode}`);
-            // Continue anyway - vLLM might not have a /health endpoint
             resolve(true);
           }
         });
@@ -164,7 +163,7 @@ class GpuTranslateBackend {
       await new Promise((resolve) => {
         const options = {
           hostname: url.hostname,
-          port: url.port || this.port,
+          port: url.port || (url.protocol === 'https:' ? 443 : 80),
           path: '/v1/models',
           method: 'GET',
           headers: this._buildHeaders(),
@@ -344,7 +343,7 @@ class GpuTranslateBackend {
 
       const options = {
         hostname: url.hostname,
-        port: url.port || this.port,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
         path: '/v1/chat/completions',
         method: 'POST',
         headers: this._buildHeaders({

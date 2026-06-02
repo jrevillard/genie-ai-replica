@@ -134,6 +134,9 @@ RUN sed -i '/from integrations\./ { /arangodb/! s/^/#/ }' /app/comps/dataprep/sr
 RUN useradd -ms /bin/bash user && \
     chown -R user:user /app /home/user
 
+# Step K.5: Copy SSL/API-key runtime patch (no-op unless env vars are set)
+COPY configs/ssl/sitecustomize.py /usr/local/lib/python3.10/site-packages/sitecustomize.py
+
 # Step L: Run the new GENIE-AI entry point from its new location
 USER user
 CMD ["python", "comps/dataprep/src/genieai_dataprep_microservice.py"]

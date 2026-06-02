@@ -79,12 +79,16 @@ def setup_trace_logging(logger_name):
 def setup_tracing(service_name: str) -> None:
     """Initialize the OTel TracerProvider with an OTLP HTTP exporter.
 
-    Args:
-        service_name: Logical service name (e.g. ``"genieai-chatqna"``).
+    No-op when OTEL_EXPORTER_OTLP_ENDPOINT is empty or unset, or when
+    ENABLE_OBSERVABILITY is not "1". This allows OPEA services to run
+    without the observability stack deployed.
     """
     global _provider
 
-    endpoint_base = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4318")
+    endpoint_base = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+    if not endpoint_base:
+        return
+
     # Python OTLPSpanExporter requires the full URL including /v1/traces
     endpoint_url = f"{endpoint_base.rstrip('/')}/v1/traces"
 

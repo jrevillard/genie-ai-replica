@@ -462,6 +462,11 @@ services:
       - TRANSLATION_CACHE_PASSWORD=${TRANSLATION_CACHE_PASSWORD}
       # Translation backend model ID — must match the model loaded in vllm-translation-guardrail
       - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
+      # Remote GPU node translation endpoint override
+      - VLLM_TRANSLATION_ENDPOINT=${TRANSLATION_VLLM_ENDPOINT:-http://vllm-translation-guardrail:9031}
+      # OPEA runtime patches for remote GPU node (SSL bypass + API key injection)
+      - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-}
+      - OPEA_API_KEY=${OPEA_API_KEY:-}
       # Email configuration (required)
       - EMAIL_HOST=${EMAIL_HOST}
       - EMAIL_PORT=${EMAIL_PORT}

@@ -1,0 +1,8 @@
+# GENIE.AI — Textgen wrapper (extends upstream OPEA image)
+# Adds sitecustomize.py for SSL bypass + API key injection (remote GPU support).
+# Only active when OPEA_SSL_SKIP_VERIFY=1 and/or OPEA_API_KEY env vars are set.
+
+ARG UPSTREAM_IMAGE=opea/llm-textgen:latest
+FROM ${UPSTREAM_IMAGE}
+
+COPY configs/ssl/sitecustomize.py /usr/local/lib/python3.11/site-packages/sitecustomize.py

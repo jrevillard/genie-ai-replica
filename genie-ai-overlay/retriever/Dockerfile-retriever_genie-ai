@@ -69,6 +69,9 @@ COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/geniea
 RUN useradd -ms /bin/bash user && \
     chown -R user:user /app /home/user
 
-# Step G: Run the new GENIE-AI entry point from its new location
+# Step G: Copy SSL/API-key runtime patch (no-op unless env vars are set)
+COPY configs/ssl/sitecustomize.py /usr/local/lib/python3.10/site-packages/sitecustomize.py
+
+# Step H: Run the new GENIE-AI entry point from its new location
 USER user
 CMD ["python", "comps/retrievers/src/genieai_retriever_microservice.py"]

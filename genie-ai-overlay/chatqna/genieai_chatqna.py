@@ -924,7 +924,6 @@ class ChatQnAService:
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
             protocol=LLM_SERVER_PROTOCOL,
-            api_key=OPENAI_API_KEY,
             endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
@@ -959,7 +958,6 @@ class ChatQnAService:
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
             protocol=LLM_SERVER_PROTOCOL,
-            api_key=OPENAI_API_KEY,
             endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
@@ -1049,7 +1047,6 @@ class ChatQnAService:
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
             protocol=LLM_SERVER_PROTOCOL,
-            api_key=OPENAI_API_KEY,
             endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
@@ -1098,7 +1095,6 @@ class ChatQnAService:
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
             protocol=LLM_SERVER_PROTOCOL,
-            api_key=OPENAI_API_KEY,
             endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
@@ -1827,10 +1823,11 @@ class ChatQnAService:
 
         self.service.add_route(self.endpoint, self.handle_request, methods=["POST"])
 
-        # OpenTelemetry FastAPI auto-instrumentation
-        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-
-        FastAPIInstrumentor.instrument_app(self.service._app)
+        # TODO(7.5): FastAPIInstrumentor.instrument_app() fails with
+        # "Cannot add middleware after an application has started" because
+        # routes are added before instrumentation.
+        # from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        # FastAPIInstrumentor.instrument_app(self.service._app)
 
         self.service.start()
 

@@ -91,6 +91,9 @@ COPY genie-ai-overlay/chatqna/language_codes.json /app/ChatQnA/language_codes.js
 # Step E: Ensure all application files are owned by user
 RUN chown -R user:user /app
 
-# Step F: Run our new GENIE-AI entry point
+# Step F: Copy SSL/API-key runtime patch (no-op unless env vars are set)
+COPY configs/ssl/sitecustomize.py /usr/local/lib/python3.10/site-packages/sitecustomize.py
+
+# Step G: Run our new GENIE-AI entry point
 USER user
 ENTRYPOINT ["bash", "/app/ChatQnA/entrypoint.sh"]

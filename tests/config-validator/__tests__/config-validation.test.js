@@ -216,19 +216,17 @@ describe('Configuration Validation Suite', () => {
       expect(gpuExists).toBe(true);
     });
 
-    test('all 5 AI services present with correct ports (9400-9404)', () => {
+    test('all 5 AI services present with nginx on port 443', () => {
       if (!gpuExists) return;
       const gpu = parseGpuCompose(GPU_COMPOSE_FILE);
       for (const serviceName of Object.keys(GPU_SERVICE_PORTS)) {
         const svc = gpu.services.find((s) => s.name === serviceName);
         expect(svc).toBeDefined();
       }
-      // Ports 9400-9404 are exposed on nginx-gpu, not on individual AI services
+      // nginx-gpu exposes port 443 (path-based routing)
       const nginx = gpu.services.find((s) => s.name === 'nginx-gpu');
       expect(nginx).toBeDefined();
-      for (const expectedPort of Object.values(GPU_SERVICE_PORTS)) {
-        expect(nginx.ports).toContain(expectedPort);
-      }
+      expect(nginx.ports).toContain(443);
     });
 
     test('nginx-gpu service exists', () => {

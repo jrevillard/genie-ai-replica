@@ -19,7 +19,7 @@ function parseEnvTemplate(filePath) {
   try {
     content = fs.readFileSync(filePath, 'utf-8');
   } catch (err) {
-    throw new Error(`Failed to read env template file: ${filePath}: ${err.message}`);
+    throw new Error(`Failed to read env template file: ${filePath}`, { cause: err });
   }
   const lines = content.split('\n');
 

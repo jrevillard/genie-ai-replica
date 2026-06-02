@@ -229,66 +229,66 @@
       ansible.builtin.debug:
         var: compose_deploy.stdout_lines
 
-- name: GPU Node - Smoke tests
+- name: GPU Node - Smoke tests (path-based routing on port 443)
   hosts: itu_rtx_gpu_api
   tags: [deploy]
   become: true
   tasks:
-    - name: Wait for vLLM LLM health (port {{ gpu_llm_port | default('9400') }})
+    - name: Wait for vLLM LLM health
       ansible.builtin.uri:
-        url: "https://localhost:{{ gpu_llm_port | default('9400') }}/health"
+        url: "https://localhost:443/llm/health"
         method: GET
         validate_certs: false
         headers:
-          X-API-Key: "{{ gpu_api_keys[0].key }}"
+          X-API-Key: "{{ gpu_api_keys[0].name }}"
       register: health_llm
       until: health_llm.status == 200
       retries: 30
       delay: 15
 
-    - name: Wait for vLLM Translation health (port {{ gpu_translation_port | default('9401') }})
+    - name: Wait for vLLM Translation health
       ansible.builtin.uri:
-        url: "https://localhost:{{ gpu_translation_port | default('9401') }}/health"
+        url: "https://localhost:443/translation/health"
         method: GET
         validate_certs: false
         headers:
-          X-API-Key: "{{ gpu_api_keys[0].key }}"
+          X-API-Key: "{{ gpu_api_keys[0].name }}"
       register: health_translation
       until: health_translation.status == 200
       retries: 30
       delay: 15
 
-    - name: Wait for TEI Embedding health (port {{ gpu_embedding_port | default('9402') }})
+    - name: Wait for TEI Embedding health
       ansible.builtin.uri:
-        url: "https://localhost:{{ gpu_embedding_port | default('9402') }}/health"
+        url: "https://localhost:443/embed/health"
         method: GET
         validate_certs: false
         headers:
-          X-API-Key: "{{ gpu_api_keys[0].key }}"
+          X-API-Key: "{{ gpu_api_keys[0].name }}"
       register: health_embedding
       until: health_embedding.status == 200
       retries: 30
       delay: 15
 
-    - name: Wait for TEI Reranker health (port {{ gpu_reranker_port | default('9403') }})
+    - name: Wait for TEI Reranker health
       ansible.builtin.uri:
-        url: "https://localhost:{{ gpu_reranker_port | default('9403') }}/health"
+        url: "https://localhost:443/rerank/health"
         method: GET
         validate_certs: false
         headers:
-          X-API-Key: "{{ gpu_api_keys[0].key }}"
+          X-API-Key: "{{ gpu_api_keys[0].name }}"
       register: health_reranker
       until: health_reranker.status == 200
       retries: 30
       delay: 15
 
-    - name: Wait for docling-serve health (port {{ gpu_docling_port | default('9404') }})
+    - name: Wait for docling-serve health
       ansible.builtin.uri:
-        url: "https://localhost:{{ gpu_docling_port | default('9404') }}/health"
+        url: "https://localhost:443/docling/health"
         method: GET
         validate_certs: false
         headers:
-          X-API-Key: "{{ gpu_api_keys[0].key }}"
+          X-API-Key: "{{ gpu_api_keys[0].name }}"
       register: health_docling
       until: health_docling.status == 200
       retries: 30
@@ -296,7 +296,7 @@
 
     - name: Verify 401 rejection without API key
       ansible.builtin.uri:
-        url: "https://localhost:{{ gpu_llm_port | default('9400') }}/health"
+        url: "https://localhost:443/llm/health"
         method: GET
         validate_certs: false
       register: auth_reject

@@ -121,11 +121,7 @@ services:
     restart: unless-stopped
     image: {{ nginx_image | default('nginx:1.28-alpine') }}
     ports:
-      - "{{ gpu_llm_port | default('9400') }}:9400"
-      - "{{ gpu_translation_port | default('9401') }}:9401"
-      - "{{ gpu_embedding_port | default('9402') }}:9402"
-      - "{{ gpu_reranker_port | default('9403') }}:9403"
-      - "{{ gpu_docling_port | default('9404') }}:9404"
+      - "443:443"
       - "80:80"
     volumes:
       - ./{{ gpu_generated_dir }}/gpu-proxy.conf:/etc/nginx/conf.d/default.conf:ro

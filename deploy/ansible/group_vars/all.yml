@@ -96,11 +96,6 @@ gpu_data_dir: ./data
 gpu_generated_dir: configs/nginx-gpu
 
 gpu_public_domain: gpu.example.com
-gpu_llm_port: "9400"
-gpu_translation_port: "9401"
-gpu_embedding_port: "9402"
-gpu_reranker_port: "9403"
-gpu_docling_port: "9404"
 gpu_env_file: ""
 nvidia_visible_devices: "all"
 

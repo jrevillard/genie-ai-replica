@@ -640,7 +640,8 @@ KC_GRAFANA_CLIENT_SECRET=
 # =============================================================================
 # When deploying a dedicated GPU node with the remote architecture (issue #758),
 # override the default local Docker DNS endpoints to point to the GPU node via HTTPS.
-# The GPU node runs nginx with TLS and API key authentication on ports 9400-9404.
+# The GPU node runs nginx with TLS and API key authentication on port 443
+# with path-based routing: /llm/, /translation/, /embed/, /rerank/, /docling/.
 #
 # GPU_NODE_HOST=gpu.example.com
 #   DNS hostname or IP of the remote GPU node.
@@ -650,12 +651,12 @@ KC_GRAFANA_CLIENT_SECRET=
 #   Public domain for the GPU node (used by certbot for TLS certificates).
 #   Typically same as GPU_NODE_HOST. Set on the GPU node in .env.
 #
-# VLLM_ENDPOINT=https://${GPU_NODE_HOST}:9400/v1
-# TRANSLATION_VLLM_ENDPOINT=https://${GPU_NODE_HOST}:9401/v1
-# EMBEDDING_SERVICE_URL=https://${GPU_NODE_HOST}:9402
-# RERANKER_SERVICE_URL=https://${GPU_NODE_HOST}:9403
+# VLLM_ENDPOINT=https://${GPU_NODE_HOST}/llm
+# TRANSLATION_VLLM_ENDPOINT=https://${GPU_NODE_HOST}/translation
+# EMBEDDING_SERVICE_URL=https://${GPU_NODE_HOST}/embed
+# RERANKER_SERVICE_URL=https://${GPU_NODE_HOST}/rerank
 #
-# DOCLING_ENDPOINT=https://${GPU_NODE_HOST}:9404
+# DOCLING_ENDPOINT=https://${GPU_NODE_HOST}/docling
 #   Remote docling-serve endpoint for document extraction.
 #   When set, dataprep sends documents to the remote GPU node for processing.
 #   When empty, dataprep uses the in-process docling converter (existing behavior).

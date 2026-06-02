@@ -5,18 +5,18 @@ const fs = require('fs');
  *
  * Validates docker-compose.gpu.yaml against expected architecture:
  * - Correct service set (5 AI services + nginx + certbot)
- * - Sequential port mapping (9400-9404)
+ * - Single port 443 (path-based routing via nginx)
  * - gpu_network defined
  * - Image tags match the main app compose
  */
 
-/** Expected AI services in GPU compose with their port mappings. */
+/** Expected AI services in GPU compose with their nginx path prefixes. */
 const GPU_SERVICE_PORTS = {
-  'vllm-llm': 9400,
-  'vllm-translation': 9401,
-  'tei-embedding': 9402,
-  'tei-reranker': 9403,
-  'docling-serve': 9404
+  'vllm-llm': 443,
+  'vllm-translation': 443,
+  'tei-embedding': 443,
+  'tei-reranker': 443,
+  'docling-serve': 443
 };
 
 /** Image tags that must match the main docker-compose.yaml exactly. */
@@ -25,7 +25,7 @@ const GPU_REQUIRED_IMAGES = {
   'vllm-translation': 'vllm/vllm-openai:v0.10.0',
   'tei-embedding': 'ghcr.io/huggingface/text-embeddings-inference:1.9.3',
   'tei-reranker': 'ghcr.io/huggingface/text-embeddings-inference:1.9.3',
-  'docling-serve': 'ghcr.io/institute-of-data-science/docling-serve:latest',
+  'docling-serve': 'ghcr.io/ds4sd/docling-serve:latest',
   'nginx-gpu': 'nginx:1.28-alpine'
 };
 
@@ -123,7 +123,7 @@ function parseGpuCompose(filePath) {
       }
 
       // Extract port mappings inside current service block (any indent)
-      const portMatch = trimmed.match(/"(\d{4}):\d{4}"/);
+      const portMatch = trimmed.match(/"(\d+):\d+"/);
       if (portMatch && currentService) {
         currentPorts.push(parseInt(portMatch[1], 10));
       }
@@ -172,16 +172,12 @@ function validateGpuNode(gpuComposePath, _mainComposePath) {
     }
   }
 
-  // 2. nginx-gpu must exist and expose all 5 ports (9400-9404)
+  // 2. nginx-gpu must exist and expose port 443 (path-based routing)
   const nginxService = gpu.services.find((s) => s.name === 'nginx-gpu');
   if (!nginxService) {
     errors.push('GPU compose missing nginx-gpu service');
-  } else {
-    for (const [serviceName, expectedPort] of Object.entries(GPU_SERVICE_PORTS)) {
-      if (!nginxService.ports.includes(expectedPort)) {
-        errors.push(`nginx-gpu: missing port ${expectedPort} for ${serviceName}`);
-      }
-    }
+  } else if (!nginxService.ports.includes(443)) {
+    errors.push('nginx-gpu: missing port 443 for path-based routing');
   }
 
   // 3. gpu_network must be defined
@@ -199,12 +195,13 @@ function validateGpuNode(gpuComposePath, _mainComposePath) {
     }
   }
 
-  // 5. Port range must be sequential 9400-9404
-  const allExposedPorts = gpu.services.flatMap((s) => s.ports).sort((a, b) => a - b);
-  const expectedPorts = [9400, 9401, 9402, 9403, 9404];
-  for (const port of expectedPorts) {
-    if (!allExposedPorts.includes(port)) {
-      errors.push(`GPU compose missing expected port: ${port}`);
+  // 5. nginx-gpu must not expose legacy ports (9400-9404)
+  const legacyPorts = [9400, 9401, 9402, 9403, 9404];
+  for (const svc of gpu.services) {
+    for (const port of svc.ports) {
+      if (legacyPorts.includes(port)) {
+        errors.push(`${svc.name}: legacy port ${port} found (path-based routing uses 443 only)`);
+      }
     }
   }
 

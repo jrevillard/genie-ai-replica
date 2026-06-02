@@ -511,6 +511,13 @@ services:
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      # TLS verification for document-repository → NGINX OIDC discovery/JWKS fetches.
+      # Default: 1 (strict, for production). Set to 0 in .env for dev with self-signed certs.
+      - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-1}
+    # Allow document-repository to resolve NGINX_PUBLIC_DOMAIN (e.g. localhost) to the
+    # Docker host, so OIDC discovery and JWKS fetches reach NGINX for JWT validation.
+    extra_hosts:
+      - "${NGINX_PUBLIC_DOMAIN:-localhost}:host-gateway"
     # Internal only - no host port mapping needed
     # ports:
     #   - "${DOC_REPO_PORT:-3001}:3001"
@@ -643,10 +650,15 @@ services:
     logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
-    image: opea/llm-textgen:latest
+    build:
+      context: .
+      dockerfile: genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-textgen:latest
     environment:
       - LLM_ENDPOINT=${VLLM_ENDPOINT:-http://vllm:8000}
       - LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-0}
+      - OPEA_API_KEY=${OPEA_API_KEY:-}
     # Internal only
     # ports:
     #   - "9000:9000"
@@ -808,11 +820,16 @@ services:
     logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
-    image: opea/embedding:latest
+    build:
+      context: .
+      dockerfile: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-embedding:latest
     environment:
       - EMBEDDING_MODEL_ENDPOINT=${EMBEDDING_SERVICE_URL:-http://tei:80}
       - TEI_EMBEDDING_ENDPOINT=${EMBEDDING_SERVICE_URL:-http://tei:80}
       - EMBEDDING_MODEL_ID=${EMBEDDING_MODEL_ID:-BAAI/bge-base-en-v1.5}
+      - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-0}
+      - OPEA_API_KEY=${OPEA_API_KEY:-}
     # Internal only
     # ports:
     #   - "6000:6000"
@@ -880,6 +897,8 @@ services:
       - RERANK_COMPONENT_NAME=GENIE_TEI_RERANKING
       - RERANKING_STRATEGY=${RERANKING_STRATEGY:-threshold}
       - RERANKING_THRESHOLD=${RERANKING_THRESHOLD:-0.5}
+      - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-0}
+      - OPEA_API_KEY=${OPEA_API_KEY:-}
     # Internal only
     # ports:
     #   - "6100:8000"
@@ -949,6 +968,8 @@ services:
       DATAPREP_CHUNK_SIZE_MD: ${DATAPREP_CHUNK_SIZE_MD:-500}
       LABEL_SELECTOR_SYSTEM_PROMPT: ${LABEL_SELECTOR_SYSTEM_PROMPT:-}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
+      OPEA_SSL_SKIP_VERIFY: ${OPEA_SSL_SKIP_VERIFY:-0}
+      OPEA_API_KEY: ${OPEA_API_KEY:-}
     networks:
       - genieai_network
     healthcheck:
@@ -1012,6 +1033,8 @@ services:
       VLLM_ENDPOINT: ${VLLM_ENDPOINT:-http://vllm:8000}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
+      OPEA_SSL_SKIP_VERIFY: ${OPEA_SSL_SKIP_VERIFY:-0}
+      OPEA_API_KEY: ${OPEA_API_KEY:-}
     networks:
       - genieai_network
     healthcheck:
@@ -1073,6 +1096,8 @@ services:
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
       OPENAI_API_KEY: ${VLLM_API_KEY:-}
+      OPEA_SSL_SKIP_VERIFY: ${OPEA_SSL_SKIP_VERIFY:-0}
+      OPEA_API_KEY: ${OPEA_API_KEY:-}
     networks:
       - genieai_network
     healthcheck:

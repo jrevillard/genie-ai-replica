@@ -112,12 +112,13 @@ class GpuTranslateBackend {
       const url = new URL(this.endpoint);
       const isHttps = url.protocol === 'https:';
       const client = isHttps ? https : http;
+      const basePath = url.pathname.replace(/\/$/, '');
 
       return new Promise((resolve, reject) => {
         const options = {
           hostname: url.hostname,
           port: url.port || (url.protocol === 'https:' ? 443 : 80),
-          path: '/health',
+          path: `${basePath}/health`,
           method: 'GET',
           headers: this._buildHeaders(),
           timeout: 5000
@@ -159,12 +160,13 @@ class GpuTranslateBackend {
       const url = new URL(this.endpoint);
       const isHttps = url.protocol === 'https:';
       const client = isHttps ? https : http;
+      const basePath = url.pathname.replace(/\/$/, '');
 
       await new Promise((resolve) => {
         const options = {
           hostname: url.hostname,
           port: url.port || (url.protocol === 'https:' ? 443 : 80),
-          path: '/v1/models',
+          path: `${basePath}/v1/models`,
           method: 'GET',
           headers: this._buildHeaders(),
           timeout: 5000
@@ -337,6 +339,7 @@ class GpuTranslateBackend {
     const url = new URL(this.endpoint);
     const isHttps = url.protocol === 'https:';
     const client = isHttps ? https : http;
+    const basePath = url.pathname.replace(/\/$/, '');
 
     return new Promise((resolve, reject) => {
       const postData = JSON.stringify(requestBody);
@@ -344,7 +347,7 @@ class GpuTranslateBackend {
       const options = {
         hostname: url.hostname,
         port: url.port || (url.protocol === 'https:' ? 443 : 80),
-        path: '/v1/chat/completions',
+        path: `${basePath}/v1/chat/completions`,
         method: 'POST',
         headers: this._buildHeaders({
           'Content-Type': 'application/json',

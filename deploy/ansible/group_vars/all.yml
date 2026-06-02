@@ -100,6 +100,10 @@ gpu_self_signed_certs: true
 gpu_env_file: ""
 nvidia_visible_devices: "all"
 
+# Remote GPU node (set in group_vars/<env>/vars.yml to route AI services to a dedicated GPU host)
+gpu_node_host: ""
+vllm_api_key: ""
+
 vllm_llm_image: vllm/vllm-openai:latest
 vllm_translation_image: vllm/vllm-openai:v0.10.0
 tei_embedding_image: ghcr.io/huggingface/text-embeddings-inference:1.9.3

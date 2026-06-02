@@ -780,11 +780,20 @@ Set in the app node's `.env` (Section 14):
 
 ```bash
 GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
-VLLM_API_KEY=<your-api-key>        # API key from the GPU node administrator
-NODE_TLS_REJECT_UNAUTHORIZED=0     # If the GPU node uses a self-signed certificate
+GPU_MODEL_REPLICAS=0                # Skip local GPU containers (vllm, tei, etc.)
+VLLM_API_KEY=<your-api-key>         # API key from the GPU node administrator
+NODE_TLS_REJECT_UNAUTHORIZED=0      # If the GPU node uses a self-signed certificate
 ```
 
-Then set `DEPLOY_OPEA=0` to skip local GPU services — the app node will use
-the remote GPU node endpoints instead.
+`GPU_MODEL_REPLICAS=0` tells Swarm to deploy 0 replicas of GPU-heavy containers
+(vllm, tei, tei_reranker, vllm-translation-guardrail). Orchestrators (ChatQnA,
+Retriever, Dataprep) still deploy and connect to the remote GPU node via the
+override endpoints.
+
+**Warning:** `DEPLOY_OPEA` must remain `1` — it controls the orchestrator services.
+Setting `DEPLOY_OPEA=0` disables ALL OPEA services (including orchestrators) and
+breaks the RAG pipeline. Use `GPU_MODEL_REPLICAS=0` to skip only GPU containers.
+
+Ansible sets `GPU_MODEL_REPLICAS=0` automatically when `gpu_node_host` is configured.
 
 For GPU node deployment, see `deploy/ansible/README.md` (Remote GPU Node section).

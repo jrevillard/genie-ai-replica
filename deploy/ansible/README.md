@@ -476,15 +476,24 @@ All services are behind nginx with TLS termination and API key authentication on
 | `gpu_public_domain` | `gpu.example.com` | Public domain (CN in TLS cert) |
 | `gpu_self_signed_certs` | `true` | Generate self-signed certs (set `false` for Let's Encrypt) |
 | `gpu_env_file` | `""` | GPU defaults file (empty = none) |
+| `gpu_node_host` | `""` | Remote GPU node hostname/IP (set in app node env to route AI services) |
+| `vllm_api_key` | `""` | API key for GPU node nginx auth (set in app node vault) |
 
 #### Connect the App Node to the GPU Node
 
-Set in the app node's `.env` (Section 14):
+When `gpu_node_host` is set in `group_vars/<env>/vars.yml`, Ansible automatically:
+
+1. Sets `GPU_MODEL_REPLICAS=0` (skips GPU-heavy containers on the app node)
+2. Generates endpoint URLs: `VLLM_ENDPOINT`, `TRANSLATION_VLLM_ENDPOINT`, `EMBEDDING_SERVICE_URL`, `RERANKER_SERVICE_URL`, `DOCLING_ENDPOINT`
+3. Propagates `VLLM_API_KEY` from vault
+
+For manual setup (Compose mode), set in `.env` (Section 14):
 
 ```bash
 GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
-VLLM_API_KEY=<your-api-key>        # API key from GPU node
-NODE_TLS_REJECT_UNAUTHORIZED=0     # If GPU node uses self-signed certs
+GPU_MODEL_REPLICAS=0                # Skip local GPU containers
+VLLM_API_KEY=<your-api-key>         # API key from GPU node
+NODE_TLS_REJECT_UNAUTHORIZED=0      # If GPU node uses self-signed certs
 ```
 
 If the GPU node uses a self-signed certificate, see `env` Section 14 for TLS options.

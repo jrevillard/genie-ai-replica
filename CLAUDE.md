@@ -86,7 +86,7 @@ docker compose --profile opea up -d
 - Node labels control service placement (`gateway=true` for API gateway, `gpu=true` for OPEA/GPU services, `genieai=true` for GENIE.AI core services)
 - Only nginx ports (80, 443) are exposed; all other services are internal
 - Kong config is applied via `kong-config` one-shot Swarm service (auto-runs after deploy)
-- To skip OPEA services in Swarm: set `DEPLOY_OPEA=0` in `.env`; in compose up: simply omit `--profile opea`
+- To skip OPEA services in Swarm: set `DEPLOY_OPEA=0` in `.env`; in compose up: simply omit `--profile opea --profile gpu-models`
 - See `env` template Section 12 for multi-node variable overrides
 
 ### Docker Commands
@@ -325,9 +325,10 @@ Grafana is accessible via Kong route `/grafana/` with Keycloak OIDC SSO (no dire
 | `docker-compose.yaml` (root) | **Dual-mode** | Single compose file for both `docker compose up` and `docker stack deploy` |
 
 The compose file supports two deployment modes:
-- **Single-node**: `docker compose up -d` (core services) or `docker compose --profile opea up -d` (full stack)
+- **Single-node**: `docker compose up -d` (core services) or `docker compose --profile opea --profile gpu-models up -d` (full stack with local GPU)
 - **Single-node**: `docker compose --profile observability up -d` (core + observability)
 - **Docker Swarm**: `docker stack deploy` with Ansible (full stack, OPEA controlled by `DEPLOY_OPEA` env var, observability by `ENABLE_OBSERVABILITY`)
+- **Remote GPU node**: `--profile opea` only (skips `gpu-models` profile containers) or `GPU_MODEL_REPLICAS=0` in Swarm
 
 **GPU Configuration**: Use GPU-specific env files with your .env:
 ```bash
@@ -341,12 +342,15 @@ All services are defined in the root `docker-compose.yaml` with cloud-native con
 
 ```
 docker-compose.yaml (root - single source of truth, dual-mode)
-├── Layer 1: OPEA AI/ML Infrastructure (profiles: [opea])
-│   ├── vLLM (LLM inference)
-│   ├── TEI (embeddings/reranking)
-│   ├── Retriever
-│   ├── Dataprep
-│   └── ChatQnA
+├── Layer 1: OPEA AI/ML Infrastructure
+│   ├── Orchestrators (profiles: [opea])
+│   │   ├── ChatQnA, Retriever, Dataprep, Embedding, Reranker
+│   │   └── Endpoints overrideable via env vars (remote GPU support)
+│   └── GPU Models (profiles: [gpu-models], GPU_MODEL_REPLICAS for Swarm)
+│       ├── vLLM (LLM inference)
+│       ├── vLLM Translation
+│       ├── TEI Embedding, TEI Reranker
+│       └── Skipped when using remote GPU node
 ├── Layer 2: GENIE.AI Services
 │   ├── Frontend (Vue 3)
 │   ├── Backend (Node.js)
@@ -369,12 +373,23 @@ docker-compose.yaml (root - single source of truth, dual-mode)
 # Core services only (local development)
 docker compose up -d
 
-# Full stack with OPEA/AI services
-docker compose --profile opea up -d
+# Full stack with OPEA/AI services (local GPU)
+docker compose --profile opea --profile gpu-models up -d
 
 # With GPU-specific configuration
-docker compose --env-file .env --env-file env.t4 --profile opea up -d
+docker compose --env-file .env --env-file env.t4 --profile opea --profile gpu-models up -d
+
+# Remote GPU node (orchestrators only, GPU containers skipped)
+docker compose --profile opea up -d  # with GPU_NODE_HOST set in .env
 ```
+
+### Remote GPU Node
+
+When using a dedicated GPU node (`GPU_NODE_HOST` in `.env`):
+- GPU-heavy containers (vllm, tei, tei_reranker, vllm-translation-guardrail) are skipped
+- Orchestrator endpoints are overridden to point to `https://<gpu-node-host>/<path>/`
+- `VLLM_API_KEY` authenticates with the GPU node nginx proxy
+- See `env` Section 14 for all variables and TLS options
 
 ## Database Schema (ArangoDB)
 

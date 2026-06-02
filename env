@@ -647,6 +647,13 @@ KC_GRAFANA_CLIENT_SECRET=
 #   DNS hostname or IP of the remote GPU node.
 #   All services below derive their URLs from this variable.
 #
+# GPU_MODEL_REPLICAS=0
+#   Set to 0 to skip GPU-heavy containers (vllm, tei, tei_reranker,
+#   vllm-translation-guardrail) on the app node when using a remote GPU node.
+#   Docker Compose: use --profile opea only (gpu-models profile is excluded).
+#   Docker Swarm: set in .env; defaults to DEPLOY_OPEA value when unset.
+#   Ansible: set automatically when gpu_node_host is configured.
+#
 # GPU_PUBLIC_DOMAIN=gpu.example.com
 #   Public domain for the GPU node (used by certbot for TLS certificates).
 #   Typically same as GPU_NODE_HOST. Set on the GPU node in .env.

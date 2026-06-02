@@ -3,21 +3,21 @@
 # =============================================================================
 #
 # Dedicated GPU node for AI model services, deployed behind nginx with
-# TLS termination and API key authentication.
+# TLS termination and API key authentication on port 443.
+#
+# Path-based routing (nginx):
+#   /llm/         - vLLM (LLM inference)
+#   /translation/ - vLLM (Translation model)
+#   /embed/       - TEI (Embedding)
+#   /rerank/      - TEI (Reranker)
+#   /docling/     - docling-serve (Document extraction)
 #
 # Usage:
 #   docker compose -f docker-compose.gpu.yaml up -d                    # Core GPU services
 #   docker compose -f docker-compose.gpu.yaml --profile letsencrypt up -d  # + certbot
 #
-# Services:
-#   Port 9400 - vLLM (LLM inference)
-#   Port 9401 - vLLM (Translation model)
-#   Port 9402 - TEI (Embedding)
-#   Port 9403 - TEI (Reranker)
-#   Port 9404 - docling-serve (Document extraction)
-#
-# All ports are exposed on the host for nginx to proxy.
-# nginx handles TLS termination and API key authentication.
+# On the app node, set GPU_MODEL_REPLICAS=0 (Swarm) or use --profile opea
+# (Compose) to skip local GPU containers and route to this node instead.
 # =============================================================================
 
 volumes:

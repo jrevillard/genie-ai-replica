@@ -160,6 +160,7 @@
           -subj "/CN={{ gpu_public_domain }}"
         creates: "{{ gpu_deploy_dir }}/ssl/server.crt"
       register: gpu_self_signed
+      when: gpu_self_signed_certs | default(true)
 
     - name: Copy SSL certificates to Docker volume
       ansible.builtin.copy:

@@ -670,7 +670,7 @@ KC_GRAFANA_CLIENT_SECRET=
 #   Contact the GPU node administrator to obtain your key.
 #
 # Self-signed TLS certificate:
-#   The GPU node uses a self-signed certificate for private IP deployments.
+#   If the GPU node uses a self-signed certificate (private IP, no Let's Encrypt),
 #   Option A — Disable TLS verification (simpler, private network only):
 #     NODE_TLS_REJECT_UNAUTHORIZED=0
 #   Option B — Trust the certificate (recommended for production):

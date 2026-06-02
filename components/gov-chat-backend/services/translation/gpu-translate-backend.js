@@ -2,6 +2,9 @@ const { logger } = require('../../shared-lib');
 const http = require('http');
 const https = require('https');
 
+// API key for remote GPU node authentication (injected via OPEA_API_KEY env var)
+const OPEA_API_KEY = process.env.OPEA_API_KEY || '';
+
 /**
  * GPU Translation Backend
  *
@@ -92,6 +95,18 @@ class GpuTranslateBackend {
   /**
    * Health check for vLLM service
    */
+  /**
+   * Build base headers for vLLM requests (injects OPEA_API_KEY when set).
+   * @returns {Object} Headers object
+   */
+  _buildHeaders(extraHeaders = {}) {
+    const headers = { ...extraHeaders };
+    if (OPEA_API_KEY) {
+      headers['X-API-Key'] = OPEA_API_KEY;
+    }
+    return headers;
+  }
+
   async healthCheck() {
     try {
       const url = new URL(this.endpoint);
@@ -104,6 +119,7 @@ class GpuTranslateBackend {
           port: url.port || this.port,
           path: '/health', // Try health endpoint first
           method: 'GET',
+          headers: this._buildHeaders(),
           timeout: 5000
         };
 
@@ -151,6 +167,7 @@ class GpuTranslateBackend {
           port: url.port || this.port,
           path: '/v1/models',
           method: 'GET',
+          headers: this._buildHeaders(),
           timeout: 5000
         };
 
@@ -330,10 +347,10 @@ class GpuTranslateBackend {
         port: url.port || this.port,
         path: '/v1/chat/completions',
         method: 'POST',
-        headers: {
+        headers: this._buildHeaders({
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData)
-        },
+        }),
         timeout: 30000 // 30 second timeout
       };
 

@@ -668,4 +668,13 @@ KC_GRAFANA_CLIENT_SECRET=
 #   API key for authenticating with the GPU node nginx proxy.
 #   One key per GENIE.AI instance, shared across all 5 GPU services.
 #   Contact the GPU node administrator to obtain your key.
+#
+# Self-signed TLS certificate:
+#   The GPU node uses a self-signed certificate for private IP deployments.
+#   Option A — Disable TLS verification (simpler, private network only):
+#     NODE_TLS_REJECT_UNAUTHORIZED=0
+#   Option B — Trust the certificate (recommended for production):
+#     Copy gpu-node.crt from the GPU node and set:
+#     NODE_EXTRA_CA_CERTS=/path/to/gpu-node.crt      (Node.js)
+#     REQUESTS_CA_BUNDLE=/path/to/gpu-node.crt         (Python)
 

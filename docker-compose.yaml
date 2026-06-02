@@ -463,7 +463,7 @@ services:
       # Translation backend model ID — must match the model loaded in vllm-translation-guardrail
       - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
       # Remote GPU node translation endpoint override
-      - VLLM_TRANSLATION_ENDPOINT=${TRANSLATION_VLLM_ENDPOINT:-http://vllm-translation-guardrail:9031}
+      - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}
       # OPEA runtime patches for remote GPU node (SSL bypass + API key injection)
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-}
       - OPEA_API_KEY=${OPEA_API_KEY:-}
@@ -735,7 +735,7 @@ services:
     restart: unless-stopped
     image: opea/translation:latest
     environment:
-      - LLM_ENDPOINT=${TRANSLATION_VLLM_ENDPOINT:-http://vllm-translation-guardrail:9031}
+      - LLM_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}
       - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
     # Internal only
     # ports:
@@ -764,7 +764,7 @@ services:
     restart: unless-stopped
     image: opea/guardrails:latest
     environment:
-      - LLM_ENDPOINT=${TRANSLATION_VLLM_ENDPOINT:-http://vllm-translation-guardrail:9031}
+      - LLM_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}
       - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
       - SAFETY_GUARD_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
       - GUARDRAILS_COMPONENT_NAME=OPEA_LLM_GUARD
@@ -1088,7 +1088,7 @@ services:
       LLM_SERVER_HOST_IP: vllm
       LLM_SERVER_PORT: 8000
       VLLM_LLM_ENDPOINT: ${VLLM_ENDPOINT:-}
-      VLLM_TRANSLATION_ENDPOINT: ${TRANSLATION_VLLM_ENDPOINT:-}
+      VLLM_TRANSLATION_ENDPOINT: ${VLLM_TRANSLATION_ENDPOINT:-}
       GUARDRAIL_SERVICE_HOST_IP: guardrail
       GUARDRAIL_SERVICE_PORT: 9090
       TRANSLATION_SERVICE_HOST_IP: vllm-translation-guardrail

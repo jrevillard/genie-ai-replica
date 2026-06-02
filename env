@@ -659,7 +659,7 @@ KC_GRAFANA_CLIENT_SECRET=
 #   Typically same as GPU_NODE_HOST. Set on the GPU node in .env.
 #
 # VLLM_ENDPOINT=https://${GPU_NODE_HOST}/llm
-# TRANSLATION_VLLM_ENDPOINT=https://${GPU_NODE_HOST}/translation
+# VLLM_TRANSLATION_ENDPOINT=https://${GPU_NODE_HOST}/translation
 # EMBEDDING_SERVICE_URL=https://${GPU_NODE_HOST}/embed
 # RERANKER_SERVICE_URL=https://${GPU_NODE_HOST}/rerank
 #

@@ -58,7 +58,7 @@ describe('Configuration Validation Suite', () => {
     // Section 14: Remote GPU Node — used by app node to point to GPU node
     'GPU_NODE_HOST',
     'VLLM_ENDPOINT',
-    'TRANSLATION_VLLM_ENDPOINT',
+    'VLLM_TRANSLATION_ENDPOINT',
     'EMBEDDING_SERVICE_URL',
     'RERANKER_SERVICE_URL',
     'DOCLING_ENDPOINT',

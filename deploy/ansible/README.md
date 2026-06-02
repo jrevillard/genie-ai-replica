@@ -486,7 +486,7 @@ All services are behind nginx with TLS termination and API key authentication on
 When `gpu_node_host` is set in `group_vars/<env>/vars.yml`, Ansible automatically:
 
 1. Sets `GPU_MODEL_REPLICAS=0` (skips GPU-heavy containers on the app node)
-2. Generates endpoint URLs: `VLLM_ENDPOINT`, `TRANSLATION_VLLM_ENDPOINT`, `EMBEDDING_SERVICE_URL`, `RERANKER_SERVICE_URL`, `DOCLING_ENDPOINT`
+2. Generates endpoint URLs: `VLLM_ENDPOINT`, `VLLM_TRANSLATION_ENDPOINT`, `EMBEDDING_SERVICE_URL`, `RERANKER_SERVICE_URL`, `DOCLING_ENDPOINT`
 3. Propagates `VLLM_API_KEY` from vault
 
 For manual setup (Compose mode), set in `.env` (Section 14):

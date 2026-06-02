@@ -46,6 +46,14 @@ Worker  (genieai=true)                → GENIE.AI services
 Worker  (gpu=true)                     → GPU services
 ```
 
+**Remote GPU node** — dedicated GPU node deployed separately:
+```
+App node (gateway=true, genieai=true)  → All app services (no OPEA/GPU)
+GPU node (standalone)                   → 5 AI services behind nginx proxy
+```
+
+See [Remote GPU Node](#remote-gpu-node) below for details.
+
 ## Step 1: Initialize Swarm
 
 On the **manager node** (gateway):
@@ -745,3 +753,38 @@ docker exec $(docker ps -q | head -1) ping -c 1 backend
 ### DNS resolution delays
 
 Swarm overlay DNS may have delays on first resolution. This causes services to fail on startup and get restarted by the restart policy. This is normal behavior — services stabilize after a few restart cycles.
+
+## Remote GPU Node
+
+GENIE.AI supports deploying AI services on a dedicated GPU node, separate from the
+app stack. The GPU node runs 5 AI services behind nginx with TLS termination and
+API key authentication on port 443, using path-based routing.
+
+### Architecture
+
+```
+App node (Docker Swarm)                    GPU node (standalone)
+┌─────────────────────────┐                ┌─────────────────────────────┐
+│ Frontend, Backend,      │                │ nginx-gpu (port 443)       │
+│ ArangoDB, Redis, ...    │   HTTPS 443    │   /llm/        → vLLM LLM   │
+│                         │ ────────────── │   /translation/ → vLLM T    │
+│ ChatQnA ──────────────────────────────→ │   /embed/      → TEI Emb   │
+│ Retriever ────────────────────────────→ │   /rerank/     → TEI Rer   │
+│ Dataprep ────────────────────────────→ │   /docling/    → docling    │
+└─────────────────────────┘                └─────────────────────────────┘
+```
+
+### Connect the App Node
+
+Set in the app node's `.env` (Section 14):
+
+```bash
+GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
+VLLM_API_KEY=<your-api-key>        # API key from the GPU node administrator
+NODE_TLS_REJECT_UNAUTHORIZED=0     # If the GPU node uses a self-signed certificate
+```
+
+Then set `DEPLOY_OPEA=0` to skip local GPU services — the app node will use
+the remote GPU node endpoints instead.
+
+For GPU node deployment, see `deploy/ansible/README.md` (Remote GPU Node section).

@@ -414,6 +414,81 @@ The GPU env file is loaded first, then the Ansible-generated `.env` is loaded on
 **Ansible `.env` values take precedence** over GPU env file values for any duplicate variables.
 This allows per-environment tuning via Ansible while keeping GPU defaults in the committed files.
 
+### Remote GPU Node (Optional)
+
+GENIE.AI supports a standalone GPU node architecture. Instead of running
+AI services alongside the app stack, deploy a dedicated GPU node with its own compose file
+and nginx reverse proxy. The app node connects to the GPU node via HTTPS on port 443
+with path-based routing and API key authentication.
+
+#### Deploy the GPU Node
+
+The GPU node has its own Ansible playbook (`deploy-gpu.yml`) and inventory group:
+
+```bash
+# 1. Create inventory (separate group for the GPU node)
+cp inventory/inventory.example inventory/my-gpu.ini
+# Edit: set [my-gpu] group, update host IP
+
+# 2. Create environment config directory
+mkdir -p group_vars/my-gpu
+cp group_vars/itu_rtx_gpu_api/vars.yml group_vars/my-gpu/vars.yml
+# Edit: set gpu_public_domain, certbot_email, etc.
+
+# 3. Create encrypted secrets (GPU node vault)
+ansible-vault create group_vars/my-gpu/vault.yml
+# Required: hugging_face_hub_token, gpu_api_keys (list of {name, key} entries)
+
+# 4. Deploy
+ansible-playbook -i inventory/my-gpu.ini deploy-gpu.yml --vault-id my-gpu@prompt
+```
+
+Tagged re-runs:
+```bash
+ansible-playbook -i inventory/my-gpu.ini deploy-gpu.yml --vault-id my-gpu@prompt --tags install    # Docker + NVIDIA toolkit
+ansible-playbook -i inventory/my-gpu.ini deploy-gpu.yml --vault-id my-gpu@prompt --tags prepare    # Render configs (nginx, API keys, compose)
+ansible-playbook -i inventory/my-gpu.ini deploy-gpu.yml --vault-id my-gpu@prompt --tags deploy     # Deploy + smoke tests
+```
+
+#### GPU Node Services
+
+| Path | Backend | Description |
+|------|---------|-------------|
+| `/llm/` | vLLM (LLM inference) | OpenAI-compatible chat completions |
+| `/translation/` | vLLM (Translation) | Translation model inference |
+| `/embed/` | TEI (Embedding) | Text embedding for vector search |
+| `/rerank/` | TEI (Reranking) | Result reranking |
+| `/docling/` | docling-serve | Document extraction |
+
+All services are behind nginx with TLS termination and API key authentication on port 443.
+
+#### GPU Node Vault Secrets
+
+| Variable | Description |
+|----------|-------------|
+| `hugging_face_hub_token` | Hugging Face Hub token (model downloads) |
+| `gpu_api_keys` | List of API keys: `[{name: "key-name", key: "actual-api-key"}]` |
+
+#### GPU Node Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `gpu_public_domain` | `gpu.example.com` | Public domain (CN in TLS cert) |
+| `gpu_self_signed_certs` | `true` | Generate self-signed certs (set `false` for Let's Encrypt) |
+| `gpu_env_file` | `""` | GPU defaults file (empty = none) |
+
+#### Connect the App Node to the GPU Node
+
+Set in the app node's `.env` (Section 14):
+
+```bash
+GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
+VLLM_API_KEY=<your-api-key>        # API key from GPU node
+NODE_TLS_REJECT_UNAUTHORIZED=0     # If GPU node uses self-signed certs
+```
+
+If the GPU node uses a self-signed certificate, see `env` Section 14 for TLS options.
+
 ## Port Configuration
 
 If ports 80/443 are occupied (e.g. by another stack), override them in your environment config:

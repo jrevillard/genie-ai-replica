@@ -200,7 +200,24 @@ For RTX 6000 ADA (24GB VRAM):
 docker compose --env-file .env --env-file env.rtx6000 --profile opea up -d
 ```
 
-### 6e. Start with observability stack
+### 6e. Remote GPU Node (Optional)
+
+GENIE.AI supports connecting to a dedicated GPU node for AI services,
+deployed separately from the app stack. When configured, the app node
+routes AI requests to the GPU node via HTTPS on port 443 with API key
+authentication.
+
+To connect to a remote GPU node, set in `.env`:
+```bash
+GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
+VLLM_API_KEY=<your-api-key>        # API key from the GPU node administrator
+NODE_TLS_REJECT_UNAUTHORIZED=0     # If the GPU node uses a self-signed certificate
+```
+
+If the GPU node uses a self-signed certificate, see `env` Section 14 for
+alternative TLS options (trusting the certificate instead of disabling verification).
+
+### 6f. Start with observability stack
 
 To add the OTel Collector, VictoriaMetrics, VictoriaLogs, and Grafana monitoring stack:
 

@@ -165,6 +165,17 @@ sys.modules.setdefault("genieai_dataprep_loader", MagicMock())
 # Dataprep microservice importlib.import_module("integrations.genieai_dataprep_arangodb")
 sys.modules.setdefault("integrations.genieai_dataprep_arangodb", MagicMock())
 
+# genieai_dataprep_utils heavy import-time dependencies (cv2, easyocr, pymupdf, docling)
+sys.modules.setdefault("cv2", MagicMock())
+sys.modules.setdefault("easyocr", MagicMock())
+sys.modules.setdefault("pymupdf", MagicMock())
+_docling_mock = MagicMock()
+sys.modules.setdefault("docling", _docling_mock)
+sys.modules.setdefault("docling.datamodel", MagicMock())
+sys.modules.setdefault("docling.datamodel.base_models", MagicMock())
+sys.modules.setdefault("docling.datamodel.pipeline_options", MagicMock())
+sys.modules.setdefault("docling.document_converter", MagicMock())
+
 
 # ---------------------------------------------------------------------------
 # Autouse fixture — required env vars for every OPEA service

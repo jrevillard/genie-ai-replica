@@ -1,7 +1,7 @@
-'use strict';
+"use strict";
 
-const { aql } = require('arangojs');
-const { logger, dbService } = require('../shared-lib');
+const { aql } = require("arangojs");
+const { logger, dbService } = require("../shared-lib");
 
 /**
  * User Provisioning Service — JIT user provisioning via ArangoDB UPSERT
@@ -53,7 +53,7 @@ const userProvisioningService = {
   async initialize() {
     if (_initialized) return;
     _initialized = true;
-    logger.info('[UserProvisioning] Schema initialization complete');
+    logger.info("[UserProvisioning] Schema initialization complete");
   },
 
   /**
@@ -65,11 +65,11 @@ const userProvisioningService = {
   async provisionUser(decodedToken) {
     const issSub = decodedToken.iss_sub;
     if (!issSub) {
-      throw new Error('Missing iss_sub in decoded token');
+      throw new Error("Missing iss_sub in decoded token");
     }
 
     logger.debug(
-      `[UserProvisioning] name: "${decodedToken.name}", preferred_username: "${decodedToken.preferred_username}", email: "${decodedToken.email}", realm_access: ${JSON.stringify(decodedToken.realm_access)}, resource_access: ${JSON.stringify(decodedToken.resource_access)}`
+      `[UserProvisioning] name: "${decodedToken.name}", preferred_username: "${decodedToken.preferred_username}", email: "${decodedToken.email}", realm_access: ${JSON.stringify(decodedToken.realm_access)}, resource_access: ${JSON.stringify(decodedToken.resource_access)}`,
     );
 
     // Check cache first — avoids ArangoDB round-trip on every request
@@ -98,7 +98,7 @@ const userProvisioningService = {
    */
   async _doProvision(decodedToken) {
     const issSub = decodedToken.iss_sub;
-    const db = await dbService.getConnection('default');
+    const db = await dbService.getConnection("default");
 
     const now = new Date().toISOString();
 
@@ -112,11 +112,13 @@ const userProvisioningService = {
           FOR u IN users
             FILTER u.email == ${email} AND u.iss_sub == null
             RETURN u
-        `
+        `,
       );
       const legacyUser = await legacyCursor.next();
       if (legacyUser) {
-        logger.info(`[UserProvisioning] Migrating legacy user ${legacyUser._key} → iss_sub: ${issSub}`);
+        logger.info(
+          `[UserProvisioning] Migrating legacy user ${legacyUser._key} → iss_sub: ${issSub}`,
+        );
         await db.query(
           aql`
             FOR u IN users
@@ -133,7 +135,7 @@ const userProvisioningService = {
                 deletedAt: null,
                 updatedAt: ${now}
               } IN users
-          `
+          `,
         );
         // Invalidate any cache for this iss_sub to force fresh read after migration
         _cache.delete(issSub);
@@ -146,7 +148,7 @@ const userProvisioningService = {
         FOR u IN users
           FILTER u.iss_sub == ${issSub} AND u.deleted == true
           RETURN u
-      `
+      `,
     );
     const deletedUser = await checkCursor.next();
     const isReactivation = !!deletedUser;
@@ -165,7 +167,7 @@ const userProvisioningService = {
       active: true,
       deleted: false,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     };
 
     const updateDoc = {
@@ -174,7 +176,9 @@ const userProvisioningService = {
       emailVerified: decodedToken.email_verified || false,
       roles: decodedToken.realm_access?.roles || [],
       updatedAt: now,
-      ...(isReactivation ? { deleted: false, deletedAt: null, active: true } : {})
+      ...(isReactivation
+        ? { deleted: false, deletedAt: null, active: true }
+        : {}),
     };
 
     const cursor = await db.query(
@@ -183,13 +187,13 @@ const userProvisioningService = {
         INSERT ${newDoc}
         UPDATE ${updateDoc} IN users
         RETURN { new: NEW, old: OLD }
-      `
+      `,
     );
 
     const result = await cursor.next();
 
     if (!result || !result.new) {
-      throw new Error('User provisioning returned no result');
+      throw new Error("User provisioning returned no result");
     }
 
     const user = result.new;
@@ -217,7 +221,7 @@ const userProvisioningService = {
     // Invalidate cache so next request re-provisions (and hits deleted check)
     _cache.delete(issSub);
 
-    const db = await dbService.getConnection('default');
+    const db = await dbService.getConnection("default");
     const now = new Date().toISOString();
 
     const cursor = await db.query(
@@ -226,16 +230,18 @@ const userProvisioningService = {
           FILTER u.iss_sub == ${issSub}
           UPDATE u WITH { deleted: true, deletedAt: ${now}, updatedAt: ${now} } IN users
           RETURN NEW
-      `
+      `,
     );
 
     const result = await cursor.next();
     if (result) {
       logger.info(`[UserProvisioning] User marked as deleted: ${issSub}`);
     } else {
-      logger.warn(`[UserProvisioning] User not found for deletion marking: ${issSub}`);
+      logger.warn(
+        `[UserProvisioning] User not found for deletion marking: ${issSub}`,
+      );
     }
-  }
+  },
 };
 
 module.exports = userProvisioningService;

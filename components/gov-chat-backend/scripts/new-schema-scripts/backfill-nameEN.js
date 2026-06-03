@@ -26,46 +26,46 @@
  * - Install dependencies: `npm install arangojs dotenv`
  */
 
-const { Database, aql } = require('arangojs');
-require('dotenv').config();
+const { Database, aql } = require("arangojs");
+require("dotenv").config();
 
 async function main() {
   const dbConfig = {
-    url: process.env.ARANGO_URL || 'http://localhost:8529',
-    databaseName: process.env.ARANGO_DATABASE || 'genie-ai',
+    url: process.env.ARANGO_URL || "http://localhost:8529",
+    databaseName: process.env.ARANGO_DATABASE || "genie-ai",
     auth: {
-      username: process.env.ARANGO_USERNAME || 'root',
-      password: process.env.ARANGO_PASSWORD || 'test'
-    }
+      username: process.env.ARANGO_USERNAME || "root",
+      password: process.env.ARANGO_PASSWORD || "test",
+    },
   };
 
-  console.log('--- Backfill nameEN Migration Script ---');
+  console.log("--- Backfill nameEN Migration Script ---");
   console.log(`Database: ${dbConfig.url}/${dbConfig.databaseName}`);
 
   const db = new Database(dbConfig);
 
   try {
     await db.get();
-    console.log('Connected to ArangoDB successfully');
+    console.log("Connected to ArangoDB successfully");
   } catch (error) {
     console.error(`Failed to connect to ArangoDB: ${error.message}`);
     process.exit(1);
   }
 
-  const serviceCategories = db.collection('serviceCategories');
-  const services = db.collection('services');
+  const serviceCategories = db.collection("serviceCategories");
+  const services = db.collection("services");
 
   try {
     await serviceCategories.exists();
     await services.exists();
-    console.log('Required collections found');
+    console.log("Required collections found");
   } catch (error) {
     console.error(`Required collections missing: ${error.message}`);
     process.exit(1);
   }
 
   // Backfill serviceCategories.nameEN
-  console.log('\n=== Backfilling serviceCategories.nameEN ===');
+  console.log("\n=== Backfilling serviceCategories.nameEN ===");
   try {
     const cursor = await db.query(aql`
       FOR cat IN serviceCategories
@@ -81,7 +81,7 @@ async function main() {
     const categories = await cursor.all();
 
     if (categories.length === 0) {
-      console.log('All serviceCategories already have nameEN set correctly');
+      console.log("All serviceCategories already have nameEN set correctly");
     } else {
       for (const cat of categories) {
         await serviceCategories.update(cat._key, { nameEN: cat.nameEN });
@@ -94,7 +94,7 @@ async function main() {
   }
 
   // Backfill services.nameEN
-  console.log('\n=== Backfilling services.nameEN ===');
+  console.log("\n=== Backfilling services.nameEN ===");
   try {
     const cursor = await db.query(aql`
       FOR svc IN services
@@ -110,7 +110,7 @@ async function main() {
     const serviceList = await cursor.all();
 
     if (serviceList.length === 0) {
-      console.log('All services already have nameEN set correctly');
+      console.log("All services already have nameEN set correctly");
     } else {
       for (const svc of serviceList) {
         await services.update(svc._key, { nameEN: svc.nameEN });
@@ -122,7 +122,7 @@ async function main() {
     console.error(`Error backfilling services: ${error.message}`);
   }
 
-  console.log('\n=== Backfill complete ===');
+  console.log("\n=== Backfill complete ===");
   process.exit(0);
 }
 

@@ -13,19 +13,19 @@ class AppError extends Error {
 }
 
 class NotFoundError extends AppError {
-  constructor(message = 'Resource not found') {
+  constructor(message = "Resource not found") {
     super(message, 404);
   }
 }
 
 class ForbiddenError extends AppError {
-  constructor(message = 'Access denied') {
+  constructor(message = "Access denied") {
     super(message, 403);
   }
 }
 
 class ValidationError extends AppError {
-  constructor(message = 'Invalid input') {
+  constructor(message = "Invalid input") {
     super(message, 400);
   }
 }

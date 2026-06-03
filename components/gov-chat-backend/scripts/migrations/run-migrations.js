@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-'use strict';
+"use strict";
 
 /**
  * ArangoDB Migration Runner
@@ -21,26 +21,31 @@
  * - ARANGO_PASSWORD (required)
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '../../../.env') });
-const { Database } = require('arangojs');
-const fs = require('fs');
-const path = require('path');
+require("dotenv").config({
+  path: require("path").join(__dirname, "../../../.env"),
+});
+const { Database } = require("arangojs");
+const fs = require("fs");
+const path = require("path");
 
-const MIGRATIONS_DIR = path.join(__dirname, 'scripts', 'migrations');
-const COLLECTION_NAME = 'schema_migrations';
+const MIGRATIONS_DIR = path.join(__dirname, "scripts", "migrations");
+const COLLECTION_NAME = "schema_migrations";
 
 async function main() {
-  const dbUrl = process.env.ARANGO_URL || 'http://127.0.0.1:8529';
-  const dbName = process.env.ARANGO_DB || 'genie-ai';
-  const user = process.env.ARANGO_USER || 'root';
+  const dbUrl = process.env.ARANGO_URL || "http://127.0.0.1:8529";
+  const dbName = process.env.ARANGO_DB || "genie-ai";
+  const user = process.env.ARANGO_USER || "root";
   const password = process.env.ARANGO_PASSWORD;
 
   if (!password) {
-    console.error('[migrations] ERROR: ARANGO_PASSWORD is required');
+    console.error("[migrations] ERROR: ARANGO_PASSWORD is required");
     process.exit(1);
   }
 
-  const systemDb = new Database({ url: dbUrl, auth: { username: user, password } });
+  const systemDb = new Database({
+    url: dbUrl,
+    auth: { username: user, password },
+  });
   await systemDb.get();
   console.log(`[migrations] Connected to ArangoDB at ${dbUrl}`);
 
@@ -51,7 +56,11 @@ async function main() {
     console.log(`[migrations] Created database '${dbName}'`);
   }
 
-  const db = new Database({ url: dbUrl, databaseName: dbName, auth: { username: user, password } });
+  const db = new Database({
+    url: dbUrl,
+    databaseName: dbName,
+    auth: { username: user, password },
+  });
   await db.get();
   console.log(`[migrations] Connected to ${dbName} at ${dbUrl}`);
 
@@ -68,7 +77,7 @@ async function main() {
     .sort();
 
   if (files.length === 0) {
-    console.log('[migrations] No migration scripts found');
+    console.log("[migrations] No migration scripts found");
     return;
   }
 
@@ -78,7 +87,7 @@ async function main() {
   let skipped = 0;
 
   for (const file of files) {
-    const migrationKey = file.replace('.js', '');
+    const migrationKey = file.replace(".js", "");
 
     const doc = await collection.documentExists(migrationKey);
     if (doc) {
@@ -92,14 +101,14 @@ async function main() {
 
     try {
       const migration = require(path.join(MIGRATIONS_DIR, file));
-      if (typeof migration.up !== 'function') {
-        throw new Error('Migration must export an up(db) function');
+      if (typeof migration.up !== "function") {
+        throw new Error("Migration must export an up(db) function");
       }
       await migration.up(db);
 
       await collection.save({
         _key: migrationKey,
-        appliedAt: new Date().toISOString()
+        appliedAt: new Date().toISOString(),
       });
 
       const elapsed = Date.now() - startTime;
@@ -111,12 +120,14 @@ async function main() {
     }
   }
 
-  console.log(`[migrations] Done: ${applied} applied, ${skipped} skipped, ${files.length} total`);
+  console.log(
+    `[migrations] Done: ${applied} applied, ${skipped} skipped, ${files.length} total`,
+  );
 }
 
 main()
   .then(() => process.exit(0))
   .catch((err) => {
-    console.error('[migrations] Fatal error:', err.message);
+    console.error("[migrations] Fatal error:", err.message);
     process.exit(1);
   });

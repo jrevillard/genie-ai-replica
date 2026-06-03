@@ -1,9 +1,9 @@
-require('dotenv').config();
-const { aql } = require('arangojs');
-const { logger, dbService } = require('../shared-lib');
-const { Worker } = require('worker_threads');
-const path = require('path');
-const { NotFoundError } = require('../middleware/errors');
+require("dotenv").config();
+const { aql } = require("arangojs");
+const { logger, dbService } = require("../shared-lib");
+const { Worker } = require("worker_threads");
+const path = require("path");
+const { NotFoundError } = require("../middleware/errors");
 
 class QueryService {
   constructor() {
@@ -15,7 +15,7 @@ class QueryService {
     this.analyticsService = null; // Will be set via dependency injection
     this.chatHistoryService = null; // Will be set via dependency injection
     this.initialized = false;
-    logger.info('QueryService constructor called');
+    logger.info("QueryService constructor called");
   }
 
   /**
@@ -24,18 +24,20 @@ class QueryService {
    */
   async init() {
     if (this.initialized) {
-      logger.debug('QueryService already initialized, skipping');
+      logger.debug("QueryService already initialized, skipping");
       return;
     }
     try {
-      this.db = await this.dbService.getConnection('default');
-      this.queries = this.db.collection('queries');
-      this.serviceCategories = this.db.collection('serviceCategories');
-      this.services = this.db.collection('services');
+      this.db = await this.dbService.getConnection("default");
+      this.queries = this.db.collection("queries");
+      this.serviceCategories = this.db.collection("serviceCategories");
+      this.services = this.db.collection("services");
       this.initialized = true;
-      logger.info('QueryService initialized successfully');
+      logger.info("QueryService initialized successfully");
     } catch (error) {
-      logger.error(`Error initializing QueryService: ${error.message}`, { stack: error.stack });
+      logger.error(`Error initializing QueryService: ${error.message}`, {
+        stack: error.stack,
+      });
       throw error;
     }
   }
@@ -46,7 +48,7 @@ class QueryService {
    */
   setAnalyticsService(analyticsService) {
     this.analyticsService = analyticsService;
-    logger.info('QueryService.analytics_service_set');
+    logger.info("QueryService.analytics_service_set");
   }
 
   /**
@@ -55,7 +57,7 @@ class QueryService {
    */
   async setChatHistoryService(chatHistoryService) {
     this.chatHistoryService = chatHistoryService;
-    logger.info('QueryService.chat_history_service_set');
+    logger.info("QueryService.chat_history_service_set");
   }
 
   /**
@@ -66,25 +68,30 @@ class QueryService {
    */
   runOPEAWorker(url, payload, headers = null) {
     return new Promise((resolve, reject) => {
-      const workerPath = path.join(__dirname, './opea-worker.js');
+      const workerPath = path.join(__dirname, "./opea-worker.js");
       const worker = new Worker(workerPath);
 
-      worker.on('message', (msg) => {
-        if (msg.status === 'success') {
+      worker.on("message", (msg) => {
+        if (msg.status === "success") {
           resolve(msg.data);
         } else {
-          reject(new Error(msg.error ? msg.error.message : 'Worker execution failed'));
+          reject(
+            new Error(
+              msg.error ? msg.error.message : "Worker execution failed",
+            ),
+          );
         }
         worker.terminate();
       });
 
-      worker.on('error', (err) => {
+      worker.on("error", (err) => {
         reject(err);
         worker.terminate();
       });
 
-      worker.on('exit', (code) => {
-        if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`));
+      worker.on("exit", (code) => {
+        if (code !== 0)
+          reject(new Error(`Worker stopped with exit code ${code}`));
       });
 
       worker.postMessage({ url, payload, headers });
@@ -97,43 +104,44 @@ class QueryService {
    * @returns {Object} A mock response object { response, metadata }.
    */
   getMockOpeaResponse(queryData) {
-    logger.info('[DEBUG] Generating mock OPEA response for test mode.');
+    logger.info("[DEBUG] Generating mock OPEA response for test mode.");
     const { categoryLabel, serviceLabels } = queryData.context;
-    const lastMessage = queryData.messages[queryData.messages.length - 1].content.toLowerCase();
+    const lastMessage =
+      queryData.messages[queryData.messages.length - 1].content.toLowerCase();
 
     let response = `This is a general mock response. You asked about "${lastMessage}" within the context of "${categoryLabel}".`;
     const metadata = {
       source_documents: [],
-      confidence_score: Math.random() * (0.98 - 0.85) + 0.85
+      confidence_score: Math.random() * (0.98 - 0.85) + 0.85,
     };
 
     // Main theme response based on categoryLabel
     switch (categoryLabel) {
-      case 'Identity & Civil Registration':
+      case "Identity & Civil Registration":
         response = `This is a mock response regarding **Identity & Civil Registration**. This category covers services like applying for National IDs, passports, and birth certificates. What specific service do you need help with?`;
         break;
-      case 'Taxes & Revenue':
+      case "Taxes & Revenue":
         response = `This is a mock response for **Taxes & Revenue**. You can get assistance with filing returns, paying taxes, or getting a tax compliance certificate. Please specify what you need.`;
         break;
-      case 'Business & Trade':
+      case "Business & Trade":
         response = `This is a mock response for **Business & Trade**. We can help with business registration, permits, and licenses. How can I assist you today?`;
         break;
-      case 'Healthcare & Social Services':
+      case "Healthcare & Social Services":
         response = `This is a mock response for **Healthcare & Social Services**. This includes finding hospitals, information on national health insurance, and other social programs.`;
         break;
-      case 'Education & Learning':
+      case "Education & Learning":
         response = `This is a mock response for **Education & Learning**. You can find information on public schools, higher education loans, and curriculum details here.`;
         break;
-      case 'Transportation & Mobility':
+      case "Transportation & Mobility":
         response = `This is a mock response for **Transport & Licenses**. This covers driver's licenses, vehicle registration, and public transport information.`;
         break;
-      case 'Housing & Urban Development':
+      case "Housing & Urban Development":
         response = `This is a mock response for **Housing & Urban Development**. Information about affordable housing programs, land rates, and building permits can be found here.`;
         break;
-      case 'Employment & Labor Services':
+      case "Employment & Labor Services":
         response = `This is a mock response for **Employment & Labor Services**. We can provide information on job searching, labor laws, and workplace safety.`;
         break;
-      case 'General':
+      case "General":
         response = `This is a general mock response as no specific category was selected. I can answer questions about a wide range of government services. What would you like to know?`;
         break;
     }
@@ -141,68 +149,72 @@ class QueryService {
     // Add documents based on serviceLabels
     if (serviceLabels && serviceLabels.length > 0) {
       serviceLabels.forEach((label) => {
-        if (label.toLowerCase().includes('id')) {
+        if (label.toLowerCase().includes("id")) {
           metadata.source_documents.push({
             document_id: `doc_id_${Math.floor(Math.random() * 1000)}`,
-            url: 'http://example.com/docs/id_application_form.pdf',
-            text: 'Official form for National ID card application.',
-            categoryLabel: categoryLabel || 'Identity & Civil Registration',
+            url: "http://example.com/docs/id_application_form.pdf",
+            text: "Official form for National ID card application.",
+            categoryLabel: categoryLabel || "Identity & Civil Registration",
             serviceLabels: [label],
-            score: 0.95
+            score: 0.95,
           });
         }
-        if (label.toLowerCase().includes('birth registration')) {
+        if (label.toLowerCase().includes("birth registration")) {
           metadata.source_documents.push({
             document_id: `doc_birth_${Math.floor(Math.random() * 1000)}`,
-            url: 'http://example.com/docs/birth_registration_guide',
-            text: 'A step-by-step guide on registering a birth.',
-            categoryLabel: categoryLabel || 'Identity & Civil Registration',
+            url: "http://example.com/docs/birth_registration_guide",
+            text: "A step-by-step guide on registering a birth.",
+            categoryLabel: categoryLabel || "Identity & Civil Registration",
             serviceLabels: [label],
-            score: 0.98
+            score: 0.98,
           });
         }
-        if (label.toLowerCase().includes('passport')) {
+        if (label.toLowerCase().includes("passport")) {
           metadata.source_documents.push({
             document_id: `doc_passport_${Math.floor(Math.random() * 1000)}`,
-            url: 'http://example.com/docs/passport_application_ecitizen',
-            text: 'Link to the eCitizen portal for passport applications.',
-            categoryLabel: categoryLabel || 'Identity & Civil Registration',
+            url: "http://example.com/docs/passport_application_ecitizen",
+            text: "Link to the eCitizen portal for passport applications.",
+            categoryLabel: categoryLabel || "Identity & Civil Registration",
             serviceLabels: [label],
-            score: 0.93
+            score: 0.93,
           });
         }
-        if (label.toLowerCase().includes('tax')) {
+        if (label.toLowerCase().includes("tax")) {
           metadata.source_documents.push({
             document_id: `doc_tax_${Math.floor(Math.random() * 1000)}`,
-            url: 'http://example.com/docs/tax_payment_options',
-            text: 'Information on various methods to pay your taxes.',
-            categoryLabel: categoryLabel || 'Taxes & Revenue',
+            url: "http://example.com/docs/tax_payment_options",
+            text: "Information on various methods to pay your taxes.",
+            categoryLabel: categoryLabel || "Taxes & Revenue",
             serviceLabels: [label],
-            score: 0.91
+            score: 0.91,
           });
         }
-        if (label.toLowerCase().includes('business')) {
+        if (label.toLowerCase().includes("business")) {
           metadata.source_documents.push({
             document_id: `doc_biz_${Math.floor(Math.random() * 1000)}`,
-            url: 'http://example.com/docs/business_registration_requirements',
-            text: 'Checklist of requirements for starting a new business.',
-            categoryLabel: categoryLabel || 'Business & Trade',
+            url: "http://example.com/docs/business_registration_requirements",
+            text: "Checklist of requirements for starting a new business.",
+            categoryLabel: categoryLabel || "Business & Trade",
             serviceLabels: [label],
-            score: 0.96
+            score: 0.96,
           });
         }
       });
     }
 
     // If no specific documents were added but we have labels, add a generic one.
-    if (metadata.source_documents.length === 0 && serviceLabels && serviceLabels.length > 0) {
+    if (
+      metadata.source_documents.length === 0 &&
+      serviceLabels &&
+      serviceLabels.length > 0
+    ) {
       metadata.source_documents.push({
         document_id: `doc_generic_${Math.floor(Math.random() * 1000)}`,
-        url: 'http://example.com/docs/general_info',
-        text: `General information document related to your query about ${serviceLabels.join(', ')}.`,
-        categoryLabel: categoryLabel || 'General',
+        url: "http://example.com/docs/general_info",
+        text: `General information document related to your query about ${serviceLabels.join(", ")}.`,
+        categoryLabel: categoryLabel || "General",
         serviceLabels: serviceLabels,
-        score: 0.85
+        score: 0.85,
       });
     }
 
@@ -217,8 +229,8 @@ class QueryService {
    */
   parseChatQnASSELine(line) {
     const trimmed = line.trim();
-    if (trimmed === '[DONE]') {
-      return { type: 'done' };
+    if (trimmed === "[DONE]") {
+      return { type: "done" };
     }
     // Match Python repr: b'...' or b"..."
     const match = trimmed.match(/^b(['"])(.*)\1$/s);
@@ -228,23 +240,23 @@ class QueryService {
       // Decode Python repr escape sequences.
       // Order matters: \\ must be handled before \x to avoid consuming escaped backslashes.
       // Use placeholder for \\ so \x doesn't match the second backslash in \\xHH.
-      const BS = '\x00BS\x00';
+      const BS = "\x00BS\x00";
       content = content
         .replace(/\\\\/g, BS)
         .replace(/(?:\\x([0-9a-fA-F]{2}))+/g, (m) => {
-          const hex = m.replace(/\\x/g, '');
-          return Buffer.from(hex, 'hex').toString('utf8');
+          const hex = m.replace(/\\x/g, "");
+          return Buffer.from(hex, "hex").toString("utf8");
         })
-        .replace(/\\n/g, '\n')
-        .replace(/\\t/g, '\t')
-        .replace(/\\r/g, '\r')
+        .replace(/\\n/g, "\n")
+        .replace(/\\t/g, "\t")
+        .replace(/\\r/g, "\r")
         .replace(quote === "'" ? /\\'/g : /\\"/g, quote === '"' ? '"' : "'")
-        .replace(new RegExp(BS, 'g'), '\\')
+        .replace(new RegExp(BS, "g"), "\\")
         // eslint-disable-next-line no-control-regex -- intentional: strip control chars from LLM output
-        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
-      return { type: 'chunk', content };
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
+      return { type: "chunk", content };
     }
-    return { type: 'error', raw: trimmed };
+    return { type: "error", raw: trimmed };
   }
 
   /**
@@ -255,38 +267,40 @@ class QueryService {
    * @returns {Promise<Object>} { queryId, opeaUrl, opeaPayload, queryData }
    */
   async initStreamQuery(queryData, _authHeaders) {
-    logger.info('QueryService.init_stream_query_start');
+    logger.info("QueryService.init_stream_query_start");
 
     // Validation (reuse same logic as createQuery)
     const missingFields = [];
-    if (!queryData.userId) missingFields.push('userId');
-    if (!queryData.sessionId) missingFields.push('sessionId');
+    if (!queryData.userId) missingFields.push("userId");
+    if (!queryData.sessionId) missingFields.push("sessionId");
 
     if (!Array.isArray(queryData.messages) || queryData.messages.length === 0) {
       if (queryData.text) {
-        queryData.messages = [{ role: 'user', content: queryData.text }];
+        queryData.messages = [{ role: "user", content: queryData.text }];
       } else {
-        missingFields.push('messages');
+        missingFields.push("messages");
       }
     }
 
     if (!queryData.context) {
-      queryData.context = { categoryLabel: 'General', serviceLabels: [] };
+      queryData.context = { categoryLabel: "General", serviceLabels: [] };
     } else {
       if (!Array.isArray(queryData.context.serviceLabels)) {
         queryData.context.serviceLabels = [];
       }
       if (!queryData.context.categoryLabel) {
-        queryData.context.categoryLabel = 'General';
+        queryData.context.categoryLabel = "General";
       }
     }
 
     if (missingFields.length > 0) {
-      throw new Error(`Missing required query data. Fields: ${missingFields.join(', ')}`);
+      throw new Error(
+        `Missing required query data. Fields: ${missingFields.join(", ")}`,
+      );
     }
 
     const lastMessage = queryData.messages[queryData.messages.length - 1];
-    const queryText = lastMessage ? lastMessage.content : '';
+    const queryText = lastMessage ? lastMessage.content : "";
 
     // Resolve categoryId
     let categoryId = queryData.categoryId || null;
@@ -307,7 +321,10 @@ class QueryService {
 
     // Resolve serviceIds
     let serviceIds = queryData.serviceId ? [queryData.serviceId] : [];
-    if (queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0) {
+    if (
+      queryData.context?.serviceLabels?.length > 0 &&
+      serviceIds.length === 0
+    ) {
       try {
         const servicesQuery = aql`
             FOR svc IN ${this.services}
@@ -321,7 +338,8 @@ class QueryService {
       }
     }
 
-    const backendMode = process.env.CONTEXT_OPTION || 'conversation-with-context-labels';
+    const backendMode =
+      process.env.CONTEXT_OPTION || "conversation-with-context-labels";
 
     const basicQueryDoc = {
       userId: queryData.userId,
@@ -334,20 +352,20 @@ class QueryService {
       contextOption: backendMode,
       messages: queryData.messages,
       context: queryData.context,
-      text: queryText
+      text: queryText,
     };
 
     const query = await this.queries.save(basicQueryDoc);
     const queryId = query._key;
-    logger.info('QueryService.stream_query_created', { queryId });
+    logger.info("QueryService.stream_query_created", { queryId });
 
     // Build OPEA payload with stream: true
-    const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
-    const opeaPort = process.env.OPEA_PORT || '8888';
+    const opeaHost = process.env.OPEA_HOST || "e2e-109-198";
+    const opeaPort = process.env.OPEA_PORT || "8888";
     const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
 
     let opeaPayload;
-    if (backendMode === 'single-message') {
+    if (backendMode === "single-message") {
       opeaPayload = { messages: queryText, stream: true };
     } else {
       opeaPayload = {
@@ -355,9 +373,9 @@ class QueryService {
         context: {
           categoryLabel: queryData.context.categoryLabel,
           serviceLabels: queryData.context.serviceLabels,
-          language: queryData.context.language
+          language: queryData.context.language,
         },
-        stream: true
+        stream: true,
       };
     }
 
@@ -372,26 +390,34 @@ class QueryService {
    * @param {Object} metadata - Metadata object (source_documents, confidence_score)
    */
   async finalizeStreamQuery(queryId, responseText, responseTime, metadata) {
-    logger.info('QueryService.finalize_stream_query_start', { queryId });
+    logger.info("QueryService.finalize_stream_query_start", { queryId });
 
     const updateData = {
       response: responseText,
       responseTime,
       isAnswered: true,
-      metadata
+      metadata,
     };
     await this.queries.update(queryId, updateData);
 
     // Record analytics
     if (this.analyticsService) {
       try {
-        await this.analyticsService.recordQuery(await this.queries.document(queryId));
+        await this.analyticsService.recordQuery(
+          await this.queries.document(queryId),
+        );
       } catch (error) {
-        logger.error('QueryService.stream_analytics_failed', { queryId, error: error.message });
+        logger.error("QueryService.stream_analytics_failed", {
+          queryId,
+          error: error.message,
+        });
       }
     }
 
-    logger.info('QueryService.finalize_stream_query_complete', { queryId, responseTime });
+    logger.info("QueryService.finalize_stream_query_complete", {
+      queryId,
+      responseTime,
+    });
   }
 
   /**
@@ -402,87 +428,115 @@ class QueryService {
   async createQuery(queryData, headers = null) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.create_query_start');
-      logger.info(`[DEBUG] Received full request payload from frontend: ${JSON.stringify(queryData, null, 2)}`);
+      logger.info("QueryService.create_query_start");
+      logger.info(
+        `[DEBUG] Received full request payload from frontend: ${JSON.stringify(queryData, null, 2)}`,
+      );
 
-      const backendMode = process.env.CONTEXT_OPTION || 'conversation-with-context-labels';
+      const backendMode =
+        process.env.CONTEXT_OPTION || "conversation-with-context-labels";
       logger.info(`[DEBUG] Backend is configured in "${backendMode}" mode.`);
 
-      logger.info('[DEBUG] Starting validation of incoming data...');
+      logger.info("[DEBUG] Starting validation of incoming data...");
       const missingFields = [];
 
       if (!queryData.userId) {
-        logger.warn('[DEBUG] Validation FAILED: userId is missing.');
-        missingFields.push('userId');
+        logger.warn("[DEBUG] Validation FAILED: userId is missing.");
+        missingFields.push("userId");
       } else {
-        logger.info(`[DEBUG] Validation PASSED: userId is present (${queryData.userId}).`);
+        logger.info(
+          `[DEBUG] Validation PASSED: userId is present (${queryData.userId}).`,
+        );
       }
 
       if (!queryData.sessionId) {
-        logger.warn('[DEBUG] Validation FAILED: sessionId is missing.');
-        missingFields.push('sessionId');
+        logger.warn("[DEBUG] Validation FAILED: sessionId is missing.");
+        missingFields.push("sessionId");
       } else {
-        logger.info(`[DEBUG] Validation PASSED: sessionId is present (${queryData.sessionId}).`);
+        logger.info(
+          `[DEBUG] Validation PASSED: sessionId is present (${queryData.sessionId}).`,
+        );
       }
 
       // --- FIX: START messages VALIDATION ---
-      if (!Array.isArray(queryData.messages) || queryData.messages.length === 0) {
+      if (
+        !Array.isArray(queryData.messages) ||
+        queryData.messages.length === 0
+      ) {
         // Fallback: Check for the legacy 'text' field
         if (queryData.text) {
-          logger.warn('[DEBUG] Validation: messages array is missing. Synthesizing from legacy "text" field.');
+          logger.warn(
+            '[DEBUG] Validation: messages array is missing. Synthesizing from legacy "text" field.',
+          );
           // Create the messages array from the text field
-          queryData.messages = [{ role: 'user', content: queryData.text }];
-          logger.info(`[DEBUG] Validation PASSED: messages array synthesized with 1 item.`);
+          queryData.messages = [{ role: "user", content: queryData.text }];
+          logger.info(
+            `[DEBUG] Validation PASSED: messages array synthesized with 1 item.`,
+          );
         } else {
           // Only fail if BOTH messages and text are missing
           logger.warn(
-            '[DEBUG] Validation FAILED: messages array is missing or empty and no legacy "text" field found.'
+            '[DEBUG] Validation FAILED: messages array is missing or empty and no legacy "text" field found.',
           );
-          missingFields.push('messages');
+          missingFields.push("messages");
         }
       } else {
-        logger.info(`[DEBUG] Validation PASSED: messages array is present with ${queryData.messages.length} items.`);
+        logger.info(
+          `[DEBUG] Validation PASSED: messages array is present with ${queryData.messages.length} items.`,
+        );
       }
       // --- FIX: END messages VALIDATION ---
 
       // --- FIX: START context VALIDATION ---
       if (!queryData.context) {
-        logger.warn('[DEBUG] Validation: context object is missing. Supplying default context.');
+        logger.warn(
+          "[DEBUG] Validation: context object is missing. Supplying default context.",
+        );
         // Create a default context object
-        queryData.context = { categoryLabel: 'General', serviceLabels: [] };
-        logger.info('[DEBUG] Validation PASSED: Default context object supplied.');
+        queryData.context = { categoryLabel: "General", serviceLabels: [] };
+        logger.info(
+          "[DEBUG] Validation PASSED: Default context object supplied.",
+        );
       } else {
-        logger.info('[DEBUG] Validation PASSED: context object is present.');
+        logger.info("[DEBUG] Validation PASSED: context object is present.");
 
         // Also validate the internals of the provided context
         if (!Array.isArray(queryData.context.serviceLabels)) {
-          logger.warn('[DEBUG] Validation WARNING: context.serviceLabels is not an array. Defaulting to empty array.');
+          logger.warn(
+            "[DEBUG] Validation WARNING: context.serviceLabels is not an array. Defaulting to empty array.",
+          );
           queryData.context.serviceLabels = [];
         } else {
           logger.info(
-            `[DEBUG] Validation PASSED: context.serviceLabels is present with labels: ${queryData.context.serviceLabels.join(', ')}.`
+            `[DEBUG] Validation PASSED: context.serviceLabels is present with labels: ${queryData.context.serviceLabels.join(", ")}.`,
           );
         }
 
         if (!queryData.context.categoryLabel) {
-          logger.warn('[DEBUG] Validation WARNING: context.categoryLabel is missing. Defaulting to "General".');
-          queryData.context.categoryLabel = 'General';
+          logger.warn(
+            '[DEBUG] Validation WARNING: context.categoryLabel is missing. Defaulting to "General".',
+          );
+          queryData.context.categoryLabel = "General";
         }
       }
       // --- FIX: END context VALIDATION ---
 
       if (missingFields.length > 0) {
-        const errorMsg = `Missing required query data from frontend. Fields: ${missingFields.join(', ')}`;
-        logger.error('QueryService.missing_required_data', { missingFields: missingFields.join(', ') });
+        const errorMsg = `Missing required query data from frontend. Fields: ${missingFields.join(", ")}`;
+        logger.error("QueryService.missing_required_data", {
+          missingFields: missingFields.join(", "),
+        });
         throw new Error(errorMsg);
       }
-      logger.info('[DEBUG] All validations passed successfully.');
+      logger.info("[DEBUG] All validations passed successfully.");
 
       // Derive text from the last message for backward compatibility and analytics
       const lastMessage = queryData.messages[queryData.messages.length - 1];
-      const queryText = lastMessage ? lastMessage.content : '';
+      const queryText = lastMessage ? lastMessage.content : "";
       if (!queryText) {
-        logger.warn('No extractable text from messages; analytics may be affected.');
+        logger.warn(
+          "No extractable text from messages; analytics may be affected.",
+        );
       }
 
       // Resolve categoryLabel to categoryId if not provided
@@ -498,18 +552,27 @@ class QueryService {
           const cursor = await this.db.query(categoryQuery);
           categoryId = await cursor.next();
           if (!categoryId) {
-            logger.warn(`Category not found for label: ${queryData.context.categoryLabel}`);
+            logger.warn(
+              `Category not found for label: ${queryData.context.categoryLabel}`,
+            );
           } else {
-            logger.info(`Resolved categoryLabel "${queryData.context.categoryLabel}" to categoryId: ${categoryId}`);
+            logger.info(
+              `Resolved categoryLabel "${queryData.context.categoryLabel}" to categoryId: ${categoryId}`,
+            );
           }
         } catch (error) {
-          logger.error(`Error resolving categoryId: ${error.message}`, { stack: error.stack });
+          logger.error(`Error resolving categoryId: ${error.message}`, {
+            stack: error.stack,
+          });
         }
       }
 
       // Optionally resolve serviceLabels to serviceIds (array)
       let serviceIds = queryData.serviceId ? [queryData.serviceId] : []; // Preserve if provided (as single or array)
-      if (queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0) {
+      if (
+        queryData.context?.serviceLabels?.length > 0 &&
+        serviceIds.length === 0
+      ) {
         try {
           const servicesQuery = aql`
               FOR svc IN ${this.services}
@@ -519,12 +582,18 @@ class QueryService {
           const cursor = await this.db.query(servicesQuery);
           serviceIds = await cursor.all();
           if (serviceIds.length === 0) {
-            logger.warn(`No services found for labels: ${queryData.context.serviceLabels.join(', ')}`);
+            logger.warn(
+              `No services found for labels: ${queryData.context.serviceLabels.join(", ")}`,
+            );
           } else {
-            logger.info(`Resolved serviceLabels to serviceIds: ${serviceIds.join(', ')}`);
+            logger.info(
+              `Resolved serviceLabels to serviceIds: ${serviceIds.join(", ")}`,
+            );
           }
         } catch (error) {
-          logger.error(`Error resolving serviceIds: ${error.message}`, { stack: error.stack });
+          logger.error(`Error resolving serviceIds: ${error.message}`, {
+            stack: error.stack,
+          });
         }
       }
 
@@ -539,13 +608,13 @@ class QueryService {
         contextOption: backendMode,
         messages: queryData.messages,
         context: queryData.context,
-        text: queryText
+        text: queryText,
       };
 
-      logger.debug('QueryService.saving_query_document', { basicQueryDoc });
+      logger.debug("QueryService.saving_query_document", { basicQueryDoc });
       const query = await this.queries.save(basicQueryDoc);
       const queryId = query._key;
-      logger.info('QueryService.query_created', { queryId });
+      logger.info("QueryService.query_created", { queryId });
 
       let opeaResponseContent = null;
       let opeaMetadata = null;
@@ -553,108 +622,131 @@ class QueryService {
       const opeaStartTime = Date.now();
 
       // *** START: TEST MODE LOGIC ***
-      if (backendMode === 'test-mode') {
-        logger.info('[DEBUG] TEST MODE ACTIVATED. Bypassing OPEA call.');
+      if (backendMode === "test-mode") {
+        logger.info("[DEBUG] TEST MODE ACTIVATED. Bypassing OPEA call.");
         const mockData = this.getMockOpeaResponse(queryData);
         opeaResponseContent = mockData.response;
         opeaMetadata = mockData.metadata;
-        opeaResponseTime = Date.now() - opeaStartTime + Math.floor(Math.random() * 200); // Simulate network delay
+        opeaResponseTime =
+          Date.now() - opeaStartTime + Math.floor(Math.random() * 200); // Simulate network delay
 
-        logger.info(`[DEBUG] Mock response generated in ${opeaResponseTime}ms.`);
+        logger.info(
+          `[DEBUG] Mock response generated in ${opeaResponseTime}ms.`,
+        );
         logger.info(`[DEBUG] Mock Response Content: ${opeaResponseContent}`);
-        logger.info(`[DEBUG] Mock Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`);
+        logger.info(
+          `[DEBUG] Mock Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`,
+        );
 
         const updateData = {
           response: opeaResponseContent,
           responseTime: opeaResponseTime,
           isAnswered: true,
-          metadata: opeaMetadata
+          metadata: opeaMetadata,
         };
         await this.queries.update(queryId, updateData);
       } else {
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
-        const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
-        const opeaPort = process.env.OPEA_PORT || '8888';
+        const opeaHost = process.env.OPEA_HOST || "e2e-109-198";
+        const opeaPort = process.env.OPEA_PORT || "8888";
         const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
 
         let opeaPayload;
-        if (backendMode === 'single-message') {
-          logger.info('[DEBUG] Backend mode is "single-message". Extracting last message for OPEA.');
+        if (backendMode === "single-message") {
+          logger.info(
+            '[DEBUG] Backend mode is "single-message". Extracting last message for OPEA.',
+          );
           const lastMessage = queryData.messages[queryData.messages.length - 1];
-          const queryText = lastMessage ? lastMessage.content : '';
+          const queryText = lastMessage ? lastMessage.content : "";
 
           if (!queryText) {
-            throw new Error('Could not extract last message content for single-message mode.');
+            throw new Error(
+              "Could not extract last message content for single-message mode.",
+            );
           }
 
           opeaPayload = {
             messages: queryText,
             stream: false,
             context: {
-              language: queryData.context?.language
-            }
+              language: queryData.context?.language,
+            },
           };
         } else {
-          logger.info('[DEBUG] Backend mode is "conversation-with-labels". Formatting payload with full context.');
+          logger.info(
+            '[DEBUG] Backend mode is "conversation-with-labels". Formatting payload with full context.',
+          );
           opeaPayload = {
             messages: queryData.messages,
             context: {
               categoryLabel: queryData.context.categoryLabel,
               serviceLabels: queryData.context.serviceLabels,
-              language: queryData.context.language
+              language: queryData.context.language,
             },
-            stream: false
+            stream: false,
           };
         }
 
-        logger.info('[DEBUG] Sending request to OPEA via Worker Thread...');
-        logger.info(`[DEBUG] OPEA Payload: ${JSON.stringify(opeaPayload, null, 2)}`);
+        logger.info("[DEBUG] Sending request to OPEA via Worker Thread...");
+        logger.info(
+          `[DEBUG] OPEA Payload: ${JSON.stringify(opeaPayload, null, 2)}`,
+        );
 
         // *** CHANGED: Use Worker Thread for OPEA Call ***
-        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload, headers);
+        const workerResult = await this.runOPEAWorker(
+          opeaUrl,
+          opeaPayload,
+          headers,
+        );
 
         opeaResponseTime = workerResult.responseTime;
         opeaResponseContent = workerResult.response;
         opeaMetadata = workerResult.metadata;
 
-        logger.info(`[DEBUG] Worker thread returned result in ${opeaResponseTime}ms.`);
+        logger.info(
+          `[DEBUG] Worker thread returned result in ${opeaResponseTime}ms.`,
+        );
         logger.info(`[DEBUG] OPEA Response Content: ${opeaResponseContent}`);
-        logger.info(`[DEBUG] OPEA Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`);
+        logger.info(
+          `[DEBUG] OPEA Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`,
+        );
 
         const updateData = {
           response: opeaResponseContent,
           responseTime: opeaResponseTime,
           isAnswered: true,
-          metadata: opeaMetadata
+          metadata: opeaMetadata,
         };
         await this.queries.update(queryId, updateData);
       }
 
       // Record the query in analytics
       if (this.analyticsService) {
-        await this.analyticsService.recordQuery(await this.queries.document(queryId));
+        await this.analyticsService.recordQuery(
+          await this.queries.document(queryId),
+        );
       }
 
       const totalDuration = Date.now() - startTime;
-      logger.info('QueryService.create_query_complete', {
+      logger.info("QueryService.create_query_complete", {
         queryId,
         mode: backendMode,
         responseTime: opeaResponseTime,
-        totalDuration
+        totalDuration,
       });
 
       return {
         queryId,
         response: opeaResponseContent,
         metadata: opeaMetadata,
-        responseTime: opeaResponseTime
+        responseTime: opeaResponseTime,
       };
     } catch (error) {
       const totalDuration = Date.now() - startTime;
-      logger.error('QueryService.create_query_failed', {
+      logger.error("QueryService.create_query_failed", {
         error: error.message,
         stack: error.stack,
-        durationMs: totalDuration
+        durationMs: totalDuration,
       });
       throw error;
     }
@@ -669,55 +761,55 @@ class QueryService {
   async addFeedback(queryId, feedback) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.add_feedback_start', { queryId });
+      logger.info("QueryService.add_feedback_start", { queryId });
 
       // Ensure feedback has required fields
       if (feedback.rating === undefined) {
-        logger.warn('QueryService.feedback_rating_required', { queryId });
-        throw new Error('Feedback rating is required');
+        logger.warn("QueryService.feedback_rating_required", { queryId });
+        throw new Error("Feedback rating is required");
       }
 
       // Prepare feedback object
       const userFeedback = {
         rating: feedback.rating,
-        comment: feedback.comment || '',
-        providedAt: new Date().toISOString()
+        comment: feedback.comment || "",
+        providedAt: new Date().toISOString(),
       };
 
       // Update the query with feedback
       const updatedQuery = await this.queries.update(
         queryId,
         {
-          userFeedback
+          userFeedback,
         },
-        { returnNew: true }
+        { returnNew: true },
       );
 
       // Update analytics if service is set
       if (this.analyticsService) {
         try {
           await this.analyticsService.recordFeedback(queryId, userFeedback);
-          logger.info('QueryService.analytics_feedback_updated', { queryId });
+          logger.info("QueryService.analytics_feedback_updated", { queryId });
         } catch (error) {
-          logger.error('QueryService.update_analytics_feedback_failed', {
+          logger.error("QueryService.update_analytics_feedback_failed", {
             queryId,
-            error: error.message
+            error: error.message,
           });
           // Continue even if analytics update fails
         }
       }
 
-      logger.info('QueryService.feedback_added', {
+      logger.info("QueryService.feedback_added", {
         queryId,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return updatedQuery.new;
     } catch (error) {
-      logger.error('QueryService.add_feedback_failed', {
+      logger.error("QueryService.add_feedback_failed", {
         queryId,
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       throw error;
     }
@@ -731,19 +823,19 @@ class QueryService {
   async getQuery(queryId) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.get_query_start', { queryId });
+      logger.info("QueryService.get_query_start", { queryId });
       const query = await this.queries.document(queryId);
-      logger.info('QueryService.query_retrieved', {
+      logger.info("QueryService.query_retrieved", {
         queryId,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return query;
     } catch (error) {
-      logger.error('QueryService.get_query_failed', {
+      logger.error("QueryService.get_query_failed", {
         queryId,
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       throw error;
     }
@@ -758,27 +850,30 @@ class QueryService {
   async markAsAnswered(queryId, responseTime = 0) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.mark_as_answered_start', { queryId, responseTime });
+      logger.info("QueryService.mark_as_answered_start", {
+        queryId,
+        responseTime,
+      });
       const updatedQuery = await this.queries.update(
         queryId,
         {
           isAnswered: true,
-          responseTime
+          responseTime,
         },
-        { returnNew: true }
+        { returnNew: true },
       );
 
-      logger.info('QueryService.query_marked_answered', {
+      logger.info("QueryService.query_marked_answered", {
         queryId,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return updatedQuery.new;
     } catch (error) {
-      logger.error('QueryService.mark_as_answered_failed', {
+      logger.error("QueryService.mark_as_answered_failed", {
         queryId,
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       throw error;
     }
@@ -793,12 +888,18 @@ class QueryService {
   async updateQueryResponseTime(queryId, responseTime) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.update_query_response_time_start', { queryId, responseTime });
+      logger.info("QueryService.update_query_response_time_start", {
+        queryId,
+        responseTime,
+      });
 
       // Validate responseTime
-      if (typeof responseTime !== 'number' || responseTime < 0) {
-        logger.warn('QueryService.invalid_response_time', { queryId, responseTime });
-        throw new Error('Invalid response time');
+      if (typeof responseTime !== "number" || responseTime < 0) {
+        logger.warn("QueryService.invalid_response_time", {
+          queryId,
+          responseTime,
+        });
+        throw new Error("Invalid response time");
       }
 
       // Update the query with response time
@@ -806,22 +907,22 @@ class QueryService {
         queryId,
         {
           responseTime,
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
         },
-        { returnNew: true }
+        { returnNew: true },
       );
 
-      logger.info('QueryService.query_response_time_updated', {
+      logger.info("QueryService.query_response_time_updated", {
         queryId,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return updatedQuery.new;
     } catch (error) {
-      logger.error('QueryService.update_query_response_time_failed', {
+      logger.error("QueryService.update_query_response_time_failed", {
         queryId,
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       throw error;
     }
@@ -837,7 +938,11 @@ class QueryService {
   async setQueryCategory(queryId, categoryId, serviceId = null) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.set_query_category_start', { queryId, categoryId, serviceId });
+      logger.info("QueryService.set_query_category_start", {
+        queryId,
+        categoryId,
+        serviceId,
+      });
 
       // Update the query with category and service
       const updateData = { categoryId };
@@ -845,51 +950,59 @@ class QueryService {
         updateData.serviceId = serviceId;
       }
 
-      const updatedQuery = await this.queries.update(queryId, updateData, { returnNew: true });
+      const updatedQuery = await this.queries.update(queryId, updateData, {
+        returnNew: true,
+      });
 
       // Update or create edge between query and category
       try {
         const edgeCursor = await this.db.query(aql`
           FOR edge IN queryCategories
-            FILTER edge._from == ${'queries/' + queryId}
+            FILTER edge._from == ${"queries/" + queryId}
             RETURN edge
         `);
 
         const existingEdge = await edgeCursor.next();
 
         if (existingEdge) {
-          logger.debug('QueryService.updating_query_category_edge', { queryId });
-          await this.db.collection('queryCategories').update(existingEdge._key, {
-            _to: `serviceCategories/${categoryId}`,
-            updatedAt: new Date().toISOString()
+          logger.debug("QueryService.updating_query_category_edge", {
+            queryId,
           });
+          await this.db
+            .collection("queryCategories")
+            .update(existingEdge._key, {
+              _to: `serviceCategories/${categoryId}`,
+              updatedAt: new Date().toISOString(),
+            });
         } else {
-          logger.debug('QueryService.creating_query_category_edge', { queryId });
-          await this.db.collection('queryCategories').save({
+          logger.debug("QueryService.creating_query_category_edge", {
+            queryId,
+          });
+          await this.db.collection("queryCategories").save({
             _from: `queries/${queryId}`,
             _to: `serviceCategories/${categoryId}`,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
           });
         }
       } catch (error) {
-        logger.error('QueryService.update_query_category_edge_failed', {
+        logger.error("QueryService.update_query_category_edge_failed", {
           queryId,
-          error: error.message
+          error: error.message,
         });
         // Continue even if edge update fails
       }
 
-      logger.info('QueryService.category_set', {
+      logger.info("QueryService.category_set", {
         queryId,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return updatedQuery.new;
     } catch (error) {
-      logger.error('QueryService.set_query_category_failed', {
+      logger.error("QueryService.set_query_category_failed", {
         queryId,
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       throw error;
     }
@@ -905,7 +1018,11 @@ class QueryService {
   async searchQueries(criteria, limit = 20, offset = 0) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.search_queries_start', { criteria, limit, offset });
+      logger.info("QueryService.search_queries_start", {
+        criteria,
+        limit,
+        offset,
+      });
 
       const filterConditions = [];
 
@@ -918,7 +1035,9 @@ class QueryService {
       }
 
       if (criteria.text) {
-        filterConditions.push(aql`LOWER(q.text) LIKE CONCAT("%", LOWER(${criteria.text}), "%")`);
+        filterConditions.push(
+          aql`LOWER(q.text) LIKE CONCAT("%", LOWER(${criteria.text}), "%")`,
+        );
       }
 
       if (criteria.categoryId) {
@@ -950,11 +1069,15 @@ class QueryService {
       }
 
       if (criteria.minRating !== undefined) {
-        filterConditions.push(aql`q.userFeedback.rating >= ${criteria.minRating}`);
+        filterConditions.push(
+          aql`q.userFeedback.rating >= ${criteria.minRating}`,
+        );
       }
 
       if (criteria.maxRating !== undefined) {
-        filterConditions.push(aql`q.userFeedback.rating <= ${criteria.maxRating}`);
+        filterConditions.push(
+          aql`q.userFeedback.rating <= ${criteria.maxRating}`,
+        );
       }
 
       if (criteria.tags && criteria.tags.length > 0) {
@@ -1000,10 +1123,10 @@ class QueryService {
       const countCursor = await this.db.query(countQuery);
       const totalCount = (await countCursor.next()) || 0;
 
-      logger.info('QueryService.search_queries_completed', {
+      logger.info("QueryService.search_queries_completed", {
         resultCount: queries.length,
         totalCount,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return {
         queries,
@@ -1012,15 +1135,15 @@ class QueryService {
           limit,
           offset,
           pages: Math.ceil(totalCount / limit),
-          currentPage: Math.floor(offset / limit) + 1
-        }
+          currentPage: Math.floor(offset / limit) + 1,
+        },
       };
     } catch (error) {
-      logger.error('QueryService.search_queries_failed', {
+      logger.error("QueryService.search_queries_failed", {
         criteria,
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       throw error;
     }
@@ -1034,42 +1157,42 @@ class QueryService {
   async deleteQuery(queryId) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.delete_query_start', { queryId });
+      logger.info("QueryService.delete_query_start", { queryId });
 
       // Delete edges connected to the query
       try {
         await this.db.query(aql`
           FOR edge IN sessionQueries
-            FILTER edge._to == ${'queries/' + queryId}
+            FILTER edge._to == ${"queries/" + queryId}
             REMOVE edge IN sessionQueries
         `);
 
         await this.db.query(aql`
           FOR edge IN queryCategories
-            FILTER edge._from == ${'queries/' + queryId}
+            FILTER edge._from == ${"queries/" + queryId}
             REMOVE edge IN queryCategories
         `);
-        logger.info('QueryService.edges_deleted', { queryId });
+        logger.info("QueryService.edges_deleted", { queryId });
       } catch (error) {
-        logger.error('QueryService.delete_edges_failed', {
+        logger.error("QueryService.delete_edges_failed", {
           queryId,
-          error: error.message
+          error: error.message,
         });
         // Continue even if edge deletion fails
       }
 
       const result = await this.queries.remove(queryId);
-      logger.info('QueryService.query_deleted', {
+      logger.info("QueryService.query_deleted", {
         queryId,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return result;
     } catch (error) {
-      logger.error('QueryService.delete_query_failed', {
+      logger.error("QueryService.delete_query_failed", {
         queryId,
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       throw error;
     }
@@ -1084,14 +1207,30 @@ class QueryService {
   async getSimilarQueries(queryText, limit = 5) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.get_similar_queries_start', { queryText });
+      logger.info("QueryService.get_similar_queries_start", { queryText });
 
       const lowerQueryText = queryText.toLowerCase();
-      const stopWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'with', 'by'];
-      const words = lowerQueryText.split(/\s+/).filter((word) => word.length > 2 && !stopWords.includes(word));
+      const stopWords = [
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "but",
+        "in",
+        "on",
+        "at",
+        "to",
+        "for",
+        "with",
+        "by",
+      ];
+      const words = lowerQueryText
+        .split(/\s+/)
+        .filter((word) => word.length > 2 && !stopWords.includes(word));
 
       if (words.length === 0) {
-        logger.info('QueryService.no_significant_words', { queryText });
+        logger.info("QueryService.no_significant_words", { queryText });
         return [];
       }
 
@@ -1110,17 +1249,17 @@ class QueryService {
 
       const cursor = await this.db.query(similarQueriesQuery);
       const similarQueries = await cursor.all();
-      logger.info('QueryService.similar_queries_found', {
+      logger.info("QueryService.similar_queries_found", {
         count: similarQueries.length,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return similarQueries;
     } catch (error) {
-      logger.error('QueryService.get_similar_queries_failed', {
+      logger.error("QueryService.get_similar_queries_failed", {
         queryText,
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return [];
     }
@@ -1134,43 +1273,47 @@ class QueryService {
   async saveQueryWithCriteria(queryData) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.save_query_with_criteria_start', { dataLength: JSON.stringify(queryData).length });
+      logger.info("QueryService.save_query_with_criteria_start", {
+        dataLength: JSON.stringify(queryData).length,
+      });
 
       if (!queryData.userId || !queryData.text) {
-        logger.warn('QueryService.missing_required_data', { queryData });
-        throw new Error('Missing required query data');
+        logger.warn("QueryService.missing_required_data", { queryData });
+        throw new Error("Missing required query data");
       }
 
       const basicQueryDoc = {
         userId: queryData.userId,
         text: queryData.text,
-        timestamp: queryData.timestamp || new Date().toISOString()
+        timestamp: queryData.timestamp || new Date().toISOString(),
       };
 
       if (queryData.categoryId) basicQueryDoc.categoryId = queryData.categoryId;
       if (queryData.serviceId) basicQueryDoc.serviceId = queryData.serviceId;
 
       basicQueryDoc.metadata = {
-        criteria: queryData.criteria || '',
+        criteria: queryData.criteria || "",
         tags: Array.isArray(queryData.tags) ? queryData.tags : [],
         isSaved: true,
         name: queryData.name || `Query ${new Date().toISOString()}`,
-        description: queryData.description || ''
+        description: queryData.description || "",
       };
 
-      logger.debug('QueryService.saving_query_with_criteria', { basicQueryDoc });
+      logger.debug("QueryService.saving_query_with_criteria", {
+        basicQueryDoc,
+      });
       const query = await this.queries.save(basicQueryDoc);
-      logger.info('QueryService.query_saved', {
+      logger.info("QueryService.query_saved", {
         queryId: query._key,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
 
       return query;
     } catch (error) {
-      logger.error('QueryService.save_query_with_criteria_failed', {
+      logger.error("QueryService.save_query_with_criteria_failed", {
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       throw error;
     }
@@ -1186,7 +1329,7 @@ class QueryService {
   async getSavedQueries(userId, limit = 20, offset = 0) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.get_saved_queries_start', { userId });
+      logger.info("QueryService.get_saved_queries_start", { userId });
 
       const query = aql`
         FOR q IN queries
@@ -1210,11 +1353,11 @@ class QueryService {
       const countCursor = await this.db.query(countQuery);
       const totalCount = (await countCursor.next()) || 0;
 
-      logger.info('QueryService.saved_queries_retrieved', {
+      logger.info("QueryService.saved_queries_retrieved", {
         userId,
         count: queries.length,
         totalCount,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return {
         queries,
@@ -1223,15 +1366,15 @@ class QueryService {
           limit,
           offset,
           pages: Math.ceil(totalCount / limit),
-          currentPage: Math.floor(offset / limit) + 1
-        }
+          currentPage: Math.floor(offset / limit) + 1,
+        },
       };
     } catch (error) {
-      logger.error('QueryService.get_saved_queries_failed', {
+      logger.error("QueryService.get_saved_queries_failed", {
         userId,
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       throw error;
     }
@@ -1246,7 +1389,7 @@ class QueryService {
   async getQueryRecommendations(userId, limit = 5) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.get_query_recommendations_start', { userId });
+      logger.info("QueryService.get_query_recommendations_start", { userId });
 
       const recentQueriesQuery = aql`
         FOR q IN queries
@@ -1260,17 +1403,21 @@ class QueryService {
       const recentQueries = await recentQueriesCursor.all();
 
       if (recentQueries.length === 0) {
-        logger.info('QueryService.no_recent_queries', { userId });
+        logger.info("QueryService.no_recent_queries", { userId });
         const popularQueries = await this.getPopularQueries(limit);
         return popularQueries.map((q) => q.text);
       }
 
-      const categories = recentQueries.filter((q) => q.categoryId).map((q) => q.categoryId);
+      const categories = recentQueries
+        .filter((q) => q.categoryId)
+        .map((q) => q.categoryId);
 
-      const services = recentQueries.filter((q) => q.serviceId).map((q) => q.serviceId);
+      const services = recentQueries
+        .filter((q) => q.serviceId)
+        .map((q) => q.serviceId);
 
       if (categories.length === 0 && services.length === 0) {
-        logger.info('QueryService.no_categories_or_services', { userId });
+        logger.info("QueryService.no_categories_or_services", { userId });
         const popularQueries = await this.getPopularQueries(limit);
         return popularQueries.map((q) => q.text);
       }
@@ -1306,28 +1453,32 @@ class QueryService {
       const recommendations = await recommendationsCursor.all();
 
       if (recommendations.length < limit) {
-        logger.info('QueryService.insufficient_recommendations', {
+        logger.info("QueryService.insufficient_recommendations", {
           count: recommendations.length,
-          limit
+          limit,
         });
-        const popularQueries = await this.getPopularQueries(limit - recommendations.length);
+        const popularQueries = await this.getPopularQueries(
+          limit - recommendations.length,
+        );
         return [...recommendations, ...popularQueries.map((q) => q.text)];
       }
 
-      logger.info('QueryService.query_recommendations_found', {
+      logger.info("QueryService.query_recommendations_found", {
         userId,
         count: recommendations.length,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return recommendations;
     } catch (error) {
-      logger.error('QueryService.get_query_recommendations_failed', {
+      logger.error("QueryService.get_query_recommendations_failed", {
         userId,
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
-      return await this.getPopularQueries(limit).then((queries) => queries.map((q) => q.text));
+      return await this.getPopularQueries(limit).then((queries) =>
+        queries.map((q) => q.text),
+      );
     }
   }
 
@@ -1339,7 +1490,7 @@ class QueryService {
   async getPopularQueries(limit = 5) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.get_popular_queries_start');
+      logger.info("QueryService.get_popular_queries_start");
       const query = aql`
         FOR q IN queries
           COLLECT text = q.text WITH COUNT INTO count
@@ -1350,16 +1501,16 @@ class QueryService {
 
       const cursor = await this.db.query(query);
       const popularQueries = await cursor.all();
-      logger.info('QueryService.popular_queries_found', {
+      logger.info("QueryService.popular_queries_found", {
         count: popularQueries.length,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return popularQueries;
     } catch (error) {
-      logger.error('QueryService.get_popular_queries_failed', {
+      logger.error("QueryService.get_popular_queries_failed", {
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return [];
     }
@@ -1374,38 +1525,45 @@ class QueryService {
   async createConversationFromQuery(queryId, options = {}) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.create_conversation_from_query_start', { queryId });
+      logger.info("QueryService.create_conversation_from_query_start", {
+        queryId,
+      });
 
       if (!this.chatHistoryService) {
-        logger.error('QueryService.chat_history_service_not_set');
-        throw new Error('Chat history service is not set');
+        logger.error("QueryService.chat_history_service_not_set");
+        throw new Error("Chat history service is not set");
       }
 
       const query = await this.getQuery(queryId);
 
       if (!query) {
-        logger.warn('QueryService.query_not_found', { queryId });
-        throw new NotFoundError('Query not found');
+        logger.warn("QueryService.query_not_found", { queryId });
+        throw new NotFoundError("Query not found");
       }
 
-      const conversation = await this.chatHistoryService.createConversationFromQuery(queryId, query.userId, {
-        title: options.title || query.text,
-        responseText: options.responseText,
-        tags: options.tags || []
-      });
+      const conversation =
+        await this.chatHistoryService.createConversationFromQuery(
+          queryId,
+          query.userId,
+          {
+            title: options.title || query.text,
+            responseText: options.responseText,
+            tags: options.tags || [],
+          },
+        );
 
-      logger.info('QueryService.conversation_created', {
+      logger.info("QueryService.conversation_created", {
         queryId,
         conversationId: conversation.conversation._key,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return conversation;
     } catch (error) {
-      logger.error('QueryService.create_conversation_from_query_failed', {
+      logger.error("QueryService.create_conversation_from_query_failed", {
         queryId,
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       throw error;
     }
@@ -1419,21 +1577,24 @@ class QueryService {
   async getConversationsForQuery(queryId) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.get_conversations_for_query_start', { queryId });
+      logger.info("QueryService.get_conversations_for_query_start", {
+        queryId,
+      });
 
       if (!this.chatHistoryService) {
-        logger.error('QueryService.chat_history_service_not_set');
-        throw new Error('Chat history service is not set');
+        logger.error("QueryService.chat_history_service_not_set");
+        throw new Error("Chat history service is not set");
       }
 
-      const relatedMessages = await this.chatHistoryService.findMessagesForQuery(queryId);
+      const relatedMessages =
+        await this.chatHistoryService.findMessagesForQuery(queryId);
 
       const conversationMap = new Map();
       for (const item of relatedMessages) {
         if (item.conversation && !conversationMap.has(item.conversation._key)) {
           conversationMap.set(item.conversation._key, {
             conversation: item.conversation,
-            messages: []
+            messages: [],
           });
         }
 
@@ -1446,18 +1607,18 @@ class QueryService {
       }
 
       const conversations = Array.from(conversationMap.values());
-      logger.info('QueryService.conversations_found', {
+      logger.info("QueryService.conversations_found", {
         queryId,
         count: conversations.length,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return conversations;
     } catch (error) {
-      logger.error('QueryService.get_conversations_for_query_failed', {
+      logger.error("QueryService.get_conversations_for_query_failed", {
         queryId,
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       throw error;
     }
@@ -1472,38 +1633,43 @@ class QueryService {
   async markQueryAsAnswered(queryId, responseTime) {
     const startTime = Date.now();
     try {
-      if (!queryId || queryId === 'undefined') {
-        logger.warn('QueryService.mark_query_as_answered_invalid_id', { queryId });
-        throw new Error('Invalid query ID provided');
+      if (!queryId || queryId === "undefined") {
+        logger.warn("QueryService.mark_query_as_answered_invalid_id", {
+          queryId,
+        });
+        throw new Error("Invalid query ID provided");
       }
 
-      logger.info('QueryService.mark_query_as_answered_start', { queryId, responseTime });
+      logger.info("QueryService.mark_query_as_answered_start", {
+        queryId,
+        responseTime,
+      });
 
       const updateData = {
         isAnswered: true,
         responseTime,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       };
 
       const updatedQuery = await this.queries.update(queryId, updateData);
 
-      logger.info('QueryService.query_marked_as_answered', {
+      logger.info("QueryService.query_marked_as_answered", {
         queryId,
         responseTime,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
 
       return updatedQuery;
     } catch (error) {
-      logger.error('QueryService.mark_query_as_answered_failed', {
+      logger.error("QueryService.mark_query_as_answered_failed", {
         queryId,
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
 
-      if (error.name === 'ArangoError' && error.errorNum === 1202) {
-        throw new NotFoundError('Query not found');
+      if (error.name === "ArangoError" && error.errorNum === 1202) {
+        throw new NotFoundError("Query not found");
       }
 
       throw error;
@@ -1520,11 +1686,14 @@ class QueryService {
   async linkQueryToMessage(queryId, messageId, options = {}) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.link_query_to_message_start', { queryId, messageId });
+      logger.info("QueryService.link_query_to_message_start", {
+        queryId,
+        messageId,
+      });
 
       if (!this.chatHistoryService) {
-        logger.error('QueryService.chat_history_service_not_set');
-        throw new Error('Chat history service is not set');
+        logger.error("QueryService.chat_history_service_not_set");
+        throw new Error("Chat history service is not set");
       }
 
       const messageCursor = await this.db.query(
@@ -1536,35 +1705,40 @@ class QueryService {
           conversationId: msg.conversationId
         }
     `,
-        { messageId }
+        { messageId },
       );
 
       const message = await messageCursor.next();
 
       if (!message) {
-        logger.warn('QueryService.message_not_found', { messageId });
-        throw new NotFoundError('Message not found');
+        logger.warn("QueryService.message_not_found", { messageId });
+        throw new NotFoundError("Message not found");
       }
 
-      const link = await this.chatHistoryService.linkQueryToConversation(queryId, message.conversationId, messageId, {
-        responseType: options.responseType || 'primary',
-        confidenceScore: options.confidenceScore || 1.0
-      });
+      const link = await this.chatHistoryService.linkQueryToConversation(
+        queryId,
+        message.conversationId,
+        messageId,
+        {
+          responseType: options.responseType || "primary",
+          confidenceScore: options.confidenceScore || 1.0,
+        },
+      );
 
-      logger.info('QueryService.query_linked_to_message', {
+      logger.info("QueryService.query_linked_to_message", {
         queryId,
         messageId,
         conversationId: message.conversationId,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return link;
     } catch (error) {
-      logger.error('QueryService.link_query_to_message_failed', {
+      logger.error("QueryService.link_query_to_message_failed", {
         queryId,
         messageId,
         error: error.message,
         stack: error.stack,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       throw error;
     }

@@ -1,7 +1,9 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
-const { logger } = require('../shared-lib');
+const {
+  keycloakAuthMiddleware,
+} = require("../middleware/keycloak-auth-middleware");
+const { logger } = require("../shared-lib");
 
 /**
  * @swagger
@@ -10,12 +12,19 @@ const { logger } = require('../shared-lib');
  *   description: On-the-fly text translation endpoints
  */
 module.exports = (translationService) => {
-  logger.info('[TRANSLATION-ROUTES] Initializing translation routes');
-  if (!translationService || typeof translationService.translate !== 'function') {
-    logger.error('[TRANSLATION-ROUTES] Invalid translationService provided to translation-routes');
-    throw new Error('translationService is required with a translate method');
+  logger.info("[TRANSLATION-ROUTES] Initializing translation routes");
+  if (
+    !translationService ||
+    typeof translationService.translate !== "function"
+  ) {
+    logger.error(
+      "[TRANSLATION-ROUTES] Invalid translationService provided to translation-routes",
+    );
+    throw new Error("translationService is required with a translate method");
   }
-  logger.debug('[TRANSLATION-ROUTES] translation-routes initialized with translationService');
+  logger.debug(
+    "[TRANSLATION-ROUTES] translation-routes initialized with translationService",
+  );
 
   // Secure all translation routes with authentication middleware
   router.use(keycloakAuthMiddleware.authenticate);
@@ -70,25 +79,37 @@ module.exports = (translationService) => {
    *       '500':
    *         description: Server error during translation.
    */
-  router.post('/', async (req, res, next) => {
-    logger.info(`[TRANSLATION-ROUTES] Request received: ${req.method} ${req.originalUrl}`);
+  router.post("/", async (req, res, next) => {
+    logger.info(
+      `[TRANSLATION-ROUTES] Request received: ${req.method} ${req.originalUrl}`,
+    );
     const { texts, source_lang, target_lang } = req.body;
 
     if (!texts || !Array.isArray(texts) || !source_lang || !target_lang) {
       logger.warn(
-        '[TRANSLATION-ROUTES] Bad request: Missing or invalid "texts" array, "source_lang", or "target_lang".'
+        '[TRANSLATION-ROUTES] Bad request: Missing or invalid "texts" array, "source_lang", or "target_lang".',
       );
       return res.status(400).json({
-        message: 'Request body must include a "texts" array, a "source_lang" string, and a "target_lang" string.'
+        message:
+          'Request body must include a "texts" array, a "source_lang" string, and a "target_lang" string.',
       });
     }
 
     try {
-      const translatedTexts = await translationService.translate(texts, source_lang, target_lang);
+      const translatedTexts = await translationService.translate(
+        texts,
+        source_lang,
+        target_lang,
+      );
       res.json({ translated_texts: translatedTexts });
-      logger.info(`[TRANSLATION-ROUTES] Successfully sent ${translatedTexts.length} translated texts to client.`);
+      logger.info(
+        `[TRANSLATION-ROUTES] Successfully sent ${translatedTexts.length} translated texts to client.`,
+      );
     } catch (error) {
-      logger.error(`[TRANSLATION-ROUTES] Error translating content: ${error.message}`, { stack: error.stack });
+      logger.error(
+        `[TRANSLATION-ROUTES] Error translating content: ${error.message}`,
+        { stack: error.stack },
+      );
       next(error); // Pass to the global error handler
     }
   });
@@ -139,25 +160,42 @@ module.exports = (translationService) => {
    *       '500':
    *         description: Server error during translation.
    */
-  router.post('/markdown', async (req, res, next) => {
-    logger.info(`[TRANSLATION-ROUTES] Request received: ${req.method} ${req.originalUrl}`);
+  router.post("/markdown", async (req, res, next) => {
+    logger.info(
+      `[TRANSLATION-ROUTES] Request received: ${req.method} ${req.originalUrl}`,
+    );
     const { markdown, source_lang, target_lang } = req.body;
 
-    if (!markdown || typeof markdown !== 'string' || !source_lang || !target_lang) {
+    if (
+      !markdown ||
+      typeof markdown !== "string" ||
+      !source_lang ||
+      !target_lang
+    ) {
       logger.warn(
-        '[TRANSLATION-ROUTES] Bad request: Missing or invalid "markdown" string, "source_lang", or "target_lang".'
+        '[TRANSLATION-ROUTES] Bad request: Missing or invalid "markdown" string, "source_lang", or "target_lang".',
       );
       return res.status(400).json({
-        message: 'Request body must include a "markdown" string, a "source_lang" string, and a "target_lang" string.'
+        message:
+          'Request body must include a "markdown" string, a "source_lang" string, and a "target_lang" string.',
       });
     }
 
     try {
-      const translatedMarkdown = await translationService.translateMarkdown(markdown, source_lang, target_lang);
+      const translatedMarkdown = await translationService.translateMarkdown(
+        markdown,
+        source_lang,
+        target_lang,
+      );
       res.json({ translated_markdown: translatedMarkdown });
-      logger.info('[TRANSLATION-ROUTES] Successfully sent translated markdown to client.');
+      logger.info(
+        "[TRANSLATION-ROUTES] Successfully sent translated markdown to client.",
+      );
     } catch (error) {
-      logger.error(`[TRANSLATION-ROUTES] Error translating markdown: ${error.message}`, { stack: error.stack });
+      logger.error(
+        `[TRANSLATION-ROUTES] Error translating markdown: ${error.message}`,
+        { stack: error.stack },
+      );
       next(error); // Pass to the global error handler
     }
   });

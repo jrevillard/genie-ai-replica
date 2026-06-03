@@ -1,6 +1,6 @@
-'use strict';
+"use strict";
 
-const { createMockUser } = require('./users');
+const { createMockUser } = require("./users");
 
 function createMockReq(overrides = {}) {
   return {
@@ -9,9 +9,9 @@ function createMockReq(overrides = {}) {
     query: {},
     body: {},
     headers: {},
-    method: 'GET',
-    path: '/',
-    ...overrides
+    method: "GET",
+    path: "/",
+    ...overrides,
   };
 }
 
@@ -22,7 +22,7 @@ function createMockRes() {
     send: jest.fn(),
     set: jest.fn().mockReturnThis(),
     setHeader: jest.fn().mockReturnThis(),
-    getHeader: jest.fn()
+    getHeader: jest.fn(),
   };
   return res;
 }

@@ -1,7 +1,9 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
-const { reconfigureLogger, triggerLogRollover } = require('../shared-lib');
+const {
+  keycloakAuthMiddleware,
+} = require("../middleware/keycloak-auth-middleware");
+const { reconfigureLogger, triggerLogRollover } = require("../shared-lib");
 
 module.exports = () => {
   /**
@@ -94,63 +96,107 @@ module.exports = () => {
    *                 error:
    *                   type: string
    */
-  router.post('/configure', keycloakAuthMiddleware.authenticate, keycloakAuthMiddleware.requireAdmin, (req, res) => {
-    try {
-      const { level, errorMaxSize, combinedMaxSize, errorMaxFiles, combinedMaxFiles, zippedArchive } = req.body;
+  router.post(
+    "/configure",
+    keycloakAuthMiddleware.authenticate,
+    keycloakAuthMiddleware.requireAdmin,
+    (req, res) => {
+      try {
+        const {
+          level,
+          errorMaxSize,
+          combinedMaxSize,
+          errorMaxFiles,
+          combinedMaxFiles,
+          zippedArchive,
+        } = req.body;
 
-      if (
-        !level &&
-        !errorMaxSize &&
-        !combinedMaxSize &&
-        !errorMaxFiles &&
-        !combinedMaxFiles &&
-        zippedArchive === undefined
-      ) {
-        return res.status(400).json({ success: false, message: 'At least one configuration parameter is required' });
-      }
+        if (
+          !level &&
+          !errorMaxSize &&
+          !combinedMaxSize &&
+          !errorMaxFiles &&
+          !combinedMaxFiles &&
+          zippedArchive === undefined
+        ) {
+          return res
+            .status(400)
+            .json({
+              success: false,
+              message: "At least one configuration parameter is required",
+            });
+        }
 
-      if (level && !['error', 'warn', 'info', 'debug'].includes(level)) {
-        return res
-          .status(400)
-          .json({ success: false, message: 'Invalid log level. Must be one of: error, warn, info, debug' });
-      }
+        if (level && !["error", "warn", "info", "debug"].includes(level)) {
+          return res
+            .status(400)
+            .json({
+              success: false,
+              message:
+                "Invalid log level. Must be one of: error, warn, info, debug",
+            });
+        }
 
-      const sizeRegex = /^\d+(k|m|g)$/;
-      const filesRegex = /^\d+d$/;
+        const sizeRegex = /^\d+(k|m|g)$/;
+        const filesRegex = /^\d+d$/;
 
-      if (errorMaxSize && !sizeRegex.test(errorMaxSize)) {
-        return res
-          .status(400)
-          .json({ success: false, message: 'Invalid errorMaxSize. Must be in format: 10m, 500k, 1g' });
-      }
-      if (combinedMaxSize && !sizeRegex.test(combinedMaxSize)) {
-        return res
-          .status(400)
-          .json({ success: false, message: 'Invalid combinedMaxSize. Must be in format: 10m, 500k, 1g' });
-      }
-      if (errorMaxFiles && !filesRegex.test(errorMaxFiles)) {
-        return res.status(400).json({ success: false, message: 'Invalid errorMaxFiles. Must be in format: 30d, 14d' });
-      }
-      if (combinedMaxFiles && !filesRegex.test(combinedMaxFiles)) {
-        return res
-          .status(400)
-          .json({ success: false, message: 'Invalid combinedMaxFiles. Must be in format: 30d, 14d' });
-      }
+        if (errorMaxSize && !sizeRegex.test(errorMaxSize)) {
+          return res
+            .status(400)
+            .json({
+              success: false,
+              message: "Invalid errorMaxSize. Must be in format: 10m, 500k, 1g",
+            });
+        }
+        if (combinedMaxSize && !sizeRegex.test(combinedMaxSize)) {
+          return res
+            .status(400)
+            .json({
+              success: false,
+              message:
+                "Invalid combinedMaxSize. Must be in format: 10m, 500k, 1g",
+            });
+        }
+        if (errorMaxFiles && !filesRegex.test(errorMaxFiles)) {
+          return res
+            .status(400)
+            .json({
+              success: false,
+              message: "Invalid errorMaxFiles. Must be in format: 30d, 14d",
+            });
+        }
+        if (combinedMaxFiles && !filesRegex.test(combinedMaxFiles)) {
+          return res
+            .status(400)
+            .json({
+              success: false,
+              message: "Invalid combinedMaxFiles. Must be in format: 30d, 14d",
+            });
+        }
 
-      reconfigureLogger({
-        level,
-        errorMaxSize,
-        combinedMaxSize,
-        errorMaxFiles,
-        combinedMaxFiles,
-        zippedArchive
-      });
+        reconfigureLogger({
+          level,
+          errorMaxSize,
+          combinedMaxSize,
+          errorMaxFiles,
+          combinedMaxFiles,
+          zippedArchive,
+        });
 
-      res.json({ success: true, message: 'Logger configuration updated successfully' });
-    } catch {
-      res.status(500).json({ success: false, message: 'Failed to update logger configuration' });
-    }
-  });
+        res.json({
+          success: true,
+          message: "Logger configuration updated successfully",
+        });
+      } catch {
+        res
+          .status(500)
+          .json({
+            success: false,
+            message: "Failed to update logger configuration",
+          });
+      }
+    },
+  );
 
   /**
    * @swagger
@@ -195,14 +241,24 @@ module.exports = () => {
    *                 error:
    *                   type: string
    */
-  router.post('/rollover', keycloakAuthMiddleware.authenticate, keycloakAuthMiddleware.requireAdmin, (req, res) => {
-    try {
-      triggerLogRollover();
-      res.json({ success: true, message: 'Log rollover triggered successfully' });
-    } catch {
-      res.status(500).json({ success: false, message: 'Failed to trigger log rollover' });
-    }
-  });
+  router.post(
+    "/rollover",
+    keycloakAuthMiddleware.authenticate,
+    keycloakAuthMiddleware.requireAdmin,
+    (req, res) => {
+      try {
+        triggerLogRollover();
+        res.json({
+          success: true,
+          message: "Log rollover triggered successfully",
+        });
+      } catch {
+        res
+          .status(500)
+          .json({ success: false, message: "Failed to trigger log rollover" });
+      }
+    },
+  );
 
   return router;
 };

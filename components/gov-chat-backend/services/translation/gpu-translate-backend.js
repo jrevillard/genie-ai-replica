@@ -1,9 +1,9 @@
-const { logger } = require('../../shared-lib');
-const http = require('http');
-const https = require('https');
+const { logger } = require("../../shared-lib");
+const http = require("http");
+const https = require("https");
 
 // API key for remote GPU node authentication (injected via OPEA_API_KEY env var)
-const OPEA_API_KEY = process.env.OPEA_API_KEY || '';
+const OPEA_API_KEY = process.env.OPEA_API_KEY || "";
 
 /**
  * GPU Translation Backend
@@ -16,8 +16,11 @@ const OPEA_API_KEY = process.env.OPEA_API_KEY || '';
 class GpuTranslateBackend {
   constructor() {
     // Configuration from environment variables
-    this.modelId = process.env.VLLM_TRANSLATION_MODEL_ID || 'google/gemma-3-4b-it';
-    this.endpoint = process.env.VLLM_TRANSLATION_ENDPOINT || 'http://vllm-translation-guardrail:9031';
+    this.modelId =
+      process.env.VLLM_TRANSLATION_MODEL_ID || "google/gemma-3-4b-it";
+    this.endpoint =
+      process.env.VLLM_TRANSLATION_ENDPOINT ||
+      "http://vllm-translation-guardrail:9031";
     this.port = parseInt(process.env.VLLM_TRANSLATION_SERVICE_PORT, 10) || 9031;
 
     // Runtime state
@@ -42,26 +45,36 @@ class GpuTranslateBackend {
     try {
       // Map model IDs to language map files
       const modelToMap = {
-        'google/translategemma-4b-it': './language-maps/translategemma-map.js',
-        'google/gemma-3-4b-it': './language-maps/gemma-3-map.js',
-        'google/gemma-3-1b-it': './language-maps/gemma-3-map.js'
+        "google/translategemma-4b-it": "./language-maps/translategemma-map.js",
+        "google/gemma-3-4b-it": "./language-maps/gemma-3-map.js",
+        "google/gemma-3-1b-it": "./language-maps/gemma-3-map.js",
       };
 
       const mapPath = modelToMap[modelId];
 
       if (!mapPath) {
-        logger.warn(`[GPU-BACKEND] No language map found for model: ${modelId}`);
-        throw new Error(`No language map found for model: ${modelId}. Add a language map file to ./language-maps/`);
+        logger.warn(
+          `[GPU-BACKEND] No language map found for model: ${modelId}`,
+        );
+        throw new Error(
+          `No language map found for model: ${modelId}. Add a language map file to ./language-maps/`,
+        );
       }
 
       this.languageMap = require(mapPath);
       this.fallbackMap = this.languageMap.fallbackMap || {};
 
-      logger.info(`[GPU-BACKEND] Loaded language map: ${this.languageMap.modelName}`);
+      logger.info(
+        `[GPU-BACKEND] Loaded language map: ${this.languageMap.modelName}`,
+      );
       logger.info(`[GPU-BACKEND] Code format: ${this.languageMap.codeFormat}`);
     } catch (error) {
-      logger.error(`[GPU-BACKEND] Failed to load language map: ${error.message}`);
-      throw new Error(`Failed to load language map for model ${modelId}`, { cause: error });
+      logger.error(
+        `[GPU-BACKEND] Failed to load language map: ${error.message}`,
+      );
+      throw new Error(`Failed to load language map for model ${modelId}`, {
+        cause: error,
+      });
     }
   }
 
@@ -70,12 +83,14 @@ class GpuTranslateBackend {
    */
   async init() {
     if (this.initialized) {
-      logger.debug('[GPU-BACKEND] Already initialized, skipping');
+      logger.debug("[GPU-BACKEND] Already initialized, skipping");
       return;
     }
 
     try {
-      logger.info('[GPU-BACKEND] Starting initialization: Performing health check...');
+      logger.info(
+        "[GPU-BACKEND] Starting initialization: Performing health check...",
+      );
 
       // Perform health check and fetch model info
       await this.healthCheck();
@@ -83,7 +98,9 @@ class GpuTranslateBackend {
 
       this.initialized = true;
       this.healthCheckPassed = true;
-      logger.info('[GPU-BACKEND] Initialized successfully. vLLM service is ready.');
+      logger.info(
+        "[GPU-BACKEND] Initialized successfully. vLLM service is ready.",
+      );
     } catch (error) {
       logger.error(`[GPU-BACKEND] Initialization failed: ${error.message}`);
       // Don't throw - allow fallback to CPU backend
@@ -102,7 +119,7 @@ class GpuTranslateBackend {
   _buildHeaders(extraHeaders = {}) {
     const headers = { ...extraHeaders };
     if (OPEA_API_KEY) {
-      headers['X-API-Key'] = OPEA_API_KEY;
+      headers["X-API-Key"] = OPEA_API_KEY;
     }
     return headers;
   }
@@ -110,38 +127,42 @@ class GpuTranslateBackend {
   async healthCheck() {
     try {
       const url = new URL(this.endpoint);
-      const isHttps = url.protocol === 'https:';
+      const isHttps = url.protocol === "https:";
       const client = isHttps ? https : http;
-      const basePath = url.pathname.replace(/\/$/, '');
+      const basePath = url.pathname.replace(/\/$/, "");
 
       return new Promise((resolve, reject) => {
         const options = {
           hostname: url.hostname,
-          port: url.port || (url.protocol === 'https:' ? 443 : 80),
+          port: url.port || (url.protocol === "https:" ? 443 : 80),
           path: `${basePath}/health`,
-          method: 'GET',
+          method: "GET",
           headers: this._buildHeaders(),
-          timeout: 5000
+          timeout: 5000,
         };
 
         const req = client.request(options, (res) => {
           if (res.statusCode >= 200 && res.statusCode < 300) {
-            logger.info(`[GPU-BACKEND] Health check passed (status ${res.statusCode})`);
+            logger.info(
+              `[GPU-BACKEND] Health check passed (status ${res.statusCode})`,
+            );
             resolve(true);
           } else {
-            logger.warn(`[GPU-BACKEND] Health check returned status ${res.statusCode}`);
+            logger.warn(
+              `[GPU-BACKEND] Health check returned status ${res.statusCode}`,
+            );
             resolve(true);
           }
         });
 
-        req.on('error', (error) => {
+        req.on("error", (error) => {
           logger.error(`[GPU-BACKEND] Health check failed: ${error.message}`);
           reject(new Error(`vLLM service unreachable: ${error.message}`));
         });
 
-        req.on('timeout', () => {
+        req.on("timeout", () => {
           req.destroy();
-          reject(new Error('vLLM service health check timeout'));
+          reject(new Error("vLLM service health check timeout"));
         });
 
         req.end();
@@ -158,50 +179,56 @@ class GpuTranslateBackend {
   async fetchModelInfo() {
     try {
       const url = new URL(this.endpoint);
-      const isHttps = url.protocol === 'https:';
+      const isHttps = url.protocol === "https:";
       const client = isHttps ? https : http;
-      const basePath = url.pathname.replace(/\/$/, '');
+      const basePath = url.pathname.replace(/\/$/, "");
 
       await new Promise((resolve) => {
         const options = {
           hostname: url.hostname,
-          port: url.port || (url.protocol === 'https:' ? 443 : 80),
+          port: url.port || (url.protocol === "https:" ? 443 : 80),
           path: `${basePath}/v1/models`,
-          method: 'GET',
+          method: "GET",
           headers: this._buildHeaders(),
-          timeout: 5000
+          timeout: 5000,
         };
 
         const req = client.request(options, (res) => {
-          let data = '';
-          res.on('data', (chunk) => {
+          let data = "";
+          res.on("data", (chunk) => {
             data += chunk;
           });
-          res.on('end', () => {
+          res.on("end", () => {
             try {
               const parsed = JSON.parse(data);
               const model = parsed.data?.find((m) => m.id === this.modelId);
               if (model?.max_model_len) {
                 this.maxModelLen = model.max_model_len;
-                logger.info(`[GPU-BACKEND] Model max context length: ${this.maxModelLen} tokens`);
+                logger.info(
+                  `[GPU-BACKEND] Model max context length: ${this.maxModelLen} tokens`,
+                );
               } else {
                 logger.warn(
-                  `[GPU-BACKEND] Model ${this.modelId} not found in /v1/models response, using default max_tokens`
+                  `[GPU-BACKEND] Model ${this.modelId} not found in /v1/models response, using default max_tokens`,
                 );
               }
               resolve();
             } catch (e) {
-              logger.warn(`[GPU-BACKEND] Failed to parse /v1/models response: ${e.message}`);
+              logger.warn(
+                `[GPU-BACKEND] Failed to parse /v1/models response: ${e.message}`,
+              );
               resolve();
             }
           });
         });
 
-        req.on('error', (error) => {
-          logger.warn(`[GPU-BACKEND] Failed to fetch model info: ${error.message}`);
+        req.on("error", (error) => {
+          logger.warn(
+            `[GPU-BACKEND] Failed to fetch model info: ${error.message}`,
+          );
           resolve(); // Don't fail init — use default max_tokens
         });
-        req.on('timeout', () => {
+        req.on("timeout", () => {
           req.destroy();
           resolve();
         });
@@ -219,7 +246,7 @@ class GpuTranslateBackend {
    */
   getLanguageCode(isoCode) {
     if (!this.languageMap) {
-      throw new Error('[GPU-BACKEND] Language map not loaded');
+      throw new Error("[GPU-BACKEND] Language map not loaded");
     }
 
     const code = this.languageMap.languageMap[isoCode];
@@ -250,7 +277,13 @@ class GpuTranslateBackend {
    * @returns {boolean} True if supported
    */
   isLanguageSupported(isoCode) {
-    return this.languageMap && Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode);
+    return (
+      this.languageMap &&
+      Object.prototype.hasOwnProperty.call(
+        this.languageMap.languageMap,
+        isoCode,
+      )
+    );
   }
 
   /**
@@ -274,45 +307,53 @@ class GpuTranslateBackend {
     const maxTokens = Math.max(128, this.maxModelLen - 128);
 
     // TranslateGemma format (structured chat with language codes)
-    if (modelId.includes('translategemma')) {
+    if (modelId.includes("translategemma")) {
       return {
         model: modelId,
         messages: [
           {
-            role: 'user',
+            role: "user",
             content: [
               {
-                type: 'text',
+                type: "text",
                 source_lang_code: sourceCode, // ISO 639-1
                 target_lang_code: targetCode, // ISO 639-1
-                text: text
-              }
-            ]
-          }
+                text: text,
+              },
+            ],
+          },
         ],
         temperature: 0.0,
-        max_tokens: maxTokens
+        max_tokens: maxTokens,
       };
     }
 
     // Gemma-3 format (prompt-based translation)
-    if (modelId.includes('gemma-3')) {
-      const sourceLangName = this.languageMap.languageNames?.[sourceCode] || sourceCode;
-      const targetLangName = this.languageMap.languageNames?.[targetCode] || targetCode;
+    if (modelId.includes("gemma-3")) {
+      const sourceLangName =
+        this.languageMap.languageNames?.[sourceCode] || sourceCode;
+      const targetLangName =
+        this.languageMap.languageNames?.[targetCode] || targetCode;
       const prompt = this.languageMap.promptTemplate
-        ? this.languageMap.promptTemplate(sourceCode, targetCode, sourceLangName, targetLangName, text)
+        ? this.languageMap.promptTemplate(
+            sourceCode,
+            targetCode,
+            sourceLangName,
+            targetLangName,
+            text,
+          )
         : `Translate the following text from ${sourceLangName} to ${targetLangName}. Only return the translation, no explanation.\n\nText: ${text}`;
 
       return {
         model: modelId,
         messages: [
           {
-            role: 'user',
-            content: prompt
-          }
+            role: "user",
+            content: prompt,
+          },
         ],
         temperature: 0.3,
-        max_tokens: maxTokens
+        max_tokens: maxTokens,
       };
     }
 
@@ -321,12 +362,12 @@ class GpuTranslateBackend {
       model: modelId,
       messages: [
         {
-          role: 'user',
-          content: `Translate from ${sourceCode} to ${targetCode}: ${text}`
-        }
+          role: "user",
+          content: `Translate from ${sourceCode} to ${targetCode}: ${text}`,
+        },
       ],
       temperature: 0.3,
-      max_tokens: maxTokens
+      max_tokens: maxTokens,
     };
   }
 
@@ -337,63 +378,71 @@ class GpuTranslateBackend {
    */
   async callVllmService(requestBody) {
     const url = new URL(this.endpoint);
-    const isHttps = url.protocol === 'https:';
+    const isHttps = url.protocol === "https:";
     const client = isHttps ? https : http;
-    const basePath = url.pathname.replace(/\/$/, '');
+    const basePath = url.pathname.replace(/\/$/, "");
 
     return new Promise((resolve, reject) => {
       const postData = JSON.stringify(requestBody);
 
       const options = {
         hostname: url.hostname,
-        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        port: url.port || (url.protocol === "https:" ? 443 : 80),
         path: `${basePath}/v1/chat/completions`,
-        method: 'POST',
+        method: "POST",
         headers: this._buildHeaders({
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(postData)
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(postData),
         }),
-        timeout: 30000 // 30 second timeout
+        timeout: 30000, // 30 second timeout
       };
 
       const req = client.request(options, (res) => {
-        let data = '';
+        let data = "";
 
-        res.on('data', (chunk) => {
+        res.on("data", (chunk) => {
           data += chunk;
         });
 
-        res.on('end', () => {
+        res.on("end", () => {
           try {
             if (res.statusCode >= 200 && res.statusCode < 300) {
               const response = JSON.parse(data);
 
               // Parse response based on format
-              let translatedText = '';
+              let translatedText = "";
               if (response.choices && response.choices.length > 0) {
                 translatedText = response.choices[0].message.content.trim();
               }
 
               resolve(translatedText);
             } else {
-              logger.error(`[GPU-BACKEND] vLLM service returned status ${res.statusCode}: ${data}`);
+              logger.error(
+                `[GPU-BACKEND] vLLM service returned status ${res.statusCode}: ${data}`,
+              );
               reject(new Error(`vLLM service error: ${res.statusCode}`));
             }
           } catch (error) {
-            logger.error(`[GPU-BACKEND] Failed to parse vLLM response: ${error.message}`);
-            reject(new Error(`Failed to parse vLLM response: ${error.message}`));
+            logger.error(
+              `[GPU-BACKEND] Failed to parse vLLM response: ${error.message}`,
+            );
+            reject(
+              new Error(`Failed to parse vLLM response: ${error.message}`),
+            );
           }
         });
       });
 
-      req.on('error', (error) => {
-        logger.error(`[GPU-BACKEND] vLLM service request failed: ${error.message}`);
+      req.on("error", (error) => {
+        logger.error(
+          `[GPU-BACKEND] vLLM service request failed: ${error.message}`,
+        );
         reject(new Error(`vLLM service request failed: ${error.message}`));
       });
 
-      req.on('timeout', () => {
+      req.on("timeout", () => {
         req.destroy();
-        reject(new Error('vLLM service request timeout'));
+        reject(new Error("vLLM service request timeout"));
       });
 
       req.write(postData);
@@ -410,16 +459,20 @@ class GpuTranslateBackend {
    */
   async translate(texts, sourceCode, targetCode) {
     if (!this.initialized) {
-      logger.error('[GPU-BACKEND] Not initialized. Cannot perform translation.');
-      throw new Error('[GPU-BACKEND] Backend is not ready.');
+      logger.error(
+        "[GPU-BACKEND] Not initialized. Cannot perform translation.",
+      );
+      throw new Error("[GPU-BACKEND] Backend is not ready.");
     }
 
     if (!texts || texts.length === 0) {
-      logger.warn('[GPU-BACKEND] translate called with empty array.');
+      logger.warn("[GPU-BACKEND] translate called with empty array.");
       return [];
     }
 
-    logger.info(`[GPU-BACKEND] Translating ${texts.length} texts from ${sourceCode} to ${targetCode}`);
+    logger.info(
+      `[GPU-BACKEND] Translating ${texts.length} texts from ${sourceCode} to ${targetCode}`,
+    );
 
     try {
       const startTime = Date.now();
@@ -430,13 +483,18 @@ class GpuTranslateBackend {
         const text = texts[i];
 
         // Skip empty texts
-        if (!text || text.trim() === '') {
-          translatedTexts.push('');
+        if (!text || text.trim() === "") {
+          translatedTexts.push("");
           continue;
         }
 
         // Format request for this model
-        const requestBody = this.formatRequest(this.modelId, sourceCode, targetCode, text);
+        const requestBody = this.formatRequest(
+          this.modelId,
+          sourceCode,
+          targetCode,
+          text,
+        );
 
         // Call vLLM service
         const translated = await this.callVllmService(requestBody);
@@ -446,16 +504,21 @@ class GpuTranslateBackend {
       }
 
       const duration = Date.now() - startTime;
-      logger.info(`[GPU-BACKEND] Translation completed in ${duration}ms (${texts.length} texts)`);
+      logger.info(
+        `[GPU-BACKEND] Translation completed in ${duration}ms (${texts.length} texts)`,
+      );
 
       return translatedTexts;
     } catch (error) {
       logger.error(`[GPU-BACKEND] Translation failed: ${error.message}`, {
         stack: error.stack,
         sourceCode: sourceCode,
-        targetCode: targetCode
+        targetCode: targetCode,
       });
-      throw new Error(`[GPU-BACKEND] Failed to perform translation: ${error.message}`, { cause: error });
+      throw new Error(
+        `[GPU-BACKEND] Failed to perform translation: ${error.message}`,
+        { cause: error },
+      );
     }
   }
 
@@ -465,15 +528,15 @@ class GpuTranslateBackend {
    */
   getBackendInfo() {
     return {
-      type: 'gpu',
+      type: "gpu",
       model: this.modelId,
       modelId: this.languageMap?.modelName || this.modelId,
-      codeFormat: this.languageMap?.codeFormat || 'unknown',
+      codeFormat: this.languageMap?.codeFormat || "unknown",
       endpoint: this.endpoint,
       port: this.port,
       maxModelLen: this.maxModelLen,
       initialized: this.initialized,
-      healthCheckPassed: this.healthCheckPassed
+      healthCheckPassed: this.healthCheckPassed,
     };
   }
 }

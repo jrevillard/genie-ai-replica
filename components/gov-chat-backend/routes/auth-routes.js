@@ -1,8 +1,10 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
-const { logger } = require('../shared-lib');
-const authController = require('../controllers/authController');
+const {
+  keycloakAuthMiddleware,
+} = require("../middleware/keycloak-auth-middleware");
+const { logger } = require("../shared-lib");
+const authController = require("../controllers/authController");
 
 /**
  * @swagger
@@ -19,14 +21,20 @@ const authController = require('../controllers/authController');
  *       401:
  *         description: Unauthorized
  */
-router.post('/logout', keycloakAuthMiddleware.authenticate, async (req, res, next) => {
-  try {
-    logger.info('Processing logout request');
-    await authController.logout(req, res);
-  } catch (error) {
-    logger.error(`Error processing logout: ${error.message}`, { stack: error.stack });
-    next(error);
-  }
-});
+router.post(
+  "/logout",
+  keycloakAuthMiddleware.authenticate,
+  async (req, res, next) => {
+    try {
+      logger.info("Processing logout request");
+      await authController.logout(req, res);
+    } catch (error) {
+      logger.error(`Error processing logout: ${error.message}`, {
+        stack: error.stack,
+      });
+      next(error);
+    }
+  },
+);
 
 module.exports = router;

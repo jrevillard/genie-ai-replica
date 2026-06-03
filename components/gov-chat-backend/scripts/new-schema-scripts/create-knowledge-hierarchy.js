@@ -57,13 +57,13 @@
  * - Exits with status 0 on success, 1 on failure.
  */
 
-const { Database, aql } = require('arangojs');
-const fs = require('fs').promises;
-const path = require('path');
-const yargs = require('yargs/yargs');
-const { hideBin } = require('yargs/helpers');
-const readline = require('readline');
-require('dotenv').config();
+const { Database, aql } = require("arangojs");
+const fs = require("fs").promises;
+const path = require("path");
+const yargs = require("yargs/yargs");
+const { hideBin } = require("yargs/helpers");
+const readline = require("readline");
+require("dotenv").config();
 
 // To support modern ESM-only packages like inquirer v9+, we will dynamically import it.
 let inquirer;
@@ -76,14 +76,14 @@ let inquirer;
 function askQuestion(query) {
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout
+    output: process.stdout,
   });
 
   return new Promise((resolve) =>
     rl.question(query, (ans) => {
       rl.close();
       resolve(ans);
-    })
+    }),
   );
 }
 
@@ -97,7 +97,7 @@ class HierarchyCreator {
    */
   async #loadInquirer() {
     if (!inquirer) {
-      inquirer = (await import('inquirer')).default;
+      inquirer = (await import("inquirer")).default;
     }
   }
 
@@ -105,8 +105,12 @@ class HierarchyCreator {
    * Verifies that the required collections exist.
    */
   async ensureCollections() {
-    console.log('Verifying that required collections exist...');
-    const requiredCollections = ['serviceCategories', 'services', 'categoryServices'];
+    console.log("Verifying that required collections exist...");
+    const requiredCollections = [
+      "serviceCategories",
+      "services",
+      "categoryServices",
+    ];
     const missingCollections = [];
 
     for (const name of requiredCollections) {
@@ -120,7 +124,7 @@ class HierarchyCreator {
     if (missingCollections.length > 0) {
       const errorMessage = `
 ✗ Prerequisite check failed. The following required collections are missing:
-  - ${missingCollections.join('\n  - ')}
+  - ${missingCollections.join("\n  - ")}
 
 Please run the schema creation script first to set up the database structure:
   node arango-schema-creator.js ./arango-schema.json
@@ -128,10 +132,10 @@ Please run the schema creation script first to set up the database structure:
       throw new Error(errorMessage);
     }
 
-    console.log('✓ All required collections found.');
-    this.serviceCategories = this.db.collection('serviceCategories');
-    this.services = this.db.collection('services');
-    this.categoryServices = this.db.collection('categoryServices');
+    console.log("✓ All required collections found.");
+    this.serviceCategories = this.db.collection("serviceCategories");
+    this.services = this.db.collection("services");
+    this.categoryServices = this.db.collection("categoryServices");
   }
 
   /**
@@ -140,25 +144,34 @@ Please run the schema creation script first to set up the database structure:
   async processFromFile(filePath) {
     console.log(`Reading hierarchy from file: ${filePath}`);
     try {
-      const fileContent = await fs.readFile(path.resolve(filePath), 'utf8');
+      const fileContent = await fs.readFile(path.resolve(filePath), "utf8");
       const data = JSON.parse(fileContent);
 
       if (!Array.isArray(data)) {
-        throw new Error('Invalid file format: The root element must be an array.');
+        throw new Error(
+          "Invalid file format: The root element must be an array.",
+        );
       }
       data.forEach((item, index) => {
-        if (typeof item.category !== 'string' || !Array.isArray(item.services)) {
+        if (
+          typeof item.category !== "string" ||
+          !Array.isArray(item.services)
+        ) {
           throw new Error(
-            `Invalid format for item at index ${index}: Must have a 'category' (string) and 'services' (array).`
+            `Invalid format for item at index ${index}: Must have a 'category' (string) and 'services' (array).`,
           );
         }
         item.services.forEach((service) => {
-          if (typeof service !== 'string') {
-            throw new Error(`Invalid service name in category "${item.category}". All services must be strings.`);
+          if (typeof service !== "string") {
+            throw new Error(
+              `Invalid service name in category "${item.category}". All services must be strings.`,
+            );
           }
         });
       });
-      console.log(`✓ Successfully read and validated ${data.length} categories from file.`);
+      console.log(
+        `✓ Successfully read and validated ${data.length} categories from file.`,
+      );
       return data;
     } catch (error) {
       console.error(`✗ Error reading or parsing file: ${error.message}`);
@@ -171,14 +184,21 @@ Please run the schema creation script first to set up the database structure:
    */
   async processInteractively() {
     await this.#loadInquirer();
-    console.log('Starting interactive mode to define knowledge hierarchy.');
-    console.log('Please enter your service categories and the services within each.');
+    console.log("Starting interactive mode to define knowledge hierarchy.");
+    console.log(
+      "Please enter your service categories and the services within each.",
+    );
     const hierarchy = [];
     let addAnotherCategory = true;
 
     while (addAnotherCategory) {
       const { categoryName } = await inquirer.prompt([
-        { type: 'input', name: 'categoryName', message: 'Enter the name of the service category (e.g., "Healthcare"):' }
+        {
+          type: "input",
+          name: "categoryName",
+          message:
+            'Enter the name of the service category (e.g., "Healthcare"):',
+        },
       ]);
 
       const services = [];
@@ -186,10 +206,10 @@ Please run the schema creation script first to set up the database structure:
       while (addAnotherService) {
         const { serviceName } = await inquirer.prompt([
           {
-            type: 'input',
-            name: 'serviceName',
-            message: `Enter a service for "${categoryName}" (or press Enter to finish):`
-          }
+            type: "input",
+            name: "serviceName",
+            message: `Enter a service for "${categoryName}" (or press Enter to finish):`,
+          },
         ]);
         if (serviceName) {
           services.push(serviceName);
@@ -200,7 +220,12 @@ Please run the schema creation script first to set up the database structure:
       hierarchy.push({ category: categoryName, services });
 
       const { continueCategory } = await inquirer.prompt([
-        { type: 'confirm', name: 'continueCategory', message: 'Do you want to add another category?', default: true }
+        {
+          type: "confirm",
+          name: "continueCategory",
+          message: "Do you want to add another category?",
+          default: true,
+        },
       ]);
       addAnotherCategory = continueCategory;
     }
@@ -212,7 +237,7 @@ Please run the schema creation script first to set up the database structure:
    */
   async getConfirmation(data) {
     await this.#loadInquirer();
-    console.log('\n--- Review Proposed Hierarchy ---');
+    console.log("\n--- Review Proposed Hierarchy ---");
     data.forEach((cat, catIndex) => {
       console.log(`\nCategory ${catIndex + 1}: ${cat.category}`);
       if (cat.services.length > 0) {
@@ -220,13 +245,20 @@ Please run the schema creation script first to set up the database structure:
           console.log(`  - Service ${svcIndex + 1}: ${svc}`);
         });
       } else {
-        console.log('  (No services defined for this category)');
+        console.log("  (No services defined for this category)");
       }
     });
-    console.log('\nThis script will write the above structure to the database.');
+    console.log(
+      "\nThis script will write the above structure to the database.",
+    );
 
     const { confirm } = await inquirer.prompt([
-      { type: 'confirm', name: 'confirm', message: 'Proceed with writing to the database?', default: false }
+      {
+        type: "confirm",
+        name: "confirm",
+        message: "Proceed with writing to the database?",
+        default: false,
+      },
     ]);
     return confirm;
   }
@@ -235,11 +267,11 @@ Please run the schema creation script first to set up the database structure:
    * Writes the hierarchy data to the ArangoDB database using individual save operations.
    */
   async writeToDatabase(data) {
-    console.log('\nAttempting to write data to the database...');
+    console.log("\nAttempting to write data to the database...");
     const result = {
       inserted: { categories: 0, services: 0, edges: 0 },
       skipped: { categories: 0, services: 0 },
-      errors: []
+      errors: [],
     };
 
     try {
@@ -283,18 +315,22 @@ Please run the schema creation script first to set up the database structure:
           const categoryDoc = {
             _key: String(categoryKey),
             nameEN: catData.category,
-            order: categoryOrder
+            order: categoryOrder,
           };
 
           // --- DEBUGGING ---
-          console.log('\n[DEBUG] Attempting to save to serviceCategories with document:');
+          console.log(
+            "\n[DEBUG] Attempting to save to serviceCategories with document:",
+          );
           console.log(JSON.stringify(categoryDoc, null, 2));
           // --- END DEBUGGING ---
 
           await this.serviceCategories.save(categoryDoc);
           currentCategoryKey = categoryDoc._key;
           result.inserted.categories++;
-          console.log(`✓ Inserted category: "${categoryDoc.nameEN}" (Key: ${currentCategoryKey})`);
+          console.log(
+            `✓ Inserted category: "${categoryDoc.nameEN}" (Key: ${currentCategoryKey})`,
+          );
           categoryKey++;
           categoryOrder++;
         }
@@ -318,32 +354,40 @@ Please run the schema creation script first to set up the database structure:
               _key: String(serviceKey),
               categoryId: currentCategoryKey,
               nameEN: serviceName,
-              order: serviceOrder
+              order: serviceOrder,
             };
 
             // --- DEBUGGING ---
-            console.log('\n[DEBUG] Attempting to save to services with document:');
+            console.log(
+              "\n[DEBUG] Attempting to save to services with document:",
+            );
             console.log(JSON.stringify(serviceDoc, null, 2));
             // --- END DEBUGGING ---
 
             const newServiceMeta = await this.services.save(serviceDoc);
             result.inserted.services++;
-            console.log(`  ✓ Inserted service: "${serviceDoc.nameEN}" (Key: ${serviceDoc._key})`);
+            console.log(
+              `  ✓ Inserted service: "${serviceDoc.nameEN}" (Key: ${serviceDoc._key})`,
+            );
 
             // Create edge
             const edgeDoc = {
-              _from: this.serviceCategories.name + '/' + currentCategoryKey,
-              _to: newServiceMeta._id
+              _from: this.serviceCategories.name + "/" + currentCategoryKey,
+              _to: newServiceMeta._id,
             };
 
             // --- DEBUGGING ---
-            console.log('\n[DEBUG] Attempting to save to categoryServices with document:');
+            console.log(
+              "\n[DEBUG] Attempting to save to categoryServices with document:",
+            );
             console.log(JSON.stringify(edgeDoc, null, 2));
             // --- END DEBUGGING ---
 
             await this.categoryServices.save(edgeDoc);
             result.inserted.edges++;
-            console.log(`    ✓ Created edge from category ${currentCategoryKey} to service ${serviceDoc._key}`);
+            console.log(
+              `    ✓ Created edge from category ${currentCategoryKey} to service ${serviceDoc._key}`,
+            );
 
             serviceKey++;
             serviceOrder++;
@@ -351,18 +395,25 @@ Please run the schema creation script first to set up the database structure:
         }
       }
 
-      console.log('\n--- Database Write Summary ---');
+      console.log("\n--- Database Write Summary ---");
       console.log(`✓ Categories inserted: ${result.inserted.categories}`);
       console.log(`✓ Services inserted:   ${result.inserted.services}`);
       console.log(`✓ Edges created:       ${result.inserted.edges}`);
-      console.log(`- Categories skipped (already exist): ${result.skipped.categories}`);
-      console.log(`- Services skipped (already exist):   ${result.skipped.services}`);
+      console.log(
+        `- Categories skipped (already exist): ${result.skipped.categories}`,
+      );
+      console.log(
+        `- Services skipped (already exist):   ${result.skipped.services}`,
+      );
       if (result.errors.length > 0) {
-        console.error('✗ Errors encountered:', result.errors);
+        console.error("✗ Errors encountered:", result.errors);
       }
-      console.log('\n✓ Hierarchy creation completed successfully.');
+      console.log("\n✓ Hierarchy creation completed successfully.");
     } catch (error) {
-      console.error('\n✗ An error occurred during the database write operation:', error.message);
+      console.error(
+        "\n✗ An error occurred during the database write operation:",
+        error.message,
+      );
       throw error;
     }
   }
@@ -371,10 +422,10 @@ Please run the schema creation script first to set up the database structure:
    * Main method to run the hierarchy creation process.
    */
   async run() {
-    const argv = yargs(hideBin(process.argv)).option('file', {
-      alias: 'f',
-      type: 'string',
-      description: 'Path to a JSON file with the hierarchy definition'
+    const argv = yargs(hideBin(process.argv)).option("file", {
+      alias: "f",
+      type: "string",
+      description: "Path to a JSON file with the hierarchy definition",
     }).argv;
 
     try {
@@ -388,7 +439,7 @@ Please run the schema creation script first to set up the database structure:
       }
 
       if (!hierarchyData || hierarchyData.length === 0) {
-        console.log('No hierarchy data provided. Exiting.');
+        console.log("No hierarchy data provided. Exiting.");
         return;
       }
 
@@ -397,7 +448,7 @@ Please run the schema creation script first to set up the database structure:
       if (isConfirmed) {
         await this.writeToDatabase(hierarchyData);
       } else {
-        console.log('Operation cancelled by user.');
+        console.log("Operation cancelled by user.");
       }
     } catch (error) {
       console.error(`\n${error.message}`);
@@ -409,26 +460,30 @@ Please run the schema creation script first to set up the database structure:
 async function main() {
   // Read configuration from environment variables, with defaults
   const dbConfig = {
-    url: process.env.ARANGO_URL || 'http://localhost:8529',
-    databaseName: process.env.ARANGO_DATABASE || 'test-temp',
+    url: process.env.ARANGO_URL || "http://localhost:8529",
+    databaseName: process.env.ARANGO_DATABASE || "test-temp",
     auth: {
-      username: process.env.ARANGO_USER || 'root',
-      password: process.env.ARANGO_PASSWORD || 'test'
-    }
+      username: process.env.ARANGO_USER || "root",
+      password: process.env.ARANGO_PASSWORD || "test",
+    },
   };
 
   // --- Confirmation Prompt ---
-  console.log('--- Knowledge Hierarchy Creation Script ---');
-  console.log('This script will create service categories and services in the database.');
-  console.log('\nDatabase configuration to be used:');
+  console.log("--- Knowledge Hierarchy Creation Script ---");
+  console.log(
+    "This script will create service categories and services in the database.",
+  );
+  console.log("\nDatabase configuration to be used:");
   console.log(`  URL:      ${dbConfig.url}`);
   console.log(`  Database: ${dbConfig.databaseName}`);
   console.log(`  User:     ${dbConfig.auth.username}`);
 
-  const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
+  const answer = await askQuestion(
+    "\nAre you sure you want to proceed with these settings? (Y/n) ",
+  );
 
-  if (answer.toLowerCase() !== 'y') {
-    console.log('Operation cancelled by user. Exiting.');
+  if (answer.toLowerCase() !== "y") {
+    console.log("Operation cancelled by user. Exiting.");
     process.exit(0);
   }
   // --- End Confirmation Prompt ---
@@ -438,7 +493,7 @@ async function main() {
     await creator.run();
     process.exit(0);
   } catch (error) {
-    console.error('✗ Failed to initialize HierarchyCreator:', error.message);
+    console.error("✗ Failed to initialize HierarchyCreator:", error.message);
     process.exit(1);
   }
 }

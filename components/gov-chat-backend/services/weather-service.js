@@ -1,5 +1,5 @@
-const axios = require('axios');
-const { logger, dbService } = require('../shared-lib');
+const axios = require("axios");
+const { logger, dbService } = require("../shared-lib");
 
 class WeatherService {
   constructor() {
@@ -9,7 +9,7 @@ class WeatherService {
     this.analyticsService = null;
     this.initialized = false;
     this.serverLocation = null; // Set in init
-    logger.info('WeatherService constructor called');
+    logger.info("WeatherService constructor called");
   }
 
   /**
@@ -18,36 +18,47 @@ class WeatherService {
    */
   async init() {
     if (this.initialized) {
-      logger.debug('WeatherService already initialized, skipping');
+      logger.debug("WeatherService already initialized, skipping");
       return;
     }
     try {
       // Fetch server location from ipapi.co
-      logger.debug('WeatherService.fetching_server_location');
-      const geoResponse = await axios.get('https://ipapi.co/json/', { timeout: 5000 });
-      logger.debug('WeatherService.server_location_response', {
+      logger.debug("WeatherService.fetching_server_location");
+      const geoResponse = await axios.get("https://ipapi.co/json/", {
+        timeout: 5000,
+      });
+      logger.debug("WeatherService.server_location_response", {
         status: geoResponse.status,
-        data: geoResponse.data
+        data: geoResponse.data,
       });
       this.serverLocation = {
         latitude: geoResponse.data.latitude || 0,
         longitude: geoResponse.data.longitude || 0,
-        city: geoResponse.data.city ? `${geoResponse.data.city}, ${geoResponse.data.country_name}` : 'Unknown'
+        city: geoResponse.data.city
+          ? `${geoResponse.data.city}, ${geoResponse.data.country_name}`
+          : "Unknown",
       };
-      if (this.serverLocation.latitude === 0 && this.serverLocation.longitude === 0) {
-        logger.warn('Server location fetch failed; using default coordinates (0, 0)');
+      if (
+        this.serverLocation.latitude === 0 &&
+        this.serverLocation.longitude === 0
+      ) {
+        logger.warn(
+          "Server location fetch failed; using default coordinates (0, 0)",
+        );
       }
-      logger.info('WeatherService.server_location_set', { serverLocation: this.serverLocation });
+      logger.info("WeatherService.server_location_set", {
+        serverLocation: this.serverLocation,
+      });
 
-      this.db = await this.dbService.getConnection('default');
-      this.weatherRequests = this.db.collection('weatherRequests');
+      this.db = await this.dbService.getConnection("default");
+      this.weatherRequests = this.db.collection("weatherRequests");
       this.initialized = true;
-      logger.info('WeatherService initialized successfully');
+      logger.info("WeatherService initialized successfully");
     } catch (error) {
       logger.error(`Error initializing WeatherService: ${error.message}`, {
         stack: error.stack,
         statusCode: error.response?.status,
-        responseData: error.response?.data
+        responseData: error.response?.data,
       });
       throw error;
     }
@@ -59,7 +70,7 @@ class WeatherService {
    */
   setAnalyticsService(analyticsService) {
     this.analyticsService = analyticsService;
-    logger.info('WeatherService.analytics_service_set');
+    logger.info("WeatherService.analytics_service_set");
   }
 
   /**
@@ -70,34 +81,46 @@ class WeatherService {
    */
   async getCityName(latitude, longitude) {
     try {
-      logger.debug('WeatherService.fetching_city_name', { latitude, longitude });
-      const response = await axios.get(`https://nominatim.openstreetmap.org/reverse`, {
-        timeout: 5000,
-        params: {
-          format: 'json',
-          lat: latitude,
-          lon: longitude,
-          zoom: 10 // City-level detail
-        },
-        headers: {
-          'User-Agent': 'GovernmentServicesAPI/1.0 (contact: fordenk@gmail.com)'
-        }
+      logger.debug("WeatherService.fetching_city_name", {
+        latitude,
+        longitude,
       });
-      logger.debug('WeatherService.city_name_response', {
+      const response = await axios.get(
+        `https://nominatim.openstreetmap.org/reverse`,
+        {
+          timeout: 5000,
+          params: {
+            format: "json",
+            lat: latitude,
+            lon: longitude,
+            zoom: 10, // City-level detail
+          },
+          headers: {
+            "User-Agent":
+              "GovernmentServicesAPI/1.0 (contact: fordenk@gmail.com)",
+          },
+        },
+      );
+      logger.debug("WeatherService.city_name_response", {
         status: response.status,
-        data: response.data
+        data: response.data,
       });
       const address = response.data.address;
-      const city = address.city || address.town || address.village || address.county || 'Unknown';
-      return `${city}, ${address.country || 'Unknown'}`;
+      const city =
+        address.city ||
+        address.town ||
+        address.village ||
+        address.county ||
+        "Unknown";
+      return `${city}, ${address.country || "Unknown"}`;
     } catch (error) {
-      logger.error('WeatherService.get_city_name_failed', {
+      logger.error("WeatherService.get_city_name_failed", {
         error: error.message,
         stack: error.stack,
         statusCode: error.response?.status,
-        responseData: error.response?.data
+        responseData: error.response?.data,
       });
-      return 'Unknown';
+      return "Unknown";
     }
   }
 
@@ -109,16 +132,18 @@ class WeatherService {
   async getWeather(locationData) {
     const startTime = Date.now();
     try {
-      logger.info('WeatherService.get_weather_start', { locationData });
+      logger.info("WeatherService.get_weather_start", { locationData });
 
       // Fallback if ipapi.co rate-limited us at startup
       if (!this.serverLocation) {
-        this.serverLocation = { latitude: 0, longitude: 0, city: 'Unknown' };
+        this.serverLocation = { latitude: 0, longitude: 0, city: "Unknown" };
       }
 
       // Validate and format coordinates
-      let latitude = parseFloat(locationData.latitude) || this.serverLocation.latitude;
-      let longitude = parseFloat(locationData.longitude) || this.serverLocation.longitude;
+      let latitude =
+        parseFloat(locationData.latitude) || this.serverLocation.latitude;
+      let longitude =
+        parseFloat(locationData.longitude) || this.serverLocation.longitude;
       const userId = locationData.userId;
 
       // Round to 4 decimal places to avoid Open-Meteo precision issues
@@ -126,42 +151,55 @@ class WeatherService {
       longitude = Math.round(longitude * 10000) / 10000;
 
       // Validate coordinates
-      if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-        logger.warn('WeatherService.invalid_coordinates', { latitude, longitude });
+      if (
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180
+      ) {
+        logger.warn("WeatherService.invalid_coordinates", {
+          latitude,
+          longitude,
+        });
         latitude = this.serverLocation.latitude;
         longitude = this.serverLocation.longitude;
       }
 
       // Get city name for the coordinates
       const city =
-        latitude !== this.serverLocation.latitude || longitude !== this.serverLocation.longitude
+        latitude !== this.serverLocation.latitude ||
+        longitude !== this.serverLocation.longitude
           ? await this.getCityName(latitude, longitude)
           : this.serverLocation.city;
 
-      logger.debug('WeatherService.location_selected', { latitude, longitude, city });
+      logger.debug("WeatherService.location_selected", {
+        latitude,
+        longitude,
+        city,
+      });
 
       // Open-Meteo API request
       const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=4`;
-      logger.debug('WeatherService.api_request', { weatherUrl });
+      logger.debug("WeatherService.api_request", { weatherUrl });
 
       // Fetch weather data
-      logger.debug('WeatherService.fetching_weather');
+      logger.debug("WeatherService.fetching_weather");
       const response = await axios.get(weatherUrl, { timeout: 5000 });
-      logger.debug('WeatherService.weather_response', {
+      logger.debug("WeatherService.weather_response", {
         status: response.status,
-        data: response.data
+        data: response.data,
       });
 
       // Parse weather data
       const weatherCodeToCondition = (code) => {
-        if ([61, 63, 65, 66, 67].includes(code)) return 'Rain';
-        if ([71, 73, 75, 77].includes(code)) return 'Snow';
-        if ([51, 53, 55].includes(code)) return 'Drizzle';
-        if ([95, 96, 99].includes(code)) return 'Thunderstorm';
-        if ([3].includes(code)) return 'Cloudy';
-        if ([2].includes(code)) return 'Partly Cloudy';
-        if ([0, 1].includes(code)) return 'Clear';
-        return 'Unknown';
+        if ([61, 63, 65, 66, 67].includes(code)) return "Rain";
+        if ([71, 73, 75, 77].includes(code)) return "Snow";
+        if ([51, 53, 55].includes(code)) return "Drizzle";
+        if ([95, 96, 99].includes(code)) return "Thunderstorm";
+        if ([3].includes(code)) return "Cloudy";
+        if ([2].includes(code)) return "Partly Cloudy";
+        if ([0, 1].includes(code)) return "Clear";
+        return "Unknown";
       };
 
       const weatherData = {
@@ -170,14 +208,20 @@ class WeatherService {
           temperature: Math.round(response.data.current.temperature_2m),
           condition: weatherCodeToCondition(response.data.current.weather_code),
           humidity: response.data.current.relative_humidity_2m,
-          windSpeed: Math.round(response.data.current.wind_speed_10m)
+          windSpeed: Math.round(response.data.current.wind_speed_10m),
         },
         forecast: response.data.daily.time.slice(1, 4).map((date, index) => ({
           date: new Date(date).toISOString(),
-          condition: weatherCodeToCondition(response.data.daily.weather_code[index + 1]),
-          highTemp: Math.round(response.data.daily.temperature_2m_max[index + 1]),
-          lowTemp: Math.round(response.data.daily.temperature_2m_min[index + 1])
-        }))
+          condition: weatherCodeToCondition(
+            response.data.daily.weather_code[index + 1],
+          ),
+          highTemp: Math.round(
+            response.data.daily.temperature_2m_max[index + 1],
+          ),
+          lowTemp: Math.round(
+            response.data.daily.temperature_2m_min[index + 1],
+          ),
+        })),
       };
 
       // Store request in ArangoDB
@@ -186,41 +230,44 @@ class WeatherService {
         latitude,
         longitude,
         city,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
-      logger.debug('WeatherService.saving_request', { requestDoc });
+      logger.debug("WeatherService.saving_request", { requestDoc });
       const request = await this.weatherRequests.save(requestDoc);
       const requestId = request._key;
 
       // Record in analytics
       if (this.analyticsService) {
         try {
-          logger.debug('WeatherService.recording_analytics', { requestId });
+          logger.debug("WeatherService.recording_analytics", { requestId });
           await this.analyticsService.recordWeatherRequest({
             _key: requestId,
             userId: userId || null,
             city,
-            timestamp: requestDoc.timestamp
+            timestamp: requestDoc.timestamp,
           });
-          logger.info('WeatherService.analytics_recorded', { requestId });
+          logger.info("WeatherService.analytics_recorded", { requestId });
         } catch (error) {
-          logger.error('WeatherService.record_analytics_failed', { requestId, error: error.message });
+          logger.error("WeatherService.record_analytics_failed", {
+            requestId,
+            error: error.message,
+          });
         }
       }
 
-      logger.info('WeatherService.weather_fetched', {
+      logger.info("WeatherService.weather_fetched", {
         requestId,
         city,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       return weatherData;
     } catch (error) {
-      logger.error('WeatherService.get_weather_failed', {
+      logger.error("WeatherService.get_weather_failed", {
         error: error.message,
         stack: error.stack,
         statusCode: error.response?.status,
         responseData: error.response?.data,
-        durationMs: Date.now() - startTime
+        durationMs: Date.now() - startTime,
       });
       throw error;
     }

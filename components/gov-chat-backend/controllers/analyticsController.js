@@ -1,4 +1,4 @@
-const { logger } = require('../shared-lib');
+const { logger } = require("../shared-lib");
 
 /**
  * Controller for analytics-related API endpoints
@@ -8,12 +8,19 @@ class AnalyticsController {
    * @param {Object} analyticsService - Singleton AnalyticsService instance
    */
   constructor(analyticsService) {
-    if (!analyticsService || typeof analyticsService.getDashboardAnalytics !== 'function') {
-      throw new Error('Invalid analyticsService provided to AnalyticsController');
+    if (
+      !analyticsService ||
+      typeof analyticsService.getDashboardAnalytics !== "function"
+    ) {
+      throw new Error(
+        "Invalid analyticsService provided to AnalyticsController",
+      );
     }
     this.analyticsService = analyticsService;
-    logger.debug('AnalyticsController initialized with analyticsService', {
-      methods: Object.getOwnPropertyNames(Object.getPrototypeOf(analyticsService)).filter((m) => m !== 'constructor')
+    logger.debug("AnalyticsController initialized with analyticsService", {
+      methods: Object.getOwnPropertyNames(
+        Object.getPrototypeOf(analyticsService),
+      ).filter((m) => m !== "constructor"),
     });
   }
 
@@ -24,25 +31,34 @@ class AnalyticsController {
    */
   async getDashboardAnalytics(req, res) {
     try {
-      logger.info('Fetching dashboard analytics');
+      logger.info("Fetching dashboard analytics");
       const { startDate, endDate, locale } = req.query;
 
       // Validate required parameters
       if (!startDate || !endDate) {
-        logger.warn('Missing required parameters: startDate and endDate are required');
+        logger.warn(
+          "Missing required parameters: startDate and endDate are required",
+        );
         return res.status(400).json({
-          error: 'Missing required parameters: startDate and endDate are required'
+          error:
+            "Missing required parameters: startDate and endDate are required",
         });
       }
 
       // Get dashboard analytics from service with locale
-      const dashboardData = await this.analyticsService.getDashboardAnalytics(startDate, endDate, locale);
+      const dashboardData = await this.analyticsService.getDashboardAnalytics(
+        startDate,
+        endDate,
+        locale,
+      );
 
-      logger.info('Dashboard analytics retrieved successfully');
+      logger.info("Dashboard analytics retrieved successfully");
       res.json(dashboardData);
     } catch (error) {
-      logger.error(`Error in getDashboardAnalytics: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ error: 'Failed to retrieve dashboard analytics' });
+      logger.error(`Error in getDashboardAnalytics: ${error.message}`, {
+        stack: error.stack,
+      });
+      res.status(500).json({ error: "Failed to retrieve dashboard analytics" });
     }
   }
 
@@ -59,9 +75,12 @@ class AnalyticsController {
 
       // Validate required parameters
       if (!startDate || !endDate) {
-        logger.warn('Missing required parameters: startDate and endDate are required');
+        logger.warn(
+          "Missing required parameters: startDate and endDate are required",
+        );
         return res.status(400).json({
-          error: 'Missing required parameters: startDate and endDate are required'
+          error:
+            "Missing required parameters: startDate and endDate are required",
         });
       }
 
@@ -70,38 +89,58 @@ class AnalyticsController {
 
       // Get the requested metric
       switch (metric) {
-        case 'totalQueries': {
+        case "totalQueries": {
           // Get analytics with specific filters to extract just the needed metric
-          const analyticsData = await this.analyticsService.getDashboardAnalytics(startDate, endDate);
+          const analyticsData =
+            await this.analyticsService.getDashboardAnalytics(
+              startDate,
+              endDate,
+            );
           value = analyticsData.queries.total;
           logger.info(`Total queries metric retrieved: ${value}`);
           break;
         }
 
-        case 'uniqueUsers':
+        case "uniqueUsers":
           // Use the dedicated method for counting unique users
-          value = await this.analyticsService.getUniqueUsersCount(startDate, endDate);
+          value = await this.analyticsService.getUniqueUsersCount(
+            startDate,
+            endDate,
+          );
           logger.info(`Unique users metric retrieved: ${value}`);
           break;
 
-        case 'averageResponseTime': {
+        case "averageResponseTime": {
           // Get query data and calculate average response time
-          const queryAnalytics = await this.analyticsService.getDashboardAnalytics(startDate, endDate);
+          const queryAnalytics =
+            await this.analyticsService.getDashboardAnalytics(
+              startDate,
+              endDate,
+            );
 
-          if (queryAnalytics.queries && typeof queryAnalytics.queries.avgResponseTime === 'number') {
+          if (
+            queryAnalytics.queries &&
+            typeof queryAnalytics.queries.avgResponseTime === "number"
+          ) {
             value = queryAnalytics.queries.avgResponseTime;
             logger.info(`Average response time retrieved: ${value} seconds`);
           } else {
             // No response time data found, provide a default value
             value = 2.8; // Default avg response time in seconds
-            logger.info('No response time data found, using default value: 2.8 seconds');
+            logger.info(
+              "No response time data found, using default value: 2.8 seconds",
+            );
           }
           break;
         }
 
-        case 'satisfactionRate': {
+        case "satisfactionRate": {
           // Get satisfaction gauge data
-          const gaugeData = await this.analyticsService.getSatisfactionGaugeData('monthly', endDate);
+          const gaugeData =
+            await this.analyticsService.getSatisfactionGaugeData(
+              "monthly",
+              endDate,
+            );
           value = gaugeData.currentValue;
           logger.info(`Satisfaction rate retrieved: ${value}%`);
           break;
@@ -109,36 +148,47 @@ class AnalyticsController {
 
         default:
           logger.warn(`Unsupported metric: ${metric}`);
-          return res.status(400).json({ error: `Unsupported metric: ${metric}` });
+          return res
+            .status(400)
+            .json({ error: `Unsupported metric: ${metric}` });
       }
 
       // If no value was found or calculated, provide a reasonable default
       if (value === null) {
         switch (metric) {
-          case 'totalQueries':
+          case "totalQueries":
             value = 1000;
-            logger.info('No total queries data, using default value: 1000');
+            logger.info("No total queries data, using default value: 1000");
             break;
-          case 'uniqueUsers':
+          case "uniqueUsers":
             value = 120;
-            logger.info('No unique users data, using default value: 120');
+            logger.info("No unique users data, using default value: 120");
             break;
-          case 'averageResponseTime':
+          case "averageResponseTime":
             value = 2.8;
-            logger.info('No average response time data, using default value: 2.8 seconds');
+            logger.info(
+              "No average response time data, using default value: 2.8 seconds",
+            );
             break;
-          case 'satisfactionRate':
+          case "satisfactionRate":
             value = 85.0;
-            logger.info('No satisfaction rate data, using default value: 85.0%');
+            logger.info(
+              "No satisfaction rate data, using default value: 85.0%",
+            );
             break;
         }
       }
 
-      logger.info(`Metric ${metric} retrieved successfully with value: ${value}`);
+      logger.info(
+        `Metric ${metric} retrieved successfully with value: ${value}`,
+      );
       res.json({ metric, value });
     } catch (error) {
-      logger.error(`Error in getMetric for ${req.params.metric}: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ error: 'Failed to retrieve metric data' });
+      logger.error(
+        `Error in getMetric for ${req.params.metric}: ${error.message}`,
+        { stack: error.stack },
+      );
+      res.status(500).json({ error: "Failed to retrieve metric data" });
     }
   }
 
@@ -149,45 +199,62 @@ class AnalyticsController {
    */
   async getTimeSeriesData(req, res) {
     try {
-      logger.info(`Fetching time series data for metric type: ${req.params.metricType}`);
+      logger.info(
+        `Fetching time series data for metric type: ${req.params.metricType}`,
+      );
       const { metricType } = req.params;
       const { interval, startDate, endDate } = req.query;
 
       // Validate required parameters
       if (!interval || !startDate || !endDate) {
-        logger.warn('Missing required parameters: interval, startDate, and endDate are required');
+        logger.warn(
+          "Missing required parameters: interval, startDate, and endDate are required",
+        );
         return res.status(400).json({
-          error: 'Missing required parameters: interval, startDate, and endDate are required'
+          error:
+            "Missing required parameters: interval, startDate, and endDate are required",
         });
       }
 
       // Validate interval
-      const validIntervals = ['hourly', 'daily', 'weekly', 'monthly'];
+      const validIntervals = ["hourly", "daily", "weekly", "monthly"];
       if (!validIntervals.includes(interval)) {
-        logger.warn(`Invalid interval: ${interval}. Must be one of: ${validIntervals.join(', ')}`);
+        logger.warn(
+          `Invalid interval: ${interval}. Must be one of: ${validIntervals.join(", ")}`,
+        );
         return res.status(400).json({
-          error: `Invalid interval: ${interval}. Must be one of: ${validIntervals.join(', ')}`
+          error: `Invalid interval: ${interval}. Must be one of: ${validIntervals.join(", ")}`,
         });
       }
 
       // Call the analytics service to get the time series data
-      const timeSeriesData = await this.analyticsService.getTimeSeriesData(metricType, interval, startDate, endDate);
+      const timeSeriesData = await this.analyticsService.getTimeSeriesData(
+        metricType,
+        interval,
+        startDate,
+        endDate,
+      );
 
       // If formatDateLabel is not available on the service, use a simple date formatting
       const processedData = timeSeriesData.map((item) => ({
-        timestamp: item.timestamp || '',
+        timestamp: item.timestamp || "",
         dateLabel: this.analyticsService.formatDateLabel
           ? this.analyticsService.formatDateLabel(item.timestamp, interval)
           : item.timestamp,
         value: item.value || 0,
-        userCount: item.userCount || 0
+        userCount: item.userCount || 0,
       }));
 
-      logger.info(`Time series data retrieved successfully with ${processedData.length} data points`);
+      logger.info(
+        `Time series data retrieved successfully with ${processedData.length} data points`,
+      );
       res.json(processedData);
     } catch (error) {
-      logger.error(`Error in getTimeSeriesData for ${req.params.metricType}: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ error: 'Failed to retrieve time series data' });
+      logger.error(
+        `Error in getTimeSeriesData for ${req.params.metricType}: ${error.message}`,
+        { stack: error.stack },
+      );
+      res.status(500).json({ error: "Failed to retrieve time series data" });
     }
   }
 
@@ -198,25 +265,36 @@ class AnalyticsController {
    */
   async getSatisfactionGauge(req, res) {
     try {
-      logger.info('Fetching satisfaction gauge data');
+      logger.info("Fetching satisfaction gauge data");
       const { startDate, endDate, locale } = req.query;
 
       // Validate required parameters
       if (!startDate || !endDate) {
-        logger.warn('Missing required parameters: startDate and endDate are required');
+        logger.warn(
+          "Missing required parameters: startDate and endDate are required",
+        );
         return res.status(400).json({
-          error: 'Missing required parameters: startDate and endDate are required'
+          error:
+            "Missing required parameters: startDate and endDate are required",
         });
       }
 
       // Get satisfaction gauge data from service
-      const gaugeData = await this.analyticsService.getSatisfactionGaugeData(startDate, endDate, locale);
+      const gaugeData = await this.analyticsService.getSatisfactionGaugeData(
+        startDate,
+        endDate,
+        locale,
+      );
 
-      logger.info('Satisfaction gauge data retrieved successfully');
+      logger.info("Satisfaction gauge data retrieved successfully");
       res.json(gaugeData);
     } catch (error) {
-      logger.error(`Error in getSatisfactionGauge: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ error: 'Failed to retrieve satisfaction gauge data' });
+      logger.error(`Error in getSatisfactionGauge: ${error.message}`, {
+        stack: error.stack,
+      });
+      res
+        .status(500)
+        .json({ error: "Failed to retrieve satisfaction gauge data" });
     }
   }
 
@@ -227,25 +305,37 @@ class AnalyticsController {
    */
   async getSatisfactionHeatmap(req, res) {
     try {
-      logger.info('Fetching satisfaction heatmap data');
+      logger.info("Fetching satisfaction heatmap data");
       const { startDate, endDate, locale } = req.query;
 
       // Validate required parameters
       if (!startDate || !endDate) {
-        logger.warn('Missing required parameters: startDate and endDate are required');
+        logger.warn(
+          "Missing required parameters: startDate and endDate are required",
+        );
         return res.status(400).json({
-          error: 'Missing required parameters: startDate and endDate are required'
+          error:
+            "Missing required parameters: startDate and endDate are required",
         });
       }
 
       // Get satisfaction heatmap data from service
-      const heatmapData = await this.analyticsService.getSatisfactionHeatmapData(startDate, endDate, locale);
+      const heatmapData =
+        await this.analyticsService.getSatisfactionHeatmapData(
+          startDate,
+          endDate,
+          locale,
+        );
 
-      logger.info('Satisfaction heatmap data retrieved successfully');
+      logger.info("Satisfaction heatmap data retrieved successfully");
       res.json(heatmapData);
     } catch (error) {
-      logger.error(`Error in getSatisfactionHeatmap: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ error: 'Failed to retrieve satisfaction heatmap data' });
+      logger.error(`Error in getSatisfactionHeatmap: ${error.message}`, {
+        stack: error.stack,
+      });
+      res
+        .status(500)
+        .json({ error: "Failed to retrieve satisfaction heatmap data" });
     }
   }
 }

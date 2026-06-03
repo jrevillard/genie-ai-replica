@@ -1,8 +1,8 @@
-require('dotenv').config();
-const { aql } = require('arangojs');
-const { logger, dbService } = require('../shared-lib');
-const { NotFoundError, ForbiddenError } = require('../middleware/errors');
-const { traceQuery } = require('../tracing-db');
+require("dotenv").config();
+const { aql } = require("arangojs");
+const { logger, dbService } = require("../shared-lib");
+const { NotFoundError, ForbiddenError } = require("../middleware/errors");
+const { traceQuery } = require("../tracing-db");
 
 //const initDB = dbService.getConnection();
 
@@ -14,7 +14,7 @@ class ChatHistoryService {
     this.dbService = dbService; // Store the service reference instead of the promise
     this.analyticsService = null; // Will be set via dependency injection
     this.initialized = false;
-    logger.info('ChatHistoryService constructor called');
+    logger.info("ChatHistoryService constructor called");
     ChatHistoryService.instance = this;
     return this;
   }
@@ -28,26 +28,30 @@ class ChatHistoryService {
 
   async init() {
     if (this.initialized) {
-      logger.debug('ChatHistoryService already initialized, skipping');
+      logger.debug("ChatHistoryService already initialized, skipping");
       return;
     }
     try {
       this.db = await this.dbService.getConnection();
 
-      this.conversations = this.db.collection('conversations');
-      this.messages = this.db.collection('messages');
-      this.userConversations = this.db.collection('userConversations');
-      this.conversationCategories = this.db.collection('conversationCategories');
-      this.queryMessages = this.db.collection('queryMessages');
-      this.conversationFiles = this.db.collection('conversationFiles');
-      this.folders = this.db.collection('folders');
-      this.userFolders = this.db.collection('userFolders');
-      this.folderConversations = this.db.collection('folderConversations');
+      this.conversations = this.db.collection("conversations");
+      this.messages = this.db.collection("messages");
+      this.userConversations = this.db.collection("userConversations");
+      this.conversationCategories = this.db.collection(
+        "conversationCategories",
+      );
+      this.queryMessages = this.db.collection("queryMessages");
+      this.conversationFiles = this.db.collection("conversationFiles");
+      this.folders = this.db.collection("folders");
+      this.userFolders = this.db.collection("userFolders");
+      this.folderConversations = this.db.collection("folderConversations");
 
       this.initialized = true;
-      logger.info('ChatHistoryService initialized successfully');
+      logger.info("ChatHistoryService initialized successfully");
     } catch (error) {
-      logger.error(`Error initializing ChatHistoryService: ${error.message}`, { stack: error.stack });
+      logger.error(`Error initializing ChatHistoryService: ${error.message}`, {
+        stack: error.stack,
+      });
       throw error;
     }
   }
@@ -58,7 +62,7 @@ class ChatHistoryService {
    */
   setAnalyticsService(analyticsService) {
     this.analyticsService = analyticsService;
-    logger.info('Analytics service set for ChatHistoryService');
+    logger.info("Analytics service set for ChatHistoryService");
   }
 
   /**
@@ -68,16 +72,16 @@ class ChatHistoryService {
    */
   async createConversation(conversationData) {
     try {
-      logger.info('Creating new conversation with data:', conversationData);
+      logger.info("Creating new conversation with data:", conversationData);
 
       // Ensure minimum required data
       if (!conversationData.userId) {
-        logger.warn('Missing required user ID');
-        throw new Error('User ID is required');
+        logger.warn("Missing required user ID");
+        throw new Error("User ID is required");
       }
 
       // Fetch category name if categoryId is provided
-      let categoryName = '';
+      let categoryName = "";
       if (conversationData.categoryId) {
         const categoryQuery = await traceQuery(
           () =>
@@ -86,17 +90,19 @@ class ChatHistoryService {
                 FILTER cat._key == ${conversationData.categoryId}
                 RETURN cat.nameEN
             `),
-          { collection: 'serviceCategories', operation: 'FILTER' }
+          { collection: "serviceCategories", operation: "FILTER" },
         );
-        categoryName = (await categoryQuery.next()) || '';
-        logger.info(`Resolved categoryId ${conversationData.categoryId} to name: ${categoryName}`);
+        categoryName = (await categoryQuery.next()) || "";
+        logger.info(
+          `Resolved categoryId ${conversationData.categoryId} to name: ${categoryName}`,
+        );
       }
 
       // Generate _key in a format similar to existing documents (numeric string)
       const timestamp = Date.now().toString();
       const randomSuffix = Math.floor(Math.random() * 10000)
         .toString()
-        .padStart(4, '0');
+        .padStart(4, "0");
       const generatedKey = `${timestamp}${randomSuffix}`; // e.g., "1747653190597"
 
       // Compute messageCount by counting existing messages for this conversation
@@ -107,27 +113,32 @@ class ChatHistoryService {
               FILTER msg.conversationId == ${generatedKey}
               RETURN msg
           `),
-        { collection: 'messages', operation: 'FILTER' }
+        { collection: "messages", operation: "FILTER" },
       );
       const messages = await messageCountQuery.all();
       const messageCount = messages.length;
-      logger.info(`Computed messageCount for conversation ${generatedKey}: ${messageCount}`);
+      logger.info(
+        `Computed messageCount for conversation ${generatedKey}: ${messageCount}`,
+      );
 
       // Prepare conversation document
       const conversationDoc = {
         _key: generatedKey,
-        title: conversationData.title || 'New Conversation',
-        lastMessage: conversationData.initialMessage || '',
+        title: conversationData.title || "New Conversation",
+        lastMessage: conversationData.initialMessage || "",
         created: conversationData.created || new Date().toISOString(),
         updated: conversationData.updated || new Date().toISOString(),
         messageCount: messageCount, // Use computed value
         isStarred: Boolean(conversationData.isStarred) || false,
         isArchived: Boolean(conversationData.isArchived) || false,
-        category: categoryName || '',
-        tags: Array.isArray(conversationData.tags) ? conversationData.tags : []
+        category: categoryName || "",
+        tags: Array.isArray(conversationData.tags) ? conversationData.tags : [],
       };
 
-      logger.info('Document to save:', JSON.stringify(conversationDoc, null, 2));
+      logger.info(
+        "Document to save:",
+        JSON.stringify(conversationDoc, null, 2),
+      );
 
       // Create conversation
       const conversation = await this.conversations.save(conversationDoc);
@@ -137,24 +148,28 @@ class ChatHistoryService {
       await this.userConversations.save({
         _from: `users/${conversationData.userKey}`,
         _to: `conversations/${conversation._key}`,
-        role: conversationData.role || 'owner',
-        lastViewedAt: new Date().toISOString()
+        role: conversationData.role || "owner",
+        lastViewedAt: new Date().toISOString(),
       });
-      logger.info(`User ${conversationData.userId} linked to conversation ${conversation._key}`);
+      logger.info(
+        `User ${conversationData.userId} linked to conversation ${conversation._key}`,
+      );
 
       // Link conversation to category if provided
       if (conversationData.categoryId) {
         await this.conversationCategories.save({
           _from: `conversations/${conversation._key}`,
           _to: `serviceCategories/${conversationData.categoryId}`,
-          relevanceScore: conversationData.relevanceScore || 1.0
+          relevanceScore: conversationData.relevanceScore || 1.0,
         });
-        logger.info(`Conversation ${conversation._key} linked to category ${conversationData.categoryId}`);
+        logger.info(
+          `Conversation ${conversation._key} linked to category ${conversationData.categoryId}`,
+        );
       }
 
       return { ...conversation, ...conversationDoc };
     } catch (error) {
-      logger.error('Error creating conversation:', error);
+      logger.error("Error creating conversation:", error);
       throw error;
     }
   }
@@ -166,11 +181,17 @@ class ChatHistoryService {
    */
   async addMessage(messageData) {
     try {
-      logger.info(`Adding message to conversation ${messageData.conversationId}`);
+      logger.info(
+        `Adding message to conversation ${messageData.conversationId}`,
+      );
 
-      if (!messageData.conversationId || !messageData.content || !messageData.sender) {
-        logger.warn('Missing required message data');
-        throw new Error('conversationId, content, and sender are required');
+      if (
+        !messageData.conversationId ||
+        !messageData.content ||
+        !messageData.sender
+      ) {
+        logger.warn("Missing required message data");
+        throw new Error("conversationId, content, and sender are required");
       }
 
       // Get the latest sequence number for this conversation
@@ -192,8 +213,9 @@ class ChatHistoryService {
         timestamp: messageData.timestamp || new Date().toISOString(),
         sender: messageData.sender,
         sequence: newSequence,
-        readStatus: messageData.readStatus !== undefined ? messageData.readStatus : true,
-        metadata: messageData.metadata || {}
+        readStatus:
+          messageData.readStatus !== undefined ? messageData.readStatus : true,
+        metadata: messageData.metadata || {},
       };
 
       const message = await this.messages.save(messageDoc);
@@ -202,18 +224,21 @@ class ChatHistoryService {
       // ---------------------------------------------------------
       // NEW: Link Reference Documents (Document Collection Compatible)
       // ---------------------------------------------------------
-      if (messageData.metadata && Array.isArray(messageData.metadata.source_documents)) {
+      if (
+        messageData.metadata &&
+        Array.isArray(messageData.metadata.source_documents)
+      ) {
         const docs = messageData.metadata.source_documents;
 
         // Clean the ID just in case
-        const convKey = messageData.conversationId.includes('/')
-          ? messageData.conversationId.split('/').pop()
+        const convKey = messageData.conversationId.includes("/")
+          ? messageData.conversationId.split("/").pop()
           : messageData.conversationId;
 
         for (const doc of docs) {
           const rawId = doc.document_id || doc.id;
           if (rawId) {
-            const fileId = rawId.includes('/') ? rawId : `files/${rawId}`;
+            const fileId = rawId.includes("/") ? rawId : `files/${rawId}`;
 
             try {
               // FIX: Save as standard fields since this is a Document collection
@@ -223,23 +248,30 @@ class ChatHistoryService {
                 messageId: message._key,
 
                 // SNAPSHOT: Store display info directly to prevent "Unknown Document"
-                documentName: doc.document_name || doc.title || 'Unknown Document',
-                fileName: doc.file_name || doc.document_name || 'Unknown File',
+                documentName:
+                  doc.document_name || doc.title || "Unknown Document",
+                fileName: doc.file_name || doc.document_name || "Unknown File",
                 url: doc.url || null,
 
                 labels: doc.serviceLabels || doc.labels || [],
-                categoryLabel: doc.categoryLabel || '',
+                categoryLabel: doc.categoryLabel || "",
                 confidenceScore: doc.score || 0,
-                createdAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
               });
-              logger.info(`[DEBUG] Saved file mapping: conversation ${convKey} -> file ${fileId}`);
+              logger.info(
+                `[DEBUG] Saved file mapping: conversation ${convKey} -> file ${fileId}`,
+              );
             } catch (saveError) {
-              logger.warn(`Failed to save conversationFile mapping for ${fileId}: ${saveError.message}`);
+              logger.warn(
+                `Failed to save conversationFile mapping for ${fileId}: ${saveError.message}`,
+              );
             }
           }
         }
         if (docs.length > 0) {
-          logger.info(`Linked ${docs.length} reference documents to conversation ${messageData.conversationId}`);
+          logger.info(
+            `Linked ${docs.length} reference documents to conversation ${messageData.conversationId}`,
+          );
         }
       }
       // ---------------------------------------------------------
@@ -249,11 +281,12 @@ class ChatHistoryService {
         const edgeDoc = {
           _from: `queries/${messageData.queryId}`,
           _to: `messages/${message._key}`,
-          responseType: messageData.responseType || 'primary',
-          createdAt: new Date().toISOString().split('.')[0] + 'Z'
+          responseType: messageData.responseType || "primary",
+          createdAt: new Date().toISOString().split(".")[0] + "Z",
         };
 
-        if (messageData.confidenceScore !== undefined) edgeDoc.confidenceScore = Number(messageData.confidenceScore);
+        if (messageData.confidenceScore !== undefined)
+          edgeDoc.confidenceScore = Number(messageData.confidenceScore);
         if (messageData.userId) edgeDoc.userId = messageData.userId;
 
         try {
@@ -266,7 +299,9 @@ class ChatHistoryService {
 
       // Update conversation stats
       const snippet =
-        messageData.content.length > 100 ? `${messageData.content.substring(0, 97)}...` : messageData.content;
+        messageData.content.length > 100
+          ? `${messageData.content.substring(0, 97)}...`
+          : messageData.content;
 
       const updateStatsQuery = aql`
         FOR doc IN conversations
@@ -278,11 +313,18 @@ class ChatHistoryService {
           } IN conversations
       `;
 
-      this.db.query(updateStatsQuery).catch((err) => logger.warn(`Background stats update failed: ${err.message}`));
+      this.db
+        .query(updateStatsQuery)
+        .catch((err) =>
+          logger.warn(`Background stats update failed: ${err.message}`),
+        );
 
       return { ...message, ...messageDoc };
     } catch (error) {
-      logger.error(`Error adding message to conversation ${messageData.conversationId}:`, error);
+      logger.error(
+        `Error adding message to conversation ${messageData.conversationId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -296,7 +338,9 @@ class ChatHistoryService {
     try {
       logger.info(`Getting conversation with ID: ${conversationId}`);
 
-      const convKey = conversationId.includes('/') ? conversationId.split('/').pop() : conversationId;
+      const convKey = conversationId.includes("/")
+        ? conversationId.split("/").pop()
+        : conversationId;
       const conversationIdFull = `conversations/${convKey}`;
 
       // Get conversation main document
@@ -319,7 +363,7 @@ class ChatHistoryService {
                   RETURN q._key
             )[0]
             RETURN MERGE(msg, { queryId: queryLink })
-        `
+        `,
           )
           .then((cursor) => cursor.all()),
 
@@ -339,7 +383,7 @@ class ChatHistoryService {
                 nameSW: cat.nameSW,
                 relevanceScore: edge.relevanceScore
               }
-        `
+        `,
           )
           .then((cursor) => cursor.all()),
 
@@ -357,7 +401,7 @@ class ChatHistoryService {
                 role: edge.role,
                 lastViewedAt: edge.lastViewedAt
               }
-        `
+        `,
           )
           .then((cursor) => cursor.all()),
 
@@ -387,19 +431,21 @@ class ChatHistoryService {
               // SCHEMA FIX: Map 'source_url' from files collection
               url: doc.url || fileDoc.source_url || fileDoc.url || null
             }
-        `
+        `,
           )
-          .then((cursor) => cursor.all())
+          .then((cursor) => cursor.all()),
       ]);
 
-      logger.info(`Found ${messages.length} messages and ${files.length} files for conversation ${conversationId}`);
+      logger.info(
+        `Found ${messages.length} messages and ${files.length} files for conversation ${conversationId}`,
+      );
 
       return {
         ...conversation,
         messages,
         categories,
         owners,
-        files
+        files,
       };
     } catch (error) {
       logger.error(`Error getting conversation ${conversationId}:`, error);
@@ -427,7 +473,7 @@ class ChatHistoryService {
       const offset = options.offset || 0;
       const includeArchived = options.includeArchived || false;
       const filterStarred = options.filterStarred || false;
-      const searchTerm = options.searchTerm || '';
+      const searchTerm = options.searchTerm || "";
 
       // Build query with conditional search filter — cannot use ternary with aql
       // templates because a falsy '' value becomes a bind var that breaks AQL syntax
@@ -506,13 +552,17 @@ class ChatHistoryService {
       }
 
       // Log and execute the query
-      logger.info(`Executing simplified query for user path: ${userIdWithPrefix}`);
+      logger.info(
+        `Executing simplified query for user path: ${userIdWithPrefix}`,
+      );
       const cursor = await traceQuery(() => this.db.query(query), {
-        collection: 'conversations',
-        operation: 'FOR'
+        collection: "conversations",
+        operation: "FOR",
       });
       const conversations = await cursor.all();
-      logger.info(`Found ${conversations.length} conversations for user ${userIdWithPrefix}`);
+      logger.info(
+        `Found ${conversations.length} conversations for user ${userIdWithPrefix}`,
+      );
 
       // Simplified count query (same conditional approach)
       let countQuery;
@@ -555,8 +605,8 @@ class ChatHistoryService {
           limit,
           offset,
           pages: Math.ceil(totalCount / limit),
-          currentPage: Math.floor(offset / limit) + 1
-        }
+          currentPage: Math.floor(offset / limit) + 1,
+        },
       };
     } catch (error) {
       logger.error(`Error getting conversations for user ${userId}:`, error);
@@ -572,19 +622,21 @@ class ChatHistoryService {
    */
   async updateQueryResponseTime(queryId, responseTime) {
     try {
-      logger.info(`Updating response time for query ${queryId} to ${responseTime}ms`);
+      logger.info(
+        `Updating response time for query ${queryId} to ${responseTime}ms`,
+      );
 
       if (!queryId || (!responseTime && responseTime !== 0)) {
-        throw new Error('queryId and responseTime are required');
+        throw new Error("queryId and responseTime are required");
       }
 
-      const updatedQuery = await this.db.collection('queries').update(
+      const updatedQuery = await this.db.collection("queries").update(
         queryId,
         {
           responseTime: Number(responseTime),
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
         },
-        { returnNew: true }
+        { returnNew: true },
       );
 
       logger.info(`Successfully updated response time for query ${queryId}`);
@@ -668,7 +720,9 @@ class ChatHistoryService {
       const countCursor = await this.db.query(countQuery);
       const totalCount = (await countCursor.next()) || 0;
 
-      logger.info(`Found ${messages.length} messages for conversation ${conversationId}`);
+      logger.info(
+        `Found ${messages.length} messages for conversation ${conversationId}`,
+      );
 
       return {
         messages,
@@ -677,11 +731,14 @@ class ChatHistoryService {
           limit,
           offset,
           pages: Math.ceil(totalCount / limit),
-          currentPage: Math.floor(offset / limit) + 1
-        }
+          currentPage: Math.floor(offset / limit) + 1,
+        },
       };
     } catch (error) {
-      logger.error(`Error getting messages for conversation ${conversationId}:`, error);
+      logger.error(
+        `Error getting messages for conversation ${conversationId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -694,9 +751,18 @@ class ChatHistoryService {
    */
   async updateConversation(conversationId, updateData) {
     try {
-      logger.info(`Updating conversation ${conversationId} with data:`, updateData);
+      logger.info(
+        `Updating conversation ${conversationId} with data:`,
+        updateData,
+      );
 
-      const allowedFields = ['title', 'isStarred', 'isArchived', 'tags', 'category'];
+      const allowedFields = [
+        "title",
+        "isStarred",
+        "isArchived",
+        "tags",
+        "category",
+      ];
 
       // Filter out non-allowed fields
       const filteredData = {};
@@ -710,12 +776,16 @@ class ChatHistoryService {
       filteredData.updated = new Date().toISOString();
 
       if (Object.keys(filteredData).length === 0) {
-        logger.warn('No valid fields to update');
-        throw new Error('No valid fields to update');
+        logger.warn("No valid fields to update");
+        throw new Error("No valid fields to update");
       }
 
       // Update the conversation
-      const updatedConv = await this.conversations.update(conversationId, filteredData, { returnNew: true });
+      const updatedConv = await this.conversations.update(
+        conversationId,
+        filteredData,
+        { returnNew: true },
+      );
       logger.info(`Conversation ${conversationId} updated successfully`);
 
       // If category changed and categoryId is provided, update the relationship
@@ -723,7 +793,7 @@ class ChatHistoryService {
         // First, remove any existing category relationships
         await this.db.query(aql`
           FOR edge IN conversationCategories
-            FILTER edge._from == ${'conversations/' + conversationId}
+            FILTER edge._from == ${"conversations/" + conversationId}
             REMOVE edge IN conversationCategories
         `);
 
@@ -731,10 +801,12 @@ class ChatHistoryService {
         await this.conversationCategories.save({
           _from: `conversations/${conversationId}`,
           _to: `serviceCategories/${updateData.categoryId}`,
-          relevanceScore: updateData.relevanceScore || 1.0
+          relevanceScore: updateData.relevanceScore || 1.0,
         });
 
-        logger.info(`Conversation ${conversationId} category updated to ${updateData.categoryId}`);
+        logger.info(
+          `Conversation ${conversationId} category updated to ${updateData.categoryId}`,
+        );
       }
 
       return updatedConv.new;
@@ -752,7 +824,9 @@ class ChatHistoryService {
    */
   async markMessagesAsRead(conversationId, messageIds = []) {
     try {
-      logger.info(`Marking messages as read for conversation ${conversationId}`);
+      logger.info(
+        `Marking messages as read for conversation ${conversationId}`,
+      );
 
       let result;
 
@@ -770,10 +844,15 @@ class ChatHistoryService {
 
         const updateCursor = await this.db.query(updateQuery);
         const updatedMessages = await updateCursor.all();
-        result = { count: updatedMessages.length, ids: updatedMessages.map((msg) => msg._key) };
+        result = {
+          count: updatedMessages.length,
+          ids: updatedMessages.map((msg) => msg._key),
+        };
       } else {
         // Update all unread messages in the conversation
-        logger.info(`Marking all unread messages as read in conversation ${conversationId}`);
+        logger.info(
+          `Marking all unread messages as read in conversation ${conversationId}`,
+        );
 
         const updateQuery = aql`
           FOR msg IN messages
@@ -784,7 +863,10 @@ class ChatHistoryService {
 
         const updateCursor = await this.db.query(updateQuery);
         const updatedMessages = await updateCursor.all();
-        result = { count: updatedMessages.length, ids: updatedMessages.map((msg) => msg._key) };
+        result = {
+          count: updatedMessages.length,
+          ids: updatedMessages.map((msg) => msg._key),
+        };
       }
 
       // OPTIMIZATION: Fire and Forget Timestamp Update
@@ -796,24 +878,33 @@ class ChatHistoryService {
               const currentTime = new Date().toISOString();
               const updateViewedQuery = aql`
               FOR edge IN userConversations
-                FILTER edge._from == ${'users/' + ownerKey} AND edge._to == ${'conversations/' + conversationId}
+                FILTER edge._from == ${"users/" + ownerKey} AND edge._to == ${"conversations/" + conversationId}
                 UPDATE edge WITH { lastViewedAt: ${currentTime} } IN userConversations
             `;
               return this.db.query(updateViewedQuery);
             }
           })
           .then(() => {
-            logger.info(`Updated lastViewedAt for conversation ${conversationId} (background)`);
+            logger.info(
+              `Updated lastViewedAt for conversation ${conversationId} (background)`,
+            );
           })
           .catch((err) => {
-            logger.warn(`Background Task Failed: Could not update lastViewedAt for ${conversationId}: ${err.message}`);
+            logger.warn(
+              `Background Task Failed: Could not update lastViewedAt for ${conversationId}: ${err.message}`,
+            );
           });
       }
 
-      logger.info(`Marked ${result.count} messages as read in conversation ${conversationId}`);
+      logger.info(
+        `Marked ${result.count} messages as read in conversation ${conversationId}`,
+      );
       return result;
     } catch (error) {
-      logger.error(`Error marking messages as read in conversation ${conversationId}:`, error);
+      logger.error(
+        `Error marking messages as read in conversation ${conversationId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -828,13 +919,16 @@ class ChatHistoryService {
     try {
       const cursor = await this.db.query(aql`
         FOR edge IN userConversations
-          FILTER edge._to == ${'conversations/' + conversationId} AND edge.role == 'owner'
+          FILTER edge._to == ${"conversations/" + conversationId} AND edge.role == 'owner'
           RETURN SUBSTRING(edge._from, 6)
       `);
 
       return (await cursor.next()) || null;
     } catch (error) {
-      logger.error(`Error getting owner ID for conversation ${conversationId}:`, error);
+      logger.error(
+        `Error getting owner ID for conversation ${conversationId}:`,
+        error,
+      );
       return null;
     }
   }
@@ -849,20 +943,24 @@ class ChatHistoryService {
     try {
       logger.info(`Deleting conversation ${conversationId} for user ${userId}`);
 
-      const convKey = conversationId.includes('/') ? conversationId.split('/').pop() : conversationId;
+      const convKey = conversationId.includes("/")
+        ? conversationId.split("/").pop()
+        : conversationId;
       const conversationIdFull = `conversations/${convKey}`;
 
       // Verify permission
       const permissionQuery = aql`
         FOR edge IN userConversations
-          FILTER edge._to == ${conversationIdFull} AND edge._from == ${'users/' + userKey}
+          FILTER edge._to == ${conversationIdFull} AND edge._from == ${"users/" + userKey}
           RETURN edge
       `;
       const permissionCursor = await this.db.query(permissionQuery);
       const permission = await permissionCursor.next();
 
       if (!permission) {
-        throw new ForbiddenError('You do not have permission to delete this conversation');
+        throw new ForbiddenError(
+          "You do not have permission to delete this conversation",
+        );
       }
 
       // Get messages
@@ -876,13 +974,13 @@ class ChatHistoryService {
 
       const trx = await this.db.beginTransaction({
         write: [
-          'messages',
-          'queryMessages',
-          'userConversations',
-          'conversationCategories',
-          'conversations',
-          'conversationFiles'
-        ]
+          "messages",
+          "queryMessages",
+          "userConversations",
+          "conversationCategories",
+          "conversations",
+          "conversationFiles",
+        ],
       });
 
       try {
@@ -905,7 +1003,9 @@ class ChatHistoryService {
             REMOVE msg IN messages
             RETURN OLD
         `;
-        const deleteMessageResult = await trx.step(() => this.db.query(deleteMessageQuery));
+        const deleteMessageResult = await trx.step(() =>
+          this.db.query(deleteMessageQuery),
+        );
         const messagesDeleted = await deleteMessageResult.all();
 
         // Delete user links
@@ -937,7 +1037,11 @@ class ChatHistoryService {
         await trx.step(() => this.conversations.remove(convKey));
 
         await trx.commit();
-        return { conversationId, messagesDeleted: messagesDeleted.length, success: true };
+        return {
+          conversationId,
+          messagesDeleted: messagesDeleted.length,
+          success: true,
+        };
       } catch (error) {
         await trx.abort();
         throw error;
@@ -959,7 +1063,7 @@ class ChatHistoryService {
 
       const query = aql`
         FOR edge IN queryMessages
-          FILTER edge._from == ${'queries/' + queryId}
+          FILTER edge._from == ${"queries/" + queryId}
 
           FOR msg IN messages
             FILTER msg._id == edge._to
@@ -983,7 +1087,9 @@ class ChatHistoryService {
 
       const cursor = await this.db.query(query);
       const relatedMessages = await cursor.all();
-      logger.info(`Found ${relatedMessages.length} messages related to query ${queryId}`);
+      logger.info(
+        `Found ${relatedMessages.length} messages related to query ${queryId}`,
+      );
 
       return relatedMessages;
     } catch (error) {
@@ -1003,7 +1109,7 @@ class ChatHistoryService {
 
       const cursor = await this.db.query(aql`
         FOR edge IN queryMessages
-          FILTER edge._to == ${'messages/' + messageId}
+          FILTER edge._to == ${"messages/" + messageId}
           
           FOR q IN queries
             FILTER q._id == edge._from
@@ -1021,14 +1127,19 @@ class ChatHistoryService {
       const result = await cursor.next();
 
       if (result) {
-        logger.info(`Found originating query ${result.query._key} for message ${messageId}`);
+        logger.info(
+          `Found originating query ${result.query._key} for message ${messageId}`,
+        );
       } else {
         logger.info(`No originating query found for message ${messageId}`);
       }
 
       return result || null;
     } catch (error) {
-      logger.error(`Error finding originating query for message ${messageId}:`, error);
+      logger.error(
+        `Error finding originating query for message ${messageId}:`,
+        error,
+      );
       return null;
     }
   }
@@ -1041,32 +1152,45 @@ class ChatHistoryService {
    * @param {Object} options - Additional options
    * @returns {Promise<Object>} Created relationship
    */
-  async linkQueryToConversation(queryId, conversationId, messageId, options = {}) {
+  async linkQueryToConversation(
+    queryId,
+    conversationId,
+    messageId,
+    options = {},
+  ) {
     try {
-      logger.info(`Linking query ${queryId} to conversation ${conversationId} via message ${messageId}`);
+      logger.info(
+        `Linking query ${queryId} to conversation ${conversationId} via message ${messageId}`,
+      );
 
       // Ensure all IDs exist
-      const query = await this.db.collection('queries').document(queryId);
+      const query = await this.db.collection("queries").document(queryId);
       await this.conversations.document(conversationId);
       const message = await this.messages.document(messageId);
 
       // Check if message belongs to conversation
       if (message.conversationId !== conversationId) {
-        logger.warn(`Message ${messageId} does not belong to conversation ${conversationId}`);
-        throw new Error('Message does not belong to the specified conversation');
+        logger.warn(
+          `Message ${messageId} does not belong to conversation ${conversationId}`,
+        );
+        throw new Error(
+          "Message does not belong to the specified conversation",
+        );
       }
 
       // Check if the link already exists
       const existingCursor = await this.db.query(aql`
         FOR edge IN queryMessages
-          FILTER edge._from == ${'queries/' + queryId} AND edge._to == ${'messages/' + messageId}
+          FILTER edge._from == ${"queries/" + queryId} AND edge._to == ${"messages/" + messageId}
           RETURN edge
       `);
 
       const existingLink = await existingCursor.next();
 
       if (existingLink) {
-        logger.info(`Link between query ${queryId} and message ${messageId} already exists`);
+        logger.info(
+          `Link between query ${queryId} and message ${messageId} already exists`,
+        );
         return existingLink;
       }
 
@@ -1074,19 +1198,21 @@ class ChatHistoryService {
       const edge = await this.queryMessages.save({
         _from: `queries/${queryId}`,
         _to: `messages/${messageId}`,
-        responseType: options.responseType || 'primary',
+        responseType: options.responseType || "primary",
         confidenceScore: options.confidenceScore || 1.0,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
       });
 
-      logger.info(`Created link between query ${queryId} and message ${messageId}`);
+      logger.info(
+        `Created link between query ${queryId} and message ${messageId}`,
+      );
 
       // If there's a category on the query, update the conversation category
       if (query.categoryId) {
         // Check if conversation already has this category
         const categoryExistsCursor = await this.db.query(aql`
           FOR edge IN conversationCategories
-            FILTER edge._from == ${'conversations/' + conversationId} AND edge._to == ${'serviceCategories/' + query.categoryId}
+            FILTER edge._from == ${"conversations/" + conversationId} AND edge._to == ${"serviceCategories/" + query.categoryId}
             RETURN edge
         `);
 
@@ -1105,7 +1231,7 @@ class ChatHistoryService {
           // Update the conversation with the category name
           if (categoryName) {
             await this.conversations.update(conversationId, {
-              category: categoryName
+              category: categoryName,
             });
           }
 
@@ -1113,16 +1239,21 @@ class ChatHistoryService {
           await this.conversationCategories.save({
             _from: `conversations/${conversationId}`,
             _to: `serviceCategories/${query.categoryId}`,
-            relevanceScore: 1.0
+            relevanceScore: 1.0,
           });
 
-          logger.info(`Updated conversation ${conversationId} with category from query: ${query.categoryId}`);
+          logger.info(
+            `Updated conversation ${conversationId} with category from query: ${query.categoryId}`,
+          );
         }
       }
 
       return edge;
     } catch (error) {
-      logger.error(`Error linking query ${queryId} to conversation ${conversationId}:`, error);
+      logger.error(
+        `Error linking query ${queryId} to conversation ${conversationId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -1136,7 +1267,9 @@ class ChatHistoryService {
    */
   async searchConversations(userId, searchTerm, options = {}) {
     try {
-      logger.info(`Searching conversations for user ${userId} with term: "${searchTerm}"`);
+      logger.info(
+        `Searching conversations for user ${userId} with term: "${searchTerm}"`,
+      );
 
       const limit = options.limit || 20;
       const offset = options.offset || 0;
@@ -1145,7 +1278,7 @@ class ChatHistoryService {
 
       const query = aql`
         FOR edge IN userConversations
-          FILTER edge._from == ${'users/' + userKey}
+          FILTER edge._from == ${"users/" + userKey}
 
           FOR conv IN conversations
             FILTER conv._id == edge._to
@@ -1183,7 +1316,9 @@ class ChatHistoryService {
       const cursor = await this.db.query(query);
       const results = await cursor.all();
 
-      logger.info(`Found ${results.length} conversations matching term "${searchTerm}" for user ${userId}`);
+      logger.info(
+        `Found ${results.length} conversations matching term "${searchTerm}" for user ${userId}`,
+      );
 
       return results;
     } catch (error) {
@@ -1204,7 +1339,7 @@ class ChatHistoryService {
       const query = aql`
         LET userConvs = (
           FOR edge IN userConversations
-            FILTER edge._from == ${'users/' + userKey}
+            FILTER edge._from == ${"users/" + userKey}
             FOR conv IN conversations
               FILTER conv._id == edge._to
               RETURN conv
@@ -1272,11 +1407,14 @@ class ChatHistoryService {
           avgMessagesPerConversation: 0,
           categoryDistribution: [],
           timeDistribution: [],
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
         }
       );
     } catch (error) {
-      logger.error(`Error getting conversation statistics for user ${userId}:`, error);
+      logger.error(
+        `Error getting conversation statistics for user ${userId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -1290,19 +1428,24 @@ class ChatHistoryService {
    */
   async createConversationFromQuery(queryId, userId, options = {}) {
     try {
-      logger.info(`Creating conversation from query ${queryId} for user ${userId}`);
+      logger.info(
+        `Creating conversation from query ${queryId} for user ${userId}`,
+      );
 
       // Get the query
-      const query = await this.db.collection('queries').document(queryId);
+      const query = await this.db.collection("queries").document(queryId);
 
       if (!query) {
         logger.warn(`Query ${queryId} not found`);
-        throw new NotFoundError('Query not found');
+        throw new NotFoundError("Query not found");
       }
 
       // Extract conversationTitle from options or use the query text (truncated if needed)
       const conversationTitle =
-        options.title || (query.text.length > 50 ? `${query.text.substring(0, 47)}...` : query.text);
+        options.title ||
+        (query.text.length > 50
+          ? `${query.text.substring(0, 47)}...`
+          : query.text);
 
       // Create conversation
       const conversationData = {
@@ -1316,8 +1459,8 @@ class ChatHistoryService {
         messageCount: 0,
         isStarred: false,
         isArchived: false,
-        category: options.category || '',
-        tags: options.tags || []
+        category: options.category || "",
+        tags: options.tags || [],
       };
 
       const conversation = await this.createConversation(conversationData);
@@ -1327,9 +1470,9 @@ class ChatHistoryService {
         conversationId: conversation._key,
         content: query.text,
         timestamp: query.timestamp,
-        sender: 'user',
+        sender: "user",
         readStatus: true,
-        userId: userId
+        userId: userId,
       });
 
       // If there's a response in options, add it as the assistant's message
@@ -1338,31 +1481,40 @@ class ChatHistoryService {
           conversationId: conversation._key,
           content: options.responseText,
           timestamp: new Date().toISOString(),
-          sender: 'assistant',
+          sender: "assistant",
           readStatus: false,
           queryId: queryId,
           userId: userId,
-          responseType: 'primary'
+          responseType: "primary",
         });
 
         // Link query to the assistant's message
-        await this.linkQueryToConversation(queryId, conversation._key, assistantMessage._key, {
-          responseType: 'primary'
-        });
+        await this.linkQueryToConversation(
+          queryId,
+          conversation._key,
+          assistantMessage._key,
+          {
+            responseType: "primary",
+          },
+        );
 
-        logger.info(`Created conversation ${conversation._key} from query ${queryId} with response`);
+        logger.info(
+          `Created conversation ${conversation._key} from query ${queryId} with response`,
+        );
 
         return {
           conversation,
           userMessage,
-          assistantMessage
+          assistantMessage,
         };
       } else {
-        logger.info(`Created conversation ${conversation._key} from query ${queryId} without response`);
+        logger.info(
+          `Created conversation ${conversation._key} from query ${queryId} without response`,
+        );
 
         return {
           conversation,
-          userMessage
+          userMessage,
         };
       }
     } catch (error) {
@@ -1383,7 +1535,7 @@ class ChatHistoryService {
 
       const cursor = await this.db.query(aql`
         FOR edge IN userConversations
-          FILTER edge._from == ${'users/' + userKey}
+          FILTER edge._from == ${"users/" + userKey}
           
           FOR conv IN conversations
             FILTER conv._id == edge._to
@@ -1414,11 +1566,16 @@ class ChatHistoryService {
       `);
 
       const conversations = await cursor.all();
-      logger.info(`Found ${conversations.length} recent conversations for user ${userId}`);
+      logger.info(
+        `Found ${conversations.length} recent conversations for user ${userId}`,
+      );
 
       return conversations;
     } catch (error) {
-      logger.error(`Error getting recent conversations for user ${userId}:`, error);
+      logger.error(
+        `Error getting recent conversations for user ${userId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -1430,12 +1587,12 @@ class ChatHistoryService {
    */
   async createFolder(folderData) {
     try {
-      logger.info('Creating new folder with data:', folderData);
+      logger.info("Creating new folder with data:", folderData);
 
       // Ensure minimum required data
       if (!folderData.userId) {
-        logger.warn('Missing required user ID');
-        throw new Error('User ID is required');
+        logger.warn("Missing required user ID");
+        throw new Error("User ID is required");
       }
 
       // Use userKey for edge operations (ArangoDB document key)
@@ -1445,7 +1602,7 @@ class ChatHistoryService {
       const folderDoc = {
         _key: Date.now().toString(),
         userId: folderData.userId,
-        name: folderData.name || 'New Folder'
+        name: folderData.name || "New Folder",
       };
 
       // Add order if provided
@@ -1454,23 +1611,23 @@ class ChatHistoryService {
       }
 
       // Create folder
-      const folder = await this.db.collection('folders').save(folderDoc);
+      const folder = await this.db.collection("folders").save(folderDoc);
       logger.info(`Folder created with key: ${folder._key}`);
 
       // Link user to folder - use "users/" prefix for the edge
       const userFolderEdge = {
         _from: `users/${userKey}`,
         _to: `folders/${folder._key}`,
-        role: folderData.role || 'owner',
-        lastAccessedAt: new Date().toISOString()
+        role: folderData.role || "owner",
+        lastAccessedAt: new Date().toISOString(),
       };
 
-      await this.db.collection('userFolders').save(userFolderEdge);
+      await this.db.collection("userFolders").save(userFolderEdge);
       logger.info(`User ${folderData.userId} linked to folder ${folder._key}`);
 
       return { ...folder, ...folderDoc };
     } catch (error) {
-      logger.error('Error creating folder:', error);
+      logger.error("Error creating folder:", error);
       throw error;
     }
   }
@@ -1485,7 +1642,7 @@ class ChatHistoryService {
       logger.info(`Getting folder with ID: ${folderId}`);
 
       // Get folder main document first
-      const folder = await this.db.collection('folders').document(folderId);
+      const folder = await this.db.collection("folders").document(folderId);
 
       // OPTIMIZATION: Run independent queries in PARALLEL
       const [conversations, owners, childFolders] = await Promise.all([
@@ -1494,12 +1651,12 @@ class ChatHistoryService {
           .query(
             aql`
           FOR edge IN folderConversations
-            FILTER edge._from == ${'folders/' + folderId}
+            FILTER edge._from == ${"folders/" + folderId}
             FOR conv IN conversations
               FILTER conv._id == edge._to
               SORT conv.updated DESC
               RETURN conv
-        `
+        `,
           )
           .then((c) => c.all()),
 
@@ -1508,7 +1665,7 @@ class ChatHistoryService {
           .query(
             aql`
           FOR edge IN userFolders
-            FILTER edge._to == ${'folders/' + folderId}
+            FILTER edge._to == ${"folders/" + folderId}
             FOR user IN users
               FILTER user._id == edge._from
               RETURN {
@@ -1518,7 +1675,7 @@ class ChatHistoryService {
                 role: edge.role,
                 lastAccessedAt: edge.lastAccessedAt
               }
-        `
+        `,
           )
           .then((c) => c.all()),
 
@@ -1530,18 +1687,20 @@ class ChatHistoryService {
             FILTER folder.parentFolderId == ${folderId}
             SORT folder.order ASC, folder.created ASC
             RETURN folder
-        `
+        `,
           )
-          .then((c) => c.all())
+          .then((c) => c.all()),
       ]);
 
-      logger.info(`Found ${conversations.length} conversations for folder ${folderId}`);
+      logger.info(
+        `Found ${conversations.length} conversations for folder ${folderId}`,
+      );
 
       return {
         ...folder,
         conversations,
         owners,
-        childFolders
+        childFolders,
       };
     } catch (error) {
       logger.error(`Error getting folder ${folderId}:`, error);
@@ -1564,7 +1723,9 @@ class ChatHistoryService {
       const userIdWithPrefix = `users/${userKey}`;
 
       // Log collection name and the key format being used
-      logger.info(`DEBUG - Collection: userFolders | Searching with _from key: '${userIdWithPrefix}'`);
+      logger.info(
+        `DEBUG - Collection: userFolders | Searching with _from key: '${userIdWithPrefix}'`,
+      );
 
       // Parse options
       const includeArchived = options.includeArchived || false;
@@ -1588,12 +1749,16 @@ class ChatHistoryService {
       logger.info(`DEBUG - Executing base query to check edges: ${baseQuery}`);
       const baseCursor = await this.db.query(baseQuery);
       const edges = await baseCursor.all();
-      logger.info(`DEBUG - Found ${edges.length} edges in userFolders where _from='${userIdWithPrefix}'`);
+      logger.info(
+        `DEBUG - Found ${edges.length} edges in userFolders where _from='${userIdWithPrefix}'`,
+      );
 
       // Log details about each edge relationship
       if (edges.length > 0) {
         edges.forEach((edge, index) => {
-          logger.info(`DEBUG - Edge ${index + 1} details: _from='${edge._from}', _to='${edge._to}'`);
+          logger.info(
+            `DEBUG - Edge ${index + 1} details: _from='${edge._from}', _to='${edge._to}'`,
+          );
         });
 
         // Now fetch the actual folder documents to check their properties
@@ -1611,7 +1776,9 @@ class ChatHistoryService {
           }
         `;
 
-        logger.info(`DEBUG - Checking folder properties with query: ${folderKeysQuery}`);
+        logger.info(
+          `DEBUG - Checking folder properties with query: ${folderKeysQuery}`,
+        );
         const folderCursor = await this.db.query(folderKeysQuery);
         const folders = await folderCursor.all();
 
@@ -1620,15 +1787,19 @@ class ChatHistoryService {
           logger.info(`  _id: ${folder._id}`);
           logger.info(`  _key: ${folder._key}`);
           logger.info(`  name: ${folder.name}`);
-          logger.info(`  isArchived: ${folder.isArchived} (${typeof folder.isArchived})`);
-          logger.info(`  parentFolderId: ${folder.parentFolderId} (${typeof folder.parentFolderId})`);
+          logger.info(
+            `  isArchived: ${folder.isArchived} (${typeof folder.isArchived})`,
+          );
+          logger.info(
+            `  parentFolderId: ${folder.parentFolderId} (${typeof folder.parentFolderId})`,
+          );
           logger.info(`  All properties: ${JSON.stringify(folder.properties)}`);
         });
       }
 
       // Create the actual query with filters and verbose debug information
       logger.info(
-        `DEBUG - Using filters: includeArchived=${includeArchived}, parentFolderId=${parentFolderId || 'null'}`
+        `DEBUG - Using filters: includeArchived=${includeArchived}, parentFolderId=${parentFolderId || "null"}`,
       );
 
       const query = aql`
@@ -1714,7 +1885,15 @@ class ChatHistoryService {
     try {
       logger.info(`Updating folder ${folderId} with data:`, updateData);
 
-      const allowedFields = ['name', 'description', 'isArchived', 'color', 'icon', 'parentFolderId', 'order'];
+      const allowedFields = [
+        "name",
+        "description",
+        "isArchived",
+        "color",
+        "icon",
+        "parentFolderId",
+        "order",
+      ];
 
       // Filter out non-allowed fields
       const filteredData = {};
@@ -1728,12 +1907,14 @@ class ChatHistoryService {
       filteredData.updated = new Date().toISOString();
 
       if (Object.keys(filteredData).length === 0) {
-        logger.warn('No valid fields to update');
-        throw new Error('No valid fields to update');
+        logger.warn("No valid fields to update");
+        throw new Error("No valid fields to update");
       }
 
       // Update the folder
-      const updatedFolder = await this.db.collection('folders').update(folderId, filteredData, { returnNew: true });
+      const updatedFolder = await this.db
+        .collection("folders")
+        .update(folderId, filteredData, { returnNew: true });
       logger.info(`Folder ${folderId} updated successfully`);
 
       return updatedFolder.new;
@@ -1752,12 +1933,14 @@ class ChatHistoryService {
    */
   async deleteFolder(folderId, userId, deleteContents = false, userKey) {
     try {
-      logger.info(`Deleting folder ${folderId} for user ${userId}, deleteContents: ${deleteContents}`);
+      logger.info(
+        `Deleting folder ${folderId} for user ${userId}, deleteContents: ${deleteContents}`,
+      );
 
       // Verify the user has permission to delete this folder
       const permissionQuery = aql`
       FOR edge IN userFolders
-        FILTER edge._to == ${'folders/' + folderId} AND edge._from == ${'users/' + userKey}
+        FILTER edge._to == ${"folders/" + folderId} AND edge._from == ${"users/" + userKey}
         RETURN edge
     `;
 
@@ -1765,14 +1948,18 @@ class ChatHistoryService {
       const permission = await permissionCursor.next();
 
       if (!permission) {
-        logger.warn(`User ${userId} does not have permission to delete folder ${folderId}`);
-        throw new ForbiddenError('You do not have permission to delete this folder');
+        logger.warn(
+          `User ${userId} does not have permission to delete folder ${folderId}`,
+        );
+        throw new ForbiddenError(
+          "You do not have permission to delete this folder",
+        );
       }
 
       // Get all conversation links for this folder
       const conversationLinkQuery = aql`
       FOR edge IN folderConversations
-        FILTER edge._from == ${'folders/' + folderId}
+        FILTER edge._from == ${"folders/" + folderId}
         RETURN edge
     `;
 
@@ -1781,28 +1968,30 @@ class ChatHistoryService {
 
       // Start a transaction to ensure atomicity
       const trx = await this.db.beginTransaction({
-        write: ['folders', 'userFolders', 'folderConversations']
+        write: ["folders", "userFolders", "folderConversations"],
       });
 
       try {
         // Delete conversation links
         for (const link of conversationLinks) {
           await trx.step(() => {
-            return this.db.collection('folderConversations').remove(link._key);
+            return this.db.collection("folderConversations").remove(link._key);
           });
         }
 
         // If deleteContents is true and we're not at the root folder, delete conversations too
         if (deleteContents) {
           for (const link of conversationLinks) {
-            const conversationId = link._to.split('/')[1];
+            const conversationId = link._to.split("/")[1];
             try {
               // Only try to delete if the conversation exists
               await this.getConversation(conversationId);
               await this.deleteConversation(conversationId, userId);
             } catch (error) {
               // If conversation not found or deletion fails, continue with other deletions
-              logger.warn(`Error deleting conversation ${conversationId}: ${error.message}`);
+              logger.warn(
+                `Error deleting conversation ${conversationId}: ${error.message}`,
+              );
             }
           }
         }
@@ -1810,7 +1999,7 @@ class ChatHistoryService {
         // Delete user-folder edges
         const deleteUserEdgeQuery = aql`
         FOR edge IN userFolders
-          FILTER edge._to == ${'folders/' + folderId}
+          FILTER edge._to == ${"folders/" + folderId}
           REMOVE edge IN userFolders
       `;
 
@@ -1833,29 +2022,35 @@ class ChatHistoryService {
             try {
               await this.deleteFolder(childKey, userId, deleteContents);
             } catch (error) {
-              logger.warn(`Error deleting child folder ${childKey}: ${error.message}`);
+              logger.warn(
+                `Error deleting child folder ${childKey}: ${error.message}`,
+              );
             }
           } else {
             // Move child folders to root (null parentFolderId)
             await trx.step(() => {
-              return this.db.collection('folders').update(childKey, { parentFolderId: null });
+              return this.db
+                .collection("folders")
+                .update(childKey, { parentFolderId: null });
             });
           }
         }
 
         // Delete the folder
-        await trx.step(() => this.db.collection('folders').remove(folderId));
+        await trx.step(() => this.db.collection("folders").remove(folderId));
 
         // Commit the transaction
         await trx.commit();
 
-        logger.info(`Folder ${folderId} deleted with ${conversationLinks.length} conversation links`);
+        logger.info(
+          `Folder ${folderId} deleted with ${conversationLinks.length} conversation links`,
+        );
 
         return {
           folderId,
           conversationLinksDeleted: conversationLinks.length,
           childFoldersAffected: childFolders.length,
-          success: true
+          success: true,
         };
       } catch (error) {
         // Abort the transaction on error
@@ -1877,41 +2072,52 @@ class ChatHistoryService {
    */
   async addConversationToFolder(folderId, conversationId, userId, userKey) {
     try {
-      logger.info(`Adding conversation ${conversationId} to folder ${folderId}`);
+      logger.info(
+        `Adding conversation ${conversationId} to folder ${folderId}`,
+      );
 
       // Verify the user has permission to access both folder and conversation
       const folderPermissionQuery = aql`
       FOR edge IN userFolders
-        FILTER edge._to == ${'folders/' + folderId} AND edge._from == ${'users/' + userKey}
+        FILTER edge._to == ${"folders/" + folderId} AND edge._from == ${"users/" + userKey}
         RETURN edge
     `;
 
       const convPermissionQuery = aql`
       FOR edge IN userConversations
-        FILTER edge._to == ${'conversations/' + conversationId} AND edge._from == ${'users/' + userKey}
+        FILTER edge._to == ${"conversations/" + conversationId} AND edge._from == ${"users/" + userKey}
         RETURN edge
     `;
 
       const folderPermissionCursor = await this.db.query(folderPermissionQuery);
-      const conversationPermissionCursor = await this.db.query(convPermissionQuery);
+      const conversationPermissionCursor =
+        await this.db.query(convPermissionQuery);
 
       const folderPermission = await folderPermissionCursor.next();
       const conversationPermission = await conversationPermissionCursor.next();
 
       if (!folderPermission) {
-        logger.warn(`User ${userId} does not have permission to access folder ${folderId}`);
-        throw new ForbiddenError('You do not have permission to access this folder');
+        logger.warn(
+          `User ${userId} does not have permission to access folder ${folderId}`,
+        );
+        throw new ForbiddenError(
+          "You do not have permission to access this folder",
+        );
       }
 
       if (!conversationPermission) {
-        logger.warn(`User ${userId} does not have permission to access conversation ${conversationId}`);
-        throw new ForbiddenError('You do not have permission to access this conversation');
+        logger.warn(
+          `User ${userId} does not have permission to access conversation ${conversationId}`,
+        );
+        throw new ForbiddenError(
+          "You do not have permission to access this conversation",
+        );
       }
 
       // Check if the conversation already exists in any folder
       const existingLinkQuery = aql`
       FOR edge IN folderConversations
-        FILTER edge._to == ${'conversations/' + conversationId}
+        FILTER edge._to == ${"conversations/" + conversationId}
         RETURN edge
     `;
 
@@ -1922,28 +2128,37 @@ class ChatHistoryService {
       if (existingLink) {
         // If it's already in the same folder, just return the existing link
         if (existingLink._from === `folders/${folderId}`) {
-          logger.info(`Conversation ${conversationId} is already in folder ${folderId}`);
+          logger.info(
+            `Conversation ${conversationId} is already in folder ${folderId}`,
+          );
           return existingLink;
         }
 
         // Otherwise, remove from the old folder
-        await this.db.collection('folderConversations').remove(existingLink._key);
-        logger.info(`Conversation ${conversationId} removed from folder ${existingLink._from.split('/')[1]}`);
+        await this.db
+          .collection("folderConversations")
+          .remove(existingLink._key);
+        logger.info(
+          `Conversation ${conversationId} removed from folder ${existingLink._from.split("/")[1]}`,
+        );
       }
 
       // Create the new folder-conversation edge
-      const edge = await this.db.collection('folderConversations').save({
+      const edge = await this.db.collection("folderConversations").save({
         _from: `folders/${folderId}`,
         _to: `conversations/${conversationId}`,
         addedAt: new Date().toISOString(),
-        addedBy: userId
+        addedBy: userId,
       });
 
       logger.info(`Conversation ${conversationId} added to folder ${folderId}`);
 
       return edge;
     } catch (error) {
-      logger.error(`Error adding conversation ${conversationId} to folder ${folderId}:`, error);
+      logger.error(
+        `Error adding conversation ${conversationId} to folder ${folderId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -1955,14 +2170,21 @@ class ChatHistoryService {
    * @param {String} userId - User ID making the request (for validation)
    * @returns {Promise<Object>} Result of the operation
    */
-  async removeConversationFromFolder(folderId, conversationId, userId, userKey) {
+  async removeConversationFromFolder(
+    folderId,
+    conversationId,
+    userId,
+    userKey,
+  ) {
     try {
-      logger.info(`Removing conversation ${conversationId} from folder ${folderId}`);
+      logger.info(
+        `Removing conversation ${conversationId} from folder ${folderId}`,
+      );
 
       // Verify the user has permission to access the folder
       const permissionQuery = aql`
       FOR edge IN userFolders
-        FILTER edge._to == ${'folders/' + folderId} AND edge._from == ${'users/' + userKey}
+        FILTER edge._to == ${"folders/" + folderId} AND edge._from == ${"users/" + userKey}
         RETURN edge
     `;
 
@@ -1970,14 +2192,18 @@ class ChatHistoryService {
       const permission = await permissionCursor.next();
 
       if (!permission) {
-        logger.warn(`User ${userId} does not have permission to access folder ${folderId}`);
-        throw new ForbiddenError('You do not have permission to access this folder');
+        logger.warn(
+          `User ${userId} does not have permission to access folder ${folderId}`,
+        );
+        throw new ForbiddenError(
+          "You do not have permission to access this folder",
+        );
       }
 
       // Find the folder-conversation edge
       const linkQuery = aql`
       FOR edge IN folderConversations
-        FILTER edge._from == ${'folders/' + folderId} AND edge._to == ${'conversations/' + conversationId}
+        FILTER edge._from == ${"folders/" + folderId} AND edge._to == ${"conversations/" + conversationId}
         RETURN edge
     `;
 
@@ -1985,21 +2211,28 @@ class ChatHistoryService {
       const link = await linkCursor.next();
 
       if (!link) {
-        logger.warn(`Conversation ${conversationId} not found in folder ${folderId}`);
-        throw new NotFoundError('Conversation not found in this folder');
+        logger.warn(
+          `Conversation ${conversationId} not found in folder ${folderId}`,
+        );
+        throw new NotFoundError("Conversation not found in this folder");
       }
 
       // Delete the edge
-      await this.db.collection('folderConversations').remove(link._key);
-      logger.info(`Conversation ${conversationId} removed from folder ${folderId}`);
+      await this.db.collection("folderConversations").remove(link._key);
+      logger.info(
+        `Conversation ${conversationId} removed from folder ${folderId}`,
+      );
 
       return {
         folderId,
         conversationId,
-        success: true
+        success: true,
       };
     } catch (error) {
-      logger.error(`Error removing conversation ${conversationId} from folder ${folderId}:`, error);
+      logger.error(
+        `Error removing conversation ${conversationId} from folder ${folderId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -2013,14 +2246,16 @@ class ChatHistoryService {
    */
   async searchFolders(userId, searchTerm, options = {}) {
     try {
-      logger.info(`Searching folders for user ${userId} with term: "${searchTerm}"`);
+      logger.info(
+        `Searching folders for user ${userId} with term: "${searchTerm}"`,
+      );
 
       const includeArchived = options.includeArchived || false;
       const userKey = options.userKey;
 
       const query = aql`
       FOR edge IN userFolders
-        FILTER edge._from == ${'users/' + userKey}
+        FILTER edge._from == ${"users/" + userKey}
 
         FOR folder IN folders
           FILTER folder._id == edge._to
@@ -2056,7 +2291,9 @@ class ChatHistoryService {
       const cursor = await this.db.query(query);
       const results = await cursor.all();
 
-      logger.info(`Found ${results.length} folders matching term "${searchTerm}" for user ${userId}`);
+      logger.info(
+        `Found ${results.length} folders matching term "${searchTerm}" for user ${userId}`,
+      );
 
       return results;
     } catch (error) {
@@ -2074,10 +2311,16 @@ class ChatHistoryService {
    * @param {String} userKey - ArangoDB _key for edge operations
    * @returns {Promise<Object>} Result of the operation
    */
-  async moveConversation(conversationId, sourceFolderId, targetFolderId, userId, userKey) {
+  async moveConversation(
+    conversationId,
+    sourceFolderId,
+    targetFolderId,
+    userId,
+    userKey,
+  ) {
     try {
       logger.info(
-        `Moving conversation ${conversationId} from folder ${sourceFolderId || 'root'} to ${targetFolderId || 'root'}`
+        `Moving conversation ${conversationId} from folder ${sourceFolderId || "root"} to ${targetFolderId || "root"}`,
       );
 
       const convPermissionQuery = aql`
@@ -2089,8 +2332,12 @@ class ChatHistoryService {
       const convPermission = await convPermissionCursor.next();
 
       if (!convPermission) {
-        logger.warn(`User ${userId} does not have permission to access conversation ${conversationId}`);
-        throw new ForbiddenError('You do not have permission to access this conversation');
+        logger.warn(
+          `User ${userId} does not have permission to access conversation ${conversationId}`,
+        );
+        throw new ForbiddenError(
+          "You do not have permission to access this conversation",
+        );
       }
 
       if (targetFolderId) {
@@ -2099,17 +2346,23 @@ class ChatHistoryService {
             FILTER edge._to == ${`folders/${targetFolderId}`} AND edge._from == ${`users/${userKey}`}
             RETURN edge
         `;
-        const folderPermissionCursor = await this.db.query(folderPermissionQuery);
+        const folderPermissionCursor = await this.db.query(
+          folderPermissionQuery,
+        );
         const folderPermission = await folderPermissionCursor.next();
 
         if (!folderPermission) {
-          logger.warn(`User ${userId} does not have permission to access folder ${targetFolderId}`);
-          throw new ForbiddenError('You do not have permission to access the target folder');
+          logger.warn(
+            `User ${userId} does not have permission to access folder ${targetFolderId}`,
+          );
+          throw new ForbiddenError(
+            "You do not have permission to access the target folder",
+          );
         }
       }
 
       const trx = await this.db.beginTransaction({
-        write: ['folderConversations']
+        write: ["folderConversations"],
       });
 
       try {
@@ -2123,51 +2376,67 @@ class ChatHistoryService {
 
         if (existingLink) {
           if (!targetFolderId) {
-            await trx.step(() => this.db.collection('folderConversations').remove(existingLink._key));
-            logger.info(`Conversation ${conversationId} removed from folder and moved to root`);
+            await trx.step(() =>
+              this.db
+                .collection("folderConversations")
+                .remove(existingLink._key),
+            );
+            logger.info(
+              `Conversation ${conversationId} removed from folder and moved to root`,
+            );
           } else if (existingLink._from === `folders/${targetFolderId}`) {
-            logger.info(`Conversation ${conversationId} is already in folder ${targetFolderId}`);
+            logger.info(
+              `Conversation ${conversationId} is already in folder ${targetFolderId}`,
+            );
             await trx.commit();
             return {
               conversationId,
               sourceFolderId,
               targetFolderId,
               success: true,
-              noChangesNeeded: true
+              noChangesNeeded: true,
             };
           } else {
-            await trx.step(() => this.db.collection('folderConversations').remove(existingLink._key));
             await trx.step(() =>
-              this.db.collection('folderConversations').save({
+              this.db
+                .collection("folderConversations")
+                .remove(existingLink._key),
+            );
+            await trx.step(() =>
+              this.db.collection("folderConversations").save({
                 _from: `folders/${targetFolderId}`,
                 _to: `conversations/${conversationId}`,
                 addedAt: new Date().toISOString(),
-                addedBy: userId
-              })
+                addedBy: userId,
+              }),
             );
             logger.info(
-              `Conversation ${conversationId} moved from folder ${existingLink._from.split('/')[1]} to ${targetFolderId}`
+              `Conversation ${conversationId} moved from folder ${existingLink._from.split("/")[1]} to ${targetFolderId}`,
             );
           }
         } else if (targetFolderId) {
           await trx.step(() =>
-            this.db.collection('folderConversations').save({
+            this.db.collection("folderConversations").save({
               _from: `folders/${targetFolderId}`,
               _to: `conversations/${conversationId}`,
               addedAt: new Date().toISOString(),
-              addedBy: userId
-            })
+              addedBy: userId,
+            }),
           );
-          logger.info(`Conversation ${conversationId} moved from root to folder ${targetFolderId}`);
+          logger.info(
+            `Conversation ${conversationId} moved from root to folder ${targetFolderId}`,
+          );
         } else {
-          logger.info(`Conversation ${conversationId} is already in root, no change needed`);
+          logger.info(
+            `Conversation ${conversationId} is already in root, no change needed`,
+          );
           await trx.commit();
           return {
             conversationId,
             sourceFolderId,
             targetFolderId,
             success: true,
-            noChangesNeeded: true
+            noChangesNeeded: true,
           };
         }
 
@@ -2178,17 +2447,25 @@ class ChatHistoryService {
 
         return {
           conversationId,
-          sourceFolderId: existingLink ? existingLink._from.split('/')[1] : null,
+          sourceFolderId: existingLink
+            ? existingLink._from.split("/")[1]
+            : null,
           targetFolderId,
-          success: true
+          success: true,
         };
       } catch (error) {
         await trx.abort();
-        logger.error(`Transaction error moving conversation ${conversationId}:`, error);
+        logger.error(
+          `Transaction error moving conversation ${conversationId}:`,
+          error,
+        );
         throw error;
       }
     } catch (error) {
-      logger.error(`Error moving conversation ${conversationId}:`, error.stack || error);
+      logger.error(
+        `Error moving conversation ${conversationId}:`,
+        error.stack || error,
+      );
       throw error;
     }
   }
@@ -2204,7 +2481,7 @@ class ChatHistoryService {
 
       const query = aql`
       FOR edge IN folderConversations
-        FILTER edge._to == ${'conversations/' + conversationId}
+        FILTER edge._to == ${"conversations/" + conversationId}
 
         LET folder = DOCUMENT(edge._from)
 
@@ -2224,14 +2501,19 @@ class ChatHistoryService {
       const result = await cursor.next();
 
       if (result) {
-        logger.info(`Found folder ${result._key} containing conversation ${conversationId}`);
+        logger.info(
+          `Found folder ${result._key} containing conversation ${conversationId}`,
+        );
       } else {
         logger.info(`Conversation ${conversationId} is not in any folder`);
       }
 
       return result || null;
     } catch (error) {
-      logger.error(`Error finding folder for conversation ${conversationId}:`, error);
+      logger.error(
+        `Error finding folder for conversation ${conversationId}:`,
+        error,
+      );
       return null;
     }
   }
@@ -2251,14 +2533,16 @@ class ChatHistoryService {
       // Loop to find all ancestors
       while (currentId) {
         // Get current folder
-        const folder = await this.db.collection('folders').document(currentId);
+        const folder = await this.db.collection("folders").document(currentId);
         path.unshift(folder); // Add to beginning of array
 
         // Move up to parent
         currentId = folder.parentFolderId;
       }
 
-      logger.info(`Found path with ${path.length} folders for folder ${folderId}`);
+      logger.info(
+        `Found path with ${path.length} folders for folder ${folderId}`,
+      );
       return path;
     } catch (error) {
       logger.error(`Error getting path for folder ${folderId}:`, error);
@@ -2275,17 +2559,19 @@ class ChatHistoryService {
    */
   async reorderFolders(userId, folderOrders, parentFolderId = null, userKey) {
     try {
-      logger.info(`Reordering folders for user ${userId} under parent ${parentFolderId || 'root'}`);
+      logger.info(
+        `Reordering folders for user ${userId} under parent ${parentFolderId || "root"}`,
+      );
 
       if (!Array.isArray(folderOrders) || folderOrders.length === 0) {
-        throw new Error('Invalid folder orders array');
+        throw new Error("Invalid folder orders array");
       }
 
       // Verify user has permission for each folder
       for (const item of folderOrders) {
         const permissionQuery = aql`
         FOR edge IN userFolders
-          FILTER edge._to == ${'folders/' + item.folderId} AND edge._from == ${'users/' + userKey}
+          FILTER edge._to == ${"folders/" + item.folderId} AND edge._from == ${"users/" + userKey}
           RETURN edge
       `;
 
@@ -2293,8 +2579,12 @@ class ChatHistoryService {
         const permission = await permissionCursor.next();
 
         if (!permission) {
-          logger.warn(`User ${userId} does not have permission to access folder ${item.folderId}`);
-          throw new ForbiddenError(`You do not have permission to access folder ${item.folderId}`);
+          logger.warn(
+            `User ${userId} does not have permission to access folder ${item.folderId}`,
+          );
+          throw new ForbiddenError(
+            `You do not have permission to access folder ${item.folderId}`,
+          );
         }
 
         // Verify folder belongs to correct parent
@@ -2312,20 +2602,26 @@ class ChatHistoryService {
         const targetParentId = parentFolderId || null;
 
         if (currentParentId !== targetParentId) {
-          logger.warn(`Folder ${item.folderId} does not belong to parent ${parentFolderId || 'root'}`);
-          throw new Error(`Folder ${item.folderId} does not belong to the specified parent folder`);
+          logger.warn(
+            `Folder ${item.folderId} does not belong to parent ${parentFolderId || "root"}`,
+          );
+          throw new Error(
+            `Folder ${item.folderId} does not belong to the specified parent folder`,
+          );
         }
       }
 
       // Update order for each folder
       const trx = await this.db.beginTransaction({
-        write: ['folders']
+        write: ["folders"],
       });
 
       try {
         for (const item of folderOrders) {
           await trx.step(() => {
-            return this.db.collection('folders').update(item.folderId, { order: item.order });
+            return this.db
+              .collection("folders")
+              .update(item.folderId, { order: item.order });
           });
         }
 
@@ -2334,7 +2630,7 @@ class ChatHistoryService {
 
         return {
           updatedFolders: folderOrders.length,
-          success: true
+          success: true,
         };
       } catch (error) {
         await trx.abort();

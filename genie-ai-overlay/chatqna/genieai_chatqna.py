@@ -103,18 +103,18 @@ def _auto_detect_model(endpoint_url: str, env_var: str) -> str | None:
     return None
 
 
-# Auto-detect LLM model from remote vLLM when endpoint is remote (https://)
-if _VLLM_LLM_ENDPOINT and _VLLM_LLM_ENDPOINT.startswith("https://"):
-    detected = _auto_detect_model(_VLLM_LLM_ENDPOINT, "LLM_MODEL")
-    if detected:
-        LLM_MODEL = detected
-
-# Auto-detect translation model from remote vLLM when endpoint is remote
-if _VLLM_TRANSLATION_ENDPOINT and _VLLM_TRANSLATION_ENDPOINT.startswith("https://"):
-    detected = _auto_detect_model(_VLLM_TRANSLATION_ENDPOINT, "VLLM_TRANSLATION_MODEL_ID")
-    if detected:
-        TRANSLATION_MODEL_ID = detected
-        LLM_TRANS_MODEL = detected
+# Auto-detect LLM and translation models from remote vLLM when GPU_NODE_HOST is set
+_GPU_NODE_HOST = os.getenv("GPU_NODE_HOST", "")
+if _GPU_NODE_HOST:
+    if _VLLM_LLM_ENDPOINT:
+        detected = _auto_detect_model(_VLLM_LLM_ENDPOINT, "LLM_MODEL")
+        if detected:
+            LLM_MODEL = detected
+    if _VLLM_TRANSLATION_ENDPOINT:
+        detected = _auto_detect_model(_VLLM_TRANSLATION_ENDPOINT, "VLLM_TRANSLATION_MODEL_ID")
+        if detected:
+            TRANSLATION_MODEL_ID = detected
+            LLM_TRANS_MODEL = detected
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 
 RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "chunk")  # node | edge | chunk

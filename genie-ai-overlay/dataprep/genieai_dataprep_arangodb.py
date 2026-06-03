@@ -318,10 +318,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             default_headers={"X-API-Key": _api_key},
         )
         model = os.getenv("VLLM_MODEL_ID")
-        # When using remote vLLM endpoint (https://), auto-detect model
-        # to avoid config mismatch with GPU node deployment
-        _endpoint = os.getenv("VLLM_ENDPOINT", "")
-        if _endpoint and _endpoint.startswith("https://"):
+        # When using remote GPU node, auto-detect model to avoid
+        # config mismatch with GPU node deployment
+        if os.getenv("GPU_NODE_HOST"):
             try:
                 models = await client.models.list()
                 model = models.data[0].id if models.data else model

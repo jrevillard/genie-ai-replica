@@ -2,8 +2,6 @@
 # Copyright (C) 2025 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0 Developed by Intel. Adapted by ITU
 
-import genie_ssl_patch  # noqa: F401 — SSL bypass + API key injection (remote GPU support)
-
 import argparse
 import asyncio
 import copy
@@ -11,6 +9,8 @@ import json
 import os
 import re
 from datetime import date, datetime
+
+import genie_ssl_patch  # noqa: F401 — SSL bypass + API key injection (remote GPU support)
 
 from tracing import get_tracer, setup_trace_logging, setup_tracing
 
@@ -87,6 +87,7 @@ LLM_TRANS_MODEL = os.getenv("LLM_TRANS_MODEL", "google/gemma-3-1b-it")
 def _auto_detect_model(endpoint_url: str, env_var: str) -> str | None:
     """Auto-detect model ID from remote vLLM /v1/models endpoint."""
     import httpx
+
     try:
         headers = {}
         api_key = os.getenv("OPEA_API_KEY", "")
@@ -97,9 +98,9 @@ def _auto_detect_model(endpoint_url: str, env_var: str) -> str | None:
         models = resp.json()
         if models.get("data"):
             return models["data"][0]["id"]
-        print(f"[WARN] Auto-detect {env_var}: no models in response")
+        logger.warning(f"Auto-detect {env_var}: no models in response")
     except Exception as e:
-        print(f"[WARN] Auto-detect {env_var} failed: {e}")
+        logger.warning(f"Auto-detect {env_var} failed: {e}")
     return None
 
 
@@ -110,11 +111,13 @@ if _GPU_NODE_HOST:
         detected = _auto_detect_model(_VLLM_LLM_ENDPOINT, "LLM_MODEL")
         if detected:
             LLM_MODEL = detected
+            logger.info(f"Auto-detected LLM_MODEL={LLM_MODEL}")
     if _VLLM_TRANSLATION_ENDPOINT:
         detected = _auto_detect_model(_VLLM_TRANSLATION_ENDPOINT, "VLLM_TRANSLATION_MODEL_ID")
         if detected:
             TRANSLATION_MODEL_ID = detected
             LLM_TRANS_MODEL = detected
+            logger.info(f"Auto-detected TRANSLATION_MODEL_ID={TRANSLATION_MODEL_ID}")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 
 RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "chunk")  # node | edge | chunk

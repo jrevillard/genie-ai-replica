@@ -94,6 +94,12 @@ sys.modules.setdefault("langchain_openai", MagicMock())
 sys.modules.setdefault("openai", MagicMock())
 
 # ChatQnA import-time dependencies
+sys.modules.setdefault("genie_ssl_patch", MagicMock())
+_tracing_mock = MagicMock()
+_tracing_mock.get_tracer = MagicMock(return_value=MagicMock())
+_tracing_mock.setup_trace_logging = MagicMock()
+_tracing_mock.setup_tracing = MagicMock()
+sys.modules.setdefault("tracing", _tracing_mock)
 sys.modules.setdefault("transformers", MagicMock())
 sys.modules.setdefault("langdetect", MagicMock())
 sys.modules.setdefault("keycloak_token_validator", MagicMock())

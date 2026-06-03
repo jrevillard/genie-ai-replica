@@ -1037,9 +1037,13 @@ class TestLoadWithDoclingRemote:
 
         old = os.environ.pop("OPEA_SSL_SKIP_VERIFY", None)
         try:
-            with patch(
-                "dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT", "https://gpu:5001",
-            ), patch("dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT_TIMEOUT", 30):
+            with (
+                patch(
+                    "dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT",
+                    "https://gpu:5001",
+                ),
+                patch("dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT_TIMEOUT", 30),
+            ):
                 await _load_with_docling_remote(temp_file)
         finally:
             if old is not None:
@@ -1056,9 +1060,13 @@ class TestLoadWithDoclingRemote:
 
         os.environ["OPEA_SSL_SKIP_VERIFY"] = "1"
         try:
-            with patch(
-                "dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT", "https://gpu:5001",
-            ), patch("dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT_TIMEOUT", 30):
+            with (
+                patch(
+                    "dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT",
+                    "https://gpu:5001",
+                ),
+                patch("dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT_TIMEOUT", 30),
+            ):
                 await _load_with_docling_remote(temp_file)
         finally:
             os.environ.pop("OPEA_SSL_SKIP_VERIFY", None)
@@ -1075,9 +1083,13 @@ class TestLoadWithDoclingRemote:
         os.environ["OPEA_API_KEY"] = "test-key"
         os.environ["OPEA_SSL_SKIP_VERIFY"] = "1"
         try:
-            with patch(
-                "dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT", "https://gpu:5001",
-            ), patch("dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT_TIMEOUT", 30):
+            with (
+                patch(
+                    "dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT",
+                    "https://gpu:5001",
+                ),
+                patch("dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT_TIMEOUT", 30),
+            ):
                 await _load_with_docling_remote(temp_file)
         finally:
             os.environ.pop("OPEA_API_KEY", None)
@@ -1096,9 +1108,13 @@ class TestLoadWithDoclingRemote:
         old_key = os.environ.pop("OPEA_API_KEY", None)
         os.environ["OPEA_SSL_SKIP_VERIFY"] = "1"
         try:
-            with patch(
-                "dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT", "https://gpu:5001",
-            ), patch("dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT_TIMEOUT", 30):
+            with (
+                patch(
+                    "dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT",
+                    "https://gpu:5001",
+                ),
+                patch("dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT_TIMEOUT", 30),
+            ):
                 await _load_with_docling_remote(temp_file)
         finally:
             if old_key is not None:

@@ -82,6 +82,39 @@ else:
     LLM_SERVER_ENDPOINT_PREFIX = ""
 LLM_MODEL = os.getenv("LLM_MODEL", "ibm-granite/granite-3.3-2b-instruct")
 LLM_TRANS_MODEL = os.getenv("LLM_TRANS_MODEL", "google/gemma-3-1b-it")
+
+
+def _auto_detect_model(endpoint_url: str, env_var: str) -> str | None:
+    """Auto-detect model ID from remote vLLM /v1/models endpoint."""
+    try:
+        import httpx
+
+        headers = {}
+        api_key = os.getenv("VLLM_API_KEY", "")
+        if api_key:
+            headers["X-API-Key"] = api_key
+        resp = httpx.get(f"{endpoint_url}/v1/models", headers=headers, timeout=10, verify=False)
+        resp.raise_for_status()
+        models = resp.json()
+        if models.get("data"):
+            return models["data"][0]["id"]
+    except Exception:
+        pass
+    return None
+
+
+# Auto-detect LLM model from remote vLLM when endpoint is remote
+if _VLLM_LLM_ENDPOINT and not os.getenv("LLM_MODEL"):
+    detected = _auto_detect_model(_VLLM_LLM_ENDPOINT, "LLM_MODEL")
+    if detected:
+        LLM_MODEL = detected
+
+# Auto-detect translation model from remote vLLM when endpoint is remote
+if _VLLM_TRANSLATION_ENDPOINT and not os.getenv("VLLM_TRANSLATION_MODEL_ID"):
+    detected = _auto_detect_model(_VLLM_TRANSLATION_ENDPOINT, "VLLM_TRANSLATION_MODEL_ID")
+    if detected:
+        TRANSLATION_MODEL_ID = detected
+        LLM_TRANS_MODEL = detected
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 
 RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "chunk")  # node | edge | chunk

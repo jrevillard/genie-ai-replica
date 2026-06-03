@@ -94,7 +94,11 @@ async def _load_with_docling_remote(doc_path: str) -> str:
     _skip_ssl = os.getenv("OPEA_SSL_SKIP_VERIFY", "") == "1"
     connector = aiohttp.TCPConnector(ssl=not _skip_ssl)
     timeout = aiohttp.ClientTimeout(total=DOCLING_ENDPOINT_TIMEOUT)
-    async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+    headers = {}
+    api_key = os.getenv("OPEA_API_KEY", "")
+    if api_key:
+        headers["X-API-Key"] = api_key
+    async with aiohttp.ClientSession(timeout=timeout, connector=connector, headers=headers) as session:
         data = aiohttp.FormData()
         data.add_field("files", file_bytes, filename=Path(doc_path).name)
 

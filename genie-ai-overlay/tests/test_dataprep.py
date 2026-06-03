@@ -1064,3 +1064,46 @@ class TestLoadWithDoclingRemote:
             os.environ.pop("OPEA_SSL_SKIP_VERIFY", None)
 
         mock_aiohttp_session.TCPConnector.assert_called_once_with(ssl=False)
+
+    @pytest.mark.asyncio
+    async def test_api_key_injected_when_set(self, temp_file, mock_aiohttp_session):
+        """When OPEA_API_KEY is set, ClientSession receives X-API-Key header."""
+        import os
+
+        from dataprep.genieai_dataprep_utils import _load_with_docling_remote
+
+        os.environ["OPEA_API_KEY"] = "test-key"
+        os.environ["OPEA_SSL_SKIP_VERIFY"] = "1"
+        try:
+            with patch(
+                "dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT", "https://gpu:5001",
+            ), patch("dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT_TIMEOUT", 30):
+                await _load_with_docling_remote(temp_file)
+        finally:
+            os.environ.pop("OPEA_API_KEY", None)
+            os.environ.pop("OPEA_SSL_SKIP_VERIFY", None)
+
+        _, kwargs = mock_aiohttp_session.ClientSession.call_args
+        assert kwargs["headers"] == {"X-API-Key": "test-key"}
+
+    @pytest.mark.asyncio
+    async def test_no_api_key_when_unset(self, temp_file, mock_aiohttp_session):
+        """When OPEA_API_KEY is unset, ClientSession receives empty headers."""
+        import os
+
+        from dataprep.genieai_dataprep_utils import _load_with_docling_remote
+
+        old_key = os.environ.pop("OPEA_API_KEY", None)
+        os.environ["OPEA_SSL_SKIP_VERIFY"] = "1"
+        try:
+            with patch(
+                "dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT", "https://gpu:5001",
+            ), patch("dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT_TIMEOUT", 30):
+                await _load_with_docling_remote(temp_file)
+        finally:
+            if old_key is not None:
+                os.environ["OPEA_API_KEY"] = old_key
+            os.environ.pop("OPEA_SSL_SKIP_VERIFY", None)
+
+        _, kwargs = mock_aiohttp_session.ClientSession.call_args
+        assert kwargs["headers"] == {}

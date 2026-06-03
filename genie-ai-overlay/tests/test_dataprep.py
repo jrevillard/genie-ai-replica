@@ -1020,7 +1020,9 @@ class TestLoadWithDoclingRemote:
         mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_resp = AsyncMock()
         mock_resp.raise_for_status = MagicMock()
-        mock_resp.text = AsyncMock(return_value="# doc")
+        mock_resp.json = AsyncMock(
+            return_value={"document": {"md_content": "# doc", "html_content": None}, "status": "success"}
+        )
         mock_session.post.return_value.__aenter__ = AsyncMock(return_value=mock_resp)
         mock_session.post.return_value.__aexit__ = AsyncMock(return_value=False)
         aiohttp_mod.ClientSession.return_value = mock_session

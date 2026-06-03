@@ -127,7 +127,7 @@ services:
 
   docling-serve:
     restart: unless-stopped
-    image: ghcr.io/ds4sd/docling-serve:latest
+    image: ghcr.io/docling-project/docling-serve:v1.21.0
     environment:
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     healthcheck:

@@ -82,7 +82,7 @@ async def _load_with_docling_remote(doc_path: str) -> str:
     and returns the extracted Markdown content.
 
     Requires DOCLING_ENDPOINT env var to be set (e.g. https://gpu-host/docling).
-    Uses the docling-serve v1alpha API: POST /v1alpha/convert/file.
+    Uses the docling-serve v1 API: POST /v1/convert/file.
     """
     import aiohttp
 
@@ -104,7 +104,7 @@ async def _load_with_docling_remote(doc_path: str) -> str:
         data.add_field("files", file_bytes, filename=Path(doc_path).name)
 
         async with session.post(
-            f"{DOCLING_ENDPOINT}/v1alpha/convert/file",
+            f"{DOCLING_ENDPOINT}/v1/convert/file",
             data=data,
         ) as resp:
             resp.raise_for_status()

@@ -241,13 +241,18 @@ class TestApiKeyInjection:
         called = {}
         orig_inner = mod._orig_aiohttp_post
 
-        async def fake_inner(self, url, **kwargs):
+        def fake_inner(self, url, **kwargs):
             called["headers"] = kwargs.get("headers")
-            return mock.AsyncMock()
+            # Return a context manager (aiohttp returns _RequestContextManager)
+            cm = mock.MagicMock()
+            cm.__aenter__ = mock.AsyncMock(return_value=mock.MagicMock())
+            cm.__aexit__ = mock.AsyncMock(return_value=False)
+            return cm
 
         mod._orig_aiohttp_post = fake_inner
         try:
-            asyncio.run(aiohttp.ClientSession.post(None, "https://example.com/test"))
+            # Patched function is sync — just call it directly
+            aiohttp.ClientSession.post(None, "https://example.com/test")
         except Exception:
             pass
         finally:
@@ -264,13 +269,16 @@ class TestApiKeyInjection:
         called = {}
         orig_inner = mod._orig_aiohttp_get
 
-        async def fake_inner(self, url, **kwargs):
+        def fake_inner(self, url, **kwargs):
             called["headers"] = kwargs.get("headers")
-            return mock.AsyncMock()
+            cm = mock.MagicMock()
+            cm.__aenter__ = mock.AsyncMock(return_value=mock.MagicMock())
+            cm.__aexit__ = mock.AsyncMock(return_value=False)
+            return cm
 
         mod._orig_aiohttp_get = fake_inner
         try:
-            asyncio.run(aiohttp.ClientSession.get(None, "https://example.com/test"))
+            aiohttp.ClientSession.get(None, "https://example.com/test")
         except Exception:
             pass
         finally:

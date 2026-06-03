@@ -72,19 +72,22 @@ if _API_KEY:
         pass
 
     # aiohttp (used by OPEA orchestrator in chatqna)
+    # IMPORTANT: session.post/get return context managers (_RequestContextManager),
+    # NOT coroutines. The wrapper must be a regular function that returns the
+    # original context manager — making it async would strip __aenter__/__aexit__.
     try:
         import aiohttp
 
         _orig_aiohttp_post = aiohttp.ClientSession.post
         _orig_aiohttp_get = aiohttp.ClientSession.get
 
-        async def _patched_aiohttp_post(self, url, **kwargs):
+        def _patched_aiohttp_post(self, url, **kwargs):
             _get_headers(kwargs).setdefault("X-API-Key", _API_KEY)
-            return await _orig_aiohttp_post(self, url, **kwargs)
+            return _orig_aiohttp_post(self, url, **kwargs)
 
-        async def _patched_aiohttp_get(self, url, **kwargs):
+        def _patched_aiohttp_get(self, url, **kwargs):
             _get_headers(kwargs).setdefault("X-API-Key", _API_KEY)
-            return await _orig_aiohttp_get(self, url, **kwargs)
+            return _orig_aiohttp_get(self, url, **kwargs)
 
         aiohttp.ClientSession.post = _patched_aiohttp_post
         aiohttp.ClientSession.get = _patched_aiohttp_get

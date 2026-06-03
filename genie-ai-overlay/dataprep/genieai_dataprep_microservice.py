@@ -8,6 +8,8 @@ Extends the base OPEA Dataprep microservice with additional endpoints for
 document repository ingestion and retraction, using ArangoDB as the backend.
 """
 
+import genie_ssl_patch  # noqa: F401 — SSL bypass + API key injection (remote GPU support)
+
 import asyncio
 import base64
 import fcntl

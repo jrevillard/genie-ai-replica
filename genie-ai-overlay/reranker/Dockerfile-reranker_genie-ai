@@ -73,7 +73,7 @@ RUN useradd -ms /bin/bash user && \
     chown -R user:user /app /home/user
 
 # Step G: Copy SSL/API-key runtime patch (no-op unless env vars are set)
-COPY configs/ssl/sitecustomize.py /usr/local/lib/python3.11/site-packages/sitecustomize.py
+COPY configs/ssl/genie_ssl_patch.py /app/genie_ssl_patch.py
 
 # Step H: Run the new microservice entry point from its new location
 USER user

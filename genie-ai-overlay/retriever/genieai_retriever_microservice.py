@@ -1,6 +1,7 @@
 # Copyright (C) 2024 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
+import genie_ssl_patch  # noqa: F401 — SSL bypass + API key injection (remote GPU support)
 
 import os
 import time

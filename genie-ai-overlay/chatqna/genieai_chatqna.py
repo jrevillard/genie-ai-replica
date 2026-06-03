@@ -1,6 +1,9 @@
 # Copyright (C) 2024 Intel Corporation
 # Copyright (C) 2025 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0 Developed by Intel. Adapted by ITU
+
+import genie_ssl_patch  # noqa: F401 — SSL bypass + API key injection (remote GPU support)
+
 import argparse
 import asyncio
 import copy

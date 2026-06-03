@@ -221,7 +221,7 @@ docker compose --profile opea up -d
 ```
 
 > **Note:** `OPEA_SSL_SKIP_VERIFY=1` disables SSL certificate verification in OPEA
-> services via a runtime patch (`configs/ssl/sitecustomize.py`). Only use with
+> services via a runtime patch (`configs/ssl/genie_ssl_patch.py`). Only use with
 > self-signed certs. Omit this variable if the GPU node uses Let's Encrypt or a public CA.
 > `OPEA_API_KEY` injects an `X-API-Key` header into all outbound HTTP calls from OPEA services.
 > If Keycloak also uses a self-signed cert, set `KEYCLOAK_SSL_SKIP_VERIFY=1` independently.

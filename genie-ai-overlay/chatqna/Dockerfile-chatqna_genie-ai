@@ -92,7 +92,7 @@ COPY genie-ai-overlay/chatqna/language_codes.json /app/ChatQnA/language_codes.js
 RUN chown -R user:user /app
 
 # Step F: Copy SSL/API-key runtime patch (no-op unless env vars are set)
-COPY configs/ssl/sitecustomize.py /usr/local/lib/python3.10/site-packages/sitecustomize.py
+COPY configs/ssl/genie_ssl_patch.py /app/genie_ssl_patch.py
 
 # Step G: Run our new GENIE-AI entry point
 USER user

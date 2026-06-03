@@ -1,9 +1,9 @@
 """
-Tests for configs/ssl/sitecustomize.py — SSL bypass + API key injection.
+Tests for configs/ssl/genie_ssl_patch.py — SSL bypass + API key injection.
 
 Run:
     pip install httpx aiohttp requests pytest
-    OPEA_SSL_SKIP_VERIFY=1 OPEA_API_KEY=test-key-123 python -m pytest tests/config/ssl/test_sitecustomize.py -v
+    OPEA_SSL_SKIP_VERIFY=1 OPEA_API_KEY=test-key-123 python -m pytest tests/config/ssl/test_genie_ssl_patch.py -v
 
 Note: monkey-patching is process-wide and irreversible within a single Python process.
 Tests reload the module but cannot unpatch. The "restore" behavior must be verified
@@ -17,28 +17,28 @@ import ssl
 import sys
 from unittest import mock
 
-SITECUSTOMIZE_PATH = os.path.join(
+GENIE_SSL_PATCH_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "..",
     "..",
     "configs",
     "ssl",
-    "sitecustomize.py",
+    "genie_ssl_patch.py",
 )
 
 
 def reload_with_env(ssl_skip="", api_key=""):
-    """Reload sitecustomize with isolated env vars."""
+    """Reload genie_ssl_patch with isolated env vars."""
     # Remove any previous patch
     for mod_name in list(sys.modules):
-        if "sitecustomize" in mod_name:
+        if "genie_ssl_patch" in mod_name:
             del sys.modules[mod_name]
     # Set env vars before import
     os.environ["OPEA_SSL_SKIP_VERIFY"] = ssl_skip
     os.environ["OPEA_API_KEY"] = api_key
-    spec = importlib.util.spec_from_file_location("sitecustomize", SITECUSTOMIZE_PATH)
+    spec = importlib.util.spec_from_file_location("genie_ssl_patch", GENIE_SSL_PATCH_PATH)
     mod = importlib.util.module_from_spec(spec)
-    sys.modules["sitecustomize"] = mod
+    sys.modules["genie_ssl_patch"] = mod
     spec.loader.exec_module(mod)
     return mod
 
@@ -128,7 +128,7 @@ class TestGetHeaders:
 class TestApiKeyInjection:
     """Verify X-API-Key header injection into HTTP libraries.
 
-    Strategy: reload sitecustomize with OPEA_API_KEY set, then mock the
+    Strategy: reload genie_ssl_patch with OPEA_API_KEY set, then mock the
     inner _orig_* function that the patched wrapper delegates to.
     This way the patched code actually runs and we capture what it passes.
     """

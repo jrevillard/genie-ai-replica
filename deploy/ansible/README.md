@@ -500,7 +500,7 @@ OPEA_API_KEY=<your-api-key>         # Same as VLLM_API_KEY (injected into OPEA s
 ```
 
 > **Note:** `OPEA_SSL_SKIP_VERIFY` and `OPEA_API_KEY` are independent of `gpu_node_host`.
-> They control runtime patches baked into OPEA Docker images via `sitecustomize.py`.
+> They control runtime patches baked into OPEA Docker images via `genie_ssl_patch.py`.
 > Use `OPEA_SSL_SKIP_VERIFY=1` only with self-signed certs — omit for Let's Encrypt or public CAs.
 
 ## Port Configuration

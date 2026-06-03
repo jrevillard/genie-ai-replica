@@ -1,11 +1,14 @@
 """
-sitecustomize.py — SSL bypass + API key injection for OPEA services.
+genie_ssl_patch.py — SSL bypass + API key injection for OPEA services.
+
+Import as the first line of any Python entry point that needs to call remote
+GPU node endpoints with self-signed certificates.
 
 Controls:
   OPEA_SSL_SKIP_VERIFY=1  Disable SSL cert verification (self-signed certs)
   OPEA_API_KEY=<key>       Inject X-API-Key header into all outbound HTTP calls
 
-When both env vars are unset, this file is a no-op.
+When both env vars are unset, this module is a no-op.
 
 WARNING: Only enable in trusted network environments.
 """

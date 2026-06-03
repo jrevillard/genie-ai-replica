@@ -792,7 +792,7 @@ Retriever, Dataprep) still deploy and connect to the remote GPU node via the
 override endpoints.
 
 `OPEA_SSL_SKIP_VERIFY=1` disables SSL certificate verification in OPEA services
-via a runtime patch (`configs/ssl/sitecustomize.py`). Only use with self-signed
+via a runtime patch (`configs/ssl/genie_ssl_patch.py`). Only use with self-signed
 certs. Omit if the GPU node uses Let's Encrypt or a public CA.
 
 `KEYCLOAK_SSL_SKIP_VERIFY=1` independently disables SSL verification for

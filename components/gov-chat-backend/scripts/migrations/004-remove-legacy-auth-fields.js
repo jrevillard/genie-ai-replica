@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 /**
  * 004-remove-legacy-auth-fields.js
@@ -12,21 +12,12 @@
  * Idempotent — safe to run multiple times.
  */
 
-const LEGACY_FIELDS = [
-  "loginName",
-  "role",
-  "accessToken",
-  "refreshToken",
-  "encPassword",
-];
+const LEGACY_FIELDS = ['loginName', 'role', 'accessToken', 'refreshToken', 'encPassword'];
 
 module.exports = {
   async up(db) {
     for (const field of LEGACY_FIELDS) {
-      const cursor = await db.query(
-        `FOR u IN users FILTER HAS(u, @field) RETURN u._id`,
-        { field },
-      );
+      const cursor = await db.query(`FOR u IN users FILTER HAS(u, @field) RETURN u._id`, { field });
       const ids = await cursor.all();
 
       if (ids.length === 0) {
@@ -36,11 +27,11 @@ module.exports = {
 
       await db.query(
         `FOR u IN users FILTER HAS(u, @field) UPDATE u WITH { [@field]: null } IN users OPTIONS { keepNull: false } RETURN NEW._key`,
-        { field },
+        { field }
       );
       console.log(`  Removed "${field}" from ${ids.length} user(s)`);
     }
 
-    console.log("  Legacy auth field cleanup complete");
-  },
+    console.log('  Legacy auth field cleanup complete');
+  }
 };

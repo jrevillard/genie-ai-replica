@@ -1,46 +1,45 @@
-"use strict";
+'use strict';
 
 // Minimum valid JWT payload for Keycloak tokens
 const mockJwtPayload = {
-  sub: "12345678-1234-1234-1234-123456789012",
-  iss: "http://localhost:8080/realms/genie",
-  iss_sub:
-    "http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012",
-  aud: "genie-app",
+  sub: '12345678-1234-1234-1234-123456789012',
+  iss: 'http://localhost:8080/realms/genie',
+  iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012',
+  aud: 'genie-app',
   exp: Math.floor(Date.now() / 1000) + 3600,
   iat: Math.floor(Date.now() / 1000),
-  email: "testuser@example.com",
-  name: "Test User",
-  preferred_username: "testuser",
+  email: 'testuser@example.com',
+  name: 'Test User',
+  preferred_username: 'testuser',
   realm_access: {
-    roles: ["user", "admin"],
+    roles: ['user', 'admin']
   },
   resource_access: {
-    "genie-app": {
-      roles: ["user"],
-    },
+    'genie-app': {
+      roles: ['user']
+    }
   },
-  typ: "Bearer",
-  azp: "genie-app",
-  session_state: "abc123-session",
-  acr: "1",
+  typ: 'Bearer',
+  azp: 'genie-app',
+  session_state: 'abc123-session',
+  acr: '1'
 };
 
 // Payload with expired token
 const mockExpiredPayload = {
   ...mockJwtPayload,
-  exp: Math.floor(Date.now() / 1000) - 3600, // Expired 1 hour ago
+  exp: Math.floor(Date.now() / 1000) - 3600 // Expired 1 hour ago
 };
 
 // Payload with wrong audience
 const mockWrongAudPayload = {
   ...mockJwtPayload,
-  aud: "wrong-client-id",
+  aud: 'wrong-client-id'
 };
 
 // Payload missing required claims
 const mockMissingClaimsPayload = {
-  sub: "12345678-1234-1234-1234-123456789012",
+  sub: '12345678-1234-1234-1234-123456789012'
   // Missing: iss, aud, exp, iat
 };
 
@@ -51,11 +50,9 @@ const mockMissingClaimsPayload = {
  */
 function generateMockJwtString(payload = {}) {
   const merged = { ...mockJwtPayload, ...payload };
-  const header = Buffer.from(
-    JSON.stringify({ alg: "RS256", kid: "test-key-id", typ: "JWT" }),
-  ).toString("base64url");
-  const body = Buffer.from(JSON.stringify(merged)).toString("base64url");
-  const sig = Buffer.from("mock-signature").toString("base64url");
+  const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'test-key-id', typ: 'JWT' })).toString('base64url');
+  const body = Buffer.from(JSON.stringify(merged)).toString('base64url');
+  const sig = Buffer.from('mock-signature').toString('base64url');
   return `${header}.${body}.${sig}`;
 }
 
@@ -64,5 +61,5 @@ module.exports = {
   mockExpiredPayload,
   mockWrongAudPayload,
   mockMissingClaimsPayload,
-  generateMockJwtString,
+  generateMockJwtString
 };

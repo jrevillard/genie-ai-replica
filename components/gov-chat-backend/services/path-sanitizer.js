@@ -1,5 +1,5 @@
-const path = require("path");
-const { logger } = require("../shared-lib");
+const path = require('path');
+const { logger } = require('../shared-lib');
 
 /**
  * Validates that a resolved path stays within its expected base directory.
@@ -14,18 +14,9 @@ function sanitizePath(baseDir, userInput) {
   const normalizedBase = path.resolve(baseDir);
   const resolved = path.resolve(normalizedBase, userInput);
 
-  if (
-    !resolved.startsWith(normalizedBase + path.sep) &&
-    resolved !== normalizedBase
-  ) {
-    logger.warn("path-sanitizer.traversal_blocked", {
-      baseDir: normalizedBase,
-      userInput,
-      resolved,
-    });
-    throw new Error(
-      "Path traversal detected: resolved path escapes allowed directory",
-    );
+  if (!resolved.startsWith(normalizedBase + path.sep) && resolved !== normalizedBase) {
+    logger.warn('path-sanitizer.traversal_blocked', { baseDir: normalizedBase, userInput, resolved });
+    throw new Error('Path traversal detected: resolved path escapes allowed directory');
   }
 
   return resolved;

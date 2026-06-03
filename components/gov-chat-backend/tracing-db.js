@@ -1,13 +1,13 @@
-const { getTracer } = require("./tracing");
-const { SpanStatusCode } = require("@opentelemetry/api");
+const { getTracer } = require('./tracing');
+const { SpanStatusCode } = require('@opentelemetry/api');
 
 function traceQuery(queryFn, { collection, operation }) {
   const tracer = getTracer();
   const span = tracer.startSpan(`db.${operation} ${collection}`);
-  span.setAttribute("db.system", "arangodb");
-  span.setAttribute("db.name", process.env.ARANGO_DB || "genie_db");
-  span.setAttribute("db.collection", collection);
-  span.setAttribute("db.operation", operation);
+  span.setAttribute('db.system', 'arangodb');
+  span.setAttribute('db.name', process.env.ARANGO_DB || 'genie_db');
+  span.setAttribute('db.collection', collection);
+  span.setAttribute('db.operation', operation);
 
   return queryFn()
     .then((result) => {

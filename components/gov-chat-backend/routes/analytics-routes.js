@@ -1,25 +1,16 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const AnalyticsController = require("../controllers/analyticsController");
-const { logger } = require("../shared-lib");
-const {
-  keycloakAuthMiddleware,
-} = require("../middleware/keycloak-auth-middleware");
+const AnalyticsController = require('../controllers/analyticsController');
+const { logger } = require('../shared-lib');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 
 module.exports = (analyticsService) => {
   try {
-    if (
-      !analyticsService ||
-      typeof analyticsService.getDashboardAnalytics !== "function"
-    ) {
-      throw new Error(
-        "analyticsService is invalid or missing getDashboardAnalytics",
-      );
+    if (!analyticsService || typeof analyticsService.getDashboardAnalytics !== 'function') {
+      throw new Error('analyticsService is invalid or missing getDashboardAnalytics');
     }
-    logger.debug("analytics-routes initialized with analyticsService", {
-      methods: Object.getOwnPropertyNames(
-        Object.getPrototypeOf(analyticsService),
-      ).filter((m) => m !== "constructor"),
+    logger.debug('analytics-routes initialized with analyticsService', {
+      methods: Object.getOwnPropertyNames(Object.getPrototypeOf(analyticsService)).filter((m) => m !== 'constructor')
     });
 
     // Instantiate controller with singleton analyticsService
@@ -156,27 +147,18 @@ module.exports = (analyticsService) => {
      *       500:
      *         description: Server error
      */
-    router.get("/dashboard", async (req, res) => {
+    router.get('/dashboard', async (req, res) => {
       try {
-        const startDate =
-          req.query.startDate || new Date().toISOString().split("T")[0];
+        const startDate = req.query.startDate || new Date().toISOString().split('T')[0];
         const endDate = req.query.endDate || new Date().toISOString();
-        const locale = req.query.locale || "en";
+        const locale = req.query.locale || 'en';
 
-        logger.info(
-          `Getting dashboard analytics from ${startDate} to ${endDate} with locale ${locale}`,
-        );
-        const analytics = await analyticsService.getDashboardAnalytics(
-          startDate,
-          endDate,
-          locale,
-        );
+        logger.info(`Getting dashboard analytics from ${startDate} to ${endDate} with locale ${locale}`);
+        const analytics = await analyticsService.getDashboardAnalytics(startDate, endDate, locale);
 
         res.json(analytics);
       } catch (error) {
-        logger.error(`Error getting dashboard analytics: ${error.message}`, {
-          stack: error.stack,
-        });
+        logger.error(`Error getting dashboard analytics: ${error.message}`, { stack: error.stack });
         res.status(500).json({ message: error.message });
       }
     });
@@ -229,10 +211,8 @@ module.exports = (analyticsService) => {
      *       500:
      *         description: Server error
      */
-    router.get("/metric/:metric", (req, res) => {
-      logger.info(
-        `Fetching metric: ${req.params.metric} from ${req.query.startDate} to ${req.query.endDate}`,
-      );
+    router.get('/metric/:metric', (req, res) => {
+      logger.info(`Fetching metric: ${req.params.metric} from ${req.query.startDate} to ${req.query.endDate}`);
       analyticsController.getMetric(req, res);
     });
 
@@ -294,27 +274,21 @@ module.exports = (analyticsService) => {
      *       500:
      *         description: Server error
      */
-    router.get("/", async (req, res) => {
+    router.get('/', async (req, res) => {
       try {
         const startDate = req.query.startDate;
         const endDate = req.query.endDate;
         const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
-        const locale = req.query.locale || "en";
+        const locale = req.query.locale || 'en';
 
         logger.info(
-          `Getting analytics from ${startDate || "unspecified"} to ${endDate || "unspecified"} with filters: ${JSON.stringify(filters)} and locale: ${locale}`,
+          `Getting analytics from ${startDate || 'unspecified'} to ${endDate || 'unspecified'} with filters: ${JSON.stringify(filters)} and locale: ${locale}`
         );
-        const analytics = await analyticsService.getAnalytics(
-          filters,
-          startDate,
-          endDate,
-        );
+        const analytics = await analyticsService.getAnalytics(filters, startDate, endDate);
 
         res.json(analytics);
       } catch (error) {
-        logger.error(`Error getting analytics: ${error.message}`, {
-          stack: error.stack,
-        });
+        logger.error(`Error getting analytics: ${error.message}`, { stack: error.stack });
         res.status(500).json({ message: error.message });
       }
     });
@@ -375,9 +349,9 @@ module.exports = (analyticsService) => {
      *       500:
      *         description: Server error
      */
-    router.get("/timeseries/:metricType", (req, res) => {
+    router.get('/timeseries/:metricType', (req, res) => {
       logger.info(
-        `Fetching time series data for metricType: ${req.params.metricType}, interval: ${req.query.interval || "daily"}, from ${req.query.startDate} to ${req.query.endDate}`,
+        `Fetching time series data for metricType: ${req.params.metricType}, interval: ${req.query.interval || 'daily'}, from ${req.query.startDate} to ${req.query.endDate}`
       );
       analyticsController.getTimeSeriesData(req, res);
     });
@@ -418,36 +392,25 @@ module.exports = (analyticsService) => {
      *       500:
      *         description: Server error
      */
-    router.post("/events", async (req, res) => {
+    router.post('/events', async (req, res) => {
       try {
         const { eventType, eventData } = req.body;
 
         if (!eventType) {
-          logger.warn("Missing required field: eventType");
-          return res.status(400).json({ message: "eventType is required" });
+          logger.warn('Missing required field: eventType');
+          return res.status(400).json({ message: 'eventType is required' });
         }
 
         const userId = req.user?.iss_sub;
         if (!userId) {
-          return res
-            .status(401)
-            .json({
-              error: "UNAUTHENTICATED",
-              message: "User not authenticated",
-            });
+          return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
         }
 
         logger.info(`Recording event of type ${eventType} for user ${userId}`);
-        const result = await analyticsService.trackEvent(
-          userId,
-          eventType,
-          eventData || {},
-        );
+        const result = await analyticsService.trackEvent(userId, eventType, eventData || {});
         res.status(201).json(result);
       } catch (error) {
-        logger.error(`Error recording event: ${error.message}`, {
-          stack: error.stack,
-        });
+        logger.error(`Error recording event: ${error.message}`, { stack: error.stack });
         res.status(500).json({ message: error.message });
       }
     });
@@ -486,14 +449,12 @@ module.exports = (analyticsService) => {
      *       500:
      *         description: Server error
      */
-    router.get("/records", async (req, res) => {
+    router.get('/records', async (req, res) => {
       try {
         const limit = parseInt(req.query.limit) || 20;
         const offset = parseInt(req.query.offset) || 0;
 
-        logger.info(
-          `Getting analytics records with limit ${limit} and offset ${offset}`,
-        );
+        logger.info(`Getting analytics records with limit ${limit} and offset ${offset}`);
 
         const cursor = await analyticsService.db.query(`
           FOR a IN analytics
@@ -505,9 +466,7 @@ module.exports = (analyticsService) => {
         const records = await cursor.all();
         res.json(records);
       } catch (error) {
-        logger.error(`Error retrieving analytics records: ${error.message}`, {
-          stack: error.stack,
-        });
+        logger.error(`Error retrieving analytics records: ${error.message}`, { stack: error.stack });
         res.status(500).json({ message: error.message });
       }
     });
@@ -546,14 +505,12 @@ module.exports = (analyticsService) => {
      *       500:
      *         description: Server error
      */
-    router.get("/events", async (req, res) => {
+    router.get('/events', async (req, res) => {
       try {
         const limit = parseInt(req.query.limit) || 20;
         const offset = parseInt(req.query.offset) || 0;
 
-        logger.info(
-          `Getting event records with limit ${limit} and offset ${offset}`,
-        );
+        logger.info(`Getting event records with limit ${limit} and offset ${offset}`);
 
         const cursor = await analyticsService.db.query(`
           FOR e IN events
@@ -565,9 +522,7 @@ module.exports = (analyticsService) => {
         const events = await cursor.all();
         res.json(events);
       } catch (error) {
-        logger.error(`Error retrieving events records: ${error.message}`, {
-          stack: error.stack,
-        });
+        logger.error(`Error retrieving events records: ${error.message}`, { stack: error.stack });
         res.status(500).json({ message: error.message });
       }
     });
@@ -628,9 +583,9 @@ module.exports = (analyticsService) => {
      *       500:
      *         description: Server error
      */
-    router.get("/satisfaction/gauge", (req, res) => {
+    router.get('/satisfaction/gauge', (req, res) => {
       logger.info(
-        `Fetching satisfaction gauge data from ${req.query.startDate} to ${req.query.endDate} with locale ${req.query.locale || "en"}`,
+        `Fetching satisfaction gauge data from ${req.query.startDate} to ${req.query.endDate} with locale ${req.query.locale || 'en'}`
       );
       analyticsController.getSatisfactionGauge(req, res);
     });
@@ -687,18 +642,18 @@ module.exports = (analyticsService) => {
      *       500:
      *         description: Server error
      */
-    router.get("/satisfaction/heatmap", (req, res) => {
+    router.get('/satisfaction/heatmap', (req, res) => {
       logger.info(
-        `Fetching satisfaction heatmap data from ${req.query.startDate} to ${req.query.endDate} with locale ${req.query.locale || "en"}`,
+        `Fetching satisfaction heatmap data from ${req.query.startDate} to ${req.query.endDate} with locale ${req.query.locale || 'en'}`
       );
       analyticsController.getSatisfactionHeatmap(req, res);
     });
 
     return router;
   } catch (error) {
-    logger.error("Failed to initialize analytics-routes:", {
+    logger.error('Failed to initialize analytics-routes:', {
       error: error.message,
-      stack: error.stack,
+      stack: error.stack
     });
     throw error;
   }

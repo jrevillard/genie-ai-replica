@@ -1,8 +1,8 @@
-const { logger, dbService } = require("../shared-lib");
-const os = require("os");
-const fs = require("fs").promises;
-const path = require("path");
-const { isValidDateStr } = require("./path-sanitizer");
+const { logger, dbService } = require('../shared-lib');
+const os = require('os');
+const fs = require('fs').promises;
+const path = require('path');
+const { isValidDateStr } = require('./path-sanitizer');
 
 class AdminDashboardService {
   constructor() {
@@ -15,28 +15,25 @@ class AdminDashboardService {
 
   setLogsService(logsService) {
     this.logsService = logsService;
-    logger.debug("LogsService set in AdminDashboardService");
+    logger.debug('LogsService set in AdminDashboardService');
   }
 
   setSecurityScanService(securityScanService) {
     this.securityScanService = securityScanService;
-    logger.debug("SecurityScanService set in AdminDashboardService");
+    logger.debug('SecurityScanService set in AdminDashboardService');
   }
 
   async init() {
     if (this.initialized) {
-      logger.debug("AdminDashboardService already initialized, skipping");
+      logger.debug('AdminDashboardService already initialized, skipping');
       return;
     }
     try {
-      this.db = await dbService.getConnection("default");
+      this.db = await dbService.getConnection('default');
       this.initialized = true;
-      logger.info("AdminDashboardService database initialized");
+      logger.info('AdminDashboardService database initialized');
     } catch (error) {
-      logger.error(
-        `Error initializing AdminDashboardService: ${error.message}`,
-        { stack: error.stack },
-      );
+      logger.error(`Error initializing AdminDashboardService: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -55,9 +52,9 @@ class AdminDashboardService {
    */
   async getSystemHealth() {
     if (!this.db) {
-      throw new Error("Database not initialized. Call init() first.");
+      throw new Error('Database not initialized. Call init() first.');
     }
-    logger.info("Getting system health metrics");
+    logger.info('Getting system health metrics');
 
     try {
       let activeUsersValue = 0;
@@ -79,7 +76,7 @@ class AdminDashboardService {
       const oneMonthAgoDate = oneMonthAgo.toISOString();
       const twoMonthsAgoDate = twoMonthsAgo.toISOString();
       logger.debug(
-        `Date ranges: now=${now.toISOString()}, oneDayAgo=${startDate}, oneMonthAgo=${oneMonthAgoDate}, twoMonthsAgo=${twoMonthsAgoDate}`,
+        `Date ranges: now=${now.toISOString()}, oneDayAgo=${startDate}, oneMonthAgo=${oneMonthAgoDate}, twoMonthsAgo=${twoMonthsAgoDate}`
       );
 
       const totalTimeSeconds = 30 * 24 * 60 * 60;
@@ -89,58 +86,41 @@ class AdminDashboardService {
         const downtimePerRebootSeconds = 5 * 60;
         totalDowntimeSeconds = downtimePerRebootSeconds;
         logger.debug(
-          `System rebooted ${currentUptimeSeconds} seconds ago; assuming ${downtimePerRebootSeconds} seconds of downtime`,
+          `System rebooted ${currentUptimeSeconds} seconds ago; assuming ${downtimePerRebootSeconds} seconds of downtime`
         );
       } else {
-        logger.debug(
-          "System has been up for more than 30 days; assuming no downtime in the last 30 days",
-        );
+        logger.debug('System has been up for more than 30 days; assuming no downtime in the last 30 days');
       }
 
-      systemUptime = (
-        ((totalTimeSeconds - totalDowntimeSeconds) / totalTimeSeconds) *
-        100
-      ).toFixed(2);
+      systemUptime = (((totalTimeSeconds - totalDowntimeSeconds) / totalTimeSeconds) * 100).toFixed(2);
       logger.debug(
-        `System Uptime Calculation: totalTimeSeconds=${totalTimeSeconds}, currentUptimeSeconds=${currentUptimeSeconds}, totalDowntimeSeconds=${totalDowntimeSeconds}, systemUptime=${systemUptime}%`,
+        `System Uptime Calculation: totalTimeSeconds=${totalTimeSeconds}, currentUptimeSeconds=${currentUptimeSeconds}, totalDowntimeSeconds=${totalDowntimeSeconds}, systemUptime=${systemUptime}%`
       );
 
       const yesterday = new Date(now);
       yesterday.setDate(now.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split("T")[0];
-      const logFile = path.join(
-        __dirname,
-        `../logs/combined-${yesterdayStr}.log`,
-      );
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      const logFile = path.join(__dirname, `../logs/combined-${yesterdayStr}.log`);
       logger.debug(`Reading log file for error rate: ${logFile}`);
       try {
-        const logContent = await fs.readFile(logFile, "utf8");
-        const logLines = logContent
-          .split("\n")
-          .filter((line) => line.trim() !== "");
+        const logContent = await fs.readFile(logFile, 'utf8');
+        const logLines = logContent.split('\n').filter((line) => line.trim() !== '');
         const totalLogs = logLines.length;
-        const errorLogs = logLines.filter((line) =>
-          line.toUpperCase().includes("[ERROR]"),
-        ).length;
-        errorRate =
-          totalLogs > 0 ? ((errorLogs / totalLogs) * 100).toFixed(2) : 0;
-        logger.debug(
-          `Error Rate Calculation: totalLogs=${totalLogs}, errorLogs=${errorLogs}, errorRate=${errorRate}%`,
-        );
+        const errorLogs = logLines.filter((line) => line.toUpperCase().includes('[ERROR]')).length;
+        errorRate = totalLogs > 0 ? ((errorLogs / totalLogs) * 100).toFixed(2) : 0;
+        logger.debug(`Error Rate Calculation: totalLogs=${totalLogs}, errorLogs=${errorLogs}, errorRate=${errorRate}%`);
       } catch (error) {
         logger.error(`Error reading log file for error rate: ${error.message}`);
       }
 
-      logger.debug(
-        "Fetching unique monthly active users from sessions collection (last 30 days)",
-      );
+      logger.debug('Fetching unique monthly active users from sessions collection (last 30 days)');
       const mauCursor = await this.db.query(
         `
         FOR s IN sessions
         FILTER s.startTime >= @oneMonthAgoDate
         COLLECT userId = s.userId INTO groups
         RETURN userId`,
-        { oneMonthAgoDate },
+        { oneMonthAgoDate }
       );
       const uniqueUsers = await mauCursor.all();
       activeUsersValue = uniqueUsers.length;
@@ -155,54 +135,44 @@ class AdminDashboardService {
           LIMIT 1
           RETURN a
       `,
-        { oneMonthAgoDate, twoMonthsAgoDate },
+        { oneMonthAgoDate, twoMonthsAgoDate }
       );
       const lastMonthAnalytics = await lastMonthAnalyticsCursor.next();
+      logger.debug(`Last month's analytics data: ${JSON.stringify(lastMonthAnalytics)}`);
+
+      uptimeTrend = lastMonthAnalytics ? (parseFloat(systemUptime) - lastMonthAnalytics.uptime).toFixed(2) : 0;
       logger.debug(
-        `Last month's analytics data: ${JSON.stringify(lastMonthAnalytics)}`,
+        `Uptime Trend Calculation: currentUptime=${systemUptime}, lastMonthUptime=${lastMonthAnalytics?.uptime || 0}, uptimeTrend=${uptimeTrend}%`
       );
 
-      uptimeTrend = lastMonthAnalytics
-        ? (parseFloat(systemUptime) - lastMonthAnalytics.uptime).toFixed(2)
-        : 0;
-      logger.debug(
-        `Uptime Trend Calculation: currentUptime=${systemUptime}, lastMonthUptime=${lastMonthAnalytics?.uptime || 0}, uptimeTrend=${uptimeTrend}%`,
-      );
-
-      logger.debug("Storing current uptime in analytics collection");
+      logger.debug('Storing current uptime in analytics collection');
       await this.storeAnalyticsData({
-        period: "monthly",
+        period: 'monthly',
         startDate: now.toISOString(),
         uptime: parseFloat(systemUptime),
         uniqueUsers: activeUsersValue,
-        errorRate: parseFloat(errorRate),
+        errorRate: parseFloat(errorRate)
       });
 
-      logger.debug(
-        "Fetching MAUs for the previous 30-day period (two months ago to one month ago)",
-      );
+      logger.debug('Fetching MAUs for the previous 30-day period (two months ago to one month ago)');
       const previousMauCursor = await this.db.query(
         `
         FOR s IN sessions
         FILTER s.startTime >= @twoMonthsAgoDate AND s.startTime < @oneMonthAgoDate
         COLLECT userId = s.userId INTO groups
         RETURN userId`,
-        { twoMonthsAgoDate, oneMonthAgoDate },
+        { twoMonthsAgoDate, oneMonthAgoDate }
       );
       const previousUniqueUsers = await previousMauCursor.all();
       const previousMau = previousUniqueUsers.length;
+      logger.debug(`Previous MAUs (from ${twoMonthsAgoDate} to ${oneMonthAgoDate}): ${previousMau}`);
+
+      activeUsersTrend = previousMau ? (((activeUsersValue - previousMau) / previousMau) * 100).toFixed(2) : 0;
       logger.debug(
-        `Previous MAUs (from ${twoMonthsAgoDate} to ${oneMonthAgoDate}): ${previousMau}`,
+        `MAUs Trend Calculation: currentMAUs=${activeUsersValue}, previousMAUs=${previousMau}, activeUsersTrend=${activeUsersTrend}%`
       );
 
-      activeUsersTrend = previousMau
-        ? (((activeUsersValue - previousMau) / previousMau) * 100).toFixed(2)
-        : 0;
-      logger.debug(
-        `MAUs Trend Calculation: currentMAUs=${activeUsersValue}, previousMAUs=${previousMau}, activeUsersTrend=${activeUsersTrend}%`,
-      );
-
-      logger.debug("Fetching average response time from queries collection");
+      logger.debug('Fetching average response time from queries collection');
       const queriesCursor = await this.db.query(
         `
         FOR q IN queries
@@ -211,19 +181,12 @@ class AdminDashboardService {
         avgTime = AVERAGE(q.responseTime), 
         count = COUNT()
         RETURN { avgTime, count }`,
-        { startDate },
+        { startDate }
       );
-      const queriesStats = (await queriesCursor.next()) || {
-        avgTime: 0,
-        count: 0,
-      };
-      logger.debug(
-        `Queries stats (in milliseconds): avgTime=${queriesStats.avgTime}, count=${queriesStats.count}`,
-      );
+      const queriesStats = (await queriesCursor.next()) || { avgTime: 0, count: 0 };
+      logger.debug(`Queries stats (in milliseconds): avgTime=${queriesStats.avgTime}, count=${queriesStats.count}`);
 
-      logger.debug(
-        "Fetching last month's average response time for trend calculation",
-      );
+      logger.debug("Fetching last month's average response time for trend calculation");
       const lastMonthQueriesCursor = await this.db.query(
         `
         FOR q IN queries
@@ -231,21 +194,16 @@ class AdminDashboardService {
         COLLECT AGGREGATE 
         avgTime = AVERAGE(q.responseTime * 1000)
         RETURN avgTime`,
-        { twoMonthsAgoDate, oneMonthAgoDate },
+        { twoMonthsAgoDate, oneMonthAgoDate }
       );
       const lastMonthAvgTime = (await lastMonthQueriesCursor.next()) || 0;
-      logger.debug(
-        `Last month's average response time (in milliseconds): ${lastMonthAvgTime}`,
-      );
+      logger.debug(`Last month's average response time (in milliseconds): ${lastMonthAvgTime}`);
 
       responseTimeTrend = lastMonthAvgTime
-        ? (
-            ((queriesStats.avgTime - lastMonthAvgTime) / lastMonthAvgTime) *
-            100
-          ).toFixed(2)
+        ? (((queriesStats.avgTime - lastMonthAvgTime) / lastMonthAvgTime) * 100).toFixed(2)
         : 0;
       logger.debug(
-        `Response Time Trend Calculation: currentAvgTime=${queriesStats.avgTime}, lastMonthAvgTime=${lastMonthAvgTime}, responseTimeTrend=${responseTimeTrend}%`,
+        `Response Time Trend Calculation: currentAvgTime=${queriesStats.avgTime}, lastMonthAvgTime=${lastMonthAvgTime}, responseTimeTrend=${responseTimeTrend}%`
       );
 
       logger.debug("Fetching last month's error rate for trend calculation");
@@ -257,46 +215,36 @@ class AdminDashboardService {
           LIMIT 1
           RETURN a.errorRate
       `,
-        { twoMonthsAgoDate, oneMonthAgoDate },
+        { twoMonthsAgoDate, oneMonthAgoDate }
       );
       const lastMonthErrorRate = (await lastMonthErrorRateCursor.next()) || 0;
       logger.debug(`Last month's error rate: ${lastMonthErrorRate}`);
 
-      errorRateTrend = lastMonthErrorRate
-        ? (parseFloat(errorRate) - lastMonthErrorRate).toFixed(2)
-        : 0;
+      errorRateTrend = lastMonthErrorRate ? (parseFloat(errorRate) - lastMonthErrorRate).toFixed(2) : 0;
       logger.debug(
-        `Error Rate Trend Calculation: currentErrorRate=${errorRate}, lastMonthErrorRate=${lastMonthErrorRate}, errorRateTrend=${errorRateTrend}%`,
+        `Error Rate Trend Calculation: currentErrorRate=${errorRate}, lastMonthErrorRate=${lastMonthErrorRate}, errorRateTrend=${errorRateTrend}%`
       );
 
-      logger.debug("Updating analytics with error rate");
+      logger.debug('Updating analytics with error rate');
       await this.storeAnalyticsData({
-        period: "daily",
+        period: 'daily',
         startDate: now.toISOString(),
         uptime: parseFloat(systemUptime),
         uniqueUsers: activeUsersValue,
-        errorRate: parseFloat(errorRate),
+        errorRate: parseFloat(errorRate)
       });
 
       const resourceUsage = await this.resourceUsageMonitor.getResourceUsage();
       logger.debug(`Resource Usage: ${JSON.stringify(resourceUsage)}`);
 
-      logger.debug("Determining health status of services");
+      logger.debug('Determining health status of services');
       const healthServices = [
-        {
-          id: "apiServices",
-          name: "API Services",
-          status: resourceUsage.cpu < 80 ? "good" : "warning",
-        },
-        { id: "database", name: "Database", status: "good" },
-        { id: "cache", name: "Cache", status: "good" },
-        {
-          id: "storage",
-          name: "Storage",
-          status: resourceUsage.storage < 90 ? "good" : "warning",
-        },
-        { id: "messageQueue", name: "Message Queue", status: "good" },
-        { id: "externalApi", name: "External API", status: "good" },
+        { id: 'apiServices', name: 'API Services', status: resourceUsage.cpu < 80 ? 'good' : 'warning' },
+        { id: 'database', name: 'Database', status: 'good' },
+        { id: 'cache', name: 'Cache', status: 'good' },
+        { id: 'storage', name: 'Storage', status: resourceUsage.storage < 90 ? 'good' : 'warning' },
+        { id: 'messageQueue', name: 'Message Queue', status: 'good' },
+        { id: 'externalApi', name: 'External API', status: 'good' }
       ];
       logger.debug(`Health Services: ${JSON.stringify(healthServices)}`);
 
@@ -305,24 +253,22 @@ class AdminDashboardService {
           systemUptime: parseFloat(systemUptime),
           avgResponseTime: Math.round(queriesStats.avgTime),
           errorRate: parseFloat(errorRate),
-          monthlyActiveUsers: activeUsersValue,
+          monthlyActiveUsers: activeUsersValue
         },
         trends: {
           uptime: parseFloat(uptimeTrend),
           responseTime: parseFloat(responseTimeTrend),
           errorRate: parseFloat(errorRateTrend),
-          activeUsers: parseFloat(activeUsersTrend),
+          activeUsers: parseFloat(activeUsersTrend)
         },
         resourceUsage,
-        healthServices,
+        healthServices
       };
       logger.debug(`Final response: ${JSON.stringify(response)}`);
 
       return response;
     } catch (error) {
-      logger.error(`Error in getSystemHealth: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error in getSystemHealth: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -333,7 +279,7 @@ class AdminDashboardService {
    */
   async storeAnalyticsData(data) {
     if (!this.db) {
-      throw new Error("Database not initialized. Call init() first.");
+      throw new Error('Database not initialized. Call init() first.');
     }
     try {
       logger.debug(`Storing analytics data: ${JSON.stringify(data)}`);
@@ -344,27 +290,25 @@ class AdminDashboardService {
           LIMIT 1
           RETURN a
       `,
-        { period: data.period, startDate: data.startDate },
+        { period: data.period, startDate: data.startDate }
       );
 
       const existing = await existingCursor.next();
       if (existing) {
-        logger.debug(
-          `Updating existing analytics record with key ${existing._key}`,
-        );
+        logger.debug(`Updating existing analytics record with key ${existing._key}`);
         await this.db.query(
           `
           UPDATE @key WITH @data IN analytics
         `,
-          { key: existing._key, data },
+          { key: existing._key, data }
         );
       } else {
-        logger.debug("Inserting new analytics record");
+        logger.debug('Inserting new analytics record');
         await this.db.query(
           `
           INSERT @data INTO analytics
         `,
-          { data },
+          { data }
         );
       }
     } catch (error) {
@@ -378,49 +322,39 @@ class AdminDashboardService {
    */
   async getDatabaseStats() {
     if (!this.db) {
-      throw new Error("Database not initialized. Call init() first.");
+      throw new Error('Database not initialized. Call init() first.');
     }
-    logger.info("Getting database statistics");
+    logger.info('Getting database statistics');
 
     try {
-      logger.debug("Fetching collection statistics");
+      logger.debug('Fetching collection statistics');
       const collections = await this.db.collections();
       const collectionStats = await Promise.all(
         collections.map(async (collection) => {
           const figures = await collection.figures();
-          logger.debug(
-            `Collection ${collection.name}: count=${figures.count}, size=${figures.size}`,
-          );
+          logger.debug(`Collection ${collection.name}: count=${figures.count}, size=${figures.size}`);
           return {
             name: collection.name,
             count: figures.count,
-            size: figures.size,
+            size: figures.size
           };
-        }),
+        })
       );
 
-      const totalSize = collectionStats.reduce(
-        (sum, coll) => sum + coll.size,
-        0,
-      );
-      const formattedSize =
-        (totalSize / (1024 * 1024 * 1024)).toFixed(1) + " GB";
-      logger.debug(
-        `Total database size: ${totalSize} bytes, formatted: ${formattedSize}`,
-      );
+      const totalSize = collectionStats.reduce((sum, coll) => sum + coll.size, 0);
+      const formattedSize = (totalSize / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+      logger.debug(`Total database size: ${totalSize} bytes, formatted: ${formattedSize}`);
 
       const response = {
         databaseSize: formattedSize,
         totalTables: collections.length,
-        collections: collectionStats,
+        collections: collectionStats
       };
       logger.debug(`Database stats response: ${JSON.stringify(response)}`);
 
       return response;
     } catch (error) {
-      logger.error(`Error in getDatabaseStats: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error in getDatabaseStats: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -435,12 +369,10 @@ class AdminDashboardService {
     const diffMs = now - date;
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     let result;
-    if (diffDays === 0) result = "Today";
-    else if (diffDays === 1) result = "1 day ago";
+    if (diffDays === 0) result = 'Today';
+    else if (diffDays === 1) result = '1 day ago';
     else result = `${diffDays} days ago`;
-    logger.debug(
-      `Formatting time ago: date=${date}, diffDays=${diffDays}, result=${result}`,
-    );
+    logger.debug(`Formatting time ago: date=${date}, diffDays=${diffDays}, result=${result}`);
     return result;
   }
 
@@ -450,19 +382,19 @@ class AdminDashboardService {
    */
   async getUserStats() {
     if (!this.db) {
-      throw new Error("Database not initialized. Call init() first.");
+      throw new Error('Database not initialized. Call init() first.');
     }
-    logger.info("Getting user statistics");
+    logger.info('Getting user statistics');
 
     try {
-      logger.debug("Fetching total user count");
+      logger.debug('Fetching total user count');
       const userCountCursor = await this.db.query(`
         RETURN LENGTH(FOR u IN users FILTER u.deleted != true RETURN 1)
       `);
       const userCount = await userCountCursor.next();
       logger.debug(`Total users: ${userCount}`);
 
-      logger.debug("Fetching active users in the last day");
+      logger.debug('Fetching active users in the last day');
       const activeUsersCursor = await this.db.query(`
         LET oneDayAgo = DATE_SUBTRACT(DATE_NOW(), 1, "day")
         RETURN LENGTH(
@@ -475,7 +407,7 @@ class AdminDashboardService {
       const activeUsers = await activeUsersCursor.next();
       logger.debug(`Active users: ${activeUsers}`);
 
-      logger.debug("Fetching new users in the last month");
+      logger.debug('Fetching new users in the last month');
       const newUsersCursor = await this.db.query(`
         LET oneMonthAgo = DATE_SUBTRACT(DATE_NOW(), 1, "month")
         RETURN LENGTH(
@@ -488,7 +420,7 @@ class AdminDashboardService {
       const newUsers = await newUsersCursor.next();
       logger.debug(`New users: ${newUsers}`);
 
-      logger.debug("Fetching sample user list (top 10)");
+      logger.debug('Fetching sample user list (top 10)');
       const usersCursor = await this.db.query(`
         FOR u IN users
           FILTER u.deleted != true
@@ -509,15 +441,13 @@ class AdminDashboardService {
         totalUsers: userCount,
         activeUsers,
         newUsers,
-        users,
+        users
       };
       logger.debug(`User stats response: ${JSON.stringify(response)}`);
 
       return response;
     } catch (error) {
-      logger.error(`Error in getUserStats: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error in getUserStats: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -534,53 +464,37 @@ class AdminDashboardService {
    * @returns {Promise<Object>} Log data
    */
   async getLogs(options = {}) {
-    const {
-      limit = 100,
-      level,
-      service,
-      dateRange = "today",
-      startDate,
-      endDate,
-    } = options;
+    const { limit = 100, level, service, dateRange = 'today', startDate, endDate } = options;
     logger.info(`Getting system logs with options: ${JSON.stringify(options)}`);
 
     try {
-      const today = new Date().toISOString().split("T")[0];
+      const today = new Date().toISOString().split('T')[0];
       const logFiles = [];
 
-      if (dateRange === "today" || dateRange === "") {
+      if (dateRange === 'today' || dateRange === '') {
         logFiles.push(path.join(__dirname, `../logs/combined-${today}.log`));
-      } else if (dateRange === "yesterday") {
+      } else if (dateRange === 'yesterday') {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split("T")[0];
-        logFiles.push(
-          path.join(__dirname, `../logs/combined-${yesterdayStr}.log`),
-        );
-      } else if (dateRange === "week") {
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        logFiles.push(path.join(__dirname, `../logs/combined-${yesterdayStr}.log`));
+      } else if (dateRange === 'week') {
         for (let i = 0; i < 7; i++) {
           const date = new Date();
           date.setDate(date.getDate() - i);
-          const dateStr = date.toISOString().split("T")[0];
-          logFiles.push(
-            path.join(__dirname, `../logs/combined-${dateStr}.log`),
-          );
+          const dateStr = date.toISOString().split('T')[0];
+          logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
         }
-      } else if (dateRange === "month") {
+      } else if (dateRange === 'month') {
         for (let i = 0; i < 30; i++) {
           const date = new Date();
           date.setDate(date.getDate() - i);
-          const dateStr = date.toISOString().split("T")[0];
-          logFiles.push(
-            path.join(__dirname, `../logs/combined-${dateStr}.log`),
-          );
+          const dateStr = date.toISOString().split('T')[0];
+          logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
         }
-      } else if (dateRange === "custom" && startDate && endDate) {
+      } else if (dateRange === 'custom' && startDate && endDate) {
         if (!isValidDateStr(startDate) || !isValidDateStr(endDate)) {
-          logger.warn("getLogs.invalid_custom_date_range", {
-            startDate,
-            endDate,
-          });
+          logger.warn('getLogs.invalid_custom_date_range', { startDate, endDate });
           return { logs: [], totalLogs: 0 };
         }
         const start = new Date(startDate);
@@ -590,10 +504,8 @@ class AdminDashboardService {
         for (let i = 0; i <= dayDiff; i++) {
           const date = new Date(start);
           date.setDate(date.getDate() + i);
-          const dateStr = date.toISOString().split("T")[0];
-          logFiles.push(
-            path.join(__dirname, `../logs/combined-${dateStr}.log`),
-          );
+          const dateStr = date.toISOString().split('T')[0];
+          logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
         }
       }
 
@@ -603,18 +515,14 @@ class AdminDashboardService {
       for (const logFile of logFiles) {
         logger.debug(`Reading log file: ${logFile}`);
         try {
-          const logContent = await fs.readFile(logFile, "utf8");
-          const logLines = logContent
-            .split("\n")
-            .filter((line) => line.trim() !== "");
+          const logContent = await fs.readFile(logFile, 'utf8');
+          const logLines = logContent.split('\n').filter((line) => line.trim() !== '');
           totalLogs += logLines.length;
           logger.debug(`Total log lines in ${logFile}: ${logLines.length}`);
 
           const parsedLogs = logLines
             .map((line) => {
-              const match = line.match(
-                /\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/,
-              );
+              const match = line.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/);
               if (!match) {
                 logger.debug(`Skipping unparseable log line: ${line}`);
                 return null;
@@ -623,12 +531,12 @@ class AdminDashboardService {
               const logDate = new Date(timestamp);
 
               const parsedLog = {
-                date: logDate.toISOString().split("T")[0],
+                date: logDate.toISOString().split('T')[0],
                 time: logDate.toLocaleTimeString(),
                 level: level.toUpperCase(),
                 service,
                 message,
-                messageKey: message.toLowerCase().replace(/\s+/g, ""),
+                messageKey: message.toLowerCase().replace(/\s+/g, '')
               };
               return parsedLog;
             })
@@ -643,19 +551,15 @@ class AdminDashboardService {
       let filteredLogs = logs;
       if (level) {
         logger.debug(`Filtering logs by level: ${level}`);
-        filteredLogs = filteredLogs.filter(
-          (log) => log.level.toLowerCase() === level.toLowerCase(),
-        );
+        filteredLogs = filteredLogs.filter((log) => log.level.toLowerCase() === level.toLowerCase());
       }
 
       if (service) {
         logger.debug(`Filtering logs by service: ${service}`);
-        filteredLogs = filteredLogs.filter((log) =>
-          log.service.toLowerCase().includes(service.toLowerCase()),
-        );
+        filteredLogs = filteredLogs.filter((log) => log.service.toLowerCase().includes(service.toLowerCase()));
       }
 
-      logger.debug("Sorting logs by date and time (most recent first)");
+      logger.debug('Sorting logs by date and time (most recent first)');
       filteredLogs.sort((a, b) => {
         const dateA = new Date(`${a.date}T${a.time}`);
         const dateB = new Date(`${b.date}T${b.time}`);
@@ -669,15 +573,13 @@ class AdminDashboardService {
         logs: filteredLogs,
         total: totalLogs,
         limit: parseInt(limit),
-        offset: 0,
+        offset: 0
       };
       logger.debug(`Logs response: ${JSON.stringify(response)}`);
 
       return response;
     } catch (error) {
-      logger.error(`Error in getLogs: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error in getLogs: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -687,38 +589,33 @@ class AdminDashboardService {
    * @returns {Promise<Object>} Rollover result
    */
   async rolloverLogs() {
-    logger.info("Triggering log rollover");
+    logger.info('Triggering log rollover');
 
     try {
-      const today = new Date().toISOString().split("T")[0];
+      const today = new Date().toISOString().split('T')[0];
       const logFile = path.join(__dirname, `../logs/combined-${today}.log`);
       logger.debug(`Checking current log file: ${logFile}`);
 
       try {
         await fs.access(logFile);
-        logger.debug("Log file exists, proceeding with rollover");
-        const newFile = path.join(
-          __dirname,
-          `../logs/combined-${today}-${Date.now()}.log`,
-        );
+        logger.debug('Log file exists, proceeding with rollover');
+        const newFile = path.join(__dirname, `../logs/combined-${today}-${Date.now()}.log`);
         await fs.rename(logFile, newFile);
         logger.debug(`Log file renamed to: ${newFile}`);
       } catch (error) {
-        if (error.code === "ENOENT") {
-          logger.debug("No log file exists for today, no rollover needed");
+        if (error.code === 'ENOENT') {
+          logger.debug('No log file exists for today, no rollover needed');
         } else {
           throw error;
         }
       }
 
       return {
-        status: "success",
-        message: "Log rollover completed successfully",
+        status: 'success',
+        message: 'Log rollover completed successfully'
       };
     } catch (error) {
-      logger.error(`Error in rolloverLogs: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error in rolloverLogs: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -739,41 +636,32 @@ class AdminDashboardService {
    * @returns {Promise<Object>} Debug log data
    */
   async debugYesterdayLogs() {
-    logger.info("Getting debug logs for yesterday");
+    logger.info('Getting debug logs for yesterday');
 
     try {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split("T")[0];
-      const logFile = path.join(
-        __dirname,
-        `../logs/combined-${yesterdayStr}.log`,
-      );
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      const logFile = path.join(__dirname, `../logs/combined-${yesterdayStr}.log`);
       logger.debug(`Reading yesterday's log file: ${logFile}`);
 
       let logs = [];
       try {
-        const logContent = await fs.readFile(logFile, "utf8");
-        const logLines = logContent
-          .split("\n")
-          .filter((line) => line.trim() !== "");
+        const logContent = await fs.readFile(logFile, 'utf8');
+        const logLines = logContent.split('\n').filter((line) => line.trim() !== '');
 
         logs = logLines
-          .filter(
-            (line) => line.includes("[DEBUG]") || line.includes("[ERROR]"),
-          )
+          .filter((line) => line.includes('[DEBUG]') || line.includes('[ERROR]'))
           .map((line) => {
-            const match = line.match(
-              /\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/,
-            );
+            const match = line.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/);
             if (!match) return null;
             const [, timestamp, level, service, message] = match;
             return {
-              date: new Date(timestamp).toISOString().split("T")[0],
+              date: new Date(timestamp).toISOString().split('T')[0],
               time: new Date(timestamp).toLocaleTimeString(),
               level: level.toUpperCase(),
               service,
-              message,
+              message
             };
           })
           .filter((log) => log !== null);
@@ -783,15 +671,13 @@ class AdminDashboardService {
 
       const response = {
         logs,
-        total: logs.length,
+        total: logs.length
       };
       logger.debug(`Debug logs response: ${JSON.stringify(response)}`);
 
       return response;
     } catch (error) {
-      logger.error(`Error in debugYesterdayLogs: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error in debugYesterdayLogs: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -802,15 +688,14 @@ class AdminDashboardService {
    */
   async backupDatabase() {
     if (!this.db) {
-      throw new Error("Database not initialized. Call init() first.");
+      throw new Error('Database not initialized. Call init() first.');
     }
-    logger.info("Backing up database");
+    logger.info('Backing up database');
 
     try {
-      logger.debug("Starting database backup");
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const backupDir =
-        process.env.BACKUP_DIR || path.join(__dirname, "../backups");
+      logger.debug('Starting database backup');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backupDir = process.env.BACKUP_DIR || path.join(__dirname, '../backups');
       await fs.mkdir(backupDir, { recursive: true });
 
       // Export all collections using arangojs API (no shell commands needed)
@@ -824,9 +709,7 @@ class AdminDashboardService {
           const documents = await cursor.all();
           backupData[collection.name] = documents;
           totalDocuments += documents.length;
-          logger.debug(
-            `Exported ${documents.length} documents from ${collection.name}`,
-          );
+          logger.debug(`Exported ${documents.length} documents from ${collection.name}`);
         } catch (err) {
           logger.warn(`Skipping collection ${collection.name}: ${err.message}`);
         }
@@ -835,23 +718,21 @@ class AdminDashboardService {
       const backupFile = path.join(backupDir, `backup-${timestamp}.json`);
       await fs.writeFile(backupFile, JSON.stringify(backupData, null, 2));
       logger.debug(
-        `Backup completed: ${totalDocuments} documents across ${Object.keys(backupData).length} collections`,
+        `Backup completed: ${totalDocuments} documents across ${Object.keys(backupData).length} collections`
       );
 
       const response = {
-        status: "success",
-        message: "Database backup completed successfully",
+        status: 'success',
+        message: 'Database backup completed successfully',
         backupFile,
         collections: Object.keys(backupData),
-        documentCount: totalDocuments,
+        documentCount: totalDocuments
       };
       logger.debug(`Backup response: ${JSON.stringify(response)}`);
 
       return response;
     } catch (error) {
-      logger.error(`Error in backupDatabase: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error in backupDatabase: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -862,12 +743,12 @@ class AdminDashboardService {
    */
   async optimizeDatabase() {
     if (!this.db) {
-      throw new Error("Database not initialized. Call init() first.");
+      throw new Error('Database not initialized. Call init() first.');
     }
-    logger.info("Optimizing database");
+    logger.info('Optimizing database');
 
     try {
-      logger.debug("Starting database optimization");
+      logger.debug('Starting database optimization');
       const collections = await this.db.collections();
       for (const collection of collections) {
         logger.debug(`Optimizing collection: ${collection.name}`);
@@ -877,22 +758,20 @@ class AdminDashboardService {
 
       const timestamp = new Date().toISOString();
       await this.storeAnalyticsData({
-        event: "optimize",
-        timestamp,
+        event: 'optimize',
+        timestamp
       });
 
       const response = {
-        status: "success",
-        message: "Database optimized successfully",
-        timestamp,
+        status: 'success',
+        message: 'Database optimized successfully',
+        timestamp
       };
       logger.debug(`Optimize response: ${JSON.stringify(response)}`);
 
       return response;
     } catch (error) {
-      logger.error(`Error in optimizeDatabase: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error in optimizeDatabase: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -903,46 +782,32 @@ class AdminDashboardService {
    */
   async getSecurityMetrics() {
     try {
-      logger.info("Fetching security metrics");
+      logger.info('Fetching security metrics');
       if (!this.securityScanService) {
-        throw new Error(
-          "SecurityScanService not initialized in AdminDashboardService",
-        );
+        throw new Error('SecurityScanService not initialized in AdminDashboardService');
       }
-      const vulnerabilities = await this.securityScanService.checkLogsForIssues(
-        this.logsService,
-      );
-      logger.debug(
-        `Security metrics response: ${JSON.stringify(vulnerabilities, null, 2)}`,
-      );
+      const vulnerabilities = await this.securityScanService.checkLogsForIssues(this.logsService);
+      logger.debug(`Security metrics response: ${JSON.stringify(vulnerabilities, null, 2)}`);
       return {
         lastScan: new Date().toISOString(),
         vulnerabilities: {
           critical: vulnerabilities.critical.length,
           medium: vulnerabilities.medium.length,
           low: vulnerabilities.low.length,
-          details: [
-            ...vulnerabilities.critical,
-            ...vulnerabilities.medium,
-            ...vulnerabilities.low,
-          ],
+          details: [...vulnerabilities.critical, ...vulnerabilities.medium, ...vulnerabilities.low]
         },
         vulnerabilityDetails: vulnerabilities,
-        failedLoginDetails: vulnerabilities.low.filter(
-          (v) => v.type === "failed_login",
-        ),
-        suspiciousDetails: vulnerabilities.critical,
+        failedLoginDetails: vulnerabilities.low.filter((v) => v.type === 'failed_login'),
+        suspiciousDetails: vulnerabilities.critical
       };
     } catch (error) {
-      logger.error(`Error fetching security metrics: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error fetching security metrics: ${error.message}`, { stack: error.stack });
       return {
-        lastScan: "Never",
+        lastScan: 'Never',
         vulnerabilities: { critical: 0, medium: 0, low: 0, details: [] },
         vulnerabilityDetails: { critical: [], medium: [], low: [] },
         failedLoginDetails: [],
-        suspiciousDetails: [],
+        suspiciousDetails: []
       };
     }
   }
@@ -952,79 +817,68 @@ class AdminDashboardService {
    * @returns {Promise<Object>} Diagnostics results
    */
   async runDiagnostics() {
-    logger.info("Running system diagnostics");
+    logger.info('Running system diagnostics');
 
     try {
-      logger.debug("Collecting system information");
+      logger.debug('Collecting system information');
       const systemInfo = {
         os: {
           type: os.type(),
           platform: os.platform(),
           release: os.release(),
-          uptime: os.uptime(),
+          uptime: os.uptime()
         },
         memory: {
           total: os.totalmem(),
           free: os.freemem(),
-          usage: Math.round((1 - os.freemem() / os.totalmem()) * 100),
+          usage: Math.round((1 - os.freemem() / os.totalmem()) * 100)
         },
         cpu: {
           model: os.cpus()[0].model,
           cores: os.cpus().length,
-          loadAvg: os.loadavg(),
+          loadAvg: os.loadavg()
         },
         process: {
           pid: process.pid,
           uptime: process.uptime(),
-          memory: process.memoryUsage(),
-        },
+          memory: process.memoryUsage()
+        }
       };
       logger.debug(`System info: ${JSON.stringify(systemInfo)}`);
 
-      logger.debug("Checking disk space");
+      logger.debug('Checking disk space');
       let diskSpace;
       try {
-        const stats = await fs.statfs("/");
-        const totalGB = Math.round(
-          (stats.blocks * stats.bsize) / (1024 * 1024 * 1024),
-        );
-        const freeGB = Math.round(
-          (stats.bavail * stats.bsize) / (1024 * 1024 * 1024),
-        );
-        const usedPercent = Math.round(
-          ((stats.blocks - stats.bavail) / stats.blocks) * 100,
-        );
+        const stats = await fs.statfs('/');
+        const totalGB = Math.round((stats.blocks * stats.bsize) / (1024 * 1024 * 1024));
+        const freeGB = Math.round((stats.bavail * stats.bsize) / (1024 * 1024 * 1024));
+        const usedPercent = Math.round(((stats.blocks - stats.bavail) / stats.blocks) * 100);
         diskSpace = `Filesystem /: ${totalGB}G total, ${freeGB}G available (${usedPercent}% used)`;
         logger.debug(`Disk space: ${diskSpace}`);
       } catch (error) {
-        diskSpace = "Unable to fetch disk space information";
+        diskSpace = 'Unable to fetch disk space information';
         logger.error(`Error getting disk space: ${error.message}`);
       }
 
-      logger.debug("Checking network connectivity");
+      logger.debug('Checking network connectivity');
       const networkChecks = [
-        { service: "API Services", status: "good" },
-        {
-          service: "Database",
-          status: (await this.checkDatabaseHealth()) ? "good" : "error",
-        },
-        { service: "Cache", status: "good" },
-        { service: "External API", status: "good" },
+        { service: 'API Services', status: 'good' },
+        { service: 'Database', status: (await this.checkDatabaseHealth()) ? 'good' : 'error' },
+        { service: 'Cache', status: 'good' },
+        { service: 'External API', status: 'good' }
       ];
       logger.debug(`Network checks: ${JSON.stringify(networkChecks)}`);
 
       const response = {
         systemInfo,
         diskSpace,
-        networkChecks,
+        networkChecks
       };
       logger.debug(`Diagnostics response: ${JSON.stringify(response)}`);
 
       return response;
     } catch (error) {
-      logger.error(`Error in runDiagnostics: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error in runDiagnostics: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -1035,12 +889,12 @@ class AdminDashboardService {
    */
   async checkDatabaseHealth() {
     if (!this.db) {
-      throw new Error("Database not initialized. Call init() first.");
+      throw new Error('Database not initialized. Call init() first.');
     }
     try {
-      logger.debug("Checking database health");
-      await this.db.query("RETURN 1");
-      logger.debug("Database health check passed");
+      logger.debug('Checking database health');
+      await this.db.query('RETURN 1');
+      logger.debug('Database health check passed');
       return true;
     } catch (error) {
       logger.error(`Database health check failed: ${error.message}`);
@@ -1053,20 +907,20 @@ class AdminDashboardService {
    * @returns {Promise<Object>} Security scan results
    */
   async runSecurityScan() {
-    logger.info("Running security scan");
+    logger.info('Running security scan');
 
     try {
-      logger.info("Simulating security scan using log files");
+      logger.info('Simulating security scan using log files');
 
-      const logsDir = path.join(__dirname, "../logs");
+      const logsDir = path.join(__dirname, '../logs');
       const logFiles = await fs.readdir(logsDir);
 
       const recentLogFiles = logFiles
         .filter(
           (filename) =>
-            filename === "combined.log" ||
-            filename === "error.log" ||
-            /(?:combined|error)-\d{4}-\d{2}-\d{2}\.log/.test(filename),
+            filename === 'combined.log' ||
+            filename === 'error.log' ||
+            /(?:combined|error)-\d{4}-\d{2}-\d{2}\.log/.test(filename)
         )
         .map((filename) => path.join(logsDir, filename));
 
@@ -1074,108 +928,92 @@ class AdminDashboardService {
         critical: 0,
         medium: 0,
         low: 0,
-        details: [],
+        details: []
       };
 
       for (const logFile of recentLogFiles) {
         try {
-          const logContent = await fs.readFile(logFile, "utf8");
-          const logLines = logContent.split("\n");
+          const logContent = await fs.readFile(logFile, 'utf8');
+          const logLines = logContent.split('\n');
 
           for (const line of logLines) {
             if (
-              line.includes("[ERROR]") &&
-              (line.includes("security breach") ||
-                line.includes("unauthorized access") ||
-                line.includes("SQL injection") ||
-                line.includes("XSS attack") ||
-                line.includes("CSRF attack"))
+              line.includes('[ERROR]') &&
+              (line.includes('security breach') ||
+                line.includes('unauthorized access') ||
+                line.includes('SQL injection') ||
+                line.includes('XSS attack') ||
+                line.includes('CSRF attack'))
             ) {
               vulnerabilities.critical++;
               vulnerabilities.details.push({
-                type: "critical",
-                description: "Potential security breach detected",
-                recommendation:
-                  "Review system logs and strengthen security measures",
+                type: 'critical',
+                description: 'Potential security breach detected',
+                recommendation: 'Review system logs and strengthen security measures'
               });
             } else if (
-              (line.includes("[ERROR]") || line.includes("[WARN]")) &&
-              (line.includes("invalid token") ||
-                line.includes("expired token") ||
-                line.includes("Authentication failed") ||
-                line.includes("Invalid credentials") ||
-                line.includes("Token has expired"))
+              (line.includes('[ERROR]') || line.includes('[WARN]')) &&
+              (line.includes('invalid token') ||
+                line.includes('expired token') ||
+                line.includes('Authentication failed') ||
+                line.includes('Invalid credentials') ||
+                line.includes('Token has expired'))
             ) {
               vulnerabilities.medium++;
-              if (
-                !vulnerabilities.details.some(
-                  (d) => d.description === "Authentication issues detected",
-                )
-              ) {
+              if (!vulnerabilities.details.some((d) => d.description === 'Authentication issues detected')) {
                 vulnerabilities.details.push({
-                  type: "medium",
-                  description: "Authentication issues detected",
-                  recommendation:
-                    "Review authentication mechanisms and token lifecycle",
+                  type: 'medium',
+                  description: 'Authentication issues detected',
+                  recommendation: 'Review authentication mechanisms and token lifecycle'
                 });
               }
             } else if (
-              (line.includes("[WARN]") || line.includes("[INFO]")) &&
-              (line.includes("login attempt") ||
-                line.includes("password reset") ||
-                line.includes("user not found") ||
-                line.includes("weak password"))
+              (line.includes('[WARN]') || line.includes('[INFO]')) &&
+              (line.includes('login attempt') ||
+                line.includes('password reset') ||
+                line.includes('user not found') ||
+                line.includes('weak password'))
             ) {
               vulnerabilities.low++;
-              if (
-                !vulnerabilities.details.some(
-                  (d) => d.description === "Password policy concerns",
-                )
-              ) {
+              if (!vulnerabilities.details.some((d) => d.description === 'Password policy concerns')) {
                 vulnerabilities.details.push({
-                  type: "low",
-                  description: "Password policy concerns",
-                  recommendation: "Enhance password requirements",
+                  type: 'low',
+                  description: 'Password policy concerns',
+                  recommendation: 'Enhance password requirements'
                 });
               }
             }
           }
         } catch (fileError) {
-          logger.warn(
-            `Could not read log file ${logFile}: ${fileError.message}`,
-          );
+          logger.warn(`Could not read log file ${logFile}: ${fileError.message}`);
         }
       }
 
-      if (
-        vulnerabilities.critical === 0 &&
-        vulnerabilities.medium === 0 &&
-        vulnerabilities.low === 0
-      ) {
+      if (vulnerabilities.critical === 0 && vulnerabilities.medium === 0 && vulnerabilities.low === 0) {
         vulnerabilities = {
           critical: 0,
           medium: Math.floor(Math.random() * 3),
           low: Math.floor(Math.random() * 5) + 1,
-          details: [],
+          details: []
         };
         if (vulnerabilities.medium > 0) {
           vulnerabilities.details.push({
-            type: "medium",
-            description: "Outdated package dependency",
-            recommendation: "Update package to latest version",
+            type: 'medium',
+            description: 'Outdated package dependency',
+            recommendation: 'Update package to latest version'
           });
         }
         if (vulnerabilities.low > 0) {
           vulnerabilities.details.push({
-            type: "low",
-            description: "Weak password policy",
-            recommendation: "Enhance password requirements",
+            type: 'low',
+            description: 'Weak password policy',
+            recommendation: 'Enhance password requirements'
           });
           if (vulnerabilities.low > 1) {
             vulnerabilities.details.push({
-              type: "low",
-              description: "Excessive session timeout",
-              recommendation: "Reduce session timeout period",
+              type: 'low',
+              description: 'Excessive session timeout',
+              recommendation: 'Reduce session timeout period'
             });
           }
         }
@@ -1184,20 +1022,18 @@ class AdminDashboardService {
       const scanResult = {
         scanTime: new Date().toISOString(),
         vulnerabilities,
-        status: "completed",
-        message: "Security scan completed successfully",
+        status: 'completed',
+        message: 'Security scan completed successfully'
       };
 
       logger.info(
-        `Security scan completed: Found ${vulnerabilities.critical} critical, ${vulnerabilities.medium} medium, and ${vulnerabilities.low} low vulnerabilities`,
+        `Security scan completed: Found ${vulnerabilities.critical} critical, ${vulnerabilities.medium} medium, and ${vulnerabilities.low} low vulnerabilities`
       );
       logger.info(`Security Scan Result: ${JSON.stringify(scanResult)}`);
 
       return scanResult;
     } catch (error) {
-      logger.error(`Error in runSecurityScan: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error in runSecurityScan: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -1213,12 +1049,12 @@ class AdminDashboardService {
    */
   async searchUsers(options = {}) {
     if (!this.db) {
-      throw new Error("Database not initialized. Call init() first.");
+      throw new Error('Database not initialized. Call init() first.');
     }
     logger.info(`Searching users with options: ${JSON.stringify(options)}`);
 
     try {
-      const { term = "", field = "all", limit = 20, offset = 0 } = options;
+      const { term = '', field = 'all', limit = 20, offset = 0 } = options;
 
       // Correctly parse string query parameters to numbers
       const parsedLimit = parseInt(limit, 10) || 20;
@@ -1230,7 +1066,7 @@ class AdminDashboardService {
         queryParams = {};
         let filterCondition;
         switch (field) {
-          case "name":
+          case 'name':
             queryParams.term = `%${term.toLowerCase()}%`;
             filterCondition = `
               LOWER(u.loginName) LIKE @term
@@ -1238,19 +1074,19 @@ class AdminDashboardService {
               OR (HAS(u, "personalIdentification") AND LOWER(u.personalIdentification.fullName) LIKE @term)
             `;
             break;
-          case "email":
+          case 'email':
             queryParams.term = `%${term.toLowerCase()}%`;
             filterCondition = `LOWER(u.email) LIKE @term`;
             break;
-          case "exactEmail":
+          case 'exactEmail':
             queryParams.exactTerm = term.toLowerCase();
             filterCondition = `LOWER(u.email) == @exactTerm`;
             break;
-          case "role":
+          case 'role':
             queryParams.term = `%${term.toLowerCase()}%`;
             filterCondition = `HAS(u, "roles") AND LENGTH(FOR r IN u.roles FILTER LOWER(r) LIKE @term RETURN 1) > 0`;
             break;
-          case "all":
+          case 'all':
           default:
             queryParams.term = `%${term.toLowerCase()}%`;
             filterCondition = `
@@ -1322,20 +1158,16 @@ class AdminDashboardService {
       const totalCount = await countCursor.next();
       const users = await usersCursor.all();
 
-      logger.debug(
-        `User search found ${totalCount} total matches, returning ${users.length} results`,
-      );
+      logger.debug(`User search found ${totalCount} total matches, returning ${users.length} results`);
 
       return {
         users,
         total: totalCount,
         limit: parseInt(limit),
-        offset: parseInt(offset),
+        offset: parseInt(offset)
       };
     } catch (error) {
-      logger.error(`Error in searchUsers: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error in searchUsers: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -1353,24 +1185,19 @@ class AdminDashboardService {
    */
   async searchLogs(options = {}) {
     if (!this.logsService) {
-      throw new Error("LogsService not initialized in AdminDashboardService");
+      throw new Error('LogsService not initialized in AdminDashboardService');
     }
     logger.info(
-      `AdminDashboardService.searchLogs calling LogsService.searchLogs with options: ${JSON.stringify(options)}`,
+      `AdminDashboardService.searchLogs calling LogsService.searchLogs with options: ${JSON.stringify(options)}`
     );
 
     try {
       // Call LogsService.searchLogs()
       const result = await this.logsService.searchLogs(options);
-      logger.debug(
-        `LogsService.searchLogs returned ${result.logs.length} logs`,
-      );
+      logger.debug(`LogsService.searchLogs returned ${result.logs.length} logs`);
       return result;
     } catch (error) {
-      logger.error(
-        `Error in AdminDashboardService.searchLogs: ${error.message}`,
-        { stack: error.stack },
-      );
+      logger.error(`Error in AdminDashboardService.searchLogs: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -1393,7 +1220,7 @@ class ResourceUsageMonitor {
 
   async getStorageUsage() {
     try {
-      const stats = await fs.statfs("/");
+      const stats = await fs.statfs('/');
       return Math.round(((stats.blocks - stats.bavail) / stats.blocks) * 100);
     } catch (error) {
       logger.error(`Error getting storage usage: ${error.message}`);
@@ -1403,15 +1230,15 @@ class ResourceUsageMonitor {
 
   async getNetworkUsage() {
     try {
-      const data = await fs.readFile("/proc/net/dev", "utf8");
-      const lines = data.split("\n").slice(2);
+      const data = await fs.readFile('/proc/net/dev', 'utf8');
+      const lines = data.split('\n').slice(2);
       let totalBytes = 0;
 
       for (const line of lines) {
         if (line.trim()) {
           const parts = line.trim().split(/\s+/);
-          const interfaceName = parts[0].replace(":", "");
-          if (interfaceName !== "lo") {
+          const interfaceName = parts[0].replace(':', '');
+          if (interfaceName !== 'lo') {
             totalBytes += parseInt(parts[1]) + parseInt(parts[9]);
           }
         }
@@ -1431,7 +1258,7 @@ class ResourceUsageMonitor {
         cpu: await this.getCpuUsage(),
         memory: await this.getMemoryUsage(),
         storage: await this.getStorageUsage(),
-        network: await this.getNetworkUsage(),
+        network: await this.getNetworkUsage()
       };
       this.lastUpdated = now;
     }

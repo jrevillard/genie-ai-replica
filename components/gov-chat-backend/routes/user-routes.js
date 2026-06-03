@@ -1,12 +1,10 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const multer = require("multer");
-const {
-  keycloakAuthMiddleware,
-} = require("../middleware/keycloak-auth-middleware");
-const { logger } = require("../shared-lib");
-const keycloakProxyService = require("../services/keycloak-proxy-service");
-const { JIT_FORWARD_FIELDS } = require("../constants/jit-fields");
+const multer = require('multer');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
+const { logger } = require('../shared-lib');
+const keycloakProxyService = require('../services/keycloak-proxy-service');
+const { JIT_FORWARD_FIELDS } = require('../constants/jit-fields');
 
 /**
  * @swagger
@@ -37,14 +35,14 @@ const { JIT_FORWARD_FIELDS } = require("../constants/jit-fields");
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB max file size
-  },
+    fileSize: 10 * 1024 * 1024 // 10MB max file size
+  }
 });
 
 module.exports = (userService) => {
-  if (!userService || typeof userService.getUserProfile !== "function") {
-    logger.error("Invalid userService provided to user-routes");
-    throw new Error("userService is required with getUserProfile");
+  if (!userService || typeof userService.getUserProfile !== 'function') {
+    logger.error('Invalid userService provided to user-routes');
+    throw new Error('userService is required with getUserProfile');
   }
 
   /**
@@ -66,7 +64,7 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.get("/", keycloakAuthMiddleware.authenticate, async (req, res) => {
+  router.get('/', keycloakAuthMiddleware.authenticate, async (req, res) => {
     try {
       const userId = req.user.iss_sub;
       const userKey = req.user._key;
@@ -74,9 +72,7 @@ module.exports = (userService) => {
       const user = await userService.getUserProfile(userKey);
       res.json(user);
     } catch (error) {
-      logger.error(`Error getting user profile: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error getting user profile: ${error.message}`, { stack: error.stack });
       res.status(500).json({ message: error.message });
     }
   });
@@ -100,31 +96,25 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.get(
-    "/context",
-    keycloakAuthMiddleware.authenticate,
-    async (req, res) => {
-      try {
-        const userKey = req.user._key;
-        const user = await userService.getUserProfile(userKey);
+  router.get('/context', keycloakAuthMiddleware.authenticate, async (req, res) => {
+    try {
+      const userKey = req.user._key;
+      const user = await userService.getUserProfile(userKey);
 
-        if (!user) {
-          return res.status(404).json({ message: "User not found" });
-        }
-
-        res.json({
-          name: user.name || "User",
-          role: user.roles || [],
-          emailVerified: user.emailVerified || false,
-        });
-      } catch (error) {
-        logger.error(`Error getting user context: ${error.message}`, {
-          stack: error.stack,
-        });
-        res.status(500).json({ message: error.message });
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
       }
-    },
-  );
+
+      res.json({
+        name: user.name || 'User',
+        role: user.roles || [],
+        emailVerified: user.emailVerified || false
+      });
+    } catch (error) {
+      logger.error(`Error getting user context: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ message: error.message });
+    }
+  });
 
   /**
    * @swagger
@@ -143,37 +133,28 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.post(
-    "/reset-data",
-    keycloakAuthMiddleware.authenticate,
-    async (req, res) => {
-      try {
-        const userId = req.user.iss_sub;
-        const userKey = req.user._key;
-        logger.info(`[RESET DATA] Reset request for user ${userId}`);
+  router.post('/reset-data', keycloakAuthMiddleware.authenticate, async (req, res) => {
+    try {
+      const userId = req.user.iss_sub;
+      const userKey = req.user._key;
+      logger.info(`[RESET DATA] Reset request for user ${userId}`);
 
-        const result = await userService.resetUserData(userKey);
-        logger.info(
-          `[RESET DATA] User profile data reset successfully for user ${userId}`,
-        );
+      const result = await userService.resetUserData(userKey);
+      logger.info(`[RESET DATA] User profile data reset successfully for user ${userId}`);
 
-        res.json({
-          success: true,
-          message: "User profile data has been reset successfully",
-          ...result,
-        });
-      } catch (error) {
-        logger.error(
-          `[RESET DATA] Error resetting user data: ${error.message}`,
-          { stack: error.stack },
-        );
-        res.status(500).json({
-          success: false,
-          message: error.message || "Failed to reset user data",
-        });
-      }
-    },
-  );
+      res.json({
+        success: true,
+        message: 'User profile data has been reset successfully',
+        ...result
+      });
+    } catch (error) {
+      logger.error(`[RESET DATA] Error resetting user data: ${error.message}`, { stack: error.stack });
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to reset user data'
+      });
+    }
+  });
 
   /**
    * @swagger
@@ -192,33 +173,22 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.post(
-    "/delete",
-    keycloakAuthMiddleware.authenticate,
-    async (req, res) => {
-      try {
-        const userId = req.user.iss_sub;
-        const userKey = req.user._key;
-        logger.info(`[DELETE] Account deletion requested for user ${userId}`);
+  router.post('/delete', keycloakAuthMiddleware.authenticate, async (req, res) => {
+    try {
+      const userId = req.user.iss_sub;
+      const userKey = req.user._key;
+      logger.info(`[DELETE] Account deletion requested for user ${userId}`);
 
-        await keycloakProxyService.deleteUser(userKey);
+      await keycloakProxyService.deleteUser(userKey);
 
-        logger.info(`[DELETE] Account deleted successfully for user ${userId}`);
-        res.json({ success: true, message: "Account deleted" });
-      } catch (error) {
-        const status = error.status === 404 ? 404 : 500;
-        logger.error(`[DELETE] Error deleting account: ${error.message}`, {
-          stack: error.stack,
-        });
-        res
-          .status(status)
-          .json({
-            success: false,
-            message: error.message || "Failed to delete account",
-          });
-      }
-    },
-  );
+      logger.info(`[DELETE] Account deleted successfully for user ${userId}`);
+      res.json({ success: true, message: 'Account deleted' });
+    } catch (error) {
+      const status = error.status === 404 ? 404 : 500;
+      logger.error(`[DELETE] Error deleting account: ${error.message}`, { stack: error.stack });
+      res.status(status).json({ success: false, message: error.message || 'Failed to delete account' });
+    }
+  });
 
   /**
    * @swagger
@@ -260,93 +230,65 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.put(
-    "/",
-    keycloakAuthMiddleware.authenticate,
-    upload.any(),
-    async (req, res) => {
-      const userId = req.user.iss_sub;
-      const userKey = req.user._key;
+  router.put('/', keycloakAuthMiddleware.authenticate, upload.any(), async (req, res) => {
+    const userId = req.user.iss_sub;
+    const userKey = req.user._key;
 
-      try {
-        // Parse profile data (multipart/form-data sends JSON in req.body.data)
-        let profileData = {};
-        if (req.body.data) {
-          try {
-            profileData = JSON.parse(req.body.data);
-          } catch {
-            return res
-              .status(400)
-              .json({ success: false, message: "Invalid profile data format" });
-          }
-        } else {
-          profileData = { ...req.body };
+    try {
+      // Parse profile data (multipart/form-data sends JSON in req.body.data)
+      let profileData = {};
+      if (req.body.data) {
+        try {
+          profileData = JSON.parse(req.body.data);
+        } catch {
+          return res.status(400).json({ success: false, message: 'Invalid profile data format' });
         }
-
-        // Split JIT fields (-> Keycloak) from custom fields (-> ArangoDB)
-        const jitFields = {};
-        const customFields = {};
-        const JIT_KEYS = JIT_FORWARD_FIELDS;
-
-        for (const [key, value] of Object.entries(profileData)) {
-          if (JIT_KEYS.includes(key)) {
-            jitFields[key] = value;
-          } else {
-            customFields[key] = value;
-          }
-        }
-
-        // Forward JIT fields to Keycloak via Account API (user's own token)
-        if (Object.keys(jitFields).length > 0) {
-          const accessToken = req.headers.authorization?.replace("Bearer ", "");
-          if (!accessToken) {
-            return res
-              .status(401)
-              .json({ success: false, message: "Missing authorization token" });
-          }
-          await keycloakProxyService.updateOwnProfile(accessToken, jitFields);
-          logger.info(
-            `[PUT /me] JIT fields forwarded to Keycloak for user ${userId}`,
-          );
-        }
-
-        // Write custom fields to ArangoDB (JIT fields are stripped by updateUserProfile)
-        const user = await userService.updateUserProfile(
-          userKey,
-          customFields,
-          req.files || [],
-        );
-        logger.info(`[PUT /me] Profile updated for user ${userId}`);
-
-        return res.json({
-          success: true,
-          message: "Profile saved successfully",
-          user,
-        });
-      } catch (error) {
-        const status =
-          error.status === 404 ? 404 : error.status === 403 ? 403 : 500;
-        logger.error(
-          `[PUT /me] Error updating user ${userId}: ${error.message}`,
-          { stack: error.stack },
-        );
-        res
-          .status(status)
-          .json({
-            success: false,
-            message: error.message || "Failed to update user",
-          });
+      } else {
+        profileData = { ...req.body };
       }
-    },
-  );
+
+      // Split JIT fields (-> Keycloak) from custom fields (-> ArangoDB)
+      const jitFields = {};
+      const customFields = {};
+      const JIT_KEYS = JIT_FORWARD_FIELDS;
+
+      for (const [key, value] of Object.entries(profileData)) {
+        if (JIT_KEYS.includes(key)) {
+          jitFields[key] = value;
+        } else {
+          customFields[key] = value;
+        }
+      }
+
+      // Forward JIT fields to Keycloak via Account API (user's own token)
+      if (Object.keys(jitFields).length > 0) {
+        const accessToken = req.headers.authorization?.replace('Bearer ', '');
+        if (!accessToken) {
+          return res.status(401).json({ success: false, message: 'Missing authorization token' });
+        }
+        await keycloakProxyService.updateOwnProfile(accessToken, jitFields);
+        logger.info(`[PUT /me] JIT fields forwarded to Keycloak for user ${userId}`);
+      }
+
+      // Write custom fields to ArangoDB (JIT fields are stripped by updateUserProfile)
+      const user = await userService.updateUserProfile(userKey, customFields, req.files || []);
+      logger.info(`[PUT /me] Profile updated for user ${userId}`);
+
+      return res.json({ success: true, message: 'Profile saved successfully', user });
+    } catch (error) {
+      const status = error.status === 404 ? 404 : error.status === 403 ? 403 : 500;
+      logger.error(`[PUT /me] Error updating user ${userId}: ${error.message}`, { stack: error.stack });
+      res.status(status).json({ success: false, message: error.message || 'Failed to update user' });
+    }
+  });
 
   /**
    * Catch-all route for unmatched requests
    */
-  router.all("*", (req, res) => {
+  router.all('*', (req, res) => {
     res.status(404).json({
       success: false,
-      message: `Route not found: ${req.method} ${req.originalUrl}`,
+      message: `Route not found: ${req.method} ${req.originalUrl}`
     });
   });
 

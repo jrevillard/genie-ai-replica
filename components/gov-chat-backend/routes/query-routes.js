@@ -1,13 +1,11 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const axios = require("axios");
-const http = require("http");
-const https = require("https");
-const {
-  keycloakAuthMiddleware,
-} = require("../middleware/keycloak-auth-middleware");
-const { logger } = require("../shared-lib");
-const translationService = require("../services/translation-service");
+const axios = require('axios');
+const http = require('http');
+const https = require('https');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
+const { logger } = require('../shared-lib');
+const translationService = require('../services/translation-service');
 
 module.exports = (queryService) => {
   // Apply authentication middleware to all routes
@@ -68,28 +66,22 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error.
    */
-  router.patch("/:queryId/responsetime", async (req, res, next) => {
+  router.patch('/:queryId/responsetime', async (req, res, next) => {
     try {
       const { queryId } = req.params;
       const { responseTime } = req.body;
 
       if (!responseTime && responseTime !== 0) {
-        return res.status(400).json({ message: "Response time is required" });
+        return res.status(400).json({ message: 'Response time is required' });
       }
 
-      const updatedQuery = await queryService.updateQueryResponseTime(
-        queryId,
-        responseTime,
-      );
+      const updatedQuery = await queryService.updateQueryResponseTime(queryId, responseTime);
 
       res.json(updatedQuery);
     } catch (error) {
-      logger.error(
-        `Error updating response time for query ${req.params.queryId}: ${error.message}`,
-        {
-          stack: error.stack,
-        },
-      );
+      logger.error(`Error updating response time for query ${req.params.queryId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });
@@ -145,21 +137,18 @@ module.exports = (queryService) => {
    *       501:
    *         description: Streaming is disabled
    */
-  router.post("/stream", async (req, res) => {
-    const streamingEnabled = process.env.OPEA_STREAMING !== "false";
+  router.post('/stream', async (req, res) => {
+    const streamingEnabled = process.env.OPEA_STREAMING !== 'false';
     if (!streamingEnabled) {
       return res.status(501).json({
-        error: "STREAMING_DISABLED",
-        message:
-          "SSE streaming is disabled. Set OPEA_STREAMING=true to enable.",
+        error: 'STREAMING_DISABLED',
+        message: 'SSE streaming is disabled. Set OPEA_STREAMING=true to enable.'
       });
     }
 
     const userId = req.user?.iss_sub;
     if (!userId) {
-      return res
-        .status(401)
-        .json({ error: "UNAUTHENTICATED", message: "User not authenticated" });
+      return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
     }
 
     const queryData = { ...req.body, userId };
@@ -167,36 +156,34 @@ module.exports = (queryService) => {
     let keepalive = null;
 
     try {
-      const { queryId, opeaUrl, opeaPayload } =
-        await queryService.initStreamQuery(queryData, {
-          authorization: req.headers.authorization,
-        });
+      const { queryId, opeaUrl, opeaPayload } = await queryService.initStreamQuery(queryData, {
+        authorization: req.headers.authorization
+      });
 
       // SSE response headers
       res.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no'
       });
 
-      const streamTimeout =
-        parseInt(process.env.CHATQNA_STREAM_TIMEOUT, 10) || 3600000;
+      const streamTimeout = parseInt(process.env.CHATQNA_STREAM_TIMEOUT, 10) || 3600000;
       opeaController = new AbortController();
 
       const opeaResponse = await axios.post(opeaUrl, opeaPayload, {
-        headers: { "Content-Type": "application/json" },
-        responseType: "stream",
+        headers: { 'Content-Type': 'application/json' },
+        responseType: 'stream',
         timeout: streamTimeout,
         signal: opeaController.signal,
         httpAgent: new http.Agent({ keepAlive: true }),
-        httpsAgent: new https.Agent({ keepAlive: true }),
+        httpsAgent: new https.Agent({ keepAlive: true })
       });
 
       const stream = opeaResponse.data;
-      let fullResponseText = "";
+      let fullResponseText = '';
       const startTime = Date.now();
-      let buffer = "";
+      let buffer = '';
       const doneState = { handled: false };
 
       function cleanupKeepalive() {
@@ -209,87 +196,63 @@ module.exports = (queryService) => {
       const doHandleStreamDone = () => {
         if (doneState.handled || res.writableEnded) return;
         doneState.handled = true;
-        handleStreamDone(
-          queryId,
-          fullResponseText,
-          startTime,
-          queryData,
-          req,
-          res,
-        );
+        handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res);
       };
 
-      stream.on("data", (chunk) => {
+      stream.on('data', (chunk) => {
         buffer += chunk.toString();
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
           const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
 
           const dataContent = trimmed.slice(6);
           const parsed = queryService.parseChatQnASSELine(dataContent);
 
-          if (parsed.type === "chunk") {
+          if (parsed.type === 'chunk') {
             fullResponseText += parsed.content;
-            res.write(
-              `data: ${JSON.stringify({ type: "chunk", content: parsed.content })}\n\n`,
-            );
-          } else if (parsed.type === "done") {
+            res.write(`data: ${JSON.stringify({ type: 'chunk', content: parsed.content })}\n\n`);
+          } else if (parsed.type === 'done') {
             doHandleStreamDone();
-          } else if (parsed.type === "error") {
-            logger.warn("QueryService.sse_parse_error", { raw: parsed.raw });
+          } else if (parsed.type === 'error') {
+            logger.warn('QueryService.sse_parse_error', { raw: parsed.raw });
           }
         }
       });
 
-      stream.on("error", (error) => {
+      stream.on('error', (error) => {
         cleanupKeepalive();
-        logger.error("QueryService.opea_stream_error", {
-          error: error.message,
-          queryId,
-        });
+        logger.error('QueryService.opea_stream_error', { error: error.message, queryId });
         if (!res.headersSent) {
-          res
-            .status(502)
-            .json({ error: "CHATQNA_STREAM_ERROR", message: error.message });
+          res.status(502).json({ error: 'CHATQNA_STREAM_ERROR', message: error.message });
         } else {
           res.write(
-            `data: ${JSON.stringify({ type: "error", message: error.message, code: "CHATQNA_STREAM_ERROR" })}\n\n`,
+            `data: ${JSON.stringify({ type: 'error', message: error.message, code: 'CHATQNA_STREAM_ERROR' })}\n\n`
           );
           res.end();
         }
       });
 
-      stream.on("end", () => {
+      stream.on('end', () => {
         if (fullResponseText && res.writableEnded === false) {
           doHandleStreamDone();
         }
       });
 
-      req.on("close", () => {
+      req.on('close', () => {
         cleanupKeepalive();
         if (opeaController && !opeaController.signal.aborted) {
           opeaController.abort();
-          logger.info("QueryService.stream_client_disconnected", { queryId });
+          logger.info('QueryService.stream_client_disconnected', { queryId });
           if (fullResponseText) {
             queryService
-              .finalizeStreamQuery(
-                queryId,
-                fullResponseText,
-                Date.now() - startTime,
-                {
-                  source_documents: [],
-                  confidence_score: 0,
-                },
-              )
-              .catch((err) =>
-                logger.error("QueryService.partial_save_failed", {
-                  queryId,
-                  error: err.message,
-                }),
-              );
+              .finalizeStreamQuery(queryId, fullResponseText, Date.now() - startTime, {
+                source_documents: [],
+                confidence_score: 0
+              })
+              .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
           }
         }
       });
@@ -299,111 +262,70 @@ module.exports = (queryService) => {
           cleanupKeepalive();
           return;
         }
-        res.write(": keepalive\n\n");
+        res.write(': keepalive\n\n');
       }, 15000);
     } catch (error) {
       if (keepalive !== null) clearInterval(keepalive);
-      logger.error("QueryService.stream_setup_error", { error: error.message });
+      logger.error('QueryService.stream_setup_error', { error: error.message });
       if (!res.headersSent) {
-        if (error.code === "ECONNABORTED" || error.code === "ERR_CANCELED") {
-          res
-            .status(504)
-            .json({
-              error: "CHATQNA_UNAVAILABLE",
-              message: "ChatQnA service unavailable or timed out",
-            });
+        if (error.code === 'ECONNABORTED' || error.code === 'ERR_CANCELED') {
+          res.status(504).json({ error: 'CHATQNA_UNAVAILABLE', message: 'ChatQnA service unavailable or timed out' });
         } else {
-          res
-            .status(500)
-            .json({ error: "STREAM_ERROR", message: error.message });
+          res.status(500).json({ error: 'STREAM_ERROR', message: error.message });
         }
       } else {
-        res.write(
-          `data: ${JSON.stringify({ type: "error", message: error.message, code: "STREAM_ERROR" })}\n\n`,
-        );
+        res.write(`data: ${JSON.stringify({ type: 'error', message: error.message, code: 'STREAM_ERROR' })}\n\n`);
         res.end();
       }
     }
   });
 
-  async function handleStreamDone(
-    queryId,
-    fullResponseText,
-    startTime,
-    queryData,
-    req,
-    res,
-  ) {
+  async function handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res) {
     if (res.writableEnded) return;
 
     const responseTime = Date.now() - startTime;
     let metadata = { source_documents: [], confidence_score: 0 };
 
     try {
-      metadata = await retrieveStreamMetadata(
-        queryData,
-        req.headers.authorization,
-      );
+      metadata = await retrieveStreamMetadata(queryData, req.headers.authorization);
     } catch (error) {
-      logger.warn("QueryService.stream_metadata_failed", {
-        queryId,
-        error: error.message,
-      });
+      logger.warn('QueryService.stream_metadata_failed', { queryId, error: error.message });
     }
 
-    res.write(
-      `data: ${JSON.stringify({ type: "metadata", ...metadata, responseTime })}\n\n`,
-    );
+    res.write(`data: ${JSON.stringify({ type: 'metadata', ...metadata, responseTime })}\n\n`);
 
     const userLanguage = queryData.context?.language;
-    if (
-      userLanguage &&
-      userLanguage.toUpperCase() !== "EN" &&
-      fullResponseText
-    ) {
+    if (userLanguage && userLanguage.toUpperCase() !== 'EN' && fullResponseText) {
       try {
         await translationService.init();
         const translated = await translationService.translateMarkdown(
           fullResponseText,
-          "en",
-          userLanguage.toLowerCase(),
+          'en',
+          userLanguage.toLowerCase()
         );
-        res.write(
-          `data: ${JSON.stringify({ type: "translation", content: translated })}\n\n`,
-        );
+        res.write(`data: ${JSON.stringify({ type: 'translation', content: translated })}\n\n`);
       } catch (error) {
-        logger.warn("QueryService.stream_translation_failed", {
-          queryId,
-          error: error.message,
-        });
+        logger.warn('QueryService.stream_translation_failed', { queryId, error: error.message });
         res.write(
-          `data: ${JSON.stringify({ type: "error", message: "Translation failed", code: "TRANSLATION_FAILED" })}\n\n`,
+          `data: ${JSON.stringify({ type: 'error', message: 'Translation failed', code: 'TRANSLATION_FAILED' })}\n\n`
         );
       }
     }
 
     try {
-      await queryService.finalizeStreamQuery(
-        queryId,
-        fullResponseText,
-        responseTime,
-        metadata,
-      );
+      await queryService.finalizeStreamQuery(queryId, fullResponseText, responseTime, metadata);
     } catch (error) {
-      logger.error("QueryService.stream_finalize_failed", {
-        queryId,
-        error: error.message,
-      });
+      logger.error('QueryService.stream_finalize_failed', { queryId, error: error.message });
     }
 
-    res.write(`data: ${JSON.stringify({ type: "done", queryId })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'done', queryId })}\n\n`);
     res.end();
-    logger.info("QueryService.stream_complete", { queryId, responseTime });
+    logger.info('QueryService.stream_complete', { queryId, responseTime });
   }
 
   async function retrieveStreamMetadata(queryData, authHeader) {
     const lastMessage = queryData.messages[queryData.messages.length - 1];
-    const queryText = lastMessage ? lastMessage.content : "";
+    const queryText = lastMessage ? lastMessage.content : '';
 
     if (!queryText) {
       return { source_documents: [], confidence_score: 0 };
@@ -411,25 +333,23 @@ module.exports = (queryService) => {
 
     let retrievedDocs;
     try {
-      const retrieverUrl = "http://retriever-arango-service:7000/v1/retrieval";
+      const retrieverUrl = 'http://retriever-arango-service:7000/v1/retrieval';
       const retrieverResponse = await axios.post(
         retrieverUrl,
         {
           messages: queryText,
-          k: 4,
+          k: 4
         },
         {
-          headers: { "Content-Type": "application/json" },
-          timeout: 10000,
-        },
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 10000
+        }
       );
 
       const result = retrieverResponse.data;
       retrievedDocs = result.retrieved_docs || result.documents || [];
     } catch (error) {
-      logger.warn("QueryService.retriever_call_failed", {
-        error: error.message,
-      });
+      logger.warn('QueryService.retriever_call_failed', { error: error.message });
       return { source_documents: [], confidence_score: 0 };
     }
 
@@ -446,42 +366,28 @@ module.exports = (queryService) => {
 
       if (fileIds.length > 0) {
         try {
-          const fileResponse = await axios.get(
-            `http://document-repository:3001/api/files/${fileIds[0]}`,
-            {
-              headers: { Authorization: authHeader },
-              timeout: 5000,
-            },
-          );
+          const fileResponse = await axios.get(`http://document-repository:3001/api/files/${fileIds[0]}`, {
+            headers: { Authorization: authHeader },
+            timeout: 5000
+          });
           const fileInfo = fileResponse.data;
           sourceDocuments.push({
             document_id: fileIds[0],
-            document_name:
-              fileInfo.file_name || fileInfo.original_name || "Unknown",
-            url: fileInfo.url || "",
-            categoryLabel:
-              fileInfo.labels?.categoryLabel ||
-              queryData.context?.categoryLabel ||
-              "General",
+            document_name: fileInfo.file_name || fileInfo.original_name || 'Unknown',
+            url: fileInfo.url || '',
+            categoryLabel: fileInfo.labels?.categoryLabel || queryData.context?.categoryLabel || 'General',
             serviceLabels: fileInfo.labels?.serviceLabels || [],
-            score: docMetadata.score || docMetadata.similarity_score || 0,
+            score: docMetadata.score || docMetadata.similarity_score || 0
           });
           scores.push(docMetadata.score || docMetadata.similarity_score || 0);
         } catch (error) {
-          logger.warn("QueryService.file_metadata_fetch_failed", {
-            fileId: fileIds[0],
-            error: error.message,
-          });
+          logger.warn('QueryService.file_metadata_fetch_failed', { fileId: fileIds[0], error: error.message });
         }
       }
     }
 
-    const confidenceScore =
-      scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-    return {
-      source_documents: sourceDocuments,
-      confidence_score: Math.round(confidenceScore * 100) / 100,
-    };
+    const confidenceScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+    return { source_documents: sourceDocuments, confidence_score: Math.round(confidenceScore * 100) / 100 };
   }
 
   /**
@@ -582,27 +488,18 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error
    */
-  router.post("/", async (req, res) => {
+  router.post('/', async (req, res) => {
     try {
       const userId = req.user?.iss_sub;
       if (!userId) {
-        return res
-          .status(401)
-          .json({
-            error: "UNAUTHENTICATED",
-            message: "User not authenticated",
-          });
+        return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
       }
       const queryData = { ...req.body, userId };
       logger.info(`Creating query for user ${userId}`);
-      const query = await queryService.createQuery(queryData, {
-        authorization: req.headers.authorization,
-      });
+      const query = await queryService.createQuery(queryData, { authorization: req.headers.authorization });
       res.status(201).json(query);
     } catch (error) {
-      logger.error(`Error creating query: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error creating query: ${error.message}`, { stack: error.stack });
       res.status(500).json({ message: error.message });
     }
   });
@@ -658,16 +555,13 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error
    */
-  router.get("/:queryId", async (req, res) => {
+  router.get('/:queryId', async (req, res) => {
     try {
       logger.info(`Fetching query with ID: ${req.params.queryId}`);
       const query = await queryService.getQuery(req.params.queryId);
       res.json(query);
     } catch (error) {
-      logger.error(
-        `Error getting query ${req.params.queryId}: ${error.message}`,
-        { stack: error.stack },
-      );
+      logger.error(`Error getting query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
       res.status(500).json({ message: error.message });
     }
   });
@@ -749,21 +643,13 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error
    */
-  router.post("/:queryId/feedback", async (req, res, next) => {
+  router.post('/:queryId/feedback', async (req, res, next) => {
     try {
-      logger.info(
-        `Adding feedback to query ${req.params.queryId} with body: ${JSON.stringify(req.body)}`,
-      );
-      const query = await queryService.addFeedback(
-        req.params.queryId,
-        req.body,
-      );
+      logger.info(`Adding feedback to query ${req.params.queryId} with body: ${JSON.stringify(req.body)}`);
+      const query = await queryService.addFeedback(req.params.queryId, req.body);
       res.json(query);
     } catch (error) {
-      logger.error(
-        `Error adding feedback to query ${req.params.queryId}: ${error.message}`,
-        { stack: error.stack },
-      );
+      logger.error(`Error adding feedback to query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
       next(error);
     }
   });
@@ -819,26 +705,20 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error.
    */
-  router.patch("/:queryId/answered", async (req, res, next) => {
+  router.patch('/:queryId/answered', async (req, res, next) => {
     try {
       const { queryId } = req.params;
       const { responseTime } = req.body;
 
       if (!responseTime && responseTime !== 0) {
-        return res.status(400).json({ message: "Response time is required" });
+        return res.status(400).json({ message: 'Response time is required' });
       }
 
-      const updatedQuery = await queryService.markQueryAsAnswered(
-        queryId,
-        responseTime,
-      );
+      const updatedQuery = await queryService.markQueryAsAnswered(queryId, responseTime);
 
       res.json(updatedQuery);
     } catch (error) {
-      logger.error(
-        `Error marking query ${req.params.queryId} as answered: ${error.message}`,
-        { stack: error.stack },
-      );
+      logger.error(`Error marking query ${req.params.queryId} as answered: ${error.message}`, { stack: error.stack });
       next(error);
     }
   });
@@ -953,32 +833,19 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error
    */
-  router.get("/", async (req, res) => {
+  router.get('/', async (req, res) => {
     try {
       const userId = req.user?.iss_sub;
       if (!userId) {
-        return res
-          .status(401)
-          .json({
-            error: "UNAUTHENTICATED",
-            message: "User not authenticated",
-          });
+        return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
       }
       const { limit = 20, offset = 0, ...criteria } = req.query;
       criteria.userId = userId;
-      logger.info(
-        `Searching queries for user ${userId}, limit: ${limit}, offset: ${offset}`,
-      );
-      const results = await queryService.searchQueries(
-        criteria,
-        parseInt(limit),
-        parseInt(offset),
-      );
+      logger.info(`Searching queries for user ${userId}, limit: ${limit}, offset: ${offset}`);
+      const results = await queryService.searchQueries(criteria, parseInt(limit), parseInt(offset));
       res.json(results);
     } catch (error) {
-      logger.error(`Error searching queries: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error searching queries: ${error.message}`, { stack: error.stack });
       res.status(500).json({ message: error.message });
     }
   });
@@ -1013,20 +880,15 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error
    */
-  router.get("/:queryId/conversations", async (req, res, next) => {
+  router.get('/:queryId/conversations', async (req, res, next) => {
     try {
       logger.info(`Getting conversations for query ${req.params.queryId}`);
-      const conversations = await queryService.getConversationsForQuery(
-        req.params.queryId,
-      );
+      const conversations = await queryService.getConversationsForQuery(req.params.queryId);
       res.json(conversations);
     } catch (error) {
-      logger.error(
-        `Error getting conversations for query ${req.params.queryId}: ${error.message}`,
-        {
-          stack: error.stack,
-        },
-      );
+      logger.error(`Error getting conversations for query ${req.params.queryId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });
@@ -1079,27 +941,19 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error
    */
-  router.post("/:queryId/conversation", async (req, res, next) => {
+  router.post('/:queryId/conversation', async (req, res, next) => {
     try {
       const { queryId } = req.params;
       const options = req.body;
 
-      logger.info(
-        `Creating conversation from query ${queryId} with options: ${JSON.stringify(options)}`,
-      );
+      logger.info(`Creating conversation from query ${queryId} with options: ${JSON.stringify(options)}`);
 
-      const result = await queryService.createConversationFromQuery(
-        queryId,
-        options,
-      );
+      const result = await queryService.createConversationFromQuery(queryId, options);
       res.status(201).json(result);
     } catch (error) {
-      logger.error(
-        `Error creating conversation from query ${req.params.queryId}: ${error.message}`,
-        {
-          stack: error.stack,
-        },
-      );
+      logger.error(`Error creating conversation from query ${req.params.queryId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });
@@ -1152,28 +1006,19 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error
    */
-  router.post("/:queryId/link/:messageId", async (req, res, next) => {
+  router.post('/:queryId/link/:messageId', async (req, res, next) => {
     try {
       const { queryId, messageId } = req.params;
       const options = req.body;
 
-      logger.info(
-        `Linking query ${queryId} to message ${messageId} with options: ${JSON.stringify(options)}`,
-      );
+      logger.info(`Linking query ${queryId} to message ${messageId} with options: ${JSON.stringify(options)}`);
 
-      const result = await queryService.linkQueryToMessage(
-        queryId,
-        messageId,
-        options,
-      );
+      const result = await queryService.linkQueryToMessage(queryId, messageId, options);
       res.json(result);
     } catch (error) {
-      logger.error(
-        `Error linking query ${req.params.queryId} to message ${req.params.messageId}: ${error.message}`,
-        {
-          stack: error.stack,
-        },
-      );
+      logger.error(`Error linking query ${req.params.queryId} to message ${req.params.messageId}: ${error.message}`, {
+        stack: error.stack
+      });
       next(error);
     }
   });

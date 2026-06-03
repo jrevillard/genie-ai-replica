@@ -1,24 +1,17 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const {
-  keycloakAuthMiddleware,
-} = require("../middleware/keycloak-auth-middleware");
-const { logger } = require("../shared-lib");
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
+const { logger } = require('../shared-lib');
 
 module.exports = (serviceCategoryService) => {
-  if (
-    !serviceCategoryService ||
-    typeof serviceCategoryService.getAllCategoriesWithServices !== "function"
-  ) {
-    logger.error("Invalid serviceCategoryService provided to service-routes");
-    throw new Error(
-      "serviceCategoryService is required with getAllCategoriesWithServices",
-    );
+  if (!serviceCategoryService || typeof serviceCategoryService.getAllCategoriesWithServices !== 'function') {
+    logger.error('Invalid serviceCategoryService provided to service-routes');
+    throw new Error('serviceCategoryService is required with getAllCategoriesWithServices');
   }
-  logger.debug("service-routes initialized with serviceCategoryService", {
-    methods: Object.getOwnPropertyNames(
-      Object.getPrototypeOf(serviceCategoryService),
-    ).filter((m) => m !== "constructor"),
+  logger.debug('service-routes initialized with serviceCategoryService', {
+    methods: Object.getOwnPropertyNames(Object.getPrototypeOf(serviceCategoryService)).filter(
+      (m) => m !== 'constructor'
+    )
   });
 
   router.use(keycloakAuthMiddleware.authenticate);
@@ -75,27 +68,19 @@ module.exports = (serviceCategoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get("/categories", async (req, res) => {
+  router.get('/categories', async (req, res) => {
     const start = Date.now();
     try {
-      const locale = req.query.locale || "en";
-      logger.info(
-        `Fetching all service categories with services, locale: ${locale}`,
-      );
-      const categories =
-        await serviceCategoryService.getAllCategoriesWithServices(locale);
-      logger.info(
-        `Fetched ${categories.length} categories in ${Date.now() - start}ms`,
-      );
+      const locale = req.query.locale || 'en';
+      logger.info(`Fetching all service categories with services, locale: ${locale}`);
+      const categories = await serviceCategoryService.getAllCategoriesWithServices(locale);
+      logger.info(`Fetched ${categories.length} categories in ${Date.now() - start}ms`);
       res.json(categories);
     } catch (error) {
-      logger.error(
-        `Error fetching all categories with services: ${error.message}`,
-        {
-          stack: error.stack,
-          durationMs: Date.now() - start,
-        },
-      );
+      logger.error(`Error fetching all categories with services: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });
@@ -158,29 +143,19 @@ module.exports = (serviceCategoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get("/categories/:categoryId", async (req, res, next) => {
+  router.get('/categories/:categoryId', async (req, res, next) => {
     const start = Date.now();
     try {
-      const locale = req.query.locale || "en";
-      logger.info(
-        `Fetching category ${req.params.categoryId} with services, locale: ${locale}`,
-      );
-      const category = await serviceCategoryService.getCategoryWithServices(
-        req.params.categoryId,
-        locale,
-      );
-      logger.info(
-        `Fetched category ${req.params.categoryId} in ${Date.now() - start}ms`,
-      );
+      const locale = req.query.locale || 'en';
+      logger.info(`Fetching category ${req.params.categoryId} with services, locale: ${locale}`);
+      const category = await serviceCategoryService.getCategoryWithServices(req.params.categoryId, locale);
+      logger.info(`Fetched category ${req.params.categoryId} in ${Date.now() - start}ms`);
       res.json(category);
     } catch (error) {
-      logger.error(
-        `Error fetching category ${req.params.categoryId} with services: ${error.message}`,
-        {
-          stack: error.stack,
-          durationMs: Date.now() - start,
-        },
-      );
+      logger.error(`Error fetching category ${req.params.categoryId} with services: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       next(error);
     }
   });
@@ -248,33 +223,25 @@ module.exports = (serviceCategoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get("/search", async (req, res) => {
+  router.get('/search', async (req, res) => {
     const start = Date.now();
     try {
-      const { query, locale = "en" } = req.query;
+      const { query, locale = 'en' } = req.query;
       if (!query) {
-        logger.warn("Search query missing in /services/search");
-        return res.status(400).json({ message: "Search query is required" });
+        logger.warn('Search query missing in /services/search');
+        return res.status(400).json({ message: 'Search query is required' });
       }
+      logger.info(`Searching services with query: "${query}", locale: ${locale}`);
+      const results = await serviceCategoryService.searchCategoriesAndServices(query, locale);
       logger.info(
-        `Searching services with query: "${query}", locale: ${locale}`,
-      );
-      const results = await serviceCategoryService.searchCategoriesAndServices(
-        query,
-        locale,
-      );
-      logger.info(
-        `Search completed in ${Date.now() - start}ms: ${results.categories.length} categories, ${results.services.length} services`,
+        `Search completed in ${Date.now() - start}ms: ${results.categories.length} categories, ${results.services.length} services`
       );
       res.json(results);
     } catch (error) {
-      logger.error(
-        `Error searching categories and services: ${error.message}`,
-        {
-          stack: error.stack,
-          durationMs: Date.now() - start,
-        },
-      );
+      logger.error(`Error searching categories and services: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });

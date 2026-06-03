@@ -1,7 +1,7 @@
-"use strict";
+'use strict';
 
-const { aql } = require("arangojs");
-const { logger, dbService } = require("../shared-lib");
+const { aql } = require('arangojs');
+const { logger, dbService } = require('../shared-lib');
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
@@ -32,20 +32,18 @@ const keycloakProxyService = {
    * @throws {Error} If user not found or sub field missing
    */
   async _resolveKeycloakUserId(userKey) {
-    const db = await dbService.getConnection("default");
+    const db = await dbService.getConnection('default');
     const cursor = await db.query(
       aql`
         FOR u IN users
           FILTER u._key == ${userKey}
           RETURN u.sub
-      `,
+      `
     );
     const sub = await cursor.next();
 
     if (!sub) {
-      throw new Error(
-        `User ${userKey} has no Keycloak UUID (sub field) — user may not have logged in via Keycloak`,
-      );
+      throw new Error(`User ${userKey} has no Keycloak UUID (sub field) — user may not have logged in via Keycloak`);
     }
 
     return sub;
@@ -72,30 +70,28 @@ const keycloakProxyService = {
     const tokenUrl = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token`;
 
     const response = await fetch(tokenUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        grant_type: "client_credentials",
+        grant_type: 'client_credentials',
         client_id: PROXY_CLIENT_ID,
-        client_secret: PROXY_CLIENT_SECRET,
+        client_secret: PROXY_CLIENT_SECRET
       }),
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
     });
 
     if (!response.ok) {
       const text = await response.text();
-      logger.error("[KeycloakProxy] Failed to obtain service account token", {
+      logger.error('[KeycloakProxy] Failed to obtain service account token', {
         status: response.status,
-        body: text,
+        body: text
       });
-      throw new Error(
-        `Failed to obtain service account token: ${response.status}`,
-      );
+      throw new Error(`Failed to obtain service account token: ${response.status}`);
     }
 
     const data = await response.json();
     cachedToken = data.access_token;
-    logger.info("[KeycloakProxy] Service account token obtained");
+    logger.info('[KeycloakProxy] Service account token obtained');
     return cachedToken;
   },
 
@@ -114,28 +110,22 @@ const keycloakProxyService = {
       method,
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+        'Content-Type': 'application/json'
+      }
     };
 
     if (body !== null) {
       options.body = JSON.stringify(body);
     }
 
-    let response = await fetch(url, {
-      ...options,
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    let response = await fetch(url, { ...options, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
 
     // Lazy refresh on 401
     if (response.status === 401) {
-      logger.warn("[KeycloakProxy] Token expired, refreshing...");
+      logger.warn('[KeycloakProxy] Token expired, refreshing...');
       token = await this.getServiceAccountToken(true);
       options.headers.Authorization = `Bearer ${token}`;
-      response = await fetch(url, {
-        ...options,
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      });
+      response = await fetch(url, { ...options, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
     }
 
     if (!response.ok) {
@@ -162,26 +152,22 @@ const keycloakProxyService = {
     let message;
     switch (status) {
       case 401:
-        message = "Keycloak authentication failed";
+        message = 'Keycloak authentication failed';
         break;
       case 403:
-        message = "Insufficient permissions for Keycloak operation";
+        message = 'Insufficient permissions for Keycloak operation';
         break;
       case 404:
-        message = "User not found in Keycloak";
+        message = 'User not found in Keycloak';
         break;
       case 409:
-        message = "Conflict in Keycloak operation (e.g. duplicate email)";
+        message = 'Conflict in Keycloak operation (e.g. duplicate email)';
         break;
       default:
         message = `Keycloak API error: ${status}`;
     }
 
-    logger.error("[KeycloakProxy] API error", {
-      status,
-      path,
-      body: body.substring(0, 200),
-    });
+    logger.error('[KeycloakProxy] API error', { status, path, body: body.substring(0, 200) });
     const error = new Error(message);
     error.status = status;
     error.keycloakBody = body;
@@ -200,17 +186,14 @@ const keycloakProxyService = {
    */
   async deleteUser(userKey) {
     const uuid = await this._resolveKeycloakUserId(userKey);
-    logger.info("[KeycloakProxy] Deleting user", { userKey, uuid });
+    logger.info('[KeycloakProxy] Deleting user', { userKey, uuid });
 
     // Delete from Keycloak first (authoritative source)
     try {
-      await this._adminApiCall("DELETE", `/users/${uuid}`);
+      await this._adminApiCall('DELETE', `/users/${uuid}`);
     } catch (error) {
       if (error.status === 404) {
-        logger.info(
-          "[KeycloakProxy] User already deleted from Keycloak, skipping",
-          { userKey, uuid },
-        );
+        logger.info('[KeycloakProxy] User already deleted from Keycloak, skipping', { userKey, uuid });
         return;
       }
       throw error;
@@ -218,7 +201,7 @@ const keycloakProxyService = {
 
     // Then erase PII from ArangoDB
     // If ArangoDB update fails, user is already deleted from Keycloak (defense-in-depth)
-    const db = await dbService.getConnection("default");
+    const db = await dbService.getConnection('default');
     try {
       await db.query(
         aql`
@@ -237,24 +220,18 @@ const keycloakProxyService = {
               active: false,
               personalIdentification: null
             } IN users
-        `,
+        `
       );
-      logger.info("[KeycloakProxy] User erased", { userKey });
+      logger.info('[KeycloakProxy] User erased', { userKey });
     } catch (arangoError) {
-      logger.error(
-        "[KeycloakProxy] ArangoDB erasure failed after Keycloak delete",
-        {
-          userKey,
-          error: arangoError.message,
-          state: "PARTIAL_ERASURE",
-        },
-      );
-      throw new Error(
-        "Partial erasure: user deleted from Keycloak but ArangoDB erasure failed",
-        {
-          cause: arangoError,
-        },
-      );
+      logger.error('[KeycloakProxy] ArangoDB erasure failed after Keycloak delete', {
+        userKey,
+        error: arangoError.message,
+        state: 'PARTIAL_ERASURE'
+      });
+      throw new Error('Partial erasure: user deleted from Keycloak but ArangoDB erasure failed', {
+        cause: arangoError
+      });
     }
   },
 
@@ -270,27 +247,25 @@ const keycloakProxyService = {
    */
   async updateOwnProfile(accessToken, data) {
     const url = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/account`;
-    logger.info("[KeycloakProxy] Updating own profile via Account API", {
-      fields: Object.keys(data),
-    });
+    logger.info('[KeycloakProxy] Updating own profile via Account API', { fields: Object.keys(data) });
 
     const response = await fetch(url, {
-      method: "PUT",
+      method: 'PUT',
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(data),
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
     });
 
     if (!response.ok) {
       const text = await response.text();
-      throw this._mapKeycloakError(response.status, text, "/account");
+      throw this._mapKeycloakError(response.status, text, '/account');
     }
 
     return {};
-  },
+  }
 };
 
 module.exports = keycloakProxyService;

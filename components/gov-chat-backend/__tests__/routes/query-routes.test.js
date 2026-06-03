@@ -1,32 +1,30 @@
-"use strict";
+'use strict';
 
-require("../setup-env");
+require('../setup-env');
 
-process.env.OPEA_STREAMING = "true";
-process.env.CHATQNA_STREAM_TIMEOUT = "5000";
+process.env.OPEA_STREAMING = 'true';
+process.env.CHATQNA_STREAM_TIMEOUT = '5000';
 
-const { Readable } = require("stream");
+const { Readable } = require('stream');
 
 // Mock shared-lib — virtual because it only exists after Docker packaging
-jest.mock("../../shared-lib", () => require("../mocks/shared-lib"), {
-  virtual: true,
-});
+jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
 
 // Mock keycloak-auth-service (used by middleware)
-jest.mock("../../services/keycloak-auth-service", () => ({
+jest.mock('../../services/keycloak-auth-service', () => ({
   verifyToken: jest.fn(),
-  checkUserStatusInKeycloak: jest.fn(),
+  checkUserStatusInKeycloak: jest.fn()
 }));
 
 // Mock user-provisioning-service (used by middleware)
-jest.mock("../../services/user-provisioning-service", () => ({
+jest.mock('../../services/user-provisioning-service', () => ({
   provisionUser: jest.fn(),
   initialize: jest.fn(),
-  markUserAsDeleted: jest.fn(),
+  markUserAsDeleted: jest.fn()
 }));
 
 // Mock the TARGET service
-jest.mock("../../services/query-service", () => ({
+jest.mock('../../services/query-service', () => ({
   initStreamQuery: jest.fn(),
   finalizeStreamQuery: jest.fn(),
   parseChatQnASSELine: jest.fn(),
@@ -38,17 +36,17 @@ jest.mock("../../services/query-service", () => ({
   searchQueries: jest.fn(),
   getConversationsForQuery: jest.fn(),
   createConversationFromQuery: jest.fn(),
-  linkQueryToMessage: jest.fn(),
+  linkQueryToMessage: jest.fn()
 }));
 
 // Mock axios (used directly by query-routes for streaming)
-jest.mock("axios", () => ({
+jest.mock('axios', () => ({
   post: jest.fn(),
-  get: jest.fn(),
+  get: jest.fn()
 }));
 
 // Mock ALL other services loaded by index.js (even unused ones)
-jest.mock("../../services/admin-dashboard-service", () => ({
+jest.mock('../../services/admin-dashboard-service', () => ({
   getSystemHealth: jest.fn(),
   getDatabaseStats: jest.fn(),
   getLogs: jest.fn(),
@@ -59,64 +57,61 @@ jest.mock("../../services/admin-dashboard-service", () => ({
   backupDatabase: jest.fn(),
   optimizeDatabase: jest.fn(),
   searchUsers: jest.fn(),
-  runDiagnostics: jest.fn(),
+  runDiagnostics: jest.fn()
 }));
-jest.mock("../../services/user-profile-service", () => ({}));
-jest.mock("../../services/analytics-service", () => ({}));
-jest.mock("../../services/chat-history-service", () => ({}));
-jest.mock("../../services/service-category-service", () => ({}));
-jest.mock("../../services/database-operations-service", () => ({}));
-jest.mock("../../services/weather-service", () => ({}));
-jest.mock("../../services/translation-service", () => ({
+jest.mock('../../services/user-profile-service', () => ({}));
+jest.mock('../../services/analytics-service', () => ({}));
+jest.mock('../../services/chat-history-service', () => ({}));
+jest.mock('../../services/service-category-service', () => ({}));
+jest.mock('../../services/database-operations-service', () => ({}));
+jest.mock('../../services/weather-service', () => ({}));
+jest.mock('../../services/translation-service', () => ({
   translate: jest.fn(),
   translateMarkdown: jest.fn(),
-  init: jest.fn(),
+  init: jest.fn()
 }));
-jest.mock("../../services/session-service", () => ({
+jest.mock('../../services/session-service', () => ({
   getUserSessions: jest.fn(),
   endSession: jest.fn(),
-  createSession: jest.fn(),
+  createSession: jest.fn()
 }));
-jest.mock("../../services/logs-service", () => ({
-  getLogsSummary: jest.fn(),
+jest.mock('../../services/logs-service', () => ({
+  getLogsSummary: jest.fn()
 }));
-jest.mock("../../services/security-scan-service", () => ({
+jest.mock('../../services/security-scan-service', () => ({
   getLastScanDetails: jest.fn(),
-  runSecurityScan: jest.fn(),
+  runSecurityScan: jest.fn()
 }));
 
 // Mock swagger dependencies
 jest.mock(
-  "swagger-jsdoc",
+  'swagger-jsdoc',
   () => () => ({
-    openapi: "3.0.0",
+    openapi: '3.0.0',
     info: {},
     components: {},
-    security: [],
+    security: []
   }),
-  { virtual: true },
+  { virtual: true }
 );
 jest.mock(
-  "swagger-ui-express",
+  'swagger-ui-express',
   () => ({
     serve: [],
-    setup: () => (req, res, next) => next(),
+    setup: () => (req, res, next) => next()
   }),
-  { virtual: true },
+  { virtual: true }
 );
 
 // Mock keycloak-auth-middleware — allow pass-through, override for 401/403 tests
-jest.mock("../../middleware/keycloak-auth-middleware", () => ({
+jest.mock('../../middleware/keycloak-auth-middleware', () => ({
   keycloakAuthMiddleware: {
     authenticate: jest.fn((req, res, next) => {
-      req.user = {
-        iss_sub: "http://localhost:8080/realms/genie#user-123",
-        _key: "user-123",
-      };
+      req.user = { iss_sub: 'http://localhost:8080/realms/genie#user-123', _key: 'user-123' };
       next();
     }),
-    requireAdmin: jest.fn((req, res, next) => next()),
-  },
+    requireAdmin: jest.fn((req, res, next) => next())
+  }
 }));
 
 // Prevent process.exit during tests
@@ -128,15 +123,13 @@ afterAll(() => {
   process.exit = originalExit;
 });
 
-const { createApp } = require("../../index");
-const request = require("supertest");
-const { createValidToken } = require("../fixtures/tokens");
+const { createApp } = require('../../index');
+const request = require('supertest');
+const { createValidToken } = require('../fixtures/tokens');
 
-const queryService = require("../../services/query-service");
-const axios = require("axios");
-const {
-  keycloakAuthMiddleware,
-} = require("../../middleware/keycloak-auth-middleware");
+const queryService = require('../../services/query-service');
+const axios = require('axios');
+const { keycloakAuthMiddleware } = require('../../middleware/keycloak-auth-middleware');
 
 const validToken = createValidToken();
 
@@ -148,95 +141,68 @@ beforeAll(() => {
 beforeEach(() => {
   jest.clearAllMocks();
   keycloakAuthMiddleware.authenticate.mockImplementation((req, res, next) => {
-    req.user = {
-      iss_sub: "http://localhost:8080/realms/genie#user-123",
-      _key: "user-123",
-    };
+    req.user = { iss_sub: 'http://localhost:8080/realms/genie#user-123', _key: 'user-123' };
     next();
   });
-  process.env.OPEA_STREAMING = "true";
+  process.env.OPEA_STREAMING = 'true';
 });
 
 function authGet(path) {
-  return request(app).get(path).set("Authorization", `Bearer ${validToken}`);
+  return request(app).get(path).set('Authorization', `Bearer ${validToken}`);
 }
 function authPost(path, body) {
-  return request(app)
-    .post(path)
-    .set("Authorization", `Bearer ${validToken}`)
-    .send(body);
+  return request(app).post(path).set('Authorization', `Bearer ${validToken}`).send(body);
 }
 function authPatch(path, body) {
-  return request(app)
-    .patch(path)
-    .set("Authorization", `Bearer ${validToken}`)
-    .send(body);
+  return request(app).patch(path).set('Authorization', `Bearer ${validToken}`).send(body);
 }
 
 // ============================================================
 // AC1.1: Auth guard — all endpoints require authentication
 // ============================================================
-describe("Auth guard", () => {
-  it("should return 401 on PATCH /:queryId/responsetime without token", async () => {
+describe('Auth guard', () => {
+  it('should return 401 on PATCH /:queryId/responsetime without token', async () => {
     keycloakAuthMiddleware.authenticate.mockImplementation((req, res) => {
-      res
-        .status(401)
-        .json({ error: "TOKEN_INVALID", message: "Authentication required" });
+      res.status(401).json({ error: 'TOKEN_INVALID', message: 'Authentication required' });
     });
 
-    const response = await request(app)
-      .patch("/api/queries/q1/responsetime")
-      .send({ responseTime: 100 });
+    const response = await request(app).patch('/api/queries/q1/responsetime').send({ responseTime: 100 });
     expect(response.status).toBe(401);
   });
 
-  it("should return 401 on POST /stream without token", async () => {
+  it('should return 401 on POST /stream without token', async () => {
     keycloakAuthMiddleware.authenticate.mockImplementation((req, res) => {
-      res
-        .status(401)
-        .json({ error: "TOKEN_INVALID", message: "Authentication required" });
+      res.status(401).json({ error: 'TOKEN_INVALID', message: 'Authentication required' });
     });
 
-    const response = await request(app)
-      .post("/api/queries/stream")
-      .send({ sessionId: "s1" });
+    const response = await request(app).post('/api/queries/stream').send({ sessionId: 's1' });
     expect(response.status).toBe(401);
   });
 
-  it("should return 401 on POST / without token", async () => {
+  it('should return 401 on POST / without token', async () => {
     keycloakAuthMiddleware.authenticate.mockImplementation((req, res) => {
-      res
-        .status(401)
-        .json({ error: "TOKEN_INVALID", message: "Authentication required" });
+      res.status(401).json({ error: 'TOKEN_INVALID', message: 'Authentication required' });
     });
 
-    const response = await request(app)
-      .post("/api/queries")
-      .send({ sessionId: "s1" });
+    const response = await request(app).post('/api/queries').send({ sessionId: 's1' });
     expect(response.status).toBe(401);
   });
 
-  it("should return 401 on GET /:queryId without token", async () => {
+  it('should return 401 on GET /:queryId without token', async () => {
     keycloakAuthMiddleware.authenticate.mockImplementation((req, res) => {
-      res
-        .status(401)
-        .json({ error: "TOKEN_INVALID", message: "Authentication required" });
+      res.status(401).json({ error: 'TOKEN_INVALID', message: 'Authentication required' });
     });
 
-    const response = await request(app).get("/api/queries/q1");
+    const response = await request(app).get('/api/queries/q1');
     expect(response.status).toBe(401);
   });
 
-  it("should return 401 on POST /:queryId/feedback without token", async () => {
+  it('should return 401 on POST /:queryId/feedback without token', async () => {
     keycloakAuthMiddleware.authenticate.mockImplementation((req, res) => {
-      res
-        .status(401)
-        .json({ error: "TOKEN_INVALID", message: "Authentication required" });
+      res.status(401).json({ error: 'TOKEN_INVALID', message: 'Authentication required' });
     });
 
-    const response = await request(app)
-      .post("/api/queries/q1/feedback")
-      .send({ rating: 5 });
+    const response = await request(app).post('/api/queries/q1/feedback').send({ rating: 5 });
     expect(response.status).toBe(401);
   });
 });
@@ -244,38 +210,29 @@ describe("Auth guard", () => {
 // ============================================================
 // AC1.2: PATCH /:queryId/responsetime
 // ============================================================
-describe("PATCH /:queryId/responsetime", () => {
-  it("should return 200 on success", async () => {
-    const updated = { _key: "q1", responseTime: 250 };
+describe('PATCH /:queryId/responsetime', () => {
+  it('should return 200 on success', async () => {
+    const updated = { _key: 'q1', responseTime: 250 };
     queryService.updateQueryResponseTime.mockResolvedValue(updated);
 
-    const response = await authPatch("/api/queries/q1/responsetime", {
-      responseTime: 250,
-    });
+    const response = await authPatch('/api/queries/q1/responsetime', { responseTime: 250 });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(updated);
-    expect(queryService.updateQueryResponseTime).toHaveBeenCalledWith(
-      "q1",
-      250,
-    );
+    expect(queryService.updateQueryResponseTime).toHaveBeenCalledWith('q1', 250);
   });
 
-  it("should return 400 when responseTime is missing", async () => {
-    const response = await authPatch("/api/queries/q1/responsetime", {});
+  it('should return 400 when responseTime is missing', async () => {
+    const response = await authPatch('/api/queries/q1/responsetime', {});
 
     expect(response.status).toBe(400);
-    expect(response.body.message).toContain("required");
+    expect(response.body.message).toContain('required');
   });
 
-  it("should return 500 via next(error) on service failure", async () => {
-    queryService.updateQueryResponseTime.mockRejectedValue(
-      new Error("DB error"),
-    );
+  it('should return 500 via next(error) on service failure', async () => {
+    queryService.updateQueryResponseTime.mockRejectedValue(new Error('DB error'));
 
-    const response = await authPatch("/api/queries/q1/responsetime", {
-      responseTime: 250,
-    });
+    const response = await authPatch('/api/queries/q1/responsetime', { responseTime: 250 });
 
     expect(response.status).toBe(500);
   });
@@ -284,43 +241,41 @@ describe("PATCH /:queryId/responsetime", () => {
 // ============================================================
 // AC1.3: POST /stream (SSE)
 // ============================================================
-describe("POST /stream", () => {
-  it("should return 501 when OPEA_STREAMING is false", async () => {
-    process.env.OPEA_STREAMING = "false";
+describe('POST /stream', () => {
+  it('should return 501 when OPEA_STREAMING is false', async () => {
+    process.env.OPEA_STREAMING = 'false';
 
-    const response = await authPost("/api/queries/stream", { sessionId: "s1" });
+    const response = await authPost('/api/queries/stream', { sessionId: 's1' });
 
     expect(response.status).toBe(501);
-    expect(response.body.error).toBe("STREAMING_DISABLED");
+    expect(response.body.error).toBe('STREAMING_DISABLED');
   });
 
-  it("should return 500 on stream setup error", async () => {
-    queryService.initStreamQuery.mockRejectedValue(
-      new Error("Init stream failed"),
-    );
+  it('should return 500 on stream setup error', async () => {
+    queryService.initStreamQuery.mockRejectedValue(new Error('Init stream failed'));
 
-    const response = await authPost("/api/queries/stream", { sessionId: "s1" });
+    const response = await authPost('/api/queries/stream', { sessionId: 's1' });
 
     expect(response.status).toBe(500);
-    expect(response.body.error).toBe("STREAM_ERROR");
+    expect(response.body.error).toBe('STREAM_ERROR');
   });
 
-  it("should return 504 on timeout/abort", async () => {
-    const abortError = new Error("Timeout");
-    abortError.code = "ECONNABORTED";
+  it('should return 504 on timeout/abort', async () => {
+    const abortError = new Error('Timeout');
+    abortError.code = 'ECONNABORTED';
     queryService.initStreamQuery.mockRejectedValue(abortError);
 
-    const response = await authPost("/api/queries/stream", { sessionId: "s1" });
+    const response = await authPost('/api/queries/stream', { sessionId: 's1' });
 
     expect(response.status).toBe(504);
-    expect(response.body.error).toBe("CHATQNA_UNAVAILABLE");
+    expect(response.body.error).toBe('CHATQNA_UNAVAILABLE');
   });
 
-  it("should stream SSE events from OPEA", async () => {
+  it('should stream SSE events from OPEA', async () => {
     queryService.initStreamQuery.mockResolvedValue({
-      queryId: "q1",
-      opeaUrl: "http://chatqna:8888/v1/chatqna",
-      opeaPayload: { messages: [] },
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
     });
 
     queryService.parseChatQnASSELine.mockImplementation((data) => {
@@ -333,10 +288,10 @@ describe("POST /stream", () => {
     const mockStream = new Readable({ read() {} });
     axios.post.mockResolvedValue({ data: mockStream });
 
-    const responsePromise = authPost("/api/queries/stream", {
-      sessionId: "s1",
-      messages: [{ role: "user", content: "hello" }],
-      context: { language: "EN" },
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }],
+      context: { language: 'EN' }
     });
 
     // Wait for SSE headers to be set, then push data
@@ -348,55 +303,52 @@ describe("POST /stream", () => {
 
     const response = await responsePromise;
     expect(response.status).toBe(200);
-    expect(response.headers["content-type"]).toBe("text/event-stream");
+    expect(response.headers['content-type']).toBe('text/event-stream');
   });
 });
 
 // ============================================================
 // AC1.4: POST /
 // ============================================================
-describe("POST /", () => {
-  it("should return 201 on success", async () => {
-    const query = { _key: "q1", text: "test", sessionId: "s1" };
+describe('POST /', () => {
+  it('should return 201 on success', async () => {
+    const query = { _key: 'q1', text: 'test', sessionId: 's1' };
     queryService.createQuery.mockResolvedValue(query);
 
-    const response = await authPost("/api/queries", {
-      sessionId: "s1",
-      text: "test query",
-    });
+    const response = await authPost('/api/queries', { sessionId: 's1', text: 'test query' });
 
     expect(response.status).toBe(201);
     expect(response.body).toEqual(query);
   });
 
-  it("should return 500 on service error", async () => {
-    queryService.createQuery.mockRejectedValue(new Error("Create failed"));
+  it('should return 500 on service error', async () => {
+    queryService.createQuery.mockRejectedValue(new Error('Create failed'));
 
-    const response = await authPost("/api/queries", { sessionId: "s1" });
+    const response = await authPost('/api/queries', { sessionId: 's1' });
 
     expect(response.status).toBe(500);
-    expect(response.body.message).toBe("Create failed");
+    expect(response.body.message).toBe('Create failed');
   });
 });
 
 // ============================================================
 // AC1.5: GET /:queryId
 // ============================================================
-describe("GET /:queryId", () => {
-  it("should return 200 with query", async () => {
-    const query = { _key: "q1", text: "test" };
+describe('GET /:queryId', () => {
+  it('should return 200 with query', async () => {
+    const query = { _key: 'q1', text: 'test' };
     queryService.getQuery.mockResolvedValue(query);
 
-    const response = await authGet("/api/queries/q1");
+    const response = await authGet('/api/queries/q1');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(query);
   });
 
-  it("should return 500 on service error", async () => {
-    queryService.getQuery.mockRejectedValue(new Error("Not found"));
+  it('should return 500 on service error', async () => {
+    queryService.getQuery.mockRejectedValue(new Error('Not found'));
 
-    const response = await authGet("/api/queries/q1");
+    const response = await authGet('/api/queries/q1');
 
     expect(response.status).toBe(500);
   });
@@ -408,13 +360,11 @@ describe("GET /:queryId", () => {
   // Helper: set up a working SSE stream pipeline
   function setupSSEStream() {
     queryService.initStreamQuery.mockResolvedValue({
-      queryId: "q1",
-      opeaUrl: "http://chatqna:8888/v1/chatqna",
-      opeaPayload: { messages: [] },
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
     });
-    queryService.parseChatQnASSELine.mockImplementation((data) =>
-      JSON.parse(data),
-    );
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
     queryService.finalizeStreamQuery.mockResolvedValue(undefined);
 
     const mockStream = new Readable({ read() {} });
@@ -422,31 +372,27 @@ describe("GET /:queryId", () => {
     return mockStream;
   }
 
-  describe("SSE stream error after headers sent", () => {
-    it("should return 401 when req.user.iss_sub is missing", async () => {
-      keycloakAuthMiddleware.authenticate.mockImplementation(
-        (req, res, next) => {
-          req.user = { _key: "user-123" }; // missing iss_sub
-          next();
-        },
-      );
-
-      const response = await authPost("/api/queries/stream", {
-        sessionId: "s1",
+  describe('SSE stream error after headers sent', () => {
+    it('should return 401 when req.user.iss_sub is missing', async () => {
+      keycloakAuthMiddleware.authenticate.mockImplementation((req, res, next) => {
+        req.user = { _key: 'user-123' }; // missing iss_sub
+        next();
       });
 
+      const response = await authPost('/api/queries/stream', { sessionId: 's1' });
+
       expect(response.status).toBe(401);
-      expect(response.body.error).toBe("UNAUTHENTICATED");
+      expect(response.body.error).toBe('UNAUTHENTICATED');
     });
   });
 
-  describe("SSE stream data type routing", () => {
-    it("should forward chunk data as SSE events to client", async () => {
+  describe('SSE stream data type routing', () => {
+    it('should forward chunk data as SSE events to client', async () => {
       const mockStream = setupSSEStream();
 
-      const responsePromise = authPost("/api/queries/stream", {
-        sessionId: "s1",
-        messages: [{ role: "user", content: "hello" }],
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
       });
 
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -462,12 +408,12 @@ describe("GET /:queryId", () => {
       expect(response.text).toContain('"type":"chunk","content":"world"');
     });
 
-    it("should not forward OPEA error type events to client as chunks", async () => {
+    it('should not forward OPEA error type events to client as chunks', async () => {
       const mockStream = setupSSEStream();
 
-      const responsePromise = authPost("/api/queries/stream", {
-        sessionId: "s1",
-        messages: [{ role: "user", content: "hello" }],
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
       });
 
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -481,12 +427,12 @@ describe("GET /:queryId", () => {
       expect(response.text).not.toMatch(/data:.*"type":"chunk".*"bad chunk"/);
     });
 
-    it("should trigger finalizeStreamQuery with accumulated text on done event", async () => {
+    it('should trigger finalizeStreamQuery with accumulated text on done event', async () => {
       const mockStream = setupSSEStream();
 
-      const responsePromise = authPost("/api/queries/stream", {
-        sessionId: "s1",
-        messages: [{ role: "user", content: "hello" }],
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
       });
 
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -498,21 +444,21 @@ describe("GET /:queryId", () => {
       await responsePromise;
 
       expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
-        "q1",
-        "Hello world",
+        'q1',
+        'Hello world',
         expect.any(Number),
-        expect.objectContaining({ source_documents: [], confidence_score: 0 }),
+        expect.objectContaining({ source_documents: [], confidence_score: 0 })
       );
     });
   });
 
-  describe("SSE stream end without explicit done", () => {
-    it("should auto-finalize when stream ends with accumulated text but no done event", async () => {
+  describe('SSE stream end without explicit done', () => {
+    it('should auto-finalize when stream ends with accumulated text but no done event', async () => {
       const mockStream = setupSSEStream();
 
-      const responsePromise = authPost("/api/queries/stream", {
-        sessionId: "s1",
-        messages: [{ role: "user", content: "hello" }],
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
       });
 
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -523,24 +469,22 @@ describe("GET /:queryId", () => {
       const response = await responsePromise;
       expect(response.status).toBe(200);
       expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
-        "q1",
-        "Auto finalized",
+        'q1',
+        'Auto finalized',
         expect.any(Number),
-        expect.any(Object),
+        expect.any(Object)
       );
     });
   });
 
-  describe("SSE metadata retrieval", () => {
-    it("should default to empty metadata when retriever call fails", async () => {
+  describe('SSE metadata retrieval', () => {
+    it('should default to empty metadata when retriever call fails', async () => {
       const mockStream = setupSSEStream();
-      axios.post
-        .mockResolvedValueOnce({ data: mockStream })
-        .mockRejectedValueOnce(new Error("Retriever unavailable"));
+      axios.post.mockResolvedValueOnce({ data: mockStream }).mockRejectedValueOnce(new Error('Retriever unavailable'));
 
-      const responsePromise = authPost("/api/queries/stream", {
-        sessionId: "s1",
-        messages: [{ role: "user", content: "hello" }],
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
       });
 
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -551,26 +495,26 @@ describe("GET /:queryId", () => {
       expect(response.status).toBe(200);
       expect(response.text).toMatch(/"type":"metadata"/);
       expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
-        "q1",
-        "",
+        'q1',
+        '',
         expect.any(Number),
-        expect.objectContaining({ source_documents: [], confidence_score: 0 }),
+        expect.objectContaining({ source_documents: [], confidence_score: 0 })
       );
     });
   });
 
-  describe("SSE translation", () => {
-    const translationService = require("../../services/translation-service");
+  describe('SSE translation', () => {
+    const translationService = require('../../services/translation-service');
 
-    it("should emit translation SSE event for non-EN language", async () => {
+    it('should emit translation SSE event for non-EN language', async () => {
       const mockStream = setupSSEStream();
       translationService.init.mockResolvedValue(undefined);
-      translationService.translateMarkdown.mockResolvedValue("Bonjour monde");
+      translationService.translateMarkdown.mockResolvedValue('Bonjour monde');
 
-      const responsePromise = authPost("/api/queries/stream", {
-        sessionId: "s1",
-        messages: [{ role: "user", content: "hello" }],
-        context: { language: "FR" },
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }],
+        context: { language: 'FR' }
       });
 
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -580,27 +524,19 @@ describe("GET /:queryId", () => {
 
       const response = await responsePromise;
       expect(response.status).toBe(200);
-      expect(translationService.translateMarkdown).toHaveBeenCalledWith(
-        "Hello world",
-        "en",
-        "fr",
-      );
-      expect(response.text).toContain(
-        '"type":"translation","content":"Bonjour monde"',
-      );
+      expect(translationService.translateMarkdown).toHaveBeenCalledWith('Hello world', 'en', 'fr');
+      expect(response.text).toContain('"type":"translation","content":"Bonjour monde"');
     });
 
-    it("should emit TRANSLATION_FAILED error event when translation fails", async () => {
+    it('should emit TRANSLATION_FAILED error event when translation fails', async () => {
       const mockStream = setupSSEStream();
       translationService.init.mockResolvedValue(undefined);
-      translationService.translateMarkdown.mockRejectedValue(
-        new Error("Translation service down"),
-      );
+      translationService.translateMarkdown.mockRejectedValue(new Error('Translation service down'));
 
-      const responsePromise = authPost("/api/queries/stream", {
-        sessionId: "s1",
-        messages: [{ role: "user", content: "hello" }],
-        context: { language: "DE" },
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }],
+        context: { language: 'DE' }
       });
 
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -610,21 +546,19 @@ describe("GET /:queryId", () => {
 
       const response = await responsePromise;
       expect(response.status).toBe(200);
-      expect(response.text).toContain("TRANSLATION_FAILED");
+      expect(response.text).toContain('TRANSLATION_FAILED');
       expect(response.text).toContain('"type":"done","queryId":"q1"');
     });
   });
 
-  describe("SSE finalize failure resilience", () => {
-    it("should still send done event when finalizeStreamQuery rejects", async () => {
+  describe('SSE finalize failure resilience', () => {
+    it('should still send done event when finalizeStreamQuery rejects', async () => {
       const mockStream = setupSSEStream();
-      queryService.finalizeStreamQuery.mockRejectedValue(
-        new Error("DB write failed"),
-      );
+      queryService.finalizeStreamQuery.mockRejectedValue(new Error('DB write failed'));
 
-      const responsePromise = authPost("/api/queries/stream", {
-        sessionId: "s1",
-        messages: [{ role: "user", content: "hello" }],
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
       });
 
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -642,21 +576,21 @@ describe("GET /:queryId", () => {
 // ============================================================
 // AC1.6: POST /:queryId/feedback
 // ============================================================
-describe("POST /:queryId/feedback", () => {
-  it("should return 200 on success", async () => {
-    const updated = { _key: "q1", feedback: { rating: 5 } };
+describe('POST /:queryId/feedback', () => {
+  it('should return 200 on success', async () => {
+    const updated = { _key: 'q1', feedback: { rating: 5 } };
     queryService.addFeedback.mockResolvedValue(updated);
 
-    const response = await authPost("/api/queries/q1/feedback", { rating: 5 });
+    const response = await authPost('/api/queries/q1/feedback', { rating: 5 });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(updated);
   });
 
-  it("should return 500 via next(error) on service failure", async () => {
-    queryService.addFeedback.mockRejectedValue(new Error("Feedback failed"));
+  it('should return 500 via next(error) on service failure', async () => {
+    queryService.addFeedback.mockRejectedValue(new Error('Feedback failed'));
 
-    const response = await authPost("/api/queries/q1/feedback", { rating: 5 });
+    const response = await authPost('/api/queries/q1/feedback', { rating: 5 });
 
     expect(response.status).toBe(500);
   });
@@ -665,70 +599,56 @@ describe("POST /:queryId/feedback", () => {
 // ============================================================
 // AC1.7: PATCH /:queryId/answered
 // ============================================================
-describe("PATCH /:queryId/answered", () => {
-  it("should return 200 on success", async () => {
-    const updated = { _key: "q1", isAnswered: true, responseTime: 500 };
+describe('PATCH /:queryId/answered', () => {
+  it('should return 200 on success', async () => {
+    const updated = { _key: 'q1', isAnswered: true, responseTime: 500 };
     queryService.markQueryAsAnswered.mockResolvedValue(updated);
 
-    const response = await authPatch("/api/queries/q1/answered", {
-      responseTime: 500,
-    });
+    const response = await authPatch('/api/queries/q1/answered', { responseTime: 500 });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(updated);
   });
 
-  it("should return 400 when responseTime is missing", async () => {
-    const response = await authPatch("/api/queries/q1/answered", {});
+  it('should return 400 when responseTime is missing', async () => {
+    const response = await authPatch('/api/queries/q1/answered', {});
 
     expect(response.status).toBe(400);
-    expect(response.body.message).toContain("required");
+    expect(response.body.message).toContain('required');
   });
 });
 
 // ============================================================
 // AC1.8: GET / (search queries with pagination)
 // ============================================================
-describe("GET /", () => {
-  it("should return 200 with pagination", async () => {
-    const results = {
-      queries: [{ _key: "q1" }],
-      pagination: { total: 1, limit: 20, offset: 0 },
-    };
+describe('GET /', () => {
+  it('should return 200 with pagination', async () => {
+    const results = { queries: [{ _key: 'q1' }], pagination: { total: 1, limit: 20, offset: 0 } };
     queryService.searchQueries.mockResolvedValue(results);
 
-    const response = await authGet("/api/queries");
+    const response = await authGet('/api/queries');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(results);
   });
 
-  it("should pass query params: limit, offset, sessionId, text", async () => {
-    queryService.searchQueries.mockResolvedValue({
-      queries: [],
-      pagination: {},
-    });
+  it('should pass query params: limit, offset, sessionId, text', async () => {
+    queryService.searchQueries.mockResolvedValue({ queries: [], pagination: {} });
 
-    const response = await authGet(
-      "/api/queries?limit=10&offset=5&sessionId=s1&text=hello",
-    );
+    const response = await authGet('/api/queries?limit=10&offset=5&sessionId=s1&text=hello');
 
     expect(response.status).toBe(200);
     expect(queryService.searchQueries).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: "s1",
-        text: "hello",
-        userId: expect.any(String),
-      }),
+      expect.objectContaining({ sessionId: 's1', text: 'hello', userId: expect.any(String) }),
       10,
-      5,
+      5
     );
   });
 
-  it("should return 500 on service error", async () => {
-    queryService.searchQueries.mockRejectedValue(new Error("Search failed"));
+  it('should return 500 on service error', async () => {
+    queryService.searchQueries.mockRejectedValue(new Error('Search failed'));
 
-    const response = await authGet("/api/queries");
+    const response = await authGet('/api/queries');
 
     expect(response.status).toBe(500);
   });
@@ -737,23 +657,21 @@ describe("GET /", () => {
 // ============================================================
 // AC1.9: GET /:queryId/conversations
 // ============================================================
-describe("GET /:queryId/conversations", () => {
-  it("should return 200 with conversations", async () => {
-    const conversations = [{ _key: "c1", title: "Chat" }];
+describe('GET /:queryId/conversations', () => {
+  it('should return 200 with conversations', async () => {
+    const conversations = [{ _key: 'c1', title: 'Chat' }];
     queryService.getConversationsForQuery.mockResolvedValue(conversations);
 
-    const response = await authGet("/api/queries/q1/conversations");
+    const response = await authGet('/api/queries/q1/conversations');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(conversations);
   });
 
-  it("should return 500 via next(error) on service failure", async () => {
-    queryService.getConversationsForQuery.mockRejectedValue(
-      new Error("DB error"),
-    );
+  it('should return 500 via next(error) on service failure', async () => {
+    queryService.getConversationsForQuery.mockRejectedValue(new Error('DB error'));
 
-    const response = await authGet("/api/queries/q1/conversations");
+    const response = await authGet('/api/queries/q1/conversations');
 
     expect(response.status).toBe(500);
   });
@@ -762,25 +680,21 @@ describe("GET /:queryId/conversations", () => {
 // ============================================================
 // AC1.10: POST /:queryId/conversation
 // ============================================================
-describe("POST /:queryId/conversation", () => {
-  it("should return 201 on success", async () => {
-    const result = { conversation: { _key: "c1" } };
+describe('POST /:queryId/conversation', () => {
+  it('should return 201 on success', async () => {
+    const result = { conversation: { _key: 'c1' } };
     queryService.createConversationFromQuery.mockResolvedValue(result);
 
-    const response = await authPost("/api/queries/q1/conversation", {
-      title: "New chat",
-    });
+    const response = await authPost('/api/queries/q1/conversation', { title: 'New chat' });
 
     expect(response.status).toBe(201);
     expect(response.body).toEqual(result);
   });
 
-  it("should return 500 via next(error) on service failure", async () => {
-    queryService.createConversationFromQuery.mockRejectedValue(
-      new Error("Create failed"),
-    );
+  it('should return 500 via next(error) on service failure', async () => {
+    queryService.createConversationFromQuery.mockRejectedValue(new Error('Create failed'));
 
-    const response = await authPost("/api/queries/q1/conversation", {});
+    const response = await authPost('/api/queries/q1/conversation', {});
 
     expect(response.status).toBe(500);
   });
@@ -789,26 +703,22 @@ describe("POST /:queryId/conversation", () => {
 // ============================================================
 // AC1.11: POST /:queryId/link/:messageId
 // ============================================================
-describe("POST /:queryId/link/:messageId", () => {
-  it("should return 200 on success", async () => {
+describe('POST /:queryId/link/:messageId', () => {
+  it('should return 200 on success', async () => {
     const result = { success: true };
     queryService.linkQueryToMessage.mockResolvedValue(result);
 
-    const response = await authPost("/api/queries/q1/link/m1", {
-      responseType: "primary",
-    });
+    const response = await authPost('/api/queries/q1/link/m1', { responseType: 'primary' });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(result);
-    expect(queryService.linkQueryToMessage).toHaveBeenCalledWith("q1", "m1", {
-      responseType: "primary",
-    });
+    expect(queryService.linkQueryToMessage).toHaveBeenCalledWith('q1', 'm1', { responseType: 'primary' });
   });
 
-  it("should return 500 via next(error) on service failure", async () => {
-    queryService.linkQueryToMessage.mockRejectedValue(new Error("Link failed"));
+  it('should return 500 via next(error) on service failure', async () => {
+    queryService.linkQueryToMessage.mockRejectedValue(new Error('Link failed'));
 
-    const response = await authPost("/api/queries/q1/link/m1", {});
+    const response = await authPost('/api/queries/q1/link/m1', {});
 
     expect(response.status).toBe(500);
   });

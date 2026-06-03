@@ -17,53 +17,49 @@
   - ARANGO_PASSWORD (default: 'test')
 */
 
-require("dotenv").config();
-const { Database } = require("arangojs");
+require('dotenv').config();
+const { Database } = require('arangojs');
 
 let db;
 
 const config = {
-  url: process.env.ARANGO_URL || "http://127.0.0.1:8529",
-  database: process.env.ARANGO_DATABASE || "node-services",
+  url: process.env.ARANGO_URL || 'http://127.0.0.1:8529',
+  database: process.env.ARANGO_DATABASE || 'node-services',
   auth: {
-    username: process.env.ARANGO_USER || "root",
-    password: process.env.ARANGO_PASSWORD || "test",
-  },
+    username: process.env.ARANGO_USER || 'root',
+    password: process.env.ARANGO_PASSWORD || 'test'
+  }
 };
 
 async function initializeDatabase() {
   try {
-    console.log(
-      `Connecting to ArangoDB at ${config.url}, database "${config.database}"...`,
-    );
+    console.log(`Connecting to ArangoDB at ${config.url}, database "${config.database}"...`);
 
     db = new Database({
       url: config.url,
       databaseName: config.database,
-      auth: config.auth,
+      auth: config.auth
     });
 
     const info = await db.get();
-    console.log(
-      `Connected to database: ${info.name} (version: ${info.version})`,
-    );
+    console.log(`Connected to database: ${info.name} (version: ${info.version})`);
   } catch (error) {
     console.error(`Failed to connect to database at ${config.url}.`);
-    console.error("Error:", error.message);
+    console.error('Error:', error.message);
     throw error;
   }
 }
 
 async function migrateUsersCollection() {
   try {
-    const collection = db.collection("users");
+    const collection = db.collection('users');
     const exists = await collection.exists();
 
     if (exists) {
       console.log('"users" collection already exists. Skipping creation.');
     } else {
       console.log('Creating "users" collection...');
-      await db.createCollection("users");
+      await db.createCollection('users');
       console.log('"users" collection created successfully.');
     }
 
@@ -74,18 +70,13 @@ async function migrateUsersCollection() {
     try {
       const indexes = await collection.getIndexes();
       const legacyEmailIndex = indexes.find(
-        (idx) =>
-          idx.fields.length === 1 &&
-          idx.fields[0] === "email" &&
-          idx.unique === true,
+        (idx) => idx.fields.length === 1 && idx.fields[0] === 'email' && idx.unique === true
       );
 
       if (legacyEmailIndex) {
-        console.log(
-          `Dropping legacy unique email index "${legacyEmailIndex.name}"...`,
-        );
+        console.log(`Dropping legacy unique email index "${legacyEmailIndex.name}"...`);
         await collection.dropIndex(legacyEmailIndex.id);
-        console.log("Legacy unique email index dropped.");
+        console.log('Legacy unique email index dropped.');
       }
     } catch (err) {
       console.log(`Could not check/drop legacy email index: ${err.message}`);
@@ -95,26 +86,26 @@ async function migrateUsersCollection() {
     // --- Create iss_sub unique index (sparse: skip legacy users without iss_sub) ---
     console.log('Ensuring "iss_sub" unique index exists...');
     await collection.ensureIndex({
-      type: "persistent",
-      fields: ["iss_sub"],
+      type: 'persistent',
+      fields: ['iss_sub'],
       unique: true,
       sparse: true,
-      name: "idx_users_iss_sub_unique",
+      name: 'idx_users_iss_sub_unique'
     });
     console.log('"iss_sub" unique index is in place.');
 
     // --- Create email persistent index (non-unique) ---
     console.log('Ensuring "email" persistent index exists...');
     await collection.ensureIndex({
-      type: "persistent",
-      fields: ["email"],
+      type: 'persistent',
+      fields: ['email'],
       unique: false,
       sparse: true,
-      name: "idx_users_email",
+      name: 'idx_users_email'
     });
     console.log('"email" persistent index is in place.');
   } catch (error) {
-    console.error("Error during users collection migration:", error);
+    console.error('Error during users collection migration:', error);
     throw error;
   }
 }
@@ -123,11 +114,9 @@ async function main() {
   try {
     await initializeDatabase();
     await migrateUsersCollection();
-    console.log(
-      '\nMigration complete. The "users" collection is ready for JIT provisioning.',
-    );
+    console.log('\nMigration complete. The "users" collection is ready for JIT provisioning.');
   } catch {
-    console.error("\nMigration failed.");
+    console.error('\nMigration failed.');
     process.exit(1);
   }
 }

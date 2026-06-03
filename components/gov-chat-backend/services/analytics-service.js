@@ -1,7 +1,7 @@
-require("dotenv").config();
-const { aql } = require("arangojs");
-const { logger, dbService } = require("../shared-lib");
-const ServiceCategoryService = require("../services/service-category-service");
+require('dotenv').config();
+const { aql } = require('arangojs');
+const { logger, dbService } = require('../shared-lib');
+const ServiceCategoryService = require('../services/service-category-service');
 
 class AnalyticsService {
   constructor() {
@@ -15,40 +15,35 @@ class AnalyticsService {
     this.serviceCategoriesCollection = null;
     this.serviceCategoryService = ServiceCategoryService; // Store reference for use
     this.initialized = false;
-    logger.info("AnalyticsService constructor called");
+    logger.info('AnalyticsService constructor called');
   }
 
   async init() {
     if (this.initialized) {
-      logger.debug("AnalyticsService already initialized, skipping");
+      logger.debug('AnalyticsService already initialized, skipping');
       return;
     }
     try {
-      this.db = await this.dbService.getConnection("default");
+      this.db = await this.dbService.getConnection('default');
 
-      this.analytics = this.db.collection("analytics");
-      this.events = this.db.collection("events");
-      this.queriesCollection = this.db.collection("queries");
-      this.usersCollection = this.db.collection("users");
-      this.sessionsCollection = this.db.collection("sessions");
-      this.serviceCategoriesCollection =
-        this.db.collection("serviceCategories");
+      this.analytics = this.db.collection('analytics');
+      this.events = this.db.collection('events');
+      this.queriesCollection = this.db.collection('queries');
+      this.usersCollection = this.db.collection('users');
+      this.sessionsCollection = this.db.collection('sessions');
+      this.serviceCategoriesCollection = this.db.collection('serviceCategories');
 
-      logger.info("Initializing AnalyticsService...");
+      logger.info('Initializing AnalyticsService...');
 
       // Initialize ServiceCategoryService
-      logger.info(
-        "Initializing ServiceCategoryService from AnalyticsService...",
-      );
+      logger.info('Initializing ServiceCategoryService from AnalyticsService...');
       await this.serviceCategoryService.init();
-      logger.info("ServiceCategoryService initialized successfully");
+      logger.info('ServiceCategoryService initialized successfully');
 
       this.initialized = true;
-      logger.info("AnalyticsService initialized successfully");
+      logger.info('AnalyticsService initialized successfully');
     } catch (error) {
-      logger.error(`Error initializing AnalyticsService: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error initializing AnalyticsService: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -61,7 +56,7 @@ class AnalyticsService {
   async recordQuery(queryDoc) {
     try {
       const analyticsDoc = {
-        type: "query",
+        type: 'query',
         queryId: queryDoc._key,
         userId: queryDoc.userId,
         sessionId: queryDoc.sessionId,
@@ -71,21 +66,17 @@ class AnalyticsService {
           categoryId: queryDoc.categoryId,
           serviceId: queryDoc.serviceId,
           responseTime: queryDoc.responseTime || 0,
-          isAnswered: queryDoc.isAnswered || false,
-        },
+          isAnswered: queryDoc.isAnswered || false
+        }
       };
 
-      logger.info("Recording query analytics...");
+      logger.info('Recording query analytics...');
       const record = await this.analytics.save(analyticsDoc);
-      logger.info(
-        `Analytics record created with auto-generated key: ${record._key}`,
-      );
+      logger.info(`Analytics record created with auto-generated key: ${record._key}`);
 
       return record;
     } catch (error) {
-      logger.error(`Error recording query analytics: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error recording query analytics: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -99,23 +90,19 @@ class AnalyticsService {
   async recordFeedback(queryId, feedback) {
     try {
       const analyticsDoc = {
-        type: "feedback",
+        type: 'feedback',
         queryId: queryId,
         timestamp: new Date().toISOString(),
-        data: feedback,
+        data: feedback
       };
 
-      logger.info("Recording feedback analytics...");
+      logger.info('Recording feedback analytics...');
       const record = await this.analytics.save(analyticsDoc);
-      logger.info(
-        `Feedback record created with auto-generated key: ${record._key}`,
-      );
+      logger.info(`Feedback record created with auto-generated key: ${record._key}`);
 
       return record;
     } catch (error) {
-      logger.error(`Error recording feedback analytics: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error recording feedback analytics: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -135,7 +122,7 @@ class AnalyticsService {
         userId,
         eventType,
         timestamp: new Date().toISOString(),
-        data: eventData,
+        data: eventData
       };
 
       logger.info(`Tracking event: ${eventType} for user ${userId}`);
@@ -144,10 +131,7 @@ class AnalyticsService {
 
       return event;
     } catch (error) {
-      logger.error(
-        `Error tracking event ${eventType} for user ${userId}: ${error.message}`,
-        { stack: error.stack },
-      );
+      logger.error(`Error tracking event ${eventType} for user ${userId}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -163,13 +147,9 @@ class AnalyticsService {
       const validStartDate = startDate
         ? new Date(startDate).toISOString()
         : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const validEndDate = endDate
-        ? new Date(endDate).toISOString()
-        : new Date().toISOString();
+      const validEndDate = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
 
-      logger.info(
-        `Getting unique users count from ${validStartDate} to ${validEndDate}`,
-      );
+      logger.info(`Getting unique users count from ${validStartDate} to ${validEndDate}`);
 
       try {
         const testCursor = await this.db.query(`
@@ -179,11 +159,9 @@ class AnalyticsService {
             RETURN a.userId
         `);
         const testResult = await testCursor.all();
-        logger.info("Sample user IDs:", testResult);
+        logger.info('Sample user IDs:', testResult);
       } catch (testError) {
-        logger.error(`Test query failed: ${testError.message}`, {
-          stack: testError.stack,
-        });
+        logger.error(`Test query failed: ${testError.message}`, { stack: testError.stack });
       }
 
       const query = `
@@ -198,19 +176,17 @@ class AnalyticsService {
         RETURN LENGTH(usersList)
       `;
 
-      logger.info("Executing unique users count query...");
+      logger.info('Executing unique users count query...');
       const cursor = await this.db.query(query, {
         startDate: validStartDate,
-        endDate: validEndDate,
+        endDate: validEndDate
       });
 
       const result = await cursor.next();
       logger.info(`Unique users count retrieved: ${result}`);
       return result || 0;
     } catch (error) {
-      logger.error(`Error getting unique users count: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error getting unique users count: ${error.message}`, { stack: error.stack });
       return 0;
     }
   }
@@ -222,18 +198,14 @@ class AnalyticsService {
    * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
    * @returns {Promise<Object>} Dashboard analytics
    */
-  async getDashboardAnalytics(startDate, endDate, locale = "en") {
+  async getDashboardAnalytics(startDate, endDate, locale = 'en') {
     try {
       const validStartDate = startDate
         ? new Date(startDate).toISOString()
         : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const validEndDate = endDate
-        ? new Date(endDate).toISOString()
-        : new Date().toISOString();
+      const validEndDate = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
 
-      logger.info(
-        `Getting dashboard analytics from ${validStartDate} to ${validEndDate} with locale ${locale}`,
-      );
+      logger.info(`Getting dashboard analytics from ${validStartDate} to ${validEndDate} with locale ${locale}`);
 
       try {
         const testCursor = await this.db.query(`
@@ -242,11 +214,9 @@ class AnalyticsService {
           }
         `);
         const testResult = await testCursor.next();
-        logger.info("Test query result:", testResult);
+        logger.info('Test query result:', testResult);
       } catch (testError) {
-        logger.error(`Test query failed: ${testError.message}`, {
-          stack: testError.stack,
-        });
+        logger.error(`Test query failed: ${testError.message}`, { stack: testError.stack });
         return this.getEmptyDashboardData();
       }
 
@@ -384,49 +354,40 @@ class AnalyticsService {
         }
       `;
 
-      logger.info("Executing dashboard analytics query...");
+      logger.info('Executing dashboard analytics query...');
 
       const analyticsData = await this.db
         .query(analyticsQuery, {
           startDate: validStartDate,
-          endDate: validEndDate,
+          endDate: validEndDate
         })
         .then((cursor) => cursor.next());
 
       if (!analyticsData) {
-        logger.info("No analytics data found, returning empty data");
+        logger.info('No analytics data found, returning empty data');
         return this.getEmptyDashboardData();
       }
 
-      logger.info("======= DEBUG: CATEGORY NAMES LOCALIZATION =======");
-      logger.info(
-        `DEBUG: Processing locale "${locale}" for category name localization`,
-      );
+      logger.info('======= DEBUG: CATEGORY NAMES LOCALIZATION =======');
+      logger.info(`DEBUG: Processing locale "${locale}" for category name localization`);
 
       // Use ServiceCategoryService to get properly translated categories
-      logger.info(
-        "Getting categories with translations using ServiceCategoryService...",
-      );
+      logger.info('Getting categories with translations using ServiceCategoryService...');
       try {
-        const categoriesWithTranslations =
-          await this.serviceCategoryService.getAllCategoriesWithServices(
-            locale,
-          );
-        logger.info(
-          `DEBUG: Retrieved ${categoriesWithTranslations.length} categories from ServiceCategoryService`,
-        );
+        const categoriesWithTranslations = await this.serviceCategoryService.getAllCategoriesWithServices(locale);
+        logger.info(`DEBUG: Retrieved ${categoriesWithTranslations.length} categories from ServiceCategoryService`);
 
         if (categoriesWithTranslations.length > 0) {
           logger.info(
-            "DEBUG: First few categories from service:",
+            'DEBUG: First few categories from service:',
             JSON.stringify(
               categoriesWithTranslations.slice(0, 3).map((c) => ({
                 catKey: c.catKey,
-                name: c.name,
+                name: c.name
               })),
               null,
-              2,
-            ),
+              2
+            )
           );
         }
 
@@ -439,59 +400,43 @@ class AnalyticsService {
 
         // Apply translated names to analytics data
         if (analyticsData.categories && analyticsData.categories.length > 0) {
-          logger.info(
-            `DEBUG: Processing ${analyticsData.categories.length} categories from analytics data`,
-          );
+          logger.info(`DEBUG: Processing ${analyticsData.categories.length} categories from analytics data`);
 
-          analyticsData.categories = analyticsData.categories.map(
-            (category) => {
-              const idParts = category.categoryId.split("/");
-              const categoryKey =
-                idParts.length > 1 ? idParts[1] : category.categoryId;
+          analyticsData.categories = analyticsData.categories.map((category) => {
+            const idParts = category.categoryId.split('/');
+            const categoryKey = idParts.length > 1 ? idParts[1] : category.categoryId;
 
-              logger.debug(
-                `DEBUG: Looking up category for ID: ${category.categoryId}, extracted key: ${categoryKey}`,
-              );
+            logger.debug(`DEBUG: Looking up category for ID: ${category.categoryId}, extracted key: ${categoryKey}`);
 
-              const translatedName = categoryMap[categoryKey];
+            const translatedName = categoryMap[categoryKey];
 
-              if (translatedName) {
-                logger.debug(
-                  `DEBUG: Found translated name for category ${categoryKey}: "${translatedName}"`,
-                );
-                return {
-                  ...category,
-                  name: translatedName,
-                };
-              } else {
-                logger.warn(
-                  `DEBUG: No translation found for category ${categoryKey} in locale ${locale}`,
-                );
-                return {
-                  ...category,
-                  name: `Category ${categoryKey}`, // Generic fallback
-                };
-              }
-            },
-          );
+            if (translatedName) {
+              logger.debug(`DEBUG: Found translated name for category ${categoryKey}: "${translatedName}"`);
+              return {
+                ...category,
+                name: translatedName
+              };
+            } else {
+              logger.warn(`DEBUG: No translation found for category ${categoryKey} in locale ${locale}`);
+              return {
+                ...category,
+                name: `Category ${categoryKey}` // Generic fallback
+              };
+            }
+          });
         }
       } catch (serviceCategoryError) {
-        logger.error(
-          `Error getting categories from ServiceCategoryService: ${serviceCategoryError.message}`,
-          {
-            stack: serviceCategoryError.stack,
-          },
-        );
+        logger.error(`Error getting categories from ServiceCategoryService: ${serviceCategoryError.message}`, {
+          stack: serviceCategoryError.stack
+        });
         // Analytics data will be returned without category names
       }
 
-      logger.info("======= END DEBUG: CATEGORY NAMES LOCALIZATION =======");
-      logger.info("Dashboard analytics processing completed successfully");
+      logger.info('======= END DEBUG: CATEGORY NAMES LOCALIZATION =======');
+      logger.info('Dashboard analytics processing completed successfully');
       return analyticsData;
     } catch (error) {
-      logger.error(`Error getting dashboard analytics: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error getting dashboard analytics: ${error.message}`, { stack: error.stack });
       return this.getEmptyDashboardData();
     }
   }
@@ -502,13 +447,13 @@ class AnalyticsService {
    * @returns {Object} Empty dashboard data matching the success response shape
    */
   getEmptyDashboardData() {
-    logger.info("Returning empty dashboard data (no fabricated values)");
+    logger.info('Returning empty dashboard data (no fabricated values)');
     return {
       queries: {
         total: 0,
         unanswered: 0,
         answeredPercentage: 0,
-        avgResponseTime: 0,
+        avgResponseTime: 0
       },
       categories: [],
       feedback: {
@@ -517,12 +462,12 @@ class AnalyticsService {
         neutral: 0,
         negative: 0,
         positivePercentage: 0,
-        negativePercentage: 0,
+        negativePercentage: 0
       },
       users: {
-        activeCount: 0,
+        activeCount: 0
       },
-      topQueries: [],
+      topQueries: []
     };
   }
 
@@ -536,34 +481,32 @@ class AnalyticsService {
    */
   async getTimeSeriesData(metricType, interval, startDate, endDate) {
     try {
-      const start = startDate
-        ? new Date(startDate)
-        : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const end = endDate ? new Date(endDate) : new Date();
 
       const startDateISO = start.toISOString();
       const endDateISO = end.toISOString();
 
       logger.info(
-        `Getting time series data for metric: ${metricType}, interval: ${interval}, from ${startDateISO} to ${endDateISO}`,
+        `Getting time series data for metric: ${metricType}, interval: ${interval}, from ${startDateISO} to ${endDateISO}`
       );
 
       let dateFormat;
       switch (interval) {
-        case "hourly":
-          dateFormat = "%Y-%m-%dT%H:00:00Z";
+        case 'hourly':
+          dateFormat = '%Y-%m-%dT%H:00:00Z';
           break;
-        case "daily":
-          dateFormat = "%Y-%m-%d";
+        case 'daily':
+          dateFormat = '%Y-%m-%d';
           break;
-        case "weekly":
-          dateFormat = "%Y-W%W";
+        case 'weekly':
+          dateFormat = '%Y-W%W';
           break;
-        case "monthly":
-          dateFormat = "%Y-%m";
+        case 'monthly':
+          dateFormat = '%Y-%m';
           break;
         default:
-          dateFormat = "%Y-%m-%d";
+          dateFormat = '%Y-%m-%d';
       }
 
       const baseQuery = `
@@ -579,11 +522,11 @@ class AnalyticsService {
         }
     `;
 
-      logger.info("Executing time series data query...");
+      logger.info('Executing time series data query...');
       const cursor = await this.db.query(baseQuery, {
         startDate: startDateISO,
         endDate: endDateISO,
-        dateFormat,
+        dateFormat
       });
 
       const dailyBreakdown = await cursor.all();
@@ -592,22 +535,18 @@ class AnalyticsService {
         timestamp: day.date,
         dateLabel: this.formatDateLabel(day.date, interval),
         value: day.totalQueries,
-        userCount: day.uniqueUsers,
+        userCount: day.uniqueUsers
       }));
 
       if (chartData.length === 0) {
-        logger.info("No time series data found, returning empty array");
+        logger.info('No time series data found, returning empty array');
         return [];
       }
 
-      logger.info(
-        `Time series data retrieved successfully with ${chartData.length} data points`,
-      );
+      logger.info(`Time series data retrieved successfully with ${chartData.length} data points`);
       return chartData;
     } catch (error) {
-      logger.error(`Error in getTimeSeriesData: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error in getTimeSeriesData: ${error.message}`, { stack: error.stack });
       return [];
     }
   }
@@ -620,8 +559,8 @@ class AnalyticsService {
    */
   formatDateLabel(timestamp, interval) {
     if (!timestamp) {
-      logger.warn("Missing timestamp for date label formatting");
-      return "";
+      logger.warn('Missing timestamp for date label formatting');
+      return '';
     }
 
     const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
@@ -632,30 +571,19 @@ class AnalyticsService {
 
     try {
       switch (interval) {
-        case "hourly":
-          return date.toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-        case "daily":
-          return date.toLocaleDateString([], {
-            month: "short",
-            day: "numeric",
-          });
-        case "weekly":
-          return `Week ${Math.ceil((date.getDate() + 6 - date.getDay()) / 7)} ${date.toLocaleDateString([], { month: "short" })}`;
-        case "monthly":
-          return date.toLocaleDateString([], {
-            month: "short",
-            year: "numeric",
-          });
+        case 'hourly':
+          return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        case 'daily':
+          return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        case 'weekly':
+          return `Week ${Math.ceil((date.getDate() + 6 - date.getDay()) / 7)} ${date.toLocaleDateString([], { month: 'short' })}`;
+        case 'monthly':
+          return date.toLocaleDateString([], { month: 'short', year: 'numeric' });
         default:
           return date.toLocaleDateString();
       }
     } catch (error) {
-      logger.error(`Error formatting date label: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error formatting date label: ${error.message}`, { stack: error.stack });
       return String(timestamp);
     }
   }
@@ -667,36 +595,32 @@ class AnalyticsService {
    * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
    * @returns {Promise<Object>} Satisfaction gauge data
    */
-  async getSatisfactionGaugeData(period, selectedDate, locale = "en") {
+  async getSatisfactionGaugeData(period, selectedDate, locale = 'en') {
     try {
       await this.init();
-      logger.debug("getSatisfactionGaugeData: Starting execution", {
+      logger.debug('getSatisfactionGaugeData: Starting execution', {
         period,
         selectedDate,
         locale,
-        method: "getSatisfactionGaugeData",
+        method: 'getSatisfactionGaugeData'
       });
 
       // Calculate date range
       let endDate;
-      const selectedDateObj = selectedDate
-        ? new Date(selectedDate)
-        : new Date();
+      const selectedDateObj = selectedDate ? new Date(selectedDate) : new Date();
       const endDateISO = selectedDateObj.toISOString();
 
       switch (period) {
-        case "daily":
-          endDate = new Date(
-            selectedDateObj.setHours(23, 59, 59, 999),
-          ).toISOString();
+        case 'daily':
+          endDate = new Date(selectedDateObj.setHours(23, 59, 59, 999)).toISOString();
           break;
-        case "weekly":
+        case 'weekly':
           endDate = endDateISO;
           break;
-        case "monthly":
+        case 'monthly':
           endDate = endDateISO;
           break;
-        case "all-time":
+        case 'all-time':
           endDate = endDateISO;
           break;
         default:
@@ -709,51 +633,30 @@ class AnalyticsService {
       // Define time periods
       const timePeriods = [
         {
-          label:
-            locale === "fr" ? "Actuel" : locale === "sw" ? "Sasa" : "Current",
+          label: locale === 'fr' ? 'Actuel' : locale === 'sw' ? 'Sasa' : 'Current',
           start: endTimestamp - weekDuration,
-          end: endTimestamp,
+          end: endTimestamp
         },
         {
-          label:
-            locale === "fr"
-              ? "Semaine dernière"
-              : locale === "sw"
-                ? "Wiki iliyopita"
-                : "Last Week",
+          label: locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki iliyopita' : 'Last Week',
           start: endTimestamp - 2 * weekDuration,
-          end: endTimestamp - weekDuration,
+          end: endTimestamp - weekDuration
         },
         {
-          label:
-            locale === "fr"
-              ? "Il y a 2 semaines"
-              : locale === "sw"
-                ? "Wiki 2 iliyopita"
-                : "2 Weeks Ago",
+          label: locale === 'fr' ? 'Il y a 2 semaines' : locale === 'sw' ? 'Wiki 2 iliyopita' : '2 Weeks Ago',
           start: endTimestamp - 3 * weekDuration,
-          end: endTimestamp - 2 * weekDuration,
+          end: endTimestamp - 2 * weekDuration
         },
         {
-          label:
-            locale === "fr"
-              ? "Il y a 3 semaines"
-              : locale === "sw"
-                ? "Wiki 3 iliyopita"
-                : "3 Weeks Ago",
+          label: locale === 'fr' ? 'Il y a 3 semaines' : locale === 'sw' ? 'Wiki 3 iliyopita' : '3 Weeks Ago',
           start: endTimestamp - 4 * weekDuration,
-          end: endTimestamp - 3 * weekDuration,
+          end: endTimestamp - 3 * weekDuration
         },
         {
-          label:
-            locale === "fr"
-              ? "Il y a 4 semaines"
-              : locale === "sw"
-                ? "Wiki 4 iliyopita"
-                : "4 Weeks Ago",
+          label: locale === 'fr' ? 'Il y a 4 semaines' : locale === 'sw' ? 'Wiki 4 iliyopita' : '4 Weeks Ago',
           start: endTimestamp - 5 * weekDuration,
-          end: endTimestamp - 4 * weekDuration,
-        },
+          end: endTimestamp - 4 * weekDuration
+        }
       ];
 
       const result = {
@@ -761,7 +664,7 @@ class AnalyticsService {
         previousValue: 0,
         changePercentage: 0,
         target: 85,
-        historicalData: [],
+        historicalData: []
       };
 
       // Batch query for all categories per period
@@ -784,36 +687,23 @@ class AnalyticsService {
         const categoryResults = await feedbackCursor.all();
 
         // Calculate average of non-zero category values
-        const categoryValues = categoryResults
-          .map((r) => Math.floor((r.average / 5) * 100))
-          .filter((v) => v > 0);
+        const categoryValues = categoryResults.map((r) => Math.floor((r.average / 5) * 100)).filter((v) => v > 0);
         const periodValue =
           categoryValues.length > 0
-            ? Math.floor(
-                categoryValues.reduce((sum, val) => sum + val, 0) /
-                  categoryValues.length,
-              )
+            ? Math.floor(categoryValues.reduce((sum, val) => sum + val, 0) / categoryValues.length)
             : 0;
 
         result.historicalData.push({
           label: period.label,
           value: periodValue,
           periodStart: new Date(period.start).toISOString(),
-          periodEnd: new Date(period.end).toISOString(),
+          periodEnd: new Date(period.end).toISOString()
         });
 
-        if (
-          period.label ===
-          (locale === "fr" ? "Actuel" : locale === "sw" ? "Sasa" : "Current")
-        ) {
+        if (period.label === (locale === 'fr' ? 'Actuel' : locale === 'sw' ? 'Sasa' : 'Current')) {
           result.currentValue = periodValue;
         } else if (
-          period.label ===
-          (locale === "fr"
-            ? "Semaine dernière"
-            : locale === "sw"
-              ? "Wiki iliyopita"
-              : "Last Week")
+          period.label === (locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki iliyopita' : 'Last Week')
         ) {
           result.previousValue = periodValue;
         }
@@ -822,71 +712,49 @@ class AnalyticsService {
       // Calculate change percentage
       result.changePercentage =
         result.previousValue > 0
-          ? Math.round(
-              ((result.currentValue - result.previousValue) /
-                result.previousValue) *
-                100,
-            )
+          ? Math.round(((result.currentValue - result.previousValue) / result.previousValue) * 100)
           : 0;
 
       // Ensure historicalData is always 5 entries
       if (result.historicalData.length < 5) {
         const defaultLabels = [
-          locale === "fr" ? "Actuel" : locale === "sw" ? "Sasa" : "Current",
-          locale === "fr"
-            ? "Semaine dernière"
-            : locale === "sw"
-              ? "Wiki iliyopita"
-              : "Last Week",
-          locale === "fr"
-            ? "Il y a 2 semaines"
-            : locale === "sw"
-              ? "Wiki 2 iliyopita"
-              : "2 Weeks Ago",
-          locale === "fr"
-            ? "Il y a 3 semaines"
-            : locale === "sw"
-              ? "Wiki 3 iliyopita"
-              : "3 Weeks Ago",
-          locale === "fr"
-            ? "Il y a 4 semaines"
-            : locale === "sw"
-              ? "Wiki 4 iliyopita"
-              : "4 Weeks Ago",
+          locale === 'fr' ? 'Actuel' : locale === 'sw' ? 'Sasa' : 'Current',
+          locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki iliyopita' : 'Last Week',
+          locale === 'fr' ? 'Il y a 2 semaines' : locale === 'sw' ? 'Wiki 2 iliyopita' : '2 Weeks Ago',
+          locale === 'fr' ? 'Il y a 3 semaines' : locale === 'sw' ? 'Wiki 3 iliyopita' : '3 Weeks Ago',
+          locale === 'fr' ? 'Il y a 4 semaines' : locale === 'sw' ? 'Wiki 4 iliyopita' : '4 Weeks Ago'
         ];
         const defaultHistoricalData = defaultLabels.map((label, i) => ({
           label,
           value: 0,
-          periodStart: new Date(
-            endTimestamp - (i + 1) * weekDuration,
-          ).toISOString(),
-          periodEnd: new Date(endTimestamp - i * weekDuration).toISOString(),
+          periodStart: new Date(endTimestamp - (i + 1) * weekDuration).toISOString(),
+          periodEnd: new Date(endTimestamp - i * weekDuration).toISOString()
         }));
         result.historicalData = defaultHistoricalData
           .slice(0, 5 - result.historicalData.length)
           .concat(result.historicalData);
       }
 
-      logger.info("getSatisfactionGaugeData: Successful data retrieval", {
+      logger.info('getSatisfactionGaugeData: Successful data retrieval', {
         currentValue: result.currentValue,
         historicalDataLength: result.historicalData.length,
         historicalData: result.historicalData,
-        method: "getSatisfactionGaugeData",
+        method: 'getSatisfactionGaugeData'
       });
 
       return result;
     } catch (error) {
-      logger.error("getSatisfactionGaugeData: Query execution failed", {
+      logger.error('getSatisfactionGaugeData: Query execution failed', {
         error: error.message,
         stack: error.stack,
-        method: "getSatisfactionGaugeData",
+        method: 'getSatisfactionGaugeData'
       });
       return {
         currentValue: 0,
         previousValue: 0,
         changePercentage: 0,
         target: 85,
-        historicalData: [],
+        historicalData: []
       };
     }
   }
@@ -898,36 +766,32 @@ class AnalyticsService {
    * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
    * @returns {Promise<Array>} Heatmap data for all categories
    */
-  async getSatisfactionHeatmapData(period, selectedDate, locale = "en") {
+  async getSatisfactionHeatmapData(period, selectedDate, locale = 'en') {
     try {
       await this.init();
-      logger.debug("getSatisfactionHeatmapData: Starting execution", {
+      logger.debug('getSatisfactionHeatmapData: Starting execution', {
         period,
         selectedDate,
         locale,
-        method: "getSatisfactionHeatmapData",
+        method: 'getSatisfactionHeatmapData'
       });
 
       // Calculate date range
       let endDate;
-      const selectedDateObj = selectedDate
-        ? new Date(selectedDate)
-        : new Date();
+      const selectedDateObj = selectedDate ? new Date(selectedDate) : new Date();
       const endDateISO = selectedDateObj.toISOString();
 
       switch (period) {
-        case "daily":
-          endDate = new Date(
-            selectedDateObj.setHours(23, 59, 59, 999),
-          ).toISOString();
+        case 'daily':
+          endDate = new Date(selectedDateObj.setHours(23, 59, 59, 999)).toISOString();
           break;
-        case "weekly":
+        case 'weekly':
           endDate = endDateISO;
           break;
-        case "monthly":
+        case 'monthly':
           endDate = endDateISO;
           break;
-        case "all-time":
+        case 'all-time':
           endDate = endDateISO;
           break;
         default:
@@ -940,98 +804,69 @@ class AnalyticsService {
       // Define time periods
       const timePeriods = [
         {
-          label:
-            locale === "fr" ? "Actuel" : locale === "sw" ? "Sasa" : "Current",
+          label: locale === 'fr' ? 'Actuel' : locale === 'sw' ? 'Sasa' : 'Current',
           start: endTimestamp - weekDuration,
-          end: endTimestamp,
+          end: endTimestamp
         },
         {
-          label:
-            locale === "fr"
-              ? "Semaine dernière"
-              : locale === "sw"
-                ? "Wiki iliyopita"
-                : "Last Week",
+          label: locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki iliyopita' : 'Last Week',
           start: endTimestamp - 2 * weekDuration,
-          end: endTimestamp - weekDuration,
+          end: endTimestamp - weekDuration
         },
         {
-          label:
-            locale === "fr"
-              ? "Il y a 2 semaines"
-              : locale === "sw"
-                ? "Wiki 2 iliyopita"
-                : "2 Weeks Ago",
+          label: locale === 'fr' ? 'Il y a 2 semaines' : locale === 'sw' ? 'Wiki 2 iliyopita' : '2 Weeks Ago',
           start: endTimestamp - 3 * weekDuration,
-          end: endTimestamp - 2 * weekDuration,
+          end: endTimestamp - 2 * weekDuration
         },
         {
-          label:
-            locale === "fr"
-              ? "Il y a 3 semaines"
-              : locale === "sw"
-                ? "Wiki 3 iliyopita"
-                : "3 Weeks Ago",
+          label: locale === 'fr' ? 'Il y a 3 semaines' : locale === 'sw' ? 'Wiki 3 iliyopita' : '3 Weeks Ago',
           start: endTimestamp - 4 * weekDuration,
-          end: endTimestamp - 3 * weekDuration,
+          end: endTimestamp - 3 * weekDuration
         },
         {
-          label:
-            locale === "fr"
-              ? "Il y a 4 semaines"
-              : locale === "sw"
-                ? "Wiki 4 iliyopita"
-                : "4 Weeks Ago",
+          label: locale === 'fr' ? 'Il y a 4 semaines' : locale === 'sw' ? 'Wiki 4 iliyopita' : '4 Weeks Ago',
           start: endTimestamp - 5 * weekDuration,
-          end: endTimestamp - 4 * weekDuration,
-        },
+          end: endTimestamp - 4 * weekDuration
+        }
       ];
 
       // Use ServiceCategoryService to get all categories with translations
-      logger.info(
-        "Getting categories with translations using ServiceCategoryService for heatmap...",
-      );
+      logger.info('Getting categories with translations using ServiceCategoryService for heatmap...');
       let categories = [];
 
       try {
-        const categoriesWithTranslations =
-          await this.serviceCategoryService.getAllCategoriesWithServices(
-            locale,
-          );
+        const categoriesWithTranslations = await this.serviceCategoryService.getAllCategoriesWithServices(locale);
         logger.info(
-          `DEBUG: Retrieved ${categoriesWithTranslations.length} categories for heatmap from ServiceCategoryService`,
+          `DEBUG: Retrieved ${categoriesWithTranslations.length} categories for heatmap from ServiceCategoryService`
         );
 
         // Map to format needed for heatmap
         categories = categoriesWithTranslations.map((cat) => ({
           id: cat.catKey,
-          name: cat.name, // Already translated by service
+          name: cat.name // Already translated by service
         }));
 
-        logger.debug(
-          `DEBUG: Mapped categories for heatmap:`,
-          JSON.stringify(categories.slice(0, 3), null, 2),
-        );
+        logger.debug(`DEBUG: Mapped categories for heatmap:`, JSON.stringify(categories.slice(0, 3), null, 2));
       } catch (serviceCategoryError) {
         logger.error(
           `Error getting categories from ServiceCategoryService for heatmap: ${serviceCategoryError.message}`,
           {
-            stack: serviceCategoryError.stack,
-          },
+            stack: serviceCategoryError.stack
+          }
         );
 
         // Fallback to generic categories if service fails
-        logger.warn("Using generic fallback categories for heatmap");
+        logger.warn('Using generic fallback categories for heatmap');
         categories = Array.from({ length: 10 }, (_, i) => ({
           id: String(i + 1),
-          name: `Category ${i + 1}`,
+          name: `Category ${i + 1}`
         }));
       }
 
       // Initialize heatmap data with zeros for all categories
       const heatmapData = categories.map((category) => ({
         name: category.name,
-        data: timePeriods.map((period) => ({ x: period.label, y: 0 })),
+        data: timePeriods.map((period) => ({ x: period.label, y: 0 }))
       }));
 
       // Batch query for all feedback per period
@@ -1054,58 +889,45 @@ class AnalyticsService {
           const feedbackCursor = await this.db.query(feedbackQuery);
           const feedbackResults = await feedbackCursor.all();
 
-          logger.debug(
-            `DEBUG: Feedback results for period ${period.label}:`,
-            feedbackResults.length,
-          );
+          logger.debug(`DEBUG: Feedback results for period ${period.label}:`, feedbackResults.length);
 
           // Update heatmap data for this period
           feedbackResults.forEach((result) => {
-            const categoryIndex = categories.findIndex(
-              (c) => c.id === result.categoryId,
-            );
+            const categoryIndex = categories.findIndex((c) => c.id === result.categoryId);
             if (categoryIndex !== -1) {
-              const periodIndex = timePeriods.findIndex(
-                (p) => p.label === period.label,
-              );
+              const periodIndex = timePeriods.findIndex((p) => p.label === period.label);
               if (periodIndex !== -1) {
-                const satisfactionPercentage = Math.floor(
-                  (result.average / 5) * 100,
-                );
-                heatmapData[categoryIndex].data[periodIndex].y =
-                  satisfactionPercentage;
+                const satisfactionPercentage = Math.floor((result.average / 5) * 100);
+                heatmapData[categoryIndex].data[periodIndex].y = satisfactionPercentage;
                 logger.debug(
-                  `DEBUG: Set heatmap value for ${categories[categoryIndex].name} at ${period.label}: ${satisfactionPercentage}%`,
+                  `DEBUG: Set heatmap value for ${categories[categoryIndex].name} at ${period.label}: ${satisfactionPercentage}%`
                 );
               }
             }
           });
         } catch (queryError) {
-          logger.error(
-            `Error querying feedback for period ${period.label}: ${queryError.message}`,
-            {
-              stack: queryError.stack,
-            },
-          );
+          logger.error(`Error querying feedback for period ${period.label}: ${queryError.message}`, {
+            stack: queryError.stack
+          });
         }
       }
 
-      logger.info("getSatisfactionHeatmapData: Successful data retrieval", {
+      logger.info('getSatisfactionHeatmapData: Successful data retrieval', {
         categories: categories.length,
         periods: timePeriods.length,
         heatmapDataSample: heatmapData.slice(0, 2).map((item) => ({
           name: item.name,
-          dataLength: item.data.length,
+          dataLength: item.data.length
         })),
-        method: "getSatisfactionHeatmapData",
+        method: 'getSatisfactionHeatmapData'
       });
 
       return heatmapData;
     } catch (error) {
-      logger.error("getSatisfactionHeatmapData: Query execution failed", {
+      logger.error('getSatisfactionHeatmapData: Query execution failed', {
         error: error.message,
         stack: error.stack,
-        method: "getSatisfactionHeatmapData",
+        method: 'getSatisfactionHeatmapData'
       });
 
       // Return empty array on error

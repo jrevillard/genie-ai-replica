@@ -1,9 +1,7 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const {
-  keycloakAuthMiddleware,
-} = require("../middleware/keycloak-auth-middleware");
-const { logger } = require("../shared-lib");
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
+const { logger } = require('../shared-lib');
 
 module.exports = (weatherService) => {
   // Apply authentication middleware
@@ -74,47 +72,32 @@ module.exports = (weatherService) => {
    *       500:
    *         description: Server error
    */
-  router.post("/", async (req, res) => {
+  router.post('/', async (req, res) => {
     try {
       const { latitude, longitude } = req.body;
 
       // Validate coordinates if provided
       if ((latitude && !longitude) || (!latitude && longitude)) {
-        return res
-          .status(400)
-          .json({ message: "Both latitude and longitude must be provided" });
+        return res.status(400).json({ message: 'Both latitude and longitude must be provided' });
       }
       if (latitude && (latitude < -90 || latitude > 90)) {
-        return res.status(400).json({ message: "Invalid latitude" });
+        return res.status(400).json({ message: 'Invalid latitude' });
       }
       if (longitude && (longitude < -180 || longitude > 180)) {
-        return res.status(400).json({ message: "Invalid longitude" });
+        return res.status(400).json({ message: 'Invalid longitude' });
       }
 
       const userId = req.user?.iss_sub;
       if (!userId) {
-        return res
-          .status(401)
-          .json({
-            error: "UNAUTHENTICATED",
-            message: "User not authenticated",
-          });
+        return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
       }
 
-      logger.info(
-        `Fetching weather for user ${userId} at lat:${latitude}, lon:${longitude}`,
-      );
+      logger.info(`Fetching weather for user ${userId} at lat:${latitude}, lon:${longitude}`);
 
-      const weatherData = await weatherService.getWeather({
-        latitude,
-        longitude,
-        userId,
-      });
+      const weatherData = await weatherService.getWeather({ latitude, longitude, userId });
       res.json(weatherData);
     } catch (error) {
-      logger.error(`Error fetching weather: ${error.message}`, {
-        stack: error.stack,
-      });
+      logger.error(`Error fetching weather: ${error.message}`, { stack: error.stack });
       res.status(500).json({ message: error.message });
     }
   });

@@ -1,9 +1,7 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const {
-  keycloakAuthMiddleware,
-} = require("../middleware/keycloak-auth-middleware");
-const { logger } = require("../shared-lib");
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
+const { logger } = require('../shared-lib');
 
 module.exports = (databaseService) => {
   // Apply authentication middleware to all routes
@@ -35,9 +33,9 @@ module.exports = (databaseService) => {
    *       500:
    *         description: Server error
    */
-  router.post("/backup", async (req, res) => {
+  router.post('/backup', async (req, res) => {
     try {
-      logger.info("Initiating database backup via API");
+      logger.info('Initiating database backup via API');
       const result = await databaseService.backupDatabase();
 
       if (result.success) {
@@ -46,13 +44,10 @@ module.exports = (databaseService) => {
         res.status(500).json(result);
       }
     } catch (error) {
-      logger.error(
-        `Unexpected error during database backup: ${error.message}`,
-        { stack: error.stack },
-      );
+      logger.error(`Unexpected error during database backup: ${error.message}`, { stack: error.stack });
       res.status(500).json({
         success: false,
-        message: "Unexpected error during database backup",
+        message: 'Unexpected error during database backup'
       });
     }
   });
@@ -90,9 +85,9 @@ module.exports = (databaseService) => {
    *       500:
    *         description: Server error
    */
-  router.post("/optimize", async (req, res) => {
+  router.post('/optimize', async (req, res) => {
     try {
-      logger.info("Initiating database optimization via API");
+      logger.info('Initiating database optimization via API');
       const result = await databaseService.optimizeDatabase();
 
       if (result.success) {
@@ -101,13 +96,10 @@ module.exports = (databaseService) => {
         res.status(500).json(result);
       }
     } catch (error) {
-      logger.error(
-        `Unexpected error during database optimization: ${error.message}`,
-        { stack: error.stack },
-      );
+      logger.error(`Unexpected error during database optimization: ${error.message}`, { stack: error.stack });
       res.status(500).json({
         success: false,
-        message: "Unexpected error during database optimization",
+        message: 'Unexpected error during database optimization'
       });
     }
   });

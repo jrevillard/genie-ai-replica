@@ -1,8 +1,8 @@
-"use strict";
+'use strict';
 
-const { jwtVerify, createRemoteJWKSet } = require("jose");
-const { logger } = require("../shared-lib");
-const axios = require("axios");
+const { jwtVerify, createRemoteJWKSet } = require('jose');
+const { logger } = require('../shared-lib');
+const axios = require('axios');
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
@@ -13,18 +13,14 @@ const JWKS_CACHE_TTL = 300000; // 5 minutes JWKS cache TTL (NFR10)
 // e.g. ["partner","contractor"]
 let additionalRealms = [];
 try {
-  const parsed = JSON.parse(process.env.KEYCLOAK_ADDITIONAL_REALMS || "[]");
+  const parsed = JSON.parse(process.env.KEYCLOAK_ADDITIONAL_REALMS || '[]');
   if (Array.isArray(parsed)) {
     additionalRealms = parsed;
   } else {
-    logger.warn(
-      "[KeycloakAuth] KEYCLOAK_ADDITIONAL_REALMS must be a JSON array, ignoring",
-    );
+    logger.warn('[KeycloakAuth] KEYCLOAK_ADDITIONAL_REALMS must be a JSON array, ignoring');
   }
 } catch {
-  logger.warn(
-    "[KeycloakAuth] Invalid JSON in KEYCLOAK_ADDITIONAL_REALMS, ignoring",
-  );
+  logger.warn('[KeycloakAuth] Invalid JSON in KEYCLOAK_ADDITIONAL_REALMS, ignoring');
 }
 
 /**
@@ -33,7 +29,7 @@ try {
 class TokenVerificationError extends Error {
   constructor(code, message, details = {}) {
     super(message);
-    this.name = "TokenVerificationError";
+    this.name = 'TokenVerificationError';
     this.code = code;
     this.details = details;
   }
@@ -121,9 +117,7 @@ let initialized = false;
 async function init(idpUrl) {
   const baseUrl = idpUrl || `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}`;
   if (!baseUrl) {
-    throw new Error(
-      "KEYCLOAK_URL environment variable is required for OIDC discovery",
-    );
+    throw new Error('KEYCLOAK_URL environment variable is required for OIDC discovery');
   }
   const discoveryUrl = `${baseUrl}/.well-known/openid-configuration`;
 
@@ -137,9 +131,7 @@ async function init(idpUrl) {
   const doc = await res.json();
 
   if (!doc.issuer || !doc.jwks_uri) {
-    throw new Error(
-      "OIDC discovery document missing required fields: issuer, jwks_uri",
-    );
+    throw new Error('OIDC discovery document missing required fields: issuer, jwks_uri');
   }
 
   const jwks = createJwksCache(doc.jwks_uri);
@@ -147,9 +139,7 @@ async function init(idpUrl) {
   initialized = true;
   initFailedAt = 0;
 
-  logger.info(
-    `[KeycloakAuth] Initialized: issuer=${doc.issuer}, jwks=${doc.jwks_uri}`,
-  );
+  logger.info(`[KeycloakAuth] Initialized: issuer=${doc.issuer}, jwks=${doc.jwks_uri}`);
 
   return doc.issuer;
 }
@@ -173,9 +163,7 @@ async function initAllRealms() {
       await init(realmUrl);
       logger.info(`[KeycloakAuth] Additional realm initialized: ${realmName}`);
     } catch (err) {
-      logger.warn(
-        `[KeycloakAuth] Failed to initialize additional realm '${realmName}': ${err.message}`,
-      );
+      logger.warn(`[KeycloakAuth] Failed to initialize additional realm '${realmName}': ${err.message}`);
     }
   }
 }
@@ -191,10 +179,7 @@ async function ensureInitialized() {
 
   // Within cooldown after a failure — skip retry
   if (initFailedAt && Date.now() - initFailedAt < INIT_RETRY_COOLDOWN) {
-    throw new TokenVerificationError(
-      "TOKEN_INVALID",
-      "Authentication service is temporarily unavailable",
-    );
+    throw new TokenVerificationError('TOKEN_INVALID', 'Authentication service is temporarily unavailable');
   }
 
   // If an init is already in progress, wait for it
@@ -228,25 +213,19 @@ const keycloakAuthService = {
    * @throws {TokenVerificationError} On verification failure
    */
   async verifyToken(token) {
-    if (!token || typeof token !== "string") {
-      throw new TokenVerificationError(
-        "TOKEN_INVALID",
-        "Token is empty or not a string",
-      );
+    if (!token || typeof token !== 'string') {
+      throw new TokenVerificationError('TOKEN_INVALID', 'Token is empty or not a string');
     }
 
-    if (token.split(".").length !== 3) {
-      throw new TokenVerificationError("TOKEN_INVALID", "Malformed JWT format");
+    if (token.split('.').length !== 3) {
+      throw new TokenVerificationError('TOKEN_INVALID', 'Malformed JWT format');
     }
 
     try {
       await ensureInitialized();
     } catch (err) {
       if (err instanceof TokenVerificationError) throw err;
-      throw new TokenVerificationError(
-        "TOKEN_INVALID",
-        "Authentication service is temporarily unavailable",
-      );
+      throw new TokenVerificationError('TOKEN_INVALID', 'Authentication service is temporarily unavailable');
     }
 
     // Extract unverified iss and exp to lookup in trusted issuer map (whitelist)
@@ -254,28 +233,23 @@ const keycloakAuthService = {
     let unverifiedIss;
     let unverifiedExp;
     try {
-      const payload = JSON.parse(
-        Buffer.from(token.split(".")[1], "base64url").toString("utf8"),
-      );
+      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
       unverifiedIss = payload.iss;
       unverifiedExp = payload.exp;
     } catch {
-      throw new TokenVerificationError(
-        "TOKEN_INVALID",
-        "Cannot decode JWT payload",
-      );
+      throw new TokenVerificationError('TOKEN_INVALID', 'Cannot decode JWT payload');
     }
 
     const jwks = issuerMap.get(unverifiedIss);
     if (!jwks) {
-      throw new TokenVerificationError("TOKEN_INVALID", "Unknown issuer");
+      throw new TokenVerificationError('TOKEN_INVALID', 'Unknown issuer');
     }
 
     // Helper function to verify token with JWT
     const verifyWithJwt = async () => {
       const { payload: verifiedPayload } = await jwtVerify(token, jwks, {
         issuer: unverifiedIss,
-        requiredClaims: ["iss", "exp"],
+        requiredClaims: ['iss', 'exp']
       });
 
       // Note: we do NOT validate azp (authorized party). Any client within
@@ -299,7 +273,7 @@ const keycloakAuthService = {
 
       const result = {
         ...verifiedPayload,
-        iss_sub: issSub,
+        iss_sub: issSub
       };
 
       logger.debug(`[KeycloakAuth] Token verified for ${issSub}`);
@@ -311,28 +285,19 @@ const keycloakAuthService = {
       }
 
       // JWTExpired → immediate TOKEN_EXPIRED (no refresh attempt)
-      if (err.name === "JWTExpired") {
-        throw new TokenVerificationError("TOKEN_EXPIRED", "Token has expired");
+      if (err.name === 'JWTExpired') {
+        throw new TokenVerificationError('TOKEN_EXPIRED', 'Token has expired');
       }
 
       // JWTClaimValidationFailed → TOKEN_INVALID (claim issues are NOT key rotation problems)
-      if (err.name === "JWTClaimValidationFailed") {
-        if (err.claim === "iss") {
-          throw new TokenVerificationError(
-            "TOKEN_INVALID",
-            "Token issuer validation failed",
-          );
+      if (err.name === 'JWTClaimValidationFailed') {
+        if (err.claim === 'iss') {
+          throw new TokenVerificationError('TOKEN_INVALID', 'Token issuer validation failed');
         }
-        if (err.claim === "aud") {
-          throw new TokenVerificationError(
-            "TOKEN_INVALID",
-            "Token audience validation failed",
-          );
+        if (err.claim === 'aud') {
+          throw new TokenVerificationError('TOKEN_INVALID', 'Token audience validation failed');
         }
-        throw new TokenVerificationError(
-          "TOKEN_INVALID",
-          "Token verification failed",
-        );
+        throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
       }
 
       // Generic Error (signature failure or unknown kid) → check exp for force-refresh decision
@@ -340,7 +305,7 @@ const keycloakAuthService = {
       const now = Math.floor(Date.now() / 1000);
       if (unverifiedExp && unverifiedExp < now) {
         // Token is expired → immediate TOKEN_EXPIRED (no refresh)
-        throw new TokenVerificationError("TOKEN_EXPIRED", "Token has expired");
+        throw new TokenVerificationError('TOKEN_EXPIRED', 'Token has expired');
       }
 
       // Signature failure with valid exp → force-refresh JWKS and retry once
@@ -352,25 +317,18 @@ const keycloakAuthService = {
 
         const result = {
           ...verifiedPayload,
-          iss_sub: issSub,
+          iss_sub: issSub
         };
 
-        logger.debug(
-          `[KeycloakAuth] Token verified after JWKS force-refresh for ${issSub}`,
-        );
+        logger.debug(`[KeycloakAuth] Token verified after JWKS force-refresh for ${issSub}`);
         return result;
       } catch (retryErr) {
         // Retry failed → TOKEN_INVALID
         if (retryErr instanceof TokenVerificationError) {
           throw retryErr;
         }
-        logger.error(
-          `[KeycloakAuth] Token verification failed after JWKS refresh: ${retryErr.message}`,
-        );
-        throw new TokenVerificationError(
-          "TOKEN_INVALID",
-          "Token verification failed",
-        );
+        logger.error(`[KeycloakAuth] Token verification failed after JWKS refresh: ${retryErr.message}`);
+        throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
       }
     }
   },
@@ -412,9 +370,9 @@ const keycloakAuthService = {
       const response = await axios.get(userInfoUrl, {
         headers: {
           Authorization: `Bearer ${token}`,
-          Accept: "application/json",
+          Accept: 'application/json'
         },
-        timeout: 3000,
+        timeout: 3000
       });
 
       // If we get a 200 response, user is active
@@ -423,27 +381,18 @@ const keycloakAuthService = {
       }
 
       // Unexpected response
-      logger.warn(
-        `[KeycloakAuth] Unexpected Keycloak UserInfo response: ${response.status}`,
-      );
+      logger.warn(`[KeycloakAuth] Unexpected Keycloak UserInfo response: ${response.status}`);
       return null;
     } catch (error) {
       // 401/403 responses indicate user is disabled/deleted
-      if (
-        error.response &&
-        (error.response.status === 401 || error.response.status === 403)
-      ) {
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
         return { active: false, disabled: true };
       }
       // Network errors: timeouts are transient (warn), unexpected errors are severe (error)
-      if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") {
-        logger.warn(
-          `[KeycloakAuth] Keycloak UserInfo check failed (network): ${error.message}`,
-        );
+      if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+        logger.warn(`[KeycloakAuth] Keycloak UserInfo check failed (network): ${error.message}`);
       } else {
-        logger.error(
-          `[KeycloakAuth] Keycloak UserInfo check failed: ${error.message}`,
-        );
+        logger.error(`[KeycloakAuth] Keycloak UserInfo check failed: ${error.message}`);
       }
       return null;
     }
@@ -476,7 +425,7 @@ const keycloakAuthService = {
    */
   _getJwksCache(issuer) {
     return issuerMap.get(issuer);
-  },
+  }
 };
 
 module.exports = keycloakAuthService;

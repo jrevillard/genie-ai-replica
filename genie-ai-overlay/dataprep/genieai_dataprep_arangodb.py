@@ -318,6 +318,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             default_headers={"X-API-Key": _api_key},
         )
         model = os.getenv("VLLM_MODEL_ID")
+        if not model:
+            # Auto-detect model from remote vLLM API
+            try:
+                models = await client.models.list()
+                model = models.data[0].id if models.data else None
+            except Exception as e:
+                logger.warning(f"Failed to auto-detect model from vLLM API: {e}")
+        if not model:
+            raise RuntimeError("VLLM_MODEL_ID not set and auto-detection failed")
 
         # Debug: Log what is sent to LLM
         logger.debug(

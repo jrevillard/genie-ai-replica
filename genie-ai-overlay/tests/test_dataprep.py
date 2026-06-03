@@ -1077,12 +1077,12 @@ class TestLoadWithDoclingRemote:
 
     @pytest.mark.asyncio
     async def test_api_key_injected_when_set(self, temp_file, mock_aiohttp_session):
-        """When OPEA_API_KEY is set, ClientSession receives X-API-Key header."""
+        """When VLLM_API_KEY is set, ClientSession receives Authorization: Bearer header."""
         import os
 
         from dataprep.genieai_dataprep_utils import _load_with_docling_remote
 
-        os.environ["OPEA_API_KEY"] = "test-key"
+        os.environ["VLLM_API_KEY"] = "test-key"
         os.environ["OPEA_SSL_SKIP_VERIFY"] = "1"
         try:
             with (
@@ -1094,20 +1094,20 @@ class TestLoadWithDoclingRemote:
             ):
                 await _load_with_docling_remote(temp_file)
         finally:
-            os.environ.pop("OPEA_API_KEY", None)
+            os.environ.pop("VLLM_API_KEY", None)
             os.environ.pop("OPEA_SSL_SKIP_VERIFY", None)
 
         _, kwargs = mock_aiohttp_session.ClientSession.call_args
-        assert kwargs["headers"] == {"X-API-Key": "test-key"}
+        assert kwargs["headers"] == {"Authorization": "Bearer test-key"}
 
     @pytest.mark.asyncio
     async def test_no_api_key_when_unset(self, temp_file, mock_aiohttp_session):
-        """When OPEA_API_KEY is unset, ClientSession receives empty headers."""
+        """When VLLM_API_KEY is unset, ClientSession receives empty headers."""
         import os
 
         from dataprep.genieai_dataprep_utils import _load_with_docling_remote
 
-        old_key = os.environ.pop("OPEA_API_KEY", None)
+        old_key = os.environ.pop("VLLM_API_KEY", None)
         os.environ["OPEA_SSL_SKIP_VERIFY"] = "1"
         try:
             with (
@@ -1120,7 +1120,7 @@ class TestLoadWithDoclingRemote:
                 await _load_with_docling_remote(temp_file)
         finally:
             if old_key is not None:
-                os.environ["OPEA_API_KEY"] = old_key
+                os.environ["VLLM_API_KEY"] = old_key
             os.environ.pop("OPEA_SSL_SKIP_VERIFY", None)
 
         _, kwargs = mock_aiohttp_session.ClientSession.call_args

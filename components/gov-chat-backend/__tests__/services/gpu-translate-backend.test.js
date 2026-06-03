@@ -54,8 +54,8 @@ function mockRequestFn(opts, callback) {
 jest.mock("http", () => ({ request: (...args) => mockRequestFn(...args) }));
 jest.mock("https", () => ({ request: (...args) => mockRequestFn(...args) }));
 
-// Set env vars BEFORE require — OPEA_API_KEY is a module-level const
-process.env.OPEA_API_KEY = "test-key-123";
+// Set env vars BEFORE require — VLLM_API_KEY is a module-level const
+process.env.VLLM_API_KEY = "test-key-123";
 process.env.VLLM_TRANSLATION_ENDPOINT = "http://vllm:9031";
 process.env.VLLM_TRANSLATION_MODEL_ID = "google/gemma-3-4b-it";
 
@@ -72,10 +72,10 @@ afterEach(() => {
 
 describe("GpuTranslateBackend", () => {
   describe("_buildHeaders", () => {
-    it("should include X-API-Key when OPEA_API_KEY is set", () => {
+    it("should include Authorization: Bearer when VLLM_API_KEY is set", () => {
       const instance = new GpuTranslateBackend();
       const headers = instance._buildHeaders();
-      expect(headers["X-API-Key"]).toBe("test-key-123");
+      expect(headers["Authorization"]).toBe("Bearer test-key-123");
       expect(Object.keys(headers)).toHaveLength(1);
     });
 
@@ -84,20 +84,20 @@ describe("GpuTranslateBackend", () => {
       const headers = instance._buildHeaders({
         "Content-Type": "application/json",
       });
-      expect(headers["X-API-Key"]).toBe("test-key-123");
+      expect(headers["Authorization"]).toBe("Bearer test-key-123");
       expect(headers["Content-Type"]).toBe("application/json");
     });
 
-    it("should let _buildHeaders overwrite X-API-Key with env value", () => {
+    it("should let _buildHeaders overwrite Authorization with env value", () => {
       // Env var always takes precedence over extra headers
       const instance = new GpuTranslateBackend();
-      const headers = instance._buildHeaders({ "X-API-Key": "override-key" });
-      expect(headers["X-API-Key"]).toBe("test-key-123");
+      const headers = instance._buildHeaders({ Authorization: "override-key" });
+      expect(headers["Authorization"]).toBe("Bearer test-key-123");
     });
   });
 
   describe("callVllmService", () => {
-    it("should inject X-API-Key and POST to /v1/chat/completions", async () => {
+    it("should inject Authorization: Bearer and POST to /v1/chat/completions", async () => {
       mockResponseData = JSON.stringify({
         choices: [{ message: { content: "traduit" } }],
       });
@@ -109,17 +109,17 @@ describe("GpuTranslateBackend", () => {
         messages: [{ role: "user", content: "hello" }],
       });
       expect(result).toBe("traduit");
-      expect(capturedOptions.headers["X-API-Key"]).toBe("test-key-123");
+      expect(capturedOptions.headers["Authorization"]).toBe("Bearer test-key-123");
       expect(capturedOptions.method).toBe("POST");
       expect(capturedOptions.path).toBe("/v1/chat/completions");
     });
   });
 
   describe("healthCheck", () => {
-    it("should inject X-API-Key and GET /health", async () => {
+    it("should inject Authorization: Bearer and GET /health", async () => {
       const instance = new GpuTranslateBackend();
       await instance.healthCheck();
-      expect(capturedOptions.headers["X-API-Key"]).toBe("test-key-123");
+      expect(capturedOptions.headers["Authorization"]).toBe("Bearer test-key-123");
       expect(capturedOptions.method).toBe("GET");
       expect(capturedOptions.path).toBe("/health");
     });

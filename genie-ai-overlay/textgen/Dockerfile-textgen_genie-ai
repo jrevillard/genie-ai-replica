@@ -1,6 +1,6 @@
 # GENIE.AI — Textgen wrapper (extends upstream OPEA image)
-# Adds genie_ssl_patch.py for SSL bypass + API key injection (remote GPU support).
-# Only active when OPEA_SSL_SKIP_VERIFY=1 and/or OPEA_API_KEY env vars are set.
+# Adds genie_ssl_patch.py for SSL bypass (remote GPU node support).
+# Only active when OPEA_SSL_SKIP_VERIFY=1 env var is set.
 
 ARG UPSTREAM_IMAGE=opea/llm-textgen:latest
 FROM ${UPSTREAM_IMAGE}

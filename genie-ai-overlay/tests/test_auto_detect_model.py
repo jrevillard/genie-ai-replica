@@ -18,7 +18,7 @@ class TestAutoDetectModel:
     def test_returns_model_id_on_success(self, monkeypatch):
         from chatqna.genieai_chatqna import _auto_detect_model
 
-        monkeypatch.setenv("OPEA_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "ibm-granite/granite-3.3-2b-instruct"}]}
@@ -30,7 +30,7 @@ class TestAutoDetectModel:
         mock_get.assert_called_once()
         call_kwargs = mock_get.call_args
         assert call_kwargs.kwargs["verify"] is False
-        assert call_kwargs.kwargs["headers"]["X-API-Key"] == "test-key"
+        assert call_kwargs.kwargs["headers"]["Authorization"] == "Bearer test-key"
 
     def test_returns_none_when_no_models_in_response(self):
         from chatqna.genieai_chatqna import _auto_detect_model
@@ -71,10 +71,10 @@ class TestAutoDetectModel:
 
         assert result is None
 
-    def test_sends_opea_api_key_header(self, monkeypatch):
+    def test_sends_vllm_api_key_as_bearer(self, monkeypatch):
         from chatqna.genieai_chatqna import _auto_detect_model
 
-        monkeypatch.setenv("OPEA_API_KEY", "test-api-key-123")
+        monkeypatch.setenv("VLLM_API_KEY", "test-api-key-123")
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "model-a"}]}
@@ -83,12 +83,12 @@ class TestAutoDetectModel:
             _auto_detect_model("https://gpu-host/llm", "LLM_MODEL")
 
         headers = mock_get.call_args.kwargs["headers"]
-        assert headers["X-API-Key"] == "test-api-key-123"
+        assert headers["Authorization"] == "Bearer test-api-key-123"
 
-    def test_no_header_when_opea_api_key_unset(self, monkeypatch):
+    def test_no_header_when_vllm_api_key_unset(self, monkeypatch):
         from chatqna.genieai_chatqna import _auto_detect_model
 
-        monkeypatch.delenv("OPEA_API_KEY", raising=False)
+        monkeypatch.delenv("VLLM_API_KEY", raising=False)
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "model-a"}]}
@@ -154,7 +154,7 @@ class TestModuleLevelAutoDetect:
         monkeypatch.setenv("GPU_NODE_HOST", "10.0.0.110")
         monkeypatch.setenv("VLLM_LLM_ENDPOINT", "https://10.0.0.110/llm")
         monkeypatch.setenv("VLLM_TRANSLATION_ENDPOINT", "https://10.0.0.110/translation")
-        monkeypatch.setenv("OPEA_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
         monkeypatch.setenv("LLM_MODEL", "default-llm")
         monkeypatch.setenv("VLLM_TRANSLATION_MODEL_ID", "default-trans")
         monkeypatch.setenv("LLM_TRANS_MODEL", "default-trans")
@@ -186,7 +186,7 @@ class TestModuleLevelAutoDetect:
         monkeypatch.setenv("GPU_NODE_HOST", "10.0.0.110")
         monkeypatch.setenv("VLLM_LLM_ENDPOINT", "https://10.0.0.110/llm")
         monkeypatch.setenv("VLLM_TRANSLATION_ENDPOINT", "https://10.0.0.110/translation")
-        monkeypatch.setenv("OPEA_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
         monkeypatch.setenv("LLM_MODEL", "default-llm")
         monkeypatch.setenv("VLLM_TRANSLATION_MODEL_ID", "default-trans")
         monkeypatch.setenv("LLM_TRANS_MODEL", "default-trans")
@@ -242,19 +242,19 @@ class TestDataprepAutoDetect:
         src = Path(__file__).resolve().parents[1] / "dataprep" / "genieai_dataprep_arangodb.py"
         return src.read_text()
 
-    def test_uses_opea_api_key_not_vllm_api_key(self, source):
+    def test_uses_vllm_api_key_for_auth(self, source):
         idx = source.find("def _label_with_llm")
         chunk = source[idx : idx + 2000]  # look within method body
 
-        assert "OPEA_API_KEY" in chunk
-        assert "VLLM_API_KEY" not in chunk
+        assert "VLLM_API_KEY" in chunk
+        assert "OPEA_API_KEY" not in chunk
 
-    def test_passes_x_api_key_as_default_header(self, source):
+    def test_no_custom_default_headers(self, source):
         idx = source.find("def _label_with_llm")
         chunk = source[idx : idx + 2000]
 
-        assert "default_headers" in chunk
-        assert "X-API-Key" in chunk
+        assert "default_headers" not in chunk
+        assert "X-API-Key" not in chunk
 
     def test_auto_detect_condition_checks_gpu_node_host(self, source):
         idx = source.find("def _label_with_llm")

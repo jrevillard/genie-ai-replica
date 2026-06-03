@@ -464,9 +464,8 @@ services:
       - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
       # Remote GPU node translation endpoint override
       - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}
-      # OPEA runtime patches for remote GPU node (SSL bypass + API key injection)
+      # OPEA runtime patches for remote GPU node (SSL bypass)
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-}
-      - OPEA_API_KEY=${OPEA_API_KEY:-}
       # Email configuration (required)
       - EMAIL_HOST=${EMAIL_HOST}
       - EMAIL_PORT=${EMAIL_PORT}
@@ -663,7 +662,7 @@ services:
       - LLM_ENDPOINT=${VLLM_ENDPOINT:-http://vllm:8000}
       - LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-0}
-      - OPEA_API_KEY=${OPEA_API_KEY:-}
+
     # Internal only
     # ports:
     #   - "9000:9000"
@@ -834,7 +833,7 @@ services:
       - TEI_EMBEDDING_ENDPOINT=${EMBEDDING_SERVICE_URL:-http://tei:80}
       - EMBEDDING_MODEL_ID=${EMBEDDING_MODEL_ID:-BAAI/bge-base-en-v1.5}
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-0}
-      - OPEA_API_KEY=${OPEA_API_KEY:-}
+
     # Internal only
     # ports:
     #   - "6000:6000"
@@ -903,7 +902,7 @@ services:
       - RERANKING_STRATEGY=${RERANKING_STRATEGY:-threshold}
       - RERANKING_THRESHOLD=${RERANKING_THRESHOLD:-0.5}
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-0}
-      - OPEA_API_KEY=${OPEA_API_KEY:-}
+
     # Internal only
     # ports:
     #   - "6100:8000"
@@ -976,7 +975,7 @@ services:
       LABEL_SELECTOR_SYSTEM_PROMPT: ${LABEL_SELECTOR_SYSTEM_PROMPT:-}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
       OPEA_SSL_SKIP_VERIFY: ${OPEA_SSL_SKIP_VERIFY:-0}
-      OPEA_API_KEY: ${OPEA_API_KEY:-}
+
       KEYCLOAK_SSL_SKIP_VERIFY: ${KEYCLOAK_SSL_SKIP_VERIFY:-0}
     extra_hosts:
       - "localhost:host-gateway"
@@ -1044,7 +1043,7 @@ services:
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
       OPEA_SSL_SKIP_VERIFY: ${OPEA_SSL_SKIP_VERIFY:-0}
-      OPEA_API_KEY: ${OPEA_API_KEY:-}
+
       GPU_NODE_HOST: ${GPU_NODE_HOST:-}
     networks:
       - genieai_network
@@ -1109,7 +1108,7 @@ services:
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
       OPENAI_API_KEY: ${VLLM_API_KEY:-}
       OPEA_SSL_SKIP_VERIFY: ${OPEA_SSL_SKIP_VERIFY:-0}
-      OPEA_API_KEY: ${OPEA_API_KEY:-}
+
     networks:
       - genieai_network
     healthcheck:

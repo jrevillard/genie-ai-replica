@@ -781,15 +781,18 @@ Set in the app node's `.env` (Section 14):
 ```bash
 GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
 GPU_MODEL_REPLICAS=0                # Skip local GPU containers (vllm, tei, etc.)
-VLLM_API_KEY=<your-api-key>         # API key from the GPU node administrator
+VLLM_API_KEY=<your-api-key>         # API key from the GPU node administrator (Authorization: Bearer)
 OPEA_SSL_SKIP_VERIFY=1              # If GPU node uses self-signed certs
-OPEA_API_KEY=<your-api-key>         # Same as VLLM_API_KEY (injected into OPEA services)
 ```
 
 `GPU_MODEL_REPLICAS=0` tells Swarm to deploy 0 replicas of GPU-heavy containers
 (vllm, tei, tei_reranker, vllm-translation-guardrail). Orchestrators (ChatQnA,
 Retriever, Dataprep) still deploy and connect to the remote GPU node via the
 override endpoints.
+
+`VLLM_API_KEY` authenticates with the GPU node nginx via standard `Authorization: Bearer`
+header. All OpenAI-compatible clients (ChatOpenAI, AsyncOpenAI, OpenAIEmbeddings)
+send this natively — no custom injection needed.
 
 `OPEA_SSL_SKIP_VERIFY=1` disables SSL certificate verification in OPEA services
 via a runtime patch (`configs/ssl/genie_ssl_patch.py`). Only use with self-signed
@@ -798,10 +801,6 @@ certs. Omit if the GPU node uses Let's Encrypt or a public CA.
 `KEYCLOAK_SSL_SKIP_VERIFY=1` independently disables SSL verification for
 dataprep's Keycloak service account token fetch. Set this if Keycloak uses a
 self-signed certificate.
-
-`OPEA_API_KEY` injects an `X-API-Key` header into all outbound HTTP calls from
-OPEA services (httpx, aiohttp, requests). Typically set to the same value as
-`VLLM_API_KEY`. These vars are independent of `gpu_node_host`.
 
 **Warning:** `DEPLOY_OPEA` must remain `1` — it controls the orchestrator services.
 Setting `DEPLOY_OPEA=0` disables ALL OPEA services (including orchestrators) and

@@ -673,6 +673,8 @@ KC_GRAFANA_CLIENT_SECRET=
 #
 # VLLM_API_KEY=<api-key-for-your-instance>
 #   API key for authenticating with the GPU node nginx proxy.
+#   Sent as standard Authorization: Bearer header by all OpenAI-compatible clients
+#   (ChatOpenAI, AsyncOpenAI, OpenAIEmbeddings, etc.).
 #   One key per GENIE.AI instance, shared across all 5 GPU services.
 #   Contact the GPU node administrator to obtain your key.
 #
@@ -689,16 +691,11 @@ KC_GRAFANA_CLIENT_SECRET=
 #   Set to 1 to disable SSL certificate verification in OPEA Python services
 #   (embedding, reranker, textgen, chatqna, retriever, dataprep). Required when
 #   the remote GPU node uses a self-signed certificate. Baked into Docker images
-#   via sitecustomize.py — no volume mounts needed. Default: 0 (verify certs).
+#   via genie_ssl_patch.py — no volume mounts needed. Default: 0 (verify certs).
 #   When using Let's Encrypt or a recognized CA, leave at 0 (default).
 #
 # KEYCLOAK_SSL_SKIP_VERIFY=0
 #   Set to 1 to disable SSL certificate verification for dataprep's Keycloak
 #   service account token fetch. Required when Keycloak uses a self-signed
 #   certificate. Independent of OPEA_SSL_SKIP_VERIFY. Default: 0 (verify certs).
-#
-# OPEA_API_KEY=<key>
-#   API key injected into all outbound HTTP calls from OPEA services via
-#   X-API-Key header. Baked into Docker images via sitecustomize.py.
-#   Typically set to the same value as VLLM_API_KEY. Default: empty (no injection).
 

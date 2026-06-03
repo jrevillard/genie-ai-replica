@@ -5,12 +5,14 @@
 
 # API key map — reads keys from external file (one key per GENIE.AI client)
 # File format: <key> 1;  (one per line)
-map $http_x_api_key $api_key_valid {
+# Validates Authorization: Bearer <key> header (OpenAI-compatible standard)
+map $http_authorization $api_key_valid {
     default 0;
+    "~^Bearer (?<key>[^ ]+)$" $key;
     include /etc/nginx/api_keys.map;
 }
 
-# Custom log format — does NOT include X-API-Key header value
+# Custom log format — does NOT include Authorization header value
 log_format gpu_node '$remote_addr - [$time_local] "$request" '
                      '$status $body_bytes_sent '
                      '"$http_referer" "$http_user_agent"';

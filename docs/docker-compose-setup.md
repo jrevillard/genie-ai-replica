@@ -210,9 +210,8 @@ authentication and skips local GPU-heavy containers.
 To connect to a remote GPU node, set in `.env`:
 ```bash
 GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
-VLLM_API_KEY=<your-api-key>         # API key from the GPU node administrator
+VLLM_API_KEY=<your-api-key>         # API key from the GPU node administrator (Authorization: Bearer)
 OPEA_SSL_SKIP_VERIFY=1              # If GPU node uses self-signed certs
-OPEA_API_KEY=<your-api-key>         # Same as VLLM_API_KEY (injected into OPEA services)
 ```
 
 Then deploy orchestrators only (GPU models are skipped):
@@ -223,7 +222,8 @@ docker compose --profile opea up -d
 > **Note:** `OPEA_SSL_SKIP_VERIFY=1` disables SSL certificate verification in OPEA
 > services via a runtime patch (`configs/ssl/genie_ssl_patch.py`). Only use with
 > self-signed certs. Omit this variable if the GPU node uses Let's Encrypt or a public CA.
-> `OPEA_API_KEY` injects an `X-API-Key` header into all outbound HTTP calls from OPEA services.
+> `VLLM_API_KEY` authenticates with the GPU node nginx via standard `Authorization: Bearer` header.
+> All OpenAI-compatible clients (ChatOpenAI, AsyncOpenAI, OpenAIEmbeddings) send this natively.
 > If Keycloak also uses a self-signed cert, set `KEYCLOAK_SSL_SKIP_VERIFY=1` independently.
 
 ### 6f. Start with observability stack

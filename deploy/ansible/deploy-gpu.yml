@@ -251,7 +251,7 @@
         method: GET
         validate_certs: false
         headers:
-          X-API-Key: "{{ gpu_api_keys[0].name }}"
+          Authorization: "Bearer {{ gpu_api_keys[0].name }}"
       register: health_llm
       until: health_llm.status == 200
       retries: 30
@@ -263,7 +263,7 @@
         method: GET
         validate_certs: false
         headers:
-          X-API-Key: "{{ gpu_api_keys[0].name }}"
+          Authorization: "Bearer {{ gpu_api_keys[0].name }}"
       register: health_translation
       until: health_translation.status == 200
       retries: 30
@@ -275,7 +275,7 @@
         method: GET
         validate_certs: false
         headers:
-          X-API-Key: "{{ gpu_api_keys[0].name }}"
+          Authorization: "Bearer {{ gpu_api_keys[0].name }}"
       register: health_embedding
       until: health_embedding.status == 200
       retries: 30
@@ -287,7 +287,7 @@
         method: GET
         validate_certs: false
         headers:
-          X-API-Key: "{{ gpu_api_keys[0].name }}"
+          Authorization: "Bearer {{ gpu_api_keys[0].name }}"
       register: health_reranker
       until: health_reranker.status == 200
       retries: 30
@@ -299,7 +299,7 @@
         method: GET
         validate_certs: false
         headers:
-          X-API-Key: "{{ gpu_api_keys[0].name }}"
+          Authorization: "Bearer {{ gpu_api_keys[0].name }}"
       register: health_docling
       until: health_docling.status == 200
       retries: 30

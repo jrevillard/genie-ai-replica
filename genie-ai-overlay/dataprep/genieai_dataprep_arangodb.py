@@ -310,12 +310,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _label_with_llm(self, chunks: list[str], all_labels: list[str], file_labels: list[str], file_id: str):
         """Labels chunks using VLLM with Retry Logic and Advisory Warnings (Spec 5.3)."""
-        _api_key = os.getenv("OPEA_API_KEY", "EMPTY")
+        _api_key = os.getenv("VLLM_API_KEY", "EMPTY")
         _vllm_endpoint = os.getenv("VLLM_ENDPOINT")
         client = AsyncOpenAI(
             api_key=_api_key,
             base_url=f"{_vllm_endpoint}/v1",
-            default_headers={"X-API-Key": _api_key},
         )
         model = os.getenv("VLLM_MODEL_ID")
         # When using remote GPU node, auto-detect model to avoid

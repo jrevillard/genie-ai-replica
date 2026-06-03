@@ -90,9 +90,9 @@ def _auto_detect_model(endpoint_url: str, env_var: str) -> str | None:
 
     try:
         headers = {}
-        api_key = os.getenv("OPEA_API_KEY", "")
+        api_key = os.getenv("VLLM_API_KEY", "")
         if api_key:
-            headers["X-API-Key"] = api_key
+            headers["Authorization"] = f"Bearer {api_key}"
         resp = httpx.get(f"{endpoint_url}/v1/models", headers=headers, timeout=10, verify=False)
         resp.raise_for_status()
         models = resp.json()

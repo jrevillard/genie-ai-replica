@@ -18,7 +18,7 @@ status: 'complete'
 
 **Always:**
 - Reuse exact same images/tags as the app node compose (Decision 2 in architecture doc)
-- Ports 9400-9404 sequential: vLLM Llama=9400, vLLM Translation=9401, TEI Embedding=9402, TEI Reranker=9403, docling-serve=9404
+- Path-based routing on single HTTPS port 443: `/llm/`, `/translation/`, `/embed/`, `/rerank/`, `/docling/`
 - nginx `map` directive reads API keys from external file; one key per GENIE.AI client shared across all 5 services
 - `nginx -s reload` for zero-downtime key rotation (no GPU service restart)
 - certbot one-shot for Let's Encrypt TLS (same pattern as app node)
@@ -40,11 +40,11 @@ status: 'complete'
 
 | Scenario | Input / State | Expected Output / Behavior | Error Handling |
 |----------|--------------|---------------------------|----------------|
-| HTTPS request with valid API key | `X-API-Key: <valid>` header to `:9400` | Proxied to backend, response returned | nginx returns backend error if service down |
-| HTTPS request with invalid API key | No header or invalid key to `:9400` | nginx returns 401 | Always 401, backend never reached |
+| HTTPS request with valid API key | `Authorization: Bearer <valid>` header to `:443` | Proxied to backend, response returned | nginx returns backend error if service down |
+| HTTPS request with invalid API key | No header or invalid key to `:443` | nginx returns 401 | Always 401, backend never reached |
 | HTTPS request with expired TLS cert | Valid API key, expired cert | TLS handshake fails | certbot must be re-run before expiry |
 | `DOCLING_ENDPOINT` empty in dataprep | Env var not set | Docling uses in-process converter (existing behavior) | No change from current code |
-| `DOCLING_ENDPOINT` set in dataprep | `https://gpu-host:9404` | Dataprep calls remote docling-serve via HTTP POST (120s total timeout) | Connection error or timeout propagated to caller with clear message |
+| `DOCLING_ENDPOINT` set in dataprep | `https://gpu-host/docling` | Dataprep calls remote docling-serve via HTTP POST (120s total timeout) | Connection error or timeout propagated to caller with clear message |
 | `DOCLING_ENDPOINT` unreachable | Valid URL but host down or wrong port | HTTP call fails within 120s timeout | Raise error immediately — no silent failure, no retry |
 | Ansible deploy with invalid vault | Wrong vault password | Ansible exits with error | No partial deployment |
 | `nginx -s reload` during active request | Active connections | Existing connections complete, new use new config | Graceful shutdown of old workers |
@@ -72,7 +72,7 @@ status: 'complete'
 
 **Execution:**
 - [x] `docker-compose.gpu.yaml` -- Create GPU node compose with 5 services (vLLM x2, TEI x2, docling-serve) + nginx + certbot
-- [x] `deploy/ansible/templates/gpu-proxy.conf.j2` -- Create nginx template: TLS termination, port-based routing (9400-9404), `map` directive for API key auth from external file
+- [x] `deploy/ansible/templates/gpu-proxy.conf.j2` -- Create nginx template: TLS termination, path-based routing on port 443 (`/llm/`, `/translation/`, `/embed/`, `/rerank/`, `/docling/`), `map` directive for `Authorization: Bearer` auth from external file
 - [x] `deploy/ansible/templates/api_keys.map.j2` -- Create API keys template iterating over `gpu_api_keys` vault variable
 - [x] `deploy/ansible/templates/docker-compose.gpu.yaml.j2` -- Create compose template parametrizing host-specific values (domain, GPU vars, API keys)
 - [x] `deploy/ansible/deploy-gpu.yml` -- Create playbook: GPU node labeling, project sync, template rendering, compose deploy, certbot, nginx reload, smoke tests (health on all 5 ports + 401 rejection)
@@ -83,9 +83,9 @@ status: 'complete'
 - [x] `env` -- Add Section 14 "Remote GPU Node" with `DOCLING_ENDPOINT`, `DOCLING_ENDPOINT_TIMEOUT` (default 120), and GPU host URL vars
 
 **Acceptance Criteria:**
-- Given a GPU node with Docker installed, when `ansible-playbook -i gpu.ini deploy-gpu.yml --vault-id gpu@prompt` runs, then all 5 services are healthy and accessible via HTTPS on ports 9400-9404
-- Given a request to GPU node port 9400 with valid `X-API-Key` header, when the request reaches nginx, then it is proxied to the backend and the response is returned
-- Given a request to GPU node port 9400 without `X-API-Key` header, when the request reaches nginx, then nginx returns 401
+- Given a GPU node with Docker installed, when `ansible-playbook -i gpu.ini deploy-gpu.yml --vault-id gpu@prompt` runs, then all 5 services are healthy and accessible via HTTPS on port 443 (path-based routing)
+- Given a request to GPU node port 443 with valid `Authorization: Bearer` header, when the request reaches nginx, then it is proxied to the backend and the response is returned
+- Given a request to GPU node port 443 without `Authorization` header, when the request reaches nginx, then nginx returns 401
 - Given `DOCLING_ENDPOINT` is set to a valid GPU node URL, when dataprep processes a document, then it calls the remote docling-serve endpoint instead of the in-process converter
 - Given `DOCLING_ENDPOINT` is empty, when dataprep processes a document, then it uses the existing in-process docling converter (unchanged behavior)
 - Given `docker compose -f docker-compose.gpu.yaml config`, when run, then it validates without errors
@@ -116,10 +116,11 @@ map $http_x_api_key $api_key_valid {
     "secret-key-1" 1;
 }
 server {
-    listen 9400 ssl;
+    listen 443 ssl;
     # ...
+    map $http_authorization $api_key_valid { ... }
     if ($api_key_valid = 0) { return 401; }
-    location / { proxy_pass http://vllm-llm:8000; }
+    location /llm/ { proxy_pass http://vllm-llm:8000/; }
 }
 ```
 
@@ -127,7 +128,7 @@ server {
 When `DOCLING_ENDPOINT` env var is set, replace the in-process `docling_converter.convert(doc_path)` call with an HTTP POST to the remote endpoint. The existing in-process path remains the default when the var is empty — no fallback logic, just an if/else on the env var. Use `aiohttp.ClientTimeout(total=int(os.getenv("DOCLING_ENDPOINT_TIMEOUT", 120)))` — configurable via env var, default 120s for document processing. On connection error or timeout, raise immediately — no silent failure, no retry.
 
 **nginx log security:**
-nginx access log must NOT include the `X-API-Key` header value. Use `log_format` that omits `$http_x_api_key` or masks it. Default nginx combined format is safe (does not include custom headers).
+nginx access log must NOT include the `Authorization` header value. Use `log_format` that omits `$http_authorization` or masks it. Default nginx combined format is safe (does not include custom headers).
 
 **Docker Compose GPU uses `env.t4`/`env.rtx6000`** for GPU memory config — same files as app node, loaded via `--env-file` override.
 

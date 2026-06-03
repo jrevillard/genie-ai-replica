@@ -2,8 +2,8 @@ const { logger } = require('../../shared-lib');
 const http = require('http');
 const https = require('https');
 
-// API key for remote GPU node authentication (injected via OPEA_API_KEY env var)
-const OPEA_API_KEY = process.env.OPEA_API_KEY || '';
+// API key for remote GPU node authentication (standard OpenAI Bearer token)
+const VLLM_API_KEY = process.env.VLLM_API_KEY || '';
 
 /**
  * GPU Translation Backend
@@ -96,13 +96,13 @@ class GpuTranslateBackend {
    * Health check for vLLM service
    */
   /**
-   * Build base headers for vLLM requests (injects OPEA_API_KEY when set).
+   * Build base headers for vLLM requests (injects Authorization: Bearer when VLLM_API_KEY is set).
    * @returns {Object} Headers object
    */
   _buildHeaders(extraHeaders = {}) {
     const headers = { ...extraHeaders };
-    if (OPEA_API_KEY) {
-      headers['X-API-Key'] = OPEA_API_KEY;
+    if (VLLM_API_KEY) {
+      headers['Authorization'] = `Bearer ${VLLM_API_KEY}`;
     }
     return headers;
   }

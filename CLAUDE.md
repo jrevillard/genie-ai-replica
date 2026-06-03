@@ -241,7 +241,7 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 
 **API Keys:**
 - `HUGGING_FACE_HUB_TOKEN` - Required for pulling models
-- `VLLM_API_KEY` - Optional, if required by your vLLM deployment
+- `VLLM_API_KEY` - GPU node API key (sent as `Authorization: Bearer` by all OpenAI-compatible clients)
 
 **Observability (optional, Section 12C):**
 - `ENABLE_OBSERVABILITY` - Enable observability stack (default: false)
@@ -388,7 +388,7 @@ docker compose --profile opea up -d  # with GPU_NODE_HOST set in .env
 When using a dedicated GPU node (`GPU_NODE_HOST` in `.env`):
 - GPU-heavy containers (vllm, tei, tei_reranker, vllm-translation-guardrail) are skipped
 - Orchestrator endpoints are overridden to point to `https://<gpu-node-host>/<path>/`
-- `VLLM_API_KEY` authenticates with the GPU node nginx proxy
+- `VLLM_API_KEY` authenticates with the GPU node nginx via `Authorization: Bearer` header
 - See `env` Section 14 for all variables and TLS options
 
 ## Database Schema (ArangoDB)

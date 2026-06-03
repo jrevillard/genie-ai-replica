@@ -494,13 +494,12 @@ For manual setup (Compose mode), set in `.env` (Section 14):
 ```bash
 GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
 GPU_MODEL_REPLICAS=0                # Skip local GPU containers
-VLLM_API_KEY=<your-api-key>         # API key from GPU node
+VLLM_API_KEY=<your-api-key>         # API key from GPU node (sent as Authorization: Bearer)
 OPEA_SSL_SKIP_VERIFY=1              # If GPU node uses self-signed certs
-OPEA_API_KEY=<your-api-key>         # Same as VLLM_API_KEY (injected into OPEA services)
 ```
 
-> **Note:** `OPEA_SSL_SKIP_VERIFY` and `OPEA_API_KEY` are independent of `gpu_node_host`.
-> They control runtime patches baked into OPEA Docker images via `genie_ssl_patch.py`.
+> **Note:** `OPEA_SSL_SKIP_VERIFY` is independent of `gpu_node_host`.
+> It controls SSL bypass baked into OPEA Docker images via `genie_ssl_patch.py`.
 > Use `OPEA_SSL_SKIP_VERIFY=1` only with self-signed certs — omit for Let's Encrypt or public CAs.
 
 ## Port Configuration

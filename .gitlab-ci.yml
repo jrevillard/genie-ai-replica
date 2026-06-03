@@ -803,7 +803,7 @@ test:sitecustomize:
         - "test-sitecustomize-"
   script:
     - mkdir -p reports
-    - OPEA_SSL_SKIP_VERIFY=1 OPEA_API_KEY=test-key-123 pytest tests/config/ssl/test_genie_ssl_patch.py -v --junitxml=reports/pytest-sitecustomize.xml --cov=configs.ssl.genie_ssl_patch --cov-report=term --cov-report=xml:reports/coverage.xml
+    - OPEA_SSL_SKIP_VERIFY=1 pytest tests/config/ssl/test_genie_ssl_patch.py -v --junitxml=reports/pytest-sitecustomize.xml --cov=configs.ssl.genie_ssl_patch --cov-report=term --cov-report=xml:reports/coverage.xml
   coverage: '/^TOTAL\s+\S+\s+\S+\s+(\d+)%/'
   artifacts:
     when: always

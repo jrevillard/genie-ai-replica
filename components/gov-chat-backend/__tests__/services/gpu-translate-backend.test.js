@@ -1,16 +1,20 @@
-'use strict';
+"use strict";
 
-require('../setup-env');
+require("../setup-env");
 
 // Mock shared-lib (virtual module, same pattern as other tests)
-jest.mock('../../shared-lib', () => ({
-  logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn()
-  }
-}), { virtual: true });
+jest.mock(
+  "../../shared-lib",
+  () => ({
+    logger: {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    },
+  }),
+  { virtual: true },
+);
 
 let capturedOptions = null;
 let mockResponseData = null;
@@ -26,13 +30,13 @@ function mockRequestFn(opts, callback) {
   const res = {
     statusCode: 200,
     on: jest.fn().mockImplementation((event, cb) => {
-      if (event === 'data' && mockResponseData !== null) {
+      if (event === "data" && mockResponseData !== null) {
         cb(mockResponseData);
       }
-      if (event === 'end') {
+      if (event === "end") {
         cb();
       }
-    })
+    }),
   };
 
   if (callback) setImmediate(() => callback(res));
@@ -42,20 +46,20 @@ function mockRequestFn(opts, callback) {
     end: jest.fn(),
     setTimeout: jest.fn(),
     destroy: jest.fn(),
-    on: jest.fn()
+    on: jest.fn(),
   };
 }
 
 // Hoisted by Jest — factory references mockRequestFn at call time
-jest.mock('http', () => ({ request: (...args) => mockRequestFn(...args) }));
-jest.mock('https', () => ({ request: (...args) => mockRequestFn(...args) }));
+jest.mock("http", () => ({ request: (...args) => mockRequestFn(...args) }));
+jest.mock("https", () => ({ request: (...args) => mockRequestFn(...args) }));
 
 // Set env vars BEFORE require — OPEA_API_KEY is a module-level const
-process.env.OPEA_API_KEY = 'test-key-123';
-process.env.VLLM_TRANSLATION_ENDPOINT = 'http://vllm:9031';
-process.env.VLLM_TRANSLATION_MODEL_ID = 'google/gemma-3-4b-it';
+process.env.OPEA_API_KEY = "test-key-123";
+process.env.VLLM_TRANSLATION_ENDPOINT = "http://vllm:9031";
+process.env.VLLM_TRANSLATION_MODEL_ID = "google/gemma-3-4b-it";
 
-const GpuTranslateBackend = require('../../services/translation/gpu-translate-backend');
+const GpuTranslateBackend = require("../../services/translation/gpu-translate-backend");
 
 beforeEach(() => {
   capturedOptions = null;
@@ -66,95 +70,103 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('GpuTranslateBackend', () => {
-  describe('_buildHeaders', () => {
-    it('should include X-API-Key when OPEA_API_KEY is set', () => {
+describe("GpuTranslateBackend", () => {
+  describe("_buildHeaders", () => {
+    it("should include X-API-Key when OPEA_API_KEY is set", () => {
       const instance = new GpuTranslateBackend();
       const headers = instance._buildHeaders();
-      expect(headers['X-API-Key']).toBe('test-key-123');
+      expect(headers["X-API-Key"]).toBe("test-key-123");
       expect(Object.keys(headers)).toHaveLength(1);
     });
 
-    it('should merge extra headers with API key', () => {
+    it("should merge extra headers with API key", () => {
       const instance = new GpuTranslateBackend();
-      const headers = instance._buildHeaders({ 'Content-Type': 'application/json' });
-      expect(headers['X-API-Key']).toBe('test-key-123');
-      expect(headers['Content-Type']).toBe('application/json');
+      const headers = instance._buildHeaders({
+        "Content-Type": "application/json",
+      });
+      expect(headers["X-API-Key"]).toBe("test-key-123");
+      expect(headers["Content-Type"]).toBe("application/json");
     });
 
-    it('should let _buildHeaders overwrite X-API-Key with env value', () => {
+    it("should let _buildHeaders overwrite X-API-Key with env value", () => {
       // Env var always takes precedence over extra headers
       const instance = new GpuTranslateBackend();
-      const headers = instance._buildHeaders({ 'X-API-Key': 'override-key' });
-      expect(headers['X-API-Key']).toBe('test-key-123');
+      const headers = instance._buildHeaders({ "X-API-Key": "override-key" });
+      expect(headers["X-API-Key"]).toBe("test-key-123");
     });
   });
 
-  describe('callVllmService', () => {
-    it('should inject X-API-Key and POST to /v1/chat/completions', async () => {
+  describe("callVllmService", () => {
+    it("should inject X-API-Key and POST to /v1/chat/completions", async () => {
       mockResponseData = JSON.stringify({
-        choices: [{ message: { content: 'traduit' } }]
+        choices: [{ message: { content: "traduit" } }],
       });
 
       const instance = new GpuTranslateBackend();
       instance.initialized = true;
 
       const result = await instance.callVllmService({
-        messages: [{ role: 'user', content: 'hello' }]
+        messages: [{ role: "user", content: "hello" }],
       });
-      expect(result).toBe('traduit');
-      expect(capturedOptions.headers['X-API-Key']).toBe('test-key-123');
-      expect(capturedOptions.method).toBe('POST');
-      expect(capturedOptions.path).toBe('/v1/chat/completions');
+      expect(result).toBe("traduit");
+      expect(capturedOptions.headers["X-API-Key"]).toBe("test-key-123");
+      expect(capturedOptions.method).toBe("POST");
+      expect(capturedOptions.path).toBe("/v1/chat/completions");
     });
   });
 
-  describe('healthCheck', () => {
-    it('should inject X-API-Key and GET /health', async () => {
+  describe("healthCheck", () => {
+    it("should inject X-API-Key and GET /health", async () => {
       const instance = new GpuTranslateBackend();
       await instance.healthCheck();
-      expect(capturedOptions.headers['X-API-Key']).toBe('test-key-123');
-      expect(capturedOptions.method).toBe('GET');
-      expect(capturedOptions.path).toBe('/health');
+      expect(capturedOptions.headers["X-API-Key"]).toBe("test-key-123");
+      expect(capturedOptions.method).toBe("GET");
+      expect(capturedOptions.path).toBe("/health");
     });
   });
 
-  describe('remote GPU node endpoint with path prefix', () => {
-    it('should prepend endpoint path to health check path', async () => {
-      process.env.VLLM_TRANSLATION_ENDPOINT = 'https://gpu-node.example.com/translation';
+  describe("remote GPU node endpoint with path prefix", () => {
+    it("should prepend endpoint path to health check path", async () => {
+      process.env.VLLM_TRANSLATION_ENDPOINT =
+        "https://gpu-node.example.com/translation";
       const instance = new GpuTranslateBackend();
       await instance.healthCheck();
-      expect(capturedOptions.hostname).toBe('gpu-node.example.com');
+      expect(capturedOptions.hostname).toBe("gpu-node.example.com");
       expect(capturedOptions.port).toBe(443);
-      expect(capturedOptions.path).toBe('/translation/health');
+      expect(capturedOptions.path).toBe("/translation/health");
     });
 
-    it('should prepend endpoint path to model info path', async () => {
-      process.env.VLLM_TRANSLATION_ENDPOINT = 'https://gpu-node.example.com/translation';
-      mockResponseData = JSON.stringify({ data: [{ id: 'google/gemma-3-4b-it', max_model_len: 8192 }] });
+    it("should prepend endpoint path to model info path", async () => {
+      process.env.VLLM_TRANSLATION_ENDPOINT =
+        "https://gpu-node.example.com/translation";
+      mockResponseData = JSON.stringify({
+        data: [{ id: "google/gemma-3-4b-it", max_model_len: 8192 }],
+      });
       const instance = new GpuTranslateBackend();
       await instance.fetchModelInfo();
-      expect(capturedOptions.path).toBe('/translation/v1/models');
+      expect(capturedOptions.path).toBe("/translation/v1/models");
     });
 
-    it('should prepend endpoint path to chat completions path', async () => {
-      process.env.VLLM_TRANSLATION_ENDPOINT = 'https://gpu-node.example.com/translation';
+    it("should prepend endpoint path to chat completions path", async () => {
+      process.env.VLLM_TRANSLATION_ENDPOINT =
+        "https://gpu-node.example.com/translation";
       mockResponseData = JSON.stringify({
-        choices: [{ message: { content: 'traduit' } }]
+        choices: [{ message: { content: "traduit" } }],
       });
       const instance = new GpuTranslateBackend();
       instance.initialized = true;
       await instance.callVllmService({
-        messages: [{ role: 'user', content: 'hello' }]
+        messages: [{ role: "user", content: "hello" }],
       });
-      expect(capturedOptions.path).toBe('/translation/v1/chat/completions');
+      expect(capturedOptions.path).toBe("/translation/v1/chat/completions");
     });
 
-    it('should strip trailing slash from endpoint path', async () => {
-      process.env.VLLM_TRANSLATION_ENDPOINT = 'https://gpu-node.example.com/translation/';
+    it("should strip trailing slash from endpoint path", async () => {
+      process.env.VLLM_TRANSLATION_ENDPOINT =
+        "https://gpu-node.example.com/translation/";
       const instance = new GpuTranslateBackend();
       await instance.healthCheck();
-      expect(capturedOptions.path).toBe('/translation/health');
+      expect(capturedOptions.path).toBe("/translation/health");
     });
   });
 });

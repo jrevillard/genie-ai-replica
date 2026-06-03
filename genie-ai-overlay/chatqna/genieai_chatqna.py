@@ -86,11 +86,10 @@ LLM_TRANS_MODEL = os.getenv("LLM_TRANS_MODEL", "google/gemma-3-1b-it")
 
 def _auto_detect_model(endpoint_url: str, env_var: str) -> str | None:
     """Auto-detect model ID from remote vLLM /v1/models endpoint."""
+    import httpx
     try:
-        import httpx
-
         headers = {}
-        api_key = os.getenv("VLLM_API_KEY", "")
+        api_key = os.getenv("OPEA_API_KEY", "")
         if api_key:
             headers["X-API-Key"] = api_key
         resp = httpx.get(f"{endpoint_url}/v1/models", headers=headers, timeout=10, verify=False)
@@ -98,8 +97,9 @@ def _auto_detect_model(endpoint_url: str, env_var: str) -> str | None:
         models = resp.json()
         if models.get("data"):
             return models["data"][0]["id"]
-    except Exception:
-        pass
+        print(f"[WARN] Auto-detect {env_var}: no models in response")
+    except Exception as e:
+        print(f"[WARN] Auto-detect {env_var} failed: {e}")
     return None
 
 

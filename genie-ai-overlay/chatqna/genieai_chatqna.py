@@ -103,14 +103,14 @@ def _auto_detect_model(endpoint_url: str, env_var: str) -> str | None:
     return None
 
 
-# Auto-detect LLM model from remote vLLM when endpoint is remote
-if _VLLM_LLM_ENDPOINT and not os.getenv("LLM_MODEL"):
+# Auto-detect LLM model from remote vLLM when endpoint is remote (https://)
+if _VLLM_LLM_ENDPOINT and _VLLM_LLM_ENDPOINT.startswith("https://"):
     detected = _auto_detect_model(_VLLM_LLM_ENDPOINT, "LLM_MODEL")
     if detected:
         LLM_MODEL = detected
 
 # Auto-detect translation model from remote vLLM when endpoint is remote
-if _VLLM_TRANSLATION_ENDPOINT and not os.getenv("VLLM_TRANSLATION_MODEL_ID"):
+if _VLLM_TRANSLATION_ENDPOINT and _VLLM_TRANSLATION_ENDPOINT.startswith("https://"):
     detected = _auto_detect_model(_VLLM_TRANSLATION_ENDPOINT, "VLLM_TRANSLATION_MODEL_ID")
     if detected:
         TRANSLATION_MODEL_ID = detected

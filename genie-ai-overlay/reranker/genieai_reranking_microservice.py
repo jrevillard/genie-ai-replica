@@ -2,11 +2,10 @@
 # Copyright (C) 2025 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0 Developed by Intel. Adapted by ITU
 
-import genie_ssl_patch  # noqa: F401 — SSL bypass + API key injection (remote GPU support)
-
 import os
 import time
 
+import genie_ssl_patch  # noqa: F401 — SSL bypass + API key injection (remote GPU support)
 from opentelemetry.trace import Status, StatusCode
 
 from tracing import get_tracer, setup_trace_logging, setup_tracing

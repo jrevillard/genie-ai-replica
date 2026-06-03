@@ -108,8 +108,14 @@ async def _load_with_docling_remote(doc_path: str) -> str:
             data=data,
         ) as resp:
             resp.raise_for_status()
-            result = await resp.text()
-            return result
+            result = await resp.json()
+            # Docling v1+ returns JSON: {"document": {"md_content": "...", ...}, "status": "..."}
+            doc = result.get("document", {})
+            md_content = doc.get("md_content")
+            if md_content:
+                return md_content
+            # Fallback: try html_content or text_content
+            return doc.get("html_content") or doc.get("text_content") or ""
 
 
 async def load_with_docling(doc_path: str) -> str:

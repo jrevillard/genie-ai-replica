@@ -475,14 +475,19 @@ func jaegerToResourceSpans(jt JaegerTrace) []*ResourceSpans {
 
 // ── Search/metadata conversion ───────────────────────────────────────────
 
+type ServiceStatsObj struct {
+	SpanCount  uint32 `json:"spanCount"`
+	ErrorCount uint32 `json:"errorCount"`
+}
+
 type TempoTraceMetadata struct {
-	TraceID           string         `json:"traceID"`
-	RootServiceName   string         `json:"rootServiceName"`
-	RootTraceName     string         `json:"rootTraceName"`
-	StartTimeUnixNano uint64         `json:"startTimeUnixNano"`
-	DurationMs        uint32         `json:"durationMs"`
-	SpanSets          []SpanSet      `json:"spanSets"`
-	ServiceStats      map[string]int `json:"serviceStats"`
+	TraceID           string                    `json:"traceID"`
+	RootServiceName   string                    `json:"rootServiceName"`
+	RootTraceName     string                    `json:"rootTraceName"`
+	StartTimeUnixNano uint64                    `json:"startTimeUnixNano"`
+	DurationMs        uint32                    `json:"durationMs"`
+	SpanSets          []SpanSet                 `json:"spanSets"`
+	ServiceStats      map[string]ServiceStatsObj `json:"serviceStats"`
 }
 
 type SpanSet struct {
@@ -520,22 +525,24 @@ func jaegerSearchToTempoTraces(jaegerData []JaegerTrace) []TempoTraceMetadata {
 				continue
 			}
 		}
-		serviceStats := map[string]int{}
-		for _, sp := range trace.Spans {
-			proc := trace.Processes[sp.ProcessID]
-			if proc == nil {
-				continue
-			}
-			svc := proc.ServiceName
-			serviceStats[svc]++
-			for _, t := range sp.Tags {
-				if t.Key == "error" && t.Value != "false" && t.Value != "unset" {
-					serviceStats[svc]++
-					break
+			serviceStats := map[string]ServiceStatsObj{}
+			for _, sp := range trace.Spans {
+				proc := trace.Processes[sp.ProcessID]
+				if proc == nil {
+					continue
 				}
+				svc := proc.ServiceName
+				st := serviceStats[svc]
+				st.SpanCount++
+				for _, t := range sp.Tags {
+					if t.Key == "error" && t.Value != "false" && t.Value != "unset" {
+						st.ErrorCount++
+						break
+					}
+				}
+				serviceStats[svc] = st
 			}
-		}
-		spanSets := []SpanSet{{Spans: make([]SpanMeta, 0, len(trace.Spans)), Matched: len(trace.Spans)}}
+			spanSets := []SpanSet{{Spans: make([]SpanMeta, 0, len(trace.Spans)), Matched: len(trace.Spans)}}
 		for _, sp := range trace.Spans {
 			spanSets[0].Spans = append(spanSets[0].Spans, SpanMeta{
 				SpanID:            spanIDFromJaeger(sp.SpanID),
@@ -603,10 +610,12 @@ func getServiceNames() []string {
 	if len(serviceNames) > 0 && time.Since(serviceCached) < serviceCacheTTL {
 		return serviceNames
 	}
+	// fetchServiceNames performs the HTTP call; caller already holds the lock.
 	return fetchServiceNames()
 }
 
 func fetchServiceNames() []string {
+	// Caller (getServiceNames) must hold serviceMu.
 	resp, err := httpGet(victoriaTracesURL+"/select/jaeger/api/services", 15*time.Second)
 	if err != nil {
 		log.Printf("[tempo-proxy] failed to fetch services: %v", err)
@@ -618,10 +627,8 @@ func fetchServiceNames() []string {
 	if err := json.Unmarshal(resp, &result); err != nil || len(result.Data) == 0 {
 		return serviceNames
 	}
-	serviceMu.Lock()
 	serviceNames = result.Data
 	serviceCached = time.Now()
-	serviceMu.Unlock()
 	return result.Data
 }
 

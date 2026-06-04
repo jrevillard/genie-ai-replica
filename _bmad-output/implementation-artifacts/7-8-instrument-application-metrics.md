@@ -36,7 +36,9 @@ so that Grafana dashboards show real-time service health beyond trace-derived me
   - [ ] Use route template patterns: Express `req.route.path` or normalize `req.originalUrl` to `/api/users/:id` form
   - [ ] Attributes: `http.method`, `http.status_code`, `http.route` (template), `service.name` (from resource)
   - [ ] PII enforcement: never set `user_id`, `email`, `query_text`, `document_text` as attributes — add allowlist filter
-  - [ ] Register middleware in `components/gov-chat-backend/index.js` after tracing import, before routes
+  - [ ] Register middleware in `components/gov-chat-backend/index.js` — ordering: after `require('./tracing')`, before routes, but AFTER `helmet` and `cors` (security headers first, then metrics wraps the request context)
+  - [ ] The metrics middleware must wrap the response lifecycle (`res.on('finish')`) to capture status code and duration accurately
+  - [ ] Place before `express.json()` body parser so parsing errors are also metered
   - [ ] Add unit tests in `components/gov-chat-backend/__tests__/metrics.test.js`
 
 - [ ] Task 2: Python metrics SDK integration in shared tracing module (AC: #2, #3)
@@ -56,22 +58,25 @@ so that Grafana dashboards show real-time service health beyond trace-derived me
 
 - [ ] Task 4: Grafana application metrics dashboard (AC: #2)
   - [ ] Create `configs/grafana/provisioning/dashboards/application-metrics.json`
+  - [ ] Use `service-health.json` as structural template (same datasource ref, panel layout, variable pattern)
   - [ ] Panels: HTTP request rate, error rate (4xx/5xx), latency percentiles (p50/p95/p99) per service
   - [ ] Panels: RAG pipeline throughput (chat, retrieval, ingestion, rerank requests/min)
   - [ ] Variable: `service_name` dropdown for filtering
-  - [ ] Datasource: VictoriaMetrics (same as existing service-health dashboard)
+  - [ ] Datasource: VictoriaMetrics — reference by UID `${PROMETHEUS_UID}` resolved from `vm-datasource.yml` provisioning (not hardcoded name)
   - [ ] Register in `configs/grafana/provisioning/dashboards/dashboards.yml`
 
 - [ ] Task 5: k6 benchmark for metrics SDK overhead (AC: #4)
   - [ ] Create `tests/k6/metrics-overhead.js` — k6 script hitting backend at 100 req/s
   - [ ] Measure p95 latency with and without metrics middleware (compare baselines)
+  - [ ] Toggle mechanism: metrics-middleware.js guards on `process.env.ENABLE_METRICS !== 'false'` — set `ENABLE_METRICS=false` for baseline run, omit for metrics run
   - [ ] Target: <5ms overhead per request (same NFR as tracing in Story 7.2)
   - [ ] Document results in story completion notes
 
 - [ ] Task 6: PII verification test (AC: #4)
   - [ ] Create `components/gov-chat-backend/__tests__/metrics-pii.test.js`
   - [ ] Test that metric attributes never contain email patterns, user_id values, query text
-  - [ ] Mock the MeterProvider to capture recorded attributes, assert PII fields absent
+  - [ ] Mock pattern: use `@opentelemetry/sdk-metrics` with `InMemoryMetricReader` (not spy) to capture recorded metrics, then inspect `.points[0].attributes` for PII keys
+  - [ ] Python equivalent: mock `meter.create_counter()` to return a spy object, assert `add()` calls never include PII keys
   - [ ] Create equivalent Python test in `genie-ai-overlay/tests/test_metrics_pii.py`
 
 - [ ] Task 7: Update documentation (AC: #1, #2)
@@ -80,6 +85,16 @@ so that Grafana dashboards show real-time service health beyond trace-derived me
   - [ ] No changes to `env` or `docker-compose.yaml` — metrics pipeline already exists
 
 ## Dev Notes
+
+### Prerequisites (Cross-Story Dependencies)
+
+This story depends on the following completed stories — their artifacts MUST exist:
+
+- **Stories 7.1–7.4**: Tracing infrastructure — `components/gov-chat-backend/tracing.js` (NodeSDK with metricReader), `genie-ai-overlay/tracing.py` (TracerProvider), and all 4 OPEA service tracing integrations.
+- **Story 7.5**: OTel Collector metrics pipeline — `configs/otel/otel-collector-config.yaml` must contain the `metrics` pipeline (`otlp → batch → prometheusremotewrite`) and VictoriaMetrics service must be defined.
+- **Story 7.6**: VictoriaLogs deployment — Collector log pipeline must be operational (no impact on metrics but validates observability stack health).
+
+**Do NOT start this story if tracing.js does not contain `OTLPMetricExporter` imports.**
 
 ### Critical: Metrics Infrastructure Already Exists
 

@@ -111,6 +111,66 @@ In Swarm mode, the Collector runs in `mode: global` with placement constraint `n
 
 See `docker-compose.yaml` for the full service definition.
 
+## Custom Application Metrics
+
+In addition to the auto-instrumented metrics above, services expose **custom business metrics** via the OpenTelemetry Metrics API.
+
+### Backend (Node.js)
+
+The `metrics.js` module provides a `getMeter()` wrapper that returns a meter from the global `MeterProvider` (configured in `tracing.js`). The `metrics-middleware.js` Express middleware records:
+
+- **`http_requests_total`** (counter): Total HTTP requests, attributes: `http.method`, `http.status_code`, `http.route`
+- **`http_request_duration_seconds`** (histogram): Request duration, same attributes
+
+```js
+const { getMeter } = require('./metrics');
+const metricsMiddleware = require('./middleware/metrics-middleware');
+app.use(metricsMiddlewareFactory());
+```
+
+The middleware is registered in `index.js` after security middleware (helmet/cors) and before `body-parser` so parsing errors are also metered.
+
+### Python OPEA Services (ChatQnA, Retriever, Dataprep, Reranker)
+
+Each OPEA service imports `get_meter()` from the shared `tracing.py` module and creates service-specific instruments:
+
+| Service | Counter | Histogram |
+|---------|---------|-----------|
+| ChatQnA | `genie.ai/chat/request` | `genie.ai/chat/rag/latency` |
+| Retriever | `rag.retrieval.requests` | `rag.retrieval.duration` |
+| Dataprep | `rag.ingestion.requests` | `rag.ingestion.duration` |
+| Reranker | `rag.rerank.requests` | `rag.rerank.duration` |
+
+```python
+from tracing import get_meter
+meter = get_meter()
+requests = meter.create_counter("genie.ai/chat/request", description="Total chat requests")
+duration = meter.create_histogram("genie.ai/chat/rag/latency", unit="s", description="Chat RAG latency")
+```
+
+### PII Enforcement
+
+All metric attributes are filtered through a PII denylist. The following keys are **never** included in metric attributes:
+
+`user_id`, `email`, `query_text`, `document_text`, `session_id`, `conversation_id`, `password`, `token`
+
+### Metrics SDK Overhead
+
+The metrics middleware adds <5ms overhead per request at P95. To disable metrics for benchmarking:
+
+```bash
+ENABLE_METRICS=false node index.js  # Disable metrics middleware
+```
+
+### Grafana Dashboard
+
+The `application-metrics.json` dashboard provides pre-built panels for:
+- HTTP request rate by route
+- HTTP duration percentiles (P50/P95/P99)
+- Chat RAG pipeline latency
+- RAG sub-service latency (Retriever/Dataprep/Reranker)
+- Error rate (5xx %, chat error rate)
+
 ## Future Considerations
 
 ### External GPU Endpoints

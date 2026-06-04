@@ -8,7 +8,14 @@ import copy
 import json
 import os
 import re
+import time
 from datetime import date, datetime
+
+from metrics import (
+    _sanitize_attributes,
+    chat_rag_duration_seconds,
+    chat_requests_total,
+)
 
 from tracing import get_tracer, setup_trace_logging, setup_tracing
 
@@ -1650,6 +1657,7 @@ class ChatQnAService:
             span.set_attribute("rag.query_length", len(last_translated_message_content))
             span.set_attribute("rag.model_id", LLM_MODEL)
 
+            _rag_start = time.time()
             try:
                 result_dict, runtime_graph = await self.megaservice.schedule(
                     initial_inputs={"text": last_translated_message_content},
@@ -1661,6 +1669,7 @@ class ChatQnAService:
                     original_language=original_language,
                     user_details=user_details,
                 )
+                _rag_duration = time.time() - _rag_start
 
                 # Count retrieved documents from result
                 chunk_count = 0
@@ -1669,8 +1678,35 @@ class ChatQnAService:
                         chunk_count = len(val.retrieved_docs)
                         break
                 span.set_attribute("rag.chunk_count", chunk_count)
+
+                # Record custom application metrics
+                response_type = "streaming" if chat_request.stream else "sync"
+                _metric_attrs = _sanitize_attributes(
+                    {
+                        "response_type": response_type,
+                        "abstained": "false",
+                        "error": "false",
+                        "retrieval_source": retriever_parameters.get("retrieval_type", "hybrid"),
+                    }
+                )
+                chat_requests_total.add(1, _metric_attrs)
+                chat_rag_duration_seconds.record(_rag_duration, _metric_attrs)
+
             except Exception as e:
                 from opentelemetry.trace import StatusCode
+
+                # Record error metric
+                _err_duration = time.time() - _rag_start
+                _err_attrs = _sanitize_attributes(
+                    {
+                        "response_type": "streaming" if chat_request.stream else "sync",
+                        "abstained": "false",
+                        "error": "true",
+                        "retrieval_source": retriever_parameters.get("retrieval_type", "hybrid"),
+                    }
+                )
+                chat_requests_total.add(1, _err_attrs)
+                chat_rag_duration_seconds.record(_err_duration, _err_attrs)
 
                 span.set_status(StatusCode.ERROR)
                 span.record_exception(e)

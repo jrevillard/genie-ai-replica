@@ -1,4 +1,5 @@
 require('./tracing');
+require('./metrics');
 require('dotenv').config();
 process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || 128; // Increased from default 4 to support high concurrency
 const express = require('express');
@@ -12,6 +13,7 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const { logger, dbService, securityHeaders, SecurityMiddleware } = require('./shared-lib');
 const { keycloakAuthMiddleware } = require('./middleware/keycloak-auth-middleware');
+const metricsMiddlewareFactory = require('./middleware/metrics-middleware');
 
 // Validate shared-lib imports
 logger.info('Validating shared-lib imports:', {
@@ -622,6 +624,9 @@ function createApp({ services = {} } = {}) {
       errorType: error?.constructor?.name || 'Unknown'
     });
   }
+
+  // Custom application metrics (HTTP counter + duration histogram)
+  app.use(metricsMiddlewareFactory());
 
   // Body parser
   app.use(bodyParser.json({ limit: '50mb' }));

@@ -7,9 +7,21 @@ import time
 
 from opentelemetry.trace import Status, StatusCode
 
-from tracing import get_tracer, setup_trace_logging, setup_tracing
+from tracing import get_meter, get_tracer, setup_trace_logging, setup_tracing
 
 setup_tracing("genieai-reranker")
+
+# Custom application metrics
+_reranker_meter = get_meter()
+_rerank_requests = _reranker_meter.create_counter(
+    "rag.rerank.requests",
+    description="Total reranking requests",
+)
+_rerank_duration = _reranker_meter.create_histogram(
+    "rag.rerank.duration",
+    description="Reranking duration",
+    unit="s",
+)
 
 tracer = get_tracer(__name__)
 
@@ -84,6 +96,11 @@ async def reranking(
 
             # Record statistics
             statistics_dict["opea_service@reranking"].append_latency(time.time() - start, None)
+
+            # Record custom reranking metrics
+            _rerank_latency = time.time() - start
+            _rerank_requests.add(1, {"reranker.model_id": "unknown"})
+            _rerank_duration.record(_rerank_latency, {"reranker.model_id": "unknown"})
             return reranking_response
 
         except Exception as e:

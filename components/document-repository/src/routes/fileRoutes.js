@@ -783,11 +783,11 @@ router.post('/retract', authorizeRole(['Admin']), fileController.retractMultiple
  *       '401':
  *         description: Unauthorized
  *       '403':
- *         description: Forbidden - Admin role required
+ *         description: Forbidden - Admin or dataprep-service role required
  *       '404':
  *         description: File not found
  */
-router.post('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.addIngestionLog);
+router.post('/:fileId/ingestion-log', authorizeRole(['Admin', 'dataprep-service']), fileController.addIngestionLog);
 
 /**
  * @swagger
@@ -810,7 +810,7 @@ router.post('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.a
  *       '401':
  *         description: Unauthorized
  */
-router.get('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.getIngestionLogs);
+router.get('/:fileId/ingestion-log', authorizeRole(['Admin', 'dataprep-service']), fileController.getIngestionLogs);
 
 /**
  * @swagger

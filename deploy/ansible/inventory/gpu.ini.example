@@ -1,0 +1,7 @@
+# GPU Node - Inventory template
+# Usage: copy to gpu.ini and replace with actual GPU node IP/hostname
+#
+# ansible-playbook -i inventory/gpu.ini deploy-gpu.yml --vault-id gpu@prompt
+
+[gpu_nodes]
+gpu-node-1 ansible_host=10.0.0.200 ansible_user=root

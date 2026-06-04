@@ -501,6 +501,149 @@ describe('GET /:queryId', () => {
         expect.objectContaining({ source_documents: [], confidence_score: 0 })
       );
     });
+
+    // Helper: parse SSE text into structured events
+    function parseSSEEvents(text) {
+      return text
+        .split('\n')
+        .filter((line) => line.startsWith('data: '))
+        .map((line) => JSON.parse(line.slice(6)));
+    }
+
+    // Helper: set up mocks for a full metadata retrieval flow
+    function setupMetadataMocks(retrieverDocs, fileResponses) {
+      queryService.initStreamQuery.mockResolvedValue({
+        queryId: 'q1',
+        opeaUrl: 'http://chatqna:8888/v1/chatqna',
+        opeaPayload: { messages: [] }
+      });
+      queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+      queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+
+      const mockStream = new Readable({ read() {} });
+
+      // Chain: ChatQnA SSE → retriever → document-repository calls
+      axios.post
+        .mockResolvedValueOnce({ data: mockStream }) // ChatQnA stream
+        .mockResolvedValueOnce({ data: { retrieved_docs: retrieverDocs } }); // retriever
+
+      // Mock axios.get for document-repository calls
+      axios.get = jest.fn().mockImplementation(async (url) => {
+        const fileId = url.split('/').pop();
+        const resp = fileResponses[fileId];
+        if (resp) return { data: resp };
+        throw new Error(`Unexpected file request: ${fileId}`);
+      });
+
+      return mockStream;
+    }
+
+    it('should return source documents with real scores from retriever', async () => {
+      const mockStream = setupMetadataMocks(
+        [
+          { text: 'chunk1', metadata: { file_ids: ['file-123'], score: 0.85 } },
+          { text: 'chunk2', metadata: { file_ids: ['file-456'], score: 0.72 } }
+        ],
+        {
+          'file-123': { success: true, data: { file_name: 'doc.pdf' } },
+          'file-456': { success: true, data: { file_name: 'doc2.pdf' } }
+        }
+      );
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'test query' }]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"chunk","content":"response"}\n\n');
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      const metadata = parseSSEEvents(response.text).find((e) => e.type === 'metadata');
+
+      expect(metadata).toBeDefined();
+      expect(metadata.source_documents).toHaveLength(2);
+      expect(metadata.source_documents[0].document_name).toBe('doc.pdf');
+      expect(metadata.source_documents[0].score).toBe(0.85);
+      expect(metadata.confidence_score).toBeCloseTo(0.785, 1);
+    });
+
+    it('should deduplicate by file_id keeping highest score', async () => {
+      const mockStream = setupMetadataMocks(
+        [
+          { text: 'chunk1', metadata: { file_ids: ['file-123'], score: 0.9 } },
+          { text: 'chunk2', metadata: { file_ids: ['file-123'], score: 0.7 } },
+          { text: 'chunk3', metadata: { file_ids: ['file-456'], score: 0.8 } }
+        ],
+        {
+          'file-123': { success: true, data: { file_name: 'doc.pdf' } },
+          'file-456': { success: true, data: { file_name: 'doc2.pdf' } }
+        }
+      );
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'test' }]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      const metadata = parseSSEEvents(response.text).find((e) => e.type === 'metadata');
+
+      expect(metadata.source_documents).toHaveLength(2);
+      expect(metadata.source_documents[0].score).toBe(0.9);
+      expect(metadata.source_documents[1].score).toBe(0.8);
+    });
+
+    it('should extract last user message when empty assistant placeholder is appended', async () => {
+      const mockStream = setupMetadataMocks([{ text: 'chunk1', metadata: { file_ids: ['file-123'], score: 0.6 } }], {
+        'file-123': { success: true, data: { file_name: 'result.pdf' } }
+      });
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [
+          { role: 'assistant', content: 'Previous response' },
+          { role: 'user', content: 'actual user query' },
+          { role: 'assistant', content: '' }
+        ]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      const metadata = parseSSEEvents(response.text).find((e) => e.type === 'metadata');
+
+      expect(metadata.source_documents).toHaveLength(1);
+      expect(metadata.source_documents[0].document_name).toBe('result.pdf');
+    });
+
+    it('should read file_name from nested document-repository response', async () => {
+      const mockStream = setupMetadataMocks([{ text: 'chunk1', metadata: { file_ids: ['file-789'], score: 0.55 } }], {
+        'file-789': { success: true, data: { file_name: 'nested-doc.pdf' } }
+      });
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'test' }]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      const metadata = parseSSEEvents(response.text).find((e) => e.type === 'metadata');
+
+      expect(metadata.source_documents[0].document_name).toBe('nested-doc.pdf');
+    });
   });
 
   describe('SSE translation', () => {

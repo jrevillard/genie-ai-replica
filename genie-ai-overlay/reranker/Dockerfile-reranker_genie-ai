@@ -72,6 +72,9 @@ COPY genie-ai-overlay/reranker/genieai_reranking_microservice.py /app/comps/rera
 RUN useradd -ms /bin/bash user && \
     chown -R user:user /app /home/user
 
-# Step G: Run the new microservice entry point from its new location
+# Step G: Copy SSL bypass runtime patch as sitecustomize (no-op unless OPEA_SSL_SKIP_VERIFY=1)
+COPY configs/ssl/genie_ssl_patch.py /usr/local/lib/python3.11/site-packages/sitecustomize.py
+
+# Step H: Run the new microservice entry point from its new location
 USER user
 CMD ["python", "comps/rerankings/src/opea_reranking_microservice.py"]

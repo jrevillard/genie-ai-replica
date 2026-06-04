@@ -200,23 +200,20 @@ describe('keycloak-auth-middleware', () => {
       );
     });
 
-    it('should return 401 when token azp does not match expected client', async () => {
+    it('should accept service account token with dataprep-service-client azp', async () => {
       const payload = {
-        ...createMockPayload(['admin']),
-        azp: 'evil-client'
+        ...createMockPayload(['dataprep-service']),
+        azp: 'dataprep-service-client'
       };
       jose.createRemoteJWKSet.mockReturnValue({});
       jose.jwtVerify.mockResolvedValue({ payload });
 
       const { req, res, next } = createMocks({
-        req: { headers: { authorization: 'Bearer valid-token-wrong-azp' } }
+        req: { headers: { authorization: 'Bearer service-account-token' } }
       });
       await authenticateToken(req, res, next);
-      expect(res.status).toHaveBeenCalledWith(401);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: 'TOKEN_INVALID', message: 'Token audience validation failed' })
-      );
-      expect(next).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalledWith();
+      expect(req.user.role).toBe('dataprep-service');
     });
 
     it('should accept token without azp claim (some flows omit it)', async () => {

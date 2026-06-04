@@ -93,7 +93,12 @@ class GenieaiArangoRetriever(OpeaComponent):
             self._initialize_llm()
 
     def _initialize_llm(self):
-        """Initialize the language model for summarization if enabled."""
+        """Initialize the language model for summarization if enabled.
+
+        When GPU_NODE_HOST is set, probes the vLLM /v1/models API and
+        overrides VLLM_MODEL_ID before creating the ChatOpenAI client.
+        Falls back to the config default on any probe failure.
+        """
         if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
             if logflag:
                 logger.debug("OpenAI API Key is set. Verifying its validity...")
@@ -113,10 +118,29 @@ class GenieaiArangoRetriever(OpeaComponent):
                 logger.error(f"An error occurred while verifying the API Key: {e}")
 
         elif VLLM_ENDPOINT:
+            # Auto-detect remote vLLM model when GPU node is used.
+            # The config default VLLM_MODEL_ID may not match the model
+            # actually loaded on the remote GPU node.
+            if os.getenv("GPU_NODE_HOST") and VLLM_ENDPOINT:
+                try:
+                    import requests as req
+
+                    resp = req.get(
+                        f"{VLLM_ENDPOINT}/v1/models",
+                        headers={"Authorization": f"Bearer {os.getenv('VLLM_API_KEY', '')}"},
+                        timeout=10,
+                    )
+                    resp.raise_for_status()
+                    models = resp.json().get("data", [])
+                    if models:
+                        os.environ["VLLM_MODEL_ID"] = models[0]["id"]
+                        logger.info(f"Auto-detected remote vLLM model for summarization: {models[0]['id']}")
+                except Exception as e:
+                    logger.warning(f"Failed to auto-detect model for summarization: {e}")
             self.llm = ChatOpenAI(
                 openai_api_key=VLLM_API_KEY,
                 openai_api_base=f"{VLLM_ENDPOINT}/v1",
-                model=VLLM_MODEL_ID,
+                model=os.getenv("VLLM_MODEL_ID", VLLM_MODEL_ID),
                 temperature=VLLM_TEMPERATURE,
                 max_tokens=VLLM_MAX_NEW_TOKENS,
                 top_p=VLLM_TOP_P,
@@ -720,17 +744,27 @@ class GenieaiArangoRetriever(OpeaComponent):
                         use_approx=use_approx_search,
                         filter_clause=aql_filter_clause if search_start == "chunk" else "",
                     )
-                    search_res = [{"doc": doc, "score": 0.0} for doc in results]
-
-                else:
-                    results = await vector_db.asimilarity_search(
+                    # MMR doesn't return scores — use relevance scores as fallback
+                    docs_and_scores = await vector_db.asimilarity_search_with_relevance_scores(
                         query=query,
                         embedding=embedding,
                         k=input.k,
                         use_approx=use_approx_search,
                         filter_clause=aql_filter_clause if search_start == "chunk" else "",
                     )
-                    search_res = [{"doc": doc, "score": 0.0} for doc in results]
+                    score_map = {id(doc): score for doc, score in docs_and_scores}
+                    search_res = [{"doc": doc, "score": score_map.get(id(doc), 0.0)} for doc in results]
+
+                else:
+                    # Default vector search — use relevance scores variant to get scores
+                    docs_and_scores = await vector_db.asimilarity_search_with_relevance_scores(
+                        query=query,
+                        embedding=embedding,
+                        k=input.k,
+                        use_approx=use_approx_search,
+                        filter_clause=aql_filter_clause if search_start == "chunk" else "",
+                    )
+                    search_res = [{"doc": doc, "score": score} for doc, score in docs_and_scores]
 
             except Exception as e:
                 logger.error(f"Error during similarity search: {e}")

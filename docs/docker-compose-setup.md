@@ -19,7 +19,7 @@ All services run on a single host. Two deployment profiles are available:
 | Profile | Command | Services |
 |---------|---------|----------|
 | **Core** | `docker compose up -d` | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Kong, NGINX |
-| **Full (OPEA)** | `docker compose --profile opea up -d` | Core + vLLM, TEI, Retriever, Dataprep, ChatQnA, Translation |
+| **Full (OPEA)** | `docker compose --profile opea --profile gpu-models up -d` | Core + vLLM, TEI, Retriever, Dataprep, ChatQnA, Translation |
 | **Observability** | `docker compose --profile observability up -d` | Core + OTel Collector, VictoriaMetrics, VictoriaLogs, Grafana |
 
 ## Step 1: Clone Repository
@@ -157,7 +157,7 @@ docker compose build backend
 For OPEA services (only if using `--profile opea`):
 
 ```bash
-docker compose --profile opea build
+docker compose --profile opea --profile gpu-models build
 ```
 
 ## Step 6: Deploy
@@ -183,7 +183,7 @@ This starts: Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Ko
 If you have a GPU and want the full RAG pipeline:
 
 ```bash
-docker compose --profile opea up -d
+docker compose --profile opea --profile gpu-models up -d
 ```
 
 ### 6d. With GPU-specific settings
@@ -191,16 +191,44 @@ docker compose --profile opea up -d
 For NVIDIA T4 (16GB VRAM):
 
 ```bash
-docker compose --env-file .env --env-file env.t4 --profile opea up -d
+docker compose --env-file .env --env-file env.t4 --profile opea --profile gpu-models up -d
 ```
 
 For RTX 6000 ADA (24GB VRAM):
 
 ```bash
-docker compose --env-file .env --env-file env.rtx6000 --profile opea up -d
+docker compose --env-file .env --env-file env.rtx6000 --profile opea --profile gpu-models up -d
 ```
 
-### 6e. Start with observability stack
+### 6e. Remote GPU Node (Optional)
+
+GENIE.AI supports connecting to a dedicated GPU node for AI services,
+deployed separately from the app stack. When configured, the app node
+routes AI requests to the GPU node via HTTPS on port 443 with API key
+authentication and skips local GPU-heavy containers.
+
+To connect to a remote GPU node, set in `.env`:
+```bash
+GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
+VLLM_API_KEY=<your-api-key>         # API key from the GPU node administrator (Authorization: Bearer)
+OPEA_SSL_SKIP_VERIFY=1              # If GPU node uses self-signed certs
+```
+
+Then deploy orchestrators only (GPU models are skipped):
+```bash
+docker compose --profile opea up -d
+```
+
+> **Note:** `OPEA_SSL_SKIP_VERIFY=1` disables SSL certificate verification in OPEA
+> services via a runtime patch (`configs/ssl/genie_ssl_patch.py`). Only use with
+> self-signed certs. Omit this variable if the GPU node uses Let's Encrypt or a public CA.
+> `VLLM_API_KEY` authenticates with the GPU node nginx via standard `Authorization: Bearer` header.
+> All clients send this header: OpenAI-compatible clients (ChatOpenAI, AsyncOpenAI) via `api_key` param;
+> OPEA TEI wrapper services (embedding, reranker) via `HF_TOKEN` env var (automatically set from
+> `VLLM_API_KEY` in docker-compose.yaml). If Keycloak also uses a self-signed cert, set
+> `KEYCLOAK_SSL_SKIP_VERIFY=1` independently.
+
+### 6f. Start with observability stack
 
 To add the OTel Collector, VictoriaMetrics, VictoriaLogs, and Grafana monitoring stack:
 
@@ -211,7 +239,7 @@ docker compose --profile observability up -d
 Combine with OPEA for the full stack plus observability:
 
 ```bash
-docker compose --profile opea --profile observability up -d
+docker compose --profile opea --profile gpu-models --profile observability up -d
 ```
 
 **Log collection**: All services use the fluentd logging driver (`driver: fluentd`) to forward container logs to the OTel Collector's `fluent_forward` receiver on port 24224 (localhost only). Docker dual logging (20.10+) keeps `docker logs` functional.

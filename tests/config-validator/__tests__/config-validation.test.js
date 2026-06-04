@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const { parseEnvTemplate, getRequiredSecrets } = require('../validators/parse-env');
 const { parseComposeEnvVars, crossReference } = require('../validators/parse-compose');
 const { validateFeatureFlags, OPEA_VAR_NAMES } = require('../validators/validate-features');
@@ -8,10 +9,19 @@ const {
   parseGpuProfile,
   GPU_RANGES
 } = require('../validators/validate-hardware');
+const {
+  validateGpuNode,
+  crossReferenceGpu,
+  parseGpuCompose,
+  GPU_SERVICE_PORTS,
+  GPU_REQUIRED_IMAGES,
+  GPU_SHARED_COMPOSE_VARS
+} = require('../validators/validate-gpu-node');
 
 const ROOT = path.resolve(__dirname, '../../..');
 const ENV_FILE = path.join(ROOT, 'env');
 const COMPOSE_FILE = path.join(ROOT, 'docker-compose.yaml');
+const GPU_COMPOSE_FILE = path.join(ROOT, 'docker-compose.gpu.yaml');
 const T4_FILE = path.join(ROOT, 'env.t4');
 const RTX6000_FILE = path.join(ROOT, 'env.rtx6000');
 
@@ -25,6 +35,35 @@ describe('Configuration Validation Suite', () => {
     composeVars = parseComposeEnvVars(COMPOSE_FILE);
     xRef = crossReference(composeVars, envParsed);
   });
+
+  // Env vars intentionally not referenced in any docker-compose file.
+  // Used by application code, build scripts, or other config files.
+  const KNOWN_ORPHANS = new Set([
+    'KEYCLOAK_URL', // Used by backend directly
+    'KEYCLOAK_REALM', // Used by backend directly
+    'KEYCLOAK_CLIENT_ID', // Used by backend directly
+    'KEYCLOAK_CLIENT_SECRET', // Used by keycloak-config directly
+    'KC_DATAPREP_CLIENT_ID', // Used by keycloak-config
+    'KC_MOBILE_CLIENT_ID', // Used by keycloak-config
+    'KC_MOBILE_REDIRECT_SCHEME', // Used by keycloak-config
+    'VUE_APP_API_URL', // Build-time variable
+    'VUE_PROXY_HOST', // Build-time variable
+    'VUE_APP_CSP_CONNECT_SRC', // Build-time variable
+    'KEYCLOAK_ADDITIONAL_REALMS', // Used by backend
+    'OPEA_HOST', // Used by backend code
+    'CONTEXT_OPTION', // Used by backend code
+    'SESSION_EXPIRATION_TIME', // Used by backend code
+    'VLLM_API_KEY', // Optional, used by OPEA services
+    'GPU_PUBLIC_DOMAIN', // Used by GPU node certbot (not in main compose)
+    // Section 14: Remote GPU Node — used by app node to point to GPU node
+    'GPU_NODE_HOST',
+    'VLLM_ENDPOINT',
+    'VLLM_TRANSLATION_ENDPOINT',
+    'EMBEDDING_SERVICE_URL',
+    'RERANKER_SERVICE_URL',
+    'DOCLING_ENDPOINT',
+    'DOCLING_ENDPOINT_TIMEOUT'
+  ]);
 
   // --- AC #2: All docker-compose env vars are documented in env template ---
   describe('AC2: Docker-compose vars documented in env template', () => {
@@ -91,27 +130,7 @@ describe('Configuration Validation Suite', () => {
   // --- AC #4: No orphaned or conflicting configurations ---
   describe('AC4: No orphaned or conflicting configurations', () => {
     test('orphans are documented (known intentional ones)', () => {
-      // These env vars are intentionally not in docker-compose.yaml
-      // They may be used by application code directly or in other config files
-      const knownOrphans = new Set([
-        'KEYCLOAK_URL', // Used by backend directly
-        'KEYCLOAK_REALM', // Used by backend directly
-        'KEYCLOAK_CLIENT_ID', // Used by backend directly
-        'KEYCLOAK_CLIENT_SECRET', // Used by keycloak-config directly
-        'KC_DATAPREP_CLIENT_ID', // Used by keycloak-config
-        'KC_MOBILE_CLIENT_ID', // Used by keycloak-config
-        'KC_MOBILE_REDIRECT_SCHEME', // Used by keycloak-config
-        'VUE_APP_API_URL', // Build-time variable
-        'VUE_PROXY_HOST', // Build-time variable
-        'VUE_APP_CSP_CONNECT_SRC', // Build-time variable
-        'KEYCLOAK_ADDITIONAL_REALMS', // Used by backend
-        'OPEA_HOST', // Used by backend code
-        'CONTEXT_OPTION', // Used by backend code
-        'SESSION_EXPIRATION_TIME', // Used by backend code
-        'VLLM_API_KEY' // Optional, used by OPEA services
-      ]);
-
-      const unknownOrphans = xRef.orphaned.filter((name) => !knownOrphans.has(name));
+      const unknownOrphans = xRef.orphaned.filter((name) => !KNOWN_ORPHANS.has(name));
       expect(unknownOrphans).toEqual([]);
     });
 
@@ -173,6 +192,84 @@ describe('Configuration Validation Suite', () => {
           }
         }
       }
+    });
+  });
+
+  // --- GPU node compose validation (issue #758) ---
+  describe('GPU node compose validation', () => {
+    let gpuExists = false;
+    let gpuComposeVars;
+    let gpuXRef;
+    let gpuValidation;
+
+    beforeAll(() => {
+      gpuExists = fs.existsSync(GPU_COMPOSE_FILE);
+      if (gpuExists) {
+        gpuComposeVars = parseComposeEnvVars(GPU_COMPOSE_FILE);
+        const gpuSharedVars = new Set([...composeVars.map((v) => v.name), ...GPU_SHARED_COMPOSE_VARS, ...KNOWN_ORPHANS]);
+        gpuXRef = crossReferenceGpu(gpuComposeVars, envParsed, gpuSharedVars);
+        gpuValidation = validateGpuNode(GPU_COMPOSE_FILE, COMPOSE_FILE);
+      }
+    });
+
+    test('docker-compose.gpu.yaml exists', () => {
+      expect(gpuExists).toBe(true);
+    });
+
+    test('all 5 AI services present with nginx on port 443', () => {
+      if (!gpuExists) return;
+      const gpu = parseGpuCompose(GPU_COMPOSE_FILE);
+      for (const serviceName of Object.keys(GPU_SERVICE_PORTS)) {
+        const svc = gpu.services.find((s) => s.name === serviceName);
+        expect(svc).toBeDefined();
+      }
+      // nginx-gpu exposes port 443 (path-based routing)
+      const nginx = gpu.services.find((s) => s.name === 'nginx-gpu');
+      expect(nginx).toBeDefined();
+      expect(nginx.ports).toContain(443);
+    });
+
+    test('nginx-gpu service exists', () => {
+      if (!gpuExists) return;
+      const gpu = parseGpuCompose(GPU_COMPOSE_FILE);
+      const nginx = gpu.services.find((s) => s.name === 'nginx-gpu');
+      expect(nginx).toBeDefined();
+    });
+
+    test('gpu_network is defined', () => {
+      if (!gpuExists) return;
+      const gpu = parseGpuCompose(GPU_COMPOSE_FILE);
+      expect(gpu.networks).toContain('gpu_network');
+    });
+
+    test('image tags match required architecture (Decision 2)', () => {
+      if (!gpuExists) return;
+      const gpu = parseGpuCompose(GPU_COMPOSE_FILE);
+      for (const [serviceName, expectedImage] of Object.entries(GPU_REQUIRED_IMAGES)) {
+        const actualImage = gpu.images.get(serviceName);
+        expect(actualImage).toBe(expectedImage);
+      }
+    });
+
+    test('no GPU compose validation errors', () => {
+      if (!gpuExists) return;
+      expect(gpuValidation.errors).toEqual([]);
+    });
+
+    test('GPU compose vars cross-reference: no undocumented vars', () => {
+      if (!gpuExists) return;
+      expect(gpuXRef.undocumented).toEqual([]);
+    });
+
+    test('GPU compose vars cross-reference: no conflicting defaults', () => {
+      if (!gpuExists) return;
+      expect(gpuXRef.conflicting).toEqual([]);
+    });
+
+    test('GPU compose vars cross-reference: no unexpected orphans', () => {
+      if (!gpuExists) return;
+      // Only known orphans allowed (Section 14 vars used by app node, not GPU compose)
+      expect(gpuXRef.orphaned).toEqual([]);
     });
   });
 

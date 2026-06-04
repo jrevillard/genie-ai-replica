@@ -69,6 +69,14 @@ COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/geniea
 RUN useradd -ms /bin/bash user && \
     chown -R user:user /app /home/user
 
-# Step G: Run the new GENIE-AI entry point from its new location
+# Step G: Copy SSL bypass runtime patch as sitecustomize (no-op unless OPEA_SSL_SKIP_VERIFY=1)
+# NOTE: Copy to site-packages, NOT dist-packages. Pip installs packages to
+# site-packages in this image, and Python's site module only loads sitecustomize
+# from getsitepackages() dirs.
+COPY configs/ssl/genie_ssl_patch.py /usr/local/lib/python3.10/site-packages/sitecustomize.py
+# Remove system sitecustomize (Ubuntu apport handler) so our patch runs first
+RUN rm -f /usr/lib/python3.10/sitecustomize.py
+
+# Step H: Run the new GENIE-AI entry point from its new location
 USER user
 CMD ["python", "comps/retrievers/src/genieai_retriever_microservice.py"]

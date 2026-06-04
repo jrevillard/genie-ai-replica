@@ -988,3 +988,140 @@ class TestRunGuardrail:
 
         assert result["success"] is False
         assert result["chunk_index"] == 1
+
+
+# ---------------------------------------------------------------------------
+# TestLoadWithDoclingRemote
+# ---------------------------------------------------------------------------
+
+
+class TestLoadWithDoclingRemote:
+    """Tests for _load_with_docling_remote() SSL connector behavior.
+
+    aiohttp is already mocked via conftest (sys.modules["aiohttp"]).
+    We grab the mock reference and configure it per test.
+    """
+
+    @pytest.fixture
+    def temp_file(self, tmp_path):
+        f = tmp_path / "test.pdf"
+        f.write_bytes(b"%fake-pdf")
+        return str(f)
+
+    @pytest.fixture
+    def mock_aiohttp_session(self):
+        """Configure the conftest aiohttp mock for a successful docling call."""
+        import aiohttp as aiohttp_mod
+
+        aiohttp_mod.TCPConnector.reset_mock()
+
+        mock_session = MagicMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        mock_resp = AsyncMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json = AsyncMock(
+            return_value={"document": {"md_content": "# doc", "html_content": None}, "status": "success"}
+        )
+        mock_session.post.return_value.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_session.post.return_value.__aexit__ = AsyncMock(return_value=False)
+        aiohttp_mod.ClientSession.return_value = mock_session
+        aiohttp_mod.ClientTimeout.return_value = MagicMock()
+        aiohttp_mod.FormData.return_value = MagicMock()
+        return aiohttp_mod
+
+    @pytest.mark.asyncio
+    async def test_ssl_verify_enabled_by_default(self, temp_file, mock_aiohttp_session):
+        """When OPEA_SSL_SKIP_VERIFY is unset, TCPConnector(ssl=True)."""
+        import os
+
+        from dataprep.genieai_dataprep_utils import _load_with_docling_remote
+
+        old = os.environ.pop("OPEA_SSL_SKIP_VERIFY", None)
+        try:
+            with (
+                patch(
+                    "dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT",
+                    "https://gpu:5001",
+                ),
+                patch("dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT_TIMEOUT", 30),
+            ):
+                await _load_with_docling_remote(temp_file)
+        finally:
+            if old is not None:
+                os.environ["OPEA_SSL_SKIP_VERIFY"] = old
+
+        mock_aiohttp_session.TCPConnector.assert_called_once_with(ssl=True)
+
+    @pytest.mark.asyncio
+    async def test_ssl_skip_verify_when_env_set(self, temp_file, mock_aiohttp_session):
+        """When OPEA_SSL_SKIP_VERIFY=1, TCPConnector(ssl=False)."""
+        import os
+
+        from dataprep.genieai_dataprep_utils import _load_with_docling_remote
+
+        os.environ["OPEA_SSL_SKIP_VERIFY"] = "1"
+        try:
+            with (
+                patch(
+                    "dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT",
+                    "https://gpu:5001",
+                ),
+                patch("dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT_TIMEOUT", 30),
+            ):
+                await _load_with_docling_remote(temp_file)
+        finally:
+            os.environ.pop("OPEA_SSL_SKIP_VERIFY", None)
+
+        mock_aiohttp_session.TCPConnector.assert_called_once_with(ssl=False)
+
+    @pytest.mark.asyncio
+    async def test_api_key_injected_when_set(self, temp_file, mock_aiohttp_session):
+        """When VLLM_API_KEY is set, ClientSession receives Authorization: Bearer header."""
+        import os
+
+        from dataprep.genieai_dataprep_utils import _load_with_docling_remote
+
+        os.environ["VLLM_API_KEY"] = "test-key"
+        os.environ["OPEA_SSL_SKIP_VERIFY"] = "1"
+        try:
+            with (
+                patch(
+                    "dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT",
+                    "https://gpu:5001",
+                ),
+                patch("dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT_TIMEOUT", 30),
+            ):
+                await _load_with_docling_remote(temp_file)
+        finally:
+            os.environ.pop("VLLM_API_KEY", None)
+            os.environ.pop("OPEA_SSL_SKIP_VERIFY", None)
+
+        _, kwargs = mock_aiohttp_session.ClientSession.call_args
+        assert kwargs["headers"] == {"Authorization": "Bearer test-key"}
+
+    @pytest.mark.asyncio
+    async def test_no_api_key_when_unset(self, temp_file, mock_aiohttp_session):
+        """When VLLM_API_KEY is unset, ClientSession receives empty headers."""
+        import os
+
+        from dataprep.genieai_dataprep_utils import _load_with_docling_remote
+
+        old_key = os.environ.pop("VLLM_API_KEY", None)
+        os.environ["OPEA_SSL_SKIP_VERIFY"] = "1"
+        try:
+            with (
+                patch(
+                    "dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT",
+                    "https://gpu:5001",
+                ),
+                patch("dataprep.genieai_dataprep_utils.DOCLING_ENDPOINT_TIMEOUT", 30),
+            ):
+                await _load_with_docling_remote(temp_file)
+        finally:
+            if old_key is not None:
+                os.environ["VLLM_API_KEY"] = old_key
+            os.environ.pop("OPEA_SSL_SKIP_VERIFY", None)
+
+        _, kwargs = mock_aiohttp_session.ClientSession.call_args
+        assert kwargs["headers"] == {}

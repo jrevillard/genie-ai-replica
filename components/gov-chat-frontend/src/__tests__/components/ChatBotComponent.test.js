@@ -1288,4 +1288,27 @@ describe('ChatBotComponent', () => {
       expect(wrapper.vm.formatMessageTime(undefined)).toBe('');
     });
   });
+
+  describe('translate helper', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('returns translated value when key exists', () => {
+      const wrapper = createChatBotWrapper();
+      // $t mock returns key, simulating a found translation
+      expect(wrapper.vm.translate('chatbot.placeholder')).toBe('chatbot.placeholder');
+    });
+
+    it('returns fallback when key is missing', () => {
+      const wrapper = createChatBotWrapper();
+      // $t mock returns key itself (missing translation behavior)
+      expect(wrapper.vm.translate('chatbot.thinking', 'Thinking...')).toBe('Thinking...');
+    });
+
+    it('returns key when key is missing and no fallback provided', () => {
+      const wrapper = createChatBotWrapper();
+      expect(wrapper.vm.translate('chatbot.thinking')).toBe('chatbot.thinking');
+    });
+  });
 });

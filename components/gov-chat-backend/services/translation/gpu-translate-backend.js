@@ -2,6 +2,9 @@ const { logger } = require('../../shared-lib');
 const http = require('http');
 const https = require('https');
 
+// API key for remote GPU node authentication (standard OpenAI Bearer token)
+const VLLM_API_KEY = process.env.VLLM_API_KEY || '';
+
 /**
  * GPU Translation Backend
  *
@@ -92,18 +95,32 @@ class GpuTranslateBackend {
   /**
    * Health check for vLLM service
    */
+  /**
+   * Build base headers for vLLM requests (injects Authorization: Bearer when VLLM_API_KEY is set).
+   * @returns {Object} Headers object
+   */
+  _buildHeaders(extraHeaders = {}) {
+    const headers = { ...extraHeaders };
+    if (VLLM_API_KEY) {
+      headers['Authorization'] = `Bearer ${VLLM_API_KEY}`;
+    }
+    return headers;
+  }
+
   async healthCheck() {
     try {
       const url = new URL(this.endpoint);
       const isHttps = url.protocol === 'https:';
       const client = isHttps ? https : http;
+      const basePath = url.pathname.replace(/\/$/, '');
 
       return new Promise((resolve, reject) => {
         const options = {
           hostname: url.hostname,
-          port: url.port || this.port,
-          path: '/health', // Try health endpoint first
+          port: url.port || (url.protocol === 'https:' ? 443 : 80),
+          path: `${basePath}/health`,
           method: 'GET',
+          headers: this._buildHeaders(),
           timeout: 5000
         };
 
@@ -113,7 +130,6 @@ class GpuTranslateBackend {
             resolve(true);
           } else {
             logger.warn(`[GPU-BACKEND] Health check returned status ${res.statusCode}`);
-            // Continue anyway - vLLM might not have a /health endpoint
             resolve(true);
           }
         });
@@ -144,13 +160,15 @@ class GpuTranslateBackend {
       const url = new URL(this.endpoint);
       const isHttps = url.protocol === 'https:';
       const client = isHttps ? https : http;
+      const basePath = url.pathname.replace(/\/$/, '');
 
       await new Promise((resolve) => {
         const options = {
           hostname: url.hostname,
-          port: url.port || this.port,
-          path: '/v1/models',
+          port: url.port || (url.protocol === 'https:' ? 443 : 80),
+          path: `${basePath}/v1/models`,
           method: 'GET',
+          headers: this._buildHeaders(),
           timeout: 5000
         };
 
@@ -321,19 +339,20 @@ class GpuTranslateBackend {
     const url = new URL(this.endpoint);
     const isHttps = url.protocol === 'https:';
     const client = isHttps ? https : http;
+    const basePath = url.pathname.replace(/\/$/, '');
 
     return new Promise((resolve, reject) => {
       const postData = JSON.stringify(requestBody);
 
       const options = {
         hostname: url.hostname,
-        port: url.port || this.port,
-        path: '/v1/chat/completions',
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: `${basePath}/v1/chat/completions`,
         method: 'POST',
-        headers: {
+        headers: this._buildHeaders({
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData)
-        },
+        }),
         timeout: 30000 // 30 second timeout
       };
 

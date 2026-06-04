@@ -1,6 +1,7 @@
 # Copyright (C) 2024 Intel Corporation
 # Copyright (C) 2025 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0 Developed by Intel. Adapted by ITU
+
 import argparse
 import asyncio
 import copy
@@ -63,8 +64,58 @@ RERANK_SERVER_HOST_IP = os.getenv("RERANK_SERVER_HOST_IP", "0.0.0.0")
 RERANK_SERVER_PORT = int(os.getenv("RERANK_SERVER_PORT", 80))
 LLM_SERVER_HOST_IP = os.getenv("LLM_SERVER_HOST_IP", "0.0.0.0")
 LLM_SERVER_PORT = int(os.getenv("LLM_SERVER_PORT", 80))
+LLM_SERVER_PROTOCOL = "http"
+# When VLLM_LLM_ENDPOINT is set (e.g. https://gpu-host/llm for remote GPU node),
+# override host/port/protocol so MicroService constructs the correct URL.
+_VLLM_LLM_ENDPOINT = os.getenv("VLLM_LLM_ENDPOINT", "")
+if _VLLM_LLM_ENDPOINT:
+    from urllib.parse import urlparse
+
+    _parsed = urlparse(_VLLM_LLM_ENDPOINT)
+    LLM_SERVER_HOST_IP = _parsed.hostname or LLM_SERVER_HOST_IP
+    LLM_SERVER_PORT = _parsed.port or 443
+    LLM_SERVER_PROTOCOL = _parsed.scheme or "https"
+    LLM_SERVER_ENDPOINT_PREFIX = _parsed.path.rstrip("/") or ""
+else:
+    LLM_SERVER_ENDPOINT_PREFIX = ""
 LLM_MODEL = os.getenv("LLM_MODEL", "ibm-granite/granite-3.3-2b-instruct")
 LLM_TRANS_MODEL = os.getenv("LLM_TRANS_MODEL", "google/gemma-3-1b-it")
+
+
+def _auto_detect_model(endpoint_url: str, env_var: str) -> str | None:
+    """Auto-detect model ID from remote vLLM /v1/models endpoint."""
+    import httpx
+
+    try:
+        headers = {}
+        api_key = os.getenv("VLLM_API_KEY", "")
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        resp = httpx.get(f"{endpoint_url}/v1/models", headers=headers, timeout=10, verify=False)
+        resp.raise_for_status()
+        models = resp.json()
+        if models.get("data"):
+            return models["data"][0]["id"]
+        logger.warning(f"Auto-detect {env_var}: no models in response")
+    except Exception as e:
+        logger.warning(f"Auto-detect {env_var} failed: {e}")
+    return None
+
+
+# Auto-detect LLM and translation models from remote vLLM when GPU_NODE_HOST is set
+_GPU_NODE_HOST = os.getenv("GPU_NODE_HOST", "")
+if _GPU_NODE_HOST:
+    if _VLLM_LLM_ENDPOINT:
+        detected = _auto_detect_model(_VLLM_LLM_ENDPOINT, "LLM_MODEL")
+        if detected:
+            LLM_MODEL = detected
+            logger.info(f"Auto-detected LLM_MODEL={LLM_MODEL}")
+    if _VLLM_TRANSLATION_ENDPOINT:
+        detected = _auto_detect_model(_VLLM_TRANSLATION_ENDPOINT, "VLLM_TRANSLATION_MODEL_ID")
+        if detected:
+            TRANSLATION_MODEL_ID = detected
+            LLM_TRANS_MODEL = detected
+            logger.info(f"Auto-detected TRANSLATION_MODEL_ID={TRANSLATION_MODEL_ID}")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 
 RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "chunk")  # node | edge | chunk
@@ -909,8 +960,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -943,8 +994,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -985,7 +1036,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            endpoint="/v1/faqgen",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/faqgen",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -1031,8 +1083,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -1079,8 +1131,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -1808,10 +1860,11 @@ class ChatQnAService:
 
         self.service.add_route(self.endpoint, self.handle_request, methods=["POST"])
 
-        # OpenTelemetry FastAPI auto-instrumentation
-        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-
-        FastAPIInstrumentor.instrument_app(self.service._app)
+        # TODO(7.5): FastAPIInstrumentor.instrument_app() fails with
+        # "Cannot add middleware after an application has started" because
+        # routes are added before instrumentation.
+        # from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        # FastAPIInstrumentor.instrument_app(self.service._app)
 
         self.service.start()
 

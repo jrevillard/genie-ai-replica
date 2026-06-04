@@ -1,7 +1,6 @@
 # Copyright (C) 2024 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-
 import os
 import time
 
@@ -120,6 +119,9 @@ async def retrieve_docs(
                 if isinstance(r, str):
                     retrieved_docs.append(RetrievalResponseData(text=r, metadata=None))
                 else:
+                    # Inject score into metadata so downstream consumers can read it
+                    if r.get("score") is not None and r["doc"].metadata is not None:
+                        r["doc"].metadata["score"] = r["score"]
                     retrieved_docs.append(RetrievalResponseData(text=r["doc"].page_content, metadata=r["doc"].metadata))
             if isinstance(input, RetrievalRequest):
                 result = RetrievalResponse(retrieved_docs=retrieved_docs)
@@ -145,9 +147,11 @@ if __name__ == "__main__":
     logger.info("Retriever Microservice is starting...")
     service = opea_microservices["opea_service@retrievers"]
 
-    # OpenTelemetry FastAPI auto-instrumentation
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-
-    FastAPIInstrumentor.instrument_app(service._app)
+    # TODO(7.5): FastAPIInstrumentor.instrument_app() fails with
+    # "Cannot add middleware after an application has started" because
+    # the OPEA comps framework initializes routes during service creation.
+    # Requires instrumenting INSIDE the comps init flow, not after.
+    # from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    # FastAPIInstrumentor.instrument_app(service._app)
 
     service.start()

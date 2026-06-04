@@ -19,7 +19,7 @@ function parseComposeEnvVars(filePath) {
   try {
     content = fs.readFileSync(filePath, 'utf-8');
   } catch (err) {
-    throw new Error(`Failed to read docker-compose file: ${filePath}: ${err.message}`);
+    throw new Error(`Failed to read docker-compose file: ${filePath}`, { cause: err });
   }
   // Filter out comment lines to avoid false positives from documentation text
   const codeLines = content

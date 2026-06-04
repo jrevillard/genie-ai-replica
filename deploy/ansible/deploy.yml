@@ -464,6 +464,18 @@
             source_tag: genie-ai-reranker:latest
             registry_tag: genie-ai-reranker:latest
             opea: true
+          - name: textgen
+            dockerfile: genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
+            context: .
+            source_tag: genie-ai-textgen:latest
+            registry_tag: genie-ai-textgen:latest
+            opea: true
+          - name: embedding
+            dockerfile: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
+            context: .
+            source_tag: genie-ai-embedding:latest
+            registry_tag: genie-ai-embedding:latest
+            opea: true
 
     - name: Get current git commit SHA
       ansible.builtin.command: git rev-parse HEAD

@@ -478,7 +478,7 @@ class TestInvoke:
     @pytest.mark.asyncio
     async def test_similarity_search_type_calls_correct_method(self, invoke_env):
         await invoke_env["retriever"].invoke(create_mock_input(search_type="similarity"))
-        invoke_env["vector_db"].asimilarity_search.assert_called_once()
+        invoke_env["vector_db"].asimilarity_search_with_relevance_scores.assert_called()
 
     @pytest.mark.asyncio
     async def test_file_id_enrichment_for_chunk_mode(self, invoke_env):
@@ -532,7 +532,7 @@ class TestInvoke:
     @pytest.mark.asyncio
     async def test_similarity_passes_k(self, invoke_env):
         await invoke_env["retriever"].invoke(create_mock_input(search_type="similarity", k=3))
-        call_kwargs = invoke_env["vector_db"].asimilarity_search.call_args.kwargs
+        call_kwargs = invoke_env["vector_db"].asimilarity_search_with_relevance_scores.call_args.kwargs
         assert call_kwargs["k"] == 3
 
     @pytest.mark.asyncio

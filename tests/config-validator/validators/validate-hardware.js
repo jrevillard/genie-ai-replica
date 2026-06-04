@@ -38,7 +38,7 @@ function parseGpuProfile(profilePath) {
   try {
     content = fs.readFileSync(profilePath, 'utf-8');
   } catch (err) {
-    throw new Error(`Failed to read GPU profile file: ${profilePath}: ${err.message}`);
+    throw new Error(`Failed to read GPU profile file: ${profilePath}`, { cause: err });
   }
   const lines = content.split('\n');
   const variables = [];

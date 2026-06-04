@@ -30,12 +30,12 @@ class TestSetupTracing:
             tracing.setup_tracing("genieai-retriever")
             mock_exporter.assert_called_once_with(endpoint="http://otel-collector:4318/v1/traces")
 
-    def test_default_endpoint_when_env_not_set(self, monkeypatch):
-        """When OTEL_EXPORTER_OTLP_ENDPOINT is not set, default to http://otel-collector:4318."""
+    def test_skips_setup_when_endpoint_not_set(self, monkeypatch):
+        """When OTEL_EXPORTER_OTLP_ENDPOINT is not set, setup_tracing() returns early (no-op)."""
         monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
         with patch.object(tracing, "OTLPSpanExporter") as mock_exporter:
             tracing.setup_tracing("test-service")
-            mock_exporter.assert_called_once_with(endpoint="http://otel-collector:4318/v1/traces")
+            mock_exporter.assert_not_called()
 
     def test_registers_shutdown_via_atexit(self, monkeypatch):
         """setup_tracing() must register shutdown handler via atexit."""

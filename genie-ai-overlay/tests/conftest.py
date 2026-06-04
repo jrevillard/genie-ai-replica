@@ -38,7 +38,14 @@ sys.modules.setdefault("comps.dataprep.src", MagicMock())
 sys.modules.setdefault("comps.dataprep.src.genieai_dataprep_utils", MagicMock())
 sys.modules.setdefault("comps.dataprep.src.integrations", MagicMock())
 _arangodb_dp_module = MagicMock()
-_arangodb_dp_module.OpeaArangoDataprep = type("OpeaArangoDataprep", (), {"__init__": lambda self, *a, **kw: None})
+_arangodb_dp_module.OpeaArangoDataprep = type(
+    "OpeaArangoDataprep",
+    (),
+    {
+        "__init__": lambda self, *a, **kw: None,
+        "_initialize_llm": lambda self, *a, **kw: None,
+    },
+)
 sys.modules.setdefault("comps.dataprep.src.integrations.arangodb", _arangodb_dp_module)
 sys.modules.setdefault("comps.dataprep.src.utils", MagicMock())
 
@@ -94,6 +101,7 @@ sys.modules.setdefault("langchain_openai", MagicMock())
 sys.modules.setdefault("openai", MagicMock())
 
 # ChatQnA import-time dependencies
+sys.modules.setdefault("genie_ssl_patch", MagicMock())
 sys.modules.setdefault("transformers", MagicMock())
 sys.modules.setdefault("langdetect", MagicMock())
 sys.modules.setdefault("keycloak_token_validator", MagicMock())
@@ -164,6 +172,17 @@ sys.modules.setdefault("genieai_dataprep_loader", MagicMock())
 
 # Dataprep microservice importlib.import_module("integrations.genieai_dataprep_arangodb")
 sys.modules.setdefault("integrations.genieai_dataprep_arangodb", MagicMock())
+
+# genieai_dataprep_utils heavy import-time dependencies (cv2, easyocr, pymupdf, docling)
+sys.modules.setdefault("cv2", MagicMock())
+sys.modules.setdefault("easyocr", MagicMock())
+sys.modules.setdefault("pymupdf", MagicMock())
+_docling_mock = MagicMock()
+sys.modules.setdefault("docling", _docling_mock)
+sys.modules.setdefault("docling.datamodel", MagicMock())
+sys.modules.setdefault("docling.datamodel.base_models", MagicMock())
+sys.modules.setdefault("docling.datamodel.pipeline_options", MagicMock())
+sys.modules.setdefault("docling.document_converter", MagicMock())
 
 
 # ---------------------------------------------------------------------------

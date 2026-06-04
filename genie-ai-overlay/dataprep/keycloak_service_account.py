@@ -57,7 +57,12 @@ async def get_service_account_token() -> str:
         }
 
         try:
-            async with aiohttp.ClientSession() as session, session.post(token_url, data=payload) as response:
+            _skip_ssl = os.getenv("KEYCLOAK_SSL_SKIP_VERIFY", "") == "1"
+            connector = aiohttp.TCPConnector(ssl=not _skip_ssl)
+            async with (
+                aiohttp.ClientSession(connector=connector) as session,
+                session.post(token_url, data=payload) as response,
+            ):
                 if response.status != 200:
                     error_text = await response.text()
                     logger.error(f"Failed to obtain service account token: {response.status} - {error_text}")

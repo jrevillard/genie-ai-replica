@@ -1,0 +1,6 @@
+---
+# ITU RTX GPU API Node — environment-specific overrides
+# Defaults live in group_vars/all.yml (GPU section)
+
+gpu_public_domain: ai.assembly.govstack.global
+certbot_email: admin@assembly.govstack.global

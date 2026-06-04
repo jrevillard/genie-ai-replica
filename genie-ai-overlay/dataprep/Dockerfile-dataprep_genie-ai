@@ -78,7 +78,7 @@ RUN pip install --no-cache-dir -r ${REQ_PATH}
 
 # Step F: Install overlay-specific dependencies
 # **UPDATED**: Added 'docling' and 'opencv-python-headless' which are required by the new utils/arangodb code.
-RUN pip install --no-cache-dir rank_bm25 docling opencv-python-headless hf_xet "python-jose[cryptography]"
+RUN pip install --no-cache-dir rank_bm25 docling opencv-python-headless hf_xet "python-jose[cryptography]" aiohttp
 
 # Step F.5: Copy shared OTel tracing module (importable from PYTHONPATH=/app)
 COPY genie-ai-overlay/tracing.py /app/tracing.py
@@ -133,6 +133,11 @@ RUN sed -i '/from integrations\./ { /arangodb/! s/^/#/ }' /app/comps/dataprep/sr
 # Step K: Create non-root user and set permissions
 RUN useradd -ms /bin/bash user && \
     chown -R user:user /app /home/user
+
+    # Step K.5: Copy SSL bypass runtime patch as sitecustomize (no-op unless OPEA_SSL_SKIP_VERIFY=1)
+    COPY configs/ssl/genie_ssl_patch.py /usr/local/lib/python3.10/dist-packages/sitecustomize.py
+    # Remove system sitecustomize (Ubuntu apport handler) so our patch runs first
+    RUN rm -f /usr/lib/python3.10/sitecustomize.py
 
 # Step L: Run the new GENIE-AI entry point from its new location
 USER user

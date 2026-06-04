@@ -300,10 +300,15 @@ async def retract_file(payload: DocRepoRetractPayload):
 # Launch microservice
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-
     logger.info("GENIE Dataprep Microservice is starting...")
     base.create_upload_folder(upload_folder)
     app = base.opea_microservices["opea_service@dataprep"]
-    FastAPIInstrumentor.instrument_app(app._app if hasattr(app, "_app") else app)
+
+    # TODO(7.5): FastAPIInstrumentor.instrument_app() fails with
+    # "Cannot add middleware after an application has started" because
+    # the OPEA comps framework initializes routes during service creation.
+    # Requires instrumenting INSIDE the comps init flow, not after.
+    # from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    # FastAPIInstrumentor.instrument_app(app._app if hasattr(app, "_app") else app)
+
     app.start()

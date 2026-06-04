@@ -635,3 +635,70 @@ KC_GRAFANA_CLIENT_SECRET=
 # GPU-specific overrides work the same as Docker:
 #   set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
 
+# =============================================================================
+# SECTION 14: REMOTE GPU NODE (OPTIONAL)
+# =============================================================================
+# When deploying a dedicated GPU node with the remote architecture (issue #758),
+# override the default local Docker DNS endpoints to point to the GPU node via HTTPS.
+# The GPU node runs nginx with TLS and API key authentication on port 443
+# with path-based routing: /llm/, /translation/, /embed/, /rerank/, /docling/.
+#
+# GPU_NODE_HOST=gpu.example.com
+#   DNS hostname or IP of the remote GPU node.
+#   All services below derive their URLs from this variable.
+#
+# GPU_MODEL_REPLICAS=0
+#   Set to 0 to skip GPU-heavy containers (vllm, tei, tei_reranker,
+#   vllm-translation-guardrail) on the app node when using a remote GPU node.
+#   Docker Compose: use --profile opea only (gpu-models profile is excluded).
+#   Docker Swarm: set in .env; defaults to DEPLOY_OPEA value when unset.
+#   Ansible: set automatically when gpu_node_host is configured.
+#
+# GPU_PUBLIC_DOMAIN=gpu.example.com
+#   Public domain for the GPU node (used by certbot for TLS certificates).
+#   Typically same as GPU_NODE_HOST. Set on the GPU node in .env.
+#
+# VLLM_ENDPOINT=https://${GPU_NODE_HOST}/llm
+# VLLM_TRANSLATION_ENDPOINT=https://${GPU_NODE_HOST}/translation
+# EMBEDDING_SERVICE_URL=https://${GPU_NODE_HOST}/embed
+# RERANKER_SERVICE_URL=https://${GPU_NODE_HOST}/rerank
+#
+# DOCLING_ENDPOINT=https://${GPU_NODE_HOST}/docling
+#   Remote docling-serve endpoint for document extraction.
+#   When set, dataprep sends documents to the remote GPU node for processing.
+#   When empty, dataprep uses the in-process docling converter (existing behavior).
+#
+# DOCLING_ENDPOINT_TIMEOUT=120
+#   HTTP timeout (seconds) for remote docling-serve calls. Default: 120.
+#
+# VLLM_API_KEY=<api-key-for-your-instance>
+#   API key for authenticating with the GPU node nginx proxy.
+#   Sent as standard Authorization: Bearer header by all clients:
+#   - OpenAI-compatible clients (ChatOpenAI, AsyncOpenAI) use api_key param → Bearer natively.
+#   - OPEA TEI wrapper services (embedding, reranker) use huggingface_hub SDK →
+#     HF_TOKEN env var (automatically set from VLLM_API_KEY in docker-compose.yaml).
+#   - Custom HTTP clients (backend translation, dataprep docling) set Authorization header explicitly.
+#   One key per GENIE.AI instance, shared across all 5 GPU services.
+#   Contact the GPU node administrator to obtain your key.
+#
+# Self-signed TLS certificate:
+#   If the GPU node uses a self-signed certificate (private IP, no Let's Encrypt),
+#   Option A — Disable TLS verification (simpler, private network only):
+#     NODE_TLS_REJECT_UNAUTHORIZED=0
+#   Option B — Trust the certificate (recommended for production):
+#     Copy gpu-node.crt from the GPU node and set:
+#     NODE_EXTRA_CA_CERTS=/path/to/gpu-node.crt      (Node.js)
+#     REQUESTS_CA_BUNDLE=/path/to/gpu-node.crt         (Python)
+#
+# OPEA_SSL_SKIP_VERIFY=0
+#   Set to 1 to disable SSL certificate verification in OPEA Python services
+#   (embedding, reranker, textgen, chatqna, retriever, dataprep). Required when
+#   the remote GPU node uses a self-signed certificate. Baked into Docker images
+#   via genie_ssl_patch.py — no volume mounts needed. Default: 0 (verify certs).
+#   When using Let's Encrypt or a recognized CA, leave at 0 (default).
+#
+# KEYCLOAK_SSL_SKIP_VERIFY=0
+#   Set to 1 to disable SSL certificate verification for dataprep's Keycloak
+#   service account token fetch. Required when Keycloak uses a self-signed
+#   certificate. Independent of OPEA_SSL_SKIP_VERIFY. Default: 0 (verify certs).
+

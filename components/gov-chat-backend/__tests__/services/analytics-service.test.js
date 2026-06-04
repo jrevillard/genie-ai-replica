@@ -315,4 +315,220 @@ describe('AnalyticsService', () => {
       expect(result).toBeDefined();
     });
   });
+
+  describe('recordQuery - error paths', () => {
+    it('should handle missing _key in queryDoc', async () => {
+      const invalidQueryDoc = { userId: 'u1', text: 'test' };
+      mockAnalytics.save.mockRejectedValueOnce(new Error('Missing _key'));
+      await expect(analyticsService.recordQuery(invalidQueryDoc)).rejects.toThrow('Missing _key');
+    });
+
+    it('should handle missing userId', async () => {
+      const queryDoc = { _key: 'q1', text: 'test' };
+      const result = await analyticsService.recordQuery(queryDoc);
+      expect(result).toBeDefined();
+    });
+
+    it('should use defaults for missing optional fields', async () => {
+      const queryDoc = { _key: 'q1', userId: 'u1', sessionId: 's1' };
+      const result = await analyticsService.recordQuery(queryDoc);
+      expect(mockAnalytics.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            responseTime: 0,
+            isAnswered: false
+          })
+        })
+      );
+    });
+  });
+
+  describe('recordFeedback - error paths', () => {
+    it('should handle missing queryId', async () => {
+      await expect(analyticsService.recordFeedback(null, { rating: 5 })).rejects.toThrow();
+    });
+
+    it('should handle empty feedback object', async () => {
+      mockAnalytics.save.mockResolvedValueOnce({ _key: 'fb-1' });
+      const result = await analyticsService.recordFeedback('q1', {});
+      expect(result).toBeDefined();
+    });
+
+    it('should propagate database errors', async () => {
+      mockAnalytics.save.mockRejectedValueOnce(new Error('Database connection lost'));
+      await expect(analyticsService.recordFeedback('q1', { rating: 5 })).rejects.toThrow('Database connection lost');
+    });
+  });
+
+  describe('trackEvent - error paths', () => {
+    it('should handle missing eventName', async () => {
+      mockEvents.save.mockRejectedValueOnce(new Error('Event name required'));
+      await expect(analyticsService.trackEvent('u1', 's1', null, {})).rejects.toThrow();
+    });
+
+    it('should handle missing userId', async () => {
+      mockEvents.save.mockResolvedValueOnce({ _key: 'evt-1' });
+      const result = await analyticsService.trackEvent(null, 's1', 'click', { button: 'submit' });
+      expect(result).toBeDefined();
+    });
+
+    it('should handle large metadata objects', async () => {
+      const largeMetadata = { data: 'x'.repeat(10000) };
+      mockEvents.save.mockResolvedValueOnce({ _key: 'evt-1' });
+      const result = await analyticsService.trackEvent('u1', 's1', 'large_event', largeMetadata);
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('getDashboardAnalytics - date range boundaries', () => {
+    it('should handle start date equal to end date', async () => {
+      const sameDay = '2026-01-15';
+      mockDb.query.mockResolvedValueOnce(createMockCursor([{ queries: { total: 5 } }])).mockResolvedValueOnce(createMockCursor([]));
+      const result = await analyticsService.getDashboardAnalytics(sameDay, sameDay);
+      expect(result).toBeDefined();
+    });
+
+    it('should handle invalid date format', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([]));
+      const result = await analyticsService.getDashboardAnalytics('invalid-date', '2026-01-15');
+      expect(result).toBeDefined();
+    });
+
+    it('should handle very long date ranges', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([]));
+      const result = await analyticsService.getDashboardAnalytics('2020-01-01', '2026-12-31');
+      expect(result).toBeDefined();
+    });
+
+    it('should handle date ranges with no data', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([]));
+      const result = await analyticsService.getDashboardAnalytics('2026-01-01', '2026-01-31');
+      expect(result.queries.total).toBe(0);
+      expect(result.feedback.total).toBe(0);
+      expect(result.users.activeCount).toBe(0);
+    });
+  });
+
+  describe('getDashboardAnalytics - zero-data aggregation', () => {
+    it('should return zero counts when no analytics data exists', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const result = await analyticsService.getDashboardAnalytics();
+      expect(result.queries.total).toBe(0);
+      expect(result.queries.answered).toBe(0);
+      expect(result.queries.unanswered).toBe(0);
+      expect(result.feedback.total).toBe(0);
+    });
+
+    it('should calculate percentages correctly with zero total', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([{ queries: { total: 0 } }])).mockResolvedValueOnce(createMockCursor([]));
+      const result = await analyticsService.getDashboardAnalytics();
+      expect(result.queries.answeredPercentage).toBe(0);
+    });
+  });
+
+  describe('getDashboardAnalytics - query validation', () => {
+    it('should validate query parameters', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([]));
+      await analyticsService.getDashboardAnalytics(null, null, 'invalid');
+      expect(mockDb.query).toHaveBeenCalled();
+    });
+
+    it('should handle missing optional parameters', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([]));
+      const result = await analyticsService.getDashboardAnalytics();
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('getDashboardAnalytics - error paths', () => {
+    it('should handle Arango query failure for total queries', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('Query timeout'));
+      const result = await analyticsService.getDashboardAnalytics();
+      expect(result.queries.total).toBe(0);
+    });
+
+    it('should handle Arango query failure for categories', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([{ queries: { total: 5 } }])).mockRejectedValueOnce(new Error('Category query failed'));
+      const result = await analyticsService.getDashboardAnalytics();
+      expect(result.categories).toEqual([]);
+    });
+
+    it('should handle ServiceCategoryService initialization failure', async () => {
+      const { ServiceCategoryService } = require('../../services/service-category-service');
+      ServiceCategoryService.init.mockRejectedValueOnce(new Error('Service category init failed'));
+      analyticsService.initialized = false;
+      await expect(analyticsService.init()).rejects.toThrow('Service category init failed');
+    });
+
+    it('should handle connection failure', async () => {
+      const { dbService: ds } = require('../../shared-lib');
+      ds.getConnection.mockRejectedValueOnce(new Error('Connection failed'));
+      analyticsService.initialized = false;
+      await expect(analyticsService.init()).rejects.toThrow('Connection failed');
+    });
+  });
+
+  describe('formatDateLabel - edge cases', () => {
+    it('should handle undefined timestamp', () => {
+      const result = analyticsService.formatDateLabel(undefined, 'daily');
+      expect(result).toBe('');
+    });
+
+    it('should handle very old dates', () => {
+      const result = analyticsService.formatDateLabel('1970-01-01T00:00:00Z', 'daily');
+      expect(result).toBeDefined();
+    });
+
+    it('should handle future dates', () => {
+      const futureDate = '2099-12-31T23:59:59Z';
+      const result = analyticsService.formatDateLabel(futureDate, 'daily');
+      expect(result).toBeDefined();
+    });
+
+    it('should handle leap year dates', () => {
+      const leapDate = '2024-02-29T12:00:00Z';
+      const result = analyticsService.formatDateLabel(leapDate, 'daily');
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('getTimeSeriesData - error paths', () => {
+    it('should handle invalid interval', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const result = await analyticsService.getTimeSeriesData('2026-01-01', '2026-01-31', 'invalid_interval');
+      expect(result).toBeDefined();
+    });
+
+    it('should handle empty result set', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const result = await analyticsService.getTimeSeriesData('2026-01-01', '2026-01-31', 'daily');
+      expect(result).toEqual([]);
+    });
+
+    it('should handle database errors', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('DB error'));
+      const result = await analyticsService.getTimeSeriesData('2026-01-01', '2026-01-31', 'daily');
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('getUsageStats - error paths', () => {
+    it('should handle missing userId parameter', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const result = await analyticsService.getUsageStats(null);
+      expect(result).toBeDefined();
+    });
+
+    it('should handle empty user stats', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const result = await analyticsService.getUsageStats('nonexistent-user');
+      expect(result.totalQueries).toBe(0);
+    });
+
+    it('should handle database connection errors', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('Connection lost'));
+      const result = await analyticsService.getUsageStats('user-1');
+      expect(result.totalQueries).toBe(0);
+    });
+  });
 });

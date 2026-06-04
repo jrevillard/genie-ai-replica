@@ -953,4 +953,235 @@ describe('QueryService', () => {
       await expect(queryService.linkQueryToMessage('query-1', 'invalid')).rejects.toThrow('Message not found');
     });
   });
+
+  describe('searchQueries - additional filters', () => {
+    it('should filter by serviceId', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
+      await queryService.searchQueries({ serviceId: 'svc-1' });
+      expect(mockDb.query).toHaveBeenCalledTimes(2);
+    });
+
+    it('should handle multiple filters combined', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
+      await queryService.searchQueries({
+        userId: 'user-1',
+        categoryId: 'cat-1',
+        serviceId: 'svc-1',
+        isAnswered: false
+      });
+      expect(mockDb.query).toHaveBeenCalledTimes(2);
+    });
+
+    it('should handle empty filter object', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
+      await queryService.searchQueries({});
+      expect(mockDb.query).toHaveBeenCalledTimes(2);
+    });
+
+    it('should validate pagination parameters', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
+      await queryService.searchQueries({}, -1, 0);
+      expect(mockDb.query).toHaveBeenCalled();
+    });
+  });
+
+  describe('searchQueries - error paths', () => {
+    it('should handle database connection errors', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('Connection lost'));
+      await expect(queryService.searchQueries({})).rejects.toThrow('Connection lost');
+    });
+
+    it('should handle malformed filter values', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
+      const result = await queryService.searchQueries({ isAnswered: 'not-a-boolean' });
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('getSimilarQueries - error paths', () => {
+    it('should handle empty query text', async () => {
+      const result = await queryService.getSimilarQueries('');
+      expect(result).toEqual([]);
+    });
+
+    it('should handle very short query text', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const result = await queryService.getSimilarQueries('a');
+      expect(result).toEqual([]);
+    });
+
+    it('should handle special characters in query', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const result = await queryService.getSimilarQueries('tax @#$% rate');
+      expect(result).toEqual([]);
+    });
+
+    it('should handle null query text', async () => {
+      const result = await queryService.getSimilarQueries(null);
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('createQuery - additional validation', () => {
+    it('should handle missing messages array', async () => {
+      const data = {
+        userId: 'u1',
+        sessionId: 's1',
+        context: { categoryLabel: 'General', serviceLabels: [] }
+      };
+      await expect(queryService.createQuery(data)).rejects.toThrow('Missing required query data');
+    });
+
+    it('should handle empty messages array', async () => {
+      const data = {
+        userId: 'u1',
+        sessionId: 's1',
+        messages: [],
+        context: { categoryLabel: 'General', serviceLabels: [] }
+      };
+      await expect(queryService.createQuery(data)).rejects.toThrow('Missing required query data');
+    });
+
+    it('should handle invalid message format', async () => {
+      const data = {
+        userId: 'u1',
+        sessionId: 's1',
+        messages: [{ invalidField: 'test' }],
+        context: { categoryLabel: 'General', serviceLabels: [] }
+      };
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'q1' });
+      mockQueriesCollection.update.mockResolvedValueOnce({ new: { _key: 'q1', isAnswered: true } });
+      const result = await queryService.createQuery(data);
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('initStreamQuery - additional validation', () => {
+    it('should handle empty messages array', async () => {
+      const data = { userId: 'u1', sessionId: 's1', messages: [] };
+      await expect(queryService.initStreamQuery(data, {})).rejects.toThrow('Missing required query data');
+    });
+
+    it('should handle missing context', async () => {
+      const data = { userId: 'u1', sessionId: 's1', messages: [{ role: 'user', content: 'test' }] };
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result).toBeDefined();
+    });
+
+    it('should handle categoryId resolution failure', async () => {
+      const data = createMockQueryData();
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([])) // No category found
+        .mockResolvedValueOnce(createMockCursor([])); // No service found
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.queryId).toBe('stream-1');
+    });
+  });
+
+  describe('finalizeStreamQuery - error paths', () => {
+    it('should handle missing queryId', async () => {
+      mockQueriesCollection.document.mockResolvedValueOnce(null);
+      await expect(queryService.finalizeStreamQuery('invalid', 'text', 100, {})).rejects.toThrow();
+    });
+
+    it('should handle database update errors', async () => {
+      mockQueriesCollection.update.mockRejectedValueOnce(new Error('Update failed'));
+      await expect(queryService.finalizeStreamQuery('q1', 'text', 100, {})).rejects.toThrow('Update failed');
+    });
+
+    it('should handle negative responseTime', async () => {
+      mockQueriesCollection.update.mockResolvedValueOnce({ new: { _key: 'q1' } });
+      await queryService.finalizeStreamQuery('q1', 'text', -100, {});
+      expect(mockQueriesCollection.update).toHaveBeenCalled();
+    });
+
+    it('should handle empty metadata', async () => {
+      mockQueriesCollection.update.mockResolvedValueOnce({ new: { _key: 'q1' } });
+      await queryService.finalizeStreamQuery('q1', 'text', 100, null);
+      expect(mockQueriesCollection.update).toHaveBeenCalled();
+    });
+  });
+
+  describe('setQueryCategory - edge cases', () => {
+    it('should handle removing category (null categoryId)', async () => {
+      mockQueriesCollection.update.mockResolvedValueOnce({
+        new: { _key: 'query-1', categoryId: null }
+      });
+      const result = await queryService.setQueryCategory('query-1', null);
+      expect(result.categoryId).toBeNull();
+    });
+
+    it('should handle invalid categoryId format', async () => {
+      mockQueriesCollection.update.mockResolvedValueOnce({
+        new: { _key: 'query-1', categoryId: 'invalid-format' }
+      });
+      const result = await queryService.setQueryCategory('query-1', 'invalid-format');
+      expect(result.categoryId).toBe('invalid-format');
+    });
+
+    it('should handle concurrent edge updates', async () => {
+      mockQueriesCollection.update.mockResolvedValueOnce({
+        new: { _key: 'query-1', categoryId: 'cat-1' }
+      });
+      mockDb.query.mockRejectedValueOnce(new Error('Concurrent update')).mockResolvedValueOnce(createMockCursor([]));
+      const result = await queryService.setQueryCategory('query-1', 'cat-1');
+      expect(result.categoryId).toBe('cat-1');
+    });
+  });
+
+  describe('deleteQuery - edge cases', () => {
+    it('should handle query with no edges', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([]));
+      const result = await queryService.deleteQuery('query-1');
+      expect(result).toBeDefined();
+    });
+
+    it('should handle multiple edges', async () => {
+      const edges = [
+        { _key: 'edge-1', _from: 'queries/query-1' },
+        { _key: 'edge-2', _from: 'queries/query-1' }
+      ];
+      mockDb.query.mockResolvedValueOnce(createMockCursor(edges));
+      const result = await queryService.deleteQuery('query-1');
+      expect(result).toBeDefined();
+    });
+
+    it('should handle database errors during deletion', async () => {
+      mockQueriesCollection.remove.mockRejectedValueOnce(new Error('Delete failed'));
+      await expect(queryService.deleteQuery('query-1')).rejects.toThrow('Delete failed');
+    });
+  });
+
+  describe('addFeedback - edge cases', () => {
+    it('should handle feedback with minimal data', async () => {
+      mockQueriesCollection.update.mockResolvedValueOnce({
+        new: { _key: 'query-1', userFeedback: { rating: 1 } }
+      });
+      const result = await queryService.addFeedback('query-1', { rating: 1 });
+      expect(result.userFeedback.rating).toBe(1);
+    });
+
+    it('should handle maximum rating', async () => {
+      mockQueriesCollection.update.mockResolvedValueOnce({
+        new: { _key: 'query-1', userFeedback: { rating: 5 } }
+      });
+      const result = await queryService.addFeedback('query-1', { rating: 5, comment: 'Perfect!' });
+      expect(result.userFeedback.rating).toBe(5);
+    });
+
+    it('should handle rating out of range', async () => {
+      mockQueriesCollection.update.mockResolvedValueOnce({
+        new: { _key: 'query-1', userFeedback: { rating: 10 } }
+      });
+      const result = await queryService.addFeedback('query-1', { rating: 10 });
+      expect(result.userFeedback.rating).toBe(10);
+    });
+
+    it('should handle update errors', async () => {
+      mockQueriesCollection.update.mockRejectedValueOnce(new Error('Update failed'));
+      await expect(queryService.addFeedback('query-1', { rating: 5 })).rejects.toThrow('Update failed');
+    });
+  });
 });

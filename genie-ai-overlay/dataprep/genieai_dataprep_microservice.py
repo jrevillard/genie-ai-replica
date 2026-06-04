@@ -17,9 +17,21 @@ import time
 
 from opentelemetry.trace import Status, StatusCode
 
-from tracing import get_tracer, setup_trace_logging, setup_tracing
+from tracing import get_meter, get_tracer, sanitize_attributes, setup_trace_logging, setup_tracing
 
 setup_tracing("genieai-dataprep")
+
+# Custom application metrics
+_dataprep_meter = get_meter()
+_ingestion_requests = _dataprep_meter.create_counter(
+    "rag.ingestion.requests",
+    description="Total document ingestion requests",
+)
+_ingestion_duration = _dataprep_meter.create_histogram(
+    "rag.ingestion.duration",
+    description="Document ingestion duration",
+    unit="s",
+)
 
 tracer = get_tracer(__name__)
 
@@ -205,9 +217,21 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
 
             statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)
 
+            # Record custom ingestion metrics
+            _ing_latency = time.time() - start
+            _file_type = payload.fileType
+            _ing_attrs = sanitize_attributes({"dataprep.file_type": _file_type, "error": "false"})
+            _ingestion_requests.add(1, _ing_attrs)
+            _ingestion_duration.record(_ing_latency, _ing_attrs)
+
             return {"success": True, "status": 200, "message": "Ingestion started in background."}
 
         except Exception as e:
+            # Record error metric
+            _err_latency = time.time() - start
+            _err_attrs = sanitize_attributes({"dataprep.file_type": payload.fileType, "error": "true"})
+            _ingestion_requests.add(1, _err_attrs)
+            _ingestion_duration.record(_err_latency, _err_attrs)
             span.record_exception(e)
             span.set_status(Status(StatusCode.ERROR, str(e)))
             logger.error(f"Error initiating dataprep ingest: {e}")

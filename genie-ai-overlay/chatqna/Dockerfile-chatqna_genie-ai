@@ -86,6 +86,7 @@ COPY genie-ai-overlay/core/constants.py /home/user/comps/cores/mega/constants.py
 # This copies your main script
 COPY genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py
 COPY genie-ai-overlay/chatqna/keycloak_token_validator.py /app/ChatQnA/keycloak_token_validator.py
+COPY genie-ai-overlay/chatqna/metrics.py /app/ChatQnA/metrics.py
 COPY genie-ai-overlay/chatqna/language_codes.json /app/ChatQnA/language_codes.json
 
 # Step E: Ensure all application files are owned by user

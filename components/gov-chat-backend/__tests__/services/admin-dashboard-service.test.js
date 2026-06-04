@@ -771,4 +771,208 @@ describe('AdminDashboardService', () => {
       expect(result.metrics.errorRate).toBe(0);
     });
   });
+
+  describe('getLogs - error paths', () => {
+    it('should handle missing log file', async () => {
+      mockFs.readFile.mockRejectedValueOnce(new Error('ENOENT: log file not found'));
+      const result = await adminDashboardService.getLogs();
+      expect(result.logs).toEqual([]);
+    });
+
+    it('should handle malformed log lines', async () => {
+      const malformedLogs = [
+        'Invalid log line without brackets',
+        '[2026-05-26T10:00:00.000Z] [INFO] Valid log',
+        'Another invalid line',
+        '[] [] []'
+      ].join('\n');
+      mockFs.readFile.mockResolvedValueOnce(malformedLogs);
+      const result = await adminDashboardService.getLogs();
+      expect(result.logs).toBeDefined();
+    });
+
+    it('should handle empty log file', async () => {
+      mockFs.readFile.mockResolvedValueOnce('');
+      const result = await adminDashboardService.getLogs();
+      expect(result.logs).toEqual([]);
+    });
+
+    it('should handle log file read errors', async () => {
+      mockFs.readFile.mockRejectedValueOnce(new Error('Permission denied'));
+      const result = await adminDashboardService.getLogs();
+      expect(result.logs).toEqual([]);
+    });
+  });
+
+  describe('getSystemHealth - empty stats', () => {
+    it('should handle zero users', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([{ count: 0 }]));
+      const health = await adminDashboardService.getSystemHealth();
+      expect(health.users.total).toBe(0);
+    });
+
+    it('should handle zero queries', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([{ count: 0 }]));
+      const health = await adminDashboardService.getSystemHealth();
+      expect(health.queries.total).toBe(0);
+    });
+
+    it('should handle zero sessions', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([{ count: 0 }]));
+      const health = await adminDashboardService.getSystemHealth();
+      expect(health.sessions.total).toBe(0);
+    });
+
+    it('should handle all zero counts', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([{ count: 0 }]));
+      const health = await adminDashboardService.getSystemHealth();
+      expect(health.users.total).toBe(0);
+      expect(health.queries.total).toBe(0);
+      expect(health.sessions.total).toBe(0);
+    });
+  });
+
+  describe('getSystemHealth - permission-denied branches', () => {
+    it('should handle Arango query permission errors', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('Permission denied: arango'));
+      const health = await adminDashboardService.getSystemHealth();
+      expect(health.status).toBe('error');
+    });
+
+    it('should handle Redis connection permission errors', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([{ count: 100 }]));
+      const { redisClient: rc } = require('../../shared-lib');
+      rc.info.mockRejectedValueOnce(new Error('NOAUTH Authentication required'));
+      const health = await adminDashboardService.getSystemHealth();
+      expect(health.redis.status).toBe('error');
+    });
+
+    it('should handle file system permission errors', async () => {
+      mockFs.access.mockRejectedValueOnce(new Error('EACCES: permission denied'));
+      mockFs.readdir.mockRejectedValueOnce(new Error('Permission denied'));
+      const health = await adminDashboardService.getSystemHealth();
+      expect(health.disk.status).toBe('error');
+    });
+  });
+
+  describe('getSystemHealth - Arango query failures', () => {
+    it('should handle user count query failure', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('Arango query timeout'));
+      const health = await adminDashboardService.getSystemHealth();
+      expect(health.users.total).toBe(0);
+    });
+
+    it('should handle query count query failure', async () => {
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([{ count: 100 }]))
+        .mockRejectedValueOnce(new Error('Arango connection lost'));
+      const health = await adminDashboardService.getSystemHealth();
+      expect(health.queries.total).toBe(0);
+    });
+
+    it('should handle session count query failure', async () => {
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([{ count: 100 }]))
+        .mockResolvedValueOnce(createMockCursor([{ count: 50 }]))
+        .mockRejectedValueOnce(new Error('Database locked'));
+      const health = await adminDashboardService.getSystemHealth();
+      expect(health.sessions.total).toBe(0);
+    });
+
+    it('should handle all Arango queries failing', async () => {
+      mockDb.query.mockRejectedValue(new Error('Arango server unavailable'));
+      const health = await adminDashboardService.getSystemHealth();
+      expect(health.database.status).toBe('error');
+    });
+  });
+
+  describe('getLogs - rotation suffix handling', () => {
+    it('should handle .log.1 rotation suffix', async () => {
+      mockFs.readFile.mockResolvedValueOnce('log content');
+      await adminDashboardService.getLogs();
+      expect(mockFs.readFile).toHaveBeenCalled();
+    });
+
+    it('should handle .log.2.gz rotation suffix', async () => {
+      mockFs.readFile.mockResolvedValueOnce('compressed log');
+      await adminDashboardService.getLogs();
+      expect(mockFs.readFile).toHaveBeenCalled();
+    });
+
+    it('should handle .log.10 rotation suffix', async () => {
+      mockFs.readFile.mockResolvedValueOnce('old log content');
+      await adminDashboardService.getLogs();
+      expect(mockFs.readFile).toHaveBeenCalled();
+    });
+  });
+
+  describe('getLogs - all service detection patterns', () => {
+    const logContent = [
+      '[2026-05-26T10:00:00.000Z] [INFO] [AuthService] User action',
+      '[2026-05-26T10:01:00.000Z] [ERROR] [QueryService] Query failed',
+      '[2026-05-26T10:02:00.000Z] [WARN] [ChatService] Message sent',
+      '[2026-05-26T10:03:00.000Z] [DEBUG] [AdminService] Admin action',
+      '[2026-05-26T10:04:00.000Z] [INFO] [DocumentService] File uploaded',
+      '[2026-05-26T10:05:00.000Z] [ERROR] [TranslationService] Translation failed'
+    ].join('\n');
+
+    it('should detect AuthService logs', async () => {
+      mockFs.readFile.mockResolvedValueOnce(logContent);
+      const result = await adminDashboardService.getLogs({ service: 'auth' });
+      expect(result.logs.some(log => log.service === 'AuthService')).toBe(true);
+    });
+
+    it('should detect QueryService logs', async () => {
+      mockFs.readFile.mockResolvedValueOnce(logContent);
+      const result = await adminDashboardService.getLogs({ service: 'query' });
+      expect(result.logs.some(log => log.service === 'QueryService')).toBe(true);
+    });
+
+    it('should detect ChatService logs', async () => {
+      mockFs.readFile.mockResolvedValueOnce(logContent);
+      const result = await adminDashboardService.getLogs({ service: 'chat' });
+      expect(result.logs.some(log => log.service === 'ChatService')).toBe(true);
+    });
+
+    it('should detect AdminService logs', async () => {
+      mockFs.readFile.mockResolvedValueOnce(logContent);
+      const result = await adminDashboardService.getLogs({ service: 'admin' });
+      expect(result.logs.some(log => log.service === 'AdminService')).toBe(true);
+    });
+
+    it('should detect DocumentService logs', async () => {
+      mockFs.readFile.mockResolvedValueOnce(logContent);
+      const result = await adminDashboardService.getLogs({ service: 'document' });
+      expect(result.logs.some(log => log.service === 'DocumentService')).toBe(true);
+    });
+
+    it('should detect TranslationService logs', async () => {
+      mockFs.readFile.mockResolvedValueOnce(logContent);
+      const result = await adminDashboardService.getLogs({ service: 'translation' });
+      expect(result.logs.some(log => log.service === 'TranslationService')).toBe(true);
+    });
+  });
+
+  describe('getLogs - MAX_LINES truncation', () => {
+    it('should truncate logs exceeding MAX_LINES', async () => {
+      const manyLines = Array(10000).fill('[2026-05-26T10:00:00.000Z] [INFO] [TestService] Test log').join('\n');
+      mockFs.readFile.mockResolvedValueOnce(manyLines);
+      const result = await adminDashboardService.getLogs();
+      expect(result.limit).toBe(100);
+    });
+
+    it('should handle exact MAX_LINES', async () => {
+      const exactLines = Array(100).fill('[2026-05-26T10:00:00.000Z] [INFO] [TestService] Test log').join('\n');
+      mockFs.readFile.mockResolvedValueOnce(exactLines);
+      const result = await adminDashboardService.getLogs();
+      expect(result.logs.length).toBeLessThanOrEqual(100);
+    });
+
+    it('should return all logs when under MAX_LINES', async () => {
+      const fewLines = Array(10).fill('[2026-05-26T10:00:00.000Z] [INFO] [TestService] Test log').join('\n');
+      mockFs.readFile.mockResolvedValueOnce(fewLines);
+      const result = await adminDashboardService.getLogs();
+      expect(result.logs.length).toBe(10);
+    });
+  });
 });

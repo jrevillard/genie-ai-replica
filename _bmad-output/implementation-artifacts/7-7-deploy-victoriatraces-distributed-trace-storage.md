@@ -396,6 +396,13 @@ glm-5-turbo
 - Init container runs in `mode: global` + `condition: none` for Swarm parity with Collector's global placement
 - VictoriaTraces v0.9.1 OTLP endpoint only supports **protobuf** encoding, NOT JSON. JSON payloads silently accepted (HTTP 200) but discarded
 - VictoriaTraces Jaeger service query (`/select/jaeger/api/traces?service=X`) may have indexing delay. Trace query by traceID (`/select/jaeger/api/traces/{traceID}`) returns immediately
+- **OTEL_TRACES_SAMPLER_RATE default was 1.0 (1%)** — should be 100.0 (100%). Fixed in docker-compose env default. The sampler processor interprets the value as a percentage, not a fraction
+- **Grafana Tempo datasource type required** — VictoriaTraces doesn't have a native Grafana plugin. Initial approach used `jaeger` datasource type but Grafana Explore Traces requires Tempo type. Changed to `tempo` datasource type with `search.type: jaeger` to use Jaeger backend for search while exposing Tempo-compatible API
+- **tempo-proxy created** — Grafana's Tempo datasource plugin calls Tempo-native HTTP endpoints (`/api/search`, `/api/v2/search`, `/api/traces/{id}`). VictoriaTraces only exposes Jaeger Query Service API. The proxy translates between the two APIs
+- **tempo-proxy rewritten in Go** — Initial Node.js version had protobuf fixed64 encoding issues. Go's `encoding/binary` handles uint64 correctly for trace IDs and span IDs
+- **tempo-proxy deadlock** — `getServiceNames()` locked `serviceMu`, then called `fetchServiceNames()` which tried `serviceMu.Lock()` again. Double lock = deadlock on tag-values endpoint
+- **tempo-proxy serviceStats format** — `map[string]int` serialized as `{"service":19}` but Grafana expects `map[string]ServiceStatsObj` → `{"service":{"spanCount":19,"errorCount":0}}` per tempopb.TraceSearchMetadata proto
+- **Grafana Drilldown limitation** — Drilldown histogram/breakdown uses TraceQL metrics aggregation which VictoriaTraces v0.9.2 doesn't support via HTTP API. Known limitation tracked in VictoriaTraces issue #113. Search, trace view, and Slow traces work correctly
 
 ### Completion Notes List
 
@@ -438,3 +445,12 @@ glm-5-turbo
 - 2026-06-01: Implemented VictoriaTraces distributed trace storage (all 14 ACs satisfied, 9 tasks completed)
 - 2026-06-01: Deployment test passed — all 15 services running, end-to-end trace pipeline verified (Collector → VictoriaTraces protobuf → Jaeger Query API). Fixed OTel config issues: exporter type inference, env var syntax, file_storage extension init container, protobuf-only requirement.
 - 2026-06-01: Root cause fixes — switched to `otlp_http` exporter (non-deprecated), added `file_storage` extension with init container for volume permissions (UID 10001), added init service to Ansible healthcheck exclusion list.
+- 2026-06-03: Fixed OTEL_TRACES_SAMPLER_RATE default from 1.0 (1%) to 100.0 (100%). Sampler interprets value as percentage, not fraction. Fixed OTel collector config based on deployment testing observations.
+- 2026-06-03: Created tempo-proxy (Go) to bridge Grafana Tempo datasource plugin with VictoriaTraces Jaeger API. Grafana Explore Traces requires Tempo datasource type, but VictoriaTraces only exposes Jaeger Query Service API. Proxy translates Tempo HTTP API calls → VictoriaTraces Jaeger API, with proper protobuf fixed64 encoding for trace/span IDs. Added as Docker service in compose with Alpine-based image.
+- 2026-06-03: Rewrote tempo-proxy in Go — initial Node.js version had protobuf fixed64 encoding issues for trace IDs and span IDs. Go's `encoding/binary` handles uint64 correctly. Alpine-based Docker image with wget healthcheck.
+- 2026-06-04: Fixed tempo-proxy search timeout on empty TraceQL queries — handler returned error instead of empty results for `{}` queries.
+- 2026-06-04: Fixed tempo-proxy deadlock — `getServiceNames()` held `serviceMu` lock then called `fetchServiceNames()` which tried to acquire same lock. Removed redundant inner lock.
+- 2026-06-04: Fixed tempo-proxy healthcheck — replaced node-based check with wget (Alpine has no node runtime).
+- 2026-06-04: Fixed tempo-proxy serviceStats JSON format — `map[string]int` serialized as `{"service":19}` but Grafana Tempo plugin expects `map[string]ServiceStatsObj` with `{"spanCount":19,"errorCount":0}` per tempopb.TraceSearchMetadata proto. Changed to proper struct.
+- 2026-06-04: Verified Grafana Explore Traces integration — search, trace waterfall view, and Slow traces all working. Drilldown histogram/breakdown confirmed as VictoriaTraces v0.9.2 limitation (TraceQL metrics not exposed via HTTP API, tracked in VictoriaTraces issue #113).
+- 2026-06-04: Updated AC5 — changed datasource type from `jaeger` to `tempo` with `search.type: jaeger` to enable Grafana Explore Traces compatibility. Datasource URL now points to `http://tempo-proxy:10429` instead of direct VictoriaTraces Jaeger API.

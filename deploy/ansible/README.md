@@ -160,10 +160,12 @@ Set in `group_vars/<env>/vars.yml`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `deploy_opea` | `1` | Deploy OPEA/AI services (GPU) |
-| `enable_observability` | `0` | Deploy OTel Collector + VictoriaMetrics + VictoriaLogs + Grafana |
+| `enable_observability` | `0` | Deploy OTel Collector + VictoriaMetrics + VictoriaLogs + VictoriaTraces + Grafana |
 | `grafana_admin_user` | `admin` | Grafana admin username |
 | `victoriametrics_retention` | `30d` | VictoriaMetrics data retention period |
 | `victorialogs_retention` | `30d` | VictoriaLogs data retention period |
+| `victoriatraces_retention` | `30d` | VictoriaTraces data retention period |
+| `otel_traces_sampler_rate` | `100.0` | Trace sampling percentage (0.0–100.0) |
 | `gpu_env_file` | `env.t4` | GPU defaults file (empty = none). Loaded first; Ansible `.env` takes precedence. |
 
 ### API Gateway (NGINX)

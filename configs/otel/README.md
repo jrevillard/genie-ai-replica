@@ -58,7 +58,7 @@ Docker sends container stdout/stderr to the Collector's `fluent_forward` receive
 
 ### Processors
 - **Batch** — Buffers telemetry before export (5s timeout, 1024 batch size)
-- **probabilistic_sampler** — Controls trace sampling rate via `OTEL_TRACES_SAMPLER_RATE` env var (default: 1.0 = 100%)
+- **probabilistic_sampler** — Controls trace sampling rate via `OTEL_TRACES_SAMPLER_RATE` env var (default: 100.0 = 100%)
 
 ### Exporters
 - **prometheusremotewrite** — Exports Prometheus-compatible metrics to VictoriaMetrics at `http://victoriametrics:8428/api/v1/write`
@@ -107,9 +107,7 @@ The queue uses the `file_storage/victoriatraces` extension which writes to the `
 **Compose mode:** The Collector waits for the init container via `depends_on: condition: service_completed_successfully`.
 **Swarm mode:** Ansible removes `depends_on` — the Collector's `restart_policy: on-failure` handles the race condition. The init container runs in `mode: global` with `restart_policy: condition: none` (one-shot on every node).
 
-**Note:** VictoriaTraces v0.9.1 only supports **protobuf** encoding for OTLP ingestion. JSON payloads are silently accepted (HTTP 200) but discarded. The OTel Collector uses protobuf by default.
-
-**Note:** VictoriaTraces v0.9.1 only supports **protobuf** encoding for OTLP ingestion. JSON payloads are silently accepted (HTTP 200) but discarded. The OTel Collector uses protobuf by default.
+**Note:** VictoriaTraces v0.9.2 only supports **protobuf** encoding for OTLP ingestion. JSON payloads are silently accepted (HTTP 200) but discarded. The OTel Collector uses protobuf by default.
 
 ## Customization
 
@@ -121,7 +119,7 @@ To add a new exporter:
 To change sampling:
 
 1. Set `OTEL_TRACES_SAMPLER_RATE` env var on the otel-collector service in docker-compose.yaml
-2. Values: 0.0 (no traces) to 1.0 (all traces)
+2. Values: 0.0 (no traces) to 100.0 (all traces)
 
 ## Instrumented Services
 
@@ -137,7 +135,7 @@ To change sampling:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OTEL_TRACES_SAMPLER_RATE` | `1.0` | Trace sampling percentage (0.0-1.0) |
+| `OTEL_TRACES_SAMPLER_RATE` | `100.0` | Trace sampling percentage (0.0-100.0) |
 
 The Collector resolves service names internally (e.g., `victoriametrics` → Docker service DNS).
 

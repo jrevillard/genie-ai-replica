@@ -14,7 +14,7 @@ so that I can query, visualize, and analyze full distributed traces across the e
 
 ## Acceptance Criteria
 
-1. **AC1: VictoriaTraces service** — Add `victoriatraces` service to `docker-compose.yaml` using `victoriametrics/victoria-traces:v0.9.1`. Stores traces with configurable retention (default 30 days via `VICTORIATRACES_RETENTION`). Data persisted in a named volume (`vtraces-data`). Docker healthcheck on `GET /-/healthy` (port 10428). Follows same dual-mode pattern as other observability services: `profiles: [observability]` for compose up, `replicas: ${ENABLE_OBSERVABILITY:-0}` for Swarm. Default HTTP port: `10428`. Placement: `node.labels.genieai == true`. Internal only — NO host port exposure.
+1. **AC1: VictoriaTraces service** — Add `victoriatraces` service to `docker-compose.yaml` using `victoriametrics/victoria-traces:v0.9.2`. Stores traces with configurable retention (default 30 days via `VICTORIATRACES_RETENTION`). Data persisted in a named volume (`vtraces-data`). Docker healthcheck on `GET /-/healthy` (port 10428). Follows same dual-mode pattern as other observability services: `profiles: [observability]` for compose up, `replicas: ${ENABLE_OBSERVABILITY:-0}` for Swarm. Default HTTP port: `10428`. Placement: `node.labels.genieai == true`. Internal only — NO host port exposure.
 2. **AC2: OTel Collector traces pipeline updated** — The OTel Collector `traces` pipeline exporter is changed from `debug` to `otlphttp` pointing to VictoriaTraces (`http://victoriatraces:10428/insert/opentelemetry/v1/traces`). The `debug` exporter is **removed** (no longer needed).
 3. **AC3: Collector buffer/resilience** — The VictoriaTraces `otlphttp` exporter includes a file-based `sending_queue` for resilience when VictoriaTraces is temporarily unavailable: `storage: file`, `num_consumers: 10`, `queue_size: 5000`, with `retry_on_failure` enabled. An `otel-queue` named volume is mounted on the Collector for persistent queue storage.
 4. **AC4: Trace sampling configurable** — A `probabilistic_sampler` processor is added to the traces pipeline. Sampling rate configurable via `OTEL_TRACES_SAMPLER_RATE` env var on the Collector service (default `1.0` = 100%). Documented in `configs/otel/README.md`.
@@ -33,7 +33,7 @@ so that I can query, visualize, and analyze full distributed traces across the e
 
 - [x] Task 1: Create VictoriaTraces service in docker-compose.yaml (AC: #1)
   - [x] Add `vtraces-data` named volume to `volumes:` section
-  - [x] Add `victoriatraces` service with: image `victoriametrics/victoria-traces:v0.9.1`, retention command, data volume, healthcheck (`/-/healthy`), `genieai_network`, profiles, deploy block
+  - [x] Add `victoriatraces` service with: image `victoriametrics/victoria-traces:v0.9.2`, retention command, data volume, healthcheck (`/-/healthy`), `genieai_network`, profiles, deploy block
   - [x] Follow dual-mode pattern: `profiles:[observability]`, `replicas:${ENABLE_OBSERVABILITY:-0}`, placement `node.labels.genieai == true`
   - [x] Add `logging: *fluent-logging` for consistent log aggregation
   - [x] Port `10428` is internal only — NO host port exposure
@@ -93,7 +93,7 @@ so that I can query, visualize, and analyze full distributed traces across the e
 
 | Property | Value |
 |----------|-------|
-| Docker image | `victoriametrics/victoria-traces:v0.9.1` |
+| Docker image | `victoriametrics/victoria-traces:v0.9.2` |
 | HTTP API port | `10428` |
 | OTLP ingestion endpoint | `/insert/opentelemetry/v1/traces` (HTTP) |
 | Jaeger query endpoint | `/select/jaeger` (for Grafana Jaeger datasource) |
@@ -192,7 +192,7 @@ victoriatraces:
   logging: *fluent-logging
   profiles: [observability]
   restart: unless-stopped
-  image: victoriametrics/victoria-traces:v0.9.1
+  image: victoriametrics/victoria-traces:v0.9.2
   command:
     - "--storageDataPath=/var/lib/victoria-traces"
     - "--retentionPeriod=${VICTORIATRACES_RETENTION:-30d}"
@@ -334,7 +334,7 @@ Current exporter names:
 - **Do NOT** change the `metrics` or `logs` pipelines — they work correctly and are independent of traces.
 - **Do NOT** rename `otlp_http` logs exporter — it's working and referenced in the logs pipeline. Only add a new `victoriatraces` exporter for traces.
 - **Do NOT** expose VictoriaTraces port to the host — it's internal-only, Grafana queries it on the Docker network.
-- **Do NOT** use `:latest` image tags — pin `v0.9.1`.
+- **Do NOT** use `:latest` image tags — pin `v0.9.2`.
 - **Do NOT** create a separate Docker network — use existing `genieai_network`.
 - **Do NOT** hardcode sampling rate — use env var with default.
 - **Do NOT** modify application code (tracing.js, tracing.py) — this story is infrastructure only.
@@ -394,7 +394,7 @@ glm-5-turbo
 - File-based `sending_queue.storage: file` requires `file_storage` extension configured in Collector config + service.extensions. Available in otelcol-contrib distroless image
 - `file_storage` directory must exist and be writable by Collector process (UID 10001). Requires init container (`otel-collector-init`) to create directory with `chown 10001:10001` before Collector starts
 - Init container runs in `mode: global` + `condition: none` for Swarm parity with Collector's global placement
-- VictoriaTraces v0.9.1 OTLP endpoint only supports **protobuf** encoding, NOT JSON. JSON payloads silently accepted (HTTP 200) but discarded
+- VictoriaTraces v0.9.2 OTLP endpoint only supports **protobuf** encoding, NOT JSON. JSON payloads silently accepted (HTTP 200) but discarded
 - VictoriaTraces Jaeger service query (`/select/jaeger/api/traces?service=X`) may have indexing delay. Trace query by traceID (`/select/jaeger/api/traces/{traceID}`) returns immediately
 - **OTEL_TRACES_SAMPLER_RATE default was 1.0 (1%)** — should be 100.0 (100%). Fixed in docker-compose env default. The sampler processor interprets the value as a percentage, not a fraction
 - **Grafana Tempo datasource type required** — VictoriaTraces doesn't have a native Grafana plugin. Initial approach used `jaeger` datasource type but Grafana Explore Traces requires Tempo type. Changed to `tempo` datasource type with `search.type: jaeger` to use Jaeger backend for search while exposing Tempo-compatible API
@@ -454,3 +454,12 @@ glm-5-turbo
 - 2026-06-04: Fixed tempo-proxy serviceStats JSON format — `map[string]int` serialized as `{"service":19}` but Grafana Tempo plugin expects `map[string]ServiceStatsObj` with `{"spanCount":19,"errorCount":0}` per tempopb.TraceSearchMetadata proto. Changed to proper struct.
 - 2026-06-04: Verified Grafana Explore Traces integration — search, trace waterfall view, and Slow traces all working. Drilldown histogram/breakdown confirmed as VictoriaTraces v0.9.2 limitation (TraceQL metrics not exposed via HTTP API, tracked in VictoriaTraces issue #113).
 - 2026-06-04: Updated AC5 — changed datasource type from `jaeger` to `tempo` with `search.type: jaeger` to enable Grafana Explore Traces compatibility. Datasource URL now points to `http://tempo-proxy:10429` instead of direct VictoriaTraces Jaeger API.
+
+### Review Findings
+
+- [x] [Review][Patch] AC1 image version: spec says v0.9.1, compose uses v0.9.2 — updated AC1 to v0.9.2 (upgrade confirmed intentional)
+- [x] [Review][Patch] Duplicate paragraph in configs/otel/README.md — protobuf encoding note repeated verbatim, removed duplicate
+- [x] [Review][Patch] Sampling rate docs contradictory in configs/otel/README.md — harmonized all to `100.0` and "0.0 to 100.0"
+- [x] [Review][Patch] Sampling rate docs CLAUDE.md — harmonized to 100.0 = 100%
+- [x] [Review][Patch] configs/otel/README.md "Customization" section — fixed "0.0 to 1.0" → "0.0 to 100.0"
+- [x] [Review][Patch] Missing `otel_traces_sampler_rate` in deploy/ansible/group_vars/all.yml — added, also added to env.j2 template

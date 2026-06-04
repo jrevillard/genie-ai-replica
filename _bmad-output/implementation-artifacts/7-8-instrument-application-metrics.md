@@ -318,6 +318,8 @@ glm-5-turbo
 
 **Total tests: 58 (27 backend + 31 Python) all passing.**
 
+**Live testing verified:** Metrics flow from backend → OTel Collector → VictoriaMetrics. `http_requests_total` and `http_request_duration_seconds` confirmed in VM. Grafana dashboard renders correctly with all 6 panels. PKCE SSO login fixed. Python OPEA metrics require RAG pipeline traffic to populate.
+
 ### File List
 
 **New files:**
@@ -327,7 +329,7 @@ glm-5-turbo
 - `components/gov-chat-backend/__tests__/metrics-pii.test.js` — PII verification tests (7 tests)
 - `genie-ai-overlay/chatqna/metrics.py` — ChatQnA custom RAG metrics
 - `genie-ai-overlay/tests/test_metrics.py` — ChatQnA metrics tests (9 tests)
-- `configs/grafana/provisioning/dashboards/application-metrics.json` — Grafana dashboard
+- `configs/grafana/provisioning/dashboards/application-metrics.json` — Grafana dashboard (6 panels)
 - `tests/metrics-overhead/k6-metrics-overhead.js` — k6 benchmark script
 
 **Modified files:**
@@ -338,8 +340,10 @@ glm-5-turbo
 - `genie-ai-overlay/retriever/genieai_retriever_microservice.py` — Added retrieval metrics
 - `genie-ai-overlay/dataprep/genieai_dataprep_microservice.py` — Added ingestion metrics
 - `genie-ai-overlay/reranker/genieai_reranking_microservice.py` — Added reranking metrics
+- `genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai` — Added COPY metrics.py
 - `genie-ai-overlay/pyproject.toml` — Added opentelemetry-exporter-otlp-proto-http test dep
 - `genie-ai-overlay/tests/conftest.py` — Added OTLP metric_exporter mock
 - `genie-ai-overlay/tests/test_tracing.py` — Added 8 new metric tests
+- `docker-compose.yaml` — Removed GF_AUTH_GENERIC_OAUTH_USE_PKCE=false (Grafana 12 defaults true)
 - `configs/otel/README.md` — Added custom metrics documentation section
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — Status updates

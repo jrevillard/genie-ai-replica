@@ -78,11 +78,19 @@
       "targets": [
         {
           "expr": "sum(increase(http_requests_total{service_name=\"genie-backend\"}[5m])) by (http_route)",
-          "legendFormat": "{{http_route}}"
+          "legendFormat": "{{http_route}}",
+          "refId": "A"
         }
       ],
       "title": "Backend HTTP Requests (5m rate)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "minSpan": 4
     },
     {
       "datasource": {
@@ -133,20 +141,30 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.5, sum(rate(http_request_duration_seconds_bucket{service_name=\"genie-backend\"}[5m]))) by (http_route)",
-          "legendFormat": "P50"
+          "expr": "histogram_quantile(0.5, sum(rate(http_request_duration_seconds_bucket{service_name=\"genie-backend\"}[5m])) by (le, http_route))",
+          "legendFormat": "P50",
+          "refId": "B"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service_name=\"genie-backend\"}[5m]))) by (http_route)",
-          "legendFormat": "P95"
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service_name=\"genie-backend\"}[5m])) by (le, http_route))",
+          "legendFormat": "P95",
+          "refId": "C"
         },
         {
-          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service_name=\"genie-backend\"}[5m]))) by (http_route)",
-          "legendFormat": "P99"
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service_name=\"genie-backend\"}[5m])) by (le, http_route))",
+          "legendFormat": "P99",
+          "refId": "D"
         }
       ],
       "title": "Backend HTTP Duration (P50/P95/P99)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "minSpan": 4
     },
     {
       "datasource": {
@@ -197,16 +215,25 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.5, sum(rate(genie_ai_chat_rag_latency_seconds_bucket[5m])) by (response_type)",
-          "legendFormat": "P50 {{response_type}}"
+          "expr": "histogram_quantile(0.5, sum(rate(genie_ai_chat_rag_latency_seconds_bucket[5m])) by (le, response_type))",
+          "legendFormat": "P50 {{response_type}}",
+          "refId": "E"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(genie_ai_chat_rag_latency_seconds_bucket[5m])) by (response_type)",
-          "legendFormat": "P95 {{response_type}}"
+          "expr": "histogram_quantile(0.95, sum(rate(genie_ai_chat_rag_latency_seconds_bucket[5m])) by (le, response_type))",
+          "legendFormat": "P95 {{response_type}}",
+          "refId": "F"
         }
       ],
       "title": "Chat RAG Pipeline Latency",
-      "type": "timeseries"
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 24,
+        "y": 0
+      },
+      "minSpan": 4
     },
     {
       "datasource": {
@@ -250,11 +277,19 @@
       "targets": [
         {
           "expr": "sum(increase(genie_ai_chat_request_total[5m])) by (response_type, error)",
-          "legendFormat": "{{response_type}} / error={{error}}"
+          "legendFormat": "{{response_type}} / error={{error}}",
+          "refId": "G"
         }
       ],
       "title": "Chat Requests (by type)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "minSpan": 4
     },
     {
       "datasource": {
@@ -305,20 +340,30 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(rag_retrieval_duration_seconds_bucket[5m])))",
-          "legendFormat": "Retriever P95"
+          "expr": "histogram_quantile(0.95, sum(rate(rag_retrieval_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "Retriever P95",
+          "refId": "H"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(rag_ingestion_duration_seconds_bucket[5m])))",
-          "legendFormat": "Dataprep P95"
+          "expr": "histogram_quantile(0.95, sum(rate(rag_ingestion_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "Dataprep P95",
+          "refId": "I"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(rag_rerank_duration_seconds_bucket[5m])))",
-          "legendFormat": "Reranker P95"
+          "expr": "histogram_quantile(0.95, sum(rate(rag_rerank_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "Reranker P95",
+          "refId": "J"
         }
       ],
       "title": "RAG Sub-Service Latency (P95)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "minSpan": 4
     },
     {
       "datasource": {
@@ -366,15 +411,24 @@
       "targets": [
         {
           "expr": "sum(increase(http_requests_total{http_status_code=~\"5..\"}[5m])) / sum(increase(http_requests_total[5m])) * 100",
-          "legendFormat": "Backend 5xx Rate"
+          "legendFormat": "Backend 5xx Rate",
+          "refId": "K"
         },
         {
           "expr": "sum(increase(genie_ai_chat_request_total{error=\"true\"}[5m])) / sum(increase(genie_ai_chat_request_total[5m])) * 100",
-          "legendFormat": "Chat Error Rate"
+          "legendFormat": "Chat Error Rate",
+          "refId": "L"
         }
       ],
       "title": "Error Rate (5xx %)",
-      "type": "stat"
+      "type": "stat",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 24,
+        "y": 8
+      },
+      "minSpan": 4
     }
   ],
   "refresh": "10s",
@@ -387,18 +441,6 @@
   ],
   "templating": {
     "list": [
-      {
-        "current": {},
-        "hide": 0,
-        "includeAll": false,
-        "label": "Datasource",
-        "name": "DS_VICTORIAMETRICS",
-        "options": [],
-        "query": "prometheus",
-        "refresh": 1,
-        "regex": "",
-        "type": "datasource"
-      },
       {
         "current": {
           "selected": true,

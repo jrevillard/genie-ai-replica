@@ -1468,8 +1468,8 @@ services:
       - GF_AUTH_GENERIC_OAUTH_CLIENT_ID=${KC_GRAFANA_CLIENT_ID:-grafana}
       - GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=${KC_GRAFANA_CLIENT_SECRET}
       - GF_AUTH_GENERIC_OAUTH_SCOPES=openid profile email roles
+      - GF_AUTH_GENERIC_OAUTH_USE_PKCE=true
       - GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH=contains(realm_access.roles[*], 'admin') && 'Admin' || 'Viewer'
-      - GF_AUTH_GENERIC_OAUTH_USE_PKCE=false
       # Auth URL: browser redirect (external, through nginx/Kong)
       - GF_AUTH_GENERIC_OAUTH_AUTH_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/auth
       # Token/API URLs: Grafana backend calls (internal Docker network, bypasses nginx)

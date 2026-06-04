@@ -5,6 +5,7 @@
 # dataprep, reranker) and exports metrics to VictoriaMetrics.
 # Receives container logs via Docker fluentd logging driver and forwards to
 # VictoriaLogs.
+# Exports traces to VictoriaTraces for distributed trace storage and query.
 #
 # Receivers:
 #   - OTLP HTTP (port 4318): standard OTLP/HTTP from SDK auto-instrumentation
@@ -12,16 +13,17 @@
 #
 # Exporters:
 #   - prometheusremotewrite (port 8428): exports OTel metrics to VictoriaMetrics
-#   - otlphttp (port 9428): exports logs to VictoriaLogs via OTLP HTTP
-#   - debug: logs traces to collector stdout (debugging / stdout aggregation)
+#   - otlp_http/victoriatraces (port 10428): exports traces to VictoriaTraces via OTLP HTTP
+#   - otlp_http (port 9428): exports logs to VictoriaLogs via OTLP HTTP
 #
 # Extensions:
 #   - health_check (port 13133): Docker healthcheck endpoint
+#   - file_storage (persistent queue for trace export resilience)
 #
 # Pipeline:
 #   metrics: otlp → batch → prometheusremotewrite
-#   traces:  otlp → batch → debug
-#   logs:    fluent_forward → batch → otlphttp
+#   traces:  otlp → probabilistic_sampler → batch → victoriatraces
+#   logs:    fluent_forward → batch → otlp_http
 #
 # Note: Docker services use the fluentd logging driver (driver: fluentd)
 # configured in docker-compose.yaml. Docker sends container stdout/stderr to
@@ -32,6 +34,9 @@
 extensions:
   health_check:
     endpoint: 0.0.0.0:13133
+  file_storage/victoriatraces:
+    directory: /var/lib/otelcol/file_storage/victoriatraces
+    timeout: 10s
 
 receivers:
   otlp:
@@ -46,6 +51,8 @@ processors:
     timeout: 5s
     send_batch_size: 1024
     send_batch_max_size: 2048
+  probabilistic_sampler:
+    sampling_percentage: ${OTEL_TRACES_SAMPLER_RATE}
 
 exporters:
   prometheusremotewrite:
@@ -60,10 +67,21 @@ exporters:
       max_interval: 30s
       max_elapsed_time: 300s
     timeout: 15s
-  debug:
-    verbosity: basic
+  otlp_http/victoriatraces:
+    endpoint: http://victoriatraces:10428/insert/opentelemetry
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+      storage: file_storage/victoriatraces
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    timeout: 15s
   otlp_http:
-    logs_endpoint: http://victorialogs:9428/insert/opentelemetry/v1/logs
+    endpoint: http://victorialogs:9428/insert/opentelemetry
     sending_queue:
       enabled: true
       num_consumers: 10
@@ -76,6 +94,7 @@ exporters:
 service:
   extensions:
     - health_check
+    - file_storage/victoriatraces
   pipelines:
     metrics:
       receivers:
@@ -88,9 +107,10 @@ service:
       receivers:
         - otlp
       processors:
+        - probabilistic_sampler
         - batch
       exporters:
-        - debug
+        - otlp_http/victoriatraces
     logs:
       receivers:
         - fluent_forward

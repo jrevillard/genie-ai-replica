@@ -63,6 +63,8 @@ volumes:
   vm-data:
   grafana-data:
   vlogs-data:
+  vtraces-data:
+  otel-queue:
 
 # Fluentd logging driver configuration for centralized log aggregation.
 # All services forward stdout/stderr to the OTel Collector's fluentforward
@@ -1355,6 +1357,26 @@ services:
   #   Docker Swarm:   ENABLE_OBSERVABILITY=1 in .env
   # ===========================================================================
 
+  # One-shot init container: sets otel-queue volume ownership for the nonroot
+  # Collector process (UID 10001). Runs before otel-collector in compose mode.
+  # In Swarm mode, depends_on is removed by Ansible — the Collector's
+  # restart policy handles the race condition until init completes.
+  otel-collector-init:
+    profiles: [observability]
+    image: busybox:latest
+    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && chown -R 10001:10001 /var/lib/otelcol"]
+    volumes:
+      - otel-queue:/var/lib/otelcol
+    networks:
+      - genieai_network
+    deploy:
+      # Global mode: runs once on every Swarm node (matches otel-collector's
+      # global placement) to set volume permissions before Collector starts.
+      # In compose mode, depends_on ensures ordering instead.
+      mode: global
+      restart_policy:
+        condition: none
+
   otel-collector:
     profiles: [observability]
     restart: unless-stopped
@@ -1366,8 +1388,14 @@ services:
       - "127.0.0.1:24224:24224"
     # Distroless image — no shell/wget for Docker healthcheck.
     # Rely on restart policy + health_check extension (port 13133) for programmatic probes.
+    environment:
+      - OTEL_TRACES_SAMPLER_RATE=${OTEL_TRACES_SAMPLER_RATE:-100.0}
     volumes:
       - ./configs/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - otel-queue:/var/lib/otelcol
+    depends_on:
+      otel-collector-init:
+        condition: service_completed_successfully
     networks:
       - genieai_network
     deploy:
@@ -1438,6 +1466,66 @@ services:
         delay: 5s
         max_attempts: 5
 
+  victoriatraces:
+    logging: *fluent-logging
+    profiles: [observability]
+    restart: unless-stopped
+    image: victoriametrics/victoria-traces:v0.9.2
+    command:
+      - "--storageDataPath=/var/lib/victoria-traces"
+      - "--retentionPeriod=${VICTORIATRACES_RETENTION:-30d}"
+      - "--httpListenAddr=:10428"
+    volumes:
+      - vtraces-data:/var/lib/victoria-traces
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:10428/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - genieai_network
+    deploy:
+      replicas: ${ENABLE_OBSERVABILITY:-0}
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+
+  tempo-proxy:
+    logging: *fluent-logging
+    profiles: [observability]
+    restart: unless-stopped
+    build:
+      context: ./tools/tempo-proxy
+      dockerfile: Dockerfile
+    image: genieai/tempo-proxy:latest
+    environment:
+      - VICTORIATRACES_URL=http://victoriatraces:10428
+      - PORT=10429
+    depends_on:
+      victoriatraces:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:10429/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - genieai_network
+    deploy:
+      replicas: ${ENABLE_OBSERVABILITY:-0}
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
   grafana:
     logging: *fluent-logging
     profiles: [observability]
@@ -1447,6 +1535,8 @@ services:
       victoriametrics:
         condition: service_healthy
       victorialogs:
+        condition: service_healthy
+      victoriatraces:
         condition: service_healthy
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
@@ -1469,7 +1559,7 @@ services:
       - GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=${KC_GRAFANA_CLIENT_SECRET}
       - GF_AUTH_GENERIC_OAUTH_SCOPES=openid profile email roles
       - GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH=contains(realm_access.roles[*], 'admin') && 'Admin' || 'Viewer'
-      - GF_AUTH_GENERIC_OAUTH_USE_PKCE=false
+      - GF_AUTH_GENERIC_OAUTH_USE_PKCE=true
       # Auth URL: browser redirect (external, through nginx/Kong)
       - GF_AUTH_GENERIC_OAUTH_AUTH_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/auth
       # Token/API URLs: Grafana backend calls (internal Docker network, bypasses nginx)

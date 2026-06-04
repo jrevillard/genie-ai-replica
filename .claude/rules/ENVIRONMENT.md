@@ -79,6 +79,7 @@ In Swarm mode, only nginx and ArangoDB are exposed on the host. All other servic
 | OTel Collector (healthcheck) | 13133 | Internal only |
 | VictoriaMetrics | 8428 | Internal only, Grafana queries this |
 | VictoriaLogs | 9428 | Internal only, Grafana queries this |
+| VictoriaTraces | 10428 | Internal only, Grafana queries this via Jaeger datasource |
 | Grafana | 3000 (container) | Accessible via Kong route `/grafana/` (no direct host port) |
 
 All services use the fluentd logging driver to forward stdout/stderr to the Collector. Docker dual logging (20.10+) keeps `docker logs` functional.

@@ -285,6 +285,40 @@
       ],
       "title": "Latency p99",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_VICTORIAMETRICS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixed": "blue", "mode": "fixed" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 18 },
+      "id": 8,
+      "options": {
+        "content": "View Traces in Trace Explorer →",
+        "openInNewTab": true
+      },
+      "title": "",
+      "type": "link",
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Trace Explorer",
+          "url": "/d/genieai-trace-explorer/trace-explorer",
+          "type": "dashboard"
+        }
+      ]
     }
   ],
   "refresh": "30s",

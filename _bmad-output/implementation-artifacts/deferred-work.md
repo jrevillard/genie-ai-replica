@@ -313,3 +313,8 @@ Items deferred during code reviews. Revisit when the related component is next m
 - Missing depends_on for Grafana→VictoriaMetrics in compose mode — nice-to-have startup ordering; services work without it. Swarm ignores depends_on.
 - OTel Collector logging exporter generates high stdout volume under load — `loglevel: info` intentional per spec (Option A MVP: traces logged to stdout). Consider `warn` for production with separate trace backend.
 
+## Deferred from: code review of 7-8-instrument-application-metrics (2026-06-04)
+
+- PII nested attributes not filtered — Current sanitization only matches exact top-level keys (e.g., `user_id`). Nested keys like `user.email` pass through. Not a risk with current code (flat attrs only) but worth hardening if attribute shapes change.
+- Metric export interval hardcoded — `export_interval_millis=15_000` in tracing.py is not configurable. Reasonable default, but should be tunable via env var for different deployment scenarios.
+

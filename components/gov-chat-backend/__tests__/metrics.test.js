@@ -42,7 +42,6 @@ describe('metrics.js', () => {
 });
 
 describe('metrics-middleware.js', () => {
-  let createApp;
   let mockCounter;
   let mockHistogram;
   let mockMeter;

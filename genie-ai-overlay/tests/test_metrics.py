@@ -15,12 +15,25 @@ import pytest
 # We patch the *source* of that name so every reload picks up the mock.
 @pytest.fixture(autouse=True)
 def _mock_tracing_meter():
-    """Inject a mock tracing.get_meter before any import."""
+    """Inject a mock tracing.get_meter before any import.
+
+    Preserves the real sanitize_attributes and _PII_KEYS so PII tests
+    exercise actual logic instead of MagicMock passthrough.
+    """
     import sys
+
+    # Grab real implementations before patching
+    from tracing import _PII_KEYS as _real_pii_keys
+    from tracing import sanitize_attributes as _real_sanitize
 
     fake_tracing = MagicMock()
     fake_meter = MagicMock()
     fake_tracing.get_meter.return_value = fake_meter
+
+    # Preserve real implementations for PII tests
+    fake_tracing.sanitize_attributes = _real_sanitize
+    fake_tracing._PII_KEYS = _real_pii_keys
+
     with patch.dict(sys.modules, {"tracing": fake_tracing}):
         yield fake_tracing
 
@@ -171,7 +184,7 @@ class TestPIIEnforcement:
             "conversation_id": "xyz789",
             "error": "true",
         }
-        result = chatqna.metrics._sanitize_attributes(attrs)
+        result = chatqna.metrics.sanitize_attributes(attrs)
         assert result == {"response_type": "streaming", "error": "true"}
 
     def test_pii_keys_include_expected_fields(self, _mock_tracing_meter):
@@ -183,6 +196,8 @@ class TestPIIEnforcement:
 
         importlib.reload(chatqna.metrics)
 
+        # _PII_KEYS is re-exported from tracing module via chatqna.metrics
+        importlib.reload(chatqna.metrics)
         pii = chatqna.metrics._PII_KEYS
         assert "user_query" in pii
         assert "llm_response" in pii
@@ -199,5 +214,5 @@ class TestPIIEnforcement:
         importlib.reload(chatqna.metrics)
 
         attrs = {"response_type": "sync"}
-        result = chatqna.metrics._sanitize_attributes(attrs)
+        result = chatqna.metrics.sanitize_attributes(attrs)
         assert result is not attrs

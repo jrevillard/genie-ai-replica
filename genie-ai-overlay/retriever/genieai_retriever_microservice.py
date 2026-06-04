@@ -4,7 +4,7 @@
 import os
 import time
 
-from tracing import get_meter, get_tracer, setup_trace_logging, setup_tracing
+from tracing import get_meter, get_tracer, sanitize_attributes, setup_trace_logging, setup_tracing
 
 setup_tracing("genieai-retriever")
 
@@ -18,21 +18,6 @@ _retrieval_duration = _retriever_meter.create_histogram(
     "rag.retrieval.duration",
     description="Retrieval duration",
     unit="s",
-)
-
-# PII keys that must never appear in metric attributes
-_PII_KEYS = frozenset(
-    {
-        "user_query",
-        "llm_response",
-        "session_id",
-        "conversation_id",
-        "user_id",
-        "email",
-        "document_text",
-        "password",
-        "token",
-    }
 )
 
 # import for retrievers component registration
@@ -162,7 +147,10 @@ async def retrieve_docs(
 
         # Record custom retrieval metrics
         _retrieval_latency = time.time() - start
-        _retrieval_attrs = {"rag.query_type": "hybrid"}
+        _retrieval_attrs = sanitize_attributes({
+            "rag.query_type": os.getenv("RETRIEVER_TYPE", "hybrid"),
+            "error": "false",
+        })
         _retrieval_requests.add(1, _retrieval_attrs)
         _retrieval_duration.record(_retrieval_latency, _retrieval_attrs)
 
@@ -172,6 +160,14 @@ async def retrieve_docs(
         return result
 
     except Exception as e:
+        # Record error metric
+        _err_latency = time.time() - start
+        _err_attrs = sanitize_attributes({
+            "rag.query_type": os.getenv("RETRIEVER_TYPE", "hybrid"),
+            "error": "true",
+        })
+        _retrieval_requests.add(1, _err_attrs)
+        _retrieval_duration.record(_err_latency, _err_attrs)
         logger.error(f"[ retrieval ] Error during retrieval invocation: {e}")
         raise
 

@@ -33,6 +33,26 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 _provider = None
 _meter_provider = None
 
+# Shared PII keys — import from here in all services to avoid duplication
+_PII_KEYS = frozenset(
+    {
+        "user_query",
+        "llm_response",
+        "session_id",
+        "conversation_id",
+        "user_id",
+        "email",
+        "document_text",
+        "password",
+        "token",
+    }
+)
+
+
+def sanitize_attributes(attrs: dict) -> dict:
+    """Return a copy of *attrs* with PII keys removed."""
+    return {k: v for k, v in attrs.items() if k not in _PII_KEYS}
+
 ZEROED_TRACE_ID = "0" * 32
 ZEROED_SPAN_ID = "0" * 16
 
@@ -115,19 +135,24 @@ def setup_tracing(service_name: str) -> None:
     trace.set_tracer_provider(_provider)
 
     # --- Metrics ---
-    metric_endpoint = f"{endpoint_base.rstrip('/')}/v1/metrics"
+    try:
+        metric_endpoint = f"{endpoint_base.rstrip('/')}/v1/metrics"
 
-    metric_exporter = OTLPMetricExporter(endpoint=metric_endpoint)
-    metric_reader = PeriodicExportingMetricReader(
-        exporter=metric_exporter,
-        export_interval_millis=15_000,
-    )
+        metric_exporter = OTLPMetricExporter(endpoint=metric_endpoint)
+        metric_reader = PeriodicExportingMetricReader(
+            exporter=metric_exporter,
+            export_interval_millis=15_000,
+        )
 
-    _meter_provider = MeterProvider(
-        resource=resource,
-        metric_readers=[metric_reader],
-    )
-    metrics.set_meter_provider(_meter_provider)
+        _meter_provider = MeterProvider(
+            resource=resource,
+            metric_readers=[metric_reader],
+        )
+        metrics.set_meter_provider(_meter_provider)
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "Failed to initialize OTel MeterProvider — metrics disabled: %s", exc
+        )
 
     atexit.register(shutdown)
 

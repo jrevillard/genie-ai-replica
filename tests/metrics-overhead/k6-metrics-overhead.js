@@ -39,7 +39,7 @@ export const options = {
   duration: DURATION,
   thresholds: {
     // Metrics overhead should be < 5ms P95 (otherwise there's a bug)
-    'req_duration{p(95)}': ['p(95)<5000'], // 5ms
+    'req_duration{p(95)}': ['p(95)<5'], // 5ms
   },
 };
 

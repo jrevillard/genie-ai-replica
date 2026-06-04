@@ -347,3 +347,19 @@ glm-5-turbo
 - `docker-compose.yaml` — Removed GF_AUTH_GENERIC_OAUTH_USE_PKCE=false (Grafana 12 defaults true)
 - `configs/otel/README.md` — Added custom metrics documentation section
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — Status updates
+
+### Review Findings
+
+- [x] [Review][Decision → Dismissed] Metric name mismatch between code and Grafana dashboard — Verified: dashboard PromQL uses correct transformed names (`genie_ai_chat_request_total`, `genie_ai_chat_rag_latency_seconds_bucket`, `rag_retrieval_duration_seconds_bucket`, etc.). OTel→Prometheus pipeline transforms correctly. No action needed. [configs/grafana/provisioning/dashboards/application-metrics.json]
+
+- [ ] [Review][Patch] PII test is vacuous — `metrics-pii.test.js` sets up `capturedAttrs` array but never invokes the middleware with a mock request/response cycle. Array stays empty, all assertions pass trivially. Fix: trigger middleware with supertest or manual req/res mock. [components/gov-chat-backend/__tests__/metrics-pii.test.js]
+- [ ] [Review][Patch] Hardcoded "unknown" attribute values — Dataprep uses `file_type: "unknown"` when `payload.fileType` is available. Reranker uses `model_id: "unknown"` when model info is in config. Retriever uses `query_type: "hybrid"` even when actual retrieval type varies. Makes attributes useless for filtering. [genie-ai-overlay/dataprep/, reranker/, retriever/]
+- [ ] [Review][Patch] PII denylist duplicated across Python services — `_PII_KEYS` frozenset defined separately in `chatqna/metrics.py` and `retriever/genieai_retriever_microservice.py`. Violates DRY, risks divergence. Extract to shared module (e.g., `tracing.py` or `core/`). [genie-ai-overlay/chatqna/metrics.py, genie-ai-overlay/retriever/genieai_retriever_microservice.py]
+- [ ] [Review][Patch] k6 threshold 5000ms instead of 5ms — Spec requires "<5ms overhead per request at P95". k6 script checks `p(95)<5000` (5 seconds). Off by 1000x. Fix: change threshold to `p(95)<5`. [tests/metrics-overhead/k6-metrics-overhead.js:37]
+- [ ] [Review][Patch] Dataprep retraction records as ingestion — `retract_file` records `rag.ingestion.requests` counter, but file retraction removes embeddings, not an ingestion operation. Violates RAG ingestion semantic intent. Fix: skip retraction or use separate metric. [genie-ai-overlay/dataprep/genieai_dataprep_microservice.py]
+- [ ] [Review][Patch] Missing error metrics in retriever/dataprep/reranker — Only ChatQnA records metrics on both success and error paths. Retriever, Dataprep, and Reranker only record on success. Creates observability blind spots during failures. Fix: add error-path metric recording with `error: "true"` attribute. [genie-ai-overlay/retriever/, dataprep/, reranker/]
+- [ ] [Review][Patch] Missing try/except around MeterProvider init — If OTLP metric endpoint is misconfigured, `MeterProvider` init in `setup_tracing()` crashes the service. Fix: wrap metrics init in try/except with warning log. [genie-ai-overlay/tracing.py]
+- [ ] [Review][Patch] Unused `createApp` variable in test — `metrics.test.js` declares `let createApp` but never assigns or uses it. Incomplete test structure. Fix: implement or remove. [components/gov-chat-backend/__tests__/metrics.test.js]
+
+- [x] [Review][Defer] PII nested attributes not filtered — Current sanitization only matches exact top-level keys (e.g., `user_id`). Nested keys like `user.email` pass through. Not a risk with current code (flat attrs only) but worth hardening if attribute shapes change. [genie-ai-overlay/chatqna/metrics.py, retriever/] — deferred, pre-existing
+- [x] [Review][Defer] Metric export interval hardcoded — `export_interval_millis=15_000` in tracing.py is not configurable. Reasonable default, but should be tunable via env var for different deployment scenarios. [genie-ai-overlay/tracing.py:123] — deferred, pre-existing

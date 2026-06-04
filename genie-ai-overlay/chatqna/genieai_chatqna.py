@@ -12,9 +12,9 @@ import time
 from datetime import date, datetime
 
 from metrics import (
-    _sanitize_attributes,
     chat_rag_duration_seconds,
     chat_requests_total,
+    sanitize_attributes,
 )
 
 from tracing import get_tracer, setup_trace_logging, setup_tracing
@@ -1681,7 +1681,7 @@ class ChatQnAService:
 
                 # Record custom application metrics
                 response_type = "streaming" if chat_request.stream else "sync"
-                _metric_attrs = _sanitize_attributes(
+                _metric_attrs = sanitize_attributes(
                     {
                         "response_type": response_type,
                         "abstained": "false",
@@ -1697,7 +1697,7 @@ class ChatQnAService:
 
                 # Record error metric
                 _err_duration = time.time() - _rag_start
-                _err_attrs = _sanitize_attributes(
+                _err_attrs = sanitize_attributes(
                     {
                         "response_type": "streaming" if chat_request.stream else "sync",
                         "abstained": "false",

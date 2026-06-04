@@ -8,27 +8,8 @@ Uses the shared tracing module's get_meter() for instrument creation.
 The MeterProvider is configured by tracing.setup_tracing().
 """
 
+from tracing import _PII_KEYS, sanitize_attributes
 from tracing import get_meter as _get_tracing_meter
-
-# PII keys that must never appear in metric attributes
-_PII_KEYS = frozenset(
-    {
-        "user_query",
-        "llm_response",
-        "session_id",
-        "conversation_id",
-        "user_id",
-        "email",
-        "document_text",
-        "password",
-        "token",
-    }
-)
-
-
-def _sanitize_attributes(attrs: dict) -> dict:
-    """Return a copy of *attrs* with PII keys removed."""
-    return {k: v for k, v in attrs.items() if k not in _PII_KEYS}
 
 
 def get_meter():
@@ -60,6 +41,6 @@ __all__ = [
     "get_meter",
     "chat_requests_total",
     "chat_rag_duration_seconds",
-    "_sanitize_attributes",
+    "sanitize_attributes",
     "_PII_KEYS",
 ]

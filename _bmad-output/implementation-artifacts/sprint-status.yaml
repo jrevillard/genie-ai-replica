@@ -122,7 +122,7 @@ development_status:
   7-4-end-to-end-trace-propagation-and-log-correlation: done
   7-5-deploy-observability-stack-collector-victoriametrics-grafana: done
   7-6-deploy-victorialogs-centralized-log-aggregation: done
-  7-7-deploy-victoriatraces-distributed-trace-storage: review
+  7-7-deploy-victoriatraces-distributed-trace-storage: done
   7-8-instrument-application-metrics: backlog
   7-9-kong-otel-tracing: backlog
   7-10-e2e-melt-correlation-test: backlog

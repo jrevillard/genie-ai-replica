@@ -900,7 +900,6 @@ services:
       dockerfile: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-reranker:latest
     environment:
-      - RERANKER_MODEL_ENDPOINT=${RERANKER_SERVICE_URL:-http://tei_reranker:80}
       - TEI_RERANKING_ENDPOINT=${RERANKER_SERVICE_URL:-http://tei_reranker:80}
       - RERANK_COMPONENT_NAME=GENIE_TEI_RERANKING
       - RERANKING_STRATEGY=${RERANKING_STRATEGY:-threshold}

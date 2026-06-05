@@ -105,6 +105,7 @@ sys.modules.setdefault("genie_ssl_patch", MagicMock())
 sys.modules.setdefault("transformers", MagicMock())
 sys.modules.setdefault("langdetect", MagicMock())
 sys.modules.setdefault("keycloak_token_validator", MagicMock())
+sys.modules.setdefault("metrics", MagicMock())
 
 # aiohttp — already mocked above for dataprep; ensure ClientTimeout is available
 _aiohttp_mock = sys.modules.get("aiohttp", MagicMock())

@@ -1686,7 +1686,7 @@ class ChatQnAService:
                         "response_type": response_type,
                         "abstained": "false",
                         "error": "false",
-                        "retrieval_source": retriever_parameters.get("retrieval_type", "hybrid"),
+                        "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
                     }
                 )
                 chat_requests_total.add(1, _metric_attrs)
@@ -1702,7 +1702,7 @@ class ChatQnAService:
                         "response_type": "streaming" if chat_request.stream else "sync",
                         "abstained": "false",
                         "error": "true",
-                        "retrieval_source": retriever_parameters.get("retrieval_type", "hybrid"),
+                        "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
                     }
                 )
                 chat_requests_total.add(1, _err_attrs)

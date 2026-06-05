@@ -165,6 +165,8 @@ The Collector uses **file-based sending queues** for resilience during backend o
 
 ### Victoria* API Endpoints for Test Validation
 
+⚠️ **Version note**: Current docker-compose pins `victoriametrics/victoria-metrics:v1.138.0`. Latest stable is v1.144.0 (May 2026). LTS line is v1.136.x. API paths are stable across versions — no impact on test code. Upgrade is a separate backlog item (not in scope for this story).
+
 **VictoriaTraces** (internal port 10428) — Jaeger-compatible JSON API:
 ```
 GET /select/jaeger/api/traces/{traceID}                      — Get trace by ID (JSON array of spans)

@@ -156,7 +156,7 @@ services:
       kong:
         condition: service_healthy
     build: api-gateway-solution/new-config/
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-kong-config:latest
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-kong-config:${IMAGE_TAG:-latest}
     networks:
       - genieai_network
     environment:
@@ -199,6 +199,8 @@ services:
       - KONG_DNS_ORDER=${KONG_DNS_ORDER:-LAST,A,AAAA,CNAME}
       - KONG_DNS_STALE_TTL=${KONG_DNS_STALE_TTL:-5}
       - KONG_NGINX_DAEMON=off
+      - KONG_TRACING_INSTRUMENTATIONS=${KONG_TRACING_INSTRUMENTATIONS:-off}
+      - KONG_TRACING_SAMPLING_RATE=${KONG_TRACING_SAMPLING_RATE:-0.01}
       # Trust nginx (Docker network) to send correct X-Forwarded-* headers.
       # Kong is internal-only; nginx on the same network is the TLS termination layer.
       # Restrict to Docker bridge subnet to prevent header spoofing from outside.
@@ -241,7 +243,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     build: api-gateway-solution/nginx/
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-nginx:latest
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-nginx:${IMAGE_TAG:-latest}
     ports:
       - target: 80
         published: ${NGINX_HTTP_PORT:-80}
@@ -322,7 +324,7 @@ services:
     logging: *fluent-logging
     restart: unless-stopped
     build: components/gov-chat-frontend/
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-frontend:latest
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-frontend:${IMAGE_TAG:-latest}
     environment:
       - PORT=8090
       - VUE_APP_API_URL=${VUE_APP_API_URL:-/api}
@@ -387,7 +389,7 @@ services:
     build:
       context: .
       dockerfile: components/gov-chat-backend/Dockerfile.migrations
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-db-migrations:latest
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-db-migrations:${IMAGE_TAG:-latest}
     networks:
       - genieai_network
     environment:
@@ -420,7 +422,7 @@ services:
     build:
       context: components/
       dockerfile: gov-chat-backend/Dockerfile
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-backend:latest
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-backend:${IMAGE_TAG:-latest}
     # Swarm: internal only - access via Kong proxy
     # ports:
     #   - "${BACKEND_PORT:-3000}:3000"
@@ -511,7 +513,7 @@ services:
     build:
       context: components/
       dockerfile: document-repository/Dockerfile
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-document-repository:latest
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-document-repository:${IMAGE_TAG:-latest}
     environment:
       # Secrets (required, no defaults in code)
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
@@ -663,7 +665,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-textgen:latest
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-textgen:${IMAGE_TAG:-latest}
     environment:
       - LLM_ENDPOINT=${VLLM_ENDPOINT:-http://vllm:8000}
       - LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
@@ -833,7 +835,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-embedding:latest
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-embedding:${IMAGE_TAG:-latest}
     environment:
       - EMBEDDING_MODEL_ENDPOINT=${EMBEDDING_SERVICE_URL:-http://tei:80}
       - TEI_EMBEDDING_ENDPOINT=${EMBEDDING_SERVICE_URL:-http://tei:80}
@@ -902,7 +904,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-reranker:latest
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-reranker:${IMAGE_TAG:-latest}
     environment:
       - TEI_RERANKING_ENDPOINT=${RERANKER_SERVICE_URL:-http://tei_reranker:80}
       - RERANK_COMPONENT_NAME=GENIE_TEI_RERANKING
@@ -945,7 +947,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-dataprep-arango:${OPEA_VERSION:-latest}
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-dataprep-arango:${IMAGE_TAG:-latest}
     # Internal only
     # ports:
     #   - "5000:5000"
@@ -1021,7 +1023,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-retriever-arango:${OPEA_VERSION:-latest}
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-retriever-arango:${IMAGE_TAG:-latest}
     # Internal only
     # ports:
     #   - "7025:7025"
@@ -1089,7 +1091,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-chatqna-server:${OPEA_VERSION:-latest}
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-chatqna-server:${IMAGE_TAG:-latest}
     working_dir: /app/ChatQnA
     # Internal OPEA service - no host port needed
     # ports:
@@ -1210,7 +1212,7 @@ services:
   postgres-init:
     logging: *fluent-logging
     build: configs/postgres/
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-postgres-init:latest
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-postgres-init:${IMAGE_TAG:-latest}
     environment:
       - PGHOST=postgres
       - PGUSER=${POSTGRES_USER:-genieai}
@@ -1235,7 +1237,7 @@ services:
   keycloak:
     logging: *fluent-logging
     build: configs/keycloak/
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-keycloak:latest
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-keycloak:${IMAGE_TAG:-latest}
     environment:
       - KC_BOOTSTRAP_ADMIN_USERNAME=admin
       - KC_BOOTSTRAP_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
@@ -1288,7 +1290,7 @@ services:
     build:
       context: configs/keycloak/
       dockerfile: Dockerfile.config-cli
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-keycloak-config:latest
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-keycloak-config:${IMAGE_TAG:-latest}
     environment:
       - KEYCLOAK_URL=http://keycloak:8080
       - KEYCLOAK_USER=admin
@@ -1504,7 +1506,7 @@ services:
     build:
       context: ./tools/tempo-proxy
       dockerfile: Dockerfile
-    image: genieai/tempo-proxy:latest
+    image: genieai/tempo-proxy:${IMAGE_TAG:-latest}
     environment:
       - VICTORIATRACES_URL=http://victoriatraces:10428
       - PORT=10429

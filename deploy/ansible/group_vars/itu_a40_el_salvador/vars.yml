@@ -8,7 +8,7 @@
 deploy_dir: /opt/genieai-el-salvador
 stack_name: genieai-el-salvador
 gpu_env_file: env.a40
-repo_branch: el-salvador-merge-test-A40-new-models
+repo_branch: adem/el-salvador-a40
 arango_db: el-salvador
 
 # =============================================================================

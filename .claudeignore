@@ -73,6 +73,9 @@ reports/
 mobile/genie_ai_mobile/build/
 mobile/genie_ai_mobile/.dart_tool/
 
+# === Serena LSP cache (binary) ===
+.serena/cache/
+
 # === Git & worktrees ===
 .git/
 .claude/worktrees/

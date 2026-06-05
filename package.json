@@ -2,11 +2,20 @@
   "scripts": {
     "prepare": "husky",
     "test:e2e": "npx playwright test tests/e2e/",
+    "test:melt": "bash tests/melt-correlation/run-melt-test.sh",
+    "test:melt:correlation": "node tests/melt-correlation/correlation.test.js",
+    "test:melt:grafana": "node tests/melt-correlation/grafana-verify.js",
+    "test:melt:chaos": "node tests/melt-correlation/chaos-resilience.test.js",
+    "test:melt:playwright": "npx playwright test tests/e2e/observability/log-search-dialog.spec.js",
     "test:e2e:list": "npx playwright test tests/e2e/ --list",
-    "lint": "npm run lint --prefix components/gov-chat-frontend && npm run lint --prefix components/gov-chat-backend && npm run lint --prefix components/document-repository && npm run lint --prefix components/shared/lib",
-    "lint:fix": "npm run lint:fix --prefix components/gov-chat-frontend && npm run lint:fix --prefix components/gov-chat-backend && npm run lint:fix --prefix components/document-repository && npm run lint:fix --prefix components/shared/lib",
-    "format": "npm run format --prefix components/gov-chat-frontend && npm run format --prefix components/gov-chat-backend && npm run format --prefix components/document-repository && npm run format --prefix components/shared/lib",
-    "format:check": "npm run format:check --prefix components/gov-chat-frontend && npm run format:check --prefix components/gov-chat-backend && npm run format:check --prefix components/document-repository && npm run format:check --prefix components/shared/lib",
+    "lint": "npm run lint:tests && npm run lint --prefix components/gov-chat-frontend && npm run lint --prefix components/gov-chat-backend && npm run lint --prefix components/document-repository && npm run lint --prefix components/shared/lib",
+    "lint:fix": "npm run lint:tests:fix && npm run lint:fix --prefix components/gov-chat-frontend && npm run lint:fix --prefix components/gov-chat-backend && npm run lint:fix --prefix components/document-repository && npm run lint:fix --prefix components/shared/lib",
+    "lint:tests": "eslint tests/",
+    "lint:tests:fix": "eslint tests/ --fix",
+    "format": "npm run format:tests && npm run format --prefix components/gov-chat-frontend && npm run format --prefix components/gov-chat-backend && npm run format --prefix components/document-repository && npm run format --prefix components/shared/lib",
+    "format:check": "npm run format:tests:check && npm run format:check --prefix components/gov-chat-frontend && npm run format:check --prefix components/gov-chat-backend && npm run format:check --prefix components/document-repository && npm run format:check --prefix components/shared/lib",
+    "format:tests": "prettier --write \"tests/**/*.js\"",
+    "format:tests:check": "prettier --check \"tests/**/*.js\"",
     "lint:py": "ruff check genie-ai-overlay/",
     "lint:py:fix": "ruff check --fix genie-ai-overlay/",
     "format:py": "ruff format genie-ai-overlay/",
@@ -16,9 +25,14 @@
     "format:dart:check": "cd mobile/genie_ai_mobile && dart format --set-exit-if-changed ."
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.51.0",
+    "eslint": "^10.4.1",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.6.0",
     "husky": "^9.1.0",
-    "lint-staged": "^15.5.0"
+    "lint-staged": "^15.5.0",
+    "prettier": "^3.8.3"
   },
   "lint-staged": {
     "components/gov-chat-backend/**/*.{js,vue}": [
@@ -35,6 +49,10 @@
     "components/document-repository/**/*.{js,vue}": [
       "components/document-repository/node_modules/.bin/eslint --fix",
       "components/document-repository/node_modules/.bin/prettier --write"
+    ],
+    "tests/**/*.js": [
+      "eslint --fix",
+      "prettier --write"
     ]
   },
   "dependencies": {

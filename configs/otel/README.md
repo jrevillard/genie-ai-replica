@@ -161,6 +161,8 @@ Kong uses its bundled `opentelemetry` plugin (available since Kong 3.0) — no a
 
 **Trace propagation**: Kong injects the W3C `traceparent` header on outbound requests to upstreams. The backend and OPEA services read this header to create child spans, forming a single distributed trace.
 
+**Kong tracing internals**: Kong's internal tracer is always active (`KONG_TRACING_INSTRUMENTATIONS=request` by default in docker-compose). This has negligible overhead when the OTel plugin is disabled — spans are created and garbage-collected within the request lifecycle. When `ENABLE_OBSERVABILITY=1`, the restore script enables the plugin, which exports these spans to the OTel Collector. Both `KONG_TRACING_INSTRUMENTATIONS` and `KONG_TRACING_SAMPLING_RATE` (default `1.0` = 100%) are overrideable via `.env` but should not need changing.
+
 ## Environment Variables
 
 | Variable | Default | Description |
@@ -270,3 +272,101 @@ Externalized services called by GENIE.AI follow the same pattern:
 ### Key Principle
 
 > **We trace what crosses our perimeter at the caller level.** External service internals are their own observability concern.
+
+## MELT Correlation Tests
+
+End-to-end tests validating that the observability pipeline correctly correlates telemetry across all three Victoria* backends: **M**etrics, **E**vents/Logs, and **T**races.
+
+### Prerequisites
+
+- GENIE.AI stack running with `ENABLE_OBSERVABILITY=1`
+- All services healthy: VictoriaTraces (:10428), VictoriaMetrics (:8428), VictoriaLogs (:9428), OTel Collector (:13133)
+- Tests must run from inside the Docker network (all Victoria* ports are container-only)
+- For Grafana tests: `GRAFANA_ADMIN_PASSWORD` set
+- For Playwright tests: `TRACE_ID` set and Playwright installed
+- For k6 overhead tests: k6 CLI installed
+- For chaos tests: Docker socket access (Swarm manager or `docker compose`)
+
+### Running Locally
+
+From inside a container on the Docker network:
+
+```bash
+# All tests (correlation + Grafana + chaos + Playwright + k6)
+npm run test:melt
+
+# Only correlation test (fast, no external deps beyond Victoria*)
+npm run test:melt:correlation
+
+# Skip chaos (destructive — stops/restarts backends)
+npm run test:melt -- --skip-chaos
+
+# Skip Playwright (needs browser + Keycloak SSO)
+npm run test:melt -- --skip-chaos --skip-playwright
+
+# Individual tests
+npm run test:melt:grafana        # Grafana datasource proxy verification
+npm run test:melt:chaos          # Chaos resilience (stop/restart backends)
+npm run test:melt:playwright     # Playwright E2E log search (needs TRACE_ID)
+```
+
+### Running in CI
+
+GitLab CI runs MELT tests as **Scheduled tier** jobs (not on every push):
+
+| Job | Stage | Condition | Description |
+|-----|-------|-----------|-------------|
+| `scheduled:melt-correlation` | scheduled | `ENABLE_OBSERVABILITY=1` | Correlation + Grafana (no chaos) |
+| `scheduled:melt-chaos` | scheduled | `ENABLE_OBSERVABILITY=1` | Chaos resilience (stop/restart backends) |
+
+Both jobs run after `scheduled:integration` (requires Docker stack + observability profile up).
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `KONG_URL` | `http://kong:8000` | Kong internal URL |
+| `VICTORIATRACES_URL` | `http://victoriatraces:10428` | VictoriaTraces URL |
+| `VICTORIAMETRICS_URL` | `http://victoriametrics:8428` | VictoriaMetrics URL |
+| `VICTORIALOGS_URL` | `http://victorialogs:9428` | VictoriaLogs URL |
+| `GRAFANA_URL` | `http://grafana:3000` | Grafana URL |
+| `GRAFANA_ADMIN_USER` | `admin` | Grafana admin username |
+| `GRAFANA_ADMIN_PASSWORD` | — | Grafana admin password (required for Task 2) |
+| `PROPAGATION_DELAY` | `15` | Seconds to wait before querying backends |
+| `RESTART_TIMEOUT` | `60` | Max seconds to wait for backend restart (chaos tests) |
+| `OUTAGE_REQUESTS` | `3` | Number of requests during chaos outage |
+| `TRACE_ID` | — | Known trace ID for Playwright test |
+| `JUNIT_OUTPUT` | `reports/melt-*-report.xml` | JUnit XML output path |
+
+### Expected Output
+
+```
+═══════════════════════════════════════════════════════════
+  MELT Correlation Test Suite
+  2026-06-05T14:30:00.000Z
+═══════════════════════════════════════════════════════════
+
+  ✅ AC8 — Prerequisites: all backends reachable (0.5s)
+  ✅ AC1 — Known error generation with trace context (0.3s)
+  ✅ AC2 — Trace ID in VictoriaTraces with span hierarchy (25.1s)
+  ✅ AC2 — Error metric in VictoriaMetrics (0.8s)
+  ✅ AC2 — Logs with trace_id in VictoriaLogs (0.6s)
+  ✅ AC2 — Cross-backend correlation: same trace_id in all 3 backends (1.2s)
+
+Results: 6/6 passed, 0 failed
+JUnit report: reports/melt-correlation-report.xml
+```
+
+JUnit XML artifacts are collected by GitLab CI and displayed in merge request pipelines.
+
+### Troubleshooting
+
+**Service unreachable:** Ensure `ENABLE_OBSERVABILITY=1` and the observability profile is running (`docker compose --profile observability ps`). All Victoria* ports are container-only — tests must run from inside Docker.
+
+**Trace not found in VictoriaTraces:** Propagation delay varies (5-15s). Increase `PROPAGATION_DELAY` to 20-30s for slow environments. Check OTel Collector health (`curl http://otel-collector:13133`).
+
+**Grafana tests fail with 401:** Set `GRAFANA_ADMIN_PASSWORD` matching your `.env` value. Grafana requires basic auth for API access.
+
+**Chaos tests leave backends stopped:** If the test is interrupted (Ctrl+C, timeout), backends may remain stopped. Run `docker compose start victoriatraces victorialogs` to restore.
+
+**k6 overhead test skipped:** Install k6 CLI (`https://k6.io/docs/getting-started/installation/`). The test is optional — it only runs when `k6` is in PATH.

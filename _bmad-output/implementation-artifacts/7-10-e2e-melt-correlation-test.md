@@ -1,6 +1,10 @@
+---
+baseline_commit: 9b5f39e5eb7348a8620d4c942af495b414caead7
+---
+
 # Story 7.10: E2E MELT Correlation Test
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -30,15 +34,15 @@ so that I can verify the MELT observability promise holds under real conditions.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create MELT correlation test infrastructure (AC: #1, #2, #8)
-  - [ ] 1.1 Create `tests/melt-correlation/melt-utils.js` — shared Node.js utilities:
+- [x] Task 1: Create MELT correlation test infrastructure (AC: #1, #2, #8)
+  - [x] 1.1 Create `tests/melt-correlation/melt-utils.js` — shared Node.js utilities:
     - `queryTrace(traceId)` — GET `http://victoriatraces:10428/select/jaeger/api/traces/{traceId}`, parse JSON, return span tree
     - `queryMetrics(traceId, timeRange)` — GET `http://victoriametrics:8428/prometheus/api/v1/query?query=...`, return metric values
     - `queryLogs(traceId, timeRange)` — POST `http://victorialogs:9428/select/logsql/query` with JSON body `{"query": "trace_id:\"{traceId}\""}`, return log entries
     - `waitForPropagation(traceId, maxRetries=3, interval=10s)` — retry loop for eventual consistency
     - `generateJUnitReport(results, outputFile)` — produce JUnit XML at `reports/melt-correlation-report.xml`
     - All endpoints configurable via env vars (`VICTORIATRACES_URL`, `VICTORIAMETRICS_URL`, `VICTORIALOGS_URL`)
-  - [ ] 1.2 Create `tests/melt-correlation/correlation.test.js` — Node.js test (Jest-compatible or standalone):
+  - [x] 1.2 Create `tests/melt-correlation/correlation.test.js` — Node.js test (Jest-compatible or standalone):
     - Sends request that triggers known error (404 on non-existent endpoint or invalid embedding request)
     - Extracts `traceparent` header from response to get trace ID
     - Validates trace ID exists in VictoriaTraces with span hierarchy (Kong → Backend)
@@ -47,17 +51,17 @@ so that I can verify the MELT observability promise holds under real conditions.
     - Cross-correlates: same trace ID found in all 3 backends
     - Outputs JUnit XML via `melt-utils.js`
 
-- [ ] Task 2: Create Grafana dashboard verification (AC: #3)
-  - [ ] 2.1 Add `tests/melt-correlation/grafana-verify.js` — queries Grafana API:
+- [x] Task 2: Create Grafana dashboard verification (AC: #3)
+  - [x] 2.1 Add `tests/melt-correlation/grafana-verify.js` — queries Grafana API:
     - GET `{GRAFANA_URL}/api/datasources/proxy/1/prometheus/api/v1/query?query=...` via VictoriaMetrics datasource proxy
     - GET `{GRAFANA_URL}/api/datasources/proxy/2/select/jaeger/api/traces/{traceId}` via VictoriaTraces datasource proxy (tempo-proxy)
     - POST `{GRAFANA_URL}/api/datasources/proxy/3/select/logsql/query` via VictoriaLogs datasource proxy
     - Validates all 3 datasources return results for the known trace ID
     - Reference dashboards: `service-logs.json` (datasource: victoriametrics-logs), `trace-explorer.json` (datasource: tempo/victoriatraces), `service-health.json` (datasource: prometheus/victoriametrics)
-  - [ ] 2.2 Grafana API requires authentication — use admin credentials from `.env` (`GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`) or API token
+  - [x] 2.2 Grafana API requires authentication — use admin credentials from `.env` (`GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`) or API token
 
-- [ ] Task 3: Create chaos resilience tests (AC: #4, #5)
-  - [ ] 3.1 Create `tests/melt-correlation/chaos-resilience.test.js` — Node.js test:
+- [x] Task 3: Create chaos resilience tests (AC: #4, #5)
+  - [x] 3.1 Create `tests/melt-correlation/chaos-resilience.test.js` — Node.js test:
     - For each backend (VictoriaLogs, VictoriaTraces):
       1. Generate baseline request, record trace ID, verify it appears in backend
       2. Stop backend: `docker compose stop victorialogs` (or `victoriatraces`)
@@ -68,11 +72,11 @@ so that I can verify the MELT observability promise holds under real conditions.
       7. Wait for backend to become healthy (healthcheck or HTTP probe)
       8. Re-query all trace IDs from step 3 — ALL must appear (zero data loss)
       9. Output JUnit XML with per-backend pass/fail
-  - [ ] 3.2 Chaos tests MUST run inside Docker network (container-only services). Use `docker exec` from a test container or run script on a Swarm manager node.
-  - [ ] 3.3 Add configurable timeout for restart (default 60s) and retry for data verification (3 retries, 10s intervals)
+  - [x] 3.2 Chaos tests MUST run inside Docker network (container-only services). Use `docker exec` from a test container or run script on a Swarm manager node.
+  - [x] 3.3 Add configurable timeout for restart (default 60s) and retry for data verification (3 retries, 10s intervals)
 
-- [ ] Task 4: Create Playwright LogSearchDialog test (AC: #6)
-  - [ ] 4.1 Create `tests/e2e/observability/log-search-dialog.spec.js` — Playwright test:
+- [x] Task 4: Create Playwright LogSearchDialog test (AC: #6)
+  - [x] 4.1 Create `tests/e2e/observability/log-search-dialog.spec.js` — Playwright test:
     - Uses existing `tests/e2e/helpers/chatbot.js` auth helpers (`loginViaUI()`)
     - Triggers a known error request via chatbot (`sendMessage(page, "trigger_error_test")`)
     - Navigates to admin dashboard
@@ -80,10 +84,10 @@ so that I can verify the MELT observability promise holds under real conditions.
     - Searches for logs by trace ID or time range covering the error
     - Verifies dialog displays log entries with correct `trace_id`, service name, and log level
     - Validates log entries are parseable (JSON structured format, not garbled)
-  - [ ] 4.2 Follow existing Playwright patterns: `playwright.config.js` (tests/e2e/, Chromium, ignoreHTTPSErrors), JUnit reporter output at `reports/playwright-report.xml`
+  - [x] 4.2 Follow existing Playwright patterns: `playwright.config.js` (tests/e2e/, Chromium, ignoreHTTPSErrors), JUnit reporter output at `reports/playwright-report.xml`
 
-- [ ] Task 5: Create k6 Collector overhead test (AC: #7)
-  - [ ] 5.1 Create `tests/melt-correlation/k6-collector-overhead.js` — k6 script:
+- [x] Task 5: Create k6 Collector overhead test (AC: #7)
+  - [x] 5.1 Create `tests/melt-correlation/k6-collector-overhead.js` — k6 script:
     - Follow pattern from `tests/metrics-overhead/k6-metrics-overhead.js`
     - Sustains ≥100 VUs for configurable duration (default 30s)
     - Targets backend health endpoint: `{BASE_URL}/api/health`
@@ -92,8 +96,8 @@ so that I can verify the MELT observability promise holds under real conditions.
     - Threshold: P99 <10ms OTel overhead
     - Env vars: `BASE_URL`, `TOKEN`, `VUS` (default 100), `DURATION` (default "30s")
 
-- [ ] Task 6: Create orchestration runner (AC: #1–#8)
-  - [ ] 6.1 Create `tests/melt-correlation/run-melt-test.sh` — shell script:
+- [x] Task 6: Create orchestration runner (AC: #1–#8)
+  - [x] 6.1 Create `tests/melt-correlation/run-melt-test.sh` — shell script:
     - Validates prerequisite services reachable (VictoriaTraces:10428, VictoriaMetrics:8428, VictoriaLogs:9428, OTel Collector:13133, Grafana:3000)
     - Runs correlation test (Task 1)
     - Runs Grafana verification (Task 2)
@@ -103,25 +107,25 @@ so that I can verify the MELT observability promise holds under real conditions.
     - Waits for propagation delay between stages (configurable, default 15s)
     - Exits: 0 (all pass), 1 (any test failure), 2 (prerequisites unreachable)
     - Produces combined JUnit XML at `reports/melt-correlation-report.xml`
-  - [ ] 6.2 Add npm scripts in root `package.json`:
+  - [x] 6.2 Add npm scripts in root `package.json`:
     - `"test:melt": "bash tests/melt-correlation/run-melt-test.sh"`
     - `"test:melt:correlation": "node tests/melt-correlation/correlation.test.js"`
     - `"test:melt:chaos": "node tests/melt-correlation/chaos-resilience.test.js"`
 
-- [ ] Task 7: GitLab CI integration (AC: #8)
-  - [ ] 7.1 Add `melt-correlation` job to `.gitlab-ci.yml` under `scheduled` stage (architecture §Test Execution Tiers — MELT tests are Scheduled tier, not Mandatory)
-  - [ ] 7.2 Job runs only when `ENABLE_OBSERVABILITY=1` via `rules:` conditional
-  - [ ] 7.3 Job requires observability stack: `docker compose --profile observability up -d` before test execution
-  - [ ] 7.4 Artifact: JUnit XML reports (`reports/melt-correlation-report.xml`, `reports/playwright-report.xml`)
-  - [ ] 7.5 Chaos tests run as separate job with `--skip-chaos` exclusion for fast CI feedback
+- [x] Task 7: GitLab CI integration (AC: #8)
+  - [x] 7.1 Add `melt-correlation` job to `.gitlab-ci.yml` under `scheduled` stage (architecture §Test Execution Tiers — MELT tests are Scheduled tier, not Mandatory)
+  - [x] 7.2 Job runs only when `ENABLE_OBSERVABILITY=1` via `rules:` conditional
+  - [x] 7.3 Job requires observability stack: `docker compose --profile observability up -d` before test execution
+  - [x] 7.4 Artifact: JUnit XML reports (`reports/melt-correlation-report.xml`, `reports/playwright-report.xml`)
+  - [x] 7.5 Chaos tests run as separate job with `--skip-chaos` exclusion for fast CI feedback
 
-- [ ] Task 8: Documentation (AC: #1–#8)
-  - [ ] 8.1 Update `configs/otel/README.md` — add "MELT Correlation Tests" section:
+- [x] Task 8: Documentation (AC: #1–#8)
+  - [x] 8.1 Update `configs/otel/README.md` — add "MELT Correlation Tests" section:
     - How to run (local vs CI)
     - Prerequisites (`ENABLE_OBSERVABILITY=1`, k6 CLI, observability stack)
     - Expected output (JUnit XML, console summary)
     - Troubleshooting (service unreachable, propagation delays, chaos cleanup)
-  - [ ] 8.2 Add inline comments in scripts explaining Victoria* API endpoints, query formats, and retry logic
+  - [x] 8.2 Add inline comments in scripts explaining Victoria* API endpoints, query formats, and retry logic
 
 ## Dev Notes
 
@@ -354,4 +358,32 @@ glm-5-turbo
 
 ### Completion Notes List
 
+- Created MELT correlation test infrastructure with shared utilities (melt-utils.js) covering VictoriaTraces, VictoriaMetrics, VictoriaLogs APIs
+- Implemented 6 test files: correlation, Grafana verification, chaos resilience, Playwright log search, k6 overhead, orchestration runner
+- Added root-level ESLint config (eslint.config.js) for tests/ directory — integrated with existing lint-staged + npm scripts
+- Added 2 GitLab CI jobs (scheduled:melt-correlation, scheduled:melt-chaos) with JUnit artifact collection
+- Updated configs/otel/README.md with comprehensive MELT test documentation
+- All CommonJS files pass ESLint + Prettier; k6 file uses ES modules (expected exclusion)
+
+### Change Log
+
+| Date | Change |
+|------|--------|
+| 2026-06-05 | Initial implementation — 8 tasks completed, 10 files created/modified |
+
 ### File List
+
+**New files:**
+- `tests/melt-correlation/melt-utils.js` — Shared MELT utilities (Victoria* queries, JUnit XML, assertions)
+- `tests/melt-correlation/correlation.test.js` — Core MELT correlation test (AC#1, AC#2, AC#8)
+- `tests/melt-correlation/grafana-verify.js` — Grafana datasource proxy verification (AC#3)
+- `tests/melt-correlation/chaos-resilience.test.js` — Chaos resilience test (AC#4, AC#5)
+- `tests/melt-correlation/k6-collector-overhead.js` — k6 OTel overhead benchmark (AC#7)
+- `tests/melt-correlation/run-melt-test.sh` — Orchestration runner script
+- `tests/e2e/observability/log-search-dialog.spec.js` — Playwright Grafana log search test (AC#6)
+- `eslint.config.js` — Root-level ESLint config for tests/ directory
+
+**Modified files:**
+- `package.json` — Added lint:tests/format:tests scripts, test:melt* scripts, lint-staged for tests/
+- `.gitlab-ci.yml` — Added scheduled:melt-correlation and scheduled:melt-chaos CI jobs
+- `configs/otel/README.md` — Added MELT Correlation Tests documentation section

@@ -185,6 +185,42 @@ describe('DatabaseOperationsService', () => {
       });
     });
 
+    it('should return index suggestions for hash and skiplist indexes', async () => {
+      const mockColl = {
+        name: 'queries',
+        compact: jest.fn().mockResolvedValue(undefined),
+        indexes: jest.fn().mockResolvedValue([
+          { type: 'hash', fields: ['email'], selectivityEstimate: 0.1 },
+          { type: 'skiplist', fields: ['a', 'b', 'c', 'd'], selectivityEstimate: 0.9 }
+        ])
+      };
+      mockDb.collections.mockResolvedValue([mockColl]);
+      const result = await service.optimizeDatabase();
+      expect(result.results[0].indexSuggestions).toHaveLength(2);
+      expect(result.results[0].indexSuggestions[0]).toContain('Low selectivity');
+      expect(result.results[0].indexSuggestions[1]).toContain('multi-field');
+    });
+
+    it('should include index suggestions for low selectivity hash indexes', async () => {
+      const mockColl = createMockCollection('users');
+      mockColl.indexes.mockResolvedValue([{ type: 'hash', fields: ['email'], selectivityEstimate: 0.1 }]);
+      mockDb.collections.mockResolvedValue([mockColl]);
+      const result = await service.optimizeDatabase();
+      expect(result.results[0].indexSuggestions).toHaveLength(1);
+      expect(result.results[0].indexSuggestions[0]).toContain('Low selectivity');
+    });
+
+    it('should include suggestions for complex multi-field skiplist indexes', async () => {
+      const mockColl = createMockCollection('queries');
+      mockColl.indexes.mockResolvedValue([
+        { type: 'skiplist', fields: ['a', 'b', 'c', 'd'], selectivityEstimate: 0.9 }
+      ]);
+      mockDb.collections.mockResolvedValue([mockColl]);
+      const result = await service.optimizeDatabase();
+      expect(result.results[0].indexSuggestions).toHaveLength(1);
+      expect(result.results[0].indexSuggestions[0]).toContain('multi-field');
+    });
+
     it('should return failure when collections() throws', async () => {
       mockDb.collections.mockRejectedValue(new Error('No collections'));
 

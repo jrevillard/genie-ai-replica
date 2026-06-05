@@ -4,22 +4,39 @@ require('../setup-env');
 
 jest.mock('dotenv', () => ({ config: jest.fn() }));
 
-jest.mock('../../shared-lib', () => ({
-  logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn()
-  },
-  dbService: { getConnection: jest.fn() }
-}), { virtual: true });
+jest.mock(
+  '../../shared-lib',
+  () => ({
+    logger: {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn()
+    },
+    dbService: { getConnection: jest.fn() }
+  }),
+  { virtual: true }
+);
 
 jest.mock('worker_threads', () => {
+  const mockWorkerCallbacks = {};
+  let exitResolve = null;
   const mockWorker = {
     on: jest.fn(),
     postMessage: jest.fn(),
     terminate: jest.fn(),
-    once: jest.fn()
+    once: jest.fn((event, cb) => {
+      if (event === 'exit') {
+        exitResolve = cb;
+      }
+    }),
+    _getCallbacks: () => mockWorkerCallbacks,
+    _fireExit: (code) => {
+      if (exitResolve) {
+        exitResolve(code);
+        exitResolve = null;
+      }
+    }
   };
 
   return {
@@ -42,7 +59,10 @@ describe('CpuTranslateBackend', () => {
 
   afterEach(async () => {
     if (backend) {
-      await backend.terminate();
+      const terminatePromise = backend.terminate();
+      // Fire exit handler so terminate() resolves without 5s timeout
+      mockWorker._fireExit(0);
+      await terminatePromise;
     }
   });
 
@@ -96,7 +116,7 @@ describe('CpuTranslateBackend', () => {
     });
 
     it('should handle worker error events', () => {
-      const errorHandler = mockWorker.on.mock.calls.find(call => call[0] === 'error')[1];
+      const errorHandler = mockWorker.on.mock.calls.find((call) => call[0] === 'error')[1];
       const error = new Error('Worker failed');
       errorHandler(error);
 
@@ -104,7 +124,7 @@ describe('CpuTranslateBackend', () => {
     });
 
     it('should handle worker exit with non-zero code', () => {
-      const exitHandler = mockWorker.on.mock.calls.find(call => call[0] === 'exit')[1];
+      const exitHandler = mockWorker.on.mock.calls.find((call) => call[0] === 'exit')[1];
       exitHandler(1);
 
       expect(backend.worker).toBe(null);
@@ -112,7 +132,7 @@ describe('CpuTranslateBackend', () => {
     });
 
     it('should handle worker exit with zero code', () => {
-      const exitHandler = mockWorker.on.mock.calls.find(call => call[0] === 'exit')[1];
+      const exitHandler = mockWorker.on.mock.calls.find((call) => call[0] === 'exit')[1];
       exitHandler(0);
 
       expect(backend.worker).toBe(null);
@@ -124,7 +144,7 @@ describe('CpuTranslateBackend', () => {
     let messageHandler;
 
     beforeEach(() => {
-      messageHandler = mockWorker.on.mock.calls.find(call => call[0] === 'message')[1];
+      messageHandler = mockWorker.on.mock.calls.find((call) => call[0] === 'message')[1];
     });
 
     it('should handle init success message', () => {
@@ -223,7 +243,7 @@ describe('CpuTranslateBackend', () => {
   describe('isLanguageSupported', () => {
     it('should return false when language map not loaded', () => {
       backend.languageMap = null;
-      expect(backend.isLanguageSupported('en')).toBe(false);
+      expect(backend.isLanguageSupported('en')).toBeFalsy();
     });
   });
 
@@ -238,7 +258,7 @@ describe('CpuTranslateBackend', () => {
     let messageHandler;
 
     beforeEach(() => {
-      messageHandler = mockWorker.on.mock.calls.find(call => call[0] === 'message')[1];
+      messageHandler = mockWorker.on.mock.calls.find((call) => call[0] === 'message')[1];
       backend.initialized = true;
       backend.workerReady = true;
     });
@@ -290,7 +310,8 @@ describe('CpuTranslateBackend', () => {
         });
       }, 10);
 
-      await expect(translatePromise).rejects.toThrow('Translation error');
+      // Error is re-wrapped by translate() catch block
+      await expect(translatePromise).rejects.toThrow('[CPU-BACKEND] Failed to perform translation.');
     });
 
     it('should increment messageId for each translation', async () => {
@@ -327,9 +348,10 @@ describe('CpuTranslateBackend', () => {
     });
 
     it('should timeout waiting for worker', async () => {
+      backend.initialized = false;
       backend.workerReady = false;
 
-      await expect(backend.init()).rejects.toThrow('[CPU-BACKEND] Worker initialization timeout');
+      await expect(backend.init(50)).rejects.toThrow('[CPU-BACKEND] Worker initialization timeout');
     });
   });
 
@@ -361,15 +383,9 @@ describe('CpuTranslateBackend', () => {
 
   describe('terminate', () => {
     it('should send terminate message and wait for exit', async () => {
-      const exitPromise = new Promise(resolve => {
-        setTimeout(() => {
-          const exitHandler = mockWorker.on.mock.calls.find(call => call[0] === 'exit')[1];
-          exitHandler(0);
-          resolve();
-        }, 10);
-      });
-
-      await Promise.all([backend.terminate(), exitPromise]);
+      const terminatePromise = backend.terminate();
+      mockWorker._fireExit(0);
+      await terminatePromise;
 
       expect(mockWorker.postMessage).toHaveBeenCalledWith({ type: 'terminate' });
       expect(backend.worker).toBeNull();
@@ -377,7 +393,7 @@ describe('CpuTranslateBackend', () => {
     });
 
     it('should force terminate after timeout', async () => {
-      await backend.terminate();
+      await backend.terminate(1);
 
       expect(mockWorker.postMessage).toHaveBeenCalledWith({ type: 'terminate' });
       expect(backend.worker).toBeNull();

@@ -105,18 +105,21 @@ describe('metrics-middleware.js', () => {
 
     // Wait for finish event
     setImmediate(() => {
-      expect(mockCounter.add).toHaveBeenCalledWith(1, expect.objectContaining({
-        'http.method': 'GET',
-        'http.status_code': 200,
-        'http.route': '/api/users/:id'
-      }));
+      expect(mockCounter.add).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          'http.method': 'GET',
+          'http.status_code': 200,
+          'http.route': '/api/users/:id'
+        })
+      );
       done();
     });
   });
 
   it('records histogram duration on response finish', (done) => {
     const middleware = capturedMiddleware();
-    const startTime = Date.now();
+
     const req = {
       method: 'POST',
       route: { path: '/api/chat/:conversationId' }
@@ -165,9 +168,12 @@ describe('metrics-middleware.js', () => {
     middleware(req, res, next);
 
     setImmediate(() => {
-      expect(mockCounter.add).toHaveBeenCalledWith(1, expect.objectContaining({
-        'http.route': 'unknown_route'
-      }));
+      expect(mockCounter.add).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          'http.route': 'unknown_route'
+        })
+      );
       done();
     });
   });

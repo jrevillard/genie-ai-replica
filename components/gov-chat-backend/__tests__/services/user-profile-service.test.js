@@ -298,4 +298,139 @@ describe('UserProfileService', () => {
       );
     });
   });
+
+  describe('process', () => {
+    it('should copy profileData fields and return processedData', async () => {
+      const profileData = {
+        personalIdentification: { fullName: 'Test' },
+        customSection: { data: 'value' },
+        email: 'test@test.com'
+      };
+      const result = await userProfileService.process('user-1', profileData, null);
+      expect(result.personalIdentification).toEqual({ fullName: 'Test' });
+      expect(result.customSection).toEqual({ data: 'value' });
+      expect(result.customSettings).toBeDefined();
+    });
+
+    it('should parse string profileData as JSON', async () => {
+      const result = await userProfileService.process(
+        'user-1',
+        '{"personalIdentification": {"fullName": "Test"}}',
+        null
+      );
+      expect(result.personalIdentification.fullName).toBe('Test');
+    });
+
+    it('should default to empty object on invalid JSON string', async () => {
+      const result = await userProfileService.process('user-1', 'not-valid-json', null);
+      expect(result).toBeDefined();
+    });
+
+    it('should skip _key field', async () => {
+      const result = await userProfileService.process('user-1', { _key: 'user-1', name: 'Test' }, null);
+      expect(result._key).toBeUndefined();
+    });
+
+    it('should handle file uploads as array', async () => {
+      const file = { fieldname: 'personalIdentification-photo', originalname: 'photo.jpg', buffer: Buffer.from('img') };
+      const profileData = { personalIdentification: {} };
+      const result = await userProfileService.process('user-1', profileData, [file]);
+      expect(result.personalIdentification.photoUrl).toBeDefined();
+    });
+
+    it('should handle file uploads as object', async () => {
+      const file = { fieldname: 'healthMedical-report', originalname: 'report.pdf', buffer: Buffer.from('pdf') };
+      const profileData = { healthMedical: {} };
+      const result = await userProfileService.process('user-1', profileData, { file1: file });
+      expect(result.healthMedical.reportUrl).toBeDefined();
+    });
+
+    it('should skip files that do not match section prefix', async () => {
+      const file = { fieldname: 'wrongSection-photo', originalname: 'photo.jpg', buffer: Buffer.from('img') };
+      const profileData = { personalIdentification: {} };
+      const result = await userProfileService.process('user-1', profileData, [file]);
+      expect(result.personalIdentification.photoUrl).toBeUndefined();
+    });
+
+    it('should aggregate custom/unknown object sections into customSettings', async () => {
+      const profileData = {
+        customAppData: { setting1: true },
+        anotherCustom: { value: 42 },
+        email: 'test@test.com'
+      };
+      const result = await userProfileService.process('user-1', profileData, null);
+      expect(result.customSettings.customAppData).toEqual({ setting1: true });
+      expect(result.customSettings.anotherCustom).toEqual({ value: 42 });
+    });
+
+    it('should not include null or non-object values in customSettings', async () => {
+      const profileData = {
+        stringField: 'hello',
+        numberField: 42,
+        nullField: null
+      };
+      const result = await userProfileService.process('user-1', profileData, null);
+      // customSettings only set when non-empty; string/number/null are skipped
+      expect(result.customSettings).toBeUndefined();
+    });
+
+    it('should not include customSettings key itself in customSettings', async () => {
+      const profileData = {
+        customSettings: { existing: true }
+      };
+      const result = await userProfileService.process('user-1', profileData, null);
+      // Step 2 copies customSettings to processedData; Step 5 skips because empty customSettings
+      // So processedData.customSettings retains the original from copy
+      expect(result.customSettings).toEqual({ existing: true });
+    });
+
+    it('should skip empty sections in file processing', async () => {
+      const file = { fieldname: 'employment-doc', originalname: 'doc.pdf', buffer: Buffer.from('pdf') };
+      const profileData = {};
+      const result = await userProfileService.process('user-1', profileData, [file]);
+      expect(result.employment).toBeUndefined();
+    });
+
+    it('should skip filename parts that do not match section-name pattern', async () => {
+      const file = { fieldname: 'photo', originalname: 'photo.jpg', buffer: Buffer.from('img') };
+      const profileData = { personalIdentification: {} };
+      const result = await userProfileService.process('user-1', profileData, [file]);
+      expect(result.personalIdentification.photoUrl).toBeUndefined();
+    });
+
+    it('should continue on storeFile error', async () => {
+      const badFile = { fieldname: 'addressResidency-proof', originalname: null, buffer: null, path: null };
+      const profileData = { addressResidency: {} };
+      const result = await userProfileService.process('user-1', profileData, [badFile]);
+      expect(result.addressResidency).toBeDefined();
+      expect(result.addressResidency.proofUrl).toBeUndefined();
+    });
+  });
+
+  describe('process - string profileData', () => {
+    it('should parse string profileData as JSON', async () => {
+      const result = await userProfileService.process('user-1', '{"customField": "value"}', {});
+      expect(result.customField).toBe('value');
+    });
+
+    it('should default to empty object on unparseable string', async () => {
+      const result = await userProfileService.process('user-1', 'not-json', {});
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('process - files as object', () => {
+    it('should handle files as object with values', async () => {
+      const file = { fieldname: 'personalIdentification-name', originalname: 'doc.pdf', buffer: Buffer.from('x') };
+      const profileData = { personalIdentification: {} };
+      const result = await userProfileService.process('user-1', profileData, { f: file });
+      expect(result.personalIdentification).toBeDefined();
+    });
+
+    it('should handle files as empty object', async () => {
+      const profileData = { testField: 'value' };
+      const result = await userProfileService.process('user-1', profileData, {});
+      expect(result.testField).toBe('value');
+    });
+  });
 });

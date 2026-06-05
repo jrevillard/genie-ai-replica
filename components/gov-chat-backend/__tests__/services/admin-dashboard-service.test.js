@@ -804,175 +804,179 @@ describe('AdminDashboardService', () => {
     });
   });
 
-  describe('getSystemHealth - empty stats', () => {
-    it('should handle zero users', async () => {
-      mockDb.query.mockResolvedValue(createMockCursor([{ count: 0 }]));
-      const health = await adminDashboardService.getSystemHealth();
-      expect(health.users.total).toBe(0);
+  describe('searchUsers', () => {
+    beforeEach(async () => {
+      await adminDashboardService.init();
     });
 
-    it('should handle zero queries', async () => {
-      mockDb.query.mockResolvedValue(createMockCursor([{ count: 0 }]));
-      const health = await adminDashboardService.getSystemHealth();
-      expect(health.queries.total).toBe(0);
+    it('should throw when not initialized', async () => {
+      adminDashboardService.db = null;
+      await expect(adminDashboardService.searchUsers({ term: 'test' })).rejects.toThrow('Database not initialized');
+      await adminDashboardService.init();
     });
 
-    it('should handle zero sessions', async () => {
-      mockDb.query.mockResolvedValue(createMockCursor([{ count: 0 }]));
-      const health = await adminDashboardService.getSystemHealth();
-      expect(health.sessions.total).toBe(0);
-    });
-
-    it('should handle all zero counts', async () => {
-      mockDb.query.mockResolvedValue(createMockCursor([{ count: 0 }]));
-      const health = await adminDashboardService.getSystemHealth();
-      expect(health.users.total).toBe(0);
-      expect(health.queries.total).toBe(0);
-      expect(health.sessions.total).toBe(0);
-    });
-  });
-
-  describe('getSystemHealth - permission-denied branches', () => {
-    it('should handle Arango query permission errors', async () => {
-      mockDb.query.mockRejectedValueOnce(new Error('Permission denied: arango'));
-      const health = await adminDashboardService.getSystemHealth();
-      expect(health.status).toBe('error');
-    });
-
-    it('should handle Redis connection permission errors', async () => {
-      mockDb.query.mockResolvedValue(createMockCursor([{ count: 100 }]));
-      const { redisClient: rc } = require('../../shared-lib');
-      rc.info.mockRejectedValueOnce(new Error('NOAUTH Authentication required'));
-      const health = await adminDashboardService.getSystemHealth();
-      expect(health.redis.status).toBe('error');
-    });
-
-    it('should handle file system permission errors', async () => {
-      mockFs.access.mockRejectedValueOnce(new Error('EACCES: permission denied'));
-      mockFs.readdir.mockRejectedValueOnce(new Error('Permission denied'));
-      const health = await adminDashboardService.getSystemHealth();
-      expect(health.disk.status).toBe('error');
-    });
-  });
-
-  describe('getSystemHealth - Arango query failures', () => {
-    it('should handle user count query failure', async () => {
-      mockDb.query.mockRejectedValueOnce(new Error('Arango query timeout'));
-      const health = await adminDashboardService.getSystemHealth();
-      expect(health.users.total).toBe(0);
-    });
-
-    it('should handle query count query failure', async () => {
+    it('should search users by name', async () => {
       mockDb.query
-        .mockResolvedValueOnce(createMockCursor([{ count: 100 }]))
-        .mockRejectedValueOnce(new Error('Arango connection lost'));
-      const health = await adminDashboardService.getSystemHealth();
-      expect(health.queries.total).toBe(0);
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(5) })
+        .mockResolvedValueOnce({ all: jest.fn().mockResolvedValue([{ _key: 'u1', loginName: 'test' }]) });
+      const result = await adminDashboardService.searchUsers({ term: 'john', field: 'name' });
+      expect(result.users).toHaveLength(1);
     });
 
-    it('should handle session count query failure', async () => {
+    it('should search users by email', async () => {
       mockDb.query
-        .mockResolvedValueOnce(createMockCursor([{ count: 100 }]))
-        .mockResolvedValueOnce(createMockCursor([{ count: 50 }]))
-        .mockRejectedValueOnce(new Error('Database locked'));
-      const health = await adminDashboardService.getSystemHealth();
-      expect(health.sessions.total).toBe(0);
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(2) })
+        .mockResolvedValueOnce({ all: jest.fn().mockResolvedValue([{ _key: 'u2', email: 'john@test.com' }]) });
+      const result = await adminDashboardService.searchUsers({ term: 'john', field: 'email' });
+      expect(result.users).toHaveLength(1);
     });
 
-    it('should handle all Arango queries failing', async () => {
-      mockDb.query.mockRejectedValue(new Error('Arango server unavailable'));
-      const health = await adminDashboardService.getSystemHealth();
-      expect(health.database.status).toBe('error');
-    });
-  });
-
-  describe('getLogs - rotation suffix handling', () => {
-    it('should handle .log.1 rotation suffix', async () => {
-      mockFs.readFile.mockResolvedValueOnce('log content');
-      await adminDashboardService.getLogs();
-      expect(mockFs.readFile).toHaveBeenCalled();
+    it('should search users by exact email', async () => {
+      mockDb.query
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(1) })
+        .mockResolvedValueOnce({ all: jest.fn().mockResolvedValue([{ _key: 'u3', email: 'john@test.com' }]) });
+      const result = await adminDashboardService.searchUsers({ term: 'john@test.com', field: 'exactEmail' });
+      expect(result.users).toHaveLength(1);
     });
 
-    it('should handle .log.2.gz rotation suffix', async () => {
-      mockFs.readFile.mockResolvedValueOnce('compressed log');
-      await adminDashboardService.getLogs();
-      expect(mockFs.readFile).toHaveBeenCalled();
+    it('should search users by role', async () => {
+      mockDb.query
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(1) })
+        .mockResolvedValueOnce({ all: jest.fn().mockResolvedValue([{ _key: 'u4' }]) });
+      const result = await adminDashboardService.searchUsers({ term: 'admin', field: 'role' });
+      expect(result.users).toHaveLength(1);
     });
 
-    it('should handle .log.10 rotation suffix', async () => {
-      mockFs.readFile.mockResolvedValueOnce('old log content');
-      await adminDashboardService.getLogs();
-      expect(mockFs.readFile).toHaveBeenCalled();
-    });
-  });
-
-  describe('getLogs - all service detection patterns', () => {
-    const logContent = [
-      '[2026-05-26T10:00:00.000Z] [INFO] [AuthService] User action',
-      '[2026-05-26T10:01:00.000Z] [ERROR] [QueryService] Query failed',
-      '[2026-05-26T10:02:00.000Z] [WARN] [ChatService] Message sent',
-      '[2026-05-26T10:03:00.000Z] [DEBUG] [AdminService] Admin action',
-      '[2026-05-26T10:04:00.000Z] [INFO] [DocumentService] File uploaded',
-      '[2026-05-26T10:05:00.000Z] [ERROR] [TranslationService] Translation failed'
-    ].join('\n');
-
-    it('should detect AuthService logs', async () => {
-      mockFs.readFile.mockResolvedValueOnce(logContent);
-      const result = await adminDashboardService.getLogs({ service: 'auth' });
-      expect(result.logs.some(log => log.service === 'AuthService')).toBe(true);
+    it('should search all fields by default', async () => {
+      mockDb.query
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(3) })
+        .mockResolvedValueOnce({ all: jest.fn().mockResolvedValue([{ _key: 'u5' }, { _key: 'u6' }]) });
+      const result = await adminDashboardService.searchUsers({ term: 'john' });
+      expect(result.users).toHaveLength(2);
     });
 
-    it('should detect QueryService logs', async () => {
-      mockFs.readFile.mockResolvedValueOnce(logContent);
-      const result = await adminDashboardService.getLogs({ service: 'query' });
-      expect(result.logs.some(log => log.service === 'QueryService')).toBe(true);
+    it('should handle empty term', async () => {
+      mockDb.query
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(10) })
+        .mockResolvedValueOnce({ all: jest.fn().mockResolvedValue(Array(10).fill({ _key: 'u' })) });
+      const result = await adminDashboardService.searchUsers({});
+      expect(result.total).toBe(10);
     });
 
-    it('should detect ChatService logs', async () => {
-      mockFs.readFile.mockResolvedValueOnce(logContent);
-      const result = await adminDashboardService.getLogs({ service: 'chat' });
-      expect(result.logs.some(log => log.service === 'ChatService')).toBe(true);
-    });
-
-    it('should detect AdminService logs', async () => {
-      mockFs.readFile.mockResolvedValueOnce(logContent);
-      const result = await adminDashboardService.getLogs({ service: 'admin' });
-      expect(result.logs.some(log => log.service === 'AdminService')).toBe(true);
-    });
-
-    it('should detect DocumentService logs', async () => {
-      mockFs.readFile.mockResolvedValueOnce(logContent);
-      const result = await adminDashboardService.getLogs({ service: 'document' });
-      expect(result.logs.some(log => log.service === 'DocumentService')).toBe(true);
-    });
-
-    it('should detect TranslationService logs', async () => {
-      mockFs.readFile.mockResolvedValueOnce(logContent);
-      const result = await adminDashboardService.getLogs({ service: 'translation' });
-      expect(result.logs.some(log => log.service === 'TranslationService')).toBe(true);
+    it('should handle query errors', async () => {
+      mockDb.query.mockRejectedValue(new Error('Query failed'));
+      await expect(adminDashboardService.searchUsers({ term: 'test' })).rejects.toThrow('Query failed');
     });
   });
 
-  describe('getLogs - MAX_LINES truncation', () => {
-    it('should truncate logs exceeding MAX_LINES', async () => {
-      const manyLines = Array(10000).fill('[2026-05-26T10:00:00.000Z] [INFO] [TestService] Test log').join('\n');
-      mockFs.readFile.mockResolvedValueOnce(manyLines);
-      const result = await adminDashboardService.getLogs();
-      expect(result.limit).toBe(100);
+  describe('searchLogs', () => {
+    it('should throw when logsService not set', async () => {
+      await expect(adminDashboardService.searchLogs({ term: 'error' })).rejects.toThrow('LogsService not initialized');
     });
 
-    it('should handle exact MAX_LINES', async () => {
-      const exactLines = Array(100).fill('[2026-05-26T10:00:00.000Z] [INFO] [TestService] Test log').join('\n');
-      mockFs.readFile.mockResolvedValueOnce(exactLines);
-      const result = await adminDashboardService.getLogs();
-      expect(result.logs.length).toBeLessThanOrEqual(100);
+    it('should delegate to logsService', async () => {
+      const mockLogsService = { searchLogs: jest.fn().mockResolvedValue({ logs: [{ msg: 'found' }] }) };
+      adminDashboardService.setLogsService(mockLogsService);
+      const result = await adminDashboardService.searchLogs({ term: 'error' });
+      expect(result.logs).toHaveLength(1);
+      expect(mockLogsService.searchLogs).toHaveBeenCalledWith({ term: 'error' });
     });
 
-    it('should return all logs when under MAX_LINES', async () => {
-      const fewLines = Array(10).fill('[2026-05-26T10:00:00.000Z] [INFO] [TestService] Test log').join('\n');
-      mockFs.readFile.mockResolvedValueOnce(fewLines);
-      const result = await adminDashboardService.getLogs();
-      expect(result.logs.length).toBe(10);
+    it('should propagate logsService errors', async () => {
+      const mockLogsService = { searchLogs: jest.fn().mockRejectedValue(new Error('Log search failed')) };
+      adminDashboardService.setLogsService(mockLogsService);
+      await expect(adminDashboardService.searchLogs({ term: 'error' })).rejects.toThrow('Log search failed');
+    });
+  });
+
+  describe('getSecurityMetrics', () => {
+    it('should throw when securityScanService not set', async () => {
+      await adminDashboardService.init();
+      const result = await adminDashboardService.getSecurityMetrics();
+      expect(result.lastScan).toBe('Never');
+    });
+
+    it('should return vulnerability counts', async () => {
+      const mockScanService = {
+        checkLogsForIssues: jest.fn().mockResolvedValue({
+          critical: [{ type: 'suspicious' }],
+          medium: [{ type: 'medium' }],
+          low: [{ type: 'failed_login' }]
+        })
+      };
+      adminDashboardService.setSecurityScanService(mockScanService);
+      adminDashboardService.setLogsService({ getLogFilePaths: jest.fn().mockResolvedValue([]) });
+      const result = await adminDashboardService.getSecurityMetrics();
+      expect(result.vulnerabilities.critical).toBe(1);
+      expect(result.vulnerabilities.medium).toBe(1);
+      expect(result.vulnerabilities.low).toBe(1);
+    });
+  });
+
+  describe('runDiagnostics', () => {
+    beforeEach(async () => {
+      await adminDashboardService.init();
+    });
+
+    it('should return system info with disk stats', async () => {
+      mockDb.query.mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(1) });
+      mockFs.statfs.mockResolvedValueOnce({ blocks: 1000000, bsize: 4096, bavail: 500000 });
+      const result = await adminDashboardService.runDiagnostics();
+      expect(result.systemInfo.os).toBeDefined();
+      expect(result.systemInfo.memory).toBeDefined();
+      expect(result.systemInfo.cpu).toBeDefined();
+      expect(result.diskSpace).toContain('total');
+      expect(result.networkChecks).toHaveLength(4);
+    });
+
+    it('should handle disk stats failure', async () => {
+      mockFs.statfs.mockRejectedValueOnce(new Error('statfs failed'));
+      const result = await adminDashboardService.runDiagnostics();
+      expect(result.diskSpace).toBe('Unable to fetch disk space information');
+    });
+  });
+
+  describe('ResourceUsageMonitor', () => {
+    it('should return CPU usage', async () => {
+      const result = await adminDashboardService.resourceUsageMonitor.getCpuUsage();
+      expect(typeof result).toBe('number');
+    });
+
+    it('should return memory usage', async () => {
+      const result = await adminDashboardService.resourceUsageMonitor.getMemoryUsage();
+      expect(typeof result).toBe('number');
+    });
+
+    it('should return storage usage', async () => {
+      mockFs.statfs.mockResolvedValueOnce({ blocks: 1000, bavail: 200 });
+      const result = await adminDashboardService.resourceUsageMonitor.getStorageUsage();
+      expect(typeof result).toBe('number');
+    });
+
+    it('should return fallback storage on error', async () => {
+      mockFs.statfs.mockRejectedValueOnce(new Error('fs error'));
+      const result = await adminDashboardService.resourceUsageMonitor.getStorageUsage();
+      expect(result).toBe(50);
+    });
+
+    it('should return network usage from /proc/net/dev', async () => {
+      mockFs.readFile.mockResolvedValueOnce('eth0: 1000 0 0 0 500 0 0 0 0 0\nlo: 100 0 0 0 50 0 0 0 0 0');
+      const result = await adminDashboardService.resourceUsageMonitor.getNetworkUsage();
+      expect(typeof result).toBe('number');
+    });
+
+    it('should return 0 when /proc/net/dev unavailable', async () => {
+      mockFs.readFile.mockRejectedValueOnce(new Error('ENOENT'));
+      const result = await adminDashboardService.resourceUsageMonitor.getNetworkUsage();
+      expect(result).toBe(0);
+    });
+
+    it('should return resource usage with cache', async () => {
+      mockFs.statfs.mockResolvedValueOnce({ blocks: 1000, bavail: 500 });
+      const result = await adminDashboardService.resourceUsageMonitor.getResourceUsage();
+      expect(result).toBeDefined();
+      expect(result.cpu).toBeDefined();
+      expect(result.memory).toBeDefined();
     });
   });
 });

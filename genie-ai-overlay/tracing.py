@@ -53,6 +53,7 @@ def sanitize_attributes(attrs: dict) -> dict:
     """Return a copy of *attrs* with PII keys removed."""
     return {k: v for k, v in attrs.items() if k not in _PII_KEYS}
 
+
 ZEROED_TRACE_ID = "0" * 32
 ZEROED_SPAN_ID = "0" * 16
 
@@ -150,9 +151,7 @@ def setup_tracing(service_name: str) -> None:
         )
         metrics.set_meter_provider(_meter_provider)
     except Exception as exc:
-        logging.getLogger(__name__).warning(
-            "Failed to initialize OTel MeterProvider — metrics disabled: %s", exc
-        )
+        logging.getLogger(__name__).warning("Failed to initialize OTel MeterProvider — metrics disabled: %s", exc)
 
     atexit.register(shutdown)
 

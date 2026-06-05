@@ -147,10 +147,12 @@ async def retrieve_docs(
 
         # Record custom retrieval metrics
         _retrieval_latency = time.time() - start
-        _retrieval_attrs = sanitize_attributes({
-            "rag.query_type": os.getenv("RETRIEVER_TYPE", "hybrid"),
-            "error": "false",
-        })
+        _retrieval_attrs = sanitize_attributes(
+            {
+                "rag.query_type": os.getenv("RETRIEVER_TYPE", "hybrid"),
+                "error": "false",
+            }
+        )
         _retrieval_requests.add(1, _retrieval_attrs)
         _retrieval_duration.record(_retrieval_latency, _retrieval_attrs)
 
@@ -162,10 +164,12 @@ async def retrieve_docs(
     except Exception as e:
         # Record error metric
         _err_latency = time.time() - start
-        _err_attrs = sanitize_attributes({
-            "rag.query_type": os.getenv("RETRIEVER_TYPE", "hybrid"),
-            "error": "true",
-        })
+        _err_attrs = sanitize_attributes(
+            {
+                "rag.query_type": os.getenv("RETRIEVER_TYPE", "hybrid"),
+                "error": "true",
+            }
+        )
         _retrieval_requests.add(1, _err_attrs)
         _retrieval_duration.record(_err_latency, _err_attrs)
         logger.error(f"[ retrieval ] Error during retrieval invocation: {e}")

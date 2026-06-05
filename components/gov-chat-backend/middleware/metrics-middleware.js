@@ -5,14 +5,7 @@
 const { getMeter } = require('../metrics');
 
 // PII keys that must never appear in metric attributes
-const PII_KEYS = new Set([
-  'user_id',
-  'email',
-  'query_text',
-  'document_text',
-  'password',
-  'token'
-]);
+const PII_KEYS = new Set(['user_id', 'email', 'query_text', 'document_text', 'password', 'token']);
 
 /**
  * Removes PII keys from attributes object.

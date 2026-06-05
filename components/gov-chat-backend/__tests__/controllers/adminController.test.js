@@ -4,10 +4,14 @@ require('../setup-env');
 
 jest.mock('dotenv', () => ({ config: jest.fn() }));
 
-jest.mock('../../shared-lib', () => ({
-  logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
-  triggerLogRollover: jest.fn()
-}), { virtual: true });
+jest.mock(
+  '../../shared-lib',
+  () => ({
+    logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
+    triggerLogRollover: jest.fn()
+  }),
+  { virtual: true }
+);
 
 jest.mock('arangojs', () => ({
   aql: (strings, ...values) => ({ _aql: true, strings, values })
@@ -26,7 +30,8 @@ jest.mock('../../services/admin-dashboard-service', () => {
     getSecurityMetrics: jest.fn().mockResolvedValue({ incidents: 0, threats: 0 }),
     runSecurityScan: jest.fn().mockResolvedValue({ scanResults: 'clean' }),
     runDiagnostics: jest.fn().mockResolvedValue({ checks: 'passed' }),
-    searchUsers: jest.fn().mockResolvedValue({ users: [], total: 0 })
+    searchUsers: jest.fn().mockResolvedValue({ users: [], total: 0 }),
+    getLogs: jest.fn().mockResolvedValue({ total: 100, logs: [] })
   }));
 });
 

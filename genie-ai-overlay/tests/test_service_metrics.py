@@ -35,37 +35,45 @@ class TestRetrieverMetrics:
 
     def test_success_attributes(self):
         """Success-path attributes must include rag.query_type and error='false'."""
-        attrs = tracing.sanitize_attributes({
-            "rag.query_type": os.getenv("RETRIEVER_TYPE", "hybrid"),
-            "error": "false",
-        })
+        attrs = tracing.sanitize_attributes(
+            {
+                "rag.query_type": os.getenv("RETRIEVER_TYPE", "hybrid"),
+                "error": "false",
+            }
+        )
         assert attrs["rag.query_type"] == "hybrid"
         assert attrs["error"] == "false"
 
     def test_error_attributes(self):
         """Error-path attributes must include error='true'."""
-        attrs = tracing.sanitize_attributes({
-            "rag.query_type": "hybrid",
-            "error": "true",
-        })
+        attrs = tracing.sanitize_attributes(
+            {
+                "rag.query_type": "hybrid",
+                "error": "true",
+            }
+        )
         assert attrs["error"] == "true"
 
     def test_uses_env_var_for_query_type(self, monkeypatch):
         """Retriever must use RETRIEVER_TYPE env var for rag.query_type."""
         monkeypatch.setenv("RETRIEVER_TYPE", "vector")
-        attrs = tracing.sanitize_attributes({
-            "rag.query_type": os.getenv("RETRIEVER_TYPE", "hybrid"),
-            "error": "false",
-        })
+        attrs = tracing.sanitize_attributes(
+            {
+                "rag.query_type": os.getenv("RETRIEVER_TYPE", "hybrid"),
+                "error": "false",
+            }
+        )
         assert attrs["rag.query_type"] == "vector"
 
     def test_sanitize_strips_pii(self):
         """PII keys must be stripped from retriever metric attributes."""
-        attrs = tracing.sanitize_attributes({
-            "rag.query_type": "hybrid",
-            "error": "false",
-            "user_query": "secret search text",
-        })
+        attrs = tracing.sanitize_attributes(
+            {
+                "rag.query_type": "hybrid",
+                "error": "false",
+                "user_query": "secret search text",
+            }
+        )
         assert "user_query" not in attrs
         assert attrs["rag.query_type"] == "hybrid"
 
@@ -80,10 +88,12 @@ class TestDataprepMetrics:
 
     def test_success_attributes_with_file_type(self):
         """Success-path attributes must include dataprep.file_type."""
-        attrs = tracing.sanitize_attributes({
-            "dataprep.file_type": "pdf",
-            "error": "false",
-        })
+        attrs = tracing.sanitize_attributes(
+            {
+                "dataprep.file_type": "pdf",
+                "error": "false",
+            }
+        )
         assert attrs["dataprep.file_type"] == "pdf"
         assert attrs["error"] == "false"
 
@@ -95,11 +105,13 @@ class TestDataprepMetrics:
 
     def test_sanitize_strips_pii(self):
         """PII keys must be stripped from dataprep metric attributes."""
-        attrs = tracing.sanitize_attributes({
-            "dataprep.file_type": "pdf",
-            "error": "false",
-            "document_text": "sensitive content",
-        })
+        attrs = tracing.sanitize_attributes(
+            {
+                "dataprep.file_type": "pdf",
+                "error": "false",
+                "document_text": "sensitive content",
+            }
+        )
         assert "document_text" not in attrs
         assert attrs["dataprep.file_type"] == "pdf"
 
@@ -115,10 +127,12 @@ class TestRerankerMetrics:
     def test_success_attributes_with_model_id(self, monkeypatch):
         """Success-path attributes must include reranker.model_id from env."""
         monkeypatch.setenv("RERANKER_MODEL_ID", "BAAI/bge-reranker-base")
-        attrs = tracing.sanitize_attributes({
-            "reranker.model_id": os.getenv("RERANKER_MODEL_ID", "unknown"),
-            "error": "false",
-        })
+        attrs = tracing.sanitize_attributes(
+            {
+                "reranker.model_id": os.getenv("RERANKER_MODEL_ID", "unknown"),
+                "error": "false",
+            }
+        )
         assert attrs["reranker.model_id"] == "BAAI/bge-reranker-base"
         assert attrs["error"] == "false"
 
@@ -130,19 +144,23 @@ class TestRerankerMetrics:
     def test_error_attributes(self, monkeypatch):
         """Error-path attributes must include error='true'."""
         monkeypatch.setenv("RERANKER_MODEL_ID", "test-model")
-        attrs = tracing.sanitize_attributes({
-            "reranker.model_id": os.getenv("RERANKER_MODEL_ID", "unknown"),
-            "error": "true",
-        })
+        attrs = tracing.sanitize_attributes(
+            {
+                "reranker.model_id": os.getenv("RERANKER_MODEL_ID", "unknown"),
+                "error": "true",
+            }
+        )
         assert attrs["error"] == "true"
 
     def test_sanitize_strips_pii(self):
         """PII keys must be stripped from reranker metric attributes."""
-        attrs = tracing.sanitize_attributes({
-            "reranker.model_id": "test-model",
-            "error": "false",
-            "email": "user@example.com",
-        })
+        attrs = tracing.sanitize_attributes(
+            {
+                "reranker.model_id": "test-model",
+                "error": "false",
+                "email": "user@example.com",
+            }
+        )
         assert "email" not in attrs
         assert attrs["reranker.model_id"] == "test-model"
 
@@ -156,17 +174,26 @@ class TestCrossServicePIIEnforcement:
     """Verify all PII keys are filtered regardless of service context."""
 
     ALL_PII_KEYS = [
-        "user_query", "llm_response", "session_id", "conversation_id",
-        "user_id", "email", "document_text", "password", "token",
+        "user_query",
+        "llm_response",
+        "session_id",
+        "conversation_id",
+        "user_id",
+        "email",
+        "document_text",
+        "password",
+        "token",
     ]
 
     @pytest.mark.parametrize("pii_key", ALL_PII_KEYS)
     def test_pii_key_stripped(self, pii_key):
         """Each PII key must be stripped from metric attributes."""
-        attrs = tracing.sanitize_attributes({
-            "safe.attr": "value",
-            pii_key: "sensitive",
-        })
+        attrs = tracing.sanitize_attributes(
+            {
+                "safe.attr": "value",
+                pii_key: "sensitive",
+            }
+        )
         assert pii_key not in attrs
         assert attrs["safe.attr"] == "value"
 

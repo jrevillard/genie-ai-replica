@@ -229,6 +229,17 @@ describe('PATCH /:queryId/responsetime', () => {
     expect(response.body.message).toContain('required');
   });
 
+  it('should accept responseTime of 0', async () => {
+    const updated = { _key: 'q1', responseTime: 0 };
+    queryService.updateQueryResponseTime.mockResolvedValue(updated);
+
+    const response = await authPatch('/api/queries/q1/responsetime', { responseTime: 0 });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(updated);
+    expect(queryService.updateQueryResponseTime).toHaveBeenCalledWith('q1', 0);
+  });
+
   it('should return 500 via next(error) on service failure', async () => {
     queryService.updateQueryResponseTime.mockRejectedValue(new Error('DB error'));
 

@@ -630,6 +630,134 @@ describe('SecurityScanService', () => {
     });
   });
 
+  describe('runSecurityScan', () => {
+    it('should throw when logsService is null', async () => {
+      await expect(securityScanService.runSecurityScan(null)).rejects.toThrow('LogsService is required');
+    });
+
+    it('should run full scan and return results', async () => {
+      const mockLogsService = {
+        getLogFilesInRange: jest.fn().mockResolvedValue([])
+      };
+      const result = await securityScanService.runSecurityScan(mockLogsService);
+      expect(result.status).toBe('completed');
+      expect(result.scanTime).toBeDefined();
+      expect(result.vulnerabilities).toBeDefined();
+      expect(result.failedLoginDetails).toEqual([]);
+      expect(result.suspiciousDetails).toEqual([]);
+      expect(mockLogsService.getLogFilesInRange).toHaveBeenCalled();
+    });
+
+    it('should save scan results after completion', async () => {
+      const mockLogsService = {
+        getLogFilesInRange: jest.fn().mockResolvedValue([])
+      };
+      await securityScanService.runSecurityScan(mockLogsService);
+      expect(mockFs.mkdir).toHaveBeenCalled();
+      expect(mockFs.writeFile).toHaveBeenCalled();
+    });
+
+    it('should propagate errors from processLogsInParallel', async () => {
+      const mockLogsService = {
+        getLogFilesInRange: jest.fn().mockRejectedValue(new Error('Log service down'))
+      };
+      await expect(securityScanService.runSecurityScan(mockLogsService)).rejects.toThrow('Log service down');
+    });
+  });
+
+  describe('processLogsInParallel', () => {
+    it('should return empty results when no log files found', async () => {
+      const mockLogsService = {
+        getLogFilesInRange: jest.fn().mockResolvedValue([])
+      };
+      const result = await securityScanService.processLogsInParallel(mockLogsService);
+      expect(result.vulnerabilities.critical).toEqual([]);
+      expect(result.vulnerabilities.medium).toEqual([]);
+      expect(result.vulnerabilities.low).toEqual([]);
+      expect(result.failedLogins).toEqual([]);
+      expect(result.suspiciousActivities).toEqual([]);
+    });
+
+    it('should process valid log files and return results', async () => {
+      const mockLogsService = {
+        getLogFilesInRange: jest.fn().mockResolvedValue(['/var/log/combined-2026-05-26.log'])
+      };
+      // Spy on processFile to avoid the Worker path
+      const processFileSpy = jest.spyOn(securityScanService, 'processFile').mockResolvedValue({
+        vulnerabilities: {
+          critical: [
+            {
+              type: 'attack_attempt',
+              severity: 'critical',
+              service: 'http',
+              matchedTerm: 'SQL injection',
+              instanceCount: 1
+            }
+          ],
+          medium: [],
+          low: []
+        },
+        failedLogins: [{ timestamp: '2026-05-26T10:00:00Z', message: 'Invalid credentials', level: 'ERROR' }],
+        suspiciousActivities: [],
+        linesProcessed: 100,
+        linesSkipped: 5
+      });
+
+      const result = await securityScanService.processLogsInParallel(mockLogsService);
+      expect(result.vulnerabilities.critical).toHaveLength(1);
+      expect(result.failedLogins).toHaveLength(1);
+      expect(processFileSpy).toHaveBeenCalledTimes(1);
+      processFileSpy.mockRestore();
+    });
+
+    it('should filter invalid gzip files', async () => {
+      securityScanService.isGzipValid = jest.fn().mockResolvedValue(false);
+
+      const mockLogsService = {
+        getLogFilesInRange: jest.fn().mockResolvedValue(['/var/log/combined-2026-05-26.log.gz'])
+      };
+
+      const result = await securityScanService.processLogsInParallel(mockLogsService);
+      expect(securityScanService.isGzipValid).toHaveBeenCalledWith('/var/log/combined-2026-05-26.log.gz');
+      // File should be filtered out since gzip is invalid
+      expect(result.vulnerabilities.critical).toEqual([]);
+    });
+
+    it('should handle processFile errors gracefully', async () => {
+      const mockLogsService = {
+        getLogFilesInRange: jest.fn().mockResolvedValue(['/var/log/combined-2026-05-26.log'])
+      };
+      securityScanService.processFile = jest.fn().mockRejectedValue(new Error('File read error'));
+
+      const result = await securityScanService.processLogsInParallel(mockLogsService);
+      // Error should be caught, returning empty results for that file
+      expect(result.vulnerabilities.critical).toEqual([]);
+    });
+
+    it('should deduplicate failedLogins and suspiciousActivities', async () => {
+      const mockLogsService = {
+        getLogFilesInRange: jest.fn().mockResolvedValue(['/var/log/combined-2026-05-26.log'])
+      };
+      securityScanService.processFile = jest.fn().mockResolvedValue({
+        vulnerabilities: { critical: [], medium: [], low: [] },
+        failedLogins: [
+          { timestamp: '2026-05-26T10:00:00Z', message: 'Failed login', level: 'ERROR' },
+          { timestamp: '2026-05-26T10:00:00Z', message: 'Failed login', level: 'ERROR' }
+        ],
+        suspiciousActivities: [
+          { timestamp: '2026-05-26T10:00:00Z', message: 'SQL injection', level: 'ERROR' },
+          { timestamp: '2026-05-26T10:00:00Z', message: 'SQL injection', level: 'ERROR' }
+        ],
+        linesProcessed: 50,
+        linesSkipped: 0
+      });
+
+      const result = await securityScanService.processLogsInParallel(mockLogsService);
+      expect(result.failedLogins).toHaveLength(1); // deduplicated
+      expect(result.suspiciousActivities).toHaveLength(1); // deduplicated
+    });
+  });
+
   describe('checkFailedLogins', () => {
     it('should return cached failed logins when available', async () => {
       const cachedData = {

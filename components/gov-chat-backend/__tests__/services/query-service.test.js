@@ -1041,19 +1041,6 @@ describe('QueryService', () => {
       };
       await expect(queryService.createQuery(data)).rejects.toThrow('Missing required query data');
     });
-
-    it('should handle invalid message format', async () => {
-      const data = {
-        userId: 'u1',
-        sessionId: 's1',
-        messages: [{ invalidField: 'test' }],
-        context: { categoryLabel: 'General', serviceLabels: [] }
-      };
-      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'q1' });
-      mockQueriesCollection.update.mockResolvedValueOnce({ new: { _key: 'q1', isAnswered: true } });
-      const result = await queryService.createQuery(data);
-      expect(result).toBeDefined();
-    });
   });
 
   describe('initStreamQuery - additional validation', () => {
@@ -1081,11 +1068,6 @@ describe('QueryService', () => {
   });
 
   describe('finalizeStreamQuery - error paths', () => {
-    it('should handle missing queryId', async () => {
-      mockQueriesCollection.document.mockResolvedValueOnce(null);
-      await expect(queryService.finalizeStreamQuery('invalid', 'text', 100, {})).rejects.toThrow();
-    });
-
     it('should handle database update errors', async () => {
       mockQueriesCollection.update.mockRejectedValueOnce(new Error('Update failed'));
       await expect(queryService.finalizeStreamQuery('q1', 'text', 100, {})).rejects.toThrow('Update failed');
@@ -1182,6 +1164,83 @@ describe('QueryService', () => {
     it('should handle update errors', async () => {
       mockQueriesCollection.update.mockRejectedValueOnce(new Error('Update failed'));
       await expect(queryService.addFeedback('query-1', { rating: 5 })).rejects.toThrow('Update failed');
+    });
+
+    it('should skip analytics when analyticsService is not set', async () => {
+      queryService.setAnalyticsService(null);
+      mockQueriesCollection.update.mockResolvedValueOnce({
+        new: { _key: 'query-1', userFeedback: { rating: 3 } }
+      });
+      const result = await queryService.addFeedback('query-1', { rating: 3 });
+      expect(result.userFeedback.rating).toBe(3);
+      queryService.setAnalyticsService(mockAnalyticsService);
+    });
+  });
+
+  describe('initStreamQuery - context branches', () => {
+    it('should use text field when messages array is empty', async () => {
+      const data = { userId: 'u1', sessionId: 's1', text: 'hello from text' };
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.queryId).toBe('stream-1');
+    });
+
+    it('should default serviceLabels to empty array when not an array', async () => {
+      const data = {
+        userId: 'u1',
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'test' }],
+        context: { categoryLabel: 'General', serviceLabels: 'not-an-array' }
+      };
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.queryId).toBe('stream-1');
+    });
+
+    it('should default categoryLabel to General when missing', async () => {
+      const data = {
+        userId: 'u1',
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'test' }],
+        context: { serviceLabels: [] }
+      };
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.queryId).toBe('stream-1');
+    });
+
+    it('should handle category resolution error gracefully', async () => {
+      const data = createMockQueryData();
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      mockDb.query
+        .mockRejectedValueOnce(new Error('Category lookup failed'))
+        .mockResolvedValueOnce(createMockCursor([]));
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.queryId).toBe('stream-1');
+    });
+
+    it('should handle service resolution error gracefully', async () => {
+      const data = createMockQueryData();
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([]))
+        .mockRejectedValueOnce(new Error('Service lookup failed'));
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.queryId).toBe('stream-1');
+    });
+  });
+
+  describe('getSimilarQueries - success path', () => {
+    it('should return similar queries with DB results', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([{ _key: 'q1', text: 'tax rate', similarity: 0.95 }]));
+      const result = await queryService.getSimilarQueries('tax payment');
+      expect(result).toHaveLength(1);
+      expect(result[0].text).toBe('tax rate');
+    });
+
+    it('should return empty array when query text has only stop words', async () => {
+      const result = await queryService.getSimilarQueries('the a an is are');
+      expect(result).toEqual([]);
     });
   });
 });

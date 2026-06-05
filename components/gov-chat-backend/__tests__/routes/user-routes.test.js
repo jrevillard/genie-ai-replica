@@ -238,6 +238,17 @@ describe('GET /api/me/context', () => {
 
     expect(response.status).toBe(500);
   });
+
+  it('should use default values when user properties are missing', async () => {
+    userProfileService.getUserProfile.mockResolvedValue({});
+
+    const response = await authGet('/api/me/context');
+
+    expect(response.status).toBe(200);
+    expect(response.body.name).toBe('User');
+    expect(response.body.role).toEqual([]);
+    expect(response.body.emailVerified).toBe(false);
+  });
 });
 
 // ============================================================
@@ -326,6 +337,16 @@ describe('PUT /api/me', () => {
     expect(userProfileService.updateUserProfile).toHaveBeenCalledWith(expect.any(String), { bio: 'text' }, []);
   });
 
+  it('should return 401 when JIT fields present but authorization header missing', async () => {
+    userProfileService.updateUserProfile.mockResolvedValue({ _key: 'u1' });
+
+    const response = await request(app).put('/api/me').send({ firstName: 'New' });
+
+    expect(response.status).toBe(401);
+    expect(response.body.success).toBe(false);
+    expect(keycloakProxyService.updateOwnProfile).not.toHaveBeenCalled();
+  });
+
   it('should return 400 for invalid JSON in multipart data field', async () => {
     const response = await request(app)
       .put('/api/me')
@@ -354,6 +375,17 @@ describe('PUT /api/me', () => {
     const response = await authPut('/api/me', { bio: 'test' });
 
     expect(response.status).toBe(404);
+    expect(response.body.success).toBe(false);
+  });
+
+  it('should return 403 when forbidden', async () => {
+    const error = new Error('Forbidden');
+    error.status = 403;
+    userProfileService.updateUserProfile.mockRejectedValue(error);
+
+    const response = await authPut('/api/me', { bio: 'test' });
+
+    expect(response.status).toBe(403);
     expect(response.body.success).toBe(false);
   });
 });

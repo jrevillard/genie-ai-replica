@@ -5,8 +5,8 @@ const { metrics } = require('@opentelemetry/api');
 
 jest.mock('@opentelemetry/api', () => ({
   metrics: {
-    getMeter: jest.fn(),
-  },
+    getMeter: jest.fn()
+  }
 }));
 
 /**
@@ -33,14 +33,14 @@ describe('PII Verification', () => {
     const mockCounter = {
       add: jest.fn((val, attrs) => {
         capturedAttrs.push(attrs);
-      }),
+      })
     };
     const mockHistogram = {
-      record: jest.fn(),
+      record: jest.fn()
     };
     metrics.getMeter.mockReturnValue({
       createCounter: jest.fn().mockReturnValue(mockCounter),
-      createHistogram: jest.fn().mockReturnValue(mockHistogram),
+      createHistogram: jest.fn().mockReturnValue(mockHistogram)
     });
 
     jest.isolateModules(() => {
@@ -50,16 +50,14 @@ describe('PII Verification', () => {
   });
 
   // Required PII keys that must never appear in metric attributes
-  const REQUIRED_PII_KEYS = [
-    'user_id', 'email', 'query_text', 'document_text', 'password', 'token',
-  ];
+  const REQUIRED_PII_KEYS = ['user_id', 'email', 'query_text', 'document_text', 'password', 'token'];
 
   REQUIRED_PII_KEYS.forEach((piiKey) => {
     it(`strips '${piiKey}' from attributes`, () => {
       const req = {
         method: 'GET',
         route: { path: '/api/test' },
-        [piiKey]: 'sensitive-value',
+        [piiKey]: 'sensitive-value'
       };
       const res = createMockRes(200);
       middleware(req, res, jest.fn());

@@ -339,6 +339,23 @@ restore_config() {
 
     # Patch rate-limiting
     log "Patching global rate-limiting plugin"
+
+    # Toggle opentelemetry plugin based on ENABLE_OBSERVABILITY
+    # Plugin defaults to disabled in kong_config.json; enable only when obs stack is active
+    log "Checking ENABLE_OBSERVABILITY for opentelemetry plugin"
+    OTel_ID=$(curl -s "${KONG_ADMIN_URL}/plugins" | jq -r '.data[] | select(.name=="opentelemetry") | .id' | sed -n '1p')
+    if [ -z "${OTel_ID}" ] || [ "${OTel_ID}" = "null" ]; then
+      log "WARNING: opentelemetry plugin not found in Kong — skipping toggle"
+    elif [ "${ENABLE_OBSERVABILITY}" = "1" ]; then
+      log "Enabling opentelemetry plugin (ENABLE_OBSERVABILITY=1)"
+      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PATCH "${KONG_ADMIN_URL}/plugins/${OTel_ID}" \
+        --data-urlencode "enabled=true")
+      if [ "${HTTP_CODE}" -ne 200 ]; then
+        log "WARNING: Failed to enable opentelemetry plugin (HTTP ${HTTP_CODE})"
+      fi
+    else
+      log "Observability disabled (ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY}) — opentelemetry plugin remains disabled"
+    fi
     RATE_LIMIT_PLUGIN_ID=$(curl -s "$KONG_ADMIN_URL/plugins" | jq -r '.data[] | select(.name == "rate-limiting") | .id' | sed -n '1p')
     if [ -z "$RATE_LIMIT_PLUGIN_ID" ]; then
         log "WARNING: No rate-limiting plugin found, skipping patch"

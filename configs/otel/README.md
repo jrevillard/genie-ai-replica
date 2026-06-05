@@ -141,7 +141,7 @@ Kong uses its bundled `opentelemetry` plugin (available since Kong 3.0) — no a
 ```json
 {
   "name": "opentelemetry",
-  "enabled": true,
+  "enabled": false,
   "config": {
     "endpoint": "http://otel-collector:4318/v1/traces",
     "resource_attributes": { "service.name": "kong-gateway" },
@@ -151,7 +151,7 @@ Kong uses its bundled `opentelemetry` plugin (available since Kong 3.0) — no a
 }
 ```
 
-**Conditional activation**: The plugin is created enabled by default, then disabled via `PATCH /plugins/{id}` in `restore-kong-config.sh` when `ENABLE_OBSERVABILITY != "1"`. Both the `kong` service and `kong-config` init container receive `ENABLE_OBSERVABILITY` from docker-compose.
+**Conditional activation**: The plugin defaults to `enabled: false` in the declarative config (safe default). The `restore-kong-config.sh` script enables it via `PATCH /plugins/{id}` when `ENABLE_OBSERVABILITY=1`. Both the `kong` service and `kong-config` init container receive `ENABLE_OBSERVABILITY` from docker-compose.
 
 **Trace propagation**: Kong injects the W3C `traceparent` header on outbound requests to upstreams. The backend and OPEA services read this header to create child spans, forming a single distributed trace.
 

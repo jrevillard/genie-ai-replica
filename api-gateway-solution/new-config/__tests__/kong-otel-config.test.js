@@ -28,8 +28,8 @@ describe('Kong OTel Configuration', () => {
       expect(otelPlugin.service).toBeUndefined();
     });
 
-    test('opentelemetry plugin is enabled by default', () => {
-      expect(otelPlugin.enabled).toBe(true);
+    test('opentelemetry plugin is disabled by default (safe default)', () => {
+      expect(otelPlugin.enabled).toBe(false);
     });
 
     test('opentelemetry config has endpoint pointing to OTel Collector', () => {
@@ -87,32 +87,35 @@ describe('Kong OTel Configuration', () => {
 
     test('opentelemetry plugin does not disrupt existing plugin order', () => {
       const pluginNames = kongConfig.plugins.map((p) => p.name);
-      expect(pluginNames).toContain('opentelemetry');
-      expect(pluginNames).toEqual(
-        expect.arrayContaining([
-          'prometheus',
-          'opentelemetry',
-          'request-transformer',
-          'rate-limiting',
-          'cors',
-          'file-log',
-          'response-transformer',
-          'request-termination',
-        ]),
-      );
+      expect(pluginNames).toEqual([
+        'prometheus',
+        'opentelemetry',
+        'request-transformer',
+        'rate-limiting',
+        'cors',
+        'file-log',
+        'response-transformer',
+        'request-termination',
+      ]);
     });
   });
 
   describe('AC7 — Conditional Activation — restore script logic (Task 4.3)', () => {
     test('restore-kong-config.sh contains ENABLE_OBSERVABILITY conditional block', () => {
       expect(restoreScript).toMatch(/ENABLE_OBSERVABILITY/);
-      expect(restoreScript).toMatch(/if.*ENABLE_OBSERVABILITY.*!=.*"1"/);
+      expect(restoreScript).toMatch(/ENABLE_OBSERVABILITY.*=.*"1"/);
     });
 
-    test('script disables opentelemetry plugin when observability is off', () => {
+    test('script enables opentelemetry plugin when observability is on', () => {
       expect(restoreScript).toMatch(/opentelemetry/);
-      expect(restoreScript).toMatch(/enabled=false/);
+      expect(restoreScript).toMatch(/enabled=true/);
       expect(restoreScript).toMatch(/PATCH.*plugins/);
+    });
+
+    test('script warns when opentelemetry plugin not found', () => {
+      expect(restoreScript).toMatch(
+        /opentelemetry plugin not found/,
+      );
     });
 
     test('script uses curl to query plugin ID via Admin API', () => {

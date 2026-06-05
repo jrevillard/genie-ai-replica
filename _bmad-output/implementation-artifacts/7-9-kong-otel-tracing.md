@@ -39,7 +39,7 @@ so that distributed traces cover the full request path from gateway through back
   - [x] 3.1 Add Kong to the "Instrumented Services" table in `configs/otel/README.md`
   - [x] 3.2 Document Kong OTel plugin configuration, conditional activation via `ENABLE_OBSERVABILITY`, and the Docker DNS endpoint
 
-- [x] Task 4 — Write tests for Kong OTel configuration (AC: #1, #2, #3, #4, #5, #6, #7)
+- [x] Task 4 — Write tests for Kong OTel configuration (AC: #1, #2, #3, #4, #5, #7)
   - [x] 4.1 Unit test: validate `kong_config.json` contains `opentelemetry` plugin as global (no `service` field) with correct config keys (`endpoint`, `resource_attributes.service.name`, `header_type`, `sampling_rate`)
   - [x] 4.2 Unit test: validate existing plugins (prometheus, rate-limiting, cors, file-log, request-transformer, response-transformer, request-termination) are preserved unchanged — 7 total, 1 global + 6 service-scoped
   - [x] 4.3 Unit test: validate `restore-kong-config.sh` contains conditional `ENABLE_OBSERVABILITY` logic
@@ -222,13 +222,38 @@ glm-5.1 (glm-5-turbo)
 - ✅ Verified global plugin loop in `restore-kong-config.sh` handles opentelemetry (jq `select(.service? | not)`)
 - ✅ Added `ENABLE_OBSERVABILITY` env var to `kong-config` init container and `kong` service in docker-compose.yaml
 - ✅ Added conditional OTel disable block in `restore-kong-config.sh` when `ENABLE_OBSERVABILITY != "1"`
+  - 🔄 Code review patch: inverted logic — plugin now defaults to `enabled: false` in JSON, restore script enables via PATCH when `ENABLE_OBSERVABILITY=1`. Eliminates race window where plugin is active before conditional check. Added error handling for failed lookups.
 - ✅ Verified Ansible compatibility — `ENABLE_OBSERVABILITY` already flows through `group_vars/all.yml` → `env.j2` → `.env`
 - ✅ Added Kong to OTel README instrumented services table with full documentation
 - ✅ Added Kong Gateway Traces section (row + traces panel) to Grafana trace-explorer dashboard
 - ✅ 19 unit tests covering AC1 (plugin config), AC5 (plugin compatibility), AC7 (conditional activation)
+  - 🔄 Code review patch: `arrayContaining` → exact `toEqual` for plugin order enforcement; updated enabled assertion to match new safe-default
+
+## Code Review Findings (2026-06-05)
+
+### Applied Patches (4)
+
+1. **Race condition fix** — `kong_config.json`: `enabled: true` → `enabled: false` (safe default). `restore-kong-config.sh`: inverted logic to enable via PATCH when `ENABLE_OBSERVABILITY=1`. Eliminates window where plugin is active before conditional check runs.
+2. **Error handling** — `restore-kong-config.sh`: added warning when OTel plugin not found in Kong Admin API; added HTTP status code check on PATCH response.
+3. **Test order enforcement** — `kong-otel-config.test.js`: replaced `expect.arrayContaining` with exact `toEqual` to enforce plugin ordering.
+4. **Test alignment** — `kong-otel-config.test.js`: updated `enabled` assertion from `true` to `false` (safe default); updated AC7 tests to verify enable-when-on logic instead of disable-when-off.
+
+### Deferred
+
+- **AC6 — Latency overhead < 2ms**: Requires running infrastructure. Benchmark test deferred to E2E observability suite.
+- **AC8 — Trace waterfall visibility**: Grafana panel in place. Runtime verification deferred to broader E2E observability test suite (covers full trace path: Kong → Backend → OPEA).
+- **Env var validation (true/false/yes)**: Pre-existing convention (`ENABLE_OBSERVABILITY` MUST be `0` or `1` per CLAUDE.md). Not introduced by this story.
+
+### Dismissed (12)
+
+- 8 Acceptance Auditor false positives (checked wrong worktree)
+- Hardcoded Docker DNS endpoint — by design per spec
+- Grafana hardcodes `service.name` in query — by design
+- Plugin order sensitivity — global vs service-scoped are separate execution paths
 
 ## Change Log
 
+- 2026-06-05: Code review — applied 4 patches (safe-default inversion, error handling, test order enforcement, test alignment)
 - 2026-06-05: Implemented Kong OTel tracing — opentelemetry plugin, conditional activation, docs, dashboard panel, 19 tests
 
 - `api-gateway-solution/new-config/kong_config.json` (modified — added opentelemetry global plugin)

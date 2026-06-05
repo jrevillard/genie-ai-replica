@@ -1,0 +1,12 @@
+{
+  "name": "kong-config-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Unit tests for Kong declarative configuration",
+  "scripts": {
+    "test": "jest --verbose"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

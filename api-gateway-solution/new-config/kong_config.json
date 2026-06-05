@@ -707,6 +707,18 @@
       }
     },
     {
+      "name": "opentelemetry",
+      "enabled": true,
+      "config": {
+        "endpoint": "http://otel-collector:4318/v1/traces",
+        "resource_attributes": {
+          "service.name": "kong-gateway"
+        },
+        "header_type": "w3c",
+        "sampling_rate": 1.0
+      }
+    },
+    {
       "name": "request-transformer",
       "id": "0b261d22-dc08-4917-a055-1a766a35948a",
       "enabled": true,

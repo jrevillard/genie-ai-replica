@@ -339,6 +339,19 @@ restore_config() {
 
     # Patch rate-limiting
     log "Patching global rate-limiting plugin"
+
+    # Toggle opentelemetry plugin based on ENABLE_OBSERVABILITY
+    log "Checking ENABLE_OBSERVABILITY for opentelemetry plugin"
+    if [ "${ENABLE_OBSERVABILITY}" != "1" ]; then
+      OTel_ID=$(curl -sf "${KONG_ADMIN_URL}/plugins" | jq -r '.[] | select(.name=="opentelemetry") | .id')
+      if [ -n "${OTel_ID}" ] && [ "${OTel_ID}" != "null" ]; then
+        log "Disabling opentelemetry plugin (ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY})"
+        curl -sf -X PATCH "${KONG_ADMIN_URL}/plugins/${OTel_ID}" \
+          --data-urlencode "enabled=false" | jq .
+      fi
+    else
+      log "Observability enabled — opentelemetry plugin active"
+    fi
     RATE_LIMIT_PLUGIN_ID=$(curl -s "$KONG_ADMIN_URL/plugins" | jq -r '.data[] | select(.name == "rate-limiting") | .id' | sed -n '1p')
     if [ -z "$RATE_LIMIT_PLUGIN_ID" ]; then
         log "WARNING: No rate-limiting plugin found, skipping patch"

@@ -188,6 +188,49 @@
       ],
       "title": "Latency Breakdown (p95)",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 },
+      "id": 6,
+      "title": "Kong Gateway Traces",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "tempo",
+        "uid": "${DS_VICTORIATRACES}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideBrand": false,
+            "nameWidth": 300
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 25 },
+      "id": 7,
+      "options": {
+        "enableTimeSync": true,
+        "showTags": ["service_name", "kong.route", "kong.consumer", "http.method", "http.status_code"],
+        "spanNameColumn": "Name",
+        "showTraceId": true,
+        "filterByTraceID": true,
+        "filterBySpanName": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "tempo", "uid": "${DS_VICTORIATRACES}" },
+          "query": "service.name=\"kong-gateway\"",
+          "queryType": "search",
+          "refId": "A",
+          "limit": 20
+        }
+      ],
+      "title": "Kong Gateway Spans",
+      "type": "traces"
     }
   ],
   "refresh": "10s",

@@ -125,11 +125,35 @@ To change sampling:
 
 | Service | OTel SDK | Default Endpoint |
 |---------|----------|-----------------|
+| Kong API Gateway | `opentelemetry` plugin (bundled) | `http://otel-collector:4318/v1/traces` |
 | Backend (Node.js) | `@opentelemetry/sdk-node` | `http://otel-collector:4318` |
 | ChatQnA (Python) | `opentelemetry-instrumentation-fastapi` | `http://otel-collector:4318` |
 | Retriever (Python) | `opentelemetry-instrumentation-fastapi` | `http://otel-collector:4318` |
 | Dataprep (Python) | `opentelemetry-instrumentation-fastapi` | `http://otel-collector:4318` |
 | Reranker (Python) | `opentelemetry-instrumentation-fastapi` | `http://otel-collector:4318` |
+
+### Kong API Gateway (opentelemetry plugin)
+
+Kong uses its bundled `opentelemetry` plugin (available since Kong 3.0) — no additional installation required.
+
+**Configuration**: Defined in `api-gateway-solution/new-config/kong_config.json` as a global plugin (no `service` field), applied by the `kong-config` init container via `restore-kong-config.sh`.
+
+```json
+{
+  "name": "opentelemetry",
+  "enabled": true,
+  "config": {
+    "endpoint": "http://otel-collector:4318/v1/traces",
+    "resource_attributes": { "service.name": "kong-gateway" },
+    "header_type": "w3c",
+    "sampling_rate": 1.0
+  }
+}
+```
+
+**Conditional activation**: The plugin is created enabled by default, then disabled via `PATCH /plugins/{id}` in `restore-kong-config.sh` when `ENABLE_OBSERVABILITY != "1"`. Both the `kong` service and `kong-config` init container receive `ENABLE_OBSERVABILITY` from docker-compose.
+
+**Trace propagation**: Kong injects the W3C `traceparent` header on outbound requests to upstreams. The backend and OPEA services read this header to create child spans, forming a single distributed trace.
 
 ## Environment Variables
 

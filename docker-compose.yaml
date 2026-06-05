@@ -164,6 +164,7 @@ services:
       - KONG_PUBLIC_URL=http://kong:8000
       - TARGET_HOST=backend
       - TARGET_PORT=3000
+      - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
     command: ["-b", "/opt/kong-config/kong_config.json"]
     deploy:
       replicas: 1
@@ -202,6 +203,7 @@ services:
       # Kong is internal-only; nginx on the same network is the TLS termination layer.
       # Restrict to Docker bridge subnet to prevent header spoofing from outside.
       - KONG_TRUSTED_IPS=${KONG_TRUSTED_IPS:-172.16.0.0/12}
+      - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 10s

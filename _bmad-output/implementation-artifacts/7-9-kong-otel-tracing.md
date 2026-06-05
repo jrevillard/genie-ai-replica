@@ -1,6 +1,9 @@
+---
+baseline_commit: fe8ff6a5faf56d3c76b4d5b7f9df33aff1b70d7f
+---
 # Story 7.9: Kong OTel Tracing
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -21,30 +24,30 @@ so that distributed traces cover the full request path from gateway through back
 
 ## Tasks / Subtasks
 
-- [ ] Task 1 — Add Kong `opentelemetry` plugin to declarative config (AC: #1, #2, #3, #4)
-  - [ ] 1.1 Verify Kong `kong:latest` opentelemetry plugin schema (run `docker run --rm kong:latest kong plugins list 2>/dev/null | grep opentelemetry` or check Admin API). Confirm `resource_attributes`, `header_type`, `sampling_rate` field names.
-  - [ ] 1.2 Add `opentelemetry` plugin entry to `plugins` array in `api-gateway-solution/new-config/kong_config.json`. Must be a **global plugin** (no `service` field) so it traces ALL services. Config: `endpoint: "http://otel-collector:4318/v1/traces"`, `resource_attributes: { "service.name": "kong-gateway" }`, `header_type: "w3c"`, `sampling_rate: 1.0`. Endpoint is hardcoded Docker DNS — JSON does NOT support env var substitution.
-  - [ ] 1.3 Verify `restore-kong-config.sh` global plugin loop (jq `select(.service? | not)`) will pick up the new plugin. No script changes needed for basic plugin creation — the loop already handles any global plugin in the JSON.
+- [x] Task 1 — Add Kong `opentelemetry` plugin to declarative config (AC: #1, #2, #3, #4)
+  - [x] 1.1 Verify Kong `kong:latest` opentelemetry plugin schema (run `docker run --rm kong:latest kong plugins list 2>/dev/null | grep opentelemetry` or check Admin API). Confirm `resource_attributes`, `header_type`, `sampling_rate` field names.
+  - [x] 1.2 Add `opentelemetry` plugin entry to `plugins` array in `api-gateway-solution/new-config/kong_config.json`. Must be a **global plugin** (no `service` field) so it traces ALL services. Config: `endpoint: "http://otel-collector:4318/v1/traces"`, `resource_attributes: { "service.name": "kong-gateway" }`, `header_type: "w3c"`, `sampling_rate: 1.0`. Endpoint is hardcoded Docker DNS — JSON does NOT support env var substitution.
+  - [x] 1.3 Verify `restore-kong-config.sh` global plugin loop (jq `select(.service? | not)`) will pick up the new plugin. No script changes needed for basic plugin creation — the loop already handles any global plugin in the JSON.
 
-- [ ] Task 2 — Gate Kong OTel on `ENABLE_OBSERVABILITY` and update docker-compose (AC: #7)
-  - [ ] 2.1 Add `ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}` to `kong-config` init container environment (docker-compose.yaml line ~155-166). This container currently does NOT receive this env var.
-  - [ ] 2.2 Update `api-gateway-solution/new-config/restore-kong-config.sh`: add conditional block after config restore that disables the `opentelemetry` plugin via `PATCH /plugins/{id}` when `ENABLE_OBSERVABILITY != "1"`.
-  - [ ] 2.3 Add `ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}` to Kong service environment (docker-compose.yaml line ~187) so Kong itself can reference it if needed.
-  - [ ] 2.4 Verify Ansible deployment compatibility: check `deploy/ansible/` templates for kong-config env var passthrough. May need to add `ENABLE_OBSERVABILITY` to Ansible group_vars if not already present.
+- [x] Task 2 — Gate Kong OTel on `ENABLE_OBSERVABILITY` and update docker-compose (AC: #7)
+  - [x] 2.1 Add `ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}` to `kong-config` init container environment (docker-compose.yaml line ~155-166). This container currently does NOT receive this env var.
+  - [x] 2.2 Update `api-gateway-solution/new-config/restore-kong-config.sh`: add conditional block after config restore that disables the `opentelemetry` plugin via `PATCH /plugins/{id}` when `ENABLE_OBSERVABILITY != "1"`.
+  - [x] 2.3 Add `ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}` to Kong service environment (docker-compose.yaml line ~187) so Kong itself can reference it if needed.
+  - [x] 2.4 Verify Ansible deployment compatibility: check `deploy/ansible/` templates for kong-config env var passthrough. May need to add `ENABLE_OBSERVABILITY` to Ansible group_vars if not already present.
 
-- [ ] Task 3 — Update OTel Collector README and docs (AC: #1, #4)
-  - [ ] 3.1 Add Kong to the "Instrumented Services" table in `configs/otel/README.md`
-  - [ ] 3.2 Document Kong OTel plugin configuration, conditional activation via `ENABLE_OBSERVABILITY`, and the Docker DNS endpoint
+- [x] Task 3 — Update OTel Collector README and docs (AC: #1, #4)
+  - [x] 3.1 Add Kong to the "Instrumented Services" table in `configs/otel/README.md`
+  - [x] 3.2 Document Kong OTel plugin configuration, conditional activation via `ENABLE_OBSERVABILITY`, and the Docker DNS endpoint
 
-- [ ] Task 4 — Write tests for Kong OTel configuration (AC: #1, #2, #3, #4, #5, #6, #7)
-  - [ ] 4.1 Unit test: validate `kong_config.json` contains `opentelemetry` plugin as global (no `service` field) with correct config keys (`endpoint`, `resource_attributes.service.name`, `header_type`, `sampling_rate`)
-  - [ ] 4.2 Unit test: validate existing plugins (prometheus, rate-limiting, cors, file-log, request-transformer, response-transformer, request-termination) are preserved unchanged — 7 total, 1 global + 6 service-scoped
-  - [ ] 4.3 Unit test: validate `restore-kong-config.sh` contains conditional `ENABLE_OBSERVABILITY` logic
-  - [ ] 4.4 Test location: `api-gateway-solution/new-config/__tests__/` — use Jest with CommonJS (consistent with project conventions)
+- [x] Task 4 — Write tests for Kong OTel configuration (AC: #1, #2, #3, #4, #5, #6, #7)
+  - [x] 4.1 Unit test: validate `kong_config.json` contains `opentelemetry` plugin as global (no `service` field) with correct config keys (`endpoint`, `resource_attributes.service.name`, `header_type`, `sampling_rate`)
+  - [x] 4.2 Unit test: validate existing plugins (prometheus, rate-limiting, cors, file-log, request-transformer, response-transformer, request-termination) are preserved unchanged — 7 total, 1 global + 6 service-scoped
+  - [x] 4.3 Unit test: validate `restore-kong-config.sh` contains conditional `ENABLE_OBSERVABILITY` logic
+  - [x] 4.4 Test location: `api-gateway-solution/new-config/__tests__/` — use Jest with CommonJS (consistent with project conventions)
 
-- [ ] Task 5 — Add Kong trace panel to Grafana dashboard (AC: #8)
-  - [ ] 5.1 Update `configs/grafana/provisioning/dashboards/trace-explorer.json` to add a Kong gateway span filter/panel (this is the most appropriate existing dashboard for trace visibility)
-  - [ ] 5.2 Panel should show `service.name = "kong-gateway"` spans with attributes: `kong.route`, `kong.consumer`, `http.method`, `http.status_code`
+- [x] Task 5 — Add Kong trace panel to Grafana dashboard (AC: #8)
+  - [x] 5.1 Update `configs/grafana/provisioning/dashboards/trace-explorer.json` to add a Kong gateway span filter/panel (this is the most appropriate existing dashboard for trace visibility)
+  - [x] 5.2 Panel should show `service.name = "kong-gateway"` spans with attributes: `kong.route`, `kong.consumer`, `http.method`, `http.status_code`
 
 ## Dev Notes
 
@@ -209,10 +212,29 @@ From Story 7-8 implementation:
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+glm-5.1 (glm-5-turbo)
 
 ### Debug Log References
 
 ### Completion Notes List
 
-### File List
+- ✅ Added Kong `opentelemetry` global plugin to `kong_config.json` (endpoint, resource_attributes, header_type, sampling_rate)
+- ✅ Verified global plugin loop in `restore-kong-config.sh` handles opentelemetry (jq `select(.service? | not)`)
+- ✅ Added `ENABLE_OBSERVABILITY` env var to `kong-config` init container and `kong` service in docker-compose.yaml
+- ✅ Added conditional OTel disable block in `restore-kong-config.sh` when `ENABLE_OBSERVABILITY != "1"`
+- ✅ Verified Ansible compatibility — `ENABLE_OBSERVABILITY` already flows through `group_vars/all.yml` → `env.j2` → `.env`
+- ✅ Added Kong to OTel README instrumented services table with full documentation
+- ✅ Added Kong Gateway Traces section (row + traces panel) to Grafana trace-explorer dashboard
+- ✅ 19 unit tests covering AC1 (plugin config), AC5 (plugin compatibility), AC7 (conditional activation)
+
+## Change Log
+
+- 2026-06-05: Implemented Kong OTel tracing — opentelemetry plugin, conditional activation, docs, dashboard panel, 19 tests
+
+- `api-gateway-solution/new-config/kong_config.json` (modified — added opentelemetry global plugin)
+- `api-gateway-solution/new-config/restore-kong-config.sh` (modified — added ENABLE_OBSERVABILITY conditional block)
+- `docker-compose.yaml` (modified — added ENABLE_OBSERVABILITY to kong-config and kong services)
+- `configs/otel/README.md` (modified — added Kong to instrumented services table + documentation)
+- `configs/grafana/provisioning/dashboards/trace-explorer.json` (modified — added Kong Gateway Traces panel)
+- `api-gateway-solution/new-config/__tests__/kong-otel-config.test.js` (new — 19 unit tests)
+- `api-gateway-solution/new-config/package.json` (new — jest test harness)

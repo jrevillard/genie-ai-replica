@@ -32,8 +32,8 @@ describe('Kong OTel Configuration', () => {
       expect(otelPlugin.enabled).toBe(false);
     });
 
-    test('opentelemetry config has endpoint pointing to OTel Collector', () => {
-      expect(otelPlugin.config.endpoint).toBe(
+    test('opentelemetry config has traces_endpoint pointing to OTel Collector', () => {
+      expect(otelPlugin.config.traces_endpoint).toBe(
         'http://otel-collector:4318/v1/traces'
       );
     });
@@ -112,15 +112,60 @@ describe('Kong OTel Configuration', () => {
       expect(restoreScript).toMatch(/PATCH.*plugins/);
     });
 
-    test('script warns when opentelemetry plugin not found', () => {
+    test('script errors when opentelemetry plugin not found and obs is enabled', () => {
       expect(restoreScript).toMatch(
-        /opentelemetry plugin not found/,
+        /ERROR.*opentelemetry plugin not found.*cannot enable tracing/,
       );
+    });
+
+    test('script increments errors counter on plugin-not-found failure', () => {
+      // Verify errors=$((errors + 1)) follows the plugin-not-found ERROR
+      expect(restoreScript).toMatch(
+        /ERROR.*opentelemetry plugin not found[\s\S]*?errors=\$\(\(errors \+ 1\)\)/,
+      );
+    });
+
+    test('script increments errors counter on PATCH failure', () => {
+      // Verify errors=$((errors + 1)) follows the PATCH failure ERROR
+      expect(restoreScript).toMatch(
+        /ERROR.*Failed to enable opentelemetry plugin[\s\S]*?errors=\$\(\(errors \+ 1\)\)/,
+      );
+    });
+
+    test('script does not error when plugin not found and obs is disabled', () => {
+      expect(restoreScript).toMatch(
+        /opentelemetry plugin not found.*skipping toggle.*observability disabled/,
+      );
+    });
+
+    test('script exits with error code when errors > 0', () => {
+      expect(restoreScript).toMatch(/exit\s+\$\{_restore_rc/);
     });
 
     test('script uses curl to query plugin ID via Admin API', () => {
       expect(restoreScript).toMatch(
         /curl.*KONG_ADMIN_URL.*plugins.*jq.*opentelemetry/,
+      );
+    });
+  });
+
+  describe('Docker Compose — Kong tracing defaults', () => {
+    let composeContent;
+
+    beforeAll(() => {
+      const composePath = path.resolve(__dirname, '..', '..', '..', 'docker-compose.yaml');
+      composeContent = fs.readFileSync(composePath, 'utf8');
+    });
+
+    test('KONG_TRACING_INSTRUMENTATIONS defaults to request', () => {
+      expect(composeContent).toMatch(
+        /KONG_TRACING_INSTRUMENTATIONS=\$\{KONG_TRACING_INSTRUMENTATIONS:-request\}/,
+      );
+    });
+
+    test('KONG_TRACING_SAMPLING_RATE defaults to 1.0', () => {
+      expect(composeContent).toMatch(
+        /KONG_TRACING_SAMPLING_RATE=\$\{KONG_TRACING_SAMPLING_RATE:-1\.0\}/,
       );
     });
   });

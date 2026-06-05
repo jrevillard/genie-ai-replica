@@ -166,6 +166,9 @@ Set in `group_vars/<env>/vars.yml`:
 | `victorialogs_retention` | `30d` | VictoriaLogs data retention period |
 | `victoriatraces_retention` | `30d` | VictoriaTraces data retention period |
 | `otel_traces_sampler_rate` | `100.0` | Trace sampling percentage (0.0–100.0) |
+| `kong_tracing_instrumentations` | `request` | Kong tracing instrumentations (`off`, `request`, `all`). Default `request` — negligible overhead when OTel plugin disabled. |
+| `kong_tracing_sampling_rate` | `1.0` | Kong internal trace sampling rate (0.0–1.0). Default `1.0` = 100%, aligned with `otel_traces_sampler_rate`. |
+| `otel_exporter_otlp_endpoint` | `http://otel-collector:4318` | OTLP Collector base URL — used by backend (Node.js), OPEA services (Python), and Kong OTel plugin (via restore script). Override for external collectors. |
 | `gpu_env_file` | `env.t4` | GPU defaults file (empty = none). Loaded first; Ansible `.env` takes precedence. |
 
 ### API Gateway (NGINX)

@@ -252,6 +252,9 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `VICTORIALOGS_RETENTION` - Log retention period (default: 30d)
 - `VICTORIATRACES_RETENTION` - Trace retention period (default: 30d)
 - `OTEL_TRACES_SAMPLER_RATE` - Trace sampling percentage (default: 100.0 = 100%)
+- `KONG_TRACING_INSTRUMENTATIONS` - Kong tracing instrumentations (default: `request`). Negligible overhead when OTel plugin disabled.
+- `KONG_TRACING_SAMPLING_RATE` - Kong trace sampling rate 0.0–1.0 (default: 1.0 = 100%, aligned with `OTEL_TRACES_SAMPLER_RATE`)
+- `OTEL_EXPORTER_OTLP_ENDPOINT` - OTLP Collector base URL for all instrumented services — backend (Node.js), OPEA (Python), Kong (via restore script). Default: `http://otel-collector:4318`. Override for external collectors.
 
 **Prompts (Two-tier priority):**
 

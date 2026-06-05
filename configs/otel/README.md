@@ -123,14 +123,16 @@ To change sampling:
 
 ## Instrumented Services
 
-| Service | OTel SDK | Default Endpoint |
-|---------|----------|-----------------|
-| Kong API Gateway | `opentelemetry` plugin (bundled) | `http://otel-collector:4318/v1/traces` |
-| Backend (Node.js) | `@opentelemetry/sdk-node` | `http://otel-collector:4318` |
-| ChatQnA (Python) | `opentelemetry-instrumentation-fastapi` | `http://otel-collector:4318` |
-| Retriever (Python) | `opentelemetry-instrumentation-fastapi` | `http://otel-collector:4318` |
-| Dataprep (Python) | `opentelemetry-instrumentation-fastapi` | `http://otel-collector:4318` |
-| Reranker (Python) | `opentelemetry-instrumentation-fastapi` | `http://otel-collector:4318` |
+All instrumented services use the centralized `OTEL_EXPORTER_OTLP_ENDPOINT` variable to locate the Collector. The SDK is no-op when the Collector is unavailable (services start normally without the observability stack).
+
+| Service | OTel SDK | Export Path |
+|---------|----------|-------------|
+| Kong API Gateway | `opentelemetry` plugin (bundled) | `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces` (patched by restore script) |
+| Backend (Node.js) | `@opentelemetry/sdk-node` | `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces` |
+| ChatQnA (Python) | `opentelemetry-instrumentation-fastapi` | `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces` |
+| Retriever (Python) | `opentelemetry-instrumentation-fastapi` | `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces` |
+| Dataprep (Python) | `opentelemetry-instrumentation-fastapi` | `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces` |
+| Reranker (Python) | `opentelemetry-instrumentation-fastapi` | `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces` |
 
 ### Kong API Gateway (opentelemetry plugin)
 
@@ -143,7 +145,7 @@ Kong uses its bundled `opentelemetry` plugin (available since Kong 3.0) — no a
   "name": "opentelemetry",
   "enabled": false,
   "config": {
-    "endpoint": "http://otel-collector:4318/v1/traces",
+    "traces_endpoint": "http://otel-collector:4318/v1/traces",
     "resource_attributes": { "service.name": "kong-gateway" },
     "header_type": "w3c",
     "sampling_rate": 1.0
@@ -151,7 +153,9 @@ Kong uses its bundled `opentelemetry` plugin (available since Kong 3.0) — no a
 }
 ```
 
-**Conditional activation**: The plugin defaults to `enabled: false` in the declarative config (safe default). The `restore-kong-config.sh` script enables it via `PATCH /plugins/{id}` when `ENABLE_OBSERVABILITY=1`. Both the `kong` service and `kong-config` init container receive `ENABLE_OBSERVABILITY` from docker-compose.
+**Conditional activation**: The plugin defaults to `enabled: false` in the declarative config (safe default). The `restore-kong-config.sh` script patches the plugin when `ENABLE_OBSERVABILITY=1`:
+- `enabled=true` — activates the OTel plugin
+- `config.traces_endpoint=${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces` — aligns the Collector URL with other services (same `OTEL_EXPORTER_OTLP_ENDPOINT` variable)
 
 **Trace propagation**: Kong injects the W3C `traceparent` header on outbound requests to upstreams. The backend and OPEA services read this header to create child spans, forming a single distributed trace.
 
@@ -159,7 +163,8 @@ Kong uses its bundled `opentelemetry` plugin (available since Kong 3.0) — no a
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OTEL_TRACES_SAMPLER_RATE` | `100.0` | Trace sampling percentage (0.0-100.0) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4318` | OTLP Collector base URL — used by backend (Node.js), OPEA services (Python), and Kong (via restore script). All services append `/v1/traces` or `/v1/metrics` to this base. |
+| `OTEL_TRACES_SAMPLER_RATE` | `100.0` | Trace sampling percentage (0.0-100.0) at Collector level |
 
 The Collector resolves service names internally (e.g., `victoriametrics` → Docker service DNS).
 

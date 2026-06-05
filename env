@@ -544,11 +544,6 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 # OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=grpc://127.0.0.1:4317
 # TELEMETRY_ENDPOINT=http://127.0.0.1:4318/v1/traces
 
-# OpenTelemetry — distributed tracing endpoint (optional, defaults to collector service)
-# Used by: Node.js backend (OTLP/HTTP), Python OPEA services (OTLP/HTTP with /v1/traces)
-# Enables log-trace correlation: all service logs include trace_id/span_id for Grafana
-# OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
-
 # =============================================================================
 # SECTION 12C: OBSERVABILITY STACK (OPTIONAL)
 # =============================================================================
@@ -568,6 +563,11 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 # VICTORIALOGS_RETENTION=30d
 # VICTORIATRACES_RETENTION=30d
 # OTEL_TRACES_SAMPLER_RATE=100.0
+# KONG_TRACING_INSTRUMENTATIONS=request
+# KONG_TRACING_SAMPLING_RATE=1.0
+# OpenTelemetry OTLP endpoint — backend (Node.js) and OPEA services (Python) export traces here
+# Default in docker-compose: http://otel-collector:4318 — override only for external collectors
+# OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 
 # Grafana admin password (required secret, no default)
 # Used by: grafana service

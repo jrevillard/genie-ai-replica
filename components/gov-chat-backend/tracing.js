@@ -2,8 +2,9 @@
 // MUST be imported as the first line in index.js (before Express and all other modules)
 // to ensure auto-instrumentation hooks activate before module loading.
 
-// Test environment guard — no-op when testing (must be before any OTel requires)
-if (process.env.NODE_ENV === 'test') {
+// Test environment guard OR no OTel endpoint — no-op (must be before any OTel requires)
+// Aligned with OPEA tracing.py: SDK only activates when OTEL_EXPORTER_OTLP_ENDPOINT is set
+if (process.env.NODE_ENV === 'test' || !process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
   const noOpSpan = {
     end: () => {},
     setAttribute: () => {},
@@ -81,14 +82,16 @@ if (process.env.NODE_ENV === 'test') {
   const serviceVersion = process.env.npm_package_version || '1.0.0';
   const deploymentEnvironment = process.env.NODE_ENV || 'development';
 
-  // Create exporter
+  // Create exporter — base URL from env var, append signal-specific path (aligned with OPEA tracing.py)
+  const endpointBase = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+
   const exporter = new OTLPTraceExporter({
-    url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector:4318/v1/traces'
+    url: `${endpointBase}/v1/traces`
   });
 
   // Metrics exporter — sends OTel HTTP metrics to VictoriaMetrics via Collector
   const metricExporter = new OTLPMetricExporter({
-    url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector:4318/v1/metrics'
+    url: `${endpointBase}/v1/metrics`
   });
   const metricReader = new PeriodicExportingMetricReader({
     exporter: metricExporter,

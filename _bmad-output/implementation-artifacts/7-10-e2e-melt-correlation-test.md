@@ -32,9 +32,9 @@ so that I can verify the MELT observability promise holds under real conditions.
 
 - [ ] Task 1: Create MELT correlation test infrastructure (AC: #1, #2, #8)
   - [ ] 1.1 Create `tests/melt-correlation/melt-utils.js` — shared Node.js utilities:
-    - `queryTrace(traceId)` — GET `http://victoriatraces:10428/api/traces/{traceId}`, parse JSON, return span tree
-    - `queryMetrics(traceId, timeRange)` — GET `http://victoriametrics:8428/api/v1/query?query=...`, return metric values
-    - `queryLogs(traceId, timeRange)` — POST `http://victorialogs:9428/select/logsql/query` with JSON body `{"query": "trace_id:{traceId}"}`, return log entries
+    - `queryTrace(traceId)` — GET `http://victoriatraces:10428/select/jaeger/api/traces/{traceId}`, parse JSON, return span tree
+    - `queryMetrics(traceId, timeRange)` — GET `http://victoriametrics:8428/prometheus/api/v1/query?query=...`, return metric values
+    - `queryLogs(traceId, timeRange)` — POST `http://victorialogs:9428/select/logsql/query` with JSON body `{"query": "trace_id:\"{traceId}\""}`, return log entries
     - `waitForPropagation(traceId, maxRetries=3, interval=10s)` — retry loop for eventual consistency
     - `generateJUnitReport(results, outputFile)` — produce JUnit XML at `reports/melt-correlation-report.xml`
     - All endpoints configurable via env vars (`VICTORIATRACES_URL`, `VICTORIAMETRICS_URL`, `VICTORIALOGS_URL`)
@@ -49,9 +49,9 @@ so that I can verify the MELT observability promise holds under real conditions.
 
 - [ ] Task 2: Create Grafana dashboard verification (AC: #3)
   - [ ] 2.1 Add `tests/melt-correlation/grafana-verify.js` — queries Grafana API:
-    - GET `{GRAFANA_URL}/api/datasources/proxy/1/api/v1/query?query=sum(rate(http_server_duration_milliseconds_count[5m]))` via VictoriaMetrics datasource proxy
-    - GET `{GRAFANA_URL}/api/datasources/proxy/2/api/traces/{traceId}` via VictoriaTraces datasource proxy (tempo-proxy)
-    - POST `{GRAFANA_URL}/api/datasources/proxy/3/loki/api/v1/query` via VictoriaLogs datasource proxy
+    - GET `{GRAFANA_URL}/api/datasources/proxy/1/prometheus/api/v1/query?query=...` via VictoriaMetrics datasource proxy
+    - GET `{GRAFANA_URL}/api/datasources/proxy/2/select/jaeger/api/traces/{traceId}` via VictoriaTraces datasource proxy (tempo-proxy)
+    - POST `{GRAFANA_URL}/api/datasources/proxy/3/select/logsql/query` via VictoriaLogs datasource proxy
     - Validates all 3 datasources return results for the known trace ID
     - Reference dashboards: `service-logs.json` (datasource: victoriametrics-logs), `trace-explorer.json` (datasource: tempo/victoriatraces), `service-health.json` (datasource: prometheus/victoriametrics)
   - [ ] 2.2 Grafana API requires authentication — use admin credentials from `.env` (`GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`) or API token
@@ -167,24 +167,29 @@ The Collector uses **file-based sending queues** for resilience during backend o
 
 **VictoriaTraces** (internal port 10428) — Jaeger-compatible JSON API:
 ```
-GET /api/traces/{traceID}                    — Get trace by ID (JSON array of spans)
-GET /api/services                             — List observed services (JSON array)
-GET /api/operations?service={name}           — List operations for a service
-GET /api/traces?service={name}&limit=20      — Search recent traces for a service
+GET /select/jaeger/api/traces/{traceID}                      — Get trace by ID (JSON array of spans)
+GET /select/jaeger/api/services                              — List observed services (JSON array)
+GET /select/jaeger/api/services/{service_name}/operations     — List span names for a service
+GET /select/jaeger/api/traces?service={name}&limit=20        — Search recent traces for a service
+GET /select/jaeger/api/dependencies                          — Service dependency graph
 ```
+⚠️ **IMPORTANT**: All endpoints require `/select/jaeger/` prefix — NOT bare `/api/`.
 - **Trace ID format**: 32-character lowercase hex, no dashes. Kong W3C `traceparent` format = 16-byte trace ID = 32 hex chars. **Must lowercase** before querying.
 - **Response format**: `{"data": [{"traceID": "...", "spans": [...], "processes": {...}}]}` — `spans` array contains the full hierarchy.
 - **Tempo proxy** (`tempo-proxy`, port 10429): Bridges VictoriaTraces → Grafana Tempo API. Grafana datasources use this. **Test validation should query VictoriaTraces directly at `:10428`** — simpler, avoids proxy dependency.
 
-**VictoriaMetrics** (internal port 8428) — Prometheus-compatible:
+**VictoriaMetrics** (internal port 8428) — **Prometheus-compatible** API (NOT Prometheus — image is `victoriametrics/victoria-metrics:v1.138.0`):
 ```
-GET /api/v1/query?query={PromQL}              — Instant query
-GET /api/v1/query_range?query={PromQL}&start=...&end=...&step=...  — Range query
-GET /api/v1/series?match[]={metric_name}       — List matching series
+GET /prometheus/api/v1/query?query={PromQL}             — Instant query
+GET /prometheus/api/v1/query_range?query={PromQL}&start=...&end=...&step=...  — Range query
+GET /prometheus/api/v1/series?match[]={metric_name}      — List matching series
 ```
-- Key auto-instrumented metric: `http_server_duration_milliseconds_count` (service_name, http_route labels)
+⚠️ **IMPORTANT**: All endpoints require `/prometheus/` prefix — NOT bare `/api/v1/`.
+- OTel auto-instrumented metric (current semantic conventions): `http.server.request.duration` (histogram, seconds)
+  - VictoriaMetrics auto-converts to: `http_server_request_duration_count`, `http_server_request_duration_bucket`, `http_server_request_duration_sum`
+  - Query example: `http_server_request_duration_count{service_name="gov-chat-backend"}`
 - Custom metrics: `genie.ai/chat/request`, `rag.retrieval.requests`, `rag.ingestion.requests`, `rag.rerank.requests`
-- Error metric: `http_server_duration_milliseconds_count{http_status_code=~"5.."}`
+- Error metric: `http_server_request_duration_count{http_response_status_code=~"5.."}`
 
 **VictoriaLogs** (internal port 9428) — LogQL query:
 ```
@@ -192,14 +197,15 @@ POST /select/logsql/query
 Content-Type: application/json
 
 {
-  "query": "trace_id:abc123def4567890...",
+  "query": "trace_id:\"abc123def4567890fedcba0987654321\"",
   "start": "2026-06-05T10:00:00Z",
   "end": "2026-06-05T10:05:00Z",
   "limit": 100
 }
 ```
-- Filter by trace_id: `trace_id:{32hexchars}`
+⚠️ **IMPORTANT**: LogQL trace_id filter requires **quoted value**: `trace_id:"{32hexchars}"` — NOT bare `trace_id:value`.
 - Filter by container: `_stream:{container_name}`
+- Alternative: combine filters: `trace_id:"abc123..." AND level:error`
 - Logs arrive via fluentd driver with tag `genie.{{.Name}}` — structured JSON with `trace_id`, `span_id`, `service.name` fields injected by OTel Collector batch processor
 
 **Grafana** (internal port 3000) — Dashboard/datasource proxy API:

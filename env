@@ -406,7 +406,9 @@ KEYCLOAK_DB_PASSWORD=
 # Production: https://your-domain.com
 # KEYCLOAK_WEB_ORIGINS=http://localhost:8090
 
-# TLS verification for backend → NGINX OIDC discovery/JWKS fetches
+# TLS verification for Node.js services (backend, document-repository).
+# Affects all HTTPS connections: backend → NGINX OIDC/JWKS fetches,
+# backend → Keycloak token introspection, document-repository → NGINX.
 # Default: 1 (strict, production). Set to 0 for local dev with self-signed NGINX certs.
 # NODE_TLS_REJECT_UNAUTHORIZED=0
 
@@ -701,6 +703,9 @@ KC_GRAFANA_CLIENT_SECRET=
 #
 # KEYCLOAK_SSL_SKIP_VERIFY=0
 #   Set to 1 to disable SSL certificate verification for dataprep's Keycloak
-#   service account token fetch. Required when Keycloak uses a self-signed
-#   certificate. Independent of OPEA_SSL_SKIP_VERIFY. Default: 0 (verify certs).
+#   service account token fetch (aiohttp connector in keycloak_service_account.py).
+#   Required when Keycloak is behind NGINX with a self-signed certificate.
+#   Independent of OPEA_SSL_SKIP_VERIFY. Default: 0 (verify certs).
+#   Only affects dataprep-arango-service. Backend and chatqna use NODE_TLS_REJECT_UNAUTHORIZED
+#   for NGINX TLS verification instead.
 

@@ -228,6 +228,27 @@ docker compose --profile opea up -d
 > `VLLM_API_KEY` in docker-compose.yaml). If Keycloak also uses a self-signed cert, set
 > `KEYCLOAK_SSL_SKIP_VERIFY=1` independently.
 
+#### Self-Signed Certificates — Decision Matrix
+
+Three environment variables control TLS verification for self-signed certificates. Each covers a different layer:
+
+| Variable | Services | Mechanism | When to set |
+|---|---|---|---|
+| `NODE_TLS_REJECT_UNAUTHORIZED=0` | backend, document-repository | Node.js built-in (all HTTPS connections) | NGINX uses self-signed cert (local dev) |
+| `OPEA_SSL_SKIP_VERIFY=1` | embedding, reranker, textgen, dataprep, retriever, chatqna (7 Python services) | `configs/ssl/genie_ssl_patch.py` (patches Python ssl module) | Remote GPU node uses self-signed cert |
+| `KEYCLOAK_SSL_SKIP_VERIFY=1` | dataprep-arango-service only | aiohttp connector in `keycloak_service_account.py` | Keycloak behind NGINX with self-signed cert |
+
+**Quick reference — which variables to set by scenario:**
+
+| Scenario | `NODE_TLS_REJECT_...` | `OPEA_SSL_...` | `KEYCLOAK_SSL_...` |
+|---|---|---|---|
+| Local dev, self-signed NGINX, no remote GPU | `0` | — | — |
+| Local dev, remote GPU with self-signed cert | `0` | `1` | — |
+| Production, real CA certificates on all hosts | — | — | — |
+| Production/air-gapped, self-signed NGINX | `0` | `1`* | `1` |
+
+`—` = use default (verify certs). \* Only if remote GPU node also uses self-signed cert.
+
 ### 6f. Start with observability stack
 
 To add the OTel Collector, VictoriaMetrics, VictoriaLogs, and Grafana monitoring stack:

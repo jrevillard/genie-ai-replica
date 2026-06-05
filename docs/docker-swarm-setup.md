@@ -802,6 +802,28 @@ certs. Omit if the GPU node uses Let's Encrypt or a public CA.
 dataprep's Keycloak service account token fetch. Set this if Keycloak uses a
 self-signed certificate.
 
+#### Self-Signed Certificates — Decision Matrix
+
+Three environment variables control TLS verification for self-signed certificates. Each covers a different layer:
+
+| Variable | Services | Mechanism | When to set |
+|---|---|---|---|
+| `NODE_TLS_REJECT_UNAUTHORIZED=0` | backend, document-repository | Node.js built-in (all HTTPS connections) | NGINX uses self-signed cert |
+| `OPEA_SSL_SKIP_VERIFY=1` | embedding, reranker, textgen, dataprep, retriever, chatqna (7 Python services) | `configs/ssl/genie_ssl_patch.py` (patches Python ssl module) | Remote GPU node uses self-signed cert |
+| `KEYCLOAK_SSL_SKIP_VERIFY=1` | dataprep-arango-service only | aiohttp connector in `keycloak_service_account.py` | Keycloak behind NGINX with self-signed cert |
+
+**Quick reference — which variables to set by scenario:**
+
+| Scenario | `NODE_TLS_REJECT_...` | `OPEA_SSL_...` | `KEYCLOAK_SSL_...` |
+|---|---|---|---|
+| Swarm deploy, self-signed NGINX, no remote GPU | `0` | — | — |
+| Swarm deploy, remote GPU with self-signed cert | `0` | `1` | — |
+| Production, real CA certificates on all hosts | — | — | — |
+| Production/air-gapped, self-signed NGINX | `0` | `1`* | `1` |
+
+`—` = use default (verify certs). \* Only if remote GPU node also uses self-signed cert.
+Set these in `.env` before running Ansible (see `env` Section 14 for GPU node variables).
+
 **Warning:** `DEPLOY_OPEA` must remain `1` — it controls the orchestrator services.
 Setting `DEPLOY_OPEA=0` disables ALL OPEA services (including orchestrators) and
 breaks the RAG pipeline. Use `GPU_MODEL_REPLICAS=0` to skip only GPU containers.

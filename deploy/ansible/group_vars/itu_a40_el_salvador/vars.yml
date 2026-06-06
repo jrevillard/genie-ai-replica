@@ -58,13 +58,13 @@ retriever_arango_k: "20"
 retriever_arango_fetch_k: "30"
 retriever_arango_score_threshold: "0.2"
 reranking_threshold: "0.6"
-vllm_llm_model_id: google/gemma-4-12B-it #ibm-granite/granite-3.3-2b-instruct
+vllm_llm_model_id: ibm-granite/granite-3.3-2b-instruct #google/gemma-4-12B-it 
 vllm_max_model_len: "16384"
-vllm_gpu_utilization: "0.8" #higher VRAM usage for A40 (24GB)
+vllm_gpu_utilization: "0.6" #back to granite 
 vllm_translation_model_id: google/gemma-3-4b-it
 vllm_translation_max_model_len: "8192"
 vllm_translation_dtype: bfloat16
-vllm_translation_gpu_utilization: "0.25"
+vllm_translation_gpu_utilization: "0.3"
 vllm_translation_kv_cache_dtype: auto
 embedding_model_id: BAAI/bge-base-en-v1.5
 reranker_model_id: cross-encoder/ms-marco-MiniLM-L-6-v2

@@ -553,7 +553,7 @@ services:
   vllm:
     profiles: [opea]
     restart: unless-stopped
-    image: ${VLLM_IMAGE:-vllm/vllm-openai:latest}
+    image: vllm/vllm-openai:latest #${VLLM_IMAGE:-vllm/vllm-openai:latest}
     # Swarm: internal only - access via Kong or docker exec
     # ports:
     #   - "${LLM_SERVER_PORT:-8000}:8000"

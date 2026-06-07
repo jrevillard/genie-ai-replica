@@ -62,3 +62,8 @@ self_signed_certs: true
 # =============================================================================
 teardown_remove_volumes: false
 teardown_remove_registry: false
+
+# =============================================================================
+# swarm_registry_url (to skip install part when not needed)
+# =============================================================================
+swarm_registry_url: "localhost:5000"

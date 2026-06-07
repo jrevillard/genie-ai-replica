@@ -44,7 +44,8 @@ email_from: "noreply@genie-ai.itu.int"
 certbot_email: "admin@assembly.govstack.global"
 certbot_replicas: "0" #turned OFF Let's Encrypt (it can't issue for a bare IP)
 # certbot_staging: "false"  # Set to "true" to use Let's Encrypt staging (avoids rate limits)
-
+node_tls_reject_unauthorized: "0"
+ssl_verify: "false" # self-signed cert on bare IP (ChatQnA JWKS)
 # =============================================================================
 # OPEA / AI SERVICES
 # =============================================================================

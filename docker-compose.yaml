@@ -466,6 +466,8 @@ services:
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
+      # Self-signed cert workaround (bare IP); see backend NODE_TLS_REJECT_UNAUTHORIZED
+      - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-1}
     # Internal only - no host port mapping needed
     # ports:
     #   - "${DOC_REPO_PORT:-3001}:3001"
@@ -1021,6 +1023,8 @@ services:
       KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
       KC_REALM: ${KEYCLOAK_REALM:-genie}
       KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}
+      # Self-signed cert workaround (bare IP); used by keycloak_token_validator.py
+      SSL_VERIFY: ${SSL_VERIFY:-true}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
     networks:

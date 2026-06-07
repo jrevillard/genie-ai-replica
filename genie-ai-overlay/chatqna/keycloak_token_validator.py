@@ -21,6 +21,10 @@ KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
 KC_REALM = os.getenv("KC_REALM", "genie")
 KC_CLIENT_ID = os.getenv("KC_CLIENT_ID", "genie-app")
 
+# Add SSL verify toggle (for ip only adress)
+SSL_VERIFY = os.getenv("SSL_VERIFY", "true").lower() not in ("0", "false", "no")
+
+
 # JWKS cache
 _jwks_keys = None
 _jwks_fetched_at = 0
@@ -36,8 +40,10 @@ async def _fetch_jwks():
         return _jwks_keys
 
     jwks_uri = f"{KEYCLOAK_URL}/realms/{KC_REALM}/protocol/openid-connect/certs"
+
+    # Try to fetch JWKS with SSL verify
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, verify=SSL_VERIFY) as client:   
             response = await client.get(jwks_uri)
             response.raise_for_status()
             _jwks_keys = response.json().get("keys", [])

@@ -26,131 +26,131 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 
 **Functional Requirements:**
 
-| # | Requirement | Architectural Implication |
-|---|-------------|---------------------------|
-| F1 | Deploy 5 GPU services on a dedicated node | Separate Docker Compose, GPU memory management |
-| F2 | Endpoints accessible remotely via HTTPS | nginx reverse proxy with TLS (Let's Encrypt) |
-| F3 | Authentication via API keys (1 per GENIE.AI instance) | nginx `map` + external keys file |
-| F4 | Support multiple keys without restarting services | `nginx -s reload` (zero downtime) |
-| F5 | Integrate docling-serve (official IBM) as 5th service | Official image, no in-process fallback |
-| F6 | Dataprep calls docling via `DOCLING_ENDPOINT` | No fallback — if GPU node is remote, the endpoint is configured |
-| F7 | Separate Ansible playbook for GPU deployment | Dedicated inventory `[gpu_nodes]` |
-| F8 | Template `.env` with "Remote GPU Endpoints" section | Ports 9400-9404, HTTPS URLs |
+| # | Exigence | Implication architecturale |
+|---|----------|---------------------------|
+| F1 | Déployer 5 services GPU sur un nœud dédié | Docker Compose séparé, gestion GPU mémoire |
+| F2 | Endpoints accessibles à distance via HTTPS | nginx reverse proxy avec TLS (Let's Encrypt) |
+| F3 | Authentification par API keys (1 par instance GENIE.AI) | nginx `map` + fichier de clés externe |
+| F4 | Support multi-clés sans redémarrer les services | `nginx -s reload` (zero downtime) |
+| F5 | Intégrer docling-serve (officiel IBM) comme 5ème service | Image officielle, pas de fallback in-process |
+| F6 | Dataprep appelle docling via `DOCLING_ENDPOINT` | Pas de fallback — si GPU node distant, l'endpoint est configuré |
+| F7 | Playbook Ansible séparé pour le déploiement GPU | Inventaire dédié `[gpu_nodes]` |
+| F8 | Template `.env` avec section "Remote GPU Endpoints" | Ports 9400-9404, URLs HTTPS |
 
 **Non-Functional Requirements:**
 
-| NFR | Detail | Impact |
+| NFR | Détail | Impact |
 |-----|--------|--------|
-| Security | Network not isolated between app and GPU | nginx TLS + API keys mandatory |
-| Multi-tenancy | GPU node shared by N GENIE.AI instances | Stateless, idempotent, 1 shared key per client |
-| Availability | `nginx -s reload` without GPU outage | Graceful reload, continuous services |
-| Backward Compatibility | Single-node without override = unchanged | Existing defaults preserved |
+| Sécurité | Réseau non isolé entre app et GPU | nginx TLS + API keys obligatoire |
+| Mutualisation | GPU node shared par N instances GENIE.AI | Stateless, idempotent, 1 clé partagée par client |
+| Disponibilité | `nginx -s reload` sans coupure GPU | Reload gracieux, services continus |
+| Rétrocompatibilité | Single-node sans override = inchangé | Defaults existants préservés |
 
 ### Scale & Complexity
 
-- **Complexity**: Medium — primarily infrastructure (Docker Compose + nginx + Ansible), only 1 application code change (dataprep `DOCLING_ENDPOINT`)
-- **Domain**: Infrastructure / DevOps
-- **Architectural components**: ~3 (nginx config, Docker Compose GPU, Ansible playbook)
+- **Complexité** : Moyenne — principalement de l'infrastructure (Docker Compose + nginx + Ansible), 1 seule modification de code applicatif (dataprep `DOCLING_ENDPOINT`)
+- **Domaine** : Infrastructure / DevOps
+- **Composants architecturaux** : ~3 (nginx config, Docker Compose GPU, Ansible playbook)
 
 ### Technical Constraints & Dependencies
 
-- **vLLM**: 1 model per instance (no multi-model serving)
-- **TEI**: 1 model per instance (embedding ≠ reranker)
-- **docling-serve**: Official IBM image, MIT license — no custom microservice
-- **GPU**: RTX 6000 Ada (48GB VRAM) — 5 services must fit
-- **TLS**: Let's Encrypt via certbot one-shot — same pattern as app node
-- **DNS**: 1 public IP = 1 hostname for the GPU node
+- **vLLM** : 1 modèle par instance (pas de multi-model serving)
+- **TEI** : 1 modèle par instance (embedding ≠ reranker)
+- **docling-serve** : Image officielle IBM, MIT license — pas de custom microservice
+- **GPU** : RTX 6000 Ada (48GB VRAM) — 5 services doivent tenir
+- **TLS** : Let's Encrypt via certbot one-shot — même pattern que l'app node
+- **DNS** : 1 IP publique = 1 hostname pour le GPU node
 
 ### Cross-Cutting Concerns Identified
 
-- **Security**: API keys and TLS applied uniformly across all 5 services via nginx
-- **Observability**: Healthchecks `/health` mandatory on each service; smoke tests post-deploy Ansible
-- **Monitoring**: Cert expiry alerts required on the GPU node
+- **Sécurité** : API keys et TLS appliqués uniformément sur tous les 5 services via nginx
+- **Observabilité** : Healthchecks `/health` obligatoires sur chaque service ; smoke tests post-deploy Ansible
+- **Monitoring** : Cert expiry alerts requis sur le GPU node
 
 ### Party Mode Contributions (2026-05-29)
 
-**Agents consulted:** Winston (Architect), Amelia (Dev), Murat (Test Architect)
+**Agents consultés :** Winston (Architect), Amelia (Dev), Murat (Test Architect)
 
-| Decision | Source | Detail |
+| Décision | Source | Détail |
 |----------|--------|--------|
-| Decentralized TLS | 🏗️ Winston | Each node manages its own certs via certbot one-shot, same pattern |
-| Dedicated DNS | 🏗️ Winston | 1 public IP = 1 hostname for the GPU node, no round-robin |
-| Compose file | 💻 Amelia | `docker-compose.gpu.yaml` at project root |
-| Separate Ansible | 💻 Amelia | `deploy/ansible/deploy-gpu.yml` + `[gpu_nodes]` inventory |
-| Healthchecks | 🧪 Murat | `/health` mandatory on 5 services, post-deploy verification |
-| Smoke tests | 🧪 Murat | Ansible post-deploy < 30s, fail fast if KO |
-| No double proxy | 👤 Jerome | Backend connects directly to GPU node, not via app node nginx |
-| No docling fallback | 👤 Jerome | `DOCLING_ENDPOINT` configured = remote, otherwise single-node local |
-| 1 shared key per client | 👤 Jerome | Same API key for all 5 services, 1 key per GENIE.AI instance |
+| TLS décentralisé | 🏗️ Winston | Chaque node gère ses propres certs via certbot one-shot, même pattern |
+| DNS dédié | 🏗️ Winston | 1 IP publique = 1 hostname pour le GPU node, pas de round-robin |
+| Fichier compose | 💻 Amelia | `docker-compose.gpu.yaml` à la racine du projet |
+| Ansible séparé | 💻 Amelia | `deploy/ansible/deploy-gpu.yml` + inventaire `[gpu_nodes]` |
+| Healthchecks | 🧪 Murat | `/health` obligatoire sur les 5 services, vérification post-deploy |
+| Smoke tests | 🧪 Murat | Ansible post-deploy < 30s, fail fast si KO |
+| Pas de double proxy | 👤 Jerome | Backend rejoint le GPU node directement, pas via nginx app node |
+| Pas de fallback docling | 👤 Jerome | `DOCLING_ENDPOINT` configuré = remote, sinon single-node local |
+| 1 clé partagée par client | 👤 Jerome | Même API key pour les 5 services, 1 clé par instance GENIE.AI |
 
 ## Core Architectural Decisions
 
 ### Decision 1: File Structure
 
-**Decision:** The GPU node uses the same conventions as the existing project, with a separate Docker Compose and a dedicated Ansible playbook.
+**Décision :** Le GPU node utilise les mêmes conventions que le projet existant, avec un Docker Compose séparé et un playbook Ansible dédié.
 
 ```
 genie-ai/
-├── docker-compose.yaml              # App node (existing, unchanged)
-├── docker-compose.gpu.yaml          # GPU node (new)
-├── env.t4 / env.rtx6000             # GPU config (reused by GPU compose)
+├── docker-compose.yaml              # App node (existant, inchangé)
+├── docker-compose.gpu.yaml          # GPU node (nouveau)
+├── env.t4 / env.rtx6000             # GPU config (réutilisés par GPU compose)
 ├── deploy/
 │   └── ansible/
-│       ├── deploy.yml               # App node (existing)
-│       ├── deploy-gpu.yml           # GPU node (new)
+│       ├── deploy.yml               # App node (existant)
+│       ├── deploy-gpu.yml           # GPU node (nouveau)
 │       ├── inventory/
-│       │   └── gpu.ini.example      # GPU node inventory (template)
+│       │   └── gpu.ini.example      # Inventaire GPU node (template)
 │       ├── group_vars/
-│       │   ├── gpu.yml               # GPU node variables
-│       │   └── gpu.vault.example     # GPU vault secrets (template)
+│       │   ├── gpu.yml               # Variables GPU node
+│       │   └── gpu.vault.example     # Vault secrets GPU (template)
 │       └── templates/
 │           ├── docker-compose.gpu.yaml.j2
-│           ├── gpu-proxy.conf.j2      # GPU nginx config (Jinja2)
-│           └── api_keys.map.j2        # GPU API keys (Jinja2)
+│           ├── gpu-proxy.conf.j2      # nginx config GPU (Jinja2)
+│           └── api_keys.map.j2        # Clés API GPU (Jinja2)
 ├── secrets/
-│   └── ssl/                         # Let's Encrypt certs (existing, gitignored)
+│   └── ssl/                         # Certs Let's Encrypt (existant, gitignored)
 └── genie-ai-overlay/
     └── dataprep/
         └── genieai_dataprep_utils.py  # Modification: DOCLING_ENDPOINT
 ```
 
-**Rationale:**
-- `docker-compose.gpu.yaml` at root = consistent with existing `env.t4`/`env.rtx6000`
-- Jinja2 templates in `deploy/ansible/templates/` = dedicated Ansible location, no duplication
-- Ansible follows existing pattern: `deploy-gpu.yml` + dedicated inventory + `group_vars/gpu.yml`
-- GPU files are committed (configs, templates); secrets are never committed (`secrets/` gitignored)
+**Rationale :**
+- `docker-compose.gpu.yaml` à la racine = cohérent avec `env.t4`/`env.rtx6000` déjà existants
+- Templates Jinja2 dans `deploy/ansible/templates/` = emplacement dédié Ansible, pas de duplication
+- Ansible suit le pattern existant : `deploy-gpu.yml` + inventaire dédié + `group_vars/gpu.yml`
+- Les fichiers GPU sont committés (configs, templates) ; les secrets ne sont jamais committés (`secrets/` gitignored)
 
 ### Decision 2: Image Versions
 
-**Decision:** Reuse the same images and tags as the app node, with version pinned for stability.
+**Décision :** Réutiliser les mêmes images et tags que l'app node, avec version pinée pour la stabilité.
 
-| Service | Image | Tag | Current Source |
+| Service | Image | Tag | Source actuelle |
 |---------|-------|-----|-----------------|
 | vLLM (Llama 3.1-8B) | `vllm/vllm-openai` | `latest` | `docker-compose.yaml` |
 | vLLM Translation (Gemma 3-4B) | `vllm/vllm-openai` | `v0.10.0` | `docker-compose.yaml` |
 | TEI Embedding | `ghcr.io/huggingface/text-embeddings-inference` | `1.9.3` | `docker-compose.yaml` |
 | TEI Reranker | `ghcr.io/huggingface/text-embeddings-inference` | `1.9.3` | `docker-compose.yaml` |
-| docling-serve | `ghcr.io/institute-of-data-science/docling-serve` | `latest` | Official IBM |
-| nginx GPU | `nginx` | `1.28-alpine` | Same base as app node nginx |
-| certbot | `certbot/certbot` | `latest` | Same as app node |
+| docling-serve | `ghcr.io/institute-of-data-science/docling-serve` | `latest` | Officiel IBM |
+| nginx GPU | `nginx` | `1.28-alpine` | Même base que nginx app node |
+| certbot | `certbot/certbot` | `latest` | Même que app node |
 
-**Rationale:**
-- No new image to maintain except docling-serve (official)
-- vLLM/TEI images are the same as app node — synchronized updates
-- `v0.10.0` pinned for translation service (already in production)
-- GPU variables (`VLLM_GPU_UTILIZATION`, etc.) reused from `env.t4`/`env.rtx6000`
+**Rationale :**
+- Pas de nouvelle image à maintenir sauf docling-serve (officiel)
+- Les images vLLM/TEI sont les mêmes que l'app node — mise à jour synchronisée
+- `v0.10.0` pinée pour le service translation (déjà en production)
+- Variables GPU (`VLLM_GPU_UTILIZATION`, etc.) réutilisées depuis `env.t4`/`env.rtx6000`
 
 ### Decision 3: Secrets Management
 
-**Decision:** Each node manages its own secrets locally. No synchronization between nodes.
+**Décision :** Chaque node gère ses propres secrets localement. Pas de synchronisation entre nodes.
 
 | Secret | App Node | GPU Node | Source |
 |--------|----------|----------|--------|
-| SSL certs (Let's Encrypt) | `secrets/ssl/server.crt + server.key` | Generated on GPU node by certbot | certbot one-shot |
-| API keys | N/A | Generated by Ansible from template | `templates/api_keys.map.j2` + `gpu.vault` |
-| Ansible vault | `group_vars/test.vault` | `group_vars/gpu.vault` | Each playbook, each vault |
+| SSL certs (Let's Encrypt) | `secrets/ssl/server.crt + server.key` | Générés sur le GPU node par certbot | certbot one-shot |
+| API keys | N/A | Généré par Ansible depuis template | `templates/api_keys.map.j2` + `gpu.vault` |
+| Ansible vault | `group_vars/test.vault` | `group_vars/gpu.vault` | Chaque playbook, chaque vault |
 
-**API keys management:**
+**API keys management :**
 ```yaml
 # group_vars/gpu.yml
 gpu_api_keys:
@@ -160,24 +160,24 @@ gpu_api_keys:
     key: "generated-secure-key-here"
 ```
 
-Ansible generates the `api_keys.map` file from this list:
+Ansible génère le fichier `api_keys.map` à partir de cette liste :
 ```nginx
-# api_keys.map (generated by Ansible)
+# api_keys.map (généré par Ansible)
 instance-genie-a  1;
 instance-genie-b  1;
 ```
 
-**Rationale:**
-- Existing pattern: `secrets/` gitignored, certs in `secrets/ssl/`
-- Each node is autonomous — no coupling between secrets
-- Ansible vault protects keys in transit and at rest
-- `nginx -s reload` after modification = no GPU service restart
+**Rationale :**
+- Pattern existant : `secrets/` gitignored, certs en `secrets/ssl/`
+- Chaque node est autonome — pas de coupling entre les secrets
+- Ansible vault protège les clés en transit et en repos
+- `nginx -s reload` après modification = pas de redémarrage des services GPU
 
-### Decision 4: Monitoring & Observability
+### Decision 4: Monitoring & Observabilité
 
-**Decision:** Integrated healthchecks in docker-compose + Ansible smoke tests post-deploy. No dedicated observability on the GPU node for now (monitoring deferred).
+**Décision :** Healthchecks intégrés au docker-compose + smoke tests Ansible post-deploy. Pas d'observabilité dédiée sur le GPU node pour le moment (monitoring différé).
 
-**Healthchecks (docker-compose.gpu.yaml):**
+**Healthchecks (docker-compose.gpu.yaml) :**
 ```yaml
 vllm-llm:
   healthcheck:
@@ -185,7 +185,7 @@ vllm-llm:
     interval: 30s
     timeout: 10s
     retries: 3
-    start_period: 120s  # vLLM is slow at startup
+    start_period: 120s  # vLLM est lent au démarrage
 tei-embedding:
   healthcheck:
     test: ["CMD", "curl", "-f", "http://localhost:80/health"]
@@ -200,7 +200,7 @@ docling-serve:
     retries: 3
 ```
 
-**Ansible smoke tests (post-deploy, < 30s):**
+**Smoke tests Ansible (post-deploy, < 30s) :**
 ```yaml
 # deploy/ansible/deploy-gpu.yml — post-deploy tasks
 - name: Verify nginx is running and TLS is valid
@@ -208,7 +208,7 @@ docling-serve:
     url: "https://{{ inventory_hostname }}:9400/health"
     validate_certs: no
     headers:
-      Authorization: "Bearer {{ gpu_api_keys[0].key }}"
+      X-API-Key: "{{ gpu_api_keys[0].key }}"
   register: nginx_health
   retries: 5
   delay: 10
@@ -219,7 +219,7 @@ docling-serve:
     url: "https://{{ inventory_hostname }}:{{ item }}/health"
     validate_certs: no
     headers:
-      Authorization: "Bearer {{ gpu_api_keys[0].key }}"
+      X-API-Key: "{{ gpu_api_keys[0].key }}"
   loop: ["9400", "9401", "9402", "9403", "9404"]
   register: service_health
 
@@ -231,11 +231,11 @@ docling-serve:
   failed_when: auth_check.status != 401
 ```
 
-**Rationale:**
-- `start_period: 120s` for vLLM — model loading takes time
-- Smoke tests cover: nginx TLS, 5 services, auth (rejection without key)
-- Fail fast: Ansible stops immediately if a check fails
-- Monitoring/observability = future (possible integration with existing OTel Collector)
+**Rationale :**
+- `start_period: 120s` pour vLLM — le chargement du modèle prend du temps
+- Smoke tests couvrent : nginx TLS, 5 services, auth (rejet sans clé)
+- Fail fast : Ansible s'arrête immédiatement si un check échoue
+- Monitoring/observabilité = futur (intégration avec OTel Collector existant possible)
 
 ## Decision Impact Analysis
 
@@ -244,53 +244,53 @@ docling-serve:
 2. nginx GPU config (`deploy/ansible/templates/gpu-proxy.conf.j2`) — security + routing
 3. Ansible playbook (`deploy/ansible/deploy-gpu.yml`) — deployment automation
 4. Dataprep code change (`genieai_dataprep_utils.py`) — DOCLING_ENDPOINT
-5. Template `.env` — Remote GPU Endpoints section
+5. Template `.env` — section Remote GPU Endpoints
 
 **Cross-Component Dependencies:**
-- Ansible playbook depends on docker-compose + nginx config (must deploy both)
-- Dataprep code change independent — can be tested locally before GPU deployment
-- Template `.env` modified on app node only — GPU node has its own vars
+- Ansible playbook dépend du docker-compose + nginx config (doit déployer les deux)
+- Dataprep code change indépendant — peut être testé en local avant le déploiement GPU
+- Template `.env` modifié sur l'app node uniquement — le GPU node a ses propres vars
 
 ## Implementation Patterns & Consistency Rules
 
 ### Naming Patterns
 
-| Item | Convention | Example |
+| Item | Convention | Exemple |
 |------|-----------|---------|
-| Docker Compose GPU | `docker-compose.gpu.yaml` | Root, parallel with `env.t4`/`env.rtx6000` |
-| nginx GPU config | `gpu-proxy.conf` | `gpu-` prefix to distinguish from app node |
-| API keys template | `api_keys.map.j2` | Jinja2 template, generated by Ansible |
-| Ansible playbook | `deploy-gpu.yml` | Same pattern as `deploy.yml` |
+| Docker Compose GPU | `docker-compose.gpu.yaml` | Racine, parallèle avec `env.t4`/`env.rtx6000` |
+| nginx GPU config | `gpu-proxy.conf` | Préfix `gpu-` pour distinguer de l'app node |
+| API keys template | `api_keys.map.j2` | Template Jinja2, généré par Ansible |
+| Ansible playbook | `deploy-gpu.yml` | Même pattern que `deploy.yml` |
 | Ansible variables | `gpu.yml` | `group_vars/gpu.yml` |
-| Ansible vault | `gpu.vault` | Encrypted secrets, API keys |
-| Public HTTPS port | `9400-9404` | Dedicated GPU range, sequential |
-| nginx template | `gpu-proxy.conf.j2` | Jinja2 template for Ansible |
+| Ansible vault | `gpu.vault` | Secrets chiffrés, clé API keys |
+| Port public HTTPS | `9400-9404` | Plage GPU dédiée, séquentiel |
+| Template nginx | `gpu-proxy.conf.j2` | Template Jinja2 pour Ansible |
 
 ### Structure Patterns
 
-**New GPU resources:**
+**Nouvelles ressources GPU :**
 ```
 deploy/ansible/
-    ├── deploy-gpu.yml         # GPU node playbook (committed)
+    ├── deploy-gpu.yml         # Playbook GPU node (committé)
     ├── inventory/
-    │   └── gpu.ini.example    # GPU node inventory (template, committed)
+    │   └── gpu.ini.example    # Inventaire GPU node (template, committé)
     ├── group_vars/
-    │   ├── gpu.yml            # GPU variables (committed)
-    │   └── gpu.vault.example  # Vault secrets template (committed)
+    │   ├── gpu.yml            # Variables GPU (committé)
+    │   └── gpu.vault.example  # Vault secrets template (committé)
     └── templates/
-        ├── docker-compose.gpu.yaml.j2  # Compose template (committed)
-        ├── gpu-proxy.conf.j2           # nginx template (committed)
-        └── api_keys.map.j2             # API keys template (committed)
-docker-compose.gpu.yaml        # GPU Compose (committed)
+        ├── docker-compose.gpu.yaml.j2  # Compose template (committé)
+        ├── gpu-proxy.conf.j2           # nginx template (committé)
+        └── api_keys.map.j2             # API keys template (committé)
+docker-compose.gpu.yaml        # Compose GPU (committé)
 ```
 
-**Resource locations:**
-- `deploy/ansible/templates/` — all GPU Jinja2 templates (nginx, api_keys, compose)
-- `deploy/ansible/` — same structure as app node, separate files
+**Emplacement des ressources :**
+- `deploy/ansible/templates/` — tous les templates Jinja2 GPU (nginx, api_keys, compose)
+- `deploy/ansible/` — même structure que l'app node, fichiers séparés
 
 ### Format Patterns
 
-**api_keys.map.j2 (committed template):**
+**api_keys.map.j2 (template committé) :**
 ```nginx
 # API keys map for GPU node nginx
 # Managed by Ansible deploy-gpu.yml - do not edit manually
@@ -299,84 +299,84 @@ docker-compose.gpu.yaml        # GPU Compose (committed)
 {% endfor %}
 ```
 
-**gpu.yml (committed variables):**
+**gpu.yml (variables committées) :**
 ```yaml
 gpu_api_keys:
   - name: instance-genie-a
     key: ""
 ```
 
-**api_keys.map (generated by Ansible, not committed):**
+**api_keys.map (généré par Ansible, non committé) :**
 ```nginx
 instance-genie-a  1;
 ```
 
 ### Process Patterns
 
-**GPU deployment:**
+**Déploiement GPU :**
 1. `ansible-playbook -i inventory/gpu.ini deploy-gpu.yml --vault-id gpu@prompt`
-2. Ansible generates `docker-compose.gpu.yaml` and `gpu-proxy.conf` from templates
-3. Ansible generates `api_keys.map` from `gpu_api_keys` vault variable
-4. Ansible runs `docker compose -f docker-compose.gpu.yaml up -d`
-5. Ansible smoke tests verify nginx TLS, health of 5 services, rejection without key
+2. Ansible génère `docker-compose.gpu.yaml` et `gpu-proxy.conf` depuis templates
+3. Ansible génère `api_keys.map` depuis `gpu_api_keys` vault variable
+4. Ansible lance `docker compose -f docker-compose.gpu.yaml up -d`
+5. Smoke tests Ansible vérifient nginx TLS, health des 5 services, rejet sans clé
 
-**Single-node (unchanged):**
-- No modification required on app node if `docker-compose.gpu.yaml` is not deployed
-- GPU env vars (`VLLM_ENDPOINT`, etc.) keep their local Docker DNS defaults
+**Single-node (inchangé) :**
+- Aucune modification requise sur l'app node si `docker-compose.gpu.yaml` n'est pas déployé
+- Les env vars GPU (`VLLM_ENDPOINT`, etc.) gardent leurs defaults Docker DNS locaux
 
-**Rollback:**
-- `docker compose -f docker-compose.gpu.yaml down` on GPU node
-- App node unchanged
+**Rollback :**
+- `docker compose -f docker-compose.gpu.yaml down` sur le GPU node
+- App node inchangé
 
 ### Enforcement Guidelines
 
-**ALL AI agents MUST:**
-- Use service names and ports defined in this document (9400-9404)
-- Never directly modify files generated by Ansible (`api_keys.map`, deployed configs)
-- Always use Jinja2 templates for GPU configurations
-- Not introduce new env variables without adding them to the `.env` template
+**Tous les agents IA DOIVENT :**
+- Utiliser les noms de services et ports définis dans ce document (9400-9404)
+- Ne jamais modifier directement les fichiers générés par Ansible (`api_keys.map`, configs déployées)
+- Toujours utiliser les templates Jinja2 pour les configurations GPU
+- Ne pas introduire de nouvelles variables env sans les ajouter au template `.env`
 
-**Verification:**
-- `docker compose -f docker-compose.gpu.yaml config` must pass without error
-- `nginx -t` on GPU node must validate config before reload
-- Ansible smoke tests must all pass before considering deployment successful
+**Vérification :**
+- `docker compose -f docker-compose.gpu.yaml config` doit passer sans erreur
+- `nginx -t` sur le GPU node doit valider la config avant reload
+- Smoke tests Ansible doivent tous passer avant de considérer le déploiement réussi
 
 ## Project Structure & Boundaries
 
 ### Complete Project Directory Structure
 
 ```
-genie-ai/                              # Project root (existing)
-├── docker-compose.yaml                # App node — single source of truth (existing, unchanged)
-├── docker-compose.gpu.yaml           # GPU node — dedicated compose (NEW)
-├── env                                # Config template (existing — add Remote GPU Endpoints section)
-├── env.t4                             # GPU memory config T4 (existing, reused)
-├── env.rtx6000                        # GPU memory config RTX 6000 (existing, reused)
+genie-ai/                              # Project root (existant)
+├── docker-compose.yaml                # App node — single source of truth (existant, inchangé)
+├── docker-compose.gpu.yaml           # GPU node — dedicated compose (NOUVEAU)
+├── env                                # Config template (existant — ajout section Remote GPU Endpoints)
+├── env.t4                             # GPU memory config T4 (existant, réutilisé)
+├── env.rtx6000                        # GPU memory config RTX 6000 (existant, réutilisé)
 │
 ├── deploy/
 │   └── ansible/
-│       ├── deploy.yml                 # App node playbook (existing, unchanged)
-│       ├── deploy-gpu.yml             # NEW — GPU node playbook
-│       ├── requirements.yml           # Ansible Galaxy (existing, unchanged)
+│       ├── deploy.yml                 # App node playbook (existant, inchangé)
+│       ├── deploy-gpu.yml             # NOUVEAU — GPU node playbook
+│       ├── requirements.yml           # Ansible Galaxy (existant, inchangé)
 │       ├── inventory/
-│       │   ├── test.ini               # App node inventory (existing)
-│       │   └── gpu.ini.example       # NEW — GPU node inventory template
+│       │   ├── test.ini               # App node inventory (existant)
+│       │   └── gpu.ini.example       # NOUVEAU — GPU node inventory template
 │       ├── group_vars/
-│       │   ├── test.yml               # App node vars (existing)
-│       │   ├── gpu.yml                # NEW — GPU node variables
-│       │   ├── test.vault.example     # App node vault template (existing)
-│       │   └── gpu.vault.example      # NEW — GPU node vault template
+│       │   ├── test.yml               # App node vars (existant)
+│       │   ├── gpu.yml                # NOUVEAU — GPU node variables
+│       │   ├── test.vault.example     # App node vault template (existant)
+│       │   └── gpu.vault.example      # NOUVEAU — GPU node vault template
 │       └── templates/
-│           ├── docker-compose.gpu.yaml.j2  # NEW — GPU compose template
-│           ├── gpu-proxy.conf.j2            # NEW — GPU nginx template
-│           └── api_keys.map.j2              # NEW — GPU API keys template
+│           ├── docker-compose.gpu.yaml.j2  # NOUVEAU — GPU compose template
+│           ├── gpu-proxy.conf.j2            # NOUVEAU — GPU nginx template
+│           └── api_keys.map.j2              # NOUVEAU — GPU API keys template
 │
 ├── genie-ai-overlay/
 │   └── dataprep/
-│       └── genieai_dataprep_utils.py  # EXISTING — add DOCLING_ENDPOINT
+│       └── genieai_dataprep_utils.py  # EXISTANT — ajout DOCLING_ENDPOINT
 │
 └── secrets/
-    └── ssl/                           # SSL certs (existing, gitignored)
+    └── ssl/                           # SSL certs (existant, gitignored)
 ```
 
 ### Architectural Boundaries
@@ -387,7 +387,7 @@ genie-ai/                              # Project root (existing)
 |----------|----------|----------|----------|
 | Public HTTPS | nginx `:443` | nginx GPU `:9400-9404` | TLS 1.2+ |
 | Inter-service | Docker DNS (`http://service:port`) | nginx reverse proxy (`https://gpu-host:940x`) | HTTPS + API key |
-| GPU node internal | N/A | Docker DNS (`http://service:port`) | HTTP (not exposed) |
+| GPU node internal | N/A | Docker DNS (`http://service:port`) | HTTP (non exposé) |
 
 **Component Boundaries:**
 
@@ -427,62 +427,62 @@ genie-ai/                              # Project root (existing)
 
 **Data Boundaries:**
 
-| Boundary | Detail |
+| Boundary | Détail |
 |----------|--------|
-| Config | App node `env` / `.env` — GPU node vars in `group_vars/gpu.yml` |
+| Config | App node `env` / `.env` — GPU node vars dans `group_vars/gpu.yml` |
 | Secrets | App node vault `test.vault` — GPU node vault `gpu.vault` |
-| API keys | GPU node only — `api_keys.map` generated by Ansible from vault |
-| SSL | App node certs in `secrets/ssl/` — GPU node certs generated by certbot on-node |
+| API keys | GPU node only — `api_keys.map` généré par Ansible depuis vault |
+| SSL | App node certs dans `secrets/ssl/` — GPU node certs générés par certbot on-node |
 
 ### Requirements to Structure Mapping
 
-| # | Requirement | Location |
-|---|-------------|----------|
-| F1 | 5 dedicated GPU services | `docker-compose.gpu.yaml` |
-| F2 | Remote HTTPS endpoints | `deploy/ansible/templates/gpu-proxy.conf.j2` |
-| F3 | API keys auth (1/instance) | `deploy/ansible/templates/api_keys.map.j2` + `group_vars/gpu.yml` |
-| F4 | Multi-keys without restart | `nginx -s reload` in `deploy-gpu.yml` |
-| F5 | docling-serve (IBM) | Service in `docker-compose.gpu.yaml` |
+| # | Exigence | Emplacement |
+|---|----------|-------------|
+| F1 | 5 services GPU dédiés | `docker-compose.gpu.yaml` |
+| F2 | Endpoints HTTPS distants | `deploy/ansible/templates/gpu-proxy.conf.j2` |
+| F3 | Auth API keys (1/instance) | `deploy/ansible/templates/api_keys.map.j2` + `group_vars/gpu.yml` |
+| F4 | Multi-clés sans restart | `nginx -s reload` dans `deploy-gpu.yml` |
+| F5 | docling-serve (IBM) | Service dans `docker-compose.gpu.yaml` |
 | F6 | Dataprep `DOCLING_ENDPOINT` | `genie-ai-overlay/dataprep/genieai_dataprep_utils.py` |
-| F7 | Separate Ansible playbook | `deploy/ansible/deploy-gpu.yml` |
-| F8 | Template `.env` GPU section | `env` (section added) |
+| F7 | Playbook Ansible séparé | `deploy/ansible/deploy-gpu.yml` |
+| F8 | Template `.env` section GPU | `env` (section ajoutée) |
 
 ### Integration Points
 
 **Internal Communication (GPU node):**
-- Docker Compose internal network — services communicate via Docker DNS on internal ports
-- nginx reverse proxy is the only public entry point
+- Docker Compose internal network — services communiquent via Docker DNS sur ports internes
+- nginx reverse proxy est le seul point d'entrée public
 
 **External Communication (app → GPU):**
-- App node services use env vars to point to GPU node HTTPS endpoints
-- Example: `VLLM_ENDPOINT=https://gpu-host:9400/v1` instead of `http://vllm-llm:8000/v1`
-- Header `Authorization: Bearer <VLLM_API_KEY>` sent by each client service (native OpenAI SDK)
+- App node services utilisent env vars pour pointer vers GPU node HTTPS endpoints
+- Exemple : `VLLM_ENDPOINT=https://gpu-host:9400/v1` au lieu de `http://vllm-llm:8000/v1`
+- Header `X-API-Key` ajouté par chaque service client
 
 **Data Flow:**
 ```
 User Query
-  → Backend → ChatQnA → vLLM (app node or GPU node depending on config)
-  → Retriever → TEI Embedding (app node or GPU node depending on config)
-  → Reranker → TEI Reranker (app node or GPU node depending on config)
-  → Dataprep → docling-serve (app node or GPU node depending on config)
+  → Backend → ChatQnA → vLLM (app node ou GPU node selon config)
+  → Retriever → TEI Embedding (app node ou GPU node selon config)
+  → Reranker → TEI Reranker (app node ou GPU node selon config)
+  → Dataprep → docling-serve (app node ou GPU node selon config)
 ```
 
 ### File Organization Patterns
 
 **Configuration Files:**
-- `deploy/ansible/templates/` — all committed Jinja2 templates (`.j2`)
-- `group_vars/gpu.yml` — committed variables (no secrets)
-- `group_vars/gpu.vault` — Ansible Vault encrypted secrets
+- `deploy/ansible/templates/` — tous les templates Jinja2 committés (`.j2`)
+- `group_vars/gpu.yml` — variables committées (pas de secrets)
+- `group_vars/gpu.vault` — secrets chiffrés Ansible Vault
 
-**Templates (Jinja2, committed):**
-- `templates/docker-compose.gpu.yaml.j2` — compose generated with Ansible vars
-- `templates/gpu-proxy.conf.j2` — nginx config generated with Ansible vars
-- `templates/api_keys.map.j2` — API keys generated from `gpu_api_keys` vault
+**Templates (Jinja2, committés):**
+- `templates/docker-compose.gpu.yaml.j2` — compose généré avec vars Ansible
+- `templates/gpu-proxy.conf.j2` — nginx config généré avec vars Ansible
+- `templates/api_keys.map.j2` — clés API généré depuis `gpu_api_keys` vault
 
-**Secrets (never committed):**
-- GPU node SSL certificates — generated by certbot one-shot on the node
-- `group_vars/gpu.vault` — Ansible Vault encrypted
-- `inventory/gpu.ini` — deployment-specific inventory (copied from `.example`)
+**Secrets (jamais committés):**
+- Certificats SSL GPU node — générés par certbot one-shot sur le node
+- `group_vars/gpu.vault` — chiffré Ansible Vault
+- `inventory/gpu.ini` — inventaire spécifique au déploiement (copié depuis `.example`)
 
 ### Development Workflow Integration
 
@@ -498,9 +498,9 @@ cd deploy/ansible
 ansible-playbook -i inventory/gpu.ini deploy-gpu.yml --vault-id gpu@prompt
 ```
 
-**App node with remote GPU:**
+**App node avec GPU distant:**
 ```bash
-# .env overrides — point to GPU node
+# .env overrides — point vers GPU node
 VLLM_ENDPOINT=https://gpu.example.com:9400/v1
 TRANSLATION_VLLM_ENDPOINT=https://gpu.example.com:9401/v1
 EMBEDDING_SERVICE_URL=https://gpu.example.com:9402
@@ -514,56 +514,56 @@ VLLM_API_KEY=shared-api-key-for-this-instance
 ### Coherence Validation ✅
 
 **Decision Compatibility:**
-- The 4 decisions are coherent: separate Docker Compose (D1) + app node images (D2) + autonomous secrets (D3) + healthchecks/smoke tests (D4) form a consistent set.
-- No version incompatibility between selected images (all from the same existing `docker-compose.yaml`).
-- The nginx + certbot pattern (D2) is compatible with local secrets (D3) — certbot generates on the node, no synchronization needed.
+- Les 4 décisions sont cohérentes : Docker Compose séparé (D1) + images app node (D2) + secrets autonomes (D3) + healthchecks/smoke tests (D4) forment un ensemble sans contradiction.
+- Aucune incompatibilité de version entre les images sélectionnées (toutes issues du même `docker-compose.yaml` existant).
+- Le pattern nginx + certbot (D2) est compatible avec les secrets locaux (D3) — certbot génère sur le node, pas de synchronisation nécessaire.
 
 **Pattern Consistency:**
-- Uniform naming conventions (`gpu-` prefix, `.j2` templates, `deploy-gpu.yml`).
-- Ansible structure follows exactly the existing `deploy.yml` pattern.
-- Process patterns (deployment, rollback, single-node) are complete and non-contradictory.
+- Conventions de nommage uniformes (`gpu-` prefix, `.j2` templates, `deploy-gpu.yml`).
+- Structure Ansible suit exactement le pattern `deploy.yml` existant.
+- Process patterns (déploiement, rollback, single-node) sont complets et non contradictoires.
 
 **Structure Alignment:**
-- The directory tree is duplication-free — single location for each file.
-- API, component, and data boundaries are clearly defined and aligned with decisions.
+- Le directory tree est sans duplication — un seul emplacement pour chaque fichier.
+- Les boundaries API, component, et data sont clairement définies et alignées avec les décisions.
 
 ### Requirements Coverage Validation ✅
 
-| Requirement | Covered | By |
+| Exigence | Couvert | Par |
 |----------|---------|-----|
-| F1 — 5 GPU services | ✅ | `docker-compose.gpu.yaml` |
-| F2 — HTTPS endpoints | ✅ | `gpu-proxy.conf.j2` (nginx TLS) |
+| F1 — 5 services GPU | ✅ | `docker-compose.gpu.yaml` |
+| F2 — Endpoints HTTPS | ✅ | `gpu-proxy.conf.j2` (nginx TLS) |
 | F3 — API keys auth | ✅ | `api_keys.map.j2` + nginx `map` |
-| F4 — Multi-keys without restart | ✅ | `nginx -s reload` |
-| F5 — docling-serve (IBM) | ✅ | Service in compose, official image |
+| F4 — Multi-clés sans restart | ✅ | `nginx -s reload` |
+| F5 — docling-serve (IBM) | ✅ | Service dans compose, image officielle |
 | F6 — DOCLING_ENDPOINT | ✅ | `genieai_dataprep_utils.py` |
-| F7 — Separate Ansible | ✅ | `deploy-gpu.yml` |
-| F8 — Template `.env` | ✅ | Remote GPU Endpoints section |
+| F7 — Ansible séparé | ✅ | `deploy-gpu.yml` |
+| F8 — Template `.env` | ✅ | Section Remote GPU Endpoints |
 
 **NFR Coverage:**
 
-| NFR | Covered | By |
+| NFR | Couvert | Par |
 |-----|---------|-----|
-| Security (network not isolated) | ✅ | nginx TLS + API keys on all 5 services |
-| Multi-tenancy (N instances) | ✅ | Stateless, 1 key per client, nginx map |
-| Availability (zero downtime reload) | ✅ | `nginx -s reload` |
-| Backward Compatibility | ✅ | Existing defaults preserved, env vars unchanged |
+| Sécurité (réseau non isolé) | ✅ | nginx TLS + API keys sur tous les 5 services |
+| Mutualisation (N instances) | ✅ | Stateless, 1 clé par client, nginx map |
+| Disponibilité (zero downtime reload) | ✅ | `nginx -s reload` |
+| Rétrocompatibilité | ✅ | Defaults existants préservés, env vars inchangés |
 
 ### Implementation Readiness Validation ✅
 
-**Decision Completeness:** All decisions include versions, rationale, and concrete examples.
+**Decision Completeness:** Toutes les décisions incluent versions, rationale, et exemples concrets.
 
-**Structure Completeness:** Complete tree with precise locations, no generic placeholders.
+**Structure Completeness:** Arbre complet avec emplacements précis, pas de placeholders génériques.
 
-**Pattern Completeness:** Naming, structure, format, process, and enforcement guidelines documented.
+**Pattern Completeness:** Naming, structure, format, process, et enforcement guidelines documentés.
 
 ### Gap Analysis Results
 
-**No critical gaps.**
+**Aucun gap critique.**
 
-**Minor gaps (non-blocking):**
-- `docs/architecture.md` should be updated to document the GPU node (documentation, not architecture)
-- The port scheme in `env` template (F8) will need to be detailed during implementation
+**Gaps mineurs (non bloquants) :**
+- `docs/architecture.md` devrait être mis à jour pour documenter le GPU node (documentation, pas architecture)
+- Le schéma de ports dans `env` template (F8) devra être détaillé lors de l'implémentation
 
 ### Architecture Completeness Checklist
 
@@ -598,15 +598,15 @@ VLLM_API_KEY=shared-api-key-for-this-instance
 **Confidence Level:** High
 
 **Key Strengths:**
-- KISS approach validated by brainstorming + Party Mode
-- Zero template duplication
-- Existing patterns reused (Ansible, certbot, nginx)
-- Full backward compatibility — single-node unchanged
+- Approche KISS validée par brainstorming + Party Mode
+- Zéro duplication de templates
+- Patterns existants réutilisés (Ansible, certbot, nginx)
+- Rétrocompatibilité totale — single-node inchangé
 
 **Areas for Future Enhancement:**
-- OTel monitoring on GPU node
+- Monitoring OTel sur le GPU node
 - Cert expiry alerts
-- Multi-GPU node scaling
+- Scaling multi-GPU nodes
 
 ### Implementation Handoff
 

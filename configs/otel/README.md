@@ -271,6 +271,61 @@ Externalized services called by GENIE.AI follow the same pattern:
 
 > **We trace what crosses our perimeter at the caller level.** External service internals are their own observability concern.
 
+## Retention Policies
+
+Data retention is configurable per telemetry type via environment variables in `.env` (Section 12C):
+
+| Variable | Default | Data Type | Notes |
+|----------|---------|-----------|-------|
+| `VICTORIAMETRICS_RETENTION` | `30d` | Metrics | Short retention due to high cardinality |
+| `VICTORIALOGS_RETENTION` | `30d` | Logs | Can extend for compliance requirements |
+| `VICTORIATRACES_RETENTION` | `30d` | Traces | Sampling rate (`OTEL_TRACES_SAMPLER_RATE`) controls volume |
+
+**Recommendations:**
+- Monitor storage usage via the Observability Stack Health dashboard
+- Adjust retention vs disk capacity based on deployment needs
+- For high-volume production, consider reducing trace retention or lowering sampling rate
+
+## Alerting
+
+Grafana-native alerting provides meta-monitoring for the observability stack itself ("who watches the watchers").
+
+### Alert Rules
+
+Four alert rules are provisioned in `configs/grafana/provisioning/alerting/alert-rules.yml`:
+
+| Alert | Severity | Condition | Purpose |
+|-------|----------|-----------|---------|
+| OTel Collector Down | Critical | `rate(vm_rows_ingested_total[2m]) == 0` for 2m | Collector pipeline broken (proxy: VM receives zero rows) |
+| VictoriaMetrics Storage High | Warning | `vm_free_disk_space_bytes < 1GB` for 5m | Storage filling up |
+| VictoriaLogs Ingestion Drop | Warning | `rate(vm_rows_ingested_total{type="vlstorage"}[5m]) < 1` for 5m | Log pipeline broken |
+| VictoriaTraces Export Failures | Warning | `rate(otelcol_exporter_send_failed_spans{...}[5m]) > 0` for 5m | Trace export errors |
+
+### Alert Thresholds
+
+Default thresholds are conservative (designed for early warning). Tune per deployment:
+
+- **Collector Down**: Alerting on `noDataState` — fires if the metric disappears (Collector completely down)
+- **Storage High**: 1GB free disk threshold — adjust based on total disk size
+- **Ingestion drops**: Baseline-relative — adjust threshold based on expected throughput
+
+### Contact Points
+
+Alert notifications are routed via `configs/grafana/provisioning/alerting/contact-points.yml`:
+
+- **Default**: Webhook endpoint (placeholder URL — configure via Grafana UI)
+- Configure real endpoints via Grafana UI → Alerting → Contact points
+- Or use Grafana env vars (`GF_ALERTING_...`) for runtime configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GRAFANA_ALERT_WEBHOOK_URL` | (empty) | Webhook URL for alert notifications (configure via Grafana UI) |
+| `GRAFANA_ALERT_EMAIL` | (empty) | Email address for alert notifications (configure via Grafana UI) |
+
+**Note:** These variables are optional documentation placeholders. Grafana provisioning YAML does not support env var substitution — configure actual values via the Grafana UI after deployment.
+
 ## Smoke Test
 
 After deploying with `ENABLE_OBSERVABILITY=1`, verify the stack is healthy:

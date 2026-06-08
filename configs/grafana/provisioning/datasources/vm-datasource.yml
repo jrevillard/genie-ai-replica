@@ -5,6 +5,7 @@ datasources:
     type: prometheus
     access: proxy
     url: http://victoriametrics:8428
+    uid: victoriametrics
     isDefault: true
     editable: false
     jsonData:

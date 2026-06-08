@@ -569,6 +569,11 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 # Default in docker-compose: http://otel-collector:4318 — override only for external collectors
 # OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 
+# Grafana alerting contact points (optional — configure via Grafana UI for production)
+# Used by: grafana service (alerting notification channels)
+# GRAFANA_ALERT_WEBHOOK_URL=
+# GRAFANA_ALERT_EMAIL=
+
 # Grafana admin password (required secret, no default)
 # Used by: grafana service
 GRAFANA_ADMIN_PASSWORD=

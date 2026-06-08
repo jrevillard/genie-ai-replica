@@ -1,0 +1,440 @@
+# =============================================================================
+# GENIE.AI — Grafana Alert Rules for Observability Stack Health
+# =============================================================================
+# Meta-monitoring alerts: "who watches the watchers"
+# All rules query VictoriaMetrics (uid: victoriametrics) as the metrics source.
+#
+# Alert rule UIDs must be unique and stable — do not change them after creation.
+# Datasource UID references vm-datasource.yml uid field (victoriametrics).
+# =============================================================================
+
+apiVersion: 1
+
+groups:
+  # ---------------------------------------------------------------------------
+  # Group 1: OTel Collector Down (AC1)
+  # Proxy approach: if VictoriaMetrics receives zero rows, the pipeline is
+  # broken (Collector down OR Collector-to-VM export broken OR VM not ingesting).
+  # Do NOT use otelcol_processor_accepted_spans — Collector self-telemetry is
+  # not exported to VictoriaMetrics.
+  # ---------------------------------------------------------------------------
+  - orgId: 1
+    uid: observability_pipeline_health
+    title: observability.pipeline_health
+    folder: Observability
+    interval: 60s
+    rules:
+      - uid: otel_collector_down
+        title: OTel Collector Down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: victoriametrics
+            model:
+              expr: rate(vm_rows_ingested_total[2m])
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              type: math
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                    type: ref
+                  reducer:
+                    type: avg
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: avg
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.5
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                    type: ref
+                  reducer:
+                    type: avg
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 2m
+        annotations:
+          description: "OTel Collector is not ingesting data. VictoriaMetrics received zero rows for over 2 minutes. Check Collector health and pipeline connectivity."
+          summary: "OTel Collector pipeline is broken"
+        labels:
+          severity: critical
+          component: otel-collector
+
+  # ---------------------------------------------------------------------------
+  # Group 2: VictoriaMetrics Storage (AC2)
+  # Alerts when storage usage exceeds 90% of capacity.
+  # ---------------------------------------------------------------------------
+  - orgId: 1
+    uid: observability_vm_storage
+    title: observability.vm_storage
+    folder: Observability
+    interval: 60s
+    rules:
+      - uid: vm_storage_high
+        title: VictoriaMetrics Storage Usage High
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: victoriametrics
+            model:
+              expr: vm_free_disk_space_bytes
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              type: math
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1073741824
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                    type: ref
+                  reducer:
+                    type: avg
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: avg
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: []
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                    type: ref
+                  reducer:
+                    type: avg
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: "VictoriaMetrics free disk space is below 1GB. Storage may fill up soon. Check retention settings and disk capacity."
+          summary: "VictoriaMetrics storage usage is critically high"
+        labels:
+          severity: warning
+          component: victoriametrics
+
+  # ---------------------------------------------------------------------------
+  # Group 3: VictoriaLogs Ingestion Drop (AC3)
+  # VictoriaLogs is a separate service from VictoriaMetrics, so vm_rows_ingested_total
+  # is not available for VL. Instead, we use the OTel Collector's fluent_forward
+  # receiver metric which flows to VictoriaMetrics via prometheusremotewrite.
+  # ---------------------------------------------------------------------------
+  - orgId: 1
+    uid: observability_vlog_ingestion
+    title: observability.vlog_ingestion
+    folder: Observability
+    interval: 60s
+    rules:
+      - uid: vlogs_ingestion_drop
+        title: VictoriaLogs Ingestion Drop
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: victoriametrics
+            model:
+              expr: rate(otelcol_receiver_accepted_log_records{receiver="fluent_forward"}[5m])
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              type: math
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: avg
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                    type: ref
+                  reducer:
+                    type: avg
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: "VictoriaLogs ingestion rate has dropped below expected threshold. Log pipeline may be broken. Check OTel Collector log pipeline and VictoriaLogs health."
+          summary: "VictoriaLogs ingestion rate dropped"
+        labels:
+          severity: warning
+          component: victorialogs
+
+  # ---------------------------------------------------------------------------
+  # Group 4: VictoriaTraces Alerts (AC4)
+  # Two alerts cover different failure modes:
+  #   - Export Failures: Collector fails to send traces to VictoriaTraces
+  #   - Ingestion Drop: No spans reaching the Collector's OTLP receiver
+  # ---------------------------------------------------------------------------
+  - orgId: 1
+    uid: observability_vtrace_ingestion
+    title: observability.vtrace_ingestion
+    folder: Observability
+    interval: 60s
+    rules:
+      - uid: vtraces_export_failures
+        title: VictoriaTraces Export Failures
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: victoriametrics
+            model:
+              expr: rate(otelcol_exporter_send_failed_spans{exporter="otlp_http/victoriatraces"}[5m])
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              type: math
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: avg
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                    type: ref
+                  reducer:
+                    type: avg
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: "OTel Collector is failing to export traces to VictoriaTraces. Traces may be lost. Check Collector trace pipeline and VictoriaTraces connectivity."
+          summary: "VictoriaTraces export failures detected"
+        labels:
+          severity: warning
+          component: victoriatraces
+      - uid: vtraces_ingestion_drop
+        title: VictoriaTraces Ingestion Rate Drop
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: victoriametrics
+            model:
+              expr: rate(otelcol_receiver_accepted_spans{receiver="otlp"}[5m])
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              type: math
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: avg
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.5
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                    type: ref
+                  reducer:
+                    type: avg
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: "No spans are reaching the OTel Collector's OTLP receiver. Trace sources may be down or misconfigured. Check instrumented services and Collector receiver."
+          summary: "VictoriaTraces ingestion rate dropped to zero"
+        labels:
+          severity: warning
+          component: victoriatraces

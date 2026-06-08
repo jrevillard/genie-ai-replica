@@ -133,6 +133,21 @@ if (process.env.NODE_ENV === 'test' || !process.env.OTEL_EXPORTER_OTLP_ENDPOINT)
         // root span, flooding traces with <100µs noise entries.
         '@opentelemetry/instrumentation-express': {
           ignoreLayersType: ['middleware']
+        },
+        // Include URL path in HTTP span names (default is just "GET"/"POST").
+        // Callback signature: (span, request, response) — all 3 args required.
+        // Server: request = IncomingMessage with .url
+        // Client: request = ClientRequest with .path
+        '@opentelemetry/instrumentation-http': {
+          applyCustomAttributesOnSpan(span, request, _response) {
+            const method = request.method || 'HTTP';
+            // IncomingMessage (server) uses .url, ClientRequest (outgoing) uses .path
+            const rawPath = request.url || request.path || '';
+            const path = (typeof rawPath === 'string' ? rawPath.split('?')[0] : '') || '';
+            if (path) {
+              span.updateName(`${method} ${path}`);
+            }
+          }
         }
       })
     ],

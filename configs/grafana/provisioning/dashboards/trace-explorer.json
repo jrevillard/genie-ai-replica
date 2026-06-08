@@ -64,7 +64,7 @@
           "http.response.status_code"
         ],
         "tags": [],
-        "type": "trace",
+        "type": "list",
         "spanName": "",
         "minDuration": "",
         "maxDuration": "",
@@ -310,7 +310,8 @@
         "spanNameColumn": "Name",
         "showTraceId": true,
         "filterByTraceID": true,
-        "filterBySpanName": true
+        "filterBySpanName": true,
+        "type": "list"
       },
       "targets": [
         {

@@ -146,7 +146,11 @@ def setup_tracing(service_name: str) -> None:
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
-        FastAPIInstrumentor().instrument()
+        FastAPIInstrumentor().instrument(
+            # Exclude health-check endpoints from tracing to reduce noise in
+            # Grafana trace search.  Docker health checks hit these every 10s.
+            excluded_urls="health,ready,alive",
+        )
         logging.getLogger(__name__).debug("FastAPI global auto-instrumentation enabled")
     except Exception as exc:
         logging.getLogger(__name__).warning(

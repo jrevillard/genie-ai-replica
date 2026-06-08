@@ -114,7 +114,13 @@ if (process.env.NODE_ENV === 'test' || !process.env.OTEL_EXPORTER_OTLP_ENDPOINT)
     instrumentations: [
       getNodeAutoInstrumentations({
         '@opentelemetry/instrumentation-fs': { enabled: false },
-        '@opentelemetry/instrumentation-dns': { enabled: false }
+        '@opentelemetry/instrumentation-dns': { enabled: false },
+        // Suppress health-check traces — they pollute Grafana trace search.
+        '@opentelemetry/instrumentation-http': {
+          ignoreIncomingPaths: [
+            (url) => url.includes('/health') || url.includes('/ready') || url.includes('/favicon'),
+          ],
+        },
       })
     ],
     textMapPropagator: new W3CTraceContextPropagator(),

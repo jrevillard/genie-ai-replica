@@ -209,6 +209,30 @@ func handleOperations(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": result.Data})
 }
 
+// handleServicesREST handles REST-style Jaeger API paths that Grafana's
+// Jaeger datasource uses: /api/services/{service}/operations.
+// Go's default mux matches "/api/services/" as a prefix for any
+// sub-path under /api/services/.
+func handleServicesREST(w http.ResponseWriter, r *http.Request) {
+	// r.URL.Path will be "/api/services/{service}/operations"
+	path := strings.TrimPrefix(r.URL.Path, "/api/services/")
+	parts := strings.SplitN(path, "/", 2)
+	if len(parts) < 2 || parts[1] != "operations" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+	service := parts[0]
+	var result struct {
+		Data []string `json:"data"`
+	}
+	upstream := victoriaTracesURL + "/select/jaeger/api/services/" + url.QueryEscape(service) + "/operations"
+	if _, err := httpGetJSON(upstream, 15*time.Second, &result); err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "upstream error"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"data": result.Data})
+}
+
 // handleSearch returns Jaeger-format trace search results.
 // When no specific service is given, iterates over all services and merges results.
 func handleSearch(w http.ResponseWriter, r *http.Request) {
@@ -429,6 +453,7 @@ func main() {
 
 	// Jaeger API endpoints — used by Grafana Jaeger datasource
 	mux.HandleFunc("/api/services", handleServices)
+	mux.HandleFunc("/api/services/", handleServicesREST) // /api/services/{service}/operations
 	mux.HandleFunc("/api/operations", handleOperations)
 	mux.HandleFunc("/api/search", handleSearch)
 	mux.HandleFunc("/api/v2/search/tags", handleSearchTagsV2)

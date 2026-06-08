@@ -236,7 +236,7 @@ def get_tracer(name: str = __name__):
     """
     return trace.get_tracer(name)
 
-def with_span(name: str, attributes: dict | None = None):
+def with_span(name: str, tracer_name: str = __name__, attributes: dict | None = None):
     """Context manager that wraps the common try/except pattern with built-in error handling.
 
     Usage::
@@ -250,9 +250,9 @@ def with_span(name: str, attributes: dict | None = None):
     Guarantees:
         - span.set_status(ERROR) + record_exception on any exception
         - span.end() always called (context manager)
-        - No-op when tracing is disabled (TESTING env var)
+        - No-op when tracing is disabled (OTEL_EXPORTER_OTLP_ENDPOINT unset)
     """
-    tracer = get_tracer("with_span")
+    tracer = get_tracer(tracer_name)
     span = tracer.start_span(name, attributes=attributes)
     return _SpanContext(span)
 

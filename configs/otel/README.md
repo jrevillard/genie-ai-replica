@@ -414,7 +414,7 @@ with tracer.start_as_current_span("operation.name") as span:
 Tracing must be disabled in test environments to avoid affecting existing test suites:
 
 **Node.js** (`tracing.js`): `if (process.env.NODE_ENV === 'test') { /* return no-ops */ }`
-**Python** (`tracing.py`): `if os.getenv("TESTING"): { /* return no-op tracer/meter */ }`
+**Python** (`tracing.py`): No explicit test guard — relies on `OTEL_EXPORTER_OTLP_ENDPOINT` being unset in test environments (returns no-op tracer via `setup_tracing()` early return)
 
 Both provide the same API shape (tracer, meter, shutdown) as no-op stubs.
 

@@ -21,18 +21,19 @@ so that I know the monitoring system is healthy and not silently losing data.
 ## Tasks / Subtasks
 
 - [ ] Task 1: Create Grafana alert rule provisioning files (AC: 1, 2, 3, 4)
-  - [ ] 1.1 Create `configs/grafana/provisioning/alerting/alert-rules.yml` with 4 alert rule groups
-  - [ ] 1.2 Alert: OTel Collector Down — ingestion rate = 0 for > 2 min (query VictoriaMetrics for `scrape_samples_scraped` or OTel Collector health metric)
-  - [ ] 1.3 Alert: VictoriaMetrics Storage > 90% — query `vm_free_disk_space_bytes` or use VictoriaMetrics `/api/v1/status/tsdb` via Prometheus datasource
-  - [ ] 1.4 Alert: VictoriaLogs ingestion rate drop — compare current rate to baseline using `rate()` with offset comparison
-  - [ ] 1.5 Alert: VictoriaTraces ingestion rate drop — same pattern as logs alert but for trace pipeline
-  - [ ] 1.6 Set appropriate severity labels (critical for collector down, warning for storage/ingestion drops)
-  - [ ] 1.7 Configure `noDataState` and `execErrState` appropriately per alert
+  - [ ] 1.1 Verify metric names by querying VictoriaMetrics `/metrics` endpoint at runtime — see "Metric Verification" in Dev Notes
+  - [ ] 1.2 Create `configs/grafana/provisioning/alerting/alert-rules.yml` with 4 alert rule groups. Use `datasourceUid: victoriametrics` (matches `uid` added to `vm-datasource.yml`)
+  - [ ] 1.3 Alert: OTel Collector Down — use **proxy approach**: query `rate(vm_rows_ingested_total[2m]) == 0` on VictoriaMetrics. If VM receives zero rows, the Collector pipeline is broken. Do NOT use `otelcol_processor_accepted_spans` (Collector self-telemetry not exported to VM).
+  - [ ] 1.4 Alert: VictoriaMetrics Storage > 90% — query `process_virtual_memory_bytes / process_virtual_memory_max_bytes` or use VictoriaMetrics HTTP API `/api/v1/status/tsdb` as fallback. Verify exact metric name at runtime.
+  - [ ] 1.5 Alert: VictoriaLogs ingestion rate drop — compare `rate(vm_rows_ingested_total{vm_agent="victorialogs"}[5m])` to baseline using offset comparison. Verify metric name at runtime.
+  - [ ] 1.6 Alert: VictoriaTraces ingestion rate drop — same proxy pattern: `rate(otelcol_exporter_sent_spans{exporter="otlp_http/victoriatraces"}[5m])` drop. Verify metric name at runtime.
+  - [ ] 1.7 Set appropriate severity labels (critical for collector down, warning for storage/ingestion drops)
+  - [ ] 1.8 Configure `noDataState: Alerting` and `execErrState: Alerting` for collector-down alert; `noDataState: OK` for others
 
 - [ ] Task 2: Create Grafana notification provisioning (AC: 5)
-  - [ ] 2.1 Create `configs/grafana/provisioning/alerting/contactpoints.yml` with webhook contact point template
+  - [ ] 2.1 Create `configs/grafana/provisioning/alerting/contact-points.yml` with webhook contact point template (kebab-case, standard Grafana naming)
   - [ ] 2.2 Create `configs/grafana/provisioning/alerting/notification-policies.yml` with default routing policy
-  - [ ] 2.3 Add env vars to `env` template: `GRAFANA_ALERT_WEBHOOK_URL` (optional), `GRAFANA_ALERT_EMAIL` (optional)
+  - [ ] 2.3 Add env vars to `env` template Section 12C: `GRAFANA_ALERT_WEBHOOK_URL` (optional), `GRAFANA_ALERT_EMAIL` (optional)
   - [ ] 2.4 Configure default notification policy to route all alerts to the configured contact point
 
 - [ ] Task 3: Create Observability Stack Health dashboard (AC: 6)
@@ -43,25 +44,28 @@ so that I know the monitoring system is healthy and not silently losing data.
   - [ ] 3.5 Panel: VictoriaTraces ingestion rate + storage size
   - [ ] 3.6 Panel: Grafana health (self-monitoring)
   - [ ] 3.7 Panel: Tempo Proxy health
-  - [ ] 3.8 Include alert state annotations on relevant panels
+  - [ ] 3.8 Panel: Query latency — VictoriaMetrics query performance (evaluate `vm_request_duration_seconds` or equivalent)
+  - [ ] 3.9 Include alert state annotations on relevant panels
 
-- [ ] Task 4: Document retention policies (AC: 7)
+- [ ] Task 4: Document retention policies and alerting variables (AC: 7)
   - [ ] 4.1 Update `configs/otel/README.md` with retention policy documentation per data type
   - [ ] 4.2 Verify env template Section 12C already has `VICTORIAMETRICS_RETENTION`, `VICTORIALOGS_RETENTION`, `VICTORIATRACES_RETENTION` variables
   - [ ] 4.3 Add documentation for alert threshold configuration
+  - [ ] 4.4 Document alerting env vars (`GRAFANA_ALERT_WEBHOOK_URL`, `GRAFANA_ALERT_EMAIL`) in `env` template Section 12C with usage examples
 
-- [ ] Task 5: Wire provisioning into Grafana container (AC: 1-7)
-  - [ ] 5.1 Update `docker-compose.yaml` Grafana volume mount to include alerting provisioning directory
-  - [ ] 5.2 Add Grafana environment variables for alerting configuration (`GF_ALERTING_ENABLED`, etc.)
-  - [ ] 5.3 Add `ENABLE_OBSERVABILITY` guard — alerts only active when stack is enabled
+- [ ] Task 5: Wire provisioning into Grafana container (AC: 1)
+  - [ ] 5.1 Verify Grafana volume mount `./configs/grafana/provisioning:/etc/grafana/provisioning:ro` already covers `alerting/` subdirectory (no mount change needed)
+  - [ ] 5.2 Verify Grafana picks up alerting provisioning files on startup (no env var changes needed — alerting is always enabled in Grafana; alert rules only fire when datasources are reachable, i.e., `ENABLE_OBSERVABILITY=1`)
+  - [ ] 5.3 Add `uid: victoriametrics` to `configs/grafana/provisioning/datasources/vm-datasource.yml` for stable alert rule datasource references
 
-- [ ] Task 6: Unit tests for provisioning files (AC: 1-7)
+- [ ] Task 6: Unit tests for provisioning files (AC: 1, 2, 3, 4, 5, 6)
   - [ ] 6.1 Test alert rule YAML is valid and all 4 rules present with correct PromQL queries
-  - [ ] 6.2 Test contact point and notification policy YAML structure
-  - [ ] 6.3 Test dashboard JSON structure (panels, datasources)
-  - [ ] 6.4 Test env template contains new alerting variables
+  - [ ] 6.2 Test all `datasourceUid` values in alert rules match provisioned datasource UIDs (validate against `vm-datasource.yml` `uid` field)
+  - [ ] 6.3 Test contact point and notification policy YAML structure
+  - [ ] 6.4 Test dashboard JSON structure (panels, datasources, query latency panel present)
+  - [ ] 6.5 Test env template contains new alerting variables
 
-- [ ] Task 7: Update Ansible for alerting variables (AC: 5, 7)
+- [ ] Task 7: Update Ansible for alerting variables (AC: 7)
   - [ ] 7.1 Add alerting env vars to `deploy/ansible/group_vars/all.yml`
   - [ ] 7.2 Add alerting env vars to `deploy/ansible/templates/env.j2`
   - [ ] 7.3 Add alerting secrets to vault example if needed
@@ -110,23 +114,30 @@ configs/grafana/provisioning/
 
 ### Key Metric Names for Alerts
 
-VictoriaMetrics exposes self-monitoring metrics. Use these for alerting:
+VictoriaMetrics exposes self-monitoring metrics at `:8428/metrics`. **MUST verify metric names at runtime** — names may differ between versions.
 
-**OTel Collector health:**
-- `otelcol_processor_accepted_spans` — spans accepted by processor (use `rate()` to check if > 0)
-- Or use OTel Collector's own health endpoint metrics exposed via Prometheus exporter
-- Fallback: check if VictoriaMetrics receives any data via `up{job="victoriametrics"}`
+**Metric Verification (Task 1.1):**
+```bash
+# Query VictoriaMetrics self-monitoring metrics
+docker exec $(docker ps --format "{{.Names}}" | grep victoriametrics | head -1) \
+  wget -qO- http://127.0.0.1:8428/metrics | grep -E "vm_rows|vm_data|process_virtual"
+```
+
+**OTel Collector health — PROXY APPROACH:**
+- Do NOT use `otelcol_processor_accepted_spans` — Collector self-telemetry is NOT exported to VictoriaMetrics
+- Use proxy: `rate(vm_rows_ingested_total[2m]) == 0` on VictoriaMetrics. If VM receives zero rows, the pipeline is broken.
+- This covers: Collector down + Collector-to-VM export broken + VM not ingesting
 
 **VictoriaMetrics storage:**
-- `vm_free_disk_space_bytes` — free disk space on VM storage
-- `vm_data_size_bytes` — actual data size
-- Compute: `1 - (vm_free_disk_space_bytes / vm_free_disk_space_bytes offset 7d)` for trend-based alerting
-- Simpler: VictoriaMetrics exposes `vm_storage_size_bytes` and total disk can be inferred
+- `vm_free_disk_space_bytes` — may or may not exist depending on version
+- Fallback: query VM HTTP API `/api/v1/status/tsdb` for storage stats
+- **Verify at runtime** before writing alert queries
 
 **Ingestion rate monitoring:**
-- VictoriaMetrics: `rate(scrape_samples_scraped[5m])` for scrape-level monitoring
-- VictoriaLogs: Use the logs datasource to query log ingestion volume over time
-- VictoriaTraces: Query trace count via Jaeger API or use metrics exported by VictoriaTraces
+- VictoriaMetrics: `rate(vm_rows_ingested_total[5m])` for overall ingestion
+- VictoriaLogs: Use the logs datasource or VM exporter metrics for log volume
+- VictoriaTraces: `rate(otelcol_exporter_sent_spans{exporter="otlp_http/victoriatraces"}[5m])` if Collector exports this metric
+- **All metric names must be verified at runtime**
 
 ### Grafana Alert Rule YAML Schema (Grafana 12.x)
 
@@ -143,11 +154,9 @@ groups:
         condition: A
         data:
           - refId: A
-            datasourceUid: victoria-metrics  # Match datasource UID from vm-datasource.yml
+            datasourceUid: victoriametrics  # MUST match uid in vm-datasource.yml
             model:
-              expr: >
-                rate(otelcol_processor_accepted_spans{processor="batch"}[2m]) == 0
-                or vector(0)
+              expr: rate(vm_rows_ingested_total[2m]) == 0
               intervalMs: 60000
               maxDataPoints: 43200
               refId: A
@@ -161,11 +170,11 @@ groups:
           severity: critical
           component: observability
         annotations:
-          summary: "OTel Collector is not processing spans"
-          description: "Ingestion rate has been zero for more than 2 minutes. The collector may be down or misconfigured."
+          summary: "OTel Collector is not ingesting data"
+          description: "VictoriaMetrics ingestion rate has been zero for more than 2 minutes. The Collector may be down or misconfigured."
 ```
 
-**IMPORTANT:** The `datasourceUid` in alert rules MUST match the actual provisioned datasource UID. Check `configs/grafana/provisioning/datasources/vm-datasource.yml` — if no `uid` is set, Grafana auto-generates one. **You may need to add an explicit `uid` to the VM datasource** to reference it in alert rules.
+**CRITICAL:** The `datasourceUid` in alert rules MUST match the `uid` field in `configs/grafana/provisioning/datasources/vm-datasource.yml`. Currently that file has NO explicit `uid` — Grafana auto-generates one. **Task 5.3 adds `uid: victoriametrics` to `vm-datasource.yml`** to fix this.
 
 ### Contact Points Schema
 
@@ -235,14 +244,7 @@ These are configurable per deployment via `.env`. Document in `configs/otel/READ
 
 ### Docker Compose Changes
 
-The Grafana service already mounts `./configs/grafana/provisioning:/etc/grafana/provisioning:ro`. Adding `alerting/` subdirectory files will automatically be picked up by Grafana on startup. **No volume mount change needed.**
-
-Add to Grafana environment:
-```yaml
-- GF_ALERTING_ENABLED=${ENABLE_OBSERVABILITY:-0}
-```
-
-Wait — `GF_ALERTING_ENABLED` doesn't exist as a toggle. Grafana alerting is always enabled when Grafana is running. The alert rules will only fire when the datasources are available (i.e., when `ENABLE_OBSERVABILITY=1`). **No special guard needed** — alerts simply won't fire when the observability stack is disabled because the datasources are unreachable.
+The Grafana service already mounts `./configs/grafana/provisioning:/etc/grafana/provisioning:ro`. Adding `alerting/` subdirectory files will automatically be picked up by Grafana on startup. **No volume mount change needed. No env var change needed.** Alert rules only fire when datasources are reachable (`ENABLE_OBSERVABILITY=1`).
 
 ### Ansible Integration
 
@@ -255,8 +257,9 @@ Alerting env vars to add:
 **Unit tests only** (no running Grafana needed):
 - Validate YAML structure of provisioning files
 - Validate all 4 alert rules exist with correct UIDs and queries
+- **Validate datasource UID references**: all `datasourceUid` values in alert rules must match `uid` field in corresponding datasource YAML
 - Validate contact point and notification policy schemas
-- Validate dashboard JSON has required panels
+- Validate dashboard JSON has required panels (including query latency panel)
 - Validate env template has alerting variables
 
 Use Node.js/Jest for consistency with existing test patterns (see Story 7-9's `kong-otel-config.test.js` pattern).
@@ -266,7 +269,7 @@ Use Node.js/Jest for consistency with existing test patterns (see Story 7-9's `k
 | File | Action | Purpose |
 |------|--------|---------|
 | `configs/grafana/provisioning/alerting/alert-rules.yml` | NEW | 4 alert rule definitions |
-| `configs/grafana/provisioning/alerting/contactpoints.yml` | NEW | Webhook/email contact points |
+| `configs/grafana/provisioning/alerting/contact-points.yml` | NEW | Webhook/email contact points |
 | `configs/grafana/provisioning/alerting/notification-policies.yml` | NEW | Default routing policy |
 | `configs/grafana/provisioning/dashboards/observability-stack-health.json` | NEW | Stack health dashboard |
 | `configs/grafana/provisioning/datasources/vm-datasource.yml` | UPDATE | Add explicit `uid` for alert rule references |
@@ -279,19 +282,21 @@ Use Node.js/Jest for consistency with existing test patterns (see Story 7-9's `k
 
 ### Critical Implementation Notes
 
-1. **Datasource UID alignment** — Alert rules reference datasources by UID. If `vm-datasource.yml` doesn't have an explicit `uid`, Grafana auto-generates one that changes between restarts. **MUST add `uid: victoriametrics` to the VM datasource** for stable alert rule references. Check other datasources too — `vtraces-datasource.yml` already has `uid: victoriatraces`.
+1. **Datasource UID alignment** — Alert rules reference datasources by UID. `vm-datasource.yml` currently has NO explicit `uid` — Grafana auto-generates one that changes between restarts. **Task 5.3 MUST add `uid: victoriametrics` to `vm-datasource.yml`** for stable alert rule references. `vtraces-datasource.yml` already has `uid: victoriatraces`.
 
 2. **No secrets in committed files** — Contact point URLs/emails should NOT contain real credentials. Use placeholder values and document UI-based configuration.
 
 3. **Alert rule UIDs must be unique and stable** — Use descriptive UIDs like `otel_collector_down`, `vm_storage_high`, `vlogs_ingestion_drop`, `vtraces_ingestion_drop`.
 
-4. **PromQL metric names** — Verify exact metric names by checking VictoriaMetrics documentation for self-monitoring metrics. VictoriaMetrics exposes metrics at `:8428/metrics` (Prometheus format). Key metrics: `vm_rows_ingested_total`, `vm_data_size_bytes`, `vm_free_disk_space_bytes`.
+4. **PromQL metric names MUST be verified at runtime** — VictoriaMetrics v1.138.0 exposes metrics at `:8428/metrics`. Verify exact names before writing queries. Names may differ between versions. Task 1.1 is dedicated to this verification.
 
-5. **OTel Collector metrics** — The Collector exposes its own metrics via the `prometheus` exporter or via OTLP. Check if Collector self-telemetry is configured in `otel-collector-config.yaml`. If not, the Collector's `batch` processor metrics (`otelcol_processor_accepted_spans`) may not be exported to VictoriaMetrics. **Alternative approach**: Use a health-check based alert — ping Collector's `:13133/health/status` endpoint via a synthetic check, or use the absence of ANY metric data in VictoriaMetrics as the "collector down" signal.
+5. **OTel Collector metrics NOT available in VictoriaMetrics** — The Collector's self-telemetry (`otelcol_processor_accepted_spans` etc.) is NOT exported to VictoriaMetrics. Use **proxy approach**: query `vm_rows_ingested_total` on VictoriaMetrics. Zero ingestion = pipeline broken.
 
-6. **VictoriaLogs/Traces ingestion rate** — These services may not export Prometheus metrics by default. VictoriaLogs exposes some stats at `:9428/metrics`. VictoriaTraces at `:10428/metrics`. If they don't expose ingestion metrics, use proxy queries through VictoriaMetrics (which tracks exporter send rates).
+6. **VictoriaLogs/Traces ingestion rate** — These services may not export Prometheus metrics by default. VictoriaLogs exposes some stats at `:9428/metrics`. VictoriaTraces at `:10428/metrics`. If they don't expose ingestion metrics, use proxy queries through VictoriaMetrics or Collector exporter metrics.
 
-7. **Grafana alerting folder** — Grafana 12.x looks in `/etc/grafana/provisioning/alerting/` for alert provisioning files. Since the provisioning directory is already mounted read-only, simply creating files in `configs/grafana/provisioning/alerting/` is sufficient.
+7. **Grafana alerting folder** — Grafana 12.x looks in `/etc/grafana/provisioning/alerting/` for alert provisioning files. Since the provisioning directory is already mounted read-only, simply creating files in `configs/grafana/provisioning/alerting/` is sufficient. No volume mount or env var change needed.
+
+8. **No `GF_ALERTING_ENABLED` env var** — This variable does NOT exist in Grafana. Alerting is always enabled. Alert rules only fire when datasources are reachable (i.e., `ENABLE_OBSERVABILITY=1`). No special guard needed.
 
 ### Previous Story Learnings (Story 7-9)
 

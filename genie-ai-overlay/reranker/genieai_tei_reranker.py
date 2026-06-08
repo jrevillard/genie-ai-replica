@@ -31,7 +31,7 @@ class GenieSearchedDoc(SearchedDoc):
 logger = CustomLogger("genie_tei_reranking")
 logflag = os.getenv("LOGFLAG", False)
 
-RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice") # slice, threshold, knee_threshold
+RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice") # slice, threshold, slice_threshold, knee_threshold
 RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.75))
 RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 1))
 
@@ -113,6 +113,22 @@ class GenieTEIReranking(OpeaTEIReranking):
                         "text": input.retrieved_docs[best_response["index"]].text, 
                         "score": best_response["score"]
                     })
+
+            elif reranking_strategy == "slice_threshold":
+                top_n = reranker_top_n if reranker_top_n else 1
+                for best_response in decoded_response:
+                    if best_response["score"] >= reranking_threshold:
+                        reranking_results.append(
+                            {"text": input.retrieved_docs[best_response["index"]].text, 
+                            "score": best_response["score"]}
+                        )
+                        if len(reranking_results) >= top_n:
+                            break
+                    else:
+                        # TEI responses are pre-sorted descending, 
+                        # can break early if a score falls below threshold
+                        break
+
             else:
                 logger.warning(f"Unknown strategy {reranking_strategy}. Defaulting to slice.")
                 for best_response in decoded_response[: input.top_n]:

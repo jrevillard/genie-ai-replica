@@ -103,7 +103,11 @@ if (process.env.NODE_ENV === 'test' || !process.env.OTEL_EXPORTER_OTLP_ENDPOINT)
     resource: resourceFromAttributes({
       [ATTR_SERVICE_NAME]: serviceName,
       [ATTR_SERVICE_VERSION]: serviceVersion,
-      [ATTR_DEPLOYMENT_ENVIRONMENT]: deploymentEnvironment
+      // ATTR_DEPLOYMENT_ENVIRONMENT is undefined in some semantic-conventions
+      // versions — use raw key as fallback.
+      ...(ATTR_DEPLOYMENT_ENVIRONMENT !== undefined
+        ? { [ATTR_DEPLOYMENT_ENVIRONMENT]: deploymentEnvironment }
+        : { 'deployment.environment': deploymentEnvironment }),
     }),
     traceExporter: exporter,
     metricReader: metricReader,

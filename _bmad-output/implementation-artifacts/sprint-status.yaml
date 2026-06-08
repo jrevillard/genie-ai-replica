@@ -126,7 +126,7 @@ development_status:
   7-8-instrument-application-metrics: done
   7-9-kong-otel-tracing: done
   7-10-e2e-melt-correlation-test: done  # Won't Fix (2026-06-08): Testing-the-testing anti-pattern. Observability disabled by default, upstream products mature. Health-check one-liner in configs/otel/README.md is sufficient.
-  7-11-observability-slos: in-progress
+  7-11-observability-slos: review
   epic-7-retrospective: optional
 
   # Epic 8: RAG Quality Assurance

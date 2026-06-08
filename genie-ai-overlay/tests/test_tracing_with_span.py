@@ -1,7 +1,7 @@
 """Tests for tracing.with_span context manager."""
 
 import pytest
-from unittest.mock import MagicMock, patch
+
 from tracing import with_span
 
 
@@ -16,15 +16,14 @@ class TestWithSpan:
     def test_returns_result_normally(self):
         """Code inside context manager runs normally."""
         result = None
-        with with_span("test.op") as span:
+        with with_span("test.op"):
             result = 42
         assert result == 42
 
     def test_propagates_exceptions(self):
         """Exceptions are not suppressed."""
-        with pytest.raises(ValueError, match="test error"):
-            with with_span("test.error") as span:
-                raise ValueError("test error")
+        with pytest.raises(ValueError, match="test error"), with_span("test.error"):
+            raise ValueError("test error")
 
     def test_span_accepts_set_attribute(self):
         """Span accepts set_attribute without error (no-op or real)."""
@@ -45,6 +44,6 @@ class TestWithSpan:
     def test_no_exception_ends_normally(self):
         """Normal execution path completes without error."""
         executed = False
-        with with_span("test.normal") as span:
+        with with_span("test.normal"):
             executed = True
         assert executed

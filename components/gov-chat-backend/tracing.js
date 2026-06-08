@@ -43,10 +43,12 @@ if (process.env.NODE_ENV === 'test' || !process.env.OTEL_EXPORTER_OTLP_ENDPOINT)
   const { resourceFromAttributes } = require('@opentelemetry/resources');
   const { redactAttributes } = require('./tracing-pii');
 
-  // Custom SpanProcessor that redacts PII before export
+  // Custom SpanProcessor that redacts PII and drops noise spans before export
   class PIIRedactionProcessor {
     constructor(exporter) {
       this._delegate = new BatchSpanProcessor(exporter);
+      // Paths that should not generate traces (health checks, readiness probes)
+      this._ignoredPaths = ['/health', '/ready', '/alive', '/favicon.ico'];
     }
 
     onStart(span, parentContext) {
@@ -54,6 +56,12 @@ if (process.env.NODE_ENV === 'test' || !process.env.OTEL_EXPORTER_OTLP_ENDPOINT)
     }
 
     onEnd(span) {
+      // Drop health-check spans before export to reduce noise in Grafana
+      const attrs = span.attributes || {};
+      const target = attrs['http.target'] || attrs['http.route'] || '';
+      if (target && this._ignoredPaths.some(p => target.includes(p))) {
+        return; // silently drop the span
+      }
       try {
         const attrs = span.attributes;
         if (attrs) {
@@ -115,12 +123,6 @@ if (process.env.NODE_ENV === 'test' || !process.env.OTEL_EXPORTER_OTLP_ENDPOINT)
       getNodeAutoInstrumentations({
         '@opentelemetry/instrumentation-fs': { enabled: false },
         '@opentelemetry/instrumentation-dns': { enabled: false },
-        // Suppress health-check traces — they pollute Grafana trace search.
-        '@opentelemetry/instrumentation-http': {
-          ignoreIncomingPaths: [
-            (url) => url.includes('/health') || url.includes('/ready') || url.includes('/favicon'),
-          ],
-        },
       })
     ],
     textMapPropagator: new W3CTraceContextPropagator(),

@@ -58,7 +58,7 @@
             "stacking": { "group": "A", "mode": "none" },
             "thresholdsStyle": { "mode": "off" }
           },
-          "unit": "s"
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -71,7 +71,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
-          "expr": "sum(rate(http_server_duration_sum{service_name=~\"genie-backend|chatqna|retriever|reranker\"}[5m])) by (service_name)\n/\nsum(rate(http_server_duration_count{service_name=~\"genie-backend|chatqna|retriever|reranker\"}[5m])) by (service_name)",
+          "expr": "sum(rate(http_server_duration_milliseconds_sum{service_name=~\"genie-backend|genieai-chatqna|genieai-retriever|genieai-reranker\"}[5m])) by (service_name)\n/\nsum(rate(http_server_duration_milliseconds_count{service_name=~\"genie-backend|genieai-chatqna|genieai-retriever|genieai-reranker\"}[5m])) by (service_name)",
           "legendFormat": "{{service_name}}",
           "refId": "A"
         }
@@ -115,7 +115,7 @@
             "stacking": { "group": "A", "mode": "normal" },
             "thresholdsStyle": { "mode": "off" }
           },
-          "unit": "s"
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -128,34 +128,34 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
-          "expr": "sum(rate(http_server_duration_sum{service_name=\"genie-backend\"}[5m])) by (service_name)",
+          "expr": "sum(rate(http_server_duration_milliseconds_sum{service_name=\"genie-backend\"}[5m])) by (service_name)",
           "legendFormat": "Backend",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
-          "expr": "sum(rate(http_server_duration_sum{service_name=\"chatqna\"}[5m])) by (service_name)",
+          "expr": "sum(rate(http_server_duration_milliseconds_sum{service_name=\"genieai-chatqna\"}[5m])) by (service_name)",
           "legendFormat": "ChatQnA",
           "hide": false,
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
-          "expr": "sum(rate(http_server_duration_sum{service_name=\"retriever\"}[5m])) by (service_name)",
+          "expr": "sum(rate(http_server_duration_milliseconds_sum{service_name=\"genieai-retriever\"}[5m])) by (service_name)",
           "legendFormat": "Retriever",
           "hide": false,
           "refId": "C"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
-          "expr": "sum(rate(http_server_duration_sum{service_name=\"reranker\"}[5m])) by (service_name)",
+          "expr": "sum(rate(http_server_duration_milliseconds_sum{service_name=\"genieai-reranker\"}[5m])) by (service_name)",
           "legendFormat": "Reranker",
           "hide": false,
           "refId": "D"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
-          "expr": "sum(rate(http_server_duration_sum{service_name=\"dataprep\"}[5m])) by (service_name)",
+          "expr": "sum(rate(http_server_duration_milliseconds_sum{service_name=\"genieai-dataprep\"}[5m])) by (service_name)",
           "legendFormat": "Dataprep",
           "hide": false,
           "refId": "E"
@@ -213,7 +213,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
-          "expr": "sum(rate(http_server_duration_count{service_name=~\"genie-backend|chatqna|retriever|reranker|dataprep\"}[5m])) by (service_name)",
+          "expr": "sum(rate(http_server_duration_milliseconds_count{service_name=~\"genie-backend|genieai-chatqna|genieai-retriever|genieai-reranker|genieai-dataprep\"}[5m])) by (service_name)",
           "legendFormat": "{{service_name}}",
           "refId": "A"
         }
@@ -263,7 +263,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
-          "expr": "sum by (http_status_code) (increase(http_server_duration_count{service_name=~\"genie-backend|chatqna|retriever|reranker|dataprep\"}[5m]))",
+          "expr": "sum by (http_status_code) (increase(http_server_duration_milliseconds_count{service_name=~\"genie-backend|genieai-chatqna|genieai-retriever|genieai-reranker|genieai-dataprep\"}[5m]))",
           "legendFormat": "{{http_status_code}}",
           "refId": "A"
         }

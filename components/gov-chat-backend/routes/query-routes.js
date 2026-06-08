@@ -156,7 +156,7 @@ module.exports = (queryService) => {
     let keepalive = null;
 
     try {
-      const { queryId, opeaUrl, opeaPayload } = await queryService.initStreamQuery(queryData, {
+      const { queryId, opeaUrl, opeaPayload, authHeaders } = await queryService.initStreamQuery(queryData, {
         authorization: req.headers.authorization
       });
 
@@ -172,7 +172,10 @@ module.exports = (queryService) => {
       opeaController = new AbortController();
 
       const opeaResponse = await axios.post(opeaUrl, opeaPayload, {
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authHeaders?.authorization && { Authorization: authHeaders.authorization })
+        },
         responseType: 'stream',
         timeout: streamTimeout,
         signal: opeaController.signal,

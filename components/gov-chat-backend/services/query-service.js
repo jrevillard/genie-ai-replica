@@ -255,7 +255,7 @@ class QueryService {
    * @param {Object} authHeaders - Auth headers to forward to OPEA
    * @returns {Promise<Object>} { queryId, opeaUrl, opeaPayload, queryData }
    */
-  async initStreamQuery(queryData, _authHeaders) {
+  async initStreamQuery(queryData, authHeaders) {
     logger.info('QueryService.init_stream_query_start');
 
     // Validation (reuse same logic as createQuery)
@@ -362,7 +362,7 @@ class QueryService {
       };
     }
 
-    return { queryId, opeaUrl, opeaPayload, queryData };
+    return { queryId, opeaUrl, opeaPayload, authHeaders, queryData };
   }
 
   /**

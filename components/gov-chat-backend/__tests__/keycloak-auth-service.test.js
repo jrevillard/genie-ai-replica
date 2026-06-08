@@ -818,7 +818,7 @@ describe('keycloakAuthService', () => {
       expect(result).toBeNull();
     });
 
-    it('should return { active: false, disabled: true } when UserInfo returns 401 (disabled user)', async () => {
+    it('should return null when UserInfo returns 401 (ambiguous — could be expired token)', async () => {
       mockAxiosGet.mockRejectedValue({
         response: { status: 401 }
       });
@@ -828,7 +828,8 @@ describe('keycloakAuthService', () => {
         'http://localhost:8080/realms/genie'
       );
 
-      expect(result).toEqual({ active: false, disabled: true });
+      // 401 is ambiguous: expired token OR disabled user — don't take destructive action
+      expect(result).toBeNull();
     });
 
     it('should return { active: false, disabled: true } when UserInfo returns 403', async () => {

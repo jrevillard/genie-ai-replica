@@ -316,6 +316,42 @@ describe('POST /stream', () => {
     expect(response.status).toBe(200);
     expect(response.headers['content-type']).toBe('text/event-stream');
   });
+
+  it('should forward Authorization header to ChatQnA', async () => {
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] },
+      authHeaders: { authorization: 'Bearer test-token-123' }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }],
+      context: { language: 'EN' }
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+    await responsePromise;
+
+    // Verify Authorization header is forwarded to ChatQnA
+    expect(axios.post).toHaveBeenCalledWith(
+      'http://chatqna:8888/v1/chatqna',
+      expect.any(Object),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-token-123'
+        })
+      })
+    );
+  });
 });
 
 // ============================================================

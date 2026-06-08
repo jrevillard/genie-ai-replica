@@ -263,8 +263,7 @@ const keycloakAuthService = {
     // Two-attempt force-refresh pattern (from Architecture Decision D3)
     // 1. Verify token with cached JWKS → fail
     // 2. Check if token exp is still valid (not expired)
-    // 3. If yes → force-refresh JWKS for this issuer → re-verify → if fail again, 401 TOKEN_INVALID
-    // 4. If no (token expired) → 401 TOKEN_EXPIRED immediately (no refresh)
+// 4. If no (token expired) → 401 TOKEN_EXPIRED immediately (no refresh)
 
     try {
       const verifiedPayload = await verifyWithJwt();
@@ -384,9 +383,14 @@ const keycloakAuthService = {
       logger.warn(`[KeycloakAuth] Unexpected Keycloak UserInfo response: ${response.status}`);
       return null;
     } catch (error) {
-      // 401/403 responses indicate user is disabled/deleted
-      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      // 403 explicitly indicates user is disabled/deleted
+      if (error.response && error.response.status === 403) {
         return { active: false, disabled: true };
+      }
+      // 401 is ambiguous: expired token OR disabled user — don't take destructive action
+      if (error.response && error.response.status === 401) {
+        logger.warn('[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous (token may be expired)');
+        return null;
       }
       // Network errors: timeouts are transient (warn), unexpected errors are severe (error)
       if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {

@@ -3,7 +3,7 @@ baseline_commit: fe8ff6a5faf56d3c76b4d5b7f9df33aff1b70d7f
 ---
 # Story 7.9: Kong OTel Tracing
 
-Status: review
+Status: done
 
 ## Story
 

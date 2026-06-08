@@ -231,7 +231,12 @@ HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN", "")
 # VLLM configuration
 VLLM_API_KEY = os.getenv("VLLM_API_KEY", "EMPTY")
 VLLM_ENDPOINT = os.getenv("VLLM_ENDPOINT")
-VLLM_MODEL_ID = os.getenv("VLLM_MODEL_ID", "ibm-granite/granite-3.3-2b-instruct")
+# Same model as main vLLM; set via compose VLLM_MODEL_ID or .env VLLM_LLM_MODEL_ID
+VLLM_MODEL_ID = (
+    os.getenv("VLLM_MODEL_ID")
+    or os.getenv("VLLM_LLM_MODEL_ID")
+    or "ibm-granite/granite-3.3-2b-instruct"
+)
 VLLM_MAX_NEW_TOKENS = os.getenv("VLLM_MAX_NEW_TOKENS", 512)
 VLLM_TOP_P = os.getenv("VLLM_TOP_P", 0.9)
 VLLM_TEMPERATURE = os.getenv("VLLM_TEMPERATURE", 0.8)

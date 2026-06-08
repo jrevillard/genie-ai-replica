@@ -968,6 +968,8 @@ services:
       VLLM_ENDPOINT: http://vllm:8000
       TEI_EMBEDDING_ENDPOINT: http://tei:80
       VLLM_API_KEY: ${VLLM_API_KEY:-}
+       # Model id for retriever LLM features; must match vLLM served name (from vars.yml → .env)
+      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
     networks:
       - genieai_network
     healthcheck:
@@ -1027,6 +1029,10 @@ services:
       SSL_VERIFY: ${SSL_VERIFY:-true}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
+      # Main chat model — must match vLLM --served-model-name (from vars.yml → VLLM_LLM_MODEL_ID)
+      LLM_MODEL: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      # Translation model — must match vllm-translation-guardrail (from vars.yml → VLLM_TRANSLATION_MODEL_ID)
+      LLM_TRANS_MODEL: ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
     networks:
       - genieai_network
     healthcheck:

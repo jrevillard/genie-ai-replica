@@ -29,8 +29,8 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.trace import Status, StatusCode
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.trace import Status, StatusCode
 
 _provider = None
 _meter_provider = None
@@ -235,6 +235,7 @@ def get_tracer(name: str = __name__):
     Safe to call before ``setup_tracing()`` — returns a no-op tracer.
     """
     return trace.get_tracer(name)
+
 
 def with_span(name: str, tracer_name: str = __name__, attributes: dict | None = None):
     """Context manager that wraps the common try/except pattern with built-in error handling.

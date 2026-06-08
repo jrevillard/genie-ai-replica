@@ -1,23 +1,20 @@
-// tempo-proxy — Bridges Grafana Tempo/TraceQL API ↔ VictoriaTraces Jaeger API
+// tempo-proxy — Path translator for Grafana Jaeger datasource ↔ VictoriaTraces Jaeger API
 //
-// Rewritten in Go to solve JavaScript's Number precision loss for nanosecond
-// timestamps in protobuf fixed64 fields. Manual protobuf binary encoder
-// produces wire-compatible output that Grafana's proto.Unmarshal can decode.
+// VictoriaTraces exposes Jaeger Query Service API at /select/jaeger/api/*,
+// but Grafana's Jaeger datasource calls standard Jaeger paths (/api/*).
+// This proxy translates paths and passes responses through as-is.
+// Multi-service aggregation is handled when no specific service is requested.
 package main
 
 import (
-	"bytes"
-	"encoding/binary"
-	"encoding/hex"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,335 +22,7 @@ import (
 	"time"
 )
 
-// ── Manual protobuf wire format encoder ──────────────────────────────
-// Wire types: 0=varint, 1=64-bit, 2=length-delimited, 5=32-bit
-
-func pbVarint(buf *bytes.Buffer, fieldNum uint32, value uint64) {
-	buf.WriteByte(byte(fieldNum<<3))
-	encodeVarint(buf, value)
-}
-
-func encodeVarint(buf *bytes.Buffer, v uint64) {
-	for v >= 0x80 {
-		buf.WriteByte(byte(v) | 0x80)
-		v >>= 7
-	}
-	buf.WriteByte(byte(v))
-}
-
-func pbFixed64(buf *bytes.Buffer, fieldNum uint32, value uint64) {
-	buf.WriteByte(byte(fieldNum<<3 | 1))
-	var b [8]byte
-	binary.LittleEndian.PutUint64(b[:], value)
-	buf.Write(b[:])
-}
-
-func pbFixed32(buf *bytes.Buffer, fieldNum uint32, value uint32) {
-	buf.WriteByte(byte(fieldNum<<3 | 5))
-	var b [4]byte
-	binary.LittleEndian.PutUint32(b[:], value)
-	buf.Write(b[:])
-}
-
-func pbBytes(buf *bytes.Buffer, fieldNum uint32, data []byte) {
-	if len(data) == 0 {
-		return
-	}
-	buf.WriteByte(byte(fieldNum<<3 | 2))
-	encodeVarint(buf, uint64(len(data)))
-	buf.Write(data)
-}
-
-func pbString(buf *bytes.Buffer, fieldNum uint32, s string) {
-	if s == "" {
-		return
-	}
-	pbBytes(buf, fieldNum, []byte(s))
-}
-
-func pbMessage(buf *bytes.Buffer, fieldNum uint32, msg []byte) {
-	// Always write the field, even for empty messages.
-	// In proto3, absent field = nil pointer, zero-length field = non-nil empty message.
-	// Callers must check nil before calling this.
-	buf.WriteByte(byte(fieldNum<<3 | 2))
-	encodeVarint(buf, uint64(len(msg)))
-	buf.Write(msg)
-}
-
-// ── OTel protobuf types (inline, matching Grafana Tempo's proto field numbers) ──
-// Field numbers from: opentelemetry/proto/trace/v1/trace.proto
-
-type TraceByIDResponse struct {
-	Trace  *Trace
-	Status int32 // tempopb.PartialStatus
-}
-
-func (r *TraceByIDResponse) Encode() []byte {
-	buf := &bytes.Buffer{}
-	if r.Trace != nil {
-		pbMessage(buf, 1, r.Trace.Encode())
-	}
-	if r.Status != 0 {
-		pbVarint(buf, 3, uint64(r.Status))
-	}
-	return buf.Bytes()
-}
-
-type Trace struct {
-	ResourceSpans []*ResourceSpans
-}
-
-func (t *Trace) Encode() []byte {
-	buf := &bytes.Buffer{}
-	for _, rs := range t.ResourceSpans {
-		pbMessage(buf, 1, rs.Encode())
-	}
-	return buf.Bytes()
-}
-
-type ResourceSpans struct {
-	Resource   *Resource
-	ScopeSpans []*ScopeSpans
-}
-
-func (rs *ResourceSpans) Encode() []byte {
-	buf := &bytes.Buffer{}
-	if rs.Resource != nil {
-		pbMessage(buf, 1, rs.Resource.Encode())
-	}
-	for _, ss := range rs.ScopeSpans {
-		pbMessage(buf, 2, ss.Encode())
-	}
-	return buf.Bytes()
-}
-
-type Resource struct {
-	Attributes []*KeyValue
-}
-
-func (r *Resource) Encode() []byte {
-	buf := &bytes.Buffer{}
-	for _, a := range r.Attributes {
-		pbMessage(buf, 1, a.Encode())
-	}
-	return buf.Bytes()
-}
-
-type ScopeSpans struct {
-	Scope *InstrumentationScope
-	Spans []*Span
-}
-
-func (ss *ScopeSpans) Encode() []byte {
-	buf := &bytes.Buffer{}
-	if ss.Scope != nil {
-		pbMessage(buf, 1, ss.Scope.Encode())
-	}
-	for _, s := range ss.Spans {
-		pbMessage(buf, 2, s.Encode())
-	}
-	return buf.Bytes()
-}
-
-type InstrumentationScope struct {
-	Name    string
-	Version string
-}
-
-func (s *InstrumentationScope) Encode() []byte {
-	buf := &bytes.Buffer{}
-	pbString(buf, 1, s.Name)
-	pbString(buf, 2, s.Version)
-	return buf.Bytes()
-}
-
-// Span fields match OTel trace.v1.Span proto field numbers
-type Span struct {
-	TraceId   []byte // field 1
-	SpanId    []byte // field 2
-	TraceState string // field 3
-	ParentSpanId []byte // field 4
-	Name     string // field 5
-	Kind     int32  // field 6
-	StartTimeUnixNano uint64 // field 7, fixed64
-	EndTimeUnixNano   uint64 // field 8, fixed64
-	Attributes []*KeyValue // field 9
-	DroppedAttributesCount uint32 // field 10
-	Events []*SpanEvent // field 11
-	DroppedEventsCount uint32 // field 12
-	Links []*SpanLink // field 13
-	DroppedLinksCount uint32 // field 14
-	Status *SpanStatus // field 15
-	Flags  uint32 // field 16
-}
-
-func (s *Span) Encode() []byte {
-	buf := &bytes.Buffer{}
-	pbBytes(buf, 1, s.TraceId)
-	pbBytes(buf, 2, s.SpanId)
-	pbString(buf, 3, s.TraceState)
-	pbBytes(buf, 4, s.ParentSpanId)
-	pbString(buf, 5, s.Name)
-	if s.Kind != 0 {
-		pbVarint(buf, 6, uint64(s.Kind))
-	}
-	if s.StartTimeUnixNano != 0 {
-		pbFixed64(buf, 7, s.StartTimeUnixNano)
-	}
-	if s.EndTimeUnixNano != 0 {
-		pbFixed64(buf, 8, s.EndTimeUnixNano)
-	}
-	for _, a := range s.Attributes {
-		pbMessage(buf, 9, a.Encode())
-	}
-	if s.DroppedAttributesCount != 0 {
-		pbVarint(buf, 10, uint64(s.DroppedAttributesCount))
-	}
-	for _, e := range s.Events {
-		pbMessage(buf, 11, e.Encode())
-	}
-	if s.DroppedEventsCount != 0 {
-		pbVarint(buf, 12, uint64(s.DroppedEventsCount))
-	}
-	for _, l := range s.Links {
-		pbMessage(buf, 13, l.Encode())
-	}
-	if s.DroppedLinksCount != 0 {
-		pbVarint(buf, 14, uint64(s.DroppedLinksCount))
-	}
-	if s.Status != nil {
-		pbMessage(buf, 15, s.Status.Encode())
-	}
-	if s.Flags != 0 {
-		pbFixed32(buf, 16, s.Flags)
-	}
-	return buf.Bytes()
-}
-
-type SpanEvent struct {
-	TimeUnixNano uint64 // field 1, fixed64
-	Name         string // field 2
-	Attributes   []*KeyValue // field 3
-	DroppedAttributesCount uint32 // field 4
-}
-
-func (e *SpanEvent) Encode() []byte {
-	buf := &bytes.Buffer{}
-	if e.TimeUnixNano != 0 {
-		pbFixed64(buf, 1, e.TimeUnixNano)
-	}
-	pbString(buf, 2, e.Name)
-	for _, a := range e.Attributes {
-		pbMessage(buf, 3, a.Encode())
-	}
-	if e.DroppedAttributesCount != 0 {
-		pbVarint(buf, 4, uint64(e.DroppedAttributesCount))
-	}
-	return buf.Bytes()
-}
-
-type SpanLink struct {
-	TraceId []byte // field 1
-	SpanId  []byte // field 2
-	TraceState string // field 3
-	Attributes []*KeyValue // field 4
-	DroppedAttributesCount uint32 // field 5
-	Flags uint32 // field 6
-}
-
-func (l *SpanLink) Encode() []byte {
-	buf := &bytes.Buffer{}
-	pbBytes(buf, 1, l.TraceId)
-	pbBytes(buf, 2, l.SpanId)
-	pbString(buf, 3, l.TraceState)
-	for _, a := range l.Attributes {
-		pbMessage(buf, 4, a.Encode())
-	}
-	if l.DroppedAttributesCount != 0 {
-		pbVarint(buf, 5, uint64(l.DroppedAttributesCount))
-	}
-	if l.Flags != 0 {
-		pbFixed32(buf, 6, l.Flags)
-	}
-	return buf.Bytes()
-}
-
-type SpanStatus struct {
-	Message string // field 2
-	Code    int32  // field 3
-}
-
-func (s *SpanStatus) Encode() []byte {
-	buf := &bytes.Buffer{}
-	pbString(buf, 2, s.Message)
-	if s.Code != 0 {
-		pbVarint(buf, 3, uint64(s.Code))
-	}
-	return buf.Bytes()
-}
-
-type KeyValue struct {
-	Key   string
-	Value *AnyValue
-}
-
-func (kv *KeyValue) Encode() []byte {
-	buf := &bytes.Buffer{}
-	pbString(buf, 1, kv.Key)
-	if kv.Value != nil {
-		pbMessage(buf, 2, kv.Value.Encode())
-	}
-	return buf.Bytes()
-}
-
-// AnyValue uses oneof: string(1), bool(2), int(3), double(4)
-type AnyValue struct {
-	Type    int // 1=string, 2=bool, 3=int, 4=double
-	StrVal  string
-	BoolVal bool
-	IntVal  string  // stored as string to match OTel AnyValue int_value type
-	DblVal  float64
-}
-
-func anyValueString(s string) *AnyValue {
-	return &AnyValue{Type: 1, StrVal: s}
-}
-
-func anyValueBool(b bool) *AnyValue {
-	return &AnyValue{Type: 2, BoolVal: b}
-}
-
-func anyValueInt(s string) *AnyValue {
-	return &AnyValue{Type: 3, IntVal: s}
-}
-
-func anyValueDouble(f float64) *AnyValue {
-	return &AnyValue{Type: 4, DblVal: f}
-}
-
-func (av *AnyValue) Encode() []byte {
-	buf := &bytes.Buffer{}
-	switch av.Type {
-	case 1:
-		pbString(buf, 1, av.StrVal)
-	case 2:
-		pbVarint(buf, 2, boolToUint64(av.BoolVal))
-	case 3:
-		pbString(buf, 3, av.IntVal)
-	case 4:
-		pbFixed64(buf, 4, math.Float64bits(av.DblVal))
-	}
-	return buf.Bytes()
-}
-
-func boolToUint64(b bool) uint64 {
-	if b {
-		return 1
-	}
-	return 0
-}
-
-// ── Config ──────────────────────────────────────────────────────────
+// ── Config ──────────────────────────────────────────────────────────────────
 
 var (
 	victoriaTracesURL string
@@ -371,230 +40,43 @@ func init() {
 	}
 }
 
-// ── ID helpers ─────────────────────────────────────────────────────────
+// ── Jaeger JSON types ───────────────────────────────────────────────────────
 
-func traceIDFromJaeger(id string) string {
-	return strings.ToLower(fmt.Sprintf("%032s", id))
+type JaegerTrace struct {
+	TraceID   string                    `json:"traceID"`
+	Processes map[string]*JaegerProcess `json:"processes"`
+	Spans     []JaegerSpan              `json:"spans"`
 }
 
-func spanIDFromJaeger(id string) string {
-	return strings.ToLower(fmt.Sprintf("%016s", id))
+type JaegerProcess struct {
+	ServiceName string     `json:"serviceName"`
+	Tags        []JaegerTag `json:"tags"`
 }
 
-func hexToBytes(h string) []byte {
-	b, _ := hex.DecodeString(h)
-	return b
+type JaegerTag struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+	Type  string `json:"type"`
 }
 
-// ── Jaeger → OTel conversion ──────────────────────────────────────────
-
-func tagToOtelAttribute(tag JaegerTag) *KeyValue {
-	kv := &KeyValue{Key: tag.Key}
-	switch tag.Type {
-	case "bool":
-		kv.Value = anyValueBool(tag.Value == "true")
-	case "int64", "int":
-		kv.Value = anyValueInt(tag.Value)
-	case "float64", "float":
-		if f, err := strconv.ParseFloat(tag.Value, 64); err == nil {
-			kv.Value = anyValueDouble(f)
-		}
-	default:
-		kv.Value = anyValueString(tag.Value)
-	}
-	return kv
+type JaegerSpan struct {
+	TraceID       string     `json:"traceID"`
+	SpanID        string     `json:"spanID"`
+	ProcessID     string     `json:"processID"`
+	OperationName string     `json:"operationName"`
+	StartTime     int64      `json:"startTime"`
+	Duration      int64      `json:"duration"`
+	ParentSpanID  string     `json:"parentSpanID"`
+	Tags          []JaegerTag `json:"tags"`
+	Logs          []JaegerLog `json:"logs"`
 }
 
-func jaegerSpanToOtel(span JaegerSpan) *Span {
-	startUS := uint64(span.StartTime) * 1000
-	endUS := uint64(span.StartTime+span.Duration) * 1000
-	s := &Span{
-		TraceId:           hexToBytes(traceIDFromJaeger(span.TraceID)),
-		SpanId:            hexToBytes(spanIDFromJaeger(span.SpanID)),
-		Name:              span.OperationName,
-		StartTimeUnixNano:  startUS,
-		EndTimeUnixNano:    endUS,
-		Status:            &SpanStatus{Code: 1},
-	}
-	if span.ParentSpanID != "" {
-		s.ParentSpanId = hexToBytes(spanIDFromJaeger(span.ParentSpanID))
-	}
-	for _, tag := range span.Tags {
-		s.Attributes = append(s.Attributes, tagToOtelAttribute(tag))
-	}
-	for _, lg := range span.Logs {
-		evt := &SpanEvent{
-			TimeUnixNano: uint64(lg.Timestamp) * 1000,
-			Name:         fmt.Sprintf("event_%d", lg.Timestamp),
-			Attributes:   make([]*KeyValue, 0, len(lg.Fields)),
-		}
-		for _, f := range lg.Fields {
-			evt.Attributes = append(evt.Attributes, tagToOtelAttribute(f))
-		}
-		s.Events = append(s.Events, evt)
-	}
-	for _, tag := range span.Tags {
-		if tag.Key == "error" && tag.Value != "false" && tag.Value != "unset" {
-			s.Status = &SpanStatus{Code: 2, Message: "Error"}
-			break
-		}
-	}
-	return s
+type JaegerLog struct {
+	Timestamp int64      `json:"timestamp"`
+	Fields    []JaegerTag `json:"fields"`
 }
 
-func jaegerToResourceSpans(jt JaegerTrace) []*ResourceSpans {
-	byProcess := make(map[string][]JaegerSpan)
-	for _, sp := range jt.Spans {
-		byProcess[sp.ProcessID] = append(byProcess[sp.ProcessID], sp)
-	}
-	var rss []*ResourceSpans
-	for pid, procSpans := range byProcess {
-		proc := jt.Processes[pid]
-		if proc == nil {
-			proc = &JaegerProcess{ServiceName: "unknown"}
-		}
-		attrs := []*KeyValue{
-			{Key: "service.name", Value: anyValueString(proc.ServiceName)},
-		}
-		for _, tag := range proc.Tags {
-			attrs = append(attrs, tagToOtelAttribute(tag))
-		}
-		otSpans := make([]*Span, 0, len(procSpans))
-		for _, sp := range procSpans {
-			otSpans = append(otSpans, jaegerSpanToOtel(sp))
-		}
-		rss = append(rss, &ResourceSpans{
-			Resource:   &Resource{Attributes: attrs},
-			ScopeSpans: []*ScopeSpans{
-				{Scope: &InstrumentationScope{Name: "", Version: ""}, Spans: otSpans},
-			},
-		})
-	}
-	return rss
-}
-
-// ── Search/metadata conversion ───────────────────────────────────────────
-
-type ServiceStatsObj struct {
-	SpanCount  uint32 `json:"spanCount"`
-	ErrorCount uint32 `json:"errorCount"`
-}
-
-type TempoTraceMetadata struct {
-	TraceID           string                    `json:"traceID"`
-	RootServiceName   string                    `json:"rootServiceName"`
-	RootTraceName     string                    `json:"rootTraceName"`
-	StartTimeUnixNano uint64                    `json:"startTimeUnixNano"`
-	DurationMs        uint32                    `json:"durationMs"`
-	SpanSets          []SpanSet                 `json:"spanSets"`
-	ServiceStats      map[string]ServiceStatsObj `json:"serviceStats"`
-}
-
-type SpanSet struct {
-	Spans   []SpanMeta `json:"spans"`
-	Matched int        `json:"matched"`
-}
-
-type SpanMeta struct {
-	SpanID            string      `json:"spanID"`
-	Name              string      `json:"name"`
-	StartTimeUnixNano uint64      `json:"startTimeUnixNano"`
-	DurationNanos     uint64      `json:"durationNanos"`
-	Attributes        []SpanAttr  `json:"attributes"`
-}
-
-type SpanAttr struct {
-	Key   string      `json:"key"`
-	Value interface{} `json:"value"`
-}
-
-func jaegerSearchToTempoTraces(jaegerData []JaegerTrace) []TempoTraceMetadata {
-	var traces []TempoTraceMetadata
-	for _, trace := range jaegerData {
-		var root *JaegerSpan
-		for i := range trace.Spans {
-			if trace.Spans[i].ParentSpanID == "" {
-				root = &trace.Spans[i]
-				break
-			}
-		}
-		if root == nil {
-			if len(trace.Spans) > 0 {
-				root = &trace.Spans[0]
-			} else {
-				continue
-			}
-		}
-			serviceStats := map[string]ServiceStatsObj{}
-			for _, sp := range trace.Spans {
-				proc := trace.Processes[sp.ProcessID]
-				if proc == nil {
-					continue
-				}
-				svc := proc.ServiceName
-				st := serviceStats[svc]
-				st.SpanCount++
-				for _, t := range sp.Tags {
-					if t.Key == "error" && t.Value != "false" && t.Value != "unset" {
-						st.ErrorCount++
-						break
-					}
-				}
-				serviceStats[svc] = st
-			}
-			spanSets := []SpanSet{{Spans: make([]SpanMeta, 0, len(trace.Spans)), Matched: len(trace.Spans)}}
-		for _, sp := range trace.Spans {
-			spanSets[0].Spans = append(spanSets[0].Spans, SpanMeta{
-				SpanID:            spanIDFromJaeger(sp.SpanID),
-				Name:              sp.OperationName,
-				StartTimeUnixNano: uint64(sp.StartTime) * 1000,
-				DurationNanos:     uint64(sp.Duration) * 1000,
-			})
-		}
-		durMs := uint32(root.Duration / 1000)
-		if durMs < 1 {
-			durMs = 1
-		}
-		rootSvc := "unknown"
-		if proc := trace.Processes[root.ProcessID]; proc != nil {
-			rootSvc = proc.ServiceName
-		}
-		traces = append(traces, TempoTraceMetadata{
-			TraceID:           traceIDFromJaeger(trace.TraceID),
-			RootServiceName:   rootSvc,
-			RootTraceName:     root.OperationName,
-			StartTimeUnixNano: uint64(root.StartTime) * 1000,
-			DurationMs:        durMs,
-			SpanSets:          spanSets,
-			ServiceStats:      serviceStats,
-		})
-	}
-	return traces
-}
-
-// ── TraceQL extraction ─────────────────────────────────────────────────
-
-var reServiceName = regexp.MustCompile(`resource\.service\.name\s*=\s*"([^"]+)"`)
-var reServiceAlt = regexp.MustCompile(`\.service\s*=\s*"([^"]+)"`)
-var reName = regexp.MustCompile(`\.name\s*=\s*"([^"]+)"`)
-
-func extractJaegerParamsFromTraceQL(traceQL string) (service, operation string) {
-	if traceQL == "" {
-		return
-	}
-	q, _ := url.QueryUnescape(traceQL)
-	if m := reServiceName.FindStringSubmatch(q); m != nil {
-		service = m[1]
-	} else if m := reServiceAlt.FindStringSubmatch(q); m != nil {
-		service = m[1]
-	}
-	if m := reName.FindStringSubmatch(q); m != nil && service == "" {
-		operation = m[1]
-	}
-	return
-}
-
-// ── Service name cache ────────────────────────────────────────────────────
+// ── Service name cache ──────────────────────────────────────────────────────
 
 var (
 	serviceMu     sync.Mutex
@@ -610,12 +92,10 @@ func getServiceNames() []string {
 	if len(serviceNames) > 0 && time.Since(serviceCached) < serviceCacheTTL {
 		return serviceNames
 	}
-	// fetchServiceNames performs the HTTP call; caller already holds the lock.
 	return fetchServiceNames()
 }
 
 func fetchServiceNames() []string {
-	// Caller (getServiceNames) must hold serviceMu.
 	resp, err := httpGet(victoriaTracesURL+"/select/jaeger/api/services", 15*time.Second)
 	if err != nil {
 		log.Printf("[tempo-proxy] failed to fetch services: %v", err)
@@ -632,16 +112,38 @@ func fetchServiceNames() []string {
 	return result.Data
 }
 
-// ── HTTP helpers ───────────────────────────────────────────────────────
+// ── HTTP helpers ────────────────────────────────────────────────────────────
 
 func httpGet(url string, timeout time.Duration) ([]byte, error) {
-	client := &http.Client{Timeout: timeout}
-	resp, err := client.Get(url)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	return doRequest(req)
+}
+
+func httpGetWithContext(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	return doRequest(req)
+}
+
+func doRequest(req *http.Request) ([]byte, error) {
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	return io.ReadAll(resp.Body)
+	data, readErr := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return data, fmt.Errorf("upstream %s: HTTP %d: %s", req.URL.String(), resp.StatusCode, strings.TrimSpace(string(data)))
+	}
+	return data, readErr
 }
 
 func httpGetJSON(url string, timeout time.Duration, v interface{}) (int, error) {
@@ -650,10 +152,6 @@ func httpGetJSON(url string, timeout time.Duration, v interface{}) (int, error) 
 		return 0, err
 	}
 	return http.StatusOK, json.Unmarshal(data, v)
-}
-
-func readBody(r *http.Request) ([]byte, error) {
-	return io.ReadAll(r.Body)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
@@ -674,12 +172,14 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	log.Printf("[tempo-proxy] RESP %d error=%s", status, msg)
 }
 
-// ── Route handlers ──────────────────────────────────────────────────────
+// ── Route handlers ──────────────────────────────────────────────────────────
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// handleServices returns the list of service names from VictoriaTraces.
+// Called by Grafana Jaeger datasource to populate service dropdown.
 func handleServices(w http.ResponseWriter, r *http.Request) {
 	var result struct {
 		Data []string `json:"data"`
@@ -691,6 +191,8 @@ func handleServices(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": result.Data})
 }
 
+// handleOperations returns operations for a given service.
+// Called by Grafana Jaeger datasource to populate operation dropdown.
 func handleOperations(w http.ResponseWriter, r *http.Request) {
 	service := r.URL.Query().Get("service")
 	if service == "" {
@@ -707,6 +209,8 @@ func handleOperations(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": result.Data})
 }
 
+// handleSearch returns Jaeger-format trace search results.
+// When no specific service is given, iterates over all services and merges results.
 func handleSearch(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	service := q.Get("service")
@@ -718,44 +222,9 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		limit = "20"
 	}
 
-	if service == "" {
-		traceQL := q.Get("q")
-		svc, op := extractJaegerParamsFromTraceQL(traceQL)
-		if svc != "" {
-			service = svc
-		}
-		if op != "" {
-			operation = op
-		}
-	}
-
-	// POST body extraction
-	if service == "" && r.Method == http.MethodPost {
-		body, _ := readBody(r)
-		var jsonBody map[string]interface{}
-		if json.Unmarshal(body, &jsonBody) == nil {
-			svc, op := extractJaegerParamsFromTraceQL(fmt.Sprint(jsonBody["traceQL"]))
-			if svc != "" {
-				service = svc
-			}
-			if op != "" {
-				operation = op
-			}
-			if v, ok := jsonBody["start"]; ok {
-				start = fmt.Sprint(v)
-			}
-			if v, ok := jsonBody["end"]; ok {
-				end = fmt.Sprint(v)
-			}
-			if v, ok := jsonBody["limit"]; ok {
-				limit = fmt.Sprint(v)
-			}
-		}
-	}
-
 	services := getServiceNames()
 	if service == "" {
-		// No specific service — iterate over all known services (skip empty)
+		// No specific service — iterate over all known services
 	} else {
 		services = []string{service}
 	}
@@ -771,15 +240,25 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 	type traceResult struct {
 		Data []JaegerTrace `json:"data"`
 	}
-	type searchResult struct {
-		Traces []TempoTraceMetadata `json:"traces"`
-	}
 
-	var allTraces []TempoTraceMetadata
+	var allTraces []JaegerTrace
 	var mu sync.Mutex
 	var wg sync.WaitGroup
+	done := make(chan struct{})
+
+	// Cancel goroutines when client disconnects or after 28s
+	searchCtx, searchCancel := context.WithTimeout(r.Context(), 28*time.Second)
+	defer searchCancel()
 
 	for _, svc := range services {
+		// Early termination: skip remaining services if we have enough traces
+		mu.Lock()
+		if len(allTraces) >= limitInt*2 {
+			mu.Unlock()
+			break
+		}
+		mu.Unlock()
+
 		wg.Add(1)
 		go func(svcName string) {
 			defer wg.Done()
@@ -796,26 +275,44 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 				jaegerParams.Set("operation", operation)
 			}
 			var tResult traceResult
-			code, err := httpGetJSON(victoriaTracesURL+"/select/jaeger/api/traces?"+jaegerParams.Encode(), 30*time.Second, &tResult)
-			if err == nil && code == http.StatusOK && len(tResult.Data) > 0 {
-				traces := jaegerSearchToTempoTraces(tResult.Data)
-				mu.Lock()
-				allTraces = append(allTraces, traces...)
-				mu.Unlock()
+			data, err := httpGetWithContext(searchCtx, victoriaTracesURL+"/select/jaeger/api/traces?"+jaegerParams.Encode())
+			if err == nil {
+				json.Unmarshal(data, &tResult)
+				if len(tResult.Data) > 0 {
+					mu.Lock()
+					allTraces = append(allTraces, tResult.Data...)
+					mu.Unlock()
+				}
 			}
 		}(svc)
 	}
 
 	wg.Wait()
+	close(done)
 
-	// Sort by startTime descending
+	// Sort by startTime descending (use first span's StartTime)
 	sort.Slice(allTraces, func(i, j int) bool {
-		return allTraces[j].StartTimeUnixNano > allTraces[i].StartTimeUnixNano
+		ti := int64(0)
+		tj := int64(0)
+		if len(allTraces[i].Spans) > 0 {
+			ti = allTraces[i].Spans[0].StartTime
+		}
+		if len(allTraces[j].Spans) > 0 {
+			tj = allTraces[j].Spans[0].StartTime
+		}
+		return tj < ti // descending
 	})
 	if len(allTraces) > limitInt {
 		allTraces = allTraces[:limitInt]
 	}
-	writeJSON(w, http.StatusOK, searchResult{Traces: allTraces})
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"data":   allTraces,
+		"total":  len(allTraces),
+		"limit":  limitInt,
+		"offset": 0,
+		"errors": nil,
+	})
 }
 
 func toMicroseconds(s string) string {
@@ -848,7 +345,6 @@ func handleSearchTagsV2(w http.ResponseWriter, r *http.Request) {
 
 func handleSearchTagValuesV2(w http.ResponseWriter, r *http.Request) {
 	tag := ""
-	// Extract tag name from path: /api/v2/search/tag/{tag}/values or /api/search/tags/{tag}/values
 	parts := strings.Split(strings.TrimSuffix(r.URL.Path, "/"), "/")
 	for i, p := range parts {
 		if (p == "tag" || p == "tags") && i+1 < len(parts) {
@@ -878,89 +374,49 @@ func handleSearchTagValuesV2(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleTraceByID returns a single trace in Jaeger JSON format.
+// VictoriaTraces already returns Jaeger format — just pass through.
 func handleTraceByID(w http.ResponseWriter, r *http.Request) {
 	// Match /api/v2/traces/{id} or /api/traces/{id}
-	re := regexp.MustCompile(`^/api/(v2/)?traces/([0-9a-fA-F]+)`)
-	m := re.FindStringSubmatch(r.URL.Path)
-	if m == nil {
+	parts := strings.Split(strings.TrimSuffix(r.URL.Path, "/"), "/")
+	traceID := ""
+	for i, p := range parts {
+		if p == "traces" && i+1 < len(parts) {
+			traceID = parts[i+1]
+			break
+		}
+	}
+	if traceID == "" {
 		writeError(w, http.StatusBadRequest, "invalid trace ID")
 		return
 	}
-	traceID := m[2]
+	// Validate traceID is hex and reasonable length (16 or 32 chars)
+	for _, c := range traceID {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			writeError(w, http.StatusBadRequest, "invalid trace ID: not hex")
+			return
+		}
+	}
+	if len(traceID) != 16 && len(traceID) != 32 {
+		writeError(w, http.StatusBadRequest, "invalid trace ID: wrong length")
+		return
+	}
 
 	data, err := httpGet(victoriaTracesURL+"/select/jaeger/api/traces/"+traceID, 15*time.Second)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	var jaegerResp struct {
-		Data []JaegerTrace `json:"data"`
-	}
-	if err := json.Unmarshal(data, &jaegerResp); err != nil || len(jaegerResp.Data) == 0 {
-		// Empty trace — return empty TraceByIDResponse
-		resp := &TraceByIDResponse{}
-		buf := resp.Encode()
-		w.Header().Set("Content-Type", "application/protobuf")
-		w.WriteHeader(http.StatusOK)
-		w.Write(buf)
-		log.Printf("[tempo-proxy] RESP 200 protobuf %d bytes (empty trace)", len(buf))
-		return
-	}
 
-	// Merge all traces into one ResourceSpans list
-	var allResourceSpans []*ResourceSpans
-	for _, trace := range jaegerResp.Data {
-		allResourceSpans = append(allResourceSpans, jaegerToResourceSpans(trace)...)
-	}
-
-	resp := &TraceByIDResponse{
-		Trace: &Trace{ResourceSpans: allResourceSpans},
-	}
-
-	buf := resp.Encode()
-	w.Header().Set("Content-Type", "application/protobuf")
+	// Pass through raw Jaeger JSON from VictoriaTraces
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(http.StatusOK)
-	w.Write(buf)
-	log.Printf("[tempo-proxy] RESP 200 protobuf %d bytes", len(buf))
+	w.Write(data)
+	log.Printf("[tempo-proxy] RESP 200 json (jaeger trace %s) %d bytes", traceID, len(data))
 }
 
-// ── Jaeger JSON types ───────────────────────────────────────────────────
-
-type JaegerTrace struct {
-	TraceID   string                  `json:"traceID"`
-	Processes map[string]*JaegerProcess `json:"processes"`
-	Spans     []JaegerSpan            `json:"spans"`
-}
-
-type JaegerProcess struct {
-	ServiceName string     `json:"serviceName"`
-	Tags       []JaegerTag `json:"tags"`
-}
-
-type JaegerTag struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-	Type  string `json:"type"`
-}
-
-type JaegerSpan struct {
-	TraceID       string     `json:"traceID"`
-	SpanID        string     `json:"spanID"`
-	ProcessID     string     `json:"processID"`
-	OperationName string     `json:"operationName"`
-	StartTime     int64      `json:"startTime"`
-	Duration      int64      `json:"duration"`
-	ParentSpanID  string     `json:"parentSpanID"`
-	Tags          []JaegerTag `json:"tags"`
-	Logs          []JaegerLog  `json:"logs"`
-}
-
-type JaegerLog struct {
-	Timestamp int64      `json:"timestamp"`
-	Fields    []JaegerTag `json:"fields"`
-}
-
-// ── Main router ──────────────────────────────────────────────────────────
+// ── Main router ─────────────────────────────────────────────────────────────
 
 func main() {
 	log.Printf("[tempo-proxy] listening on :%d, backend: %s", port, victoriaTracesURL)
@@ -971,15 +427,17 @@ func main() {
 	mux.HandleFunc("/health", handleHealth)
 	mux.HandleFunc("/api/echo", handleHealth)
 
+	// Jaeger API endpoints — used by Grafana Jaeger datasource
 	mux.HandleFunc("/api/services", handleServices)
 	mux.HandleFunc("/api/operations", handleOperations)
 	mux.HandleFunc("/api/search", handleSearch)
 	mux.HandleFunc("/api/v2/search/tags", handleSearchTagsV2)
 
-	// Tag values — two route patterns
+	// Tag values — kept for backward compat
 	mux.HandleFunc("/api/v2/search/tag/", handleSearchTagValuesV2)
 	mux.HandleFunc("/api/search/tags/", handleSearchTagValuesV2)
 
+	// Metrics — stub
 	mux.HandleFunc("/api/metrics/query_range", handleMetrics)
 	mux.HandleFunc("/api/metrics/query", handleMetrics)
 	mux.HandleFunc("/api/v1/query_range", handleMetrics)

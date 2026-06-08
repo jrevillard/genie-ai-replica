@@ -306,11 +306,11 @@
       "gridPos": { "h": 2, "w": 24, "x": 0, "y": 18 },
       "id": 8,
       "options": {
-        "content": "View Traces in Trace Explorer →",
-        "openInNewTab": true
+        "mode": "markdown",
+        "content": "[View Traces in Trace Explorer →](/d/genieai-trace-explorer/trace-explorer)"
       },
       "title": "",
-      "type": "link",
+      "type": "text",
       "links": [
         {
           "targetBlank": true,

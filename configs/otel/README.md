@@ -19,7 +19,9 @@ Docker Container Logs (fluentd logging driver)
 
 ### Trace Storage
 
-Traces are exported to VictoriaTraces via OTLP HTTP. VictoriaTraces stores distributed traces and provides Jaeger Query Service JSON APIs for Grafana integration.
+Traces are exported to VictoriaTraces via OTLP HTTP. VictoriaTraces stores distributed traces and provides Jaeger Query Service JSON APIs at `/select/jaeger/api/*` for Grafana integration.
+
+**Grafana datasource**: A `jaeger`-type datasource is provisioned pointing at `http://tempo-proxy:10429`. The tempo-proxy translates Grafana's standard Jaeger API paths (`/api/*`) to VictoriaTraces' prefixed paths (`/select/jaeger/api/*`) and passes responses through as-is. The Jaeger datasource uses HTTP/JSON only (no gRPC), ensuring compatibility with the HTTP/1.1 proxy.
 
 **Sending queue**: The VictoriaTraces exporter uses a file-based sending queue persisted to the `otel-queue` volume (`/var/lib/otelcol/file_storage/victoriatraces`). A one-shot `otel-collector-init` container sets correct volume ownership for the nonroot Collector process (UID 10001). In compose mode, ordering is ensured via `depends_on`; in Swarm mode, the Collector's restart policy handles the startup race.
 

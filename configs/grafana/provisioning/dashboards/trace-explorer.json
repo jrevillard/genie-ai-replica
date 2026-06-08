@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "GENIE.AI Trace Explorer — distributed trace waterfall, service map, and latency breakdown",
+  "description": "GENIE.AI Trace Explorer \u2014 distributed trace waterfall, service map, and latency breakdown",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -24,14 +24,19 @@
   "panels": [
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "title": "Trace Search",
       "type": "row"
     },
     {
       "datasource": {
-        "type": "tempo",
+        "type": "jaeger",
         "uid": "${DS_VICTORIATRACES}"
       },
       "fieldConfig": {
@@ -43,11 +48,21 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 1 },
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
       "id": 2,
       "options": {
         "enableTimeSync": true,
-        "showTags": ["service_name", "span_name", "status.code", "http.response.status_code"],
+        "showTags": [
+          "service_name",
+          "span_name",
+          "status.code",
+          "http.response.status_code"
+        ],
         "tags": [],
         "type": "trace",
         "spanName": "",
@@ -57,8 +72,10 @@
       },
       "targets": [
         {
-          "datasource": { "type": "tempo", "uid": "${DS_VICTORIATRACES}" },
-          "query": "",
+          "datasource": {
+            "type": "jaeger",
+            "uid": "${DS_VICTORIATRACES}"
+          },
           "refId": "A",
           "queryType": "search",
           "maxTraces": 1000,
@@ -70,7 +87,12 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
       "id": 3,
       "title": "Service Overview",
       "type": "row"
@@ -96,28 +118,47 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.1 },
-              { "color": "red", "value": 1 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
             ]
           }
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
       "id": 4,
       "options": {
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_VICTORIAMETRICS}"
+          },
           "expr": "sum(rate(http_server_duration_milliseconds_count[5m])) by (service_name)",
           "format": "table",
           "instant": true,
@@ -129,7 +170,10 @@
         {
           "id": "organize",
           "options": {
-            "excludeByName": { "Time": true, "__name__": true },
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
             "indexByName": {},
             "renameByName": {
               "service_name": "Service",
@@ -147,7 +191,9 @@
       },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "axisBorderShow": false,
             "axisCenteredZero": false,
@@ -158,29 +204,59 @@
             "drawStyle": "bars",
             "fillOpacity": 80,
             "gradientMode": "none",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": true },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": true
+            },
             "lineInterpolation": "smooth",
             "lineWidth": 1,
             "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
+            "scaleDistribution": {
+              "type": "linear"
+            },
             "showPoints": "never",
             "spanNulls": false,
-            "stacking": { "group": "A", "mode": "normal" },
-            "thresholdsStyle": { "mode": "off" }
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
           "unit": "s"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
       "id": 5,
       "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_VICTORIAMETRICS}"
+          },
           "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_milliseconds_bucket{service_name=~\"$service\"}[5m])) by (le, service_name))",
           "legendFormat": "p95 {{service_name}}",
           "refId": "A"
@@ -191,14 +267,19 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
       "id": 6,
       "title": "Kong Gateway Traces",
       "type": "row"
     },
     {
       "datasource": {
-        "type": "tempo",
+        "type": "jaeger",
         "uid": "${DS_VICTORIATRACES}"
       },
       "fieldConfig": {
@@ -210,11 +291,22 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 25 },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
       "id": 7,
       "options": {
         "enableTimeSync": true,
-        "showTags": ["service_name", "kong.route", "kong.consumer", "http.method", "http.status_code"],
+        "showTags": [
+          "service_name",
+          "kong.route",
+          "kong.consumer",
+          "http.method",
+          "http.status_code"
+        ],
         "spanNameColumn": "Name",
         "showTraceId": true,
         "filterByTraceID": true,
@@ -222,9 +314,12 @@
       },
       "targets": [
         {
-          "datasource": { "type": "tempo", "uid": "${DS_VICTORIATRACES}" },
-          "query": "service.name=\"kong-gateway\"",
+          "datasource": {
+            "type": "jaeger",
+            "uid": "${DS_VICTORIATRACES}"
+          },
           "queryType": "search",
+          "service": "kong-gateway",
           "refId": "A",
           "limit": 20
         }
@@ -235,18 +330,26 @@
   ],
   "refresh": "10s",
   "schemaVersion": 39,
-  "tags": ["genieai", "observability", "trace-explorer"],
+  "tags": [
+    "genieai",
+    "observability",
+    "trace-explorer"
+  ],
   "templating": {
     "list": [
       {
-        "current": { "selected": true, "text": "VictoriaTraces", "value": "victoriatraces" },
+        "current": {
+          "selected": true,
+          "text": "VictoriaTraces",
+          "value": "victoriatraces"
+        },
         "hide": 0,
         "includeAll": false,
         "label": "Trace Datasource",
         "multi": false,
         "name": "DS_VICTORIATRACES",
         "options": [],
-        "query": "tempo",
+        "query": "jaeger",
         "queryValue": "victoriatraces",
         "refresh": 1,
         "regex": "",
@@ -254,7 +357,11 @@
         "type": "datasource"
       },
       {
-        "current": { "selected": true, "text": "VictoriaMetrics", "value": "P4169E866C3094E38" },
+        "current": {
+          "selected": true,
+          "text": "VictoriaMetrics",
+          "value": "P4169E866C3094E38"
+        },
         "hide": 0,
         "includeAll": false,
         "label": "Metrics Datasource",
@@ -270,8 +377,15 @@
       },
       {
         "allValue": ".*",
-        "current": { "selected": true, "text": "All", "value": "$__all" },
-        "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_VICTORIAMETRICS}"
+        },
         "definition": "label_values(http_server_duration_milliseconds_count, service_name)",
         "hide": 0,
         "includeAll": true,
@@ -279,7 +393,10 @@
         "multi": true,
         "name": "service",
         "options": [],
-        "query": { "query": "label_values(http_server_duration_milliseconds_count, service_name)", "refId": "StandardVariableQuery" },
+        "query": {
+          "query": "label_values(http_server_duration_milliseconds_count, service_name)",
+          "refId": "StandardVariableQuery"
+        },
         "refresh": 2,
         "regex": "",
         "skipUrlSync": false,
@@ -288,7 +405,10 @@
       }
     ]
   },
-  "time": { "from": "now-1h", "to": "now" },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "title": "Trace Explorer",
   "uid": "genieai-trace-explorer",
   "version": 1

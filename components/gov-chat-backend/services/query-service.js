@@ -4,6 +4,7 @@ const { logger, dbService } = require('../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
+const api = require('@opentelemetry/api');
 
 class QueryService {
   constructor() {
@@ -610,8 +611,13 @@ class QueryService {
         logger.info('[DEBUG] Sending request to OPEA via Worker Thread...');
         logger.info(`[DEBUG] OPEA Payload: ${JSON.stringify(opeaPayload, null, 2)}`);
 
+        // Inject traceparent from active OTel context so OPEA services join the distributed trace
+        const traceHeaders = {};
+        api.propagation.inject(api.context.active(), traceHeaders);
+        const workerHeaders = { ...headers, ...traceHeaders };
+
         // *** CHANGED: Use Worker Thread for OPEA Call ***
-        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload, headers);
+        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload, workerHeaders);
 
         opeaResponseTime = workerResult.responseTime;
         opeaResponseContent = workerResult.response;

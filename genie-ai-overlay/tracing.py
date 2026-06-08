@@ -104,11 +104,14 @@ def setup_trace_logging(logger_name):
 def setup_tracing(service_name: str) -> None:
     """Initialize the OTel TracerProvider with an OTLP HTTP exporter.
 
-    Also configures a MeterProvider for custom application metrics.
+    Also configures a MeterProvider for custom application metrics and
+    enables FastAPI auto-instrumentation so incoming ``traceparent``
+    headers are automatically extracted for distributed tracing.
 
-    No-op when OTEL_EXPORTER_OTLP_ENDPOINT is empty or unset, or when
-    ENABLE_OBSERVABILITY is not "1". This allows OPEA services to run
-    without the observability stack deployed.
+    No-op when OTEL_EXPORTER_OTLP_ENDPOINT is empty or unset.
+    This allows OPEA services to run without the observability stack
+    deployed — the Collector not being deployed means the endpoint
+    variable is never injected into the containers.
     """
     global _provider, _meter_provider
 
@@ -134,6 +137,37 @@ def setup_tracing(service_name: str) -> None:
     _provider = TracerProvider(resource=resource)
     _provider.add_span_processor(trace_processor)
     trace.set_tracer_provider(_provider)
+
+    # --- FastAPI auto-instrumentation (global) ---
+    # MUST be called before any FastAPI app is created.  setup_tracing()
+    # runs before OPEA comps imports, so all MicroService apps created
+    # later are automatically instrumented — no per-service
+    # FastAPIInstrumentor.instrument_app() calls needed.
+    try:
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+        FastAPIInstrumentor().instrument()
+        logging.getLogger(__name__).debug("FastAPI global auto-instrumentation enabled")
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "FastAPI auto-instrumentation unavailable (install opentelemetry-instrumentation-fastapi): %s", exc
+        )
+
+    # --- HTTP client auto-instrumentation (global) ---
+    # Instrument the HTTP clients used by the OPEA ServiceOrchestrator
+    # so that outgoing calls to sub-services (retriever, reranker, etc.)
+    # automatically propagate ``traceparent``.
+    for _mod_name, _class_name in (
+        ("opentelemetry.instrumentation.aiohttp_client", "AioHttpClientInstrumentor"),
+        ("opentelemetry.instrumentation.requests", "RequestsInstrumentor"),
+    ):
+        try:
+            _mod = __import__(_mod_name, fromlist=[_class_name])
+            _cls = getattr(_mod, _class_name)
+            _cls().instrument()
+            logging.getLogger(__name__).debug("%s enabled", _class_name)
+        except Exception as exc:
+            logging.getLogger(__name__).debug("%s unavailable (optional): %s", _class_name, exc)
 
     # --- Metrics ---
     try:

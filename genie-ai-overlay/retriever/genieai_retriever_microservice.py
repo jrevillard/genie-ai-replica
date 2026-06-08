@@ -180,11 +180,8 @@ if __name__ == "__main__":
     logger.info("Retriever Microservice is starting...")
     service = opea_microservices["opea_service@retrievers"]
 
-    # TODO(7.5): FastAPIInstrumentor.instrument_app() fails with
-    # "Cannot add middleware after an application has started" because
-    # the OPEA comps framework initializes routes during service creation.
-    # Requires instrumenting INSIDE the comps init flow, not after.
-    # from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-    # FastAPIInstrumentor.instrument_app(service._app)
+    # FastAPI auto-instrumentation is handled globally by tracing.py
+    # setup_tracing() → FastAPIInstrumentor().instrument() runs before
+    # OPEA comps creates the FastAPI app, so traceparent extraction works.
 
     service.start()

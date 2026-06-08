@@ -1896,11 +1896,9 @@ class ChatQnAService:
 
         self.service.add_route(self.endpoint, self.handle_request, methods=["POST"])
 
-        # TODO(7.5): FastAPIInstrumentor.instrument_app() fails with
-        # "Cannot add middleware after an application has started" because
-        # routes are added before instrumentation.
-        # from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-        # FastAPIInstrumentor.instrument_app(self.service._app)
+        # FastAPI auto-instrumentation is handled globally by tracing.py
+        # setup_tracing() → FastAPIInstrumentor().instrument() runs before
+        # OPEA comps creates the FastAPI app, so traceparent extraction works.
 
         self.service.start()
 

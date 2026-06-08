@@ -87,6 +87,8 @@ COPY genie-ai-overlay/tracing.py /app/tracing.py
 RUN pip install --no-cache-dir \
     "opentelemetry-api>=1.22" "opentelemetry-sdk>=1.22" \
     "opentelemetry-instrumentation-fastapi>=0.43b0" \
+    "opentelemetry-instrumentation-aiohttp-client>=0.43b0" \
+    "opentelemetry-instrumentation-requests>=0.43b0" \
     "opentelemetry-exporter-otlp-proto-http>=1.22"
 
 # Step G: Pre-install EasyOCR models (auto-download during build)

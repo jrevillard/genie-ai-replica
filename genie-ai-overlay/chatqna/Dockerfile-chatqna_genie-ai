@@ -68,6 +68,8 @@ RUN pip install --no-cache-dir langdetect transformers "python-jose[cryptography
     "opentelemetry-api>=1.22" "opentelemetry-sdk>=1.22" \
     "opentelemetry-instrumentation-fastapi>=0.43b0" \
     "opentelemetry-instrumentation-httpx>=0.43b0" \
+    "opentelemetry-instrumentation-aiohttp-client>=0.43b0" \
+    "opentelemetry-instrumentation-requests>=0.43b0" \
     "opentelemetry-exporter-otlp-proto-http>=1.22"
 
 # Step D: "Overlay" our custom GENIE-AI "glue" files

@@ -119,9 +119,8 @@ async def reranking(
 
 
 if __name__ == "__main__":
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-
     opea_microservices["opea_service@reranking"].start()
-    app = opea_microservices["opea_service@reranking"]
-    FastAPIInstrumentor.instrument_app(app._app if hasattr(app, "_app") else app)
+    # FastAPI auto-instrumentation is handled globally by tracing.py
+    # setup_tracing() → FastAPIInstrumentor().instrument() runs before
+    # OPEA comps creates the FastAPI app, so traceparent extraction works.
     logger.info("OPEA Reranking Microservice is starting...")

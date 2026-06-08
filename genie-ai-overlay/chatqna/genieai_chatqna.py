@@ -619,7 +619,8 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         # OPEA embedding microservice returns {"data": [{"index": 0, "embedding": [...]}]}
         if isinstance(data, dict) and "data" in data:
             data = data["data"]
-        assert isinstance(data, list)
+        if not isinstance(data, list):
+            raise ValueError(f"Embedding service returned unexpected type: {type(data).__name__}, expected list")
         next_data = {"text": inputs["input"], "embedding": data[0]["embedding"]}
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
@@ -673,7 +674,8 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         if logflag:
             logger.debug(f"File ID Pairs: {file_id_pairs}")
 
-        with_rerank = runtime_graph.downstream(cur_node)[0].startswith("rerank")
+        downstream_nodes = runtime_graph.downstream(cur_node)
+        with_rerank = downstream_nodes and downstream_nodes[0].startswith("rerank")
         if with_rerank and retrieved_docs:
             # prepare inputs for rerank
             next_data["initial_query"] = data["initial_query"]

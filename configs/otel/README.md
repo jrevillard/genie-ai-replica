@@ -270,3 +270,15 @@ Externalized services called by GENIE.AI follow the same pattern:
 ### Key Principle
 
 > **We trace what crosses our perimeter at the caller level.** External service internals are their own observability concern.
+
+## Smoke Test
+
+After deploying with `ENABLE_OBSERVABILITY=1`, verify the stack is healthy:
+
+```bash
+# Collector health (inside Docker network)
+docker exec $(docker ps --format "{{.Names}}" | grep otel-collector | head -1) \
+  curl -sf http://localhost:13133/health/status
+
+# Grafana accessible (via Kong route, requires auth)
+curl -sk -o /dev/null -w "HTTP %{http_code}" https://localhost/grafana/

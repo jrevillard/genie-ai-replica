@@ -147,10 +147,10 @@ development_status:
 # Status: open | in-progress | done | deferred
 retro-action-items:
   # Epic 7 retro (2026-06-08)
-  RETRO-7-1: Create span creation template with built-in error handling | amelia | open
+  RETRO-7-1: Create span creation template with built-in error handling | amelia | done
   RETRO-7-2: Track retro action items in sprint-status | amelia | done
-  RETRO-7-3: Define runtime verification protocol for infra stories | murat | open
-  RETRO-7-4: Create OTel integration guide (import order, spans, PII, test guards) | amelia | in-progress
+  RETRO-7-3: Define runtime verification protocol for infra stories | murat | done
+  RETRO-7-4: Create OTel integration guide (import order, spans, PII, test guards) | amelia | done
   # Epic 4 carry-over
   RETRO-4-1: Fix ChatQnA assert isinstance production crash | amelia | done
   RETRO-4-2: Fix ChatQnA downstream()[0] IndexError | amelia | done

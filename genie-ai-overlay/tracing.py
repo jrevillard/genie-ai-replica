@@ -20,6 +20,7 @@ import logging
 import os
 import signal
 import sys
+from urllib.parse import urlparse
 
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
@@ -161,17 +162,47 @@ def setup_tracing(service_name: str) -> None:
     # Instrument the HTTP clients used by the OPEA ServiceOrchestrator
     # so that outgoing calls to sub-services (retriever, reranker, etc.)
     # automatically propagate ``traceparent``.
-    for _mod_name, _class_name in (
-        ("opentelemetry.instrumentation.aiohttp_client", "AioHttpClientInstrumentor"),
-        ("opentelemetry.instrumentation.requests", "RequestsInstrumentor"),
-    ):
-        try:
-            _mod = __import__(_mod_name, fromlist=[_class_name])
-            _cls = getattr(_mod, _class_name)
-            _cls().instrument()
-            logging.getLogger(__name__).debug("%s enabled", _class_name)
-        except Exception as exc:
-            logging.getLogger(__name__).debug("%s unavailable (optional): %s", _class_name, exc)
+    #
+    # Default operation names for client spans are just the HTTP method
+    # (e.g. "POST") which is useless in Grafana trace search.  We use
+    # request hooks to rename spans to "METHOD /path" so they read as
+    # "POST /v1/retrieval" instead of just "POST".
+
+    try:
+        from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
+
+        def _aiohttp_request_hook(span, params):
+            """Rename aiohttp client spans from 'POST' to 'POST /v1/retrieval'."""
+            if span and span.is_recording() and hasattr(params, "url"):
+                try:
+                    parsed = urlparse(str(params.url))
+                    if parsed.path:
+                        span.update_name(f"{params.method} {parsed.path}")
+                except Exception:
+                    pass
+
+        AioHttpClientInstrumentor().instrument(request_hook=_aiohttp_request_hook)
+        logging.getLogger(__name__).debug("AioHttpClientInstrumentor enabled with path naming")
+    except Exception as exc:
+        logging.getLogger(__name__).debug("AioHttpClientInstrumentor unavailable (optional): %s", exc)
+
+    try:
+        from opentelemetry.instrumentation.requests import RequestsInstrumentor
+
+        def _requests_request_hook(span, request):
+            """Rename requests client spans from 'POST' to 'POST /v1/embeddings'."""
+            if span and span.is_recording() and hasattr(request, "url"):
+                try:
+                    parsed = urlparse(str(request.url))
+                    if parsed.path:
+                        span.update_name(f"{request.method} {parsed.path}")
+                except Exception:
+                    pass
+
+        RequestsInstrumentor().instrument(request_hook=_requests_request_hook)
+        logging.getLogger(__name__).debug("RequestsInstrumentor enabled with path naming")
+    except Exception as exc:
+        logging.getLogger(__name__).debug("RequestsInstrumentor unavailable (optional): %s", exc)
 
     # --- Metrics ---
     try:

@@ -19,8 +19,7 @@ groups:
   # not exported to VictoriaMetrics.
   # ---------------------------------------------------------------------------
   - orgId: 1
-    uid: observability_pipeline_health
-    title: observability.pipeline_health
+    name: observability.pipeline_health
     folder: Observability
     interval: 60s
     rules:
@@ -34,7 +33,7 @@ groups:
               to: 0
             datasourceUid: victoriametrics
             model:
-              expr: rate(vm_rows_ingested_total[2m])
+              expr: rate(vm_rows_inserted_total{type="promremotewrite"}[2m])
               instant: false
               intervalMs: 1000
               maxDataPoints: 43200
@@ -114,8 +113,7 @@ groups:
   # Alerts when storage usage exceeds 90% of capacity.
   # ---------------------------------------------------------------------------
   - orgId: 1
-    uid: observability_vm_storage
-    title: observability.vm_storage
+    name: observability.vm_storage
     folder: Observability
     interval: 60s
     rules:
@@ -205,13 +203,12 @@ groups:
 
   # ---------------------------------------------------------------------------
   # Group 3: VictoriaLogs Ingestion Drop (AC3)
-  # VictoriaLogs is a separate service from VictoriaMetrics, so vm_rows_ingested_total
+  # VictoriaLogs is a separate service from VictoriaMetrics, so vm_rows_inserted_total{type="promremotewrite"}
   # is not available for VL. Instead, we use the OTel Collector's fluent_forward
   # receiver metric which flows to VictoriaMetrics via prometheusremotewrite.
   # ---------------------------------------------------------------------------
   - orgId: 1
-    uid: observability_vlog_ingestion
-    title: observability.vlog_ingestion
+    name: observability.vlog_ingestion
     folder: Observability
     interval: 60s
     rules:
@@ -225,7 +222,7 @@ groups:
               to: 0
             datasourceUid: victoriametrics
             model:
-              expr: rate(otelcol_receiver_accepted_log_records{receiver="fluent_forward"}[5m])
+              expr: rate(otelcol_receiver_accepted_log_records_total{receiver="fluent_forward"}[5m])
               instant: false
               intervalMs: 1000
               maxDataPoints: 43200
@@ -293,8 +290,7 @@ groups:
   #   - Ingestion Drop: No spans reaching the Collector's OTLP receiver
   # ---------------------------------------------------------------------------
   - orgId: 1
-    uid: observability_vtrace_ingestion
-    title: observability.vtrace_ingestion
+    name: observability.vtrace_ingestion
     folder: Observability
     interval: 60s
     rules:
@@ -308,7 +304,7 @@ groups:
               to: 0
             datasourceUid: victoriametrics
             model:
-              expr: rate(otelcol_exporter_send_failed_spans{exporter="otlp_http/victoriatraces"}[5m])
+              expr: rate(vt_http_errors_total{path="/insert/opentelemetry/v1/traces"}[5m])
               instant: false
               intervalMs: 1000
               maxDataPoints: 43200
@@ -378,7 +374,7 @@ groups:
               to: 0
             datasourceUid: victoriametrics
             model:
-              expr: rate(otelcol_receiver_accepted_spans{receiver="otlp"}[5m])
+              expr: rate(vt_bytes_ingested_total{type="opentelemetry_traces_otlphttp_protobuf"}[5m])
               instant: false
               intervalMs: 1000
               maxDataPoints: 43200

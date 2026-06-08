@@ -9,6 +9,9 @@
 #
 # Receivers:
 #   - OTLP HTTP (port 4318): standard OTLP/HTTP from SDK auto-instrumentation
+#   - prometheus/collector_self (port 8888): scrapes Collector's own self-telemetry metrics
+#   - prometheus/victoriametrics_internal (port 8428): scrapes VictoriaMetrics internal metrics
+#   - prometheus/victoriatraces_internal (port 10428): scrapes VictoriaTraces internal metrics
 #   - fluent_forward (port 24224): receives logs from Docker fluentd logging driver
 #
 # Exporters:
@@ -45,6 +48,48 @@ receivers:
         endpoint: 0.0.0.0:4318
   fluent_forward:
     endpoint: 0.0.0.0:24224
+
+  # Scrape OTel Collector's own self-telemetry metrics (otelcol_*).
+  # Requires service.telemetry.metrics.address to be set (see service section).
+  prometheus/collector_self:
+    config:
+      scrape_configs:
+        - job_name: "otel-collector"
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["localhost:8888"]
+
+  # Scrape VictoriaMetrics internal metrics (vm_*).
+  # VM exposes a Prometheus-compatible /metrics endpoint.
+  prometheus/victoriametrics_internal:
+    config:
+      scrape_configs:
+        - job_name: "victoriametrics"
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["victoriametrics:8428"]
+          metrics_path: "/metrics"
+
+  # Scrape VictoriaTraces internal metrics (vt_*).
+  # Used by alert rules for trace pipeline health monitoring.
+  prometheus/victoriatraces_internal:
+    config:
+      scrape_configs:
+        - job_name: "victoriatraces"
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["victoriatraces:10428"]
+          metrics_path: "/metrics"
+
+  # Scrape VictoriaLogs internal metrics.
+  prometheus/victorialogs_internal:
+    config:
+      scrape_configs:
+        - job_name: "victorialogs"
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["victorialogs:9428"]
+          metrics_path: "/metrics"
 
 processors:
   batch:
@@ -102,6 +147,15 @@ exporters:
       max_interval: 30s
 
 service:
+  telemetry:
+    metrics:
+      level: detailed
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: "0.0.0.0"
+                port: 8888
   extensions:
     - health_check
     - file_storage/victoriatraces
@@ -109,6 +163,10 @@ service:
     metrics:
       receivers:
         - otlp
+        - prometheus/collector_self
+        - prometheus/victoriametrics_internal
+        - prometheus/victoriatraces_internal
+        - prometheus/victorialogs_internal
       processors:
         - batch
       exporters:

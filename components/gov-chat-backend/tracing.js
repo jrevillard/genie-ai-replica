@@ -62,6 +62,11 @@ if (process.env.NODE_ENV === 'test' || !process.env.OTEL_EXPORTER_OTLP_ENDPOINT)
       if (target && this._ignoredPaths.some((p) => target.includes(p))) {
         return; // silently drop the span
       }
+      // Drop Express catch-all route handler spans (health checks hitting wildcard routes)
+      const opName = span.name || '';
+      if (opName.startsWith('request handler - *')) {
+        return;
+      }
       try {
         const attrs = span.attributes;
         if (attrs) {

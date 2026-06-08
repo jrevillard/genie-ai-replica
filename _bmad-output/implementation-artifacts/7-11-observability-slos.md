@@ -356,3 +356,13 @@ None — all tasks completed without errors.
 - env (added GRAFANA_ALERT_WEBHOOK_URL, GRAFANA_ALERT_EMAIL)
 - deploy/ansible/group_vars/all.yml (added grafana_alert_webhook_url, grafana_alert_email)
 - deploy/ansible/templates/env.j2 (added GRAFANA_ALERT_WEBHOOK_URL, GRAFANA_ALERT_EMAIL)
+
+### Review Findings
+
+- [x] [Review][Decision→Patch] VictoriaTraces alert logic inversion — Rename to "VictoriaTraces Export Failures" + add separate Collector receiver alert for ingestion drop. [configs/grafana/provisioning/alerting/alert-rules.yml]
+- [x] [Review][Patch] VictoriaLogs metric label `type="vlstorage"` may not exist in VictoriaMetrics self-monitoring — Alert uses `rate(vm_rows_ingested_total{type="vlstorage"}[5m])` but this label may not be exported by VM. If wrong, alert never fires. [configs/grafana/provisioning/alerting/alert-rules.yml]
+- [x] [Review][Patch] Dashboard ALERTS annotation queries VictoriaMetrics datasource — Grafana internal `ALERTS` metric comes from the alerting engine, not VictoriaMetrics. Annotation query may return no data. [configs/grafana/provisioning/dashboards/observability-stack-health.json]
+- [x] [Review][Defer] Alert threshold too sensitive / storage threshold context-blind — Hardcoded 1GB (`vm_free_disk_space_bytes < 1073741824`) and 0.5 rows/sec thresholds not configurable per deployment. Deployment-specific tuning needed. [configs/grafana/provisioning/alerting/alert-rules.yml] — deferred, pre-existing
+- [x] [Review][Defer] No documented rollback procedure for alert rules — No emergency rollback docs if bad alert rules are deployed. Ops doc gap. — deferred, pre-existing
+- [x] [Review][Defer] Notification repeat_interval 4h for critical alerts — May be too slow for operational response on collector-down. Deployment-specific tuning. [configs/grafana/provisioning/alerting/notification-policies.yml] — deferred, pre-existing
+- [x] [Review][Defer] Alert thresholds not tunable via env var — Magic numbers hardcoded in alert rules. Future enhancement. [configs/grafana/provisioning/alerting/alert-rules.yml] — deferred, pre-existing

@@ -15,15 +15,16 @@
       },
       {
         "datasource": {
-          "uid": "victoriametrics"
+          "type": "grafana",
+          "uid": "-- Grafana --"
         },
         "enable": true,
-        "expr": "ALERTS",
         "iconColor": "red",
         "name": "Alert State",
+        "builtIn": false,
         "showIn": 0,
         "tags": ["observability"],
-        "type": "tags"
+        "type": "alert"
       }
     ]
   },

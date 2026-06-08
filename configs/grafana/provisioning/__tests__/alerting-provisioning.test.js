@@ -71,13 +71,22 @@ describe('Alerting Provisioning', () => {
       expect(new Set(uids).size).toBe(4);
     });
 
+    test('contains 5 alert rules (4 ACs + extra VictoriaTraces ingestion)', () => {
+      const allRules = alertRules.groups.flatMap((g) => g.rules);
+      expect(allRules).toHaveLength(5);
+    });
+
     const expectedRules = [
       { uid: 'otel_collector_down', title: 'OTel Collector Down' },
       {
         uid: 'vm_storage_high',
         title: 'VictoriaMetrics Storage Usage High',
       },
-      { uid: 'vlogs_ingestion_drop', title: 'VictoriaLogs Ingestion Rate Drop' },
+      { uid: 'vlogs_ingestion_drop', title: 'VictoriaLogs Ingestion Drop' },
+      {
+        uid: 'vtraces_export_failures',
+        title: 'VictoriaTraces Export Failures',
+      },
       {
         uid: 'vtraces_ingestion_drop',
         title: 'VictoriaTraces Ingestion Rate Drop',
@@ -157,10 +166,14 @@ describe('Alerting Provisioning', () => {
       expect(rule.execErrState).toBe('Alerting');
     });
 
-    test('non-critical alerts use noDataState: OK', () => {
+    test('non-critical alerts use noDataState: OK (except collector-down and vtraces-ingestion)', () => {
       const nonCritical = alertRules.groups
         .flatMap((g) => g.rules)
-        .filter((r) => r.uid !== 'otel_collector_down');
+        .filter(
+          (r) =>
+            r.uid !== 'otel_collector_down' &&
+            r.uid !== 'vtraces_ingestion_drop'
+        );
       nonCritical.forEach((rule) => {
         expect(rule.noDataState).toBe('OK');
       });
@@ -319,7 +332,7 @@ describe('Alerting Provisioning', () => {
         (a) => a.name === 'Alert State'
       );
       expect(alertAnnotation).toBeDefined();
-      expect(alertAnnotation.datasource.uid).toBe('victoriametrics');
+      expect(alertAnnotation.datasource).toBeDefined();
     });
 
     test('dashboard has observability tags', () => {

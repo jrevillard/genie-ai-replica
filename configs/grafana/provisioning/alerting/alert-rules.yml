@@ -205,7 +205,9 @@ groups:
 
   # ---------------------------------------------------------------------------
   # Group 3: VictoriaLogs Ingestion Drop (AC3)
-  # Detects ingestion rate drops by comparing current rate to baseline.
+  # VictoriaLogs is a separate service from VictoriaMetrics, so vm_rows_ingested_total
+  # is not available for VL. Instead, we use the OTel Collector's fluent_forward
+  # receiver metric which flows to VictoriaMetrics via prometheusremotewrite.
   # ---------------------------------------------------------------------------
   - orgId: 1
     uid: observability_vlog_ingestion
@@ -214,7 +216,7 @@ groups:
     interval: 60s
     rules:
       - uid: vlogs_ingestion_drop
-        title: VictoriaLogs Ingestion Rate Drop
+        title: VictoriaLogs Ingestion Drop
         condition: C
         data:
           - refId: A
@@ -223,7 +225,7 @@ groups:
               to: 0
             datasourceUid: victoriametrics
             model:
-              expr: rate(vm_rows_ingested_total{type="vlstorage"}[5m])
+              expr: rate(otelcol_receiver_accepted_log_records{receiver="fluent_forward"}[5m])
               instant: false
               intervalMs: 1000
               maxDataPoints: 43200
@@ -285,9 +287,10 @@ groups:
           component: victorialogs
 
   # ---------------------------------------------------------------------------
-  # Group 4: VictoriaTraces Ingestion Drop (AC4)
-  # Uses the same proxy pattern: traces exported by OTel Collector to
-  # VictoriaTraces via otlp_http exporter.
+  # Group 4: VictoriaTraces Alerts (AC4)
+  # Two alerts cover different failure modes:
+  #   - Export Failures: Collector fails to send traces to VictoriaTraces
+  #   - Ingestion Drop: No spans reaching the Collector's OTLP receiver
   # ---------------------------------------------------------------------------
   - orgId: 1
     uid: observability_vtrace_ingestion
@@ -295,8 +298,8 @@ groups:
     folder: Observability
     interval: 60s
     rules:
-      - uid: vtraces_ingestion_drop
-        title: VictoriaTraces Ingestion Rate Drop
+      - uid: vtraces_export_failures
+        title: VictoriaTraces Export Failures
         condition: C
         data:
           - refId: A
@@ -360,8 +363,78 @@ groups:
         execErrState: Alerting
         for: 5m
         annotations:
-          description: "VictoriaTraces is experiencing export failures. Traces may be lost. Check OTel Collector trace pipeline and VictoriaTraces health."
-          summary: "VictoriaTraces ingestion has errors"
+          description: "OTel Collector is failing to export traces to VictoriaTraces. Traces may be lost. Check Collector trace pipeline and VictoriaTraces connectivity."
+          summary: "VictoriaTraces export failures detected"
+        labels:
+          severity: warning
+          component: victoriatraces
+      - uid: vtraces_ingestion_drop
+        title: VictoriaTraces Ingestion Rate Drop
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: victoriametrics
+            model:
+              expr: rate(otelcol_receiver_accepted_spans{receiver="otlp"}[5m])
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+              type: math
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: avg
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.5
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                    type: ref
+                  reducer:
+                    type: avg
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          description: "No spans are reaching the OTel Collector's OTLP receiver. Trace sources may be down or misconfigured. Check instrumented services and Collector receiver."
+          summary: "VictoriaTraces ingestion rate dropped to zero"
         labels:
           severity: warning
           component: victoriatraces

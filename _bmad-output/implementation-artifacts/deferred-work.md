@@ -318,3 +318,10 @@ Items deferred during code reviews. Revisit when the related component is next m
 - PII nested attributes not filtered — Current sanitization only matches exact top-level keys (e.g., `user_id`). Nested keys like `user.email` pass through. Not a risk with current code (flat attrs only) but worth hardening if attribute shapes change.
 - Metric export interval hardcoded — `export_interval_millis=15_000` in tracing.py is not configurable. Reasonable default, but should be tunable via env var for different deployment scenarios.
 
+
+## Deferred from: code review of 7-11-observability-slos (2026-06-08)
+
+- Alert threshold too sensitive / storage threshold context-blind — Hardcoded 1GB and 0.5 rows/sec thresholds not configurable per deployment.
+- No documented rollback procedure for alert rules — No emergency rollback docs if bad alert rules deployed.
+- Notification repeat_interval 4h for critical alerts — May be too slow for collector-down response.
+- Alert thresholds not tunable via env var — Magic numbers hardcoded in alert rules.

@@ -29,6 +29,7 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.trace import Status, StatusCode
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 _provider = None
@@ -234,6 +235,43 @@ def get_tracer(name: str = __name__):
     Safe to call before ``setup_tracing()`` — returns a no-op tracer.
     """
     return trace.get_tracer(name)
+
+def with_span(name: str, attributes: dict | None = None):
+    """Context manager that wraps the common try/except pattern with built-in error handling.
+
+    Usage::
+
+        from tracing import with_span
+
+        with with_span("service.operation", attributes={"key": "value"}) as span:
+            result = do_work()
+            span.set_attribute("result.count", len(result))
+
+    Guarantees:
+        - span.set_status(ERROR) + record_exception on any exception
+        - span.end() always called (context manager)
+        - No-op when tracing is disabled (TESTING env var)
+    """
+    tracer = get_tracer("with_span")
+    span = tracer.start_span(name, attributes=attributes)
+    return _SpanContext(span)
+
+
+class _SpanContext:
+    """Context manager wrapper that ensures error handling on spans."""
+
+    def __init__(self, span):
+        self._span = span
+
+    def __enter__(self):
+        return self._span
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is not None:
+            self._span.record_exception(exc_val)
+            self._span.set_status(Status(StatusCode.ERROR, str(exc_val)))
+        self._span.end()
+        return False  # don't suppress exceptions
 
 
 def get_meter() -> metrics.Meter:

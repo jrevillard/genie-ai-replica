@@ -22,8 +22,10 @@ if (process.env.NODE_ENV === 'test' || !process.env.OTEL_EXPORTER_OTLP_ENDPOINT)
       return fn(noOpSpan);
     }
   };
+  const withSpanNoOp = (name, fn) => fn(noOpSpan);
   module.exports = {
     sdk: null,
+    withSpan: withSpanNoOp,
     getTracer: () => noOpTracer
   };
 } else {
@@ -182,5 +184,45 @@ if (process.env.NODE_ENV === 'test' || !process.env.OTEL_EXPORTER_OTLP_ENDPOINT)
     return trace.getTracer(serviceName, serviceVersion);
   }
 
-  module.exports = { sdk, getTracer };
+/**
+ * Span helper — wraps the common try/catch/finally pattern with built-in error handling.
+ *
+ * Usage:
+ *   const { withSpan } = require('./tracing');
+ *   const result = await withSpan('service.operation', async (span) => {
+ *     const data = await doWork();
+ *     span.setAttribute('data.count', data.length);
+ *     return data;
+ *   });
+ *
+ * Guarantees:
+ *   - span.setStatus(ERROR) + recordException on any exception
+ *   - span.end() always called (finally)
+ *   - No-op in test environment
+ */
+function withSpan(name, fn, options = {}) {
+  const tracer = getTracer();
+  const span = tracer.startSpan(name, options);
+  try {
+    const result = fn(span);
+    if (result && typeof result.then === 'function') {
+      return result
+        .catch((err) => {
+          span.recordException(err);
+          span.setStatus({ code: 2, message: err.message }); // 2 = ERROR
+          throw err;
+        })
+        .finally(() => span.end());
+    }
+    span.end();
+    return result;
+  } catch (err) {
+    span.recordException(err);
+    span.setStatus({ code: 2, message: err.message });
+    span.end();
+    throw err;
+  }
+}
+
+  module.exports = { sdk, getTracer, withSpan };
 }

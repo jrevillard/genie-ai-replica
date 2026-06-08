@@ -141,3 +141,16 @@ development_status:
   9-1-create-ai-test-scaffolding-generator: backlog
   9-2-create-ai-test-case-suggestion-engine: backlog
   epic-9-retrospective: optional
+
+# RETRO ACTION ITEMS (open items from retrospectives)
+# Format: RETRO-{epic}-{seq}: description | owner | status
+# Status: open | in-progress | done | deferred
+retro-action-items:
+  # Epic 7 retro (2026-06-08)
+  RETRO-7-1: Create span creation template with built-in error handling | amelia | open
+  RETRO-7-2: Track retro action items in sprint-status | amelia | done
+  RETRO-7-3: Define runtime verification protocol for infra stories | murat | open
+  RETRO-7-4: Create OTel integration guide (import order, spans, PII, test guards) | amelia | in-progress
+  # Epic 4 carry-over
+  RETRO-4-1: Fix ChatQnA assert isinstance production crash | amelia | done
+  RETRO-4-2: Fix ChatQnA downstream()[0] IndexError | amelia | done

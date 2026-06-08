@@ -337,3 +337,145 @@ docker exec $(docker ps --format "{{.Names}}" | grep otel-collector | head -1) \
 
 # Grafana accessible (via Kong route, requires auth)
 curl -sk -o /dev/null -w "HTTP %{http_code}" https://localhost/grafana/
+```
+
+## Integration Guide
+
+Rules and patterns for adding OTel instrumentation to new services.
+
+### Import Order (Critical)
+
+OTel SDK monkey-patches modules at load time. The tracing module **must** be the very first import.
+
+**Node.js (backend):**
+```javascript
+// index.js — FIRST line must be:
+require('./tracing');
+// Only then:
+const express = require('express');
+const cors = require('cors');
+// ...
+```
+
+**Python (OPEA services):**
+```python
+# genieai_*.py — FIRST line must be:
+from tracing import get_tracer, get_meter
+# Only then:
+from comps import ...
+from fastapi import ...
+```
+
+Violating import order results in **no traces from that service** — the SDK cannot instrument modules loaded before it.
+
+### Span Creation Pattern
+
+Always wrap the actual work, not just metadata. Every span must handle errors:
+
+**Node.js:**
+```javascript
+const span = tracer.startSpan('operation.name');
+try {
+  // Actual work here — not just attribute reads
+  const result = await doRealWork();
+  span.setAttribute('result.count', result.length);
+  return result;
+} catch (err) {
+  span.recordException(err);
+  span.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
+  throw err;
+} finally {
+  span.end();
+}
+```
+
+**Python:**
+```python
+tracer = get_tracer(__name__)
+with tracer.start_as_current_span("operation.name") as span:
+    try:
+        # Actual work here
+        result = do_real_work()
+        span.set_attribute("result.count", len(result))
+        return result
+    except Exception as e:
+        span.record_exception(e)
+        span.set_status(Status(StatusCode.ERROR, str(e)))
+        raise
+```
+
+**Common mistakes (from Epic 7 retro):**
+- ❌ `span.recordException(err)` without `span.setStatus(ERROR)` → span appears successful
+- ❌ Span wrapping only attribute reads → ~0ms duration, useless telemetry
+- ❌ Missing try/finally → span never ends on exception (memory leak in Python)
+
+### Test Environment Guards
+
+Tracing must be disabled in test environments to avoid affecting existing test suites:
+
+**Node.js** (`tracing.js`): `if (process.env.NODE_ENV === 'test') { /* return no-ops */ }`
+**Python** (`tracing.py`): `if os.getenv("TESTING"): { /* return no-op tracer/meter */ }`
+
+Both provide the same API shape (tracer, meter, shutdown) as no-op stubs.
+
+### PII Redaction
+
+Sensitive attributes are filtered by `PIIRedactionProcessor` (Node.js) and a denylist check (Python). Denylist keys: `password`, `token`, `secret`, `authorization`, `cookie`, `api_key`, `credit_card`, `ssn`.
+
+When adding new span attributes, verify they don't contain PII. The denylist is in:
+- Node.js: `components/gov-chat-backend/tracing-pii.js`
+- Python: `genie-ai-overlay/tracing.py` (`PII_DENYLIST`)
+
+### Metric Naming
+
+Follow OTel semantic conventions. Use **route templates** to prevent cardinality explosion:
+
+- ✅ `http.server.duration` with attribute `http.route: "/api/chat/:id"`
+- ❌ `http.server.duration` with attribute `http.url: "/api/chat/abc123"` (cardinality explosion)
+
+### Safe-Default Pattern
+
+All observability features are **disabled by default**. Enable only when `ENABLE_OBSERVABILITY=1`:
+
+- Node.js: SDK init guarded by env var check
+- Python: SDK init guarded by env var check
+- Kong: Plugin created disabled, conditionally enabled by `restore-kong-config.sh`
+- Docker: Services use `profiles: [observability]`
+
+This ensures zero runtime impact when observability is not enabled.
+
+## Runtime Verification Protocol
+
+Minimum verification requirements for infrastructure and observability stories.
+
+### Infrastructure Stories (Collector, Databases, Proxies)
+
+Every infrastructure story MUST include at least one **smoke test against a running service**:
+
+| Check | Method |
+|-------|--------|
+| Collector health | `curl http://localhost:13133/health/status` |
+| Metric ingestion | Query VictoriaMetrics: `curl http://localhost:8428/api/v1/query?query=up` |
+| Log ingestion | Query VictoriaLogs: `curl http://localhost:9428/select/logsql/query -d 'query=*'` |
+| Trace storage | Query VictoriaTraces: `curl http://localhost:10429/api/traces?service=backend` |
+| Grafana datasource | Verify provisioning via Grafana API |
+
+### Application Stories (Tracing, Metrics)
+
+Application stories MUST verify:
+
+| Check | Method |
+|-------|--------|
+| Span export | Unit test with `InMemorySpanExporter` verifying span attributes |
+| Error handling | Test that exceptions produce spans with `status=ERROR` |
+| Test isolation | Existing test suite passes with no regressions |
+| PII check | Verify denylisted attributes are not exported |
+
+### Deferred Verification
+
+When runtime verification cannot be done in CI (requires GPU, running services), document:
+1. What was verified (unit tests only)
+2. What needs runtime verification (specific metrics, dashboards, alerts)
+3. How to verify (exact curl commands or Grafana queries)
+
+This prevents the "deferred forever" pattern seen in Epic 7.

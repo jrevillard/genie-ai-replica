@@ -122,7 +122,13 @@ if (process.env.NODE_ENV === 'test' || !process.env.OTEL_EXPORTER_OTLP_ENDPOINT)
     instrumentations: [
       getNodeAutoInstrumentations({
         '@opentelemetry/instrumentation-fs': { enabled: false },
-        '@opentelemetry/instrumentation-dns': { enabled: false }
+        '@opentelemetry/instrumentation-dns': { enabled: false },
+        // Suppress noisy Express middleware spans — only create spans for route handlers.
+        // Without this, every middleware (cors, helmet, logger, etc.) creates a separate
+        // root span, flooding traces with <100µs noise entries.
+        '@opentelemetry/instrumentation-express': {
+          ignoreLayersType: ['middleware']
+        }
       })
     ],
     textMapPropagator: new W3CTraceContextPropagator(),

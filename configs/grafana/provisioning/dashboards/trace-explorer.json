@@ -79,7 +79,8 @@
           "refId": "A",
           "queryType": "search",
           "maxTraces": 1000,
-          "limit": 20
+          "limit": 20,
+          "minDuration": "1ms"
         }
       ],
       "title": "Search Traces",

@@ -59,7 +59,7 @@ if (process.env.NODE_ENV === 'test' || !process.env.OTEL_EXPORTER_OTLP_ENDPOINT)
       // Drop health-check spans before export to reduce noise in Grafana
       const attrs = span.attributes || {};
       const target = attrs['http.target'] || attrs['http.route'] || '';
-      if (target && this._ignoredPaths.some(p => target.includes(p))) {
+      if (target && this._ignoredPaths.some((p) => target.includes(p))) {
         return; // silently drop the span
       }
       try {
@@ -115,14 +115,14 @@ if (process.env.NODE_ENV === 'test' || !process.env.OTEL_EXPORTER_OTLP_ENDPOINT)
       // versions — use raw key as fallback.
       ...(ATTR_DEPLOYMENT_ENVIRONMENT !== undefined
         ? { [ATTR_DEPLOYMENT_ENVIRONMENT]: deploymentEnvironment }
-        : { 'deployment.environment': deploymentEnvironment }),
+        : { 'deployment.environment': deploymentEnvironment })
     }),
     traceExporter: exporter,
     metricReader: metricReader,
     instrumentations: [
       getNodeAutoInstrumentations({
         '@opentelemetry/instrumentation-fs': { enabled: false },
-        '@opentelemetry/instrumentation-dns': { enabled: false },
+        '@opentelemetry/instrumentation-dns': { enabled: false }
       })
     ],
     textMapPropagator: new W3CTraceContextPropagator(),

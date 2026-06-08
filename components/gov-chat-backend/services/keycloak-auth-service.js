@@ -263,7 +263,7 @@ const keycloakAuthService = {
     // Two-attempt force-refresh pattern (from Architecture Decision D3)
     // 1. Verify token with cached JWKS → fail
     // 2. Check if token exp is still valid (not expired)
-// 4. If no (token expired) → 401 TOKEN_EXPIRED immediately (no refresh)
+    // 4. If no (token expired) → 401 TOKEN_EXPIRED immediately (no refresh)
 
     try {
       const verifiedPayload = await verifyWithJwt();

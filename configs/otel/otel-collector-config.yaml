@@ -53,6 +53,16 @@ processors:
     send_batch_max_size: 2048
   probabilistic_sampler:
     sampling_percentage: ${OTEL_TRACES_SAMPLER_RATE}
+  # Rename Kong spans from hardcoded "kong" to "METHOD /path" using attributes.
+  # Kong hardcodes span name as "kong" (instrumentation.lua:252) but sets
+  # http.method and http.route attributes — use those for descriptive names.
+  transform/kong_span_names:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - set(name, Concat([attributes["http.method"], " ", attributes["http.route"]], "")) where resource.attributes["service.name"] == "kong-gateway" and attributes["http.method"] != nil and attributes["http.route"] != nil and attributes["http.route"] != ""
+          - set(name, Concat([attributes["http.method"], " ", ExtractPatterns(attributes["http.url"], "https?://[^/]+(/[^?]*)")[0]], "")) where resource.attributes["service.name"] == "kong-gateway" and attributes["http.method"] != nil and name == "kong"
 
 exporters:
   prometheusremotewrite:
@@ -108,6 +118,7 @@ service:
         - otlp
       processors:
         - probabilistic_sampler
+        - transform/kong_span_names
         - batch
       exporters:
         - otlp_http/victoriatraces

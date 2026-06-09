@@ -504,7 +504,8 @@ const Map<String, dynamic> thLocale = {
         "การดำเนินการนี้จะล้างข้อมูลโปรไฟล์และประวัติการแชททั้งหมดของคุณ",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "ลบบัญชี",
     "deleteAccountDesc":
         "การดำเนินการนี้จะลบบัญชีของคุณและข้อมูลที่เกี่ยวข้องทั้งหมดอย่างถาวร",

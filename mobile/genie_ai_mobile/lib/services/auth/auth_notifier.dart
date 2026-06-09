@@ -29,7 +29,9 @@ String? _extractSub(String? idToken) {
   try {
     final parts = idToken.split('.');
     if (parts.length != 3) return null;
-    final payload = utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+    final payload = utf8.decode(
+      base64Url.decode(base64Url.normalize(parts[1])),
+    );
     return (jsonDecode(payload) as Map<String, dynamic>)['sub'] as String?;
   } catch (_) {
     return null;
@@ -48,7 +50,8 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
   late final AuthLogger _authLogger;
   late final AuthenticationApi _authenticationApi;
   late final ConnectivityChecker _connectivityChecker;
-  final NetworkErrorClassifier _networkErrorClassifier = NetworkErrorClassifier();
+  final NetworkErrorClassifier _networkErrorClassifier =
+      NetworkErrorClassifier();
 
   bool _isAuthorizing = false;
   bool _isRefreshing = false;
@@ -71,16 +74,17 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
       _debounceTimer?.cancel();
     });
 
-    _connectivitySubscription = _connectivityChecker.onConnectivityChanged.listen(
-      _onConnectivityChanged,
-      onError: (Object e) {
-        _authLogger.logAuthFailure(
-          errorCode: 'CONNECTIVITY_STREAM_ERROR',
-          message: 'Connectivity stream error: $e',
-          source: 'AuthNotifier.build',
+    _connectivitySubscription = _connectivityChecker.onConnectivityChanged
+        .listen(
+          _onConnectivityChanged,
+          onError: (Object e) {
+            _authLogger.logAuthFailure(
+              errorCode: 'CONNECTIVITY_STREAM_ERROR',
+              message: 'Connectivity stream error: $e',
+              source: 'AuthNotifier.build',
+            );
+          },
         );
-      },
-    );
 
     Future.microtask(() => _initializeAuth());
     return const AuthState.unauthenticated();
@@ -172,14 +176,11 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
       }
 
       final endpoints = await _keycloakService.discoverEndpoints().timeout(
-            discoveryTimeout,
-            onTimeout: () {
-              throw TimeoutException(
-                'Discovery timed out',
-                discoveryTimeout,
-              );
-            },
-          );
+        discoveryTimeout,
+        onTimeout: () {
+          throw TimeoutException('Discovery timed out', discoveryTimeout);
+        },
+      );
       if (!ref.mounted) return;
       if (endpoints == null) {
         _authLogger.logAuthFailure(
@@ -195,19 +196,19 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
         return;
       }
 
-      final tokenResponse = await _appAuth
-          .authorizeAndExchangeCode(
-            AuthorizationTokenRequest(
-              _keycloakService.keycloakConfig.clientId,
-              '${_keycloakService.keycloakConfig.redirectScheme}://callback',
-              serviceConfiguration: _serviceConfiguration(endpoints),
-              scopes: ['openid', 'profile', 'email', 'offline_access'],
-              allowInsecureConnections:
-                  _keycloakService.keycloakConfig.allowInsecureConnections,
-            ),
-          );
+      final tokenResponse = await _appAuth.authorizeAndExchangeCode(
+        AuthorizationTokenRequest(
+          _keycloakService.keycloakConfig.clientId,
+          '${_keycloakService.keycloakConfig.redirectScheme}://callback',
+          serviceConfiguration: _serviceConfiguration(endpoints),
+          scopes: ['openid', 'profile', 'email', 'offline_access'],
+          allowInsecureConnections:
+              _keycloakService.keycloakConfig.allowInsecureConnections,
+        ),
+      );
 
-      final expiration = tokenResponse.accessTokenExpirationDateTime ??
+      final expiration =
+          tokenResponse.accessTokenExpirationDateTime ??
           DateTime.now().add(const Duration(seconds: 3600));
 
       final accessToken = tokenResponse.accessToken;
@@ -284,10 +285,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
         message: tr('auth.timeout'),
         source: 'AuthNotifier.authorize',
       );
-      state = AuthState.error(
-        message: tr('auth.timeout'),
-        retryable: true,
-      );
+      state = AuthState.error(message: tr('auth.timeout'), retryable: true);
     } on FormatException catch (e) {
       _authLogger.logAuthFailure(
         errorCode: 'AUTH_MALFORMED_RESPONSE',
@@ -366,139 +364,138 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
       }
 
       try {
-      final discoveryEndpoints = await _keycloakService.discoverEndpoints().timeout(
-            discoveryTimeout,
-            onTimeout: () {
-              throw TimeoutException(
-                'Discovery timed out',
-                discoveryTimeout,
-              );
-            },
+        final discoveryEndpoints = await _keycloakService
+            .discoverEndpoints()
+            .timeout(
+              discoveryTimeout,
+              onTimeout: () {
+                throw TimeoutException('Discovery timed out', discoveryTimeout);
+              },
+            );
+        if (!ref.mounted) return;
+        if (discoveryEndpoints == null) {
+          _authLogger.logAuthFailure(
+            errorCode: 'REFRESH_DISCOVERY_FAILED',
+            keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
+            message: 'Endpoint discovery failed during token refresh',
+            source: 'AuthNotifier.refreshToken',
           );
-      if (!ref.mounted) return;
-      if (discoveryEndpoints == null) {
-        _authLogger.logAuthFailure(
-          errorCode: 'REFRESH_DISCOVERY_FAILED',
-          keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
-          message: 'Endpoint discovery failed during token refresh',
+          state = const AuthState.unauthenticated();
+          return;
+        }
+
+        final tokenResponse = await _appAuth
+            .token(
+              TokenRequest(
+                _keycloakService.keycloakConfig.clientId,
+                '${_keycloakService.keycloakConfig.redirectScheme}://callback',
+                serviceConfiguration: _serviceConfiguration(discoveryEndpoints),
+                grantType: 'refresh_token',
+                refreshToken: currentRefreshToken,
+                scopes: ['openid', 'profile', 'email', 'offline_access'],
+                allowInsecureConnections:
+                    _keycloakService.keycloakConfig.allowInsecureConnections,
+              ),
+            )
+            .timeout(
+              refreshTokenTimeout,
+              onTimeout: () {
+                throw TimeoutException(
+                  'Token refresh timed out',
+                  refreshTokenTimeout,
+                );
+              },
+            );
+
+        final expiration =
+            tokenResponse.accessTokenExpirationDateTime ??
+            DateTime.now().add(const Duration(seconds: 3600));
+
+        final accessToken = tokenResponse.accessToken;
+        if (accessToken == null) {
+          _lastFailedOperation = _FailedOperation.none;
+          _authLogger.logAuthFailure(
+            errorCode: 'REFRESH_FAILED',
+            keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
+            message: 'No access token in refresh response',
+            source: 'AuthNotifier.refreshToken',
+          );
+          state = const AuthState.unauthenticated();
+          return;
+        }
+
+        await _tokenStorage.saveTokens(
+          accessToken: accessToken,
+          idToken: tokenResponse.idToken ?? '',
+          refreshToken: tokenResponse.refreshToken ?? currentRefreshToken,
+          accessTokenExpiration: expiration,
+        );
+        if (!ref.mounted) return;
+
+        _lastFailedOperation = _FailedOperation.none;
+        _authLogger.logAuthEvent(
+          message: 'Token refresh successful',
           source: 'AuthNotifier.refreshToken',
         );
-        state = const AuthState.unauthenticated();
-        return;
-      }
-
-      final tokenResponse = await _appAuth
-          .token(
-            TokenRequest(
-              _keycloakService.keycloakConfig.clientId,
-              '${_keycloakService.keycloakConfig.redirectScheme}://callback',
-              serviceConfiguration: _serviceConfiguration(discoveryEndpoints),
-              grantType: 'refresh_token',
-              refreshToken: currentRefreshToken,
-              scopes: ['openid', 'profile', 'email', 'offline_access'],
-              allowInsecureConnections:
-                  _keycloakService.keycloakConfig.allowInsecureConnections,
-            ),
-          )
-          .timeout(
-            refreshTokenTimeout,
-            onTimeout: () {
-              throw TimeoutException(
-                'Token refresh timed out',
-                refreshTokenTimeout,
-              );
-            },
+        state = AuthState.authenticated(
+          userId: _extractSub(tokenResponse.idToken),
+        );
+      } on FormatException catch (e) {
+        _authLogger.logAuthFailure(
+          errorCode: 'REFRESH_MALFORMED_RESPONSE',
+          keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
+          message: 'Malformed token response: $e',
+          source: 'AuthNotifier.refreshToken',
+        );
+        _lastFailedOperation = _FailedOperation.none;
+        await _tokenStorage.deleteAll();
+        if (!ref.mounted) return;
+        state = AuthState(
+          status: AuthStatus.unauthenticated,
+          errorMessage: tr('auth.sessionExpired'),
+        );
+      } on TimeoutException catch (e) {
+        final isDiscovery =
+            (e.message?.contains('Discovery') ?? false) ||
+            e.duration == discoveryTimeout;
+        _authLogger.logAuthFailure(
+          errorCode: isDiscovery
+              ? 'REFRESH_DISCOVERY_TIMEOUT'
+              : 'REFRESH_TIMEOUT',
+          networkReachable: _connectivityChecker.isOnline,
+          message: tr('auth.timeout'),
+          source: 'AuthNotifier.refreshToken',
+        );
+        state = AuthState.error(message: tr('auth.timeout'), retryable: true);
+      } catch (e) {
+        // Layer 2: Safety net — if network error, preserve tokens
+        if (_networkErrorClassifier.isNetworkError(e)) {
+          _authLogger.logAuthFailure(
+            errorCode: 'REFRESH_NETWORK_OFFLINE_MID_OP',
+            networkReachable: false,
+            message: 'Network lost during token refresh',
+            source: 'AuthNotifier.refreshToken',
           );
-
-      final expiration = tokenResponse.accessTokenExpirationDateTime ??
-          DateTime.now().add(const Duration(seconds: 3600));
-
-      final accessToken = tokenResponse.accessToken;
-      if (accessToken == null) {
+          state = AuthState.error(
+            message: tr('auth.noInternetConnection'),
+            retryable: true,
+          );
+          return;
+        }
         _lastFailedOperation = _FailedOperation.none;
         _authLogger.logAuthFailure(
           errorCode: 'REFRESH_FAILED',
           keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
-          message: 'No access token in refresh response',
+          message: 'Token refresh failed — tokens cleared',
           source: 'AuthNotifier.refreshToken',
         );
-        state = const AuthState.unauthenticated();
-        return;
-      }
-
-      await _tokenStorage.saveTokens(
-        accessToken: accessToken,
-        idToken: tokenResponse.idToken ?? '',
-        refreshToken: tokenResponse.refreshToken ?? currentRefreshToken,
-        accessTokenExpiration: expiration,
-      );
-      if (!ref.mounted) return;
-
-      _lastFailedOperation = _FailedOperation.none;
-      _authLogger.logAuthEvent(
-        message: 'Token refresh successful',
-        source: 'AuthNotifier.refreshToken',
-      );
-      state = AuthState.authenticated(
-        userId: _extractSub(tokenResponse.idToken),
-      );
-    } on FormatException catch (e) {
-      _authLogger.logAuthFailure(
-        errorCode: 'REFRESH_MALFORMED_RESPONSE',
-        keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
-        message: 'Malformed token response: $e',
-        source: 'AuthNotifier.refreshToken',
-      );
-      _lastFailedOperation = _FailedOperation.none;
-      await _tokenStorage.deleteAll();
-      if (!ref.mounted) return;
-      state = AuthState(
-        status: AuthStatus.unauthenticated,
-        errorMessage: tr('auth.sessionExpired'),
-      );
-    } on TimeoutException catch (e) {
-      final isDiscovery =
-          (e.message?.contains('Discovery') ?? false) ||
-          e.duration == discoveryTimeout;
-      _authLogger.logAuthFailure(
-        errorCode: isDiscovery ? 'REFRESH_DISCOVERY_TIMEOUT' : 'REFRESH_TIMEOUT',
-        networkReachable: _connectivityChecker.isOnline,
-        message: tr('auth.timeout'),
-        source: 'AuthNotifier.refreshToken',
-      );
-      state = AuthState.error(
-        message: tr('auth.timeout'),
-        retryable: true,
-      );
-    } catch (e) {
-      // Layer 2: Safety net — if network error, preserve tokens
-      if (_networkErrorClassifier.isNetworkError(e)) {
-        _authLogger.logAuthFailure(
-          errorCode: 'REFRESH_NETWORK_OFFLINE_MID_OP',
-          networkReachable: false,
-          message: 'Network lost during token refresh',
-          source: 'AuthNotifier.refreshToken',
+        await _tokenStorage.deleteAll();
+        if (!ref.mounted) return;
+        state = AuthState(
+          status: AuthStatus.unauthenticated,
+          errorMessage: tr('auth.sessionExpired'),
         );
-        state = AuthState.error(
-          message: tr('auth.noInternetConnection'),
-          retryable: true,
-        );
-        return;
       }
-      _lastFailedOperation = _FailedOperation.none;
-      _authLogger.logAuthFailure(
-        errorCode: 'REFRESH_FAILED',
-        keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
-        message: 'Token refresh failed — tokens cleared',
-        source: 'AuthNotifier.refreshToken',
-      );
-      await _tokenStorage.deleteAll();
-      if (!ref.mounted) return;
-      state = AuthState(
-        status: AuthStatus.unauthenticated,
-        errorMessage: tr('auth.sessionExpired'),
-      );
-    }
     } finally {
       _isRefreshing = false;
     }
@@ -515,7 +512,9 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
 
     await Future.wait<void>([
       _authenticationApi.apiAuthLogoutPost().then((_) {}).catchError((_) {}),
-      _keycloakService.endSession(idTokenHint: idToken).catchError((_) => false),
+      _keycloakService
+          .endSession(idTokenHint: idToken)
+          .catchError((_) => false),
     ]);
     if (!ref.mounted) return;
 

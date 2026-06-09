@@ -1,0 +1,393 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Health monitoring for the GENIE.AI observability stack — VictoriaMetrics, VictoriaLogs, VictoriaTraces, and OTel Collector.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Service Uptime",
+      "description": "Uptime of the three Victoria services.",
+      "type": "stat",
+      "datasource": {"uid": "victoriametrics"},
+      "gridPos": {"h": 4, "w": 8, "x": 0, "y": 0},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 60}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}
+      },
+      "targets": [
+        {
+          "expr": "vm_app_uptime_seconds",
+          "legendFormat": "{{ service_name }}",
+          "refId": "A",
+          "datasource": {"uid": "victoriametrics"}
+        }
+      ]
+    },
+    {
+      "title": "Storage Overview",
+      "description": "Data size and stored rows for all Victoria services.",
+      "type": "stat",
+      "datasource": {"uid": "victoriametrics"},
+      "gridPos": {"h": 4, "w": 8, "x": 8, "y": 0},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "green", "value": null}]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": "Rows .*"},
+            "properties": [{"id": "unit", "value": "short"}, {"id": "decimals", "value": 0}]
+          }
+        ]
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(vm_data_size_bytes{job=\"victoriametrics\"})",
+          "legendFormat": "VM data",
+          "refId": "A",
+          "datasource": {"uid": "victoriametrics"}
+        },
+        {
+          "expr": "sum(vl_data_size_bytes{job=\"victorialogs\"})",
+          "legendFormat": "VLogs data",
+          "refId": "B",
+          "datasource": {"uid": "victoriametrics"}
+        },
+        {
+          "expr": "sum(vt_data_size_bytes{job=\"victoriatraces\"})",
+          "legendFormat": "VTraces data",
+          "refId": "C",
+          "datasource": {"uid": "victoriametrics"}
+        },
+        {
+          "expr": "sum(vm_rows{job=\"victoriametrics\"})",
+          "legendFormat": "Rows VM",
+          "refId": "D",
+          "datasource": {"uid": "victoriametrics"}
+        },
+        {
+          "expr": "sum(vl_indexdb_rows{job=\"victorialogs\"})",
+          "legendFormat": "Rows VLogs",
+          "refId": "E",
+          "datasource": {"uid": "victoriametrics"}
+        },
+        {
+          "expr": "sum(vt_indexdb_rows{job=\"victoriatraces\"})",
+          "legendFormat": "Rows VTraces",
+          "refId": "F",
+          "datasource": {"uid": "victoriametrics"}
+        }
+      ]
+    },
+    {
+      "title": "Free Disk Space",
+      "description": "Free disk space per service volume.",
+      "type": "stat",
+      "datasource": {"uid": "victoriametrics"},
+      "gridPos": {"h": 4, "w": 8, "x": 16, "y": 0},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 1000000000},
+              {"color": "green", "value": 10000000000}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}
+      },
+      "targets": [
+        {
+          "expr": "vm_free_disk_space_bytes{job=\"victoriametrics\"}",
+          "legendFormat": "{{ job }}",
+          "refId": "A",
+          "datasource": {"uid": "victoriametrics"}
+        },
+        {
+          "expr": "vl_free_disk_space_bytes{job=\"victorialogs\"}",
+          "legendFormat": "{{ job }}",
+          "refId": "B",
+          "datasource": {"uid": "victoriametrics"}
+        },
+        {
+          "expr": "vt_free_disk_space_bytes{job=\"victoriatraces\"}",
+          "legendFormat": "{{ job }}",
+          "refId": "C",
+          "datasource": {"uid": "victoriametrics"}
+        }
+      ]
+    },
+    {
+      "title": "OTel Collector Throughput",
+      "description": "Data received by the OTel Collector from all receivers (metrics, logs, traces).",
+      "type": "timeseries",
+      "datasource": {"uid": "victoriametrics"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "pointSize": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "desc"},
+        "legend": {"displayMode": "list", "placement": "bottom", "calcs": ["last", "mean"]}
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(otelcol_receiver_accepted_metric_points_total[5m]))",
+          "legendFormat": "Metric points/s",
+          "refId": "A",
+          "datasource": {"uid": "victoriametrics"}
+        },
+        {
+          "expr": "sum(rate(otelcol_receiver_accepted_log_records_total[5m]))",
+          "legendFormat": "Log records/s",
+          "refId": "B",
+          "datasource": {"uid": "victoriametrics"}
+        },
+        {
+          "expr": "sum(rate(otelcol_receiver_accepted_spans_total[5m]))",
+          "legendFormat": "Trace spans/s",
+          "refId": "C",
+          "datasource": {"uid": "victoriametrics"}
+        }
+      ]
+    },
+    {
+      "title": "VictoriaMetrics Ingestion Rate",
+      "description": "Rate of rows ingested by VictoriaMetrics, broken down by ingestion type.",
+      "type": "timeseries",
+      "datasource": {"uid": "victoriametrics"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "pointSize": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "desc"},
+        "legend": {"displayMode": "list", "placement": "bottom", "calcs": ["last", "mean"]}
+      },
+      "targets": [
+        {
+          "expr": "rate(vm_rows_inserted_total{job=\"victoriametrics\"}[5m])",
+          "legendFormat": "{{ type }}",
+          "refId": "A",
+          "datasource": {"uid": "victoriametrics"}
+        }
+      ]
+    },
+    {
+      "title": "VictoriaLogs Ingestion Rate",
+      "description": "Log ingestion rate from OTel Collector and VLogs HTTP requests.",
+      "type": "timeseries",
+      "datasource": {"uid": "victoriametrics"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "pointSize": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "desc"},
+        "legend": {"displayMode": "list", "placement": "bottom", "calcs": ["last", "mean"]}
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(otelcol_receiver_accepted_log_records_total{receiver=\"fluent_forward\"}[5m]))",
+          "legendFormat": "Collector received",
+          "refId": "A",
+          "datasource": {"uid": "victoriametrics"}
+        },
+        {
+          "expr": "sum(rate(vl_http_requests_total{job=\"victorialogs\"}[5m]))",
+          "legendFormat": "VLogs processed",
+          "refId": "B",
+          "datasource": {"uid": "victoriametrics"}
+        }
+      ]
+    },
+    {
+      "title": "VictoriaTraces Pipeline",
+      "description": "Trace spans exported and received by VictoriaTraces.",
+      "type": "timeseries",
+      "datasource": {"uid": "victoriametrics"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "pointSize": 5
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Export errors"},
+            "properties": [
+              {"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [10, 10]}},
+              {"id": "color", "value": "red"}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "VLogs export errors"},
+            "properties": [
+              {"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [10, 10]}},
+              {"id": "color", "value": "orange"}
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "desc"},
+        "legend": {"displayMode": "list", "placement": "bottom", "calcs": ["last", "mean"]}
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(otelcol_exporter_sent_spans_total[5m]))",
+          "legendFormat": "Spans exported/s",
+          "refId": "A",
+          "datasource": {"uid": "victoriametrics"}
+        },
+        {
+          "expr": "sum(rate(vt_http_errors_total{path=\"/insert/opentelemetry/v1/traces\"}[5m]))",
+          "legendFormat": "Export errors",
+          "refId": "B",
+          "datasource": {"uid": "victoriametrics"}
+        },
+        {
+          "expr": "sum(rate(vl_errors_total{job=\"victorialogs\"}[5m]))",
+          "legendFormat": "VLogs export errors",
+          "refId": "C",
+          "datasource": {"uid": "victoriametrics"}
+        }
+      ]
+    },
+    {
+      "title": "Request Latency",
+      "description": "Average request latency per Victoria service.",
+      "type": "timeseries",
+      "datasource": {"uid": "victoriametrics"},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 20},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "pointSize": 5
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "desc"},
+        "legend": {"displayMode": "list", "placement": "bottom", "calcs": ["last", "mean"]}
+      },
+      "targets": [
+        {
+          "expr": "rate(vm_http_request_duration_seconds_sum{job=\"victoriametrics\"}[5m]) / rate(vm_http_request_duration_seconds_count{job=\"victoriametrics\"}[5m])",
+          "legendFormat": "VictoriaMetrics",
+          "refId": "A",
+          "datasource": {"uid": "victoriametrics"}
+        },
+        {
+          "expr": "rate(vl_http_request_duration_seconds_sum{job=\"victorialogs\"}[5m]) / rate(vl_http_request_duration_seconds_count{job=\"victorialogs\"}[5m])",
+          "legendFormat": "VictoriaLogs",
+          "refId": "B",
+          "datasource": {"uid": "victoriametrics"}
+        },
+        {
+          "expr": "rate(vt_http_request_duration_seconds_sum{job=\"victoriatraces\"}[5m]) / rate(vt_http_request_duration_seconds_count{job=\"victoriatraces\"}[5m])",
+          "legendFormat": "VictoriaTraces",
+          "refId": "C",
+          "datasource": {"uid": "victoriametrics"}
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": ["observability", "genie-ai"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "Observability Stack Health",
+  "uid": "observability-stack-health",
+  "version": 0
+}

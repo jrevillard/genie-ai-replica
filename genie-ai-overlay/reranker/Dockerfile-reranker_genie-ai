@@ -52,6 +52,17 @@ RUN mv /app/comps/cores/proto/docarray.py /app/comps/cores/proto/opea_docarray.p
     sed -i 's/from \.\.proto.docarray import/from \.\.proto.opea_docarray import/' /app/comps/cores/mega/orchestrator.py && \
     sed -i 's/from \.\.proto.docarray import/from \.\.proto.opea_docarray import/' /app/comps/cores/mega/micro_service.py
 
+# Step D.5: Copy shared OTel tracing module (importable from PYTHONPATH=/app)
+COPY genie-ai-overlay/tracing.py /app/tracing.py
+
+# Step D.6: Install OpenTelemetry dependencies for distributed tracing
+RUN pip install --no-cache-dir \
+    "opentelemetry-api>=1.22" "opentelemetry-sdk>=1.22" \
+    "opentelemetry-instrumentation-fastapi>=0.43b0" \
+    "opentelemetry-instrumentation-aiohttp-client>=0.43b0" \
+    "opentelemetry-instrumentation-requests>=0.43b0" \
+    "opentelemetry-exporter-otlp-proto-http>=1.22"
+
 # Step E: "Overlay" custom GENIE-AI files
 # 1. Place the custom reranker class into the integrations folder
 COPY genie-ai-overlay/reranker/genieai_tei_reranker.py /app/comps/rerankings/src/integrations/genieai_tei_reranker.py
@@ -63,6 +74,9 @@ COPY genie-ai-overlay/reranker/genieai_reranking_microservice.py /app/comps/rera
 RUN useradd -ms /bin/bash user && \
     chown -R user:user /app /home/user
 
-# Step G: Run the new microservice entry point from its new location
+# Step G: Copy SSL bypass runtime patch as sitecustomize (no-op unless OPEA_SSL_SKIP_VERIFY=1)
+COPY configs/ssl/genie_ssl_patch.py /usr/local/lib/python3.11/site-packages/sitecustomize.py
+
+# Step H: Run the new microservice entry point from its new location
 USER user
 CMD ["python", "comps/rerankings/src/opea_reranking_microservice.py"]

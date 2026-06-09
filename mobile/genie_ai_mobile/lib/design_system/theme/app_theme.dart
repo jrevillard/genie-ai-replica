@@ -76,7 +76,10 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: tokens.surface,
-        contentTextStyle: TextStyle(color: tokens.fg, fontSize: tokens.textBase),
+        contentTextStyle: TextStyle(
+          color: tokens.fg,
+          fontSize: tokens.textBase,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DsRadii.md),
         ),
@@ -123,19 +126,59 @@ class AppTheme {
   static TextTheme _buildTextTheme(AppTokens tokens) {
     final color = tokens.fg;
     return TextTheme(
-      displayLarge: TextStyle(color: color, fontSize: tokens.text2xl, fontWeight: FontWeight.bold),
-      displayMedium: TextStyle(color: color, fontSize: tokens.textXl * 1.15, fontWeight: FontWeight.bold),
-      headlineLarge: TextStyle(color: color, fontSize: tokens.textXl, fontWeight: FontWeight.w600),
-      headlineMedium: TextStyle(color: color, fontSize: tokens.textLg, fontWeight: FontWeight.w600),
-      titleLarge: TextStyle(color: color, fontSize: tokens.textMd * 1.1, fontWeight: FontWeight.w600),
-      titleMedium: TextStyle(color: color, fontSize: tokens.textMd, fontWeight: FontWeight.w500),
-      titleSmall: TextStyle(color: color, fontSize: tokens.textBase, fontWeight: FontWeight.w500),
+      displayLarge: TextStyle(
+        color: color,
+        fontSize: tokens.text2xl,
+        fontWeight: FontWeight.bold,
+      ),
+      displayMedium: TextStyle(
+        color: color,
+        fontSize: tokens.textXl * 1.15,
+        fontWeight: FontWeight.bold,
+      ),
+      headlineLarge: TextStyle(
+        color: color,
+        fontSize: tokens.textXl,
+        fontWeight: FontWeight.w600,
+      ),
+      headlineMedium: TextStyle(
+        color: color,
+        fontSize: tokens.textLg,
+        fontWeight: FontWeight.w600,
+      ),
+      titleLarge: TextStyle(
+        color: color,
+        fontSize: tokens.textMd * 1.1,
+        fontWeight: FontWeight.w600,
+      ),
+      titleMedium: TextStyle(
+        color: color,
+        fontSize: tokens.textMd,
+        fontWeight: FontWeight.w500,
+      ),
+      titleSmall: TextStyle(
+        color: color,
+        fontSize: tokens.textBase,
+        fontWeight: FontWeight.w500,
+      ),
       bodyLarge: TextStyle(color: color, fontSize: tokens.textMd),
       bodyMedium: TextStyle(color: color, fontSize: tokens.textBase),
       bodySmall: TextStyle(color: color, fontSize: tokens.textSm),
-      labelLarge: TextStyle(color: color, fontSize: tokens.textBase, fontWeight: FontWeight.w500),
-      labelMedium: TextStyle(color: color, fontSize: tokens.textSm, fontWeight: FontWeight.w500),
-      labelSmall: TextStyle(color: color, fontSize: tokens.textXs, fontWeight: FontWeight.w500),
+      labelLarge: TextStyle(
+        color: color,
+        fontSize: tokens.textBase,
+        fontWeight: FontWeight.w500,
+      ),
+      labelMedium: TextStyle(
+        color: color,
+        fontSize: tokens.textSm,
+        fontWeight: FontWeight.w500,
+      ),
+      labelSmall: TextStyle(
+        color: color,
+        fontSize: tokens.textXs,
+        fontWeight: FontWeight.w500,
+      ),
     );
   }
 }

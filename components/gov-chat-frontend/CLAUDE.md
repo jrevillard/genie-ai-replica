@@ -1,5 +1,41 @@
 # CLAUDE.md — gov-chat-frontend
 
+## Common Commands
+
+```bash
+npm run dev           # Dev server (http://localhost:5173)
+npm test              # Jest unit tests
+npm run test:contract # Controller/middleware tests only
+npm run lint          # ESLint check
+npm run lint:fix      # ESLint auto-fix
+npm run format        # Prettier format
+npm run format:check  # Prettier check (no changes)
+npm run build         # Production build
+```
+
+## Architecture
+
+Vue 3 web app with Vuex state management and vue-i18n internationalization.
+
+| Directory | Purpose |
+|-----------|---------|
+| `src/components/` | Vue components — use DS primitives (DsButton, DsModal, etc.) |
+| `src/stores/` | Vuex store modules (auth, chat, categories, folders, settings) |
+| `src/services/` | API clients (axios) with 401 retry logic |
+| `src/router/` | Vue Router with auth guards |
+| `src/views/` | Page-level components |
+| `src/i18n/` | vue-i18n locale messages |
+| `src/__tests__/` | Jest tests (components, stores, services, utils) |
+
+- **Component style**: Options API (existing codebase convention)
+- **Testing**: Jest + `@vue/test-utils`. Tests in `src/__tests__/` mirroring `src/` structure.
+- **State**: Vuex stores in `src/stores/` — actions for async, mutations for sync state changes
+
+## See Also
+
+- Root `CLAUDE.md` — GENIE.AI architecture, deployment, full tech stack
+- `.claude/rules/TESTING.md` — Test commands and patterns for all components
+
 ## Design System
 
 This frontend is governed by the **GENIE.AI Design System (DS)**. The DS is the single source of truth for all component styling.

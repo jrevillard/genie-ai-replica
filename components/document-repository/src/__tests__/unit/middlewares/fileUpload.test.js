@@ -1,12 +1,52 @@
 const Joi = require('joi');
+const multer = require('multer');
 
 // buildContentDisposition and batchFileIdsSchema are module-scoped in fileController
 // (not exported). We test the Joi schema logic and CRLF sanitization pattern
 // independently here to verify the security fixes from issues #471 and #472.
 
+// Mock config before requiring middleware
+jest.mock('../../../config/appConfig', () => ({
+  upload: {
+    uploadDir: 'uploads',
+    allowedMimeTypes: ['application/pdf', 'text/plain', 'text/html'],
+    allowedExtensions: ['.pdf', '.txt', '.html'],
+    maxFileSize: 52428800,
+    maxFilesUpload: 5
+  }
+}));
+
+jest.mock(
+  '../../../../shared-lib',
+  () => ({
+    logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
+  }),
+  { virtual: true }
+);
+
+jest.mock('../../../utils/mimeTypeValidator', () => ({
+  validateFileType: jest.fn().mockResolvedValue({ isValid: true })
+}));
+
+const { validateFiles, handleMulterError } = require('../../../middlewares/fileUpload');
+const { validateFileType } = require('../../../utils/mimeTypeValidator');
+
+function createMocks(overrides = {}) {
+  const req = {
+    file: undefined,
+    files: undefined,
+    ...overrides
+  };
+  const res = {
+    status: jest.fn().mockReturnThis(),
+    json: jest.fn().mockReturnThis()
+  };
+  const next = jest.fn();
+  return { req, res, next };
+}
+
 describe('fileUpload security tests', () => {
   describe('CRLF sanitization (buildContentDisposition pattern)', () => {
-    // This mirrors the buildContentDisposition logic from fileController.js
     function sanitizeFilename(filename) {
       return filename.replace(/[\r\n]/g, '');
     }
@@ -53,7 +93,6 @@ describe('fileUpload security tests', () => {
   });
 
   describe('batchFileIdsSchema validation (issue #472)', () => {
-    // This mirrors the schema from fileController.js
     const MAX_BATCH_SIZE = 50;
     const batchFileIdsSchema = Joi.object({
       fileIds: Joi.array().items(Joi.string().min(1)).min(1).max(MAX_BATCH_SIZE).required()
@@ -103,5 +142,150 @@ describe('fileUpload security tests', () => {
       const { error } = batchFileIdsSchema.validate({ fileIds: 'not-an-array' });
       expect(error).toBeDefined();
     });
+  });
+});
+
+describe('validateFiles middleware', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    validateFileType.mockResolvedValue({ isValid: true });
+  });
+
+  it('should return 400 when no file is present on req.file or req.files', async () => {
+    const { req, res, next } = createMocks({ file: undefined, files: undefined });
+
+    await validateFiles(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'No file uploaded' }));
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('should validate a single file on req.file', async () => {
+    const file = { originalname: 'test.pdf', mimetype: 'application/pdf', buffer: Buffer.from('test') };
+    const { req, res, next } = createMocks({ file });
+
+    await validateFiles(req, res, next);
+
+    expect(next).toHaveBeenCalledWith();
+    expect(validateFileType).toHaveBeenCalledWith(file);
+  });
+
+  it('should validate multiple files on req.files', async () => {
+    const files = [
+      { originalname: 'a.pdf', mimetype: 'application/pdf', buffer: Buffer.from('a') },
+      { originalname: 'b.pdf', mimetype: 'application/pdf', buffer: Buffer.from('b') }
+    ];
+    const { req, res, next } = createMocks({ file: undefined, files });
+
+    await validateFiles(req, res, next);
+
+    expect(next).toHaveBeenCalledWith();
+    expect(validateFileType).toHaveBeenCalledTimes(2);
+  });
+
+  it('should return 400 when file validation fails', async () => {
+    validateFileType.mockResolvedValue({ isValid: false, error: 'Invalid MIME type' });
+    const file = { originalname: 'evil.exe', mimetype: 'application/exe', buffer: Buffer.from('x') };
+    const { req, res, next } = createMocks({ file });
+
+    await validateFiles(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Invalid MIME type' }));
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('should return 400 when one file in multi-upload fails validation', async () => {
+    validateFileType
+      .mockResolvedValueOnce({ isValid: true })
+      .mockResolvedValueOnce({ isValid: false, error: 'Disallowed file type' });
+
+    const files = [
+      { originalname: 'good.pdf', mimetype: 'application/pdf', buffer: Buffer.from('g') },
+      { originalname: 'bad.exe', mimetype: 'application/exe', buffer: Buffer.from('b') }
+    ];
+    const { req, res, next } = createMocks({ file: undefined, files });
+
+    await validateFiles(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Disallowed file type' }));
+  });
+
+  it('should handle unexpected errors gracefully', async () => {
+    validateFileType.mockRejectedValue(new Error('Unexpected error'));
+    const file = { originalname: 'test.pdf', mimetype: 'application/pdf', buffer: Buffer.from('t') };
+    const { req, res, next } = createMocks({ file });
+
+    await validateFiles(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Unexpected error' }));
+  });
+});
+
+describe('handleMulterError middleware', () => {
+  it('should handle LIMIT_FILE_SIZE error', () => {
+    const { req, res, next } = createMocks();
+    const error = new multer.MulterError('LIMIT_FILE_SIZE', 'file');
+
+    handleMulterError(error, req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: expect.stringContaining('File size too large') })
+    );
+  });
+
+  it('should handle LIMIT_FILE_COUNT error', () => {
+    const { req, res, next } = createMocks();
+    const error = new multer.MulterError('LIMIT_FILE_COUNT');
+
+    handleMulterError(error, req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Too many files uploaded' }));
+  });
+
+  it('should handle LIMIT_UNEXPECTED_FILE error', () => {
+    const { req, res, next } = createMocks();
+    const error = new multer.MulterError('LIMIT_UNEXPECTED_FILE', 'wrongField');
+
+    handleMulterError(error, req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Unexpected file field' }));
+  });
+
+  it('should handle unknown MulterError codes', () => {
+    const { req, res, next } = createMocks();
+    const error = new multer.MulterError('LIMIT_FIELD_KEY');
+    error.message = 'Too many fields';
+
+    handleMulterError(error, req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining('Upload error') }));
+  });
+
+  it('should handle file type rejection errors from fileFilter', () => {
+    const { req, res, next } = createMocks();
+    const error = new Error('File type application/exe is not allowed');
+
+    handleMulterError(error, req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining('not allowed') }));
+  });
+
+  it('should pass non-multer non-filetype errors to next', () => {
+    const { req, res, next } = createMocks();
+    const error = new Error('Something completely unexpected');
+
+    handleMulterError(error, req, res, next);
+
+    expect(next).toHaveBeenCalledWith(error);
+    expect(res.status).not.toHaveBeenCalled();
   });
 });

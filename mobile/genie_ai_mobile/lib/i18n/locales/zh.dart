@@ -435,7 +435,8 @@ const Map<String, dynamic> zhLocale = {
     "resetUserDataDesc": "这将清除您的所有个人资料数据和聊天记录。",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "删除账户",
     "deleteAccountDesc": "这将永久删除您的账户和所有相关数据。",
     "edit": "编辑",

@@ -157,7 +157,7 @@ class CpuTranslateBackend {
   /**
    * Initialize backend (initialize worker thread)
    */
-  async init() {
+  async init(timeout = 1200000) {
     if (this.initialized) {
       logger.debug('[CPU-BACKEND] Already initialized, skipping');
       return;
@@ -167,7 +167,7 @@ class CpuTranslateBackend {
       logger.info('[CPU-BACKEND] Starting initialization: Loading model in worker thread...');
 
       // Wait for worker to be ready (with timeout)
-      const timeout = 1200000; // 20 minutes timeout for model loading (can be slow on first run)
+      // timeout: default 20 minutes for model loading (can be slow on first run)
       const startTime = Date.now();
       let lastLogTime = startTime;
 
@@ -293,11 +293,8 @@ class CpuTranslateBackend {
         });
       });
 
-      // Clear timeout when promise resolves/rejects
-      translationPromise.finally(() => clearTimeout(timeout));
-
       // Wait for worker to complete translation (main thread is free!)
-      const translatedTexts = await translationPromise;
+      const translatedTexts = await translationPromise.finally(() => clearTimeout(timeout));
 
       const duration = Date.now() - startTime;
       logger.info(`[CPU-BACKEND] Translation completed in ${duration}ms`);
@@ -336,7 +333,7 @@ class CpuTranslateBackend {
   /**
    * Terminate worker thread (cleanup)
    */
-  async terminate() {
+  async terminate(forceTimeout = 5000) {
     if (this.worker) {
       logger.info('[CPU-BACKEND] Terminating worker thread...');
       this.worker.postMessage({ type: 'terminate' });
@@ -344,9 +341,9 @@ class CpuTranslateBackend {
       // Wait for worker to exit gracefully
       await new Promise((resolve) => {
         const timeout = setTimeout(() => {
-          this.worker.terminate();
+          if (this.worker) this.worker.terminate();
           resolve();
-        }, 5000);
+        }, forceTimeout);
 
         this.worker.once('exit', () => {
           clearTimeout(timeout);

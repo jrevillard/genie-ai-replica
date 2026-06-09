@@ -31,14 +31,15 @@ class OidcEndpoints {
 
   @override
   int get hashCode => Object.hash(
-        authorizationEndpoint,
-        tokenEndpoint,
-        userinfoEndpoint,
-        endSessionEndpoint,
-      );
+    authorizationEndpoint,
+    tokenEndpoint,
+    userinfoEndpoint,
+    endSessionEndpoint,
+  );
 
   @override
-  String toString() => 'OidcEndpoints('
+  String toString() =>
+      'OidcEndpoints('
       'authorization: $authorizationEndpoint, '
       'token: $tokenEndpoint, '
       'userinfo: $userinfoEndpoint, '
@@ -55,8 +56,8 @@ class KeycloakService {
     required this.keycloakConfig,
     http.Client? httpClient,
     AuthLogger? logger,
-  })  : _httpClient = httpClient ?? http.Client(),
-        _logger = logger;
+  }) : _httpClient = httpClient ?? http.Client(),
+       _logger = logger;
 
   Future<OidcEndpoints?> discoverEndpoints() async {
     if (_cachedEndpoints != null) return _cachedEndpoints;
@@ -143,9 +144,9 @@ class KeycloakService {
           'id_token_hint': idTokenHint,
         'client_id': keycloakConfig.clientId,
       };
-      final uri = Uri.parse(endpoints.endSessionEndpoint).replace(
-        queryParameters: queryParams,
-      );
+      final uri = Uri.parse(
+        endpoints.endSessionEndpoint,
+      ).replace(queryParameters: queryParams);
 
       final response = await _httpClient.get(uri);
 

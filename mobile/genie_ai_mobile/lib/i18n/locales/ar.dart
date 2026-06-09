@@ -504,7 +504,8 @@ const Map<String, dynamic> arLocale = {
         "سيؤدي هذا إلى مسح جميع بيانات ملفك الشخصي وسجل المحادثات.",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "حذف الحساب",
     "deleteAccountDesc":
         "سيؤدي هذا إلى حذف حسابك وجميع البيانات المرتبطة به نهائياً.",

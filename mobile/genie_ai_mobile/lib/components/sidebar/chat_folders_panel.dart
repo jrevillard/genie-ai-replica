@@ -123,10 +123,13 @@ class _ChatFoldersPanelState extends ConsumerState<ChatFoldersPanel> {
     setState(() => _isLoading = true);
 
     try {
-      final response = widget.activeTab == 'folders' &&
-          _folderSelected &&
-          _selectedFolderId.isNotEmpty
-          ? await _chatHistoryApi.apiChatFoldersFolderIdGetWithHttpInfo(_selectedFolderId)
+      final response =
+          widget.activeTab == 'folders' &&
+              _folderSelected &&
+              _selectedFolderId.isNotEmpty
+          ? await _chatHistoryApi.apiChatFoldersFolderIdGetWithHttpInfo(
+              _selectedFolderId,
+            )
           : await _chatHistoryApi.apiChatConversationsGetWithHttpInfo(
               limit: 100,
               offset: 0,
@@ -221,7 +224,10 @@ class _ChatFoldersPanelState extends ConsumerState<ChatFoldersPanel> {
       final request = ApiChatConversationsConversationIdPatchRequest(
         isStarred: newStatus,
       );
-      await _chatHistoryApi.apiChatConversationsConversationIdPatchWithHttpInfo(chatId, request);
+      await _chatHistoryApi.apiChatConversationsConversationIdPatchWithHttpInfo(
+        chatId,
+        request,
+      );
       setState(() {
         chat['isStarred'] = newStatus;
         if (widget.activeTab == 'starred' && !newStatus) {
@@ -249,7 +255,10 @@ class _ChatFoldersPanelState extends ConsumerState<ChatFoldersPanel> {
       final request = ApiChatConversationsConversationIdPatchRequest(
         isArchived: value,
       );
-      await _chatHistoryApi.apiChatConversationsConversationIdPatchWithHttpInfo(chatId, request);
+      await _chatHistoryApi.apiChatConversationsConversationIdPatchWithHttpInfo(
+        chatId,
+        request,
+      );
       await _loadConversationsForCurrentTab();
     } catch (e) {
       debugPrint("[CHAT_FOLDERS] ERROR in archive toggle: $e");
@@ -291,7 +300,9 @@ class _ChatFoldersPanelState extends ConsumerState<ChatFoldersPanel> {
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${tr('sidebar.errorCreatingFolder')}: $e')),
+                    SnackBar(
+                      content: Text('${tr('sidebar.errorCreatingFolder')}: $e'),
+                    ),
                   );
                 }
               }
@@ -330,13 +341,18 @@ class _ChatFoldersPanelState extends ConsumerState<ChatFoldersPanel> {
                 final request = ApiChatFoldersFolderIdPatchRequest(
                   name: _editingFolderName.trim(),
                 );
-                await _chatHistoryApi.apiChatFoldersFolderIdPatchWithHttpInfo(folder['id'], request);
+                await _chatHistoryApi.apiChatFoldersFolderIdPatchWithHttpInfo(
+                  folder['id'],
+                  request,
+                );
                 if (mounted) Navigator.pop(context);
                 _loadFoldersFromBackend();
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${tr('sidebar.errorUpdatingFolder')}: $e')),
+                    SnackBar(
+                      content: Text('${tr('sidebar.errorUpdatingFolder')}: $e'),
+                    ),
                   );
                 }
               }
@@ -365,7 +381,9 @@ class _ChatFoldersPanelState extends ConsumerState<ChatFoldersPanel> {
           variant: DsButtonVariant.danger,
           onPressed: () async {
             try {
-              await _chatHistoryApi.apiChatFoldersFolderIdDeleteWithHttpInfo(folder['id']);
+              await _chatHistoryApi.apiChatFoldersFolderIdDeleteWithHttpInfo(
+                folder['id'],
+              );
               if (mounted) Navigator.pop(context);
               _loadFoldersFromBackend();
               if (_selectedFolderId == folder['id']) {
@@ -374,7 +392,9 @@ class _ChatFoldersPanelState extends ConsumerState<ChatFoldersPanel> {
             } catch (e) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${tr('sidebar.errorDeletingFolder')}: $e')),
+                  SnackBar(
+                    content: Text('${tr('sidebar.errorDeletingFolder')}: $e'),
+                  ),
                 );
               }
             }
@@ -416,13 +436,21 @@ class _ChatFoldersPanelState extends ConsumerState<ChatFoldersPanel> {
                 final request = ApiChatConversationsConversationIdPatchRequest(
                   title: _newChatTitle.trim(),
                 );
-                await _chatHistoryApi.apiChatConversationsConversationIdPatchWithHttpInfo(chatId, request);
+                await _chatHistoryApi
+                    .apiChatConversationsConversationIdPatchWithHttpInfo(
+                      chatId,
+                      request,
+                    );
                 setState(() => chat['title'] = _newChatTitle.trim());
                 if (mounted) Navigator.pop(context);
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${tr('sidebar.errorUpdatingConversation')}: $e')),
+                    SnackBar(
+                      content: Text(
+                        '${tr('sidebar.errorUpdatingConversation')}: $e',
+                      ),
+                    ),
                   );
                 }
               }
@@ -467,16 +495,19 @@ class _ChatFoldersPanelState extends ConsumerState<ChatFoldersPanel> {
                   'conversations/',
                   '',
                 );
-                await _chatHistoryApi.apiChatFoldersFolderIdConversationsConversationIdPostWithHttpInfo(
-                  _destinationFolderId!,
-                  convId,
-                );
+                await _chatHistoryApi
+                    .apiChatFoldersFolderIdConversationsConversationIdPostWithHttpInfo(
+                      _destinationFolderId!,
+                      convId,
+                    );
                 if (mounted) Navigator.pop(context);
                 _loadConversationsForCurrentTab();
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${tr('sidebar.errorMovingChat')}: $e')),
+                    SnackBar(
+                      content: Text('${tr('sidebar.errorMovingChat')}: $e'),
+                    ),
                   );
                 }
               }
@@ -507,7 +538,8 @@ class _ChatFoldersPanelState extends ConsumerState<ChatFoldersPanel> {
                 'conversations/',
                 '',
               );
-              await _chatHistoryApi.apiChatConversationsConversationIdDeleteWithHttpInfo(chatId);
+              await _chatHistoryApi
+                  .apiChatConversationsConversationIdDeleteWithHttpInfo(chatId);
 
               if (mounted) {
                 setState(

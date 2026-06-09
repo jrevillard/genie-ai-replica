@@ -136,9 +136,229 @@ graph TB
 | Kong | None | Pure reverse proxy |
 | NGINX | TLS only | Terminates TLS, proxies to Kong |
 
+### 3.1 Cross-Cutting Services
+
+| Service Type | Components | Purpose |
+|--------------|-----------|---------|
+| Testing | Jest (backend, frontend, doc-repo), pytest (OPEA), flutter_test (mobile), Playwright (E2E) | Unit, integration, and end-to-end testing with CI pipeline |
+| Observability | OTel Collector, VictoriaMetrics, VictoriaLogs, VictoriaTraces, Grafana | Distributed tracing, metrics, logs, dashboards, alerting |
+
 ---
 
-## 4. User Authentication Flow
+## 4. Testing Architecture
+
+### 4.1 Test Framework Matrix
+
+| Component | Test Framework | Test Directory | Coverage |
+|-----------|---------------|----------------|----------|
+| Backend | Jest (supertest) | `components/gov-chat-backend/__tests__/` | Unit + integration tests for routes, controllers, services |
+| Frontend | Jest + Vue Test Utils | `components/gov-chat-frontend/src/__tests__/` | Component unit tests, Vuex store tests |
+| Document Repository | Jest (supertest) | `components/document-repository/__tests__/` | Upload, ClamAV scanning, metadata tests |
+| OPEA ChatQnA | pytest | `genie-ai-overlay/chatqna/tests/` | Python unit + integration tests |
+| OPEA Retriever | pytest | `genie-ai-overlay/retriever/tests/` | Vector + graph retrieval tests |
+| OPEA Dataprep | pytest | `genie-ai-overlay/dataprep/tests/` | Ingestion, chunking, labeling tests |
+| Mobile | flutter_test | `mobile/genie_ai_mobile/test/` | Widget + integration tests |
+| E2E | Playwright | `tests/e2e/` | Multi-phase procedure tests (auth, chat, upload) |
+| Config Validation | Jest | `tests/config-validator/` | Environment variable coverage, secret validation |
+
+### 4.2 CI Pipeline Flow
+
+```mermaid
+graph LR
+    A[Lint] --> B[Test]
+    B --> C[Config Validate]
+    C --> D[E2E Tests]
+    D --> E[JUnit Reports]
+    
+    style A fill:#e1f5fe
+    style B fill:#c8e6c9
+    style C fill:#fff9c4
+    style D fill:#f3e5f5
+    style E fill:#e0f2f1
+```
+
+The GitLab CI pipeline (`.gitlab-ci.yml`) executes in four stages:
+
+1. **Lint** — ESLint (JS), Ruff (Python), Dart analyzer (Flutter)
+2. **Test** — Unit + integration tests (Jest, pytest, flutter_test)
+3. **Config Validate** — Verify environment variable coverage, required secrets, conflicting configs
+4. **E2E Tests** — Playwright multi-phase procedures (authentication, chat, document upload, ingestion)
+
+All test stages generate JUnit XML reports for GitLab to display in merge request widgets and block merging on failure.
+
+### 4.3 Backend Testability Pattern
+
+The backend uses a `createApp()` pattern to enable route testing without starting an HTTP server:
+
+```javascript
+// index.js
+export function createApp() {
+  const app = express();
+  // ... middleware and routes
+  return app;
+}
+
+// __tests__/integration/chat.test.js
+import { createApp } from '../index';
+import request from 'supertest';
+
+describe('POST /api/chat', () => {
+  it('should return chat response', async () => {
+    const app = createApp();
+    const response = await request(app)
+      .post('/api/chat')
+      .send({ message: 'test' });
+    expect(response.status).toBe(200);
+  });
+});
+```
+
+This pattern allows `supertest` to test Express routes directly without binding to a network port, enabling fast parallel test execution.
+
+---
+
+## 5. Observability Architecture
+
+### 5.1 Distributed Tracing Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant FE as Vue Frontend
+    participant N as NGINX
+    participant K as Kong
+    participant BE as Backend
+    participant ChatQnA as OPEA ChatQnA
+    participant Ret as Retriever
+    participant ADB as ArangoDB
+    participant LLM as vLLM
+    participant Collector as OTel Collector
+    participant VM as VictoriaTraces
+
+    User->>FE: Send message
+    FE->>N: HTTPS (traceparent header)
+    N->>K: Proxy (propagates traceparent)
+    K->>BE: Reverse proxy
+    
+    BE->>BE: Create root span (backend.request)
+    BE->>Collector: Export span (OTLP)
+    
+    BE->>ChatQnA: Bearer token + traceparent
+    ChatQnA->>ChatQnA: Create child span (chatqna.process)
+    ChatQnA->>Collector: Export span
+    
+    ChatQnA->>Ret: Query + traceparent
+    Ret->>Ret: Create child span (retriever.search)
+    Ret->>ADB: Vector + graph search
+    Ret->>Collector: Export span
+    
+    ChatQnA->>LLM: Generate + traceparent
+    LLM->>LLM: Create child span (llm.inference)
+    LLM->>Collector: Export span
+    
+    Collector->>VM: Store trace
+    Collector->>Collector: Self-telemetry span
+```
+
+### 5.2 Trace Propagation
+
+All services use W3C Trace Context (`traceparent` header) for distributed tracing:
+
+| Header | Format | Purpose |
+|--------|--------|---------|
+| `traceparent` | `00-{trace-id}-{parent-id}-{trace-flags}` | W3C standard for trace context propagation |
+
+Trace propagation chain:
+1. **Backend** (Node.js) — Creates root span, injects `traceparent` into upstream requests
+2. **OPEA ChatQnA** (Python FastAPI) — Extracts context, creates child spans
+3. **OPEA Retriever/Reranker/vLLM** — Propagate context through RAG pipeline
+4. **OTel Collector** — Receives spans via OTLP, exports to VictoriaTraces
+
+### 5.3 Service Instrumentation
+
+| Service | Instrumentation | Tracing Library | Key Spans |
+|---------|---------------|-----------------|-----------|
+| Backend | `tracing.js`, `tracing-db.js`, `tracing-pii.js`, `metrics.js` | `@opentelemetry/api` + `@opentelemetry/sdk-node` | HTTP requests, database queries, PII redaction |
+| OPEA ChatQnA | `genie-ai-overlay/tracing.py` | OpenTelemetry Python + FastAPI | Request processing, LLM calls, retries |
+| OPEA Retriever | OpenTelemetry Python | Vector search, graph queries |
+| OPEA Dataprep | OpenTelemetry Python | Ingestion, chunking, labeling |
+| Kong (optional) | OTel plugin | Request routing (sampling controlled by `KONG_TRACING_SAMPLING_RATE`) |
+
+### 5.4 Victoria Storage Stack
+
+| Component | Purpose | Retention | Port |
+|-----------|---------|-----------|------|
+| VictoriaMetrics | Metric storage (Prometheus compatible) | 30d (configurable) | 8428 |
+| VictoriaLogs | Log storage (fluentd receiver) | 30d (configurable) | 9428 |
+| VictoriaTraces | Distributed trace storage | 30d (configurable) | 10428 |
+
+### 5.5 OTel Collection
+
+The OTel Collector runs in `mode: global` (one instance per Swarm node) and receives:
+
+1. **Traces/Metrics** — Via OTLP HTTP receiver (port 4318) from instrumented services
+2. **Logs** — Via fluentd receiver (port 24224) from Docker fluentd logging driver
+3. **Self-telemetry** — Collector generates its own spans/metrics for monitoring
+
+Collection flow:
+```
+Service stdout/stderr → Docker fluentd driver → OTel Collector (fluent_forward) → VictoriaLogs
+Service traces/metrics → OTLP HTTP → OTel Collector → VictoriaTraces/VictoriaMetrics
+```
+
+### 5.6 Grafana Dashboards and Alerting
+
+Grafana provides 10 pre-built dashboards across two folders:
+
+**Application dashboards (General folder):**
+
+| Dashboard | Purpose | Data Source |
+|-----------|---------|-------------|
+| Service Health | Service uptime, error rates, latency | VictoriaMetrics |
+| Application Metrics | Custom business metrics (requests, users) | VictoriaMetrics |
+| Logs Explorer | Log aggregation, filtering, search | VictoriaLogs |
+| Trace Explorer | Distributed trace search, waterfall | VictoriaTraces (Jaeger) |
+| RAG Waterfall | End-to-end RAG pipeline latency | VictoriaTraces |
+| Stack Health | Infrastructure metrics (CPU, memory) | VictoriaMetrics |
+
+**Infrastructure dashboards (Observability folder):**
+
+| Dashboard | Purpose | Data Source |
+|-----------|---------|-------------|
+| VictoriaMetrics Single Node | VM internal metrics and health | VictoriaMetrics |
+| VictoriaLogs Single Node | VL ingestion and storage metrics | VictoriaLogs |
+| VictoriaTraces Single Node | VT trace processing metrics | VictoriaTraces |
+| Observability Stack Health | Collector, storage, ingestion overview | VictoriaMetrics |
+
+**Alerting** — Grafana alert rules notify on:
+- Collector down (missed heartbeat)
+- Storage filling (>80% disk usage)
+- Log pipeline broken (no log entries)
+- Trace export failure (high error rate)
+
+### 5.7 Configuration
+
+Observability is **disabled by default**. Enable via:
+
+| Method | Configuration |
+|--------|---------------|
+| Docker Compose | `docker compose --profile observability up -d` |
+| Docker Swarm | `ENABLE_OBSERVABILITY=1` in `.env` (MUST be `0` or `1`) |
+| Ansible | `enable_observability: "1"` in `group_vars/all.yml` |
+
+**Environment variables** (`.env` Section 12C):
+- `ENABLE_OBSERVABILITY` — Enable/disable the stack (default: `0`)
+- `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` — Grafana credentials
+- `VICTORIALOGS_RETENTION` / `VICTORIATRACES_RETENTION` / `VICTORIAMETRICS_RETENTION` — Data retention
+- `OTEL_TRACES_SAMPLER_RATE` — Trace sampling rate (default: 100.0 = 100%)
+
+**Config files**:
+- `configs/otel/otel-collector-config.yaml` — Collector receivers, processors, exporters
+- `configs/grafana/provisioning/` — Datasources + dashboards (auto-provisioned)
+
+---
+
+## 6. User Authentication Flow
 
 ```mermaid
 sequenceDiagram
@@ -172,7 +392,7 @@ Keycloak serves as the sole identity authority. If an external IdP is configured
 
 ---
 
-## 5. Token Validation and JWKS
+## 7. Token Validation and JWKS
 
 ```mermaid
 sequenceDiagram
@@ -215,9 +435,9 @@ Each service independently validates JWTs against Keycloak JWKS. JWKS public key
 
 ---
 
-## 6. Token Lifecycle
+## 8. Token Lifecycle
 
-### 6.1 Silent Token Renew
+### 8.1 Silent Token Renew
 
 ```mermaid
 sequenceDiagram
@@ -233,7 +453,7 @@ sequenceDiagram
 
 The frontend uses a silent renew mechanism (iframe) to obtain a new access_token from Keycloak before the current one expires. This happens transparently to the user as long as the Keycloak session is still valid.
 
-### 6.2 Logout and Session Termination
+### 8.2 Logout and Session Termination
 
 ```mermaid
 sequenceDiagram
@@ -253,7 +473,7 @@ Logout is initiated by the frontend calling Keycloak's end_session_endpoint with
 
 ---
 
-## 7. API Request Flow
+## 9. API Request Flow
 
 ```mermaid
 sequenceDiagram
@@ -292,11 +512,79 @@ sequenceDiagram
 
 The RAG pipeline flows through the API gateway, backend, and OPEA services. The Bearer token is forwarded to ChatQnA, which performs independent JWKS validation. ChatQnA also fetches user context from the backend via `GET /api/me/context` to enrich AI prompts with user profile data.
 
+### 9.2 RAG Pipeline with Distributed Tracing
+
+Each stage of the RAG pipeline emits OTel spans for observability:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant FE as Vue Frontend
+    participant BE as Backend
+    participant ChatQnA as OPEA ChatQnA
+    participant TEI as TEI Embedding
+    participant Ret as Retriever
+    participant ADB as ArangoDB
+    participant Rerank as Reranker
+    participant LLM as vLLM
+    participant Collector as OTel Collector
+
+    User->>FE: Send query
+    FE->>BE: POST /api/chat
+    
+    BE->>BE: [SPAN: backend.request]
+    BE->>Collector: Export span (OTLP)
+    
+    BE->>ChatQnA: POST /chat (with traceparent)
+    ChatQnA->>ChatQnA: [SPAN: chatqna.process]
+    ChatQnA->>Collector: Export span
+    
+    ChatQnA->>TEI: Generate embedding (traceparent)
+    TEI->>TEI: [SPAN: tei.embedding]
+    TEI->>Collector: Export span
+    TEI->>ChatQnA: Vector
+    
+    ChatQnA->>Ret: Query (traceparent)
+    Ret->>Ret: [SPAN: retriever.search]
+    Ret->>ADB: Vector + graph search
+    ADB->>ADB: [SPAN: arangodb.query]
+    Ret->>Collector: Export span
+    Ret->>ChatQnA: Chunks
+    
+    ChatQnA->>Rerank: Rerank (traceparent)
+    Rerank->>Rerank: [SPAN: reranker.score]
+    Rerank->>Collector: Export span
+    Rerank->>ChatQnA: Ranked chunks
+    
+    ChatQnA->>LLM: Generate (traceparent)
+    LLM->>LLM: [SPAN: llm.inference]
+    LLM->>Collector: Export span
+    LLM->>ChatQnA: Response
+    
+    ChatQnA->>BE: RAG response
+    BE->>FE: API response
+    FE->>User: Display answer
+```
+
+**Key spans emitted:**
+- `backend.request` — Backend HTTP request processing
+- `chatqna.process` — ChatQnA orchestration (root span for RAG)
+- `tei.embedding` — Embedding generation
+- `retriever.search` — Vector + graph retrieval
+- `arangodb.query` — Database query execution
+- `reranker.score` — Result reranking
+- `llm.inference` — LLM generation
+
+All spans include:
+- **Parent-child relationships** (via `traceparent` header)
+- **Attributes** (model IDs, chunk counts, latency, error codes)
+- **Events** (LLM prompt start, retrieval completion, etc.)
+
 ---
 
-## 8. Document Upload and Ingestion
+## 10. Document Upload and Ingestion
 
-### 8.1 Upload Flow
+### 10.1 Upload Flow
 
 ```mermaid
 sequenceDiagram
@@ -320,7 +608,7 @@ sequenceDiagram
 
 Users upload documents through the frontend to the Document Repository service. Files are validated (type, size), scanned by ClamAV, and stored with metadata. Upload requires an authenticated user with admin role.
 
-### 8.2 Ingestion Flow
+### 10.2 Ingestion Flow
 
 Ingestion is triggered manually by an admin after upload. The Document Repository proxies the request to the Dataprep service.
 
@@ -357,7 +645,7 @@ sequenceDiagram
 
 Dataprep uses a dedicated Keycloak client with the `client_credentials` grant type. This service account is separate from user tokens and has permissions scoped to document ingestion operations. The ingestion pipeline extracts content, chunks it, labels each chunk against the service taxonomy, constructs a knowledge graph (entities + relationships), generates vector embeddings, and stores everything in ArangoDB.
 
-### 8.3 Document Retraction
+### 10.3 Document Retraction
 
 ```mermaid
 sequenceDiagram
@@ -378,7 +666,7 @@ Retraction removes all graph data (chunks, entities, relationships) associated w
 
 ---
 
-## 9. Public vs Protected Routes
+## 11. Public vs Protected Routes
 
 | Route | Access | Notes |
 |-------|--------|-------|
@@ -397,15 +685,15 @@ Unauthenticated requests to protected routes receive a 401 response. The backend
 
 ---
 
-## 10. User Lifecycle
+## 12. User Lifecycle
 
-### 10.1 JIT Provisioning
+### 12.1 JIT Provisioning
 
 On each authenticated request, the backend checks whether the user exists in ArangoDB. If not, it creates the user record using a composite key formed from the JWT issuer and subject (`iss#sub`). If the user already exists, the backend updates the user's metadata (name, email, roles) to stay in sync with Keycloak.
 
 This ensures ArangoDB always reflects the current state from the identity provider. For detailed user management procedures, see the [Keycloak Admin Guide](keycloak-admin-guide.md).
 
-### 10.2 User Disable and Delete Propagation
+### 12.2 User Disable and Delete Propagation
 
 ```mermaid
 sequenceDiagram
@@ -432,7 +720,7 @@ When a user is disabled or deleted in Keycloak, the propagation is handled at th
 
 ---
 
-## 11. External Identity Providers
+## 13. External Identity Providers
 
 ```mermaid
 sequenceDiagram
@@ -459,7 +747,7 @@ For configuration details, see the [External IdP Integration Guide](external-idp
 
 ---
 
-## 12. API Gateway
+## 14. API Gateway
 
 The API gateway consists of two layers:
 
@@ -469,7 +757,7 @@ The API gateway consists of two layers:
 
 Request path: `Browser -> NGINX (TLS) -> Kong (CORS, rate limit) -> Backend (JWT validation) -> Upstream services`
 
-### 12.1 Reverse Proxy Header Chain for Keycloak
+### 14.1 Reverse Proxy Header Chain for Keycloak
 
 Keycloak runs behind the NGINX → Kong proxy chain with the `/auth` path prefix. The following headers are used to tell Keycloak its public URL:
 
@@ -502,7 +790,7 @@ This approach (docs option 1: X-Forwarded-Prefix) avoids hardcoding a full URL i
 
 ---
 
-## 13. Key Decisions
+## 15. Key Decisions
 
 | ID | Decision | Rationale |
 |----|----------|-----------|
@@ -517,7 +805,7 @@ This approach (docs option 1: X-Forwarded-Prefix) avoids hardcoding a full URL i
 
 ---
 
-## 14. Further Reading
+## 16. Further Reading
 
 - [Keycloak Admin Guide](keycloak-admin-guide.md) -- Realm configuration, user management, client setup
 - [Docker Compose Setup](docker-compose-setup.md) -- Local development deployment with Docker Compose

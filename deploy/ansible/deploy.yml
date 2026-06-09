@@ -390,79 +390,91 @@
             dockerfile: components/gov-chat-frontend/Dockerfile
             context: components/gov-chat-frontend/
             source_tag: genieai_mvp_frontend:latest
-            registry_tag: genie-ai-frontend:latest
+            registry_tag: "genie-ai-frontend:{{ image_tag }}"
             opea: false
           - name: backend
             dockerfile: components/gov-chat-backend/Dockerfile
             context: components
             source_tag: genieai_mvp_backend:latest
-            registry_tag: genie-ai-backend:latest
+            registry_tag: "genie-ai-backend:{{ image_tag }}"
             opea: false
           - name: document-repository
             dockerfile: components/document-repository/Dockerfile
             context: components
             source_tag: genieai_mvp_document-repository:latest
-            registry_tag: genie-ai-document-repository:latest
+            registry_tag: "genie-ai-document-repository:{{ image_tag }}"
             opea: false
           - name: nginx
             dockerfile: api-gateway-solution/nginx/Dockerfile
             context: api-gateway-solution/nginx/
             source_tag: genie-ai-nginx:latest
-            registry_tag: genie-ai-nginx:latest
+            registry_tag: "genie-ai-nginx:{{ image_tag }}"
             opea: false
           - name: kong-config
             dockerfile: api-gateway-solution/new-config/Dockerfile
             context: api-gateway-solution/new-config/
             source_tag: genie-ai-kong-config:latest
-            registry_tag: genie-ai-kong-config:latest
+            registry_tag: "genie-ai-kong-config:{{ image_tag }}"
             opea: false
           - name: postgres-init
             dockerfile: configs/postgres/Dockerfile
             context: configs/postgres/
             source_tag: genie-ai-postgres-init:latest
-            registry_tag: genie-ai-postgres-init:latest
+            registry_tag: "genie-ai-postgres-init:{{ image_tag }}"
             opea: false
           - name: keycloak
             dockerfile: configs/keycloak/Dockerfile
             context: configs/keycloak/
             source_tag: genie-ai-keycloak:latest
-            registry_tag: genie-ai-keycloak:latest
+            registry_tag: "genie-ai-keycloak:{{ image_tag }}"
             opea: false
           - name: keycloak-config
             dockerfile: configs/keycloak/Dockerfile.config-cli
             context: configs/keycloak/
             source_tag: genie-ai-keycloak-config:latest
-            registry_tag: genie-ai-keycloak-config:latest
+            registry_tag: "genie-ai-keycloak-config:{{ image_tag }}"
             opea: false
           - name: db-migrations
             dockerfile: components/gov-chat-backend/Dockerfile.migrations
             context: .
             source_tag: genie-ai-db-migrations:latest
-            registry_tag: genie-ai-db-migrations:latest
+            registry_tag: "genie-ai-db-migrations:{{ image_tag }}"
             opea: false
           - name: dataprep-arango
             dockerfile: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
             context: .
             source_tag: genie-ai-dataprep-arango:latest
-            registry_tag: genie-ai-dataprep-arango:latest
+            registry_tag: "genie-ai-dataprep-arango:{{ image_tag }}"
             opea: true
           - name: retriever-arango
             dockerfile: genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
             context: .
             source_tag: genie-ai-retriever-arango:latest
-            registry_tag: genie-ai-retriever-arango:latest
+            registry_tag: "genie-ai-retriever-arango:{{ image_tag }}"
             opea: true
           - name: chatqna-server
             dockerfile: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
             context: .
             source_tag: genie-ai-chatqna-server:latest
-            registry_tag: genie-ai-chatqna-server:latest
+            registry_tag: "genie-ai-chatqna-server:{{ image_tag }}"
             opea: true
           - name: reranker
             dockerfile: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
             context: .
             source_tag: genie-ai-reranker:latest
-            registry_tag: genie-ai-reranker:latest
+            registry_tag: "genie-ai-reranker:{{ image_tag }}"
+            opea: true
+          - name: textgen
+            dockerfile: genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
+            context: .
+            source_tag: genie-ai-textgen:latest
+            registry_tag: "genie-ai-textgen:{{ image_tag }}"
+            opea: true
+          - name: embedding
+            dockerfile: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
+            context: .
+            source_tag: genie-ai-embedding:latest
+            registry_tag: "genie-ai-embedding:{{ image_tag }}"
             opea: true
 
     - name: Get current git commit SHA
@@ -471,6 +483,10 @@
         chdir: "{{ deploy_dir }}"
       register: git_sha
       changed_when: false
+
+    - name: Set image tag from git SHA
+      ansible.builtin.set_fact:
+        image_tag: "{{ git_sha.stdout[:8] }}"
 
     - name: Check if images need rebuild
       ansible.builtin.command: >
@@ -698,6 +714,7 @@
         | reject('search', 'postgres-init')
         | reject('search', 'keycloak-config')
         | reject('search', 'db-migrations')
+        | reject('search', 'otel-collector-init')
         | reject('search', '0/0')
         | select('search', '0/')
         | length == 0

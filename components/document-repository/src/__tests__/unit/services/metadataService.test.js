@@ -1,33 +1,39 @@
-const fs = require('fs').promises;
-const metadataService = require('../../../services/metadataService');
-
-// Mock fs.promises
 jest.mock('fs', () => ({
   promises: {
     stat: jest.fn()
   }
 }));
 
-// Mock uuid
 jest.mock('uuid', () => ({
   v4: jest.fn().mockReturnValue('test-uuid-1234')
 }));
 
-// Mock fileUtils
 jest.mock('../../../utils/fileUtils', () => ({
   getFileHash: jest.fn().mockResolvedValue('abc123hash')
 }));
 
-// Mock mime-types
 jest.mock('mime-types', () => ({
   lookup: jest.fn().mockReturnValue('application/pdf')
 }));
 
+jest.mock(
+  '../../../../shared-lib',
+  () => ({
+    logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
+    dbService: { getConnection: jest.fn() }
+  }),
+  { virtual: true }
+);
+
+const fs = require('fs').promises;
+const metadataService = require('../../../services/metadataService');
+
 describe('metadataService', () => {
-  describe('extractMetadata', () => {
-    // extractMetadata is not exported directly on the singleton,
-    // so we test it indirectly via addMetadata with mocked fs/db
-    // Instead, we require the module source to access the standalone function.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('addMetadata', () => {
     it('should add metadata via addMetadata with mocked fs and db', async () => {
       const mockStats = { size: 1024, birthtime: new Date('2025-01-01') };
       fs.stat.mockResolvedValue(mockStats);
@@ -56,6 +62,58 @@ describe('metadataService', () => {
       expect(savedArg.create_date).toBeDefined();
       expect(savedArg.dataprep.status).toBe('Pending');
       expect(savedArg.chunk_count).toBe(0);
+    });
+
+    it('should use fileInfo overrides when provided', async () => {
+      const mockStats = { size: 2048, birthtime: new Date('2025-02-01') };
+      fs.stat.mockResolvedValue(mockStats);
+
+      const mockCollection = { save: jest.fn().mockResolvedValue({}) };
+      const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
+      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await metadataService.addMetadata('/path.pdf', {
+        file_id: 'custom-id',
+        file_name: 'custom.pdf',
+        file_size: 9999,
+        file_type: 'text/plain',
+        file_hash: 'custom-hash',
+        labels: ['label-a'],
+        author: 'Custom Author',
+        language: 'fr',
+        source_url: 'https://example.com',
+        crawl_date: '2025-06-01T12:00:00.000Z'
+      });
+
+      const savedArg = mockCollection.save.mock.calls[0][0];
+      expect(savedArg.file_id).toBe('custom-id');
+      expect(savedArg.file_size).toBe(9999);
+      expect(savedArg.file_type).toBe('text/plain');
+      expect(savedArg.file_hash).toBe('custom-hash');
+      expect(savedArg.labels).toEqual(['label-a']);
+      expect(savedArg.language).toBe('fr');
+      expect(savedArg.source_url).toBe('https://example.com');
+      expect(savedArg.crawl_date).toBe('2025-06-01T12:00:00.000Z');
+    });
+
+    it('should default language to unknown when not provided', async () => {
+      const mockStats = { size: 100, birthtime: new Date() };
+      fs.stat.mockResolvedValue(mockStats);
+
+      const mockCollection = { save: jest.fn().mockResolvedValue({}) };
+      const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
+      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await metadataService.addMetadata('/path.pdf', { file_name: 'test.pdf' });
+
+      const savedArg = mockCollection.save.mock.calls[0][0];
+      expect(savedArg.language).toBe('unknown');
+    });
+
+    it('should propagate errors from addMetadata', async () => {
+      fs.stat.mockRejectedValue(new Error('file not found'));
+
+      await expect(metadataService.addMetadata('/missing.pdf', {})).rejects.toThrow('file not found');
     });
   });
 
@@ -105,10 +163,15 @@ describe('metadataService', () => {
 
       await metadataService.searchMetadata(null, null, '2025-01-01', '2025-12-31', '2024-01-01', '2024-12-31');
       const query = mockDb.query.mock.calls[0][0];
+      const bindVars = mockDb.query.mock.calls[0][1];
       expect(query).toContain('file.uploaded_date >= @uploaded_date_from');
       expect(query).toContain('file.uploaded_date <= @uploaded_date_to');
       expect(query).toContain('file.create_date >= @create_date_from');
       expect(query).toContain('file.create_date <= @create_date_to');
+      expect(bindVars.uploaded_date_from).toBe('2025-01-01');
+      expect(bindVars.uploaded_date_to).toBe('2025-12-31');
+      expect(bindVars.create_date_from).toBe('2024-01-01');
+      expect(bindVars.create_date_to).toBe('2024-12-31');
     });
 
     it('should add FILTER for labels using INTERSECTION', async () => {
@@ -161,7 +224,6 @@ describe('metadataService', () => {
 
       metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
 
-      // 3 filters: file_name, file_type, author
       await metadataService.searchMetadata('doc', 'text/plain', null, null, null, null, null, 'Alice');
       const query = mockDb.query.mock.calls[0][0];
       const filterCount = (query.match(/ AND /g) || []).length;
@@ -178,6 +240,24 @@ describe('metadataService', () => {
       const query = mockDb.query.mock.calls[0][0];
       expect(query).not.toContain('INTERSECTION');
     });
+
+    it('should return search results from cursor', async () => {
+      const results = [{ file_id: '1', file_name: 'report.pdf' }];
+      const mockCursor = { all: jest.fn().mockResolvedValue(results) };
+      const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
+
+      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      const result = await metadataService.searchMetadata('report');
+      expect(result).toEqual(results);
+    });
+
+    it('should propagate database errors', async () => {
+      const mockDb = { query: jest.fn().mockRejectedValue(new Error('DB connection lost')) };
+      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await expect(metadataService.searchMetadata('test')).rejects.toThrow('DB connection lost');
+    });
   });
 
   describe('getMetadataById', () => {
@@ -190,6 +270,8 @@ describe('metadataService', () => {
 
       const result = await metadataService.getMetadataById('123');
       expect(result).toEqual(metadata);
+      const query = mockDb.query.mock.calls[0][0];
+      expect(query).toContain('FILTER file.file_id == @file_id');
     });
 
     it('should return null when not found', async () => {
@@ -200,6 +282,17 @@ describe('metadataService', () => {
 
       const result = await metadataService.getMetadataById('nonexistent');
       expect(result).toBeNull();
+    });
+
+    it('should query with correct file_id bindVar', async () => {
+      const mockCursor = { next: jest.fn().mockResolvedValue(null) };
+      const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
+
+      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await metadataService.getMetadataById('file-abc123');
+      const bindVars = mockDb.query.mock.calls[0][1];
+      expect(bindVars.file_id).toBe('file-abc123');
     });
   });
 
@@ -227,6 +320,20 @@ describe('metadataService', () => {
       const result = await metadataService.deleteMetadata('123');
       expect(result).toBe(true);
       expect(mockCollection.remove).toHaveBeenCalledWith('abc123');
+    });
+
+    it('should propagate database errors during delete', async () => {
+      const metadata = { _key: 'abc123', file_id: '123' };
+      const mockCursor = { next: jest.fn().mockResolvedValue(metadata) };
+      const mockCollection = { remove: jest.fn().mockRejectedValue(new Error('remove failed')) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValue(mockCursor),
+        collection: jest.fn().mockReturnValue(mockCollection)
+      };
+
+      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await expect(metadataService.deleteMetadata('123')).rejects.toThrow('remove failed');
     });
   });
 
@@ -268,7 +375,7 @@ describe('metadataService', () => {
       await metadataService.updateMetadata('123', {
         dataprep: { status: 'Ingested', ingest_date: '2025-01-01T00:00:00Z' },
         chunk_count: 5,
-        file_name: 'should-be-ignored.pdf' // not in allowed fields
+        file_name: 'should-be-ignored.pdf'
       });
 
       expect(mockCollection.update).toHaveBeenCalledTimes(1);
@@ -321,10 +428,33 @@ describe('metadataService', () => {
       });
 
       const updateArg = mockCollection.update.mock.calls[0][1];
-      // Should preserve ingest_date from existing metadata
       expect(updateArg.dataprep.ingest_date).toBe('2025-01-01');
       expect(updateArg.dataprep.status).toBe('Retracted');
       expect(updateArg.dataprep.retract_date).toBe('2025-06-01');
+    });
+
+    it('should return the updated document after update', async () => {
+      const metadata = {
+        _key: 'abc123',
+        file_id: '123',
+        dataprep: { status: 'Pending' }
+      };
+      const updatedDoc = { ...metadata, chunk_count: 10 };
+      const mockCursor = { next: jest.fn().mockResolvedValue(metadata) };
+      const mockCollection = {
+        update: jest.fn().mockResolvedValue({}),
+        document: jest.fn().mockResolvedValue(updatedDoc)
+      };
+      const mockDb = {
+        query: jest.fn().mockResolvedValue(mockCursor),
+        collection: jest.fn().mockReturnValue(mockCollection)
+      };
+
+      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      const result = await metadataService.updateMetadata('123', { chunk_count: 10 });
+      expect(result).toEqual(updatedDoc);
+      expect(mockCollection.document).toHaveBeenCalledWith('abc123');
     });
   });
 });

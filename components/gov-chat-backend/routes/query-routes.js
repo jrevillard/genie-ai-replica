@@ -140,7 +140,10 @@ module.exports = (queryService) => {
   router.post('/stream', async (req, res) => {
     const streamingEnabled = process.env.OPEA_STREAMING !== 'false';
     if (!streamingEnabled) {
-      return res.status(501).json({ error: 'STREAMING_DISABLED', message: 'SSE streaming is disabled. Set OPEA_STREAMING=true to enable.' });
+      return res.status(501).json({
+        error: 'STREAMING_DISABLED',
+        message: 'SSE streaming is disabled. Set OPEA_STREAMING=true to enable.'
+      });
     }
 
     const userId = req.user?.iss_sub;
@@ -153,7 +156,9 @@ module.exports = (queryService) => {
     let keepalive = null;
 
     try {
-      const { queryId, opeaUrl, opeaPayload } = await queryService.initStreamQuery(queryData, { authorization: req.headers.authorization });
+      const { queryId, opeaUrl, opeaPayload, authHeaders } = await queryService.initStreamQuery(queryData, {
+        authorization: req.headers.authorization
+      });
 
       // SSE response headers
       res.writeHead(200, {
@@ -167,7 +172,10 @@ module.exports = (queryService) => {
       opeaController = new AbortController();
 
       const opeaResponse = await axios.post(opeaUrl, opeaPayload, {
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authHeaders?.authorization && { Authorization: authHeaders.authorization })
+        },
         responseType: 'stream',
         timeout: streamTimeout,
         signal: opeaController.signal,
@@ -223,7 +231,9 @@ module.exports = (queryService) => {
         if (!res.headersSent) {
           res.status(502).json({ error: 'CHATQNA_STREAM_ERROR', message: error.message });
         } else {
-          res.write(`data: ${JSON.stringify({ type: 'error', message: error.message, code: 'CHATQNA_STREAM_ERROR' })}\n\n`);
+          res.write(
+            `data: ${JSON.stringify({ type: 'error', message: error.message, code: 'CHATQNA_STREAM_ERROR' })}\n\n`
+          );
           res.end();
         }
       });
@@ -240,10 +250,12 @@ module.exports = (queryService) => {
           opeaController.abort();
           logger.info('QueryService.stream_client_disconnected', { queryId });
           if (fullResponseText) {
-            queryService.finalizeStreamQuery(queryId, fullResponseText, Date.now() - startTime, {
-              source_documents: [],
-              confidence_score: 0
-            }).catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
+            queryService
+              .finalizeStreamQuery(queryId, fullResponseText, Date.now() - startTime, {
+                source_documents: [],
+                confidence_score: 0
+              })
+              .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
           }
         }
       });
@@ -255,7 +267,6 @@ module.exports = (queryService) => {
         }
         res.write(': keepalive\n\n');
       }, 15000);
-
     } catch (error) {
       if (keepalive !== null) clearInterval(keepalive);
       logger.error('QueryService.stream_setup_error', { error: error.message });
@@ -290,11 +301,17 @@ module.exports = (queryService) => {
     if (userLanguage && userLanguage.toUpperCase() !== 'EN' && fullResponseText) {
       try {
         await translationService.init();
-        const translated = await translationService.translateMarkdown(fullResponseText, 'en', userLanguage.toLowerCase());
+        const translated = await translationService.translateMarkdown(
+          fullResponseText,
+          'en',
+          userLanguage.toLowerCase()
+        );
         res.write(`data: ${JSON.stringify({ type: 'translation', content: translated })}\n\n`);
       } catch (error) {
         logger.warn('QueryService.stream_translation_failed', { queryId, error: error.message });
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Translation failed', code: 'TRANSLATION_FAILED' })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', message: 'Translation failed', code: 'TRANSLATION_FAILED' })}\n\n`
+        );
       }
     }
 
@@ -310,8 +327,9 @@ module.exports = (queryService) => {
   }
 
   async function retrieveStreamMetadata(queryData, authHeader) {
-    const lastMessage = queryData.messages[queryData.messages.length - 1];
-    const queryText = lastMessage ? lastMessage.content : '';
+    // Find the last user message (frontend appends empty assistant placeholder)
+    const lastUserMessage = [...queryData.messages].reverse().find((m) => m.role === 'user');
+    const queryText = lastUserMessage ? lastUserMessage.content : '';
 
     if (!queryText) {
       return { source_documents: [], confidence_score: 0 };
@@ -320,13 +338,17 @@ module.exports = (queryService) => {
     let retrievedDocs;
     try {
       const retrieverUrl = 'http://retriever-arango-service:7000/v1/retrieval';
-      const retrieverResponse = await axios.post(retrieverUrl, {
-        messages: queryText,
-        k: 4
-      }, {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 10000
-      });
+      const retrieverResponse = await axios.post(
+        retrieverUrl,
+        {
+          input: queryText,
+          k: 4
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 10000
+        }
+      );
 
       const result = retrieverResponse.data;
       retrievedDocs = result.retrieved_docs || result.documents || [];
@@ -341,29 +363,39 @@ module.exports = (queryService) => {
 
     const sourceDocuments = [];
     const scores = [];
+    const seenFileIds = new Map(); // Deduplicate by file_id, keep highest score
 
     for (const doc of retrievedDocs) {
       const docMetadata = doc.metadata || {};
       const fileIds = docMetadata.file_ids || [];
+      const currentScore = docMetadata.score || docMetadata.similarity_score || 0;
 
       if (fileIds.length > 0) {
+        const fileId = fileIds[0];
+
+        // Dedup: skip if we already have a higher-scoring entry for this file
+        const existingScore = seenFileIds.get(fileId);
+        if (existingScore !== undefined && existingScore >= currentScore) continue;
+
         try {
-          const fileResponse = await axios.get(
-            `http://document-repository:3001/api/files/${fileIds[0]}`,
-            { headers: { Authorization: authHeader }, timeout: 5000 }
-          );
-          const fileInfo = fileResponse.data;
-          sourceDocuments.push({
-            document_id: fileIds[0],
-            document_name: fileInfo.file_name || fileInfo.original_name || 'Unknown',
-            url: fileInfo.url || '',
-            categoryLabel: fileInfo.labels?.categoryLabel || queryData.context?.categoryLabel || 'General',
-            serviceLabels: fileInfo.labels?.serviceLabels || [],
-            score: docMetadata.score || docMetadata.similarity_score || 0
+          const fileResponse = await axios.get(`http://document-repository:3001/api/files/${fileId}`, {
+            headers: { Authorization: authHeader },
+            timeout: 5000
           });
-          scores.push(docMetadata.score || docMetadata.similarity_score || 0);
+          // Handle nested response {data: {file_name: ...}} and flat {file_name: ...}
+          const fileData = fileResponse.data?.data || fileResponse.data;
+          sourceDocuments.push({
+            document_id: fileId,
+            document_name: fileData.file_name || fileData.original_name || 'Unknown',
+            url: fileData.url || '',
+            categoryLabel: fileData.labels?.categoryLabel || queryData.context?.categoryLabel || 'General',
+            serviceLabels: fileData.labels?.serviceLabels || [],
+            score: currentScore
+          });
+          seenFileIds.set(fileId, currentScore);
+          scores.push(currentScore);
         } catch (error) {
-          logger.warn('QueryService.file_metadata_fetch_failed', { fileId: fileIds[0], error: error.message });
+          logger.warn('QueryService.file_metadata_fetch_failed', { fileId, error: error.message });
         }
       }
     }

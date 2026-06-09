@@ -99,10 +99,7 @@ class MockInnerClient extends http.BaseClient {
 }
 
 http.StreamedResponse streamedResponse(int statusCode, String body) {
-  return http.StreamedResponse(
-    Stream.value(utf8.encode(body)),
-    statusCode,
-  );
+  return http.StreamedResponse(Stream.value(utf8.encode(body)), statusCode);
 }
 
 void main() {
@@ -127,38 +124,52 @@ void main() {
   setUp(() {
     tokenStorage = FakeTokenStorage();
     logger = _RecordingAuthLogger();
-    interceptor = makeInterceptor(
-      responseFn: (_) => streamedResponse(200, ''),
-    );
+    interceptor = makeInterceptor(responseFn: (_) => streamedResponse(200, ''));
   });
 
   tearDown(() => interceptor.close());
 
   // --- Task 4.2: Bearer token injection ---
   group('Bearer token injection', () {
-    test('injects Authorization: Bearer <token> header when token exists', () async {
-      tokenStorage.accessToken = 'test-access-token';
-      late http.BaseRequest captured;
-      interceptor = makeInterceptor(responseFn: (req) {
-        captured = req;
-        return streamedResponse(200, 'ok');
-      });
+    test(
+      'injects Authorization: Bearer <token> header when token exists',
+      () async {
+        tokenStorage.accessToken = 'test-access-token';
+        late http.BaseRequest captured;
+        interceptor = makeInterceptor(
+          responseFn: (req) {
+            captured = req;
+            return streamedResponse(200, 'ok');
+          },
+        );
 
-      final request = http.Request('GET', Uri.parse('https://api.example.com/data'));
-      await interceptor.send(request);
+        final request = http.Request(
+          'GET',
+          Uri.parse('https://api.example.com/data'),
+        );
+        await interceptor.send(request);
 
-      expect(captured.headers['Authorization'], equals('Bearer test-access-token'));
-    });
+        expect(
+          captured.headers['Authorization'],
+          equals('Bearer test-access-token'),
+        );
+      },
+    );
 
     test('does NOT set Authorization header when token is null', () async {
       tokenStorage.accessToken = null;
       late http.BaseRequest captured;
-      interceptor = makeInterceptor(responseFn: (req) {
-        captured = req;
-        return streamedResponse(200, 'ok');
-      });
+      interceptor = makeInterceptor(
+        responseFn: (req) {
+          captured = req;
+          return streamedResponse(200, 'ok');
+        },
+      );
 
-      final request = http.Request('GET', Uri.parse('https://api.example.com/data'));
+      final request = http.Request(
+        'GET',
+        Uri.parse('https://api.example.com/data'),
+      );
       await interceptor.send(request);
 
       expect(captured.headers.containsKey('Authorization'), isFalse);
@@ -185,7 +196,10 @@ void main() {
         },
       );
 
-      final request = http.Request('GET', Uri.parse('https://api.example.com/data'));
+      final request = http.Request(
+        'GET',
+        Uri.parse('https://api.example.com/data'),
+      );
       final response = await interceptor.send(request);
 
       expect(refreshCalled, isTrue);
@@ -202,10 +216,12 @@ void main() {
       final refreshAllowed = Completer<void>();
 
       interceptor = AuthInterceptor(
-        inner: MockInnerClient(responseFn: (req) {
-          // All calls return 401 — retries will also fail
-          return streamedResponse(401, 'Unauthorized');
-        }),
+        inner: MockInnerClient(
+          responseFn: (req) {
+            // All calls return 401 — retries will also fail
+            return streamedResponse(401, 'Unauthorized');
+          },
+        ),
         tokenStorage: tokenStorage,
         onRefreshToken: () async {
           refreshCallCount++;
@@ -221,9 +237,15 @@ void main() {
       // Fire 3 concurrent requests that will all get 401.
       // The first one triggers refresh; the other 2 await the same Completer.
       final futures = [
-        interceptor.send(http.Request('GET', Uri.parse('https://api.example.com/1'))),
-        interceptor.send(http.Request('GET', Uri.parse('https://api.example.com/2'))),
-        interceptor.send(http.Request('GET', Uri.parse('https://api.example.com/3'))),
+        interceptor.send(
+          http.Request('GET', Uri.parse('https://api.example.com/1')),
+        ),
+        interceptor.send(
+          http.Request('GET', Uri.parse('https://api.example.com/2')),
+        ),
+        interceptor.send(
+          http.Request('GET', Uri.parse('https://api.example.com/3')),
+        ),
       ];
 
       // Wait for refresh to start, then a small delay to ensure the other
@@ -263,12 +285,12 @@ void main() {
         },
       );
 
-      final request = http.Request('GET', Uri.parse('https://api.example.com/data'));
-
-      expect(
-        () => interceptor.send(request),
-        throwsA(isA<AuthException>()),
+      final request = http.Request(
+        'GET',
+        Uri.parse('https://api.example.com/data'),
       );
+
+      expect(() => interceptor.send(request), throwsA(isA<AuthException>()));
     });
   });
 
@@ -284,12 +306,12 @@ void main() {
         },
       );
 
-      final request = http.Request('GET', Uri.parse('https://api.example.com/data'));
-
-      expect(
-        () => interceptor.send(request),
-        throwsA(isA<AuthException>()),
+      final request = http.Request(
+        'GET',
+        Uri.parse('https://api.example.com/data'),
       );
+
+      expect(() => interceptor.send(request), throwsA(isA<AuthException>()));
     });
 
     test('throws AuthException when refresh returns null token', () async {
@@ -302,12 +324,12 @@ void main() {
         },
       );
 
-      final request = http.Request('GET', Uri.parse('https://api.example.com/data'));
-
-      expect(
-        () => interceptor.send(request),
-        throwsA(isA<AuthException>()),
+      final request = http.Request(
+        'GET',
+        Uri.parse('https://api.example.com/data'),
       );
+
+      expect(() => interceptor.send(request), throwsA(isA<AuthException>()));
     });
   });
 
@@ -324,7 +346,10 @@ void main() {
         },
       );
 
-      final request = http.Request('GET', Uri.parse('https://api.example.com/data'));
+      final request = http.Request(
+        'GET',
+        Uri.parse('https://api.example.com/data'),
+      );
       final response = await interceptor.send(request);
 
       expect(response.statusCode, equals(500));
@@ -342,7 +367,10 @@ void main() {
         },
       );
 
-      final request = http.Request('GET', Uri.parse('https://api.example.com/data'));
+      final request = http.Request(
+        'GET',
+        Uri.parse('https://api.example.com/data'),
+      );
       final response = await interceptor.send(request);
 
       expect(response.statusCode, equals(403));
@@ -359,12 +387,14 @@ void main() {
       late http.BaseRequest retryRequest;
 
       interceptor = AuthInterceptor(
-        inner: MockInnerClient(responseFn: (req) {
-          callIndex++;
-          if (callIndex == 1) return streamedResponse(401, 'Unauthorized');
-          retryRequest = req;
-          return streamedResponse(200, '{"ok": true}');
-        }),
+        inner: MockInnerClient(
+          responseFn: (req) {
+            callIndex++;
+            if (callIndex == 1) return streamedResponse(401, 'Unauthorized');
+            retryRequest = req;
+            return streamedResponse(200, '{"ok": true}');
+          },
+        ),
         tokenStorage: tokenStorage,
         onRefreshToken: () async {
           tokenStorage.accessToken = 'new-token';
@@ -372,7 +402,10 @@ void main() {
         logger: logger,
       );
 
-      final request = http.Request('POST', Uri.parse('https://api.example.com/data'));
+      final request = http.Request(
+        'POST',
+        Uri.parse('https://api.example.com/data'),
+      );
       request.body = requestBody;
       request.headers['Content-Type'] = 'application/json';
 
@@ -404,7 +437,10 @@ void main() {
         },
       );
 
-      final request = http.Request('GET', Uri.parse('https://api.example.com/data'));
+      final request = http.Request(
+        'GET',
+        Uri.parse('https://api.example.com/data'),
+      );
       await interceptor.send(request);
 
       expect(
@@ -428,7 +464,10 @@ void main() {
         },
       );
 
-      final request = http.Request('GET', Uri.parse('https://api.example.com/data'));
+      final request = http.Request(
+        'GET',
+        Uri.parse('https://api.example.com/data'),
+      );
       await interceptor.send(request);
 
       expect(
@@ -447,7 +486,10 @@ void main() {
         },
       );
 
-      final request = http.Request('GET', Uri.parse('https://api.example.com/data'));
+      final request = http.Request(
+        'GET',
+        Uri.parse('https://api.example.com/data'),
+      );
       try {
         await interceptor.send(request);
       } catch (_) {}

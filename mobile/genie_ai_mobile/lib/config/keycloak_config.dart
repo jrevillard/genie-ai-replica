@@ -35,8 +35,14 @@ class KeycloakConfig {
           allowInsecureConnections == other.allowInsecureConnections;
 
   @override
-  int get hashCode =>
-      Object.hash(keycloakUrl, realm, clientId, redirectScheme, backendUrl, allowInsecureConnections);
+  int get hashCode => Object.hash(
+    keycloakUrl,
+    realm,
+    clientId,
+    redirectScheme,
+    backendUrl,
+    allowInsecureConnections,
+  );
 }
 
 KeycloakConfig getConfig() {

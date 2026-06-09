@@ -64,9 +64,18 @@ COPY --chmod=0755 genie-ai-overlay/chatqna/entrypoint.sh /app/ChatQnA/entrypoint
 
 # Step C: Install dependencies
 # Install extra dependencies from our original Dockerfile_genieai
-RUN pip install --no-cache-dir langdetect transformers "python-jose[cryptography]"
+RUN pip install --no-cache-dir langdetect transformers "python-jose[cryptography]" \
+    "opentelemetry-api>=1.22" "opentelemetry-sdk>=1.22" \
+    "opentelemetry-instrumentation-fastapi>=0.43b0" \
+    "opentelemetry-instrumentation-httpx>=0.43b0" \
+    "opentelemetry-instrumentation-aiohttp-client>=0.43b0" \
+    "opentelemetry-instrumentation-requests>=0.43b0" \
+    "opentelemetry-exporter-otlp-proto-http>=1.22"
 
 # Step D: "Overlay" our custom GENIE-AI "glue" files
+# Copy the shared OTel tracing module (importable from PYTHONPATH=/app)
+COPY genie-ai-overlay/tracing.py /app/tracing.py
+
 # --- FIX: Copy the original api_protocol.py to /app to make it importable as top-level 'api_protocol' ---
 # This path '/home/user/comps/...' will now be correct
 RUN cp /home/user/comps/cores/proto/api_protocol.py /app/api_protocol.py
@@ -79,11 +88,20 @@ COPY genie-ai-overlay/core/constants.py /home/user/comps/cores/mega/constants.py
 # This copies your main script
 COPY genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py
 COPY genie-ai-overlay/chatqna/keycloak_token_validator.py /app/ChatQnA/keycloak_token_validator.py
+COPY genie-ai-overlay/chatqna/metrics.py /app/ChatQnA/metrics.py
 COPY genie-ai-overlay/chatqna/language_codes.json /app/ChatQnA/language_codes.json
 
 # Step E: Ensure all application files are owned by user
 RUN chown -R user:user /app
 
-# Step F: Run our new GENIE-AI entry point
+# Step F: Copy SSL bypass runtime patch as sitecustomize (no-op unless OPEA_SSL_SKIP_VERIFY=1)
+# NOTE: Copy to site-packages, NOT dist-packages. The OPEA chatqna base installs
+# packages via pip which uses site-packages. Python's site module only loads
+# sitecustomize from getsitepackages() dirs — dist-packages is NOT scanned.
+COPY configs/ssl/genie_ssl_patch.py /usr/local/lib/python3.10/site-packages/sitecustomize.py
+# Remove system sitecustomize (Ubuntu apport handler) so our patch runs first
+RUN rm -f /usr/lib/python3.10/sitecustomize.py
+
+# Step G: Run our new GENIE-AI entry point
 USER user
 ENTRYPOINT ["bash", "/app/ChatQnA/entrypoint.sh"]

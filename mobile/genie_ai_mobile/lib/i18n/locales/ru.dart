@@ -508,7 +508,8 @@ const Map<String, dynamic> ruLocale = {
     "resetUserDataDesc": "Это удалит все данные вашего профиля и историю чата.",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "Удалить аккаунт",
     "deleteAccountDesc":
         "Это навсегда удалит ваш аккаунт и все связанные данные.",

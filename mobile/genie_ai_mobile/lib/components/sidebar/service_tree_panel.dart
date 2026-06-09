@@ -24,7 +24,6 @@ class ServiceTreePanel extends ConsumerStatefulWidget {
 }
 
 class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
-
   // Input Controller
   final TextEditingController _searchController = TextEditingController();
 
@@ -91,9 +90,8 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
 
       // Fetch categories using the OpenAPI-generated ServiceCategoriesApi
       final categoriesApi = ref.read(serviceCategoriesApiProvider);
-      final response = await categoriesApi.apiServiceCategoriesCategoriesGetWithHttpInfo(
-        locale: currentLocale,
-      );
+      final response = await categoriesApi
+          .apiServiceCategoriesCategoriesGetWithHttpInfo(locale: currentLocale);
 
       if (response.statusCode == 200) {
         final categories = jsonDecode(response.body) as List<dynamic>;
@@ -251,15 +249,10 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(
-              color: ThemeManager().tokens.brand,
-            ),
+            CircularProgressIndicator(color: ThemeManager().tokens.brand),
             const SizedBox(height: DsSpacing.md),
             // REMOVED defaultValue
-            Text(
-              tr("common.loading"),
-              style: TextStyle(color: tokens.muted),
-            ),
+            Text(tr("common.loading"), style: TextStyle(color: tokens.muted)),
           ],
         ),
       );
@@ -272,11 +265,7 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.error_outline,
-                size: 48,
-                color: tokens.danger,
-              ),
+              Icon(Icons.error_outline, size: 48, color: tokens.danger),
               const SizedBox(height: DsSpacing.md),
               Text(
                 _errorMessage!,
@@ -318,13 +307,8 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
         decoration: InputDecoration(
           // REMOVED defaultValue
           hintText: tr("sidebar.searchPlaceholder"),
-          hintStyle: TextStyle(
-            color: tokens.muted,
-          ),
-          prefixIcon: Icon(
-            Icons.search,
-            color: tokens.muted,
-          ),
+          hintStyle: TextStyle(color: tokens.muted),
+          prefixIcon: Icon(Icons.search, color: tokens.muted),
           filled: true,
           fillColor: tokens.muted20,
           border: OutlineInputBorder(
@@ -451,7 +435,10 @@ class _ServiceTreePanelState extends ConsumerState<ServiceTreePanel> {
     // Render Tile
     return Container(
       // FIX: Added margin for better touch area and visual separation when selected
-      margin: const EdgeInsets.symmetric(vertical: DsSpacing.xs, horizontal: DsSpacing.sm),
+      margin: const EdgeInsets.symmetric(
+        vertical: DsSpacing.xs,
+        horizontal: DsSpacing.sm,
+      ),
       decoration: BoxDecoration(
         // FIX: Solid Primary color when selected (Standard Button Color)
         color: isSelected ? tokens.brand : Colors.transparent,

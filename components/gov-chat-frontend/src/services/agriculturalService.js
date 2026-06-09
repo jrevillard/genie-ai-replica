@@ -11,23 +11,6 @@
 
 import usdaRssService from './usdaRssService.js';
 
-const API_ENDPOINTS = {
-  // NASA Harvest - Crop Health (NDVI)
-  // Documentation: https://harvest.nasa.gov/
-  nasaHarvest: 'https://earthengine.googleapis.com/v1alpha/projects/earthengine-legacy/value:compute',
-
-  // Sentinel Hub - Satellite Imagery Statistics
-  // Documentation: https://docs.sentinel-hub.com/api/latest/api/statistics/
-  sentinelHub: 'https://services.sentinel-hub.com/api/v1/statistics',
-
-  // USDA APHIS - Pest Alerts (public data)
-  // Main URL: https://www.aphis.usda.gov/aphis/ourfocus/planthealth/
-  usdaAphis: 'https://www.aphis.usda.gov/aphis/ourfocus/planthealth/plant-pest-and-disease-programs/pest-detection',
-
-  // Backup: FAO GIEWS (requires API key)
-  faoGIEWS: 'https://fenixservices.fao.org/faostat/static/v1.0/js/'
-};
-
 class AgriculturalService {
   constructor() {
     this.cache = new Map();

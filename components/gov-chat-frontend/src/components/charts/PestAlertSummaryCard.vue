@@ -1,11 +1,5 @@
 <template>
-  <DsCard
-    variant="elevated"
-    padding="sm"
-    hoverable
-    class="pest-alert-summary-card"
-    @click="openChart"
-  >
+  <DsCard variant="elevated" padding="sm" hoverable class="pest-alert-summary-card" @click="openChart">
     <DsSpinner v-if="loading" size="sm" overlay />
     <div class="pest-alert__layout">
       <div class="pest-alert__icon">
@@ -52,7 +46,6 @@ import agriculturalService from '../../services/agriculturalService.js';
 
 export default {
   name: 'PestAlertSummaryCard',
-  emits: ['open-chart'],
   components: {
     DsCard,
     DsPill,
@@ -64,6 +57,7 @@ export default {
       default: 'Central America'
     }
   },
+  emits: ['open-chart'],
   data() {
     return {
       pestData: null,

@@ -23,11 +23,7 @@
     </div>
 
     <!-- Loading State -->
-    <DsSpinner
-      v-if="loading"
-      size="lg"
-      overlay
-    />
+    <DsSpinner v-if="loading" size="lg" overlay />
 
     <!-- Error State -->
     <DsStateDisplay
@@ -47,12 +43,7 @@
     <div v-else class="pest-alert-chart__content">
       <!-- Summary Donut Chart -->
       <div class="pest-alert-chart__summary">
-        <apexchart
-          type="donut"
-          height="250"
-          :options="summaryChartOptions"
-          :series="summaryChartSeries"
-        />
+        <apexchart type="donut" height="250" :options="summaryChartOptions" :series="summaryChartSeries" />
         <div class="pest-alert-chart__center-text">
           <div class="pest-alert-chart__total">{{ totalAlerts }}</div>
           <div class="pest-alert-chart__total-label">
@@ -101,11 +92,14 @@
 
                 <div class="pest-alert-chart__card-meta">
                   <DsPill :variant="getSeverityPillVariant(alert.severity)" size="sm">
-                    {{ $t(`charts.severity.${alert.severity}`, alert.severity.charAt(0).toUpperCase() + alert.severity.slice(1)) }}
+                    {{
+                      $t(
+                        `charts.severity.${alert.severity}`,
+                        alert.severity.charAt(0).toUpperCase() + alert.severity.slice(1)
+                      )
+                    }}
                   </DsPill>
-                  <i
-                    :class="['fas', expandedAlert === alert.id ? 'fa-chevron-up' : 'fa-chevron-down']"
-                  />
+                  <i :class="['fas', expandedAlert === alert.id ? 'fa-chevron-up' : 'fa-chevron-down']" />
                 </div>
               </div>
             </template>
@@ -147,7 +141,10 @@
               </div>
 
               <!-- Recommendations -->
-              <div v-if="alert.recommendations && alert.recommendations.length" class="pest-alert-chart__recommendations">
+              <div
+                v-if="alert.recommendations && alert.recommendations.length"
+                class="pest-alert-chart__recommendations"
+              >
                 <h5>{{ $t('charts.pestAlert.recommendations', 'Recommendations') }}</h5>
                 <ul>
                   <li v-for="(rec, idx) in alert.recommendations" :key="idx">
@@ -158,9 +155,7 @@
 
               <!-- Source -->
               <div v-if="alert.source" class="pest-alert-chart__source">
-                <span class="pest-alert-chart__source-label">
-                  {{ $t('charts.pestAlert.source', 'Source') }}:
-                </span>
+                <span class="pest-alert-chart__source-label"> {{ $t('charts.pestAlert.source', 'Source') }}: </span>
                 <a :href="alert.source" target="_blank" rel="noopener noreferrer">
                   {{ alert.source }}
                 </a>
@@ -168,10 +163,7 @@
 
               <!-- Actions -->
               <div class="pest-alert-chart__actions">
-                <button
-                  class="pest-alert-chart__action-btn"
-                  @click="viewOnMap(alert)"
-                >
+                <button class="pest-alert-chart__action-btn" @click="viewOnMap(alert)">
                   <i class="fas fa-map-marker-alt" />
                   {{ $t('charts.pestAlert.viewOnMap', 'View on Map') }}
                 </button>
@@ -267,7 +259,7 @@ export default {
       if (this.selectedSeverity === 'all') {
         return this.pestData.alerts;
       }
-      return this.pestData.alerts.filter(alert => alert.severity === this.selectedSeverity);
+      return this.pestData.alerts.filter((alert) => alert.severity === this.selectedSeverity);
     },
 
     totalAlerts() {
@@ -301,11 +293,7 @@ export default {
           this.$t('charts.severity.moderate', 'Moderate'),
           this.$t('charts.severity.low', 'Low')
         ],
-        colors: [
-          'var(--danger)',
-          'var(--warning)',
-          'var(--success)'
-        ],
+        colors: ['var(--danger)', 'var(--warning)', 'var(--success)'],
         plotOptions: {
           pie: {
             donut: {
@@ -387,7 +375,7 @@ export default {
       return new Date(dateStr).toLocaleDateString();
     },
 
-    getAlertCardVariant(severity) {
+    getAlertCardVariant(_severity) {
       return 'elevated'; // Always use elevated for better contrast with severity backgrounds
     },
 
@@ -525,7 +513,9 @@ export default {
 }
 
 .pest-alert-chart__card {
-  transition: transform var(--space-sm), box-shadow var(--space-sm);
+  transition:
+    transform var(--space-sm),
+    box-shadow var(--space-sm);
 }
 
 .pest-alert-chart__card--high {

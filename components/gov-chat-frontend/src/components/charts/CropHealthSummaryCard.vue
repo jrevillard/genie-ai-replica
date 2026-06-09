@@ -8,7 +8,9 @@
           <circle
             v-for="(segment, index) in segments"
             :key="index"
-            cx="50" cy="50" r="40"
+            cx="50"
+            cy="50"
+            r="40"
             :stroke="segment.color"
             stroke-width="8"
             fill="none"
@@ -37,7 +39,6 @@ import DsSpinner from '../ds/Spinner.vue';
 
 export default {
   name: 'CropHealthSummaryCard',
-  emits: ['open-chart'],
   components: { DsCard, DsSpinner },
   props: {
     region: {
@@ -45,6 +46,7 @@ export default {
       default: 'El Salvador'
     }
   },
+  emits: ['open-chart'],
   data() {
     return {
       healthData: null,

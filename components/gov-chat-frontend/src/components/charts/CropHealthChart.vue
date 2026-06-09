@@ -33,7 +33,9 @@
           <div class="summary-item">
             <span class="summary-label">{{ $t('charts.averageNDVI', 'Average NDVI') }}</span>
             <strong class="summary-value">{{ averageNDVI }}</strong>
-            <DsPill :variant="averageTrend === 'improving' ? 'success' : averageTrend === 'declining' ? 'danger' : 'warning'">
+            <DsPill
+              :variant="averageTrend === 'improving' ? 'success' : averageTrend === 'declining' ? 'danger' : 'warning'"
+            >
               {{ translateTrend(averageTrend) }}
               <span v-if="averageChange !== 0">({{ averageChange > 0 ? '+' : '' }}{{ averageChange }}%)</span>
             </DsPill>
@@ -44,7 +46,9 @@
           <div class="summary-item">
             <span class="summary-label">{{ $t('charts.overallHealth', 'Overall Health') }}</span>
             <strong class="summary-value">{{ translateHealthStatus(overallHealth) }}</strong>
-            <DsPill :variant="overallHealth === 'good' ? 'success' : overallHealth === 'warning' ? 'danger' : 'warning'">
+            <DsPill
+              :variant="overallHealth === 'good' ? 'success' : overallHealth === 'warning' ? 'danger' : 'warning'"
+            >
               {{ healthyDepartments }}/{{ totalDepartments }} {{ $t('charts.departments', 'departments') }}
             </DsPill>
           </div>
@@ -99,6 +103,14 @@ export default {
       default: 300000
     }
   },
+  setup() {
+    const { theme, isDarkMode, getCssVarStrings } = useChartTheme({
+      onThemeChange: () => {
+        // Theme change triggers re-render via computed chartOptions
+      }
+    });
+    return { theme, isDarkMode, getCssVarStrings };
+  },
   data() {
     return {
       loading: false,
@@ -107,14 +119,6 @@ export default {
       selectedRegion: 'all',
       refreshTimer: null
     };
-  },
-  setup() {
-    const { theme, isDarkMode, getCssVarStrings } = useChartTheme({
-      onThemeChange: () => {
-        // Theme change triggers re-render via computed chartOptions
-      }
-    });
-    return { theme, isDarkMode, getCssVarStrings };
   },
   computed: {
     departments() {
@@ -158,7 +162,7 @@ export default {
     },
     chartOptions() {
       const departments = this.departmentData.map((d) => d.department);
-      const ndviValues = this.departmentData.map((d) => d.ndvi);
+
       const pointColors = this.departmentData.map((d) => this.getHealthColor(d.health));
       const cssVars = this.getCssVarStrings();
 

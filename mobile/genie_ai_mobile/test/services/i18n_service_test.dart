@@ -26,32 +26,27 @@ void main() {
       });
 
       test('supported languages has expected count', () {
-        expect(service.supportedLanguages.length, greaterThan(0));
+        // El Salvador deployment: English and Spanish only
+        expect(service.supportedLanguages.length, 2);
       });
 
-      test('supported languages contains key locales', () {
+      test('supported languages contains en and es', () {
         expect(service.supportedLanguages.containsKey('en'), isTrue);
-        expect(service.supportedLanguages.containsKey('ar'), isTrue);
-        expect(service.supportedLanguages.containsKey('fr'), isTrue);
+        expect(service.supportedLanguages.containsKey('es'), isTrue);
       });
     });
 
     group('locale switching', () {
-      test('changes locale to French', () {
-        service.changeLanguage('fr');
-        expect(service.currentLocale.languageCode, 'fr');
-      });
-
-      test('changes locale to Arabic', () {
-        service.changeLanguage('ar');
-        expect(service.currentLocale.languageCode, 'ar');
+      test('changes locale to Spanish', () {
+        service.changeLanguage('es');
+        expect(service.currentLocale.languageCode, 'es');
       });
 
       test('notifies listeners on locale change', () {
         bool notified = false;
         service.addListener(() => notified = true);
 
-        service.changeLanguage('fr');
+        service.changeLanguage('es');
 
         expect(notified, isTrue);
       });
@@ -68,6 +63,15 @@ void main() {
       test('ignores unsupported language code', () {
         service.changeLanguage('xx');
         // Should remain English
+        expect(service.currentLocale.languageCode, 'en');
+      });
+
+      test('ignores removed locale codes', () {
+        // These locales were removed during El Salvador culling
+        service.changeLanguage('fr');
+        expect(service.currentLocale.languageCode, 'en');
+
+        service.changeLanguage('ar');
         expect(service.currentLocale.languageCode, 'en');
       });
     });
@@ -100,9 +104,8 @@ void main() {
       });
 
       test('falls back to English when current locale missing key', () {
-        // Switch to a locale, then translate a key that might not exist
-        service.changeLanguage('fr');
-        // The translate method falls back to English if key not in French
+        // Switch to Spanish, then translate a key that might not exist
+        service.changeLanguage('es');
         final result = service.translate('countries.CH');
         expect(result, isNotEmpty);
       });
@@ -132,20 +135,15 @@ void main() {
         expect(service.isRtl, isFalse);
       });
 
-      test('Arabic is RTL', () {
-        service.changeLanguage('ar');
-        expect(service.isRtl, isTrue);
-      });
-
-      test('French is not RTL', () {
-        service.changeLanguage('fr');
+      test('Spanish is not RTL', () {
+        service.changeLanguage('es');
         expect(service.isRtl, isFalse);
       });
 
-      test('Hebrew and Farsi RTL branches exist in source', () {
-        // isRtl checks for 'he' and 'fa' which are not in supportedLanguages.
-        // These are forward-looking branches. Verify they don't cause errors
-        // and that the getter correctly returns false for unsupported codes.
+      test('unsupported RTL codes return false', () {
+        // Arabic was removed during locale culling
+        service.changeLanguage('ar');
+        // Falls back to en, which is not RTL
         expect(service.isRtl, isFalse);
       });
     });

@@ -49,7 +49,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Kong / NGINX API Gateway
 - ClamAV for document scanning
 - ESLint 10 (flat config) + Prettier 3 in frontend and backend
-- Jest configured in backend but **no test files exist yet**
+- Jest test suite in `__tests__/` with 20+ test files (routes, services, middleware, tracing)
 
 ---
 
@@ -98,11 +98,13 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 #### Express (Backend)
 - **Route structure**: Each domain has its own file in `routes/` exporting `express.Router()`
+- **`createApp()` pattern**: `index.js` exports `createApp()` for testability — inject dependencies, create isolated Express app for supertest without starting server
 - **Auth middleware**: Applied **per-route** via `authMiddleware.authenticate` — NEVER global
 - **Error handling**: `try/catch` in route handlers, global error middleware in `index.js`
 - **DB access**: Direct `arangojs` with AQL queries in service files — no ORM, no repository pattern
 - **Config**: Minimal `config.js` at service root. Most config via `process.env` with defaults inline.
 - **Logging**: Import `{ logger }` from `../shared-lib`
+- **Tracing**: OTel SDK initialized in `tracing.js`, span helpers in `tracing-db.js`, PII filtering in `tracing-pii.js`, Prometheus metrics in `metrics.js`
 
 ### Testing Rules
 
@@ -134,6 +136,39 @@ _This file contains critical rules and patterns that AI agents must follow when 
 | Backend (gov-chat-backend) | `__tests__/` | `__tests__/keycloak-auth-middleware.test.js` |
 | Frontend (gov-chat-frontend) | `src/__tests__/` | `src/__tests__/userService.test.js` |
 | Backend mock fixtures | `__tests__/mocks/` | `__tests__/mocks/mockJwtPayload.js` |
+| OPEA Services (genie-ai-overlay) | `tests/` | `tests/test_retriever.py` |
+| OPEA shared fixtures | `tests/conftest.py` | pytest fixtures for all services |
+| Document Repository | `__tests__/` | `__tests__/routes/*.test.js` |
+| Config Validation | `tests/config-validator/` | `tests/config-validator/*.test.js` |
+| E2E | `tests/e2e/` | `tests/e2e/*.spec.js` |
+
+#### Backend Test Patterns
+
+- **`createApp()` pattern**: `index.js` exports `createApp()` — tests create isolated Express instances via `supertest` without starting HTTP server
+- **Module-level mocking**: `__tests__/mocks/shared-lib.js` mocks frozen `db-connection-service` singleton via Jest `moduleNameMapper`
+- **Test structure**: `__tests__/routes/` (route handlers), `__tests__/controllers/`, `__tests__/services/`, `__tests__/middleware/`
+- **Fixtures**: `__tests__/fixtures/` contains reusable test data (users, tokens, requests)
+
+#### OPEA / Python Testing
+
+- **Framework**: pytest (configured in `genie-ai-overlay/pytest.ini`)
+- **Module system**: Standard Python imports; tests run from `genie-ai-overlay/` directory
+- **File location**: `genie-ai-overlay/tests/` directory
+- **Naming**: `test_*.py` (e.g., `test_chatqna.py`, `test_retriever.py`)
+- **Shared fixtures**: `tests/conftest.py` — pytest fixtures for all OPEA services (mock comps library, ArangoDB, model endpoints)
+- **Mock infrastructure**: Fixtures mock the `comps` library (vendored at build time as `opea_docarray`), ArangoDB, and external model endpoints
+- **Tracing tests**: `test_tracing_with_span.py`, `test_*_tracing.py` validate OTel span emission per service
+- **JUnit XML**: pytest configured with `--junitxml=reports/pytest-report.xml` for CI reporting
+- **Copyright headers**: All Python test files must include ITU copyright header
+
+#### Observability / Tracing Rules
+
+- **OTel SDK**: Backend uses `@opentelemetry/*` packages (initialized in `tracing.js`); OPEA uses `opentelemetry-*` packages (initialized in `genie-ai-overlay/tracing.py`)
+- **Span creation**: Use `tracing.withSpan(name, fn)` (backend) or `tracing.trace_span(name)` decorator (Python) — never create spans manually via global tracer
+- **PII filtering**: `tracing-pii.js` (backend) filters sensitive attributes from spans — never log raw tokens, passwords, or user PII in span attributes
+- **DB instrumentation**: `tracing-db.js` instruments ArangoDB queries — automatic span creation for DB operations
+- **Trace propagation**: W3C `traceparent` header propagated across all service boundaries (Kong → Backend → ChatQnA → Retriever → Reranker)
+- **Test helpers**: `tracing-with-span.test.js` / `test_tracing_with_span.py` validate span emission without OTel collector running
 
 #### Authentication Test Conventions
 
@@ -210,7 +245,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Backend has no `src/` subdirectory — files at service root
 - Axios unified at 1.10+ — do not downgrade
 - Backend: Jest configured; test files now exist in `__tests__/` — follow existing patterns
-- Frontend: Jest 29.7 + @vue/test-utils configured; 240 service-level tests exist, zero component tests — see Frontend Testing Architecture section
+- Frontend: Jest 29.7 + @vue/test-utils configured; test files exist in `src/__tests__/` (components, stores, services, utils) — see Frontend Testing Architecture section
 
 ---
 

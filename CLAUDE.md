@@ -57,53 +57,31 @@ ansible-playbook -i inventory/test.ini teardown.yml --vault-id test@prompt
 
 ### Docker Deployment (Manual)
 
-**Option 1 - Full stack** (GENIE.AI + OPEA infrastructure):
 ```bash
-# First time: create your .env from template
-cp env .env
-# Edit .env with your secrets (ARANGO_PASSWORD, KEYCLOAK_ADMIN_PASSWORD, etc.)
+cp env .env                                           # First time: create local env
+# Edit .env with your secrets
 
-# Deploy with default settings
-docker compose up -d
+# Deploy modes (single root docker-compose.yaml):
+docker compose up -d                                  # Core services only
+docker compose --profile opea --profile gpu-models up -d  # Full stack with local GPU
+docker compose --profile observability up -d          # Core + observability stack
 
-# Or with GPU-specific settings:
-docker compose --env-file .env --env-file env.t4 up -d
-docker compose --env-file .env --env-file env.rtx6000 up -d
+# GPU-specific config:
+docker compose --env-file .env --env-file env.t4 up -d        # NVIDIA T4 (16GB)
+docker compose --env-file .env --env-file env.rtx6000 up -d   # RTX 6000 ADA (24GB)
+
+# Useful commands:
+docker compose build [service_name]                   # Rebuild after code changes
+docker service logs genieai_<service> -f              # View logs
+docker service scale genieai_<service>=<replicas>     # Scale a service
 ```
 
-**Option 2 - GENIE.AI only** (frontend, backend, arango, redis, doc-repo):
-```bash
-# Core services only (no OPEA/AI services)
-docker compose up -d
-
-# Full stack including OPEA/AI services
-docker compose --profile opea up -d
-```
-
-**Important notes:**
-- All images must be pre-built and pushed to a registry before deploying (`docker stack deploy` cannot build)
-- `depends_on` provides startup ordering for `docker compose up`; Swarm ignores it and uses healthchecks + restart policy
-- Node labels control service placement (`gateway=true` for API gateway, `gpu=true` for OPEA/GPU services, `genieai=true` for GENIE.AI core services)
-- Only nginx ports (80, 443) are exposed; all other services are internal
-- Kong config is applied via `kong-config` one-shot Swarm service (auto-runs after deploy)
-- To skip OPEA services in Swarm: set `DEPLOY_OPEA=0` in `.env`; in compose up: simply omit `--profile opea --profile gpu-models`
-- See `env` template Section 12 for multi-node variable overrides
-
-### Docker Commands
-
-```bash
-# Rebuild after code changes
-docker compose build [service_name]
-
-# View logs
-docker service logs genieai_<service> -f
-
-# Scale a service
-docker service scale genieai_<service>=<replicas>
-
-# List services
-docker service ls
-```
+**Key notes:**
+- Swarm: all images must be pre-built/pushed (`docker stack deploy` cannot build)
+- Profiles: `opea` (AI orchestrators), `gpu-models` (vLLM, TEI), `observability` (OTel stack)
+- Remote GPU: set `GPU_NODE_HOST` in `.env`, skip `gpu-models` profile — see `env` Section 14
+- Only nginx ports (80, 443) exposed; all other services internal
+- Node labels: `gateway=true`, `gpu=true`, `genieai=true`
 
 ### E2E Tests
 
@@ -133,22 +111,29 @@ For the full architecture overview with diagrams (C4 context/container, authenti
 User Query → Backend (BFF) → ChatQnA Service → Embedding → Retriever (ArangoDB) → Reranker → LLM → Response
 ```
 
+Each RAG pipeline stage emits OTel spans (when observability enabled), propagated via W3C `traceparent` header across service boundaries.
+
 ### Key Directories
 
 | Directory | Purpose |
 |-----------|---------|
 | `components/gov-chat-backend/` | Node.js API (auth, chat, analytics, users) |
+| `components/gov-chat-backend/__tests__/` | Backend Jest tests (routes, services, middleware, tracing) |
 | `components/gov-chat-frontend/` | Vue 3 web UI with Vuex state management |
+| `components/gov-chat-frontend/src/__tests__/` | Frontend Jest tests (components, stores, services) |
 | `components/document-repository/` | File upload/processing with ClamAV scanning |
 | `genie-ai-overlay/chatqna/` | Main chat microservice (Python/FastAPI) |
 | `genie-ai-overlay/retriever/` | Hybrid vector-graph retrieval service |
 | `genie-ai-overlay/dataprep/` | Document ingestion and chunking pipeline |
 | `genie-ai-overlay/reranker/` | Result reranking service |
 | `genie-ai-overlay/core/` | Shared types, protocols, constants |
+| `genie-ai-overlay/tests/` | OPEA pytest suite (retriever, dataprep, reranker, tracing) |
 | `api-gateway-solution/` | Kong/NGINX configuration and scripts |
 | `secrets/` | **Secrets** (SSL certificates - NOT committed) |
-| `configs/` | **Configuration** (LLM prompts - committed) |
-| `tests/` | Integration tests for RAG pipeline |
+| `configs/` | **Configuration** (LLM prompts, OTel collector, Grafana dashboards) |
+| `configs/otel/` | OTel Collector configuration |
+| `configs/grafana/provisioning/` | Grafana datasources and dashboard definitions |
+| `tests/` | E2E tests (Playwright), config validation, log assertions, metrics overhead |
 
 ## Technology Stack
 
@@ -161,6 +146,9 @@ User Query → Backend (BFF) → ChatQnA Service → Embedding → Retriever (Ar
 | Database | ArangoDB 3.12+ (multi-model: document + graph + vector) |
 | Cache | Redis |
 | API Gateway | Kong, NGINX |
+| Testing | Jest (Node.js), pytest (Python), Playwright (E2E), flutter_test |
+| Observability | OTel SDK, VictoriaMetrics, VictoriaLogs, VictoriaTraces, Grafana |
+| CI/CD | GitLab CI (`.gitlab-ci.yml`) |
 
 ## Linting and Formatting
 
@@ -181,6 +169,16 @@ npm run format:dart:check # Check Dart formatting without modifying files
 npm run format:dart     # Auto-format Dart files
 ```
 
+## Testing
+
+Test frameworks: Jest (backend, frontend, doc-repo), pytest (OPEA), flutter_test (mobile), Playwright (E2E). CI pipeline (`.gitlab-ci.yml`) runs 4 stages (lint → test → config → e2e) on every MR with JUnit XML reports.
+
+- **Backend `createApp()` pattern**: `index.js` exports `createApp()` — tests use `supertest` without starting HTTP server
+- **OPEA shared fixtures**: `genie-ai-overlay/tests/conftest.py` mocks comps library, ArangoDB, model endpoints
+- **Config validation**: `tests/config-validator/` validates env variable coverage
+
+→ Full commands, patterns, CI details: `.claude/rules/TESTING.md`
+
 ## Code Standards Summary
 
 ### JavaScript/Vue 3
@@ -196,6 +194,7 @@ npm run format:dart     # Auto-format Dart files
 ### Node.js/Express
 
 - Controller → Service pattern: Controllers handle HTTP, Services contain business logic
+- **`createApp()` pattern**: Backend `index.js` exports `createApp()` for testability — inject dependencies, create isolated Express app for supertest without starting server
 - Use `dotenv` for configuration, centralized `config/appConfig.js`
 - Security: `helmet`, `express-rate-limit`, proper CORS
 - Logging: `winston` with daily rotation
@@ -291,32 +290,16 @@ To change built-in defaults, edit the Python code:
 - Database URLs: `ARANGO_URL`, `VLLM_ENDPOINT`, etc. (defaults in docker-compose.yaml)
 - Service configurations: `LOG_LEVEL`, `NODE_ENV`, `TRANSLATION_BACKEND`, etc. (defaults in code)
 
-## i18n System
-
 ## Observability Stack (Optional)
 
-The observability stack (OTel Collector + VictoriaMetrics + VictoriaLogs + Grafana) is **disabled by default**. Enable via:
+Disabled by default. Enable: `docker compose --profile observability up -d` or `ENABLE_OBSERVABILITY=1` in `.env`.
 
-- **Docker Compose**: `docker compose --profile observability up -d`
-- **Docker Swarm**: `ENABLE_OBSERVABILITY=1` in `.env` (MUST be `0` or `1`, not `true`/`false`)
-- **Ansible**: `enable_observability: "1"` in `group_vars/all.yml`
+- **Tracing**: OTel SDK (Node.js + Python), W3C `traceparent` propagation across RAG pipeline
+- **Storage**: VictoriaMetrics (metrics), VictoriaLogs (logs), VictoriaTraces (traces)
+- **Dashboards**: 10 pre-built Grafana dashboards (auto-provisioned from `configs/grafana/provisioning/`)
+- **Access**: Grafana via Kong `/grafana/` with Keycloak SSO
 
-All services use the **fluentd logging driver** to forward container logs to the OTel Collector's `fluent_forward` receiver (port 24224, localhost only). Docker dual logging (20.10+) keeps `docker logs` functional. The Collector runs in `mode: global` without placement constraint, ensuring one Collector on every Swarm node (gateway, genieai, gpu) — all service logs are collected regardless of node type.
-
-**Configuration variables** (`.env` Section 12C):
-- `ENABLE_OBSERVABILITY` — Enable/disable the stack (default: `0`, MUST be `0` or `1`)
-- `GRAFANA_ADMIN_USER` — Grafana admin username (default: admin)
-- `GRAFANA_ADMIN_PASSWORD` — Grafana admin password (required when enabled)
-- `VICTORIALOGS_RETENTION` — Log retention period (default: 30d)
-- `VICTORIATRACES_RETENTION` — Trace retention period (default: 30d)
-- `OTEL_TRACES_SAMPLER_RATE` — Trace sampling rate (default: 100.0 = 100%)
-- `KC_GRAFANA_CLIENT_ID` — Keycloak OIDC client ID for Grafana SSO (default: grafana)
-- `KC_GRAFANA_CLIENT_SECRET` — Keycloak OIDC client secret (required when enabled)
-- `VICTORIAMETRICS_RETENTION` — Metric retention period (default: 30d)
-
-Grafana is accessible via Kong route `/grafana/` with Keycloak OIDC SSO (no direct host port).
-
-**Config files**: `configs/otel/` (Collector config), `configs/grafana/provisioning/` (datasources + dashboards)
+→ Full details: `.claude/rules/OBSERVABILITY.md`
 
 ## i18n System
 
@@ -326,79 +309,21 @@ Grafana is accessible via Kong route `/grafana/` with Keycloak OIDC SSO (no dire
 
 ## Docker Compose Structure
 
-### Project Docker Compose File
-
-| File | Scope | Use Case |
-|------|-------|----------|
-| `docker-compose.yaml` (root) | **Dual-mode** | Single compose file for both `docker compose up` and `docker stack deploy` |
-
-The compose file supports two deployment modes:
-- **Single-node**: `docker compose up -d` (core services) or `docker compose --profile opea --profile gpu-models up -d` (full stack with local GPU)
-- **Single-node**: `docker compose --profile observability up -d` (core + observability)
-- **Docker Swarm**: `docker stack deploy` with Ansible (full stack, OPEA controlled by `DEPLOY_OPEA` env var, observability by `ENABLE_OBSERVABILITY`)
-- **Remote GPU node**: `--profile opea` only (skips `gpu-models` profile containers) or `GPU_MODEL_REPLICAS=0` in Swarm
-
-**GPU Configuration**: Use GPU-specific env files with your .env:
-```bash
-docker compose --env-file .env --env-file env.t4 up -d        # NVIDIA T4 (16GB VRAM)
-docker compose --env-file .env --env-file env.rtx6000 up -d   # RTX 6000 ADA (24GB VRAM)
-```
-
-### Deployment Architecture
-
-All services are defined in the root `docker-compose.yaml` with cloud-native configuration:
+Single `docker-compose.yaml` for both `docker compose up` and `docker stack deploy`. Profiles control which layers activate:
 
 ```
-docker-compose.yaml (root - single source of truth, dual-mode)
-├── Layer 1: OPEA AI/ML Infrastructure
-│   ├── Orchestrators (profiles: [opea])
-│   │   ├── ChatQnA, Retriever, Dataprep, Embedding, Reranker
-│   │   └── Endpoints overrideable via env vars (remote GPU support)
-│   └── GPU Models (profiles: [gpu-models], GPU_MODEL_REPLICAS for Swarm)
-│       ├── vLLM (LLM inference)
-│       ├── vLLM Translation
-│       ├── TEI Embedding, TEI Reranker
-│       └── Skipped when using remote GPU node
-├── Layer 2: GENIE.AI Services
-│   ├── Frontend (Vue 3)
-│   ├── Backend (Node.js)
-│   ├── ArangoDB
-│   ├── Redis
-│   └── Document Repository
-├── Layer 3: API Gateway
-│   ├── Kong
-│   └── NGINX
-└── Layer 4: Observability (profiles: [observability], ENABLE_OBSERVABILITY)
-    ├── OTel Collector (trace/metric/log collection)
-    ├── VictoriaMetrics (metric storage)
-    ├── VictoriaLogs (log storage)
-    ├── VictoriaTraces (distributed trace storage)
-    └── Grafana (dashboards, via Kong /grafana/ with Keycloak SSO)
+docker-compose.yaml (dual-mode)
+├── OPEA AI/ML (profiles: [opea], [gpu-models])
+├── GENIE.AI Services (always active)
+├── API Gateway (always active)
+└── Observability (profile: [observability])
 ```
 
-### Usage
+**Swarm**: OPEA controlled by `DEPLOY_OPEA`, observability by `ENABLE_OBSERVABILITY`. Node labels: `gateway=true`, `gpu=true`, `genieai=true`.
 
-```bash
-# Core services only (local development)
-docker compose up -d
+**Remote GPU**: Set `GPU_NODE_HOST` in `.env`, skip `gpu-models` profile. Orchestrator endpoints overridden to GPU node. `VLLM_API_KEY` for auth. See `env` Section 14.
 
-# Full stack with OPEA/AI services (local GPU)
-docker compose --profile opea --profile gpu-models up -d
-
-# With GPU-specific configuration
-docker compose --env-file .env --env-file env.t4 --profile opea --profile gpu-models up -d
-
-# Remote GPU node (orchestrators only, GPU containers skipped)
-docker compose --profile opea up -d  # with GPU_NODE_HOST set in .env
-```
-
-### Remote GPU Node
-
-When using a dedicated GPU node (`GPU_NODE_HOST` in `.env`):
-- GPU-heavy containers (vllm, tei, tei_reranker, vllm-translation-guardrail) are skipped
-- Orchestrator endpoints are overridden to point to `https://<gpu-node-host>/<path>/`
-- `VLLM_API_KEY` authenticates with the GPU node nginx via `Authorization: Bearer` header
-- See `env` Section 14 for all variables and TLS options
+→ Full architecture diagrams: `docs/architecture.md` | Deployment guides: `docs/docker-compose-setup.md`, `docs/docker-swarm-setup.md`
 
 ## Database Schema (ArangoDB)
 

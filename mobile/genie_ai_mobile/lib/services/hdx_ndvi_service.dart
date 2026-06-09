@@ -1,7 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:csv/csv.dart';
 
@@ -187,7 +185,7 @@ class HdxNdviService {
       }
 
       // Extract headers (skip first row)
-      final headers = rows[0] as List<dynamic>;
+      final headers = rows[0];
       print(
         '[HDX NDVI] CSV has ${rows.length} rows, ${headers.length} columns',
       );
@@ -204,7 +202,7 @@ class HdxNdviService {
 
       // Process data rows (skip header row)
       for (var i = 1; i < rows.length; i++) {
-        final row = rows[i] as List<dynamic>;
+        final row = rows[i];
 
         if (row.length < 5) continue;
 
@@ -217,7 +215,7 @@ class HdxNdviService {
         final date = row[3]?.toString() ?? '';
         final vim = _parseDouble(row[4]); // NDVI value
         final vim_lta = _parseDouble(row[5]); // Long-term average
-        final viq = _parseDouble(row[6]); // Anomaly %
+        // viq (Anomaly %) not used yet
 
         if (admin0 == 'El Salvador' && vim != null) {
           // Find which department this municipality belongs to

@@ -72,6 +72,8 @@ dependencies:
 
   # CSV parsing for HDX NDVI data
   csv: ^6.0.0
+  # XML parsing for USDA RSS feed
+  xml: ^6.5.0
 
 dev_dependencies:
   flutter_test:

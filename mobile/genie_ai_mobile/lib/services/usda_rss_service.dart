@@ -1,7 +1,6 @@
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
-import 'package:flutter/foundation.dart';
 
 /// USDA RSS Feed Service
 ///
@@ -11,14 +10,6 @@ class UsdaRssService {
   // USDA APHIS RSS feeds
   static const String _usdaAphisNewsUrl =
       'https://www.aphis.usda.gov/aphis/newsroom/rss';
-  static const String _usdaPestAlertUrl =
-      'https://www.aphis.usda.gov/aphis/ourfocus/planthealth/rss';
-
-  // Alternative pest alert sources
-  static const String _faoLocustUrl =
-      'https://locust-hub-fao.org/feeds/news-feed/';
-  static const String _proMedPlantUrl =
-      'https://promedmail.org/feeds/PlantDiseases';
 
   /// Get pest alerts for Central America
   Future<Map<String, dynamic>> getPestAlerts({

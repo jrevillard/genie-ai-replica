@@ -1,7 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:genie_ai_mobile/services/api_service.dart';
-import 'dart:convert' as convert;
+import 'dart:convert';
 
 class ChatbotProxy {
   final ApiService _api = ApiService();

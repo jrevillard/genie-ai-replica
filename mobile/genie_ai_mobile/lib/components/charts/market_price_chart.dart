@@ -1112,7 +1112,7 @@ ${tr('market.sharedVia')}
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        tr('market.predictionsFor') ?? 'AI Predictions',
+                        tr('market.predictionsFor'),
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),

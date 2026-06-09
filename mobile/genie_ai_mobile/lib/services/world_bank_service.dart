@@ -393,7 +393,7 @@ class WorldBankService {
   /// Get all market data in a single call
   ///
   /// Returns a map with all 8 categories
-  Future<Map<String, dynamic?>> getAllMarketData() async {
+  Future<Map<String, dynamic>> getAllMarketData() async {
     final results = await Future.wait([
       getMaizePrices(),
       getCropProtectionCosts(),

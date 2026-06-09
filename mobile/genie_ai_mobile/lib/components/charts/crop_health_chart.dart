@@ -49,7 +49,9 @@ class _CropHealthChartState extends State<CropHealthChart> {
     });
 
     try {
-      final data = await _agriculturalProxy.getCropHealth(region: widget.region);
+      final data = await _agriculturalProxy.getCropHealth(
+        region: widget.region,
+      );
       setState(() {
         _cropData = data;
         _loading = false;
@@ -101,7 +103,9 @@ class _CropHealthChartState extends State<CropHealthChart> {
                         _translate('charts.cropHealthSubtitle') ??
                             'Vegetation health across departments',
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha:0.7),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
                         ),
                       ),
                     ],
@@ -133,8 +137,11 @@ class _CropHealthChartState extends State<CropHealthChart> {
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      Icon(Icons.error_outline,
-                          size: 48, color: theme.colorScheme.error),
+                      Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: theme.colorScheme.error,
+                      ),
                       const SizedBox(height: 12),
                       Text(
                         _error!,
@@ -159,8 +166,8 @@ class _CropHealthChartState extends State<CropHealthChart> {
                       getDrawingHorizontalLine: (value) {
                         return FlLine(
                           color: isDark
-                              ? Colors.white.withValues(alpha:0.1)
-                              : Colors.black.withValues(alpha:0.1),
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : Colors.black.withValues(alpha: 0.1),
                           strokeWidth: 1,
                         );
                       },
@@ -188,7 +195,7 @@ class _CropHealthChartState extends State<CropHealthChart> {
                                   style: TextStyle(
                                     fontSize: 9,
                                     color: theme.colorScheme.onSurface
-                                        .withValues(alpha:0.7),
+                                        .withValues(alpha: 0.7),
                                   ),
                                 ),
                               );
@@ -207,8 +214,9 @@ class _CropHealthChartState extends State<CropHealthChart> {
                                 value.toStringAsFixed(1),
                                 style: TextStyle(
                                   fontSize: 10,
-                                  color: theme.colorScheme.onSurface
-                                      .withValues(alpha:0.7),
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.7,
+                                  ),
                                 ),
                               );
                             }
@@ -249,9 +257,7 @@ class _CropHealthChartState extends State<CropHealthChart> {
                               radius: 5,
                               color: _getHealthColor(health),
                               strokeWidth: 2,
-                              strokeColor: isDark
-                                  ? Colors.white
-                                  : Colors.white,
+                              strokeColor: isDark ? Colors.white : Colors.white,
                             );
                           },
                         ),
@@ -259,8 +265,8 @@ class _CropHealthChartState extends State<CropHealthChart> {
                           show: true,
                           gradient: LinearGradient(
                             colors: [
-                              Colors.green.withValues(alpha:0.3),
-                              Colors.green.withValues(alpha:0.05),
+                              Colors.green.withValues(alpha: 0.3),
+                              Colors.green.withValues(alpha: 0.05),
                             ].reversed.toList(),
                           ),
                         ),
@@ -306,9 +312,7 @@ class _CropHealthChartState extends State<CropHealthChart> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildHealthStatusCard(theme, isDark),
-                  ),
+                  Expanded(child: _buildHealthStatusCard(theme, isDark)),
                 ],
               ),
               const SizedBox(height: 16),
@@ -323,15 +327,21 @@ class _CropHealthChartState extends State<CropHealthChart> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.access_time,
-                          size: 14,
-                          color: theme.colorScheme.onSurface.withValues(alpha:0.5)),
+                      Icon(
+                        Icons.access_time,
+                        size: 14,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         '${_translate('charts.lastUpdated') ?? 'Last updated'}: ${_formatDate(DateTime.now())}',
                         style: TextStyle(
                           fontSize: 12,
-                          color: theme.colorScheme.onSurface.withValues(alpha:0.5),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
+                          ),
                         ),
                       ),
                     ],
@@ -372,8 +382,8 @@ class _CropHealthChartState extends State<CropHealthChart> {
       padding: EdgeInsets.all(isCompact ? 8 : 12),
       decoration: BoxDecoration(
         color: isDark
-            ? Colors.white.withValues(alpha:0.05)
-            : Colors.grey.withValues(alpha:0.1),
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.grey.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -383,7 +393,7 @@ class _CropHealthChartState extends State<CropHealthChart> {
           Text(
             label,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha:0.7),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
               fontSize: isCompact ? 10 : null,
             ),
             textAlign: TextAlign.center,
@@ -404,12 +414,16 @@ class _CropHealthChartState extends State<CropHealthChart> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(_getTrendIcon(trend),
-                    color: _getTrendColor(trend), size: 16),
+                Icon(
+                  _getTrendIcon(trend),
+                  color: _getTrendColor(trend),
+                  size: 16,
+                ),
                 const SizedBox(width: 4),
                 Flexible(
                   child: Text(
-                    _translate('charts.$trend')?.toUpperCase() ?? trend.toUpperCase(),
+                    _translate('charts.$trend')?.toUpperCase() ??
+                        trend.toUpperCase(),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: _getTrendColor(trend),
                       fontWeight: FontWeight.bold,
@@ -447,8 +461,8 @@ class _CropHealthChartState extends State<CropHealthChart> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isDark
-            ? Colors.white.withValues(alpha:0.05)
-            : Colors.grey.withValues(alpha:0.1),
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.grey.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -458,7 +472,7 @@ class _CropHealthChartState extends State<CropHealthChart> {
           Text(
             _translate('charts.overallHealth') ?? 'Overall Health',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha:0.7),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
             ),
             textAlign: TextAlign.center,
           ),
@@ -474,7 +488,7 @@ class _CropHealthChartState extends State<CropHealthChart> {
           Text(
             '$healthyDepts/$totalDepts ${_translate('charts.departments') ?? 'departments'}',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha:0.7),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
             ),
           ),
         ],
@@ -507,14 +521,11 @@ class _CropHealthChartState extends State<CropHealthChart> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: isDark
-                  ? Colors.white.withValues(alpha:0.03)
-                  : Colors.grey.withValues(alpha:0.05),
+                  ? Colors.white.withValues(alpha: 0.03)
+                  : Colors.grey.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(8),
               border: Border(
-                left: BorderSide(
-                  color: _getHealthColor(health),
-                  width: 4,
-                ),
+                left: BorderSide(color: _getHealthColor(health), width: 4),
               ),
             ),
             child: Row(
@@ -533,7 +544,9 @@ class _CropHealthChartState extends State<CropHealthChart> {
                       Text(
                         'NDVI: ${ndvi.toStringAsFixed(3)}',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha:0.7),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
                         ),
                       ),
                     ],
@@ -542,8 +555,11 @@ class _CropHealthChartState extends State<CropHealthChart> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Icon(_getTrendIcon(trend),
-                        color: _getTrendColor(trend), size: 16),
+                    Icon(
+                      _getTrendIcon(trend),
+                      color: _getTrendColor(trend),
+                      size: 16,
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       '${change > 0 ? '+' : ''}${change.toStringAsFixed(1)}%',
@@ -565,8 +581,7 @@ class _CropHealthChartState extends State<CropHealthChart> {
   String _calculateOverallHealth() {
     if (_cropData == null) return 'unknown';
     final data = _cropData!['data'] as List<dynamic>;
-    final warnings =
-        data.where((d) => d['health'] == 'warning').length;
+    final warnings = data.where((d) => d['health'] == 'warning').length;
     final good = data.where((d) => d['health'] == 'good').length;
 
     if (warnings >= 2) return 'warning';

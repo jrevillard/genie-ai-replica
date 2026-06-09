@@ -48,32 +48,11 @@ class HdxNdviService {
       'Antiguo Cuscatlán',
       'Huizúcar',
     ],
-    'San Miguel': [
-      'San Miguel',
-      'Moncagua',
-      'Chinameca',
-    ],
-    'Santa Ana': [
-      'Santa Ana',
-      'Chalchuapa',
-      'Metapán',
-      'Coatepeque',
-    ],
-    'Usulután': [
-      'Usulután',
-      'Jiquilisco',
-      'Puerto El Triunfo',
-    ],
-    'La Unión': [
-      'La Unión',
-      'Conchagua',
-      'San Alejo',
-    ],
-    'Chalatenango': [
-      'Chalatenango',
-      'Agua Caliente',
-      'Nombre de Jesús',
-    ],
+    'San Miguel': ['San Miguel', 'Moncagua', 'Chinameca'],
+    'Santa Ana': ['Santa Ana', 'Chalchuapa', 'Metapán', 'Coatepeque'],
+    'Usulután': ['Usulután', 'Jiquilisco', 'Puerto El Triunfo'],
+    'La Unión': ['La Unión', 'Conchagua', 'San Alejo'],
+    'Chalatenango': ['Chalatenango', 'Agua Caliente', 'Nombre de Jesús'],
   };
 
   /// Get NDVI data for El Salvador departments
@@ -191,8 +170,9 @@ class HdxNdviService {
   Future<Map<String, dynamic>> _downloadAndParseCSV() async {
     try {
       // Download CSV
-      final response =
-          await http.get(Uri.parse(_csvUrl)).timeout(const Duration(seconds: 60));
+      final response = await http
+          .get(Uri.parse(_csvUrl))
+          .timeout(const Duration(seconds: 60));
 
       if (response.statusCode != 200) {
         throw Exception('Failed to download CSV: ${response.statusCode}');
@@ -208,7 +188,9 @@ class HdxNdviService {
 
       // Extract headers (skip first row)
       final headers = rows[0] as List<dynamic>;
-      print('[HDX NDVI] CSV has ${rows.length} rows, ${headers.length} columns');
+      print(
+        '[HDX NDVI] CSV has ${rows.length} rows, ${headers.length} columns',
+      );
 
       // Parse data rows
       final deptData = <String, List<double>>{};
@@ -241,8 +223,7 @@ class HdxNdviService {
           // Find which department this municipality belongs to
           String? targetDept;
           for (final entry in _departmentToMunicipalities.entries) {
-            if (entry.value.contains(admin2) ||
-                admin1.contains(entry.key)) {
+            if (entry.value.contains(admin2) || admin1.contains(entry.key)) {
               targetDept = entry.key;
               break;
             }
@@ -287,7 +268,8 @@ class HdxNdviService {
         if (records.isEmpty) continue;
 
         // Calculate average NDVI
-        final avgNdvi = deptData[dept]!.reduce((a, b) => a + b) / deptData[dept]!.length;
+        final avgNdvi =
+            deptData[dept]!.reduce((a, b) => a + b) / deptData[dept]!.length;
 
         // Get most recent record
         final mostRecent = records.last;
@@ -472,11 +454,7 @@ class HdxNdviService {
           'health': 'good',
         },
       ],
-      'average': {
-        'ndvi': 0.63,
-        'trend': 'stable',
-        'change': -0.8,
-      },
+      'average': {'ndvi': 0.63, 'trend': 'stable', 'change': -0.8},
       'message': 'Unable to fetch HDX data. Please check your connection.',
     };
   }
@@ -509,9 +487,7 @@ class HdxNdviService {
         'datasetUrl': _datasetUrl,
       };
     } catch (e) {
-      return {
-        'error': e.toString(),
-      };
+      return {'error': e.toString()};
     }
   }
 }

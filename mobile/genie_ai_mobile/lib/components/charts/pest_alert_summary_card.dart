@@ -7,10 +7,7 @@ import 'package:genie_ai_mobile/services/i18n_service.dart';
 class PestAlertSummaryCard extends StatefulWidget {
   final String region;
 
-  const PestAlertSummaryCard({
-    super.key,
-    this.region = 'Central America',
-  });
+  const PestAlertSummaryCard({super.key, this.region = 'Central America'});
 
   @override
   State<PestAlertSummaryCard> createState() => _PestAlertSummaryCardState();
@@ -46,7 +43,9 @@ class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
 
   Future<void> _loadData() async {
     try {
-      final data = await _agriculturalProxy.getPestAlerts(region: widget.region);
+      final data = await _agriculturalProxy.getPestAlerts(
+        region: widget.region,
+      );
       if (mounted) {
         setState(() {
           _pestData = data;
@@ -138,7 +137,9 @@ class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
                       child: Text(
                         _translate('charts.active') ?? 'active',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.6,
+                          ),
                           fontSize: 11,
                         ),
                         maxLines: 1,

@@ -99,11 +99,7 @@ class AgriculturalProxy {
       'offline': true,
       'dataSource': 'Fallback (offline mode)',
       'data': <dynamic>[],
-      'average': {
-        'ndvi': 0,
-        'trend': 'unknown',
-        'change': 0,
-      },
+      'average': {'ndvi': 0, 'trend': 'unknown', 'change': 0},
       'message': 'Unable to fetch data. Please check your connection.',
     };
   }
@@ -115,12 +111,7 @@ class AgriculturalProxy {
       'offline': true,
       'dataSource': 'Fallback (offline mode)',
       'alerts': <dynamic>[],
-      'summary': {
-        'total': 0,
-        'high': 0,
-        'moderate': 0,
-        'low': 0,
-      },
+      'summary': {'total': 0, 'high': 0, 'moderate': 0, 'low': 0},
       'message': 'Unable to fetch pest alerts. Please check your connection.',
     };
   }
@@ -159,9 +150,7 @@ class AgriculturalProxy {
       final hdxService = HdxNdviService();
       return await hdxService.getCacheInfo();
     } catch (e) {
-      return {
-        'error': e.toString(),
-      };
+      return {'error': e.toString()};
     }
   }
 

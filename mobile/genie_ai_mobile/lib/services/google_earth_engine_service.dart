@@ -9,7 +9,8 @@ import 'package:http/http.dart' as http;
 /// API Documentation: https://power.larc.nasa.gov/data-access-viewer/
 /// No API key required. Free for all uses.
 class GoogleEarthEngineService {
-  static const String _baseUrl = 'https://power.larc.nasa.gov/api/temporal/daily/point';
+  static const String _baseUrl =
+      'https://power.larc.nasa.gov/api/temporal/daily/point';
 
   // El Salvador department coordinates (center points)
   static const Map<String, Map<String, double>> _departmentCoords = {
@@ -60,8 +61,10 @@ class GoogleEarthEngineService {
       // Calculate overall averages
       final avgNdvi = departmentData.isEmpty
           ? 0.0
-          : departmentData.map((d) => d['ndvi'] as double).reduce((a, b) => a + b) /
-              departmentData.length;
+          : departmentData
+                    .map((d) => d['ndvi'] as double)
+                    .reduce((a, b) => a + b) /
+                departmentData.length;
 
       return {
         'region': region,
@@ -70,11 +73,7 @@ class GoogleEarthEngineService {
         'endDate': endDate.toIso8601String().split('T')[0],
         'dataSource': 'NASA POWER (FREE)',
         'data': departmentData,
-        'average': {
-          'ndvi': avgNdvi,
-          'trend': 'stable',
-          'change': 0.0,
-        },
+        'average': {'ndvi': avgNdvi, 'trend': 'stable', 'change': 0.0},
       };
     } catch (e) {
       print('[NASA POWER] Error: $e');
@@ -92,20 +91,20 @@ class GoogleEarthEngineService {
   ) async {
     // Build NASA POWER API URL
     // Format: https://power.larc.nasa.gov/api/temporal/daily/point?parameters=NDVI&community=AG&longitude={lon}&latitude={lat}&start={startDate}&end={endDate}&format=JSON
-    final url = Uri.parse('$_baseUrl').replace(queryParameters: {
-      'parameters': 'NDVI',
-      'community': 'AG',
-      'longitude': longitude.toString(),
-      'latitude': latitude.toString(),
-      'start': startDate.toIso8601String().split('T')[0],
-      'end': endDate.toIso8601String().split('T')[0],
-      'format': 'JSON',
-    });
+    final url = Uri.parse('$_baseUrl').replace(
+      queryParameters: {
+        'parameters': 'NDVI',
+        'community': 'AG',
+        'longitude': longitude.toString(),
+        'latitude': latitude.toString(),
+        'start': startDate.toIso8601String().split('T')[0],
+        'end': endDate.toIso8601String().split('T')[0],
+        'format': 'JSON',
+      },
+    );
 
     try {
-      final response = await http.get(url).timeout(
-        const Duration(seconds: 30),
-      );
+      final response = await http.get(url).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final jsonData = json.decode(response.body);
@@ -129,8 +128,10 @@ class GoogleEarthEngineService {
               final firstHalf = ndviList.sublist(0, midPoint);
               final secondHalf = ndviList.sublist(midPoint);
 
-              final firstAvg = firstHalf.reduce((a, b) => a + b) / firstHalf.length;
-              final secondAvg = secondHalf.reduce((a, b) => a + b) / secondHalf.length;
+              final firstAvg =
+                  firstHalf.reduce((a, b) => a + b) / firstHalf.length;
+              final secondAvg =
+                  secondHalf.reduce((a, b) => a + b) / secondHalf.length;
 
               final change = ((secondAvg - firstAvg) / firstAvg) * 100;
 
@@ -270,11 +271,7 @@ class GoogleEarthEngineService {
           'health': 'good',
         },
       ],
-      'average': {
-        'ndvi': 0.63,
-        'trend': 'stable',
-        'change': -2.1,
-      },
+      'average': {'ndvi': 0.63, 'trend': 'stable', 'change': -2.1},
     };
   }
 }

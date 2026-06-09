@@ -16,11 +16,7 @@ class MarketPriceChart extends StatefulWidget {
   final String category;
   final Map<String, dynamic>? data;
 
-  const MarketPriceChart({
-    super.key,
-    required this.category,
-    this.data,
-  });
+  const MarketPriceChart({super.key, required this.category, this.data});
 
   @override
   State<MarketPriceChart> createState() => _MarketPriceChartState();
@@ -101,38 +97,14 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
   }
 
   static const Map<String, dynamic> _categoryConfig = {
-    'maize': {
-      'i18nKey': 'maizeGrains',
-      'color': '#2E7D32',
-    },
-    'cropProtection': {
-      'i18nKey': 'cropProtection',
-      'color': '#D84315',
-    },
-    'vegetables': {
-      'i18nKey': 'fruitsVeggies',
-      'color': '#558B2F',
-    },
-    'livestock': {
-      'i18nKey': 'livestock',
-      'color': '#8D6E63',
-    },
-    'fertilizer': {
-      'i18nKey': 'fertilizer',
-      'color': '#F9A825',
-    },
-    'apiary': {
-      'i18nKey': 'apiary',
-      'color': '#F57F17',
-    },
-    'aquaculture': {
-      'i18nKey': 'aquaculture',
-      'color': '#0288D1',
-    },
-    'harvestStorage': {
-      'i18nKey': 'harvestStorage',
-      'color': '#00838F',
-    },
+    'maize': {'i18nKey': 'maizeGrains', 'color': '#2E7D32'},
+    'cropProtection': {'i18nKey': 'cropProtection', 'color': '#D84315'},
+    'vegetables': {'i18nKey': 'fruitsVeggies', 'color': '#558B2F'},
+    'livestock': {'i18nKey': 'livestock', 'color': '#8D6E63'},
+    'fertilizer': {'i18nKey': 'fertilizer', 'color': '#F9A825'},
+    'apiary': {'i18nKey': 'apiary', 'color': '#F57F17'},
+    'aquaculture': {'i18nKey': 'aquaculture', 'color': '#0288D1'},
+    'harvestStorage': {'i18nKey': 'harvestStorage', 'color': '#00838F'},
   };
 
   @override
@@ -225,7 +197,10 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: _categoryColor,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
               ),
             ),
           ),
@@ -283,9 +258,7 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
                     ),
                   ),
                 ),
-                borderData: FlBorderData(
-                  show: false,
-                ),
+                borderData: FlBorderData(show: false),
                 minX: 0,
                 maxX: (_timeSeries.length - 1).toDouble(),
                 minY: _minY,
@@ -324,7 +297,9 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
                         if (index >= 0 && index < _timeSeries.length) {
                           final dataPoint = _timeSeries[index];
                           final year = dataPoint['year'] as String? ?? '';
-                          final value = _formatValue(dataPoint['value'] as double?);
+                          final value = _formatValue(
+                            dataPoint['value'] as double?,
+                          );
                           return LineTooltipItem(
                             '$year\n$value',
                             TextStyle(
@@ -384,10 +359,7 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
         decoration: BoxDecoration(
           color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: color.withValues(alpha: 0.3),
-            width: 1,
-          ),
+          border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -550,10 +522,10 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
     final standardInterval = normalized > 5
         ? 10
         : normalized > 2
-            ? 5
-            : normalized > 1
-                ? 2
-                : 1;
+        ? 5
+        : normalized > 1
+        ? 2
+        : 1;
     return (standardInterval * magnitude).toDouble();
   }
 
@@ -584,7 +556,8 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
       return value.toStringAsFixed(0);
     } else if (widget.category == 'fertilizer') {
       return value.toStringAsFixed(0);
-    } else if (widget.category == 'harvestStorage' || widget.category == 'cropProtection') {
+    } else if (widget.category == 'harvestStorage' ||
+        widget.category == 'cropProtection') {
       return '${value.toStringAsFixed(0)}%';
     } else {
       return value.toStringAsFixed(0);
@@ -674,11 +647,13 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
       final localNews = result['localNews'] as String? ?? '';
 
       // Build historical data string
-      final historyData = _timeSeries.map((item) {
-        final year = item['year'] as String;
-        final value = _formatValue(item['value'] as double?);
-        return '  $year: $value';
-      }).join('\n');
+      final historyData = _timeSeries
+          .map((item) {
+            final year = item['year'] as String;
+            final value = _formatValue(item['value'] as double?);
+            return '  $year: $value';
+          })
+          .join('\n');
 
       // Call chatbot proxy API
       final currentLocale = I18nService().currentLocale;
@@ -753,9 +728,10 @@ Provide:
 
       final chatbotProxy = ChatbotProxy();
       final response = await chatbotProxy.submitQuery(
-        sessionId: 'market-predict-${widget.category}-${DateTime.now().millisecondsSinceEpoch}',
+        sessionId:
+            'market-predict-${widget.category}-${DateTime.now().millisecondsSinceEpoch}',
         messages: [
-          {'role': 'user', 'content': prompt}
+          {'role': 'user', 'content': prompt},
         ],
         userId: 'market-prediction-user',
         categoryId: null,
@@ -890,10 +866,26 @@ class _PredictionInputDialogState extends State<_PredictionInputDialog> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        _buildTimeFrameChip(tr('market.timeFrame3Months'), '3 months', theme),
-                        _buildTimeFrameChip(tr('market.timeFrame6Months'), '6 months', theme),
-                        _buildTimeFrameChip(tr('market.timeFrame1Year'), '1 year', theme),
-                        _buildTimeFrameChip(tr('market.timeFrame2Years'), '2 years', theme),
+                        _buildTimeFrameChip(
+                          tr('market.timeFrame3Months'),
+                          '3 months',
+                          theme,
+                        ),
+                        _buildTimeFrameChip(
+                          tr('market.timeFrame6Months'),
+                          '6 months',
+                          theme,
+                        ),
+                        _buildTimeFrameChip(
+                          tr('market.timeFrame1Year'),
+                          '1 year',
+                          theme,
+                        ),
+                        _buildTimeFrameChip(
+                          tr('market.timeFrame2Years'),
+                          '2 years',
+                          theme,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -948,7 +940,9 @@ class _PredictionInputDialogState extends State<_PredictionInputDialog> {
               runSpacing: 8,
               children: [
                 TextButton(
-                  onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
+                  onPressed: _isSubmitting
+                      ? null
+                      : () => Navigator.of(context).pop(),
                   child: Text(tr('common.cancel')),
                 ),
                 ElevatedButton.icon(
@@ -970,7 +964,10 @@ class _PredictionInputDialogState extends State<_PredictionInputDialog> {
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : const Icon(Icons.send, size: 16),
                   label: Text(tr('common.submit')),
@@ -1017,10 +1014,15 @@ class _PredictionResponseDialog extends StatelessWidget {
     required this.categoryColor,
   });
 
-  void _sharePrediction(BuildContext context, String predictionText, String platform) async {
+  void _sharePrediction(
+    BuildContext context,
+    String predictionText,
+    String platform,
+  ) async {
     // Format the prediction for sharing
     final currentDate = DateTime.now();
-    final shareText = '''
+    final shareText =
+        '''
 🤖 *${tr('market.predictionsFor')}: $commodityName* 🤖
 📅 ${currentDate.day}/${currentDate.month}/${currentDate.year}
 
@@ -1036,7 +1038,9 @@ ${tr('market.sharedVia')}
     try {
       if (platform == 'whatsapp') {
         // Use WhatsApp deep link
-        final whatsappUrl = Uri.parse('whatsapp://send?text=${Uri.encodeComponent(shareText)}');
+        final whatsappUrl = Uri.parse(
+          'whatsapp://send?text=${Uri.encodeComponent(shareText)}',
+        );
         final launched = await launchUrl(
           whatsappUrl,
           mode: LaunchMode.externalApplication,
@@ -1070,9 +1074,7 @@ ${tr('market.sharedVia')}
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${tr('market.shareError')}: $e'),
-          ),
+          SnackBar(content: Text('${tr('market.shareError')}: $e')),
         );
       }
     }
@@ -1102,11 +1104,7 @@ ${tr('market.sharedVia')}
                     color: categoryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(
-                    Icons.psychology,
-                    color: categoryColor,
-                    size: 24,
-                  ),
+                  child: Icon(Icons.psychology, color: categoryColor, size: 24),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1122,7 +1120,9 @@ ${tr('market.sharedVia')}
                       Text(
                         commodityName,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
                         ),
                       ),
                     ],
@@ -1145,28 +1145,37 @@ ${tr('market.sharedVia')}
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: response.containsKey('response')
                       ? MarkdownBody(
-                          data: response['response']?.toString() ?? tr('market.noResponse'),
-                          styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-                            p: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
-                          ),
+                          data:
+                              response['response']?.toString() ??
+                              tr('market.noResponse'),
+                          styleSheet: MarkdownStyleSheet.fromTheme(theme)
+                              .copyWith(
+                                p: theme.textTheme.bodyMedium?.copyWith(
+                                  height: 1.5,
+                                ),
+                              ),
                           selectable: true,
                           onTapLink: (text, href, title) {
                             if (href != null) {
-                              launchUrl(Uri.parse(href), mode: LaunchMode.externalApplication);
+                              launchUrl(
+                                Uri.parse(href),
+                                mode: LaunchMode.externalApplication,
+                              );
                             }
                           },
                         )
                       : response.containsKey('error')
-                          ? Text(
-                              response['error']?.toString() ?? tr('market.errorOccurred'),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.error,
-                              ),
-                            )
-                          : Text(
-                              response.toString(),
-                              style: theme.textTheme.bodyMedium,
-                            ),
+                      ? Text(
+                          response['error']?.toString() ??
+                              tr('market.errorOccurred'),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.error,
+                          ),
+                        )
+                      : Text(
+                          response.toString(),
+                          style: theme.textTheme.bodyMedium,
+                        ),
                 ),
               ),
             ),
@@ -1181,7 +1190,11 @@ ${tr('market.sharedVia')}
               children: [
                 TextButton.icon(
                   onPressed: () {
-                    Clipboard.setData(ClipboardData(text: response['response']?.toString() ?? ''));
+                    Clipboard.setData(
+                      ClipboardData(
+                        text: response['response']?.toString() ?? '',
+                      ),
+                    );
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(tr('market.responseCopied')),
@@ -1193,12 +1206,20 @@ ${tr('market.sharedVia')}
                   label: Text(tr('market.copy')),
                 ),
                 OutlinedButton.icon(
-                  onPressed: () => _sharePrediction(context, response['response']?.toString() ?? '', 'whatsapp'),
+                  onPressed: () => _sharePrediction(
+                    context,
+                    response['response']?.toString() ?? '',
+                    'whatsapp',
+                  ),
                   icon: const Icon(Icons.message, size: 16),
                   label: Text(tr('market.shareViaWhatsApp')),
                 ),
                 OutlinedButton.icon(
-                  onPressed: () => _sharePrediction(context, response['response']?.toString() ?? '', 'email'),
+                  onPressed: () => _sharePrediction(
+                    context,
+                    response['response']?.toString() ?? '',
+                    'email',
+                  ),
                   icon: const Icon(Icons.email, size: 16),
                   label: Text(tr('market.shareViaEmail')),
                 ),

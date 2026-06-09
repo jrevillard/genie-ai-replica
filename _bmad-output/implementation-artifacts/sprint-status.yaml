@@ -130,8 +130,8 @@ development_status:
   epic-7-retrospective: done
 
   # Epic 8: RAG Quality Assurance
-  epic-8: backlog
-  8-1-create-rag-quality-test-bed-and-document-corpus-fixtures: backlog
+  epic-8: in-progress
+  8-1-create-rag-quality-test-bed-and-document-corpus-fixtures: ready-for-dev
   8-2-create-ragas-threshold-configuration-and-evaluation-pipeline: backlog
   8-3-create-rag-quality-report-generator: backlog
   epic-8-retrospective: optional

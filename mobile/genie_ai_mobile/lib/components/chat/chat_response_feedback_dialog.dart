@@ -76,7 +76,9 @@ class _ChatResponseFeedbackDialogState
 
     return Dialog(
       backgroundColor: tokens.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DsRadii.xl)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(DsRadii.xl),
+      ),
       insetPadding: const EdgeInsets.all(DsSpacing.md),
       child: SafeArea(
         child: Container(
@@ -99,10 +101,7 @@ class _ChatResponseFeedbackDialogState
                 Text(
                   tr("responseRating.note"),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: tokens.textSm,
-                    color: tokens.fg70,
-                  ),
+                  style: TextStyle(fontSize: tokens.textSm, color: tokens.fg70),
                 ),
                 const SizedBox(height: DsSpacing.xl),
 
@@ -117,15 +116,10 @@ class _ChatResponseFeedbackDialogState
                           margin: const EdgeInsets.only(bottom: DsSpacing.lg),
                           padding: const EdgeInsets.all(DsSpacing.sm),
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? tokens.muted20
-                                : tokens.mutedSoft,
+                            color: isDark ? tokens.muted20 : tokens.mutedSoft,
                             borderRadius: BorderRadius.circular(DsRadii.lg),
                             border: Border(
-                              left: BorderSide(
-                                color: tokens.border,
-                                width: 3,
-                              ),
+                              left: BorderSide(color: tokens.border, width: 3),
                             ),
                           ),
                           child: Column(
@@ -200,16 +194,15 @@ class _ChatResponseFeedbackDialogState
                         TextField(
                           onChanged: (v) => _feedbackText = v,
                           maxLines: 3,
-                          style: TextStyle(color: tokens.fg, fontSize: tokens.textBase),
+                          style: TextStyle(
+                            color: tokens.fg,
+                            fontSize: tokens.textBase,
+                          ),
                           decoration: InputDecoration(
                             hintText: tr("responseRating.additionalComments"),
-                            hintStyle: TextStyle(
-                              color: tokens.fg30,
-                            ),
+                            hintStyle: TextStyle(color: tokens.fg30),
                             filled: true,
-                            fillColor: isDark
-                                ? tokens.muted20
-                                : tokens.surface,
+                            fillColor: isDark ? tokens.muted20 : tokens.surface,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(DsRadii.lg),
                               borderSide: BorderSide(color: tokens.border),
@@ -287,9 +280,7 @@ class _ChatResponseFeedbackDialogState
               width: 28,
               height: 28,
               colorFilter: ColorFilter.mode(
-                isActive
-                    ? tokens.accent
-                    : tokens.muted,
+                isActive ? tokens.accent : tokens.muted,
                 BlendMode.srcIn,
               ),
             ),
@@ -299,9 +290,7 @@ class _ChatResponseFeedbackDialogState
               style: TextStyle(
                 fontSize: tokens.textSm,
                 fontWeight: FontWeight.w600,
-                color: isActive
-                    ? tokens.accent
-                    : tokens.fg70,
+                color: isActive ? tokens.accent : tokens.fg70,
               ),
             ),
           ],
@@ -329,12 +318,7 @@ class _ChatResponseFeedbackDialogState
                 width: isSelected ? 2 : 1,
               ),
               boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: tokens.accent30,
-                        spreadRadius: 2,
-                      ),
-                    ]
+                  ? [BoxShadow(color: tokens.accent30, spreadRadius: 2)]
                   : null,
             ),
           ),
@@ -375,17 +359,13 @@ class _ChatResponseFeedbackDialogState
                       shape: BoxShape.circle,
                       color: isSelected
                           ? tokens.accent
-                          : (isDark
-                                ? tokens.fg30
-                                : tokens.mutedSoft),
+                          : (isDark ? tokens.fg30 : tokens.mutedSoft),
                     ),
                     child: Text(
                       "$rating",
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: isSelected
-                            ? tokens.accentFg
-                            : tokens.fg70,
+                        color: isSelected ? tokens.accentFg : tokens.fg70,
                       ),
                     ),
                   ),

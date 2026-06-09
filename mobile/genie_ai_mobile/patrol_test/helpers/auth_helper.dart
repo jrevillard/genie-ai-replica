@@ -42,11 +42,14 @@ class AuthHelper {
 
   /// Obtain a master admin token for Keycloak Admin API calls.
   Future<String> getAdminToken(String adminPassword) async {
-    final uri = Uri.parse('$keycloakUrl/realms/master/protocol/openid-connect/token');
+    final uri = Uri.parse(
+      '$keycloakUrl/realms/master/protocol/openid-connect/token',
+    );
     final response = await _client.post(
       uri,
       headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: 'client_id=admin-cli'
+      body:
+          'client_id=admin-cli'
           '&username=admin'
           '&password=${Uri.encodeComponent(adminPassword)}'
           '&grant_type=password',
@@ -83,11 +86,14 @@ class AuthHelper {
     required String username,
     required String password,
   }) async {
-    final uri = Uri.parse('$keycloakUrl/realms/$realm/protocol/openid-connect/token');
+    final uri = Uri.parse(
+      '$keycloakUrl/realms/$realm/protocol/openid-connect/token',
+    );
     final response = await _client.post(
       uri,
       headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: 'grant_type=password'
+      body:
+          'grant_type=password'
           '&client_id=${Uri.encodeComponent(clientId)}'
           '&username=${Uri.encodeComponent(username)}'
           '&password=${Uri.encodeComponent(password)}',

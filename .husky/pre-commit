@@ -1,0 +1,20 @@
+#!/bin/sh
+# Pre-commit: run eslint + prettier on staged files via lint-staged.
+# Gracefully skips if component node_modules are not installed.
+# CI will catch any lint issues that slip through.
+
+has_deps=false
+for dir in components/gov-chat-backend components/gov-chat-frontend components/document-repository; do
+  if [ -d "$dir/node_modules/.bin" ]; then
+    has_deps=true
+    break
+  fi
+done
+
+if [ "$has_deps" = false ]; then
+  echo "⚠  Pre-commit: node_modules not found. Lint will run in CI."
+  echo "   To enable local lint: npm ci in the relevant component(s)"
+  exit 0
+fi
+
+npx lint-staged

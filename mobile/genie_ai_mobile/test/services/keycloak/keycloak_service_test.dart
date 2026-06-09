@@ -46,18 +46,22 @@ void main() {
   );
 
   final wellKnownResponse = {
-    'authorization_endpoint': 'http://localhost:8080/realms/genie/protocol/openid-connect/auth',
-    'token_endpoint': 'http://localhost:8080/realms/genie/protocol/openid-connect/token',
-    'userinfo_endpoint': 'http://localhost:8080/realms/genie/protocol/openid-connect/userinfo',
-    'end_session_endpoint': 'http://localhost:8080/realms/genie/protocol/openid-connect/logout',
+    'authorization_endpoint':
+        'http://localhost:8080/realms/genie/protocol/openid-connect/auth',
+    'token_endpoint':
+        'http://localhost:8080/realms/genie/protocol/openid-connect/token',
+    'userinfo_endpoint':
+        'http://localhost:8080/realms/genie/protocol/openid-connect/userinfo',
+    'end_session_endpoint':
+        'http://localhost:8080/realms/genie/protocol/openid-connect/logout',
   };
 
   group('KeycloakService', () {
     group('discoverEndpoints', () {
       test('parses .well-known/openid-configuration response correctly', () async {
-        final httpClient = MockHttpClient(MockHttpClientConfig(
-          responseBody: jsonEncode(wellKnownResponse),
-        ));
+        final httpClient = MockHttpClient(
+          MockHttpClientConfig(responseBody: jsonEncode(wellKnownResponse)),
+        );
         final service = KeycloakService(
           keycloakConfig: testConfig,
           httpClient: httpClient,
@@ -68,44 +72,60 @@ void main() {
         expect(endpoints, isNotNull);
         expect(
           endpoints!.authorizationEndpoint,
-          equals('http://localhost:8080/realms/genie/protocol/openid-connect/auth'),
+          equals(
+            'http://localhost:8080/realms/genie/protocol/openid-connect/auth',
+          ),
         );
         expect(
           endpoints.tokenEndpoint,
-          equals('http://localhost:8080/realms/genie/protocol/openid-connect/token'),
+          equals(
+            'http://localhost:8080/realms/genie/protocol/openid-connect/token',
+          ),
         );
         expect(
           endpoints.userinfoEndpoint,
-          equals('http://localhost:8080/realms/genie/protocol/openid-connect/userinfo'),
+          equals(
+            'http://localhost:8080/realms/genie/protocol/openid-connect/userinfo',
+          ),
         );
         expect(
           endpoints.endSessionEndpoint,
-          equals('http://localhost:8080/realms/genie/protocol/openid-connect/logout'),
+          equals(
+            'http://localhost:8080/realms/genie/protocol/openid-connect/logout',
+          ),
         );
       });
 
-      test('caches discovered endpoints — second call does not make HTTP request', () async {
-        var callCount = 0;
-        final httpClient = MockHttpClient(MockHttpClientConfig(
-          responseBody: jsonEncode(wellKnownResponse),
-        ));
-        final countingClient = _CountingHttpClient(httpClient, () => callCount++);
-        final service = KeycloakService(
-          keycloakConfig: testConfig,
-          httpClient: countingClient,
-        );
+      test(
+        'caches discovered endpoints — second call does not make HTTP request',
+        () async {
+          var callCount = 0;
+          final httpClient = MockHttpClient(
+            MockHttpClientConfig(responseBody: jsonEncode(wellKnownResponse)),
+          );
+          final countingClient = _CountingHttpClient(
+            httpClient,
+            () => callCount++,
+          );
+          final service = KeycloakService(
+            keycloakConfig: testConfig,
+            httpClient: countingClient,
+          );
 
-        await service.discoverEndpoints();
-        await service.discoverEndpoints();
+          await service.discoverEndpoints();
+          await service.discoverEndpoints();
 
-        expect(callCount, equals(1));
-      });
+          expect(callCount, equals(1));
+        },
+      );
 
       test('returns null on HTTP error (non-200 status)', () async {
-        final httpClient = MockHttpClient(MockHttpClientConfig(
-          statusCode: 500,
-          responseBody: 'Internal Server Error',
-        ));
+        final httpClient = MockHttpClient(
+          MockHttpClientConfig(
+            statusCode: 500,
+            responseBody: 'Internal Server Error',
+          ),
+        );
         final service = KeycloakService(
           keycloakConfig: testConfig,
           httpClient: httpClient,
@@ -117,9 +137,11 @@ void main() {
       });
 
       test('returns null on SocketException (network error)', () async {
-        final httpClient = MockHttpClient(MockHttpClientConfig(
-          throwException: SocketException('Network unreachable'),
-        ));
+        final httpClient = MockHttpClient(
+          MockHttpClientConfig(
+            throwException: SocketException('Network unreachable'),
+          ),
+        );
         final service = KeycloakService(
           keycloakConfig: testConfig,
           httpClient: httpClient,
@@ -131,9 +153,11 @@ void main() {
       });
 
       test('returns null on ClientException', () async {
-        final httpClient = MockHttpClient(MockHttpClientConfig(
-          throwException: http.ClientException('Connection refused'),
-        ));
+        final httpClient = MockHttpClient(
+          MockHttpClientConfig(
+            throwException: http.ClientException('Connection refused'),
+          ),
+        );
         final service = KeycloakService(
           keycloakConfig: testConfig,
           httpClient: httpClient,
@@ -145,9 +169,9 @@ void main() {
       });
 
       test('returns null on FormatException (invalid JSON)', () async {
-        final httpClient = MockHttpClient(MockHttpClientConfig(
-          responseBody: 'not-json',
-        ));
+        final httpClient = MockHttpClient(
+          MockHttpClientConfig(responseBody: 'not-json'),
+        );
         final service = KeycloakService(
           keycloakConfig: testConfig,
           httpClient: httpClient,
@@ -238,9 +262,9 @@ void main() {
 
     group('endSession', () {
       test('returns true on HTTP 200', () async {
-        final httpClient = MockHttpClient(MockHttpClientConfig(
-          responseBody: jsonEncode(wellKnownResponse),
-        ));
+        final httpClient = MockHttpClient(
+          MockHttpClientConfig(responseBody: jsonEncode(wellKnownResponse)),
+        );
         final service = KeycloakService(
           keycloakConfig: testConfig,
           httpClient: httpClient,
@@ -253,13 +277,12 @@ void main() {
 
       test('returns true on HTTP 302 (redirect)', () async {
         // First call (discovery) returns 200, second call (endSession) returns 302
-        final discoveryClient = MockHttpClient(MockHttpClientConfig(
-          responseBody: jsonEncode(wellKnownResponse),
-        ));
-        final redirectClient = MockHttpClient(MockHttpClientConfig(
-          statusCode: 302,
-          responseBody: '',
-        ));
+        final discoveryClient = MockHttpClient(
+          MockHttpClientConfig(responseBody: jsonEncode(wellKnownResponse)),
+        );
+        final redirectClient = MockHttpClient(
+          MockHttpClientConfig(statusCode: 302, responseBody: ''),
+        );
         final service = KeycloakService(
           keycloakConfig: testConfig,
           httpClient: _SequentialHttpClient([discoveryClient, redirectClient]),
@@ -271,10 +294,9 @@ void main() {
       });
 
       test('returns false on HTTP 400 error', () async {
-        final httpClient = MockHttpClient(MockHttpClientConfig(
-          statusCode: 400,
-          responseBody: 'Bad Request',
-        ));
+        final httpClient = MockHttpClient(
+          MockHttpClientConfig(statusCode: 400, responseBody: 'Bad Request'),
+        );
         final service = KeycloakService(
           keycloakConfig: testConfig,
           httpClient: httpClient,
@@ -286,10 +308,12 @@ void main() {
       });
 
       test('returns false on HTTP 500 error', () async {
-        final httpClient = MockHttpClient(MockHttpClientConfig(
-          statusCode: 500,
-          responseBody: 'Internal Server Error',
-        ));
+        final httpClient = MockHttpClient(
+          MockHttpClientConfig(
+            statusCode: 500,
+            responseBody: 'Internal Server Error',
+          ),
+        );
         final service = KeycloakService(
           keycloakConfig: testConfig,
           httpClient: httpClient,
@@ -301,9 +325,11 @@ void main() {
       });
 
       test('returns false on SocketException (network unreachable)', () async {
-        final httpClient = MockHttpClient(MockHttpClientConfig(
-          throwException: SocketException('Network unreachable'),
-        ));
+        final httpClient = MockHttpClient(
+          MockHttpClientConfig(
+            throwException: SocketException('Network unreachable'),
+          ),
+        );
         final service = KeycloakService(
           keycloakConfig: testConfig,
           httpClient: httpClient,
@@ -315,9 +341,11 @@ void main() {
       });
 
       test('returns false on ClientException (connection reset)', () async {
-        final httpClient = MockHttpClient(MockHttpClientConfig(
-          throwException: http.ClientException('Connection reset'),
-        ));
+        final httpClient = MockHttpClient(
+          MockHttpClientConfig(
+            throwException: http.ClientException('Connection reset'),
+          ),
+        );
         final service = KeycloakService(
           keycloakConfig: testConfig,
           httpClient: httpClient,
@@ -329,10 +357,12 @@ void main() {
       });
 
       test('returns false when discovery fails (endpoints null)', () async {
-        final httpClient = MockHttpClient(MockHttpClientConfig(
-          statusCode: 500,
-          responseBody: 'Discovery failed',
-        ));
+        final httpClient = MockHttpClient(
+          MockHttpClientConfig(
+            statusCode: 500,
+            responseBody: 'Discovery failed',
+          ),
+        );
         final service = KeycloakService(
           keycloakConfig: testConfig,
           httpClient: httpClient,
@@ -346,10 +376,13 @@ void main() {
 
       test('calls endpoint even with empty idTokenHint', () async {
         var callCount = 0;
-        final httpClient = MockHttpClient(MockHttpClientConfig(
-          responseBody: jsonEncode(wellKnownResponse),
-        ));
-        final countingClient = _CountingHttpClient(httpClient, () => callCount++);
+        final httpClient = MockHttpClient(
+          MockHttpClientConfig(responseBody: jsonEncode(wellKnownResponse)),
+        );
+        final countingClient = _CountingHttpClient(
+          httpClient,
+          () => callCount++,
+        );
         final service = KeycloakService(
           keycloakConfig: testConfig,
           httpClient: countingClient,
@@ -371,10 +404,12 @@ void main() {
         final tempDir = Directory.systemTemp.createTempSync('kc_test_');
         try {
           final logger = AuthLogger(logDir: tempDir);
-          final httpClient = MockHttpClient(MockHttpClientConfig(
-            statusCode: 500,
-            responseBody: 'Internal Server Error',
-          ));
+          final httpClient = MockHttpClient(
+            MockHttpClientConfig(
+              statusCode: 500,
+              responseBody: 'Internal Server Error',
+            ),
+          );
           final service = KeycloakService(
             keycloakConfig: testConfig,
             httpClient: httpClient,
@@ -401,9 +436,11 @@ void main() {
         final tempDir = Directory.systemTemp.createTempSync('kc_test_');
         try {
           final logger = AuthLogger(logDir: tempDir);
-          final httpClient = MockHttpClient(MockHttpClientConfig(
-            throwException: SocketException('Network unreachable'),
-          ));
+          final httpClient = MockHttpClient(
+            MockHttpClientConfig(
+              throwException: SocketException('Network unreachable'),
+            ),
+          );
           final service = KeycloakService(
             keycloakConfig: testConfig,
             httpClient: httpClient,
@@ -429,9 +466,11 @@ void main() {
         final tempDir = Directory.systemTemp.createTempSync('kc_test_');
         try {
           final logger = AuthLogger(logDir: tempDir);
-          final httpClient = MockHttpClient(MockHttpClientConfig(
-            throwException: http.ClientException('Connection refused'),
-          ));
+          final httpClient = MockHttpClient(
+            MockHttpClientConfig(
+              throwException: http.ClientException('Connection refused'),
+            ),
+          );
           final service = KeycloakService(
             keycloakConfig: testConfig,
             httpClient: httpClient,
@@ -457,9 +496,9 @@ void main() {
         final tempDir = Directory.systemTemp.createTempSync('kc_test_');
         try {
           final logger = AuthLogger(logDir: tempDir);
-          final httpClient = MockHttpClient(MockHttpClientConfig(
-            responseBody: 'not-json',
-          ));
+          final httpClient = MockHttpClient(
+            MockHttpClientConfig(responseBody: 'not-json'),
+          );
           final service = KeycloakService(
             keycloakConfig: testConfig,
             httpClient: httpClient,
@@ -486,9 +525,11 @@ void main() {
         try {
           final logger = AuthLogger(logDir: tempDir);
           // Response with valid JSON but missing expected fields -> TypeError on cast
-          final httpClient = MockHttpClient(MockHttpClientConfig(
-            responseBody: jsonEncode({'authorization_endpoint': 'http://a'}),
-          ));
+          final httpClient = MockHttpClient(
+            MockHttpClientConfig(
+              responseBody: jsonEncode({'authorization_endpoint': 'http://a'}),
+            ),
+          );
           final service = KeycloakService(
             keycloakConfig: testConfig,
             httpClient: httpClient,
@@ -514,9 +555,9 @@ void main() {
         final tempDir = Directory.systemTemp.createTempSync('kc_test_');
         try {
           final logger = AuthLogger(logDir: tempDir);
-          final httpClient = MockHttpClient(MockHttpClientConfig(
-            responseBody: jsonEncode(wellKnownResponse),
-          ));
+          final httpClient = MockHttpClient(
+            MockHttpClientConfig(responseBody: jsonEncode(wellKnownResponse)),
+          );
           final service = KeycloakService(
             keycloakConfig: testConfig,
             httpClient: httpClient,
@@ -545,13 +586,12 @@ void main() {
         final tempDir = Directory.systemTemp.createTempSync('kc_test_');
         try {
           final logger = AuthLogger(logDir: tempDir);
-          final discoveryClient = MockHttpClient(MockHttpClientConfig(
-            responseBody: jsonEncode(wellKnownResponse),
-          ));
-          final errorClient = MockHttpClient(MockHttpClientConfig(
-            statusCode: 400,
-            responseBody: 'Bad Request',
-          ));
+          final discoveryClient = MockHttpClient(
+            MockHttpClientConfig(responseBody: jsonEncode(wellKnownResponse)),
+          );
+          final errorClient = MockHttpClient(
+            MockHttpClientConfig(statusCode: 400, responseBody: 'Bad Request'),
+          );
           final service = KeycloakService(
             keycloakConfig: testConfig,
             httpClient: _SequentialHttpClient([discoveryClient, errorClient]),
@@ -577,12 +617,14 @@ void main() {
         final tempDir = Directory.systemTemp.createTempSync('kc_test_');
         try {
           final logger = AuthLogger(logDir: tempDir);
-          final discoveryClient = MockHttpClient(MockHttpClientConfig(
-            responseBody: jsonEncode(wellKnownResponse),
-          ));
-          final errorClient = MockHttpClient(MockHttpClientConfig(
-            throwException: SocketException('Network unreachable'),
-          ));
+          final discoveryClient = MockHttpClient(
+            MockHttpClientConfig(responseBody: jsonEncode(wellKnownResponse)),
+          );
+          final errorClient = MockHttpClient(
+            MockHttpClientConfig(
+              throwException: SocketException('Network unreachable'),
+            ),
+          );
           final service = KeycloakService(
             keycloakConfig: testConfig,
             httpClient: _SequentialHttpClient([discoveryClient, errorClient]),
@@ -608,12 +650,14 @@ void main() {
         final tempDir = Directory.systemTemp.createTempSync('kc_test_');
         try {
           final logger = AuthLogger(logDir: tempDir);
-          final discoveryClient = MockHttpClient(MockHttpClientConfig(
-            responseBody: jsonEncode(wellKnownResponse),
-          ));
-          final errorClient = MockHttpClient(MockHttpClientConfig(
-            throwException: http.ClientException('Connection reset'),
-          ));
+          final discoveryClient = MockHttpClient(
+            MockHttpClientConfig(responseBody: jsonEncode(wellKnownResponse)),
+          );
+          final errorClient = MockHttpClient(
+            MockHttpClientConfig(
+              throwException: http.ClientException('Connection reset'),
+            ),
+          );
           final service = KeycloakService(
             keycloakConfig: testConfig,
             httpClient: _SequentialHttpClient([discoveryClient, errorClient]),
@@ -639,12 +683,12 @@ void main() {
         final tempDir = Directory.systemTemp.createTempSync('kc_test_');
         try {
           final logger = AuthLogger(logDir: tempDir);
-          final discoveryClient = MockHttpClient(MockHttpClientConfig(
-            responseBody: jsonEncode(wellKnownResponse),
-          ));
-          final errorClient = MockHttpClient(MockHttpClientConfig(
-            throwException: Exception('Unexpected error'),
-          ));
+          final discoveryClient = MockHttpClient(
+            MockHttpClientConfig(responseBody: jsonEncode(wellKnownResponse)),
+          );
+          final errorClient = MockHttpClient(
+            MockHttpClientConfig(throwException: Exception('Unexpected error')),
+          );
           final service = KeycloakService(
             keycloakConfig: testConfig,
             httpClient: _SequentialHttpClient([discoveryClient, errorClient]),
@@ -670,9 +714,9 @@ void main() {
         final tempDir = Directory.systemTemp.createTempSync('kc_test_');
         try {
           final logger = AuthLogger(logDir: tempDir);
-          final httpClient = MockHttpClient(MockHttpClientConfig(
-            responseBody: jsonEncode(wellKnownResponse),
-          ));
+          final httpClient = MockHttpClient(
+            MockHttpClientConfig(responseBody: jsonEncode(wellKnownResponse)),
+          );
           final service = KeycloakService(
             keycloakConfig: testConfig,
             httpClient: httpClient,

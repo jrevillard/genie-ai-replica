@@ -7,6 +7,7 @@
         "start": "node src/server.js",
         "dev": "nodemon src/server.js",
         "test": "jest",
+        "test:contract": "jest --testPathPattern='src/__tests__/unit/(controllers|middlewares)/'",
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage",
         "lint": "eslint .",
@@ -57,6 +58,7 @@
         "eslint-config-prettier": "^10.1.8",
         "globals": "^17.4.0",
         "jest": "^29.7.0",
+        "jest-junit": "^17.0.0",
         "nodemon": "^3.0.1",
         "prettier": "^3.8.1",
         "supertest": "^6.3.3"

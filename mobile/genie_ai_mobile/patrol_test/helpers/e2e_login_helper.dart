@@ -22,7 +22,8 @@ Future<InMemoryTokenStorage> obtainE2ETokens({
   );
 
   final storage = InMemoryTokenStorage();
-  final expiration = DateTime.tryParse(tokens['expires_at']!) ??
+  final expiration =
+      DateTime.tryParse(tokens['expires_at']!) ??
       DateTime.now().add(const Duration(seconds: 300));
   await storage.saveTokens(
     accessToken: tokens['access_token']!,
@@ -55,8 +56,10 @@ Future<ProviderContainer> createAuthenticatedContainer({
     password: password,
   );
 
-  return ProviderContainer(overrides: [
-    ...testProviderOverrides,
-    tokenStorageProvider.overrideWithValue(storage),
-  ]);
+  return ProviderContainer(
+    overrides: [
+      ...testProviderOverrides,
+      tokenStorageProvider.overrideWithValue(storage),
+    ],
+  );
 }

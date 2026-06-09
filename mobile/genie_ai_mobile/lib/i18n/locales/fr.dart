@@ -512,7 +512,8 @@ const Map<String, dynamic> frLocale = {
         "Cela effacera toutes vos données de profil et votre historique de chat.",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "Supprimer le compte",
     "deleteAccountDesc":
         "Cela supprimera définitivement votre compte et toutes les données associées.",

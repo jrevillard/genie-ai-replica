@@ -33,7 +33,9 @@ class ConfirmDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!visible) return const SizedBox.shrink();
+    if (!visible) {
+      return const SizedBox.shrink(key: ValueKey('confirm-dialog-hidden'));
+    }
 
     final tokens = ThemeManager().tokens;
 
@@ -72,6 +74,7 @@ class ConfirmDialog extends StatelessWidget {
                   padding: const EdgeInsets.all(DsSpacing.xl),
                   child: Text(
                     effectiveTitle,
+                    key: const ValueKey('confirm-dialog-title'),
                     style: TextStyle(
                       fontSize: ThemeManager().tokens.textMd,
                       fontWeight: FontWeight.bold,
@@ -84,6 +87,7 @@ class ConfirmDialog extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: DsSpacing.xl),
                   child: Text(
                     effectiveMessage,
+                    key: const ValueKey('confirm-dialog-message'),
                     style: TextStyle(
                       fontSize: ThemeManager().tokens.textBase,
                       color: tokens.muted,
@@ -110,16 +114,19 @@ class ConfirmDialog extends StatelessWidget {
                     children: [
                       if (secondaryText != null)
                         DsButton(
+                          key: const ValueKey('confirm-dialog-secondary-btn'),
                           label: secondaryText!,
                           variant: DsButtonVariant.ghost,
                           onPressed: onSecondary ?? () {},
                         ),
                       DsButton(
+                        key: const ValueKey('confirm-dialog-cancel-btn'),
                         label: effectiveCancelText,
                         variant: DsButtonVariant.ghost,
                         onPressed: onCancel,
                       ),
                       DsButton(
+                        key: const ValueKey('confirm-dialog-confirm-btn'),
                         label: effectiveConfirmText,
                         variant: DsButtonVariant.primary,
                         onPressed: onConfirm,

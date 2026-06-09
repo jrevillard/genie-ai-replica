@@ -1,0 +1,9 @@
+# GENIE.AI — Embedding wrapper (extends upstream OPEA image)
+# Adds genie_ssl_patch.py for SSL bypass (remote GPU node support).
+# Only active when OPEA_SSL_SKIP_VERIFY=1 env var is set.
+
+ARG UPSTREAM_IMAGE=opea/embedding:latest
+FROM ${UPSTREAM_IMAGE}
+
+COPY configs/ssl/genie_ssl_patch.py /usr/local/lib/python3.11/dist-packages/sitecustomize.py
+ENV PYTHONPATH="/usr/local/lib/python3.11/dist-packages:${PYTHONPATH}"

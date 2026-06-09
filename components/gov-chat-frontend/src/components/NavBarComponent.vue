@@ -1,7 +1,7 @@
 <!-- NavBarComponent.vue with logout button and admin role check -->
 <template>
   <div class="nav-container">
-    <header class="nav-bar">
+    <header class="nav-bar" data-test-id="nav-bar">
       <!-- Left section with hamburger menu, logo, and title -->
       <div class="nav-left">
         <!-- Hamburger button for sidebar toggle -->

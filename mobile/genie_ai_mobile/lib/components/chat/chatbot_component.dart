@@ -53,7 +53,6 @@ class ChatBotComponent extends ConsumerStatefulWidget {
 }
 
 class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
-
   // Conversation State
   String? _currentConversationId;
   String _conversationTitle = "New Chat";
@@ -258,9 +257,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     try {
       final cleanId = conversationId.replaceFirst('conversations/', '');
       final chatHistoryApi = ref.read(chatHistoryApiProvider);
-      final res = await chatHistoryApi.apiChatConversationsConversationIdGetWithHttpInfo(
-        cleanId,
-      );
+      final res = await chatHistoryApi
+          .apiChatConversationsConversationIdGetWithHttpInfo(cleanId);
 
       if (res.statusCode != 200) {
         throw Exception("Failed to load conversation: ${res.statusCode}");
@@ -424,7 +422,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     List<dynamic>? sources;
     double? confidence;
 
-    final String streamingId = 'stream_${DateTime.now().millisecondsSinceEpoch}';
+    final String streamingId =
+        'stream_${DateTime.now().millisecondsSinceEpoch}';
     setState(() {
       _isStreaming = true;
       _messages.add({
@@ -459,102 +458,109 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _streamSubscription = streamedResponse.stream
           .transform(utf8.decoder)
           .listen(
-        (chunk) {
-          if (!mounted) return;
-          for (final event in parser.parseChunk(chunk)) {
-            final msg = findStreamingMessage();
-            if (msg == null) {
-              _streamSubscription?.cancel();
-              return;
-            }
-            switch (event) {
-              case SseChunkEvent(:final content):
-                accumulatedContent += content;
-                setState(() { msg['content'] = accumulatedContent; });
-                _scrollToBottom();
-              case SseMetadataEvent(
-                :final sourceDocuments,
-                :final confidenceScore,
-              ):
-                sources = sourceDocuments;
-                confidence = confidenceScore;
-              case SseTranslationEvent(:final content):
-                accumulatedContent = content;
-                setState(() { msg['content'] = content; });
-                _scrollToBottom();
-              case SseDoneEvent(:final queryId):
-                streamQueryId = queryId;
-              case SseErrorEvent(:final message):
-                debugPrint('[SSE] Error event: $message');
-            }
-          }
-        },
-        onDone: () {
-          if (!mounted) return;
-          for (final event in parser.flush()) {
-            switch (event) {
-              case SseChunkEvent(:final content):
-                accumulatedContent += content;
-              case SseDoneEvent(:final queryId):
-                streamQueryId = queryId;
-              case SseMetadataEvent(
-                :final sourceDocuments,
-                :final confidenceScore,
-              ):
-                sources = sourceDocuments;
-                confidence = confidenceScore;
-              case SseTranslationEvent(:final content):
-                accumulatedContent = content;
-              case SseErrorEvent(:final message):
-                debugPrint('[SSE] Error event (flush): $message');
-            }
-          }
+            (chunk) {
+              if (!mounted) return;
+              for (final event in parser.parseChunk(chunk)) {
+                final msg = findStreamingMessage();
+                if (msg == null) {
+                  _streamSubscription?.cancel();
+                  return;
+                }
+                switch (event) {
+                  case SseChunkEvent(:final content):
+                    accumulatedContent += content;
+                    setState(() {
+                      msg['content'] = accumulatedContent;
+                    });
+                    _scrollToBottom();
+                  case SseMetadataEvent(
+                    :final sourceDocuments,
+                    :final confidenceScore,
+                  ):
+                    sources = sourceDocuments;
+                    confidence = confidenceScore;
+                  case SseTranslationEvent(:final content):
+                    accumulatedContent = content;
+                    setState(() {
+                      msg['content'] = content;
+                    });
+                    _scrollToBottom();
+                  case SseDoneEvent(:final queryId):
+                    streamQueryId = queryId;
+                  case SseErrorEvent(:final message):
+                    debugPrint('[SSE] Error event: $message');
+                }
+              }
+            },
+            onDone: () {
+              if (!mounted) return;
+              for (final event in parser.flush()) {
+                switch (event) {
+                  case SseChunkEvent(:final content):
+                    accumulatedContent += content;
+                  case SseDoneEvent(:final queryId):
+                    streamQueryId = queryId;
+                  case SseMetadataEvent(
+                    :final sourceDocuments,
+                    :final confidenceScore,
+                  ):
+                    sources = sourceDocuments;
+                    confidence = confidenceScore;
+                  case SseTranslationEvent(:final content):
+                    accumulatedContent = content;
+                  case SseErrorEvent(:final message):
+                    debugPrint('[SSE] Error event (flush): $message');
+                }
+              }
 
-          final msg = findStreamingMessage();
-          if (msg != null) {
-            setState(() {
-              msg['content'] = accumulatedContent.isNotEmpty
-                  ? accumulatedContent
-                  : 'No response received';
-              msg['queryId'] = streamQueryId;
-              msg['sources'] = sources ?? [];
-              msg['confidence'] = confidence;
-              msg['metadata'] = {
-                'sources': sources,
-                'confidence_score': confidence,
-              }..removeWhere((key, value) => value == null);
-            });
-          }
+              final msg = findStreamingMessage();
+              if (msg != null) {
+                setState(() {
+                  msg['content'] = accumulatedContent.isNotEmpty
+                      ? accumulatedContent
+                      : 'No response received';
+                  msg['queryId'] = streamQueryId;
+                  msg['sources'] = sources ?? [];
+                  msg['confidence'] = confidence;
+                  msg['metadata'] = {
+                    'sources': sources,
+                    'confidence_score': confidence,
+                  }..removeWhere((key, value) => value == null);
+                });
+              }
 
-          setState(() {
-            _isStreaming = false;
-            _isLoading = false;
-          });
+              setState(() {
+                _isStreaming = false;
+                _isLoading = false;
+              });
 
-          if (sources != null && sources!.isNotEmpty) {
-            _relatedDocuments = _mergeUniqueDocs(sources!, _relatedDocuments);
-            widget.onRelatedDocumentsUpdate(_relatedDocuments);
-          }
-          _updateQuickHelpVisibility();
-        },
-        onError: (error) {
-          if (!mounted) return;
-          debugPrint('[SSE] Stream error: $error');
-          final msg = findStreamingMessage();
-          if (msg != null) {
-            setState(() {
-              msg['content'] = accumulatedContent.isNotEmpty
-                  ? accumulatedContent
-                  : 'Streaming error';
-            });
-          }
-          setState(() {
-            _isStreaming = false;
-            _isLoading = false;
-          });
-        },
-        cancelOnError: true,
-      );
+              if (sources != null && sources!.isNotEmpty) {
+                _relatedDocuments = _mergeUniqueDocs(
+                  sources!,
+                  _relatedDocuments,
+                );
+                widget.onRelatedDocumentsUpdate(_relatedDocuments);
+              }
+              _updateQuickHelpVisibility();
+            },
+            onError: (error) {
+              if (!mounted) return;
+              debugPrint('[SSE] Stream error: $error');
+              final msg = findStreamingMessage();
+              if (msg != null) {
+                setState(() {
+                  msg['content'] = accumulatedContent.isNotEmpty
+                      ? accumulatedContent
+                      : 'Streaming error';
+                });
+              }
+              setState(() {
+                _isStreaming = false;
+                _isLoading = false;
+              });
+            },
+            cancelOnError: true,
+          );
     } catch (e) {
       debugPrint('[SSE] Connection error: $e');
       if (!mounted) return;
@@ -583,12 +589,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
       final request = ApiQueriesPostRequest(
         sessionId: sessionId,
-        messages: messagesForApi.map((m) => ApiQueriesPostRequestMessagesInner(
-          role: m['role'] == 'user'
-              ? ApiQueriesPostRequestMessagesInnerRoleEnum.user
-              : ApiQueriesPostRequestMessagesInnerRoleEnum.assistant,
-          content: m['content'] as String,
-        )).toList(),
+        messages: messagesForApi
+            .map(
+              (m) => ApiQueriesPostRequestMessagesInner(
+                role: m['role'] == 'user'
+                    ? ApiQueriesPostRequestMessagesInnerRoleEnum.user
+                    : ApiQueriesPostRequestMessagesInnerRoleEnum.assistant,
+                content: m['content'] as String,
+              ),
+            )
+            .toList(),
         categoryId: _selectedCategoryId,
         timestamp: DateTime.now().toUtc(),
       );
@@ -710,16 +720,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           try {
             final queriesApi = ref.read(queriesApiProvider);
             final cleanQueryId = queryId.replaceFirst('queries/', '');
-            
+
             final feedbackRequest = ApiQueriesQueryIdFeedbackPostRequest(
               rating: feedbackData['rating'],
               comment: feedbackData['text'],
             );
 
-            final res = await queriesApi.apiQueriesQueryIdFeedbackPostWithHttpInfo(
-              cleanQueryId,
-              feedbackRequest,
-            );
+            final res = await queriesApi
+                .apiQueriesQueryIdFeedbackPostWithHttpInfo(
+                  cleanQueryId,
+                  feedbackRequest,
+                );
 
             if (res.statusCode != 200 && res.statusCode != 201) {
               throw Exception("Feedback failed: ${res.statusCode}");
@@ -753,18 +764,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     try {
       dynamic conversationResponse;
       final chatHistoryApi = ref.read(chatHistoryApiProvider);
-      
+
       if (_currentConversationId == null) {
         final createRequest = ApiChatConversationsPostRequest(
           title: _conversationTitle,
           categoryId: _selectedCategoryId,
         );
-        final res = await chatHistoryApi.apiChatConversationsPostWithHttpInfo(createRequest);
-        
+        final res = await chatHistoryApi.apiChatConversationsPostWithHttpInfo(
+          createRequest,
+        );
+
         if (res.statusCode != 200 && res.statusCode != 201) {
           throw Exception("Create conversation failed: ${res.statusCode}");
         }
-        
+
         conversationResponse = jsonDecode(res.body);
       } else {
         final id = _currentConversationId!.replaceFirst('conversations/', '');
@@ -772,15 +785,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           title: _conversationTitle,
           categoryId: _selectedCategoryId,
         );
-        final res = await chatHistoryApi.apiChatConversationsConversationIdPatchWithHttpInfo(
-          id,
-          updateRequest,
-        );
-        
+        final res = await chatHistoryApi
+            .apiChatConversationsConversationIdPatchWithHttpInfo(
+              id,
+              updateRequest,
+            );
+
         if (res.statusCode != 200 && res.statusCode != 201) {
           throw Exception("Update conversation failed: ${res.statusCode}");
         }
-        
+
         conversationResponse = jsonDecode(res.body);
       }
 
@@ -798,20 +812,24 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         // CRITICAL: We save msg['content'] (Visible prompt), NOT actualContent (hidden prompt).
         // This ensures the user sees exactly what they clicked in history.
         try {
-          final addMessageRequest = ApiChatConversationsConversationIdMessagesPostRequest(
-            content: msg['content'] as String,
-            sender: msg['role'] == 'user' 
-                ? ApiChatConversationsConversationIdMessagesPostRequestSenderEnum.user 
-                : ApiChatConversationsConversationIdMessagesPostRequestSenderEnum.assistant,
-            queryId: msg['queryId']?.toString(),
-            metadata: msg['metadata'] as Map<String, dynamic>?,
-          );
-          
-          final res = await chatHistoryApi.apiChatConversationsConversationIdMessagesPostWithHttpInfo(
-            conversationIdClean,
-            addMessageRequest,
-          );
-          
+          final addMessageRequest =
+              ApiChatConversationsConversationIdMessagesPostRequest(
+                content: msg['content'] as String,
+                sender: msg['role'] == 'user'
+                    ? ApiChatConversationsConversationIdMessagesPostRequestSenderEnum
+                          .user
+                    : ApiChatConversationsConversationIdMessagesPostRequestSenderEnum
+                          .assistant,
+                queryId: msg['queryId']?.toString(),
+                metadata: msg['metadata'] as Map<String, dynamic>?,
+              );
+
+          final res = await chatHistoryApi
+              .apiChatConversationsConversationIdMessagesPostWithHttpInfo(
+                conversationIdClean,
+                addMessageRequest,
+              );
+
           if (res.statusCode != 200 && res.statusCode != 201) {
             throw Exception("Add message failed: ${res.statusCode}");
           }
@@ -1192,7 +1210,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   itemCount:
                       _messages.length + (_isLoading || _isStreaming ? 1 : 0),
                   itemBuilder: (context, index) {
-                    if (index == _messages.length && (_isLoading || _isStreaming)) {
+                    if (index == _messages.length &&
+                        (_isLoading || _isStreaming)) {
                       return Padding(
                         padding: const EdgeInsets.symmetric(
                           vertical: DsSpacing.md,

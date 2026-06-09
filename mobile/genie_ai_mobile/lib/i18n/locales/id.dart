@@ -507,7 +507,8 @@ const Map<String, dynamic> idLocale = {
         "Ini akan menghapus semua data profil dan riwayat obrolan Anda.",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "Hapus Akun",
     "deleteAccountDesc":
         "Ini akan menghapus akun Anda dan semua data terkait secara permanen.",

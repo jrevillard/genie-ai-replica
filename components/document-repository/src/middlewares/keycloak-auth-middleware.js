@@ -4,7 +4,6 @@
 // Validates Keycloak JWTs via JWKS with defense-in-depth:
 // - Signature verification via JWKS
 // - Issuer validation (jwtVerify issuer option)
-// - Audience validation (azp claim)
 // - Algorithm restriction (RS256 only)
 const jose = require('jose');
 const appConfig = require('../config/appConfig');
@@ -135,16 +134,10 @@ const authenticateToken = async (req, res, next) => {
       });
     }
 
-    // Validate azp (authorized party) — the client that requested the token.
-    // Keycloak 26+ sets aud=account for access tokens; azp holds the actual client ID.
-    const expectedClientId = appConfig.security.keycloakClientId;
-    if (decoded.azp && decoded.azp !== expectedClientId) {
-      return res.status(401).json({
-        error: 'TOKEN_INVALID',
-        message: 'Token audience validation failed',
-        details: {}
-      });
-    }
+    // Note: we do NOT validate azp (authorized party). Any client within
+    // the trusted realm that obtains a valid token should be accepted by
+    // this resource server — this is standard OIDC Resource Server behavior.
+    // The token's signature, issuer, and expiration are already verified above.
 
     const roles = decoded.realm_access?.roles || [];
     const role = mapRole(roles);

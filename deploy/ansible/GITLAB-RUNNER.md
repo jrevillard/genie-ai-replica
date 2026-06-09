@@ -16,7 +16,7 @@ Ansible playbook to install and configure a GitLab Runner with Docker executor f
 │   └── config.toml
 │       ├── executor = "docker"
 │       ├── DOCKER_HOST=tcp://127.0.0.1:2375
-│       ├── privileged = false, cap_drop = ALL
+│       ├── privileged = false, devices = ["/dev/kvm"] (Android emulator)
 │       └── concurrent = 2, limit = 2, 4g RAM, 2 CPUs
 └── CI jobs → socket proxy → Docker Engine
 ```
@@ -27,7 +27,8 @@ Ansible playbook to install and configure a GitLab Runner with Docker executor f
 |-------|-----------|---------|
 | API filtering | docker-socket-proxy | Default-deny, only CONTAINERS/IMAGES/NETWORKS/VOLUMES/EXEC/POST allowed |
 | UID remapping | userns-remap (`dockremap`) | Container root (uid 0) → unprivileged host uid |
-| Container restrictions | config.toml | `privileged=false`, `cap_drop=ALL`, memory/CPU limits |
+| Container restrictions | config.toml | `privileged=false`, memory/CPU limits, KVM device passthrough |
+| Socket proxy isolation | `userns_mode: host` on proxy | Required for proxy to access Docker socket despite userns-remap |
 | Network isolation | 127.0.0.1 binding | Proxy only accessible from localhost |
 
 **Registration:** The runner is created manually in GitLab UI (Settings > CI/CD > Runners > New project runner). GitLab generates an authentication token (`glrt-xxx`) which is stored in the Ansible vault and deployed to `config.toml` (mode `0600`, owned by `gitlab-runner`).
@@ -137,9 +138,10 @@ Override in `group_vars/gitlab_runners/vars.yml` if needed:
 |----------|---------|-------------|
 | `gitlab_runner_concurrent` | `2` | Max parallel jobs (global) |
 | `gitlab_runner_limit` | `2` | Max jobs for this runner |
-| `gitlab_runner_memory_limit` | `4g` | Memory limit per job container |
+| `gitlab_runner_memory_limit` | `8g` | Memory limit per job container |
 | `gitlab_runner_cpu_limit` | `2.0` | CPU limit per job container |
 | `gitlab_runner_docker_image` | `docker:28` | Default image for jobs without `image:` |
+| `gitlab_runner_kvm_device` | `/dev/kvm` | KVM device passthrough (set to `""` to disable) |
 
 ## Playbook Tags
 
@@ -222,6 +224,43 @@ docker_userns_remap: false
 ```
 
 Then re-deploy and manually remove `/etc/docker/daemon.json` + restart Docker.
+
+### Why no `cap_drop = ["ALL"]`
+
+`cap_drop = ["ALL"]` is intentionally not set in the runner config. With `userns-remap` already providing container isolation at the host level, dropping all capabilities inside containers breaks CI jobs that need `setuid`/`setgid` for package installation (`apt-get`, `pip`) in their `before_script`. The security model relies on userns-remap + socket proxy filtering instead.
+
+## KVM Passthrough (Android Emulator)
+
+The runner supports KVM device passthrough for Android emulator workloads (e.g. Patrol E2E tests). This is enabled by default when `/dev/kvm` exists on the host.
+
+**How it works:**
+
+- `devices = ["/dev/kvm"]` is added to `config.toml` `[runners.docker]` section
+- The `gitlab-runner` user is added to the `kvm` group automatically
+- CI jobs needing KVM should use `tags: [kvm]` to target runners with KVM support
+- No `privileged = true` required — KVM is a fine-grained device passthrough
+
+**Verify KVM on the host:**
+
+```bash
+# Check /dev/kvm exists
+ls -la /dev/kvm
+
+# Check KVM is usable
+kvm-ok  # or: cat /proc/cpuinfo | grep -c 'vmx\|svm'
+```
+
+**To disable KVM passthrough**, add to `group_vars/gitlab_runners/vars.yml`:
+
+```yaml
+gitlab_runner_kvm_device: ""
+```
+
+**After changes**, re-deploy:
+
+```bash
+ansible-playbook -i inventory/gitlab-runner.ini gitlab-runner.yml --tags runner --vault-id gitlab@prompt
+```
 
 ## Rotating the Runner Token
 

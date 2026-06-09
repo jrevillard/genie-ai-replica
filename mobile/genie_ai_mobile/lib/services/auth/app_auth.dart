@@ -12,7 +12,7 @@ class FlutterAppAuthAdapter implements AppAuth {
   final FlutterAppAuth _appAuth;
 
   const FlutterAppAuthAdapter([FlutterAppAuth? appAuth])
-      : _appAuth = appAuth ?? const FlutterAppAuth();
+    : _appAuth = appAuth ?? const FlutterAppAuth();
 
   @override
   Future<AuthorizationTokenResponse> authorizeAndExchangeCode(

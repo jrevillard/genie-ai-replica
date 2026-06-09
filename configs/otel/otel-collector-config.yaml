@@ -1,0 +1,189 @@
+# =============================================================================
+# GENIE.AI — OpenTelemetry Collector Configuration
+# =============================================================================
+# Receives OTLP traces from instrumented services (backend, chatqna, retriever,
+# dataprep, reranker) and exports metrics to VictoriaMetrics.
+# Receives container logs via Docker fluentd logging driver and forwards to
+# VictoriaLogs.
+# Exports traces to VictoriaTraces for distributed trace storage and query.
+#
+# Receivers:
+#   - OTLP HTTP (port 4318): standard OTLP/HTTP from SDK auto-instrumentation
+#   - prometheus/collector_self (port 8888): scrapes Collector's own self-telemetry metrics
+#   - prometheus/victoriametrics_internal (port 8428): scrapes VictoriaMetrics internal metrics
+#   - prometheus/victoriatraces_internal (port 10428): scrapes VictoriaTraces internal metrics
+#   - fluent_forward (port 24224): receives logs from Docker fluentd logging driver
+#
+# Exporters:
+#   - prometheusremotewrite (port 8428): exports OTel metrics to VictoriaMetrics
+#   - otlp_http/victoriatraces (port 10428): exports traces to VictoriaTraces via OTLP HTTP
+#   - otlp_http (port 9428): exports logs to VictoriaLogs via OTLP HTTP
+#
+# Extensions:
+#   - health_check (port 13133): Docker healthcheck endpoint
+#   - file_storage (persistent queue for trace export resilience)
+#
+# Pipeline:
+#   metrics: otlp → batch → prometheusremotewrite
+#   traces:  otlp → probabilistic_sampler → batch → victoriatraces
+#   logs:    fluent_forward → batch → otlp_http
+#
+# Note: Docker services use the fluentd logging driver (driver: fluentd)
+# configured in docker-compose.yaml. Docker sends container stdout/stderr to
+# the collector's fluent_forward receiver on port 24224. Dual logging (Docker
+# 20.10+) keeps `docker logs` functional alongside the fluentd driver.
+# =============================================================================
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  file_storage/victoriatraces:
+    directory: /var/lib/otelcol/file_storage/victoriatraces
+    timeout: 10s
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+  fluent_forward:
+    endpoint: 0.0.0.0:24224
+
+  # Scrape OTel Collector's own self-telemetry metrics (otelcol_*).
+  # Requires service.telemetry.metrics.address to be set (see service section).
+  prometheus/collector_self:
+    config:
+      scrape_configs:
+        - job_name: "otel-collector"
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["localhost:8888"]
+
+  # Scrape VictoriaMetrics internal metrics (vm_*).
+  # VM exposes a Prometheus-compatible /metrics endpoint.
+  prometheus/victoriametrics_internal:
+    config:
+      scrape_configs:
+        - job_name: "victoriametrics"
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["victoriametrics:8428"]
+          metrics_path: "/metrics"
+
+  # Scrape VictoriaTraces internal metrics (vt_*).
+  # Used by alert rules for trace pipeline health monitoring.
+  prometheus/victoriatraces_internal:
+    config:
+      scrape_configs:
+        - job_name: "victoriatraces"
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["victoriatraces:10428"]
+          metrics_path: "/metrics"
+
+  # Scrape VictoriaLogs internal metrics.
+  prometheus/victorialogs_internal:
+    config:
+      scrape_configs:
+        - job_name: "victorialogs"
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["victorialogs:9428"]
+          metrics_path: "/metrics"
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+  probabilistic_sampler:
+    sampling_percentage: ${OTEL_TRACES_SAMPLER_RATE}
+  # Rename Kong spans from hardcoded "kong" to "METHOD /path" using attributes.
+  # Kong hardcodes span name as "kong" (instrumentation.lua:252) but sets
+  # http.method and http.route attributes — use those for descriptive names.
+  transform/kong_span_names:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - set(name, Concat([attributes["http.method"], " ", attributes["http.route"]], "")) where resource.attributes["service.name"] == "kong-gateway" and attributes["http.method"] != nil and attributes["http.route"] != nil and attributes["http.route"] != ""
+          - set(name, Concat([attributes["http.method"], " ", ExtractPatterns(attributes["http.url"], "https?://[^/]+(/[^?]*)")[0]], "")) where resource.attributes["service.name"] == "kong-gateway" and attributes["http.method"] != nil and name == "kong"
+
+exporters:
+  prometheusremotewrite:
+    endpoint: http://victoriametrics:8428/api/v1/write
+    tls:
+      insecure: true
+    resource_to_telemetry_conversion:
+      enabled: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    timeout: 15s
+  otlp_http/victoriatraces:
+    endpoint: http://victoriatraces:10428/insert/opentelemetry
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+      storage: file_storage/victoriatraces
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    timeout: 15s
+  otlp_http:
+    endpoint: http://victorialogs:9428/insert/opentelemetry
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+
+service:
+  telemetry:
+    metrics:
+      level: detailed
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: "0.0.0.0"
+                port: 8888
+  extensions:
+    - health_check
+    - file_storage/victoriatraces
+  pipelines:
+    metrics:
+      receivers:
+        - otlp
+        - prometheus/collector_self
+        - prometheus/victoriametrics_internal
+        - prometheus/victoriatraces_internal
+        - prometheus/victorialogs_internal
+      processors:
+        - batch
+      exporters:
+        - prometheusremotewrite
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - probabilistic_sampler
+        - transform/kong_span_names
+        - batch
+      exporters:
+        - otlp_http/victoriatraces
+    logs:
+      receivers:
+        - fluent_forward
+      processors:
+        - batch
+      exporters:
+        - otlp_http

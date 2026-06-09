@@ -7,6 +7,8 @@ services:
       - "127.0.0.1:2375:2375"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    userns_mode: host
+    network_mode: host
     environment:
       DOCKER_TLS_CERTDIR: ""
       CONTAINERS: "{{ docker_socket_proxy_containers }}"

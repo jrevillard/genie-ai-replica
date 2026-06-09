@@ -1,0 +1,81 @@
+# === Dependencies (biggest waste) ===
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# === Build artifacts ===
+dist/
+build/
+.next/
+out/
+*.min.js
+*.min.css
+*.tsbuildinfo
+
+# === Lock files (no contextual value) ===
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# === Logs & temp ===
+*.log
+logs/
+*.tmp
+*.temp
+*~
+*.swp
+*.swo
+
+# === Environment & secrets ===
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+*.crt
+
+# === Data & media (large, no code insight) ===
+data/
+*.csv
+*.xlsx
+*.pdf
+*.zip
+*.tar
+*.gz
+*.mp4
+*.wav
+
+# === IDE & editor ===
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# === Test results & coverage ===
+test-results/
+coverage/
+.nyc_output/
+reports/
+
+# === Docker & deploy artifacts ===
+*.tar.gz
+*.img
+
+# === Mobile build artifacts ===
+mobile/genie_ai_mobile/build/
+mobile/genie_ai_mobile/.dart_tool/
+
+# === Serena LSP cache (binary) ===
+.serena/cache/
+
+# === Git & worktrees ===
+.git/
+.claude/worktrees/

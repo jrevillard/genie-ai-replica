@@ -147,6 +147,9 @@ Set in `group_vars/<env>/vault.yml`:
 | `kc_dataprep_client_secret` | Dataprep service account secret (client_credentials grant) |
 | `email_password` | SMTP password |
 | `hugging_face_hub_token` | Hugging Face Hub token |
+| `grafana_admin_password` | Grafana admin password (required when `enable_observability=1`) |
+| `grafana_client_id` | `grafana` | Keycloak OIDC client ID for Grafana SSO (required when `enable_observability=1`) |
+| `grafana_client_secret` | Grafana OIDC client secret (required when `enable_observability=1`) |
 
 ## Environment Variables (Non-Secret)
 
@@ -157,6 +160,15 @@ Set in `group_vars/<env>/vars.yml`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `deploy_opea` | `1` | Deploy OPEA/AI services (GPU) |
+| `enable_observability` | `0` | Deploy OTel Collector + VictoriaMetrics + VictoriaLogs + VictoriaTraces + Grafana |
+| `grafana_admin_user` | `admin` | Grafana admin username |
+| `victoriametrics_retention` | `30d` | VictoriaMetrics data retention period |
+| `victorialogs_retention` | `30d` | VictoriaLogs data retention period |
+| `victoriatraces_retention` | `30d` | VictoriaTraces data retention period |
+| `otel_traces_sampler_rate` | `100.0` | Trace sampling percentage (0.0–100.0) |
+| `kong_tracing_instrumentations` | `request` | Kong tracing instrumentations (`off`, `request`, `all`). Default `request` — negligible overhead when OTel plugin disabled. |
+| `kong_tracing_sampling_rate` | `1.0` | Kong internal trace sampling rate (0.0–1.0). Default `1.0` = 100%, aligned with `otel_traces_sampler_rate`. |
+| `otel_exporter_otlp_endpoint` | `http://otel-collector:4318` | OTLP Collector base URL — used by backend (Node.js), OPEA services (Python), and Kong OTel plugin (via restore script). Override for external collectors. |
 | `gpu_env_file` | `env.t4` | GPU defaults file (empty = none). Loaded first; Ansible `.env` takes precedence. |
 
 ### API Gateway (NGINX)
@@ -406,6 +418,94 @@ GPU env file options (provide GPU-specific defaults in `docker-compose.yaml`):
 The GPU env file is loaded first, then the Ansible-generated `.env` is loaded on top.
 **Ansible `.env` values take precedence** over GPU env file values for any duplicate variables.
 This allows per-environment tuning via Ansible while keeping GPU defaults in the committed files.
+
+### Remote GPU Node (Optional)
+
+GENIE.AI supports a standalone GPU node architecture. Instead of running
+AI services alongside the app stack, deploy a dedicated GPU node with its own compose file
+and nginx reverse proxy. The app node connects to the GPU node via HTTPS on port 443
+with path-based routing and API key authentication.
+
+#### Deploy the GPU Node
+
+The GPU node has its own Ansible playbook (`deploy-gpu.yml`) and inventory group:
+
+```bash
+# 1. Create inventory (separate group for the GPU node)
+cp inventory/inventory.example inventory/my-gpu.ini
+# Edit: set [my-gpu] group, update host IP
+
+# 2. Create environment config directory
+mkdir -p group_vars/my-gpu
+cp group_vars/itu_rtx_gpu_api/vars.yml group_vars/my-gpu/vars.yml
+# Edit: set gpu_public_domain, certbot_email, etc.
+
+# 3. Create encrypted secrets (GPU node vault)
+ansible-vault create group_vars/my-gpu/vault.yml
+# Required: hugging_face_hub_token, gpu_api_keys (list of {name, key} entries)
+
+# 4. Deploy
+ansible-playbook -i inventory/my-gpu.ini deploy-gpu.yml --vault-id my-gpu@prompt
+```
+
+Tagged re-runs:
+```bash
+ansible-playbook -i inventory/my-gpu.ini deploy-gpu.yml --vault-id my-gpu@prompt --tags install    # Docker + NVIDIA toolkit
+ansible-playbook -i inventory/my-gpu.ini deploy-gpu.yml --vault-id my-gpu@prompt --tags prepare    # Render configs (nginx, API keys, compose)
+ansible-playbook -i inventory/my-gpu.ini deploy-gpu.yml --vault-id my-gpu@prompt --tags deploy     # Deploy + smoke tests
+```
+
+#### GPU Node Services
+
+| Path | Backend | Description |
+|------|---------|-------------|
+| `/llm/` | vLLM (LLM inference) | OpenAI-compatible chat completions |
+| `/translation/` | vLLM (Translation) | Translation model inference |
+| `/embed/` | TEI (Embedding) | Text embedding for vector search |
+| `/rerank/` | TEI (Reranking) | Result reranking |
+| `/docling/` | docling-serve | Document extraction |
+
+All services are behind nginx with TLS termination and API key authentication on port 443.
+
+#### GPU Node Vault Secrets
+
+| Variable | Description |
+|----------|-------------|
+| `hugging_face_hub_token` | Hugging Face Hub token (model downloads) |
+| `gpu_api_keys` | List of API keys: `[{name: "key-name", key: "actual-api-key"}]` |
+
+#### GPU Node Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `gpu_public_domain` | `gpu.example.com` | Public domain (CN in TLS cert) |
+| `gpu_self_signed_certs` | `true` | Generate self-signed certs (set `false` for Let's Encrypt) |
+| `gpu_env_file` | `""` | GPU defaults file (empty = none) |
+| `gpu_node_host` | `""` | Remote GPU node hostname/IP (set in app node env to route AI services) |
+| `vllm_api_key` | `""` | API key for GPU node nginx auth (set in app node vault) |
+| `opea_ssl_skip_verify` | `""` | Disable SSL cert verification for OPEA services (`"1"` for self-signed certs, empty = verify) |
+| `opea_api_key` | `""` | API key injected into OPEA outbound HTTP calls (typically same as `vllm_api_key`) |
+
+#### Connect the App Node to the GPU Node
+
+When `gpu_node_host` is set in `group_vars/<env>/vars.yml`, Ansible automatically:
+
+1. Sets `GPU_MODEL_REPLICAS=0` (skips GPU-heavy containers on the app node)
+2. Generates endpoint URLs: `VLLM_ENDPOINT`, `VLLM_TRANSLATION_ENDPOINT`, `EMBEDDING_SERVICE_URL`, `RERANKER_SERVICE_URL`, `DOCLING_ENDPOINT`
+3. Propagates `VLLM_API_KEY` from vault
+
+For manual setup (Compose mode), set in `.env` (Section 14):
+
+```bash
+GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
+GPU_MODEL_REPLICAS=0                # Skip local GPU containers
+VLLM_API_KEY=<your-api-key>         # API key from GPU node (sent as Authorization: Bearer)
+OPEA_SSL_SKIP_VERIFY=1              # If GPU node uses self-signed certs
+```
+
+> **Note:** `OPEA_SSL_SKIP_VERIFY` is independent of `gpu_node_host`.
+> It controls SSL bypass baked into OPEA Docker images via `genie_ssl_patch.py`.
+> Use `OPEA_SSL_SKIP_VERIFY=1` only with self-signed certs — omit for Let's Encrypt or public CAs.
 
 ## Port Configuration
 

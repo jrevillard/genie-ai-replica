@@ -141,7 +141,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     });
 
     try {
-      debugPrint('[PROFILE SCREEN] Calling currentUserApi.apiMeGetWithHttpInfo()');
+      debugPrint(
+        '[PROFILE SCREEN] Calling currentUserApi.apiMeGetWithHttpInfo()',
+      );
       final api = ref.read(currentUserApiProvider);
       final response = await api.apiMeGetWithHttpInfo();
       if (response.statusCode != 200) {

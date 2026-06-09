@@ -14,12 +14,12 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 // World Bank Indicator Codes
 const INDICATORS = {
-  MAIZE: 'AG.PRD.CROP.XD',              // Crop production index (2014-2016 = 100)
+  MAIZE: 'AG.PRD.CROP.XD', // Crop production index (2014-2016 = 100)
   CROP_PROTECTION: 'TM.VAL.AGRI.ZS.UN', // Agricultural raw materials exports (% of total merchandise exports)
-  VEGETABLES: 'AG.PRD.FOOD.XD',          // Food production index (2014-2016 = 100)
-  LIVESTOCK: 'AG.PRD.LVSK.XD',           // Livestock production index (2014-2016 = 100)
-  FERTILIZER: 'AG.CON.FERT.ZS',          // Fertilizer consumption (kilograms per hectare of arable land)
-  AQUACULTURE: 'ER.FSH.AQUA.MT'          // Aquaculture production (metric tons)
+  VEGETABLES: 'AG.PRD.FOOD.XD', // Food production index (2014-2016 = 100)
+  LIVESTOCK: 'AG.PRD.LVSK.XD', // Livestock production index (2014-2016 = 100)
+  FERTILIZER: 'AG.CON.FERT.ZS', // Fertilizer consumption (kilograms per hectare of arable land)
+  AQUACULTURE: 'ER.FSH.AQUA.MT' // Aquaculture production (metric tons)
 };
 
 class WorldBankService {
@@ -46,8 +46,8 @@ class WorldBankService {
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'Accept': 'application/json',
-        },
+          Accept: 'application/json'
+        }
       });
 
       if (!response.ok) {
@@ -73,7 +73,7 @@ class WorldBankService {
           metadata,
           data,
           indicator,
-          country: countryCode,
+          country: countryCode
         };
       }
 
@@ -102,13 +102,13 @@ class WorldBankService {
       countryCode: 'SLV',
       indicator,
       startDate,
-      endDate,
+      endDate
     });
 
     if (data && data.data && data.data.length > 0) {
       return {
         ...data,
-        dataSource: 'El Salvador',
+        dataSource: 'El Salvador'
       };
     }
 
@@ -119,13 +119,13 @@ class WorldBankService {
       countryCode: 'LCN',
       indicator,
       startDate,
-      endDate,
+      endDate
     });
 
     if (data && data.data && data.data.length > 0) {
       return {
         ...data,
-        dataSource: 'Regional Average (Latin America)',
+        dataSource: 'Regional Average (Latin America)'
       };
     }
 
@@ -136,13 +136,13 @@ class WorldBankService {
       countryCode: '1W',
       indicator,
       startDate,
-      endDate,
+      endDate
     });
 
     if (data && data.data && data.data.length > 0) {
       return {
         ...data,
-        dataSource: 'Global Average',
+        dataSource: 'Global Average'
       };
     }
 
@@ -173,7 +173,7 @@ class WorldBankService {
     if (data) {
       this.cache.set(cacheKey, {
         data,
-        timestamp: Date.now(),
+        timestamp: Date.now()
       });
     }
 
@@ -200,7 +200,7 @@ class WorldBankService {
         processed.push({
           year: String(year),
           value: Number(value),
-          decimal: Number(value),
+          decimal: Number(value)
         });
       }
     }
@@ -246,7 +246,7 @@ class WorldBankService {
       cacheKey: 'maize-prices',
       fetchFn: async () => {
         const data = await this._fetchWithFallback({
-          indicator: INDICATORS.MAIZE,
+          indicator: INDICATORS.MAIZE
         });
 
         if (!data) return null;
@@ -259,9 +259,9 @@ class WorldBankService {
           dataSource: data.dataSource,
           data: this._processTimeSeriesData(data.data),
           trend: this._calculateTrend(data.data),
-          lastUpdated: new Date().toISOString(),
+          lastUpdated: new Date().toISOString()
         };
-      },
+      }
     });
   }
 
@@ -274,7 +274,7 @@ class WorldBankService {
       cacheKey: 'crop-protection-costs',
       fetchFn: async () => {
         const data = await this._fetchWithFallback({
-          indicator: INDICATORS.CROP_PROTECTION,
+          indicator: INDICATORS.CROP_PROTECTION
         });
 
         if (!data) return null;
@@ -287,9 +287,9 @@ class WorldBankService {
           dataSource: data.dataSource,
           data: this._processTimeSeriesData(data.data),
           trend: this._calculateTrend(data.data),
-          lastUpdated: new Date().toISOString(),
+          lastUpdated: new Date().toISOString()
         };
-      },
+      }
     });
   }
 
@@ -302,7 +302,7 @@ class WorldBankService {
       cacheKey: 'vegetable-prices',
       fetchFn: async () => {
         const data = await this._fetchWithFallback({
-          indicator: INDICATORS.VEGETABLES,
+          indicator: INDICATORS.VEGETABLES
         });
 
         if (!data) return null;
@@ -315,9 +315,9 @@ class WorldBankService {
           dataSource: data.dataSource,
           data: this._processTimeSeriesData(data.data),
           trend: this._calculateTrend(data.data),
-          lastUpdated: new Date().toISOString(),
+          lastUpdated: new Date().toISOString()
         };
-      },
+      }
     });
   }
 
@@ -330,7 +330,7 @@ class WorldBankService {
       cacheKey: 'poultry-pork-feed',
       fetchFn: async () => {
         const data = await this._fetchWithFallback({
-          indicator: INDICATORS.LIVESTOCK,
+          indicator: INDICATORS.LIVESTOCK
         });
 
         if (!data) return null;
@@ -343,9 +343,9 @@ class WorldBankService {
           dataSource: data.dataSource,
           data: this._processTimeSeriesData(data.data),
           trend: this._calculateTrend(data.data),
-          lastUpdated: new Date().toISOString(),
+          lastUpdated: new Date().toISOString()
         };
-      },
+      }
     });
   }
 
@@ -358,7 +358,7 @@ class WorldBankService {
       cacheKey: 'fertilizer-prices',
       fetchFn: async () => {
         const data = await this._fetchWithFallback({
-          indicator: INDICATORS.FERTILIZER,
+          indicator: INDICATORS.FERTILIZER
         });
 
         if (!data) return null;
@@ -371,9 +371,9 @@ class WorldBankService {
           dataSource: data.dataSource,
           data: this._processTimeSeriesData(data.data),
           trend: this._calculateTrend(data.data),
-          lastUpdated: new Date().toISOString(),
+          lastUpdated: new Date().toISOString()
         };
-      },
+      }
     });
   }
 
@@ -386,7 +386,7 @@ class WorldBankService {
       cacheKey: 'honey-market',
       fetchFn: async () => {
         const data = await this._fetchWithFallback({
-          indicator: INDICATORS.LIVESTOCK,
+          indicator: INDICATORS.LIVESTOCK
         });
 
         if (!data) return null;
@@ -399,9 +399,9 @@ class WorldBankService {
           dataSource: data.dataSource,
           data: this._processTimeSeriesData(data.data),
           trend: this._calculateTrend(data.data),
-          lastUpdated: new Date().toISOString(),
+          lastUpdated: new Date().toISOString()
         };
-      },
+      }
     });
   }
 
@@ -414,7 +414,7 @@ class WorldBankService {
       cacheKey: 'tilapia-market',
       fetchFn: async () => {
         const data = await this._fetchWithFallback({
-          indicator: INDICATORS.AQUACULTURE,
+          indicator: INDICATORS.AQUACULTURE
         });
 
         if (!data) return null;
@@ -427,9 +427,9 @@ class WorldBankService {
           dataSource: data.dataSource,
           data: this._processTimeSeriesData(data.data),
           trend: this._calculateTrend(data.data),
-          lastUpdated: new Date().toISOString(),
+          lastUpdated: new Date().toISOString()
         };
-      },
+      }
     });
   }
 
@@ -443,7 +443,7 @@ class WorldBankService {
       fetchFn: async () => {
         // Use rural population as proxy for storage capacity
         const data = await this._fetchWithFallback({
-          indicator: 'SP.RUR.TOTL.ZS',
+          indicator: 'SP.RUR.TOTL.ZS'
         });
 
         if (!data) return null;
@@ -456,9 +456,9 @@ class WorldBankService {
           dataSource: data.dataSource,
           data: this._processTimeSeriesData(data.data),
           trend: this._calculateTrend(data.data),
-          lastUpdated: new Date().toISOString(),
+          lastUpdated: new Date().toISOString()
         };
-      },
+      }
     });
   }
 
@@ -475,7 +475,7 @@ class WorldBankService {
       this.getFertilizerPrices(),
       this.getHoneyMarketData(),
       this.getTilapiaMarketData(),
-      this.getHarvestStorageData(),
+      this.getHarvestStorageData()
     ]);
 
     return {
@@ -487,7 +487,7 @@ class WorldBankService {
       apiary: results[5],
       aquaculture: results[6],
       harvestStorage: results[7],
-      lastUpdated: new Date().toISOString(),
+      lastUpdated: new Date().toISOString()
     };
   }
 
@@ -512,7 +512,7 @@ class WorldBankService {
       size: this.cache.size,
       keys: cacheKeys,
       duration: '24 hours',
-      entries: {},
+      entries: {}
     };
 
     for (const key of cacheKeys) {
@@ -523,7 +523,7 @@ class WorldBankService {
         timestamp: cached.timestamp,
         age_minutes: Math.floor(age / 1000 / 60),
         age_hours: (age / 1000 / 60 / 60).toFixed(2),
-        expired: age >= CACHE_DURATION,
+        expired: age >= CACHE_DURATION
       };
     }
 

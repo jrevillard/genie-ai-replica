@@ -1,10 +1,5 @@
 <template>
-  <DsCard
-    variant="elevated"
-    hoverable
-    class="market-price-summary-card"
-    @click="openChart"
-  >
+  <DsCard variant="elevated" hoverable class="market-price-summary-card" @click="openChart">
     <div class="card-content">
       <!-- Sparkline Chart -->
       <div class="sparkline-container">
@@ -12,12 +7,7 @@
           <DsSpinner size="sm" />
         </div>
         <div v-else-if="timeSeries.length >= 2" class="sparkline-chart">
-          <apexchart
-            type="line"
-            :height="40"
-            :options="chartOptions"
-            :series="chartSeries"
-          />
+          <apexchart type="line" :height="40" :options="chartOptions" :series="chartSeries" />
         </div>
         <div v-else class="sparkline-empty">
           {{ $t('charts.market.noData', 'No data') }}
@@ -47,7 +37,6 @@ import { useChartTheme } from '../../composables/useChartTheme.js';
 
 export default {
   name: 'MarketPriceSummaryCard',
-  emits: ['open-chart'],
 
   components: {
     DsCard,
@@ -59,22 +48,24 @@ export default {
     category: {
       type: String,
       required: true,
-      validator: (value) => [
-        'maize',
-        'cropProtection',
-        'vegetables',
-        'livestock',
-        'fertilizer',
-        'apiary',
-        'aquaculture',
-        'harvestStorage'
-      ].includes(value)
+      validator: (value) =>
+        [
+          'maize',
+          'cropProtection',
+          'vegetables',
+          'livestock',
+          'fertilizer',
+          'apiary',
+          'aquaculture',
+          'harvestStorage'
+        ].includes(value)
     },
     region: {
       type: String,
       default: 'El Salvador'
     }
   },
+  emits: ['open-chart'],
 
   data() {
     return {
@@ -139,9 +130,11 @@ export default {
       if (!this.timeSeries || this.timeSeries.length === 0) {
         return [{ data: [] }];
       }
-      return [{
-        data: this.timeSeries.map(d => d.value)
-      }];
+      return [
+        {
+          data: this.timeSeries.map((d) => d.value)
+        }
+      ];
     },
 
     chartOptions() {
@@ -174,7 +167,7 @@ export default {
           }
         },
         xaxis: {
-          categories: this.timeSeries.map(d => d.year),
+          categories: this.timeSeries.map((d) => d.year),
           labels: {
             show: false
           },

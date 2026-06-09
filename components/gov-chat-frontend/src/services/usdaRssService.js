@@ -4,20 +4,20 @@
 class UsdaRssService {
   constructor() {
     this.departmentCoordinates = {
-      'Ahuachapán': { lat: 13.9833, lng: -89.8333 },
+      Ahuachapán: { lat: 13.9833, lng: -89.8333 },
       'Santa Ana': { lat: 13.9936, lng: -89.5564 },
-      'Sonsonate': { lat: 13.7167, lng: -89.7267 },
-      'Chalatenango': { lat: 14.0333, lng: -88.9167 },
+      Sonsonate: { lat: 13.7167, lng: -89.7267 },
+      Chalatenango: { lat: 14.0333, lng: -88.9167 },
       'La Libertad': { lat: 13.4833, lng: -89.3167 },
-      'San Salvador': { lat: 13.7000, lng: -89.2000 },
-      'Cuscatlán': { lat: 13.7333, lng: -88.9000 },
-      'La Paz': { lat: 13.4500, lng: -88.9167 },
-      'Cabañas': { lat: 13.8500, lng: -88.6667 },
+      'San Salvador': { lat: 13.7, lng: -89.2 },
+      Cuscatlán: { lat: 13.7333, lng: -88.9 },
+      'La Paz': { lat: 13.45, lng: -88.9167 },
+      Cabañas: { lat: 13.85, lng: -88.6667 },
       'San Vicente': { lat: 13.6167, lng: -88.7833 },
-      'Usulután': { lat: 13.3667, lng: -88.4500 },
+      Usulután: { lat: 13.3667, lng: -88.45 },
       'San Miguel': { lat: 13.4833, lng: -88.1833 },
-      'Morazán': { lat: 13.7500, lng: -88.0000 },
-      'La Unión': { lat: 13.5333, lng: -87.8500 }
+      Morazán: { lat: 13.75, lng: -88.0 },
+      'La Unión': { lat: 13.5333, lng: -87.85 }
     };
   }
 
@@ -80,9 +80,13 @@ class UsdaRssService {
         description: this.getFallArmywormDescription(month, armywormSeverity, isSpanish),
         recommendations: this.getFallArmywormRecommendations(armywormSeverity, isSpanish),
         firstDetected: this.getFirstDetectedDate(month, year),
-        source: isSpanish ? 'MAG - Ministerio de Agricultura y Ganadería' : 'MAG - Ministry of Agriculture and Livestock',
+        source: isSpanish
+          ? 'MAG - Ministerio de Agricultura y Ganadería'
+          : 'MAG - Ministry of Agriculture and Livestock',
         link: 'https://www.gob.sv/ministerio-de-agricultura-y-ganaderia/',
-        seasonalPattern: isSpanish ? 'Actividad máxima: Mayo-Octubre (época lluviosa)' : 'Peak activity: May-October (rainy season)',
+        seasonalPattern: isSpanish
+          ? 'Actividad máxima: Mayo-Octubre (época lluviosa)'
+          : 'Peak activity: May-October (rainy season)',
         trend: this.getTrend(month, 5, 10)
       });
     }
@@ -106,9 +110,13 @@ class UsdaRssService {
         description: this.getCoffeeRustDescription(month, coffeeRustSeverity, isSpanish),
         recommendations: this.getCoffeeRustRecommendations(coffeeRustSeverity, isSpanish),
         firstDetected: this.getFirstDetectedDate(month, year),
-        source: isSpanish ? 'PROCAFE - Programa Cooperativo Regional para el Desarrollo Tecnológico Moderno de la Caficultura' : 'PROCAFE - Regional Cooperative Program for Technological Development of Coffee Growing',
+        source: isSpanish
+          ? 'PROCAFE - Programa Cooperativo Regional para el Desarrollo Tecnológico Moderno de la Caficultura'
+          : 'PROCAFE - Regional Cooperative Program for Technological Development of Coffee Growing',
         link: 'https://www.procafe.org.sv/',
-        seasonalPattern: isSpanish ? 'Actividad máxima: Junio-Septiembre (meses húmedos)' : 'Peak activity: June-September (humid months)',
+        seasonalPattern: isSpanish
+          ? 'Actividad máxima: Junio-Septiembre (meses húmedos)'
+          : 'Peak activity: June-September (humid months)',
         trend: this.getTrend(month, 6, 9)
       });
     }
@@ -129,14 +137,20 @@ class UsdaRssService {
         pest: isSpanish ? 'Mosca Blanca' : 'Whitefly',
         scientificName: 'Bemisia tabaci',
         severity: whiteflySeverity,
-        affectedCrops: isSpanish ? ['Frijoles', 'Tomates', 'Chiles', 'Pepinos', 'Ayote'] : ['Beans', 'Tomatoes', 'Peppers', 'Cucumbers', 'Squash'],
+        affectedCrops: isSpanish
+          ? ['Frijoles', 'Tomates', 'Chiles', 'Pepinos', 'Ayote']
+          : ['Beans', 'Tomatoes', 'Peppers', 'Cucumbers', 'Squash'],
         departments: affectedDepts,
         description: this.getWhiteflyDescription(month, whiteflySeverity, isSpanish),
         recommendations: this.getWhiteflyRecommendations(whiteflySeverity, isSpanish),
         firstDetected: this.getFirstDetectedDate(month, year),
-        source: isSpanish ? 'CENTA - Centro Nacional de Tecnología Agropecuaria y Forestal' : 'CENTA - National Center for Agricultural and Forestry Technology',
+        source: isSpanish
+          ? 'CENTA - Centro Nacional de Tecnología Agropecuaria y Forestal'
+          : 'CENTA - National Center for Agricultural and Forestry Technology',
         link: 'https://www.centa.gob.sv/',
-        seasonalPattern: isSpanish ? 'Actividad máxima: Marzo-Mayo y Septiembre-Noviembre (períodos de transición)' : 'Peak activity: March-May and September-November (transitional periods)',
+        seasonalPattern: isSpanish
+          ? 'Actividad máxima: Marzo-Mayo y Septiembre-Noviembre (períodos de transición)'
+          : 'Peak activity: March-May and September-November (transitional periods)',
         trend: this.getTrend(month, 3, 5)
       });
     }
@@ -160,9 +174,13 @@ class UsdaRssService {
         description: this.getLateBlightDescription(month, lateBlightSeverity, isSpanish),
         recommendations: this.getLateBlightRecommendations(lateBlightSeverity, isSpanish),
         firstDetected: this.getFirstDetectedDate(month, year),
-        source: isSpanish ? 'CENTA - Centro Nacional de Tecnología Agropecuaria y Forestal' : 'CENTA - National Center for Agricultural and Forestry Technology',
+        source: isSpanish
+          ? 'CENTA - Centro Nacional de Tecnología Agropecuaria y Forestal'
+          : 'CENTA - National Center for Agricultural and Forestry Technology',
         link: 'https://www.centa.gob.sv/boletines-para-hortalizas/',
-        seasonalPattern: isSpanish ? 'Actividad máxima: Octubre-Febrero (meses frescos y húmedos)' : 'Peak activity: October-February (cooler, humid months)',
+        seasonalPattern: isSpanish
+          ? 'Actividad máxima: Octubre-Febrero (meses frescos y húmedos)'
+          : 'Peak activity: October-February (cooler, humid months)',
         trend: this.getTrend(month, 10, 12)
       });
     }
@@ -170,7 +188,7 @@ class UsdaRssService {
     // COFFEE BORER BEETLE (Hypothenemus hampei)
     // Peak: November-February
     if (month >= 11 || month <= 2) {
-      const borerSeverity = (month === 12 || month === 1) ? 'high' : 'moderate';
+      const borerSeverity = month === 12 || month === 1 ? 'high' : 'moderate';
       alerts.push({
         id: `coffee-borer-${year}-${month.toString().padStart(2, '0')}`,
         pest: isSpanish ? 'Broca del Café' : 'Coffee Berry Borer',
@@ -178,20 +196,23 @@ class UsdaRssService {
         severity: borerSeverity,
         affectedCrops: isSpanish ? ['Café'] : ['Coffee'],
         departments: ['Santa Ana', 'Ahuachapán', 'Sonsonate', 'La Libertad'],
-        description: (month === 1 || month === 2)
-          ? (isSpanish
+        description:
+          month === 1 || month === 2
+            ? isSpanish
               ? 'Actividad máxima de la broca durante la cosecha principal. Adultos perforando los granos de café.'
-              : 'Peak borer activity during main harvest season. Adults boring into coffee berries.')
-          : (isSpanish
+              : 'Peak borer activity during main harvest season. Adults boring into coffee berries.'
+            : isSpanish
               ? 'Monitoreo postcosecha crítico. Procesamiento y almacenamiento adecuados esenciales.'
-              : 'Post-harvest monitoring critical. Proper processing and storage essential.'),
+              : 'Post-harvest monitoring critical. Proper processing and storage essential.',
         recommendations: isSpanish
           ? 'Cosechar todos los granos, despalmar si es necesario. Usar trampas, sanitizar equipos, garantizar procesamiento adecuado. Eliminar y destruir granos infestados.'
           : 'Harvest all berries, strip-pick if necessary. Use traps, sanitize equipment, ensure proper processing. Remove and destroy infested berries.',
         firstDetected: new Date(month <= 2 ? year - 1 : year, 11, 1).toISOString().split('T')[0],
         source: 'PROCAFE',
         link: 'https://www.procafe.org.sv/',
-        seasonalPattern: isSpanish ? 'Máximo durante cosecha de café: Noviembre-Febrero' : 'Peak during coffee harvest: November-February',
+        seasonalPattern: isSpanish
+          ? 'Máximo durante cosecha de café: Noviembre-Febrero'
+          : 'Peak during coffee harvest: November-February',
         trend: month <= 2 ? 'decreasing' : 'increasing'
       });
     }
@@ -199,6 +220,7 @@ class UsdaRssService {
     return alerts;
   }
 
+  /* eslint-disable no-useless-assignment */
   getSeasonalSeverity(month, { peakStart, peakEnd, secondaryPeakStart, secondaryPeakEnd }) {
     // Check primary peak
     let inPrimaryPeak = false;
@@ -257,18 +279,29 @@ class UsdaRssService {
 
     return 'none';
   }
+  /* eslint-enable no-useless-assignment */
 
   getDepartmentsForPest(pestType, month) {
     const allDepts = [
-      'Ahuachapán', 'Santa Ana', 'Sonsonate', 'Chalatenango',
-      'La Libertad', 'San Salvador', 'Cuscatlán', 'La Paz',
-      'Cabañas', 'San Vicente', 'Usulután', 'San Miguel',
-      'Morazán', 'La Unión'
+      'Ahuachapán',
+      'Santa Ana',
+      'Sonsonate',
+      'Chalatenango',
+      'La Libertad',
+      'San Salvador',
+      'Cuscatlán',
+      'La Paz',
+      'Cabañas',
+      'San Vicente',
+      'Usulután',
+      'San Miguel',
+      'Morazán',
+      'La Unión'
     ];
 
     switch (pestType) {
       case 'fall_armyworm':
-        return (month >= 5 && month <= 10)
+        return month >= 5 && month <= 10
           ? ['San Miguel', 'Usulután', 'La Unión', 'Morazán', 'San Vicente']
           : ['Usulután', 'San Miguel'];
 
@@ -301,7 +334,7 @@ class UsdaRssService {
   getFirstDetectedDate(month, year) {
     const weeksAgo = (month % 3) + 1;
     const date = new Date(year, month - 1, 1);
-    date.setDate(date.getDate() - (weeksAgo * 7));
+    date.setDate(date.getDate() - weeksAgo * 7);
     return date.toISOString().split('T')[0];
   }
 
@@ -327,22 +360,37 @@ class UsdaRssService {
 
   // FALL ARMYWORM
   getFallArmywormDescription(month, severity, isSpanish) {
-    const severityDesc = severity === 'high'
-      ? (isSpanish ? 'severa' : 'severe')
-      : severity === 'moderate'
-          ? (isSpanish ? 'moderada' : 'moderate')
-          : (isSpanish ? 'baja' : 'low');
+    const severityDesc =
+      severity === 'high'
+        ? isSpanish
+          ? 'severa'
+          : 'severe'
+        : severity === 'moderate'
+          ? isSpanish
+            ? 'moderada'
+            : 'moderate'
+          : isSpanish
+            ? 'baja'
+            : 'low';
 
     if (isSpanish) {
-      return `La actividad del Cogollero es ${severityDesc} en los departamentos del oriente y costeros. ` +
-        `Las larvas se alimentan en las cogollas del maíz causando daño de "perforación". ${month >= 5 && month <= 10
-          ? 'Las lluvias fuertes promueven la reproducción rápida y propagación. Monitorear de cerca.'
-          : 'Las condiciones secas limitan la propagación pero las poblaciones persisten en áreas irrigadas.'}`;
+      return (
+        `La actividad del Cogollero es ${severityDesc} en los departamentos del oriente y costeros. ` +
+        `Las larvas se alimentan en las cogollas del maíz causando daño de "perforación". ${
+          month >= 5 && month <= 10
+            ? 'Las lluvias fuertes promueven la reproducción rápida y propagación. Monitorear de cerca.'
+            : 'Las condiciones secas limitan la propagación pero las poblaciones persisten en áreas irrigadas.'
+        }`
+      );
     } else {
-      return `Fall Armyworm activity is ${severityDesc} in eastern and coastal departments. ` +
-        `Larvae feeding in maize whorls causing "shot-hole" damage. ${month >= 5 && month <= 10
-          ? 'Heavy rains promoting rapid reproduction and spread. Monitor closely.'
-          : 'Dry conditions limiting spread but populations persist in irrigated areas.'}`;
+      return (
+        `Fall Armyworm activity is ${severityDesc} in eastern and coastal departments. ` +
+        `Larvae feeding in maize whorls causing "shot-hole" damage. ${
+          month >= 5 && month <= 10
+            ? 'Heavy rains promoting rapid reproduction and spread. Monitor closely.'
+            : 'Dry conditions limiting spread but populations persist in irrigated areas.'
+        }`
+      );
     }
   }
 
@@ -365,15 +413,23 @@ class UsdaRssService {
   // COFFEE RUST
   getCoffeeRustDescription(month, severity, isSpanish) {
     if (isSpanish) {
-      return `La Roya del Café muestra incidencia ${severity} en altitudes >1000m. ` +
-        `Manchas polvorientas amarillo-naranja en el envés de las hojas. ${month >= 6 && month <= 9
-          ? 'Condiciones húmedas favoreciendo la dispersión rápida de esporas. Período crítico para prevención.'
-          : 'Menor humedad reduciendo la propagación pero manteniendo vigilancia en plantaciones sombreadas.'}`;
+      return (
+        `La Roya del Café muestra incidencia ${severity} en altitudes >1000m. ` +
+        `Manchas polvorientas amarillo-naranja en el envés de las hojas. ${
+          month >= 6 && month <= 9
+            ? 'Condiciones húmedas favoreciendo la dispersión rápida de esporas. Período crítico para prevención.'
+            : 'Menor humedad reduciendo la propagación pero manteniendo vigilancia en plantaciones sombreadas.'
+        }`
+      );
     } else {
-      return `Coffee Leaf Rust showing ${severity} incidence in altitudes >1000m. ` +
-        `Orange-yellow powdery spots on lower leaf surfaces. ${month >= 6 && month <= 9
-          ? 'Humid conditions favoring rapid spore dispersal. Critical period for prevention.'
-          : 'Lower humidity reducing spread but maintaining vigilance in shaded plantations.'}`;
+      return (
+        `Coffee Leaf Rust showing ${severity} incidence in altitudes >1000m. ` +
+        `Orange-yellow powdery spots on lower leaf surfaces. ${
+          month >= 6 && month <= 9
+            ? 'Humid conditions favoring rapid spore dispersal. Critical period for prevention.'
+            : 'Lower humidity reducing spread but maintaining vigilance in shaded plantations.'
+        }`
+      );
     }
   }
 
@@ -396,15 +452,23 @@ class UsdaRssService {
   // WHITEFLY
   getWhiteflyDescription(month, severity, isSpanish) {
     if (isSpanish) {
-      return `Poblaciones de Mosca Blanca en niveles ${severity} en valles productores de vegetales. ` +
-        `Ninfas y adultos en el envés de las hojas. ${month >= 3 && month <= 5
-          ? 'Temperaturas primaverales favoreciendo reproducción rápida. Riesgo de transmisión de virus elevado.'
-          : 'Monitoreo crítico. Puede transmitir virus Gemini y otras enfermedades.'}`;
+      return (
+        `Poblaciones de Mosca Blanca en niveles ${severity} en valles productores de vegetales. ` +
+        `Ninfas y adultos en el envés de las hojas. ${
+          month >= 3 && month <= 5
+            ? 'Temperaturas primaverales favoreciendo reproducción rápida. Riesgo de transmisión de virus elevado.'
+            : 'Monitoreo crítico. Puede transmitir virus Gemini y otras enfermedades.'
+        }`
+      );
     } else {
-      return `Whitefly populations at ${severity} levels in vegetable-producing valleys. ` +
-        `Nymphs and adults on leaf undersides. ${month >= 3 && month <= 5
-          ? 'Spring temperatures favoring rapid reproduction. Virus transmission risk elevated.'
-          : 'Monitoring critical. Can transmit Gemini virus and other diseases.'}`;
+      return (
+        `Whitefly populations at ${severity} levels in vegetable-producing valleys. ` +
+        `Nymphs and adults on leaf undersides. ${
+          month >= 3 && month <= 5
+            ? 'Spring temperatures favoring rapid reproduction. Virus transmission risk elevated.'
+            : 'Monitoring critical. Can transmit Gemini virus and other diseases.'
+        }`
+      );
     }
   }
 
@@ -427,15 +491,23 @@ class UsdaRssService {
   // LATE BLIGHT
   getLateBlightDescription(month, severity, isSpanish) {
     if (isSpanish) {
-      return `Condiciones de Tizón Tardío ${severity} en zonas de altura. ` +
-        `Lesiones empapadas de agua, crecimiento de moho blanco en hojas. ${month >= 10 || month <= 2
-          ? 'Clima fresco y húmedo ideal para desarrollo de la enfermedad. Riesgo de propagación rápida.'
-          : 'Temperaturas más cálidas limitando propagación pero monitorear en zonas sombreadas y de gran altitud.'}`;
+      return (
+        `Condiciones de Tizón Tardío ${severity} en zonas de altura. ` +
+        `Lesiones empapadas de agua, crecimiento de moho blanco en hojas. ${
+          month >= 10 || month <= 2
+            ? 'Clima fresco y húmedo ideal para desarrollo de la enfermedad. Riesgo de propagación rápida.'
+            : 'Temperaturas más cálidas limitando propagación pero monitorear en zonas sombreadas y de gran altitud.'
+        }`
+      );
     } else {
-      return `Late Blight conditions ${severity} in highland areas. ` +
-        `Water-soaked lesions, white mold growth on leaves. ${month >= 10 || month <= 2
-          ? 'Cool, humid weather ideal for disease development. Risk of rapid spread.'
-          : 'Warmer temperatures limiting spread but monitor in shaded, high-altitude areas.'}`;
+      return (
+        `Late Blight conditions ${severity} in highland areas. ` +
+        `Water-soaked lesions, white mold growth on leaves. ${
+          month >= 10 || month <= 2
+            ? 'Cool, humid weather ideal for disease development. Risk of rapid spread.'
+            : 'Warmer temperatures limiting spread but monitor in shaded, high-altitude areas.'
+        }`
+      );
     }
   }
 
@@ -456,9 +528,9 @@ class UsdaRssService {
   }
 
   calculateSummary(alerts) {
-    const high = alerts.filter(a => a.severity === 'high').length;
-    const moderate = alerts.filter(a => a.severity === 'moderate').length;
-    const low = alerts.filter(a => a.severity === 'low').length;
+    const high = alerts.filter((a) => a.severity === 'high').length;
+    const moderate = alerts.filter((a) => a.severity === 'moderate').length;
+    const low = alerts.filter((a) => a.severity === 'low').length;
 
     return {
       total: alerts.length,

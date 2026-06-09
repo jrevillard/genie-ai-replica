@@ -65,13 +65,16 @@
         </table>
       </DsCard>
 
-      <p class="last-updated">
-        {{ $t('charts.market.lastUpdated', 'Last updated') }}: {{ formatDate(lastUpdated) }}
-      </p>
+      <p class="last-updated">{{ $t('charts.market.lastUpdated', 'Last updated') }}: {{ formatDate(lastUpdated) }}</p>
     </div>
 
     <!-- Prediction Input Dialog -->
-    <DsModal :visible="showPredictionDialog" :title="$t('charts.market.getPredictions', 'Get AI Predictions')" size="lg" @close="closePredictionDialog">
+    <DsModal
+      :visible="showPredictionDialog"
+      :title="$t('charts.market.getPredictions', 'Get AI Predictions')"
+      size="lg"
+      @close="closePredictionDialog"
+    >
       <div class="prediction-form">
         <DsFormGroup :label="$t('charts.market.commodity', 'Commodity')">
           <strong>{{ commodityName }}</strong>
@@ -116,7 +119,12 @@
     </DsSpinner>
 
     <!-- Prediction Response Dialog -->
-    <DsModal :visible="showResponseDialog" :title="`${$t('charts.market.predictionsFor', 'AI Predictions')}: ${commodityName}`" size="lg" @close="closeResponseDialog">
+    <DsModal
+      :visible="showResponseDialog"
+      :title="`${$t('charts.market.predictionsFor', 'AI Predictions')}: ${commodityName}`"
+      size="lg"
+      @close="closeResponseDialog"
+    >
       <div v-if="predictionResponse" class="prediction-response" v-html="renderedPrediction"></div>
       <span v-else>{{ $t('charts.market.noResponse', 'No response received') }}</span>
 
@@ -145,7 +153,16 @@ import DsSelect from '../ds/Select.vue';
 import DsSpinner from '../ds/Spinner.vue';
 import DsStateDisplay from '../ds/StateDisplay.vue';
 
-const VALID_CATEGORIES = ['maize', 'cropProtection', 'vegetables', 'livestock', 'fertilizer', 'apiary', 'aquaculture', 'harvestStorage'];
+const VALID_CATEGORIES = [
+  'maize',
+  'cropProtection',
+  'vegetables',
+  'livestock',
+  'fertilizer',
+  'apiary',
+  'aquaculture',
+  'harvestStorage'
+];
 
 export default {
   name: 'MarketPriceChart',
@@ -246,7 +263,12 @@ export default {
       const cssVars = this.getCssVarStrings();
 
       return {
-        chart: { type: 'line', toolbar: { show: false }, animations: { enabled: true, easing: 'easeinout', speed: 800 }, background: 'transparent' },
+        chart: {
+          type: 'line',
+          toolbar: { show: false },
+          animations: { enabled: true, easing: 'easeinout', speed: 800 },
+          background: 'transparent'
+        },
         xaxis: {
           categories: years,
           labels: { rotate: -45, style: { fontSize: '11px', colors: cssVars.mutedColor } },
@@ -260,8 +282,16 @@ export default {
         },
         colors: [this.categoryConfig.color || cssVars.accentColor],
         stroke: { curve: 'smooth', width: 3 },
-        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.5, opacityTo: 0.1, stops: [0, 90, 100] } },
-        markers: { size: 6, colors: [this.categoryConfig.color || cssVars.accentColor], strokeColors: cssVars.backgroundColor, strokeWidth: 2 },
+        fill: {
+          type: 'gradient',
+          gradient: { shadeIntensity: 1, opacityFrom: 0.5, opacityTo: 0.1, stops: [0, 90, 100] }
+        },
+        markers: {
+          size: 6,
+          colors: [this.categoryConfig.color || cssVars.accentColor],
+          strokeColors: cssVars.backgroundColor,
+          strokeWidth: 2
+        },
         tooltip: { y: { formatter: (v) => this.formatValue(v) }, theme: this.isDarkMode ? 'dark' : 'light' },
         grid: { borderColor: cssVars.gridColor, strokeDashArray: 4, strokeOpacity: 0.5 }
       };
@@ -340,9 +370,10 @@ export default {
         const currentLanguage = localStorage.getItem('preferredLanguage') || 'en';
         const currentDate = new Date();
 
-        const prompt = currentLanguage === 'es'
-          ? `Solicitud de Predicción de Precios de Mercado para El Salvador\n\nFecha: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nProducto: ${this.commodityName}\nMarco Temporal: ${this.selectedTimeFrame}\n\nDatos Actuales:\n• Último Valor: ${this.latestValue} ${this.unit}\n• Tendencia: ${this.trendLabel}\n\nDatos Históricos:\n${historyData}\n\n${this.worldNewsInput ? `Factores Mundiales:\n${this.worldNewsInput}\n` : ''}${this.localNewsInput ? `Factores Locales:\n${this.localNewsInput}\n` : ''}\nProporcione análisis y predicción para ${this.selectedTimeFrame}.`
-          : `Market Price Prediction Request for El Salvador\n\nDate: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nCommodity: ${this.commodityName}\nTime Frame: ${this.selectedTimeFrame}\n\nCurrent Data:\n• Latest: ${this.latestValue} ${this.unit}\n• Trend: ${this.trendLabel}\n\nHistorical Data:\n${historyData}\n\n${this.worldNewsInput ? `World Factors:\n${this.worldNewsInput}\n` : ''}${this.localNewsInput ? `Local Factors:\n${this.localNewsInput}\n` : ''}\nProvide price forecast and analysis for ${this.selectedTimeFrame}.`;
+        const prompt =
+          currentLanguage === 'es'
+            ? `Solicitud de Predicción de Precios de Mercado para El Salvador\n\nFecha: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nProducto: ${this.commodityName}\nMarco Temporal: ${this.selectedTimeFrame}\n\nDatos Actuales:\n• Último Valor: ${this.latestValue} ${this.unit}\n• Tendencia: ${this.trendLabel}\n\nDatos Históricos:\n${historyData}\n\n${this.worldNewsInput ? `Factores Mundiales:\n${this.worldNewsInput}\n` : ''}${this.localNewsInput ? `Factores Locales:\n${this.localNewsInput}\n` : ''}\nProporcione análisis y predicción para ${this.selectedTimeFrame}.`
+            : `Market Price Prediction Request for El Salvador\n\nDate: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nCommodity: ${this.commodityName}\nTime Frame: ${this.selectedTimeFrame}\n\nCurrent Data:\n• Latest: ${this.latestValue} ${this.unit}\n• Trend: ${this.trendLabel}\n\nHistorical Data:\n${historyData}\n\n${this.worldNewsInput ? `World Factors:\n${this.worldNewsInput}\n` : ''}${this.localNewsInput ? `Local Factors:\n${this.localNewsInput}\n` : ''}\nProvide price forecast and analysis for ${this.selectedTimeFrame}.`;
 
         const response = await chatbotService.submitQuery({
           userId: this.userId,

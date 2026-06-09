@@ -29,6 +29,7 @@ _bmad-output/
    - Create `_bmad-output/archived/<initiative-key>/implementation-artifacts/`
    - Move all completed initiative files from `planning-artifacts/` and `implementation-artifacts/` into the archive
    - Keep shared resources (e.g., `research/`) in place
+   - Keep `deferred-work.md` in `implementation-artifacts/` — it is a cross-initiative backlog of actionable technical debt, not a completed artifact
    - Commit with message: `chore: archive <initiative-key> initiative artifacts`
 3. **In the new initiative worktree**: name files with standard BMAD names (`prd.md`, `architecture.md`, `epics.md`) since the active directories are now clean
 

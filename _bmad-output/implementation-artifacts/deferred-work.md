@@ -2,6 +2,65 @@
 
 Items deferred during code reviews. Revisit when the related component is next modified.
 
+---
+
+## Initiative: mobile-oidc (2026-04 — 2026-05)
+
+## Deferred from: code review of 3-1-applifecycle-token-validation (mobile-oidc, 2026-04-27)
+
+- **Concurrent `validateTokens()` calls not guarded** — No mutex/re-entrancy guard on `validateTokens()`. Multiple `resumed` events can trigger overlapping async refresh flows. Known limitation documented in spec.
+- **`validateTokens()` can race with `logout()`** — If user logs out while a lifecycle-triggered refresh is in-flight, the refresh may re-save tokens that logout deleted. Pre-existing issue, made more reachable by the lifecycle trigger. Root cause: no coordination flag between logout and validateTokens.
+- **`validateTokens()` can race with `authorize()`** — If app resumes while user is mid-authorization flow, lifecycle validation could trigger a redundant refresh competing with the in-flight authorize.
+
+## Deferred from: code review of 3-2-network-error-detection-recovery (mobile-oidc, 2026-04-28)
+
+- **Lost state on app close after network error** — If app closes while state is `error` due to network error during refreshToken, on restart `_initializeAuth()` will attempt refresh with same stale tokens. Pre-existing.
+- **Race condition: authorize() vs logout()** — If logout() is called during authorize(), tokens may be saved after logout. Pre-existing (async concurrent methods, out of scope).
+- **Fragile keyword-based classification** — NetworkErrorClassifier uses keywords in error code. Documented as "best-effort heuristic" in spec, accepted as technical limitation.
+
+## Deferred from: code review of 4-2-dart-flavor-config-keycloak-client-template (mobile-oidc, 2026-04-28)
+
+- **No runtime validation of scheme coherence** — The 4-layer scheme coherence rule (Dart config, Android build.gradle, iOS XCConfig, .env) is well-documented but not enforced programmatically. A mismatch causes silent OIDC callback failure.
+- **No backchannel logout configuration** — The mobile client lacks `backchannel.logout.session.required` and `backchannel.logout.url`. Not mentioned in spec, out of scope for this story.
+
+## Deferred from: code review of 4-3-custom-url-scheme-per-deployment (mobile-oidc, 2026-04-28)
+
+- **No automated enforcement for scheme coherence rule** — The coherence rule (Dart = Gradle = XCConfig = env) is documented but no lint/CI check prevents future mismatches.
+- **Missing `webOrigins` in Keycloak mobile client config** — `genie-realm.yaml` mobile client has no `webOrigins`, potentially needed for Android App Links verification.
+- **Non-flavored debug build collides with `itu` flavor** — `flutter build apk` without `--flavor` uses same `applicationId` as `itu`. Pre-existing.
+- **`e2e_config.dart` missing `allowInsecureConnections: true`** for `http://localhost:8080` URL. Would cause OIDC flow failure if appauth enforces HTTPS.
+- **Template flavor config has misleading scheme pattern** — `com.<institution>.genieai` vs actual convention `com.itu.genieai[.<suffix>]`.
+- **`env` template hardcodes `KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai`** — Not generic for new institutional deployments.
+
+## Deferred from: code review of 4-4-deployment-onboarding-guide (mobile-oidc, 2026-04-28)
+
+- **Air-gapped section lacks concrete DNS configuration example** — Guide mentions local DNS and /etc/hosts but provides no specific commands.
+- **No Docker service health check before running verification commands** — Operators may run verification before keycloak-config finishes processing.
+- **Missing key.properties file permissions warning** — Signing credentials file should be chmod 600 but guide doesn't mention permissions.
+- **Missing dependency resolution troubleshooting** — `flutter pub get` failure is a common first-build error not covered in troubleshooting section.
+- **App Store compliance requirements omitted** — Google Play Data Safety disclosure and Apple privacy manifests are non-optional for store submission but not mentioned.
+- **Version code/name management across deployments** — App stores require unique version codes per submission; no guidance for managing these across multiple institutional deployments.
+
+## Deferred from: code review of 6-1-user-service-migration (mobile-oidc, 2026-04-29)
+
+- **RightSidebarComponent fallback accessToken removed** — If `widget.accessToken` is null, the operation is silently ignored. Dead code (cleanup story 6.2/6.3).
+- **UserProfileProxy multipart Authorization header removed without replacement** — `UserProfileProxy` creates `ApiService()` directly, not in scope for this story.
+- **FileProxy token null handling** — If `TokenStorage.getAccessToken()` returns null, upload proceeds without auth. Very rare edge case.
+
+## Deferred from: code review of 5-1-password-reset-via-keycloak-browser (mobile-oidc, 2026-04-29)
+
+- **`resetCredentials` flow verification in Keycloak Admin Console not documented** — If a previous deployment modified the browser authentication flow, the "Forgot Password" button may not appear even if `resetPasswordAllowed=true`. Pre-existing operational risk.
+
+## Deferred from: code review of 6-5-auth-test-suite-ci (mobile-oidc, 2026-05-04)
+
+- **`InsecureHttpClient` in production `auth_providers.dart`** — Class with `badCertificateCallback = true` in `lib/services/auth/`. Low risk since `allowInsecureConnections` defaults to `false` for all production flavors, but should be guarded by `kDebugMode` or moved to test-only to prevent accidental use.
+- **`init()` signature change breaks backward compatibility** — `keycloak-auth-service.js`: `init(idpUrl, clientId)` → `init(idpUrl)`. Out of scope for this test story, introduced via Keycloak proxy chain infrastructure fix.
+- **AC#7 Data preservation** — Marked "manual QA" but no procedure documented in completion notes. Manual verification not automated.
+
+---
+
+## Initiative: testing-framework (2026-05 — 2026-06)
+
 ## Deferred from: code review of 7-6-deploy-victorialogs-centralized-log-aggregation (2026-05-29)
 
 - Fluentd driver drops logs when Collector is down — inherent tradeoff; dual logging keeps docker logs functional. No fallback mechanism.
@@ -30,9 +89,9 @@ Items deferred during code reviews. Revisit when the related component is next m
 
 ## Deferred from: code review of 3-4-test-vuex-store-modules (2026-05-20)
 
-- UPDATE_CHAT: chaîne vide traitée comme "pas de changement" — le code source utilise `title || state.chats[chatIndex].title` qui traite `''` comme falsy. Comportement du code source, pas des tests. Pre-existing.
-- Persistence plugin dupliqué au lieu d'être importé — `persistence.test.js` réplique la logique du plugin au lieu d'importer depuis `store/index.js`. Approche délibérée pour isolation; duplication fidèle au source. Pre-existing design choice.
-- Edge cases manquants (null inputs, IDs dupliqués, quota localStorage) — amélioration de couverture future, pas bloquant pour cette story.
+- UPDATE_CHAT: empty string treated as "no change" — source code uses `title || state.chats[chatIndex].title` which treats `''` as falsy. Source code behavior, not a test issue. Pre-existing.
+- Persistence plugin duplicated instead of imported — `persistence.test.js` replicates plugin logic instead of importing from `store/index.js`. Deliberate approach for isolation; duplication faithful to source. Pre-existing design choice.
+- Missing edge cases (null inputs, duplicate IDs, localStorage quota) — future coverage improvement, not blocking for this story.
 
 ## Deferred from: code review of 3-5-test-http-services (2026-05-20)
 
@@ -97,13 +156,13 @@ Items deferred during code reviews. Revisit when the related component is next m
 
 ## Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)
 
-- getMetric fallback quand service retourne null/undefined — le controller a un fallback pour null values, non testé. Scope controller, sera couvert par story 2.7.
-- Locale non testé sur satisfaction endpoints — le controller accepte un param locale sur gauge/heatmap mais les tests ne vérifient pas sa propagation. Nice-to-have hors AC.
-- Malformed JSON dans filters param — `JSON.parse(req.query.filters)` peut throw si le JSON est invalide. Edge case non couvert par AC4.
-- Pagination avec limit/offset non-numériques — `parseInt() || default` gère les cas non-numériques. Edge case au-delà du scope AC7.
-- Recherche avec query string vide — `?query=` vs query absent. AC14 couvre le cas sans query param.
-- categoryExists lance une erreur (DB failure) — si le service throw au lieu de retourner false, le route catch retourne 500. Edge case d'infrastructure.
-- DELETE service avec error code non-404 — le route check `error.code === 404`, les autres codes tombent dans le 500 générique. Edge case au-delà du scope AC16.
+- getMetric fallback when service returns null/undefined — controller has a fallback for null values, untested. Controller scope, will be covered by story 2.7.
+- Locale not tested on satisfaction endpoints — controller accepts a locale param on gauge/heatmap but tests don't verify its propagation. Nice-to-have beyond AC.
+- Malformed JSON in filters param — `JSON.parse(req.query.filters)` can throw if JSON is invalid. Edge case not covered by AC4.
+- Pagination with non-numeric limit/offset — `parseInt() || default` handles non-numeric cases. Edge case beyond AC7 scope.
+- Search with empty query string — `?query=` vs query absent. AC14 covers the case without query param.
+- categoryExists throws error (DB failure) — if service throws instead of returning false, route catch returns 500. Infrastructure edge case.
+- DELETE service with non-404 error code — route checks `error.code === 404`, other codes fall into generic 500. Edge case beyond AC16 scope.
 
 ## Deferred from: code review of 2-6-test-backend-admin-and-files-route-handlers (2026-05-18)
 
@@ -133,11 +192,11 @@ Items deferred during code reviews. Revisit when the related component is next m
 
 ## Deferred from: code review of 2-7-test-backend-service-layer (2026-05-18)
 
-- Worker thread mock ne simule pas le flux async — le mock Worker fournit `on`/`postMessage`/`terminate` mais ne simule jamais l'émission d'événements. Tests actuels fonctionnent car le code OPEA worker n'est pas appelé directement. Amélioration nice-to-have.
-- Pagination: un seul scénario testé — `searchQueries` testé avec total=25 et pageSize=10. Scénarios limites (exact boundary, zero results) seraient un plus.
-- User profile `process`: couverture indirecte — la méthode `process` (agrégation de custom settings) n'est testée que via `updateUserProfile`. Des tests directs ajouteraient de la robustesse.
-- Translation backend fallback: risque théorique de race — le test de fallback GPU→CPU assigne `translationService.backend` manuellement. Risque théorique si le service cache le backend.
-- Chat history: edge collection query patterns — les patterns de traversal de graphe ArangoDB (edge bidirectionnelle, vérification d'existence d'edge) sont complexes à mocker et ne sont pas testés directement.
+- Worker thread mock does not simulate async flow — mock Worker provides `on`/`postMessage`/`terminate` but never simulates event emission. Current tests work because OPEA worker code is not called directly. Nice-to-have improvement.
+- Pagination: only one scenario tested — `searchQueries` tested with total=25 and pageSize=10. Boundary scenarios (exact boundary, zero results) would be a plus.
+- User profile `process`: indirect coverage — `process` method (custom settings aggregation) only tested via `updateUserProfile`. Direct tests would add robustness.
+- Translation backend fallback: theoretical race risk — GPU→CPU fallback test manually assigns `translationService.backend`. Theoretical risk if service caches the backend.
+- Chat history: edge collection query patterns — ArangoDB graph traversal patterns (bidirectional edge, edge existence check) are complex to mock and not tested directly.
 
 ## Deferred from: code review of 2-9-test-backend-admin-and-security-services (2026-05-26)
 

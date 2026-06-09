@@ -1,5 +1,6 @@
 // lib/services/api_service.dart
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
@@ -18,14 +19,14 @@ class ApiService {
   ApiService._internal();
 
   void setToken(String token) {
-    print(
+    debugPrint(
       '[ApiService] Setting access token: ${token.substring(0, token.length > 5 ? 5 : token.length)}...',
     );
     _accessToken = token;
   }
 
   void clearToken() {
-    print('[ApiService] Clearing access token');
+    debugPrint('[ApiService] Clearing access token');
     _accessToken = null;
   }
 
@@ -36,7 +37,7 @@ class ApiService {
       'Content-Type': contentType,
       if (_accessToken != null) 'Authorization': 'Bearer $_accessToken',
     };
-    // print('[ApiService] Generated Headers: $headers');
+    // debugPrint('[ApiService] Generated Headers: $headers');
     return headers;
   }
 
@@ -48,9 +49,11 @@ class ApiService {
       queryParameters: params?.map((k, v) => MapEntry(k, v.toString())),
     );
 
-    print('----------------------------------------------------------------');
-    print('[API Request] GET');
-    print('URL: $uri');
+    debugPrint(
+      '----------------------------------------------------------------',
+    );
+    debugPrint('[API Request] GET');
+    debugPrint('URL: $uri');
 
     try {
       final response = await http.get(uri, headers: getHeaders());
@@ -65,10 +68,12 @@ class ApiService {
   Future<http.Response> post(String endpoint, Map<String, dynamic> data) async {
     final uri = Uri.parse('$baseUrl/$endpoint');
 
-    print('----------------------------------------------------------------');
-    print('[API Request] POST');
-    print('URL: $uri');
-    print('Body: ${jsonEncode(data)}');
+    debugPrint(
+      '----------------------------------------------------------------',
+    );
+    debugPrint('[API Request] POST');
+    debugPrint('URL: $uri');
+    debugPrint('Body: ${jsonEncode(data)}');
 
     try {
       final response = await http.post(
@@ -87,10 +92,12 @@ class ApiService {
   Future<http.Response> put(String endpoint, Map<String, dynamic> data) async {
     final uri = Uri.parse('$baseUrl/$endpoint');
 
-    print('----------------------------------------------------------------');
-    print('[API Request] PUT');
-    print('URL: $uri');
-    print('Body: ${jsonEncode(data)}');
+    debugPrint(
+      '----------------------------------------------------------------',
+    );
+    debugPrint('[API Request] PUT');
+    debugPrint('URL: $uri');
+    debugPrint('Body: ${jsonEncode(data)}');
 
     try {
       final response = await http.put(
@@ -112,10 +119,12 @@ class ApiService {
   ) async {
     final uri = Uri.parse('$baseUrl/$endpoint');
 
-    print('----------------------------------------------------------------');
-    print('[API Request] PATCH');
-    print('URL: $uri');
-    print('Body: ${jsonEncode(data)}');
+    debugPrint(
+      '----------------------------------------------------------------',
+    );
+    debugPrint('[API Request] PATCH');
+    debugPrint('URL: $uri');
+    debugPrint('Body: ${jsonEncode(data)}');
 
     try {
       final response = await http.patch(
@@ -139,9 +148,11 @@ class ApiService {
       queryParameters: params?.map((k, v) => MapEntry(k, v.toString())),
     );
 
-    print('----------------------------------------------------------------');
-    print('[API Request] DELETE');
-    print('URL: $uri');
+    debugPrint(
+      '----------------------------------------------------------------',
+    );
+    debugPrint('[API Request] DELETE');
+    debugPrint('URL: $uri');
 
     try {
       final response = await http.delete(uri, headers: getHeaders());
@@ -154,15 +165,19 @@ class ApiService {
   }
 
   void _logResponse(http.Response response) {
-    print('[API Response] Status Code: ${response.statusCode}');
-    print('Body: ${response.body}');
-    print('----------------------------------------------------------------');
+    debugPrint('[API Response] Status Code: ${response.statusCode}');
+    debugPrint('Body: ${response.body}');
+    debugPrint(
+      '----------------------------------------------------------------',
+    );
   }
 
   void _logError(Object error, StackTrace stackTrace) {
-    print('!!!!!!!!!!! [API EXCEPTION] !!!!!!!!!!!');
-    print('Error: $error');
-    print('Stack Trace: $stackTrace');
-    print('----------------------------------------------------------------');
+    debugPrint('!!!!!!!!!!! [API EXCEPTION] !!!!!!!!!!!');
+    debugPrint('Error: $error');
+    debugPrint('Stack Trace: $stackTrace');
+    debugPrint(
+      '----------------------------------------------------------------',
+    );
   }
 }

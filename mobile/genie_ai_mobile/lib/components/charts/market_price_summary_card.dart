@@ -129,7 +129,7 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
         });
       }
     } catch (e) {
-      print(
+      debugPrint(
         '[MarketPriceSummaryCard] Error loading data for ${widget.category}: $e',
       );
       if (mounted) {

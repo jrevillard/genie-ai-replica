@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:csv/csv.dart';
@@ -63,7 +64,7 @@ class HdxNdviService {
     bool forceRefresh = false,
   }) async {
     try {
-      print('[HDX NDVI] Fetching crop health data for $region');
+      debugPrint('[HDX NDVI] Fetching crop health data for $region');
 
       // Check if we need to look for updates
       if (checkForUpdates) {
@@ -74,13 +75,13 @@ class HdxNdviService {
       if (!forceRefresh) {
         final cachedData = await _loadCachedData();
         if (cachedData != null) {
-          print('[HDX NDVI] Returning cached data');
+          debugPrint('[HDX NDVI] Returning cached data');
           return cachedData;
         }
       }
 
       // Download fresh data
-      print('[HDX NDVI] Downloading fresh data from HDX');
+      debugPrint('[HDX NDVI] Downloading fresh data from HDX');
       final data = await _downloadAndParseCSV();
 
       // Save to cache
@@ -89,12 +90,12 @@ class HdxNdviService {
 
       return data;
     } catch (e) {
-      print('[HDX NDVI] Error: $e');
+      debugPrint('[HDX NDVI] Error: $e');
 
       // Try to return cached data even on error
       final cachedData = await _loadCachedData();
       if (cachedData != null) {
-        print('[HDX NDVI] Returning cached data due to error');
+        debugPrint('[HDX NDVI] Returning cached data due to error');
         return cachedData;
       }
 
@@ -113,7 +114,7 @@ class HdxNdviService {
   /// Internal method to check HDX for dataset updates
   Future<bool> _checkForUpdates() async {
     try {
-      print('[HDX NDVI] Checking for updates...');
+      debugPrint('[HDX NDVI] Checking for updates...');
 
       // Fetch the dataset page to get the last modified date
       final response = await http
@@ -146,20 +147,24 @@ class HdxNdviService {
           final lastKnownModified = prefs.getString(_lastModifiedKey);
 
           if (lastKnownModified != modifiedDate) {
-            print('[HDX NDVI] New data available! Modified: $modifiedDate');
+            debugPrint(
+              '[HDX NDVI] New data available! Modified: $modifiedDate',
+            );
             await prefs.setString(_lastModifiedKey, modifiedDate);
             return true;
           } else {
-            print('[HDX NDVI] Data is up to date. Modified: $modifiedDate');
+            debugPrint(
+              '[HDX NDVI] Data is up to date. Modified: $modifiedDate',
+            );
             return false;
           }
         }
       }
 
-      print('[HDX NDVI] Could not determine last modified date');
+      debugPrint('[HDX NDVI] Could not determine last modified date');
       return false;
     } catch (e) {
-      print('[HDX NDVI] Error checking for updates: $e');
+      debugPrint('[HDX NDVI] Error checking for updates: $e');
       return false;
     }
   }
@@ -186,7 +191,7 @@ class HdxNdviService {
 
       // Extract headers (skip first row)
       final headers = rows[0];
-      print(
+      debugPrint(
         '[HDX NDVI] CSV has ${rows.length} rows, ${headers.length} columns',
       );
 
@@ -208,13 +213,13 @@ class HdxNdviService {
 
         // Extract data from columns
         // Expected columns based on HDX dataset:
-        // admin0, admin1, admin2, date, vim, vim_lta, viq, n_pixels
+        // admin0, admin1, admin2, date, vim, vimLta, viq, n_pixels
         final admin0 = row[0]?.toString() ?? '';
         final admin1 = row[1]?.toString() ?? ''; // Department
         final admin2 = row[2]?.toString() ?? ''; // Municipality
         final date = row[3]?.toString() ?? '';
         final vim = _parseDouble(row[4]); // NDVI value
-        final vim_lta = _parseDouble(row[5]); // Long-term average
+        final vimLta = _parseDouble(row[5]); // Long-term average
         // viq (Anomaly %) not used yet
 
         if (admin0 == 'El Salvador' && vim != null) {
@@ -233,8 +238,8 @@ class HdxNdviService {
             // Calculate trend if we have long-term average
             String trend = 'stable';
             double? change;
-            if (vim_lta != null) {
-              final diff = ((vim - vim_lta) / vim_lta) * 100;
+            if (vimLta != null) {
+              final diff = ((vim - vimLta) / vimLta) * 100;
               change = double.parse(diff.toStringAsFixed(1));
               if (diff > 2) {
                 trend = 'improving';
@@ -249,7 +254,7 @@ class HdxNdviService {
               'date': date,
               'ndvi': double.parse(vim.toStringAsFixed(3)),
               'trend': trend,
-              if (change != null) 'change': change,
+              ...change != null ? {'change': change} : {},
               'health': _getHealthStatus(vim),
             });
           }
@@ -305,7 +310,7 @@ class HdxNdviService {
         'lastUpdate': DateTime.now().toIso8601String(),
       };
     } catch (e) {
-      print('[HDX NDVI] Error parsing CSV: $e');
+      debugPrint('[HDX NDVI] Error parsing CSV: $e');
       rethrow;
     }
   }
@@ -360,14 +365,16 @@ class HdxNdviService {
           if (age.inDays < 7) {
             return data;
           } else {
-            print('[HDX NDVI] Cached data is too old (${age.inDays} days)');
+            debugPrint(
+              '[HDX NDVI] Cached data is too old (${age.inDays} days)',
+            );
           }
         }
       }
 
       return null;
     } catch (e) {
-      print('[HDX NDVI] Error loading cached data: $e');
+      debugPrint('[HDX NDVI] Error loading cached data: $e');
       return null;
     }
   }
@@ -378,9 +385,9 @@ class HdxNdviService {
       final prefs = await SharedPreferences.getInstance();
       final jsonStr = json.encode(data);
       await prefs.setString(_cachedDataKey, jsonStr);
-      print('[HDX NDVI] Data cached successfully');
+      debugPrint('[HDX NDVI] Data cached successfully');
     } catch (e) {
-      print('[HDX NDVI] Error saving cached data: $e');
+      debugPrint('[HDX NDVI] Error saving cached data: $e');
     }
   }
 
@@ -390,7 +397,7 @@ class HdxNdviService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_lastUpdateKey, DateTime.now().toIso8601String());
     } catch (e) {
-      print('[HDX NDVI] Error saving timestamp: $e');
+      debugPrint('[HDX NDVI] Error saving timestamp: $e');
     }
   }
 
@@ -463,9 +470,9 @@ class HdxNdviService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_cachedDataKey);
       await prefs.remove(_lastUpdateKey);
-      print('[HDX NDVI] Cache cleared');
+      debugPrint('[HDX NDVI] Cache cleared');
     } catch (e) {
-      print('[HDX NDVI] Error clearing cache: $e');
+      debugPrint('[HDX NDVI] Error clearing cache: $e');
     }
   }
 

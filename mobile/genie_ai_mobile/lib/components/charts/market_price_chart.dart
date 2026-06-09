@@ -604,9 +604,10 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
       ),
     );
 
-    if (result == null || !mounted) return;
+    if (result == null || !context.mounted) return;
 
     // Show loading overlay
+    if (!context.mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -740,12 +741,12 @@ Provide:
       );
 
       // Hide loading overlay
-      if (mounted) {
+      if (context.mounted) {
         Navigator.of(context).pop();
       }
 
       // Show response in dialog
-      if (mounted) {
+      if (context.mounted) {
         showDialog(
           context: context,
           builder: (responseContext) => _PredictionResponseDialog(
@@ -757,12 +758,12 @@ Provide:
       }
     } catch (e) {
       // Hide loading overlay
-      if (mounted) {
+      if (context.mounted) {
         Navigator.of(context).pop();
       }
 
       // Show error
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${tr('market.error')}: $e'),

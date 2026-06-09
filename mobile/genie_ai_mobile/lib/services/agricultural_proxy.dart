@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'hdx_ndvi_service.dart';
 import 'usda_rss_service.dart';
 
@@ -29,7 +30,7 @@ class AgriculturalProxy {
       final cached = _cache[cacheKey] as Map<String, dynamic>;
       final timestamp = DateTime.parse(cached['timestamp'] as String);
       if (DateTime.now().difference(timestamp) < _cacheDuration) {
-        print('[AgriculturalProxy] Returning cached crop health data');
+        debugPrint('[AgriculturalProxy] Returning cached crop health data');
         return cached['data'] as Map<String, dynamic>;
       }
     }
@@ -49,7 +50,7 @@ class AgriculturalProxy {
 
       return data;
     } catch (e) {
-      print('[AgriculturalProxy] Failed to fetch crop health: $e');
+      debugPrint('[AgriculturalProxy] Failed to fetch crop health: $e');
       return _getFallbackCropHealthData(region);
     }
   }
@@ -69,7 +70,7 @@ class AgriculturalProxy {
       final cached = _cache[cacheKey] as Map<String, dynamic>;
       final timestamp = DateTime.parse(cached['timestamp'] as String);
       if (DateTime.now().difference(timestamp) < _cacheDuration) {
-        print('[AgriculturalProxy] Returning cached pest alerts');
+        debugPrint('[AgriculturalProxy] Returning cached pest alerts');
         return cached['data'] as Map<String, dynamic>;
       }
     }
@@ -86,7 +87,7 @@ class AgriculturalProxy {
 
       return data;
     } catch (e) {
-      print('[AgriculturalProxy] Failed to fetch pest alerts: $e');
+      debugPrint('[AgriculturalProxy] Failed to fetch pest alerts: $e');
       return _getFallbackPestAlertData(region);
     }
   }
@@ -119,7 +120,7 @@ class AgriculturalProxy {
   /// Clear all cached data
   void clearCache() {
     _cache.clear();
-    print('[AgriculturalProxy] Cache cleared');
+    debugPrint('[AgriculturalProxy] Cache cleared');
   }
 
   /// Get cache information
@@ -139,7 +140,7 @@ class AgriculturalProxy {
       final hdxService = HdxNdviService();
       return await hdxService.checkForUpdates();
     } catch (e) {
-      print('[AgriculturalProxy] Failed to check for updates: $e');
+      debugPrint('[AgriculturalProxy] Failed to check for updates: $e');
       return false;
     }
   }
@@ -160,7 +161,7 @@ class AgriculturalProxy {
       final hdxService = HdxNdviService();
       await hdxService.clearCache();
     } catch (e) {
-      print('[AgriculturalProxy] Failed to clear HDX cache: $e');
+      debugPrint('[AgriculturalProxy] Failed to clear HDX cache: $e');
     }
   }
 }

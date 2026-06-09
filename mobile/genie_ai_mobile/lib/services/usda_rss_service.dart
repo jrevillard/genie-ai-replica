@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
@@ -16,14 +17,14 @@ class UsdaRssService {
     String region = 'Central America',
   }) async {
     try {
-      print('[UsdaRssService] Fetching pest alerts for $region');
+      debugPrint('[UsdaRssService] Fetching pest alerts for $region');
 
       // Try to fetch from USDA RSS feed first
       final alerts = await _fetchFromUSDA();
 
       // If USDA doesn't have enough data, supplement with other sources
       if (alerts.isEmpty) {
-        print(
+        debugPrint(
           '[UsdaRssService] No USDA alerts found, trying alternative sources',
         );
         return await _getMockData();
@@ -43,7 +44,7 @@ class UsdaRssService {
         'summary': summary,
       };
     } catch (e) {
-      print('[UsdaRssService] Error fetching alerts: $e');
+      debugPrint('[UsdaRssService] Error fetching alerts: $e');
       return await _getMockData();
     }
   }
@@ -79,7 +80,7 @@ class UsdaRssService {
 
       return [];
     } catch (e) {
-      print('[UsdaRssService] Error parsing RSS feed: $e');
+      debugPrint('[UsdaRssService] Error parsing RSS feed: $e');
       return [];
     }
   }
@@ -151,13 +152,24 @@ class UsdaRssService {
 
     // Extract affected crops
     final crops = <String>[];
-    if (lowerDesc.contains('maize') || lowerDesc.contains('corn'))
+    if (lowerDesc.contains('maize') || lowerDesc.contains('corn')) {
       crops.add('Maize');
-    if (lowerDesc.contains('coffee')) crops.add('Coffee');
-    if (lowerDesc.contains('bean')) crops.add('Beans');
-    if (lowerDesc.contains('sorghum')) crops.add('Sorghum');
-    if (lowerDesc.contains('tomato')) crops.add('Tomatoes');
-    if (lowerDesc.contains('fruit')) crops.add('Fruits');
+    }
+    if (lowerDesc.contains('coffee')) {
+      crops.add('Coffee');
+    }
+    if (lowerDesc.contains('bean')) {
+      crops.add('Beans');
+    }
+    if (lowerDesc.contains('sorghum')) {
+      crops.add('Sorghum');
+    }
+    if (lowerDesc.contains('tomato')) {
+      crops.add('Tomatoes');
+    }
+    if (lowerDesc.contains('fruit')) {
+      crops.add('Fruits');
+    }
 
     // Parse date
     DateTime firstDetected;
@@ -218,7 +230,7 @@ class UsdaRssService {
   /// Mock data when RSS feeds are unavailable
   /// Enhanced with realistic seasonal patterns for El Salvador
   Future<Map<String, dynamic>> _getMockData() async {
-    print('[UsdaRssService] Using enhanced seasonal mock data');
+    debugPrint('[UsdaRssService] Using enhanced seasonal mock data');
 
     final now = DateTime.now();
     final currentMonth = now.month;
@@ -614,8 +626,9 @@ class UsdaRssService {
       return 'stable';
     } else {
       // Crosses year boundary
-      if (currentMonth > peakEnd && currentMonth < peakStart)
+      if (currentMonth > peakEnd && currentMonth < peakStart) {
         return 'decreasing';
+      }
       return 'stable';
     }
   }

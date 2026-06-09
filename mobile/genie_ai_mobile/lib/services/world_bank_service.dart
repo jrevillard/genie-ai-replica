@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 /// World Bank Open Data Service
@@ -41,7 +42,7 @@ class WorldBankService {
     );
 
     try {
-      print('[WorldBankService] Fetching: $indicator for $countryCode');
+      debugPrint('[WorldBankService] Fetching: $indicator for $countryCode');
       final response = await _client
           .get(url)
           .timeout(const Duration(seconds: 30));
@@ -58,7 +59,7 @@ class WorldBankService {
 
           // Handle pagination
           if (pages > 1 && page == 1) {
-            print(
+            debugPrint(
               '[WorldBankService] Warning: Data is paginated ($pages pages). '
               'Only first page returned.',
             );
@@ -72,10 +73,12 @@ class WorldBankService {
           };
         }
       } else {
-        print('[WorldBankService] HTTP ${response.statusCode} for $indicator');
+        debugPrint(
+          '[WorldBankService] HTTP ${response.statusCode} for $indicator',
+        );
       }
     } catch (e) {
-      print('[WorldBankService] Error fetching $indicator: $e');
+      debugPrint('[WorldBankService] Error fetching $indicator: $e');
     }
 
     return null;
@@ -105,7 +108,9 @@ class WorldBankService {
       return {...data, 'dataSource': 'El Salvador'};
     }
 
-    print('[WorldBankService] No SLV data for $indicator, trying regional');
+    debugPrint(
+      '[WorldBankService] No SLV data for $indicator, trying regional',
+    );
 
     // Try Latin America & Caribbean regional average
     data = await _fetchIndicator(
@@ -121,7 +126,9 @@ class WorldBankService {
       return {...data, 'dataSource': 'Regional Average (Latin America)'};
     }
 
-    print('[WorldBankService] No regional data for $indicator, trying global');
+    debugPrint(
+      '[WorldBankService] No regional data for $indicator, trying global',
+    );
 
     // Try global average
     data = await _fetchIndicator(
@@ -137,7 +144,7 @@ class WorldBankService {
       return {...data, 'dataSource': 'Global Average'};
     }
 
-    print('[WorldBankService] No data available for $indicator');
+    debugPrint('[WorldBankService] No data available for $indicator');
     return null;
   }
 
@@ -151,7 +158,7 @@ class WorldBankService {
       final cached = _cache[cacheKey] as Map<String, dynamic>;
       final timestamp = DateTime.parse(cached['timestamp'] as String);
       if (DateTime.now().difference(timestamp) < _cacheDuration) {
-        print('[WorldBankService] Returning cached data for $cacheKey');
+        debugPrint('[WorldBankService] Returning cached data for $cacheKey');
         return cached['data'] as T?;
       }
     }
@@ -473,7 +480,7 @@ class WorldBankService {
   void clearCache() {
     final count = _cache.length;
     _cache.clear();
-    print('[WorldBankService] Cleared all cache ($count entries)');
+    debugPrint('[WorldBankService] Cleared all cache ($count entries)');
   }
 
   /// Get cache information
@@ -520,7 +527,7 @@ class WorldBankService {
     }
 
     if (keysToRemove.isNotEmpty) {
-      print(
+      debugPrint(
         '[WorldBankService] Cleared ${keysToRemove.length} expired entries',
       );
     }

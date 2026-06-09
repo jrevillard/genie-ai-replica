@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 /// NASA POWER Service
@@ -29,7 +30,7 @@ class GoogleEarthEngineService {
     String timeRange = '30d',
   }) async {
     try {
-      print('[NASA POWER] Fetching crop health data for $region');
+      debugPrint('[NASA POWER] Fetching crop health data for $region');
 
       // Calculate date range (last 30 days)
       final endDate = DateTime.now();
@@ -53,7 +54,7 @@ class GoogleEarthEngineService {
 
           departmentData.add(ndviData);
         } catch (e) {
-          print('[NASA POWER] Error fetching data for $deptName: $e');
+          debugPrint('[NASA POWER] Error fetching data for $deptName: $e');
           // Continue with other departments even if one fails
         }
       }
@@ -76,7 +77,7 @@ class GoogleEarthEngineService {
         'average': {'ndvi': avgNdvi, 'trend': 'stable', 'change': 0.0},
       };
     } catch (e) {
-      print('[NASA POWER] Error: $e');
+      debugPrint('[NASA POWER] Error: $e');
       return _getMockData();
     }
   }
@@ -91,7 +92,7 @@ class GoogleEarthEngineService {
   ) async {
     // Build NASA POWER API URL
     // Format: https://power.larc.nasa.gov/api/temporal/daily/point?parameters=NDVI&community=AG&longitude={lon}&latitude={lat}&start={startDate}&end={endDate}&format=JSON
-    final url = Uri.parse('$_baseUrl').replace(
+    final url = Uri.parse(_baseUrl).replace(
       queryParameters: {
         'parameters': 'NDVI',
         'community': 'AG',
@@ -167,10 +168,10 @@ class GoogleEarthEngineService {
       }
 
       // If we get here, the API didn't return valid data
-      print('[NASA POWER] Invalid response for $department');
+      debugPrint('[NASA POWER] Invalid response for $department');
       return await _mockDepartmentNDVI(department);
     } catch (e) {
-      print('[NASA POWER] Exception for $department: $e');
+      debugPrint('[NASA POWER] Exception for $department: $e');
       return await _mockDepartmentNDVI(department);
     }
   }

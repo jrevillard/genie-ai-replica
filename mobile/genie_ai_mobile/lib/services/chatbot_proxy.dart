@@ -17,7 +17,9 @@ class ChatbotProxy {
   }) async {
     // CRITICAL FIX: Clean userId to remove 'users/' prefix
     // This ensures backend profile lookup succeeds and avoids "User profile not found" warnings
-    final cleanUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    final cleanUserId = userId.startsWith('users/')
+        ? userId.substring(6)
+        : userId;
 
     // Build context object (matching Vue app's queryData.context)
     final Map<String, dynamic> context = {};
@@ -84,8 +86,10 @@ class ChatbotProxy {
       // FIX: Ensure userId in body is clean (remove 'users/' prefix)
       // This solves the backend warning "userId in body does not match token userId"
       if (feedback.containsKey('userId') && feedback['userId'] is String) {
-        feedback['userId'] =
-            (feedback['userId'] as String).replaceFirst('users/', '');
+        feedback['userId'] = (feedback['userId'] as String).replaceFirst(
+          'users/',
+          '',
+        );
       }
 
       // Note: queryId here should now be clean (e.g. "274711...") thanks to the fix in the Dialog.

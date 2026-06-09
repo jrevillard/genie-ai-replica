@@ -9,10 +9,7 @@ import 'crop_health_chart.dart';
 class CropHealthSummaryCard extends StatefulWidget {
   final String region;
 
-  const CropHealthSummaryCard({
-    super.key,
-    this.region = 'El Salvador',
-  });
+  const CropHealthSummaryCard({super.key, this.region = 'El Salvador'});
 
   @override
   State<CropHealthSummaryCard> createState() => _CropHealthSummaryCardState();
@@ -49,7 +46,9 @@ class _CropHealthSummaryCardState extends State<CropHealthSummaryCard> {
 
   Future<void> _loadData() async {
     try {
-      final data = await _agriculturalProxy.getCropHealth(region: widget.region);
+      final data = await _agriculturalProxy.getCropHealth(
+        region: widget.region,
+      );
       if (mounted) {
         setState(() {
           _healthData = data;
@@ -178,7 +177,9 @@ class _CropHealthSummaryCardState extends State<CropHealthSummaryCard> {
                       painter: _HealthDonutPainter(
                         breakdown: _healthBreakdown,
                         total: _healthData != null
-                            ? (_healthData!['data'] as List<dynamic>?)?.length ?? 0
+                            ? (_healthData!['data'] as List<dynamic>?)
+                                      ?.length ??
+                                  0
                             : 0,
                         backgroundColor: isDark
                             ? Colors.grey.shade700
@@ -207,7 +208,9 @@ class _CropHealthSummaryCardState extends State<CropHealthSummaryCard> {
                           tr('charts.cropHealth'),
                           style: theme.textTheme.bodySmall?.copyWith(
                             fontSize: 10,
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.7,
+                            ),
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -248,7 +251,10 @@ class _CropHealthSummaryCardState extends State<CropHealthSummaryCard> {
             children: [
               // Header
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [

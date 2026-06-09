@@ -11,10 +11,7 @@ import 'market_price_chart.dart';
 class MarketPriceSummaryCard extends StatefulWidget {
   final String category; // 'maize', 'cropProtection', 'vegetables', etc.
 
-  const MarketPriceSummaryCard({
-    super.key,
-    required this.category,
-  });
+  const MarketPriceSummaryCard({super.key, required this.category});
 
   @override
   State<MarketPriceSummaryCard> createState() => _MarketPriceSummaryCardState();
@@ -132,7 +129,9 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
         });
       }
     } catch (e) {
-      print('[MarketPriceSummaryCard] Error loading data for ${widget.category}: $e');
+      print(
+        '[MarketPriceSummaryCard] Error loading data for ${widget.category}: $e',
+      );
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -156,7 +155,8 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
   }
 
   IconData get _categoryIcon {
-    return _categoryConfig[widget.category]?['icon'] as IconData? ?? Icons.show_chart;
+    return _categoryConfig[widget.category]?['icon'] as IconData? ??
+        Icons.show_chart;
   }
 
   List<Map<String, dynamic>> get _timeSeries {
@@ -265,7 +265,9 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
                           _title,
                           style: theme.textTheme.bodySmall?.copyWith(
                             fontSize: 9,
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.7,
+                            ),
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -291,14 +293,14 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
                               _trend == 'up'
                                   ? Icons.trending_up
                                   : _trend == 'down'
-                                      ? Icons.trending_down
-                                      : Icons.trending_flat,
+                                  ? Icons.trending_down
+                                  : Icons.trending_flat,
                               size: 9,
                               color: _trend == 'up'
                                   ? Colors.green
                                   : _trend == 'down'
-                                      ? Colors.red
-                                      : Colors.grey,
+                                  ? Colors.red
+                                  : Colors.grey,
                             ),
                           ],
                         ),
@@ -323,7 +325,10 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
             children: [
               // Header
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -416,8 +421,7 @@ class _PriceSparklinePainter extends CustomPainter {
     }
 
     // Draw filled area
-    final fillPath = Path()
-      ..moveTo(points.first.dx, center.dy + radius);
+    final fillPath = Path()..moveTo(points.first.dx, center.dy + radius);
     for (final point in points) {
       fillPath.lineTo(point.dx, point.dy);
     }
@@ -430,8 +434,7 @@ class _PriceSparklinePainter extends CustomPainter {
     canvas.drawPath(fillPath, fillPaint);
 
     // Draw line
-    final linePath = Path()
-      ..moveTo(points.first.dx, points.first.dy);
+    final linePath = Path()..moveTo(points.first.dx, points.first.dy);
     for (int i = 1; i < points.length; i++) {
       linePath.lineTo(points[i].dx, points[i].dy);
     }

@@ -64,7 +64,9 @@ class _PestAlertChartState extends State<PestAlertChart> {
     });
 
     try {
-      final data = await _agriculturalProxy.getPestAlerts(region: widget.region);
+      final data = await _agriculturalProxy.getPestAlerts(
+        region: widget.region,
+      );
       setState(() {
         _pestData = data;
         _loading = false;
@@ -132,7 +134,9 @@ class _PestAlertChartState extends State<PestAlertChart> {
                         _translate('charts.pestAlertSubtitle') ??
                             'Current pest and disease warnings',
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha:0.7),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
                         ),
                       ),
                     ],
@@ -155,13 +159,29 @@ class _PestAlertChartState extends State<PestAlertChart> {
                 runSpacing: 8,
                 children: [
                   _buildFilterChip(
-                      context, 'all', _translate('charts.all') ?? 'All', theme),
-                  _buildFilterChip(context, 'high',
-                      _translate('charts.severityHigh') ?? 'High', theme),
-                  _buildFilterChip(context, 'moderate',
-                      _translate('charts.severityModerate') ?? 'Moderate', theme),
+                    context,
+                    'all',
+                    _translate('charts.all') ?? 'All',
+                    theme,
+                  ),
                   _buildFilterChip(
-                      context, 'low', _translate('charts.severityLow') ?? 'Low', theme),
+                    context,
+                    'high',
+                    _translate('charts.severityHigh') ?? 'High',
+                    theme,
+                  ),
+                  _buildFilterChip(
+                    context,
+                    'moderate',
+                    _translate('charts.severityModerate') ?? 'Moderate',
+                    theme,
+                  ),
+                  _buildFilterChip(
+                    context,
+                    'low',
+                    _translate('charts.severityLow') ?? 'Low',
+                    theme,
+                  ),
                 ],
               ),
 
@@ -183,8 +203,11 @@ class _PestAlertChartState extends State<PestAlertChart> {
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      Icon(Icons.error_outline,
-                          size: 48, color: theme.colorScheme.error),
+                      Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: theme.colorScheme.error,
+                      ),
                       const SizedBox(height: 12),
                       Text(
                         _error!,
@@ -203,7 +226,9 @@ class _PestAlertChartState extends State<PestAlertChart> {
 
             // Alert Cards
             if (!_loading && _filteredAlerts.isNotEmpty)
-              ..._filteredAlerts.map((alert) => _buildAlertCard(alert, theme, isDark)),
+              ..._filteredAlerts.map(
+                (alert) => _buildAlertCard(alert, theme, isDark),
+              ),
 
             // Empty State
             if (!_loading && _filteredAlerts.isEmpty && _pestData != null)
@@ -217,15 +242,21 @@ class _PestAlertChartState extends State<PestAlertChart> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.access_time,
-                          size: 14,
-                          color: theme.colorScheme.onSurface.withValues(alpha:0.5)),
+                      Icon(
+                        Icons.access_time,
+                        size: 14,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         '${_translate('charts.lastUpdated') ?? 'Last updated'}: ${_formatDate(DateTime.now())}',
                         style: TextStyle(
                           fontSize: 12,
-                          color: theme.colorScheme.onSurface.withValues(alpha:0.5),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
+                          ),
                         ),
                       ),
                     ],
@@ -239,7 +270,11 @@ class _PestAlertChartState extends State<PestAlertChart> {
   }
 
   Widget _buildFilterChip(
-      BuildContext context, String severity, String label, ThemeData theme) {
+    BuildContext context,
+    String severity,
+    String label,
+    ThemeData theme,
+  ) {
     final isDark = theme.brightness == Brightness.dark;
     final isSelected = _selectedSeverity == severity;
     final summary = _pestData?['summary'] as Map<String, dynamic>?;
@@ -255,13 +290,14 @@ class _PestAlertChartState extends State<PestAlertChart> {
       label: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (severity != 'all')
-            Icon(_getSeverityIcon(severity), size: 14),
+          if (severity != 'all') Icon(_getSeverityIcon(severity), size: 14),
           if (severity != 'all') const SizedBox(width: 4),
           Text(label),
           const SizedBox(width: 4),
-          Text('($count)',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+          Text(
+            '($count)',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+          ),
         ],
       ),
       selected: isSelected,
@@ -332,7 +368,7 @@ class _PestAlertChartState extends State<PestAlertChart> {
                 Text(
                   _translate('charts.activeAlerts') ?? 'Active Alerts',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha:0.7),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
                 ),
               ],
@@ -343,7 +379,11 @@ class _PestAlertChartState extends State<PestAlertChart> {
     );
   }
 
-  Widget _buildAlertCard(Map<String, dynamic> alert, ThemeData theme, bool isDark) {
+  Widget _buildAlertCard(
+    Map<String, dynamic> alert,
+    ThemeData theme,
+    bool isDark,
+  ) {
     final severity = alert['severity'] as String;
     final pest = alert['pest'] as String;
     final scientific = alert['scientificName'] as String;
@@ -361,12 +401,10 @@ class _PestAlertChartState extends State<PestAlertChart> {
       decoration: BoxDecoration(
         color: isDark ? Colors.grey.shade900 : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border(
-          left: BorderSide(color: severityColor, width: 4),
-        ),
+        border: Border(left: BorderSide(color: severityColor, width: 4)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha:0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -408,7 +446,9 @@ class _PestAlertChartState extends State<PestAlertChart> {
                           scientific,
                           style: theme.textTheme.bodySmall?.copyWith(
                             fontStyle: FontStyle.italic,
-                            color: theme.colorScheme.onSurface.withValues(alpha:0.7),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.7,
+                            ),
                           ),
                         ),
                       ],
@@ -429,7 +469,7 @@ class _PestAlertChartState extends State<PestAlertChart> {
                   const SizedBox(width: 8),
                   Icon(
                     isExpanded ? Icons.expand_less : Icons.expand_more,
-                    color: theme.colorScheme.onSurface.withValues(alpha:0.5),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
                 ],
               ),
@@ -447,14 +487,19 @@ class _PestAlertChartState extends State<PestAlertChart> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      color: theme.colorScheme.primaryContainer.withValues(
+                        alpha: 0.3,
+                      ),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.info_outline,
-                            size: 16, color: theme.colorScheme.primary),
+                        Icon(
+                          Icons.info_outline,
+                          size: 16,
+                          color: theme.colorScheme.primary,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -498,7 +543,10 @@ class _PestAlertChartState extends State<PestAlertChart> {
                       color: Colors.amber.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                       border: Border(
-                        left: BorderSide(color: Colors.amber.shade700, width: 3),
+                        left: BorderSide(
+                          color: Colors.amber.shade700,
+                          width: 3,
+                        ),
                       ),
                     ),
                     child: Column(
@@ -506,8 +554,11 @@ class _PestAlertChartState extends State<PestAlertChart> {
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.lightbulb_outline,
-                                size: 16, color: Colors.amber.shade700),
+                            Icon(
+                              Icons.lightbulb_outline,
+                              size: 16,
+                              color: Colors.amber.shade700,
+                            ),
                             const SizedBox(width: 8),
                             Text(
                               _translate('charts.recommendations') ??
@@ -520,10 +571,7 @@ class _PestAlertChartState extends State<PestAlertChart> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Text(
-                          recommendations,
-                          style: theme.textTheme.bodySmall,
-                        ),
+                        Text(recommendations, style: theme.textTheme.bodySmall),
                       ],
                     ),
                   ),
@@ -537,7 +585,9 @@ class _PestAlertChartState extends State<PestAlertChart> {
                       OutlinedButton.icon(
                         onPressed: () => _viewOnMap(alert),
                         icon: const Icon(Icons.map, size: 16),
-                        label: Text(_translate('charts.viewMap') ?? 'View on Map'),
+                        label: Text(
+                          _translate('charts.viewMap') ?? 'View on Map',
+                        ),
                       ),
                       OutlinedButton.icon(
                         onPressed: () => _shareAlert(alert),
@@ -548,7 +598,9 @@ class _PestAlertChartState extends State<PestAlertChart> {
                         onPressed: () => _getAssistance(alert),
                         icon: const Icon(Icons.help_outline, size: 16),
                         label: Text(
-                            _translate('charts.getAssistance') ?? 'Get Assistance'),
+                          _translate('charts.getAssistance') ??
+                              'Get Assistance',
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: theme.colorScheme.primary,
                           foregroundColor: theme.colorScheme.onPrimary,
@@ -564,8 +616,13 @@ class _PestAlertChartState extends State<PestAlertChart> {
     );
   }
 
-  Widget _buildDetailItem(BuildContext context, IconData icon, String label,
-      String value, ThemeData theme) {
+  Widget _buildDetailItem(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+    ThemeData theme,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -575,7 +632,7 @@ class _PestAlertChartState extends State<PestAlertChart> {
           Text(
             '$label: ',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha:0.7),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
             ),
           ),
           Expanded(
@@ -597,8 +654,11 @@ class _PestAlertChartState extends State<PestAlertChart> {
         padding: const EdgeInsets.all(40),
         child: Column(
           children: [
-            Icon(Icons.check_circle_outline,
-                size: 64, color: Colors.green.shade400),
+            Icon(
+              Icons.check_circle_outline,
+              size: 64,
+              color: Colors.green.shade400,
+            ),
             const SizedBox(height: 16),
             Text(
               _translate('charts.noPestAlerts') ?? 'No Active Pest Alerts',
@@ -612,7 +672,7 @@ class _PestAlertChartState extends State<PestAlertChart> {
               _translate('charts.noPestAlertsDesc') ??
                   'No pest alerts for the selected severity level.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha:0.7),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
               ),
               textAlign: TextAlign.center,
             ),
@@ -651,9 +711,9 @@ class _PestAlertChartState extends State<PestAlertChart> {
   void _viewOnMap(Map<String, dynamic> alert) async {
     final departments = alert['departments'] as List<dynamic>;
     if (departments.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('charts.noLocationData'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(tr('charts.noLocationData'))));
       return;
     }
 
@@ -669,10 +729,12 @@ class _PestAlertChartState extends State<PestAlertChart> {
     String mapsUrl;
     if (coords != null) {
       // Use coordinates for direct location
-      mapsUrl = 'geo:${coords['lat']},${coords['lng']}?q=${Uri.encodeComponent(searchQuery)}';
+      mapsUrl =
+          'geo:${coords['lat']},${coords['lng']}?q=${Uri.encodeComponent(searchQuery)}';
     } else {
       // Use search query only
-      mapsUrl = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(searchQuery)}';
+      mapsUrl =
+          'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(searchQuery)}';
     }
 
     try {
@@ -684,17 +746,15 @@ class _PestAlertChartState extends State<PestAlertChart> {
 
       if (!launched && mounted) {
         // Fallback: try web URL
-        final webUrl = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(searchQuery)}';
-        await launchUrl(
-          Uri.parse(webUrl),
-          mode: LaunchMode.platformDefault,
-        );
+        final webUrl =
+            'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(searchQuery)}';
+        await launchUrl(Uri.parse(webUrl), mode: LaunchMode.platformDefault);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${tr('charts.mapError')}: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('${tr('charts.mapError')}: $e')));
       }
     }
   }
@@ -710,7 +770,8 @@ class _PestAlertChartState extends State<PestAlertChart> {
     final source = alert['source'] as String?;
 
     // Format the pest alert for sharing
-    final shareText = '''
+    final shareText =
+        '''
 🚨 ${_getSeverityLabel(severity)} SEVERITY PEST ALERT 🚨
 
 🐛 ${tr('charts.pest')}: $pest
@@ -740,7 +801,11 @@ ${_translate('charts.sharedVia') ?? 'Shared via'} AgroGenio AI
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${_translate('charts.shareError') ?? 'Error sharing'}: $e')),
+          SnackBar(
+            content: Text(
+              '${_translate('charts.shareError') ?? 'Error sharing'}: $e',
+            ),
+          ),
         );
       }
     }
@@ -758,7 +823,8 @@ ${_translate('charts.sharedVia') ?? 'Shared via'} AgroGenio AI
     _userContextController.clear();
 
     // Create a pre-formatted prompt with pest context
-    final basePrompt = '''Pest: $pest ($scientific)
+    final basePrompt =
+        '''Pest: $pest ($scientific)
 Severity: ${_getSeverityLabel(severity)}
 Crops: $crops
 Areas: $departments
@@ -820,12 +886,14 @@ Recommendations: $recommendations''';
             final currentLocale = I18nService().currentLocale;
             final currentLanguage = currentLocale.languageCode;
             debugPrint("[PEST_ALERT] Current locale: $currentLocale");
-            debugPrint("[PEST_ALERT] Language code being sent: '$currentLanguage'");
+            debugPrint(
+              "[PEST_ALERT] Language code being sent: '$currentLanguage'",
+            );
 
             final response = await _chatbotProxy.submitQuery(
               sessionId: 'pest-assist-${DateTime.now().millisecondsSinceEpoch}',
               messages: [
-                {'role': 'user', 'content': finalPrompt}
+                {'role': 'user', 'content': finalPrompt},
               ],
               userId: 'pest-alert-user',
               categoryId: null,
@@ -845,7 +913,11 @@ Recommendations: $recommendations''';
                 builder: (responseContext) => _ResponseDialog(
                   response: response,
                   onCopy: () {
-                    Clipboard.setData(ClipboardData(text: response['response']?.toString() ?? ''));
+                    Clipboard.setData(
+                      ClipboardData(
+                        text: response['response']?.toString() ?? '',
+                      ),
+                    );
                     ScaffoldMessenger.of(responseContext).showSnackBar(
                       SnackBar(
                         content: Text(tr('charts.responseCopied')),
@@ -1002,7 +1074,9 @@ class _AssistanceDialogState extends State<_AssistanceDialog> {
                         color: theme.colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                          color: theme.colorScheme.outline.withValues(
+                            alpha: 0.3,
+                          ),
                         ),
                       ),
                       child: Text(
@@ -1041,7 +1115,9 @@ class _AssistanceDialogState extends State<_AssistanceDialog> {
               runSpacing: 8,
               children: [
                 TextButton(
-                  onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
+                  onPressed: _isSubmitting
+                      ? null
+                      : () => Navigator.of(context).pop(),
                   child: Text(tr('common.cancel')),
                 ),
                 ElevatedButton.icon(
@@ -1052,7 +1128,9 @@ class _AssistanceDialogState extends State<_AssistanceDialog> {
                             _isSubmitting = true;
                           });
 
-                          await widget.onSubmit(widget.userContextController.text.trim());
+                          await widget.onSubmit(
+                            widget.userContextController.text.trim(),
+                          );
 
                           if (mounted) {
                             setState(() {
@@ -1064,7 +1142,10 @@ class _AssistanceDialogState extends State<_AssistanceDialog> {
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : const Icon(Icons.send, size: 16),
                   label: Text(tr('charts.submitQuery')),
@@ -1083,10 +1164,7 @@ class _ResponseDialog extends StatelessWidget {
   final Map<String, dynamic> response;
   final VoidCallback onCopy;
 
-  const _ResponseDialog({
-    required this.response,
-    required this.onCopy,
-  });
+  const _ResponseDialog({required this.response, required this.onCopy});
 
   @override
   Widget build(BuildContext context) {
@@ -1134,27 +1212,30 @@ class _ResponseDialog extends StatelessWidget {
                   child: response.containsKey('response')
                       ? MarkdownBody(
                           data: response['response'] ?? tr('charts.noResponse'),
-                          styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-                            p: theme.textTheme.bodyMedium,
-                          ),
+                          styleSheet: MarkdownStyleSheet.fromTheme(
+                            theme,
+                          ).copyWith(p: theme.textTheme.bodyMedium),
                           selectable: true,
                           onTapLink: (text, href, title) {
                             if (href != null) {
-                              launchUrl(Uri.parse(href), mode: LaunchMode.externalApplication);
+                              launchUrl(
+                                Uri.parse(href),
+                                mode: LaunchMode.externalApplication,
+                              );
                             }
                           },
                         )
                       : response.containsKey('error')
-                          ? Text(
-                              response['error'] ?? tr('charts.errorOccurred'),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.error,
-                              ),
-                            )
-                          : Text(
-                              response.toString(),
-                              style: theme.textTheme.bodyMedium,
-                            ),
+                      ? Text(
+                          response['error'] ?? tr('charts.errorOccurred'),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.error,
+                          ),
+                        )
+                      : Text(
+                          response.toString(),
+                          style: theme.textTheme.bodyMedium,
+                        ),
                 ),
               ),
             ),

@@ -9,10 +9,7 @@ import 'pest_alert_chart.dart';
 class PestAlertSummaryCard extends StatefulWidget {
   final String region;
 
-  const PestAlertSummaryCard({
-    super.key,
-    this.region = 'Central America',
-  });
+  const PestAlertSummaryCard({super.key, this.region = 'Central America'});
 
   @override
   State<PestAlertSummaryCard> createState() => _PestAlertSummaryCardState();
@@ -48,7 +45,9 @@ class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
 
   Future<void> _loadData() async {
     try {
-      final data = await _agriculturalProxy.getPestAlerts(region: widget.region);
+      final data = await _agriculturalProxy.getPestAlerts(
+        region: widget.region,
+      );
       if (mounted) {
         setState(() {
           _pestData = data;
@@ -117,9 +116,7 @@ class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
                   ),
                   // Alert dots overlay
                   if (_totalAlerts > 0)
-                    Positioned.fill(
-                      child: _buildAlertDots(),
-                    ),
+                    Positioned.fill(child: _buildAlertDots()),
                 ],
               ),
             ),
@@ -154,7 +151,9 @@ class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
                         child: Text(
                           tr('charts.active'),
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.6,
+                            ),
                             fontSize: 11,
                           ),
                           maxLines: 1,
@@ -201,7 +200,10 @@ class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
             children: [
               // Header
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [

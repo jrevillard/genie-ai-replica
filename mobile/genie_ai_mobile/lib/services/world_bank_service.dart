@@ -16,8 +16,7 @@ class WorldBankService {
 
   final http.Client _client;
 
-  WorldBankService({http.Client? client})
-      : _client = client ?? http.Client();
+  WorldBankService({http.Client? client}) : _client = client ?? http.Client();
 
   /// Fetch data from World Bank API
   ///
@@ -43,9 +42,9 @@ class WorldBankService {
 
     try {
       print('[WorldBankService] Fetching: $indicator for $countryCode');
-      final response = await _client.get(url).timeout(
-        const Duration(seconds: 30),
-      );
+      final response = await _client
+          .get(url)
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final List<dynamic> json = jsonDecode(response.body);
@@ -59,8 +58,10 @@ class WorldBankService {
 
           // Handle pagination
           if (pages > 1 && page == 1) {
-            print('[WorldBankService] Warning: Data is paginated ($pages pages). '
-                'Only first page returned.');
+            print(
+              '[WorldBankService] Warning: Data is paginated ($pages pages). '
+              'Only first page returned.',
+            );
           }
 
           return {
@@ -101,10 +102,7 @@ class WorldBankService {
     if (data != null &&
         data['data'] != null &&
         (data['data'] as List).isNotEmpty) {
-      return {
-        ...data,
-        'dataSource': 'El Salvador',
-      };
+      return {...data, 'dataSource': 'El Salvador'};
     }
 
     print('[WorldBankService] No SLV data for $indicator, trying regional');
@@ -120,10 +118,7 @@ class WorldBankService {
     if (data != null &&
         data['data'] != null &&
         (data['data'] as List).isNotEmpty) {
-      return {
-        ...data,
-        'dataSource': 'Regional Average (Latin America)',
-      };
+      return {...data, 'dataSource': 'Regional Average (Latin America)'};
     }
 
     print('[WorldBankService] No regional data for $indicator, trying global');
@@ -139,10 +134,7 @@ class WorldBankService {
     if (data != null &&
         data['data'] != null &&
         (data['data'] as List).isNotEmpty) {
-      return {
-        ...data,
-        'dataSource': 'Global Average',
-      };
+      return {...data, 'dataSource': 'Global Average'};
     }
 
     print('[WorldBankService] No data available for $indicator');
@@ -190,9 +182,7 @@ class WorldBankService {
       cacheKey: 'maize-prices',
       fetchFn: () async {
         // Use crop production index as proxy for grain market health
-        final data = await _fetchWithFallback(
-          indicator: 'AG.PRD.CROP.XD',
-        );
+        final data = await _fetchWithFallback(indicator: 'AG.PRD.CROP.XD');
 
         if (data == null) return null;
 
@@ -220,9 +210,7 @@ class WorldBankService {
       cacheKey: 'crop-protection-costs',
       fetchFn: () async {
         // Use agricultural exports as indicator of crop value
-        final data = await _fetchWithFallback(
-          indicator: 'TM.VAL.AGRI.ZS.UN',
-        );
+        final data = await _fetchWithFallback(indicator: 'TM.VAL.AGRI.ZS.UN');
 
         if (data == null) return null;
 
@@ -250,9 +238,7 @@ class WorldBankService {
       cacheKey: 'vegetable-prices',
       fetchFn: () async {
         // Use food production index as proxy for vegetable market
-        final data = await _fetchWithFallback(
-          indicator: 'AG.PRD.FOOD.XD',
-        );
+        final data = await _fetchWithFallback(indicator: 'AG.PRD.FOOD.XD');
 
         if (data == null) return null;
 
@@ -280,9 +266,7 @@ class WorldBankService {
       cacheKey: 'poultry-pork-feed',
       fetchFn: () async {
         // Use livestock production index
-        final data = await _fetchWithFallback(
-          indicator: 'AG.PRD.LVSK.XD',
-        );
+        final data = await _fetchWithFallback(indicator: 'AG.PRD.LVSK.XD');
 
         if (data == null) return null;
 
@@ -308,9 +292,7 @@ class WorldBankService {
     return await _getCachedOrFetch<Map<String, dynamic>>(
       cacheKey: 'fertilizer-prices',
       fetchFn: () async {
-        final data = await _fetchWithFallback(
-          indicator: 'AG.CON.FERT.ZS',
-        );
+        final data = await _fetchWithFallback(indicator: 'AG.CON.FERT.ZS');
 
         if (data == null) return null;
 
@@ -337,9 +319,7 @@ class WorldBankService {
       cacheKey: 'honey-market',
       fetchFn: () async {
         // Use livestock production index
-        final data = await _fetchWithFallback(
-          indicator: 'AG.PRD.LVSK.XD',
-        );
+        final data = await _fetchWithFallback(indicator: 'AG.PRD.LVSK.XD');
 
         if (data == null) return null;
 
@@ -365,9 +345,7 @@ class WorldBankService {
     return await _getCachedOrFetch<Map<String, dynamic>>(
       cacheKey: 'tilapia-market',
       fetchFn: () async {
-        final data = await _fetchWithFallback(
-          indicator: 'ER.FSH.AQUA.MT',
-        );
+        final data = await _fetchWithFallback(indicator: 'ER.FSH.AQUA.MT');
 
         if (data == null) return null;
 
@@ -395,9 +373,7 @@ class WorldBankService {
       cacheKey: 'harvest-storage',
       fetchFn: () async {
         // Use rural population as proxy for storage capacity
-        final data = await _fetchWithFallback(
-          indicator: 'SP.RUR.TOTL.ZS',
-        );
+        final data = await _fetchWithFallback(indicator: 'SP.RUR.TOTL.ZS');
 
         if (data == null) return null;
 
@@ -544,7 +520,9 @@ class WorldBankService {
     }
 
     if (keysToRemove.isNotEmpty) {
-      print('[WorldBankService] Cleared ${keysToRemove.length} expired entries');
+      print(
+        '[WorldBankService] Cleared ${keysToRemove.length} expired entries',
+      );
     }
   }
 

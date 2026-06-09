@@ -19,7 +19,8 @@ class ApiService {
 
   void setToken(String token) {
     print(
-        '[ApiService] Setting access token: ${token.substring(0, token.length > 5 ? 5 : token.length)}...');
+      '[ApiService] Setting access token: ${token.substring(0, token.length > 5 ? 5 : token.length)}...',
+    );
     _accessToken = token;
   }
 
@@ -39,8 +40,10 @@ class ApiService {
     return headers;
   }
 
-  Future<http.Response> get(String endpoint,
-      {Map<String, dynamic>? params}) async {
+  Future<http.Response> get(
+    String endpoint, {
+    Map<String, dynamic>? params,
+  }) async {
     final uri = Uri.parse('$baseUrl/$endpoint').replace(
       queryParameters: params?.map((k, v) => MapEntry(k, v.toString())),
     );
@@ -104,7 +107,9 @@ class ApiService {
   }
 
   Future<http.Response> patch(
-      String endpoint, Map<String, dynamic> data) async {
+    String endpoint,
+    Map<String, dynamic> data,
+  ) async {
     final uri = Uri.parse('$baseUrl/$endpoint');
 
     print('----------------------------------------------------------------');
@@ -126,8 +131,10 @@ class ApiService {
     }
   }
 
-  Future<http.Response> delete(String endpoint,
-      {Map<String, dynamic>? params}) async {
+  Future<http.Response> delete(
+    String endpoint, {
+    Map<String, dynamic>? params,
+  }) async {
     final uri = Uri.parse('$baseUrl/$endpoint').replace(
       queryParameters: params?.map((k, v) => MapEntry(k, v.toString())),
     );

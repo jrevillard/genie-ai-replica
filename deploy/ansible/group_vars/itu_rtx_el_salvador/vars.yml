@@ -8,8 +8,15 @@
 deploy_dir: /opt/genieai-el-salvador
 stack_name: genieai-el-salvador
 gpu_env_file: env.rtx6000
-repo_branch: el-salvador-merge-test
+repo_branch: release/el-salvador-ds-port
 arango_db: el-salvador
+
+# KEYCLOAK THEME
+keycloak_theme: genie-el-salvador
+
+# MOBILE OIDC CLIENT
+kc_mobile_client_id: genie-mobile-el-salvador
+kc_mobile_redirect_scheme: sv.gov.agrogenio
 
 # =============================================================================
 # API GATEWAY

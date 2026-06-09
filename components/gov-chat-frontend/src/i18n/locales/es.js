@@ -624,6 +624,7 @@ export default {
       priceHistory: 'Historial de Precios',
       dataTable: 'Tabla de Datos',
       lastUpdated: 'Última actualización',
+      commodity: 'Producto',
       noData: 'Sin datos disponibles',
       year: 'Año',
       value: 'Valor',
@@ -1566,6 +1567,7 @@ export default {
   },
   common: {
     cancel: 'Cancelar',
+    submit: 'Enviar',
     create: 'Crear',
     save: 'Guardar',
     move: 'Mover',

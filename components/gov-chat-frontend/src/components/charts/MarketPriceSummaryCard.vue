@@ -67,6 +67,10 @@ export default {
   },
   emits: ['open-chart'],
 
+  setup() {
+    const { getCssVarStrings } = useChartTheme({});
+    return { getCssVarStrings };
+  },
   data() {
     return {
       priceData: null,
@@ -138,8 +142,7 @@ export default {
     },
 
     chartOptions() {
-      const { getChartColors } = useChartTheme();
-      const colors = getChartColors();
+      const cssVars = this.getCssVarStrings();
 
       return {
         chart: {
@@ -156,7 +159,7 @@ export default {
           curve: 'smooth',
           width: 2
         },
-        colors: [colors.primary],
+        colors: [cssVars.accentColor],
         fill: {
           type: 'gradient',
           gradient: {

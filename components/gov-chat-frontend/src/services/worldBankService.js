@@ -386,7 +386,7 @@ class WorldBankService {
       cacheKey: 'honey-market',
       fetchFn: async () => {
         const data = await this._fetchWithFallback({
-          indicator: INDICATORS.LIVESTOCK
+          indicator: INDICATORS.LIVESTOCK // TODO: No dedicated apiculture indicator in WB API
         });
 
         if (!data) return null;

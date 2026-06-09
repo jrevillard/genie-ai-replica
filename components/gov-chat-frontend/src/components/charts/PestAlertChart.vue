@@ -3,22 +3,18 @@
     <!-- Header -->
     <div class="pest-alert-chart__header">
       <div class="pest-alert-chart__title">
-        <h3>{{ $t('charts.pestAlert.title', 'Pest & Disease Alerts') }}</h3>
+        <h3>{{ $t('charts.pestAlertTitle', 'Pest & Disease Alerts') }}</h3>
         <p class="pest-alert-chart__subtitle">
-          {{ $t('charts.pestAlert.subtitle', 'Current agricultural alerts for El Salvador') }}
+          {{ $t('charts.pestAlertSubtitle', 'Current agricultural alerts for El Salvador') }}
         </p>
       </div>
 
       <!-- Severity Filter -->
-      <DsSelect
-        v-model="selectedSeverity"
-        :placeholder="$t('charts.pestAlert.filterSeverity', 'Filter by severity')"
-        size="md"
-      >
-        <option value="all">{{ $t('charts.pestAlert.allSeverities', 'All Severities') }}</option>
-        <option value="high">{{ $t('charts.severity.high', 'High') }}</option>
-        <option value="moderate">{{ $t('charts.severity.moderate', 'Moderate') }}</option>
-        <option value="low">{{ $t('charts.severity.low', 'Low') }}</option>
+      <DsSelect v-model="selectedSeverity" :placeholder="$t('charts.filterSeverity', 'Filter by severity')" size="md">
+        <option value="all">{{ $t('charts.all', 'All Severities') }}</option>
+        <option value="high">{{ $t('charts.high', 'High') }}</option>
+        <option value="moderate">{{ $t('charts.moderate', 'Moderate') }}</option>
+        <option value="low">{{ $t('charts.low', 'Low') }}</option>
       </DsSelect>
     </div>
 
@@ -29,14 +25,14 @@
     <DsStateDisplay
       v-else-if="error"
       type="error"
-      :message="$t('charts.pestAlert.error', 'Failed to load pest alerts. Please try again.')"
+      :message="$t('charts.loadDataError', 'Failed to load pest alerts. Please try again.')"
     />
 
     <!-- Empty State -->
     <DsStateDisplay
       v-else-if="showEmptyState"
       type="empty"
-      :message="$t('charts.pestAlert.noAlerts', 'No active pest alerts for this region.')"
+      :message="$t('charts.noPestAlerts', 'No active pest alerts for this region.')"
     />
 
     <!-- Content -->
@@ -47,7 +43,7 @@
         <div class="pest-alert-chart__center-text">
           <div class="pest-alert-chart__total">{{ totalAlerts }}</div>
           <div class="pest-alert-chart__total-label">
-            {{ $t('charts.pestAlert.activeAlerts', 'Active Alerts') }}
+            {{ $t('charts.activeAlerts', 'Active Alerts') }}
           </div>
         </div>
       </div>
@@ -61,7 +57,7 @@
           @click="selectedSeverity = severity"
         >
           <DsPill :variant="severity">
-            {{ $t(`charts.severity.${severity}`, severity.charAt(0).toUpperCase() + severity.slice(1)) }}
+            {{ $t(`charts.${severity}`, severity.charAt(0).toUpperCase() + severity.slice(1)) }}
           </DsPill>
           <span class="pest-alert-chart__chip-count">{{ getSeverityCount(severity) }}</span>
         </div>
@@ -93,10 +89,7 @@
                 <div class="pest-alert-chart__card-meta">
                   <DsPill :variant="getSeverityPillVariant(alert.severity)" size="sm">
                     {{
-                      $t(
-                        `charts.severity.${alert.severity}`,
-                        alert.severity.charAt(0).toUpperCase() + alert.severity.slice(1)
-                      )
+                      $t(`charts.${alert.severity}`, alert.severity.charAt(0).toUpperCase() + alert.severity.slice(1))
                     }}
                   </DsPill>
                   <i :class="['fas', expandedAlert === alert.id ? 'fa-chevron-up' : 'fa-chevron-down']" />
@@ -116,7 +109,7 @@
                 <!-- Department -->
                 <div v-if="alert.department" class="pest-alert-chart__detail">
                   <span class="pest-alert-chart__detail-label">
-                    {{ $t('charts.pestAlert.department', 'Department') }}
+                    {{ $t('charts.byDepartment', 'Department') }}
                   </span>
                   <span class="pest-alert-chart__detail-value">{{ alert.department }}</span>
                 </div>
@@ -124,7 +117,7 @@
                 <!-- Affected Crops -->
                 <div v-if="alert.affectedCrops && alert.affectedCrops.length" class="pest-alert-chart__detail">
                   <span class="pest-alert-chart__detail-label">
-                    {{ $t('charts.pestAlert.affectedCrops', 'Affected Crops') }}
+                    {{ $t('charts.affectedCrops', 'Affected Crops') }}
                   </span>
                   <span class="pest-alert-chart__detail-value">
                     {{ alert.affectedCrops.join(', ') }}
@@ -134,7 +127,7 @@
                 <!-- Season -->
                 <div v-if="alert.season" class="pest-alert-chart__detail">
                   <span class="pest-alert-chart__detail-label">
-                    {{ $t('charts.pestAlert.season', 'Season') }}
+                    {{ $t('charts.firstDetected', 'Season') }}
                   </span>
                   <span class="pest-alert-chart__detail-value">{{ alert.season }}</span>
                 </div>
@@ -145,7 +138,7 @@
                 v-if="alert.recommendations && alert.recommendations.length"
                 class="pest-alert-chart__recommendations"
               >
-                <h5>{{ $t('charts.pestAlert.recommendations', 'Recommendations') }}</h5>
+                <h5>{{ $t('charts.recommendations', 'Recommendations') }}</h5>
                 <ul>
                   <li v-for="(rec, idx) in alert.recommendations" :key="idx">
                     {{ rec }}
@@ -155,7 +148,7 @@
 
               <!-- Source -->
               <div v-if="alert.source" class="pest-alert-chart__source">
-                <span class="pest-alert-chart__source-label"> {{ $t('charts.pestAlert.source', 'Source') }}: </span>
+                <span class="pest-alert-chart__source-label"> {{ $t('charts.source', 'Source') }}: </span>
                 <a :href="alert.source" target="_blank" rel="noopener noreferrer">
                   {{ alert.source }}
                 </a>
@@ -165,14 +158,14 @@
               <div class="pest-alert-chart__actions">
                 <button class="pest-alert-chart__action-btn" @click="viewOnMap(alert)">
                   <i class="fas fa-map-marker-alt" />
-                  {{ $t('charts.pestAlert.viewOnMap', 'View on Map') }}
+                  {{ $t('charts.viewMap', 'View on Map') }}
                 </button>
                 <button
                   class="pest-alert-chart__action-btn pest-alert-chart__action-btn--primary"
                   @click="submitAssistanceQuery(alert)"
                 >
                   <i class="fas fa-comments" />
-                  {{ $t('charts.pestAlert.getAssistance', 'Get Assistance') }}
+                  {{ $t('charts.getAssistance', 'Get Assistance') }}
                 </button>
               </div>
             </div>
@@ -183,7 +176,7 @@
       <!-- Last Updated -->
       <div class="pest-alert-chart__footer">
         <span class="pest-alert-chart__last-updated">
-          {{ $t('charts.pestAlert.lastUpdated', 'Last updated') }}:
+          {{ $t('charts.lastUpdated', 'Last updated') }}:
           {{ formatDate(lastUpdated) }}
         </span>
       </div>
@@ -288,11 +281,7 @@ export default {
           background: 'transparent',
           fontFamily: colors.chartColors[0]
         },
-        labels: [
-          this.$t('charts.severity.high', 'High'),
-          this.$t('charts.severity.moderate', 'Moderate'),
-          this.$t('charts.severity.low', 'Low')
-        ],
+        labels: [this.$t('charts.high', 'High'), this.$t('charts.moderate', 'Moderate'), this.$t('charts.low', 'Low')],
         colors: ['var(--danger)', 'var(--warning)', 'var(--success)'],
         plotOptions: {
           pie: {

@@ -623,6 +623,7 @@ export default {
       priceHistory: 'Price History',
       dataTable: 'Data Table',
       lastUpdated: 'Last updated',
+      commodity: 'Commodity',
       noData: 'No data available',
       year: 'Year',
       value: 'Value',
@@ -1553,6 +1554,7 @@ export default {
   },
   common: {
     cancel: 'Cancel',
+    submit: 'Submit',
     create: 'Create',
     save: 'Save',
     move: 'Move',

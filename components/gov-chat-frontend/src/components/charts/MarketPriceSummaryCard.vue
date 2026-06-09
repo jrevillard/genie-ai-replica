@@ -84,7 +84,7 @@ export default {
       const i18nMap = {
         maize: 'charts.market.maizeGrains',
         cropProtection: 'charts.market.cropProtection',
-        vegetables: 'charts.market.vegetables',
+        vegetables: 'charts.market.fruitsVeggies',
         livestock: 'charts.market.livestock',
         fertilizer: 'charts.market.fertilizer',
         apiary: 'charts.market.apiary',

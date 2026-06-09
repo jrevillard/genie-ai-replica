@@ -145,6 +145,13 @@
             {{ translate('chatbot.whatCanIHelp') }}
           </h2>
 
+          <!-- Agricultural Insights -->
+          <div class="insights-row">
+            <CropHealthSummaryCard @open-chart="openChart('crop-health')" />
+            <PestAlertSummaryCard @open-chart="openChart('pest-alert')" />
+            <MarketPriceSummaryCard category="maize" @open-chart="openChart('market-price', 'maize')" />
+          </div>
+
           <div class="quick-help-grid">
             <DsCard
               v-for="button in quickHelpButtons"
@@ -162,6 +169,13 @@
           </div>
         </div>
       </div>
+
+      <!-- Chart Dialog -->
+      <ChartDialog :visible="chartDialog.visible" :title="chartDialog.title" @close="closeChartDialog">
+        <CropHealthChart v-if="chartDialog.type === 'crop-health'" />
+        <PestAlertChart v-if="chartDialog.type === 'pest-alert'" />
+        <MarketPriceChart v-if="chartDialog.type === 'market-price'" :category="chartDialog.category || 'maize'" />
+      </ChartDialog>
       <!-- Input Area -->
       <div class="chat-input">
         <DsInput
@@ -289,6 +303,13 @@ import DsButton from './ds/Button.vue';
 import DsCard from './ds/Card.vue';
 import DsInput from './ds/Input.vue';
 import DsSelect from './ds/Select.vue';
+import ChartDialog from './charts/ChartDialog.vue';
+import CropHealthSummaryCard from './charts/CropHealthSummaryCard.vue';
+import PestAlertSummaryCard from './charts/PestAlertSummaryCard.vue';
+import MarketPriceSummaryCard from './charts/MarketPriceSummaryCard.vue';
+import CropHealthChart from './charts/CropHealthChart.vue';
+import PestAlertChart from './charts/PestAlertChart.vue';
+import MarketPriceChart from './charts/MarketPriceChart.vue';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import jsPDF from 'jspdf';
@@ -312,7 +333,14 @@ export default {
     DsButton,
     DsCard,
     DsInput,
-    DsSelect
+    DsSelect,
+    ChartDialog,
+    CropHealthSummaryCard,
+    PestAlertSummaryCard,
+    MarketPriceSummaryCard,
+    CropHealthChart,
+    PestAlertChart,
+    MarketPriceChart
   },
 
   data() {
@@ -375,7 +403,8 @@ export default {
       streamingQueryId: null, // Query ID of the current streaming response
       streamController: null, // AbortController for cancelling active streams
       relatedDocuments: [], // Holds documents for the right sidebar
-      hiddenPromptForNextMessage: null // Stores hidden prompt for dual-prompt mechanism
+      hiddenPromptForNextMessage: null, // Stores hidden prompt for dual-prompt mechanism
+      chartDialog: { visible: false, type: null, title: '', category: null }
     };
   },
 
@@ -645,6 +674,18 @@ export default {
     translate(key, fallback) {
       const value = this.$t(key);
       return value !== key ? value : fallback || key;
+    },
+
+    openChart(type, category) {
+      const titles = {
+        'crop-health': this.translate('charts.cropHealthTitle', 'Crop Health - NDVI Index'),
+        'pest-alert': this.translate('charts.pestAlertTitle', 'Pest & Disease Alerts'),
+        'market-price': this.translate('charts.marketPriceTitle', 'Market Prices')
+      };
+      this.chartDialog = { visible: true, type, title: titles[type] || type, category };
+    },
+    closeChartDialog() {
+      this.chartDialog.visible = false;
     },
 
     selectQuickHelpOption(option) {
@@ -2027,6 +2068,19 @@ export default {
 .quick-help-content {
   max-width: 600px;
   width: 100%;
+}
+
+.insights-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+@media (max-width: 768px) {
+  .insights-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .quick-help-heading {

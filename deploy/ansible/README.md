@@ -561,11 +561,11 @@ ssh node "docker service ls --filter name=genieai_keycloak"
 Docker Swarm (`docker stack deploy`) does **not** automatically load `.env` files like Docker Compose does. To ensure environment variables are correctly substituted:
 
 1. The playbook verifies that critical vault variables (ARANGO_PASSWORD, POSTGRES_PASSWORD, KC_DATAPREP_CLIENT_SECRET) are set in the `.env` file before deployment
-2. It generates a resolved `docker-compose.yaml` with all variables substituted using `docker compose config`
+2. It generates a resolved `docker-compose.resolved.yaml` with all variables substituted using `docker compose config` (the source template is never modified)
 3. Post-processing fixes known `docker compose config` issues:
    - **Port integers**: `docker compose config` converts published ports to strings (e.g. `"80"` instead of `80`), which Swarm rejects. A `sed` fix restores them to integers.
    - **`name:` properties**: `docker compose config` adds `name:` properties that Swarm does not support. A `sed` fix removes them.
-4. The resolved file is deployed to the Swarm (overwriting the template from git)
+4. The resolved file is deployed to the Swarm
 5. The resolved file is set to mode `0600` since it contains secrets
 
 This means `docker-compose.yaml` on the target server will differ from the one in git — this is expected. The original is restored on each `prepare` run via git clone/pull.

@@ -509,7 +509,7 @@
 
     - name: Build image (changed only)
       ansible.builtin.shell: >
-        DOCKER_BUILDKIT=1 docker build
+        docker build
         -f {{ deploy_dir }}/{{ item.item.dockerfile }}
         -t {{ item.item.source_tag }}
         --label git_sha={{ git_sha.stdout }}

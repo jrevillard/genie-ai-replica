@@ -17,6 +17,11 @@ gpu_node_host: "10.0.0.110"
 # Self-signed certificates (IP-based access, no domain/Let's Encrypt)
 self_signed_certs: true
 
+# SSL verification — self-signed certs on both app node and remote GPU node
+node_tls_reject_unauthorized: "0"
+opea_ssl_skip_verify: "1"
+keycloak_ssl_skip_verify: "1"
+
 # KEYCLOAK THEME
 keycloak_theme: genie-el-salvador
 

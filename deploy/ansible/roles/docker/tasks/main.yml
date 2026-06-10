@@ -60,6 +60,12 @@
     dest: /etc/apt/preferences.d/docker-pin
     mode: "0644"
 
+- name: Check if Docker is already installed
+  ansible.builtin.command: dpkg -l docker-ce
+  register: docker_is_installed
+  failed_when: false
+  changed_when: false
+
 - name: Check if Docker packages are up-to-date
   ansible.builtin.shell: |
     for pkg in docker-ce docker-ce-cli containerd.io docker-compose-plugin; do
@@ -79,7 +85,7 @@
     name: "{{ item }}"
     selection: install
   loop: "{{ docker_hold_packages }}"
-  when: docker_upgrade_check.stdout == "upgrade"
+  when: docker_is_installed.rc == 0 and docker_upgrade_check.stdout == "upgrade"
 
 - name: Install Docker Engine (pinned version)
   ansible.builtin.apt:
@@ -97,7 +103,7 @@
     name: "{{ item }}"
     selection: hold
   loop: "{{ docker_hold_packages }}"
-  when: docker_upgrade_check.stdout == "upgrade"
+  when: docker_is_installed.rc == 0 and docker_upgrade_check.stdout == "upgrade"
 
 - name: Ensure Docker service is started and enabled
   ansible.builtin.systemd:

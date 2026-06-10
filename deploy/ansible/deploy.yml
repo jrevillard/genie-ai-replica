@@ -274,7 +274,6 @@
             dest: "{{ deploy_dir }}"
             version: "{{ repo_branch }}"
             accept_hostkey: true
-            depth: 1
           when: not git_dir.stat.exists
 
         - name: Pull latest changes
@@ -383,6 +382,17 @@
   tags: [build]
   become: true
   tasks:
+    - name: Get current git commit SHA
+      ansible.builtin.command: git rev-parse HEAD
+      args:
+        chdir: "{{ deploy_dir }}"
+      register: git_sha
+      changed_when: false
+
+    - name: Set image tag from git SHA
+      ansible.builtin.set_fact:
+        image_tag: "{{ git_sha.stdout[:8] }}"
+
     - name: Define image build list
       ansible.builtin.set_fact:
         genieai_images:
@@ -477,17 +487,6 @@
             registry_tag: "genie-ai-embedding:{{ image_tag }}"
             opea: true
 
-    - name: Get current git commit SHA
-      ansible.builtin.command: git rev-parse HEAD
-      args:
-        chdir: "{{ deploy_dir }}"
-      register: git_sha
-      changed_when: false
-
-    - name: Set image tag from git SHA
-      ansible.builtin.set_fact:
-        image_tag: "{{ git_sha.stdout[:8] }}"
-
     - name: Check if images need rebuild
       ansible.builtin.command: >
         docker image inspect --format '{{ '{{' }}.Config.Labels.git_sha{{ '}}' }}'
@@ -514,8 +513,6 @@
       loop_control:
         label: "{{ item.item.name }}"
       register: build_results
-      async: 300
-      poll: 30
 
     - name: Tag image for registry
       ansible.builtin.command: >

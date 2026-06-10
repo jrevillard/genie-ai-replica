@@ -625,13 +625,13 @@
           {% if gpu_env_file and gpu_env_file | length > 0 %}--env-file {{ deploy_dir }}/{{ gpu_env_file }}{% endif %}
           --env-file {{ deploy_dir }}/.env \
           {{ _compose_profiles }} \
-          -f {{ deploy_dir }}/{{ compose_file }} config > {{ deploy_dir }}/docker-compose.yaml.tmp
+          -f {{ deploy_dir }}/{{ compose_file }} config > {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
 
         # Fix port types: convert quoted port numbers to bare integers
-        sed -i 's/published: "\([0-9]*\)"/published: \1/g' {{ deploy_dir }}/docker-compose.yaml.tmp
+        sed -i 's/published: "\([0-9]*\)"/published: \1/g' {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
 
         # Remove 'name' properties not supported by docker stack deploy
-        sed -i '/^[[:space:]]*name:/d' {{ deploy_dir }}/docker-compose.yaml.tmp
+        sed -i '/^[[:space:]]*name:/d' {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
 
         # Remove 'host_ip' properties not supported by docker stack deploy
         sed -i '/^[[:space:]]*host_ip:/d' {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
@@ -639,22 +639,22 @@
         # Remove 'profiles' blocks not supported by docker stack deploy
         # (profiles is a multi-line YAML block: 'profiles:' + '- xxx' items)
         awk '/^[[:space:]]*profiles:/{match($0,/^[[:space:]]*/);n=RLENGTH;next} n{match($0,/^[[:space:]]*/);if(RLENGTH<=n)n=0} !n' \
-          {{ deploy_dir }}/docker-compose.yaml.tmp > {{ deploy_dir }}/docker-compose.yaml.tmp2
-        mv {{ deploy_dir }}/docker-compose.yaml.tmp2 {{ deploy_dir }}/docker-compose.yaml.tmp
+          {{ deploy_dir }}/docker-compose.resolved.yaml.tmp > {{ deploy_dir }}/docker-compose.resolved.yaml.tmp2
+        mv {{ deploy_dir }}/docker-compose.resolved.yaml.tmp2 {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
 
         # Remove depends_on blocks (not supported by docker stack deploy)
         # docker compose config normalizes depends_on to mapping format which
         # Swarm rejects. Startup ordering relies on healthchecks + restart policy.
         awk '/^[[:space:]]*depends_on:/{match($0,/^[[:space:]]*/);n=RLENGTH;next} n{match($0,/^[[:space:]]*/);if(RLENGTH<=n)n=0} !n' \
-          {{ deploy_dir }}/docker-compose.yaml.tmp > {{ deploy_dir }}/docker-compose.yaml.tmp2
-        mv {{ deploy_dir }}/docker-compose.yaml.tmp2 {{ deploy_dir }}/docker-compose.yaml.tmp
+          {{ deploy_dir }}/docker-compose.resolved.yaml.tmp > {{ deploy_dir }}/docker-compose.resolved.yaml.tmp2
+        mv {{ deploy_dir }}/docker-compose.resolved.yaml.tmp2 {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
 
         # Check if changed and atomically replace
-        if ! diff -q {{ deploy_dir }}/docker-compose.yaml.tmp {{ deploy_dir }}/docker-compose.yaml > /dev/null 2>&1; then
-          mv {{ deploy_dir }}/docker-compose.yaml.tmp {{ deploy_dir }}/docker-compose.yaml
+        if ! diff -q {{ deploy_dir }}/docker-compose.resolved.yaml.tmp {{ deploy_dir }}/docker-compose.resolved.yaml > /dev/null 2>&1; then
+          mv {{ deploy_dir }}/docker-compose.resolved.yaml.tmp {{ deploy_dir }}/docker-compose.resolved.yaml
           echo "COMPOSE_CHANGED"
         else
-          rm {{ deploy_dir }}/docker-compose.yaml.tmp
+          rm {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
           echo "COMPOSE_UNCHANGED"
         fi
       args:
@@ -665,14 +665,14 @@
 
     - name: Set permissions on resolved compose file (contains secrets)
       ansible.builtin.file:
-        path: "{{ deploy_dir }}/docker-compose.yaml"
+        path: "{{ deploy_dir }}/docker-compose.resolved.yaml"
         mode: '0600'
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
 
     - name: Deploy Docker stack
       ansible.builtin.shell: |
-        docker stack deploy -c {{ deploy_dir }}/docker-compose.yaml {{ stack_name }}
+        docker stack deploy -c {{ deploy_dir }}/docker-compose.resolved.yaml {{ stack_name }}
       args:
         chdir: "{{ deploy_dir }}"
       register: stack_deploy

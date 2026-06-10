@@ -568,7 +568,7 @@ Docker Swarm (`docker stack deploy`) does **not** automatically load `.env` file
 4. The resolved file is deployed to the Swarm
 5. The resolved file is set to mode `0600` since it contains secrets
 
-This means `docker-compose.yaml` on the target server will differ from the one in git — this is expected. The original is restored on each `prepare` run via git clone/pull.
+The source template (`docker-compose.yaml`) is never modified — resolved output is written to `docker-compose.resolved.yaml`. Tagged re-runs (`--tags build,deploy`) correctly re-resolve variables since the source always contains template references.
 
 **Note on CSP values**: Variables containing CSP keywords like `'self'` must be quoted in the `.env` file (e.g. `CSP_CONNECT_SRC="'self' https://example.com"`). Without quotes, `docker compose config`'s YAML parser strips the single quotes, breaking the CSP directive. The Ansible template handles this automatically.
 

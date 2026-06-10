@@ -383,16 +383,8 @@
   tags: [build]
   become: true
   tasks:
-    - name: Get current git commit SHA
-      ansible.builtin.command: git rev-parse HEAD
-      args:
-        chdir: "{{ deploy_dir }}"
-      register: git_sha
-      changed_when: false
-
-    - name: Set image tag from git SHA
-      ansible.builtin.set_fact:
-        image_tag: "{{ git_sha.stdout[:8] }}"
+    - name: Initialize shared facts (registry URL, image tag)
+      ansible.builtin.include_tasks: tasks/deploy-shared-facts.yml
 
     - name: Define image build list
       ansible.builtin.set_fact:
@@ -565,9 +557,8 @@
           kc_dataprep_client_secret, kc_mobile_client_id, kc_mobile_redirect_scheme.
         quiet: true
 
-    - name: Set swarm registry URL
-      ansible.builtin.set_fact:
-        swarm_registry_url: "{{ swarm_registry_url | default('localhost:' + (registry_port | default('5000'))) }}"
+    - name: Initialize shared facts (registry URL, image tag)
+      ansible.builtin.include_tasks: tasks/deploy-shared-facts.yml
 
     - name: Generate .env file from template
       ansible.builtin.template:

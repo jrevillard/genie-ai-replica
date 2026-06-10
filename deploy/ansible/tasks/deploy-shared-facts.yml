@@ -1,0 +1,18 @@
+---
+# Shared facts for build and deploy plays.
+# Included via include_tasks to avoid duplication across tagged plays.
+
+- name: Set swarm registry URL
+  ansible.builtin.set_fact:
+    swarm_registry_url: "{{ swarm_registry_url | default('localhost:' + (registry_port | default('5000'))) }}"
+
+- name: Get current git commit SHA
+  ansible.builtin.command: git rev-parse HEAD
+  args:
+    chdir: "{{ deploy_dir }}"
+  register: git_sha
+  changed_when: false
+
+- name: Set image tag from git SHA
+  ansible.builtin.set_fact:
+    image_tag: "{{ git_sha.stdout[:8] }}"

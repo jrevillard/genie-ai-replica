@@ -1,16 +1,32 @@
 # Copyright (C) 2024 Intel Corporation
 # Copyright (C) 2025 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0 Developed by Intel. Adapted by ITU
+
 import argparse
 import asyncio
 import copy
 import json
 import os
 import re
+import time
 from datetime import date, datetime
+
+from metrics import (
+    chat_rag_duration_seconds,
+    chat_requests_total,
+    sanitize_attributes,
+)
+
+from tracing import get_tracer, setup_trace_logging, setup_tracing
+
+setup_tracing("genieai-chatqna")
 
 import aiohttp  # for async http requests
 import httpx
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+HTTPXClientInstrumentor().instrument()
+
 from comps import CustomLogger, MegaServiceEndpoint, MicroService, ServiceOrchestrator, ServiceRoleType, ServiceType
 from comps.cores.proto.docarray import LLMParams, RerankerParms, RetrieverParms
 from comps.cores.proto.genieai_api_protocol import (
@@ -22,6 +38,7 @@ from langdetect import detect
 from transformers import AutoTokenizer
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
+setup_trace_logging("GENIE.AI_CHATQNA")
 logflag = os.getenv("LOGFLAG", True)
 
 
@@ -54,8 +71,58 @@ RERANK_SERVER_HOST_IP = os.getenv("RERANK_SERVER_HOST_IP", "0.0.0.0")
 RERANK_SERVER_PORT = int(os.getenv("RERANK_SERVER_PORT", 80))
 LLM_SERVER_HOST_IP = os.getenv("LLM_SERVER_HOST_IP", "0.0.0.0")
 LLM_SERVER_PORT = int(os.getenv("LLM_SERVER_PORT", 80))
+LLM_SERVER_PROTOCOL = "http"
+# When VLLM_LLM_ENDPOINT is set (e.g. https://gpu-host/llm for remote GPU node),
+# override host/port/protocol so MicroService constructs the correct URL.
+_VLLM_LLM_ENDPOINT = os.getenv("VLLM_LLM_ENDPOINT", "")
+if _VLLM_LLM_ENDPOINT:
+    from urllib.parse import urlparse
+
+    _parsed = urlparse(_VLLM_LLM_ENDPOINT)
+    LLM_SERVER_HOST_IP = _parsed.hostname or LLM_SERVER_HOST_IP
+    LLM_SERVER_PORT = _parsed.port or 443
+    LLM_SERVER_PROTOCOL = _parsed.scheme or "https"
+    LLM_SERVER_ENDPOINT_PREFIX = _parsed.path.rstrip("/") or ""
+else:
+    LLM_SERVER_ENDPOINT_PREFIX = ""
 LLM_MODEL = os.getenv("LLM_MODEL", "ibm-granite/granite-3.3-2b-instruct")
 LLM_TRANS_MODEL = os.getenv("LLM_TRANS_MODEL", "google/gemma-3-1b-it")
+
+
+def _auto_detect_model(endpoint_url: str, env_var: str) -> str | None:
+    """Auto-detect model ID from remote vLLM /v1/models endpoint."""
+    import httpx
+
+    try:
+        headers = {}
+        api_key = os.getenv("VLLM_API_KEY", "")
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        resp = httpx.get(f"{endpoint_url}/v1/models", headers=headers, timeout=10, verify=False)
+        resp.raise_for_status()
+        models = resp.json()
+        if models.get("data"):
+            return models["data"][0]["id"]
+        logger.warning(f"Auto-detect {env_var}: no models in response")
+    except Exception as e:
+        logger.warning(f"Auto-detect {env_var} failed: {e}")
+    return None
+
+
+# Auto-detect LLM and translation models from remote vLLM when GPU_NODE_HOST is set
+_GPU_NODE_HOST = os.getenv("GPU_NODE_HOST", "")
+if _GPU_NODE_HOST:
+    if _VLLM_LLM_ENDPOINT:
+        detected = _auto_detect_model(_VLLM_LLM_ENDPOINT, "LLM_MODEL")
+        if detected:
+            LLM_MODEL = detected
+            logger.info(f"Auto-detected LLM_MODEL={LLM_MODEL}")
+    if _VLLM_TRANSLATION_ENDPOINT:
+        detected = _auto_detect_model(_VLLM_TRANSLATION_ENDPOINT, "VLLM_TRANSLATION_MODEL_ID")
+        if detected:
+            TRANSLATION_MODEL_ID = detected
+            LLM_TRANS_MODEL = detected
+            logger.info(f"Auto-detected TRANSLATION_MODEL_ID={TRANSLATION_MODEL_ID}")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 
 RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "chunk")  # node | edge | chunk
@@ -175,6 +242,11 @@ class GenieUserProfileClient:
         url = f"{BACKEND_SERVICE_URL}/api/me/context"
 
         headers = {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
+
+        # Inject W3C traceparent for distributed tracing
+        from opentelemetry.propagate import inject
+
+        inject(headers)
 
         try:
             _timeout = aiohttp.ClientTimeout(total=30)
@@ -547,7 +619,8 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         # OPEA embedding microservice returns {"data": [{"index": 0, "embedding": [...]}]}
         if isinstance(data, dict) and "data" in data:
             data = data["data"]
-        assert isinstance(data, list)
+        if not isinstance(data, list):
+            raise ValueError(f"Embedding service returned unexpected type: {type(data).__name__}, expected list")
         next_data = {"text": inputs["input"], "embedding": data[0]["embedding"]}
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
@@ -601,7 +674,8 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         if logflag:
             logger.debug(f"File ID Pairs: {file_id_pairs}")
 
-        with_rerank = runtime_graph.downstream(cur_node)[0].startswith("rerank")
+        downstream_nodes = runtime_graph.downstream(cur_node)
+        with_rerank = downstream_nodes and downstream_nodes[0].startswith("rerank")
         if with_rerank and retrieved_docs:
             # prepare inputs for rerank
             next_data["initial_query"] = data["initial_query"]
@@ -836,6 +910,11 @@ class ChatQnAService:
         file_get_metadata_url = f"{DOC_REPO_URL}/api/files/{file_id}"
         headers = {"Authorization": f"Bearer {token}"}
 
+        # Inject W3C traceparent for distributed tracing
+        from opentelemetry.propagate import inject
+
+        inject(headers)
+
         try:
             async with (
                 aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
@@ -890,8 +969,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -924,8 +1003,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -966,7 +1045,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            endpoint="/v1/faqgen",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/faqgen",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -1012,8 +1092,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -1060,8 +1140,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -1072,8 +1152,13 @@ class ChatQnAService:
         self.megaservice.flow_to(rerank, llm)
 
     @staticmethod
-    def _build_translategemma_prompt(text: str, source_lang_code: str, target_lang_code: str,
-                                      source_lang_name: str = "English", target_lang_name: str = "English") -> str:
+    def _build_translategemma_prompt(
+        text: str,
+        source_lang_code: str,
+        target_lang_code: str,
+        source_lang_name: str = "English",
+        target_lang_name: str = "English",
+    ) -> str:
         """Build a prompt for TranslateGemma using the completions API.
 
         Duplicated in document-translation/genieai_pdf_translator.py — keep in sync.
@@ -1095,7 +1180,9 @@ class ChatQnAService:
             f"<end_of_turn>\n<start_of_turn>model\n"
         )
 
-    async def _get_translated_history_string(self, history: list, target_language: str, source_lang_code: str = "en") -> str:
+    async def _get_translated_history_string(
+        self, history: list, target_language: str, source_lang_code: str = "en"
+    ) -> str:
         """
         A helper that:
         1. Truncates history to stay within a token limit.
@@ -1113,7 +1200,9 @@ class ChatQnAService:
 
         # Single-message mode sends history as a plain string — translate it
         if isinstance(history, str):
-            return await self._translate_text_chunk(history, target_language, source_lang_code=source_lang_code, iso_code="en")
+            return await self._translate_text_chunk(
+                history, target_language, source_lang_code=source_lang_code, iso_code="en"
+            )
 
         max_translation_chars = MAX_TRANSLATION_CHARS
         current_chars = 0
@@ -1130,7 +1219,6 @@ class ChatQnAService:
             messages_to_process.append(message)
             current_chars += message_chars
         messages_to_process.reverse()
-
 
         flattened_history_parts = []
         for message in messages_to_process:
@@ -1149,27 +1237,28 @@ class ChatQnAService:
                 source_lang_code=source_lang_code,
                 target_lang_code="en",
                 source_lang_name=source_lang_code.upper(),
-                target_lang_name="English"
+                target_lang_name="English",
             )
             payload = {
                 "model": TRANSLATION_MODEL_ID,
                 "prompt": prompt,
                 "temperature": 0.0,
                 "max_tokens": min(max(len(flattened_history_string) // 2, 512), 4096),
-                "repetition_penalty": 1.2
+                "repetition_penalty": 1.2,
             }
             url = TRANSLATION_COMPLETIONS_URL
         else:
-            prompt = f"Translate the following chat history to {target_language}. Preserve the role markers (e.g., 'USER:', 'ASSISTANT:').\n\nHISTORY:\n{flattened_history_string}"
-            payload = {
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0,
-                "stream": False
-            }
+            prompt = (
+                f"Translate the following chat history to {target_language}. "
+                f"Preserve the role markers (e.g., 'USER:', 'ASSISTANT:')."
+                f"\n\nHISTORY:\n{flattened_history_string}"
+            )
+            payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0, "stream": False}
             url = TRANSLATION_LLM_URL
 
         if logflag:
-            logger.debug(f"Payload for translation service ({'TranslateGemma' if IS_TRANSLATEGEMMA else 'generic'}): {payload}")
+            svc = "TranslateGemma" if IS_TRANSLATEGEMMA else "generic"
+            logger.debug(f"Payload for translation service ({svc}): {payload}")
 
         try:
             async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
@@ -1231,7 +1320,9 @@ class ChatQnAService:
 
         return chunks
 
-    async def _translate_text_chunk(self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en") -> str:
+    async def _translate_text_chunk(
+        self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en"
+    ) -> str:
         """Translate a single chunk of text.
 
         Automatically uses TranslateGemma completions API (with pre-formatted prompt)
@@ -1250,32 +1341,37 @@ class ChatQnAService:
                 source_lang_code=source_lang_code,
                 target_lang_code=target_lang_code,
                 source_lang_name=source_lang_code.upper(),
-                target_lang_name=target_lang
+                target_lang_name=target_lang,
             )
             payload = {
                 "model": TRANSLATION_MODEL_ID,
                 "prompt": prompt,
                 "temperature": 0.0,
                 "max_tokens": min(max(len(text) // 2, 512), 4096),
-                "repetition_penalty": 1.2
+                "repetition_penalty": 1.2,
             }
             url = TRANSLATION_COMPLETIONS_URL
         else:
             language_notes = {
                 "Sesotho": "NOTE: Sesotho is spoken in Lesotho and South Africa. It is NOT Afrikaans.",
                 "Bengali": "NOTE: Bengali is spoken in Bangladesh and India. It is NOT Hindi.",
-                "Mandinka": "NOTE: Mandinka is spoken in West Africa (Gambia, Senegal, Mali)."
+                "Mandinka": "NOTE: Mandinka is spoken in West Africa (Gambia, Senegal, Mali).",
             }
             note = language_notes.get(target_lang, "")
             if iso_code:
-                prompt = f"Translate the following text to {target_lang} (ISO 639-1 code: {iso_code}). {note} Only output the translated text, nothing else.\n\nText: {text}\n\nTranslation:"
+                prompt = (
+                    f"Translate the following text to {target_lang} "
+                    f"(ISO 639-1 code: {iso_code}). {note} "
+                    f"Only output the translated text, nothing else."
+                    f"\n\nText: {text}\n\nTranslation:"
+                )
             else:
-                prompt = f"Translate the following text to {target_lang}. {note} Only output the translated text.\n\nText: {text}\n\nTranslation:"
-            payload = {
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0,
-                "stream": False
-            }
+                prompt = (
+                    f"Translate the following text to {target_lang}. "
+                    f"{note} Only output the translated text."
+                    f"\n\nText: {text}\n\nTranslation:"
+                )
+            payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0, "stream": False}
             url = TRANSLATION_LLM_URL
 
         if logflag:
@@ -1298,7 +1394,9 @@ class ChatQnAService:
             logger.warning(f"Failed to translate chunk, returning original: {type(e).__name__}: {e}")
             return text
 
-    async def _translate_with_chunking(self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en") -> str:
+    async def _translate_with_chunking(
+        self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en"
+    ) -> str:
         """Translate long text by splitting into chunks and translating separately."""
         chunks = self._split_text_into_chunks(text, max_chars=2000)
 
@@ -1307,7 +1405,10 @@ class ChatQnAService:
 
         # Translate chunks concurrently
         translated_chunks = await asyncio.gather(
-            *[self._translate_text_chunk(chunk, target_lang, iso_code, source_lang_code=source_lang_code) for chunk in chunks]
+            *[
+                self._translate_text_chunk(chunk, target_lang, iso_code, source_lang_code=source_lang_code)
+                for chunk in chunks
+            ]
         )
 
         return " ".join(translated_chunks)
@@ -1459,7 +1560,9 @@ class ChatQnAService:
                 logger.debug(
                     f"Original language detected: {original_language}. Proceeding with translation of chat history."
                 )
-            translated_history_string = await self._get_translated_history_string(full_chat_history, "English", source_lang_code=original_language.lower())
+            translated_history_string = await self._get_translated_history_string(
+                full_chat_history, "English", source_lang_code=original_language.lower()
+            )
         else:
             # If already English, flatten without translation
             if isinstance(full_chat_history, str):
@@ -1550,16 +1653,66 @@ class ChatQnAService:
             else RERANKING_THRESHOLD,
         )
 
-        result_dict, runtime_graph = await self.megaservice.schedule(
-            initial_inputs={"text": last_translated_message_content},
-            llm_parameters=parameters,
-            retriever_parameters=retriever_parameters,
-            reranker_parameters=reranker_parameters,
-            full_chat_history_string=translated_history_string,
-            retrieval_context=retrieval_context,
-            original_language=original_language,
-            user_details=user_details,
-        )
+        # RAG orchestration with tracing span
+        tracer = get_tracer("chatqna.orchestrate")
+        with tracer.start_as_current_span("chatqna.orchestrate") as span:
+            span.set_attribute("rag.query_length", len(last_translated_message_content))
+            span.set_attribute("rag.model_id", LLM_MODEL)
+
+            _rag_start = time.time()
+            try:
+                result_dict, runtime_graph = await self.megaservice.schedule(
+                    initial_inputs={"text": last_translated_message_content},
+                    llm_parameters=parameters,
+                    retriever_parameters=retriever_parameters,
+                    reranker_parameters=reranker_parameters,
+                    full_chat_history_string=translated_history_string,
+                    retrieval_context=retrieval_context,
+                    original_language=original_language,
+                    user_details=user_details,
+                )
+                _rag_duration = time.time() - _rag_start
+
+                # Count retrieved documents from result
+                chunk_count = 0
+                for _key, val in result_dict.items():
+                    if hasattr(val, "retrieved_docs"):
+                        chunk_count = len(val.retrieved_docs)
+                        break
+                span.set_attribute("rag.chunk_count", chunk_count)
+
+                # Record custom application metrics
+                response_type = "streaming" if chat_request.stream else "sync"
+                _metric_attrs = sanitize_attributes(
+                    {
+                        "response_type": response_type,
+                        "abstained": "false",
+                        "error": "false",
+                        "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
+                    }
+                )
+                chat_requests_total.add(1, _metric_attrs)
+                chat_rag_duration_seconds.record(_rag_duration, _metric_attrs)
+
+            except Exception as e:
+                from opentelemetry.trace import StatusCode
+
+                # Record error metric
+                _err_duration = time.time() - _rag_start
+                _err_attrs = sanitize_attributes(
+                    {
+                        "response_type": "streaming" if chat_request.stream else "sync",
+                        "abstained": "false",
+                        "error": "true",
+                        "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
+                    }
+                )
+                chat_requests_total.add(1, _err_attrs)
+                chat_rag_duration_seconds.record(_err_duration, _err_attrs)
+
+                span.set_status(StatusCode.ERROR)
+                span.record_exception(e)
+                raise
 
         if logflag:
             logger.debug(f"\nResult Dict: {result_dict}")
@@ -1744,6 +1897,10 @@ class ChatQnAService:
         )
 
         self.service.add_route(self.endpoint, self.handle_request, methods=["POST"])
+
+        # FastAPI auto-instrumentation is handled globally by tracing.py
+        # setup_tracing() → FastAPIInstrumentor().instrument() runs before
+        # OPEA comps creates the FastAPI app, so traceparent extraction works.
 
         self.service.start()
 

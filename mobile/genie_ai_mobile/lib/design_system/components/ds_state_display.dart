@@ -33,7 +33,10 @@ class DsStateDisplay extends StatelessWidget {
       case DsStateType.loading:
         return customChild ??
             Center(
-              child: DsSpinner(size: DsSpinnerSize.lg),
+              child: DsSpinner(
+                size: DsSpinnerSize.lg,
+                key: const ValueKey('ds-state-spinner'),
+              ),
             );
       case DsStateType.empty:
         return Center(
@@ -44,12 +47,14 @@ class DsStateDisplay extends StatelessWidget {
               children: [
                 Icon(
                   icon ?? Icons.inbox_outlined,
+                  key: const ValueKey('ds-state-icon'),
                   size: 48,
                   color: tokens.muted,
                 ),
                 const SizedBox(height: DsSpacing.md),
                 Text(
                   message ?? 'No data',
+                  key: const ValueKey('ds-state-message'),
                   style: TextStyle(
                     color: tokens.muted,
                     fontSize: tokens.textBase,
@@ -59,6 +64,7 @@ class DsStateDisplay extends StatelessWidget {
                 if (actionLabel != null && onAction != null) ...[
                   const SizedBox(height: DsSpacing.md),
                   DsButton(
+                    key: const ValueKey('ds-state-action'),
                     label: actionLabel!,
                     variant: DsButtonVariant.secondary,
                     onPressed: onAction,
@@ -77,12 +83,14 @@ class DsStateDisplay extends StatelessWidget {
               children: [
                 Icon(
                   icon ?? Icons.error_outline,
+                  key: const ValueKey('ds-state-icon'),
                   size: 48,
                   color: tokens.danger,
                 ),
                 const SizedBox(height: DsSpacing.md),
                 Text(
                   message ?? 'Something went wrong',
+                  key: const ValueKey('ds-state-message'),
                   style: TextStyle(
                     color: tokens.muted,
                     fontSize: tokens.textBase,
@@ -92,6 +100,7 @@ class DsStateDisplay extends StatelessWidget {
                 if (actionLabel != null && onAction != null) ...[
                   const SizedBox(height: DsSpacing.md),
                   DsButton(
+                    key: const ValueKey('ds-state-action'),
                     label: actionLabel!,
                     variant: DsButtonVariant.primary,
                     onPressed: onAction,

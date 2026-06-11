@@ -49,6 +49,7 @@ class DsCard extends StatelessWidget {
     }
 
     return Card(
+      key: const ValueKey('ds-card'),
       elevation: elevation,
       color: bgColor,
       shape: RoundedRectangleBorder(
@@ -57,7 +58,11 @@ class DsCard extends StatelessWidget {
             ? BorderSide(color: borderColor)
             : BorderSide.none,
       ),
-      child: Padding(padding: effectivePadding, child: child),
+      child: Padding(
+        key: const ValueKey('ds-card-padding'),
+        padding: effectivePadding,
+        child: child,
+      ),
     );
   }
 }

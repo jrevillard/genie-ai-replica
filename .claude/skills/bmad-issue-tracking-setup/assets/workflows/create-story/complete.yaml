@@ -59,11 +59,13 @@ print(pattern.replace('{prd_key}', prd_key).replace('{story_key}', key))
   STORE: story_branch
 # Extract story title (needed for both issue creation and MR)
 - RUN: python3 -c "
-import sys
+import sys, re
 with open(sys.argv[1], 'r', encoding='utf-8') as f:
     for line in f:
         if line.startswith('# '):
-            print(line[2:].strip())
+            heading = line[2:].strip()
+            m = re.match(r'Story\s+\d+\.\d+\s*:\s*(.+)', heading)
+            print(m.group(1).strip() if m else heading)
             break
 " {implementation_artifacts}/{story_key}.md
   STORE: story_title
@@ -87,7 +89,7 @@ with open(sys.argv[1], 'r', encoding='utf-8') as f:
     content: "**Sprint Key:** `{story_key}`\n**Epic:** {epic_num}\n**PRD:** {prd_key}\n\n---\n\n{story_body}"
     mode: overwrite
 # Create the issue (searches first, skips if found)
-- SET: { variable: title, value: "{epic_num}.{story_num} {story_title}" }
+- SET: { variable: title, value: "Story {epic_num}.{story_num}: {story_title}" }
 - SET: { variable: labels, value: "type{sep}story\nstatus{sep}ready-for-dev\nprd{sep}{prd_key}\n{prd_key}{sep}epic-{epic_num}" }
 - SET: { variable: description_file, value: "/tmp/issue-desc.md" }
 - INCLUDE: common/create-issue
@@ -136,10 +138,10 @@ print(parts[1])
         - SET: { variable: mr_repo, value: "{git_host}/{git_owner}/{git_repo}" }
 - CHECK: git_platform eq "gitlab"
   TRUE:
-    - RUN: glab mr create --title "{epic_num}.{story_num} {story_title}" --description "{issue_ref}" --target-branch {prd_branch} --source-branch {story_branch} -R "{mr_repo}"
+    - RUN: glab mr create --title "Story {epic_num}.{story_num}: {story_title}" --description "{issue_ref}" --target-branch {prd_branch} --source-branch {story_branch} -R "{mr_repo}"
       EXPECT_EXIT: 0
   FALSE:
-    - RUN: gh pr create --title "{epic_num}.{story_num} {story_title}" --body "{issue_ref}" --base {prd_branch} --head {story_branch} -R "{mr_repo}"
+    - RUN: gh pr create --title "Story {epic_num}.{story_num}: {story_title}" --body "{issue_ref}" --base {prd_branch} --head {story_branch} -R "{mr_repo}"
       EXPECT_EXIT: 0
 - RUN: rm -f /tmp/issue-desc.md
 - OUTPUT:

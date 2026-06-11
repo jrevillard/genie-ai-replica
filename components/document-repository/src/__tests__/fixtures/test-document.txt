@@ -1,0 +1,8 @@
+This is a test document used by the document repository test suite.
+
+It contains plain English text for testing file upload, language detection,
+and text extraction functionality. The content is intentionally simple to
+ensure reliable test results across different environments.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. This sentence
+contains enough text for language detection to work properly.

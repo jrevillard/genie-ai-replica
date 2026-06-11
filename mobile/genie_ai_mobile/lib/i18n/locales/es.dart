@@ -202,7 +202,8 @@ const Map<String, dynamic> esLocale = {
     "noInternetConnection": "Sin conexión a Internet",
     "networkUnreachable": "Red inalcanzable",
     "authenticationFailed": "Error de autenticación",
-    "sessionExpired": "Su sesión ha expirado. Por favor, inicie sesión de nuevo.",
+    "sessionExpired":
+        "Su sesión ha expirado. Por favor, inicie sesión de nuevo.",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -511,7 +512,8 @@ const Map<String, dynamic> esLocale = {
         "Esto borrará todos tus datos de perfil e historial de chat.",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "Eliminar cuenta",
     "deleteAccountDesc":
         "Esto eliminará permanentemente tu cuenta y todos los datos asociados.",

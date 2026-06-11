@@ -1,7 +1,7 @@
 <template>
   <div class="app-container">
     <!-- Main chatbot container -->
-    <div class="chatbot-container">
+    <div class="chatbot-container" data-test-id="chatbot-container">
       <!-- New Chat Confirmation Dialog -->
       <ConfirmDialog
         :visible="showNewChatConfirm"
@@ -94,13 +94,24 @@
       </div>
       <!-- The scrollable chat window -->
       <div ref="chatWindow" class="chat-window" aria-live="polite">
-        <div v-for="(msg, index) in chatMessages" :key="index" class="chat-message" :class="msg.sender">
+        <div
+          v-for="(msg, index) in chatMessages"
+          :key="`${msg.sender}-${msg.timestamp || ''}-${index}`"
+          class="chat-message"
+          :class="msg.sender"
+        >
           <div class="message-wrapper">
             <div class="message-bubble">
               <!-- Render bot messages as sanitized HTML for Markdown, user messages as plain text -->
               <span v-if="msg.sender === 'user'">{{ msg.content }}</span>
-              <!-- eslint-disable-next-line vue/no-v-html -->
-              <div v-else v-html="renderMarkdown(msg.content)"></div>
+              <template v-else>
+                <div v-if="msg.isStreaming && !msg.content" class="streaming-indicator">
+                  <DsSpinner size="sm" />
+                  <span>{{ translate('chatbot.thinking', 'Thinking...') }}</span>
+                </div>
+                <!-- eslint-disable-next-line vue/no-v-html -->
+                <div v-else v-html="renderMarkdown(msg.content)"></div>
+              </template>
             </div>
             <span class="message-time">{{ formatMessageTime(msg.timestamp) }}</span>
           </div>
@@ -121,11 +132,6 @@
         </div>
         <!-- Auto-scroll anchor element -->
         <div ref="messagesEnd"></div>
-      </div>
-      <!-- Loading spinner with "Thinking..." text (non-streaming fallback only) -->
-      <div v-if="isLoading && !isStreaming" class="loading-spinner" aria-label="Processing your request">
-        <Loader2 :size="16" class="animate-spin" />
-        <span class="loading-text">Thinking...</span>
       </div>
       <!-- Quick Help Overlay -->
       <div v-if="showQuickHelp && selectedContextItems.length === 0" class="quick-help-overlay">
@@ -170,6 +176,7 @@
             v-if="chatMessages.length > 0"
             variant="ghost"
             :title="translate('chatbot.saveChat')"
+            data-testid="save-chat-btn"
             :disabled="isSaving"
             @click="saveChatToHistory"
           >
@@ -271,6 +278,7 @@ import chatbotService from '../services/chatbotService';
 import serviceTreeService from '../services/serviceTreeService'; // *** NEW: Import serviceTreeService
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import chatHistoryService from '../services/chatHistoryService';
+import DsSpinner from './ds/Spinner.vue';
 import DsPill from './ds/Pill.vue';
 import DsButton from './ds/Button.vue';
 import DsCard from './ds/Card.vue';
@@ -293,6 +301,7 @@ export default {
     RightSideBarComponent,
     ConfirmDialog,
     DsPill,
+    DsSpinner,
     DsButton,
     DsCard,
     DsInput,
@@ -302,7 +311,6 @@ export default {
   data() {
     return {
       conversationId: null,
-      messages: [],
       chatMessages: [],
       newMessage: '',
       selectedContextItems: [],
@@ -607,8 +615,9 @@ export default {
       // Document opened
     },
 
-    translate(key) {
-      return this.$t(key);
+    translate(key, fallback) {
+      const value = this.$t(key);
+      return value !== key ? value : fallback || key;
     },
 
     selectQuickHelpOption(option) {
@@ -1138,7 +1147,7 @@ export default {
             continue;
           }
 
-          if (message.sender === 'user' || (message.sender === 'bot' && message.queryId)) {
+          if ((message.sender === 'user' || (message.sender === 'bot' && message.queryId)) && message.content) {
             const messageData = {
               conversationId: conversation._key,
               content: message.content,
@@ -1213,7 +1222,7 @@ export default {
           if (message.isSaved) {
             continue;
           }
-          if (message.sender === 'user' || (message.sender === 'bot' && message.queryId)) {
+          if ((message.sender === 'user' || (message.sender === 'bot' && message.queryId)) && message.content) {
             const messageData = {
               conversationId: this.conversationId,
               content: message.content,
@@ -1326,14 +1335,12 @@ export default {
 
     startNewChatConfirmed() {
       this.showNewChatConfirm = false;
-      this.chatMessages = [
-        {
-          sender: 'bot',
-          content: this.translate('chatbot.welcomeMessage'),
-          timestamp: new Date().toISOString(),
-          isSaved: true
-        }
-      ];
+      this.chatMessages.splice(0, this.chatMessages.length, {
+        sender: 'bot',
+        content: this.translate('chatbot.welcomeMessage'),
+        timestamp: new Date().toISOString(),
+        isSaved: true
+      });
       this.currentChatId = null;
       this.conversationId = null;
       this.selectedContextItems = [];
@@ -1346,7 +1353,9 @@ export default {
         messages: JSON.parse(JSON.stringify(this.chatMessages)),
         contextItems: []
       };
-      this.scrollToBottom();
+      this.$nextTick(() => {
+        this.scrollToBottom();
+      });
       notificationService.info(this.translate('chatbot.newChatStarted'), 1500);
     },
 
@@ -1911,30 +1920,14 @@ export default {
   border-radius: var(--radius-sm);
 }
 
-/* Loading Spinner Styles */
-.loading-spinner {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+/* Streaming Indicator — shown inside bot bubble while waiting for first chunk */
+.streaming-indicator {
   display: flex;
-  justify-content: center;
   align-items: center;
   gap: var(--space-sm);
-  background: var(--overlay-bg); /* Semi-transparent background for visibility */
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-md);
-  z-index: 100; /* Ensure it overlays other content */
-}
-
-.loading-spinner :deep(svg) {
-  color: var(--accent); /* Match button colors */
-}
-
-.loading-spinner .loading-text {
-  font-size: var(--text-base);
-  color: var(--fg);
-  font-weight: 500;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  padding: var(--space-xs) 0;
 }
 
 .bot-message-meta {

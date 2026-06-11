@@ -878,50 +878,1195 @@ await db.collection('myCollection').update('document-key', { value: 456 });
 
 ## Testing
 
-### Frontend Tests
+### Testing Infrastructure Overview
 
-```bash
-cd components/gov-chat-frontend
-npm test
+GENIE.AI uses a comprehensive testing strategy across all components:
+
+| Component | Framework | Test Location | Type |
+|-----------|-----------|---------------|------|
+| Frontend | Jest + Vue Test Utils | `src/__tests__/` | Unit, Integration |
+| Backend | Jest + Supertest | `__tests__/` | Unit, Integration, Contract |
+| Document Repository | Jest + Supertest | `__tests__/` | Unit, Integration |
+| OPEA Services | pytest | `genie-ai-overlay/tests/` | Unit, Integration |
+| Mobile | flutter_test | `test/` | Unit, Widget |
+| E2E | Playwright | `tests/e2e/` | End-to-End |
+| Config Validation | Jest | `tests/config-validator/` | Schema Validation |
+
+### Backend Testing (Node.js)
+
+#### Test Structure
+
+```
+components/gov-chat-backend/
+├── __tests__/
+│   ├── routes/           # Route handler tests
+│   ├── controllers/      # Controller tests
+│   ├── services/         # Business logic tests
+│   ├── middleware/       # Middleware tests
+│   ├── mocks/            # Mock fixtures
+│   └── fixtures/         # Test data fixtures
 ```
 
-### Backend Tests
+#### Test Commands
 
 ```bash
 cd components/gov-chat-backend
+
+# Run all tests
 npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with coverage
+npm run test:coverage
+
+# Run contract tests (OpenAPI validation)
+npm run test:contract
+
+# Run specific test file
+npm test routes/chat.test.js
+
+# Run tests matching pattern
+npm test -- --testNamePattern="should create"
 ```
 
-### Document Repository Tests
+#### Backend Test Patterns
+
+**Testing Routes with Supertest**
+
+The backend uses the `createApp()` pattern for testing routes without starting an HTTP server:
+
+```javascript
+// __tests__/routes/chat.test.js
+const request = require('supertest');
+const { createApp } = require('../index'); // Exports createApp(), not app.listen()
+const chatService = require('../../services/chat-service');
+
+// Mock service dependencies
+jest.mock('../../services/chat-service');
+jest.mock('../../shared/lib/logger');
+
+describe('POST /api/chat/messages', () => {
+  let app;
+
+  beforeEach(() => {
+    // Clear mocks before each test
+    jest.clearAllMocks();
+    // Create fresh app instance
+    app = createApp();
+  });
+
+  it('should send a message successfully', async () => {
+    // Mock service response
+    chatService.sendMessage.mockResolvedValue({
+      messageId: 'msg123',
+      response: 'Hello, user!'
+    });
+
+    const response = await request(app)
+      .post('/api/chat/messages')
+      .set('Authorization', 'Bearer valid-token')
+      .send({
+        conversationId: 'conv123',
+        content: 'Hello, AI!'
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('messageId');
+    expect(chatService.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Hello, AI!' })
+    );
+  });
+
+  it('should return 401 without auth token', async () => {
+    const response = await request(app)
+      .post('/api/chat/messages')
+      .send({
+        conversationId: 'conv123',
+        content: 'Hello, AI!'
+      });
+
+    expect(response.status).toBe(401);
+  });
+});
+```
+
+**Testing Services**
+
+```javascript
+// __tests__/services/chat-service.test.js
+const chatService = require('../../services/chat-service');
+const db = require('../../shared/lib/arango-wrapper');
+
+jest.mock('../../shared/lib/arango-wrapper');
+
+describe('ChatService', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('sendMessage', () => {
+    it('should save message and return response', async () => {
+      const mockMessage = {
+        _key: 'msg123',
+        content: 'Hello, AI!',
+        role: 'user',
+        timestamp: Date.now()
+      };
+
+      db.query.mockResolvedValue({
+        all: async () => [mockMessage]
+      });
+
+      const result = await chatService.sendMessage({
+        conversationId: 'conv123',
+        content: 'Hello, AI!'
+      });
+
+      expect(result).toHaveProperty('messageId');
+      expect(db.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT'),
+        expect.any(Object)
+      );
+    });
+
+    it('should handle database errors', async () => {
+      db.query.mockRejectedValue(new Error('Database connection failed'));
+
+      await expect(
+        chatService.sendMessage({
+          conversationId: 'conv123',
+          content: 'Hello, AI!'
+        })
+      ).rejects.toThrow('Database connection failed');
+    });
+  });
+});
+```
+
+**Module Mocking with Jest**
+
+```javascript
+// __tests__/mocks/arango-wrapper.js
+const mockDb = {
+  query: jest.fn(),
+  collection: jest.fn(() => ({
+    save: jest.fn(),
+    update: jest.fn(),
+    remove: jest.fn()
+  })),
+  transaction: jest.fn()
+};
+
+module.exports = mockDb;
+
+// In test file
+jest.mock('../../shared/lib/arango-wrapper', () => require('../mocks/arango-wrapper'));
+```
+
+### Frontend Testing (Vue 3)
+
+#### Test Structure
+
+```
+components/gov-chat-frontend/
+├── src/__tests__/
+│   ├── components/      # Component tests
+│   ├── services/        # API service tests
+│   ├── store/           # Vuex store tests
+│   └── utils/           # Utility function tests
+```
+
+#### Test Commands
+
+```bash
+cd components/gov-chat-frontend
+
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with coverage
+npm run test:coverage
+
+# Run contract tests (OpenAPI validation)
+npm run test:contract
+
+# Run specific test file
+npm test src/__tests__/components/ChatMessage.test.js
+```
+
+#### Frontend Test Patterns
+
+**Testing Components with Vue Test Utils**
+
+```javascript
+// src/__tests__/components/ChatMessage.test.js
+import { mount, config } from '@vue/test-utils';
+import ChatMessage from '@/components/ChatMessage.vue';
+import Vuex from 'vuex';
+
+// Mock global components
+config.global.stubs = {
+  DsCard: true,
+  DsButton: true
+};
+
+describe('ChatMessage', () => {
+  let store;
+  let actions;
+
+  beforeEach(() => {
+    actions = {
+      sendMessage: jest.fn()
+    };
+
+    store = new Vuex.Store({
+      actions
+    });
+  });
+
+  it('renders message content', () => {
+    const wrapper = mount(ChatMessage, {
+      props: {
+        message: {
+          content: 'Hello, user!',
+          role: 'assistant',
+          timestamp: Date.now()
+        }
+      },
+      global: {
+        plugins: [store]
+      }
+    });
+
+    expect(wrapper.text()).toContain('Hello, user!');
+  });
+
+  it('emits send event when button clicked', async () => {
+    const wrapper = mount(ChatMessage, {
+      props: {
+        message: {
+          content: 'Hello!',
+          role: 'user',
+          timestamp: Date.now()
+        }
+      },
+      global: {
+        plugins: [store]
+      }
+    });
+
+    await wrapper.find('[data-testid="send-button"]').trigger('click');
+    expect(wrapper.emitted('send')).toBeTruthy();
+  });
+});
+```
+
+**Testing Vuex Store**
+
+```javascript
+// src/__tests__/store/chat.test.js
+import { createStore } from 'vuex';
+import chat from '@/store/modules/chat';
+
+describe('Chat Store', () => {
+  let store;
+
+  beforeEach(() => {
+    store = createStore({
+      modules: {
+        chat: {
+          ...chat,
+          state: {
+            conversations: [],
+            currentConversation: null
+          }
+        }
+      }
+    });
+  });
+
+  it('commits new conversation', () => {
+    store.commit('chat/ADD_CONVERSATION', {
+      id: 'conv123',
+      title: 'New Chat'
+    });
+
+    expect(store.state.chat.conversations).toHaveLength(1);
+    expect(store.state.chat.conversations[0].id).toBe('conv123');
+  });
+
+  it('dispatches sendMessage action', async () => {
+    const mockResponse = { messageId: 'msg123', content: 'Response' };
+    chatService.sendMessage = jest.fn().mockResolvedValue(mockResponse);
+
+    await store.dispatch('chat/sendMessage', {
+      conversationId: 'conv123',
+      content: 'Hello'
+    });
+
+    expect(chatService.sendMessage).toHaveBeenCalled();
+  });
+});
+```
+
+**Testing API Services**
+
+```javascript
+// src/__tests__/services/chat-api.test.js
+import chatApi from '@/services/chat-api';
+import axios from 'axios';
+
+jest.mock('axios');
+
+describe('Chat API', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('fetches conversations successfully', async () => {
+    const mockConversations = [
+      { id: 'conv1', title: 'Chat 1' },
+      { id: 'conv2', title: 'Chat 2' }
+    ];
+
+    axios.get.mockResolvedValue({ data: mockConversations });
+
+    const result = await chatApi.getConversations();
+
+    expect(result).toEqual(mockConversations);
+    expect(axios.get).toHaveBeenCalledWith('/api/chat/conversations');
+  });
+
+  it('handles API errors', async () => {
+    axios.get.mockRejectedValue(new Error('Network error'));
+
+    await expect(chatApi.getConversations()).rejects.toThrow('Network error');
+  });
+});
+```
+
+### OPEA Services Testing (Python)
+
+#### Test Structure
+
+```
+genie-ai-overlay/
+├── tests/
+│   ├── conftest.py          # Pytest fixtures
+│   ├── test_chatqna.py       # ChatQnA tests
+│   ├── test_retriever.py     # Retriever tests
+│   ├── test_dataprep.py      # Dataprep tests
+│   └── fixtures/             # Test data fixtures
+```
+
+#### Test Commands
+
+```bash
+cd genie-ai-overlay
+
+# Run all tests
+pytest
+
+# Run specific test file
+pytest tests/test_retriever.py
+
+# Run tests with coverage
+pytest --cov=chatqna --cov=retriever --cov=dataprep
+
+# Run tests with verbose output
+pytest -v
+
+# Run tests matching pattern
+pytest -k "test_embedding"
+
+# Run tests in parallel
+pytest -n auto
+```
+
+#### OPEA Test Patterns
+
+**Pytest Fixtures (conftest.py)**
+
+```python
+# tests/conftest.py
+import pytest
+from unittest.mock import Mock, patch
+
+@pytest.fixture
+def mock_arango_client():
+    """Mock ArangoDB client for testing."""
+    client = Mock()
+    client.query.return_value = []
+    client.collection.return_value = Mock()
+    return client
+
+@pytest.fixture
+def mock_logger():
+    """Mock CustomLogger for testing."""
+    logger = Mock()
+    logger.info = Mock()
+    logger.error = Mock()
+    return logger
+
+@pytest.fixture
+def sample_document():
+    """Sample document fixture for testing."""
+    return {
+        "_key": "doc123",
+        "title": "Test Document",
+        "content": "This is a test document content.",
+        "category": "test-category",
+        "language": "en"
+    }
+```
+
+**Testing Retriever Service**
+
+```python
+# tests/test_retriever.py
+import pytest
+from genieai_retriever import RetrieverService
+
+@pytest.mark.asyncio
+async def test_hybrid_search(mock_arango_client, sample_document):
+    """Test hybrid vector + graph search."""
+    retriever = RetrieverService(mock_arango_client)
+
+    # Mock query results
+    mock_arango_client.query.return_value.all.return_value = [sample_document]
+
+    results = await retriever.hybrid_search(
+        query="test query",
+        top_k=5,
+        alpha=0.5  # Balance between vector and graph
+    )
+
+    assert len(results) == 1
+    assert results[0]["_key"] == "doc123"
+    mock_arango_client.query.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_vector_search_fallback(mock_arango_client):
+    """Test fallback to vector-only search."""
+    retriever = RetrieverService(mock_arango_client)
+
+    # Mock graph search failure
+    mock_arango_client.query.side_effect = Exception("Graph search failed")
+
+    with pytest.raises(Exception):
+        await retriever.hybrid_search("test query")
+```
+
+**Mocking the comps Library**
+
+```python
+# tests/conftest.py
+import sys
+from unittest.mock import Mock
+
+# Mock comps library modules
+sys.modules['comps'] = Mock()
+sys.modules['comps.utils'] = Mock()
+sys.modules['comps.utils.tracing'] = Mock()
+
+# Setup tracing mock
+mock_tracer = Mock()
+mock_span = Mock()
+mock_span.__enter__ = Mock(return_value=mock_span)
+mock_span.__exit__ = Mock(return_value=False)
+mock_tracer.start_as_current_span.return_value = mock_span
+sys.modules['comps.utils.tracing'].trace_span = Mock(return_value=mock_span)
+```
+
+### Document Repository Testing
+
+#### Test Commands
 
 ```bash
 cd components/document-repository
+
+# Run all tests
 npm test
+
+# Run tests in watch mode
 npm run test:watch
+
+# Run tests with coverage
 npm run test:coverage
+
+# Run specific test file
+npm test __tests__/services/file-service.test.js
 ```
 
-### Mobile Tests
+#### Test Patterns
+
+**Testing File Upload**
+
+```javascript
+// __tests__/routes/upload.test.js
+const request = require('supertest');
+const fs = require('fs');
+const path = require('path');
+const { createApp } = require('../index');
+
+describe('POST /api/files/upload', () => {
+  let app;
+
+  beforeEach(() => {
+    app = createApp();
+  });
+
+  it('should upload PDF file successfully', async () => {
+    const filePath = path.join(__dirname, 'fixtures/test.pdf');
+
+    const response = await request(app)
+      .post('/api/files/upload')
+      .set('Authorization', 'Bearer valid-token')
+      .attach('file', filePath)
+      .field('category', 'test-category');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('fileId');
+    expect(response.body.category).toBe('test-category');
+  });
+
+  it('should reject files without auth', async () => {
+    const filePath = path.join(__dirname, 'fixtures/test.pdf');
+
+    const response = await request(app)
+      .post('/api/files/upload')
+      .attach('file', filePath);
+
+    expect(response.status).toBe(401);
+  });
+});
+```
+
+### Mobile Testing (Flutter)
+
+#### Test Commands
 
 ```bash
 cd mobile/genie_ai_mobile
+
+# Run all tests
 flutter test
 
 # Run specific test file
 flutter test test/widget_test.dart
+
+# Run tests with coverage
+flutter test --coverage
+
+# Run tests on specific device
+flutter test -d <device-id>
+
+# Run integration tests
+flutter drive --target=test_driver/integration_test.dart
 ```
 
-### E2E Tests
+#### Test Patterns
+
+**Widget Testing**
+
+```dart
+// test/widget_test.dart
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:genie_ai_mobile/screens/chat_screen.dart';
+
+void main() {
+  testWidgets('ChatScreen renders message list', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatMessagesProvider.overrideWith((ref) => [
+            Message(content: 'Hello', role: 'user'),
+            Message(content: 'Hi there!', role: 'assistant'),
+          ]),
+        ],
+        child: MaterialApp(home: ChatScreen()),
+      ),
+    );
+
+    expect(find.text('Hello'), findsOneWidget);
+    expect(find.text('Hi there!'), findsOneWidget);
+  });
+
+  testWidgets('ChatScreen sends message on button tap', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(home: ChatScreen()),
+      ),
+    );
+
+    await tester.enterText(
+      find.byType(TextField),
+      'Test message',
+    );
+    await tester.tap(find.byType(DsButton));
+    await tester.pump();
+
+    expect(find.text('Test message'), findsOneWidget);
+  });
+}
+```
+
+### Config Validation Testing
+
+#### Test Commands
+
+```bash
+cd tests/config-validator
+
+# Run all config validation tests
+npm test
+
+# Test specific environment
+npm test -- --env=development
+
+# Validate actual env file
+npm test -- --env-file=../../.env
+```
+
+### E2E Testing (Playwright)
+
+#### Test Structure
+
+```
+tests/e2e/
+├── auth/                   # Authentication flows
+├── chat/                   # Chat functionality
+├── documents/              # Document upload/management
+├── admin/                  # Admin dashboard
+└── fixtures/               # Test data fixtures
+```
+
+#### Test Commands
 
 ```bash
 # Run all E2E tests
 npm run test:e2e
 
-# List E2E tests
+# Run specific test file
+npx playwright test tests/e2e/chat/chat-flow.spec.ts
+
+# Run tests in headed mode (show browser)
+npx playwright test --headed
+
+# Debug tests
+npx playwright test --debug
+
+# List all tests
 npm run test:e2e:list
 
-# Run specific test file
-npx playwright test tests/e2e/my-test.spec.ts
+# Run tests in specific browser
+npx playwright test --project=chromium
+npx playwright test --project=firefox
+npx playwright test --project=webkit
+```
+
+#### E2E Test Patterns
+
+```typescript
+// tests/e2e/chat/chat-flow.spec.ts
+import { test, expect } from '@playwright/test';
+
+test.describe('Chat Flow', () => {
+  test.beforeEach(async ({ page }) => {
+    // Login before each test
+    await page.goto('/login');
+    await page.fill('[data-testid="username"]', 'testuser');
+    await page.fill('[data-testid="password"]', 'testpass');
+    await page.click('[data-testid="login-button"]');
+    await page.waitForURL('/chat');
+  });
+
+  test('sends message and receives response', async ({ page }) => {
+    await page.fill('[data-testid="message-input"]', 'Hello, AI!');
+    await page.click('[data-testid="send-button"]');
+
+    // Wait for assistant response
+    await expect(page.locator('[data-testid="message-content"]').last()).toContainText(
+      /assistant|ai|response/i,
+      { timeout: 10000 }
+    );
+  });
+
+  test('creates new conversation', async ({ page }) => {
+    await page.click('[data-testid="new-chat-button"]');
+
+    await expect(page).toHaveURL(/\/chat\/conv-[a-f0-9-]+/);
+    await expect(page.locator('[data-testid="message-list"]')).toBeEmpty();
+  });
+});
+```
+
+### Coverage Reports
+
+```bash
+# Backend coverage
+cd components/gov-chat-backend
+npm run test:coverage
+open coverage/lcov-report/index.html
+
+# Frontend coverage
+cd components/gov-chat-frontend
+npm run test:coverage
+open coverage/lcov-report/index.html
+
+# Python coverage
+cd genie-ai-overlay
+pytest --cov=. --cov-report=html
+open htmlcov/index.html
+
+# Flutter coverage
+cd mobile/genie_ai_mobile
+flutter test --coverage
+open coverage/lcov/index.html
+```
+
+---
+
+## Observability Development
+
+### Overview
+
+The GENIE.AI observability stack provides distributed tracing, metrics, and logs for debugging and monitoring. It uses OpenTelemetry (OTel) for instrumentation and VictoriaMetrics family for storage, with Grafana dashboards for visualization.
+
+**Stack Components:**
+- **OTel Collector**: Central telemetry collection (traces, metrics, logs)
+- **VictoriaMetrics**: Metrics storage (Prometheus-compatible)
+- **VictoriaLogs**: Log aggregation and search
+- **VictoriaTraces**: Distributed trace storage (Jaeger-compatible)
+- **Grafana**: Dashboards and visualization
+
+### Running the Observability Stack
+
+#### Start Observability Services
+
+```bash
+# Start core services + observability
+docker compose --profile observability up -d
+
+# Verify observability services are running
+docker compose ps otel-collector victoriametrics victorialogs victoriatraces grafana
+```
+
+#### Access Grafana
+
+**Access via Kong route (authenticated):**
+```
+URL: https://localhost/grafana/
+Auth: Keycloak SSO (same credentials as GENIE.AI)
+```
+
+**Access directly (development only):**
+```bash
+# Port forward to local machine
+docker compose port grafana 3000
+
+# Access at http://localhost:3000
+# Default admin credentials (if SSO not configured):
+# Username: admin
+# Password: <GRAFANA_ADMIN_PASSWORD from .env>
+```
+
+### Available Dashboards
+
+| Dashboard | Purpose | Key Metrics |
+|-----------|---------|-------------|
+| Service Health | Service uptime, error rates | Uptime %, Error rate, Request rate |
+| App Metrics | Application performance | Response time, Throughput, Memory |
+| Logs Viewer | Search and filter logs | Error logs, Warning logs, Custom queries |
+| Trace Explorer | Distributed traces | Trace duration, Span timeline, Errors |
+| RAG Waterfall | RAG pipeline performance | Embedding time, Retrieval time, LLM time |
+| Stack Health | Infrastructure health | CPU, Memory, Disk, Network |
+| VictoriaMetrics | Metrics storage health | Ingestion rate, Storage size |
+
+### Viewing Traces and Logs
+
+#### Query Logs
+
+1. **Open Grafana** → Navigate to "Logs Viewer" dashboard
+2. **Select filters**:
+   - `service`: `backend`, `frontend`, `chatqna`, `retriever`, etc.
+   - `level`: `error`, `warn`, `info`, `debug`
+   - `environment`: `development`, `production`
+3. **Search**: Enter query in search bar (e.g., `HTTP 500`, `ArangoDB error`)
+4. **View details**: Click log entry to see full context, including `trace_id` for correlation
+
+#### Explore Traces
+
+1. **Open Grafana** → Navigate to "Trace Explorer" dashboard
+2. **Select time range** (last 15 minutes, last hour, etc.)
+3. **Filter traces**:
+   - `service`: `backend`, `chatqna`, etc.
+   - `operation`: `POST /api/chat/messages`, `hybrid_search`, etc.
+   - `status`: `OK`, `ERROR`
+4. **Click trace ID** to view waterfall visualization
+5. **View spans**: Expand each span to see attributes, events, logs
+
+#### Correlate Logs and Traces
+
+Each log entry includes a `trace_id` attribute. Click it to jump directly to the associated trace in the Trace Explorer.
+
+### Adding Tracing to Backend Routes
+
+Backend uses the `withSpan()` helper for automatic tracing:
+
+```javascript
+// routes/chat.js
+const { withSpan } = require('../tracing');
+
+/**
+ * POST /api/chat/messages
+ */
+router.post('/messages', authenticateKeycloak, withSpan('POST /api/chat/messages', async (req, res) => {
+  // Automatically creates a span named "POST /api/chat/messages"
+  // Includes attributes: http.method, http.route, http.status_code
+  
+  try {
+    const response = await chatService.sendMessage(req.body);
+    res.json(response);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}));
+```
+
+**Manual Span Creation:**
+
+```javascript
+const tracer = require('../tracing').tracer;
+
+async function processMessage(message) {
+  const span = tracer.startSpan('processMessage', {
+    attributes: {
+      'message.id': message.id,
+      'message.length': message.content.length
+    }
+  });
+
+  try {
+    // Your business logic
+    const result = await llmService.generate(message);
+    span.addEvent('LLM response received', {
+      'response.length': result.length
+    });
+    return result;
+  } catch (error) {
+    span.recordException(error);
+    throw error;
+  } finally {
+    span.end();
+  }
+}
+```
+
+### Adding Tracing to Python Services
+
+Python services use the `@trace_span` decorator:
+
+```python
+# genieai_chatqna.py
+from comps.utils.tracing import trace_span
+
+@trace_span("hybrid_search")
+async def hybrid_search(query: str, top_k: int = 5):
+    """
+    Automatically traced with operation name "hybrid_search".
+    Includes attributes: query, top_k
+    """
+    try:
+        # Your business logic
+        results = await retriever.search(query, top_k)
+        return results
+    except Exception as e:
+        # Exception automatically recorded in span
+        raise e
+```
+
+**Manual Span Creation:**
+
+```python
+from opentelemetry import trace
+
+tracer = trace.get_tracer(__name__)
+
+async def process_document(doc_id: str):
+    with tracer.start_as_current_span("processDocument") as span:
+        span.set_attribute("document.id", doc_id)
+        
+        # Business logic
+        metadata = await extract_metadata(doc_id)
+        span.add_event("Metadata extracted", {"metadata": metadata})
+        
+        return metadata
+```
+
+### OTel Collector Configuration
+
+The collector configuration is in `configs/otel/otel-collector-config.yaml`:
+
+```yaml
+receivers:
+  # Receive traces from app services (OTLP HTTP)
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+  
+  # Receive container logs (fluentd)
+  fluent_forward:
+    endpoint: 0.0.0.0:24224
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+
+exporters:
+  # Metrics to VictoriaMetrics
+  prometheusremotewrite:
+    endpoint: http://victoriametrics:8428/api/v1/write
+  
+  # Logs to VictoriaLogs
+  otlp/http:
+    endpoint: http://victorialogs:9428
+  
+  # Traces to VictoriaTraces
+  otlp:
+    endpoint: http://victoriatraces:10428
+```
+
+**Adding new receivers/exporters:**
+1. Edit `configs/otel/otel-collector-config.yaml`
+2. Restart collector: `docker compose restart otel-collector`
+3. Verify logs: `docker compose logs -f otel-collector`
+
+### Debugging with Distributed Tracing
+
+#### Scenario: Slow RAG Response
+
+1. **Navigate to Trace Explorer** → Filter by `service: chatqna`, `operation: /chatqna`
+2. **Sort by duration** (descending) → Click slowest trace
+3. **Examine waterfall**:
+   - Long span in `retriever`? → Check ArangoDB query performance
+   - Long span in `embedding`? → Check TEI service, GPU memory
+   - Long span in `llm`? → Check vLLM queue, model size
+4. **Drill down**: Click span to view attributes (e.g., `query.text`, `top_k`, `alpha`)
+5. **Correlate logs**: Click log entries in span timeline to see error messages
+
+#### Scenario: HTTP 500 Errors
+
+1. **Navigate to Logs Viewer** → Filter `level: error`, `service: backend`
+2. **Search for** `HTTP 500`, `ArangoDB error`, `Keycloak error`
+3. **Click trace_id** in log entry → Jumps to associated trace
+4. **View span timeline** → Identify which service/component failed
+5. **Check span attributes** → View request parameters, user context
+
+### Observability Environment Variables
+
+Key variables in `.env` (Section 12C):
+
+```bash
+# Enable/disable observability stack (0 or 1)
+ENABLE_OBSERVABILITY=1
+
+# Grafana credentials
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=<strong-password>
+
+# Retention periods
+VICTORIAMETRICS_RETENTION=30d
+VICTORIALOGS_RETENTION=30d
+VICTORIATRACES_RETENTION=30d
+
+# Trace sampling rate (0.0-100.0)
+OTEL_TRACES_SAMPLER_RATE=100.0
+
+# OTLP Collector endpoint (for services to send telemetry)
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+```
+
+---
+
+## CI Pipeline
+
+### GitLab CI Stages
+
+The GitLab CI pipeline (`.gitlab-ci.yml`) runs in 4 stages:
+
+| Stage | Jobs | Purpose | Artifacts |
+|-------|------|---------|-----------|
+| lint | lint-js, lint-py, lint-dart | Code quality | None |
+| test | test-backend, test-frontend, test-doc-repo, test-opea | Unit/integration tests | JUnit XML |
+| config | validate-config | Environment validation | None |
+| e2e | e2e-playwright | End-to-end tests | HTML report |
+
+### Pipeline Triggers
+
+**Automatic triggers** (on push/MR):
+- `components/gov-chat-backend/**/*.js` → lint-js, test-backend
+- `components/gov-chat-frontend/**/*.vue` → lint-js, test-frontend
+- `genie-ai-overlay/**/*.py` → lint-py, test-opea
+- `mobile/genie_ai_mobile/**/*.dart` → lint-dart
+- `docker-compose.yaml`, `env` → validate-config
+- `tests/e2e/**/*.spec.ts` → e2e-playwright
+
+**Manual triggers** (via GitLab UI):
+- e2e-playwright (requires staging environment)
+
+### JUnit XML Reports
+
+All test jobs generate JUnit XML reports for GitLab's test visualization:
+
+```yaml
+# Example backend test job
+test-backend:
+  script:
+    - cd components/gov-chat-backend
+    - npm ci
+    - npm test -- --junit
+  artifacts:
+    when: always
+    reports:
+      junit: components/gov-chat-backend/junit.xml
+    paths:
+      - components/gov-chat-backend/coverage/
+```
+
+**View test results:**
+1. Open Pipeline in GitLab → Click "Test" job
+2. "Tests" tab shows pass/fail summary
+3. Click test file to see individual test cases
+4. Download `junit.xml` for offline analysis
+
+### MR Blocking on Failure
+
+**Protected branches** (`main`, `production`):
+- Pipeline **must pass** before MR can be merged
+- Failing jobs block merge automatically
+- No manual override allowed
+
+**Feature branches** (`feat/*`, `fix/*`):
+- Pipeline runs but does not block commits
+- Warnings displayed in MR page
+
+### Running CI Checks Locally
+
+Before pushing, run the same checks locally to avoid CI failures:
+
+```bash
+# Run all lint checks
+npm run lint
+npm run lint:py
+npm run lint:dart
+
+# Run all tests
+cd components/gov-chat-backend && npm test
+cd components/gov-chat-frontend && npm test
+cd components/document-repository && npm test
+cd genie-ai-overlay && pytest
+
+# Validate config
+cd tests/config-validator && npm test
+
+# Run E2E tests (requires services running)
+npm run test:e2e
+```
+
+**Parallel execution with npm-run-all:**
+
+```bash
+# Install globally
+npm install -g npm-run-all
+
+# Run all lint checks in parallel
+npm-run-all --parallel lint lint:py lint:dart
+
+# Run all tests in parallel
+npm-run-all --parallel test test:py
+```
+
+### CI Pipeline Jobs Reference
+
+```yaml
+# .gitlab-ci.yml (simplified)
+stages:
+  - lint
+  - test
+  - config
+  - e2e
+
+variables:
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.10"
+
+# Stage: lint
+lint-js:
+  stage: lint
+  script:
+    - npm ci
+    - npm run lint
+  rules:
+    - changes:
+        - "components/**/*.js"
+        - "components/**/*.vue"
+
+lint-py:
+  stage: lint
+  image: python:3.10
+  script:
+    - cd genie-ai-overlay
+    - pip install ruff
+    - ruff check .
+  rules:
+    - changes:
+        - "genie-ai-overlay/**/*.py"
+
+# Stage: test
+test-backend:
+  stage: test
+  script:
+    - cd components/gov-chat-backend
+    - npm ci
+    - npm test -- --junit
+  artifacts:
+    reports:
+      junit: components/gov-chat-backend/junit.xml
+  rules:
+    - changes:
+        - "components/gov-chat-backend/**"
+
+# Stage: config
+validate-config:
+  stage: config
+  script:
+    - cd tests/config-validator
+    - npm install
+    - npm test -- --env-file=../../env
+  rules:
+    - changes:
+        - "env"
+        - "docker-compose.yaml"
+
+# Stage: e2e
+e2e-playwright:
+  stage: e2e
+  script:
+    - npx playwright install
+    - npm run test:e2e
+  artifacts:
+    paths:
+      - tests/e2e/playwright-report/
+  when: manual  # Requires staging environment
 ```
 
 ---

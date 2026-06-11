@@ -1,0 +1,2 @@
+This is a test document for E2E upload validation.
+It contains plain text content for testing the document repository upload flow.

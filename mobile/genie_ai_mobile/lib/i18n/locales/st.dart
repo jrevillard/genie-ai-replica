@@ -512,7 +512,8 @@ const Map<String, dynamic> stLocale = {
         "Sena se tla hlakola dintlha tsohle tsa profaele ya hao le nalane ya dipuisano.",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "Hlakola Ak'haonte",
     "deleteAccountDesc":
         "Sena se tla hlakola ak'haonte ya hao ka ho sa feleng le dintlha tsohle tse amanang le eona.",

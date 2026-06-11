@@ -18,8 +18,8 @@ class AuthInterceptor extends http.BaseClient {
     required this.tokenStorage,
     required this.onRefreshToken,
     AuthLogger? logger,
-  })  : _inner = inner,
-        _logger = logger;
+  }) : _inner = inner,
+       _logger = logger;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {

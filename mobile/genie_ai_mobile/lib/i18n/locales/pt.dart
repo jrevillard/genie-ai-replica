@@ -511,7 +511,8 @@ const Map<String, dynamic> ptLocale = {
         "Isso limpará todos os seus dados de perfil e histórico de chat.",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "Excluir Conta",
     "deleteAccountDesc":
         "Isso excluirá permanentemente sua conta e todos os dados associados.",

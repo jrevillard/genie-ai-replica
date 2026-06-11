@@ -118,10 +118,18 @@ class ThemeManager extends ChangeNotifier {
   // ===========================================================================
 
   ThemeData get lightTheme => AppTheme.build(
-    AppTokens.fromConfig(config: _config, isDark: false, fontScale: fontSize / 50.0),
+    AppTokens.fromConfig(
+      config: _config,
+      isDark: false,
+      fontScale: fontSize / 50.0,
+    ),
   );
 
   ThemeData get darkTheme => AppTheme.build(
-    AppTokens.fromConfig(config: _config, isDark: true, fontScale: fontSize / 50.0),
+    AppTokens.fromConfig(
+      config: _config,
+      isDark: true,
+      fontScale: fontSize / 50.0,
+    ),
   );
 }

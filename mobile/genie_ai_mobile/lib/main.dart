@@ -63,11 +63,7 @@ void main() async {
   // Initialize Connectivity (Online/Offline)
   await ConnectivityService().init();
 
-  runApp(
-    const ProviderScope(
-      child: MyApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends ConsumerStatefulWidget {
@@ -125,7 +121,8 @@ class _MyAppState extends ConsumerState<MyApp> {
       final expiresAt = uri.queryParameters['expires_at'];
       if (accessToken != null && idToken != null && refreshToken != null) {
         final expiration = expiresAt != null
-            ? DateTime.tryParse(expiresAt) ?? DateTime.now().add(const Duration(seconds: 300))
+            ? DateTime.tryParse(expiresAt) ??
+                  DateTime.now().add(const Duration(seconds: 300))
             : DateTime.now().add(const Duration(seconds: 300));
         await tokenStorage.saveTokens(
           accessToken: accessToken,
@@ -137,7 +134,9 @@ class _MyAppState extends ConsumerState<MyApp> {
         // re-runs build() and crashes on late final fields.
         // ignore: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
         ref.read(authProvider.notifier).state = const AuthState.authenticated();
-        debugPrint('[TEST-AUTH] Tokens injected via deep link, expiration: $expiration');
+        debugPrint(
+          '[TEST-AUTH] Tokens injected via deep link, expiration: $expiration',
+        );
       } else {
         debugPrint('[TEST-AUTH] Missing token parameters in deep link');
       }
@@ -150,11 +149,16 @@ class _MyAppState extends ConsumerState<MyApp> {
 
     // Non-OIDC HTTPS links (email verification, etc.) → open in system browser
     try {
-      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
       if (launched) {
         debugPrint('[APPLINKS] Launched system browser for: $uri');
       } else {
-        debugPrint('[APPLINKS] Failed to launch browser for: $uri (no browser app available)');
+        debugPrint(
+          '[APPLINKS] Failed to launch browser for: $uri (no browser app available)',
+        );
       }
     } catch (e) {
       debugPrint('[APPLINKS] Error launching browser: $e');
@@ -248,10 +252,7 @@ class _MyAppState extends ConsumerState<MyApp> {
           },
           home: authState.status == AuthStatus.authenticated
               ? MainScreen(
-                  user: {
-                    'id': authState.userId ?? '',
-                    'accessToken': '',
-                  },
+                  user: {'id': authState.userId ?? '', 'accessToken': ''},
                   isDarkMode: ThemeManager().isDarkMode,
                   toggleTheme: _toggleTheme,
                   onLogout: _onLogout,
@@ -261,9 +262,8 @@ class _MyAppState extends ConsumerState<MyApp> {
               : const OidcLoginScreen(),
           routes: {
             '/login': (context) => const OidcLoginScreen(),
-            '/profile': (context) => UserProfileScreen(
-              user: {'id': authState.userId ?? ''},
-            ),
+            '/profile': (context) =>
+                UserProfileScreen(user: {'id': authState.userId ?? ''}),
             '/about': (context) => const AboutScreen(),
           },
         );
@@ -445,7 +445,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                 key: _chatBotKey,
                                 userId: widget.user['id'] ?? widget.user['_id'],
                                 onRefreshSidebar: _refreshSidebar,
-                                onRelatedDocumentsUpdate: _updateRelatedDocuments,
+                                onRelatedDocumentsUpdate:
+                                    _updateRelatedDocuments,
                                 httpClient: widget.httpClient,
                                 streamBaseUrl: widget.streamBaseUrl,
                               ),

@@ -105,13 +105,20 @@ if os.path.exists(path):
     with open(path, 'r', encoding='utf-8') as f:
         for line in f:
             if line.startswith('#'):
-                parts = line.lstrip('#').strip().split(' ', 1)
-                epic_story = sys.argv[2].split('-', 1)[0] if '-' in sys.argv[2] else ''
-                print(epic_story + '. ' + parts[1].strip() if len(parts) > 1 else parts[0].strip())
+                heading = line.lstrip('#').strip()
+                if heading.startswith('Story '):
+                    print(heading)
+                else:
+                    parts = sys.argv[2].split('-')
+                    print('Story ' + parts[0] + '.' + parts[1] + ': ' + heading if len(parts) >= 2 else heading)
                 break
 else:
     parts = sys.argv[2].split('-')
-    print(parts[0] + '.' + parts[1] if len(parts) > 1 else sys.argv[2])
+    if len(parts) >= 2:
+        title_part = ' '.join(parts[2:]).title() if len(parts) > 2 else 'Untitled'
+        print('Story ' + parts[0] + '.' + parts[1] + ': ' + title_part)
+    else:
+        print(sys.argv[2])
 " {implementation_artifacts} {entry}
                 STORE: entry_title
       # --- Parse status from sprint-status (format: "key: status") ---
@@ -138,74 +145,59 @@ else:
       - INCLUDE: common/find-issue
       - CHECK: empty issue_id
         FALSE:
-          # Verify match: check if the issue title matches (case-sensitive)
+          # Found — check status
           - CHECK: platform eq "gitlab"
             TRUE:
-              - RUN: glab api "projects/{project}/issues/{issue_id}" --hostname {host} | python3 -c "import json,sys; print(json.load(sys.stdin)['title'])"
-                STORE: found_title
-                PLATFORM: gitlab
-            FALSE:
-              - RUN: gh api "repos/{project}/issues/{issue_id}" --hostname {host} --jq '.title'
-                STORE: found_title
-                PLATFORM: github
-          - CHECK: found_title eq "{entry_title}"
-            TRUE:
-              # Title matches — check status
-              - CHECK: platform eq "gitlab"
-                TRUE:
-                  - RUN: glab api "projects/{project}/issues/{issue_id}" --hostname {host} | python3 -c "
+              - RUN: glab api "projects/{project}/issues/{issue_id}" --hostname {host} | python3 -c "
 import json, sys
 for l in json.load(sys.stdin)['labels']:
     if l.startswith('status'):
         print(l)
 "
-                    STORE: current_status_label
-                    PLATFORM: gitlab
-                FALSE:
-                  - RUN: gh api "repos/{project}/issues/{issue_id}" --hostname {host} --jq '[.labels[] | select(.name | startswith("status:")) | .name][0] // "none"'
-                    STORE: current_status_label
-                    PLATFORM: github
-              - CHECK: current_status_label eq "status{sep}{mapped_status}"
-                TRUE:
-                  # Already in sync
-                  - RUN: python3 -c "
+                  STORE: current_status_label
+                  PLATFORM: gitlab
+              FALSE:
+                - RUN: gh api "repos/{project}/issues/{issue_id}" --hostname {host} --jq '[.labels[] | select(.name | startswith("status:")) | .name][0] // "none"'
+                  STORE: current_status_label
+                  PLATFORM: github
+          - CHECK: current_status_label eq "status{sep}{mapped_status}"
+            TRUE:
+              # Already in sync
+              - RUN: python3 -c "
 n = int(sys.argv[1]) + 1
 print(n)
 " {sync_skipped}
-                    STORE: sync_skipped
+                STORE: sync_skipped
+            FALSE:
+              # Status differs — update
+              - SET: { variable: new_status, value: "{mapped_status}" }
+              - CHECK: mapped_status eq "done"
+                TRUE:
+                  - SET: { variable: close, value: "true" }
                 FALSE:
-                  # Status differs — update
-                  - SET: { variable: new_status, value: "{mapped_status}" }
-                  - CHECK: mapped_status eq "done"
+                  - CHECK: mapped_status eq "closed"
                     TRUE:
                       - SET: { variable: close, value: "true" }
                     FALSE:
-                      - CHECK: mapped_status eq "closed"
+                      - CHECK: mapped_status eq "backlog"
                         TRUE:
-                          - SET: { variable: close, value: "true" }
+                          - SET: { variable: close, value: "none" }
                         FALSE:
-                          - CHECK: mapped_status eq "backlog"
+                          - CHECK: mapped_status eq "deferred"
                             TRUE:
                               - SET: { variable: close, value: "none" }
                             FALSE:
-                              - CHECK: mapped_status eq "deferred"
+                              - CHECK: mapped_status eq "optional"
                                 TRUE:
                                   - SET: { variable: close, value: "none" }
                                 FALSE:
-                                  - CHECK: mapped_status eq "optional"
-                                    TRUE:
-                                      - SET: { variable: close, value: "none" }
-                                    FALSE:
-                                      - SET: { variable: close, value: "false" }
-                  - INCLUDE: common/update-issue-status
-                  - RUN: python3 -c "
+                                  - SET: { variable: close, value: "false" }
+              - INCLUDE: common/update-issue-status
+              - RUN: python3 -c "
 n = int(sys.argv[1]) + 1
 print(n)
 " {sync_updated}
-                    STORE: sync_updated
-            FALSE:
-              # Title doesn't match — treat as no match (create new)
-              - SET: { variable: issue_id, value: "" }
+                STORE: sync_updated
         TRUE:
           # No issue found — create
           - SET: { variable: issue_id, value: "" }

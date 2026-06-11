@@ -131,22 +131,27 @@ ansible_user=jerome
 
 Set in `group_vars/<env>/vault.yml`:
 
-| Variable | Description |
-|----------|-------------|
-| `arango_password` | ArangoDB root password |
-| `session_secret` | Session encryption secret |
-| `translation_cache_password` | Redis cache password |
-| `postgres_password` | PostgreSQL superuser password |
-| `kong_db_password` | PostgreSQL dedicated Kong user password (must differ from `postgres_password`) |
-| `keycloak_admin_password` | Keycloak master admin console password |
-| `genie_admin_password` | GENIE realm admin user password (frontend admin) |
-| `genie_admin_email` | GENIE realm admin user email (required for email verification) |
-| `keycloak_db_password` | PostgreSQL dedicated Keycloak user password |
-| `keycloak_client_secret` | OIDC client secret for genie-app |
-| `keycloak_proxy_client_secret` | Service account secret for admin API proxy |
-| `kc_dataprep_client_secret` | Dataprep service account secret (client_credentials grant) |
-| `email_password` | SMTP password |
-| `hugging_face_hub_token` | Hugging Face Hub token |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `arango_password` | always | ArangoDB root password |
+| `translation_cache_password` | always | Redis cache password |
+| `postgres_password` | always | PostgreSQL superuser password |
+| `kong_db_password` | always | PostgreSQL dedicated Kong user password (must differ from `postgres_password`) |
+| `keycloak_admin_password` | always | Keycloak master admin console password |
+| `genie_admin_password` | always | GENIE realm admin user password (frontend admin) |
+| `genie_admin_email` | always | GENIE realm admin user email (required for email verification) |
+| `keycloak_db_password` | always | PostgreSQL dedicated Keycloak user password |
+| `keycloak_client_secret` | always | OIDC client secret for genie-app |
+| `keycloak_proxy_client_secret` | always | Service account secret for admin API proxy |
+| `kc_dataprep_client_secret` | always | Dataprep service account secret (client_credentials grant) |
+| `kc_mobile_client_id` | always | Mobile app Keycloak client ID (Flutter, public client with PKCE) |
+| `kc_mobile_redirect_scheme` | always | Mobile app redirect scheme (e.g. `genieai://`) |
+| `email_password` | always | SMTP password |
+| `hugging_face_hub_token` | GPU node | Hugging Face Hub token (model downloads) |
+| `vllm_api_key` | remote GPU | API key for GPU node nginx auth (set in `group_vars/<env>/vault.yml`) |
+| `grafana_admin_password` | observability | Grafana admin password (required when `enable_observability=1`) |
+| `grafana_client_id` | observability | Keycloak OIDC client ID for Grafana SSO (default: `grafana`, required when `enable_observability=1`) |
+| `grafana_client_secret` | observability | Grafana OIDC client secret (required when `enable_observability=1`) |
 
 ## Environment Variables (Non-Secret)
 
@@ -157,6 +162,17 @@ Set in `group_vars/<env>/vars.yml`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `deploy_opea` | `1` | Deploy OPEA/AI services (GPU) |
+| `enable_observability` | `0` | Deploy OTel Collector + VictoriaMetrics + VictoriaLogs + VictoriaTraces + Grafana |
+| `grafana_admin_user` | `admin` | Grafana admin username |
+| `victoriametrics_retention` | `30d` | VictoriaMetrics data retention period |
+| `victorialogs_retention` | `30d` | VictoriaLogs data retention period |
+| `victoriatraces_retention` | `30d` | VictoriaTraces data retention period |
+| `otel_traces_sampler_rate` | `100.0` | Trace sampling percentage (0.0–100.0) |
+| `kong_tracing_instrumentations` | `request` | Kong tracing instrumentations (`off`, `request`, `all`). Default `request` — negligible overhead when OTel plugin disabled. |
+| `kong_tracing_sampling_rate` | `1.0` | Kong internal trace sampling rate (0.0–1.0). Default `1.0` = 100%, aligned with `otel_traces_sampler_rate`. |
+| `otel_exporter_otlp_endpoint` | `http://otel-collector:4318` | OTLP Collector base URL — used by backend (Node.js), OPEA services (Python), and Kong OTel plugin (via restore script). Override for external collectors. |
+| `grafana_alert_webhook_url` | `""` | Webhook URL for Grafana alert notifications (empty = disabled) |
+| `grafana_alert_email` | `""` | Email address for Grafana alert notifications (empty = disabled) |
 | `gpu_env_file` | `env.t4` | GPU defaults file (empty = none). Loaded first; Ansible `.env` takes precedence. |
 
 ### API Gateway (NGINX)
@@ -167,6 +183,7 @@ Set in `group_vars/<env>/vars.yml`:
 | `nginx_http_port` | `80` | HTTP port (only set if non-default) |
 | `nginx_https_port` | `443` | HTTPS port (only set if non-default) |
 | `nginx_permissions_policy` | `camera=(), microphone=(), geolocation=()` | Nginx Permissions-Policy header |
+| `kong_trusted_ips` | `10.0.0.0/8` | CIDR range for X-Forwarded-* header passthrough. Kong trusts these IPs for `X-Forwarded-Proto/Host/Port/Prefix`. Docker Compose: `172.16.0.0/12`, Swarm overlay: `10.0.0.0/8` |
 | `registry_port` | `5000` | Local Docker registry port |
 
 ### Frontend Configuration
@@ -202,6 +219,7 @@ Set in `group_vars/<env>/vars.yml`:
 | `arango_db` | `genie-ai` | ArangoDB database name (default: `genie-ai` in code) |
 | `arango_graph_name` | `GRAPH` | ArangoDB graph name (used by retriever and dataprep) |
 | `arango_port` | `8529` | ArangoDB port exposed on host |
+| `translation_cache` | `on` | Translation cache toggle (`on`/`off`). Uses Redis with `translation_cache_password` |
 
 ### LLM Model Configuration (vLLM)
 
@@ -240,6 +258,8 @@ Set in `group_vars/<env>/vars.yml`:
 | `chatqna_type` | `standard` | ChatQnA service type |
 | `chatqna_system_prompt` | (built-in) | LLM system prompt (optional, has built-in default) |
 | `chatqna_enforce_abstention` | `true` | Whether to enforce abstention |
+| `opea_streaming` | `true` | Enable SSE streaming for ChatQnA responses. Set to `false` to disable |
+| `chatqna_stream_timeout` | `3600000` | Timeout in milliseconds for ChatQnA streaming responses (default: 1 hour). Set to `300000` for 5 minutes |
 
 ### Retriever Configuration
 
@@ -307,6 +327,25 @@ Set in `group_vars/<env>/vars.yml`:
 | `keycloak_google_client_secret` | — | Google IdP client secret (optional, in vault) |
 | `keycloak_microsoft_client_id` | — | Microsoft IdP client ID (optional) |
 | `keycloak_microsoft_client_secret` | — | Microsoft IdP client secret (optional, in vault) |
+
+**Keycloak Realm Behavior** (configured automatically by `keycloak-config` service, override in `vars.yml`):
+
+| Variable | Default | Required | Description |
+|----------|---------|----------|-------------|
+| `genie_admin_username` | `genieadmin` | no | Admin username created in GENIE realm |
+| `kc_dataprep_client_id` | `genie-dataprep` | no | Keycloak client ID for dataprep service account |
+| `keycloak_ssl_skip_verify` | `""` | no | Skip SSL verification for Keycloak API calls (set `"true"` for self-signed certs) |
+| `keycloak_password_policy` | — | no | Password policy string (e.g. `length(8) and notUsername`) |
+| `keycloak_theme` | `keycloak` | no | Login theme for Keycloak |
+| `keycloak_access_token_lifespan` | — | no | Access token lifespan (e.g. `300` seconds, `5m`) |
+| `keycloak_registration_enabled` | — | no | Enable user self-registration (`true`/`false`) |
+| `keycloak_verify_email` | — | no | Require email verification for new users |
+| `keycloak_reset_password` | — | no | Allow users to reset their password |
+| `keycloak_login_with_email` | — | no | Allow email-based login |
+| `keycloak_duplicate_emails` | — | no | Allow duplicate emails across users |
+| `keycloak_brute_force` | — | no | Enable brute-force attack protection |
+| `keycloak_i18n_enabled` | — | no | Enable internationalization in login UI |
+| `keycloak_locale` | — | no | Default locale for login UI |
 
 Keycloak is proxied by NGINX at `/auth/*`. The `keycloak-config` service automatically applies realm configuration (clients, roles, mappers) on startup.
 
@@ -407,6 +446,94 @@ The GPU env file is loaded first, then the Ansible-generated `.env` is loaded on
 **Ansible `.env` values take precedence** over GPU env file values for any duplicate variables.
 This allows per-environment tuning via Ansible while keeping GPU defaults in the committed files.
 
+### Remote GPU Node (Optional)
+
+GENIE.AI supports a standalone GPU node architecture. Instead of running
+AI services alongside the app stack, deploy a dedicated GPU node with its own compose file
+and nginx reverse proxy. The app node connects to the GPU node via HTTPS on port 443
+with path-based routing and API key authentication.
+
+#### Deploy the GPU Node
+
+The GPU node has its own Ansible playbook (`deploy-gpu.yml`) and inventory group:
+
+```bash
+# 1. Create inventory (separate group for the GPU node)
+cp inventory/inventory.example inventory/my-gpu.ini
+# Edit: set [my-gpu] group, update host IP
+
+# 2. Create environment config directory
+mkdir -p group_vars/my-gpu
+cp group_vars/itu_rtx_gpu_api/vars.yml group_vars/my-gpu/vars.yml
+# Edit: set gpu_public_domain, certbot_email, etc.
+
+# 3. Create encrypted secrets (GPU node vault)
+ansible-vault create group_vars/my-gpu/vault.yml
+# Required: hugging_face_hub_token, gpu_api_keys (list of {name, key} entries)
+
+# 4. Deploy
+ansible-playbook -i inventory/my-gpu.ini deploy-gpu.yml --vault-id my-gpu@prompt
+```
+
+Tagged re-runs:
+```bash
+ansible-playbook -i inventory/my-gpu.ini deploy-gpu.yml --vault-id my-gpu@prompt --tags install    # Docker + NVIDIA toolkit
+ansible-playbook -i inventory/my-gpu.ini deploy-gpu.yml --vault-id my-gpu@prompt --tags prepare    # Render configs (nginx, API keys, compose)
+ansible-playbook -i inventory/my-gpu.ini deploy-gpu.yml --vault-id my-gpu@prompt --tags deploy     # Deploy + smoke tests
+```
+
+#### GPU Node Services
+
+| Path | Backend | Description |
+|------|---------|-------------|
+| `/llm/` | vLLM (LLM inference) | OpenAI-compatible chat completions |
+| `/translation/` | vLLM (Translation) | Translation model inference |
+| `/embed/` | TEI (Embedding) | Text embedding for vector search |
+| `/rerank/` | TEI (Reranking) | Result reranking |
+| `/docling/` | docling-serve | Document extraction |
+
+All services are behind nginx with TLS termination and API key authentication on port 443.
+
+#### GPU Node Vault Secrets
+
+| Variable | Description |
+|----------|-------------|
+| `hugging_face_hub_token` | Hugging Face Hub token (model downloads) |
+| `gpu_api_keys` | List of API keys: `[{name: "key-name", key: "actual-api-key"}]` |
+
+#### GPU Node Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `gpu_public_domain` | `gpu.example.com` | Public domain (CN in TLS cert) |
+| `gpu_self_signed_certs` | `true` | Generate self-signed certs (set `false` for Let's Encrypt) |
+| `gpu_env_file` | `""` | GPU defaults file (empty = none) |
+| `gpu_node_host` | `""` | Remote GPU node hostname/IP (set in app node env to route AI services) |
+| `vllm_api_key` | `""` | API key for GPU node nginx auth (set in app node vault) |
+| `opea_ssl_skip_verify` | `""` | Disable SSL cert verification for OPEA services (`"1"` for self-signed certs, empty = verify) |
+| `opea_api_key` | `""` | API key injected into OPEA outbound HTTP calls (typically same as `vllm_api_key`) |
+
+#### Connect the App Node to the GPU Node
+
+When `gpu_node_host` is set in `group_vars/<env>/vars.yml`, Ansible automatically:
+
+1. Sets `GPU_MODEL_REPLICAS=0` (skips GPU-heavy containers on the app node)
+2. Generates endpoint URLs: `VLLM_ENDPOINT`, `VLLM_TRANSLATION_ENDPOINT`, `EMBEDDING_SERVICE_URL`, `RERANKER_SERVICE_URL`, `DOCLING_ENDPOINT`
+3. Propagates `VLLM_API_KEY` from vault
+
+For manual setup (Compose mode), set in `.env` (Section 14):
+
+```bash
+GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
+GPU_MODEL_REPLICAS=0                # Skip local GPU containers
+VLLM_API_KEY=<your-api-key>         # API key from GPU node (sent as Authorization: Bearer)
+OPEA_SSL_SKIP_VERIFY=1              # If GPU node uses self-signed certs
+```
+
+> **Note:** `OPEA_SSL_SKIP_VERIFY` is independent of `gpu_node_host`.
+> It controls SSL bypass baked into OPEA Docker images via `genie_ssl_patch.py`.
+> Use `OPEA_SSL_SKIP_VERIFY=1` only with self-signed certs — omit for Let's Encrypt or public CAs.
+
 ## Port Configuration
 
 If ports 80/443 are occupied (e.g. by another stack), override them in your environment config:
@@ -461,14 +588,14 @@ ssh node "docker service ls --filter name=genieai_keycloak"
 Docker Swarm (`docker stack deploy`) does **not** automatically load `.env` files like Docker Compose does. To ensure environment variables are correctly substituted:
 
 1. The playbook verifies that critical vault variables (ARANGO_PASSWORD, POSTGRES_PASSWORD, KC_DATAPREP_CLIENT_SECRET) are set in the `.env` file before deployment
-2. It generates a resolved `docker-compose.yaml` with all variables substituted using `docker compose config`
+2. It generates a resolved `docker-compose.resolved.yaml` with all variables substituted using `docker compose config` (the source template is never modified)
 3. Post-processing fixes known `docker compose config` issues:
    - **Port integers**: `docker compose config` converts published ports to strings (e.g. `"80"` instead of `80`), which Swarm rejects. A `sed` fix restores them to integers.
    - **`name:` properties**: `docker compose config` adds `name:` properties that Swarm does not support. A `sed` fix removes them.
-4. The resolved file is deployed to the Swarm (overwriting the template from git)
+4. The resolved file is deployed to the Swarm
 5. The resolved file is set to mode `0600` since it contains secrets
 
-This means `docker-compose.yaml` on the target server will differ from the one in git — this is expected. The original is restored on each `prepare` run via git clone/pull.
+The source template (`docker-compose.yaml`) is never modified — resolved output is written to `docker-compose.resolved.yaml`. Tagged re-runs (`--tags build,deploy`) correctly re-resolve variables since the source always contains template references.
 
 **Note on CSP values**: Variables containing CSP keywords like `'self'` must be quoted in the `.env` file (e.g. `CSP_CONNECT_SRC="'self' https://example.com"`). Without quotes, `docker compose config`'s YAML parser strips the single quotes, breaking the CSP directive. The Ansible template handles this automatically.
 
@@ -492,8 +619,55 @@ ansible-playbook -i inventory/itu_rtx_test.ini teardown.yml --vault-id itu_rtx_t
 
 ### "Missing required vault variable"
 ```bash
-ansible-vault edit --vault-id itu_rtx_test@prompt group_vars/itu_rtx_test/vault.yml
-# Ensure all secrets are set
+ansible-vault edit --vault-id <env>@prompt group_vars/<env>/vault.yml
+# Ensure all secrets listed in the Vault Secrets table are set
+```
+
+### `'swarm_registry_url' is undefined` or `'image_tag' is undefined`
+
+These variables are computed by `tasks/deploy-shared-facts.yml` during the `build` tag. If you skip the build tag and go directly to `deploy`, the facts are missing.
+
+**Fix:** Always include `build` before `deploy`, or run both together:
+```bash
+ansible-playbook -i inventory/<env>.ini deploy.yml --tags build,deploy --vault-id <env>@prompt
+```
+
+### `'nginx_permissions_policy' is undefined`
+
+The `nginx_permissions_policy` variable is set in `group_vars/all.yml` but may be missing if you have a custom `vars.yml` that overrides `nginx_` variables without including this one.
+
+**Fix:** Ensure `group_vars/all.yml` is loaded (do not create a `vars.yml` that shadows it), or add the variable explicitly:
+```yaml
+# group_vars/<env>/vars.yml
+nginx_permissions_policy: "camera=(), microphone=(), geolocation=()"
+```
+
+### `Permission denied (publickey)`
+
+SSH key not configured on the target host, or connecting with wrong user.
+
+**Fix:**
+```bash
+# Copy your public key to the target host
+ssh-copy-id <user>@<host>
+
+# WSL users: if keys are on a Windows mount (permissions 777), SSH refuses them
+# Copy to WSL home instead:
+cp -r /mnt/c/Users/<you>/.ssh ~/.ssh
+chmod 700 ~/.ssh && chmod 600 ~/.ssh/*
+```
+
+### "Missing required vault variable: kc_mobile_client_id"
+
+The `kc_mobile_client_id` and `kc_mobile_redirect_scheme` vault variables are validated by the playbook but may be missing from older vault files.
+
+**Fix:** Add them to your vault:
+```bash
+ansible-vault edit --vault-id <env>@prompt group_vars/<env>/vault.yml
+```
+```yaml
+kc_mobile_client_id: "genie-mobile"       # Keycloak public client ID for Flutter app
+kc_mobile_redirect_scheme: "genieai://"    # Mobile app redirect URI scheme
 ```
 
 ### Docker build fails

@@ -115,6 +115,18 @@ describe('keycloak-proxy-service', () => {
         'Failed to obtain service account token'
       );
     });
+
+    it('should return cached token without fetching', async () => {
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse());
+
+      const first = await keycloakProxyService.getServiceAccountToken();
+      expect(first).toBe('test-token-123');
+
+      // Second call should use cache — no new fetch
+      await keycloakProxyService.getServiceAccountToken();
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('deleteUser', () => {
@@ -320,6 +332,18 @@ describe('keycloak-proxy-service', () => {
     it('should map 409 to conflict', () => {
       const error = keycloakProxyService._mapKeycloakError(409, 'Conflict', '/users/x');
       expect(error.message).toBe('Conflict in Keycloak operation (e.g. duplicate email)');
+    });
+
+    it('should map 401 to authentication failed', () => {
+      const error = keycloakProxyService._mapKeycloakError(401, 'Unauthorized', '/admin/realms');
+      expect(error.message).toBe('Keycloak authentication failed');
+      expect(error.status).toBe(401);
+    });
+
+    it('should map unknown status to generic Keycloak API error', () => {
+      const error = keycloakProxyService._mapKeycloakError(500, 'Server Error', '/admin/realms');
+      expect(error.message).toBe('Keycloak API error: 500');
+      expect(error.status).toBe(500);
     });
   });
 

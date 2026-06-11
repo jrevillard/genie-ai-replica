@@ -183,3 +183,23 @@ clients:
       require.pushed.authorization.requests: false
     redirectUris:
       - $(env:KC_MOBILE_REDIRECT_SCHEME)://callback
+
+  # Grafana observability dashboards — OIDC SSO via Keycloak
+  # Confidential client with standard flow. Grafana authenticates users via Generic OAuth.
+  - clientId: $(env:KC_GRAFANA_CLIENT_ID)
+    enabled: true
+    publicClient: false
+    standardFlowEnabled: true
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: false
+    secret: $(env:KC_GRAFANA_CLIENT_SECRET)
+    attributes:
+      pkce.code.challenge.method: S256
+      oauth2.device.authorization.grant.enabled: false
+      client.credentials.use.refresh.token: false
+      require.pushed.authorization.requests: false
+    redirectUris:
+      - $(env:KC_PUBLIC_ORIGIN)/grafana/*
+    webOrigins:
+      - $(env:KC_PUBLIC_ORIGIN)

@@ -4,6 +4,7 @@ const { logger, dbService } = require('../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
+const api = require('@opentelemetry/api');
 
 class QueryService {
   constructor() {
@@ -254,7 +255,7 @@ class QueryService {
    * @param {Object} authHeaders - Auth headers to forward to OPEA
    * @returns {Promise<Object>} { queryId, opeaUrl, opeaPayload, queryData }
    */
-  async initStreamQuery(queryData, _authHeaders) {
+  async initStreamQuery(queryData, authHeaders) {
     logger.info('QueryService.init_stream_query_start');
 
     // Validation (reuse same logic as createQuery)
@@ -361,7 +362,7 @@ class QueryService {
       };
     }
 
-    return { queryId, opeaUrl, opeaPayload, queryData };
+    return { queryId, opeaUrl, opeaPayload, authHeaders, queryData };
   }
 
   /**
@@ -591,8 +592,8 @@ class QueryService {
             messages: queryText,
             stream: false,
             context: {
-              language: queryData.context?.language,
-            },
+              language: queryData.context?.language
+            }
           };
         } else {
           logger.info('[DEBUG] Backend mode is "conversation-with-labels". Formatting payload with full context.');
@@ -610,8 +611,13 @@ class QueryService {
         logger.info('[DEBUG] Sending request to OPEA via Worker Thread...');
         logger.info(`[DEBUG] OPEA Payload: ${JSON.stringify(opeaPayload, null, 2)}`);
 
+        // Inject traceparent from active OTel context so OPEA services join the distributed trace
+        const traceHeaders = {};
+        api.propagation.inject(api.context.active(), traceHeaders);
+        const workerHeaders = { ...headers, ...traceHeaders };
+
         // *** CHANGED: Use Worker Thread for OPEA Call ***
-        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload, headers);
+        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload, workerHeaders);
 
         opeaResponseTime = workerResult.responseTime;
         opeaResponseContent = workerResult.response;
@@ -1578,7 +1584,7 @@ class QueryService {
 
       logger.info('QueryService.get_queries_for_inspector_start', { options });
 
-      let filterConditions = [];
+      const filterConditions = [];
 
       if (options.userId) {
         filterConditions.push(aql`q.userId == ${options.userId}`);
@@ -1660,7 +1666,7 @@ class QueryService {
           RETURN total
       `;
       const countCursor = await this.db.query(countQuery);
-      const totalCount = await countCursor.next() || 0;
+      const totalCount = (await countCursor.next()) || 0;
 
       logger.info('QueryService.get_queries_for_inspector_complete', {
         resultCount: queries.length,

@@ -407,4 +407,406 @@ describe('SessionService', () => {
       expect(removed).toBe(0);
     });
   });
+
+  describe('init error handling', () => {
+    it('should throw error when database connection fails (lines 33-34)', async () => {
+      const { dbService } = require('../shared-lib');
+
+      // Reset the service to uninitialized state
+      sessionService.initialized = false;
+      sessionService.db = null;
+
+      // Mock connection to fail
+      dbService.getConnection.mockRejectedValueOnce(new Error('Connection failed'));
+
+      await expect(sessionService.init()).rejects.toThrow('Connection failed');
+    });
+  });
+
+  describe('init already initialized', () => {
+    it('should return early when already initialized (lines 20-21)', async () => {
+      const { logger } = require('../shared-lib');
+      await sessionService.init();
+
+      // Call init again
+      await sessionService.init();
+
+      // Should log debug message and not re-initialize
+      expect(logger.debug).toHaveBeenCalledWith('SessionService already initialized, skipping');
+    });
+  });
+
+  describe('createSession branches', () => {
+    beforeEach(async () => {
+      await sessionService.init();
+    });
+
+    it('should update session with deviceInfo when provided (line 56)', async () => {
+      const deviceInfo = { type: 'mobile', os: 'iOS' };
+      mockSessionsCollection.document.mockResolvedValueOnce({
+        _key: 'session-1',
+        userId: 'user-1',
+        deviceInfo
+      });
+
+      await sessionService.createSession('user-1', 'user-key-1', deviceInfo);
+
+      expect(mockSessionsCollection.update).toHaveBeenCalledWith('session-1', { deviceInfo });
+    });
+
+    it('should update session with ipAddress when provided as string (line 60)', async () => {
+      mockSessionsCollection.document.mockResolvedValueOnce({
+        _key: 'session-1',
+        userId: 'user-1',
+        ipAddress: '192.168.1.1'
+      });
+
+      await sessionService.createSession('user-1', 'user-key-1', {}, '192.168.1.1');
+
+      expect(mockSessionsCollection.update).toHaveBeenCalledWith('session-1', { ipAddress: '192.168.1.1' });
+    });
+
+    it('should not update when deviceInfo and ipAddress are empty (line 64)', async () => {
+      mockSessionsCollection.document.mockResolvedValueOnce({
+        _key: 'session-1',
+        userId: 'user-1'
+      });
+
+      await sessionService.createSession('user-1', 'user-key-1', {}, '');
+
+      // update should not be called when updateData is empty
+      expect(mockSessionsCollection.update).not.toHaveBeenCalled();
+    });
+
+    it('should handle edge creation error gracefully (line 77)', async () => {
+      mockSessionsCollection.document.mockResolvedValueOnce({
+        _key: 'session-1',
+        userId: 'user-1'
+      });
+
+      // Edge creation fails
+      mockUserSessionsCollection.save.mockRejectedValueOnce(new Error('Edge creation failed'));
+
+      const result = await sessionService.createSession('user-1', 'user-key-1');
+
+      // Should still return session despite edge error
+      expect(result).toBeDefined();
+      expect(result._key).toBe('session-1');
+    });
+
+    it('should throw error when session creation fails (lines 84-85)', async () => {
+      mockSessionsCollection.save.mockRejectedValueOnce(new Error('Database error'));
+
+      await expect(sessionService.createSession('user-1', 'user-key-1')).rejects.toThrow('Database error');
+    });
+  });
+
+  describe('getActiveSession error handling', () => {
+    beforeEach(async () => {
+      await sessionService.init();
+    });
+
+    it('should return null on query error (lines 137-138)', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('Query failed'));
+
+      const result = await sessionService.getActiveSession('user-1');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getOrCreateSession cleanup error', () => {
+    beforeEach(async () => {
+      await sessionService.init();
+    });
+
+    it('should handle background cleanup failure gracefully (line 151)', async () => {
+      const activeSession = createActiveSession();
+      mockDb.query.mockResolvedValueOnce(createMockCursor([activeSession]));
+
+      // Mock cleanupExpiredSessions to fail
+      const originalCleanup = sessionService.cleanupExpiredSessions.bind(sessionService);
+      sessionService.cleanupExpiredSessions = jest.fn().mockRejectedValueOnce(new Error('Cleanup failed'));
+
+      // Should not throw despite cleanup failure
+      const result = await sessionService.getOrCreateSession('user-1', 'user-1');
+
+      expect(result).toBeDefined();
+      expect(result._key).toBe('active-session-1');
+
+      // Restore original method
+      sessionService.cleanupExpiredSessions = originalCleanup;
+    });
+  });
+
+  describe('getOrCreateSession error handling', () => {
+    beforeEach(async () => {
+      await sessionService.init();
+    });
+
+    it('should throw error when getActiveSession fails (lines 167-168)', async () => {
+      // getActiveSession returns null (no active session), so createSession is called
+      mockDb.query.mockResolvedValueOnce(createMockCursor([]));
+
+      // Mock createSession to throw
+      const originalCreateSession = sessionService.createSession.bind(sessionService);
+      sessionService.createSession = jest.fn().mockRejectedValueOnce(new Error('Database error'));
+
+      await expect(sessionService.getOrCreateSession('user-1', 'user-1')).rejects.toThrow('Database error');
+
+      // Restore original method
+      sessionService.createSession = originalCreateSession;
+    });
+  });
+
+  describe('endSession already inactive', () => {
+    beforeEach(async () => {
+      await sessionService.init();
+    });
+
+    it('should return early when session is already inactive (lines 181-182)', async () => {
+      const inactiveSession = {
+        _key: 'session-1',
+        active: false,
+        endTime: new Date().toISOString()
+      };
+
+      mockSessionsCollection.document.mockResolvedValueOnce(inactiveSession);
+
+      const result = await sessionService.endSession('session-1');
+
+      expect(result).toEqual(inactiveSession);
+      expect(mockSessionsCollection.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('endSession verification branches', () => {
+    beforeEach(async () => {
+      await sessionService.init();
+    });
+
+    it('should log warning when session still active after update (lines 205-206)', async () => {
+      mockSessionsCollection.document
+        .mockResolvedValueOnce({ _key: 'session-1', active: true })
+        .mockResolvedValueOnce({ _key: 'session-1', active: true }); // Still active after update
+
+      mockSessionsCollection.update.mockResolvedValueOnce({
+        new: { _key: 'session-1', active: false }
+      });
+
+      await sessionService.endSession('session-1');
+
+      expect(mockSessionsCollection.update).toHaveBeenCalled();
+    });
+
+    it('should log success when session is now inactive (lines 207-208)', async () => {
+      mockSessionsCollection.document
+        .mockResolvedValueOnce({ _key: 'session-1', active: true })
+        .mockResolvedValueOnce({ _key: 'session-1', active: false, endTime: new Date().toISOString() });
+
+      mockSessionsCollection.update.mockResolvedValueOnce({
+        new: { _key: 'session-1', active: false, endTime: new Date().toISOString() }
+      });
+
+      await sessionService.endSession('session-1');
+
+      expect(mockSessionsCollection.update).toHaveBeenCalled();
+    });
+
+    it('should throw error when session update fails (lines 217-218)', async () => {
+      mockSessionsCollection.document.mockResolvedValueOnce({ _key: 'session-1', active: true });
+
+      mockSessionsCollection.update.mockRejectedValueOnce(new Error('Update failed'));
+
+      await expect(sessionService.endSession('session-1')).rejects.toThrow('Update failed');
+    });
+  });
+
+  describe('keepSessionAlive', () => {
+    beforeEach(async () => {
+      await sessionService.init();
+    });
+
+    it('should update lastActiveTime for session (lines 217-240)', async () => {
+      const updatedSession = {
+        _key: 'session-1',
+        lastActiveTime: new Date().toISOString()
+      };
+
+      mockSessionsCollection.update.mockResolvedValueOnce({
+        new: updatedSession
+      });
+
+      const result = await sessionService.keepSessionAlive('session-1');
+
+      expect(result).toEqual(updatedSession);
+      expect(mockSessionsCollection.update).toHaveBeenCalledWith(
+        'session-1',
+        { lastActiveTime: expect.any(String) },
+        { returnNew: true }
+      );
+    });
+
+    it('should throw error when update fails', async () => {
+      mockSessionsCollection.update.mockRejectedValueOnce(new Error('Update failed'));
+
+      await expect(sessionService.keepSessionAlive('session-1')).rejects.toThrow('Update failed');
+    });
+  });
+
+  describe('getUserSessions branches', () => {
+    beforeEach(async () => {
+      await sessionService.init();
+    });
+
+    it('should query with legacyKey when provided (lines 248-264)', async () => {
+      const sessions = [
+        { _key: 'session-1', userId: 'user-1' },
+        { _key: 'session-2', userId: 'legacy-1' }
+      ];
+
+      mockDb.query.mockResolvedValueOnce(createMockCursor(sessions));
+
+      const result = await sessionService.getUserSessions('user-1', { legacyKey: 'legacy-1' });
+
+      expect(result).toHaveLength(2);
+      expect(mockDb.query).toHaveBeenCalled();
+    });
+
+    it('should query activeOnly with legacyKey (lines 250-256)', async () => {
+      const activeSessions = [{ _key: 'session-1', userId: 'user-1', active: true }];
+
+      mockDb.query.mockResolvedValueOnce(createMockCursor(activeSessions));
+
+      const result = await sessionService.getUserSessions('user-1', {
+        legacyKey: 'legacy-1',
+        activeOnly: true
+      });
+
+      expect(result).toHaveLength(1);
+      expect(mockDb.query).toHaveBeenCalled();
+    });
+
+    it('should query activeOnly without legacyKey (lines 265-272)', async () => {
+      const activeSessions = [{ _key: 'session-1', userId: 'user-1', active: true }];
+
+      mockDb.query.mockResolvedValueOnce(createMockCursor(activeSessions));
+
+      const result = await sessionService.getUserSessions('user-1', { activeOnly: true });
+
+      expect(result).toHaveLength(1);
+      expect(mockDb.query).toHaveBeenCalled();
+    });
+
+    it('should query all sessions without filters (lines 274-279)', async () => {
+      const sessions = [
+        { _key: 'session-1', userId: 'user-1', active: true },
+        { _key: 'session-2', userId: 'user-1', active: false }
+      ];
+
+      mockDb.query.mockResolvedValueOnce(createMockCursor(sessions));
+
+      const result = await sessionService.getUserSessions('user-1', {});
+
+      expect(result).toHaveLength(2);
+      expect(mockDb.query).toHaveBeenCalled();
+    });
+
+    it('should throw error when query fails', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('Query failed'));
+
+      await expect(sessionService.getUserSessions('user-1')).rejects.toThrow('Query failed');
+    });
+  });
+
+  describe('getSession', () => {
+    beforeEach(async () => {
+      await sessionService.init();
+    });
+
+    it('should retrieve session by id (lines 292-302)', async () => {
+      const session = {
+        _key: 'session-1',
+        _id: 'sessions/session-1',
+        userId: 'user-1',
+        active: true
+      };
+
+      mockSessionsCollection.document.mockResolvedValueOnce(session);
+
+      const result = await sessionService.getSession('session-1');
+
+      expect(result).toEqual(session);
+    });
+
+    it('should throw error when session not found', async () => {
+      mockSessionsCollection.document.mockRejectedValueOnce(new Error('document not found'));
+
+      await expect(sessionService.getSession('session-1')).rejects.toThrow('document not found');
+    });
+  });
+
+  describe('cleanupExpiredSessions error handling', () => {
+    beforeEach(async () => {
+      await sessionService.init();
+    });
+
+    it('should throw error when query fails (lines 341-342)', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('Query failed'));
+
+      await expect(sessionService.cleanupExpiredSessions()).rejects.toThrow('Query failed');
+    });
+  });
+
+  describe('getSessionStats', () => {
+    beforeEach(async () => {
+      await sessionService.init();
+    });
+
+    it('should retrieve session statistics (lines 374-431)', async () => {
+      const stats = {
+        totalSessions: 100,
+        activeSessions: 25,
+        uniqueUsers: 40,
+        avgSessionDuration: 1800000,
+        sessionsByDevice: [
+          { deviceType: 'mobile', count: 60 },
+          { deviceType: 'desktop', count: 40 }
+        ]
+      };
+
+      mockDb.query.mockResolvedValueOnce({
+        next: jest.fn().mockResolvedValueOnce(stats)
+      });
+
+      const result = await sessionService.getSessionStats('2024-01-01', '2024-12-31');
+
+      expect(result).toEqual(stats);
+      expect(mockDb.query).toHaveBeenCalled();
+    });
+
+    it('should throw error when stats query fails', async () => {
+      mockDb.query.mockRejectedValueOnce(new Error('Stats query failed'));
+
+      await expect(sessionService.getSessionStats('2024-01-01', '2024-12-31')).rejects.toThrow('Stats query failed');
+    });
+
+    it('should handle edge case with no sessions', async () => {
+      const emptyStats = {
+        totalSessions: 0,
+        activeSessions: 0,
+        uniqueUsers: 0,
+        avgSessionDuration: null,
+        sessionsByDevice: []
+      };
+
+      mockDb.query.mockResolvedValueOnce({
+        next: jest.fn().mockResolvedValueOnce(emptyStats)
+      });
+
+      const result = await sessionService.getSessionStats('2024-01-01', '2024-12-31');
+
+      expect(result).toEqual(emptyStats);
+    });
+  });
 });

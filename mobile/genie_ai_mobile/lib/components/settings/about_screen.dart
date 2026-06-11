@@ -124,7 +124,10 @@ class _AboutScreenState extends State<AboutScreen> {
             ),
             const SizedBox(height: DsSpacing.xs),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: DsSpacing.sm, vertical: DsSpacing.xxs),
+              padding: const EdgeInsets.symmetric(
+                horizontal: DsSpacing.sm,
+                vertical: DsSpacing.xxs,
+              ),
               decoration: BoxDecoration(
                 color: tokens.mutedSoft,
                 borderRadius: BorderRadius.circular(DsRadii.lg),
@@ -208,7 +211,10 @@ class _AboutScreenState extends State<AboutScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(fontWeight: FontWeight.w500, color: tokens.fg)),
+          Text(
+            label,
+            style: TextStyle(fontWeight: FontWeight.w500, color: tokens.fg),
+          ),
           Expanded(
             child: Text(
               value,

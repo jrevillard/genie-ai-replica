@@ -202,7 +202,8 @@ const Map<String, dynamic> bnLocale = {
     "noInternetConnection": "ইন্টারনেট সংযোগ নেই",
     "networkUnreachable": "নেটওয়ার্ক পৌঁছাযোগ্য নয়",
     "authenticationFailed": "প্রমাণীকরণ ব্যর্থ হয়েছে",
-    "sessionExpired": "আপনার সেশনের মেয়াদ শেষ হয়েছে। অনুগ্রহ করে আবার সাইন ইন করুন।",
+    "sessionExpired":
+        "আপনার সেশনের মেয়াদ শেষ হয়েছে। অনুগ্রহ করে আবার সাইন ইন করুন।",
   },
   "brandName": "জিনি এআই",
   "nav": {
@@ -512,7 +513,8 @@ const Map<String, dynamic> bnLocale = {
         "এটি আপনার সমস্ত প্রোফাইল ডেটা এবং চ্যাটের ইতিহাস মুছে ফেলবে।",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "অ্যাকাউন্ট মুছে ফেলুন",
     "deleteAccountDesc":
         "এটি আপনার অ্যাকাউন্ট এবং সম্পর্কিত সমস্ত ডেটা স্থায়ীভাবে মুছে ফেলবে।",

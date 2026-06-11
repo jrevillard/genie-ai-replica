@@ -1,0 +1,22 @@
+# =============================================================================
+# GENIE.AI — Grafana Alerting Contact Points
+# =============================================================================
+# Contact points define WHERE alerts are sent. Configure actual endpoints
+# via Grafana UI or environment variables after deployment.
+#
+# NOTE: Grafana provisioning does NOT support env var substitution in YAML.
+# Placeholder values below — update via Grafana UI for production use.
+# =============================================================================
+
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: default-webhook
+    receivers:
+      - uid: default-webhook-receiver
+        type: webhook
+        settings:
+          url: http://localhost:9999/alerts
+          httpMethod: POST
+        disableResolveMessage: false

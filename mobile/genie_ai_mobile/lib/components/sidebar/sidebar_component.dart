@@ -58,12 +58,7 @@ class _SidebarComponentState extends State<SidebarComponent>
     return Container(
       decoration: BoxDecoration(
         color: tokens.surface,
-        border: Border(
-          bottom: BorderSide(
-            color: tokens.border,
-            width: 1,
-          ),
-        ),
+        border: Border(bottom: BorderSide(color: tokens.border, width: 1)),
       ),
       child: TabBar(
         controller: _tabController,
@@ -71,13 +66,14 @@ class _SidebarComponentState extends State<SidebarComponent>
         unselectedLabelColor: tokens.muted,
         indicatorColor: tokens.accent,
         indicatorSize: TabBarIndicatorSize.tab,
-        labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: ThemeManager().tokens.textSm),
+        labelStyle: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: ThemeManager().tokens.textSm,
+        ),
         tabs: [
           Tab(
             icon: const Icon(Icons.category_outlined, size: 20),
-            text: tr(
-              "sidebar.governmentServices",
-            ),
+            text: tr("sidebar.governmentServices"),
             iconMargin: const EdgeInsets.only(bottom: DsSpacing.xs),
           ),
           Tab(
@@ -118,12 +114,7 @@ class _SidebarComponentState extends State<SidebarComponent>
       height: 48,
       decoration: BoxDecoration(
         color: tokens.surface,
-        border: Border(
-          bottom: BorderSide(
-            color: tokens.border,
-            width: 1,
-          ),
-        ),
+        border: Border(bottom: BorderSide(color: tokens.border, width: 1)),
       ),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
@@ -140,7 +131,10 @@ class _SidebarComponentState extends State<SidebarComponent>
               });
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: DsSpacing.md, vertical: DsSpacing.sm),
+              padding: const EdgeInsets.symmetric(
+                horizontal: DsSpacing.md,
+                vertical: DsSpacing.sm,
+              ),
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(
@@ -191,8 +185,7 @@ class _SidebarComponentState extends State<SidebarComponent>
           Expanded(
             child: Column(
               children: [
-                if (_activeTab == "history")
-                  _buildSubTabNavigation(tokens),
+                if (_activeTab == "history") _buildSubTabNavigation(tokens),
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
@@ -228,11 +221,7 @@ class _SidebarComponentState extends State<SidebarComponent>
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.wb_sunny_outlined,
-                  size: 24,
-                  color: tokens.warning,
-                ),
+                Icon(Icons.wb_sunny_outlined, size: 24, color: tokens.warning),
                 const SizedBox(width: DsSpacing.md),
                 Expanded(
                   child: Column(

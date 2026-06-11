@@ -19,7 +19,8 @@ All services run on a single host. Two deployment profiles are available:
 | Profile | Command | Services |
 |---------|---------|----------|
 | **Core** | `docker compose up -d` | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Kong, NGINX |
-| **Full (OPEA)** | `docker compose --profile opea up -d` | Core + vLLM, TEI, Retriever, Dataprep, ChatQnA, Translation |
+| **Full (OPEA)** | `docker compose --profile opea --profile gpu-models up -d` | Core + vLLM, TEI, Retriever, Dataprep, ChatQnA, Translation |
+| **Observability** | `docker compose --profile observability up -d` | Core + OTel Collector, VictoriaMetrics, VictoriaLogs, Grafana |
 
 ## Step 1: Clone Repository
 
@@ -90,6 +91,18 @@ For OPEA/GPU services, also set:
 HUGGING_FACE_HUB_TOKEN=<hf-token>
 ```
 
+For observability (optional), also set:
+
+```bash
+ENABLE_OBSERVABILITY=1
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=<strong-password>
+KC_GRAFANA_CLIENT_ID=grafana
+KC_GRAFANA_CLIENT_SECRET=<strong-secret>
+```
+
+**Note:** `ENABLE_OBSERVABILITY` must be `0` or `1`, not `true`/`false`.
+
 See the `env` template for the full list of variables and their descriptions.
 
 ## Step 4: SSL Certificates
@@ -144,7 +157,7 @@ docker compose build backend
 For OPEA services (only if using `--profile opea`):
 
 ```bash
-docker compose --profile opea build
+docker compose --profile opea --profile gpu-models build
 ```
 
 ## Step 6: Deploy
@@ -170,7 +183,7 @@ This starts: Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Ko
 If you have a GPU and want the full RAG pipeline:
 
 ```bash
-docker compose --profile opea up -d
+docker compose --profile opea --profile gpu-models up -d
 ```
 
 ### 6d. With GPU-specific settings
@@ -178,14 +191,83 @@ docker compose --profile opea up -d
 For NVIDIA T4 (16GB VRAM):
 
 ```bash
-docker compose --env-file .env --env-file env.t4 --profile opea up -d
+docker compose --env-file .env --env-file env.t4 --profile opea --profile gpu-models up -d
 ```
 
 For RTX 6000 ADA (24GB VRAM):
 
 ```bash
-docker compose --env-file .env --env-file env.rtx6000 --profile opea up -d
+docker compose --env-file .env --env-file env.rtx6000 --profile opea --profile gpu-models up -d
 ```
+
+### 6e. Remote GPU Node (Optional)
+
+GENIE.AI supports connecting to a dedicated GPU node for AI services,
+deployed separately from the app stack. When configured, the app node
+routes AI requests to the GPU node via HTTPS on port 443 with API key
+authentication and skips local GPU-heavy containers.
+
+To connect to a remote GPU node, set in `.env`:
+```bash
+GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
+VLLM_API_KEY=<your-api-key>         # API key from the GPU node administrator (Authorization: Bearer)
+OPEA_SSL_SKIP_VERIFY=1              # If GPU node uses self-signed certs
+```
+
+Then deploy orchestrators only (GPU models are skipped):
+```bash
+docker compose --profile opea up -d
+```
+
+> **Note:** `OPEA_SSL_SKIP_VERIFY=1` disables SSL certificate verification in OPEA
+> services via a runtime patch (`configs/ssl/genie_ssl_patch.py`). Only use with
+> self-signed certs. Omit this variable if the GPU node uses Let's Encrypt or a public CA.
+> `VLLM_API_KEY` authenticates with the GPU node nginx via standard `Authorization: Bearer` header.
+> All clients send this header: OpenAI-compatible clients (ChatOpenAI, AsyncOpenAI) via `api_key` param;
+> OPEA TEI wrapper services (embedding, reranker) via `HF_TOKEN` env var (automatically set from
+> `VLLM_API_KEY` in docker-compose.yaml). If Keycloak also uses a self-signed cert, set
+> `KEYCLOAK_SSL_SKIP_VERIFY=1` independently.
+
+#### Self-Signed Certificates — Decision Matrix
+
+Three environment variables control TLS verification for self-signed certificates. Each covers a different layer:
+
+| Variable | Services | Mechanism | When to set |
+|---|---|---|---|
+| `NODE_TLS_REJECT_UNAUTHORIZED=0` | backend, document-repository | Node.js built-in (all HTTPS connections) | NGINX uses self-signed cert (local dev) |
+| `OPEA_SSL_SKIP_VERIFY=1` | embedding, reranker, textgen, dataprep, retriever, chatqna (7 Python services) | `configs/ssl/genie_ssl_patch.py` (patches Python ssl module) | Remote GPU node uses self-signed cert |
+| `KEYCLOAK_SSL_SKIP_VERIFY=1` | dataprep-arango-service only | aiohttp connector in `keycloak_service_account.py` | Keycloak behind NGINX with self-signed cert |
+
+**Quick reference — which variables to set by scenario:**
+
+| Scenario | `NODE_TLS_REJECT_...` | `OPEA_SSL_...` | `KEYCLOAK_SSL_...` |
+|---|---|---|---|
+| Local dev, self-signed NGINX, no remote GPU | `0` | — | — |
+| Local dev, remote GPU with self-signed cert | `0` | `1` | — |
+| Production, real CA certificates on all hosts | — | — | — |
+| Production/air-gapped, self-signed NGINX | `0` | `1`* | `1` |
+
+`—` = use default (verify certs). \* Only if remote GPU node also uses self-signed cert.
+
+### 6f. Start with observability stack
+
+To add the OTel Collector, VictoriaMetrics, VictoriaLogs, and Grafana monitoring stack:
+
+```bash
+docker compose --profile observability up -d
+```
+
+Combine with OPEA for the full stack plus observability:
+
+```bash
+docker compose --profile opea --profile gpu-models --profile observability up -d
+```
+
+**Log collection**: All services use the fluentd logging driver (`driver: fluentd`) to forward container logs to the OTel Collector's `fluent_forward` receiver on port 24224 (localhost only). Docker dual logging (20.10+) keeps `docker logs` functional.
+
+Access Grafana via Kong at `https://<domain>/grafana/` (requires Keycloak OIDC login). Three dashboards are pre-configured: **Service Health**, **RAG Pipeline Trace Waterfall**, and **Service Logs**.
+
+See `configs/otel/README.md` for Collector configuration details.
 
 ## Step 7: Post-Deploy — Kong Configuration
 

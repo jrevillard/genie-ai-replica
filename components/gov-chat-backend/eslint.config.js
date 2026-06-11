@@ -11,8 +11,8 @@ module.exports = [
       sourceType: 'script',
       globals: {
         ...globals.node,
-        AbortController: 'readonly',
-      },
+        AbortController: 'readonly'
+      }
     },
     rules: {
       ...sharedRules

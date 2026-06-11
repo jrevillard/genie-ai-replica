@@ -1,9 +1,24 @@
 # Copyright (C) 2024 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-
 import os
 import time
+
+from tracing import get_meter, get_tracer, sanitize_attributes, setup_trace_logging, setup_tracing
+
+setup_tracing("genieai-retriever")
+
+# Custom application metrics
+_retriever_meter = get_meter()
+_retrieval_requests = _retriever_meter.create_counter(
+    "rag.retrieval.requests",
+    description="Total retrieval requests",
+)
+_retrieval_duration = _retriever_meter.create_histogram(
+    "rag.retrieval.duration",
+    description="Retrieval duration",
+    unit="s",
+)
 
 # import for retrievers component registration
 # from integrations.elasticsearch import OpeaElasticsearchRetriever
@@ -45,6 +60,7 @@ from comps.cores.proto.genieai_api_protocol import (
 from comps.retrievers.src.integrations.genieai_retriever_arangodb import GenieaiArangoRetriever  # noqa: F401
 
 logger = CustomLogger("genieai_retriever_microservice")
+setup_trace_logging("genieai_retriever_microservice")
 logflag = os.getenv("LOGFLAG", False)
 
 
@@ -83,9 +99,16 @@ async def retrieve_docs(
         logger.info(f"[ retrieval ] input: {input}")
 
     try:
-        response = await loader.invoke(input)
-        if logflag:
-            logger.debug(f"[ retrieval ] Retriever component response: {response}")
+        tracer = get_tracer("retriever.retrieve")
+        with tracer.start_as_current_span("retriever.hybrid_search") as span:
+            response = await loader.invoke(input)
+
+            # Set RAG attributes (metadata only — no PII)
+            if isinstance(response, list):
+                span.set_attribute("rag.chunk_count", len(response))
+
+            if logflag:
+                logger.debug(f"[ retrieval ] Retriever component response: {response}")
 
         retrieved_docs = []
         if isinstance(input, (EmbedDoc, EmbedMultimodalDoc)):
@@ -108,6 +131,9 @@ async def retrieve_docs(
                 if isinstance(r, str):
                     retrieved_docs.append(RetrievalResponseData(text=r, metadata=None))
                 else:
+                    # Inject score into metadata so downstream consumers can read it
+                    if r.get("score") is not None and r["doc"].metadata is not None:
+                        r["doc"].metadata["score"] = r["score"]
                     retrieved_docs.append(RetrievalResponseData(text=r["doc"].page_content, metadata=r["doc"].metadata))
             if isinstance(input, RetrievalRequest):
                 result = RetrievalResponse(retrieved_docs=retrieved_docs)
@@ -119,16 +145,43 @@ async def retrieve_docs(
         # Record statistics
         statistics_dict["opea_service@retrievers"].append_latency(time.time() - start, None)
 
+        # Record custom retrieval metrics
+        _retrieval_latency = time.time() - start
+        _retrieval_attrs = sanitize_attributes(
+            {
+                "rag.query_type": os.getenv("RETRIEVER_TYPE", "hybrid"),
+                "error": "false",
+            }
+        )
+        _retrieval_requests.add(1, _retrieval_attrs)
+        _retrieval_duration.record(_retrieval_latency, _retrieval_attrs)
+
         if logflag:
             logger.debug(f"[ retrieval ] Output generated: {result}")
 
         return result
 
     except Exception as e:
+        # Record error metric
+        _err_latency = time.time() - start
+        _err_attrs = sanitize_attributes(
+            {
+                "rag.query_type": os.getenv("RETRIEVER_TYPE", "hybrid"),
+                "error": "true",
+            }
+        )
+        _retrieval_requests.add(1, _err_attrs)
+        _retrieval_duration.record(_err_latency, _err_attrs)
         logger.error(f"[ retrieval ] Error during retrieval invocation: {e}")
         raise
 
 
 if __name__ == "__main__":
     logger.info("Retriever Microservice is starting...")
-    opea_microservices["opea_service@retrievers"].start()
+    service = opea_microservices["opea_service@retrievers"]
+
+    # FastAPI auto-instrumentation is handled globally by tracing.py
+    # setup_tracing() → FastAPIInstrumentor().instrument() runs before
+    # OPEA comps creates the FastAPI app, so traceparent extraction works.
+
+    service.start()

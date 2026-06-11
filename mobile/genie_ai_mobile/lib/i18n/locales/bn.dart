@@ -1080,8 +1080,7 @@ const Map<String, dynamic> bnLocale = {
     },
     "shareWhatsApp": "হোয়াটসঅ্যাপে শেয়ার করুন",
   },
-  "quickhelp": {
-  },
+  "quickhelp": {},
   "common": {
     "cancel": "বাতিল",
     "create": "তৈরি করুন",

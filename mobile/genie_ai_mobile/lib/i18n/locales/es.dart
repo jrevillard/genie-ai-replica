@@ -1077,8 +1077,7 @@ const Map<String, dynamic> esLocale = {
     },
     "shareWhatsApp": "Compartir en WhatsApp",
   },
-  "quickhelp": {
-  },
+  "quickhelp": {},
   "common": {
     "cancel": "Cancelar",
     "create": "Crear",

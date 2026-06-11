@@ -1081,8 +1081,7 @@ const Map<String, dynamic> swLocale = {
     },
     "shareWhatsApp": "Shiriki kwenye WhatsApp",
   },
-  "quickhelp": {
-  },
+  "quickhelp": {},
   "common": {
     "cancel": "Ghairi",
     "create": "Unda",

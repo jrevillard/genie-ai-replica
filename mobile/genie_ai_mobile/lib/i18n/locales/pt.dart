@@ -1080,8 +1080,7 @@ const Map<String, dynamic> ptLocale = {
     },
     "shareWhatsApp": "Compartilhar no WhatsApp",
   },
-  "quickhelp": {
-  },
+  "quickhelp": {},
   "common": {
     "cancel": "Cancelar",
     "create": "Criar",

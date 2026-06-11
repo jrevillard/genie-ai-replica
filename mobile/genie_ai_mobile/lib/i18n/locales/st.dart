@@ -1081,8 +1081,7 @@ const Map<String, dynamic> stLocale = {
     },
     "shareWhatsApp": "Arolelana ho WhatsApp",
   },
-  "quickhelp": {
-  },
+  "quickhelp": {},
   "common": {
     "cancel": "Hlakola",
     "create": "Etsa",

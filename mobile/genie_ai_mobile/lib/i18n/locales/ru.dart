@@ -1076,8 +1076,7 @@ const Map<String, dynamic> ruLocale = {
     },
     "shareWhatsApp": "Поделиться в WhatsApp",
   },
-  "quickhelp": {
-  },
+  "quickhelp": {},
   "common": {
     "cancel": "Отмена",
     "create": "Создать",

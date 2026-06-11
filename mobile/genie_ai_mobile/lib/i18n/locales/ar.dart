@@ -1065,8 +1065,7 @@ const Map<String, dynamic> arLocale = {
     },
     "shareWhatsApp": "شارك على واتساب",
   },
-  "quickhelp": {
-  },
+  "quickhelp": {},
   "common": {
     "cancel": "إلغاء",
     "create": "إنشاء",

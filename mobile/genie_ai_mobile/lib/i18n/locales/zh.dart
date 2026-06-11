@@ -970,8 +970,7 @@ const Map<String, dynamic> zhLocale = {
     },
     "shareWhatsApp": "分享到 WhatsApp",
   },
-  "quickhelp": {
-  },
+  "quickhelp": {},
   "common": {
     "cancel": "取消",
     "create": "创建",

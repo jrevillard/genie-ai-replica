@@ -1073,8 +1073,7 @@ const Map<String, dynamic> idLocale = {
     },
     "shareWhatsApp": "Bagikan di WhatsApp",
   },
-  "quickhelp": {
-  },
+  "quickhelp": {},
   "common": {
     "cancel": "Batal",
     "create": "Buat",

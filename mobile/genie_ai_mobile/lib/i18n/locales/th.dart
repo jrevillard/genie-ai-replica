@@ -1066,8 +1066,7 @@ const Map<String, dynamic> thLocale = {
     },
     "shareWhatsApp": "แชร์ทาง WhatsApp",
   },
-  "quickhelp": {
-  },
+  "quickhelp": {},
   "common": {
     "cancel": "ยกเลิก",
     "create": "สร้าง",

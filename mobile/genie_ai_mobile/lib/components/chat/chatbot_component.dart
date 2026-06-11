@@ -168,7 +168,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   }
 
   String _getConfigWelcomeMessage() {
-    final welcomeConfig = _cachedConfig?['features']?['chat']?['welcomeMessage'];
+    final welcomeConfig =
+        _cachedConfig?['features']?['chat']?['welcomeMessage'];
     if (welcomeConfig != null) {
       return resolveConfigText(welcomeConfig, _currentLocale);
     }
@@ -208,8 +209,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         // Resolve text with locale maps
         final resolvedTitle = resolveConfigText(btn['title'], _currentLocale);
         final action = btn['action'] as Map<String, dynamic>?;
-        final resolvedVisibleText = resolveConfigText(action?['visibleText'], _currentLocale);
-        final resolvedHiddenPrompt = resolveConfigText(action?['hiddenPrompt'], _currentLocale);
+        final resolvedVisibleText = resolveConfigText(
+          action?['visibleText'],
+          _currentLocale,
+        );
+        final resolvedHiddenPrompt = resolveConfigText(
+          action?['hiddenPrompt'],
+          _currentLocale,
+        );
 
         loadedButtons.add({
           'id': btn['id'],
@@ -713,9 +720,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     }
 
     // Use pre-resolved values from button map with i18n fallback
-    final String visibleText = button['resolvedVisibleText'] ?? (visibleTextKey.isNotEmpty ? tr(visibleTextKey) : '');
+    final String visibleText =
+        button['resolvedVisibleText'] ??
+        (visibleTextKey.isNotEmpty ? tr(visibleTextKey) : '');
     // If hiddenPromptKey is empty, fallback to visible text
-    final String hiddenPrompt = button['resolvedHiddenPrompt'] ?? (hiddenPromptKey.isNotEmpty ? tr(hiddenPromptKey) : visibleText);
+    final String hiddenPrompt =
+        button['resolvedHiddenPrompt'] ??
+        (hiddenPromptKey.isNotEmpty ? tr(hiddenPromptKey) : visibleText);
 
     setState(() {
       _showQuickHelpOverlay = false;

@@ -1087,8 +1087,7 @@ const Map<String, dynamic> deLocale = {
     },
     "shareWhatsApp": "Auf WhatsApp teilen",
   },
-  "quickhelp": {
-  },
+  "quickhelp": {},
   "common": {
     "cancel": "Abbrechen",
     "create": "Erstellen",

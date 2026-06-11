@@ -1064,8 +1064,7 @@ const Map<String, dynamic> manLocale = {
     },
     "shareWhatsApp": "A kii WhatsApp la",
   },
-  "quickhelp": {
-  },
+  "quickhelp": {},
   "common": {
     "cancel": "A bula",
     "create": "Ladang",

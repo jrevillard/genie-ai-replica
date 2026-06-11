@@ -49,17 +49,25 @@ jest.mock('../../services/query-service', () => ({
   getQueryInspectorDetails: jest.fn()
 }));
 
-jest.mock('swagger-jsdoc', () => () => ({
-  openapi: '3.0.0',
-  info: {},
-  components: {},
-  security: []
-}), { virtual: true });
+jest.mock(
+  'swagger-jsdoc',
+  () => () => ({
+    openapi: '3.0.0',
+    info: {},
+    components: {},
+    security: []
+  }),
+  { virtual: true }
+);
 
-jest.mock('swagger-ui-express', () => ({
-  serve: [],
-  setup: () => (req, res, next) => next()
-}), { virtual: true });
+jest.mock(
+  'swagger-ui-express',
+  () => ({
+    serve: [],
+    setup: () => (req, res, next) => next()
+  }),
+  { virtual: true }
+);
 
 jest.mock('../../services/user-profile-service', () => ({}));
 jest.mock('../../services/analytics-service', () => ({}));
@@ -71,10 +79,14 @@ jest.mock('../../services/translation-service', () => ({
   translate: jest.fn()
 }));
 
-jest.mock('../../routes/translation-routes', () => {
-  const express = require('express');
-  return express.Router();
-}, { virtual: true });
+jest.mock(
+  '../../routes/translation-routes',
+  () => {
+    const express = require('express');
+    return express.Router();
+  },
+  { virtual: true }
+);
 
 jest.mock('../../middleware/keycloak-auth-middleware', () => ({
   keycloakAuthMiddleware: {
@@ -156,7 +168,9 @@ describe('Query Inspector Routes', () => {
         data: { queries: [], pagination: { total: 0, limit: 10, offset: 0, pages: 0, currentPage: 1 } }
       });
 
-      await authGet('/api/admin/queries/inspect?limit=10&offset=20&searchText=tax&minConfidence=0.5&maxConfidence=1.0&userId=user-1&startDate=2025-01-01&endDate=2025-12-31');
+      await authGet(
+        '/api/admin/queries/inspect?limit=10&offset=20&searchText=tax&minConfidence=0.5&maxConfidence=1.0&userId=user-1&startDate=2025-01-01&endDate=2025-12-31'
+      );
 
       expect(queryService.getQueriesForInspector).toHaveBeenCalledWith({
         limit: '10',

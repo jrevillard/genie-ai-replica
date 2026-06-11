@@ -15,11 +15,7 @@
         @page="goToPage"
         @inspect="inspectQuery"
       />
-      <QueryInspectorDetail
-        v-else
-        :query="selectedQuery"
-        @back="selectedQuery = null"
-      />
+      <QueryInspectorDetail v-else :query="selectedQuery" @back="selectedQuery = null" />
     </template>
   </div>
 </template>

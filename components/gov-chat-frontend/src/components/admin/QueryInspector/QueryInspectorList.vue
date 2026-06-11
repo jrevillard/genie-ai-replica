@@ -12,24 +12,10 @@
           />
         </DsFormGroup>
         <DsFormGroup :label="translate('admin.queryInspector.minConfidence', 'Min Confidence')">
-          <DsInput
-            v-model="filters.minConfidence"
-            type="number"
-            placeholder="0.0"
-            min="0"
-            max="1"
-            step="0.1"
-          />
+          <DsInput v-model="filters.minConfidence" type="number" placeholder="0.0" min="0" max="1" step="0.1" />
         </DsFormGroup>
         <DsFormGroup :label="translate('admin.queryInspector.maxConfidence', 'Max Confidence')">
-          <DsInput
-            v-model="filters.maxConfidence"
-            type="number"
-            placeholder="1.0"
-            min="0"
-            max="1"
-            step="0.1"
-          />
+          <DsInput v-model="filters.maxConfidence" type="number" placeholder="1.0" min="0" max="1" step="0.1" />
         </DsFormGroup>
         <DsFormGroup :label="translate('admin.queryInspector.from', 'From')">
           <DsInput v-model="filters.startDate" type="date" />
@@ -62,16 +48,14 @@
         </tr>
       </thead>
       <tbody>
-        <tr
-          v-for="query in queries"
-          :key="query._key"
-          class="qi-list__row"
-          @click="$emit('inspect', query._key)"
-        >
+        <tr v-for="query in queries" :key="query._key" class="qi-list__row" @click="$emit('inspect', query._key)">
           <td class="qi-list__cell--time">{{ formatTime(query.timestamp) }}</td>
           <td class="qi-list__cell--question">{{ truncate(query.text, 80) }}</td>
           <td class="qi-list__cell--center">
-            <DsPill v-if="query.metadata?.confidence_score != null" :variant="confidenceVariant(query.metadata.confidence_score)">
+            <DsPill
+              v-if="query.metadata?.confidence_score != null"
+              :variant="confidenceVariant(query.metadata.confidence_score)"
+            >
               {{ formatConfidence(query.metadata.confidence_score) }}
             </DsPill>
             <span v-else class="qi-list__muted">N/A</span>
@@ -109,10 +93,11 @@
         {{ translate('admin.queryInspector.prev', 'Prev') }}
       </DsButton>
       <span class="qi-list__page-info">
-        {{ translate('admin.queryInspector.pageInfo', 'Page {current} of {total} ({count} total)')
-          .replace('{current}', pagination.currentPage)
-          .replace('{total}', pagination.pages)
-          .replace('{count}', pagination.total)
+        {{
+          translate('admin.queryInspector.pageInfo', 'Page {current} of {total} ({count} total)')
+            .replace('{current}', pagination.currentPage)
+            .replace('{total}', pagination.pages)
+            .replace('{count}', pagination.total)
         }}
       </span>
       <DsButton

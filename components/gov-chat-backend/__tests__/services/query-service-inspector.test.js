@@ -137,9 +137,7 @@ describe('QueryService — Inspector methods', () => {
     });
 
     it('should default limit to 50 when not provided', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([0]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
 
       const result = await queryService.getQueriesForInspector();
 
@@ -147,9 +145,7 @@ describe('QueryService — Inspector methods', () => {
     });
 
     it('should filter by userId', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([0]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
 
       await queryService.getQueriesForInspector({ userId: 'user-1' });
 
@@ -157,9 +153,7 @@ describe('QueryService — Inspector methods', () => {
     });
 
     it('should filter by date range', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([0]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
 
       await queryService.getQueriesForInspector({
         startDate: '2025-01-01',
@@ -170,9 +164,7 @@ describe('QueryService — Inspector methods', () => {
     });
 
     it('should filter by confidence range', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([0]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
 
       await queryService.getQueriesForInspector({
         minConfidence: '0.5',
@@ -183,9 +175,7 @@ describe('QueryService — Inspector methods', () => {
     });
 
     it('should skip empty confidence filters', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([0]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
 
       await queryService.getQueriesForInspector({
         minConfidence: '',
@@ -196,9 +186,7 @@ describe('QueryService — Inspector methods', () => {
     });
 
     it('should filter by searchText', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([0]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
 
       await queryService.getQueriesForInspector({ searchText: 'tax' });
 
@@ -217,9 +205,7 @@ describe('QueryService — Inspector methods', () => {
     });
 
     it('should handle zero results', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([0]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
 
       const result = await queryService.getQueriesForInspector();
 
@@ -229,9 +215,7 @@ describe('QueryService — Inspector methods', () => {
     });
 
     it('should handle null count from DB', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([null]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([null]));
 
       const result = await queryService.getQueriesForInspector();
 
@@ -251,9 +235,7 @@ describe('QueryService — Inspector methods', () => {
     });
 
     it('should apply all filters combined', async () => {
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([]))
-        .mockResolvedValueOnce(createMockCursor([0]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
 
       await queryService.getQueriesForInspector({
         userId: 'user-1',
@@ -344,10 +326,7 @@ describe('QueryService — Inspector methods', () => {
       expect(result.data.userName).toBeNull();
 
       const { logger } = require('../../shared-lib');
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('user_lookup_failed'),
-        expect.any(Object)
-      );
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user_lookup_failed'), expect.any(Object));
     });
 
     it('should throw on document not found', async () => {

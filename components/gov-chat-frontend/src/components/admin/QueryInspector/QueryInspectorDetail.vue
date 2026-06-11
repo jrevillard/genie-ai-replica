@@ -18,10 +18,22 @@
           </span>
         </template>
         <div class="qi-detail__meta">
-          <span><strong>{{ translate('admin.queryInspector.user', 'User') }}:</strong> {{ query.userName || query.userId }}</span>
-          <span><strong>{{ translate('admin.queryInspector.time', 'Time') }}:</strong> {{ formatTime(query.timestamp) }}</span>
-          <span><strong>{{ translate('admin.queryInspector.responseTime', 'Response Time') }}:</strong> {{ query.responseTime || 0 }}ms</span>
-          <span><strong>{{ translate('admin.queryInspector.mode', 'Mode') }}:</strong> {{ query.contextOption || 'N/A' }}</span>
+          <span
+            ><strong>{{ translate('admin.queryInspector.user', 'User') }}:</strong>
+            {{ query.userName || query.userId }}</span
+          >
+          <span
+            ><strong>{{ translate('admin.queryInspector.time', 'Time') }}:</strong>
+            {{ formatTime(query.timestamp) }}</span
+          >
+          <span
+            ><strong>{{ translate('admin.queryInspector.responseTime', 'Response Time') }}:</strong>
+            {{ query.responseTime || 0 }}ms</span
+          >
+          <span
+            ><strong>{{ translate('admin.queryInspector.mode', 'Mode') }}:</strong>
+            {{ query.contextOption || 'N/A' }}</span
+          >
         </div>
         <div class="qi-detail__box">{{ query.text }}</div>
       </DsCard>
@@ -34,7 +46,10 @@
           </span>
         </template>
         <div class="qi-detail__box qi-detail__box--context">
-          <p><strong>{{ translate('admin.queryInspector.category', 'Category') }}:</strong> {{ query.context?.categoryLabel || 'None' }}</p>
+          <p>
+            <strong>{{ translate('admin.queryInspector.category', 'Category') }}:</strong>
+            {{ query.context?.categoryLabel || 'None' }}
+          </p>
           <p>
             <strong>{{ translate('admin.queryInspector.serviceLabels', 'Service Labels') }}:</strong>
             <span v-if="query.context?.serviceLabels?.length">{{ query.context.serviceLabels.join(', ') }}</span>
@@ -108,10 +123,13 @@
         <div class="qi-detail__box qi-detail__box--response">
           {{ query.response || 'No response recorded' }}
         </div>
-        <div class="qi-detail__meta" style="margin-top: var(--space-sm);">
+        <div class="qi-detail__meta" style="margin-top: var(--space-sm)">
           <span>
             <strong>{{ translate('admin.queryInspector.confidenceScore', 'Confidence Score') }}:</strong>
-            <DsPill v-if="query.metadata?.confidence_score != null" :variant="confidenceVariant(query.metadata.confidence_score)">
+            <DsPill
+              v-if="query.metadata?.confidence_score != null"
+              :variant="confidenceVariant(query.metadata.confidence_score)"
+            >
               {{ formatConfidence(query.metadata.confidence_score) }}
             </DsPill>
             <span v-else class="qi-detail__muted">N/A</span>
@@ -134,10 +152,12 @@
             </DsPill>
           </p>
           <p v-if="query.userFeedback.comment">
-            <strong>{{ translate('admin.queryInspector.comment', 'Comment') }}:</strong> {{ query.userFeedback.comment }}
+            <strong>{{ translate('admin.queryInspector.comment', 'Comment') }}:</strong>
+            {{ query.userFeedback.comment }}
           </p>
           <p class="qi-detail__muted">
-            {{ translate('admin.queryInspector.providedAt', 'Provided at') }}: {{ formatTime(query.userFeedback.providedAt) }}
+            {{ translate('admin.queryInspector.providedAt', 'Provided at') }}:
+            {{ formatTime(query.userFeedback.providedAt) }}
           </p>
         </div>
       </DsCard>

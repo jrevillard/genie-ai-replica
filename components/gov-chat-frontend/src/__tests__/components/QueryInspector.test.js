@@ -30,7 +30,8 @@ const dsStubs = {
   DsFormGroup: { template: '<div><label v-if="label">{{ label }}</label><slot /></div>', props: ['label'] },
   DsPill: { template: '<span class="ds-pill"><slot /></span>', props: ['variant'] },
   DsCard: {
-    template: '<div class="ds-card"><div v-if="$slots.header" class="ds-card__header"><slot name="header" /></div><div><slot /></div></div>',
+    template:
+      '<div class="ds-card"><div v-if="$slots.header" class="ds-card__header"><slot name="header" /></div><div><slot /></div></div>',
     props: ['variant']
   },
   DsSpinner: { template: '<div class="ds-spinner">Loading...</div>' },
@@ -219,14 +220,16 @@ describe('QueryInspectorList', () => {
   }
 
   it('should render table with query rows', () => {
-    const queries = [{
-      _key: 'q1',
-      timestamp: '2025-05-28T10:00:00Z',
-      text: 'What is the tax rate?',
-      metadata: { confidence_score: 0.92, source_documents: [{}] },
-      responseTime: 500,
-      userFeedback: { rating: 5 }
-    }];
+    const queries = [
+      {
+        _key: 'q1',
+        timestamp: '2025-05-28T10:00:00Z',
+        text: 'What is the tax rate?',
+        metadata: { confidence_score: 0.92, source_documents: [{}] },
+        responseTime: 500,
+        userFeedback: { rating: 5 }
+      }
+    ];
 
     const wrapper = mountList({ queries, pagination: { total: 1, limit: 25, offset: 0, pages: 1, currentPage: 1 } });
     expect(wrapper.text()).toContain('What is the tax rate?');
@@ -244,7 +247,10 @@ describe('QueryInspectorList', () => {
   });
 
   it('should show empty state when no queries', () => {
-    const wrapper = mountList({ queries: [], pagination: { total: 0, limit: 25, offset: 0, pages: 0, currentPage: 1 } });
+    const wrapper = mountList({
+      queries: [],
+      pagination: { total: 0, limit: 25, offset: 0, pages: 0, currentPage: 1 }
+    });
     expect(wrapper.find('.ds-state').exists() || wrapper.text()).toBeTruthy();
   });
 
@@ -255,15 +261,21 @@ describe('QueryInspectorList', () => {
   });
 
   it('should not show pagination when single page', () => {
-    const wrapper = mountList({ queries: [], pagination: { total: 0, limit: 25, offset: 0, pages: 0, currentPage: 1 } });
+    const wrapper = mountList({
+      queries: [],
+      pagination: { total: 0, limit: 25, offset: 0, pages: 0, currentPage: 1 }
+    });
     expect(wrapper.find('.qi-list__pagination').exists()).toBe(false);
   });
 
   it('should emit search event when search button clicked', async () => {
-    const wrapper = mountList({ queries: [], pagination: { total: 0, limit: 25, offset: 0, pages: 0, currentPage: 1 } });
+    const wrapper = mountList({
+      queries: [],
+      pagination: { total: 0, limit: 25, offset: 0, pages: 0, currentPage: 1 }
+    });
 
     const buttons = wrapper.findAll('.ds-btn');
-    const searchBtn = buttons.find(b => b.text().includes('Search'));
+    const searchBtn = buttons.find((b) => b.text().includes('Search'));
     if (searchBtn) {
       await searchBtn.trigger('click');
       expect(wrapper.emitted('search')).toBeTruthy();
@@ -271,7 +283,10 @@ describe('QueryInspectorList', () => {
   });
 
   it('should reset filters and emit search on reset', async () => {
-    const wrapper = mountList({ queries: [], pagination: { total: 0, limit: 25, offset: 0, pages: 0, currentPage: 1 } });
+    const wrapper = mountList({
+      queries: [],
+      pagination: { total: 0, limit: 25, offset: 0, pages: 0, currentPage: 1 }
+    });
 
     wrapper.vm.filters.searchText = 'tax';
     await wrapper.vm.$nextTick();
@@ -313,7 +328,13 @@ describe('QueryInspectorDetail', () => {
     metadata: {
       confidence_score: 0.92,
       source_documents: [
-        { document_name: 'Tax Guide 2025', document_id: 'doc-1', score: 0.95, categoryLabel: 'Taxes', url: 'https://example.com/tax-guide' }
+        {
+          document_name: 'Tax Guide 2025',
+          document_id: 'doc-1',
+          score: 0.95,
+          categoryLabel: 'Taxes',
+          url: 'https://example.com/tax-guide'
+        }
       ]
     },
     userFeedback: { rating: 5, comment: 'Very helpful', providedAt: '2025-05-28T10:01:00Z' }

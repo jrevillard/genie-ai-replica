@@ -644,7 +644,16 @@ module.exports = (adminService, logsService) => {
    */
   router.get('/queries/inspect', async (req, res, next) => {
     try {
-      const allowedParams = ['limit', 'offset', 'userId', 'searchText', 'startDate', 'endDate', 'minConfidence', 'maxConfidence'];
+      const allowedParams = [
+        'limit',
+        'offset',
+        'userId',
+        'searchText',
+        'startDate',
+        'endDate',
+        'minConfidence',
+        'maxConfidence'
+      ];
       const params = {};
       for (const key of allowedParams) {
         if (req.query[key] !== undefined) params[key] = req.query[key];

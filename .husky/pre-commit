@@ -1,20 +1,76 @@
 #!/bin/sh
-# Pre-commit: run eslint + prettier on staged files via lint-staged.
-# Gracefully skips if component node_modules are not installed.
-# CI will catch any lint issues that slip through.
+# Pre-commit: run linters/formatters on staged files.
+# - JS/Vue: eslint --fix + prettier --write via lint-staged
+# - Python: ruff check --fix + ruff format
+# - Dart: dart format
+# Only installs deps for components with staged files.
 
-has_deps=false
-for dir in components/gov-chat-backend components/gov-chat-frontend components/document-repository; do
-  if [ -d "$dir/node_modules/.bin" ]; then
-    has_deps=true
-    break
+set -e
+
+# ---------------------------------------------------------------------------
+# Determine which components have staged files
+# ---------------------------------------------------------------------------
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
+
+has_backend=$(echo "$STAGED" | grep -q "components/gov-chat-backend/" && echo true || echo false)
+has_frontend=$(echo "$STAGED" | grep -q "components/gov-chat-frontend/" && echo true || echo false)
+has_docrepo=$(echo "$STAGED" | grep -q "components/document-repository/" && echo true || echo false)
+has_python=$(echo "$STAGED" | grep -q "\.py$" && echo true || echo false)
+has_dart=$(echo "$STAGED" | grep -q "\.dart$" && echo true || echo false)
+
+# ---------------------------------------------------------------------------
+# Install missing deps only for affected components
+# ---------------------------------------------------------------------------
+install_if_needed() {
+  dir="$1"
+  if [ ! -d "$dir/node_modules/.bin" ]; then
+    echo "⟩ Pre-commit: installing deps in $dir"
+    (cd "$dir" && npm ci --prefer-offline --no-audit --no-fund) || {
+      echo "✗ Failed to install deps in $dir. Aborting commit."
+      echo "  Fix: cd $dir && npm ci"
+      exit 1
+    }
   fi
-done
+}
 
-if [ "$has_deps" = false ]; then
-  echo "⚠  Pre-commit: node_modules not found. Lint will run in CI."
-  echo "   To enable local lint: npm ci in the relevant component(s)"
-  exit 0
+if [ "$has_backend" = true ]; then install_if_needed "components/gov-chat-backend"; fi
+if [ "$has_frontend" = true ]; then install_if_needed "components/gov-chat-frontend"; fi
+if [ "$has_docrepo" = true ]; then install_if_needed "components/document-repository"; fi
+
+# ---------------------------------------------------------------------------
+# Run lint-staged (JS/Vue: eslint + prettier)
+# ---------------------------------------------------------------------------
+has_js=$(echo "$STAGED" | grep -qE "\.(js|vue|json|css|scss)$" && echo true || echo false)
+if [ "$has_js" = true ]; then
+  npx lint-staged
 fi
 
-npx lint-staged
+# ---------------------------------------------------------------------------
+# Run ruff on staged Python files
+# ---------------------------------------------------------------------------
+if [ "$has_python" = true ]; then
+  if command -v ruff >/dev/null 2>&1; then
+    PY_FILES=$(echo "$STAGED" | grep "\.py$")
+    if [ -n "$PY_FILES" ]; then
+      echo "⟩ ruff check --fix"
+      ruff check --fix $PY_FILES || true
+      echo "⟩ ruff format"
+      ruff format $PY_FILES || true
+      git add $PY_FILES
+    fi
+  else
+    echo "⚠  ruff not found. Install: pip install ruff"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Run dart format on staged Dart files
+# ---------------------------------------------------------------------------
+if [ "$has_dart" = true ]; then
+  DART_FILES=$(echo "$STAGED" | grep "\.dart$")
+  if [ -n "$DART_FILES" ] && command -v dart >/dev/null 2>&1; then
+    echo "⟩ dart format"
+    dart format $DART_FILES
+    git add $DART_FILES
+  fi
+fi

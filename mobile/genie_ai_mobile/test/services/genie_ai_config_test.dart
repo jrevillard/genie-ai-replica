@@ -21,8 +21,8 @@ void main() {
         // Loads from the real test asset bundle
         await GenieAiConfig.load();
 
-        expect(GenieAiConfig.title, 'Genie AI');
-        expect(GenieAiConfig.iconPath, 'assets/config/genie-ai-icon-light.svg');
+        expect(GenieAiConfig.title, 'GENIE.AI');
+        expect(GenieAiConfig.iconPath, 'config/logo-genie-ai.jpeg');
         expect(GenieAiConfig.isLoaded, isTrue);
       });
 

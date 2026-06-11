@@ -1004,8 +1004,6 @@ const Map<String, dynamic> manLocale = {
     "fileReceived": "Kaito sotota a benta.",
     "fileUploadError": "Kaito wulu manta.",
     "processingError": "I la nyininka sabang manta.",
-    "welcomeMessage":
-        "Bismillah! N si i demba nyaadii Keniya mansa serivisolu kumo la bii?",
     "attachFile": "Kaito dii",
     "fileTooLarge": "Kaito baa tiyaata. A ka kanyaming le {maxSize} koto.",
     "saveChat": "Kumoo mara",
@@ -1018,7 +1016,6 @@ const Map<String, dynamic> manLocale = {
     "unsavedChanges":
         "I sota yelema baliyaalu la. I lafita kuma kuta daminang na?",
     "whatCanIHelp": "N si i demba nyaadii bii?",
-    "justChat": "Kuma dorong",
     "queryContext": "Nyininka kumo",
     "contextAdded": "Kumo kafuta i la nyininka la",
     "contextRemoved": "Kumo wuluta i la nyininka la",
@@ -1068,60 +1065,6 @@ const Map<String, dynamic> manLocale = {
     "shareWhatsApp": "A kii WhatsApp la",
   },
   "quickhelp": {
-    "applyForID": "Aydi (ID) nyininka",
-    "payTaxes": "Takisi joong",
-    "startBusiness": "Jula daminang",
-    "findHealthcare": "Kendeyaa",
-    "educationServices": "Karango",
-    "transportLicenses": "Taa-ani-Sayo",
-    "housingPrograms": "Bungo",
-    "findJobs": "Baara nyining",
-    "justChat": "Kuma dorong",
-
-    "applyForIDPrompt":
-        "I fango k'i ke Keniya sate sefoo moo ti. Aydi (ID) kaito soto wama a tunta kutaayaa kumo ladang. NAFA BAA: Kaito lafiyalu safee (Bang kaito, mbaa ani baa la Aydi kaito) ani moo wulandi Huduma bung wama Sefoo bung na. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
-
-    "payTaxesPrompt":
-        "I fango k'i ke KRA (Keniya Takisi Bongo) moo ti. Takisi joong ani KRA Pini nyininka wama iTax portaloo la passwordo yelema kumo ladang. NAFA BAA: Moo hakili tu June 30 waati tammita kumo la ani i demba ni munafo te je la takisi joong (Nil) kumo la. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
-
-    "startBusinessPrompt":
-        "I fango k'i ke eCitizen jula demba moo ti. Jula toko sefoo ani kampaani sefoo Keniya kono ladang. NAFA BAA: Toko nyining ani sefoo kodo kumo ladang, ani moo wulandi eCitizen portaloo la a paree kama. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
-
-    "findHealthcarePrompt":
-        "I fango k'i ke kendeyaa seriviso moo ti. NHIF taa SHIF (Jamahoo Kendeyaa Insorans) ani sefoo kumo ladang. NAFA BAA: USSD koodo (*263#) wama website linko safee ani jamahoo kendeyaa nafolu ladang. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
-
-    "educationServicesPrompt":
-        "I fango k'i ke karango demba moo ti. CBC karango, NEMIS sefoo, wama uniwersiti taa KUCCPS la kumo ladang. NAFA BAA: Mbaa ani baa demba karang-dingolu tesiti nomboolu je kama SMS wama KNEC portaloo la. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
-
-    "transportLicensesPrompt":
-        "I fango k'i ke NTSA seriviso moo ti. Bori laysensi kutaayaa, mobiloo tubo, wama TIMS akawunto kumo ladang. NAFA BAA: Moo demba eCitizen NTSA portaloo dung kumo la ani mobiloo tubo waati nyininka. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
-
-    "housingProgramsPrompt":
-        "I fango k'i ke bungo demba moo ti. Boma Yangu (Bungo Demba) sefoo ani joongo kumo ladang. NAFA BAA: Moo wulandi Boma Yangu portaloo la bungo je kama ani moo taa kumo ladang. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
-
-    "findJobsPrompt":
-        "I fango k'i ke mansa baara demba moo ti. Public Service Commission (PSC) portaloo la akawunto ladang ani baara nyininka kumo ladang. NAFA BAA: Moo demba a la karango kaitolu paree ani PSC website wama MyGov kaitolu je nyining kama. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
-
-    "justChatPrompt":
-        "I fango k'i ke sate moo ti. Kuma nyooma, i dembanta ani Keniya moo-n-kuwolu londi. NAFA BAA: Moo hakili tu ko i si kuma kuwo biling fey, bari i la semboo mu Keniya mansa serivisolu le ti, nyooma **Aydi**, **Takisi**, ani **Jula Sefoo**. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
-
-    "applyForIDUserPrompt":
-        "N lafita londi la Aydi (ID) kaito nyininka la Keniya kono.",
-    "payTaxesUserPrompt":
-        "N lafita londi la takisi joong wama KRA joong la Keniya kono.",
-    "startBusinessUserPrompt":
-        "N lafita londi la jula kuta wama kampaani sefoo la Keniya kono.",
-    "findHealthcareUserPrompt":
-        "N lafita londi la jamahoo kendeyaa ani insorans (NHIF/SHIF) la Keniya kono.",
-    "educationServicesUserPrompt":
-        "N lafita londi la karang-bongo ani karango serivisolu la Keniya kono.",
-    "transportLicensesUserPrompt":
-        "N lafita londi la bori laysensi ani NTSA serivisolu la Keniya kono.",
-    "housingProgramsUserPrompt":
-        "N lafita londi la Boma Yangu (Bungo Demba) la Keniya kono.",
-    "findJobsUserPrompt":
-        "N lafita londi la mansa baara ani PSC nyininka la Keniya kono.",
-    "justChatUserPrompt": "N lafita kuma dorong Keniya moo-n-kuwolu la.",
   },
   "common": {
     "cancel": "A bula",

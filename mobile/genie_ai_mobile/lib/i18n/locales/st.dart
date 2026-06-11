@@ -1020,8 +1020,6 @@ const Map<String, dynamic> stLocale = {
     "fileReceived": "Faele e amohetsoe ka katleho.",
     "fileUploadError": "Phoso ho kenya faele.",
     "processingError": "Phoso ho sebetsana le kopo ea hao.",
-    "welcomeMessage":
-        "Re a u amohela! Nka u thusa joang kajeno ka litšebeletso tsa 'muso oa Kenya?",
     "attachFile": "Hlomathisa Faele",
     "fileTooLarge": "Faele e kholo haholo. Boholo ke {maxSize}.",
     "saveChat": "Boloka Puisano",
@@ -1034,7 +1032,6 @@ const Map<String, dynamic> stLocale = {
     "unsavedChanges":
         "O na le diphetoho tse sa bolokwang. Na u na le bonnete ba hore u batla ho qala puisano e ncha?",
     "whatCanIHelp": "Nka u thusa joang kajeno?",
-    "justChat": "Bua feela",
     "queryContext": "Moelelo oa Potso",
     "contextAdded": "Moelelo o kentsoe potsong ea hao",
     "contextRemoved": "Moelelo o tlositsoe potsong ea hao",
@@ -1085,61 +1082,6 @@ const Map<String, dynamic> stLocale = {
     "shareWhatsApp": "Arolelana ho WhatsApp",
   },
   "quickhelp": {
-    "applyForID": "Etsa Kopo ea ID",
-    "payTaxes": "Lefang Lekhetho",
-    "startBusiness": "Qala Khoebo",
-    "findHealthcare": "Bophelo bo botle",
-    "educationServices": "Thuto",
-    "transportLicenses": "Dipalangoang",
-    "housingPrograms": "Matlo",
-    "findJobs": "Batla Mesebetsi",
-    "justChat": "Bua feela",
-
-    "applyForIDPrompt":
-        "Etsa eka u setsebi sa ngoliso ea baahi ba Kenya se thusang. Hlalosa mehato ea ho fumana karete ea ID ea Naha (Maisha Namba) kapa ho fumana e ncha. BOHLOKOA: Fana ka lenane le hlakileng la litokomane tse hlokahalang 'me u elelitse mosebedisi hore a etele Setsi sa Huduma. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "payTaxesPrompt":
-        "Etsa eka u motataisi oa KRA (Tsamaiso ea Lekhetho ea Kenya). Hlalosa mokhoa oa ho khutlisa lekhetho, kopo ea KRA PIN, kapa ho seta phasewete botjha inthaneteng. BOHLOKOA: Hopotsa mosebelisi letsatsi la bo-30 Phuptjane mme u mo tataise ka Mokhoa oa ho filed Nil Returns. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "startBusinessPrompt":
-        "Etsa eka u moeletsi oa likhoebo oa lits'ebeletso tsa eCitizen. Tataisa mosebedisi ho tloha ngolisong ea lebitso la khoebo le khamphani Kenya. BOHLOKOA: Hlalosa litšenyehelo tsa morao-rao tsa theko, 'me u lebise mosebelisi webosaeteng. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "findHealthcarePrompt":
-        "Etsa eka u tsela ea lits'ebeletso tsa bophelo bo botle. Fana ka leseli ho qala ka NHIF ho ea ho SHIF. BOHLOKOA: Fana ka likhoutu tsa semmuso tsa USSD kapa lihokela bakeng sa ngoliso mme o hlalose menyetla ea bophelo bo botle ba sechaba. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "educationServicesPrompt":
-        "Etsa eka u moeletsi oa thuto. Buisana ka thuto ea CBC, ngoliso ea NEMIS, kapa ho isoa yunivesithi ka KUCCPS. BOHLOKOA: Hlalosa hore batsoali ba ka hlahloba liphetho tsa litlhahlobo ka SMS ha e lokolloa. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "transportLicensesPrompt":
-        "Etsa eka u motataisi oa lits'ebeletso tsa NTSA. Hlalosa tšebetso ea ntlafatso ea laesense ea ho khanna, tlhahlobo ea makoloi, kapa tsamaiso ea ak'haonte ea TIMS. BOHLOKOA: Tataisa mosebedisi. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "housingProgramsPrompt":
-        "Etsa eka u moeletsi oa mananeo a matlo. Hlalosa ngoliso ea Lenaneo la Matlo a Theko e tlase (Boma Yangu). BOHLOKOA: Tataisa mosebelisi sebakeng sa Boma Yangu 'me u hlalose maemo a ho theoha. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "findJobsPrompt":
-        "Etsa eka u mokoetlisi oa mosebetsi bakeng sa litšebeletso tsa sechaba. Tataisa mosebedisi ho theha profil. BOHLOKOA: Eletsa mosebedisi ho boloka litifikeiti mme ba shebe libaka tsa marang-rang tsa PSC. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "justChatPrompt":
-        "Etsa eka u metsoalle ea lehae. E-ba le mosa 'me u ithute hantle ka setso le bophelo ba letsatsi le letsatsi ba Kenya. BOHLOKOA: Hopotsa mosebelisi matla a hau. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "applyForIDUserPrompt":
-        "Ke batla ho tseba ka ho etsa kopo ea karete ea ID ea Naha Kenya.",
-    "payTaxesUserPrompt":
-        "Ke batla ho botsa ka ho patala lekhetho kapa ho kenya lekhetho la ka la KRA Kenya.",
-    "startBusinessUserPrompt":
-        "Ke batla ho fumana ts'ebetso ea ho ngolisa khoebo e ncha kapa khamphani Kenya.",
-    "findHealthcareUserPrompt":
-        "Ke batla ho botsa ka litsi tsa bophelo bo botle ba sechaba le inshorense (NHIF/SHIF) Kenya.",
-    "educationServicesUserPrompt":
-        "Ke batla ho tseba ka dikolo le lits'ebeletso tsa thuto Kenya.",
-    "transportLicensesUserPrompt":
-        "Ke batla ho botsa ka laesense ea ho khanna le lits'ebeletso tsa NTSA Kenya.",
-    "housingProgramsUserPrompt":
-        "Ke batla ho tseba ka Lenaneo la Matlo a Theko e Tlaase (Boma Yangu) Kenya.",
-    "findJobsUserPrompt":
-        "Ke batla ho botsa ka menyetla ea mosebetsi oa mmuso le likopo tsa PSC Kenya.",
-    "justChatUserPrompt":
-        "Ke batla ho qoqa ka kakaretso mabapi le bophelo Kenya.",
   },
   "common": {
     "cancel": "Hlakola",

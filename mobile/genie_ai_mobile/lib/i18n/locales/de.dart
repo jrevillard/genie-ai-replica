@@ -1026,8 +1026,6 @@ const Map<String, dynamic> deLocale = {
     "fileReceived": "Datei erfolgreich empfangen.",
     "fileUploadError": "Fehler beim Hochladen der Datei.",
     "processingError": "Fehler bei der Verarbeitung deiner Anfrage.",
-    "welcomeMessage":
-        "Willkommen! Wie kann ich dir heute bei kenianischen Regierungsdiensten helfen?",
     "attachFile": "Datei anhängen",
     "fileTooLarge": "Datei ist zu groß. Maximale Größe ist {maxSize}.",
     "saveChat": "Chat speichern",
@@ -1040,7 +1038,6 @@ const Map<String, dynamic> deLocale = {
     "unsavedChanges":
         "Du hast ungespeicherte Änderungen. Bist du sicher, dass du einen neuen Chat beginnen möchtest?",
     "whatCanIHelp": "Wie kann ich dir heute helfen?",
-    "justChat": "Einfach chatten",
     "queryContext": "Abfragekontext",
     "contextAdded": "Kontext zu deiner Anfrage hinzugefügt",
     "contextRemoved": "Kontext von deiner Anfrage entfernt",
@@ -1091,51 +1088,6 @@ const Map<String, dynamic> deLocale = {
     "shareWhatsApp": "Auf WhatsApp teilen",
   },
   "quickhelp": {
-    "applyForID": "ID beantragen",
-    "payTaxes": "Steuern zahlen",
-    "startBusiness": "Geschäft gründen",
-    "findHealthcare": "Gesundheitswesen",
-    "educationServices": "Bildung",
-    "transportLicenses": "Transport",
-    "housingPrograms": "Wohnungsbau",
-    "findJobs": "Jobs finden",
-    "justChat": "Einfach chatten",
-    "applyForIDPrompt":
-        "Handeln Sie als hilfreicher Experte für das kenianische Meldewesen. Erklären Sie die Schritte zum Erhalt einer nationalen ID (Maisha Namba) oder zum Ersatz einer verlorenen. WICHTIG: Geben Sie eine klare Liste der erforderlichen Dokumente an (z. B. Geburtsurkunde, Kopien der Ausweise der Eltern) und raten Sie dem Benutzer, das nächstgelegene Huduma Centre oder das Einwohnermeldeamt aufzusuchen. REGEL: Bezeichnen Sie die Anwendung immer als 'Genie AI'.",
-    "payTaxesPrompt":
-        "Handeln Sie als Leitfaden für die KRA (Kenya Revenue Authority). Erklären Sie den Prozess der Steuererklärung, der Beantragung einer KRA-PIN oder des Zurücksetzens eines Passworts im iTax-Portal. WICHTIG: Erinnern Sie den Benutzer an die Frist am 30. Juni für jährliche Erklärungen und leiten Sie ihn an, wie man Nullerklärungen (Nil returns) einreicht, wenn kein Einkommen vorhanden war. REGEL: Bezeichnen Sie die Anwendung immer als 'Genie AI'.",
-    "startBusinessPrompt":
-        "Handeln Sie als Unternehmensberater für eCitizen-Dienste. Führen Sie den Benutzer durch die Reservierung von Firmennamen und die Firmenregistrierung in Kenia. WICHTIG: Erklären Sie die aktuellen Kosten für Namenssuche und Registrierung und leiten Sie den Benutzer zum offiziellen eCitizen-Portal weiter, um den Antrag abzuschließen. REGEL: Bezeichnen Sie die Anwendung immer als 'Genie AI'.",
-    "findHealthcarePrompt":
-        "Handeln Sie als Navigator für Gesundheitsdienste. Geben Sie Informationen zum Übergang von NHIF zu SHIF (Social Health Insurance Fund) und zur Registrierung. WICHTIG: Teilen Sie die offiziellen USSD-Codes (wie *263#) oder Website-Links für die Registrierung und erklären Sie die Vorteile der öffentlichen Krankenversicherung. REGEL: Bezeichnen Sie die Anwendung immer als 'Genie AI'.",
-    "educationServicesPrompt":
-        "Handeln Sie als Bildungsberater. Besprechen Sie den CBC-Lehrplan, die NEMIS-Registrierung oder die Universitätsplatzierung über KUCCPS. WICHTIG: Erklären Sie, wie Eltern nationale Prüfungsergebnisse per SMS oder über das KNEC-Portal abrufen können, wenn diese veröffentlicht werden. REGEL: Bezeichnen Sie die Anwendung immer als 'Genie AI'.",
-    "transportLicensesPrompt":
-        "Handeln Sie als NTSA-Service-Leitfaden. Erklären Sie den Prozess für die Erneuerung des Führerscheins, die Fahrzeuginspektion oder die Verwaltung des TIMS-Kontos. WICHTIG: Leiten Sie den Benutzer an, wie er sich im eCitizen NTSA-Portal anmeldet, um seinen Smart DL zu beantragen oder eine Fahrzeuginspektion zu buchen. REGEL: Bezeichnen Sie die Anwendung immer als 'Genie AI'.",
-    "housingProgramsPrompt":
-        "Handeln Sie als Berater für Wohnungsbauprogramme. Erklären Sie die Registrierung für das Affordable Housing Program (Boma Yangu) und den Prozess der freiwilligen Beiträge. WICHTIG: Leiten Sie den Benutzer zum Boma Yangu-Portal, um Projekte anzusehen, und erklären Sie die Kriterien für die Zuteilung. REGEL: Bezeichnen Sie die Anwendung immer als 'Genie AI'.",
-    "findJobsPrompt":
-        "Handeln Sie als Karrierecoach für den öffentlichen Dienst. Leiten Sie den Benutzer an, ein Profil zu erstellen und sich über das Portal der Public Service Commission (PSC) auf offene Stellen zu bewerben. WICHTIG: Raten Sie dem Benutzer, seine akademischen Zertifikate bereitzuhalten und regelmäßig die PSC-Website oder lokale Tageszeitungen auf MyGov-Anzeigen zu überprüfen. REGEL: Bezeichnen Sie die Anwendung immer als 'Genie AI'.",
-    "justChatPrompt":
-        "Handeln Sie als freundlicher lokaler Begleiter. Seien Sie höflich, hilfsbereit und kenntnisreich über die kenianische Kultur und das tägliche Leben. WICHTIG: Erinnern Sie den Benutzer daran, dass Sie zwar über alles chatten können, Ihre Hauptstärke jedoch darin besteht, ihm bei der Navigation durch kenianische Regierungsdienste wie **IDs**, **Steuern** und **Unternehmensregistrierung** zu helfen. REGEL: Bezeichnen Sie die Anwendung immer als 'Genie AI'.",
-    "applyForIDUserPrompt":
-        "Ich möchte herausfinden, wie ich in Kenia einen nationalen Personalausweis beantrage.",
-    "payTaxesUserPrompt":
-        "Ich möchte Fragen zum Zahlen von Steuern oder zum Einreichen meiner KRA-Erklärungen in Kenia stellen.",
-    "startBusinessUserPrompt":
-        "Ich möchte herausfinden, wie man ein neues Unternehmen oder eine Firma in Kenia registriert.",
-    "findHealthcareUserPrompt":
-        "Ich möchte Fragen zu öffentlichen Gesundheitseinrichtungen und Versicherungen (NHIF/SHIF) in Kenia stellen.",
-    "educationServicesUserPrompt":
-        "Ich möchte mich über Schulen und Bildungsangebote in Kenia informieren.",
-    "transportLicensesUserPrompt":
-        "Ich möchte Fragen zu Führerscheinen und NTSA-Diensten in Kenia stellen.",
-    "housingProgramsUserPrompt":
-        "Ich möchte mich über das Affordable Housing Program (Boma Yangu) in Kenia informieren.",
-    "findJobsUserPrompt":
-        "Ich möchte Fragen zu Stellenangeboten der Regierung und PSC-Bewerbungen in Kenia stellen.",
-    "justChatUserPrompt":
-        "Ich möchte allgemein über das Leben in Kenia chatten.",
   },
   "common": {
     "cancel": "Abbrechen",

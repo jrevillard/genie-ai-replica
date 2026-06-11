@@ -395,6 +395,7 @@ export default {
     },
     '$i18n.locale'(newLocale) {
       this.currentLocale = newLocale;
+      this.loadQuickHelpButtons();
     }
   },
 

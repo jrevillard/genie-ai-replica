@@ -263,8 +263,20 @@
   "features": {
     "chat": {
       "welcomeMessage": {
+        "ar": "مرحبًا! كيف يمكنني مساعدتك في خدمات الحكومة الكينية اليوم؟",
+        "bn": "স্বাগতম! আমি আজ কিভাবে আপনাকে কেনিয়া সরকারের পরিষেবাগুলির সাথে সহায়তা করতে পারি?",
+        "de": "Willkommen! Wie kann ich Ihnen heute bei den kenianischen Regierungsdiensten helfen?",
         "en": "Welcome! How can I assist you with Kenya government services today?",
-        "es": "¡Bienvenido! ¿Cómo puedo asistirlo con los servicios gubernamentales de Kenia hoy?"
+        "es": "¡Bienvenido! ¿Cómo puedo asistirlo con los servicios gubernamentales de Kenia hoy?",
+        "fr": "Bienvenue ! Comment puis-je vous aider aujourd'hui avec les services du gouvernement kényan ?",
+        "id": "Selamat datang! Bagaimana saya bisa membantu Anda dengan layanan pemerintah Kenya hari ini?",
+        "man": "Bismillay! Mbe ñaadi ka i makaamoo ning Keniya gomnati baaralu bii?",
+        "pt": "Bem-vindo! Como posso ajudá-lo com os serviços governamentais do Quênia hoje?",
+        "ru": "Добро пожаловать! Чем я могу помочь вам с государственными услугами Кении сегодня?",
+        "st": "Kena ka kgotso! Nka o thusa jwang ka ditshebeletso tsa mmuso wa Kenya kajeno?",
+        "sw": "Karibu! Nawezaje kukusaidia na huduma za serikali ya Kenya leo?",
+        "th": "ยินดีต้อนรับ! ฉันสามารถช่วยเหลือคุณเกี่ยวกับบริการรัฐบาลเคนยาได้อย่างไรวันนี้?",
+        "zh": "欢迎！今天我如何帮助您处理肯尼亚政府服务？"
       },
       "botName": "GENIE.AI",
       "quickHelp": {
@@ -272,8 +284,20 @@
           {
             "id": "just-chat",
             "title": {
+              "ar": "دردشة فقط",
+              "bn": "শুধু চ্যাট করুন",
+              "de": "Nur chatten",
               "en": "Just Chat",
-              "es": "Solo Chatear"
+              "es": "Solo Chatear",
+              "fr": "Discuter",
+              "id": "Ngobrol",
+              "man": "Kuma Dorong",
+              "pt": "Apenas Conversar",
+              "ru": "Просто чат",
+              "st": "Moqoqo Feela",
+              "sw": "Ongea Tu",
+              "th": "แชทเท่านั้น",
+              "zh": "聊天"
             },
             "icon": {
               "type": "file",
@@ -282,20 +306,56 @@
             "category": null,
             "action": {
               "visibleText": {
+                "ar": "أود الدردشة حول الخدمات الحكومية",
+                "bn": "আমি সরকারি পরিষেবা নিয়ে চ্যাট করতে চাই",
+                "de": "Ich möchte über Regierungsdienste chatten",
                 "en": "I'd like to chat about government services",
-                "es": "Me gustaría chatear sobre servicios gubernamentales"
+                "es": "Me gustaría chatear sobre servicios gubernamentales",
+                "fr": "J'aimerais discuter des services gouvernementaux",
+                "id": "Saya ingin mengobrol tentang layanan pemerintah",
+                "man": "N lafiya la ka kuma gomnati baaralu kang",
+                "pt": "Gostaria de conversar sobre serviços governamentais",
+                "ru": "Я хотел бы поболтать о государственных услугах",
+                "st": "Ke rata ho qoqa ka ditshebeletso tsa mmuso",
+                "sw": "Ningependa kuzungumza kuhusu huduma za serikali",
+                "th": "ฉันอยากแชทเกี่ยวกับบริการรัฐบาล",
+                "zh": "我想聊聊政府服务"
               },
               "hiddenPrompt": {
+                "ar": "تصرف كرفيق محلي ودود. كن مهذبًا ومفيدًا وملمًا بالثقافة الكينية والحياة اليومية. هام: ذكّر المستخدم بأنه بينما يمكنك الدردشة حول أي شيء، فإن قوتك الرئيسية تكمن في مساعدتهم على التنقل في الخدمات الحكومية الكينية مثل **الهويات**، و**الضرائب**، و**تسجيل الأعمال**. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+                "bn": "একজন বন্ধুত্বপূর্ণ স্থানীয় সঙ্গীহিসেবে কাজ করুন। কেনিয়ান সংস্কৃতি এবং দৈনন্দিন জীবন সম্পর্কে বিনয়ী, সহায়ক এবং জ্ঞানী হন। গুরুত্বপূর্ণ: ব্যবহারকারীকে মনে করিয়ে দিন যে আপনি যেকোনো বিষয়ে চ্যাট করতে পারলেও, আপনার মূল শক্তি হলো কেনিয়ান সরকারি পরিষেবা যেমন **আইডি**, **ট্যাক্স**, এবং **ব্যবসা নিবন্ধন** নেভিগেট করতে তাদের সাহায্য করা। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+                "de": "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'.",
                 "en": "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+                "es": "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'.",
+                "fr": "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'.",
+                "id": "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'.",
+                "man": "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'.",
+                "pt": "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'.",
+                "ru": "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'.",
+                "st": "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'.",
+                "sw": "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'.",
+                "th": "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'.",
+                "zh": "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
               }
             }
           },
           {
             "id": "identity-civil",
             "title": {
+              "ar": "طلب الهوية",
+              "bn": "আইডি-এর জন্য আবেদন",
+              "de": "ID beantragen",
               "en": "Apply for ID",
-              "es": "Solicitar ID"
+              "es": "Solicitar ID",
+              "fr": "Demander une CNI",
+              "id": "Ajukan KTP",
+              "man": "ID Ñiningo",
+              "pt": "Solicitar ID",
+              "ru": "Получить ID",
+              "st": "Kopa ID",
+              "sw": "Omba Kitambulisho",
+              "th": "สมัครบัตรประชาชน",
+              "zh": "申请身份证"
             },
             "icon": {
               "type": "file",
@@ -304,20 +364,56 @@
             "category": "1",
             "action": {
               "visibleText": {
+                "ar": "أحتاج إلى معلومات حول كيفية تقديم طلب للحصول على بطاقة الهوية الوطنية",
+                "bn": "কীভাবে একটি জাতীয় পরিচয়পত্রের জন্য আবেদন করতে হয় সে সম্পর্কে আমার তথ্য প্রয়োজন",
+                "de": "Ich möchte herausfinden, wie ich einen nationalen Personalausweis beantrage.",
                 "en": "I need information on how to apply for a national ID card",
-                "es": "Necesito información sobre cómo solicitar una tarjeta de ID nacional"
+                "es": "Necesito información sobre cómo solicitar una tarjeta de ID nacional",
+                "fr": "J'ai besoin d'informations sur la manière de demander une carte d'identité nationale",
+                "id": "Saya butuh informasi cara mengajukan KTP",
+                "man": "N lafiya la ka long ñaadi mbe ID kaard ñiningo ke",
+                "pt": "Preciso de informações sobre como solicitar um cartão de ID nacional",
+                "ru": "Мне нужна информация о том, как подать заявку на национальное удостоверение личности",
+                "st": "Ke hloka tlhahisoleseding mabapi le hore na nka etsa kopo ya karata ya naha ya ID jwang",
+                "sw": "Ninahitaji maelezo kuhusu jinsi ya kuomba kitambulisho cha kitaifa",
+                "th": "ฉันต้องการข้อมูลเกี่ยวกับวิธีสมัครบัตรประชาชนแห่งชาติ",
+                "zh": "我需要关于如何申请居民身份证的信息"
               },
               "hiddenPrompt": {
+                "ar": "تصرف كخبير مفيد في التسجيل المدني الكيني. اشرح خطوات الحصول على الهوية الوطنية (Maisha Namba) أو استبدال هوية مفقودة. هام: قدم قائمة واضحة بالمستندات المطلوبة (مثل شهادة الميلاد، ونسخ من هويات الوالدين) وانصح المستخدم بزيارة أقرب مركز Huduma Centre أو مكتب مسجل الأشخاص. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+                "bn": "একজন সহায়ক কেনিয়ান নাগরিক নিবন্ধন বিশেষজ্ঞ হিসেবে কাজ করুন। একটি জাতীয় পরিচয়পত্র (Maisha Namba) পাওয়ার বাহারিয়ে যাওয়া কার্ড প্রতিস্থাপনের পদক্ষেপগুলো ব্যাখ্যা করুন। গুরুত্বপূর্ণ: প্রয়োজনীয় নথিপত্রের একটি স্পষ্ট তালিকা প্রদান করুন (যেমন: জন্ম সনদ, বাবা-মায়ের আইডির অনুলিপি) এবং ব্যবহারকারীকে তাদের নিকটস্থ হুদুমা (Huduma) কেন্দ্র বা রেজিস্ট্রার অফ পার্সন্স অফিসে যাওয়ার পরামর্শ দিন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+                "de": "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
                 "en": "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'."
+                "es": "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+                "fr": "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+                "id": "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+                "man": "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+                "pt": "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+                "ru": "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+                "st": "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+                "sw": "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+                "th": "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+                "zh": "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'."
               }
             }
           },
           {
             "id": "taxes-revenue",
             "title": {
+              "ar": "دفع الضرائب",
+              "bn": "ট্যাক্স প্রদান",
+              "de": "Steuern zahlen",
               "en": "Pay Taxes",
-              "es": "Pagar impuestos"
+              "es": "Pagar impuestos",
+              "fr": "Payer les impôts",
+              "id": "Bayar Pajak",
+              "man": "Jooyaa muta",
+              "pt": "Pagar Impostos",
+              "ru": "Оплатить налоги",
+              "st": "Lefa lekgetho",
+              "sw": "Lipa Kodi",
+              "th": "ชำระภาษี",
+              "zh": "缴税"
             },
             "icon": {
               "type": "file",
@@ -326,20 +422,56 @@
             "category": "5",
             "action": {
               "visibleText": {
+                "ar": "ما هو العملية لدفع الضرائب عبر الإنترنت؟",
+                "bn": "অনলাইনে আমার কর পরিশোধ করার প্রক্রিয়া কী?",
+                "de": "Wie ist der Prozess, um meine Steuern online zu zahlen?",
                 "en": "What's the process for paying my taxes online?",
-                "es": "¿Cuál es el proceso para pagar mis impuestos en línea?"
+                "es": "¿Cuál es el proceso para pagar mis impuestos en línea?",
+                "fr": "Quel est le processus pour payer mes impôts en ligne ?",
+                "id": "Bagaimana proses membayar pajak saya secara online?",
+                "man": "Jooyaa muta onlayin coko mu munne ti?",
+                "pt": "Qual é o processo para pagar meus impostos online?",
+                "ru": "Каков процесс оплаты налогов онлайн?",
+                "st": "Ke tshebetso efe bakeng sa ho lefa lekgetho la ka inthaneteng?",
+                "sw": "Je, ni mchakato gani wa kulipa kodi zangu mtandaoni?",
+                "th": "กระบวนการชำระภาษีออนไลน์คืออะไร?",
+                "zh": "在线缴税的过程是什么？"
               },
               "hiddenPrompt": {
+                "ar": "تصرف كدليل لـ KRA (هيئة الإيرادات الكينية). اشرح عملية تقديم الإقرارات، أو التقدم بطلب للحصول على KRA PIN، أو إعادة تعيين كلمة المرور على بوابة iTax. هام: ذكّر المستخدم بموعد 30 يونيو النهائي للإقرارات السنوية ووجهه حول كيفية تقديم إقرارات صفرية (Nil returns) إذا لم يكن لديه دخل. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+                "bn": "একজন KRA (কেনিয়া রেভিনিউ অথরিটি) গাইড হিসেবে কাজ করুন। রিটার্ন জমা দেওয়া, KRA পিন-এর জন্য আবেদন করা বা iTax পোর্টালে পাসওয়ার্ড রিসেট করার প্রক্রিয়াটি ব্যাখ্যা করুন। গুরুত্বপূর্ণ: বার্ষিক রিটার্ন জমা দেওয়ার জন্য ব্যবহারকারীকে ৩০শে জুনের সময়সীমার কথা মনে করিয়ে দিন এবং তাদের কোনো আয় না থাকলে কীভাবে শূন্য (Nil) রিটার্ন জমা দিতে হয সে বিষয়ে গাইড করুন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+                "de": "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
                 "en": "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'."
+                "es": "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+                "fr": "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+                "id": "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+                "man": "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+                "pt": "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+                "ru": "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+                "st": "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+                "sw": "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+                "th": "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+                "zh": "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'."
               }
             }
           },
           {
             "id": "business-trade",
             "title": {
+              "ar": "بدء عمل تجاري",
+              "bn": "ব্যবসা শুরু করুন",
+              "de": "Unternehmen gründen",
               "en": "Start Business",
-              "es": "Iniciar negocio"
+              "es": "Iniciar negocio",
+              "fr": "Créer une entreprise",
+              "id": "Mulai Usaha",
+              "man": "Bita damina",
+              "pt": "Iniciar Negócio",
+              "ru": "Начать бизнес",
+              "st": "Qala kgwebo",
+              "sw": "Anza Biashara",
+              "th": "เริ่มธุรกิจ",
+              "zh": "创业"
             },
             "icon": {
               "type": "file",
@@ -348,20 +480,56 @@
             "category": "8",
             "action": {
               "visibleText": {
+                "ar": "دلني على الخطوات لتسجيل عمل جديد",
+                "bn": "একটি নতুন ব্যবসা নিবন্ধন করার ধাপগুলোর মাধ্যমে আমাকে গাইড করুন",
+                "de": "Führen Sie mich durch die Schritte zur Registrierung eines neuen Unternehmens.",
                 "en": "Guide me through the steps to register a new business",
-                "es": "Guíeme a través de los pasos para registrar un nuevo negocio"
+                "es": "Guíeme a través de los pasos para registrar un nuevo negocio",
+                "fr": "Guidez-moi à travers les étapes pour enregistrer une nouvelle entreprise",
+                "id": "Bimbing saya melalui langkah-langkah untuk mendaftarkan bisnis baru",
+                "man": "N makaamoo bita lataramoo to",
+                "pt": "Guie-me pelos passos para registrar um novo negócio",
+                "ru": "Проведите меня через шаги регистрации нового бизнеса",
+                "st": "Ntsamaise mehatong ya ho ngodisa kgwebo e ntjha",
+                "sw": "Niongoze kupitia hatua za kusajili biashara mpya",
+                "th": "นำฉันผ่านขั้นตอนการจดทะเบียนธุรกิจใหม่",
+                "zh": "指导我完成开创新事业的步骤"
               },
               "hiddenPrompt": {
+                "ar": "تصرف كمستشار أعمال لخدمات eCitizen. وجه المستخدم خلال حجز الاسم التجاري وتسجيل الشركة في كينيا. هام: اشرح التكاليف الحالية للبحث عن الاسم والتسجيل، ووجه المستخدم إلى بوابة eCitizen الرسمية لإكمال الطلب. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+                "bn": "ই-সিটিজেন (eCitizen) পরিষেবাগুলোর জন্য একজন ব্যবসায়িক পরামর্শদাতা হিসেবে কাজ করুন। কেনিয়ায় ব্যবসার নাম সংরক্ষণ এবং কোম্পানি নিবন্ধনের মাধ্যমে ব্যবহারকারীকে গাইড করুন। গুরুত্বপূর্ণ: নাম অনুসন্ধান এবং নিবন্ধনের জন্য বর্তমান খরচগুলো ব্যাখ্যা করুন এবং আবেদনটি সম্পূর্ণ করতে ব্যবহারকারীকে অফিসিয়াল ই-সিটিজেন পোর্টালে নির্দেশ করুন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+                "de": "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
                 "en": "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'."
+                "es": "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+                "fr": "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+                "id": "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+                "man": "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+                "pt": "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+                "ru": "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+                "st": "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+                "sw": "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+                "th": "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+                "zh": "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'."
               }
             }
           },
           {
             "id": "healthcare-social",
             "title": {
+              "ar": "الرعاية الصحية",
+              "bn": "স্বাস্থ্যসেবা",
+              "de": "Gesundheitswesen",
               "en": "Healthcare",
-              "es": "Salud"
+              "es": "Salud",
+              "fr": "Santé",
+              "id": "Kesehatan",
+              "man": "Kenda-yaa",
+              "pt": "Saúde",
+              "ru": "Здравоохранение",
+              "st": "Bophelo",
+              "sw": "Afya",
+              "th": "สุขภาพ",
+              "zh": "医疗"
             },
             "icon": {
               "type": "file",
@@ -370,20 +538,56 @@
             "category": "2",
             "action": {
               "visibleText": {
+                "ar": "أين يمكنني العثور على معلومات حول خدمات الرعاية الصحية العامة؟",
+                "bn": "আমি পাবলিক স্বাস্থ্যসেবা সম্পর্কে কোথায় তথ্য পেতে পারি?",
+                "de": "Wo finde ich Informationen über öffentliche Gesundheitsdienste?",
                 "en": "Where can I find information about public healthcare services?",
-                "es": "¿Dónde puedo encontrar información sobre servicios de salud pública?"
+                "es": "¿Dónde puedo encontrar información sobre servicios de salud pública?",
+                "fr": "Où puis-je trouver des informations sur les services de santé publics ?",
+                "id": "Di mana saya bisa mencari informasi tentang layanan kesehatan masyarakat?",
+                "man": "Mbe kenda-yaa dulaa kibaroo soto minto?",
+                "pt": "Onde posso encontrar informações sobre serviços de saúde pública?",
+                "ru": "Где я могу найти информацию об общественных медицинских услугах?",
+                "st": "Nka fumana hokae tlhahisoleseding ka ditshebeletso tsa setjhaba tsa bophelo bo botle?",
+                "sw": "Wapi ninaweza kupata maelezo kuhusu huduma za afya ya umma?",
+                "th": "ฉันสามารถหาข้อมูลเกี่ยวกับบริการสุขภาพสาธารณะได้ที่ไหน?",
+                "zh": "哪里可以找到公共医疗服务的信息？"
               },
               "hiddenPrompt": {
+                "ar": "تصرف كموجه للخدمات الصحية. قدم معلومات حول الانتقال من NHIF إلى SHIF (صندوق التأمين الصحي الاجتماعي) وكيفية التسجيل. هام: شارك رموز USSD الرسمية (مثل *263#) أو روابط الموقع للتسجيل واشرح فوائد التغطية الصحية العامة. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+                "bn": "একজন স্বাস্থ্য পরিষেবা নেভিগেটর হিসেবে কাজ করুন। NHIF থেকে SHIF (সোশ্যাল হেলথ ইন্স্যুরেন্স ফান্ড)-এ রূপান্তর এবং কীভাবে নিবন্ধন করতে হয় সে সম্পর্কে তথ্য প্রদান করুন। গুরুত্বপূর্ণ: নিবন্ধনের জন্য অফিসিয়াল USSD কোডগুলো (যেমন *263#) বা ওয়েবসাইটের লিঙ্কগুলো শেয়ার করুন এবং জনস্বাস্থ্য কভারের সুবিধাগুলো ব্যাখ্যা করুন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+                "de": "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
                 "en": "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'."
+                "es": "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+                "fr": "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+                "id": "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+                "man": "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+                "pt": "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+                "ru": "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+                "st": "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+                "sw": "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+                "th": "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+                "zh": "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'."
               }
             }
           },
           {
             "id": "education-learning",
             "title": {
+              "ar": "التعليم",
+              "bn": "শিক্ষা",
+              "de": "Bildung",
               "en": "Education",
-              "es": "Educación"
+              "es": "Educación",
+              "fr": "Éducation",
+              "id": "Pendidikan",
+              "man": "Karandiri",
+              "pt": "Educação",
+              "ru": "Образование",
+              "st": "Thuto",
+              "sw": "Elimu",
+              "th": "การศึกษา",
+              "zh": "教育"
             },
             "icon": {
               "type": "file",
@@ -392,20 +596,56 @@
             "category": "3",
             "action": {
               "visibleText": {
+                "ar": "ما هي خدمات التعليم المتاحة لأطفالي؟",
+                "bn": "আমার সন্তানদের জন্য কী কী শিক্ষা পরিষেবা উপলব্ধ আছে?",
+                "de": "Welche Bildungsdienste stehen meinen Kindern zur Verfügung?",
                 "en": "What education services are available for my children?",
-                "es": "¿Qué servicios educativos están disponibles para mis hijos?"
+                "es": "¿Qué servicios educativos están disponibles para mis hijos?",
+                "fr": "Quels services éducatifs sont disponibles pour mes enfants ?",
+                "id": "Layanan pendidikan apa yang tersedia untuk anak-anak saya?",
+                "man": "Karandiri baaralu munne soto nna dingingolu ye?",
+                "pt": "Quais serviços de educação estão disponíveis para meus filhos?",
+                "ru": "Какие образовательные услуги доступны для моих детей?",
+                "st": "Ke ditshebeletso dife tsa thuto tse fumanehang bakeng sa bana ba ka?",
+                "sw": "Ni huduma zipi za elimu zinazopatikana kwa watoto wangu?",
+                "th": "บริการการศึกษาอะไรที่มีสำหรับลูกของฉัน?",
+                "zh": "我的孩子有哪些教育服务可用？"
               },
               "hiddenPrompt": {
+                "ar": "تصرف كمستشار تعليمي. ناقش منهج CBC، أو تسجيل NEMIS، أو القبول الجامعي عبر KUCCPS. هام: اشرح كيف يمكن للوالدين التحقق من نتائج الامتحانات الوطنية عبر الرسائل القصيرة أو بوابة KNEC عند إصدارها. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+                "bn": "একজন শিক্ষা পরামর্শদাতা হিসেবে কাজ করুন। CBC পাঠ্যক্রম, NEMIS নিবন্ধন, বা KUCCPS-এর মাধ্যমে বিশ্ববিদ্যালয়ে নিয়োগ নিয়ে আলোচনা করুন। গুরুত্বপূর্ণ: পরীক্ষার ফলাফল প্রকাশিত হলে পিতামাতারা কীভাবে SMS বা KNEC পোর্টালের মাধ্যমে জাতীয় পরীক্ষার ফলাফল চেক করতে পারেন তা ব্যাখ্যা করুন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+                "de": "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
                 "en": "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'."
+                "es": "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+                "fr": "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+                "id": "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+                "man": "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+                "pt": "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+                "ru": "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+                "st": "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+                "sw": "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+                "th": "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+                "zh": "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'."
               }
             }
           },
           {
             "id": "transportation-mobility",
             "title": {
+              "ar": "النقل",
+              "bn": "পরিবহন",
+              "de": "Verkehr",
               "en": "Transport",
-              "es": "Transporte"
+              "es": "Transporte",
+              "fr": "Transport",
+              "id": "Transportasi",
+              "man": "Moto",
+              "pt": "Transporte",
+              "ru": "Транспорт",
+              "st": "Dipalangwang",
+              "sw": "Usafiri",
+              "th": "การขนส่ง",
+              "zh": "交通"
             },
             "icon": {
               "type": "file",
@@ -414,20 +654,56 @@
             "category": "7",
             "action": {
               "visibleText": {
+                "ar": "كيف أجدد رخصة القيادة الخاصة بي؟",
+                "bn": "কীভাবে আমি আমার ড্রাইভিং লাইসেন্স নবায়ন করব?",
+                "de": "Wie erneuere ich meinen Führerschein?",
                 "en": "How do I renew my driving license?",
-                "es": "¿Cómo renuevo mi licencia de conducir?"
+                "es": "¿Cómo renuevo mi licencia de conducir?",
+                "fr": "Comment puis-je renouveler mon permis de conduire ?",
+                "id": "Bagaimana cara memperpanjang SIM saya?",
+                "man": "Ñaadi mbe nna moto laisins kurandi?",
+                "pt": "Como renovo minha carteira de motorista?",
+                "ru": "Как мне продлить водительские права?",
+                "st": "Nka ntjhafatsa laesense ya ka ya ho kganna jwang?",
+                "sw": "Je, ninawezaje kuhuisha leseni yangu ya udereva?",
+                "th": "ฉันจะต่ออายุใบขับขี่อย่างไร?",
+                "zh": "如何续签我的驾照？"
               },
               "hiddenPrompt": {
+                "ar": "تصرف كدليل لخدمات NTSA. اشرح عملية تجديد رخصة القيادة، أو فحص المركبات، أو إدارة حساب TIMS. هام: وجه المستخدم حول كيفية تسجيل الدخول إلى بوابة eCitizen NTSA لتقديم طلب للحصول على Smart DL أو حجز فحص للمركبة. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+                "bn": "একজন NTSA সার্ভিস গাইড হিসেবে কাজ করুন। ড্রাইভিং লাইসেন্স নবায়ন, যানবাহন পরিদর্শন, বা TIMS অ্যাকাউন্ট পরিচালনার প্রক্রিয়াটি ব্যাখ্যা করুন। গুরুত্বপূর্ণ: ব্যবহারকারীকে তাদের স্মার্ট DL-এর জন্য আবেদন করতে বা গাড়ির পরিদর্শন বুক করতে eCitizen NTSA পোর্টালে কীভাবে লগইন করতে হয় সে সম্পর্কে গাইড করুন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+                "de": "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
                 "en": "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'."
+                "es": "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+                "fr": "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+                "id": "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+                "man": "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+                "pt": "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+                "ru": "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+                "st": "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+                "sw": "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+                "th": "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+                "zh": "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'."
               }
             }
           },
           {
             "id": "housing-urban",
             "title": {
+              "ar": "الإسكان",
+              "bn": "আবাসন",
+              "de": "Wohnen",
               "en": "Housing",
-              "es": "Vivienda"
+              "es": "Vivienda",
+              "fr": "Logement",
+              "id": "Perumahan",
+              "man": "Suw",
+              "pt": "Habitação",
+              "ru": "Жильё",
+              "st": "Matlo",
+              "sw": "Nyumba",
+              "th": "ที่อยู่อาศัย",
+              "zh": "住房"
             },
             "icon": {
               "type": "file",
@@ -436,20 +712,56 @@
             "category": "9",
             "action": {
               "visibleText": {
+                "ar": "أخبرني عن برامج الإسكان الميسورة التكلفة في كينيا",
+                "bn": "কেনিয়ায় সাশ্রয়ী মূল্যের আবাসন কর্মসূচি সম্পর্কে আমাকে বলুন",
+                "de": "Erzählen Sie mir von erschwinglichen Wohnungsprogrammen in Kenia.",
                 "en": "Tell me about affordable housing programs in Kenya",
-                "es": "Cuénteme sobre programas de vivienda asequible en Kenia"
+                "es": "Cuénteme sobre programas de vivienda asequible en Kenia",
+                "fr": "Parlez-moi des programmes de logement abordable au Kenya",
+                "id": "Beri tahu saya tentang program perumahan terjangkau di Kenya",
+                "man": "Maa Keniya suw baaralu kang (affordable housing)",
+                "pt": "Conte-me sobre programas de habitação acessível no Quênia",
+                "ru": "Расскажите о доступных жилищных программах в Кении",
+                "st": "Bolelle ka mananeo a matlo a theko e tlase a Kenya",
+                "sw": "Niambie kuhusu programu za nyumba za bei nafuu nchini Kenya",
+                "th": "บอกฉันเกี่ยวกับโปรแกรมที่อยู่อาศัยราคาไม่แพงในเคนยา",
+                "zh": "告诉我肯尼亚的负担得起的住房计划"
               },
               "hiddenPrompt": {
+                "ar": "تصرف كمستشار لبرنامج الإسكان. اشرح التسجيل في برنامج الإسكان الميسر (Boma Yangu) وعملية المساهمة الطوعية. هام: وجه المستخدم إلى بوابة Boma Yangu لعرض المشاريع وشرح معايير الأهلية للتخصيص. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+                "bn": "একজন আবাসন কর্মসূচি উপদেষ্টা হিসেবে কাজ করুন। অ্যাফোর্ডেবল হাউজিং প্রোগ্রাম (বোমা ইয়াঙ্গু/Boma Yangu) নিবন্ধন এবং স্বেচ্ছায় অবদান রাখার প্রক্রিয়াটি ব্যাখ্যা করুন। গুরুত্বপূর্ণ: প্রজেক্টগুলো দেখার জন্য ব্যবহারকারীকে বোমা ইয়াঙ্গু পোর্টালে গাইড করুন এবং বরাদ্দের যোগ্যতার মানদণ্ড ব্যাখ্যা করুন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+                "de": "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
                 "en": "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'."
+                "es": "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+                "fr": "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+                "id": "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+                "man": "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+                "pt": "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+                "ru": "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+                "st": "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+                "sw": "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+                "th": "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+                "zh": "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'."
               }
             }
           },
           {
             "id": "employment-labor",
             "title": {
+              "ar": "إيجاد وظائف",
+              "bn": "চাকরি খুঁজুন",
+              "de": "Arbeitsplätze",
               "en": "Find Jobs",
-              "es": "Empleos"
+              "es": "Empleos",
+              "fr": "Emplois",
+              "id": "Pekerjaan",
+              "man": "Baara",
+              "pt": "Empregos",
+              "ru": "Работа",
+              "st": "Mosebetsi",
+              "sw": "Kazi",
+              "th": "งาน",
+              "zh": "工作"
             },
             "icon": {
               "type": "file",
@@ -458,12 +770,36 @@
             "category": "4",
             "action": {
               "visibleText": {
+                "ar": "ما هي فرص العمل الحكومية المتاحة حاليًا؟",
+                "bn": "বর্তমানে সরকারি চাকরির কী সুযোগ রয়েছে?",
+                "de": "Welche staatlichen Arbeitsmöglichkeiten gibt es derzeit?",
                 "en": "What government job opportunities are currently available?",
-                "es": "¿Qué oportunidades de empleo gubernamentales están disponibles actualmente?"
+                "es": "¿Qué oportunidades de empleo gubernamentales están disponibles actualmente?",
+                "fr": "Quelles opportunités d'emploi gouvernementales sont actuellement disponibles ?",
+                "id": "Peluang kerja pemerintah apa yang saat ini tersedia?",
+                "man": "Gomnati baara munne ka nyining saaying?",
+                "pt": "Quais oportunidades de emprego governamental estão disponíveis atualmente?",
+                "ru": "Какие государственные вакансии доступны в настоящее время?",
+                "st": "Ke menyetla efe ya mosebetsi ya mmuso e fumanehang ha jwale?",
+                "sw": "Ni fursa zipi za kazi za serikali zinazopatikana kwa sasa?",
+                "th": "โอกาสงานรัฐบาลอะไรที่มีอยู่ในปัจจุบัน?",
+                "zh": "目前有哪些政府工作机会？"
               },
               "hiddenPrompt": {
+                "ar": "تصرف كمدرب مهني للخدمة العامة. وجه المستخدم لإنشاء ملف تعريف والتقدم للوظائف الشاغرة عبر بوابة لجنة الخدمة العامة (PSC). هام: انصح المستخدم بتجهيز شهاداته الأكاديمية والتحقق بانتظام من موقع PSC أو الصحف المحلية لإعلانات MyGov. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+                "bn": "পাবলিক সার্ভিসের জন্য একজন ক্যারিয়ার কোচ হিসেবে কাজ করুন। পাবলিক সার্ভিস কমিশন (PSC) পোর্টালের মাধ্যমে একটি প্রোফাইল তৈরি করা এবং শূন্যপদের জন্য আবেদন করার বিষয়ে ব্যবহারকারীকে গাইড করুন। গুরুত্বপূর্ণ: ব্যবহারকারীকে তাদের একাডেমিক সার্টিফিকেট প্রস্তুত রাখতে এবং MyGov বিজ্ঞাপনের জন্য নিয়মিত PSC ওয়েবসাইট বা স্থানীয় সংবাদপত্র চেক করার পরামর্শ দিন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+                "de": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
                 "en": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'."
+                "es": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+                "fr": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+                "id": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+                "man": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+                "pt": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+                "ru": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+                "st": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+                "sw": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+                "th": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+                "zh": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'."
               }
             }
           }

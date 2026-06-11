@@ -161,8 +161,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _messages.first['content'] = newWelcomeMessage;
         });
       }
-
-      // Update the state variable for future resets
+      // Reload quick help buttons with new locale
+      _loadQuickHelpConfig();
       _welcomeMessage = newWelcomeMessage;
     }
   }

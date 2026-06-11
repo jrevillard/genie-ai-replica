@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "GENIE.AI Framework Configuration",
-  "description": "Configuration file for customizing the GENIE.AI chatbot framework with a darker light blue theme inspired by ITU website banner",
+  "description": "Configuration file for customizing the GENIE.AI chatbot framework with dual-prompt mechanism for quick help buttons",
   "type": "object",
   "properties": {
     "app": {
@@ -44,54 +44,74 @@
     },
     "theme": {
       "type": "object",
-      "description": "UI theme and color scheme settings",
+      "description": "UI theme and color scheme settings. All accent variants (hover, muted, dark mode) are derived automatically from brandColor via CSS.",
       "properties": {
-        "primaryColor": {
+        "brandColor": {
           "type": "string",
-          "description": "Primary color for buttons and accents",
-          "default": "#4E97D1"
+          "description": "Primary brand color (hex). This is the single source for the entire accent palette.",
+          "default": "#4071cb"
         },
-        "secondaryColor": {
+        "bg": {
           "type": "string",
-          "description": "Secondary color for accents and highlights",
-          "default": "#2C5F8A"
+          "description": "Page background color (overrides the default light gray)"
         },
-        "backgroundColor": {
+        "fg": {
           "type": "string",
-          "description": "Background color for main content area",
-          "default": "#f5f7fa"
-        },
-        "textColor": {
-          "type": "string",
-          "description": "Primary text color",
-          "default": "#333333"
+          "description": "Primary text color (overrides the default dark gray)"
         },
         "navbar": {
           "type": "object",
-          "description": "Navbar-specific styling",
+          "description": "Navbar-specific overrides (optional, defaults to brand)",
           "properties": {
-            "gradientStart": {
+            "background": {
               "type": "string",
-              "description": "Start color for navbar gradient",
-              "default": "#4E97D1"
+              "description": "Navbar background color (defaults to brandColor)"
             },
-            "gradientEnd": {
+            "text": {
               "type": "string",
-              "description": "End color for navbar gradient",
-              "default": "#2C5F8A"
+              "description": "Navbar text/icon color (auto-contrasted if omitted)"
+            }
+          }
+        },
+        "colors": {
+          "type": "object",
+          "description": "Override semantic status colors",
+          "properties": {
+            "success": {
+              "type": "string",
+              "description": "Success color"
             },
-            "textColor": {
+            "warning": {
               "type": "string",
-              "description": "Navbar text/icon color",
-              "default": "#ffffff"
+              "description": "Warning color"
+            },
+            "danger": {
+              "type": "string",
+              "description": "Danger color"
+            },
+            "info": {
+              "type": "string",
+              "description": "Info color"
+            }
+          }
+        },
+        "typography": {
+          "type": "object",
+          "description": "Typography overrides",
+          "properties": {
+            "fontFamily": {
+              "type": "string",
+              "description": "Override body font stack"
+            },
+            "fontScale": {
+              "type": "number",
+              "description": "Multiplier for all text sizes (e.g. 1.1)"
             }
           }
         }
       },
       "required": [
-        "primaryColor",
-        "secondaryColor",
-        "navbar"
+        "brandColor"
       ]
     },
     "features": {
@@ -114,68 +134,8 @@
             },
             "quickHelp": {
               "type": "object",
-              "description": "Quick Help button panel configurations",
+              "description": "Quick Help button configurations with dual-prompt mechanism",
               "properties": {
-                "layout": {
-                  "type": "object",
-                  "description": "Grid system for buttons",
-                  "properties": {
-                    "columns": {
-                      "type": "integer",
-                      "default": 2
-                    },
-                    "gapX": {
-                      "type": "string",
-                      "default": "10px"
-                    },
-                    "gapY": {
-                      "type": "string",
-                      "default": "10px"
-                    },
-                    "childAspectRatio": {
-                      "type": "number",
-                      "default": 3.5
-                    }
-                  }
-                },
-                "defaults": {
-                  "type": "object",
-                  "description": "Base styles inherited by all buttons",
-                  "properties": {
-                    "height": {
-                      "type": "string"
-                    },
-                    "fontSize": {
-                      "type": "string"
-                    },
-                    "borderRadius": {
-                      "type": "string"
-                    },
-                    "showShadow": {
-                      "type": "boolean"
-                    },
-                    "shadow": {
-                      "type": "object",
-                      "properties": {
-                        "enabled": {
-                          "type": "boolean"
-                        },
-                        "color": {
-                          "type": "string"
-                        },
-                        "blur": {
-                          "type": "string"
-                        },
-                        "opacity": {
-                          "type": "number"
-                        }
-                      }
-                    },
-                    "showBorder": {
-                      "type": "boolean"
-                    }
-                  }
-                },
                 "buttons": {
                   "type": "array",
                   "description": "List of Quick Help buttons",
@@ -184,26 +144,52 @@
                     "properties": {
                       "id": {
                         "type": "string",
-                        "description": "Unique identifier"
+                        "description": "Unique identifier for the button"
+                      },
+                      "title": {
+                        "type": "string",
+                        "description": "i18n key for button label"
+                      },
+                      "icon": {
+                        "type": "object",
+                        "description": "Button icon configuration",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "file",
+                              "inline"
+                            ],
+                            "description": "Type of icon source"
+                          },
+                          "value": {
+                            "type": "string",
+                            "description": "Path to SVG file or inline SVG content"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ]
                       },
                       "category": {
                         "type": [
                           "string",
                           "null"
                         ],
-                        "description": "Optional category grouping"
+                        "description": "Category ID for the button (null for general)"
                       },
                       "action": {
                         "type": "object",
-                        "description": "The 2-prompt mechanism",
+                        "description": "The dual-prompt mechanism: visibleText for user, hiddenPrompt for LLM",
                         "properties": {
                           "visibleText": {
                             "type": "string",
-                            "description": "What user sees in chat"
+                            "description": "i18n key for text user sees in chat"
                           },
                           "hiddenPrompt": {
                             "type": "string",
-                            "description": "What LLM sees"
+                            "description": "i18n key for detailed prompt sent to LLM"
                           }
                         },
                         "required": [
@@ -211,98 +197,37 @@
                           "hiddenPrompt"
                         ]
                       },
-                      "appearance": {
+                      "styles": {
                         "type": "object",
-                        "description": "Visual configuration",
+                        "description": "Custom styles for the button",
                         "properties": {
-                          "label": {
-                            "type": "object",
-                            "properties": {
-                              "text": {
-                                "type": "string"
-                              },
-                              "color": {
-                                "type": "string"
-                              }
-                            }
+                          "backgroundColor": {
+                            "type": "string",
+                            "description": "Background color"
                           },
-                          "icon": {
-                            "type": "object",
-                            "properties": {
-                              "value": {
-                                "type": "string"
-                              },
-                              "color": {
-                                "type": "string"
-                              }
-                            }
+                          "hoverColor": {
+                            "type": "string",
+                            "description": "Hover background color"
                           },
-                          "style": {
-                            "type": "object",
-                            "properties": {
-                              "background": {
-                                "type": "object",
-                                "properties": {
-                                  "gradient": {
-                                    "type": "object",
-                                    "properties": {
-                                      "start": {
-                                        "type": "string"
-                                      },
-                                      "end": {
-                                        "type": "string"
-                                      },
-                                      "direction": {
-                                        "type": "string",
-                                        "enum": [
-                                          "horizontal",
-                                          "vertical",
-                                          "diagonal"
-                                        ]
-                                      }
-                                    }
-                                  }
-                                }
-                              },
-                              "border": {
-                                "type": "object",
-                                "properties": {
-                                  "enabled": {
-                                    "type": "boolean"
-                                  }
-                                }
-                              },
-                              "shadow": {
-                                "type": "object",
-                                "properties": {
-                                  "enabled": {
-                                    "type": "boolean"
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          "darkMode": {
-                            "type": "object",
-                            "description": "Overrides for dark mode",
-                            "properties": {
-                              "label": {
-                                "type": "object"
-                              },
-                              "icon": {
-                                "type": "object"
-                              },
-                              "style": {
-                                "type": "object"
-                              }
-                            }
+                          "outlineColor": {
+                            "type": "string",
+                            "description": "Border/outline color"
                           }
-                        }
+                        },
+                        "required": [
+                          "backgroundColor",
+                          "hoverColor",
+                          "outlineColor"
+                        ]
                       }
                     },
                     "required": [
                       "id",
-                      "action"
+                      "title",
+                      "icon",
+                      "category",
+                      "action",
+                      "styles"
                     ]
                   }
                 }
@@ -326,131 +251,220 @@
     "theme"
   ],
   "app": {
-    "title": "Genie AI",
+    "title": "GENIE.AI",
     "icon": {
       "type": "file",
-      "value": "assets/config/genie-ai-icon-light.svg"
+      "value": "/config/logo-genie-ai.jpeg"
     }
   },
   "theme": {
-    "brandColor": "#4682B4"
+    "brandColor": "#4071cb"
   },
   "features": {
     "chat": {
-      "welcomeMessage": "Welcome to Genie AI, for Global Empowerment, Intelligence and Equity",
-      "botName": "Genie AI",
+      "welcomeMessage": {
+        "en": "Welcome! How can I assist you with Kenya government services today?",
+        "es": "¡Bienvenido! ¿Cómo puedo asistirlo con los servicios gubernamentales de Kenia hoy?"
+      },
+      "botName": "GENIE.AI",
       "quickHelp": {
-        "layout": {
-          "columns": 2,
-          "childAspectRatio": 4.2
-        },
         "buttons": [
           {
             "id": "just-chat",
+            "title": {
+              "en": "Just Chat",
+              "es": "Solo Chatear"
+            },
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/just-chat.svg"
+            },
             "category": null,
             "action": {
-              "visibleText": "quickhelp.justChatUserPrompt",
-              "hiddenPrompt": "quickhelp.justChatPrompt"
-            },
-            "appearance": {
-              "label": { "text": "quickhelp.justChat" },
-              "icon": { "value": "/config/quickhelp/just-chat.svg" }
+              "visibleText": {
+                "en": "I'd like to chat about government services",
+                "es": "Me gustaría chatear sobre servicios gubernamentales"
+              },
+              "hiddenPrompt": {
+                "en": "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'.",
+                "es": "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+              }
             }
           },
           {
             "id": "identity-civil",
+            "title": {
+              "en": "Apply for ID",
+              "es": "Solicitar ID"
+            },
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/identity-civil.svg"
+            },
             "category": "1",
             "action": {
-              "visibleText": "quickhelp.applyForIDUserPrompt",
-              "hiddenPrompt": "quickhelp.applyForIDPrompt"
-            },
-            "appearance": {
-              "label": { "text": "quickhelp.applyForID" },
-              "icon": { "value": "/config/quickhelp/identity-civil.svg" }
+              "visibleText": {
+                "en": "I need information on how to apply for a national ID card",
+                "es": "Necesito información sobre cómo solicitar una tarjeta de ID nacional"
+              },
+              "hiddenPrompt": {
+                "en": "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+                "es": "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'."
+              }
             }
           },
           {
             "id": "taxes-revenue",
+            "title": {
+              "en": "Pay Taxes",
+              "es": "Pagar impuestos"
+            },
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/taxes-revenue.svg"
+            },
             "category": "5",
             "action": {
-              "visibleText": "quickhelp.payTaxesUserPrompt",
-              "hiddenPrompt": "quickhelp.payTaxesPrompt"
-            },
-            "appearance": {
-              "label": { "text": "quickhelp.payTaxes" },
-              "icon": { "value": "/config/quickhelp/taxes-revenue.svg" }
+              "visibleText": {
+                "en": "What's the process for paying my taxes online?",
+                "es": "¿Cuál es el proceso para pagar mis impuestos en línea?"
+              },
+              "hiddenPrompt": {
+                "en": "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+                "es": "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'."
+              }
             }
           },
           {
             "id": "business-trade",
+            "title": {
+              "en": "Start Business",
+              "es": "Iniciar negocio"
+            },
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/business-trade.svg"
+            },
             "category": "8",
             "action": {
-              "visibleText": "quickhelp.startBusinessUserPrompt",
-              "hiddenPrompt": "quickhelp.startBusinessPrompt"
-            },
-            "appearance": {
-              "label": { "text": "quickhelp.startBusiness" },
-              "icon": { "value": "/config/quickhelp/business-trade.svg" }
+              "visibleText": {
+                "en": "Guide me through the steps to register a new business",
+                "es": "Guíeme a través de los pasos para registrar un nuevo negocio"
+              },
+              "hiddenPrompt": {
+                "en": "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+                "es": "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'."
+              }
             }
           },
           {
             "id": "healthcare-social",
+            "title": {
+              "en": "Healthcare",
+              "es": "Salud"
+            },
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/healthcare-social.svg"
+            },
             "category": "2",
             "action": {
-              "visibleText": "quickhelp.findHealthcareUserPrompt",
-              "hiddenPrompt": "quickhelp.findHealthcarePrompt"
-            },
-            "appearance": {
-              "label": { "text": "quickhelp.findHealthcare" },
-              "icon": { "value": "/config/quickhelp/healthcare-social.svg" }
+              "visibleText": {
+                "en": "Where can I find information about public healthcare services?",
+                "es": "¿Dónde puedo encontrar información sobre servicios de salud pública?"
+              },
+              "hiddenPrompt": {
+                "en": "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+                "es": "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'."
+              }
             }
           },
           {
             "id": "education-learning",
+            "title": {
+              "en": "Education",
+              "es": "Educación"
+            },
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/education-learning.svg"
+            },
             "category": "3",
             "action": {
-              "visibleText": "quickhelp.educationServicesUserPrompt",
-              "hiddenPrompt": "quickhelp.educationServicesPrompt"
-            },
-            "appearance": {
-              "label": { "text": "quickhelp.educationServices" },
-              "icon": { "value": "/config/quickhelp/education-learning.svg" }
+              "visibleText": {
+                "en": "What education services are available for my children?",
+                "es": "¿Qué servicios educativos están disponibles para mis hijos?"
+              },
+              "hiddenPrompt": {
+                "en": "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+                "es": "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'."
+              }
             }
           },
           {
             "id": "transportation-mobility",
+            "title": {
+              "en": "Transport",
+              "es": "Transporte"
+            },
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/transportation-mobility.svg"
+            },
             "category": "7",
             "action": {
-              "visibleText": "quickhelp.transportLicensesUserPrompt",
-              "hiddenPrompt": "quickhelp.transportLicensesPrompt"
-            },
-            "appearance": {
-              "label": { "text": "quickhelp.transportLicenses" },
-              "icon": { "value": "/config/quickhelp/transportation-mobility.svg" }
+              "visibleText": {
+                "en": "How do I renew my driving license?",
+                "es": "¿Cómo renuevo mi licencia de conducir?"
+              },
+              "hiddenPrompt": {
+                "en": "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+                "es": "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'."
+              }
             }
           },
           {
             "id": "housing-urban",
+            "title": {
+              "en": "Housing",
+              "es": "Vivienda"
+            },
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/housing-urban.svg"
+            },
             "category": "9",
             "action": {
-              "visibleText": "quickhelp.housingProgramsUserPrompt",
-              "hiddenPrompt": "quickhelp.housingProgramsPrompt"
-            },
-            "appearance": {
-              "label": { "text": "quickhelp.housingPrograms" },
-              "icon": { "value": "/config/quickhelp/housing-urban.svg" }
+              "visibleText": {
+                "en": "Tell me about affordable housing programs in Kenya",
+                "es": "Cuénteme sobre programas de vivienda asequible en Kenia"
+              },
+              "hiddenPrompt": {
+                "en": "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+                "es": "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'."
+              }
             }
           },
           {
             "id": "employment-labor",
+            "title": {
+              "en": "Find Jobs",
+              "es": "Empleos"
+            },
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/employment-labor.svg"
+            },
             "category": "4",
             "action": {
-              "visibleText": "quickhelp.findJobsUserPrompt",
-              "hiddenPrompt": "quickhelp.findJobsPrompt"
-            },
-            "appearance": {
-              "label": { "text": "quickhelp.findJobs" },
-              "icon": { "value": "/config/quickhelp/employment-labor.svg" }
+              "visibleText": {
+                "en": "What government job opportunities are currently available?",
+                "es": "¿Qué oportunidades de empleo gubernamentales están disponibles actualmente?"
+              },
+              "hiddenPrompt": {
+                "en": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+                "es": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'."
+              }
             }
           }
         ]

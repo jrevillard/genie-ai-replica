@@ -1343,7 +1343,6 @@ export default {
     fileReceived: 'ফাইল সফলভাবে গৃহীত হয়েছে।',
     fileUploadError: 'ফাইল আপলোড করতে ত্রুটি।',
     processingError: 'আপনার অনুরোধ প্রক্রিয়া করতে ত্রুটি।',
-    welcomeMessage: 'স্বাগতম! আমি আজ কিভাবে আপনাকে কেনিয়া সরকারের পরিষেবাগুলির সাথে সহায়তা করতে পারি?',
     attachFile: 'ফাইল সংযুক্ত করুন',
     fileTooLarge: 'ফাইলটি অনেক বড়। সর্বোচ্চ আকার হলো {maxSize}।',
     saveChat: 'চ্যাট সেভ করুন',
@@ -1355,7 +1354,7 @@ export default {
     clearContext: 'প্রসঙ্গ পরিষ্কার করুন এবং একটি নতুন চ্যাট শুরু করুন',
     unsavedChanges: 'আপনার অসংরক্ষিত পরিবর্তন আছে। আপনি কি নিশ্চিত যে আপনি একটি নতুন চ্যাট শুরু করতে চান?',
     whatCanIHelp: 'আমি আজ আপনাকে কীভাবে সাহায্য করতে পারি?',
-    justChat: 'শুধু চ্যাট করুন',
+
     queryContext: 'কোয়েরি প্রসঙ্গ',
     contextAdded: 'আপনার কোয়েরিতে প্রসঙ্গ যোগ করা হয়েছে',
     contextRemoved: 'আপনার কোয়েরি থেকে প্রসঙ্গ সরানো হয়েছে',
@@ -1385,26 +1384,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'আইডি-এর জন্য আবেদন',
-    payTaxes: 'ট্যাক্স প্রদান',
-    startBusiness: 'ব্যবসা শুরু করুন',
-    findHealthcare: 'স্বাস্থ্যসেবা',
-    educationServices: 'শিক্ষা',
-    transportLicenses: 'পরিবহন',
-    housingPrograms: 'আবাসন',
-    findJobs: 'চাকরি খুঁজুন',
-    justChat: 'শুধু চ্যাট করুন',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'আমি সরকারি পরিষেবা নিয়ে চ্যাট করতে চাই',
-    applyForIDUserPrompt: 'কীভাবে একটি জাতীয় পরিচয়পত্রের জন্য আবেদন করতে হয় সে সম্পর্কে আমার তথ্য প্রয়োজন',
-    payTaxesUserPrompt: 'অনলাইনে আমার কর পরিশোধ করার প্রক্রিয়া কী?',
-    startBusinessUserPrompt: 'একটি নতুন ব্যবসা নিবন্ধন করার ধাপগুলোর মাধ্যমে আমাকে গাইড করুন',
-    findHealthcareUserPrompt: 'আমি পাবলিক স্বাস্থ্যসেবা সম্পর্কে কোথায় তথ্য পেতে পারি?',
-    educationServicesUserPrompt: 'আমার সন্তানদের জন্য কী কী শিক্ষা পরিষেবা উপলব্ধ আছে?',
-    transportLicensesUserPrompt: 'কীভাবে আমি আমার ড্রাইভিং লাইসেন্স নবায়ন করব?',
-    housingProgramsUserPrompt: 'কেনিয়ায় সাশ্রয়ী মূল্যের আবাসন কর্মসূচি সম্পর্কে আমাকে বলুন',
-    findJobsUserPrompt: 'বর্তমানে সরকারি চাকরির কী সুযোগ রয়েছে?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

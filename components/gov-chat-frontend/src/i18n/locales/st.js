@@ -1371,7 +1371,6 @@ export default {
     fileReceived: 'Faele e amohetswe ka katleho.',
     fileUploadError: 'Phoso ha ho kenngwa faele.',
     processingError: 'Phoso ha ho thehwa kopo ya hao.',
-    welcomeMessage: 'Kena ka kgotso! Nka o thusa jwang ka ditshebeletso tsa mmuso wa Kenya kajeno?',
     attachFile: 'Lema Faele (Attach)',
     fileTooLarge: 'Faele e kgolo haholo. Boholo bo kgethehileng ke {maxSize}.',
     saveChat: 'Boloka Moqoqo',
@@ -1383,7 +1382,7 @@ export default {
     clearContext: 'Hlakola nalane mme o qale moqoqo o motjha',
     unsavedChanges: 'O na le diphetoho tse sa bolokoang. Na o na le bonnete ba hore o batla ho qala moqoqo o motjha?',
     whatCanIHelp: 'Nka o thusa jwang kajeno?',
-    justChat: 'Moqoqo Feela',
+
     queryContext: 'Mongolo wa Potso',
     contextAdded: 'Tlhaloso e ekeditswe potsong ya hao',
     contextRemoved: 'Tlhaloso e tlositswe potsong ya hao',
@@ -1413,26 +1412,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'Kopa ID',
-    payTaxes: 'Lefa lekgetho',
-    startBusiness: 'Qala kgwebo',
-    findHealthcare: 'Bophelo',
-    educationServices: 'Thuto',
-    transportLicenses: 'Dipalangwang',
-    housingPrograms: 'Matlo',
-    findJobs: 'Mosebetsi',
-    justChat: 'Moqoqo Feela',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'Ke rata ho qoqa ka ditshebeletso tsa mmuso',
-    applyForIDUserPrompt: 'Ke hloka tlhahisoleseding mabapi le hore na nka etsa kopo ya karata ya naha ya ID jwang',
-    payTaxesUserPrompt: 'Ke tshebetso efe bakeng sa ho lefa lekgetho la ka inthaneteng?',
-    startBusinessUserPrompt: 'Ntsamaise mehatong ya ho ngodisa kgwebo e ntjha',
-    findHealthcareUserPrompt: 'Nka fumana hokae tlhahisoleseding ka ditshebeletso tsa setjhaba tsa bophelo bo botle?',
-    educationServicesUserPrompt: 'Ke ditshebeletso dife tsa thuto tse fumanehang bakeng sa bana ba ka?',
-    transportLicensesUserPrompt: 'Nka ntjhafatsa laesense ya ka ya ho kganna jwang?',
-    housingProgramsUserPrompt: 'Bolelle ka mananeo a matlo a theko e tlase a Kenya',
-    findJobsUserPrompt: 'Ke menyetla efe ya mosebetsi ya mmuso e fumanehang ha jwale?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

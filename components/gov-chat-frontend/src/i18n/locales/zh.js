@@ -1305,7 +1305,6 @@ export default {
     fileReceived: '文件接收成功。',
     fileUploadError: '上传文件出错。',
     processingError: '处理您的请求出错。',
-    welcomeMessage: '欢迎！今天我如何帮助您处理肯尼亚政府服务？',
     attachFile: '附加文件',
     fileTooLarge: '文件太大。最大大小为 {maxSize}。',
     saveChat: '保存聊天',
@@ -1317,7 +1316,7 @@ export default {
     clearContext: '清除上下文并开始新对话',
     unsavedChanges: '您有未保存的更改。您确定要开始新聊天吗？',
     whatCanIHelp: '今天我能帮您什么？',
-    justChat: '只是聊天',
+
     queryContext: '查询上下文',
     contextAdded: '上下文添加到您的查询',
     contextRemoved: '上下文从您的查询移除',
@@ -1346,26 +1345,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: '申请身份证',
-    payTaxes: '缴税',
-    startBusiness: '创业',
-    findHealthcare: '医疗',
-    educationServices: '教育',
-    transportLicenses: '交通',
-    housingPrograms: '住房',
-    findJobs: '工作',
-    justChat: '聊天',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: '我想聊聊政府服务',
-    applyForIDUserPrompt: '我需要关于如何申请居民身份证的信息',
-    payTaxesUserPrompt: '在线缴税的过程是什么？',
-    startBusinessUserPrompt: '指导我完成开创新事业的步骤',
-    findHealthcareUserPrompt: '哪里可以找到公共医疗服务的信息？',
-    educationServicesUserPrompt: '我的孩子有哪些教育服务可用？',
-    transportLicensesUserPrompt: '如何续签我的驾照？',
-    housingProgramsUserPrompt: '告诉我肯尼亚的负担得起的住房计划',
-    findJobsUserPrompt: '目前有哪些政府工作机会？',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

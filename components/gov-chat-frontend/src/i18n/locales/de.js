@@ -1376,7 +1376,6 @@ export default {
     fileReceived: 'Datei erfolgreich empfangen.',
     fileUploadError: 'Fehler beim Hochladen der Datei.',
     processingError: 'Fehler beim Verarbeiten Ihrer Anfrage.',
-    welcomeMessage: 'Willkommen! Wie kann ich Ihnen heute bei den kenianischen Regierungsdiensten helfen?',
     attachFile: 'Datei anhängen',
     fileTooLarge: 'Datei ist zu groß. Maximale Größe ist {maxSize}.',
     saveChat: 'Chat speichern',
@@ -1388,7 +1387,7 @@ export default {
     clearContext: 'Kontext löschen und neues Gespräch starten',
     unsavedChanges: 'Sie haben ungespeicherte Änderungen. Sind Sie sicher, dass Sie einen neuen Chat starten möchten?',
     whatCanIHelp: 'Wie kann ich Ihnen heute helfen?',
-    justChat: 'Nur chatten',
+
     queryContext: 'Anfragekontext',
     contextAdded: 'Kontext zu Ihrer Anfrage hinzugefügt',
     contextRemoved: 'Kontext aus Ihrer Anfrage entfernt',
@@ -1418,26 +1417,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'ID beantragen',
-    payTaxes: 'Steuern zahlen',
-    startBusiness: 'Unternehmen gründen',
-    findHealthcare: 'Gesundheitswesen',
-    educationServices: 'Bildung',
-    transportLicenses: 'Verkehr',
-    housingPrograms: 'Wohnen',
-    findJobs: 'Arbeitsplätze',
-    justChat: 'Nur chatten',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'Ich möchte über Regierungsdienste chatten',
-    applyForIDUserPrompt: 'Ich möchte herausfinden, wie ich einen nationalen Personalausweis beantrage.',
-    payTaxesUserPrompt: 'Wie ist der Prozess, um meine Steuern online zu zahlen?',
-    startBusinessUserPrompt: 'Führen Sie mich durch die Schritte zur Registrierung eines neuen Unternehmens.',
-    findHealthcareUserPrompt: 'Wo finde ich Informationen über öffentliche Gesundheitsdienste?',
-    educationServicesUserPrompt: 'Welche Bildungsdienste stehen meinen Kindern zur Verfügung?',
-    transportLicensesUserPrompt: 'Wie erneuere ich meinen Führerschein?',
-    housingProgramsUserPrompt: 'Erzählen Sie mir von erschwinglichen Wohnungsprogrammen in Kenia.',
-    findJobsUserPrompt: 'Welche staatlichen Arbeitsmöglichkeiten gibt es derzeit?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

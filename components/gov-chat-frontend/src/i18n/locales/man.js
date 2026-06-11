@@ -1317,7 +1317,6 @@ export default {
     fileReceived: 'Fayiloo yeleta benta.',
     fileUploadError: 'Filiyata fayiloo yele to.',
     processingError: 'Filiyata i la ñiningo dada to.',
-    welcomeMessage: 'Bismillay! Mbe ñaadi ka i makaamoo ning Keniya gomnati baaralu bii?',
     attachFile: 'Fayiloo Kafu',
     fileTooLarge: 'Fayiloo warata baa. Tambi-da mu {maxSize} ti.',
     saveChat: 'Kuma Mara',
@@ -1329,7 +1328,7 @@ export default {
     clearContext: 'Kuma fiti ani kuma kura damina',
     unsavedChanges: 'I la yailamawol ti mara. I lafiya la ka kuma kura damina le ti?',
     whatCanIHelp: 'Mbe ñaadi ka i makaamoo bii?',
-    justChat: 'Kuma Dorong',
+
     queryContext: 'Ñiningo Coko',
     contextAdded: 'Cokoyaa kafuta i la ñiningo to',
     contextRemoved: 'Cokoyaa botata i la ñiningo to',
@@ -1359,26 +1358,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'ID Ñiningo',
-    payTaxes: 'Jooyaa muta',
-    startBusiness: 'Bita damina',
-    findHealthcare: 'Kenda-yaa',
-    educationServices: 'Karandiri',
-    transportLicenses: 'Moto',
-    housingPrograms: 'Suw',
-    findJobs: 'Baara',
-    justChat: 'Kuma Dorong',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'N lafiya la ka kuma gomnati baaralu kang',
-    applyForIDUserPrompt: 'N lafiya la ka long ñaadi mbe ID kaard ñiningo ke',
-    payTaxesUserPrompt: 'Jooyaa muta onlayin coko mu munne ti?',
-    startBusinessUserPrompt: 'N makaamoo bita lataramoo to',
-    findHealthcareUserPrompt: 'Mbe kenda-yaa dulaa kibaroo soto minto?',
-    educationServicesUserPrompt: 'Karandiri baaralu munne soto nna dingingolu ye?',
-    transportLicensesUserPrompt: 'Ñaadi mbe nna moto laisins kurandi?',
-    housingProgramsUserPrompt: 'Maa Keniya suw baaralu kang (affordable housing)',
-    findJobsUserPrompt: 'Gomnati baara munne ka nyining saaying?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

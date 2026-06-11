@@ -1366,7 +1366,6 @@ export default {
     fileReceived: 'Faili imepokelewa.',
     fileUploadError: 'Hitilafu katika kupakia faili.',
     processingError: 'Hitilafu katika kushughulikia ombi lako.',
-    welcomeMessage: 'Karibu! Nawezaje kukusaidia na huduma za serikali ya Kenya leo?',
     attachFile: 'Ambatisha Faili',
     fileTooLarge: 'Faili ni kubwa sana. Ukubwa wa juu ni {maxSize}.',
     saveChat: 'Hifadhi Mazungumzo',
@@ -1378,7 +1377,7 @@ export default {
     clearContext: 'Futa muktadha na anza mazungumzo mapya',
     unsavedChanges: 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kuanza mazungumzo mapya?',
     whatCanIHelp: 'Naweza kukusaidia vipi leo?',
-    justChat: 'Ongea tu',
+
     queryContext: 'Muktadha wa Hoja',
     contextAdded: 'Muktadha umeongezwa kwenye swali lako',
     contextRemoved: 'Muktadha umeondolewa kutoka kwenye swali lako',
@@ -1408,26 +1407,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'Omba Kitambulisho',
-    payTaxes: 'Lipa Kodi',
-    startBusiness: 'Anza Biashara',
-    findHealthcare: 'Afya',
-    educationServices: 'Elimu',
-    transportLicenses: 'Usafiri',
-    housingPrograms: 'Nyumba',
-    findJobs: 'Kazi',
-    justChat: 'Ongea Tu',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'Ningependa kuzungumza kuhusu huduma za serikali',
-    applyForIDUserPrompt: 'Ninahitaji maelezo kuhusu jinsi ya kuomba kitambulisho cha kitaifa',
-    payTaxesUserPrompt: 'Je, ni mchakato gani wa kulipa kodi zangu mtandaoni?',
-    startBusinessUserPrompt: 'Niongoze kupitia hatua za kusajili biashara mpya',
-    findHealthcareUserPrompt: 'Wapi ninaweza kupata maelezo kuhusu huduma za afya ya umma?',
-    educationServicesUserPrompt: 'Ni huduma zipi za elimu zinazopatikana kwa watoto wangu?',
-    transportLicensesUserPrompt: 'Je, ninawezaje kuhuisha leseni yangu ya udereva?',
-    housingProgramsUserPrompt: 'Niambie kuhusu programu za nyumba za bei nafuu nchini Kenya',
-    findJobsUserPrompt: 'Ni fursa zipi za kazi za serikali zinazopatikana kwa sasa?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

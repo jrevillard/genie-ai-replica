@@ -1353,7 +1353,6 @@ export default {
     fileReceived: 'File berhasil diterima.',
     fileUploadError: 'Kesalahan mengunggah file.',
     processingError: 'Kesalahan memproses permintaan Anda.',
-    welcomeMessage: 'Selamat datang! Bagaimana saya bisa membantu Anda dengan layanan pemerintah Kenya hari ini?',
     attachFile: 'Lampirkan File',
     fileTooLarge: 'File terlalu besar. Ukuran maksimum adalah {maxSize}.',
     saveChat: 'Simpan Obrolan',
@@ -1365,7 +1364,7 @@ export default {
     clearContext: 'Hapus konteks dan mulai percakapan baru',
     unsavedChanges: 'Anda memiliki perubahan yang belum disimpan. Apakah Anda yakin ingin memulai obrolan baru?',
     whatCanIHelp: 'Ada yang bisa saya bantu hari ini?',
-    justChat: 'Hanya Mengobrol',
+
     queryContext: 'Konteks Pertanyaan',
     contextAdded: 'Konteks ditambahkan ke pertanyaan Anda',
     contextRemoved: 'Konteks dihapus dari pertanyaan Anda',
@@ -1395,26 +1394,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'Ajukan KTP',
-    payTaxes: 'Bayar Pajak',
-    startBusiness: 'Mulai Usaha',
-    findHealthcare: 'Kesehatan',
-    educationServices: 'Pendidikan',
-    transportLicenses: 'Transportasi',
-    housingPrograms: 'Perumahan',
-    findJobs: 'Pekerjaan',
-    justChat: 'Ngobrol',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'Saya ingin mengobrol tentang layanan pemerintah',
-    applyForIDUserPrompt: 'Saya butuh informasi cara mengajukan KTP',
-    payTaxesUserPrompt: 'Bagaimana proses membayar pajak saya secara online?',
-    startBusinessUserPrompt: 'Bimbing saya melalui langkah-langkah untuk mendaftarkan bisnis baru',
-    findHealthcareUserPrompt: 'Di mana saya bisa mencari informasi tentang layanan kesehatan masyarakat?',
-    educationServicesUserPrompt: 'Layanan pendidikan apa yang tersedia untuk anak-anak saya?',
-    transportLicensesUserPrompt: 'Bagaimana cara memperpanjang SIM saya?',
-    housingProgramsUserPrompt: 'Beri tahu saya tentang program perumahan terjangkau di Kenya',
-    findJobsUserPrompt: 'Peluang kerja pemerintah apa yang saat ini tersedia?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

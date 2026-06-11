@@ -263,6 +263,26 @@ const adminDashboardService = {
       console.error('Error searching users:', error);
       throw error;
     }
+  },
+
+  async getQueriesForInspector(options = {}) {
+    try {
+      const response = await httpService.get('/admin/queries/inspect', { params: options });
+      return response.data;
+    } catch (error) {
+      console.error('[AdminDashboardService] Error fetching queries for inspector:', error.message);
+      throw error;
+    }
+  },
+
+  async getQueryInspectorDetails(queryId) {
+    try {
+      const response = await httpService.get(`/admin/queries/inspect/${queryId}`);
+      return response.data;
+    } catch (error) {
+      console.error('[AdminDashboardService] Error fetching query details:', error.message);
+      throw error;
+    }
   }
 };
 

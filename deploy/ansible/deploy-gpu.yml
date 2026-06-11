@@ -158,6 +158,7 @@
           -keyout {{ gpu_deploy_dir }}/ssl/server.key
           -out {{ gpu_deploy_dir }}/ssl/server.crt
           -subj "/CN={{ gpu_public_domain }}"
+          -addext "subjectAltName={{ gpu_public_domain | ipaddr | ternary('IP', 'DNS') }}:{{ gpu_public_domain }}"
         creates: "{{ gpu_deploy_dir }}/ssl/server.crt"
       register: gpu_self_signed
       when: gpu_self_signed_certs | default(true)

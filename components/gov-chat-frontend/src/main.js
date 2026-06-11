@@ -13,7 +13,8 @@
 import { createApp } from 'vue';
 import App from './App.vue';
 import router from './router';
-import i18n from './i18n';
+import i18n, { availableLocales } from './i18n';
+import { detectInitialLocale } from './utils/localeDetection';
 import store from './store'; // Import the Vuex store
 import FileDialogSafe from './fileDialogSafe'; // Import our custom directive
 
@@ -111,29 +112,16 @@ const getSavedLocale = () => {
   }
 };
 
-const savedLanguage = localStorage.getItem('userLocale');
-if (savedLanguage && i18n) {
-  i18n.locale = savedLanguage;
-  document.documentElement.setAttribute('lang', savedLanguage);
-}
-
-const getBrowserLocale = () => {
-  // Get browser language (e.g. 'en-US' -> 'en')
-  const browserLang = navigator.language || navigator.userLanguage;
-  const shortLang = browserLang.split('-')[0];
-
-  // Check if we support this language
-  const supportedLocales = ['en', 'fr', 'sw'];
-  return supportedLocales.includes(shortLang) ? shortLang : null;
-};
-
-// Set the initial locale based on our prioritization logic
-const savedLocale = getSavedLocale();
-const browserLocale = getBrowserLocale();
-const initialLocale = savedLocale || browserLocale || 'en';
+// Determine initial locale using dynamic locale detection
+const initialLocale = detectInitialLocale(
+  getSavedLocale(),
+  navigator.language || navigator.userLanguage,
+  availableLocales
+);
 
 // Set the locale directly as a string (not as a ref)
 i18n.global.locale = initialLocale;
+document.documentElement.setAttribute('lang', initialLocale);
 
 // ThemeManager singleton handles initial theme detection and DOM application
 // (initialized at import time via its constructor)

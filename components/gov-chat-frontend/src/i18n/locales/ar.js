@@ -1417,7 +1417,6 @@ export default {
     fileReceived: 'تم استلام الملف بنجاح.',
     fileUploadError: 'خطأ في تحميل الملف.',
     processingError: 'خطأ في معالجة طلبك.',
-    welcomeMessage: 'مرحبًا! كيف يمكنني مساعدتك في خدمات الحكومة الكينية اليوم؟',
     attachFile: 'إرفاق ملف',
     fileTooLarge: 'الملف كبير جدًا. الحجم الأقصى هو {maxSize}.',
     saveChat: 'حفظ المحادثة',
@@ -1429,7 +1428,7 @@ export default {
     clearContext: 'مسح السياق وبدء محادثة جديدة',
     unsavedChanges: 'لديك تغييرات غير محفوظة. هل أنت متأكد من أنك تريد بدء محادثة جديدة؟',
     whatCanIHelp: 'كيف يمكنني مساعدتك اليوم؟',
-    justChat: 'مجرد دردشة',
+
     queryContext: 'سياق الاستعلام',
     contextAdded: 'تم إضافة السياق إلى استفسارك',
     contextRemoved: 'تم إزالة السياق من استفسارك',
@@ -1459,26 +1458,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'طلب الهوية',
-    payTaxes: 'دفع الضرائب',
-    startBusiness: 'بدء عمل تجاري',
-    findHealthcare: 'الرعاية الصحية',
-    educationServices: 'التعليم',
-    transportLicenses: 'النقل',
-    housingPrograms: 'الإسكان',
-    findJobs: 'إيجاد وظائف',
-    justChat: 'دردشة فقط',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'أود الدردشة حول الخدمات الحكومية',
-    applyForIDUserPrompt: 'أحتاج إلى معلومات حول كيفية تقديم طلب للحصول على بطاقة الهوية الوطنية',
-    payTaxesUserPrompt: 'ما هو العملية لدفع الضرائب عبر الإنترنت؟',
-    startBusinessUserPrompt: 'دلني على الخطوات لتسجيل عمل جديد',
-    findHealthcareUserPrompt: 'أين يمكنني العثور على معلومات حول خدمات الرعاية الصحية العامة؟',
-    educationServicesUserPrompt: 'ما هي خدمات التعليم المتاحة لأطفالي؟',
-    transportLicensesUserPrompt: 'كيف أجدد رخصة القيادة الخاصة بي؟',
-    housingProgramsUserPrompt: 'أخبرني عن برامج الإسكان الميسورة التكلفة في كينيا',
-    findJobsUserPrompt: 'ما هي فرص العمل الحكومية المتاحة حاليًا؟',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

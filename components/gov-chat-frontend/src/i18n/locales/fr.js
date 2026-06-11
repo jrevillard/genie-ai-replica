@@ -1391,7 +1391,7 @@ export default {
     unsavedChanges:
       'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir commencer une nouvelle discussion ?',
     whatCanIHelp: "Comment puis-je vous aider aujourd'hui ?",
-    justChat: 'Simplement discuter',
+
     queryContext: 'Contexte de la requête',
     contextAdded: 'Contexte ajouté à votre requête',
     contextRemoved: 'Contexte supprimé de votre requête',
@@ -1421,25 +1421,11 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'Demander une CNI',
-    payTaxes: 'Payer les impôts',
-    startBusiness: 'Créer une entreprise',
-    findHealthcare: 'Santé',
-    educationServices: 'Éducation',
-    transportLicenses: 'Transport',
-    housingPrograms: 'Logement',
-    findJobs: 'Emplois',
-    justChat: 'Discuter',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
     justChatUserPrompt: "J'aimerais discuter des services gouvernementaux",
     applyForIDUserPrompt: "J'ai besoin d'informations sur la manière de demander une carte d'identité nationale",
-    payTaxesUserPrompt: 'Quel est le processus pour payer mes impôts en ligne ?',
-    startBusinessUserPrompt: 'Guidez-moi à travers les étapes pour enregistrer une nouvelle entreprise',
-    findHealthcareUserPrompt: 'Où puis-je trouver des informations sur les services de santé publics ?',
-    educationServicesUserPrompt: 'Quels services éducatifs sont disponibles pour mes enfants ?',
-    transportLicensesUserPrompt: 'Comment puis-je renouveler mon permis de conduire ?',
-    housingProgramsUserPrompt: 'Parlez-moi des programmes de logement abordable au Kenya',
+
     findJobsUserPrompt: "Quelles opportunités d'emploi gouvernementales sont actuellement disponibles ?",
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)

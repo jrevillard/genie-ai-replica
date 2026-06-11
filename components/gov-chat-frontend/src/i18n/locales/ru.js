@@ -1373,7 +1373,6 @@ export default {
     fileReceived: 'Файл успешно получен.',
     fileUploadError: 'Ошибка загрузки файла.',
     processingError: 'Ошибка обработки вашего запроса.',
-    welcomeMessage: 'Добро пожаловать! Чем я могу помочь вам с государственными услугами Кении сегодня?',
     attachFile: 'Прикрепить файл',
     fileTooLarge: 'Файл слишком большой. Максимальный размер {maxSize}.',
     saveChat: 'Сохранить чат',
@@ -1385,7 +1384,7 @@ export default {
     clearContext: 'Очистить контекст и начать новый разговор',
     unsavedChanges: 'У вас есть несохранённые изменения. Вы уверены, что хотите начать новый чат?',
     whatCanIHelp: 'Чем я могу помочь вам сегодня?',
-    justChat: 'Просто чат',
+
     queryContext: 'Контекст запроса',
     contextAdded: 'Контекст добавлен к вашему запросу',
     contextRemoved: 'Контекст удалён из вашего запроса',
@@ -1415,26 +1414,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'Получить ID',
-    payTaxes: 'Оплатить налоги',
-    startBusiness: 'Начать бизнес',
-    findHealthcare: 'Здравоохранение',
-    educationServices: 'Образование',
-    transportLicenses: 'Транспорт',
-    housingPrograms: 'Жильё',
-    findJobs: 'Работа',
-    justChat: 'Просто чат',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'Я хотел бы поболтать о государственных услугах',
-    applyForIDUserPrompt: 'Мне нужна информация о том, как подать заявку на национальное удостоверение личности',
-    payTaxesUserPrompt: 'Каков процесс оплаты налогов онлайн?',
-    startBusinessUserPrompt: 'Проведите меня через шаги регистрации нового бизнеса',
-    findHealthcareUserPrompt: 'Где я могу найти информацию об общественных медицинских услугах?',
-    educationServicesUserPrompt: 'Какие образовательные услуги доступны для моих детей?',
-    transportLicensesUserPrompt: 'Как мне продлить водительские права?',
-    housingProgramsUserPrompt: 'Расскажите о доступных жилищных программах в Кении',
-    findJobsUserPrompt: 'Какие государственные вакансии доступны в настоящее время?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

@@ -1361,7 +1361,6 @@ export default {
     fileReceived: 'ได้รับไฟล์สำเร็จ',
     fileUploadError: 'ข้อผิดพลาดในการอัปโหลดไฟล์',
     processingError: 'ข้อผิดพลาดในการประมวลผลคำขอของคุณ',
-    welcomeMessage: 'ยินดีต้อนรับ! ฉันสามารถช่วยเหลือคุณเกี่ยวกับบริการรัฐบาลเคนยาได้อย่างไรวันนี้?',
     attachFile: 'แนบไฟล์',
     fileTooLarge: 'ไฟล์ใหญ่เกินไป ขนาดสูงสุดคือ {maxSize}',
     saveChat: 'บันทึกแชท',
@@ -1373,7 +1372,7 @@ export default {
     clearContext: 'ล้างบริบทและเริ่มการสนทนาใหม่',
     unsavedChanges: 'คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก คุณแน่ใจว่าต้องการเริ่มแชทใหม่หรือไม่?',
     whatCanIHelp: 'ฉันสามารถช่วยอะไรคุณได้วันนี้?',
-    justChat: 'แค่แชท',
+
     queryContext: 'บริบทคำถาม',
     contextAdded: 'เพิ่มบริบทในคำถามของคุณ',
     contextRemoved: 'ลบบริบทจากคำถามของคุณ',
@@ -1403,26 +1402,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'สมัครบัตรประชาชน',
-    payTaxes: 'ชำระภาษี',
-    startBusiness: 'เริ่มธุรกิจ',
-    findHealthcare: 'สุขภาพ',
-    educationServices: 'การศึกษา',
-    transportLicenses: 'การขนส่ง',
-    housingPrograms: 'ที่อยู่อาศัย',
-    findJobs: 'งาน',
-    justChat: 'แชทเท่านั้น',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'ฉันอยากแชทเกี่ยวกับบริการรัฐบาล',
-    applyForIDUserPrompt: 'ฉันต้องการข้อมูลเกี่ยวกับวิธีสมัครบัตรประชาชนแห่งชาติ',
-    payTaxesUserPrompt: 'กระบวนการชำระภาษีออนไลน์คืออะไร?',
-    startBusinessUserPrompt: 'นำฉันผ่านขั้นตอนการจดทะเบียนธุรกิจใหม่',
-    findHealthcareUserPrompt: 'ฉันสามารถหาข้อมูลเกี่ยวกับบริการสุขภาพสาธารณะได้ที่ไหน?',
-    educationServicesUserPrompt: 'บริการการศึกษาอะไรที่มีสำหรับลูกของฉัน?',
-    transportLicensesUserPrompt: 'ฉันจะต่ออายุใบขับขี่อย่างไร?',
-    housingProgramsUserPrompt: 'บอกฉันเกี่ยวกับโปรแกรมที่อยู่อาศัยราคาไม่แพงในเคนยา',
-    findJobsUserPrompt: 'โอกาสงานรัฐบาลอะไรที่มีอยู่ในปัจจุบัน?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

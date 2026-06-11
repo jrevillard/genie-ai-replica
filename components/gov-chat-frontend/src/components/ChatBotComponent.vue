@@ -287,6 +287,7 @@ import DsSelect from './ds/Select.vue';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import jsPDF from 'jspdf';
+import { resolveConfigText } from '../utils/configResolver';
 
 export default {
   name: 'ChatBotComponent',
@@ -329,7 +330,8 @@ export default {
       },
       currentChatId: null,
       currentChatTitle: '',
-      currentLocale: 'en',
+      cachedConfig: null,
+      currentLocale: (navigator.language || 'en').split('-')[0],
       showQuickHelp: true,
       currentCategoryId: null,
       serviceCategories: [], // This will now hold the transformed tree data
@@ -390,6 +392,10 @@ export default {
   watch: {
     currentLocale: function () {
       this.updateDialogTexts();
+    },
+    '$i18n.locale'(newLocale) {
+      this.currentLocale = newLocale;
+      this.loadQuickHelpButtons();
     }
   },
 
@@ -401,7 +407,7 @@ export default {
         this.chatMessages = [
           {
             sender: 'bot',
-            content: this.translate('chatbot.welcomeMessage'),
+            content: this.getWelcomeMessage(),
             timestamp: new Date().toISOString(),
             isSaved: true
           }
@@ -438,7 +444,7 @@ export default {
     if (this.chatMessages.length === 0) {
       this.chatMessages.push({
         sender: 'bot',
-        content: this.translate('chatbot.welcomeMessage')
+        content: this.getWelcomeMessage()
       });
     }
 
@@ -587,14 +593,21 @@ export default {
       try {
         const { loadConfig } = await import('../main.js');
         const config = await loadConfig();
+        this.cachedConfig = config;
         const buttons = config?.features?.chat?.quickHelp?.buttons || [];
+        const locale = this.currentLocale;
+
         this.quickHelpButtons = buttons.map((button) => {
+          const title = resolveConfigText(button.title, locale);
+          const visibleText = resolveConfigText(button.action?.visibleText, locale);
+          const hiddenPrompt = resolveConfigText(button.action?.hiddenPrompt, locale);
+
           return {
-            service: this.$t(button.title),
+            service: title,
             textKey: button.title,
-            visibleTextKey: button.action.visibleText,
-            hiddenPromptKey: button.action.hiddenPrompt,
-            icon: button.icon.value,
+            visibleText: visibleText,
+            hiddenPrompt: hiddenPrompt,
+            icon: button.icon?.value,
             category: button.category,
             id: button.id
           };
@@ -603,6 +616,14 @@ export default {
         console.error('[ChatBotComponent] Failed to load Quick Help config:', error);
         this.quickHelpButtons = [];
       }
+    },
+
+    getWelcomeMessage() {
+      const configWelcome = this.cachedConfig?.features?.chat?.welcomeMessage;
+      if (configWelcome) {
+        return resolveConfigText(configWelcome, this.currentLocale);
+      }
+      return this.translate('chatbot.welcomeMessage');
     },
 
     // formatUptime method removed
@@ -649,11 +670,11 @@ export default {
       this.showQuickHelp = false;
       if (rawOption.hiddenPromptKey) {
         // Display the visible text in the chat (what user sees)
-        const visibleMessage = this.$t(rawOption.visibleTextKey);
+        const visibleMessage = rawOption.visibleText || this.$t(rawOption.visibleTextKey);
         this.newMessage = visibleMessage;
 
         // Store the hidden prompt to send to backend (what LLM sees)
-        this.hiddenPromptForNextMessage = this.$t(rawOption.hiddenPromptKey);
+        this.hiddenPromptForNextMessage = rawOption.hiddenPrompt || this.$t(rawOption.hiddenPromptKey);
         this.sendMessage();
       }
     },
@@ -981,7 +1002,7 @@ export default {
         if (this.chatMessages.length === 0) {
           this.chatMessages.push({
             sender: 'bot',
-            content: this.translate('chatbot.welcomeMessage'),
+            content: this.getWelcomeMessage(),
             timestamp: new Date().toISOString(),
             queryId: null,
             isSaved: true
@@ -1269,7 +1290,7 @@ export default {
           this.chatMessages = [
             {
               sender: 'bot',
-              content: this.translate('chatbot.welcomeMessage')
+              content: this.getWelcomeMessage()
             }
           ];
         }
@@ -1337,7 +1358,7 @@ export default {
       this.showNewChatConfirm = false;
       this.chatMessages.splice(0, this.chatMessages.length, {
         sender: 'bot',
-        content: this.translate('chatbot.welcomeMessage'),
+        content: this.getWelcomeMessage(),
         timestamp: new Date().toISOString(),
         isSaved: true
       });

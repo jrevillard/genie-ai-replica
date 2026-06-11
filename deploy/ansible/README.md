@@ -131,25 +131,27 @@ ansible_user=jerome
 
 Set in `group_vars/<env>/vault.yml`:
 
-| Variable | Description |
-|----------|-------------|
-| `arango_password` | ArangoDB root password |
-| `session_secret` | Session encryption secret |
-| `translation_cache_password` | Redis cache password |
-| `postgres_password` | PostgreSQL superuser password |
-| `kong_db_password` | PostgreSQL dedicated Kong user password (must differ from `postgres_password`) |
-| `keycloak_admin_password` | Keycloak master admin console password |
-| `genie_admin_password` | GENIE realm admin user password (frontend admin) |
-| `genie_admin_email` | GENIE realm admin user email (required for email verification) |
-| `keycloak_db_password` | PostgreSQL dedicated Keycloak user password |
-| `keycloak_client_secret` | OIDC client secret for genie-app |
-| `keycloak_proxy_client_secret` | Service account secret for admin API proxy |
-| `kc_dataprep_client_secret` | Dataprep service account secret (client_credentials grant) |
-| `email_password` | SMTP password |
-| `hugging_face_hub_token` | Hugging Face Hub token |
-| `grafana_admin_password` | Grafana admin password (required when `enable_observability=1`) |
-| `grafana_client_id` | `grafana` | Keycloak OIDC client ID for Grafana SSO (required when `enable_observability=1`) |
-| `grafana_client_secret` | Grafana OIDC client secret (required when `enable_observability=1`) |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `arango_password` | always | ArangoDB root password |
+| `translation_cache_password` | always | Redis cache password |
+| `postgres_password` | always | PostgreSQL superuser password |
+| `kong_db_password` | always | PostgreSQL dedicated Kong user password (must differ from `postgres_password`) |
+| `keycloak_admin_password` | always | Keycloak master admin console password |
+| `genie_admin_password` | always | GENIE realm admin user password (frontend admin) |
+| `genie_admin_email` | always | GENIE realm admin user email (required for email verification) |
+| `keycloak_db_password` | always | PostgreSQL dedicated Keycloak user password |
+| `keycloak_client_secret` | always | OIDC client secret for genie-app |
+| `keycloak_proxy_client_secret` | always | Service account secret for admin API proxy |
+| `kc_dataprep_client_secret` | always | Dataprep service account secret (client_credentials grant) |
+| `kc_mobile_client_id` | always | Mobile app Keycloak client ID (Flutter, public client with PKCE) |
+| `kc_mobile_redirect_scheme` | always | Mobile app redirect scheme (e.g. `genieai://`) |
+| `email_password` | always | SMTP password |
+| `hugging_face_hub_token` | GPU node | Hugging Face Hub token (model downloads) |
+| `vllm_api_key` | remote GPU | API key for GPU node nginx auth (set in `group_vars/<env>/vault.yml`) |
+| `grafana_admin_password` | observability | Grafana admin password (required when `enable_observability=1`) |
+| `grafana_client_id` | observability | Keycloak OIDC client ID for Grafana SSO (default: `grafana`, required when `enable_observability=1`) |
+| `grafana_client_secret` | observability | Grafana OIDC client secret (required when `enable_observability=1`) |
 
 ## Environment Variables (Non-Secret)
 
@@ -169,6 +171,8 @@ Set in `group_vars/<env>/vars.yml`:
 | `kong_tracing_instrumentations` | `request` | Kong tracing instrumentations (`off`, `request`, `all`). Default `request` — negligible overhead when OTel plugin disabled. |
 | `kong_tracing_sampling_rate` | `1.0` | Kong internal trace sampling rate (0.0–1.0). Default `1.0` = 100%, aligned with `otel_traces_sampler_rate`. |
 | `otel_exporter_otlp_endpoint` | `http://otel-collector:4318` | OTLP Collector base URL — used by backend (Node.js), OPEA services (Python), and Kong OTel plugin (via restore script). Override for external collectors. |
+| `grafana_alert_webhook_url` | `""` | Webhook URL for Grafana alert notifications (empty = disabled) |
+| `grafana_alert_email` | `""` | Email address for Grafana alert notifications (empty = disabled) |
 | `gpu_env_file` | `env.t4` | GPU defaults file (empty = none). Loaded first; Ansible `.env` takes precedence. |
 
 ### API Gateway (NGINX)
@@ -179,6 +183,7 @@ Set in `group_vars/<env>/vars.yml`:
 | `nginx_http_port` | `80` | HTTP port (only set if non-default) |
 | `nginx_https_port` | `443` | HTTPS port (only set if non-default) |
 | `nginx_permissions_policy` | `camera=(), microphone=(), geolocation=()` | Nginx Permissions-Policy header |
+| `kong_trusted_ips` | `10.0.0.0/8` | CIDR range for X-Forwarded-* header passthrough. Kong trusts these IPs for `X-Forwarded-Proto/Host/Port/Prefix`. Docker Compose: `172.16.0.0/12`, Swarm overlay: `10.0.0.0/8` |
 | `registry_port` | `5000` | Local Docker registry port |
 
 ### Frontend Configuration
@@ -214,6 +219,7 @@ Set in `group_vars/<env>/vars.yml`:
 | `arango_db` | `genie-ai` | ArangoDB database name (default: `genie-ai` in code) |
 | `arango_graph_name` | `GRAPH` | ArangoDB graph name (used by retriever and dataprep) |
 | `arango_port` | `8529` | ArangoDB port exposed on host |
+| `translation_cache` | `on` | Translation cache toggle (`on`/`off`). Uses Redis with `translation_cache_password` |
 
 ### LLM Model Configuration (vLLM)
 
@@ -252,6 +258,8 @@ Set in `group_vars/<env>/vars.yml`:
 | `chatqna_type` | `standard` | ChatQnA service type |
 | `chatqna_system_prompt` | (built-in) | LLM system prompt (optional, has built-in default) |
 | `chatqna_enforce_abstention` | `true` | Whether to enforce abstention |
+| `opea_streaming` | `true` | Enable SSE streaming for ChatQnA responses. Set to `false` to disable |
+| `chatqna_stream_timeout` | `3600000` | Timeout in milliseconds for ChatQnA streaming responses (default: 1 hour). Set to `300000` for 5 minutes |
 
 ### Retriever Configuration
 
@@ -319,6 +327,25 @@ Set in `group_vars/<env>/vars.yml`:
 | `keycloak_google_client_secret` | — | Google IdP client secret (optional, in vault) |
 | `keycloak_microsoft_client_id` | — | Microsoft IdP client ID (optional) |
 | `keycloak_microsoft_client_secret` | — | Microsoft IdP client secret (optional, in vault) |
+
+**Keycloak Realm Behavior** (configured automatically by `keycloak-config` service, override in `vars.yml`):
+
+| Variable | Default | Required | Description |
+|----------|---------|----------|-------------|
+| `genie_admin_username` | `genieadmin` | no | Admin username created in GENIE realm |
+| `kc_dataprep_client_id` | `genie-dataprep` | no | Keycloak client ID for dataprep service account |
+| `keycloak_ssl_skip_verify` | `""` | no | Skip SSL verification for Keycloak API calls (set `"true"` for self-signed certs) |
+| `keycloak_password_policy` | — | no | Password policy string (e.g. `length(8) and notUsername`) |
+| `keycloak_theme` | `keycloak` | no | Login theme for Keycloak |
+| `keycloak_access_token_lifespan` | — | no | Access token lifespan (e.g. `300` seconds, `5m`) |
+| `keycloak_registration_enabled` | — | no | Enable user self-registration (`true`/`false`) |
+| `keycloak_verify_email` | — | no | Require email verification for new users |
+| `keycloak_reset_password` | — | no | Allow users to reset their password |
+| `keycloak_login_with_email` | — | no | Allow email-based login |
+| `keycloak_duplicate_emails` | — | no | Allow duplicate emails across users |
+| `keycloak_brute_force` | — | no | Enable brute-force attack protection |
+| `keycloak_i18n_enabled` | — | no | Enable internationalization in login UI |
+| `keycloak_locale` | — | no | Default locale for login UI |
 
 Keycloak is proxied by NGINX at `/auth/*`. The `keycloak-config` service automatically applies realm configuration (clients, roles, mappers) on startup.
 
@@ -592,8 +619,55 @@ ansible-playbook -i inventory/itu_rtx_test.ini teardown.yml --vault-id itu_rtx_t
 
 ### "Missing required vault variable"
 ```bash
-ansible-vault edit --vault-id itu_rtx_test@prompt group_vars/itu_rtx_test/vault.yml
-# Ensure all secrets are set
+ansible-vault edit --vault-id <env>@prompt group_vars/<env>/vault.yml
+# Ensure all secrets listed in the Vault Secrets table are set
+```
+
+### `'swarm_registry_url' is undefined` or `'image_tag' is undefined`
+
+These variables are computed by `tasks/deploy-shared-facts.yml` during the `build` tag. If you skip the build tag and go directly to `deploy`, the facts are missing.
+
+**Fix:** Always include `build` before `deploy`, or run both together:
+```bash
+ansible-playbook -i inventory/<env>.ini deploy.yml --tags build,deploy --vault-id <env>@prompt
+```
+
+### `'nginx_permissions_policy' is undefined`
+
+The `nginx_permissions_policy` variable is set in `group_vars/all.yml` but may be missing if you have a custom `vars.yml` that overrides `nginx_` variables without including this one.
+
+**Fix:** Ensure `group_vars/all.yml` is loaded (do not create a `vars.yml` that shadows it), or add the variable explicitly:
+```yaml
+# group_vars/<env>/vars.yml
+nginx_permissions_policy: "camera=(), microphone=(), geolocation=()"
+```
+
+### `Permission denied (publickey)`
+
+SSH key not configured on the target host, or connecting with wrong user.
+
+**Fix:**
+```bash
+# Copy your public key to the target host
+ssh-copy-id <user>@<host>
+
+# WSL users: if keys are on a Windows mount (permissions 777), SSH refuses them
+# Copy to WSL home instead:
+cp -r /mnt/c/Users/<you>/.ssh ~/.ssh
+chmod 700 ~/.ssh && chmod 600 ~/.ssh/*
+```
+
+### "Missing required vault variable: kc_mobile_client_id"
+
+The `kc_mobile_client_id` and `kc_mobile_redirect_scheme` vault variables are validated by the playbook but may be missing from older vault files.
+
+**Fix:** Add them to your vault:
+```bash
+ansible-vault edit --vault-id <env>@prompt group_vars/<env>/vault.yml
+```
+```yaml
+kc_mobile_client_id: "genie-mobile"       # Keycloak public client ID for Flutter app
+kc_mobile_redirect_scheme: "genieai://"    # Mobile app redirect URI scheme
 ```
 
 ### Docker build fails

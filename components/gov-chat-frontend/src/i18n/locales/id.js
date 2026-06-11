@@ -531,6 +531,16 @@ export default {
       metadataUpdateSuccess: 'Metadata untuk file {fileId} telah diperbarui.'
     }
   },
+  auth: {
+    errors: {
+      tokenExpired: 'Sesi Anda telah berakhir. Silakan masuk kembali.',
+      tokenInvalid: 'Sesi Anda tidak valid. Silakan masuk kembali.',
+      insufficientRoles: 'Anda tidak memiliki izin yang diperlukan. Hubungi administrator Anda.',
+      serviceUnavailable: 'Layanan autentikasi sementara tidak tersedia. Silakan coba lagi nanti.',
+      provisioningFailed: 'Terjadi kesalahan sistem. Silakan coba lagi nanti.',
+      default: 'Terjadi kesalahan'
+    }
+  },
   charts: {
     tooltip: {
       title: 'Tanggal',

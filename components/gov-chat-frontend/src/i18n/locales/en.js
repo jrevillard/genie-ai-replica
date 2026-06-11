@@ -1355,7 +1355,6 @@ export default {
     fileReceived: 'File received successfully.',
     fileUploadError: 'Error uploading file.',
     processingError: 'Error processing your request.',
-    welcomeMessage: 'Welcome! How can I assist you with Kenya government services today?',
     attachFile: 'Attach File',
     fileTooLarge: 'File is too large. Maximum size is {maxSize}.',
     saveChat: 'Save Chat',
@@ -1367,7 +1366,7 @@ export default {
     clearContext: 'Clear context and start a new conversation',
     unsavedChanges: 'You have unsaved changes. Are you sure you want to start a new chat?',
     whatCanIHelp: 'How can I help you today?',
-    justChat: 'Just Chat',
+
     queryContext: 'Query Context',
     contextAdded: 'Context added to your query',
     contextRemoved: 'Context removed from your query',
@@ -1401,26 +1400,11 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'Apply for ID',
-    payTaxes: 'Pay Taxes',
-    startBusiness: 'Start Business',
-    findHealthcare: 'Healthcare',
-    educationServices: 'Education',
-    transportLicenses: 'Transport',
-    housingPrograms: 'Housing',
-    findJobs: 'Find Jobs',
-    justChat: 'Just Chat',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
     justChatUserPrompt: "I'd like to chat about government services",
-    applyForIDUserPrompt: 'I need information on how to apply for a national ID card',
+
     payTaxesUserPrompt: "What's the process for paying my taxes online?",
-    startBusinessUserPrompt: 'Guide me through the steps to register a new business',
-    findHealthcareUserPrompt: 'Where can I find information about public healthcare services?',
-    educationServicesUserPrompt: 'What education services are available for my children?',
-    transportLicensesUserPrompt: 'How do I renew my driving license?',
-    housingProgramsUserPrompt: 'Tell me about affordable housing programs in Kenya',
-    findJobsUserPrompt: 'What government job opportunities are currently available?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

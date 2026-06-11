@@ -23,6 +23,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:genie_ai_mobile/utils/config_resolver.dart';
 
 class ChatBotComponent extends ConsumerStatefulWidget {
   final String userId;
@@ -99,6 +100,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // Welcome message
   late String _welcomeMessage;
 
+  // Cached config and locale
+  Map<String, dynamic>? _cachedConfig;
+  String _currentLocale = 'en';
+
   bool get _hasUnsavedChanges {
     if (_currentConversationId == null) {
       return _messages.length > 1;
@@ -113,7 +118,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
     // Initialize default text from I18n
     _conversationTitle = tr('chatbot.newChatTitle');
-    _welcomeMessage = tr('chatbot.welcomeMessage');
+    _welcomeMessage = _getConfigWelcomeMessage();
 
     _loadQuickHelpConfig();
     _titleController.text = _conversationTitle;
@@ -141,8 +146,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
+    // Track current locale
+    _currentLocale = Localizations.localeOf(context).languageCode;
+
     // Check for language changes and update welcome message
-    final String newWelcomeMessage = tr('chatbot.welcomeMessage');
+    final String newWelcomeMessage = _getConfigWelcomeMessage();
 
     if (_welcomeMessage != newWelcomeMessage) {
       // If the first message is the welcome message, update it in the UI
@@ -153,10 +161,19 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _messages.first['content'] = newWelcomeMessage;
         });
       }
-
-      // Update the state variable for future resets
+      // Reload quick help buttons with new locale
+      _loadQuickHelpConfig();
       _welcomeMessage = newWelcomeMessage;
     }
+  }
+
+  String _getConfigWelcomeMessage() {
+    final welcomeConfig =
+        _cachedConfig?['features']?['chat']?['welcomeMessage'];
+    if (welcomeConfig != null) {
+      return resolveConfigText(welcomeConfig, _currentLocale);
+    }
+    return tr('chatbot.welcomeMessage');
   }
 
   Future<void> _loadQuickHelpConfig() async {
@@ -165,6 +182,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'assets/config/genie-ai-config.json',
       );
       final Map<String, dynamic> config = jsonDecode(configString);
+
+      // Cache the config for later use
+      _cachedConfig = config;
 
       final Map<String, dynamic> quickHelpConfig =
           config['features']?['chat']?['quickHelp'] ?? {};
@@ -186,12 +206,27 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             ? 'assets/config/quickhelp/${iconPath.split('/').last}'
             : 'assets/config/quickhelp/default.svg';
 
+        // Resolve text with locale maps
+        final resolvedTitle = resolveConfigText(btn['title'], _currentLocale);
+        final action = btn['action'] as Map<String, dynamic>?;
+        final resolvedVisibleText = resolveConfigText(
+          action?['visibleText'],
+          _currentLocale,
+        );
+        final resolvedHiddenPrompt = resolveConfigText(
+          action?['hiddenPrompt'],
+          _currentLocale,
+        );
+
         loadedButtons.add({
           'id': btn['id'],
           'category': btn['category'],
-          'action': btn['action'] ?? {},
+          'action': action ?? {},
           'appearance': appearance ?? {},
           'iconAsset': localIconAsset,
+          'resolvedTitle': resolvedTitle,
+          'resolvedVisibleText': resolvedVisibleText,
+          'resolvedHiddenPrompt': resolvedHiddenPrompt,
         });
       }
 
@@ -684,14 +719,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       return;
     }
 
-    // Translate both
-    final String visibleText = visibleTextKey.isNotEmpty
-        ? tr(visibleTextKey)
-        : '';
+    // Use pre-resolved values from button map with i18n fallback
+    final String visibleText =
+        button['resolvedVisibleText'] ??
+        (visibleTextKey.isNotEmpty ? tr(visibleTextKey) : '');
     // If hiddenPromptKey is empty, fallback to visible text
-    final String hiddenPrompt = hiddenPromptKey.isNotEmpty
-        ? tr(hiddenPromptKey)
-        : visibleText;
+    final String hiddenPrompt =
+        button['resolvedHiddenPrompt'] ??
+        (hiddenPromptKey.isNotEmpty ? tr(hiddenPromptKey) : visibleText);
 
     setState(() {
       _showQuickHelpOverlay = false;

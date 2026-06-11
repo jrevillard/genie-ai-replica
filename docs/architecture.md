@@ -810,5 +810,7 @@ This approach (docs option 1: X-Forwarded-Prefix) avoids hardcoding a full URL i
 - [Keycloak Admin Guide](keycloak-admin-guide.md) -- Realm configuration, user management, client setup
 - [Docker Compose Setup](docker-compose-setup.md) -- Local development deployment with Docker Compose
 - [Docker Swarm Setup](docker-swarm-setup.md) -- Production deployment with Docker Swarm and Ansible
+- [Ansible Deployment](../deploy/ansible/README.md) -- Automated Docker Swarm deployment with per-environment secrets
+- [OTel Collector Integration](../configs/otel/README.md) -- Observability stack configuration (OTel Collector, VictoriaMetrics, VictoriaLogs, VictoriaTraces, Grafana)
 - [External IdP Integration Guide](external-idp-integration-guide.md) -- Connecting Google, Microsoft, and SAML identity providers
 - [E2E Tests](e2e-tests/README.md) -- End-to-end test procedures for authentication and session lifecycle

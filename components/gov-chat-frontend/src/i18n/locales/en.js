@@ -1690,5 +1690,11 @@ export default {
       uploadSuccess: 'Successfully uploaded {fileName}',
       uploadFailed: 'Failed to upload {fileName}.'
     }
+  },
+  pestAlerts: {
+    title: 'Pest Alerts',
+    high: 'High',
+    moderate: 'Moderate',
+    low: 'Low'
   }
 };

@@ -1693,5 +1693,11 @@ export default {
       uploadSuccess: '{fileName} subido con éxito',
       uploadFailed: 'Falló la subida de {fileName}.'
     }
+  },
+  pestAlerts: {
+    title: 'Alertas de Plagas',
+    high: 'Alta',
+    moderate: 'Moderada',
+    low: 'Baja'
   }
 };

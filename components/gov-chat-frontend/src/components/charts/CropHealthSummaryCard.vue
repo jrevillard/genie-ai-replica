@@ -1,5 +1,5 @@
 <template>
-  <DsCard variant="elevated" hoverable padding="sm" class="crop-health-summary-card" @click="openChart">
+  <DsCard variant="outline" hoverable padding="sm" class="crop-health-summary-card" @click="openChart">
     <DsSpinner v-if="loading" size="sm" />
     <div v-else class="card-content">
       <div class="donut-chart">

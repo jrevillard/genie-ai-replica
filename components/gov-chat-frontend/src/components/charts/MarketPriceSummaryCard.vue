@@ -1,5 +1,5 @@
 <template>
-  <DsCard variant="elevated" hoverable class="market-price-summary-card" @click="openChart">
+  <DsCard variant="outline" hoverable class="market-price-summary-card" @click="openChart">
     <div class="card-content">
       <!-- Sparkline Chart -->
       <div class="sparkline-container">

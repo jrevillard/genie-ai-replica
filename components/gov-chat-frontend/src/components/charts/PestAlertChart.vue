@@ -135,12 +135,12 @@
 
               <!-- Recommendations -->
               <div
-                v-if="alert.recommendations && alert.recommendations.length"
+                v-if="alert.recommendations && getRecommendationList(alert.recommendations).length"
                 class="pest-alert-chart__recommendations"
               >
                 <h5>{{ $t('charts.recommendations', 'Recommendations') }}</h5>
                 <ul>
-                  <li v-for="(rec, idx) in alert.recommendations" :key="idx">
+                  <li v-for="(rec, idx) in getRecommendationList(alert.recommendations)" :key="idx">
                     {{ rec }}
                   </li>
                 </ul>
@@ -354,6 +354,20 @@ export default {
 
     getSeverityCount(severity) {
       return this.pestData?.summary?.[severity] || 0;
+    },
+
+    getRecommendationList(recommendations) {
+      if (Array.isArray(recommendations)) {
+        return recommendations;
+      }
+      if (typeof recommendations === 'string') {
+        return recommendations
+          .split(/\.\s*/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
+          .map((s) => (s.endsWith('.') ? s : s + '.'));
+      }
+      return [];
     },
 
     toggleAlert(alertId) {

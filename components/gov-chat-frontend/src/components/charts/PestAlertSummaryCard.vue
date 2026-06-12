@@ -1,5 +1,5 @@
 <template>
-  <DsCard variant="elevated" padding="sm" hoverable class="pest-alert-summary-card" @click="openChart">
+  <DsCard variant="outline" padding="sm" hoverable class="pest-alert-summary-card" @click="openChart">
     <DsSpinner v-if="loading" size="sm" overlay />
     <div class="pest-alert__layout">
       <div class="pest-alert__icon">

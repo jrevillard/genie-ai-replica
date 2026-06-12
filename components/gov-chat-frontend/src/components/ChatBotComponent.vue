@@ -537,7 +537,7 @@ export default {
       if (context.serviceLabels?.length > 0) {
         for (const label of context.serviceLabels) {
           const item = this.selectedContextItems.find((i) => i.service === label);
-          if (item?.category && item.serviceKey !== 'just-chat') {
+          if (!item) {
             warnings.push(this.translate('chatbot.serviceLabelMismatch', '').replace('{label}', label));
           }
         }

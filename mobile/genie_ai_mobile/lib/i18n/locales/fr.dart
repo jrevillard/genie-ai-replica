@@ -1163,4 +1163,5 @@ const Map<String, dynamic> frLocale = {
     "techStack": "Pile technologique",
     "copyright": "Tous droits réservés.",
   },
+  'welcomeMessage': 'Bienvenue ! Comment puis-je vous aider aujourd\'hui ?',
 };

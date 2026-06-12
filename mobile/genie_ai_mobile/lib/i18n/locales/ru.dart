@@ -1150,4 +1150,5 @@ const Map<String, dynamic> ruLocale = {
     "techStack": "Технологический стек",
     "copyright": "Все права защищены.",
   },
+  'welcomeMessage': 'Добро пожаловать! Чем я могу помочь вам сегодня?',
 };

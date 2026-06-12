@@ -1368,6 +1368,7 @@ export default {
     }
   },
   chatbot: {
+    welcomeMessage: 'Добро пожаловать! Чем я могу помочь вам сегодня?',
     placeholder: 'Введите ваш запрос здесь...',
     sendButton: 'Отправить',
     fileReceived: 'Файл успешно получен.',

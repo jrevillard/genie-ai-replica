@@ -644,9 +644,8 @@ describe('ChatBotComponent', () => {
 
       const quickHelpOption = {
         service: 'Customer Service',
-        textKey: 'quickhelp.customerService',
-        visibleTextKey: 'quickhelp.customerServiceVisible',
-        hiddenPromptKey: 'quickhelp.customerServiceHidden',
+        visibleText: 'I need customer service help',
+        hiddenPrompt: 'You are a customer service assistant',
         category: 'general',
         id: 'test-quick-help-1'
       };
@@ -656,7 +655,7 @@ describe('ChatBotComponent', () => {
 
       const addedItem = vm.selectedContextItems.find((item) => item.service === 'Customer Service');
       expect(addedItem).toBeDefined();
-      expect(addedItem.serviceKey).toBe('quickhelp.customerService');
+      expect(addedItem.serviceKey).toBe('test-quick-help-1');
     });
 
     it('sets hiddenPromptForNextMessage for dual-prompt mechanism', async () => {
@@ -665,9 +664,8 @@ describe('ChatBotComponent', () => {
 
       const quickHelpOption = {
         service: 'Test Service',
-        textKey: 'quickhelp.test',
-        visibleTextKey: 'quickhelp.testVisible',
-        hiddenPromptKey: 'quickhelp.testHidden',
+        visibleText: 'I need test help',
+        hiddenPrompt: 'You are a test assistant',
         category: 'test-category'
       };
 
@@ -676,8 +674,8 @@ describe('ChatBotComponent', () => {
 
       vm.selectQuickHelpOption(quickHelpOption);
 
-      expect(vm.hiddenPromptForNextMessage).toBe('quickhelp.testHidden');
-      expect(vm.newMessage).toBe('quickhelp.testVisible');
+      expect(vm.hiddenPromptForNextMessage).toBe('You are a test assistant');
+      expect(vm.newMessage).toBe('I need test help');
       sendMessageSpy.mockRestore();
     });
 
@@ -687,9 +685,8 @@ describe('ChatBotComponent', () => {
 
       const quickHelpOption = {
         service: 'Visible Test',
-        textKey: 'quickhelp.visibleTest',
-        visibleTextKey: 'quickhelp.visibleTestVisible',
-        hiddenPromptKey: 'quickhelp.visibleTestHidden',
+        visibleText: 'Visible test message',
+        hiddenPrompt: 'Hidden test prompt',
         category: 'general'
       };
 
@@ -698,10 +695,8 @@ describe('ChatBotComponent', () => {
 
       vm.selectQuickHelpOption(quickHelpOption);
 
-      // The component uses this.$t() to translate the visibleTextKey
-      // Since we mock $t to return the key itself, newMessage will be the translated key
-      expect(vm.newMessage).toBe('quickhelp.visibleTestVisible');
-      expect(vm.hiddenPromptForNextMessage).toBe('quickhelp.visibleTestHidden');
+      expect(vm.newMessage).toBe('Visible test message');
+      expect(vm.hiddenPromptForNextMessage).toBe('Hidden test prompt');
     });
 
     it('hides quick help overlay after selection', () => {
@@ -728,15 +723,14 @@ describe('ChatBotComponent', () => {
       const vm = wrapper.vm;
 
       const justChatOption = {
-        service: 'quickhelp.justChat', // Must match the $t mock return value
-        textKey: 'quickhelp.justChat',
+        service: 'Just Chat',
         category: null,
-        id: 'just-chat-test'
+        id: 'just-chat'
       };
 
       vm.selectQuickHelpOption(justChatOption);
 
-      // When service matches 'quickhelp.justChat', categoryId remains null
+      // When id is 'just-chat', categoryId remains null
       expect(vm.currentCategoryId).toBeNull();
     });
 

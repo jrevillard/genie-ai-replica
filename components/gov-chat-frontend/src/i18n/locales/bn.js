@@ -1338,6 +1338,7 @@ export default {
     }
   },
   chatbot: {
+    welcomeMessage: 'স্বাগতম! আজ আমি কিভাবে আপনাকে সাহায্য করতে পারি?',
     placeholder: 'আপনার জিজ্ঞাসা এখানে লিখুন...',
     sendButton: 'পাঠান',
     fileReceived: 'ফাইল সফলভাবে গৃহীত হয়েছে।',

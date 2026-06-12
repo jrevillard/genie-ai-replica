@@ -1139,4 +1139,5 @@ const Map<String, dynamic> thLocale = {
     "techStack": "เทคโนโลยีที่ใช้",
     "copyright": "สงวนลิขสิทธิ์",
   },
+  'welcomeMessage': 'ยินดีต้อนรับ! วันนี้ฉันช่วยคุณได้อย่างไร?',
 };

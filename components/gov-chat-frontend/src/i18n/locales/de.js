@@ -1371,6 +1371,7 @@ export default {
     }
   },
   chatbot: {
+    welcomeMessage: 'Willkommen! Wie kann ich Ihnen heute helfen?',
     placeholder: 'Geben Sie Ihre Anfrage hier ein...',
     sendButton: 'Senden',
     fileReceived: 'Datei erfolgreich empfangen.',

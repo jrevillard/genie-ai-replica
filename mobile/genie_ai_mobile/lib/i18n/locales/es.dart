@@ -1151,4 +1151,5 @@ const Map<String, dynamic> esLocale = {
     "techStack": "Stack Tecnológico",
     "copyright": "Todos los derechos reservados.",
   },
+  'welcomeMessage': '¡Bienvenido! ¿Cómo puedo asistirle hoy?',
 };

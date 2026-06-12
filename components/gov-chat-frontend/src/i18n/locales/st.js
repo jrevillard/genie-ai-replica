@@ -1366,6 +1366,7 @@ export default {
     }
   },
   chatbot: {
+    welcomeMessage: 'Welcome! Ho jo ka u thusa joang kajeno?',
     placeholder: 'Ngola potso ya hao mona...',
     sendButton: 'Romela',
     fileReceived: 'Faele e amohetswe ka katleho.',

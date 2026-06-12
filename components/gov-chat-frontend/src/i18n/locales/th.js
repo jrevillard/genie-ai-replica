@@ -1356,6 +1356,7 @@ export default {
     }
   },
   chatbot: {
+    welcomeMessage: 'ยินดีต้อนรับ! วันนี้ฉันช่วยคุณได้อย่างไร?',
     placeholder: 'พิมพ์คำถามของคุณที่นี่...',
     sendButton: 'ส่ง',
     fileReceived: 'ได้รับไฟล์สำเร็จ',

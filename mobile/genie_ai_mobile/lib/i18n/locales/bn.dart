@@ -1155,4 +1155,5 @@ const Map<String, dynamic> bnLocale = {
     "techStack": "টেক স্ট্যাক",
     "copyright": "সর্বস্বত্ব সংরক্ষিত।",
   },
+  'welcomeMessage': 'স্বাগতম! আজ আমি কিভাবে আপনাকে সাহায্য করতে পারি?',
 };

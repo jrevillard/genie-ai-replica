@@ -1135,4 +1135,5 @@ const Map<String, dynamic> manLocale = {
     "techStack": "Baara fengo",
     "copyright": "Sariyaalu biling maratolu.",
   },
+  'welcomeMessage': 'Welcome! How can I assist you today?',
 };

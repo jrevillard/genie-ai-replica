@@ -525,7 +525,13 @@ export default {
       this.responseDialog.error = null;
 
       try {
-        const result = await chatbotService.submitQuery({ query: fullQuery });
+        const currentLanguage = localStorage.getItem('userLocale') || 'en';
+        const result = await chatbotService.submitQuery({
+          sessionId: `pest-alert-assist-${Date.now()}`,
+          messages: [{ role: 'user', content: fullQuery }],
+          context: { language: currentLanguage.toUpperCase() },
+          contextOption: 'simple-query'
+        });
         this.responseDialog.response = result.response || this.$t('charts.noResponse', 'No response received.');
       } catch (error) {
         this.responseDialog.error = error.message || 'Failed to get assistance. Please try again.';

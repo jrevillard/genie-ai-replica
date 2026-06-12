@@ -67,7 +67,7 @@ const { createStore } = require('vuex');
 
 function createWrapper(options = {}) {
   const store = createStore({
-    state: () => ({ user: { roles: ['user'] } }),
+    state: () => ({ user: { id: 'test-user-id', roles: ['user'] } }),
     getters: { currentUser: (s) => s.user }
   });
 
@@ -163,7 +163,14 @@ describe('PestAlertChart — Get Assistance', () => {
 
       await wrapper.vm.submitAssistanceQuery();
 
-      expect(mockSubmitQuery).toHaveBeenCalledWith({ query: 'Test prompt\n\nAdditional context: Extra context' });
+      const callArgs = mockSubmitQuery.mock.calls[0][0];
+      expect(callArgs.sessionId).toMatch(/^pest-alert-assist-\d+$/);
+      expect(callArgs.messages).toEqual([
+        { role: 'user', content: 'Test prompt\n\nAdditional context: Extra context' }
+      ]);
+      expect(callArgs.context.language).toBe('EN');
+      expect(callArgs.contextOption).toBe('simple-query');
+      // userId is NOT sent — backend extracts it from JWT via req.user.iss_sub
     });
 
     it('uses prompt without user input when none provided', async () => {
@@ -176,7 +183,10 @@ describe('PestAlertChart — Get Assistance', () => {
 
       await wrapper.vm.submitAssistanceQuery();
 
-      expect(mockSubmitQuery).toHaveBeenCalledWith({ query: 'Just the prompt' });
+      const callArgs = mockSubmitQuery.mock.calls[0][0];
+      expect(callArgs.messages).toEqual([{ role: 'user', content: 'Just the prompt' }]);
+      expect(callArgs.sessionId).toMatch(/^pest-alert-assist-\d+$/);
+      expect(callArgs.contextOption).toBe('simple-query');
     });
 
     it('closes assistance dialog and opens response dialog', async () => {

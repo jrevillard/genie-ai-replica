@@ -140,18 +140,26 @@
       </div>
       <!-- Quick Help Overlay -->
       <div v-if="showQuickHelp && selectedContextItems.length === 0" class="quick-help-overlay">
-        <div class="quick-help-content">
-          <h2 class="quick-help-heading">
-            {{ translate('chatbot.whatCanIHelp') }}
-          </h2>
+        <div class="welcome-header">
+          <h2 class="quick-help-heading">{{ translate('chatbot.whatCanIHelp') }}</h2>
+        </div>
 
-          <!-- Agricultural Insights -->
-          <div class="insights-row">
+        <!-- Insights Section -->
+        <div class="insights-section">
+          <div class="section-header">
+            <h3 class="section-title">{{ translate('charts.insights') }}</h3>
+          </div>
+          <div class="insights-cards">
             <CropHealthSummaryCard @open-chart="openChart('crop-health')" />
             <PestAlertSummaryCard @open-chart="openChart('pest-alert')" />
-            <MarketPriceSummaryCard category="maize" @open-chart="openChart('market-price', 'maize')" />
           </div>
+        </div>
 
+        <!-- Fast Actions Section -->
+        <div class="fast-actions-section">
+          <div class="section-header">
+            <h3 class="section-title">{{ translate('charts.fastActions') }}</h3>
+          </div>
           <div class="quick-help-grid">
             <DsCard
               v-for="button in quickHelpButtons"
@@ -166,6 +174,29 @@
               <img class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
               <div class="quick-help-text">{{ button.service }}</div>
             </DsCard>
+          </div>
+        </div>
+
+        <!-- Market Prices Section -->
+        <div class="market-prices-section">
+          <div class="section-header">
+            <h3 class="section-title">{{ translate('charts.market.sectionTitle') }}</h3>
+          </div>
+          <div class="market-cards">
+            <MarketPriceSummaryCard category="maize" @open-chart="openChart('market-price', 'maize')" />
+            <MarketPriceSummaryCard
+              category="cropProtection"
+              @open-chart="openChart('market-price', 'cropProtection')"
+            />
+            <MarketPriceSummaryCard category="vegetables" @open-chart="openChart('market-price', 'vegetables')" />
+            <MarketPriceSummaryCard category="livestock" @open-chart="openChart('market-price', 'livestock')" />
+            <MarketPriceSummaryCard category="fertilizer" @open-chart="openChart('market-price', 'fertilizer')" />
+            <MarketPriceSummaryCard category="apiary" @open-chart="openChart('market-price', 'apiary')" />
+            <MarketPriceSummaryCard category="aquaculture" @open-chart="openChart('market-price', 'aquaculture')" />
+            <MarketPriceSummaryCard
+              category="harvestStorage"
+              @open-chart="openChart('market-price', 'harvestStorage')"
+            />
           </div>
         </div>
       </div>
@@ -680,7 +711,7 @@ export default {
       const titles = {
         'crop-health': this.translate('charts.cropHealthTitle', 'Crop Health - NDVI Index'),
         'pest-alert': this.translate('charts.pestAlertTitle', 'Pest & Disease Alerts'),
-        'market-price': this.translate('charts.marketPriceTitle', 'Market Prices')
+        'market-price': this.translate('charts.market.sectionTitle', 'Market Prices')
       };
       this.chartDialog = { visible: true, type, title: titles[type] || type, category };
     },
@@ -2065,36 +2096,58 @@ export default {
   overflow-y: auto;
 }
 
-.quick-help-content {
-  max-width: 600px;
-  width: 100%;
-}
-
-.insights-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-sm);
-  margin-bottom: var(--space-md);
-}
-
-@media (max-width: 768px) {
-  .insights-row {
-    grid-template-columns: 1fr;
-  }
+.welcome-header {
+  text-align: center;
+  margin-bottom: var(--space-lg);
 }
 
 .quick-help-heading {
   text-align: center;
   font-size: var(--text-xl);
   font-weight: 600;
-  margin-bottom: var(--space-lg);
   color: var(--fg);
+}
+
+.insights-section,
+.fast-actions-section,
+.market-prices-section {
+  width: 100%;
+  max-width: 800px;
+  margin-bottom: var(--space-lg);
+}
+
+.section-header {
+  margin-bottom: var(--space-md);
+}
+
+.section-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--fg);
+  margin: 0;
+}
+
+.insights-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.insights-cards > * {
+  grid-column: span 2;
+}
+
+.market-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-sm);
 }
 
 .quick-help-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: var(--space-md);
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-sm);
 }
 
 .quick-help-item {
@@ -2125,6 +2178,47 @@ export default {
   font-size: var(--text-base);
   color: var(--fg);
   font-weight: 500;
+}
+
+/* QuickHelp Responsive */
+@media (max-width: 1024px) {
+  .insights-cards,
+  .quick-help-grid,
+  .market-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .insights-cards > * {
+    grid-column: span 3;
+  }
+}
+
+@media (max-width: 768px) {
+  .insights-cards,
+  .quick-help-grid,
+  .market-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .insights-cards > * {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 480px) {
+  .insights-cards,
+  .quick-help-grid,
+  .market-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .insights-cards > * {
+    grid-column: span 1;
+  }
+
+  .quick-help-heading {
+    font-size: var(--text-lg);
+  }
 }
 
 /* Chat Input Styles */
@@ -2167,16 +2261,6 @@ export default {
     margin-right: var(--space-sm);
     flex: 1;
   }
-
-  .quick-help-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (min-width: 1024px) {
-  .quick-help-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
 }
 
 @media (max-width: 768px) {
@@ -2189,16 +2273,6 @@ export default {
   .status-metrics {
     width: 100%;
     justify-content: space-between;
-  }
-}
-
-@media (max-width: 480px) {
-  .quick-help-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .quick-help-heading {
-    font-size: var(--text-lg);
   }
 }
 

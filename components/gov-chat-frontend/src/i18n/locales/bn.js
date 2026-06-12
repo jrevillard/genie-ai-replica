@@ -1338,7 +1338,11 @@ export default {
     }
   },
   chatbot: {
-    welcomeMessage: 'স্বাগতম! আজ আমি কিভাবে আপনাকে সাহায্য করতে পারি?',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'কনফিগারেশন অসমঞ্জতা: {warnings}. দয়া করে দ্রুত সাহায্য এবং জ্ঞান শ্রেণিবিন্যাস কনফিগারেশন পরীক্ষা করুন।',
+    categoryNotFound: 'ক্যাটাগরি "{label}" জ্ঞান শ্রেণিবিন্যাসে পাওয়া যায়নি',
+    serviceLabelMismatch: 'সার্ভিস "{label}" একটি UI লেবেল ব্যবহার করে যা জ্ঞান শ্রেণিবিন্যাসের সাথে মেলে না',
     placeholder: 'আপনার জিজ্ঞাসা এখানে লিখুন...',
     sendButton: 'পাঠান',
     fileReceived: 'ফাইল সফলভাবে গৃহীত হয়েছে।',

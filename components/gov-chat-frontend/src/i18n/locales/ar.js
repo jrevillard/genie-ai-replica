@@ -1412,7 +1412,11 @@ export default {
     }
   },
   chatbot: {
-    welcomeMessage: 'مرحباً! كيف يمكنني مساعدتك اليوم؟',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'عدم تطابق في التكوين: {warnings}. يرجى التحقق من تكوين المساعدة السريعة والتسلسل الهرمي للمعرفة.',
+    categoryNotFound: 'الفئة "{label}" غير موجودة في التسلسل الهرمي للمعرفة',
+    serviceLabelMismatch: 'الخدمة "{label}" تستخدم تسمية واجهة مستخدم قد لا تتطابق مع التسلسل الهرمي للمعرفة',
     placeholder: 'اكتب استفسارك هنا...',
     sendButton: 'إرسال',
     fileReceived: 'تم استلام الملف بنجاح.',

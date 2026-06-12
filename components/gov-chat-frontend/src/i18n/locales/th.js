@@ -1356,7 +1356,11 @@ export default {
     }
   },
   chatbot: {
-    welcomeMessage: 'ยินดีต้อนรับ! วันนี้ฉันช่วยคุณได้อย่างไร?',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'การกำหนดค่าไม่ตรงกัน: {warnings}. กรุณาตรวจสอบการกำหนดค่าความช่วยเหลือด่วนและลำดับชั้นความรู้',
+    categoryNotFound: 'ไม่พบหมวดหมู่ "{label}" ในลำดับชั้นความรู้',
+    serviceLabelMismatch: 'บริการ "{label}" ใช้ป้าย UI ที่อาจไม่ตรงกับลำดับชั้นความรู้',
     placeholder: 'พิมพ์คำถามของคุณที่นี่...',
     sendButton: 'ส่ง',
     fileReceived: 'ได้รับไฟล์สำเร็จ',

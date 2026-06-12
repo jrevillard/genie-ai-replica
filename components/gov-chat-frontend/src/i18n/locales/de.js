@@ -1371,7 +1371,12 @@ export default {
     }
   },
   chatbot: {
-    welcomeMessage: 'Willkommen! Wie kann ich Ihnen heute helfen?',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'Konfigurationsfehler: {warnings}. Bitte überprüfen Sie die Schnellhilfe- und Wissenshierarchie-Konfiguration.',
+    categoryNotFound: 'Kategorie "{label}" nicht in der Wissenshierarchie gefunden',
+    serviceLabelMismatch:
+      'Dienst "{label}" verwendet ein UI-Label, das möglicherweise nicht zur Wissenshierarchie passt',
     placeholder: 'Geben Sie Ihre Anfrage hier ein...',
     sendButton: 'Senden',
     fileReceived: 'Datei erfolgreich empfangen.',

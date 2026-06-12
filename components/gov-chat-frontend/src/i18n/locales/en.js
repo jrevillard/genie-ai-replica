@@ -1351,6 +1351,10 @@ export default {
   },
   chatbot: {
     welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',
+    categoryNotFound: 'Category "{label}" not found in knowledge hierarchy',
+    serviceLabelMismatch: 'Service "{label}" uses a UI label that may not match the knowledge hierarchy',
     placeholder: 'Type your query here...',
     sendButton: 'Send',
     fileReceived: 'File received successfully.',

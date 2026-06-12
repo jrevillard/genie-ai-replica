@@ -1368,7 +1368,12 @@ export default {
     }
   },
   chatbot: {
-    welcomeMessage: 'Добро пожаловать! Чем я могу помочь вам сегодня?',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'Несоответствие конфигурации: {warnings}. Проверьте конфигурацию быстрой помощи и иерархии знаний.',
+    categoryNotFound: 'Категория "{label}" не найдена в иерархии знаний',
+    serviceLabelMismatch:
+      'Сервис "{label}" использует метку интерфейса, которая может не соответствовать иерархии знаний',
     placeholder: 'Введите ваш запрос здесь...',
     sendButton: 'Отправить',
     fileReceived: 'Файл успешно получен.',

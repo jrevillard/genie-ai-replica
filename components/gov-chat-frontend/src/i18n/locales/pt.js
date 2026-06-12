@@ -1373,7 +1373,12 @@ export default {
     }
   },
   chatbot: {
-    welcomeMessage: 'Bem-vindo! Como posso ajudá-lo hoje?',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'Incompatibilidade de configuração: {warnings}. Verifique a configuração de Ajuda Rápida e hierarquia de conhecimento.',
+    categoryNotFound: 'Categoria "{label}" não encontrada na hierarquia de conhecimento',
+    serviceLabelMismatch:
+      'Serviço "{label}" usa um rótulo de UI que pode não corresponder à hierarquia de conhecimento',
     placeholder: 'Digite sua consulta aqui...',
     sendButton: 'Enviar',
     fileReceived: 'Arquivo recebido com sucesso.',

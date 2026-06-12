@@ -1412,6 +1412,7 @@ export default {
     }
   },
   chatbot: {
+    welcomeMessage: 'مرحباً! كيف يمكنني مساعدتك اليوم؟',
     placeholder: 'اكتب استفسارك هنا...',
     sendButton: 'إرسال',
     fileReceived: 'تم استلام الملف بنجاح.',

@@ -1373,6 +1373,7 @@ export default {
     }
   },
   chatbot: {
+    welcomeMessage: 'Bem-vindo! Como posso ajudá-lo hoje?',
     placeholder: 'Digite sua consulta aqui...',
     sendButton: 'Enviar',
     fileReceived: 'Arquivo recebido com sucesso.',

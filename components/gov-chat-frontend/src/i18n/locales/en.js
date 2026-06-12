@@ -1350,6 +1350,7 @@ export default {
     }
   },
   chatbot: {
+    welcomeMessage: 'Welcome! How can I assist you today?',
     placeholder: 'Type your query here...',
     sendButton: 'Send',
     fileReceived: 'File received successfully.',

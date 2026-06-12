@@ -1300,6 +1300,7 @@ export default {
     }
   },
   chatbot: {
+    welcomeMessage: '欢迎！今天我能如何帮助您？',
     placeholder: '在此输入您的查询...',
     sendButton: '发送',
     fileReceived: '文件接收成功。',

@@ -1161,4 +1161,5 @@ const Map<String, dynamic> deLocale = {
     "techStack": "Tech-Stack",
     "copyright": "Alle Rechte vorbehalten.",
   },
+  'welcomeMessage': 'Willkommen! Wie kann ich Ihnen heute helfen?',
 };

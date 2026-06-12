@@ -1361,6 +1361,7 @@ export default {
     }
   },
   chatbot: {
+    welcomeMessage: 'Karibu! Ninawezaje kusaidia leo?',
     placeholder: 'Andika swali lako hapa...',
     sendButton: 'Tuma',
     fileReceived: 'Faili imepokelewa.',

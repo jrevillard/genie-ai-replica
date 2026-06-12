@@ -1147,4 +1147,6 @@ const Map<String, dynamic> idLocale = {
     "techStack": "Tech Stack",
     "copyright": "Hak cipta dilindungi undang-undang.",
   },
+  'welcomeMessage':
+      'Selamat datang! Bagaimana saya bisa membantu Anda hari ini?',
 };

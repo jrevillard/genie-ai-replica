@@ -152,7 +152,7 @@
               @click="selectQuickHelpOption(button)"
             >
               <img class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
-              <div class="quick-help-text">{{ $t(button.textKey) }}</div>
+              <div class="quick-help-text">{{ button.service }}</div>
             </DsCard>
           </div>
         </div>
@@ -510,7 +510,7 @@ export default {
     getCategoryLabelById(id) {
       if (id === null || id === undefined) {
         const selectedServices = this.selectedContextItems.map((item) => item.serviceKey);
-        if (selectedServices.includes('quickhelp.justChat')) {
+        if (selectedServices.includes('just-chat')) {
           return 'General';
         }
         return null;
@@ -537,7 +537,7 @@ export default {
       if (context.serviceLabels?.length > 0) {
         for (const label of context.serviceLabels) {
           const item = this.selectedContextItems.find((i) => i.service === label);
-          if (item?.serviceKey?.startsWith('quickhelp.') && item.serviceKey !== 'quickhelp.justChat') {
+          if (item?.category && item.serviceKey !== 'just-chat') {
             warnings.push(`Service "${label}" uses a UI label that may not match the knowledge hierarchy`);
           }
         }
@@ -646,7 +646,7 @@ export default {
       if (!rawOption.service) {
         return;
       }
-      const categoryId = rawOption.category || (rawOption.service !== this.$t('quickhelp.justChat') ? 'general' : null);
+      const categoryId = rawOption.category || (rawOption.id !== 'just-chat' ? 'general' : null);
 
       const contextExists = this.selectedContextItems.some(
         (item) => item.service === rawOption.service && item.category === categoryId
@@ -655,20 +655,20 @@ export default {
       if (!contextExists) {
         this.selectedContextItems.push({
           service: rawOption.service,
-          serviceKey: rawOption.textKey,
+          serviceKey: rawOption.id || rawOption.service,
           category: categoryId,
           selected: true
         });
       }
 
-      if (rawOption.service !== this.$t('quickhelp.justChat')) {
+      if (rawOption.id !== 'just-chat') {
         this.currentCategoryId = categoryId;
       } else {
         this.currentCategoryId = this.currentCategoryId || null;
       }
 
       this.showQuickHelp = false;
-      if (rawOption.hiddenPromptKey) {
+      if (rawOption.hiddenPromptKey || rawOption.hiddenPrompt) {
         // Display the visible text in the chat (what user sees)
         const visibleMessage = rawOption.visibleText || this.$t(rawOption.visibleTextKey);
         this.newMessage = visibleMessage;
@@ -728,8 +728,8 @@ export default {
         if (quickHelpOption) {
           this.selectedContextItems = [
             {
-              service: this.safeTranslate(quickHelpOption.textKey),
-              serviceKey: quickHelpOption.textKey,
+              service: quickHelpOption.service,
+              serviceKey: quickHelpOption.id || quickHelpOption.service,
               category: this.currentCategoryId,
               selected: true
             }

@@ -1040,4 +1040,5 @@ const Map<String, dynamic> zhLocale = {
     "techStack": "技术栈",
     "copyright": "版权所有。",
   },
+  'welcomeMessage': '欢迎！今天我能如何帮助您？',
 };

@@ -1139,4 +1139,5 @@ const Map<String, dynamic> arLocale = {
     "techStack": "التقنيات المستخدمة",
     "copyright": "جميع الحقوق محفوظة.",
   },
+  'welcomeMessage': 'مرحباً! كيف يمكنني مساعدتك اليوم؟',
 };

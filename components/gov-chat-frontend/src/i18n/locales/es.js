@@ -1361,6 +1361,7 @@ export default {
     }
   },
   chatbot: {
+    welcomeMessage: '¡Bienvenido! ¿Cómo puedo asistirle hoy?',
     placeholder: 'Escriba su consulta aquí...',
     sendButton: 'Enviar',
     fileReceived: 'Archivo recibido con éxito.',

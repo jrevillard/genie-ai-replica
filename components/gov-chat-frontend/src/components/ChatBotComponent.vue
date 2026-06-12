@@ -532,19 +532,19 @@ export default {
 
       const warnings = [];
       if (context.categoryLabel && /^Category \d+$/.test(context.categoryLabel)) {
-        warnings.push(`Category "${context.categoryLabel}" not found in knowledge hierarchy`);
+        warnings.push(this.translate('chatbot.categoryNotFound', '').replace('{label}', context.categoryLabel));
       }
       if (context.serviceLabels?.length > 0) {
         for (const label of context.serviceLabels) {
           const item = this.selectedContextItems.find((i) => i.service === label);
           if (item?.category && item.serviceKey !== 'just-chat') {
-            warnings.push(`Service "${label}" uses a UI label that may not match the knowledge hierarchy`);
+            warnings.push(this.translate('chatbot.serviceLabelMismatch', '').replace('{label}', label));
           }
         }
       }
       if (warnings.length > 0) {
         notificationService.warning(
-          `Configuration mismatch: ${warnings.join('; ')}. Please check the Quick Help and knowledge hierarchy configuration.`,
+          this.translate('chatbot.configMismatchWarning', '').replace('{warnings}', warnings.join('; ')),
           8000
         );
       }

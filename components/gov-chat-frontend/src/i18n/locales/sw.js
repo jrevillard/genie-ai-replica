@@ -1361,7 +1361,11 @@ export default {
     }
   },
   chatbot: {
-    welcomeMessage: 'Karibu! Ninawezaje kusaidia leo?',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'Hitilafu ya usanidi: {warnings}. Tafadhali angalia usanidi wa Msaada wa Haraka na mpangilio wa maarifa.',
+    categoryNotFound: 'Kategoria "{label}" haipatikani katika mpangilio wa maarifa',
+    serviceLabelMismatch: 'Huduma "{label}" inatumia lebo ya UI ambayo huenda isilingane na mpangilio wa maarifa',
     placeholder: 'Andika swali lako hapa...',
     sendButton: 'Tuma',
     fileReceived: 'Faili imepokelewa.',

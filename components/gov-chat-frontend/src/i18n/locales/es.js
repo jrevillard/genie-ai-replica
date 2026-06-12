@@ -1361,7 +1361,12 @@ export default {
     }
   },
   chatbot: {
-    welcomeMessage: '¡Bienvenido! ¿Cómo puedo asistirle hoy?',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'Incoherencia de configuración: {warnings}. Verifique la configuración de Ayuda Rápida y la jerarquía de conocimiento.',
+    categoryNotFound: 'Categoría "{label}" no encontrada en la jerarquía de conocimiento',
+    serviceLabelMismatch:
+      'Servicio "{label}" utiliza una etiqueta de UI que puede no coincidir con la jerarquía de conocimiento',
     placeholder: 'Escriba su consulta aquí...',
     sendButton: 'Enviar',
     fileReceived: 'Archivo recibido con éxito.',

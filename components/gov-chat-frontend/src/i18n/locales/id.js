@@ -1358,7 +1358,11 @@ export default {
     }
   },
   chatbot: {
-    welcomeMessage: 'Selamat datang! Bagaimana saya bisa membantu Anda hari ini?',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'Ketidakcocokan konfigurasi: {warnings}. Silakan periksa konfigurasi Bantuan Cepat dan hierarki pengetahuan.',
+    categoryNotFound: 'Kategori "{label}" tidak ditemukan dalam hierarki pengetahuan',
+    serviceLabelMismatch: 'Layanan "{label}" menggunakan label UI yang mungkin tidak cocok dengan hierarki pengetahuan',
     placeholder: 'Ketik pertanyaan Anda di sini...',
     sendButton: 'Kirim',
     fileReceived: 'File berhasil diterima.',

@@ -1312,6 +1312,7 @@ export default {
     }
   },
   chatbot: {
+    welcomeMessage: 'Welcome! How can I assist you today?',
     placeholder: 'I la ñiningo nyining jang...',
     sendButton: 'Kii',
     fileReceived: 'Fayiloo yeleta benta.',

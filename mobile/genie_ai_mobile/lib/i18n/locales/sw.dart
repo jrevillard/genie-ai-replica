@@ -1155,4 +1155,5 @@ const Map<String, dynamic> swLocale = {
     "techStack": "Teknolojia",
     "copyright": "Haki zote zimehifadhiwa.",
   },
+  'welcomeMessage': 'Karibu! Ninawezaje kusaidia leo?',
 };

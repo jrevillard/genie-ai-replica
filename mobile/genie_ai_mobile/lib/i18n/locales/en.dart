@@ -1152,4 +1152,5 @@ const Map<String, dynamic> enLocale = {
     "techStack": "Tech Stack",
     "copyright": "All rights reserved.",
   },
+  'welcomeMessage': 'Welcome! How can I assist you today?',
 };

@@ -1358,6 +1358,7 @@ export default {
     }
   },
   chatbot: {
+    welcomeMessage: 'Selamat datang! Bagaimana saya bisa membantu Anda hari ini?',
     placeholder: 'Ketik pertanyaan Anda di sini...',
     sendButton: 'Kirim',
     fileReceived: 'File berhasil diterima.',

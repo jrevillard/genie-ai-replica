@@ -1155,4 +1155,5 @@ const Map<String, dynamic> stLocale = {
     "techStack": "Mahlale a morao-rao",
     "copyright": "Litokelo tsohle li sirelelitsoe.",
   },
+  'welcomeMessage': 'Welcome! Ho jo ka u thusa joang kajeno?',
 };

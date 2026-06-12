@@ -1154,4 +1154,5 @@ const Map<String, dynamic> ptLocale = {
     "techStack": "Tech Stack",
     "copyright": "Todos os direitos reservados.",
   },
+  'welcomeMessage': 'Bem-vindo! Como posso ajudá-lo hoje?',
 };

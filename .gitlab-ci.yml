@@ -546,7 +546,9 @@ lint:backend:
       changes:
         - "components/gov-chat-backend/**/*"
         - ".gitlab-ci.yml"
-    - when: on_success
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
 
 lint:frontend:
   extends: .lint_node
@@ -570,7 +572,9 @@ lint:frontend:
       changes:
         - "components/gov-chat-frontend/**/*"
         - ".gitlab-ci.yml"
-    - when: on_success
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
 
 lint:doc-repo:
   extends: .lint_node
@@ -594,7 +598,9 @@ lint:doc-repo:
       changes:
         - "components/document-repository/**/*"
         - ".gitlab-ci.yml"
-    - when: on_success
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
 
 lint:python:
   image: python:3.10-slim
@@ -617,7 +623,9 @@ lint:python:
         - "genie-ai-overlay/**/*.py"
         - "genie-ai-overlay/pyproject.toml"
         - ".gitlab-ci.yml"
-    - when: on_success
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
 
 lint:dart:
   extends: .flutter_base
@@ -631,7 +639,9 @@ lint:dart:
       changes:
         - "mobile/genie_ai_mobile/**/*"
         - ".gitlab-ci.yml"
-    - when: on_success
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
 
 # --- Test jobs ---
 
@@ -663,7 +673,9 @@ test:backend:
       changes:
         - "components/gov-chat-backend/**/*"
         - ".gitlab-ci.yml"
-    - when: on_success
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
 
 test:frontend:
   extends: .test_node
@@ -693,7 +705,9 @@ test:frontend:
       changes:
         - "components/gov-chat-frontend/**/*"
         - ".gitlab-ci.yml"
-    - when: on_success
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
 
 test:doc-repo:
   extends: .test_node
@@ -723,7 +737,9 @@ test:doc-repo:
       changes:
         - "components/document-repository/**/*"
         - ".gitlab-ci.yml"
-    - when: on_success
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
 
 # --- Contract jobs ---
 # NOTE: Contract stage removed — route handler tests already run in the test stage
@@ -769,7 +785,8 @@ test:python:
         - "genie-ai-overlay/pyproject.toml"
         - ".gitlab-ci.yml"
       when: on_success
-    - when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
 
 # genie_ssl_patch.py tests — SSL bypass + API key injection
 test:sitecustomize:
@@ -804,7 +821,8 @@ test:sitecustomize:
         - "tests/config/ssl/**/*"
         - ".gitlab-ci.yml"
       when: on_success
-    - when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
 
 # --- Existing jobs (unchanged) ---
 
@@ -840,7 +858,9 @@ test:flutter:
       changes:
         - "mobile/genie_ai_mobile/**/*"
         - ".gitlab-ci.yml"
-    - when: on_success
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
 
 # Patrol E2E tests — DinD emulator (shared with scheduled:e2e-mobile)
 e2e:integration:
@@ -932,7 +952,8 @@ config:validate:
         - "api-gateway-solution/new-config/**/*"
         - ".gitlab-ci.yml"
       when: on_success
-    - when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
 
 # --- Scheduled jobs (nightly via pipeline schedule) ---
 

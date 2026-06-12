@@ -1899,47 +1899,94 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 
 ## CI Pipeline
 
+### Pipeline Scope (workflow rules)
+
+The `workflow:` block controls which branches/sources trigger a pipeline at all:
+
+| Source/Branch | Pipeline runs? |
+|---|---|
+| Merge request event | Yes (path-scoped jobs) |
+| `main` branch push | Yes (all jobs) |
+| `release/*` branch push | Yes (all jobs) |
+| Scheduled (cron) | Yes (scheduled jobs only) |
+| Web (manual trigger) | Yes (manual jobs only) |
+| Tag | Yes (no lint/test jobs by design) |
+| Feature branch push (no MR) | **No** — suppressed to avoid duplicates |
+| Feature branch push (open MR) | **No** — MR pipeline runs instead |
+
 ### GitLab CI Stages
 
-The GitLab CI pipeline (`.gitlab-ci.yml`) runs in 4 stages:
+The pipeline runs in 6 stages:
 
-| Stage | Jobs | Purpose | Artifacts |
-|-------|------|---------|-----------|
-| lint | lint-js, lint-py, lint-dart | Code quality | None |
-| test | test-backend, test-frontend, test-doc-repo, test-opea | Unit/integration tests | JUnit XML |
-| config | validate-config | Environment validation | None |
-| e2e | e2e-playwright | End-to-end tests | HTML report |
+| Stage | Jobs | Purpose |
+|-------|------|---------|
+| lint | lint:backend, lint:frontend, lint:doc-repo, lint:python, lint:dart | Code quality (ESLint, Prettier, Ruff, dart analyze) |
+| test | test:backend, test:frontend, test:doc-repo, test:python, test:sitecustomize, test:flutter | Unit/integration tests with JUnit XML |
+| config | config:validate | Environment variable coverage and consistency |
+| e2e | e2e:integration, patrol:e2e, e2e:playwright | End-to-end tests (merge trains only) |
+| scheduled | scheduled:integration, scheduled:e2e-mobile, scheduled:e2e-web, scheduled:melt-* | Nightly jobs via pipeline schedule |
+| manual | manual:rag-quality | Manual RAG quality regression (web trigger, GPU runner) |
 
-### Pipeline Triggers
+### Per-Job Rules (path-scoped on MR, full suite on main/release)
 
-**Automatic triggers** (on push/MR):
-- `components/gov-chat-backend/**/*.js` → lint-js, test-backend
-- `components/gov-chat-frontend/**/*.vue` → lint-js, test-frontend
-- `genie-ai-overlay/**/*.py` → lint-py, test-opea
-- `mobile/genie_ai_mobile/**/*.dart` → lint-dart
-- `docker-compose.yaml`, `env` → validate-config
-- `tests/e2e/**/*.spec.ts` → e2e-playwright
+Each lint/test/config job uses a two-rule pattern:
 
-**Manual triggers** (via GitLab UI):
-- e2e-playwright (requires staging environment)
+```yaml
+rules:
+  - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    changes:
+      - "components/gov-chat-backend/**/*"
+      - ".gitlab-ci.yml"
+    when: on_success
+  - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+    when: on_success
+```
+
+- **Rule 1 (MR)**: Job only runs if changed files match the `changes:` glob. `.gitlab-ci.yml` is included in every job so CI changes trigger a full validation.
+- **Rule 2 (main/release)**: Job always runs on `main` and `release/*` branches, regardless of changed files.
+
+### Path-Based Trigger Mapping
+
+| Changed files | MR jobs triggered |
+|---|---|
+| `components/gov-chat-backend/**/*` | lint:backend, test:backend |
+| `components/gov-chat-frontend/**/*` | lint:frontend, test:frontend |
+| `components/document-repository/**/*` | lint:doc-repo, test:doc-repo |
+| `genie-ai-overlay/**/*.py` | lint:python, test:python |
+| `mobile/genie_ai_mobile/**/*` | lint:dart, test:flutter |
+| `configs/ssl/**/*` | test:sitecustomize |
+| `env`, `docker-compose.yaml`, `api-gateway-solution/new-config/**/*` | config:validate |
+| `.gitlab-ci.yml` | **All jobs** (full validation) |
+
+### E2E Jobs
+
+E2E jobs only run on **merge trains** (not regular MR pushes):
+
+| Job | Scope | Trigger |
+|---|---|---|
+| e2e:integration | Mobile + web E2E | Merge train, changes in mobile/frontend/backend/e2e |
+| patrol:e2e | Patrol mobile E2E | Merge train, changes in mobile |
+| e2e:playwright | Playwright web E2E | Merge train, changes in e2e/frontend/backend/doc-repo |
+
+Scheduled E2E runs nightly via pipeline schedule (`$CI_PIPELINE_SOURCE == "schedule"`).
 
 ### JUnit XML Reports
 
 All test jobs generate JUnit XML reports for GitLab's test visualization:
 
 ```yaml
-# Example backend test job
-test-backend:
+# Example: test:backend
+test:backend:
   script:
-    - cd components/gov-chat-backend
-    - npm ci
-    - npm test -- --junit
+    - cd components/gov-chat-backend && npm ci
+    - npm test -- --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   artifacts:
     when: always
     reports:
       junit: components/gov-chat-backend/junit.xml
-    paths:
-      - components/gov-chat-backend/coverage/
+      coverage_report:
+        coverage_format: cobertura
+        path: components/gov-chat-backend/coverage/cobertura-coverage.xml
 ```
 
 **View test results:**
@@ -1950,7 +1997,7 @@ test-backend:
 
 ### MR Blocking on Failure
 
-**Protected branches** (`main`, `production`):
+**Protected branches** (`main`, `release/*`):
 - Pipeline **must pass** before MR can be merged
 - Failing jobs block merge automatically
 - No manual override allowed
@@ -1993,80 +2040,6 @@ npm-run-all --parallel lint lint:py lint:dart
 
 # Run all tests in parallel
 npm-run-all --parallel test test:py
-```
-
-### CI Pipeline Jobs Reference
-
-```yaml
-# .gitlab-ci.yml (simplified)
-stages:
-  - lint
-  - test
-  - config
-  - e2e
-
-variables:
-  NODE_VERSION: "22"
-  PYTHON_VERSION: "3.10"
-
-# Stage: lint
-lint-js:
-  stage: lint
-  script:
-    - npm ci
-    - npm run lint
-  rules:
-    - changes:
-        - "components/**/*.js"
-        - "components/**/*.vue"
-
-lint-py:
-  stage: lint
-  image: python:3.10
-  script:
-    - cd genie-ai-overlay
-    - pip install ruff
-    - ruff check .
-  rules:
-    - changes:
-        - "genie-ai-overlay/**/*.py"
-
-# Stage: test
-test-backend:
-  stage: test
-  script:
-    - cd components/gov-chat-backend
-    - npm ci
-    - npm test -- --junit
-  artifacts:
-    reports:
-      junit: components/gov-chat-backend/junit.xml
-  rules:
-    - changes:
-        - "components/gov-chat-backend/**"
-
-# Stage: config
-validate-config:
-  stage: config
-  script:
-    - cd tests/config-validator
-    - npm install
-    - npm test -- --env-file=../../env
-  rules:
-    - changes:
-        - "env"
-        - "docker-compose.yaml"
-
-# Stage: e2e
-e2e-playwright:
-  stage: e2e
-  script:
-    - npx playwright install
-    - npm run test:e2e
-  artifacts:
-    paths:
-      - tests/e2e/playwright-report/
-  when: manual  # Requires staging environment
 ```
 
 ---

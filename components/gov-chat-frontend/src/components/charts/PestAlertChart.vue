@@ -160,13 +160,9 @@
                   <i class="fas fa-map-marker-alt" />
                   {{ $t('charts.viewMap', 'View on Map') }}
                 </button>
-                <button
-                  class="pest-alert-chart__action-btn pest-alert-chart__action-btn--primary"
-                  @click="submitAssistanceQuery(alert)"
-                >
-                  <i class="fas fa-comments" />
+                <DsButton variant="primary" :small="true" @click="openAssistanceDialog(alert)">
                   {{ $t('charts.getAssistance', 'Get Assistance') }}
-                </button>
+                </DsButton>
               </div>
             </div>
           </DsCard>
@@ -181,23 +177,99 @@
         </span>
       </div>
     </div>
+
+    <!-- Assistance Dialog -->
+    <DsModal
+      :visible="assistanceDialog.visible"
+      :title="$t('charts.getAssistance', 'Get Assistance')"
+      size="md"
+      @close="closeAssistanceDialog"
+    >
+      <div class="assistance-dialog__section">
+        <label class="assistance-dialog__label">{{ $t('charts.assistancePrompt', 'Context') }}</label>
+        <div class="assistance-dialog__prompt">{{ assistanceDialog.prompt }}</div>
+      </div>
+      <div class="assistance-dialog__section">
+        <DsInput
+          v-model="assistanceDialog.userInput"
+          type="textarea"
+          :rows="4"
+          :placeholder="$t('charts.assistanceHint', 'Add your specific context...')"
+        />
+      </div>
+      <template #footer>
+        <DsButton variant="secondary" @click="closeAssistanceDialog">
+          {{ $t('common.cancel', 'Cancel') }}
+        </DsButton>
+        <DsButton variant="primary" :disabled="assistanceDialog.loading" @click="submitAssistanceQuery">
+          <DsSpinner v-if="assistanceDialog.loading" size="sm" />
+          {{ $t('charts.submitQuery', 'Get AI Response') }}
+        </DsButton>
+      </template>
+    </DsModal>
+
+    <!-- Response Dialog -->
+    <DsModal
+      :visible="responseDialog.visible"
+      :title="$t('charts.aiResponse', 'AI Response')"
+      size="lg"
+      :scrollable="true"
+      @close="closeResponseDialog"
+    >
+      <div v-if="responseDialog.loading" class="assistance-dialog__loading">
+        <DsSpinner size="md" />
+        <p>{{ $t('chatbot.thinking', 'Thinking...') }}</p>
+      </div>
+      <div v-else-if="responseDialog.error" class="assistance-dialog__error">
+        <p>{{ responseDialog.error }}</p>
+      </div>
+      <div v-else>
+        <div class="assistance-dialog__section">
+          <label class="assistance-dialog__label">{{ $t('charts.assistancePrompt', 'Your Question') }}</label>
+          <div class="assistance-dialog__prompt">{{ responseDialog.prompt }}</div>
+        </div>
+        <div class="assistance-dialog__section">
+          <label class="assistance-dialog__label">{{ $t('charts.aiResponse', 'Response') }}</label>
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <div v-if="renderedAIResponse" class="assistance-dialog__response" v-html="renderedAIResponse"></div>
+          <span v-else>{{ $t('charts.noResponse', 'No response') }}</span>
+        </div>
+      </div>
+      <template #footer>
+        <DsButton variant="secondary" @click="copyResponse">
+          {{ $t('charts.copy', 'Copy') }}
+        </DsButton>
+        <DsButton variant="primary" @click="closeResponseDialog">
+          {{ $t('common.cancel', 'Close') }}
+        </DsButton>
+      </template>
+    </DsModal>
   </div>
 </template>
 
 <script>
 import DsCard from '../ds/Card.vue';
+import DsButton from '../ds/Button.vue';
+import DsInput from '../ds/Input.vue';
+import DsModal from '../ds/Modal.vue';
 import DsPill from '../ds/Pill.vue';
 import DsSpinner from '../ds/Spinner.vue';
 import DsStateDisplay from '../ds/StateDisplay.vue';
 import DsSelect from '../ds/Select.vue';
 import { useChartTheme } from '../../composables/useChartTheme.js';
 import agriculturalService from '../../services/agriculturalService.js';
+import chatbotService from '../../services/chatbotService.js';
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
 
 export default {
   name: 'PestAlertChart',
 
   components: {
+    DsButton,
     DsCard,
+    DsInput,
+    DsModal,
     DsPill,
     DsSpinner,
     DsStateDisplay,
@@ -240,7 +312,21 @@ export default {
       pestData: null,
       selectedSeverity: 'all',
       expandedAlert: null,
-      refreshTimer: null
+      refreshTimer: null,
+      assistanceDialog: {
+        visible: false,
+        prompt: '',
+        userInput: '',
+        alert: null,
+        loading: false
+      },
+      responseDialog: {
+        visible: false,
+        prompt: '',
+        response: '',
+        loading: false,
+        error: null
+      }
     };
   },
 
@@ -318,6 +404,11 @@ export default {
           }
         }
       };
+    },
+
+    renderedAIResponse() {
+      if (!this.responseDialog.response) return '';
+      return DOMPurify.sanitize(marked.parse(this.responseDialog.response));
     }
   },
 
@@ -402,16 +493,61 @@ export default {
       window.open(`https://www.google.com/maps/search/?api=1&query=${encodedQuery}`, '_blank');
     },
 
-    submitAssistanceQuery(alert) {
+    openAssistanceDialog(alert) {
       const severityLabel = alert.severity.charAt(0).toUpperCase() + alert.severity.slice(1);
-      const query = `I have a ${severityLabel.toLowerCase()} severity ${alert.pest} alert in ${alert.department || 'my area'}. ${alert.scientificName ? `Scientific name: ${alert.scientificName}.` : ''} What should I do?`;
+      const scientific = alert.scientificName ? ` (Scientific name: ${alert.scientificName})` : '';
+      this.assistanceDialog.prompt = `I have a ${severityLabel} severity ${alert.pest}${scientific} alert in ${alert.department || 'my area'}. What should I do?`;
+      this.assistanceDialog.userInput = '';
+      this.assistanceDialog.alert = alert;
+      this.assistanceDialog.loading = false;
+      this.assistanceDialog.visible = true;
+    },
 
-      // Emit event for parent component to handle
-      // Or navigate to chat with pre-filled query
-      console.log('[PestAlertChart] Assistance query:', query);
+    closeAssistanceDialog() {
+      this.assistanceDialog.visible = false;
+      this.assistanceDialog.prompt = '';
+      this.assistanceDialog.userInput = '';
+      this.assistanceDialog.alert = null;
+      this.assistanceDialog.loading = false;
+    },
 
-      // You could emit an event here or navigate to chat
-      // For now, just log it
+    async submitAssistanceQuery() {
+      const fullQuery = this.assistanceDialog.userInput
+        ? `${this.assistanceDialog.prompt}\n\nAdditional context: ${this.assistanceDialog.userInput}`
+        : this.assistanceDialog.prompt;
+
+      this.closeAssistanceDialog();
+
+      this.responseDialog.visible = true;
+      this.responseDialog.prompt = fullQuery;
+      this.responseDialog.response = '';
+      this.responseDialog.loading = true;
+      this.responseDialog.error = null;
+
+      try {
+        const result = await chatbotService.submitQuery({ query: fullQuery });
+        this.responseDialog.response = result.response || this.$t('charts.noResponse', 'No response received.');
+      } catch (error) {
+        this.responseDialog.error = error.message || 'Failed to get assistance. Please try again.';
+        this.responseDialog.response = '';
+      } finally {
+        this.responseDialog.loading = false;
+      }
+    },
+
+    closeResponseDialog() {
+      this.responseDialog.visible = false;
+      this.responseDialog.prompt = '';
+      this.responseDialog.response = '';
+      this.responseDialog.loading = false;
+      this.responseDialog.error = null;
+    },
+
+    copyResponse() {
+      const textToCopy = `Question: ${this.responseDialog.prompt}\n\nResponse: ${this.responseDialog.response}`;
+      navigator.clipboard.writeText(textToCopy).catch((err) => {
+        console.error('[PestAlertChart] Failed to copy response:', err);
+      });
     }
   }
 };
@@ -722,5 +858,45 @@ export default {
     width: 100%;
     justify-content: center;
   }
+}
+
+/* Assistance Dialog Styles */
+.assistance-dialog__section {
+  margin-bottom: var(--space-md);
+}
+
+.assistance-dialog__label {
+  font-weight: 600;
+  display: block;
+  margin-bottom: var(--space-xs);
+  color: var(--fg);
+  font-size: var(--text-sm);
+}
+
+.assistance-dialog__prompt {
+  background: var(--bg);
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--accent);
+  font-style: italic;
+  color: var(--fg);
+  font-size: var(--text-sm);
+}
+
+.assistance-dialog__response {
+  color: var(--fg);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.assistance-dialog__loading,
+.assistance-dialog__error {
+  text-align: center;
+  padding: var(--space-lg);
+  color: var(--muted);
+}
+
+.assistance-dialog__error {
+  color: var(--danger);
 }
 </style>

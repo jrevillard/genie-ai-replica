@@ -82,6 +82,17 @@ export async function loadConfig() {
     root.style.setProperty('--font-scale', String(theme.typography.fontScale));
   }
 
+  // Set favicon from config if available
+  if (config.app?.icon?.type === 'file' && config.app.icon.value) {
+    const favicon32 = document.querySelector('link[sizes="32x32"]');
+    const favicon16 = document.querySelector('link[sizes="16x16"]');
+    const appleTouch = document.querySelector('link[sizes="180x180"]');
+    const iconPath = config.app.icon.value;
+    if (favicon32) favicon32.href = iconPath;
+    if (favicon16) favicon16.href = iconPath;
+    if (appleTouch) appleTouch.href = iconPath;
+  }
+
   return config;
 }
 

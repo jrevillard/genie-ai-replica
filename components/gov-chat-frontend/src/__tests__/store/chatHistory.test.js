@@ -539,6 +539,32 @@ describe('Vuex chatHistory module', () => {
         chatHistory.actions.moveChat({ commit, rootGetters }, { chatId: 'c1', fromFolderId: 'f1', toFolderId: 'f2' })
       ).rejects.toThrow('Network error');
     });
+
+    // Regression tests — issue #827: move succeeds on the backend but the frontend shows an error
+    it('should not fail when getFolder rejects after a successful move (issue #827)', async () => {
+      mockMoveConversation.mockResolvedValue({});
+      mockGetFolder.mockRejectedValue(new Error('refresh failed'));
+
+      await expect(
+        chatHistory.actions.moveChat({ commit, rootGetters }, { chatId: 'c1', fromFolderId: 'f1', toFolderId: 'f2' })
+      ).resolves.toBeUndefined();
+
+      // The move is still reflected locally even though the folder refresh failed
+      expect(mockMoveConversation).toHaveBeenCalledWith('c1', 'f1', 'f2');
+      expect(commit).toHaveBeenCalledWith('MOVE_CHAT', { chatId: 'c1', fromFolderId: 'f1', toFolderId: 'f2' });
+    });
+
+    it('should tolerate an undefined conversations array in getFolder response (issue #827)', async () => {
+      mockMoveConversation.mockResolvedValue({});
+      mockGetFolder.mockResolvedValue({ conversations: undefined });
+
+      await expect(
+        chatHistory.actions.moveChat({ commit, rootGetters }, { chatId: 'c1', fromFolderId: 'f1', toFolderId: 'f2' })
+      ).resolves.toBeUndefined();
+
+      expect(commit).toHaveBeenCalledWith('SET_FOLDER_CHATS', { folderId: 'f2', chats: [] });
+      expect(commit).toHaveBeenCalledWith('MOVE_CHAT', { chatId: 'c1', fromFolderId: 'f1', toFolderId: 'f2' });
+    });
   });
 
   describe('removeChatFromFolder action (AC6)', () => {

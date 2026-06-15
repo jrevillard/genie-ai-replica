@@ -190,7 +190,8 @@ export default {
 
     // Enhanced moveChat action to sync with backend
     async moveChat({ commit, rootGetters }, { chatId, fromFolderId, toFolderId }) {
-      const currentUser = rootGetters['auth/currentUser'];
+      // auth module is NOT namespaced — getter lives in global namespace
+      const currentUser = rootGetters['currentUser'];
       if (!currentUser) throw new Error('User is missing');
       // Authoritative backend operation — a failure here must propagate
       await chatHistoryService.moveConversation(chatId, fromFolderId, toFolderId);

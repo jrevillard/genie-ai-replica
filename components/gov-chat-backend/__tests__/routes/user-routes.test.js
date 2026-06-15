@@ -119,6 +119,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   keycloakAuthMiddleware.authenticate.mockImplementation((req, res, next) => {
     req.user = { iss_sub: 'http://localhost:8080/realms/genie#user-123', _key: 'user-123' };
+    req.claims = { realm_access: { roles: ['offline_access', 'default-roles-genie', 'admin', 'uma_authorization'] } };
     next();
   });
 });
@@ -246,7 +247,8 @@ describe('GET /api/me/context', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.name).toBe('User');
-    expect(response.body.role).toEqual([]);
+    // Roles come from JWT claims (set in beforeEach mock), not from ArangoDB user document
+    expect(response.body.role).toEqual(['admin']);
     expect(response.body.emailVerified).toBe(false);
   });
 });

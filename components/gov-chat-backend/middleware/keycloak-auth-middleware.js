@@ -176,7 +176,10 @@ const keycloakAuthMiddleware = {
    * @param {Function} next - Express next middleware
    */
   requireAdmin(req, res, next) {
-    const roles = req.user && req.user.roles;
+    // Use JWT claims (req.claims) instead of ArangoDB user (req.user.roles)
+    // to avoid stale cached roles when Keycloak role assignments change.
+    // req.claims is set from the verified JWT on every request, so it is always fresh.
+    const roles = req.claims && req.claims.realm_access && req.claims.realm_access.roles;
     if (!roles || !Array.isArray(roles) || !roles.includes('admin')) {
       logger.warn(
         `[requireAdmin] Access denied for ${req.user?.iss_sub || 'unknown'} — roles: ${JSON.stringify(roles)}`

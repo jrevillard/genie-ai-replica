@@ -450,7 +450,7 @@ This allows per-environment tuning via Ansible while keeping GPU defaults in the
 
 GENIE.AI supports a standalone GPU node architecture. Instead of running
 AI services alongside the app stack, deploy a dedicated GPU node with its own compose file
-and nginx reverse proxy. The app node connects to the GPU node via HTTPS on port 443
+and nginx reverse proxy. The app node connects to the GPU node via HTTPS (configurable via `gpu_https_port`, default 443)
 with path-based routing and API key authentication.
 
 #### Deploy the GPU Node
@@ -492,7 +492,7 @@ ansible-playbook -i inventory/my-gpu.ini deploy-gpu.yml --vault-id my-gpu@prompt
 | `/rerank/` | TEI (Reranking) | Result reranking |
 | `/docling/` | docling-serve | Document extraction |
 
-All services are behind nginx with TLS termination and API key authentication on port 443.
+All services are behind nginx with TLS termination and API key authentication (default port 443, configurable via `gpu_https_port`).
 
 #### GPU Node Vault Secrets
 

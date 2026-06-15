@@ -241,14 +241,14 @@
       ansible.builtin.debug:
         var: compose_deploy.stdout_lines
 
-- name: GPU Node - Smoke tests (path-based routing on port 443)
+- name: GPU Node - Smoke tests (path-based routing on port {{ gpu_https_port | default('443') }})
   hosts: itu_rtx_gpu_api
   tags: [deploy]
   become: true
   tasks:
     - name: Wait for vLLM LLM health
       ansible.builtin.uri:
-        url: "https://localhost:443/llm/health"
+        url: "https://localhost:{{ gpu_https_port | default('443') }}/llm/health"
         method: GET
         validate_certs: false
         headers:
@@ -260,7 +260,7 @@
 
     - name: Wait for vLLM Translation health
       ansible.builtin.uri:
-        url: "https://localhost:443/translation/health"
+        url: "https://localhost:{{ gpu_https_port | default('443') }}/translation/health"
         method: GET
         validate_certs: false
         headers:
@@ -272,7 +272,7 @@
 
     - name: Wait for TEI Embedding health
       ansible.builtin.uri:
-        url: "https://localhost:443/embed/health"
+        url: "https://localhost:{{ gpu_https_port | default('443') }}/embed/health"
         method: GET
         validate_certs: false
         headers:
@@ -284,7 +284,7 @@
 
     - name: Wait for TEI Reranker health
       ansible.builtin.uri:
-        url: "https://localhost:443/rerank/health"
+        url: "https://localhost:{{ gpu_https_port | default('443') }}/rerank/health"
         method: GET
         validate_certs: false
         headers:
@@ -296,7 +296,7 @@
 
     - name: Wait for docling-serve health
       ansible.builtin.uri:
-        url: "https://localhost:443/docling/health"
+        url: "https://localhost:{{ gpu_https_port | default('443') }}/docling/health"
         method: GET
         validate_certs: false
         headers:
@@ -308,7 +308,7 @@
 
     - name: Verify 401 rejection without API key
       ansible.builtin.uri:
-        url: "https://localhost:443/llm/health"
+        url: "https://localhost:{{ gpu_https_port | default('443') }}/llm/health"
         method: GET
         validate_certs: false
       register: auth_reject

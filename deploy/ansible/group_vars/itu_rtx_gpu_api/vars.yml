@@ -3,4 +3,5 @@
 # Defaults live in group_vars/all.yml (GPU section)
 
 gpu_public_domain: ai.assembly.govstack.global
+gpu_https_port: "444"
 certbot_email: admin@assembly.govstack.global

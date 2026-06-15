@@ -4,7 +4,7 @@
 # DO NOT EDIT MANUALLY — generated from templates/docker-compose.gpu.yaml.j2
 #
 # Dedicated GPU node for AI model services behind nginx with TLS + API key auth.
-# Path-based routing on port 443: /llm/, /translation/, /embed/, /rerank/, /docling/.
+# Path-based routing on port {{ gpu_https_port | default('443') }}: /llm/, /translation/, /embed/, /rerank/, /docling/.
 # On the app node, GPU_MODEL_REPLICAS=0 or --profile opea skips local GPU containers.
 
 volumes:
@@ -125,7 +125,7 @@ services:
     restart: unless-stopped
     image: {{ nginx_image | default('nginx:1.28-alpine') }}
     ports:
-      - "443:443"
+      - "{{ gpu_https_port | default('443') }}:443"
       - "80:80"
     volumes:
       - ./{{ gpu_generated_dir }}:/etc/nginx/conf.d:ro

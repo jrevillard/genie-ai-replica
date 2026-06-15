@@ -13,6 +13,7 @@ arango_db: el-salvador
 
 # Remote GPU node (vLLM, TEI run on 10.0.0.110)
 gpu_node_host: "10.0.0.110"
+gpu_https_port: "444"
 
 # Self-signed certificates (IP-based access, no domain/Let's Encrypt)
 self_signed_certs: true

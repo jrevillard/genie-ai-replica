@@ -709,6 +709,28 @@ describe('requireAdmin', () => {
     });
   });
 
+  it('should return 403 when claims.realm_access exists but has no roles', async () => {
+    req.user = {
+      _key: 'users/333',
+      iss_sub: 'http://localhost:8080/realms/genie#333',
+      email: 'no-roles-prop@example.com',
+      name: 'No Roles Prop User'
+    };
+    req.claims = {
+      realm_access: {}
+    };
+
+    keycloakAuthMiddleware.requireAdmin(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'FORBIDDEN',
+      message: 'Admin access required',
+      details: {}
+    });
+  });
+
   it('should return 403 when roles array is empty', async () => {
     req.user = {
       _key: 'users/000',

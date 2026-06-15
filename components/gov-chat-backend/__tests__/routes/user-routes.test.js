@@ -251,6 +251,20 @@ describe('GET /api/me/context', () => {
     expect(response.body.role).toEqual(['admin']);
     expect(response.body.emailVerified).toBe(false);
   });
+
+  it('should return empty roles when claims.realm_access exists but has no roles', async () => {
+    userProfileService.getUserProfile.mockResolvedValue({ name: 'Test User', roles: ['admin'], emailVerified: true });
+    keycloakAuthMiddleware.authenticate.mockImplementation((req, res, next) => {
+      req.user = { iss_sub: 'http://localhost:8080/realms/genie#user-123', _key: 'user-123' };
+      req.claims = { realm_access: {} };
+      next();
+    });
+
+    const response = await authGet('/api/me/context');
+
+    expect(response.status).toBe(200);
+    expect(response.body.role).toEqual([]);
+  });
 });
 
 // ============================================================

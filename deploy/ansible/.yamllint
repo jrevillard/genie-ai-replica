@@ -6,3 +6,4 @@ yaml-files:
 extends: relaxed
 rules:
   line-length: disable
+  document-start: disable

@@ -667,7 +667,7 @@ docs:validate:
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
-    when: on_success
+      when: on_success
 
 # --- Test jobs ---
 

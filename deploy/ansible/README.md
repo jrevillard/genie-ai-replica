@@ -534,6 +534,30 @@ OPEA_SSL_SKIP_VERIFY=1              # If GPU node uses self-signed certs
 > It controls SSL bypass baked into OPEA Docker images via `genie_ssl_patch.py`.
 > Use `OPEA_SSL_SKIP_VERIFY=1` only with self-signed certs — omit for Let's Encrypt or public CAs.
 
+#### Self-Signed Certificates — Decision Matrix
+
+Two Ansible variables control TLS verification for self-signed certificates in services not covered by NGINX termination. Each covers a different layer:
+
+| Ansible Variable | Environment Variable | Services | When to set |
+|---|---|---|---|
+| `opea_ssl_skip_verify` | `OPEA_SSL_SKIP_VERIFY` | OPEA Python services (7) | Remote GPU node uses self-signed cert |
+| `keycloak_ssl_skip_verify` | `KEYCLOAK_SSL_SKIP_VERIFY` | dataprep-arango-service | Keycloak behind NGINX with self-signed cert |
+
+> **Note on `NODE_TLS_REJECT_UNAUTHORIZED`:** This variable controls TLS verification for backend and document-repository (Node.js services). When using self-signed certificates with the Ansible playbook, set `NODE_TLS_REJECT_UNAUTHORIZED=0` directly in the generated `.env` file after deployment, or add `node_tls_reject_unauthorized: "0"` to your `group_vars/<env>/vars.yml` (requires the env template to be updated to emit this variable — see the `release/el-salvador-ds-port` branch for the pending fix).
+
+**Quick reference — which variables to set by scenario:**
+
+| Scenario | `opea_ssl_...` | `keycloak_ssl_...` | `NODE_TLS_...` |
+|---|---|---|---|
+| Local, self-signed NGINX, no remote GPU | — | — | `"0"` (manual) |
+| Local, remote GPU, self-signed cert | `"1"` | — | `"0"` (manual) |
+| Production, real CA certificates | — | — | — |
+| Production/air-gapped, self-signed NGINX + remote GPU | `"1"` | `"1"` | `"0"` (manual) |
+
+`—` = use default (verify certs). `opea_ssl_skip_verify` and `keycloak_ssl_skip_verify` are opt-in via `group_vars/<env>/vars.yml`.
+
+For detailed explanations of each variable and the underlying mechanisms, see [Self-Signed Certificates](../docker-compose-setup.md#self-signed-certificates--decision-matrix).
+
 ## Port Configuration
 
 If ports 80/443 are occupied (e.g. by another stack), override them in your environment config:
@@ -656,6 +680,20 @@ ssh-copy-id <user>@<host>
 cp -r /mnt/c/Users/<you>/.ssh ~/.ssh
 chmod 700 ~/.ssh && chmod 600 ~/.ssh/*
 ```
+
+### Keycloak realm import fails with "Invalid sender address 'null'"
+
+The `smtpServer` block in the Keycloak realm template (`configs/keycloak/genie-realm.yaml`) is always present. If `EMAIL_FROM` is empty (the default), Keycloak rejects the realm configuration during import.
+
+**Fix:** Set `email_host` and `email_from` in your group_vars:
+
+```yaml
+# group_vars/<env>/vars.yml
+email_host: "smtp.example.com"
+email_from: "noreply@example.com"
+```
+
+This is required when `keycloak_verify_email` or `keycloak_reset_password` is set to `true`.
 
 ### "Missing required vault variable: kc_mobile_client_id"
 

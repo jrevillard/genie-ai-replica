@@ -506,7 +506,7 @@ describe('Vuex chatHistory module', () => {
 
     beforeEach(() => {
       commit = jest.fn();
-      rootGetters = { 'auth/currentUser': { sub: 'user-123' } };
+      rootGetters = { currentUser: { sub: 'user-123' } };
     });
 
     it('should call service and commit mutations on success', async () => {
@@ -525,7 +525,7 @@ describe('Vuex chatHistory module', () => {
     });
 
     it('should throw when currentUser is null', async () => {
-      rootGetters = { 'auth/currentUser': null };
+      rootGetters = { currentUser: null };
 
       await expect(
         chatHistory.actions.moveChat({ commit, rootGetters }, { chatId: 'c1', fromFolderId: 'f1', toFolderId: 'f2' })

@@ -124,10 +124,10 @@ function parseGpuCompose(filePath) {
         continue;
       }
 
-      // Extract port mappings inside current service block (any indent)
-      const portMatch = trimmed.match(/"(\d+):\d+"/);
+      // Match both literal "443:443" and variable "${VAR:-443}:443"
+      const portMatch = trimmed.match(/"(?:\$\{[^}]*:-(\d+)\}|(\d+)):\d+"/);
       if (portMatch && currentService) {
-        currentPorts.push(parseInt(portMatch[1], 10));
+        currentPorts.push(parseInt(portMatch[1] || portMatch[2], 10));
       }
 
       // Extract image (4-space indent, inside a service block)

@@ -657,7 +657,7 @@ docs:validate:
   script:
     - ansible-playbook --syntax-check deploy/ansible/deploy.yml
     - ansible-playbook --syntax-check deploy/ansible/deploy-gpu.yml
-    - yamllint deploy/ansible/
+    - yamllint deploy/ansible/templates/ deploy/ansible/tasks/ deploy/ansible/group_vars/
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:

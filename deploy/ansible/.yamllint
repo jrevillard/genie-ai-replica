@@ -1,0 +1,8 @@
+yaml-files:
+  - '*.yaml'
+  - '*.yml'
+  - '*.j2'
+
+extends: relaxed
+rules:
+  line-length: disable

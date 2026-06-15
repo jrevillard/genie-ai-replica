@@ -430,9 +430,12 @@ Fix any errors before proceeding. This catches missing variables and syntax issu
 
 From the project root on the **manager node**:
 
+> **Important:** `docker stack deploy` does not substitute `${VAR}` references from environment variables. `docker compose config` pre-resolves them into a flat YAML file suitable for Swarm deployment.
+
 ```bash
 set -a && source .env && set +a
-docker stack deploy -c docker-compose.yaml genieai
+docker compose config > docker-compose.resolved.yaml
+docker stack deploy -c docker-compose.resolved.yaml genieai
 ```
 
 This creates a stack named `genieai`. All services start according to their placement constraints.
@@ -440,7 +443,9 @@ This creates a stack named `genieai`. All services start according to their plac
 ### With GPU-specific overrides:
 
 ```bash
-set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
+set -a && source .env && source env.t4 && set +a
+docker compose config > docker-compose.resolved.yaml
+docker stack deploy -c docker-compose.resolved.yaml genieai
 ```
 
 ## Step 9: Post-Deploy — Kong Configuration
@@ -634,7 +639,8 @@ cp env .env
 
 # Deploy
 set -a && source .env && set +a
-docker stack deploy -c docker-compose.yaml genieai
+docker compose config > docker-compose.resolved.yaml
+docker stack deploy -c docker-compose.resolved.yaml genieai
 
 # Remove the stack
 docker stack rm genieai
@@ -684,7 +690,8 @@ docker push localhost:5000/genie-ai-kong-config:latest
 
 # 5. Deploy
 set -a && source .env && set +a
-docker stack deploy -c docker-compose.yaml genieai
+docker compose config > docker-compose.resolved.yaml
+docker stack deploy -c docker-compose.resolved.yaml genieai
 
 # 6. Verify
 docker service ls

@@ -204,7 +204,7 @@ docker compose --env-file .env --env-file env.rtx6000 --profile opea --profile g
 
 GENIE.AI supports connecting to a dedicated GPU node for AI services,
 deployed separately from the app stack. When configured, the app node
-routes AI requests to the GPU node via HTTPS on port 443 with API key
+routes AI requests to the GPU node via HTTPS (default port 443, configurable via `gpu_https_port`) with API key
 authentication and skips local GPU-heavy containers.
 
 To connect to a remote GPU node, set in `.env`:

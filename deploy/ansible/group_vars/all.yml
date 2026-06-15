@@ -100,6 +100,7 @@ gpu_data_dir: ./data
 gpu_generated_dir: configs/nginx-gpu
 
 gpu_public_domain: gpu.example.com
+gpu_https_port: "443"
 gpu_self_signed_certs: true
 gpu_env_file: ""
 nvidia_visible_devices: "all"

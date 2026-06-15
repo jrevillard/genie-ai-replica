@@ -1920,7 +1920,7 @@ The pipeline runs in 6 stages:
 
 | Stage | Jobs | Purpose |
 |-------|------|---------|
-| lint | lint:backend, lint:frontend, lint:doc-repo, lint:python, lint:dart | Code quality (ESLint, Prettier, Ruff, dart analyze) |
+| lint | lint:backend, lint:frontend, lint:doc-repo, lint:python, lint:dart, docs:validate | Code quality + Ansible/deploy validation |
 | test | test:backend, test:frontend, test:doc-repo, test:python, test:sitecustomize, test:flutter | Unit/integration tests with JUnit XML |
 | config | config:validate | Environment variable coverage and consistency |
 | e2e | e2e:integration, patrol:e2e, e2e:playwright | End-to-end tests (merge trains only) |
@@ -1956,6 +1956,7 @@ rules:
 | `mobile/genie_ai_mobile/**/*` | lint:dart, test:flutter |
 | `configs/ssl/**/*` | test:sitecustomize |
 | `env`, `docker-compose.yaml`, `api-gateway-solution/new-config/**/*` | config:validate |
+| `deploy/**/*`, `docs/**/*`, `CLAUDE.md` | docs:validate |
 | `.gitlab-ci.yml` | **All jobs** (full validation) |
 
 ### E2E Jobs
@@ -2006,6 +2007,8 @@ test:backend:
 - Pipeline runs but does not block commits
 - Warnings displayed in MR page
 
+> **Docs-only MRs** (no component changes): These trigger only `docs:validate`. If no CI job matches the changed files, no pipeline runs and the MR **cannot be merged** (GitLab requires a successful pipeline). The `docs:validate` job's `changes:` pattern covers `deploy/**/*`, `docs/**/*`, and `CLAUDE.md`.
+
 ### Running CI Checks Locally
 
 Before pushing, run the same checks locally to avoid CI failures:
@@ -2024,6 +2027,10 @@ cd genie-ai-overlay && pytest
 
 # Validate config
 cd tests/config-validator && npm test
+
+# Validate ansible playbooks
+ansible-playbook --syntax-check deploy/ansible/deploy.yml
+yamllint deploy/ansible/
 
 # Run E2E tests (requires services running)
 npm run test:e2e

@@ -643,6 +643,32 @@ lint:dart:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+# --- Docs/Deploy validation ---
+
+# Validates Ansible playbooks (syntax) and YAML linting for deployment docs.
+# Covers MRs that only modify deploy/ansible/, docs/, or root-level files
+# where no component lint/test job would otherwise trigger.
+docs:validate:
+  image: python:3.10-slim
+  stage: lint
+  before_script:
+    - pip install ansible-core yamllint
+    - ansible-galaxy collection install -r deploy/ansible/requirements.yml
+  script:
+    - ansible-playbook --syntax-check deploy/ansible/deploy.yml
+    - ansible-playbook --syntax-check deploy/ansible/deploy-gpu.yml
+    - yamllint -c deploy/ansible/.yamllint deploy/ansible/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "deploy/**/*"
+        - "docs/**/*"
+        - "CLAUDE.md"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
 # --- Test jobs ---
 
 test:backend:

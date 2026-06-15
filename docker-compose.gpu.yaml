@@ -147,7 +147,7 @@ services:
     restart: unless-stopped
     image: nginx:1.28-alpine
     ports:
-      - "443:443"
+      - "${GPU_HTTPS_PORT:-443}:443"
       - "80:80"
     volumes:
       - ./configs/nginx-gpu/gpu-proxy.conf:/etc/nginx/conf.d/default.conf:ro

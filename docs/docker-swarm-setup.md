@@ -765,7 +765,7 @@ Swarm overlay DNS may have delays on first resolution. This causes services to f
 
 GENIE.AI supports deploying AI services on a dedicated GPU node, separate from the
 app stack. The GPU node runs 5 AI services behind nginx with TLS termination and
-API key authentication on port 443, using path-based routing.
+API key authentication (default port 443, configurable via `gpu_https_port`), using path-based routing.
 
 ### Architecture
 

@@ -14,6 +14,7 @@ enable_observability: "0"
 
 # Remote GPU endpoint
 gpu_node_host: "ai.assembly.govstack.global"
+gpu_https_port: "444"
 opea_ssl_skip_verify: "1"
 keycloak_ssl_skip_verify: "1"
 

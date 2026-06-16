@@ -1404,8 +1404,16 @@ services:
     # Expose fluentforward receiver on localhost so the Docker daemon can
     # send container logs via the fluentd logging driver. Binding to
     # 127.0.0.1 prevents external access (no unauthenticated log injection).
+    # Use mode: host so Docker daemon's fluentd driver connects directly to the
+    # collector container. Mode: ingress (Swarm routing mesh) breaks fluentd's
+    # persistent TCP connections — IPVS terminates and re-opens them, causing
+    # CLOSE-WAIT states and data loss.
     ports:
-      - "127.0.0.1:24224:24224"
+      - target: 24224
+        published: 24224
+        protocol: tcp
+        mode: host
+        host_ip: 127.0.0.1
     # Distroless image — no shell/wget for Docker healthcheck.
     # Rely on restart policy + health_check extension (port 13133) for programmatic probes.
     environment:

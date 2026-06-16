@@ -469,8 +469,8 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         retriever_parameters = kwargs.get("retriever_parameters")
         if retriever_parameters:
-            # inputs.update(retriever_parameters.dict())
-            safe_params = retriever_parameters.dict(exclude_unset=True, exclude_none=True)
+            # inputs.update(retriever_parameters.model_dump())
+            safe_params = retriever_parameters.model_dump(exclude_unset=True, exclude_none=True)
             inputs.update(safe_params)
 
         retrieval_context = kwargs.get("retrieval_context", {})
@@ -480,7 +480,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
     elif self.services[cur_node].service_type == ServiceType.RERANK:
         reranker_parameters = kwargs.get("reranker_parameters")
         if reranker_parameters:
-            inputs.update(reranker_parameters.dict())
+            inputs.update(reranker_parameters.model_dump())
         if logflag:
             logger.debug(f"Aligned input of the reranker: {inputs}")
 
@@ -615,7 +615,9 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
 
     elif self.services[cur_node].service_type == ServiceType.EMBEDDING:
         if logflag:
-            logger.debug(f"Raw output of the embedding\n {data}\n")
+            logger.debug(
+                f"Raw output of the embedding: {type(data).__name__}, top-level keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'}"
+            )
         # OPEA embedding microservice returns {"data": [{"index": 0, "embedding": [...]}]}
         if isinstance(data, dict) and "data" in data:
             data = data["data"]
@@ -625,7 +627,9 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         if logflag:
-            logger.debug(f"Raw output of the retriever\n {data}\n")
+            logger.debug(
+                f"Raw output of the retriever: {type(data).__name__}, top-level keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'}"
+            )
         retrieved_docs = data.get("retrieved_docs", [])
         [doc["text"] for doc in retrieved_docs]
 
@@ -1445,7 +1449,7 @@ class ChatQnAService:
 
         # -----------------------------------------------
 
-        chat_request = ChatCompletionRequest.parse_obj(data)
+        chat_request = ChatCompletionRequest.model_validate(data)
 
         # --- LOGGING FOR DEBUGGING CHAT REQUEST ---
         logger.debug(f"Parsed chat request: {chat_request}")
@@ -1456,8 +1460,8 @@ class ChatQnAService:
             try:
                 retrieval_context = chat_request.context.model_dump(exclude_unset=True)
             except Exception:
-                retrieval_context = chat_request.context.dict(exclude_unset=True)
-        logger.debug(f"Context: {retrieval_context}")
+                retrieval_context = chat_request.context.model_dump(exclude_unset=True)
+        logger.debug(f"Context keys: {list(retrieval_context.keys())}")
         # -----------------------------------------------
 
         if logflag:
@@ -1600,7 +1604,9 @@ class ChatQnAService:
                 logger.warning(".model_dump method not supported")
                 retrieval_context = chat_request.context.dict(exclude_unset=True)
         if logflag:
-            logger.debug(f"Retrieval Context: {retrieval_context}")
+            logger.debug(
+                f"Retrieval Context: {list(retrieval_context.keys()) if isinstance(retrieval_context, dict) else type(retrieval_context).__name__}"
+            )
 
         parameters = LLMParams(
             max_tokens=chat_request.max_tokens if chat_request.max_tokens else 1024,
@@ -1715,7 +1721,9 @@ class ChatQnAService:
                 raise
 
         if logflag:
-            logger.debug(f"\nResult Dict: {result_dict}")
+            logger.debug(
+                f"Result Dict: {list(result_dict.keys()) if isinstance(result_dict, dict) else type(result_dict).__name__}"
+            )
             logger.debug(f"\nRuntime Graph: {runtime_graph}")
 
         for _node, response in result_dict.items():
@@ -1803,7 +1811,9 @@ class ChatQnAService:
         source_documents_file_ids = []
 
         if logflag:
-            logger.info(f"\n\n[ DEBUG ] retrieved docs with scores: {retrieved_docs_with_scores}\n")
+            logger.debug(
+                f"retrieved docs count: {len(retrieved_docs_with_scores)}, scores: {[d.get('score') for d in retrieved_docs_with_scores]}"
+            )
 
         for item in retrieved_docs_with_scores:
             doc_id_by_orchestrator = item.get("id", "N/A")
@@ -1865,11 +1875,11 @@ class ChatQnAService:
 
                         scores.append(score)
 
-            logger.info(f"\n\n[ DEBUG ] appendding document conf score: {score} ")
+            logger.debug(f"appending document conf score: {score} ")
 
         # Calculate overall confidence score (e.g., average of top documents)
         confidence_score = sum(scores) / len(scores) if scores else 0.0
-        logger.info(f"\n\n[ DEBUG ] document confidence scores: {scores} ")
+        logger.debug(f"document confidence scores: {scores}")
 
         # Construct the final JSON payload
         final_response_payload = {

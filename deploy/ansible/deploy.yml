@@ -618,6 +618,9 @@
         # Remove 'name' properties not supported by docker stack deploy
         sed -i '/^[[:space:]]*name:/d' {{ deploy_dir }}/docker-compose.yaml.tmp
 
+        # Remove 'host_ip' properties not supported by docker stack deploy
+        sed -i '/^[[:space:]]*host_ip:/d' {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
+
         # Remove 'profiles' blocks not supported by docker stack deploy
         # (profiles is a multi-line YAML block: 'profiles:' + '- xxx' items)
         awk '/^[[:space:]]*profiles:/{match($0,/^[[:space:]]*/);n=RLENGTH;next} n{match($0,/^[[:space:]]*/);if(RLENGTH<=n)n=0} !n' \

@@ -1724,7 +1724,8 @@ class ChatQnAService:
 
         if logflag:
             logger.debug(
-                f"Result Dict: {list(result_dict.keys()) if isinstance(result_dict, dict) else type(result_dict).__name__}"
+                f"Result Dict: "
+                f"{list(result_dict.keys()) if isinstance(result_dict, dict) else type(result_dict).__name__}"
             )
             logger.debug(f"\nRuntime Graph: {runtime_graph}")
 
@@ -1814,7 +1815,8 @@ class ChatQnAService:
 
         if logflag:
             logger.debug(
-                f"retrieved docs count: {len(retrieved_docs_with_scores)}, scores: {[d.get('score') for d in retrieved_docs_with_scores]}"
+                f"retrieved docs count: {len(retrieved_docs_with_scores)}, "
+                f"scores: {[d.get('score') for d in retrieved_docs_with_scores]}"
             )
 
         for item in retrieved_docs_with_scores:

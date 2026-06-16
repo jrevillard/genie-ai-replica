@@ -2,9 +2,12 @@
 // MUST be imported as the first line in index.js (before Express and all other modules)
 // to ensure auto-instrumentation hooks activate before module loading.
 
-// Test environment guard OR no OTel endpoint — no-op (must be before any OTel requires)
-// Aligned with OPEA tracing.py: SDK only activates when OTEL_EXPORTER_OTLP_ENDPOINT is set
-if (process.env.NODE_ENV === 'test' || !process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
+// Test environment guard OR observability disabled — no-op (must be before any OTel requires)
+// ENABLE_OBSERVABILITY is the single gate: when disabled the Collector is not deployed,
+// so SDK init would produce DNS errors. OTEL_EXPORTER_OTLP_ENDPOINT always has a compose
+// default and cannot be used as the gate.
+// Aligned with OPEA tracing.py.
+if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1') {
   const noOpSpan = {
     end: () => {},
     setAttribute: () => {},

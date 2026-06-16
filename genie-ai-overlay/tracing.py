@@ -110,12 +110,17 @@ def setup_tracing(service_name: str) -> None:
     enables FastAPI auto-instrumentation so incoming ``traceparent``
     headers are automatically extracted for distributed tracing.
 
-    No-op when OTEL_EXPORTER_OTLP_ENDPOINT is empty or unset.
-    This allows OPEA services to run without the observability stack
-    deployed — the Collector not being deployed means the endpoint
-    variable is never injected into the containers.
+    No-op when ENABLE_OBSERVABILITY is not "1".  This is the single
+    source-of-truth gate: when observability is disabled the Collector
+    container is not deployed, so any SDK init would only produce DNS
+    resolution errors.  The OTEL_EXPORTER_OTLP_ENDPOINT fallback in
+    docker-compose always provides a value, so it cannot be used as
+    the gate.
     """
     global _provider, _meter_provider
+
+    if os.getenv("ENABLE_OBSERVABILITY") != "1":
+        return
 
     endpoint_base = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
     if not endpoint_base:

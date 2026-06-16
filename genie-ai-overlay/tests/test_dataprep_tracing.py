@@ -30,6 +30,7 @@ class TestDataprepTracingSetup:
 
     def test_setup_tracing_with_dataprep_service_name(self, monkeypatch):
         """Dataprep must call setup_tracing('genieai-dataprep')."""
+        monkeypatch.setenv("ENABLE_OBSERVABILITY", "1")
         monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
 
         with patch("tracing.OTLPSpanExporter"):

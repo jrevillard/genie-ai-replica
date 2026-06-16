@@ -63,6 +63,7 @@ describe('tracing.js non-test branch', () => {
 
   beforeAll(() => {
     process.env.NODE_ENV = 'development';
+    process.env.ENABLE_OBSERVABILITY = '1';
     process.env.OTEL_EXPORTER_OTLP_ENDPOINT = 'http://otel-collector:4318';
     process.exit = jest.fn();
     // Use isolateModules to get a fresh require of tracing.js with NODE_ENV=development

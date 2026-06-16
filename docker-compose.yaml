@@ -490,7 +490,8 @@ services:
       # CORS (deployment-specific, localhost defaults)
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090,https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}}
       - CSP_CONNECT_SRC=${CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
-      # OpenTelemetry — empty when observability disabled (SDK is no-op)
+      # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
+      - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
     networks:
       - genieai_network
@@ -915,7 +916,8 @@ services:
       - HF_TOKEN=${VLLM_API_KEY:-}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-0}
-      # OpenTelemetry — empty when observability disabled (SDK is no-op)
+      # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
+      - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
 
     # Internal only
@@ -997,7 +999,8 @@ services:
       HUGGINGFACEHUB_API_TOKEN: ${VLLM_API_KEY:-}
 
       KEYCLOAK_SSL_SKIP_VERIFY: ${KEYCLOAK_SSL_SKIP_VERIFY:-0}
-      # OpenTelemetry — empty when observability disabled (SDK is no-op)
+      # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
+      ENABLE_OBSERVABILITY: ${ENABLE_OBSERVABILITY:-0}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
     extra_hosts:
       - "localhost:host-gateway"
@@ -1066,7 +1069,8 @@ services:
       HF_TOKEN: ${VLLM_API_KEY:-}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
       OPEA_SSL_SKIP_VERIFY: ${OPEA_SSL_SKIP_VERIFY:-0}
-      # OpenTelemetry — empty when observability disabled (SDK is no-op)
+      # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
+      ENABLE_OBSERVABILITY: ${ENABLE_OBSERVABILITY:-0}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
 
       GPU_NODE_HOST: ${GPU_NODE_HOST:-}
@@ -1134,7 +1138,8 @@ services:
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
       OPENAI_API_KEY: ${VLLM_API_KEY:-}
       OPEA_SSL_SKIP_VERIFY: ${OPEA_SSL_SKIP_VERIFY:-0}
-      # OpenTelemetry — empty when observability disabled (SDK is no-op)
+      # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
+      ENABLE_OBSERVABILITY: ${ENABLE_OBSERVABILITY:-0}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
 
     networks:

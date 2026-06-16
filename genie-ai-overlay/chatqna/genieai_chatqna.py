@@ -842,7 +842,9 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         next_data = data
 
     if logflag:
-        logger.info(f"\n[ DEBUG ] FINAL ALIGNED DATA FOR NEXT NODE:\n{json.dumps(next_data, indent=2, default=str)}\n")
+        logger.debug(
+            f"FINAL ALIGNED DATA keys: {list(next_data.keys())}, text length: {len(next_data.get('text', ''))}"
+        )
 
     return next_data
 

@@ -87,6 +87,11 @@ class TraceContextFilter(logging.Filter):
         record.trace_id = ctx["trace_id"]
         record.span_id = ctx["span_id"]
         record.service = self.service_name
+        # Prepend trace context into the message itself so it appears in
+        # VictoriaLogs _msg regardless of the formatter used by CustomLogger.
+        # Match the backend Node.js format: trace_id="..." span_id="..."
+        if ctx["trace_id"] != ZEROED_TRACE_ID:
+            record.msg = f'trace_id="{ctx["trace_id"]}" span_id="{ctx["span_id"]}" {record.msg}'
         return True
 
 

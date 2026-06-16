@@ -480,6 +480,21 @@
             registry_tag: "genie-ai-embedding:{{ image_tag }}"
             opea: true
 
+    # Observability images (built only when enable_observability != "0")
+    - name: Define observability image list
+      ansible.builtin.set_fact:
+        observability_images:
+          - name: tempo-proxy
+            dockerfile: tools/tempo-proxy/Dockerfile
+            context: tools/tempo-proxy/
+            source_tag: tempo-proxy:latest
+            registry_tag: "genieai/tempo-proxy:{{ image_tag }}"
+            opea: false
+
+    - name: Merge image lists (include observability when enabled)
+      ansible.builtin.set_fact:
+        genieai_images: "{{ genieai_images + (observability_images if enable_observability != '0' else []) }}"
+
     - name: Check if images need rebuild
       ansible.builtin.command: >
         docker image inspect --format '{{ '{{' }}.Config.Labels.git_sha{{ '}}' }}'

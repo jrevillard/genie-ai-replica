@@ -1522,7 +1522,7 @@ services:
     build:
       context: ./tools/tempo-proxy
       dockerfile: Dockerfile
-    image: genieai/tempo-proxy:${IMAGE_TAG:-latest}
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genieai/tempo-proxy:${IMAGE_TAG:-latest}
     environment:
       - VICTORIATRACES_URL=http://victoriatraces:10428
       - PORT=10429

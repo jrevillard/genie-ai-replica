@@ -407,7 +407,7 @@ Shared variables in `group_vars/all.yml`:
 |-----|-------------|
 | `install` | Docker, NVIDIA toolkit, Swarm init, registry |
 | `prepare` | Git clone, directories, SSL certs |
-| `build` | Build and push 12 images to local registry |
+| `build` | Build and push images to local registry (16 base + OPEA when enabled + observability when enabled) |
 | `deploy` | Generate .env, validate, deploy stack, verify |
 
 ```bash

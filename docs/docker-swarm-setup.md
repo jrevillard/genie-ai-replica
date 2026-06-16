@@ -223,7 +223,7 @@ docker build -f genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai -t genie-ai
 docker build -f genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai -t genie-ai-reranker:latest .
 ```
 
-This builds 14 services. Skip the OPEA builds if `DEPLOY_OPEA=0`.
+This builds 13 services (9 base + 4 OPEA). Skip the OPEA builds if `DEPLOY_OPEA=0`.
 
 ### 5b. Tag images for local registry
 

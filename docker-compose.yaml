@@ -1570,7 +1570,7 @@ services:
       - GF_AUTH_DISABLE_LOGIN_FORM=true
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/service-health.json
       - GF_INSTALL_PLUGINS=victoriametrics-logs-datasource
-      - GF_SERVER_ROOT_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}:${NGINX_HTTPS_PORT:-443}/grafana/
+      - GF_SERVER_ROOT_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/grafana/
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
       - GF_AUTH_GENERIC_OAUTH_ENABLED=true
       - GF_AUTH_GENERIC_OAUTH_NAME=Keycloak

@@ -1,4 +1,23 @@
 describe('tracing.js', () => {
+  describe('observability disabled guard', () => {
+    it('exports no-op when ENABLE_OBSERVABILITY is not "1"', () => {
+      process.env.NODE_ENV = 'development';
+      process.env.ENABLE_OBSERVABILITY = '0';
+      process.env.OTEL_EXPORTER_OTLP_ENDPOINT = 'http://otel-collector:4318';
+
+      jest.isolateModules(() => {
+        const { sdk, getTracer } = require('../tracing');
+        expect(sdk).toBeNull();
+        const tracer = getTracer();
+        const span = tracer.startSpan('test');
+        expect(() => span.end()).not.toThrow();
+      });
+
+      delete process.env.ENABLE_OBSERVABILITY;
+      delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    });
+  });
+
   describe('test environment guard', () => {
     it('exports null sdk when NODE_ENV=test', () => {
       const { sdk, getTracer } = require('../tracing');

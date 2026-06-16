@@ -8,8 +8,9 @@ import tracing
 
 
 @pytest.fixture(autouse=True)
-def _reset_tracing():
+def _reset_tracing(monkeypatch):
     """Reset tracing module state before each test."""
+    monkeypatch.setenv("ENABLE_OBSERVABILITY", "1")
     tracing._reset()
     yield
     tracing._reset()
@@ -33,6 +34,27 @@ class TestSetupTracing:
     def test_skips_setup_when_endpoint_not_set(self, monkeypatch):
         """When OTEL_EXPORTER_OTLP_ENDPOINT is not set, setup_tracing() returns early (no-op)."""
         monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+        with patch.object(tracing, "OTLPSpanExporter") as mock_exporter:
+            tracing.setup_tracing("test-service")
+            mock_exporter.assert_not_called()
+
+    def test_skips_setup_when_observability_disabled(self, monkeypatch):
+        """When ENABLE_OBSERVABILITY is not '1', setup_tracing() returns early (no-op).
+
+        This is the primary gate: even if OTEL_EXPORTER_OTLP_ENDPOINT is set,
+        the SDK must not initialize when observability is disabled because the
+        Collector container is not deployed, causing DNS resolution errors.
+        """
+        monkeypatch.setenv("ENABLE_OBSERVABILITY", "0")
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4318")
+        with patch.object(tracing, "OTLPSpanExporter") as mock_exporter:
+            tracing.setup_tracing("test-service")
+            mock_exporter.assert_not_called()
+
+    def test_skips_setup_when_observability_unset(self, monkeypatch):
+        """When ENABLE_OBSERVABILITY is not set at all, setup_tracing() returns early."""
+        monkeypatch.delenv("ENABLE_OBSERVABILITY", raising=False)
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4318")
         with patch.object(tracing, "OTLPSpanExporter") as mock_exporter:
             tracing.setup_tracing("test-service")
             mock_exporter.assert_not_called()

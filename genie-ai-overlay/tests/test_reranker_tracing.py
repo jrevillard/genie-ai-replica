@@ -29,6 +29,7 @@ class TestRerankerTracingSetup:
 
     def test_setup_tracing_with_reranker_service_name(self, monkeypatch):
         """Reranker must call setup_tracing('genieai-reranker')."""
+        monkeypatch.setenv("ENABLE_OBSERVABILITY", "1")
         monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
 
         with patch("tracing.OTLPSpanExporter"):

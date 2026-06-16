@@ -405,7 +405,7 @@ class TestAlignInputs:
             llm_params = {}
             inputs = {"text": "query", "k": 4}
             retriever_params = MagicMock()
-            retriever_params.dict.return_value = {"search_type": "hybrid", "fetch_k": 20}
+            retriever_params.model_dump.return_value = {"search_type": "hybrid", "fetch_k": 20}
             with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
                 result = align_inputs(
                     self_mock,
@@ -425,7 +425,7 @@ class TestAlignInputs:
             llm_params = {}
             inputs = {"initial_query": "test", "documents": []}
             reranker_params = MagicMock()
-            reranker_params.dict.return_value = {"top_n": 3, "threshold": 0.8}
+            reranker_params.model_dump.return_value = {"top_n": 3, "threshold": 0.8}
             with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
                 result = align_inputs(
                     self_mock,

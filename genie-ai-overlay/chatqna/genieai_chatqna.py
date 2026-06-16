@@ -616,7 +616,8 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
     elif self.services[cur_node].service_type == ServiceType.EMBEDDING:
         if logflag:
             logger.debug(
-                f"Raw output of the embedding: {type(data).__name__}, top-level keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'}"
+                f"Raw output of the embedding: {type(data).__name__}, "
+                f"keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'}"
             )
         # OPEA embedding microservice returns {"data": [{"index": 0, "embedding": [...]}]}
         if isinstance(data, dict) and "data" in data:
@@ -628,7 +629,8 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         if logflag:
             logger.debug(
-                f"Raw output of the retriever: {type(data).__name__}, top-level keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'}"
+                f"Raw output of the retriever: {type(data).__name__}, "
+                f"keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'}"
             )
         retrieved_docs = data.get("retrieved_docs", [])
         [doc["text"] for doc in retrieved_docs]
@@ -1606,9 +1608,11 @@ class ChatQnAService:
                 logger.warning(".model_dump method not supported")
                 retrieval_context = chat_request.context.dict(exclude_unset=True)
         if logflag:
-            logger.debug(
-                f"Retrieval Context: {list(retrieval_context.keys()) if isinstance(retrieval_context, dict) else type(retrieval_context).__name__}"
-            )
+            if isinstance(retrieval_context, dict):
+                ctx_desc = list(retrieval_context.keys())
+            else:
+                ctx_desc = type(retrieval_context).__name__
+            logger.debug(f"Retrieval Context: {ctx_desc}")
 
         parameters = LLMParams(
             max_tokens=chat_request.max_tokens if chat_request.max_tokens else 1024,

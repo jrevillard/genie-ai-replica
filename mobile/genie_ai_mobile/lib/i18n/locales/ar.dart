@@ -1000,6 +1000,8 @@ const Map<String, dynamic> arLocale = {
     },
   },
   "chatbot": {
+    "aiGeneratedNoDocs":
+        "مُولّد بواسطة الذكاء الاصطناعي — لا يعتمد على وثائق المكتبة",
     "placeholder": "اكتب استفسارك هنا...",
     "sendButton": "إرسال",
     "fileReceived": "تم استلام الملف بنجاح.",

@@ -1012,6 +1012,8 @@ const Map<String, dynamic> esLocale = {
   },
   "chatbot": {
     "placeholder": "Escribe tu consulta aquí...",
+    "aiGeneratedNoDocs":
+        "Generado por IA — no basado en los documentos de la biblioteca",
     "sendButton": "Enviar",
     "fileReceived": "Archivo recibido con éxito.",
     "fileUploadError": "Error al subir archivo.",

@@ -1338,6 +1338,7 @@ export default {
     }
   },
   chatbot: {
+    aiGeneratedNoDocs: 'এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'কনফিগারেশন অসমঞ্জতা: {warnings}. দয়া করে দ্রুত সাহায্য এবং জ্ঞান শ্রেণিবিন্যাস কনফিগারেশন পরীক্ষা করুন।',

@@ -21,9 +21,11 @@ class SseMetadataEvent extends SseEvent {
   final List<dynamic> sourceDocuments;
   final double confidenceScore;
   final int? responseTime;
+  final bool isGrounded;
   const SseMetadataEvent({
     required this.sourceDocuments,
     required this.confidenceScore,
+    required this.isGrounded,
     this.responseTime,
   });
 }
@@ -107,6 +109,7 @@ class SseParser {
       'metadata' => SseMetadataEvent(
         sourceDocuments: json['source_documents'] as List<dynamic>? ?? [],
         confidenceScore: (json['confidence_score'] as num?)?.toDouble() ?? 0.0,
+        isGrounded: json['is_grounded'] as bool? ?? false,
         responseTime: json['responseTime'] as int?,
       ),
       'translation' => SseTranslationEvent(json['content'] as String? ?? ''),

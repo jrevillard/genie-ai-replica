@@ -911,8 +911,6 @@ services:
     environment:
       - TEI_RERANKING_ENDPOINT=${RERANKER_SERVICE_URL:-http://tei_reranker:80}
       - RERANK_COMPONENT_NAME=GENIE_TEI_RERANKING
-      - RERANKING_STRATEGY=${RERANKING_STRATEGY:-threshold}
-      - RERANKING_THRESHOLD=${RERANKING_THRESHOLD:-0.5}
       - HF_TOKEN=${VLLM_API_KEY:-}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-0}
@@ -1120,6 +1118,11 @@ services:
       RETRIEVER_SERVICE_PORT: 7000
       RERANK_SERVER_HOST_IP: reranker
       RERANK_SERVER_PORT: 8000
+      # chatqna reads these and forwards them in the reranker request; they must live
+      # on chatqna (the orchestrator), not only on the reranker service.
+      RERANKING_STRATEGY: ${RERANKING_STRATEGY:-threshold}
+      RERANKING_THRESHOLD: ${RERANKING_THRESHOLD:-0.5}
+      RERANKER_TOP_N: ${RERANKER_TOP_N:-2}
       LLM_SERVER_HOST_IP: vllm
       LLM_SERVER_PORT: 8000
       VLLM_LLM_ENDPOINT: ${VLLM_ENDPOINT:-}

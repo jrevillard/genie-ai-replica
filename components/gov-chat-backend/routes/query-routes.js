@@ -188,6 +188,9 @@ module.exports = (queryService) => {
       const startTime = Date.now();
       let buffer = '';
       const doneState = { handled: false };
+      // Metadata emitted by chatqna in-stream (reranker-grounded source docs + is_grounded),
+      // forwarded to the client instead of running a separate backend-side retrieval.
+      let capturedMetadata = null;
 
       function cleanupKeepalive() {
         if (keepalive !== null) {
@@ -199,7 +202,7 @@ module.exports = (queryService) => {
       const doHandleStreamDone = () => {
         if (doneState.handled || res.writableEnded) return;
         doneState.handled = true;
-        handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res);
+        handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata);
       };
 
       stream.on('data', (chunk) => {
@@ -217,6 +220,14 @@ module.exports = (queryService) => {
           if (parsed.type === 'chunk') {
             fullResponseText += parsed.content;
             res.write(`data: ${JSON.stringify({ type: 'chunk', content: parsed.content })}\n\n`);
+          } else if (parsed.type === 'metadata') {
+            // chatqna already computed reranker-grounded source docs + is_grounded; capture
+            // them instead of re-running retrieval on the backend.
+            capturedMetadata = {
+              source_documents: parsed.source_documents,
+              confidence_score: parsed.confidence_score,
+              is_grounded: parsed.is_grounded
+            };
           } else if (parsed.type === 'done') {
             doHandleStreamDone();
           } else if (parsed.type === 'error') {
@@ -283,17 +294,13 @@ module.exports = (queryService) => {
     }
   });
 
-  async function handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res) {
+  async function handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata) {
     if (res.writableEnded) return;
 
     const responseTime = Date.now() - startTime;
-    let metadata = { source_documents: [], confidence_score: 0 };
-
-    try {
-      metadata = await retrieveStreamMetadata(queryData, req.headers.authorization);
-    } catch (error) {
-      logger.warn('QueryService.stream_metadata_failed', { queryId, error: error.message });
-    }
+    // Source documents + grounding come from chatqna's in-stream metadata event
+    // (reranker verdict + is_grounded), not from a backend-side retrieval.
+    const metadata = capturedMetadata || { source_documents: [], confidence_score: 0, is_grounded: false };
 
     res.write(`data: ${JSON.stringify({ type: 'metadata', ...metadata, responseTime })}\n\n`);
 
@@ -324,84 +331,6 @@ module.exports = (queryService) => {
     res.write(`data: ${JSON.stringify({ type: 'done', queryId })}\n\n`);
     res.end();
     logger.info('QueryService.stream_complete', { queryId, responseTime });
-  }
-
-  async function retrieveStreamMetadata(queryData, authHeader) {
-    // Find the last user message (frontend appends empty assistant placeholder)
-    const lastUserMessage = [...queryData.messages].reverse().find((m) => m.role === 'user');
-    const queryText = lastUserMessage ? lastUserMessage.content : '';
-
-    if (!queryText) {
-      return { source_documents: [], confidence_score: 0 };
-    }
-
-    let retrievedDocs;
-    try {
-      const retrieverUrl = 'http://retriever-arango-service:7000/v1/retrieval';
-      const retrieverResponse = await axios.post(
-        retrieverUrl,
-        {
-          input: queryText,
-          k: 4
-        },
-        {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: 10000
-        }
-      );
-
-      const result = retrieverResponse.data;
-      retrievedDocs = result.retrieved_docs || result.documents || [];
-    } catch (error) {
-      logger.warn('QueryService.retriever_call_failed', { error: error.message });
-      return { source_documents: [], confidence_score: 0 };
-    }
-
-    if (retrievedDocs.length === 0) {
-      return { source_documents: [], confidence_score: 0 };
-    }
-
-    const sourceDocuments = [];
-    const scores = [];
-    const seenFileIds = new Map(); // Deduplicate by file_id, keep highest score
-
-    for (const doc of retrievedDocs) {
-      const docMetadata = doc.metadata || {};
-      const fileIds = docMetadata.file_ids || [];
-      const currentScore = docMetadata.score || docMetadata.similarity_score || 0;
-
-      if (fileIds.length > 0) {
-        const fileId = fileIds[0];
-
-        // Dedup: skip if we already have a higher-scoring entry for this file
-        const existingScore = seenFileIds.get(fileId);
-        if (existingScore !== undefined && existingScore >= currentScore) continue;
-
-        try {
-          const fileResponse = await axios.get(`http://document-repository:3001/api/files/${fileId}`, {
-            headers: { Authorization: authHeader },
-            timeout: 5000
-          });
-          // Handle nested response {data: {file_name: ...}} and flat {file_name: ...}
-          const fileData = fileResponse.data?.data || fileResponse.data;
-          sourceDocuments.push({
-            document_id: fileId,
-            document_name: fileData.file_name || fileData.original_name || 'Unknown',
-            url: fileData.url || '',
-            categoryLabel: fileData.labels?.categoryLabel || queryData.context?.categoryLabel || 'General',
-            serviceLabels: fileData.labels?.serviceLabels || [],
-            score: currentScore
-          });
-          seenFileIds.set(fileId, currentScore);
-          scores.push(currentScore);
-        } catch (error) {
-          logger.warn('QueryService.file_metadata_fetch_failed', { fileId, error: error.message });
-        }
-      }
-    }
-
-    const confidenceScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-    return { source_documents: sourceDocuments, confidence_score: Math.round(confidenceScore * 100) / 100 };
   }
 
   /**

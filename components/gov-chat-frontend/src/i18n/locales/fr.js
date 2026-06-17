@@ -1373,6 +1373,7 @@ export default {
     }
   },
   chatbot: {
+    aiGeneratedNoDocs: 'Généré par IA — non basé sur les documents de la bibliothèque',
     placeholder: 'Tapez votre requête ici...',
     sendButton: 'Envoyer',
     fileReceived: 'Fichier reçu avec succès.',

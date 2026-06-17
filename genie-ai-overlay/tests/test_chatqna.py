@@ -1145,3 +1145,151 @@ class TestFetchFileMetadata:
         ):
             result = await svc.fetch_file_metadata("file123")
         assert result is None
+
+
+# ===========================================================================
+# Task 12: Test _assemble_source_documents() — grounding + reranker verdict
+# ===========================================================================
+class TestAssembleSourceDocuments:
+    """Source documents must reflect the reranker's verdict, not the retriever's
+    raw cosine hits. When the reranker rejects everything, the response is flagged
+    as not grounded (LLM-generated) and no documents are shown."""
+
+    @staticmethod
+    def _result_dict(rerank_verdict=None, retrieved_docs=None, file_id_pairs=None, with_reranker=True):
+        rd = {
+            "retriever_service": {
+                "retrieved_docs": retrieved_docs or [],
+                "file_id_pairs": file_id_pairs or {},
+            }
+        }
+        if with_reranker:
+            # align_outputs (RERANK branch) stores the verdict under "retrieved_docs"
+            # (with id + reranker score reconstructed), NOT under "reranked_docs".
+            rd["rerank_service"] = {"retrieved_docs": rerank_verdict or []}
+        return rd
+
+    @pytest.mark.asyncio
+    async def test_grounded_uses_reranker_verdict(self):
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["Beekeeping and Honey"], "file_name": "bee.pdf"})
+        result_dict = self._result_dict(
+            rerank_verdict=[
+                {"id": "d1", "text": "hives", "score": 0.95},
+                {"id": "d2", "text": "honey", "score": 0.85},
+            ],
+            retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
+            file_id_pairs={"d1": "f1", "d2": "f2"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        assert grounded is True
+        # confidence is returned unrounded; handle_request rounds it for the payload
+        assert round(confidence, 2) == round((0.95 + 0.85) / 2, 2)
+        assert [d["document_id"] for d in docs] == ["f1", "f2"]
+        assert [round(d["score"], 2) for d in docs] == [0.95, 0.85]
+
+    @pytest.mark.asyncio
+    async def test_not_grounded_when_reranker_rejects_all(self):
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["Fruit"], "file_name": "fruit.pdf"})
+        # Retriever found docs, but the reranker rejected them all (verdict = []).
+        result_dict = self._result_dict(
+            rerank_verdict=[],
+            retrieved_docs=[{"id": "d1", "text": "jocote", "metadata": {"score": 0.72}}],
+            file_id_pairs={"d1": "f1"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        # The irrelevant retriever hits must NOT leak into the response.
+        assert grounded is False
+        assert docs == []
+        assert confidence == 0.0
+
+    @pytest.mark.asyncio
+    async def test_reranker_verdict_filters_non_kept_docs(self):
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["X"], "file_name": "a.pdf"})
+        result_dict = self._result_dict(
+            # Reranker kept only the second doc.
+            rerank_verdict=[{"id": "d2", "text": "honey", "score": 0.92}],
+            retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
+            file_id_pairs={"d1": "f1", "d2": "f2"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        assert grounded is True
+        assert [d["document_id"] for d in docs] == ["f2"]
+        assert confidence == 0.92
+
+    @pytest.mark.asyncio
+    async def test_no_reranker_falls_back_to_retriever_docs(self):
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["X"], "file_name": "a.pdf"})
+        result_dict = self._result_dict(
+            with_reranker=False,
+            retrieved_docs=[{"id": "d1", "text": "hives", "metadata": {"score": 0.7}}],
+            file_id_pairs={"d1": "f1"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        assert grounded is True
+        assert [d["document_id"] for d in docs] == ["f1"]
+        assert confidence == 0.7
+
+
+# ===========================================================================
+# Task 13: Test _stream_with_metadata() — metadata event in token stream
+# ===========================================================================
+class TestStreamWithMetadata:
+    """The streaming response must append a `metadata` SSE event (reranker-grounded
+    source documents + is_grounded) before the terminal [DONE], so the backend can
+    forward it instead of re-running retrieval."""
+
+    @staticmethod
+    async def _drain(gen):
+        out = []
+        async for item in gen:
+            out.append(item)
+        return out
+
+    @staticmethod
+    def _make_body(chunks):
+        async def _aiter():
+            for c in chunks:
+                yield c
+
+        return _aiter()
+
+    @pytest.mark.asyncio
+    async def test_metadata_emitted_before_done(self):
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([{"document_id": "f1", "score": 0.95}], 0.95, True))
+        body = self._make_body(["data: b'Hello'\n\n", "data: b' world'\n\n", "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        joined = "".join(out)
+        # Token chunks forwarded verbatim
+        assert "data: b'Hello'\n\n" in joined
+        assert "data: b' world'\n\n" in joined
+        # Metadata event present, BEFORE [DONE]
+        meta_idx = joined.find('"type": "metadata"')
+        done_idx = joined.find("[DONE]")
+        assert meta_idx != -1 and meta_idx < done_idx
+        assert '"is_grounded": true' in joined
+        assert '"confidence_score": 0.95' in joined
+
+    @pytest.mark.asyncio
+    async def test_not_grounded_flagged_in_metadata(self):
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body(["data: b'Hi'\n\n", "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        joined = "".join(out)
+        assert '"is_grounded": false' in joined
+        assert '"source_documents": []' in joined
+
+    @pytest.mark.asyncio
+    async def test_appends_done_if_missing(self):
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body(["data: b'Hi'\n\n"])  # no [DONE]
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        joined = "".join(out)
+        assert '"type": "metadata"' in joined
+        assert joined.rstrip().endswith("data: [DONE]")

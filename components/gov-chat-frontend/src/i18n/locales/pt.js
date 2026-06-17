@@ -1373,6 +1373,7 @@ export default {
     }
   },
   chatbot: {
+    aiGeneratedNoDocs: 'Gerado por IA — não baseado nos documentos da biblioteca',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Incompatibilidade de configuração: {warnings}. Verifique a configuração de Ajuda Rápida e hierarquia de conhecimento.',

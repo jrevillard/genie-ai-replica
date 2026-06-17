@@ -1362,6 +1362,7 @@ export default {
   },
   chatbot: {
     welcomeMessage: 'Welcome! How can I assist you today?',
+    aiGeneratedNoDocs: 'Generado por IA — no basado en los documentos de la biblioteca',
     configMismatchWarning:
       'Incoherencia de configuración: {warnings}. Verifique la configuración de Ayuda Rápida y la jerarquía de conocimiento.',
     categoryNotFound: 'Categoría "{label}" no encontrada en la jerarquía de conocimiento',

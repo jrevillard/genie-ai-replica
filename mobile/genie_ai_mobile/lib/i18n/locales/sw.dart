@@ -1015,6 +1015,7 @@ const Map<String, dynamic> swLocale = {
     },
   },
   "chatbot": {
+    "aiGeneratedNoDocs": "Imezalishwa na AI — haizingatii nyaraka za maktaba",
     "placeholder": "Andika swali lako hapa...",
     "sendButton": "Tuma",
     "fileReceived": "Faili imepokelewa.",

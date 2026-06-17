@@ -1014,6 +1014,8 @@ const Map<String, dynamic> bnLocale = {
     },
   },
   "chatbot": {
+    "aiGeneratedNoDocs":
+        "এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়",
     "placeholder": "আপনার প্রশ্ন এখানে লিখুন...",
     "sendButton": "পাঠান",
     "fileReceived": "ফাইলটি সফলভাবে গৃহীত হয়েছে।",

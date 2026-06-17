@@ -50,6 +50,12 @@ RUN pip install --no-cache-dir \
 # Pin to 0.3.x series to stay compatible with langchain-core<1.0 (required by langchain-community, langchain-arangodb, etc.)
 RUN pip install --no-cache-dir --upgrade "langchain-huggingface>=0.3.1,<1.0.0"
 
+# Upgrade langchain-arangodb: OPEA v1.3 pins 0.0.4, whose similarity search ignores any
+# `filter_clause` kwarg (silently swallowed by **kwargs, no FILTER in the AQL). This makes
+# category/label filtering a no-op, so every query scans the whole collection. 1.2.0 supports
+# `filter_clause` natively and is compatible with the pinned langchain-core 0.3.x / python-arango 8.x.
+RUN pip install --no-cache-dir --upgrade "langchain-arangodb>=1.2.0,<2.0.0"
+
 # Step D: Fix docarray circular import
 # Reverting to the original, correct "rename hack".
 # 1. Rename the conflicting local file to avoid name collision.

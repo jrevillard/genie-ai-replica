@@ -1014,6 +1014,8 @@ const Map<String, dynamic> ptLocale = {
     },
   },
   "chatbot": {
+    "aiGeneratedNoDocs":
+        "Gerado por IA — não baseado nos documentos da biblioteca",
     "placeholder": "Digite sua consulta aqui...",
     "sendButton": "Enviar",
     "fileReceived": "Arquivo recebido com sucesso.",

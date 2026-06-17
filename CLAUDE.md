@@ -41,9 +41,9 @@ Automated Docker Swarm deployment via Ansible with per-environment secrets. See 
 ```bash
 cd deploy/ansible
 ansible-galaxy collection install -r requirements.yml
-cp inventory.example inventory/test.ini          # edit with host IP
-cp group_vars/test.vault.example group_vars/test.vault
-ansible-vault edit --vault-id test@prompt group_vars/test.vault  # set secrets
+cp inventory/inventory.example inventory/test.ini          # edit with host IP
+cp group_vars/itu_rtx_test/vars.yml group_vars/test/vars.yml  # base config
+ansible-vault create group_vars/test/vault.yml --vault-id test@prompt  # set secrets
 # Place SSL certs in files/certificates/test/
 ansible-playbook -i inventory/test.ini deploy.yml --vault-id test@prompt
 ```

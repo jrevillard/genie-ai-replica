@@ -6,9 +6,26 @@ Automated Docker Swarm deployment for GENIE.AI using Ansible with per-environmen
 
 - **Ansible 2.15+** / ansible-core 2.15+ (control machine)
 - **community.docker 4.x** collection
-- **SSH access** to the target node
+- **SSH access** to the target node (password or key-based)
 - **Ansible Vault password** per environment
 - **Git deploy key** on the target node (for `git clone`)
+
+#### SSH Key Setup
+
+```bash
+# Generate a deploy key (if you don't have one)
+ssh-keygen -t ed25519 -f ~/.ssh/deploy-key -N ""
+
+# Copy public key to the target host
+ssh-copy-id -i ~/.ssh/deploy-key.pub <user>@<host>
+
+# Verify connectivity
+ssh <user>@<host> "docker --version"
+```
+
+Set `ansible_ssh_private_key_file` in your inventory `[all:vars]` if using a non-default key path (see `inventory/inventory.example`).
+
+> **WSL users:** If keys are on a Windows mount (permissions 777), SSH refuses them. Copy to WSL home: `cp -r /mnt/c/Users/<you>/.ssh ~/.ssh && chmod 700 ~/.ssh && chmod 600 ~/.ssh/*`
 
 ## Quick Start
 
@@ -146,7 +163,7 @@ Set in `group_vars/<env>/vault.yml`:
 | `kc_dataprep_client_secret` | always | Dataprep service account secret (client_credentials grant) |
 | `kc_mobile_client_id` | always | Mobile app Keycloak client ID (Flutter, public client with PKCE) |
 | `kc_mobile_redirect_scheme` | always | Mobile app redirect scheme (e.g. `genieai://`) |
-| `email_password` | always | SMTP password |
+| `email_password` | user registration | SMTP password (omit if `keycloak_verify_email: false`) |
 | `hugging_face_hub_token` | GPU node | Hugging Face Hub token (model downloads) |
 | `vllm_api_key` | remote GPU | API key for GPU node nginx auth (set in `group_vars/<env>/vault.yml`) |
 | `grafana_admin_password` | observability | Grafana admin password (required when `enable_observability=1`) |
@@ -162,6 +179,8 @@ Set in `group_vars/<env>/vars.yml`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `deploy_opea` | `1` | Deploy OPEA/AI services (GPU) |
+
+> **Warning:** `deploy_opea` controls **only** whether AI/ML services (ChatQnA, Retriever, Reranker, vLLM, TEI) are included in the stack. It does **not** configure GPU placement or remote GPU endpoints — those are handled by `gpu_node_host` and inventory groups. Setting `deploy_opea: "0"` does not imply "no GPU"; it means "no AI pipeline services".
 | `enable_observability` | `0` | Deploy OTel Collector + VictoriaMetrics + VictoriaLogs + VictoriaTraces + Grafana |
 | `grafana_admin_user` | `admin` | Grafana admin username |
 | `victoriametrics_retention` | `30d` | VictoriaMetrics data retention period |
@@ -657,11 +676,10 @@ ansible-playbook -i inventory/<env>.ini deploy.yml --tags build,deploy --vault-i
 
 ### `'nginx_permissions_policy' is undefined`
 
-The `nginx_permissions_policy` variable is set in `group_vars/all.yml` but may be missing if you have a custom `vars.yml` that overrides `nginx_` variables without including this one.
+The `nginx_permissions_policy` variable has a default in `group_vars/all.yml`. This error occurs if a custom `group_vars/<env>/vars.yml` explicitly sets `nginx_*` variables but omits this one, or if `all.yml` was removed.
 
-**Fix:** Ensure `group_vars/all.yml` is loaded (do not create a `vars.yml` that shadows it), or add the variable explicitly:
+**Fix:** Add to `group_vars/<env>/vars.yml`:
 ```yaml
-# group_vars/<env>/vars.yml
 nginx_permissions_policy: "camera=(), microphone=(), geolocation=()"
 ```
 

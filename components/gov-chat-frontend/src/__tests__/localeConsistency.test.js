@@ -59,4 +59,50 @@ describe('Locale consistency', () => {
       expect(keys).toEqual(referenceKeys);
     }
   });
+
+  // Deep key-parity regression guard.
+  //
+  // The 14 locale files are NOT yet fully key-aligned (pre-existing
+  // fragmentation — see localeParity.baseline.json). Enforcing an identical
+  // deep key set would fail CI today; full alignment is tracked separately.
+  // Instead this guard FAILS ONLY WHEN fragmentation GROWS: each locale's
+  // missing/extra leaf-key counts vs `en` (source of truth) must not exceed the
+  // committed baseline. Adding a key to en.js without propagating makes
+  // `missing` grow → CI fails → forces cross-locale propagation (prevents
+  // aiGeneratedNoDocs-class gaps). When divergence is intentionally reduced,
+  // shrink the baseline numbers to lock the improvement.
+  function flattenKeys(obj, prefix = '') {
+    const keys = [];
+    for (const [k, v] of Object.entries(obj)) {
+      const p = prefix ? `${prefix}.${k}` : k;
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        keys.push(...flattenKeys(v, p));
+      } else {
+        keys.push(p);
+      }
+    }
+    return keys;
+  }
+
+  test('locale deep key-parity has not regressed beyond baseline', () => {
+    const baseline = require('./localeParity.baseline.json');
+    const reference = new Set(flattenKeys(getLocaleData('en')));
+
+    const regressions = [];
+    for (const locale of localeFiles) {
+      if (locale === 'en') continue;
+      const keys = new Set(flattenKeys(getLocaleData(locale)));
+      const missing = [...reference].filter((k) => !keys.has(k)).length;
+      const extra = [...keys].filter((k) => !reference.has(k)).length;
+      const base = baseline[locale] || { missing: 0, extra: 0 };
+      if (missing > base.missing || extra > base.extra) {
+        regressions.push(
+          `${locale}: missing ${base.missing} → ${missing}, extra ${base.extra} → ${extra}. ` +
+            'A key was likely added/removed in en.js without propagating to all locales. ' +
+            'Align the locale files, or deliberately update localeParity.baseline.json.'
+        );
+      }
+    }
+    expect(regressions).toEqual([]);
+  });
 });

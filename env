@@ -209,6 +209,13 @@ HUGGING_FACE_HUB_TOKEN=
 # They serve the same purpose but at different stages (build-time vs runtime).
 # VUE_APP_CSP_CONNECT_SRC=
 
+# Available UI locales for this deployment (comma-separated locale codes)
+# Restricts the language picker + vue-i18n loaded messages to the listed codes.
+# Default: unset (all locales under src/i18n/locales/ are active)
+# Example (El Salvador): en,es
+# Locale source files are never deleted — this only filters which are exposed.
+# VUE_APP_AVAILABLE_LOCALES=
+
 # =============================================================================
 # SECTION 6: BACKEND SERVICE CONFIGURATION
 # =============================================================================
@@ -482,6 +489,12 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 
 # Default locale for login pages (default: en)
 # KEYCLOAK_LOCALE=en
+
+# Supported locales for login/account pages — JSON array of locale codes.
+# Restricts the Keycloak language picker. Default (unset): the curated set
+# ["ar","de","en","es","fr","pt","ru","th","zh-Hans"].
+# Example (El Salvador): ["en","es"]
+# KEYCLOAK_SUPPORTED_LOCALES=
 
 # Access token lifespan in seconds (default: 300 = 5 minutes)
 # KEYCLOAK_ACCESS_TOKEN_LIFESPAN=300

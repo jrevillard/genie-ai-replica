@@ -237,6 +237,8 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `CSP_CONNECT_SRC` - Content Security Policy connect sources
 - `NGINX_PUBLIC_DOMAIN` - Public domain for Nginx
 - `VUE_APP_API_URL` - Frontend API URL
+- `VUE_APP_AVAILABLE_LOCALES` - Whitelist of active UI locales (comma-separated codes, e.g. `en,es`; unset = all locales)
+- `KEYCLOAK_SUPPORTED_LOCALES` - Keycloak login-page locales (JSON array, e.g. `["en","es"]`; unset = curated default)
 
 **API Keys:**
 - `HUGGING_FACE_HUB_TOKEN` - Required for pulling models
@@ -306,6 +308,7 @@ Disabled by default. Enable: `docker compose --profile observability up -d` or `
 - English (`nameEN`) is the source of truth for RAG compatibility
 - Translations stored in dedicated collections (`serviceCategoryTranslations`, etc.)
 - Translation keys follow pattern: `${sourceKey}_${languageCode}`
+- Locale **availability** is config-driven, not file-presence: all locale files stay in source; a deployment restricts active locales via `VUE_APP_AVAILABLE_LOCALES` (web — runtime-injected through `window.APP_CONFIG`), `KeycloakConfig.supportedLocaleCodes` per flavor (mobile), and `KEYCLOAK_SUPPORTED_LOCALES` (Keycloak login pages). Unset = all locales.
 
 ## Docker Compose Structure
 

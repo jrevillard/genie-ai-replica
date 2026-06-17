@@ -973,27 +973,16 @@ class ChatQnAService:
         # Retriever docs carry the orchestrator id + text + similarity score (metadata.score).
         retrieved_docs = retriever_node_output.get("retrieved_docs", [])
 
-        # The reranker's verdict: only docs that exceeded the relevance threshold.
+        # The reranker's verdict. NOTE: align_outputs (RERANK branch) stores the reranked
+        # docs under the "retrieved_docs" key — with id + reranker score already
+        # reconstructed — NOT under "reranked_docs" (that key is empty in the orchestrator
+        # output). Each verdict doc is {id, text, score} where score is the reranker score.
         reranker_node_output = result_dict.get(rerank_key, {}) if rerank_key else {}
-        reranked_docs = reranker_node_output.get("reranked_docs", [])
-
-        # Map text -> orchestrator doc id from the retriever output, so the reranker's
-        # verdict (text + reranker score, no id) can be resolved back to file ids.
-        retrieved_id_by_text = {}
-        for doc in retrieved_docs:
-            text = doc.get("text")
-            if text and text not in retrieved_id_by_text:
-                retrieved_id_by_text[text] = doc.get("id", "N/A")
+        rerank_verdict = reranker_node_output.get("retrieved_docs", []) if rerank_key else []
 
         # Normalize the documents to display into (id, score) tuples.
         if rerank_key:
-            display_docs = [
-                {
-                    "id": retrieved_id_by_text.get(doc.get("text"), "N/A"),
-                    "score": doc.get("score", 0.0),
-                }
-                for doc in reranked_docs
-            ]
+            display_docs = [{"id": doc.get("id", "N/A"), "score": doc.get("score", 0.0)} for doc in rerank_verdict]
         else:
             display_docs = [
                 {
@@ -1006,7 +995,7 @@ class ChatQnAService:
         logger.info(
             f"Grounding decision: is_grounded={is_grounded} "
             f"(reranker_present={bool(rerank_key)}, "
-            f"reranked_docs={len(reranked_docs)}, retriever_docs={len(retrieved_docs)})"
+            f"rerank_verdict={len(rerank_verdict)}, retriever_docs={len(retrieved_docs)})"
         )
 
         source_documents_formatted = []

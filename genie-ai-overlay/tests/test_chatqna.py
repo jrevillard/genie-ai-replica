@@ -1156,7 +1156,7 @@ class TestAssembleSourceDocuments:
     as not grounded (LLM-generated) and no documents are shown."""
 
     @staticmethod
-    def _result_dict(reranked_docs=None, retrieved_docs=None, file_id_pairs=None, with_reranker=True):
+    def _result_dict(rerank_verdict=None, retrieved_docs=None, file_id_pairs=None, with_reranker=True):
         rd = {
             "retriever_service": {
                 "retrieved_docs": retrieved_docs or [],
@@ -1164,7 +1164,9 @@ class TestAssembleSourceDocuments:
             }
         }
         if with_reranker:
-            rd["rerank_service"] = {"reranked_docs": reranked_docs or []}
+            # align_outputs (RERANK branch) stores the verdict under "retrieved_docs"
+            # (with id + reranker score reconstructed), NOT under "reranked_docs".
+            rd["rerank_service"] = {"retrieved_docs": rerank_verdict or []}
         return rd
 
     @pytest.mark.asyncio
@@ -1172,7 +1174,10 @@ class TestAssembleSourceDocuments:
         svc = create_chatqna_service()
         svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["Beekeeping and Honey"], "file_name": "bee.pdf"})
         result_dict = self._result_dict(
-            reranked_docs=[{"text": "hives", "score": 0.95}, {"text": "honey", "score": 0.85}],
+            rerank_verdict=[
+                {"id": "d1", "text": "hives", "score": 0.95},
+                {"id": "d2", "text": "honey", "score": 0.85},
+            ],
             retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
             file_id_pairs={"d1": "f1", "d2": "f2"},
         )
@@ -1189,7 +1194,7 @@ class TestAssembleSourceDocuments:
         svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["Fruit"], "file_name": "fruit.pdf"})
         # Retriever found docs, but the reranker rejected them all (verdict = []).
         result_dict = self._result_dict(
-            reranked_docs=[],
+            rerank_verdict=[],
             retrieved_docs=[{"id": "d1", "text": "jocote", "metadata": {"score": 0.72}}],
             file_id_pairs={"d1": "f1"},
         )
@@ -1205,7 +1210,7 @@ class TestAssembleSourceDocuments:
         svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["X"], "file_name": "a.pdf"})
         result_dict = self._result_dict(
             # Reranker kept only the second doc.
-            reranked_docs=[{"text": "honey", "score": 0.92}],
+            rerank_verdict=[{"id": "d2", "text": "honey", "score": 0.92}],
             retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
             file_id_pairs={"d1": "f1", "d2": "f2"},
         )

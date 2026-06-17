@@ -1015,6 +1015,7 @@ const Map<String, dynamic> stLocale = {
     },
   },
   "chatbot": {
+    "aiGeneratedNoDocs": "AI-generated — not based on library documents",
     "placeholder": "Ngola potso ea hao mona...",
     "sendButton": "Romela",
     "fileReceived": "Faele e amohetsoe ka katleho.",

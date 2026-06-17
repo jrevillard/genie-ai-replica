@@ -1368,6 +1368,7 @@ export default {
     }
   },
   chatbot: {
+    aiGeneratedNoDocs: 'Сгенерировано ИИ — не основано на документах библиотеки',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Несоответствие конфигурации: {warnings}. Проверьте конфигурацию быстрой помощи и иерархии знаний.',

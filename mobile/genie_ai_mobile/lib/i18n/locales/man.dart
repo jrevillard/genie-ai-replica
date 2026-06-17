@@ -999,6 +999,7 @@ const Map<String, dynamic> manLocale = {
     },
   },
   "chatbot": {
+    "aiGeneratedNoDocs": "AI-generated — not based on library documents",
     "placeholder": "I la nyininka safee jang...",
     "sendButton": "Kii",
     "fileReceived": "Kaito sotota a benta.",

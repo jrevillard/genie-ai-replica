@@ -908,6 +908,7 @@ const Map<String, dynamic> zhLocale = {
     },
   },
   "chatbot": {
+    "aiGeneratedNoDocs": "AI 生成 — 不基于文库文档",
     "placeholder": "在此处输入您的问题...",
     "sendButton": "发送",
     "fileReceived": "文件接收成功。",

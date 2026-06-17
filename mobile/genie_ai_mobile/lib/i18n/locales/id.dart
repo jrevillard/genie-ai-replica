@@ -1007,6 +1007,8 @@ const Map<String, dynamic> idLocale = {
     },
   },
   "chatbot": {
+    "aiGeneratedNoDocs":
+        "Dihasilkan oleh AI — tidak berdasarkan dokumen perpustakaan",
     "placeholder": "Ketik pertanyaan Anda di sini...",
     "sendButton": "Kirim",
     "fileReceived": "Berkas berhasil diterima.",

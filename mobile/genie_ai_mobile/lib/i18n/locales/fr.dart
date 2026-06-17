@@ -1019,6 +1019,8 @@ const Map<String, dynamic> frLocale = {
     },
   },
   "chatbot": {
+    "aiGeneratedNoDocs":
+        "Généré par IA — non basé sur les documents de la bibliothèque",
     "placeholder": "Tapez votre demande ici...",
     "sendButton": "Envoyer",
     "fileReceived": "Fichier reçu avec succès.",

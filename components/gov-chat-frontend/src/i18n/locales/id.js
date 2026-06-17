@@ -1358,6 +1358,7 @@ export default {
     }
   },
   chatbot: {
+    aiGeneratedNoDocs: 'Dihasilkan oleh AI — tidak berdasarkan dokumen perpustakaan',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Ketidakcocokan konfigurasi: {warnings}. Silakan periksa konfigurasi Bantuan Cepat dan hierarki pengetahuan.',

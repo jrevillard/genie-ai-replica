@@ -1009,6 +1009,8 @@ const Map<String, dynamic> ruLocale = {
     },
   },
   "chatbot": {
+    "aiGeneratedNoDocs":
+        "Сгенерировано ИИ — не основано на документах библиотеки",
     "placeholder": "Введите ваш запрос здесь...",
     "sendButton": "Отправить",
     "fileReceived": "Файл успешно получен.",

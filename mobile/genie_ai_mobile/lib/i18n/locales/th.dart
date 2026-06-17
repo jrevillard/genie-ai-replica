@@ -1000,6 +1000,7 @@ const Map<String, dynamic> thLocale = {
     },
   },
   "chatbot": {
+    "aiGeneratedNoDocs": "สร้างโดย AI — ไม่อิงจากเอกสารในคลังเอกสาร",
     "placeholder": "พิมพ์คำถามของคุณที่นี่...",
     "sendButton": "ส่ง",
     "fileReceived": "ได้รับไฟล์เรียบร้อยแล้ว",

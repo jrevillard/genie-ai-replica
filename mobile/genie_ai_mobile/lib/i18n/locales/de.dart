@@ -1021,6 +1021,8 @@ const Map<String, dynamic> deLocale = {
     },
   },
   "chatbot": {
+    "aiGeneratedNoDocs":
+        "KI-generiert — nicht auf Bibliotheksdokumenten basierend",
     "placeholder": "Gib deine Anfrage hier ein...",
     "sendButton": "Senden",
     "fileReceived": "Datei erfolgreich empfangen.",

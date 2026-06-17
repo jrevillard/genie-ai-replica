@@ -1361,6 +1361,7 @@ export default {
     }
   },
   chatbot: {
+    aiGeneratedNoDocs: 'Imezalishwa na AI — haizingatii nyaraka za maktaba',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Hitilafu ya usanidi: {warnings}. Tafadhali angalia usanidi wa Msaada wa Haraka na mpangilio wa maarifa.',

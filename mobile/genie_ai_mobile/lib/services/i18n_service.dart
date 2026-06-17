@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/i18n/locales/en.dart';
 import 'package:genie_ai_mobile/i18n/locales/ar.dart';
 import 'package:genie_ai_mobile/i18n/locales/de.dart';
@@ -32,8 +34,10 @@ class I18nService extends ChangeNotifier {
   Locale _currentLocale = const Locale('en');
   Locale get currentLocale => _currentLocale;
 
-  // Supported Languages Configuration
-  final Map<String, String> supportedLanguages = {
+  // Master set of locale codes → display names for every locale shipped in the
+  // build. The subset active for this deployment is selected per-flavor via
+  // KeycloakConfig.supportedLocaleCodes (see config/keycloak_config.dart).
+  static const Map<String, String> _masterLocaleNames = {
     'ar': 'Arabic',
     'bn': 'Bengali',
     'zh': 'Chinese',
@@ -48,6 +52,14 @@ class I18nService extends ChangeNotifier {
     'es': 'Spanish',
     'sw': 'Kiswahili',
     'th': 'Thai',
+  };
+
+  // Locales active for THIS deployment, derived from the active flavor's
+  // supportedLocaleCodes. Default flavor = all locales; the el-salvador flavor
+  // restricts to ['en', 'es'].
+  late final Map<String, String> supportedLanguages = {
+    for (final code in getConfig().supportedLocaleCodes)
+      if (_masterLocaleNames.containsKey(code)) code: _masterLocaleNames[code]!,
   };
 
   // Translation Data Store

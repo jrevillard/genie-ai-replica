@@ -142,4 +142,119 @@ void main() {
       expect(flavors.config.backendUrl, equals('https://api.itu.int'));
     });
   });
+
+  group('equality & locale whitelist', () {
+    test('allSupportedLocaleCodes lists every shipped locale', () {
+      expect(allSupportedLocaleCodes, hasLength(14));
+      expect(
+        allSupportedLocaleCodes,
+        containsAll(<String>[
+          'ar',
+          'bn',
+          'zh',
+          'en',
+          'fr',
+          'de',
+          'id',
+          'man',
+          'pt',
+          'ru',
+          'st',
+          'es',
+          'sw',
+          'th',
+        ]),
+      );
+    });
+
+    test('supportedLocaleCodes defaults to all shipped locales', () {
+      const KeycloakConfig config = KeycloakConfig(
+        keycloakUrl: 'u',
+        realm: 'r',
+        clientId: 'c',
+        redirectScheme: 's',
+        backendUrl: 'b',
+      );
+      expect(config.supportedLocaleCodes, allSupportedLocaleCodes);
+    });
+
+    test('supportedLocaleCodes can be restricted per flavor', () {
+      const KeycloakConfig restricted = KeycloakConfig(
+        keycloakUrl: 'u',
+        realm: 'r',
+        clientId: 'c',
+        redirectScheme: 's',
+        backendUrl: 'b',
+        supportedLocaleCodes: ['en', 'es'],
+      );
+      expect(restricted.supportedLocaleCodes, <String>['en', 'es']);
+    });
+
+    test('an instance equals itself', () {
+      const KeycloakConfig a = KeycloakConfig(
+        keycloakUrl: 'u',
+        realm: 'r',
+        clientId: 'c',
+        redirectScheme: 's',
+        backendUrl: 'b',
+      );
+      expect(a == a, isTrue);
+    });
+
+    test(
+      'distinct instances with identical fields are equal and share hashCode',
+      () {
+        // Non-const local prevents const canonicalization so the field-by-field
+        // equality path (incl. listEquals) is actually exercised.
+        final String url = 'https://example.com';
+        final KeycloakConfig a = KeycloakConfig(
+          keycloakUrl: url,
+          realm: 'genie',
+          clientId: 'c',
+          redirectScheme: 's',
+          backendUrl: 'b',
+        );
+        final KeycloakConfig b = KeycloakConfig(
+          keycloakUrl: url,
+          realm: 'genie',
+          clientId: 'c',
+          redirectScheme: 's',
+          backendUrl: 'b',
+        );
+        expect(identical(a, b), isFalse);
+        expect(a == b, isTrue);
+        expect(a.hashCode, equals(b.hashCode));
+      },
+    );
+
+    test('configs differing only in supportedLocaleCodes are not equal', () {
+      const KeycloakConfig def = KeycloakConfig(
+        keycloakUrl: 'u',
+        realm: 'r',
+        clientId: 'c',
+        redirectScheme: 's',
+        backendUrl: 'b',
+      );
+      const KeycloakConfig restricted = KeycloakConfig(
+        keycloakUrl: 'u',
+        realm: 'r',
+        clientId: 'c',
+        redirectScheme: 's',
+        backendUrl: 'b',
+        supportedLocaleCodes: ['en'],
+      );
+      expect(def == restricted, isFalse);
+    });
+
+    test('is not equal to an unrelated object', () {
+      const KeycloakConfig a = KeycloakConfig(
+        keycloakUrl: 'u',
+        realm: 'r',
+        clientId: 'c',
+        redirectScheme: 's',
+        backendUrl: 'b',
+      );
+      expect(a == Object(), isFalse);
+    });
+  });
 }

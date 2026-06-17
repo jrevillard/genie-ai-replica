@@ -30,6 +30,7 @@ const DASHBOARD_PATH = path.resolve(
   __dirname,
   '..',
   'dashboards',
+  'observability',
   'observability-stack-health.json'
 );
 const ENV_TEMPLATE_PATH = path.resolve(__dirname, '..', '..', '..', '..', 'env');

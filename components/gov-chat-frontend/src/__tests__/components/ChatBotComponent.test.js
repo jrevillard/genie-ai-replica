@@ -445,6 +445,55 @@ describe('ChatBotComponent', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Grounding flag: grounded vs AI-generated responses
+  // -----------------------------------------------------------------------
+  describe('Grounding flag — grounded vs AI-generated', () => {
+    it('shows the AI-generated flag when metadata reports is_grounded=false', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Apiary intro';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      capturedCallbacks.onMetadata({
+        is_grounded: false,
+        confidence_score: 0,
+        source_documents: []
+      });
+      await wrapper.vm.$nextTick();
+
+      const lastBot = vm.chatMessages[vm.chatMessages.length - 1];
+      expect(lastBot.isGrounded).toBe(false);
+      // Ungrounded responses show the warning flag, not the confidence bar.
+      expect(wrapper.find('.grounding-flag').exists()).toBe(true);
+      expect(wrapper.find('.confidence-score').exists()).toBe(false);
+    });
+
+    it('shows the confidence bar when metadata reports is_grounded=true', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Beekeeping question';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      capturedCallbacks.onMetadata({
+        is_grounded: true,
+        confidence_score: 0.92,
+        source_documents: [{ document_id: 'f1', document_name: 'bee.pdf', score: 0.92 }]
+      });
+      await wrapper.vm.$nextTick();
+
+      const lastBot = vm.chatMessages[vm.chatMessages.length - 1];
+      expect(lastBot.isGrounded).toBe(true);
+      expect(lastBot.confidenceScore).toBe(0.92);
+      expect(wrapper.find('.confidence-score').exists()).toBe(true);
+      expect(wrapper.find('.grounding-flag').exists()).toBe(false);
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // Subtask 3b: sendMessage() error recovery
   // -----------------------------------------------------------------------
   describe('Subtask 3b — sendMessage error recovery', () => {

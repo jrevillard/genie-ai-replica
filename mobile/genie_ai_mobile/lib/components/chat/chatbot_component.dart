@@ -456,6 +456,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     String accumulatedContent = '';
     List<dynamic>? sources;
     double? confidence;
+    bool? isGrounded;
 
     final String streamingId =
         'stream_${DateTime.now().millisecondsSinceEpoch}';
@@ -511,9 +512,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   case SseMetadataEvent(
                     :final sourceDocuments,
                     :final confidenceScore,
+                    isGrounded: final grounded,
                   ):
                     sources = sourceDocuments;
                     confidence = confidenceScore;
+                    isGrounded = grounded;
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
                     setState(() {
@@ -538,9 +541,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   case SseMetadataEvent(
                     :final sourceDocuments,
                     :final confidenceScore,
+                    isGrounded: final grounded,
                   ):
                     sources = sourceDocuments;
                     confidence = confidenceScore;
+                    isGrounded = grounded;
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
                   case SseErrorEvent(:final message):
@@ -557,9 +562,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   msg['queryId'] = streamQueryId;
                   msg['sources'] = sources ?? [];
                   msg['confidence'] = confidence;
+                  msg['isGrounded'] = isGrounded;
                   msg['metadata'] = {
                     'sources': sources,
                     'confidence_score': confidence,
+                    'is_grounded': isGrounded,
                   }..removeWhere((key, value) => value == null);
                 });
               }
@@ -1328,7 +1335,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    if (msg['confidence'] != null)
+                                    if (msg['isGrounded'] == false)
+                                      Text(
+                                        tr('chatbot.aiGeneratedNoDocs'),
+                                        style: TextStyle(
+                                          fontSize: tokens.textXs,
+                                          color: tokens.warning,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      )
+                                    else if (msg['confidence'] != null)
                                       Text(
                                         "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
                                         style: TextStyle(

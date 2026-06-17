@@ -384,6 +384,26 @@ describe('QueryService', () => {
       expect(result.type).toBe('chunk');
       expect(result.content).toBe('\\xc3');
     });
+
+    it('should parse chatqna metadata JSON event', () => {
+      const meta = {
+        type: 'metadata',
+        source_documents: [{ document_id: 'f1', score: 0.95 }],
+        confidence_score: 0.9,
+        is_grounded: true
+      };
+      const result = queryService.parseChatQnASSELine(JSON.stringify(meta));
+      expect(result.type).toBe('metadata');
+      expect(result.is_grounded).toBe(true);
+      expect(result.confidence_score).toBe(0.9);
+      expect(result.source_documents).toHaveLength(1);
+    });
+
+    it('should treat non-metadata JSON object as error', () => {
+      // A JSON object without type:metadata must not be mistaken for metadata.
+      const result = queryService.parseChatQnASSELine(JSON.stringify({ type: 'chunk', content: 'x' }));
+      expect(result.type).toBe('error');
+    });
   });
 
   describe('getMockOpeaResponse', () => {

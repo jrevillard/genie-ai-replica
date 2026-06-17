@@ -944,6 +944,178 @@ class ChatQnAService:
         return None
         # return []
 
+    async def _assemble_source_documents(self, result_dict: dict) -> tuple[list, float, bool]:
+        """Build the source-document list, confidence, and grounding flag from the graph output.
+
+        Source documents reflect the **reranker's verdict**, not the retriever's raw cosine
+        hits (which are always moderate-high for same-domain text and would surface
+        irrelevant references with a misleading confidence whenever the reranker found
+        nothing relevant).
+
+        Grounding (``is_grounded``):
+          - With a reranker in the pipeline: True iff at least one doc passed the relevance
+            threshold (i.e. the LLM had document backing for its answer).
+          - Without a reranker: True iff the retriever returned at least one doc.
+        When not grounded, no source documents are returned and confidence is 0.0; the
+        frontend flags the response as AI-generated rather than showing a score.
+
+        Args:
+            result_dict: The megaservice orchestrator output keyed by node name.
+
+        Returns:
+            (source_documents, confidence_score, is_grounded)
+        """
+        rerank_key = self._find_node_key("rerank", result_dict)
+        retriever_key = self._find_node_key("retriever", result_dict)
+
+        retriever_node_output = result_dict.get(retriever_key, {})
+        file_id_pairs = retriever_node_output.get("file_id_pairs", {})
+        # Retriever docs carry the orchestrator id + text + similarity score (metadata.score).
+        retrieved_docs = retriever_node_output.get("retrieved_docs", [])
+
+        # The reranker's verdict: only docs that exceeded the relevance threshold.
+        reranker_node_output = result_dict.get(rerank_key, {}) if rerank_key else {}
+        reranked_docs = reranker_node_output.get("reranked_docs", [])
+
+        # Map text -> orchestrator doc id from the retriever output, so the reranker's
+        # verdict (text + reranker score, no id) can be resolved back to file ids.
+        retrieved_id_by_text = {}
+        for doc in retrieved_docs:
+            text = doc.get("text")
+            if text and text not in retrieved_id_by_text:
+                retrieved_id_by_text[text] = doc.get("id", "N/A")
+
+        # Normalize the documents to display into (id, score) tuples.
+        if rerank_key:
+            display_docs = [
+                {
+                    "id": retrieved_id_by_text.get(doc.get("text"), "N/A"),
+                    "score": doc.get("score", 0.0),
+                }
+                for doc in reranked_docs
+            ]
+        else:
+            display_docs = [
+                {
+                    "id": doc.get("id", "N/A"),
+                    "score": (doc.get("metadata") or {}).get("score", doc.get("score", 0.0)),
+                }
+                for doc in retrieved_docs
+            ]
+        is_grounded = bool(display_docs)
+        logger.info(
+            f"Grounding decision: is_grounded={is_grounded} "
+            f"(reranker_present={bool(rerank_key)}, "
+            f"reranked_docs={len(reranked_docs)}, retriever_docs={len(retrieved_docs)})"
+        )
+
+        source_documents_formatted = []
+        scores = []
+        source_documents_file_ids = []
+
+        if logflag:
+            logger.debug(f"display docs count: {len(display_docs)}, scores: {[d.get('score') for d in display_docs]}")
+
+        for item in display_docs:
+            doc_id_by_orchestrator = item.get("id", "N/A")
+            if doc_id_by_orchestrator not in file_id_pairs:
+                logger.warning(f"Warning: Document ID {doc_id_by_orchestrator} not found in file_id_pairs mapping.")
+                continue
+
+            file_id = file_id_pairs[doc_id_by_orchestrator]
+            if not file_id:
+                logger.warning(f"Warning: No File ID mapped for Document ID {doc_id_by_orchestrator}.")
+                continue
+            if file_id in source_documents_file_ids:
+                logger.info(f"Note: Duplicate File ID {file_id} found. Skipping duplicate.")
+                scores.append(item.get("score", 0.0))
+                continue
+
+            logger.info(f"Document ID {doc_id_by_orchestrator} mapped to File ID {file_id}.")
+            source_documents_file_ids.append(file_id)
+
+            score = item.get("score", 0.0)
+            # Construct the file read URL (assuming a standard pattern)
+            file_read_url = f"{BACKEND_SERVICE_URL}/api/files/{file_id}/viewbrowser" if file_id else ""
+
+            labels = []
+            file_name = ""
+            if file_id:
+                file_metadata = await self.fetch_file_metadata(file_id)
+                if file_metadata and isinstance(file_metadata, dict):
+                    labels = file_metadata["labels"]
+                    file_name = file_metadata.get("file_name", "")
+                    logger.info(f"Labels for file ID {file_id}: {labels}")
+                    logger.info(f"File name for file ID {file_id}: {file_name}")
+                    author = file_metadata.get("author", "")
+                    if author == "crawler" and file_name.endswith(".html"):
+                        # If the author is 'crawler' and the file is an HTML, we can assume it's a web page
+                        file_read_url = file_metadata.get("source_url", file_read_url)
+                        logger.info(f"Updated file read URL for crawled HTML: {file_read_url}")
+                else:
+                    logger.warning(f"Skipping metadata for file ID {file_id} due to fetch failure.")
+                    # Assigning error values to avoid service crashing [to be optimised]
+                    labels = "error"
+                    file_id = "error"
+                    file_name = "error"
+                    file_read_url = "error"
+                    score = 0
+
+            source_documents_formatted.append(
+                {
+                    "document_id": file_id,
+                    "document_name": file_name,
+                    "url": file_read_url,
+                    "categoryLabel": labels,
+                    "serviceLabels": [],
+                    "score": score,
+                }
+            )
+            scores.append(score)
+            logger.debug(f"appending document conf score: {score} ")
+
+        # Average of the displayed (reranker) scores; 0.0 when not grounded.
+        confidence_score = sum(scores) / len(scores) if scores else 0.0
+        logger.debug(f"document confidence scores: {scores}")
+
+        return source_documents_formatted, confidence_score, is_grounded
+
+    async def _stream_with_metadata(self, body_iterator, result_dict):
+        """Forward the LLM token stream, then append a `metadata` SSE event.
+
+        The metadata event carries the reranker-grounded source documents, confidence,
+        and ``is_grounded`` flag, emitted as plain JSON **before** the terminal ``[DONE]``
+        so downstream consumers (backend → web/mobile) receive document backing for the
+        streamed answer instead of re-running retrieval themselves.
+
+        Token chunks are forwarded verbatim (they are Python-repr-encoded by the
+        orchestrator's ``align_generator``); the terminal ``[DONE]`` is suppressed and
+        re-emitted after the metadata. Metadata is computed **after** the token stream so
+        it never delays Time-To-First-Token (it does up to N ``fetch_file_metadata`` calls).
+        """
+        async for chunk in body_iterator:
+            text = chunk.decode("utf-8") if isinstance(chunk, (bytes, bytearray)) else str(chunk)
+            if text.strip() == "data: [DONE]":
+                # Suppress the terminal [DONE]; re-emit it after the metadata event.
+                continue
+            yield text
+
+        # Compute metadata after tokens so TTFT is unaffected by the doc-metadata fetches.
+        source_documents, confidence_score, is_grounded = await self._assemble_source_documents(result_dict)
+        yield (
+            "data: "
+            + json.dumps(
+                {
+                    "type": "metadata",
+                    "source_documents": source_documents,
+                    "confidence_score": round(confidence_score, 2),
+                    "is_grounded": is_grounded,
+                }
+            )
+            + "\n\n"
+        )
+        yield "data: [DONE]\n\n"
+
     def add_remote_service(self):
 
         embedding = MicroService(
@@ -1735,7 +1907,13 @@ class ChatQnAService:
 
         for _node, response in result_dict.items():
             if isinstance(response, StreamingResponse):
-                return response
+                # Wrap the token stream so the reranker-grounded metadata (source docs,
+                # confidence, is_grounded) is emitted before [DONE]. Without this the
+                # backend would re-run retrieval without the category filter / reranker.
+                return StreamingResponse(
+                    self._stream_with_metadata(response.body_iterator, result_dict),
+                    media_type="text/event-stream",
+                )
 
         llm_response = result_dict.get(self._find_node_key("llm", result_dict), {}).get(
             "text", "Sorry, I could not generate a response."
@@ -1797,97 +1975,9 @@ class ChatQnAService:
         if logflag:
             logger.debug(f"\nFinal Text Response: {final_text_response}")
 
-        rerank_key = self._find_node_key("rerank", result_dict)
-        retriever_key = self._find_node_key("retriever", result_dict)
-
-        source_node_key = rerank_key if rerank_key else retriever_key
-
-        source_node_output = result_dict.get(
-            source_node_key, {}
-        )  # reranker microservice output or retriever microservice output
-        retrieved_docs_with_scores = source_node_output.get(
-            "retrieved_docs", []
-        )  # downstream_black_list, id, text, score
-
-        retriever_node_output = result_dict.get(retriever_key, {})
-        file_id_pairs = retriever_node_output.get("file_id_pairs", {})
-
-        # Format the source documents list
-        source_documents_formatted = []
-        scores = []
-        source_documents_file_ids = []
-
-        if logflag:
-            logger.debug(
-                f"retrieved docs count: {len(retrieved_docs_with_scores)}, "
-                f"scores: {[d.get('score') for d in retrieved_docs_with_scores]}"
-            )
-
-        for item in retrieved_docs_with_scores:
-            doc_id_by_orchestrator = item.get("id", "N/A")
-            if doc_id_by_orchestrator not in file_id_pairs:
-                logger.warning(f"Warning: Document ID {doc_id_by_orchestrator} not found in file_id_pairs mapping.")
-                continue
-            else:
-                file_id = file_id_pairs[doc_id_by_orchestrator]
-                if not file_id:
-                    logger.warning(f"Warning: No File ID mapped for Document ID {doc_id_by_orchestrator}.")
-                    continue
-                else:
-                    if file_id in source_documents_file_ids:
-                        logger.info(f"Note: Duplicate File ID {file_id} found. Skipping duplicate.")
-                        score = item.get("score", 0.0)
-                        scores.append(score)
-                        continue
-                    else:
-                        logger.info(f"Document ID {doc_id_by_orchestrator} mapped to File ID {file_id}.")
-                        source_documents_file_ids.append(file_id)
-
-                        score = item.get("score", 0.0)
-                        # Construct the file read URL (assuming a standard pattern)
-                        file_read_url = f"{BACKEND_SERVICE_URL}/api/files/{file_id}/viewbrowser" if file_id else ""
-
-                        labels = []
-                        file_name = ""
-                        if file_id:
-                            file_metadata = await self.fetch_file_metadata(file_id)
-                            if file_metadata and isinstance(file_metadata, dict):
-                                labels = file_metadata["labels"]
-                                file_name = file_metadata.get("file_name", "")
-                                logger.info(f"Labels for file ID {file_id}: {labels}")
-                                logger.info(f"File name for file ID {file_id}: {file_name}")
-                                author = file_metadata.get("author", "")
-                                if author == "crawler" and file_name.endswith(".html"):
-                                    # If the author is 'crawler' and the file is an HTML, we can assume it's a web page
-                                    file_read_url = file_metadata.get("source_url", file_read_url)
-                                    logger.info(f"Updated file read URL for crawled HTML: {file_read_url}")
-                            else:
-                                logger.warning(f"Skipping metadata for file ID {file_id} due to fetch failure.")
-                                # Assigning error values to avoid service crashing [to be optimised]
-                                labels = "error"
-                                file_id = "error"
-                                file_name = "error"
-                                file_read_url = "error"
-                                score = 0
-
-                        source_documents_formatted.append(
-                            {
-                                "document_id": file_id,
-                                "document_name": file_name,
-                                "url": file_read_url,
-                                "categoryLabel": labels,
-                                "serviceLabels": [],
-                                "score": score,
-                            }
-                        )
-
-                        scores.append(score)
-
-            logger.debug(f"appending document conf score: {score} ")
-
-        # Calculate overall confidence score (e.g., average of top documents)
-        confidence_score = sum(scores) / len(scores) if scores else 0.0
-        logger.debug(f"document confidence scores: {scores}")
+        # Assemble source documents + confidence + grounding flag. Reflects the reranker's
+        # verdict; not grounded (is_grounded=False) when the reranker found nothing relevant.
+        source_documents_formatted, confidence_score, is_grounded = await self._assemble_source_documents(result_dict)
 
         # Construct the final JSON payload
         final_response_payload = {
@@ -1895,6 +1985,10 @@ class ChatQnAService:
             "metadata": {
                 "source_documents": source_documents_formatted,
                 "confidence_score": round(confidence_score, 2),
+                # Whether the answer is backed by retrieved document chunks (true) or
+                # generated from the LLM's parametric knowledge (false). Frontend uses
+                # this to flag responses that have no document basis.
+                "is_grounded": is_grounded,
             },
         }
 

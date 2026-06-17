@@ -1351,6 +1351,7 @@ export default {
   },
   chatbot: {
     welcomeMessage: 'Welcome! How can I assist you today?',
+    aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     configMismatchWarning:
       'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',
     categoryNotFound: 'Category "{label}" not found in knowledge hierarchy',

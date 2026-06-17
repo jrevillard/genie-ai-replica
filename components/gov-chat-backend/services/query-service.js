@@ -221,6 +221,23 @@ class QueryService {
     if (trimmed === '[DONE]') {
       return { type: 'done' };
     }
+    // chatqna metadata event: a raw JSON object (NOT a Python-repr token chunk).
+    // Carries the reranker-grounded source documents, confidence, and is_grounded flag.
+    if (trimmed.startsWith('{')) {
+      try {
+        const obj = JSON.parse(trimmed);
+        if (obj && obj.type === 'metadata') {
+          return {
+            type: 'metadata',
+            source_documents: obj.source_documents ?? [],
+            confidence_score: obj.confidence_score ?? 0,
+            is_grounded: obj.is_grounded ?? false
+          };
+        }
+      } catch {
+        // Not valid JSON — fall through to token-chunk handling.
+      }
+    }
     // Match Python repr: b'...' or b"..."
     const match = trimmed.match(/^b(['"])(.*)\1$/s);
     if (match) {

@@ -1011,6 +1011,7 @@ const Map<String, dynamic> enLocale = {
   },
   "chatbot": {
     "placeholder": "Type your query here...",
+    "aiGeneratedNoDocs": "AI-generated — not based on library documents",
     "sendButton": "Send",
     "fileReceived": "File received successfully.",
     "fileUploadError": "Error uploading file.",

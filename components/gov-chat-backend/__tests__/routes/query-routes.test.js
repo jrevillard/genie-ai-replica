@@ -525,30 +525,6 @@ describe('GET /:queryId', () => {
   });
 
   describe('SSE metadata retrieval', () => {
-    it('should default to empty metadata when retriever call fails', async () => {
-      const mockStream = setupSSEStream();
-      axios.post.mockResolvedValueOnce({ data: mockStream }).mockRejectedValueOnce(new Error('Retriever unavailable'));
-
-      const responsePromise = authPost('/api/queries/stream', {
-        sessionId: 's1',
-        messages: [{ role: 'user', content: 'hello' }]
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
-      mockStream.push(null);
-
-      const response = await responsePromise;
-      expect(response.status).toBe(200);
-      expect(response.text).toMatch(/"type":"metadata"/);
-      expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
-        'q1',
-        '',
-        expect.any(Number),
-        expect.objectContaining({ source_documents: [], confidence_score: 0 })
-      );
-    });
-
     // Helper: parse SSE text into structured events
     function parseSSEEvents(text) {
       return text
@@ -557,139 +533,77 @@ describe('GET /:queryId', () => {
         .map((line) => JSON.parse(line.slice(6)));
     }
 
-    // Helper: set up mocks for a full metadata retrieval flow
-    function setupMetadataMocks(retrieverDocs, fileResponses) {
-      queryService.initStreamQuery.mockResolvedValue({
-        queryId: 'q1',
-        opeaUrl: 'http://chatqna:8888/v1/chatqna',
-        opeaPayload: { messages: [] }
-      });
-      queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
-      queryService.finalizeStreamQuery.mockResolvedValue(undefined);
-
-      const mockStream = new Readable({ read() {} });
-
-      // Chain: ChatQnA SSE → retriever → document-repository calls
-      axios.post
-        .mockResolvedValueOnce({ data: mockStream }) // ChatQnA stream
-        .mockResolvedValueOnce({ data: { retrieved_docs: retrieverDocs } }); // retriever
-
-      // Mock axios.get for document-repository calls
-      axios.get = jest.fn().mockImplementation(async (url) => {
-        const fileId = url.split('/').pop();
-        const resp = fileResponses[fileId];
-        if (resp) return { data: resp };
-        throw new Error(`Unexpected file request: ${fileId}`);
-      });
-
-      return mockStream;
-    }
-
-    it('should return source documents with real scores from retriever', async () => {
-      const mockStream = setupMetadataMocks(
-        [
-          { text: 'chunk1', metadata: { file_ids: ['file-123'], score: 0.85 } },
-          { text: 'chunk2', metadata: { file_ids: ['file-456'], score: 0.72 } }
-        ],
-        {
-          'file-123': { success: true, data: { file_name: 'doc.pdf' } },
-          'file-456': { success: true, data: { file_name: 'doc2.pdf' } }
-        }
-      );
-
+    it('should forward chatqna metadata event with source documents + is_grounded', async () => {
+      // chatqna now emits the reranker-grounded metadata in-stream; the backend forwards
+      // it verbatim instead of running its own retrieval.
+      const mockStream = setupSSEStream();
       const responsePromise = authPost('/api/queries/stream', {
         sessionId: 's1',
-        messages: [{ role: 'user', content: 'test query' }]
+        messages: [{ role: 'user', content: 'hello' }]
       });
 
       await new Promise((resolve) => setTimeout(resolve, 50));
-      mockStream.push('data: {"type":"chunk","content":"response"}\n\n');
+      mockStream.push('data: {"type":"chunk","content":"answer"}\n\n');
+      mockStream.push(
+        'data: {"type":"metadata","source_documents":[{"document_id":"f1","document_name":"bee.pdf","score":0.95}],"confidence_score":0.95,"is_grounded":true}\n\n'
+      );
       mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
       mockStream.push(null);
 
       const response = await responsePromise;
       const metadata = parseSSEEvents(response.text).find((e) => e.type === 'metadata');
-
       expect(metadata).toBeDefined();
-      expect(metadata.source_documents).toHaveLength(2);
-      expect(metadata.source_documents[0].document_name).toBe('doc.pdf');
-      expect(metadata.source_documents[0].score).toBe(0.85);
-      expect(metadata.confidence_score).toBeCloseTo(0.785, 1);
-    });
-
-    it('should deduplicate by file_id keeping highest score', async () => {
-      const mockStream = setupMetadataMocks(
-        [
-          { text: 'chunk1', metadata: { file_ids: ['file-123'], score: 0.9 } },
-          { text: 'chunk2', metadata: { file_ids: ['file-123'], score: 0.7 } },
-          { text: 'chunk3', metadata: { file_ids: ['file-456'], score: 0.8 } }
-        ],
-        {
-          'file-123': { success: true, data: { file_name: 'doc.pdf' } },
-          'file-456': { success: true, data: { file_name: 'doc2.pdf' } }
-        }
-      );
-
-      const responsePromise = authPost('/api/queries/stream', {
-        sessionId: 's1',
-        messages: [{ role: 'user', content: 'test' }]
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
-      mockStream.push(null);
-
-      const response = await responsePromise;
-      const metadata = parseSSEEvents(response.text).find((e) => e.type === 'metadata');
-
-      expect(metadata.source_documents).toHaveLength(2);
-      expect(metadata.source_documents[0].score).toBe(0.9);
-      expect(metadata.source_documents[1].score).toBe(0.8);
-    });
-
-    it('should extract last user message when empty assistant placeholder is appended', async () => {
-      const mockStream = setupMetadataMocks([{ text: 'chunk1', metadata: { file_ids: ['file-123'], score: 0.6 } }], {
-        'file-123': { success: true, data: { file_name: 'result.pdf' } }
-      });
-
-      const responsePromise = authPost('/api/queries/stream', {
-        sessionId: 's1',
-        messages: [
-          { role: 'assistant', content: 'Previous response' },
-          { role: 'user', content: 'actual user query' },
-          { role: 'assistant', content: '' }
-        ]
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
-      mockStream.push(null);
-
-      const response = await responsePromise;
-      const metadata = parseSSEEvents(response.text).find((e) => e.type === 'metadata');
-
       expect(metadata.source_documents).toHaveLength(1);
-      expect(metadata.source_documents[0].document_name).toBe('result.pdf');
+      expect(metadata.source_documents[0].document_name).toBe('bee.pdf');
+      expect(metadata.is_grounded).toBe(true);
+      expect(metadata.confidence_score).toBe(0.95);
+      expect(metadata.responseTime).toEqual(expect.any(Number));
+
+      // The backend must persist the chatqna-provided metadata (no re-fetch).
+      expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+        'q1',
+        'answer',
+        expect.any(Number),
+        expect.objectContaining({ source_documents: expect.any(Array), is_grounded: true })
+      );
     });
 
-    it('should read file_name from nested document-repository response', async () => {
-      const mockStream = setupMetadataMocks([{ text: 'chunk1', metadata: { file_ids: ['file-789'], score: 0.55 } }], {
-        'file-789': { success: true, data: { file_name: 'nested-doc.pdf' } }
-      });
-
+    it('should forward not-grounded metadata (LLM-generated response)', async () => {
+      const mockStream = setupSSEStream();
       const responsePromise = authPost('/api/queries/stream', {
         sessionId: 's1',
-        messages: [{ role: 'user', content: 'test' }]
+        messages: [{ role: 'user', content: 'hello' }]
       });
 
       await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"chunk","content":"guessed answer"}\n\n');
+      mockStream.push('data: {"type":"metadata","source_documents":[],"confidence_score":0,"is_grounded":false}\n\n');
       mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
       mockStream.push(null);
 
       const response = await responsePromise;
       const metadata = parseSSEEvents(response.text).find((e) => e.type === 'metadata');
+      expect(metadata.is_grounded).toBe(false);
+      expect(metadata.source_documents).toEqual([]);
+    });
 
-      expect(metadata.source_documents[0].document_name).toBe('nested-doc.pdf');
+    it('should default to empty ungrounded metadata when chatqna sends no metadata event', async () => {
+      const mockStream = setupSSEStream();
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'hello' }]
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      mockStream.push('data: {"type":"chunk","content":"answer"}\n\n');
+      mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+      mockStream.push(null);
+
+      const response = await responsePromise;
+      const metadata = parseSSEEvents(response.text).find((e) => e.type === 'metadata');
+      expect(metadata).toBeDefined();
+      expect(metadata.source_documents).toEqual([]);
+      expect(metadata.is_grounded).toBe(false);
     });
   });
 

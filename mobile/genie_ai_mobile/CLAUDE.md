@@ -95,11 +95,20 @@ lib/design_system/
 | `tokens.fg` | Config or default | Near white |
 | `tokens.surface` | White | Brand-tinted (22% L) |
 | `tokens.muted` | Medium gray | Brand-tinted (58% L) |
+| `tokens.mutedSoft` | Light gray | Brand-tinted |
 | `tokens.border` | Light gray | Brand-tinted (30% L) |
+| `tokens.borderLight` | Very light gray | Brand-tinted (light) |
 | `tokens.accent` | Brand color | Lightened brand |
+| `tokens.accentHover` | Darkened brand | Lightened brand |
+| `tokens.accentMuted` | Tinted brand (muted) | Tinted brand |
 | `tokens.accentFg` | White | Dark brand |
-| `tokens.danger` | Red | Red |
+| `tokens.accentSecondary` | Secondary tint | Secondary tint |
+| `tokens.navbarBg` | Config or default | Brand-tinted |
+| `tokens.navbarFg` | Config or default | Near white |
 | `tokens.success` | Green | Green |
+| `tokens.warning` | Amber/orange | Amber/orange |
+| `tokens.danger` | Red | Red |
+| `tokens.info` | Blue | Blue |
 
 ## Prerequisites
 

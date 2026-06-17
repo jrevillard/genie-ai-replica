@@ -57,6 +57,7 @@ repo_branch: main
 nginx_public_domain: "localhost"
 nginx_http_port: "80"
 nginx_https_port: "443"
+nginx_permissions_policy: "camera=(), microphone=(), geolocation=()"
 
 # Kong trusted IPs for X-Forwarded-* header passthrough.
 # Kong must trust nginx (on the Docker network) to pass through X-Forwarded-Proto,

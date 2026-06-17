@@ -72,7 +72,7 @@ class WeatherService {
     try {
       logger.debug('WeatherService.fetching_city_name', { latitude, longitude });
       const response = await axios.get(`https://nominatim.openstreetmap.org/reverse`, {
-        timeout: 5000,
+        timeout: 10000,
         params: {
           format: 'json',
           lat: latitude,
@@ -146,7 +146,7 @@ class WeatherService {
 
       // Fetch weather data
       logger.debug('WeatherService.fetching_weather');
-      const response = await axios.get(weatherUrl, { timeout: 5000 });
+      const response = await axios.get(weatherUrl, { timeout: 10000 });
       logger.debug('WeatherService.weather_response', {
         status: response.status,
         data: response.data

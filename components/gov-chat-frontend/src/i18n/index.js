@@ -23,4 +23,7 @@ const i18n = createI18n({
   messages
 });
 
+// Locales dynamically built from files in ./locales/
+export const availableLocales = Object.keys(messages);
+
 export default i18n;

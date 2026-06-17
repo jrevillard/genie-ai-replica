@@ -11,16 +11,4 @@ providers:
     allowUiUpdates: true
     options:
       path: /etc/grafana/provisioning/dashboards
-      foldersFromFilesStructure: false
-
-  - name: Observability
-    orgId: 1
-    folder: Observability
-    type: file
-    disableDeletion: false
-    editable: true
-    updateIntervalSeconds: 30
-    allowUiUpdates: true
-    options:
-      path: /etc/grafana/provisioning/dashboards/observability
-      foldersFromFilesStructure: false
+      foldersFromFilesStructure: true

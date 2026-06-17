@@ -48,7 +48,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "${datasource}"
           },
-          "expr": "container_name:~\"$service\" _msg:~\"$level\" $filter _msg:~\"trace_id=\\\"${trace_id:raw}\\\"\"",
+          "expr": "container_name:~\"$service\" _msg:~\"$level\" $filter",
           "refId": "A"
         }
       ],
@@ -104,7 +104,7 @@
           "query": "*"
         },
         "refresh": 2,
-        "regex": "/.+_(.+)\\.\\d+\\.",
+        "regex": "/.+_(.+)\\.\\d+\\./",
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"

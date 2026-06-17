@@ -30,6 +30,8 @@ keycloak_ssl_skip_verify: "1"
 
 # KEYCLOAK THEME
 keycloak_theme: genie-el-salvador
+# Supported locales for Keycloak login/account pages (JSON array; envsubst into the realm)
+keycloak_supported_locales: '["en","es"]'
 
 # MOBILE OIDC CLIENT
 kc_mobile_client_id: genie-mobile-el-salvador
@@ -45,6 +47,8 @@ nginx_public_domain: "10.0.0.102"
 # =============================================================================
 vue_app_api_url: "https://10.0.0.102/api"
 vue_app_csp_connect_src: "'self' https://10.0.0.102 https://10.0.0.110 https://api.worldbank.org http://localhost:8010 https://localhost:8010 http://localhost:8090 https://localhost:8090 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
+# Available UI locales — El Salvador serves English + Spanish only (all 14 source locale files stay in the repo)
+vue_app_available_locales: "en,es"
 
 # =============================================================================
 # BACKEND

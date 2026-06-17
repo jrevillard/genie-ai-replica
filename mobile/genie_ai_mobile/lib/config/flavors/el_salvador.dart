@@ -10,4 +10,6 @@ const config = KeycloakConfig(
   clientId: 'genie-mobile-el-salvador',
   redirectScheme: 'sv.gov.agrogenio',
   backendUrl: 'https://ai.assembly.govstack.global/api',
+  // El Salvador serves English + Spanish only (all 14 locale files stay in source).
+  supportedLocaleCodes: ['en', 'es'],
 );

@@ -27,8 +27,12 @@ void main() {
       });
 
       test('supported languages has expected count', () {
-        // El Salvador deployment: English and Spanish only
-        expect(service.supportedLanguages.length, 2);
+        // Default (dev) flavor exposes every shipped locale; the el-salvador
+        // flavor restricts to ['en','es'] at runtime (see locale whitelist group).
+        expect(
+          service.supportedLanguages.length,
+          allSupportedLocaleCodes.length,
+        );
       });
 
       test('supported languages contains en and es', () {
@@ -64,15 +68,6 @@ void main() {
       test('ignores unsupported language code', () {
         service.changeLanguage('xx');
         // Should remain English
-        expect(service.currentLocale.languageCode, 'en');
-      });
-
-      test('ignores removed locale codes', () {
-        // These locales were removed during El Salvador culling
-        service.changeLanguage('fr');
-        expect(service.currentLocale.languageCode, 'en');
-
-        service.changeLanguage('ar');
         expect(service.currentLocale.languageCode, 'en');
       });
     });
@@ -142,8 +137,8 @@ void main() {
       });
 
       test('unsupported RTL codes return false', () {
-        // Arabic was removed during locale culling
-        service.changeLanguage('ar');
+        // Hebrew is RTL but not a shipped locale -> ignored, falls back to en
+        service.changeLanguage('he');
         // Falls back to en, which is not RTL
         expect(service.isRtl, isFalse);
       });

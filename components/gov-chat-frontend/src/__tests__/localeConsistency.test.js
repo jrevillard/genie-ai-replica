@@ -34,29 +34,26 @@ describe('Locale consistency', () => {
   test('all locale files share the same top-level keys', () => {
     if (localeFiles.length < 2) return;
 
-    const referenceLocale = localeFiles[0];
-    const referenceKeys = Object.keys(getLocaleData(referenceLocale)).sort();
+    // Source of truth is `en`. Every locale's top-level keys must be a subset
+    // of en's: no locale may introduce a top-level namespace en lacks. Locales
+    // may legitimately LACK keys en has (e.g. en/es-only agriculture namespaces
+    // on a deployment fork) — that asymmetry is tracked by the deep key-parity
+    // regression guard below.
+    const referenceKeys = Object.keys(getLocaleData('en')).sort();
 
-    for (const locale of localeFiles.slice(1)) {
+    for (const locale of localeFiles) {
+      if (locale === 'en') continue;
       const keys = Object.keys(getLocaleData(locale)).sort();
-      const missing = referenceKeys.filter((k) => !keys.includes(k));
       const extra = keys.filter((k) => !referenceKeys.includes(k));
 
-      if (missing.length > 0 || extra.length > 0) {
-        // Provide details in the thrown error since this Jest version
-        // doesn't support expect(message, value) syntax
-        const details = [
-          `Locale "${locale}" differs from "${referenceLocale}":`,
-          missing.length > 0 ? `  Missing keys: ${missing.join(', ')}` : null,
-          extra.length > 0 ? `  Extra keys: ${extra.join(', ')}` : null
-        ]
-          .filter(Boolean)
-          .join('\n');
-
-        throw new Error(details);
+      if (extra.length > 0) {
+        throw new Error(
+          `Locale "${locale}" has top-level keys absent from "en": ${extra.join(', ')}. ` +
+            'Every locale namespace must exist in the source-of-truth (en).'
+        );
       }
 
-      expect(keys).toEqual(referenceKeys);
+      expect(extra).toEqual([]);
     }
   });
 

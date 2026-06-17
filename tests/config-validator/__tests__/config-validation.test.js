@@ -87,6 +87,19 @@ describe('Configuration Validation Suite', () => {
       expect(noDefault).toBeDefined();
       expect(noDefault.default).toBeNull();
     });
+
+    test('locale whitelist vars are extracted from compose with correct defaults', () => {
+      const vueVar = composeVars.find((v) => v.name === 'VUE_APP_AVAILABLE_LOCALES');
+      expect(vueVar).toBeDefined();
+      expect(vueVar.hasDefault).toBe(true);
+      expect(vueVar.default).toBe(''); // unset = all locales active
+
+      const kcVar = composeVars.find((v) => v.name === 'KEYCLOAK_SUPPORTED_LOCALES');
+      expect(kcVar).toBeDefined();
+      expect(kcVar.hasDefault).toBe(true);
+      // Default curated set as a JSON array string (envsubst into the realm YAML).
+      expect(kcVar.default).toBe('["ar","de","en","es","fr","pt","ru","th","zh-Hans"]');
+    });
   });
 
   // --- AC #3: Required secrets have no undefined defaults ---

@@ -330,6 +330,7 @@ services:
       - VUE_APP_API_URL=${VUE_APP_API_URL:-/api}
       - VUE_PROXY_HOST=${VUE_PROXY_HOST:-localhost}
       - VUE_APP_CSP_CONNECT_SRC=${VUE_APP_CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
+      - VUE_APP_AVAILABLE_LOCALES=${VUE_APP_AVAILABLE_LOCALES:-}
     # Port 8090 is internal only - outer nginx on 80/443 is the public entry point
     # ports:
     #   - "${FRONTEND_PORT:-8090}:8090"
@@ -1341,6 +1342,7 @@ services:
       - KEYCLOAK_THEME=${KEYCLOAK_THEME:-genie}
       - KEYCLOAK_I18N_ENABLED=${KEYCLOAK_I18N_ENABLED:-true}
       - KEYCLOAK_LOCALE=${KEYCLOAK_LOCALE:-en}
+      - KEYCLOAK_SUPPORTED_LOCALES=${KEYCLOAK_SUPPORTED_LOCALES:-["ar","de","en","es","fr","pt","ru","th","zh-Hans"]}
       - KEYCLOAK_ACCESS_TOKEN_LIFESPAN=${KEYCLOAK_ACCESS_TOKEN_LIFESPAN:-300}
       # SMTP (reuses EMAIL_* — required because realm smtpServer overrides server-level KC_SMTP_*)
       - EMAIL_HOST=${EMAIL_HOST:-}

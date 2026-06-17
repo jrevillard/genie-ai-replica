@@ -28,13 +28,17 @@ void main() {
       localeFiles.sort();
       final sortedSupported = supportedLanguageCodes.toList()..sort();
 
+      // The active locale whitelist (per flavor) must be a SUBSET of the locale
+      // files on disk: all source locales stay in the repo, a deployment only
+      // restricts which are active. The default flavor exposes every shipped
+      // file (equality); restricted flavors (e.g. el-salvador en/es) expose fewer.
       expect(
-        sortedSupported,
-        equals(localeFiles),
+        localeFiles.toSet().containsAll(sortedSupported),
+        isTrue,
         reason:
-            'I18nService.supportedLanguages ($sortedSupported) must match '
-            'locale files on disk ($localeFiles). If you add a locale file, '
-            'add it to supportedLanguages and vice versa.',
+            'I18nService.supportedLanguages ($sortedSupported) contains a code '
+            'with no matching locale file on disk ($localeFiles). Every active '
+            'locale must have a source file.',
       );
     });
 

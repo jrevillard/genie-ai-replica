@@ -1565,7 +1565,7 @@ import DsTabs from './ds/Tabs.vue';
 import DsSelect from './ds/Select.vue';
 import { Loader2 } from 'lucide-vue-next';
 import { eventBus } from '../eventBus.js';
-import { availableLanguages } from '../config/languageConfig.js';
+import { getAvailableLanguages } from '../config/languageConfig.js';
 import oidcConfig from '../config/oidcConfig.js';
 import documentFileService from '../services/documentFileService.js';
 import { formatFileSize } from '../utils/fileUtils.js';
@@ -1608,8 +1608,8 @@ export default {
       // State for loading translations
       isTranslationsLoading: false,
 
-      // Configuration for language dropdowns in translations tables
-      availableLanguages: availableLanguages,
+      // Configuration for language dropdowns in translations tables (deployment-scoped)
+      availableLanguages: getAvailableLanguages(),
 
       // Current locale for translations
       currentLocale: this.getCurrentLanguage(),

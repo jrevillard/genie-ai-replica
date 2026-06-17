@@ -168,6 +168,16 @@ git fetch upstream
 git rebase upstream/main
 ```
 
+## Localization
+
+All 14 locale source files (`lib/i18n/locales/*.dart`) stay in the repo. The set
+of **active** locales for a deployment is driven per-flavor by
+`KeycloakConfig.supportedLocaleCodes` (`lib/config/keycloak_config.dart`); the
+default is every shipped locale (`allSupportedLocaleCodes`).
+`I18nService.supportedLanguages` derives from the active flavor's codes —
+`main.dart`'s `supportedLocales` is unchanged. A restricted deployment (e.g.
+El Salvador `['en','es']`) exposes a locale subset without deleting files.
+
 ## Build & Run
 
 ```bash

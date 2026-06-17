@@ -129,12 +129,16 @@ jest.mock('../../config/oidcConfig', () => ({
   }
 }));
 
-jest.mock('../../config/languageConfig', () => ({
-  availableLanguages: [
+jest.mock('../../config/languageConfig', () => {
+  const availableLanguages = [
     { code: 'en', name: 'English' },
     { code: 'fr', name: 'French' }
-  ]
-}));
+  ];
+  return {
+    availableLanguages,
+    getAvailableLanguages: () => availableLanguages
+  };
+});
 
 jest.mock('../../utils/fileUtils', () => ({
   formatFileSize: jest.fn((size) => size + ' B')

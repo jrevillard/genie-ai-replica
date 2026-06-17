@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 
 void main() {
@@ -160,6 +161,29 @@ void main() {
         final a = I18nService();
         final b = I18nService();
         expect(identical(a, b), isTrue);
+      });
+    });
+
+    group('per-deployment locale whitelist', () {
+      test('default flavor exposes every shipped locale', () {
+        expect(getConfig().supportedLocaleCodes, allSupportedLocaleCodes);
+        final I18nService service = I18nService();
+        expect(
+          service.supportedLanguages.length,
+          allSupportedLocaleCodes.length,
+        );
+      });
+
+      test('a flavor can restrict to a subset (e.g. el-salvador en/es)', () {
+        const KeycloakConfig restricted = KeycloakConfig(
+          keycloakUrl: 'https://example.com',
+          realm: 'genie',
+          clientId: 'genie-app',
+          redirectScheme: 'sv.gov.agrogenio',
+          backendUrl: 'https://example.com/api',
+          supportedLocaleCodes: ['en', 'es'],
+        );
+        expect(restricted.supportedLocaleCodes, ['en', 'es']);
       });
     });
   });

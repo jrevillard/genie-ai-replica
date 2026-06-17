@@ -1,8 +1,29 @@
+import 'package:flutter/foundation.dart';
+
 import 'dev_config.dart';
 import 'staging_config.dart';
 import 'e2e_config.dart';
 import 'flavors/itu.dart' as flavors;
 import 'flavors/el_salvador.dart' as el_salvador;
+
+/// The full set of locale codes shipped in every build. A deployment flavor
+/// exposes a subset via [KeycloakConfig.supportedLocaleCodes].
+const List<String> allSupportedLocaleCodes = <String>[
+  'ar',
+  'bn',
+  'zh',
+  'en',
+  'fr',
+  'de',
+  'id',
+  'man',
+  'pt',
+  'ru',
+  'st',
+  'es',
+  'sw',
+  'th',
+];
 
 class KeycloakConfig {
   final String keycloakUrl;
@@ -12,6 +33,10 @@ class KeycloakConfig {
   final String backendUrl;
   final bool allowInsecureConnections;
 
+  /// Locale codes active for this deployment's flavor. Defaults to all shipped
+  /// locales; a flavor may restrict this (e.g. el-salvador → ['en', 'es']).
+  final List<String> supportedLocaleCodes;
+
   const KeycloakConfig({
     required this.keycloakUrl,
     required this.realm,
@@ -19,6 +44,7 @@ class KeycloakConfig {
     required this.redirectScheme,
     required this.backendUrl,
     this.allowInsecureConnections = false,
+    this.supportedLocaleCodes = allSupportedLocaleCodes,
   });
 
   String get realmUrl => '$keycloakUrl/realms/$realm';
@@ -33,7 +59,8 @@ class KeycloakConfig {
           clientId == other.clientId &&
           redirectScheme == other.redirectScheme &&
           backendUrl == other.backendUrl &&
-          allowInsecureConnections == other.allowInsecureConnections;
+          allowInsecureConnections == other.allowInsecureConnections &&
+          listEquals(supportedLocaleCodes, other.supportedLocaleCodes);
 
   @override
   int get hashCode => Object.hash(
@@ -43,6 +70,7 @@ class KeycloakConfig {
     redirectScheme,
     backendUrl,
     allowInsecureConnections,
+    Object.hashAll(supportedLocaleCodes),
   );
 }
 

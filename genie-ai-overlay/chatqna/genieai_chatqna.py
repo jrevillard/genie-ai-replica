@@ -1024,8 +1024,11 @@ class ChatQnAService:
             source_documents_file_ids.append(file_id)
 
             score = item.get("score", 0.0)
-            # Construct the file read URL (assuming a standard pattern)
-            file_read_url = f"{BACKEND_SERVICE_URL}/api/files/{file_id}/viewbrowser" if file_id else ""
+            # Clients (web + mobile) build the view URL from their own public base + file_id.
+            # Emitting the internal BACKEND_SERVICE_URL here would give the browser an
+            # unreachable hostname (DNS_PROBE_FINISHED_NXDOMAIN), so leave it empty for
+            # normal files. Crawled HTML pages carry a real external source_url (set below).
+            file_read_url = ""
 
             labels = []
             file_name = ""

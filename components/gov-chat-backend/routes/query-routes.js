@@ -235,10 +235,10 @@ module.exports = (queryService) => {
             contextWindow.push({ source: unit, target: translated });
             if (contextWindow.length > CONTEXT_WINDOW_SIZE) contextWindow.shift();
           } catch (error) {
-            logger.warn('QueryService.stream_translation_unit_failed', {
-              queryId,
-              error: error.message
-            });
+            logger.warn(
+              `QueryService.stream_translation_unit_failed: ${error.message} (lang=${targetLanguage}, unitLen=${unit.length}, unitPreview=${unit.slice(0, 80)})`,
+              { queryId }
+            );
             // Fallback: emit the original EN unit so the user is not left waiting.
             if (!res.writableEnded) {
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: unit })}\n\n`);

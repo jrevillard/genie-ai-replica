@@ -112,4 +112,45 @@ describe('GpuTranslateBackend streaming', () => {
       spy.mockRestore();
     });
   });
+
+  describe('pre-existing methods (coverage)', () => {
+    it('getLanguageCode returns code for supported languages', () => {
+      expect(backend.getLanguageCode('en')).toBeDefined();
+      expect(backend.getLanguageCode('es')).toBeDefined();
+    });
+
+    it('isLanguageSupported returns true for known languages', () => {
+      expect(backend.isLanguageSupported('en')).toBe(true);
+    });
+
+    it('formatRequest builds a gemma-3 request body', () => {
+      const req = backend.formatRequest('google/gemma-3-4b-it', 'English', 'Spanish', 'Hello world');
+      expect(req.model).toBe('google/gemma-3-4b-it');
+      expect(req.messages).toBeDefined();
+      expect(req.messages.length).toBeGreaterThan(0);
+    });
+
+    it('translate batch calls callVllmService per text', async () => {
+      const spy = jest.spyOn(backend, 'callVllmService').mockResolvedValue('Hola');
+      const result = await backend.translate(['Hello'], 'en', 'es');
+      expect(result).toEqual(['Hola']);
+      expect(spy).toHaveBeenCalledTimes(1);
+      spy.mockRestore();
+    });
+
+    it('translate skips empty texts in the batch', async () => {
+      const spy = jest.spyOn(backend, 'callVllmService').mockResolvedValue('Hola');
+      const result = await backend.translate(['', 'Hello'], 'en', 'es');
+      expect(result[0]).toBe('');
+      expect(result[1]).toBe('Hola');
+      expect(spy).toHaveBeenCalledTimes(1);
+      spy.mockRestore();
+    });
+
+    it('translate throws when not initialized', async () => {
+      backend.initialized = false;
+      await expect(backend.translate(['hi'], 'en', 'es')).rejects.toThrow(/not ready/i);
+      backend.initialized = true;
+    });
+  });
 });

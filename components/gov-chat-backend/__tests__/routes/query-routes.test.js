@@ -362,6 +362,83 @@ describe('POST /stream', () => {
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 
+  it('should fall back to the EN unit when stream translation fails (#829)', async () => {
+    process.env.STREAMING_TRANSLATION_ENABLED = '1';
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    translationService.init.mockResolvedValue(undefined);
+    // Translator fails -> the catch emits the original EN unit as a fallback.
+    translationService.translateStream.mockRejectedValue(new Error('vLLM down'));
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hola' }],
+      context: { language: 'es' }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockStream.push('data: {"type":"chunk","content":"Hello world. "}\n\n');
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    const body = response.text || '';
+    expect(body).toContain('Hello world. ');
+    expect(body).not.toMatch(/"type":"translation"/);
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+  });
+
+  it('should flush a trailing partial unit at stream end + keep context window (#829)', async () => {
+    process.env.STREAMING_TRANSLATION_ENABLED = '1';
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    translationService.init.mockResolvedValue(undefined);
+    translationService.translateStream.mockImplementation(async (unit, src, tgt, ctx, onToken) => {
+      const t = `[ES]${unit}`;
+      if (onToken) onToken(t);
+      return t;
+    });
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hola' }],
+      context: { language: 'es' }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // A complete sentence (committed at boundary) + a trailing partial (flushed at done).
+    mockStream.push('data: {"type":"chunk","content":"Sentence one. "}\n\n');
+    mockStream.push('data: {"type":"chunk","content":"partial trailing"}\n\n');
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    const body = response.text || '';
+    expect(body).toContain('[ES]Sentence one. ');
+    expect(body).toContain('[ES]partial trailing');
+    // Second unit should have received the first as context (context window grows).
+    expect(translationService.translateStream).toHaveBeenCalledTimes(2);
+    const secondCallCtx = translationService.translateStream.mock.calls[1][3];
+    expect(secondCallCtx.length).toBeGreaterThanOrEqual(1);
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+  });
+
   it('should forward Authorization header to ChatQnA', async () => {
     queryService.initStreamQuery.mockResolvedValue({
       queryId: 'q1',

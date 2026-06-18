@@ -290,5 +290,18 @@ describe('TranslationService', () => {
       expect(result).toBe('batch-result');
       expect(onToken).toHaveBeenCalledWith('batch-result');
     });
+
+    it('falls back to CPU backend when GPU translateStream throws (auto mode)', async () => {
+      translationService.backendType = 'gpu';
+      translationService.backend = {
+        getLanguageCode: (l) => l,
+        isLanguageSupported: () => true,
+        translateStream: jest.fn().mockRejectedValue(new Error('GPU down'))
+      };
+      // CpuTranslateBackend is mocked at the top of this file (translate ->
+      // mockCpuTranslate -> ['translated text']).
+      const result = await translationService.translateStream('hi', 'en', 'es');
+      expect(result).toBe('translated text');
+    });
   });
 });

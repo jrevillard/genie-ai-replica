@@ -262,8 +262,6 @@ export default {
       network: 'নেটওয়ার্ক ব্যান্ডউইথ'
     },
     databaseManagement: 'ডেটাবেস ম্যানেজমেন্ট',
-    reindexDatabase: 'ডেটাবেস রি-ইনডেক্স করুন',
-    lastReindex: 'সর্বশেষ রি-ইনডেক্স',
     databaseSize: 'ডেটাবেসের আকার',
     totalTables: 'মোট টেবিল',
     logManagement: 'লগ ম্যানেজমেন্ট',
@@ -294,18 +292,14 @@ export default {
     roleUser: 'ব্যবহারকারী',
     statusActive: 'সক্রিয়',
     dbActions: {
-      reindex: 'রি-ইনডেক্স',
       backup: 'ব্যাকআপ',
       optimize: 'অপ্টিমাইজ করুন',
-      reindexDesc: 'ডেটাবেস ইনডেক্স পুনর্নির্মাণ করুন',
       backupDesc: 'ডেটাবেস ব্যাকআপ তৈরি করুন',
       optimizeDesc: 'কোয়েরি পারফরম্যান্স অপ্টিমাইজ করুন'
     },
     operations: {
-      reindexTitle: 'ডেটাবেস রি-ইনডেক্স ফলাফল',
       backupTitle: 'ডেটাবেস ব্যাকআপ ফলাফল',
       optimizeTitle: 'ডেটাবেস অপ্টিমাইজেশন ফলাফল',
-      reindexResults: 'রি-ইনডেক্স ফলাফল',
       optimizeResults: 'অপ্টিমাইজেশন ফলাফল',
       collection: 'সংগ্রহ (Collection)',
       status: 'স্ট্যাটাস',
@@ -317,11 +311,7 @@ export default {
       errorDetails: 'ত্রুটির বিবরণ',
       close: 'বন্ধ করুন',
       resultsTitle: 'অপারেশনের ফলাফল',
-      reindexDatabase: {
-        success: 'ডেটাবেস রি-ইনডেক্স সফলভাবে সম্পন্ন হয়েছে',
-        error: 'ডেটাবেস রি-ইনডেক্স করার সময় ত্রুটি',
-        loading: 'ডেটাবেস রি-ইনডেক্স করা হচ্ছে...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'ডেটাবেস ব্যাকআপ সফলভাবে সম্পন্ন হয়েছে',
         error: 'ডেটাবেস ব্যাকআপ করার সময় ত্রুটি',
@@ -890,7 +880,6 @@ export default {
     accountManagement: 'অ্যাকাউন্ট ব্যবস্থাপনা',
     resetUserData: 'ব্যবহারকারীর ডেটা রিসেট করুন',
     resetUserDataDesc: 'এটি আপনার প্রোফাইলের সমস্ত ডেটা এবং চ্যাটের ইতিহাস মুছে ফেলবে।',
-    edit: 'সম্পাদনা করুন',
     standardAccount: 'স্ট্যান্ডার্ড অ্যাকাউন্ট',
     cancel: 'বাতিল করুন',
     account: {
@@ -1338,6 +1327,7 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'প্রতিক্রিয়া ব্যাহত হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
     aiGeneratedNoDocs: 'এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

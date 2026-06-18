@@ -172,7 +172,6 @@ export default {
     SE: 'Suécia',
     CH: 'Suíça',
     SY: 'Síria',
-    TW: 'Taiwan',
     TJ: 'Tadjiquistão',
     TZ: 'Tanzânia',
     TH: 'Tailândia',
@@ -266,8 +265,6 @@ export default {
       network: 'Largura de Banda de Rede'
     },
     databaseManagement: 'Gerenciamento de Banco de Dados',
-    reindexDatabase: 'Reindexar Banco de Dados',
-    lastReindex: 'Última Reindexação',
     databaseSize: 'Tamanho do Banco de Dados',
     totalTables: 'Total de Tabelas',
     logManagement: 'Gerenciamento de Logs',
@@ -298,18 +295,14 @@ export default {
     roleUser: 'Usuário',
     statusActive: 'Ativo',
     dbActions: {
-      reindex: 'Reindexar',
       backup: 'Backup',
       optimize: 'Otimizar',
-      reindexDesc: 'Reconstruir índices do banco de dados',
       backupDesc: 'Criar backup do banco de dados',
       optimizeDesc: 'Otimizar desempenho de consultas'
     },
     operations: {
-      reindexTitle: 'Resultados da Reindexação do Banco de Dados',
       backupTitle: 'Resultados do Backup do Banco de Dados',
       optimizeTitle: 'Resultados da Otimização do Banco de Dados',
-      reindexResults: 'Resultados da Reindexação',
       optimizeResults: 'Resultados da Otimização',
       collection: 'Coleção',
       status: 'Status',
@@ -321,11 +314,7 @@ export default {
       errorDetails: 'Detalhes do Erro',
       close: 'Fechar',
       resultsTitle: 'Resultados da Operação',
-      reindexDatabase: {
-        success: 'Reindexação do banco de dados concluída com sucesso',
-        error: 'Erro durante a reindexação do banco de dados',
-        loading: 'Reindexando banco de dados...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'Backup do banco de dados concluído com sucesso',
         error: 'Erro durante o backup do banco de dados',
@@ -925,7 +914,6 @@ export default {
     accountManagement: 'Gerenciamento de Conta',
     resetUserData: 'Redefinir Dados do Usuário',
     resetUserDataDesc: 'Isso limpará todos os dados do seu perfil e histórico de chat.',
-    edit: 'Editar',
     standardAccount: 'Conta Padrão',
     cancel: 'Cancelar',
     account: {
@@ -1373,6 +1361,7 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'A resposta foi interrompida. Tente novamente.',
     aiGeneratedNoDocs: 'Gerado por IA — não baseado nos documentos da biblioteca',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

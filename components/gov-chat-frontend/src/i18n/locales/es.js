@@ -1021,7 +1021,6 @@ export default {
     manageMyAccountDesc: 'Administre su perfil, configuración de seguridad y preferencias de cuenta.',
     resetUserData: 'Restablecer Datos de Usuario',
     resetUserDataDesc: 'Esto borrará todos sus datos de perfil e historial de chat.',
-    edit: 'Editar',
     standardAccount: 'Cuenta Estándar',
     cancel: 'Cancelar',
     account: {
@@ -1469,6 +1468,7 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'Se interrumpió la respuesta. Inténtelo de nuevo.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     aiGeneratedNoDocs: 'Generado por IA — no basado en los documentos de la biblioteca',
     configMismatchWarning:

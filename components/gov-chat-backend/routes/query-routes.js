@@ -255,14 +255,9 @@ module.exports = (queryService) => {
             scheduleUnitTranslation(pendingEn);
             pendingEn = '';
           }
-          try {
-            await translationChain;
-          } catch (error) {
-            logger.warn('QueryService.stream_translation_chain_failed', {
-              queryId,
-              error: error.message
-            });
-          }
+          // Each scheduled unit swallows its own errors (see scheduleUnitTranslation),
+          // so the chain never rejects; awaiting it just orders completion before 'done'.
+          await translationChain;
           await handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata, true);
         } else {
           handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata, false);

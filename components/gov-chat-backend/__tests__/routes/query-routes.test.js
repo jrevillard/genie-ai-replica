@@ -255,6 +255,9 @@ describe('PATCH /:queryId/responsetime', () => {
 // AC1.3: POST /stream (SSE)
 // ============================================================
 describe('POST /stream', () => {
+  afterEach(() => {
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+  });
   it('should return 501 when OPEA_STREAMING is false', async () => {
     process.env.OPEA_STREAMING = 'false';
 
@@ -436,6 +439,47 @@ describe('POST /stream', () => {
     expect(translationService.translateStream).toHaveBeenCalledTimes(2);
     const secondCallCtx = translationService.translateStream.mock.calls[1][3];
     expect(secondCallCtx.length).toBeGreaterThanOrEqual(1);
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+  });
+
+  it('should degrade to direct EN forwarding after translateStream failure (#829)', async () => {
+    process.env.STREAMING_TRANSLATION_ENABLED = '1';
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    translationService.init.mockResolvedValue(undefined);
+    translationService.translateStream.mockRejectedValue(new Error('GPU down'));
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hola' }],
+      context: { language: 'es' }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // First chunk: complete sentence → translateStream fails → degradation flag set
+    mockStream.push('data: {"type":"chunk","content":"First sentence. "}\n\n');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Second chunk: should be forwarded DIRECTLY (not buffered/translated)
+    mockStream.push('data: {"type":"chunk","content":"Raw English"}\n\n');
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    const body = response.text || '';
+    // Both texts present (EN fallback for failed unit + direct-forwarded chunk)
+    expect(body).toContain('First sentence. ');
+    expect(body).toContain('Raw English');
+    // No post-stream translation event (streaming path skipPostStreamTranslation=true)
+    expect(body).not.toMatch(/"type":"translation"/);
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 

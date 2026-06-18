@@ -303,5 +303,33 @@ describe('TranslationService', () => {
       const result = await translationService.translateStream('hi', 'en', 'es');
       expect(result).toBe('translated text');
     });
+
+    it('uses fallback language when target is not directly supported', async () => {
+      translationService.backend = {
+        getLanguageCode: (l) => (l === 'en' ? 'English' : l === 'es' ? 'Spanish' : null),
+        isLanguageSupported: (l) => l === 'es',
+        getFallbackLanguage: (l) => (l === 'fr' ? 'es' : null),
+        translateStream: jest.fn(async () => 'fallback-translated')
+      };
+      const result = await translationService.translateStream('hi', 'en', 'fr');
+      expect(result).toBe('fallback-translated');
+      expect(translationService.backend.translateStream).toHaveBeenCalledWith(
+        'hi',
+        'English',
+        'Spanish',
+        undefined,
+        undefined
+      );
+    });
+
+    it('throws when target is unsupported with no fallback', async () => {
+      translationService.backend = {
+        getLanguageCode: (l) => (l === 'en' ? 'English' : null),
+        isLanguageSupported: () => false,
+        getFallbackLanguage: () => null,
+        translateStream: jest.fn()
+      };
+      await expect(translationService.translateStream('hi', 'en', 'xx')).rejects.toThrow(/Unsupported target language/);
+    });
   });
 });

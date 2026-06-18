@@ -259,13 +259,21 @@ module.exports = (queryService) => {
         if (doneState.handled || res.writableEnded) return;
         doneState.handled = true;
         if (useStreamingTranslation) {
-          if (pendingEn.trim()) {
-            scheduleUnitTranslation(pendingEn);
-            pendingEn = '';
+          if (streamingTranslationFailed) {
+            // Degraded: flush remaining EN directly (bypass translation)
+            if (pendingEn && !res.writableEnded) {
+              res.write(`data: ${JSON.stringify({ type: 'chunk', content: pendingEn })}\n\n`);
+              pendingEn = '';
+            }
+          } else {
+            if (pendingEn.trim()) {
+              scheduleUnitTranslation(pendingEn);
+              pendingEn = '';
+            }
+            // Each scheduled unit swallows its own errors (see scheduleUnitTranslation),
+            // so the chain never rejects; awaiting it just orders completion before 'done'.
+            await translationChain;
           }
-          // Each scheduled unit swallows its own errors (see scheduleUnitTranslation),
-          // so the chain never rejects; awaiting it just orders completion before 'done'.
-          await translationChain;
           await handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata, true);
         } else {
           handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata, false);

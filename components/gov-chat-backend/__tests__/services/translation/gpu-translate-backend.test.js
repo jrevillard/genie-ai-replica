@@ -152,5 +152,45 @@ describe('GpuTranslateBackend streaming', () => {
       await expect(backend.translate(['hi'], 'en', 'es')).rejects.toThrow(/not ready/i);
       backend.initialized = true;
     });
+
+    it('init performs health check + fetches model info via http', async () => {
+      backend.initialized = false;
+      const res1 = new EventEmitter();
+      const res2 = new EventEmitter();
+      let callCount = 0;
+      http.request.mockImplementation((opts, cb) => {
+        callCount++;
+        const req = new EventEmitter();
+        req.write = () => {};
+        req.end = () => {};
+        process.nextTick(() => {
+          const r = callCount === 1 ? res1 : res2;
+          r.statusCode = 200;
+          cb(r);
+          if (callCount === 1) {
+            r.emit('end');
+          } else {
+            r.emit('data', JSON.stringify({ data: [{ id: backend.modelId, max_model_len: 4096 }] }));
+            r.emit('end');
+          }
+        });
+        return req;
+      });
+
+      await backend.init();
+      expect(backend.initialized).toBe(true);
+      expect(backend.maxModelLen).toBe(4096);
+    });
+
+    it('getFallbackLanguage + getSupportedLanguages return expected values', () => {
+      const langs = backend.getSupportedLanguages();
+      expect(langs).toBeDefined();
+      expect(typeof langs).toBe('object');
+    });
+
+    it('translate catch propagates error on callVllmService failure', async () => {
+      jest.spyOn(backend, 'callVllmService').mockRejectedValue(new Error('vLLM 500'));
+      await expect(backend.translate(['Hello'], 'en', 'es')).rejects.toThrow(/Failed to perform translation/);
+    });
   });
 });

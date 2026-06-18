@@ -215,6 +215,7 @@ module.exports = (queryService) => {
       const contextWindow = [];
       let translationChain = Promise.resolve();
       const CONTEXT_WINDOW_SIZE = 3;
+      let streamingTranslationFailed = false;
 
       const scheduleUnitTranslation = (unit) => {
         translationChain = translationChain.then(async () => {
@@ -235,14 +236,21 @@ module.exports = (queryService) => {
             contextWindow.push({ source: unit, target: translated });
             if (contextWindow.length > CONTEXT_WINDOW_SIZE) contextWindow.shift();
           } catch (error) {
-            logger.warn('QueryService.stream_translation_unit_failed', {
-              queryId,
-              error: error.message
-            });
-            // Fallback: emit the original EN unit so the user is not left waiting.
+            logger.warn(
+              `QueryService.stream_translation_unit_failed: ${error.message} (lang=${targetLanguage}, unitLen=${unit.length}, unitPreview=${unit.slice(0, 80)})`,
+              { queryId }
+            );
+            // Fallback: emit the original EN unit, flush pending buffer, then stop
+            // buffering and forward subsequent EN chunks directly (preserves
+            // original markdown formatting instead of fragmenting into units).
             if (!res.writableEnded) {
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: unit })}\n\n`);
             }
+            if (pendingEn && !res.writableEnded) {
+              res.write(`data: ${JSON.stringify({ type: 'chunk', content: pendingEn })}\n\n`);
+              pendingEn = '';
+            }
+            streamingTranslationFailed = true;
           }
         });
       };
@@ -278,7 +286,7 @@ module.exports = (queryService) => {
 
           if (parsed.type === 'chunk') {
             fullResponseText += parsed.content;
-            if (useStreamingTranslation) {
+            if (useStreamingTranslation && !streamingTranslationFailed) {
               // Buffer EN; commit complete units to the translator at boundaries.
               pendingEn += parsed.content;
               let extracted = extractCommittableUnit(pendingEn);

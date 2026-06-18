@@ -6,6 +6,7 @@ const https = require('https');
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 const translationService = require('../services/translation-service');
+const { extractCommittableUnit } = require('../services/translation/stream-boundary');
 
 module.exports = (queryService) => {
   // Apply authentication middleware to all routes
@@ -199,10 +200,68 @@ module.exports = (queryService) => {
         }
       }
 
-      const doHandleStreamDone = () => {
+      // Streaming translation (issue #829): when enabled and the UI language is not
+      // English, buffer the EN answer and stream-translate complete units (sentence/
+      // paragraph boundaries) so the user sees the target language WHILE streaming,
+      // instead of an English stream that flips at the end.
+      const streamingTranslationEnabled = ['1', 'true'].includes(
+        (process.env.STREAMING_TRANSLATION_ENABLED || '').toLowerCase()
+      );
+      const targetLanguage = queryData.context?.language;
+      const useStreamingTranslation =
+        streamingTranslationEnabled && targetLanguage && targetLanguage.toUpperCase() !== 'EN';
+
+      let pendingEn = '';
+      const contextWindow = [];
+      let translationChain = Promise.resolve();
+      const CONTEXT_WINDOW_SIZE = 3;
+
+      const scheduleUnitTranslation = (unit) => {
+        translationChain = translationChain.then(async () => {
+          if (res.writableEnded) return;
+          try {
+            await translationService.init();
+            const translated = await translationService.translateStream(
+              unit,
+              'en',
+              targetLanguage,
+              contextWindow,
+              (delta) => {
+                if (!res.writableEnded) {
+                  res.write(`data: ${JSON.stringify({ type: 'chunk', content: delta })}\n\n`);
+                }
+              }
+            );
+            contextWindow.push({ source: unit, target: translated });
+            if (contextWindow.length > CONTEXT_WINDOW_SIZE) contextWindow.shift();
+          } catch (error) {
+            logger.warn('QueryService.stream_translation_unit_failed', {
+              queryId,
+              error: error.message
+            });
+            // Fallback: emit the original EN unit so the user is not left waiting.
+            if (!res.writableEnded) {
+              res.write(`data: ${JSON.stringify({ type: 'chunk', content: unit })}\n\n`);
+            }
+          }
+        });
+      };
+
+      const doHandleStreamDone = async () => {
         if (doneState.handled || res.writableEnded) return;
         doneState.handled = true;
-        handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata);
+        if (useStreamingTranslation) {
+          if (pendingEn.trim()) {
+            scheduleUnitTranslation(pendingEn);
+            pendingEn = '';
+          }
+          // Each scheduled unit swallows its own errors (see scheduleUnitTranslation),
+          // so the chain never rejects; awaiting it just orders completion before 'done'.
+          await translationChain;
+          await handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata, true);
+        } else {
+          handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata, false);
+        }
       };
 
       stream.on('data', (chunk) => {
@@ -219,7 +278,18 @@ module.exports = (queryService) => {
 
           if (parsed.type === 'chunk') {
             fullResponseText += parsed.content;
-            res.write(`data: ${JSON.stringify({ type: 'chunk', content: parsed.content })}\n\n`);
+            if (useStreamingTranslation) {
+              // Buffer EN; commit complete units to the translator at boundaries.
+              pendingEn += parsed.content;
+              let extracted = extractCommittableUnit(pendingEn);
+              while (extracted) {
+                pendingEn = extracted.remainder;
+                scheduleUnitTranslation(extracted.unit);
+                extracted = extractCommittableUnit(pendingEn);
+              }
+            } else {
+              res.write(`data: ${JSON.stringify({ type: 'chunk', content: parsed.content })}\n\n`);
+            }
           } else if (parsed.type === 'metadata') {
             // chatqna already computed reranker-grounded source docs + is_grounded; capture
             // them instead of re-running retrieval on the backend.
@@ -294,7 +364,16 @@ module.exports = (queryService) => {
     }
   });
 
-  async function handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata) {
+  async function handleStreamDone(
+    queryId,
+    fullResponseText,
+    startTime,
+    queryData,
+    req,
+    res,
+    capturedMetadata,
+    skipPostStreamTranslation = false
+  ) {
     if (res.writableEnded) return;
 
     const responseTime = Date.now() - startTime;
@@ -305,7 +384,7 @@ module.exports = (queryService) => {
     res.write(`data: ${JSON.stringify({ type: 'metadata', ...metadata, responseTime })}\n\n`);
 
     const userLanguage = queryData.context?.language;
-    if (userLanguage && userLanguage.toUpperCase() !== 'EN' && fullResponseText) {
+    if (!skipPostStreamTranslation && userLanguage && userLanguage.toUpperCase() !== 'EN' && fullResponseText) {
       try {
         await translationService.init();
         const translated = await translationService.translateMarkdown(

@@ -247,6 +247,69 @@ class TranslationService {
   }
 
   /**
+   * @method translateStream
+   * @description Stream-translate a single COMPLETE unit (sentence/paragraph) from
+   * sourceLang to targetLang, invoking onToken for each output delta. Used by the
+   * chat streaming handler to show the target language WHILE streaming (issue #829)
+   * instead of flipping at the end. The caller buffers source chunks into complete
+   * units first (see services/translation/stream-boundary.js) — the translator must
+   * receive a complete unit.
+   * @param {string} unit - A complete source-language unit to translate
+   * @param {string} sourceLang - Source language code (e.g. 'en')
+   * @param {string} targetLang - Target language code (e.g. 'es')
+   * @param {{source: string, target: string}[]} [context] - Prior units EN+target for consistency
+   * @param {(delta: string) => void} [onToken] - Streaming callback
+   * @returns {Promise<string>} Full translated unit
+   */
+  async translateStream(unit, sourceLang, targetLang, context, onToken) {
+    if (!this.initialized || !this.backend) {
+      throw new Error('[TRANSLATION-SERVICE] Service is not ready.');
+    }
+    if (!unit || unit.trim() === '') return '';
+
+    const sourceLangCode = this.backend.getLanguageCode(sourceLang);
+    if (!sourceLangCode) throw new Error(`Unsupported source language: ${sourceLang}`);
+
+    if (!this.backend.isLanguageSupported(targetLang)) {
+      const fallbackLang = this.backend.getFallbackLanguage(targetLang);
+      if (fallbackLang) {
+        logger.warn(`[TRANSLATION-SERVICE] Stream target ${targetLang} not supported, using fallback ${fallbackLang}`);
+        return this.translateStream(unit, sourceLang, fallbackLang, context, onToken);
+      }
+      throw new Error(`Unsupported target language: ${targetLang}`);
+    }
+    const targetLangCode = this.backend.getLanguageCode(targetLang);
+
+    try {
+      if (typeof this.backend.translateStream === 'function') {
+        return await this.backend.translateStream(unit, sourceLangCode, targetLangCode, context, onToken);
+      }
+      // Backend has no streaming support (e.g. CPU) — translate the unit in one
+      // shot and emit it as a single delta so the caller keeps streaming.
+      const [translated] = await this.backend.translate([unit], sourceLangCode, targetLangCode);
+      if (translated && onToken) onToken(translated);
+      return translated || '';
+    } catch (error) {
+      // GPU failure in auto mode -> CPU fallback (non-streaming) for this unit.
+      if (this.backendType === 'gpu' && translationBackend === 'auto') {
+        logger.warn(`[TRANSLATION-SERVICE] GPU stream failed, CPU fallback (non-streaming): ${error.message}`);
+        try {
+          const cpuBackend = new CpuTranslateBackend();
+          await cpuBackend.init();
+          const sCode = cpuBackend.getLanguageCode(sourceLang);
+          const tCode = cpuBackend.getLanguageCode(targetLang);
+          const [translated] = await cpuBackend.translate([unit], sCode, tCode);
+          if (translated && onToken) onToken(translated);
+          return translated || '';
+        } catch (cpuError) {
+          throw new Error('Stream translation failed on both GPU and CPU', { cause: cpuError });
+        }
+      }
+      throw error;
+    }
+  }
+
+  /**
    * @method translateMarkdown
    * @description Translates the content of a markdown file while preserving the markdown structure.
    * Caches the result to Redis permanently if caching is enabled.

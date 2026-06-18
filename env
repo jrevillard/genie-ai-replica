@@ -244,6 +244,11 @@ HUGGING_FACE_HUB_TOKEN=
 # Default: info
 # LOG_LEVEL=debug
 
+# Stream the target-language translation during chat streaming (issue #829) instead
+# of streaming English and flipping to the UI language at the end. 1 = stream-translate
+# complete sentence/paragraph units as they arrive; 0 (default) = current behavior.
+# STREAMING_TRANSLATION_ENABLED=0
+
 # Application session lifetime for automatic purging (MILLISECONDS, NOT seconds or minutes).
 # Controls how long an inactive analytics session is kept before automatic cleanup.
 # Used by: backend (session-service.js)

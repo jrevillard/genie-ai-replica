@@ -273,9 +273,7 @@ class TranslationService {
     if (!this.backend.isLanguageSupported(targetLang)) {
       const fallbackLang = this.backend.getFallbackLanguage(targetLang);
       if (fallbackLang) {
-        logger.warn(
-          `[TRANSLATION-SERVICE] Stream target ${targetLang} not supported, using fallback ${fallbackLang}`
-        );
+        logger.warn(`[TRANSLATION-SERVICE] Stream target ${targetLang} not supported, using fallback ${fallbackLang}`);
         return this.translateStream(unit, sourceLang, fallbackLang, context, onToken);
       }
       throw new Error(`Unsupported target language: ${targetLang}`);
@@ -284,13 +282,7 @@ class TranslationService {
 
     try {
       if (typeof this.backend.translateStream === 'function') {
-        return await this.backend.translateStream(
-          unit,
-          sourceLangCode,
-          targetLangCode,
-          context,
-          onToken
-        );
+        return await this.backend.translateStream(unit, sourceLangCode, targetLangCode, context, onToken);
       }
       // Backend has no streaming support (e.g. CPU) — translate the unit in one
       // shot and emit it as a single delta so the caller keeps streaming.
@@ -300,9 +292,7 @@ class TranslationService {
     } catch (error) {
       // GPU failure in auto mode -> CPU fallback (non-streaming) for this unit.
       if (this.backendType === 'gpu' && translationBackend === 'auto') {
-        logger.warn(
-          `[TRANSLATION-SERVICE] GPU stream failed, CPU fallback (non-streaming): ${error.message}`
-        );
+        logger.warn(`[TRANSLATION-SERVICE] GPU stream failed, CPU fallback (non-streaming): ${error.message}`);
         try {
           const cpuBackend = new CpuTranslateBackend();
           await cpuBackend.init();

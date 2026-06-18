@@ -6,6 +6,7 @@ process.env.OPEA_STREAMING = 'true';
 process.env.CHATQNA_STREAM_TIMEOUT = '5000';
 
 const { Readable } = require('stream');
+const translationService = require('../../services/translation-service');
 
 // Mock shared-lib — virtual because it only exists after Docker packaging
 jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
@@ -68,6 +69,7 @@ jest.mock('../../services/weather-service', () => ({}));
 jest.mock('../../services/translation-service', () => ({
   translate: jest.fn(),
   translateMarkdown: jest.fn(),
+  translateStream: jest.fn(),
   init: jest.fn()
 }));
 jest.mock('../../services/session-service', () => ({
@@ -315,6 +317,49 @@ describe('POST /stream', () => {
     const response = await responsePromise;
     expect(response.status).toBe(200);
     expect(response.headers['content-type']).toBe('text/event-stream');
+  });
+
+  it('should stream the target-language translation when STREAMING_TRANSLATION_ENABLED (#829)', async () => {
+    process.env.STREAMING_TRANSLATION_ENABLED = '1';
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+
+    // translateStream: invokes onToken with the "translated" text and returns it.
+    translationService.init.mockResolvedValue(undefined);
+    translationService.translateStream.mockImplementation(async (unit, src, tgt, ctx, onToken) => {
+      const translated = `[ES]${unit}`;
+      if (onToken) onToken(translated);
+      return translated;
+    });
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hola' }],
+      context: { language: 'es' }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // EN answer with a sentence boundary so the unit commits to the translator.
+    mockStream.push('data: {"type":"chunk","content":"Hello world. "}\n\n');
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    const body = response.text || '';
+    // The streamed chunk is the TRANSLATED unit, not the EN source.
+    expect(body).toContain('[ES]Hello world. ');
+    // The streaming path must NOT emit a post-stream 'translation' event.
+    expect(body).not.toMatch(/"type":"translation"/);
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 
   it('should forward Authorization header to ChatQnA', async () => {

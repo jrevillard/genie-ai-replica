@@ -434,9 +434,7 @@ class GpuTranslateBackend {
         if (res.statusCode < 200 || res.statusCode >= 300) {
           let errBody = '';
           res.on('data', (c) => (errBody += c));
-          res.on('end', () =>
-            reject(new Error(`vLLM stream service error: ${res.statusCode} ${errBody}`))
-          );
+          res.on('end', () => reject(new Error(`vLLM stream service error: ${res.statusCode} ${errBody}`)));
           return;
         }
         res.setEncoding('utf8');
@@ -562,9 +560,7 @@ class GpuTranslateBackend {
     // uses a structured payload where free-text context isn't supported, so it
     // translates the unit standalone (still correct, just less cross-unit glue).
     if (context && context.length > 0 && !this.modelId.includes('translategemma')) {
-      const ctxBlock = context
-        .map((c) => `EN: ${c.source}\n${targetCode.toUpperCase()}: ${c.target}`)
-        .join('\n');
+      const ctxBlock = context.map((c) => `EN: ${c.source}\n${targetCode.toUpperCase()}: ${c.target}`).join('\n');
       const langNames = this.languageMap?.languageNames || {};
       const srcName = langNames[sourceCode] || sourceCode;
       const tgtName = langNames[targetCode] || targetCode;

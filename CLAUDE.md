@@ -239,6 +239,7 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `VUE_APP_API_URL` - Frontend API URL
 - `VUE_APP_AVAILABLE_LOCALES` - Whitelist of active UI locales (comma-separated codes, e.g. `en,es`; unset = all locales)
 - `KEYCLOAK_SUPPORTED_LOCALES` - Keycloak login-page locales (JSON array, e.g. `["en","es"]`; unset = curated default)
+- `STREAMING_TRANSLATION_ENABLED` - Stream the target-language chat translation during generation instead of English-then-flip (issue #829). `1`/`0`; default `0` (current behavior)
 
 **API Keys:**
 - `HUGGING_FACE_HUB_TOKEN` - Required for pulling models

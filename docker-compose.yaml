@@ -1133,6 +1133,9 @@ services:
       GUARDRAIL_SERVICE_PORT: 9090
       TRANSLATION_SERVICE_HOST_IP: vllm-translation-guardrail
       TRANSLATION_SERVICE_PORT: 9031
+      # Stream the target-language translation during chat (issue #829) instead of
+      # streaming English and flipping at the end. 0 = current behavior (default).
+      STREAMING_TRANSLATION_ENABLED: ${STREAMING_TRANSLATION_ENABLED:-0}
       DOC_REPO_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
       KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth

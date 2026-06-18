@@ -263,27 +263,9 @@ module.exports = (queryService) => {
               error: error.message
             });
           }
-          await handleStreamDone(
-            queryId,
-            fullResponseText,
-            startTime,
-            queryData,
-            req,
-            res,
-            capturedMetadata,
-            true
-          );
+          await handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata, true);
         } else {
-          handleStreamDone(
-            queryId,
-            fullResponseText,
-            startTime,
-            queryData,
-            req,
-            res,
-            capturedMetadata,
-            false
-          );
+          handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata, false);
         }
       };
 

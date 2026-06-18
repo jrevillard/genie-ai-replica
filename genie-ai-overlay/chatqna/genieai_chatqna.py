@@ -607,6 +607,12 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             next_data["initial_query"] = data["initial_query"]
             next_data["retrieved_docs"] = retrieved_docs
             next_data["file_id_pairs"] = file_id_pairs
+            # Preserve query embedding for adaptive reranking
+            if "embedding" in data:
+                next_data["embedding"] = data["embedding"]
+            # Forward chunk_embeddings if available from retriever
+            if "chunk_embeddings" in data:
+                next_data["chunk_embeddings"] = data["chunk_embeddings"]
 
             # Expected data format if using tei_reranker directly (bypassing reranker service):
             # next_data["query"] = data["initial_query"]

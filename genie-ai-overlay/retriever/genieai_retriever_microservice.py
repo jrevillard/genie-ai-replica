@@ -104,16 +104,25 @@ async def retrieve_docs(
                 retrieved_docs=retrieved_docs, initial_query=input.text, metadata=metadata_list
             )
         else:
+            chunk_embeddings = []
             for r in response:
                 if isinstance(r, str):
                     retrieved_docs.append(RetrievalResponseData(text=r, metadata=None))
                 else:
-                    retrieved_docs.append(RetrievalResponseData(text=r["doc"].page_content, metadata=r["doc"].metadata))
+                    metadata = r["doc"].metadata.copy() if r["doc"].metadata else {}
+                    # Extract chunk_embeddings if present
+                    if "chunk_embeddings" in metadata:
+                        chunk_embeddings = metadata.get("chunk_embeddings", [])
+                        del metadata["chunk_embeddings"]  # Remove from metadata to avoid bloat
+                    retrieved_docs.append(RetrievalResponseData(text=r["doc"].page_content, metadata=metadata))
             if isinstance(input, RetrievalRequest):
                 result = RetrievalResponse(retrieved_docs=retrieved_docs)
             elif isinstance(input, ChatCompletionRequest):
                 input.retrieved_docs = retrieved_docs
                 input.documents = [doc.text for doc in retrieved_docs]
+                # Propagate embeddings if present
+                if chunk_embeddings:
+                    input.chunk_embeddings = chunk_embeddings
                 result = input
 
         # Record statistics

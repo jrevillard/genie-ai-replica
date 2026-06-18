@@ -71,6 +71,7 @@ logflag = os.getenv("LOGFLAG", False)
 ARANGO_TEXT_FIELD = "text"
 ARANGO_EMBEDDING_FIELD = "embedding"
 ARANGO_FILE_ID_FIELD = "file_id"
+RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice")
 
 
 @OpeaComponentRegistry.register("GENIE_RETRIEVER_ARANGODB")
@@ -825,6 +826,50 @@ class GenieaiArangoRetriever(OpeaComponent):
                             r["doc"].metadata["file_ids"] = r["doc"].metadata.get("file_ids", []) + [file_id]
 
             logger.info(f"Added neighborhoods to {len(search_res)} documents.")
+
+        ################################
+        # Fetch Chunk Embeddings (for Adaptive Reranking) #
+        ################################
+
+        # Check if adaptive reranking is requested
+        input_dict = (
+            input.model_dump(exclude_none=True)
+            if hasattr(input, "model_dump")
+            else getattr(input, "dict", lambda: {})()
+        )
+
+        reranking_strategy = input_dict.get("reranking_strategy", RERANKING_STRATEGY)
+
+        if reranking_strategy == "adaptive":
+            chunk_embeddings = []
+            for r in search_res:
+                chunk_key = r["doc"].metadata.get("_key") if r["doc"].metadata else None
+                if chunk_key:
+                    try:
+                        # Fetch embedding from ArangoDB
+                        aql = f"""
+                            FOR doc IN @@collection
+                                FILTER doc._key == @chunk_key
+                                RETURN doc.{ARANGO_EMBEDDING_FIELD}
+                        """
+                        bind_vars = {"@collection": collection_name, "chunk_key": chunk_key}
+                        cursor = self.db.aql.execute(aql, bind_vars=bind_vars)
+                        embedding_result = list(cursor)
+                        if embedding_result and len(embedding_result) > 0:
+                            chunk_embeddings.append(embedding_result[0])
+                        else:
+                            logger.warning(f"Chunk {chunk_key} missing embedding")
+                            chunk_embeddings.append([])
+                    except Exception as e:
+                        logger.error(f"Error fetching embedding for chunk {chunk_key}: {e}")
+                        chunk_embeddings.append([])
+                else:
+                    chunk_embeddings.append([])
+
+            # Store in first result's metadata for downstream processing
+            if chunk_embeddings and len(search_res) > 0:
+                search_res[0]["doc"].metadata["chunk_embeddings"] = chunk_embeddings
+                logger.info(f"Fetched {len(chunk_embeddings)} chunk embeddings for adaptive reranking")
 
         ################################
         # Summarize Results (optional) #

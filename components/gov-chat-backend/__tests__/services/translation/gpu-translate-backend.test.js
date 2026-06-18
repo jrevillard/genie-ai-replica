@@ -2,9 +2,13 @@ const { EventEmitter } = require('events');
 
 jest.mock('http', () => ({ request: jest.fn() }));
 jest.mock('https', () => ({ request: jest.fn() }));
-jest.mock('../../../shared-lib', () => ({
-  logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }
-}), { virtual: true });
+jest.mock(
+  '../../../shared-lib',
+  () => ({
+    logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }
+  }),
+  { virtual: true }
+);
 
 const http = require('http');
 const GpuTranslateBackend = require('../../../services/translation/gpu-translate-backend');
@@ -36,9 +40,7 @@ describe('GpuTranslateBackend streaming', () => {
       });
 
       const tokens = [];
-      const full = await backend.callVllmStream({ messages: [{ role: 'user', content: 'hi' }] }, (d) =>
-        tokens.push(d)
-      );
+      const full = await backend.callVllmStream({ messages: [{ role: 'user', content: 'hi' }] }, (d) => tokens.push(d));
       expect(tokens).toEqual(['Hola', ' mundo']);
       expect(full).toBe('Hola mundo');
     });

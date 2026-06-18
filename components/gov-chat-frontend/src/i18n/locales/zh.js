@@ -265,8 +265,6 @@ export default {
       network: '网络带宽'
     },
     databaseManagement: '数据库管理',
-    reindexDatabase: '重新索引数据库',
-    lastReindex: '上次重新索引',
     databaseSize: '数据库大小',
     totalTables: '总表数',
     logManagement: '日志管理',
@@ -297,18 +295,14 @@ export default {
     roleUser: '用户',
     statusActive: '活跃',
     dbActions: {
-      reindex: '重新索引',
       backup: '备份',
       optimize: '优化',
-      reindexDesc: '重建数据库索引',
       backupDesc: '创建数据库备份',
       optimizeDesc: '优化查询性能'
     },
     operations: {
-      reindexTitle: '数据库重新索引结果',
       backupTitle: '数据库备份结果',
       optimizeTitle: '数据库优化结果',
-      reindexResults: '重新索引结果',
       optimizeResults: '优化结果',
       collection: '集合',
       status: '状态',
@@ -320,11 +314,7 @@ export default {
       errorDetails: '错误详情',
       close: '关闭',
       resultsTitle: '操作结果',
-      reindexDatabase: {
-        success: '数据库重新索引成功完成',
-        error: '数据库重新索引过程中出错',
-        loading: '正在重新索引数据库...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: '数据库备份成功完成',
         error: '数据库备份过程中出错',
@@ -855,7 +845,6 @@ export default {
     manageMyAccountDesc: '管理您的个人资料、安全设置和账户偏好。',
     resetUserData: '重置用户数据',
     resetUserDataDesc: '这将清除您的所有资料数据和聊天历史。',
-    edit: '编辑',
     standardAccount: '标准账户',
     cancel: '取消',
     account: {
@@ -1300,6 +1289,7 @@ export default {
     }
   },
   chatbot: {
+    streamingError: '回复已中断。请重试。',
     aiGeneratedNoDocs: 'AI 生成 — 不基于文库文档',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning: '配置不匹配：{warnings}。请检查快速帮助和知识层次结构的配置。',

@@ -265,8 +265,6 @@ export default {
       network: 'Upeo wa Mtandao'
     },
     databaseManagement: 'Usimamizi wa Hifadhidata',
-    reindexDatabase: 'Faharisi Hifadhidata',
-    lastReindex: 'Faharisi ya Mwisho',
     databaseSize: 'Ukubwa wa Hifadhidata',
     totalTables: 'Jumla ya Jedwali',
     logManagement: 'Usimamizi wa Kumbukumbu',
@@ -297,18 +295,14 @@ export default {
     roleUser: 'Mtumiaji',
     statusActive: 'Hai',
     dbActions: {
-      reindex: 'Faharisi Upya',
       backup: 'Hifadhi Nakala',
       optimize: 'Boresha',
-      reindexDesc: 'Jenga upya faharasa za hifadhidata',
       backupDesc: 'Tengeneza nakala ya hifadhidata',
       optimizeDesc: 'Boresha utendaji wa utafutaji'
     },
     operations: {
-      reindexTitle: 'Matokeo ya Kurekebisha Faharasa ya Hifadhidata',
       backupTitle: 'Matokeo ya Nakala Rudufu ya Hifadhidata',
       optimizeTitle: 'Matokeo ya Uboreshaji wa Hifadhidata',
-      reindexResults: 'Matokeo ya Faharasa',
       optimizeResults: 'Matokeo ya Uboreshaji',
       collection: 'Mkusanyiko',
       status: 'Hali',
@@ -320,11 +314,7 @@ export default {
       errorDetails: 'Maelezo ya Hitilafu',
       close: 'Funga',
       resultsTitle: 'Matokeo ya Operesheni',
-      reindexDatabase: {
-        success: 'Urekebishaji wa faharasa ya hifadhidata umekamilika',
-        error: 'Hitilafu wakati wa kurekebishwa faharasa ya hifadhidata',
-        loading: 'Inarekebisha faharasa ya hifadhidata...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'Nakala rudufu ya hifadhidata imekamilika',
         error: 'Hitilafu wakati wa kufanya nakala rudufu ya hifadhidata',
@@ -915,7 +905,6 @@ export default {
     manageMyAccountDesc: 'Simamia wasifu wako, mipangilio ya usalama na mapendeleo ya akaunti.',
     resetUserData: 'Weka Upya Data ya Mtumiaji',
     resetUserDataDesc: 'Hii itafuta data zote za wasifu wako na historia ya mazungumzo.',
-    edit: 'Hariri',
     standardAccount: 'Akaunti ya Kawaida',
     cancel: 'Ghairi',
     account: {
@@ -1361,6 +1350,7 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'Jibu lilikatika. Tafadhali jaribu tena.',
     aiGeneratedNoDocs: 'Imezalishwa na AI — haizingatii nyaraka za maktaba',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
@@ -1479,7 +1469,7 @@ export default {
       1: 'Haina msaada',
       2: 'Msaada Kidogo',
       3: 'Msaada wa Wastani',
-      44: 'Msaada Sana',
+      4: 'Msaada Sana',
       5: 'Inabadilisha Maisha'
     },
     additionalComments: 'Maoni ya ziada...',

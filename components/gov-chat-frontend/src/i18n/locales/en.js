@@ -1399,18 +1399,12 @@ export default {
     exportSuccess: 'Chat exported successfully',
     exportError: 'Failed to export chat. Please try again.',
     streamingError: 'Response was interrupted. Please try again.',
-    streamTimeout: 'Response timed out. Please try again.',
-    translationFailed: 'Translation failed. Showing original response.',
-    generating: 'Generating response...',
     removeItem: 'Remove item'
   },
   quickhelp: {
     // Labels (Short for UI)
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: "I'd like to chat about government services",
-
-    payTaxesUserPrompt: "What's the process for paying my taxes online?",
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

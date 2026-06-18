@@ -265,8 +265,6 @@ export default {
       network: 'Netzwerkbandbreite'
     },
     databaseManagement: 'Datenbankverwaltung',
-    reindexDatabase: 'Datenbank neu indizieren',
-    lastReindex: 'Letzte Neuindizierung',
     databaseSize: 'Datenbankgröße',
     totalTables: 'Gesamttabellen',
     logManagement: 'Protokollverwaltung',
@@ -297,18 +295,14 @@ export default {
     roleUser: 'Benutzer',
     statusActive: 'Aktiv',
     dbActions: {
-      reindex: 'Neu indizieren',
       backup: 'Sichern',
       optimize: 'Optimieren',
-      reindexDesc: 'Datenbankindizes neu erstellen',
       backupDesc: 'Datenbanksicherung erstellen',
       optimizeDesc: 'Abfrageleistung optimieren'
     },
     operations: {
-      reindexTitle: 'Ergebnisse der Datenbankneuindizierung',
       backupTitle: 'Ergebnisse der Datenbanksicherung',
       optimizeTitle: 'Ergebnisse der Datenbankoptimierung',
-      reindexResults: 'Neuindizierungsergebnisse',
       optimizeResults: 'Optimierungsergebnisse',
       collection: 'Sammlung',
       status: 'Status',
@@ -320,11 +314,7 @@ export default {
       errorDetails: 'Fehlerdetails',
       close: 'Schließen',
       resultsTitle: 'Operationsergebnisse',
-      reindexDatabase: {
-        success: 'Datenbankneuindizierung erfolgreich abgeschlossen',
-        error: 'Fehler bei der Datenbankneuindizierung',
-        loading: 'Datenbank wird neu indiziert...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'Datenbanksicherung erfolgreich abgeschlossen',
         error: 'Fehler bei der Datenbanksicherung',
@@ -920,7 +910,6 @@ export default {
     manageMyAccountDesc: 'Verwalten Sie Ihr Profil, Sicherheitseinstellungen und Kontopräferenzen.',
     resetUserData: 'Benutzerdaten zurücksetzen',
     resetUserDataDesc: 'Dies löscht alle Ihre Profildaten und den Chatverlauf.',
-    edit: 'Bearbeiten',
     standardAccount: 'Standardkonto',
     cancel: 'Abbrechen',
     account: {
@@ -1371,6 +1360,7 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'Die Antwort wurde unterbrochen. Bitte versuchen Sie es erneut.',
     aiGeneratedNoDocs: 'KI-generiert — nicht auf Bibliotheksdokumenten basierend',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

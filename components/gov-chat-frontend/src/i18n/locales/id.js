@@ -264,8 +264,6 @@ export default {
       network: 'Bandwidth Jaringan'
     },
     databaseManagement: 'Manajemen Database',
-    reindexDatabase: 'Indeks Ulang Database',
-    lastReindex: 'Indeks Ulang Terakhir',
     databaseSize: 'Ukuran Database',
     totalTables: 'Total Tabel',
     logManagement: 'Manajemen Log',
@@ -296,18 +294,14 @@ export default {
     roleUser: 'Pengguna',
     statusActive: 'Aktif',
     dbActions: {
-      reindex: 'Indeks Ulang',
       backup: 'Cadangkan',
       optimize: 'Optimalkan',
-      reindexDesc: 'Bangun ulang indeks database',
       backupDesc: 'Buat cadangan database',
       optimizeDesc: 'Optimalkan kinerja query'
     },
     operations: {
-      reindexTitle: 'Hasil Indeks Ulang Database',
       backupTitle: 'Hasil Cadangan Database',
       optimizeTitle: 'Hasil Optimasi Database',
-      reindexResults: 'Hasil Indeks Ulang',
       optimizeResults: 'Hasil Optimasi',
       collection: 'Koleksi',
       status: 'Status',
@@ -319,11 +313,7 @@ export default {
       errorDetails: 'Detail Kesalahan',
       close: 'Tutup',
       resultsTitle: 'Hasil Operasi',
-      reindexDatabase: {
-        success: 'Indeks ulang database berhasil diselesaikan',
-        error: 'Kesalahan saat indeks ulang database',
-        loading: 'Mengindeks ulang database...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'Pencadangan database berhasil diselesaikan',
         error: 'Kesalahan saat pencadangan database',
@@ -1358,6 +1348,7 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'Respons terputus. Silakan coba lagi.',
     aiGeneratedNoDocs: 'Dihasilkan oleh AI — tidak berdasarkan dokumen perpustakaan',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

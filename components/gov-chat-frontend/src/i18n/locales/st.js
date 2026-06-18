@@ -262,8 +262,6 @@ export default {
       network: 'Bandwidth ya Marangrang'
     },
     databaseManagement: 'Tsamaiso ya Datha (Database)',
-    reindexDatabase: 'Etsa Indekse Botjha (Reindex)',
-    lastReindex: 'Tlhahlobo ya Indekse ya ho qetela',
     databaseSize: 'Boholo ba Datha (Database)',
     totalTables: 'Ditafole kaofela',
     logManagement: 'Tsamaiso ya Lilog',
@@ -294,18 +292,14 @@ export default {
     roleUser: 'Mosebedisi',
     statusActive: 'E sebetsang',
     dbActions: {
-      reindex: 'Etsa Indekse Botjha',
       backup: 'Bokella (Backup)',
       optimize: 'Ntlafatsa',
-      reindexDesc: 'Tsosolosa di-index tsa database',
       backupDesc: 'Etsa backup ya database',
       optimizeDesc: 'Ntlafatsa tshebetso ya dipotso (queries)'
     },
     operations: {
-      reindexTitle: 'Diphetho tsa ho Etsa Indekse Botjha',
       backupTitle: 'Diphetho tsa Backup ya Database',
       optimizeTitle: 'Diphetho tsa ho Ntlafatsa Database',
-      reindexResults: 'Diphetho tsa Indekse',
       optimizeResults: 'Diphetho tsa ho Ntlafatsa',
       collection: 'Pokello',
       status: 'Boemo',
@@ -317,11 +311,7 @@ export default {
       errorDetails: 'Dintlha tsa Phoso',
       close: 'Kwala',
       resultsTitle: 'Diphetho tsa Tshebetso',
-      reindexDatabase: {
-        success: 'Ho etsa indekse botjha ya database ho phethetswe ka katleho',
-        error: 'Phoso nakong ya ho etsa indekse botjha ya database',
-        loading: 'E etsa indekse botjha ya database...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'Backup ya database e phethetswe ka katleho',
         error: 'Phoso nakong ya backup ya database',
@@ -915,7 +905,6 @@ export default {
     accountManagement: 'Tsamaiso ya Akhaonto',
     resetUserData: 'Seta Datha ya Mosebedisi Botjha',
     resetUserDataDesc: 'Sena se tla hlakola datha yohle ya profaele ya hao le nalane ya moqoqo.',
-    edit: 'Fetola',
     standardAccount: 'Akhaonto e Tlwaelehileng',
     cancel: 'Hlakola',
     account: {
@@ -1366,6 +1355,7 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'Karabo e emisetsoe. Re leke hape.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

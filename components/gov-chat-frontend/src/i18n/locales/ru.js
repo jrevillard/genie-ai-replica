@@ -265,8 +265,6 @@ export default {
       network: 'Пропускная способность сети'
     },
     databaseManagement: 'Управление базой данных',
-    reindexDatabase: 'Переиндексировать базу данных',
-    lastReindex: 'Последняя переиндексация',
     databaseSize: 'Размер базы данных',
     totalTables: 'Всего таблиц',
     logManagement: 'Управление журналами',
@@ -297,18 +295,14 @@ export default {
     roleUser: 'Пользователь',
     statusActive: 'Активен',
     dbActions: {
-      reindex: 'Переиндексировать',
       backup: 'Резервное копирование',
       optimize: 'Оптимизировать',
-      reindexDesc: 'Перестроить индексы базы данных',
       backupDesc: 'Создать резервную копию базы данных',
       optimizeDesc: 'Оптимизировать производительность запросов'
     },
     operations: {
-      reindexTitle: 'Результаты переиндексации базы данных',
       backupTitle: 'Результаты резервного копирования базы данных',
       optimizeTitle: 'Результаты оптимизации базы данных',
-      reindexResults: 'Результаты переиндексации',
       optimizeResults: 'Результаты оптимизации',
       collection: 'Коллекция',
       status: 'Статус',
@@ -320,11 +314,7 @@ export default {
       errorDetails: 'Детали ошибки',
       close: 'Закрыть',
       resultsTitle: 'Результаты операции',
-      reindexDatabase: {
-        success: 'Переиндексация базы данных успешно завершена',
-        error: 'Ошибка при переиндексации базы данных',
-        loading: 'Переиндексация базы данных...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'Резервное копирование базы данных успешно завершено',
         error: 'Ошибка при резервном копировании базы данных',
@@ -920,7 +910,6 @@ export default {
     accountManagement: 'Управление учётной записью',
     resetUserData: 'Сбросить данные пользователя',
     resetUserDataDesc: 'Это удалит все данные вашего профиля и историю чатов.',
-    edit: 'Редактировать',
     standardAccount: 'Стандартная учётная запись',
     cancel: 'Отмена',
     account: {
@@ -1368,6 +1357,7 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'Ответ был прерван. Повторите попытку.',
     aiGeneratedNoDocs: 'Сгенерировано ИИ — не основано на документах библиотеки',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

@@ -265,8 +265,6 @@ export default {
       network: 'แบนด์วิดธ์เครือข่าย'
     },
     databaseManagement: 'การจัดการฐานข้อมูล',
-    reindexDatabase: 'รีอินเด็กซ์ฐานข้อมูล',
-    lastReindex: 'รีอินเด็กซ์ล่าสุด',
     databaseSize: 'ขนาดฐานข้อมูล',
     totalTables: 'ตารางทั้งหมด',
     logManagement: 'การจัดการบันทึก',
@@ -297,18 +295,14 @@ export default {
     roleUser: 'ผู้ใช้',
     statusActive: 'ใช้งาน',
     dbActions: {
-      reindex: 'รีอินเด็กซ์',
       backup: 'สำรองข้อมูล',
       optimize: 'ปรับปรุง',
-      reindexDesc: 'สร้างดัชนีฐานข้อมูลใหม่',
       backupDesc: 'สร้างสำรองฐานข้อมูล',
       optimizeDesc: 'ปรับปรุงประสิทธิภาพการสอบถาม'
     },
     operations: {
-      reindexTitle: 'ผลลัพธ์การรีอินเด็กซ์ฐานข้อมูล',
       backupTitle: 'ผลลัพธ์การสำรองฐานข้อมูล',
       optimizeTitle: 'ผลลัพธ์การปรับปรุงฐานข้อมูล',
-      reindexResults: 'ผลลัพธ์รีอินเด็กซ์',
       optimizeResults: 'ผลลัพธ์การปรับปรุง',
       collection: 'คอลเลกชัน',
       status: 'สถานะ',
@@ -320,11 +314,7 @@ export default {
       errorDetails: 'รายละเอียดข้อผิดพลาด',
       close: 'ปิด',
       resultsTitle: 'ผลลัพธ์การดำเนินการ',
-      reindexDatabase: {
-        success: 'รีอินเด็กซ์ฐานข้อมูลเสร็จสิ้นสำเร็จ',
-        error: 'ข้อผิดพลาดระหว่างรีอินเด็กซ์ฐานข้อมูล',
-        loading: 'กำลังรีอินเด็กซ์ฐานข้อมูล...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'สำรองฐานข้อมูลเสร็จสิ้นสำเร็จ',
         error: 'ข้อผิดพลาดระหว่างสำรองฐานข้อมูล',
@@ -910,7 +900,6 @@ export default {
     manageMyAccountDesc: 'จัดการข้อมูลส่วนตัว การตั้งค่าความปลอดภัย และการตั้งค่าบัญชี',
     resetUserData: 'รีเซ็ตข้อมูลผู้ใช้',
     resetUserDataDesc: 'นี้จะล้างข้อมูลโปรไฟล์และประวัติแชททั้งหมดของคุณ',
-    edit: 'แก้ไข',
     standardAccount: 'บัญชีมาตรฐาน',
     cancel: 'ยกเลิก',
     account: {
@@ -1356,6 +1345,7 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'การตอบกลับถูกขัดจังหวะ โปรดลองอีกครั้ง',
     aiGeneratedNoDocs: 'สร้างโดย AI — ไม่อิงจากเอกสารในคลังเอกสาร',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

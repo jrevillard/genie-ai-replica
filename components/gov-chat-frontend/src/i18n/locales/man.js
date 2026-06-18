@@ -262,8 +262,6 @@ export default {
       network: 'Netwookoo kandaa'
     },
     databaseManagement: 'Detabeesi Lataramoo',
-    reindexDatabase: 'Detabeesi indexi kura',
-    lastReindex: 'Indexi kura labang',
     databaseSize: 'Detabeesi warayaa',
     totalTables: 'Tebulol bee kafung',
     logManagement: 'Log Lataramoo',
@@ -294,18 +292,14 @@ export default {
     roleUser: 'Moo (User)',
     statusActive: 'A ka baara',
     dbActions: {
-      reindex: 'Indexi kura',
       backup: 'Bakaap (Mara)',
       optimize: 'A dadiyaa',
-      reindexDesc: 'Detabeesi indexolu lo-kura',
       backupDesc: 'Detabeesi marol ke',
       optimizeDesc: 'Koori baara-coko dadiyaa'
     },
     operations: {
-      reindexTitle: 'Detabeesi Indexi kura Fata',
       backupTitle: 'Detabeesi Mara Fata',
       optimizeTitle: 'Detabeesi Dadiyaa Fata',
-      reindexResults: 'Indexi kura Fatal',
       optimizeResults: 'Dadiyaa Fatal',
       collection: 'Kafung-da',
       status: 'Cokoyaa',
@@ -317,11 +311,7 @@ export default {
       errorDetails: 'Filiya kumpa-kumol',
       close: 'A dade',
       resultsTitle: 'Baara Fatal',
-      reindexDatabase: {
-        success: 'Detabeesi indexi kura benta',
-        error: 'Filiyata detabeesi indexi kura to',
-        loading: 'A ka detabeesi indexi kura...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'Detabeesi mara benta',
         error: 'Filiyata detabeesi mara to',
@@ -864,7 +854,6 @@ export default {
     accountManagement: 'Akaanti Lataramoo',
     resetUserData: 'Moo Kibaroo Fitindi',
     resetUserDataDesc: 'Nying si i la moo-kibaroo bee fiti ani kuma koto.',
-    edit: 'A dada',
     standardAccount: 'Akaanti Kilingo',
     cancel: 'A bula',
     account: {
@@ -1312,6 +1301,7 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'Jɛɛmɔgɔya labɛnnen na. A ñaa ma ñɔɔrɔ.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:

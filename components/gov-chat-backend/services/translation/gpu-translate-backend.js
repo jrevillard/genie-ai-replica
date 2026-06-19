@@ -554,6 +554,10 @@ class GpuTranslateBackend {
     if (!text || text.trim() === '') return '';
 
     const requestBody = this.formatRequest(this.modelId, sourceCode, targetCode, text);
+    // Cap max_tokens for streaming — translation units are sentence/paragraph-sized
+    // (typically < 500 tokens). The formatRequest default (maxModelLen - 128) can
+    // overflow the model's context window when the context window adds input tokens.
+    requestBody.max_tokens = 1024;
 
     // Context window: for prompt-based models, prepend prior units so the
     // translator keeps terminology/pronouns consistent across units. TranslateGemma

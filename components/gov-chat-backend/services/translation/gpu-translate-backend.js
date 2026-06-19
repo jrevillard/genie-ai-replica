@@ -574,9 +574,10 @@ class GpuTranslateBackend {
       ];
     }
 
-    // Dynamically cap max_tokens AFTER context injection so input + output never
-    // exceeds maxModelLen. formatRequest derives max_tokens from maxModelLen assuming
-    // only the text input; the context window adds extra tokens that can overflow.
+    // Dynamically cap max_tokens AFTER context injection so input (messages +
+    // context window) + output never exceeds maxModelLen. formatRequest derives
+    // max_tokens from maxModelLen assuming only the text input; the context window
+    // adds extra input tokens that can overflow (vLLM 400).
     const inputTokens = Math.ceil(JSON.stringify(requestBody.messages).length / 4);
     const safeMaxTokens = Math.max(256, this.maxModelLen - inputTokens - 128);
     requestBody.max_tokens = Math.min(requestBody.max_tokens || safeMaxTokens, safeMaxTokens);

@@ -217,9 +217,13 @@ module.exports = (queryService) => {
       const CONTEXT_WINDOW_SIZE = 3;
       let streamingTranslationFailed = false;
 
-      const scheduleUnitTranslation = (unit) => {
+      const scheduleUnitTranslation = (rawUnit) => {
         translationChain = translationChain.then(async () => {
           if (res.writableEnded) return;
+          // Strip trailing newlines before translation — the model may drop them.
+          // Re-append after to preserve markdown line/paragraph structure.
+          const trailingNewlines = (rawUnit.match(/\n*$/) || [''])[0];
+          const unit = rawUnit.replace(/\n+$/, '');
           try {
             await translationService.init();
             const translated = await translationService.translateStream(
@@ -233,18 +237,21 @@ module.exports = (queryService) => {
                 }
               }
             );
+            // Re-append trailing newlines to preserve formatting.
+            if (trailingNewlines && !res.writableEnded) {
+              res.write(`data: ${JSON.stringify({ type: 'chunk', content: trailingNewlines })}\n\n`);
+            }
             contextWindow.push({ source: unit, target: translated });
             if (contextWindow.length > CONTEXT_WINDOW_SIZE) contextWindow.shift();
           } catch (error) {
             logger.warn(
-              `QueryService.stream_translation_unit_failed: ${error.message} (lang=${targetLanguage}, unitLen=${unit.length}, unitPreview=${unit.slice(0, 80)})`,
+              `QueryService.stream_translation_unit_failed: ${error.message} (lang=${targetLanguage}, unitLen=${rawUnit.length}, unitPreview=${rawUnit.slice(0, 80)})`,
               { queryId }
             );
-            // Fallback: emit the original EN unit, flush pending buffer, then stop
-            // buffering and forward subsequent EN chunks directly (preserves
-            // original markdown formatting instead of fragmenting into units).
+            // Fallback: emit the original EN unit (with \n), flush pending buffer,
+            // then stop buffering and forward subsequent EN chunks directly.
             if (!res.writableEnded) {
-              res.write(`data: ${JSON.stringify({ type: 'chunk', content: unit })}\n\n`);
+              res.write(`data: ${JSON.stringify({ type: 'chunk', content: rawUnit })}\n\n`);
             }
             if (pendingEn && !res.writableEnded) {
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: pendingEn })}\n\n`);
@@ -259,13 +266,21 @@ module.exports = (queryService) => {
         if (doneState.handled || res.writableEnded) return;
         doneState.handled = true;
         if (useStreamingTranslation) {
-          if (pendingEn.trim()) {
-            scheduleUnitTranslation(pendingEn);
-            pendingEn = '';
+          if (streamingTranslationFailed) {
+            // Degraded: flush remaining EN directly (bypass translation)
+            if (pendingEn && !res.writableEnded) {
+              res.write(`data: ${JSON.stringify({ type: 'chunk', content: pendingEn })}\n\n`);
+              pendingEn = '';
+            }
+          } else {
+            if (pendingEn.trim()) {
+              scheduleUnitTranslation(pendingEn);
+              pendingEn = '';
+            }
+            // Each scheduled unit swallows its own errors (see scheduleUnitTranslation),
+            // so the chain never rejects; awaiting it just orders completion before 'done'.
+            await translationChain;
           }
-          // Each scheduled unit swallows its own errors (see scheduleUnitTranslation),
-          // so the chain never rejects; awaiting it just orders completion before 'done'.
-          await translationChain;
           await handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata, true);
         } else {
           handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res, capturedMetadata, false);

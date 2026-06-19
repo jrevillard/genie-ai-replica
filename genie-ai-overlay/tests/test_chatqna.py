@@ -541,18 +541,22 @@ class TestAlignOutputs:
             assert result["initial_query"] == "test"
             assert len(result["retrieved_docs"]) == 1
 
-        def test_forwards_embeddings_for_adaptive_reranking(self):
+        def test_chunk_embeddings_flow_via_metadata_channel(self):
+            """Verify chunk embeddings propagate via retrieved_docs[].metadata,
+            which survives the OPEA megaservice hop (top-level fields are
+            stripped). chatqna assembles chunk_embeddings from there."""
             self_mock = MagicMock()
             self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
             graph = create_mock_runtime_graph(downstream_nodes=["rerank_node"])
             data = {
                 "initial_query": "test",
-                "retrieved_docs": [{"id": "d1", "text": "doc1"}],
-                "metadata": [{"file_ids": ["f1"]}],
-                "embedding": [0.1, 0.2, 0.3],
-                "chunk_embeddings": [[0.1, 0.2], [0.3, 0.4]],
+                "retrieved_docs": [
+                    {"id": "d1", "text": "doc1", "metadata": {"chunk_embedding": [0.1, 0.2]}},
+                    {"id": "d2", "text": "doc2", "metadata": {"chunk_embedding": [0.3, 0.4]}},
+                ],
+                "metadata": [{"file_ids": ["f1"]}, {"file_ids": ["f2"]}],
             }
-            inputs = {}
+            inputs = {"input": "test", "embedding": [0.5, 0.6, 0.7]}
             llm_params = {}
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
@@ -566,8 +570,7 @@ class TestAlignOutputs:
                     graph,
                     llm_params,
                 )
-            # Query embedding + chunk embeddings forwarded to the reranker
-            assert result["embedding"] == [0.1, 0.2, 0.3]
+            assert result["embedding"] == [0.5, 0.6, 0.7]
             assert result["chunk_embeddings"] == [[0.1, 0.2], [0.3, 0.4]]
 
         def test_forwards_query_embedding_from_request_when_retriever_drops_it(self):
@@ -578,12 +581,13 @@ class TestAlignOutputs:
             graph = create_mock_runtime_graph(downstream_nodes=["rerank_node"])
             data = {
                 "initial_query": "test",
-                "retrieved_docs": [{"id": "d1", "text": "doc1"}],
-                "metadata": [{"file_ids": ["f1"]}],
-                "chunk_embeddings": [[0.1, 0.2], [0.3, 0.4]],
-                # NOTE: no "embedding" in data (retriever did not echo it)
+                "retrieved_docs": [
+                    {"id": "d1", "text": "doc1", "metadata": {"chunk_embedding": [0.1, 0.2]}},
+                    {"id": "d2", "text": "doc2", "metadata": {"chunk_embedding": [0.3, 0.4]}},
+                ],
+                "metadata": [{"file_ids": ["f1"]}, {"file_ids": ["f2"]}],
             }
-            inputs = {"input": "test", "embedding": [0.5, 0.6, 0.7]}  # request carries it
+            inputs = {"input": "test", "embedding": [0.5, 0.6, 0.7]}
             llm_params = {}
             with (
                 patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),

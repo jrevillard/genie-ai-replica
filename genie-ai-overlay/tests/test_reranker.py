@@ -983,8 +983,8 @@ class TestAdaptiveStrategy:
         assert "docC" in {d.text for d in result.reranked_docs}
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_slice_when_query_embedding_missing(self):
-        """Regression (BUG #1): no query embedding -> adaptive cannot run -> slice."""
+    async def test_raises_when_query_embedding_missing(self):
+        """Adaptive with no query embedding -> hard-fail (no silent slice fallback)."""
         reranker = create_reranker()
         tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
         input_doc = create_mock_chat_request(
@@ -995,14 +995,15 @@ class TestAdaptiveStrategy:
             top_n=1,
         )
         mock_session = create_mock_aiohttp_session(tei_response)
-        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
-            result = await reranker.invoke(input_doc)
-        assert len(result.reranked_docs) == 1
-        assert result.reranked_docs[0].score == 0.95
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            pytest.raises(RuntimeError, match="ADAPTIVE"),
+        ):
+            await reranker.invoke(input_doc)
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_slice_when_chunk_embeddings_misaligned(self):
-        """Regression (BUG #2): chunk_embeddings count != docs -> slice fallback."""
+    async def test_raises_when_chunk_embeddings_misaligned(self):
+        """Adaptive with chunk_embeddings count != docs -> hard-fail."""
         reranker = create_reranker()
         tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
         input_doc = create_mock_chat_request(
@@ -1013,14 +1014,15 @@ class TestAdaptiveStrategy:
             top_n=1,
         )
         mock_session = create_mock_aiohttp_session(tei_response)
-        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
-            result = await reranker.invoke(input_doc)
-        assert len(result.reranked_docs) == 1
-        assert result.reranked_docs[0].score == 0.95
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            pytest.raises(RuntimeError, match="ADAPTIVE"),
+        ):
+            await reranker.invoke(input_doc)
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_slice_when_chunk_embedding_empty(self):
-        """Regression (BUG #2): an empty chunk embedding must not crash; fall back."""
+    async def test_raises_when_chunk_embedding_empty(self):
+        """Adaptive with an empty chunk embedding -> hard-fail."""
         reranker = create_reranker()
         tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
         input_doc = create_mock_chat_request(
@@ -1031,7 +1033,8 @@ class TestAdaptiveStrategy:
             top_n=1,
         )
         mock_session = create_mock_aiohttp_session(tei_response)
-        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
-            result = await reranker.invoke(input_doc)
-        assert len(result.reranked_docs) == 1
-        assert result.reranked_docs[0].score == 0.95
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            pytest.raises(RuntimeError, match="ADAPTIVE"),
+        ):
+            await reranker.invoke(input_doc)

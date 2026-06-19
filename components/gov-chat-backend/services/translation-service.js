@@ -5,7 +5,7 @@ const Redis = require('ioredis'); // For Redis cache
 // Import backend modules
 const CpuTranslateBackend = require('./translation/cpu-translate-backend');
 const GpuTranslateBackend = require('./translation/gpu-translate-backend');
-const { splitEdges } = require('./translation/text-edges');
+const { splitEdges, startsWithWordSpacedScript } = require('./translation/text-edges');
 
 // --- Read settings from environment variables ---
 const DEFAULT_THREADS = 4;
@@ -390,7 +390,7 @@ class TranslationService {
               (cur.type === 'strong' || cur.type === 'emphasis') &&
               next.type === 'text' &&
               next.value &&
-              /^[\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}]/u.test(next.value)
+              startsWithWordSpacedScript(next.value)
             ) {
               next.value = ` ${next.value}`;
             }

@@ -555,23 +555,15 @@ class GpuTranslateBackend {
 
     const requestBody = this.formatRequest(this.modelId, sourceCode, targetCode, text);
 
-    // Context window: for prompt-based models, prepend prior units so the
-    // translator keeps terminology/pronouns consistent across units. TranslateGemma
-    // uses a structured payload where free-text context isn't supported, so it
-    // translates the unit standalone (still correct, just less cross-unit glue).
+    // Context window: prepend prior units to formatRequest's EXISTING prompt
+    // (which has "Only return the translation, no explanation"). We AUGMENT
+    // the prompt — never replace it. Replacing would lose the constraint and
+    // the model would add commentary/alternatives, breaking formatting.
     if (context && context.length > 0 && !this.modelId.includes('translategemma')) {
       const ctxBlock = context.map((c) => `EN: ${c.source}\n${targetCode.toUpperCase()}: ${c.target}`).join('\n');
-      const langNames = this.languageMap?.languageNames || {};
-      const srcName = langNames[sourceCode] || sourceCode;
-      const tgtName = langNames[targetCode] || targetCode;
-      requestBody.messages = [
-        {
-          role: 'user',
-          content:
-            `Prior context (for terminology consistency only — do NOT translate or repeat it):\n${ctxBlock}\n\n` +
-            `Translate ONLY the following text from ${srcName} to ${tgtName}. Return only the translation:\n${text}`
-        }
-      ];
+      requestBody.messages[0].content =
+        `Prior context (for terminology consistency only — do NOT translate or repeat it):\n${ctxBlock}\n\n` +
+        requestBody.messages[0].content;
     }
 
     // Dynamically cap max_tokens AFTER context injection so input (messages +

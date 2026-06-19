@@ -900,6 +900,10 @@ class GenieaiArangoRetriever(OpeaComponent):
             if reranking_strategy == "adaptive" and search_res:
                 for r in search_res:
                     chunk_key = r["doc"].id if r["doc"].id else (r["doc"].metadata or {}).get("_key")
+                    # ArangoVector may set Document.id to the full _id (collection/key);
+                    # normalise to _key for the AQL `FILTER doc._key == @chunk_key`.
+                    if chunk_key and "/" in str(chunk_key):
+                        chunk_key = str(chunk_key).rsplit("/", 1)[-1]
                     if not chunk_key:
                         r["doc"].metadata["chunk_embedding"] = []
                         continue
@@ -911,6 +915,9 @@ class GenieaiArangoRetriever(OpeaComponent):
                         """
                         cursor = self.db.aql.execute(aql, bind_vars={"chunk_key": chunk_key})
                         emb = next(iter(cursor), [])
+                        logger.debug(
+                            f"[ADAPTIVE] chunk_key={chunk_key} emb_len={len(emb) if isinstance(emb, list) else 0}"
+                        )
                         r["doc"].metadata["chunk_embedding"] = emb if isinstance(emb, list) else []
                     except Exception as e:
                         logger.error(f"Error fetching chunk embedding for {chunk_key}: {e}")

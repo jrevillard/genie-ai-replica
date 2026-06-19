@@ -570,6 +570,37 @@ class TestAlignOutputs:
             assert result["embedding"] == [0.1, 0.2, 0.3]
             assert result["chunk_embeddings"] == [[0.1, 0.2], [0.3, 0.4]]
 
+        def test_forwards_query_embedding_from_request_when_retriever_drops_it(self):
+            """The request (inputs) carries the query embedding; the retriever
+            response may not echo it. align_outputs must forward inputs' embedding."""
+            self_mock = MagicMock()
+            self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
+            graph = create_mock_runtime_graph(downstream_nodes=["rerank_node"])
+            data = {
+                "initial_query": "test",
+                "retrieved_docs": [{"id": "d1", "text": "doc1"}],
+                "metadata": [{"file_ids": ["f1"]}],
+                "chunk_embeddings": [[0.1, 0.2], [0.3, 0.4]],
+                # NOTE: no "embedding" in data (retriever did not echo it)
+            }
+            inputs = {"input": "test", "embedding": [0.5, 0.6, 0.7]}  # request carries it
+            llm_params = {}
+            with (
+                patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+                patch("chatqna.genieai_chatqna.RETRIEVER_SEARCH_START", "chunk"),
+            ):
+                result = align_outputs(
+                    self_mock,
+                    data,
+                    "retriever_node",
+                    inputs,
+                    graph,
+                    llm_params,
+                )
+            # Query embedding taken from the request (inputs), not lost
+            assert result["embedding"] == [0.5, 0.6, 0.7]
+            assert result["chunk_embeddings"] == [[0.1, 0.2], [0.3, 0.4]]
+
         def test_without_rerank_no_docs_adds_abstention(self):
             self_mock = MagicMock()
             self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}

@@ -157,8 +157,8 @@ HUGGING_FACE_HUB_TOKEN=
 # EMBEDDING_MODEL_ID=
 
 # Reranking model for search result refinement
-# Default: cross-encoder/ms-marco-MiniLM-L-6-v2
-# RERANKER_MODEL_ID=
+# Default: BAAI/bge-reranker-v2-m3
+# RERANKER_MODEL_ID=BAAI/bge-reranker-v2-m3
 
 # ArangoDB graph traversal (used by retriever and chatqna)
 # RETRIEVER_ARANGO_GRAPH_NAME=GRAPH

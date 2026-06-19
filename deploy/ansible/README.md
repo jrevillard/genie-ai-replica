@@ -266,7 +266,7 @@ Set in `group_vars/<env>/vars.yml`:
 |----------|---------|-------------|
 | `embedding_server_endpoint` | `/v1/embeddings` | Embedding service API endpoint path |
 | `embedding_model_id` | `BAAI/bge-base-en-v1.5` | Embedding model for vector search |
-| `reranker_model_id` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Reranking model |
+| `reranker_model_id` | `BAAI/bge-reranker-v2-m3` | Reranking model |
 | `reranking_strategy` | `hybrid` | Reranker strategy (hybrid, score, all) |
 | `reranking_threshold` | `0.9` | Threshold for reranker strategy |
 | `novelty_sigmoid_a` | `20.0` | Adaptive: novelty-to-weight logistic steepness |

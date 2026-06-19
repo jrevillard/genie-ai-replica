@@ -402,6 +402,82 @@ class GpuTranslateBackend {
   }
 
   /**
+   * Call vLLM service with streaming output (stream:true). Invokes onToken for
+   * each generated delta token and resolves with the full concatenated text.
+   * @param {Object} requestBody - Request body (stream:true is added automatically)
+   * @param {(delta: string) => void} [onToken] - Called for each output delta
+   * @returns {Promise<string>} Full concatenated translated text
+   */
+  async callVllmStream(requestBody, onToken) {
+    const url = new URL(this.endpoint);
+    const isHttps = url.protocol === 'https:';
+    const client = isHttps ? https : http;
+    const basePath = url.pathname.replace(/\/$/, '');
+    const postData = JSON.stringify({ ...requestBody, stream: true });
+
+    const options = {
+      hostname: url.hostname,
+      port: url.port || (url.protocol === 'https:' ? 443 : 80),
+      path: `${basePath}/v1/chat/completions`,
+      method: 'POST',
+      headers: this._buildHeaders({
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      }),
+      timeout: 60000
+    };
+
+    return new Promise((resolve, reject) => {
+      let full = '';
+      let buffer = '';
+      const req = client.request(options, (res) => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          let errBody = '';
+          res.on('data', (c) => (errBody += c));
+          res.on('end', () => reject(new Error(`vLLM stream service error: ${res.statusCode} ${errBody}`)));
+          return;
+        }
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          buffer += chunk;
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data: ')) continue;
+            const payload = trimmed.slice(6);
+            if (payload === '[DONE]') continue;
+            try {
+              const parsed = JSON.parse(payload);
+              const delta = parsed.choices?.[0]?.delta?.content || '';
+              if (delta) {
+                full += delta;
+                if (onToken) onToken(delta);
+              }
+            } catch {
+              // Ignore non-JSON keepalive/partial lines
+            }
+          }
+        });
+        res.on('end', () => resolve(full));
+      });
+
+      req.on('error', (error) => {
+        logger.error(`[GPU-BACKEND] vLLM stream request failed: ${error.message}`);
+        reject(new Error(`vLLM stream request failed: ${error.message}`));
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('vLLM stream request timeout'));
+      });
+
+      req.write(postData);
+      req.end();
+    });
+  }
+
+  /**
    * Translate using vLLM service
    * @param {string[]} texts - Texts to translate
    * @param {string} sourceCode - Source language code (model-specific)
@@ -457,6 +533,48 @@ class GpuTranslateBackend {
       });
       throw new Error(`[GPU-BACKEND] Failed to perform translation: ${error.message}`, { cause: error });
     }
+  }
+
+  /**
+   * Stream-translate a single COMPLETE unit (sentence/paragraph — see
+   * services/translation/stream-boundary.js). The translator streams its output
+   * via onToken. An optional rolling context window (prior units) keeps
+   * terminology/pronouns consistent across units (prompt-based models only).
+   * @param {string} text - Complete unit to translate
+   * @param {string} sourceCode - Source language code (model-specific)
+   * @param {string} targetCode - Target language code (model-specific)
+   * @param {{source: string, target: string}[]} [context] - Prior units EN+target
+   * @param {(delta: string) => void} [onToken] - Streaming callback
+   * @returns {Promise<string>} Full translated text
+   */
+  async translateStream(text, sourceCode, targetCode, context, onToken) {
+    if (!this.initialized) {
+      throw new Error('[GPU-BACKEND] Backend is not ready.');
+    }
+    if (!text || text.trim() === '') return '';
+
+    const requestBody = this.formatRequest(this.modelId, sourceCode, targetCode, text);
+
+    // Context window: prepend prior units to formatRequest's EXISTING prompt
+    // (which has "Only return the translation, no explanation"). We AUGMENT
+    // the prompt — never replace it. Replacing would lose the constraint and
+    // the model would add commentary/alternatives, breaking formatting.
+    if (context && context.length > 0 && !this.modelId.includes('translategemma')) {
+      const ctxBlock = context.map((c) => `EN: ${c.source}\n${targetCode.toUpperCase()}: ${c.target}`).join('\n');
+      requestBody.messages[0].content =
+        `Prior context (for terminology consistency only — do NOT translate or repeat it):\n${ctxBlock}\n\n` +
+        requestBody.messages[0].content;
+    }
+
+    // Dynamically cap max_tokens AFTER context injection so input (messages +
+    // context window) + output never exceeds maxModelLen. formatRequest derives
+    // max_tokens from maxModelLen assuming only the text input; the context window
+    // adds extra input tokens that can overflow (vLLM 400).
+    const inputTokens = Math.ceil(JSON.stringify(requestBody.messages).length / 4);
+    const safeMaxTokens = Math.max(256, this.maxModelLen - inputTokens - 128);
+    requestBody.max_tokens = Math.min(requestBody.max_tokens || safeMaxTokens, safeMaxTokens);
+
+    return this.callVllmStream(requestBody, onToken);
   }
 
   /**

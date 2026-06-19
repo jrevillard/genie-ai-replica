@@ -52,6 +52,7 @@ from comps import (
 )
 from comps.cores.proto.genieai_api_protocol import (
     ChatCompletionRequest,
+    GenieRetrievalResponse,
     RetrievalRequest,
     RetrievalRequestArangoDB,
     RetrievalResponse,
@@ -150,7 +151,11 @@ async def retrieve_docs(
                             query_embedding = qe
                     retrieved_docs.append(RetrievalResponseData(text=r["doc"].page_content, metadata=r["doc"].metadata))
             if isinstance(input, RetrievalRequest):
-                result = RetrievalResponse(retrieved_docs=retrieved_docs)
+                result = GenieRetrievalResponse(retrieved_docs=retrieved_docs)
+                # Carry chunk embeddings for the adaptive reranker (the base
+                # RetrievalResponse has no embeddings field).
+                if chunk_embeddings and all(ce for ce in chunk_embeddings):
+                    result.chunk_embeddings = chunk_embeddings
             elif isinstance(input, ChatCompletionRequest):
                 input.retrieved_docs = retrieved_docs
                 input.documents = [doc.text for doc in retrieved_docs]

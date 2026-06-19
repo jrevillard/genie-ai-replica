@@ -687,9 +687,13 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             next_data["initial_query"] = data["initial_query"]
             next_data["retrieved_docs"] = retrieved_docs
             next_data["file_id_pairs"] = file_id_pairs
-            # Preserve query embedding for adaptive reranking
-            if "embedding" in data:
-                next_data["embedding"] = data["embedding"]
+            # Forward the query embedding for adaptive reranking. Prefer the
+            # request's embedding (inputs) — always present — then the retriever echo.
+            query_embedding = inputs.get("embedding") if isinstance(inputs, dict) else None
+            if not query_embedding:
+                query_embedding = data.get("embedding")
+            if query_embedding:
+                next_data["embedding"] = query_embedding
             # Forward chunk_embeddings if available from retriever
             if "chunk_embeddings" in data:
                 next_data["chunk_embeddings"] = data["chunk_embeddings"]

@@ -345,6 +345,25 @@ class TestInvoke:
         assert isinstance(result, list)
 
     @pytest.mark.asyncio
+    async def test_adaptive_strategy_attaches_chunk_embeddings(self, invoke_env):
+        db = invoke_env["db"]
+        # Every AQL call (file-id lookup + adaptive embedding fetch) yields an embedding vector
+        db.aql.execute.side_effect = lambda *args, **kwargs: iter([[0.1, 0.2, 0.3]])
+        input_mock = create_mock_input(search_start="chunk", reranking_strategy="adaptive")
+        result = await invoke_env["retriever"].invoke(input_mock)
+        assert len(result) >= 1
+        # Adaptive path attaches each chunk's embedding to its own metadata
+        assert result[0]["doc"].metadata.get("chunk_embedding") == [0.1, 0.2, 0.3]
+
+    @pytest.mark.asyncio
+    async def test_non_adaptive_skips_chunk_embedding_fetch(self, invoke_env):
+        input_mock = create_mock_input(search_start="chunk", reranking_strategy="slice")
+        result = await invoke_env["retriever"].invoke(input_mock)
+        assert len(result) >= 1
+        # Non-adaptive retrieval must not attach chunk embeddings
+        assert "chunk_embedding" not in (result[0]["doc"].metadata or {})
+
+    @pytest.mark.asyncio
     async def test_hybrid_search_calls_fetch_neighborhoods(self, invoke_env):
         invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
         await invoke_env["retriever"].invoke(create_mock_input(enable_traversal=True))

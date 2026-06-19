@@ -890,6 +890,33 @@ class GenieaiArangoRetriever(OpeaComponent):
 
                     r["doc"].page_content = summarized_text
 
+            ##################################################################
+            # Fetch Chunk Embeddings (for adaptive reranking)                #
+            ##################################################################
+            # When adaptive reranking is requested, attach each chunk's stored
+            # embedding to its own metadata. The retriever microservice assembles
+            # them into an ordered chunk_embeddings list propagated to the reranker.
+            reranking_strategy = input_dict.get("reranking_strategy", os.getenv("RERANKING_STRATEGY", "slice"))
+            if reranking_strategy == "adaptive" and search_res:
+                for r in search_res:
+                    chunk_key = r["doc"].id if r["doc"].id else (r["doc"].metadata or {}).get("_key")
+                    if not chunk_key:
+                        r["doc"].metadata["chunk_embedding"] = []
+                        continue
+                    try:
+                        aql = f"""
+                            FOR doc IN {collection_name}
+                                FILTER doc._key == @chunk_key
+                                RETURN doc.{ARANGO_EMBEDDING_FIELD}
+                        """
+                        cursor = self.db.aql.execute(aql, bind_vars={"chunk_key": chunk_key})
+                        emb = next(iter(cursor), [])
+                        r["doc"].metadata["chunk_embedding"] = emb if isinstance(emb, list) else []
+                    except Exception as e:
+                        logger.error(f"Error fetching chunk embedding for {chunk_key}: {e}")
+                        r["doc"].metadata["chunk_embedding"] = []
+                logger.info(f"Fetched chunk embeddings for {len(search_res)} chunks (adaptive reranking)")
+
             if logflag:
                 logger.debug(f"Final results of retrievers/src/integrations/arangodb_genieai.py: {search_res}")
 

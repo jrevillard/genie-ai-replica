@@ -737,3 +737,301 @@ class TestEnvDefaults:
             result = await reranker.invoke(input_doc)
 
         assert len(result.reranked_docs) == 3
+
+
+# ---------------------------------------------------------------------------
+# Adaptive-strategy imports (E402 ignored per pyproject — OPEA import pattern)
+# ---------------------------------------------------------------------------
+from reranker.genieai_tei_reranker import (  # noqa: E402
+    adaptive_context_selection,
+    cosine_similarity,
+    estimate_token_count,
+    novelty_sigmoid,
+)
+
+# ---------------------------------------------------------------------------
+# Helpers for adaptive / ChatCompletionRequest-path tests
+# ---------------------------------------------------------------------------
+
+
+def create_mock_chat_request(
+    texts=None,
+    query="test query",
+    embedding=None,
+    chunk_embeddings=None,
+    reranking_strategy=None,
+    reranking_threshold=None,
+    top_n=None,
+):
+    """Create a mock ChatCompletionRequest input for adaptive reranking.
+
+    Adaptive runs on the ChatCompletionRequest path (input.input, input.embedding,
+    input.chunk_embeddings). The mock exposes embedding/chunk_embeddings so the
+    adaptive branch can validate and consume them.
+    """
+    doc = MagicMock()
+    doc.__class__ = _RealChatCompletionRequest
+    doc.input = query
+    doc.initial_query = query
+    doc.retrieved_docs = []
+    if texts is None:
+        texts = ["doc1 text", "doc2 text", "doc3 text"]
+    for text in texts:
+        mock_doc = MagicMock()
+        mock_doc.text = text
+        doc.retrieved_docs.append(mock_doc)
+    doc.embedding = embedding if embedding is not None else []
+    doc.chunk_embeddings = chunk_embeddings if chunk_embeddings is not None else []
+
+    dump = {}
+    if reranking_strategy is not None:
+        dump["reranking_strategy"] = reranking_strategy
+    if reranking_threshold is not None:
+        dump["reranking_threshold"] = reranking_threshold
+    if top_n is not None:
+        dump["top_n"] = top_n
+    doc.model_dump = MagicMock(return_value=dump)
+    doc.top_n = top_n
+    return doc
+
+
+def create_tei_rerank_response_shuffled(pairs):
+    """TEI response with explicit (index, score) pairs (shuffled indices).
+
+    Models real TEI behaviour: results are sorted by score descending, but each
+    result's ``index`` points back to its original position in the input texts.
+    """
+    return [{"index": idx, "score": score} for idx, score in pairs]
+
+
+# ---------------------------------------------------------------------------
+# Test: Adaptive helper primitives
+# ---------------------------------------------------------------------------
+
+
+class TestAdaptiveHelpers:
+    """Unit tests for adaptive utility-cost primitives."""
+
+    def test_cosine_similarity_identical_vectors_is_one(self):
+        assert cosine_similarity([1.0, 2.0, 3.0], [1.0, 2.0, 3.0]) == 1.0
+
+    def test_cosine_similarity_orthogonal_vectors_is_zero(self):
+        assert cosine_similarity([1.0, 0.0], [0.0, 1.0]) == 0.0
+
+    def test_cosine_similarity_zero_vector_returns_zero(self):
+        assert cosine_similarity([0.0, 0.0], [1.0, 1.0]) == 0.0
+        assert cosine_similarity([1.0, 1.0], [0.0, 0.0]) == 0.0
+
+    def test_cosine_similarity_symmetric(self):
+        a, b = [1.0, 2.0, 3.0], [4.0, 5.0, 6.0]
+        assert cosine_similarity(a, b) == pytest.approx(cosine_similarity(b, a))
+
+    def test_novelty_sigmoid_monotonic_increasing(self):
+        assert novelty_sigmoid(0.0) < novelty_sigmoid(0.5) < novelty_sigmoid(1.0)
+
+    def test_novelty_sigmoid_bounded_open_interval(self):
+        for n in (-1.0, 0.0, 0.5, 1.0, 2.0):
+            assert 0.0 < novelty_sigmoid(n) < 1.0
+
+    def test_estimate_token_count_minimum_one(self):
+        assert estimate_token_count("") == 1
+        assert estimate_token_count("ab") == 1
+
+    def test_estimate_token_count_chars_over_four(self):
+        assert estimate_token_count("abcdefgh") == 2.0
+
+
+# ---------------------------------------------------------------------------
+# Test: adaptive_context_selection
+# ---------------------------------------------------------------------------
+
+
+class TestAdaptiveContextSelection:
+    """Unit tests for the adaptive_context_selection selector."""
+
+    def test_empty_texts_returns_empty(self):
+        assert adaptive_context_selection([], [], [1.0, 0.0], []) == []
+
+    def test_single_high_score_chunk_selected(self):
+        idxs = adaptive_context_selection(
+            texts=["good chunk"],
+            chunk_embeddings=[[1.0, 0.0]],
+            query_embedding=[1.0, 0.0],
+            reranker_scores=[0.95],
+        )
+        assert idxs == [0]
+
+    def test_indices_within_range_and_unique(self):
+        idxs = adaptive_context_selection(
+            texts=["a", "b", "c", "d"],
+            chunk_embeddings=[[1.0, 0.0], [0.8, 0.2], [0.2, 0.8], [0.0, 1.0]],
+            query_embedding=[1.0, 0.0],
+            reranker_scores=[0.95, 0.90, 0.85, 0.80],
+        )
+        assert len(idxs) >= 1
+        assert all(0 <= i < 4 for i in idxs)
+        assert len(idxs) == len(set(idxs))
+
+    def test_extreme_threshold_selects_nothing(self):
+        with patch("reranker.genieai_tei_reranker.MIN_VALUE_THRESHOLD", 1e9):
+            idxs = adaptive_context_selection(
+                texts=["a", "b"],
+                chunk_embeddings=[[1.0, 0.0], [0.0, 1.0]],
+                query_embedding=[1.0, 0.0],
+                reranker_scores=[0.95, 0.90],
+            )
+        assert idxs == []
+
+
+# ---------------------------------------------------------------------------
+# Test: slice_threshold strategy — top-N capped at a score threshold
+# ---------------------------------------------------------------------------
+
+
+class TestSliceThresholdStrategy:
+    """Tests for the 'slice_threshold' reranking strategy."""
+
+    @pytest.mark.asyncio
+    async def test_returns_only_at_or_above_threshold(self):
+        reranker = create_reranker()
+        tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
+        input_doc = create_mock_searched_doc(
+            texts=["a", "b", "c"], reranking_strategy="slice_threshold", reranking_threshold=0.7, top_n=5
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+        assert [d.score for d in result.reranked_docs] == [0.95, 0.82]
+
+    @pytest.mark.asyncio
+    async def test_respects_top_n_cap(self):
+        reranker = create_reranker()
+        tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
+        input_doc = create_mock_searched_doc(
+            texts=["a", "b", "c"], reranking_strategy="slice_threshold", reranking_threshold=0.5, top_n=1
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+        assert len(result.reranked_docs) == 1
+        assert result.reranked_docs[0].score == 0.95
+
+    @pytest.mark.asyncio
+    async def test_all_below_threshold_returns_empty(self):
+        reranker = create_reranker()
+        tei_response = create_tei_rerank_response([0.95, 0.82])
+        input_doc = create_mock_searched_doc(
+            texts=["a", "b"], reranking_strategy="slice_threshold", reranking_threshold=0.99, top_n=5
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+        assert len(result.reranked_docs) == 0
+
+
+# ---------------------------------------------------------------------------
+# Test: adaptive strategy — utility-cost selection + integration invariants
+# ---------------------------------------------------------------------------
+
+
+class TestAdaptiveStrategy:
+    """Tests for the 'adaptive' utility-cost reranking strategy."""
+
+    @pytest.mark.asyncio
+    async def test_happy_path_returns_chat_request_with_reranked_docs(self):
+        reranker = create_reranker()
+        tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
+        input_doc = create_mock_chat_request(
+            texts=["alpha", "beta", "gamma"],
+            embedding=[1.0, 0.0],
+            chunk_embeddings=[[1.0, 0.0], [0.7, 0.3], [0.1, 0.9]],
+            reranking_strategy="adaptive",
+            top_n=3,
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+        # ChatCompletionRequest path returns the input with reranked_docs set
+        assert result is input_doc
+        assert len(result.reranked_docs) >= 1
+        assert all(0.0 <= d.score <= 1.0 for d in result.reranked_docs)
+
+    @pytest.mark.asyncio
+    async def test_alignment_with_nonsequential_indices(self):
+        """Regression: TEI sorts descending but shuffles order; output text and
+        score must stay aligned via each result's 'index' field."""
+        reranker = create_reranker()
+        # Sorted desc by score, indices shuffled: docC(2)=0.95, docA(0)=0.82, docB(1)=0.61
+        tei_response = create_tei_rerank_response_shuffled([(2, 0.95), (0, 0.82), (1, 0.61)])
+        texts = ["docA", "docB", "docC"]
+        input_doc = create_mock_chat_request(
+            texts=texts,
+            embedding=[1.0, 0.0],
+            chunk_embeddings=[[0.90, 0.10], [0.10, 0.90], [0.95, 0.05]],  # aligned with texts
+            reranking_strategy="adaptive",
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+
+        expected = {"docA": 0.82, "docB": 0.61, "docC": 0.95}
+        for rdoc in result.reranked_docs:
+            assert rdoc.text in expected
+            # Misalignment would pair a doc with another doc's score
+            assert rdoc.score == expected[rdoc.text]
+        # The strongest match (docC) must always be among the selected
+        assert "docC" in {d.text for d in result.reranked_docs}
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_slice_when_query_embedding_missing(self):
+        """Regression (BUG #1): no query embedding -> adaptive cannot run -> slice."""
+        reranker = create_reranker()
+        tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
+        input_doc = create_mock_chat_request(
+            texts=["a", "b", "c"],
+            embedding=[],
+            chunk_embeddings=[[1.0, 0.0], [0.5, 0.5], [0.0, 1.0]],
+            reranking_strategy="adaptive",
+            top_n=1,
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+        assert len(result.reranked_docs) == 1
+        assert result.reranked_docs[0].score == 0.95
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_slice_when_chunk_embeddings_misaligned(self):
+        """Regression (BUG #2): chunk_embeddings count != docs -> slice fallback."""
+        reranker = create_reranker()
+        tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
+        input_doc = create_mock_chat_request(
+            texts=["a", "b", "c"],
+            embedding=[1.0, 0.0],
+            chunk_embeddings=[[1.0, 0.0], [0.0, 1.0]],  # only 2 -> misaligned with 3 docs
+            reranking_strategy="adaptive",
+            top_n=1,
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+        assert len(result.reranked_docs) == 1
+        assert result.reranked_docs[0].score == 0.95
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_slice_when_chunk_embedding_empty(self):
+        """Regression (BUG #2): an empty chunk embedding must not crash; fall back."""
+        reranker = create_reranker()
+        tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
+        input_doc = create_mock_chat_request(
+            texts=["a", "b", "c"],
+            embedding=[1.0, 0.0],
+            chunk_embeddings=[[1.0, 0.0], [], [0.0, 1.0]],  # middle empty
+            reranking_strategy="adaptive",
+            top_n=1,
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+        assert len(result.reranked_docs) == 1
+        assert result.reranked_docs[0].score == 0.95

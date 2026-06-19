@@ -11,12 +11,9 @@ class AuthLogger {
   Future<void> _writeChain = Future.value();
 
   AuthLogger({this.logDir})
-      : _talker = Talker(
-          settings: TalkerSettings(
-            useHistory: true,
-            useConsoleLogs: true,
-          ),
-        );
+    : _talker = Talker(
+        settings: TalkerSettings(useHistory: true, useConsoleLogs: true),
+      );
 
   Future<Directory> _getLogDir() async {
     if (logDir != null) return logDir!;
@@ -61,8 +58,9 @@ class AuthLogger {
   }
 
   DateTime? _parseDateFromFilename(String filename) {
-    final match = RegExp(r'auth_logs_(\d{4})-(\d{2})-(\d{2})\.txt$')
-        .firstMatch(filename);
+    final match = RegExp(
+      r'auth_logs_(\d{4})-(\d{2})-(\d{2})\.txt$',
+    ).firstMatch(filename);
     if (match == null) return null;
     try {
       return DateTime.utc(
@@ -159,15 +157,8 @@ class AuthLogger {
   }
 
   /// Log a non-failure auth event (login success, logout, token refresh success).
-  void logAuthEvent({
-    required String message,
-    required String source,
-  }) {
-    _logStructured(
-      level: 'INFO',
-      message: message,
-      source: source,
-    );
+  void logAuthEvent({required String message, required String source}) {
+    _logStructured(level: 'INFO', message: message, source: source);
   }
 
   /// Log an API-layer error (401, network errors).

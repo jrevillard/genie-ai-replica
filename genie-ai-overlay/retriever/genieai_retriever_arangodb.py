@@ -17,6 +17,8 @@ from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
+from tracing import setup_trace_logging
+
 from .config import (
     ARANGO_DB,
     ARANGO_DISTANCE_STRATEGY,
@@ -66,12 +68,12 @@ class GenieEmbedDoc(EmbedDoc):
 
 
 logger = CustomLogger("genieai_retriever_arangodb")
+setup_trace_logging("genieai_retriever_arangodb")
 logflag = os.getenv("LOGFLAG", False)
 
 ARANGO_TEXT_FIELD = "text"
 ARANGO_EMBEDDING_FIELD = "embedding"
 ARANGO_FILE_ID_FIELD = "file_id"
-RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice")
 
 
 @OpeaComponentRegistry.register("GENIE_RETRIEVER_ARANGODB")
@@ -91,7 +93,12 @@ class GenieaiArangoRetriever(OpeaComponent):
             self._initialize_llm()
 
     def _initialize_llm(self):
-        """Initialize the language model for summarization if enabled."""
+        """Initialize the language model for summarization if enabled.
+
+        When GPU_NODE_HOST is set, probes the vLLM /v1/models API and
+        overrides VLLM_MODEL_ID before creating the ChatOpenAI client.
+        Falls back to the config default on any probe failure.
+        """
         if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
             if logflag:
                 logger.debug("OpenAI API Key is set. Verifying its validity...")
@@ -111,10 +118,29 @@ class GenieaiArangoRetriever(OpeaComponent):
                 logger.error(f"An error occurred while verifying the API Key: {e}")
 
         elif VLLM_ENDPOINT:
+            # Auto-detect remote vLLM model when GPU node is used.
+            # The config default VLLM_MODEL_ID may not match the model
+            # actually loaded on the remote GPU node.
+            if os.getenv("GPU_NODE_HOST") and VLLM_ENDPOINT:
+                try:
+                    import requests as req
+
+                    resp = req.get(
+                        f"{VLLM_ENDPOINT}/v1/models",
+                        headers={"Authorization": f"Bearer {os.getenv('VLLM_API_KEY', '')}"},
+                        timeout=10,
+                    )
+                    resp.raise_for_status()
+                    models = resp.json().get("data", [])
+                    if models:
+                        os.environ["VLLM_MODEL_ID"] = models[0]["id"]
+                        logger.info(f"Auto-detected remote vLLM model for summarization: {models[0]['id']}")
+                except Exception as e:
+                    logger.warning(f"Failed to auto-detect model for summarization: {e}")
             self.llm = ChatOpenAI(
                 openai_api_key=VLLM_API_KEY,
                 openai_api_base=f"{VLLM_ENDPOINT}/v1",
-                model=VLLM_MODEL_ID,
+                model=os.getenv("VLLM_MODEL_ID", VLLM_MODEL_ID),
                 temperature=VLLM_TEMPERATURE,
                 max_tokens=VLLM_MAX_NEW_TOKENS,
                 top_p=VLLM_TOP_P,
@@ -490,410 +516,393 @@ class GenieaiArangoRetriever(OpeaComponent):
 
         start = time.time()
 
-        #################
-        # Process Input #
-        #################
+        # OpenTelemetry span for retrieval operation
+        from tracing import get_tracer
 
-        input_dict = input.model_dump(exclude_none=True)
-        query = input_dict.get("input", input_dict.get("text"))
-        if logflag:
-            logger.info(f"Retriever Input Dict: {input_dict}")
+        tracer = get_tracer("retriever.arangodb")
+        span = tracer.start_span("retriever.hybrid_search")
+        span.set_attribute("rag.search_mode", ARANGO_SEARCH_MODE)
+        span.set_attribute("rag.top_k", input.k if hasattr(input, "k") else 0)
 
-        if not query:
-            logger.error("Query is empty. Please provide a valid query.")
-            return []
+        try:
+            #################
+            # Process Input #
+            #################
 
-        embedding = input.embedding if isinstance(input.embedding, list) else None
-        graph_name = input_dict.get("graph_name", ARANGO_GRAPH_NAME)
-        search_start = input_dict.get("search_start", ARANGO_SEARCH_START)
-        search_mode = input_dict.get("search_mode", ARANGO_SEARCH_MODE)
-        enable_traversal = input_dict.get("enable_traversal", ARANGO_TRAVERSAL_ENABLED)
-        enable_summarizer = input_dict.get("enable_summarizer", SUMMARIZER_ENABLED)
-        distance_strategy = input_dict.get("distance_strategy", ARANGO_DISTANCE_STRATEGY)
-        use_approx_search = input_dict.get("use_approx_search", ARANGO_USE_APPROX_SEARCH)
-        num_centroids = input_dict.get("num_centroids", ARANGO_NUM_CENTROIDS)
-        traversal_max_depth = input_dict.get("traversal_max_depth", ARANGO_TRAVERSAL_MAX_DEPTH)
-        traversal_max_depth = int(traversal_max_depth)
-        traversal_max_returned = input_dict.get("traversal_max_returned", ARANGO_TRAVERSAL_MAX_RETURNED)
-        traversal_score_threshold = input_dict.get("traversal_score_threshold", ARANGO_TRAVERSAL_SCORE_THRESHOLD)
-        traversal_query = input_dict.get("traversal_query", ARANGO_TRAVERSAL_QUERY)
+            input_dict = input.model_dump(exclude_none=True)
+            query = input_dict.get("input", input_dict.get("text"))
+            if logflag:
+                logger.info(f"Retriever Input Dict: {input_dict}")
 
-        filter_data = input_dict.get("context", {})
-        filter_strategy = input_dict.get("filter_strategy", ARANGO_FILTER_STRATEGY).upper()
+            if not query:
+                logger.error("Query is empty. Please provide a valid query.")
+                return []
 
-        # Consolidate all labels into a single list (this will need to change later)
-        labels_to_filter = []
-        if filter_data.get("categoryLabel"):
-            labels_to_filter.append(filter_data["categoryLabel"])
-        if filter_data.get("serviceLabels"):
-            labels_to_filter.extend(filter_data["serviceLabels"])
+            embedding = input.embedding if isinstance(input.embedding, list) else None
+            graph_name = input_dict.get("graph_name", ARANGO_GRAPH_NAME)
+            search_start = input_dict.get("search_start", ARANGO_SEARCH_START)
+            search_mode = input_dict.get("search_mode", ARANGO_SEARCH_MODE)
+            enable_traversal = input_dict.get("enable_traversal", ARANGO_TRAVERSAL_ENABLED)
+            enable_summarizer = input_dict.get("enable_summarizer", SUMMARIZER_ENABLED)
+            distance_strategy = input_dict.get("distance_strategy", ARANGO_DISTANCE_STRATEGY)
+            use_approx_search = input_dict.get("use_approx_search", ARANGO_USE_APPROX_SEARCH)
+            num_centroids = input_dict.get("num_centroids", ARANGO_NUM_CENTROIDS)
+            traversal_max_depth = input_dict.get("traversal_max_depth", ARANGO_TRAVERSAL_MAX_DEPTH)
+            traversal_max_depth = int(traversal_max_depth)
+            traversal_max_returned = input_dict.get("traversal_max_returned", ARANGO_TRAVERSAL_MAX_RETURNED)
+            traversal_score_threshold = input_dict.get("traversal_score_threshold", ARANGO_TRAVERSAL_SCORE_THRESHOLD)
+            traversal_query = input_dict.get("traversal_query", ARANGO_TRAVERSAL_QUERY)
 
-        # CONSTRUCT THE AQL FILTER CLAUSE
-        aql_filter_clause = ""
+            filter_data = input_dict.get("context", {})
+            filter_strategy = input_dict.get("filter_strategy", ARANGO_FILTER_STRATEGY).upper()
 
-        if labels_to_filter:
-            labels_array = "[" + ", ".join(f'"{label}"' for label in labels_to_filter) + "]"
+            # Consolidate all labels into a single list (this will need to change later)
+            labels_to_filter = []
+            if filter_data.get("categoryLabel"):
+                labels_to_filter.append(filter_data["categoryLabel"])
+            if filter_data.get("serviceLabels"):
+                labels_to_filter.extend(filter_data["serviceLabels"])
 
-            if filter_strategy == "AND":
-                # ALL operator: chunk_labels must contain all labels from our list
-                aql_filter_clause = f"FILTER (doc.chunk_labels != null) AND ({labels_array} ALL IN doc.chunk_labels)"
-            elif filter_strategy == "OR":
-                # ANY operator: chunk_labels must contain at least one label from our list
-                aql_filter_clause = f"FILTER (doc.chunk_labels != null) AND ({labels_array} ANY IN doc.chunk_labels)"
+            # CONSTRUCT THE AQL FILTER CLAUSE
+            aql_filter_clause = ""
+
+            if labels_to_filter:
+                labels_array = "[" + ", ".join(f'"{label}"' for label in labels_to_filter) + "]"
+
+                if filter_strategy == "AND":
+                    # ALL operator: chunk_labels must contain all labels from our list
+                    aql_filter_clause = (
+                        f"FILTER (doc.chunk_labels != null) AND ({labels_array} ALL IN doc.chunk_labels)"
+                    )
+                elif filter_strategy == "OR":
+                    # ANY operator: chunk_labels must contain at least one label from our list
+                    aql_filter_clause = (
+                        f"FILTER (doc.chunk_labels != null) AND ({labels_array} ANY IN doc.chunk_labels)"
+                    )
+                else:
+                    raise HTTPException(
+                        status_code=400, detail=f"Invalid filter_strategy: {filter_strategy}. Expected 'AND' or 'OR'."
+                    )
+
+                if logflag:
+                    logger.debug(f"Applying filter strategy '{filter_strategy}' with labels: {labels_to_filter}")
+
+            if not graph_name:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Graph name is empty. Please provide a valid graph name.",
+                )
+
+            if search_start == "node":
+                collection_name = f"{graph_name}_ENTITY"
+            elif search_start == "edge":
+                collection_name = f"{graph_name}_LINKS_TO"
+            elif search_start == "chunk":
+                collection_name = f"{graph_name}_SOURCE"
             else:
                 raise HTTPException(
-                    status_code=400, detail=f"Invalid filter_strategy: {filter_strategy}. Expected 'AND' or 'OR'."
+                    status_code=400,
+                    detail=f"Invalid search_start value: {search_start}. Expected 'node', 'edge', or 'chunk'.",
                 )
 
             if logflag:
-                logger.debug(f"Applying filter strategy '{filter_strategy}' with labels: {labels_to_filter}")
+                logger.debug(
+                    f"Graph name: {graph_name}, Start Collection name: "
+                    f"{collection_name}, label filter clause: {aql_filter_clause}"
+                )
 
-        if not graph_name:
-            raise HTTPException(
-                status_code=400,
-                detail="Graph name is empty. Please provide a valid graph name.",
-            )
+            #################
+            # Validate Data #
+            #################
 
-        if search_start == "node":
-            collection_name = f"{graph_name}_ENTITY"
-        elif search_start == "edge":
-            collection_name = f"{graph_name}_LINKS_TO"
-        elif search_start == "chunk":
-            collection_name = f"{graph_name}_SOURCE"
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid search_start value: {search_start}. Expected 'node', 'edge', or 'chunk'.",
-            )
-
-        if logflag:
-            logger.debug(
-                f"Graph name: {graph_name}, Start Collection name: "
-                f"{collection_name}, label filter clause: {aql_filter_clause}"
-            )
-
-        #################
-        # Validate Data #
-        #################
-
-        if not self.db.has_graph(graph_name):
-            graph_names_for_debug = [g["name"] for g in self.db.graphs()]
-            logger.error(f"Graph '{graph_name}' does not exist in ArangoDB. Graphs: {graph_names_for_debug}")
-            return []
-
-        v_col_exists = self.db.graph(graph_name).has_vertex_collection(collection_name)
-        e_col_exists = self.db.graph(graph_name).has_edge_collection(collection_name)
-
-        if not (v_col_exists or e_col_exists):
-            collection_names = set()
-            for e_d in self.db.graph(graph_name).edge_definitions():
-                collection_names.add(e_d["edge_collection"])
-                collection_names.update(e_d["from_vertex_collections"])  # list of source vertex collections
-                collection_names.update(e_d["to_vertex_collections"])  # list of destination vertex collections
-
-            m = (
-                f"Collection '{collection_name}' does not exist in graph "
-                f"'{graph_name}'. Collections: {collection_names}"
-            )
-            logger.error(m)
-            return []
-
-        collection = self.db.collection(collection_name)
-        collection_count = collection.count()
-
-        if collection_count == 0:
-            logger.error(f"Collection '{collection_name}' is empty.")
-            return []
-
-        if collection_count < num_centroids:
-            m = (
-                f"Collection '{collection_name}' has fewer documents "
-                f"({collection_count}) than the number of centroids "
-                f"({num_centroids}). Please adjust the number of centroids."
-            )
-            logger.error(m)
-            return []
-
-        ################################
-        # Retrieve Embedding Dimension #
-        ################################
-
-        random_doc = collection.random()
-        random_doc_id = random_doc["_id"]
-        sample_embedding = random_doc.get(ARANGO_EMBEDDING_FIELD)
-
-        if not sample_embedding:
-            logger.error(f"Document '{random_doc_id}' is missing field '{ARANGO_EMBEDDING_FIELD}'.")
-            return []
-
-        if not isinstance(sample_embedding, list):
-            logger.error(f"Document '{random_doc_id}' has a non-list embedding field, found {type(embedding)}.")
-            return []
-
-        dimension = len(sample_embedding)
-
-        if dimension == 0:
-            logger.error(f"Document '{random_doc_id}' has an empty embedding field.")
-            return []
-
-        if OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED:
-            embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=dimension)
-        elif TEI_EMBEDDING_ENDPOINT and HF_TOKEN:
-            embeddings = HuggingFaceEndpointEmbeddings(
-                model=TEI_EMBEDDING_ENDPOINT,
-                task="feature-extraction",
-                huggingfacehub_api_token=HF_TOKEN,
-            )
-        else:
-            embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
-
-        try:
-            vector_db = ArangoVector(
-                embedding=embeddings,
-                embedding_dimension=dimension,
-                database=self.db,
-                collection_name=collection_name,
-                embedding_field=ARANGO_EMBEDDING_FIELD,
-                text_field=ARANGO_TEXT_FIELD,
-                distance_strategy=distance_strategy,
-                num_centroids=num_centroids,
-                search_type=search_mode,
-            )
-        except Exception as e:
-            logger.error(f"Error during ArangoVector initialization: {e}")
-
-            return []
-
-        ######################
-        # Compute Similarity #
-        ######################
-
-        if embedding is None:
-            try:
-                embedding = embeddings.embed_query(query)
-            except Exception as e:
-                logger.error(f"Failed to embed query text: {e}")
+            if not self.db.has_graph(graph_name):
+                graph_names_for_debug = [g["name"] for g in self.db.graphs()]
+                logger.error(f"Graph '{graph_name}' does not exist in ArangoDB. Graphs: {graph_names_for_debug}")
                 return []
 
-        try:
-            if input.search_type == "similarity_score_threshold":
-                # Find documents whose vector embeddings are similar to a query
-                # embedding and also return how similar they are.
-                # Returns a list like: [(doc1, 0.92), (doc2, 0.89), ...]
-                docs_and_similarities = await vector_db.asimilarity_search_with_relevance_scores(
-                    query=query,
-                    embedding=embedding,
-                    k=input.k,
-                    score_threshold=input.score_threshold,
-                    use_approx=use_approx_search,
-                    filter_clause=aql_filter_clause if search_start == "chunk" else "",
-                )
-                search_res = [{"doc": doc, "score": score} for doc, score in docs_and_similarities]
-            elif input.search_type == "mmr":
-                # Find diverse but still relevant documents — useful when you want
-                # the results to not just be similar, but also not all the same.
-                # Balances similarity to the query and diversity between results.
-                # k: how many results to return
-                # fetch_k: how many top candidates to consider
-                # lambda_mult: the balance between similarity (high relevance) and novelty (diversity)
-                results = await vector_db.amax_marginal_relevance_search(
-                    query=query,
-                    embedding=embedding,
-                    k=input.k,
-                    fetch_k=input.fetch_k,
-                    lambda_mult=input.lambda_mult,
-                    use_approx=use_approx_search,
-                    filter_clause=aql_filter_clause if search_start == "chunk" else "",
-                )
-                search_res = [{"doc": doc, "score": 0.0} for doc in results]
+            v_col_exists = self.db.graph(graph_name).has_vertex_collection(collection_name)
+            e_col_exists = self.db.graph(graph_name).has_edge_collection(collection_name)
 
+            if not (v_col_exists or e_col_exists):
+                collection_names = set()
+                for e_d in self.db.graph(graph_name).edge_definitions():
+                    collection_names.add(e_d["edge_collection"])
+                    collection_names.update(e_d["from_vertex_collections"])  # list of source vertex collections
+                    collection_names.update(e_d["to_vertex_collections"])  # list of destination vertex collections
+
+                m = (
+                    f"Collection '{collection_name}' does not exist in graph "
+                    f"'{graph_name}'. Collections: {collection_names}"
+                )
+                logger.error(m)
+                return []
+
+            collection = self.db.collection(collection_name)
+            collection_count = collection.count()
+
+            if collection_count == 0:
+                logger.error(f"Collection '{collection_name}' is empty.")
+                return []
+
+            if collection_count < num_centroids:
+                m = (
+                    f"Collection '{collection_name}' has fewer documents "
+                    f"({collection_count}) than the number of centroids "
+                    f"({num_centroids}). Please adjust the number of centroids."
+                )
+                logger.error(m)
+                return []
+
+            ################################
+            # Retrieve Embedding Dimension #
+            ################################
+
+            random_doc = collection.random()
+            random_doc_id = random_doc["_id"]
+            sample_embedding = random_doc.get(ARANGO_EMBEDDING_FIELD)
+
+            if not sample_embedding:
+                logger.error(f"Document '{random_doc_id}' is missing field '{ARANGO_EMBEDDING_FIELD}'.")
+                return []
+
+            if not isinstance(sample_embedding, list):
+                logger.error(f"Document '{random_doc_id}' has a non-list embedding field, found {type(embedding)}.")
+                return []
+
+            dimension = len(sample_embedding)
+
+            if dimension == 0:
+                logger.error(f"Document '{random_doc_id}' has an empty embedding field.")
+                return []
+
+            if OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED:
+                embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=dimension)
+            elif TEI_EMBEDDING_ENDPOINT and HF_TOKEN:
+                embeddings = HuggingFaceEndpointEmbeddings(
+                    model=TEI_EMBEDDING_ENDPOINT,
+                    task="feature-extraction",
+                    huggingfacehub_api_token=HF_TOKEN,
+                )
             else:
-                results = await vector_db.asimilarity_search(
-                    query=query,
-                    embedding=embedding,
-                    k=input.k,
-                    use_approx=use_approx_search,
-                    filter_clause=aql_filter_clause if search_start == "chunk" else "",
+                embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
+
+            try:
+                vector_db = ArangoVector(
+                    embedding=embeddings,
+                    embedding_dimension=dimension,
+                    database=self.db,
+                    collection_name=collection_name,
+                    embedding_field=ARANGO_EMBEDDING_FIELD,
+                    text_field=ARANGO_TEXT_FIELD,
+                    distance_strategy=distance_strategy,
+                    num_centroids=num_centroids,
+                    search_type=search_mode,
                 )
-                search_res = [{"doc": doc, "score": 0.0} for doc in results]
+            except Exception as e:
+                logger.error(f"Error during ArangoVector initialization: {e}")
 
-        except Exception as e:
-            logger.error(f"Error during similarity search: {e}")
-            return []
+                return []
 
-        if not search_res:
-            logger.info("No documents found.")
-            return []
+            ######################
+            # Compute Similarity #
+            ######################
 
-        logger.info(f"Found {len(search_res)} documents.")
-        logger.info(f"Search results after similarity search: {search_res}")
+            if embedding is None:
+                try:
+                    embedding = embeddings.embed_query(query)
+                except Exception as e:
+                    logger.error(f"Failed to embed query text: {e}")
+                    return []
 
-        # Retrieve file_id for each chunk using AQL (search_start == 'chunk')
-        if search_start == "chunk":
-            for r in search_res:
-                chunk_id = r["doc"].id if r["doc"].id else None
-                if chunk_id:
-                    aql = f"""
-                        FOR doc IN {collection_name}
-                            FILTER doc._key == @chunk_id
-                            RETURN doc.{ARANGO_FILE_ID_FIELD}
-                    """
-                    bind_vars = {"chunk_id": chunk_id}
-                    cursor = self.db.aql.execute(aql, bind_vars=bind_vars)
-                    file_ids = list(doc for doc in cursor)
-                    r["doc"].metadata["file_ids"] = file_ids if file_ids else []
-            logger.info(f"Adding file id metadata after similarity search: {search_res}")
-
-        #######################################################################
-        # Traverse Source Documents (based on ARANGO_TRAVERSAL_ENABLED value) #
-        #######################################################################
-
-        if enable_traversal:
-            keys = [r["doc"].id for r in search_res]
-
-            neighborhoods = self.fetch_neighborhoods(
-                db=vector_db.db,
-                keys=keys,  # A list of ids
-                graph_name=graph_name,
-                search_start=search_start,
-                query_embedding=embedding,
-                collection_name=collection_name,
-                traversal_max_depth=traversal_max_depth,
-                traversal_max_returned=traversal_max_returned,
-                traversal_score_threshold=traversal_score_threshold,
-                traversal_query=traversal_query,
-                distance_strategy=distance_strategy,
-            )
-
-            logger.info(f"Results after fetching neighborhood: {neighborhoods}")
-            for r in search_res:
-                neighborhood = neighborhoods.get(r["doc"].id)
-
-                if not neighborhood:
-                    continue
-
-                # Common header for added related info
-                r["doc"].page_content += "\n------\nRELATED INFORMATION:\n------\n"
-
-                if search_start == "chunk":
-                    # neighborhood may be a list or other structure
-                    r["doc"].page_content += str(neighborhood)
-
-                elif search_start == "edge":
-                    # neighborhood is expected to be a list with one dict: [{ "chunk_text": ..., "file_id": ... }]
-                    first = neighborhood[0] if isinstance(neighborhood, list) and neighborhood else None
-                    if isinstance(first, dict):
-                        # first may contain 'chunk_text' and 'file_id' keys directly
-                        chunk_text = first.get("chunk_text")
-                        file_id = first.get("file_id")
-                    else:
-                        # fallback: if it's nested like { edge_text: { "chunk_text": ..., "file_id": ... } }
-                        chunk_text = None
-                        file_id = None
-                        if isinstance(first, dict):
-                            inner = next(iter(first.values()), None)
-                            if isinstance(inner, dict):
-                                chunk_text = inner.get("chunk_text")
-                                file_id = inner.get("file_id")
-
-                    if chunk_text:
-                        r["doc"].page_content += str(chunk_text)
-                    if file_id:
-                        r["doc"].metadata["file_ids"] = r["doc"].metadata.get("file_ids", []) + [file_id]
+            try:
+                if input.search_type == "similarity_score_threshold":
+                    # Find documents whose vector embeddings are similar to a query
+                    # embedding and also return how similar they are.
+                    # Returns a list like: [(doc1, 0.92), (doc2, 0.89), ...]
+                    docs_and_similarities = await vector_db.asimilarity_search_with_relevance_scores(
+                        query=query,
+                        embedding=embedding,
+                        k=input.k,
+                        score_threshold=input.score_threshold,
+                        use_approx=use_approx_search,
+                        filter_clause=aql_filter_clause if search_start == "chunk" else "",
+                    )
+                    search_res = [{"doc": doc, "score": score} for doc, score in docs_and_similarities]
+                elif input.search_type == "mmr":
+                    # Find diverse but still relevant documents — useful when you want
+                    # the results to not just be similar, but also not all the same.
+                    # Balances similarity to the query and diversity between results.
+                    # k: how many results to return
+                    # fetch_k: how many top candidates to consider
+                    # lambda_mult: the balance between similarity (high relevance) and novelty (diversity)
+                    results = await vector_db.amax_marginal_relevance_search(
+                        query=query,
+                        embedding=embedding,
+                        k=input.k,
+                        fetch_k=input.fetch_k,
+                        lambda_mult=input.lambda_mult,
+                        use_approx=use_approx_search,
+                        filter_clause=aql_filter_clause if search_start == "chunk" else "",
+                    )
+                    # MMR doesn't return scores — use relevance scores as fallback
+                    docs_and_scores = await vector_db.asimilarity_search_with_relevance_scores(
+                        query=query,
+                        embedding=embedding,
+                        k=input.k,
+                        use_approx=use_approx_search,
+                        filter_clause=aql_filter_clause if search_start == "chunk" else "",
+                    )
+                    score_map = {id(doc): score for doc, score in docs_and_scores}
+                    search_res = [{"doc": doc, "score": score_map.get(id(doc), 0.0)} for doc in results]
 
                 else:
-                    # search_start == 'node'
-                    # neighborhood should be a list of dicts where each dict has a single key mapping to the inner dict:
-                    # e.g. [{ edge_text: { "chunk_text": ..., "file_id": ... } }, ...]
-                    first_item = neighborhood[0] if isinstance(neighborhood, list) and neighborhood else None
-                    inner = None
+                    # Default vector search — use relevance scores variant to get scores
+                    docs_and_scores = await vector_db.asimilarity_search_with_relevance_scores(
+                        query=query,
+                        embedding=embedding,
+                        k=input.k,
+                        use_approx=use_approx_search,
+                        filter_clause=aql_filter_clause if search_start == "chunk" else "",
+                    )
+                    search_res = [{"doc": doc, "score": score} for doc, score in docs_and_scores]
 
-                    if isinstance(first_item, dict):
-                        # normally it's a dict mapping edge_text -> {...}
-                        inner = next(iter(first_item.values()), None)
-                    elif isinstance(first_item, list):
-                        # defensive: if it's a nested list (older bug) take first element
-                        maybe = first_item[0] if first_item else None
-                        if isinstance(maybe, dict):
-                            inner = next(iter(maybe.values()), None)
+            except Exception as e:
+                logger.error(f"Error during similarity search: {e}")
+                return []
 
-                    if isinstance(inner, dict):
-                        chunk_text = inner.get("chunk_text")
-                        file_id = inner.get("file_id")
+            if not search_res:
+                logger.info("No documents found.")
+                return []
+
+            logger.info(f"Found {len(search_res)} documents.")
+            logger.info(f"Search results after similarity search: {search_res}")
+
+            # Retrieve file_id for each chunk using AQL (search_start == 'chunk')
+            if search_start == "chunk":
+                for r in search_res:
+                    chunk_id = r["doc"].id if r["doc"].id else None
+                    if chunk_id:
+                        aql = f"""
+                            FOR doc IN {collection_name}
+                                FILTER doc._key == @chunk_id
+                                RETURN doc.{ARANGO_FILE_ID_FIELD}
+                        """
+                        bind_vars = {"chunk_id": chunk_id}
+                        cursor = self.db.aql.execute(aql, bind_vars=bind_vars)
+                        file_ids = list(doc for doc in cursor)
+                        r["doc"].metadata["file_ids"] = file_ids if file_ids else []
+                logger.info(f"Adding file id metadata after similarity search: {search_res}")
+
+            #######################################################################
+            # Traverse Source Documents (based on ARANGO_TRAVERSAL_ENABLED value) #
+            #######################################################################
+
+            if enable_traversal:
+                keys = [r["doc"].id for r in search_res]
+
+                neighborhoods = self.fetch_neighborhoods(
+                    db=vector_db.db,
+                    keys=keys,  # A list of ids
+                    graph_name=graph_name,
+                    search_start=search_start,
+                    query_embedding=embedding,
+                    collection_name=collection_name,
+                    traversal_max_depth=traversal_max_depth,
+                    traversal_max_returned=traversal_max_returned,
+                    traversal_score_threshold=traversal_score_threshold,
+                    traversal_query=traversal_query,
+                    distance_strategy=distance_strategy,
+                )
+
+                logger.info(f"Results after fetching neighborhood: {neighborhoods}")
+                for r in search_res:
+                    neighborhood = neighborhoods.get(r["doc"].id)
+
+                    if not neighborhood:
+                        continue
+
+                    # Common header for added related info
+                    r["doc"].page_content += "\n------\nRELATED INFORMATION:\n------\n"
+
+                    if search_start == "chunk":
+                        # neighborhood may be a list or other structure
+                        r["doc"].page_content += str(neighborhood)
+
+                    elif search_start == "edge":
+                        # neighborhood is expected to be a list with one dict: [{ "chunk_text": ..., "file_id": ... }]
+                        first = neighborhood[0] if isinstance(neighborhood, list) and neighborhood else None
+                        if isinstance(first, dict):
+                            # first may contain 'chunk_text' and 'file_id' keys directly
+                            chunk_text = first.get("chunk_text")
+                            file_id = first.get("file_id")
+                        else:
+                            # fallback: if it's nested like { edge_text: { "chunk_text": ..., "file_id": ... } }
+                            chunk_text = None
+                            file_id = None
+                            if isinstance(first, dict):
+                                inner = next(iter(first.values()), None)
+                                if isinstance(inner, dict):
+                                    chunk_text = inner.get("chunk_text")
+                                    file_id = inner.get("file_id")
+
                         if chunk_text:
                             r["doc"].page_content += str(chunk_text)
                         if file_id:
                             r["doc"].metadata["file_ids"] = r["doc"].metadata.get("file_ids", []) + [file_id]
 
-            logger.info(f"Added neighborhoods to {len(search_res)} documents.")
+                    else:
+                        # search_start == 'node'
+                        # neighborhood: list of dicts, each with single key mapping to inner dict:
+                        # e.g. [{ edge_text: { "chunk_text": ..., "file_id": ... } }, ...]
+                        first_item = neighborhood[0] if isinstance(neighborhood, list) and neighborhood else None
+                        inner = None
 
-        ################################
-        # Fetch Chunk Embeddings (for Adaptive Reranking) #
-        ################################
+                        if isinstance(first_item, dict):
+                            # normally it's a dict mapping edge_text -> {...}
+                            inner = next(iter(first_item.values()), None)
+                        elif isinstance(first_item, list):
+                            # defensive: if it's a nested list (older bug) take first element
+                            maybe = first_item[0] if first_item else None
+                            if isinstance(maybe, dict):
+                                inner = next(iter(maybe.values()), None)
 
-        # Check if adaptive reranking is requested
-        input_dict = (
-            input.model_dump(exclude_none=True)
-            if hasattr(input, "model_dump")
-            else getattr(input, "dict", lambda: {})()
-        )
+                        if isinstance(inner, dict):
+                            chunk_text = inner.get("chunk_text")
+                            file_id = inner.get("file_id")
+                            if chunk_text:
+                                r["doc"].page_content += str(chunk_text)
+                            if file_id:
+                                r["doc"].metadata["file_ids"] = r["doc"].metadata.get("file_ids", []) + [file_id]
 
-        reranking_strategy = input_dict.get("reranking_strategy", RERANKING_STRATEGY)
+                logger.info(f"Added neighborhoods to {len(search_res)} documents.")
 
-        if reranking_strategy == "adaptive":
-            chunk_embeddings = []
-            for r in search_res:
-                chunk_key = r["doc"].metadata.get("_key") if r["doc"].metadata else None
-                if chunk_key:
-                    try:
-                        # Fetch embedding from ArangoDB
-                        aql = f"""
-                            FOR doc IN @@collection
-                                FILTER doc._key == @chunk_key
-                                RETURN doc.{ARANGO_EMBEDDING_FIELD}
-                        """
-                        bind_vars = {"@collection": collection_name, "chunk_key": chunk_key}
-                        cursor = self.db.aql.execute(aql, bind_vars=bind_vars)
-                        embedding_result = list(cursor)
-                        if embedding_result and len(embedding_result) > 0:
-                            chunk_embeddings.append(embedding_result[0])
-                        else:
-                            logger.warning(f"Chunk {chunk_key} missing embedding")
-                            chunk_embeddings.append([])
-                    except Exception as e:
-                        logger.error(f"Error fetching embedding for chunk {chunk_key}: {e}")
-                        chunk_embeddings.append([])
-                else:
-                    chunk_embeddings.append([])
+            ################################
+            # Summarize Results (optional) #
+            ################################
 
-            # Store in first result's metadata for downstream processing
-            if chunk_embeddings and len(search_res) > 0:
-                search_res[0]["doc"].metadata["chunk_embeddings"] = chunk_embeddings
-                logger.info(f"Fetched {len(chunk_embeddings)} chunk embeddings for adaptive reranking")
+            if enable_summarizer:
+                for r in search_res:
+                    prompt = self.generate_summarization_prompt(query, r["doc"].page_content)
+                    res = self.llm.invoke(prompt)
+                    summarized_text = res.content
 
-        ################################
-        # Summarize Results (optional) #
-        ################################
+                    logger.info(f"Summarized {r['doc'].id}")
 
-        if enable_summarizer:
-            for r in search_res:
-                prompt = self.generate_summarization_prompt(query, r["doc"].page_content)
-                res = self.llm.invoke(prompt)
-                summarized_text = res.content
+                    r["doc"].page_content = summarized_text
 
-                logger.info(f"Summarized {r['doc'].id}")
+            if logflag:
+                logger.debug(f"Final results of retrievers/src/integrations/arangodb_genieai.py: {search_res}")
 
-                r["doc"].page_content = summarized_text
+            ################################
+            #  Returning Powerful Results  #
+            ################################
 
-        if logflag:
-            logger.debug(f"Final results of retrievers/src/integrations/arangodb_genieai.py: {search_res}")
+            finish = time.time()
+            if logflag:
+                logger.info(f"Retreiver logic completion time: {finish - start:.4f} seconds")
 
-        ################################
-        #  Returning Powerful Results  #
-        ################################
-
-        finish = time.time()
-        if logflag:
-            logger.info(f"Retreiver logic completion time: {finish - start:.4f} seconds")
+            span.set_attribute("rag.chunk_count", len(search_res))
+        finally:
+            span.end()
 
         return search_res

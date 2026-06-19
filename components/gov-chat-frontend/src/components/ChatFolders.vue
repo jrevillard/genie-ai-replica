@@ -1191,11 +1191,8 @@ export default {
           this.selectedFolderId = 'default';
           this.folderSelected = false;
         } else {
-          await chatHistoryService.moveConversation(
-            this.activeChat._key,
-            this.selectedFolderId,
-            this.destinationFolderId
-          );
+          // The store action owns the API call + state sync — do not call the
+          // service directly here, otherwise the move API fires twice (issue #827)
           await this.moveChat({
             chatId: this.activeChat._key,
             fromFolderId: this.selectedFolderId,

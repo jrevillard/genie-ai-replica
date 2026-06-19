@@ -1,0 +1,57 @@
+---
+# GENIE.AI Cloud Deployment — bb-ai-vm-02 (10.0.0.101)
+# Single-node, 16GB RAM, no local GPU
+# Remote GPU at ai.assembly.govstack.global
+
+# =============================================================================
+# DEPLOYMENT OPTIONS
+# =============================================================================
+# OPEA orchestrators run here (ChatQnA, Retriever, Dataprep, Reranker, etc.)
+# GPU models run on remote GPU node — gpu_node_host triggers GPU_MODEL_REPLICAS=0
+deploy_opea: "1"
+repo_branch: main
+enable_observability: "0"
+
+# Remote GPU endpoint
+gpu_node_host: "ai.assembly.govstack.global"
+gpu_https_port: "444"
+opea_ssl_skip_verify: "1"
+keycloak_ssl_skip_verify: "1"
+
+# =============================================================================
+# API GATEWAY
+# =============================================================================
+nginx_public_domain: "10.0.0.101"
+nginx_http_port: "80"
+nginx_https_port: "443"
+nginx_permissions_policy: "camera=(), microphone=()"
+registry_port: "5000"
+self_signed_certs: true
+
+# =============================================================================
+# FRONTEND
+# =============================================================================
+vue_app_api_url: "https://10.0.0.101/api"
+vue_app_csp_connect_src: "'self' https://10.0.0.101 wss://10.0.0.101 http://localhost"
+
+# =============================================================================
+# BACKEND
+# =============================================================================
+cors_allowed_origins: "https://10.0.0.101,http://localhost"
+csp_connect_src: "'self' https://10.0.0.101 wss://10.0.0.101 http://localhost"
+node_tls_reject_unauthorized: "0"
+
+# =============================================================================
+# AI MODELS (remote GPU)
+# =============================================================================
+vllm_api_key: ""  # Set in vault.yml
+hugging_face_hub_token: ""  # Set in vault.yml
+
+# =============================================================================
+# EMAIL (non-secret) — configure if email is needed
+# =============================================================================
+email_host: "smtp.itu.ch"
+email_port: "587"
+email_secure: "false"
+email_user: "genie-ai"
+email_from: "noreply@genie-ai.itu.int"

@@ -12,6 +12,7 @@ class InsecureHttpClient extends http.BaseClient {
     final securityContext = SecurityContext(withTrustedRoots: false);
     final httpClient = HttpClient(context: securityContext);
     httpClient.badCertificateCallback = (cert, host, port) => true;
+    httpClient.connectionTimeout = const Duration(seconds: 10);
     return IOClient(httpClient);
   }
 

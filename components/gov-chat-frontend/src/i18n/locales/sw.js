@@ -265,8 +265,6 @@ export default {
       network: 'Upeo wa Mtandao'
     },
     databaseManagement: 'Usimamizi wa Hifadhidata',
-    reindexDatabase: 'Faharisi Hifadhidata',
-    lastReindex: 'Faharisi ya Mwisho',
     databaseSize: 'Ukubwa wa Hifadhidata',
     totalTables: 'Jumla ya Jedwali',
     logManagement: 'Usimamizi wa Kumbukumbu',
@@ -297,18 +295,14 @@ export default {
     roleUser: 'Mtumiaji',
     statusActive: 'Hai',
     dbActions: {
-      reindex: 'Faharisi Upya',
       backup: 'Hifadhi Nakala',
       optimize: 'Boresha',
-      reindexDesc: 'Jenga upya faharasa za hifadhidata',
       backupDesc: 'Tengeneza nakala ya hifadhidata',
       optimizeDesc: 'Boresha utendaji wa utafutaji'
     },
     operations: {
-      reindexTitle: 'Matokeo ya Kurekebisha Faharasa ya Hifadhidata',
       backupTitle: 'Matokeo ya Nakala Rudufu ya Hifadhidata',
       optimizeTitle: 'Matokeo ya Uboreshaji wa Hifadhidata',
-      reindexResults: 'Matokeo ya Faharasa',
       optimizeResults: 'Matokeo ya Uboreshaji',
       collection: 'Mkusanyiko',
       status: 'Hali',
@@ -320,11 +314,7 @@ export default {
       errorDetails: 'Maelezo ya Hitilafu',
       close: 'Funga',
       resultsTitle: 'Matokeo ya Operesheni',
-      reindexDatabase: {
-        success: 'Urekebishaji wa faharasa ya hifadhidata umekamilika',
-        error: 'Hitilafu wakati wa kurekebishwa faharasa ya hifadhidata',
-        loading: 'Inarekebisha faharasa ya hifadhidata...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'Nakala rudufu ya hifadhidata imekamilika',
         error: 'Hitilafu wakati wa kufanya nakala rudufu ya hifadhidata',
@@ -915,7 +905,6 @@ export default {
     manageMyAccountDesc: 'Simamia wasifu wako, mipangilio ya usalama na mapendeleo ya akaunti.',
     resetUserData: 'Weka Upya Data ya Mtumiaji',
     resetUserDataDesc: 'Hii itafuta data zote za wasifu wako na historia ya mazungumzo.',
-    edit: 'Hariri',
     standardAccount: 'Akaunti ya Kawaida',
     cancel: 'Ghairi',
     account: {
@@ -1361,12 +1350,18 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'Jibu lilikatika. Tafadhali jaribu tena.',
+    aiGeneratedNoDocs: 'Imezalishwa na AI — haizingatii nyaraka za maktaba',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'Hitilafu ya usanidi: {warnings}. Tafadhali angalia usanidi wa Msaada wa Haraka na mpangilio wa maarifa.',
+    categoryNotFound: 'Kategoria "{label}" haipatikani katika mpangilio wa maarifa',
+    serviceLabelMismatch: 'Huduma "{label}" inatumia lebo ya UI ambayo huenda isilingane na mpangilio wa maarifa',
     placeholder: 'Andika swali lako hapa...',
     sendButton: 'Tuma',
     fileReceived: 'Faili imepokelewa.',
     fileUploadError: 'Hitilafu katika kupakia faili.',
     processingError: 'Hitilafu katika kushughulikia ombi lako.',
-    welcomeMessage: 'Karibu! Nawezaje kukusaidia na huduma za serikali ya Kenya leo?',
     attachFile: 'Ambatisha Faili',
     fileTooLarge: 'Faili ni kubwa sana. Ukubwa wa juu ni {maxSize}.',
     saveChat: 'Hifadhi Mazungumzo',
@@ -1378,7 +1373,7 @@ export default {
     clearContext: 'Futa muktadha na anza mazungumzo mapya',
     unsavedChanges: 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kuanza mazungumzo mapya?',
     whatCanIHelp: 'Naweza kukusaidia vipi leo?',
-    justChat: 'Ongea tu',
+
     queryContext: 'Muktadha wa Hoja',
     contextAdded: 'Muktadha umeongezwa kwenye swali lako',
     contextRemoved: 'Muktadha umeondolewa kutoka kwenye swali lako',
@@ -1408,26 +1403,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'Omba Kitambulisho',
-    payTaxes: 'Lipa Kodi',
-    startBusiness: 'Anza Biashara',
-    findHealthcare: 'Afya',
-    educationServices: 'Elimu',
-    transportLicenses: 'Usafiri',
-    housingPrograms: 'Nyumba',
-    findJobs: 'Kazi',
-    justChat: 'Ongea Tu',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'Ningependa kuzungumza kuhusu huduma za serikali',
-    applyForIDUserPrompt: 'Ninahitaji maelezo kuhusu jinsi ya kuomba kitambulisho cha kitaifa',
-    payTaxesUserPrompt: 'Je, ni mchakato gani wa kulipa kodi zangu mtandaoni?',
-    startBusinessUserPrompt: 'Niongoze kupitia hatua za kusajili biashara mpya',
-    findHealthcareUserPrompt: 'Wapi ninaweza kupata maelezo kuhusu huduma za afya ya umma?',
-    educationServicesUserPrompt: 'Ni huduma zipi za elimu zinazopatikana kwa watoto wangu?',
-    transportLicensesUserPrompt: 'Je, ninawezaje kuhuisha leseni yangu ya udereva?',
-    housingProgramsUserPrompt: 'Niambie kuhusu programu za nyumba za bei nafuu nchini Kenya',
-    findJobsUserPrompt: 'Ni fursa zipi za kazi za serikali zinazopatikana kwa sasa?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:
@@ -1492,7 +1469,7 @@ export default {
       1: 'Haina msaada',
       2: 'Msaada Kidogo',
       3: 'Msaada wa Wastani',
-      44: 'Msaada Sana',
+      4: 'Msaada Sana',
       5: 'Inabadilisha Maisha'
     },
     additionalComments: 'Maoni ya ziada...',

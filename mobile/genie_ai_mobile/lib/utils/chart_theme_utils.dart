@@ -10,21 +10,14 @@ class ChartThemeUtils {
     final green = bgColor.green;
     // ignore: deprecated_member_use
     final blue = bgColor.blue;
-    double luminance =
-        (0.2126 * red +
-            0.7152 * green +
-            0.0722 * blue) /
-        255;
+    double luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
     return luminance < 0.5;
   }
 
   static LinearGradient barGradient() {
     final tokens = ThemeManager().tokens;
     return LinearGradient(
-      colors: [
-        tokens.accent,
-        ColorUtils.darken(tokens.accent, 0.1),
-      ],
+      colors: [tokens.accent, ColorUtils.darken(tokens.accent, 0.1)],
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
     );

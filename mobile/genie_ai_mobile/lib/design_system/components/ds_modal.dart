@@ -28,12 +28,8 @@ class DsModal extends StatelessWidget {
   }) {
     return showDialog<T>(
       context: context,
-      builder: (_) => DsModal(
-        title: title,
-        content: content,
-        actions: actions,
-        size: size,
-      ),
+      builder: (_) =>
+          DsModal(title: title, content: content, actions: actions, size: size),
     );
   }
 
@@ -48,11 +44,13 @@ class DsModal extends StatelessWidget {
     };
 
     return Dialog(
+      key: const ValueKey('ds-modal'),
       insetPadding: const EdgeInsets.symmetric(
         horizontal: DsSpacing.lg,
         vertical: DsSpacing.xl,
       ),
       child: ConstrainedBox(
+        key: const ValueKey('ds-modal-constraint'),
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -66,6 +64,7 @@ class DsModal extends StatelessWidget {
               ),
               child: Text(
                 title,
+                key: const ValueKey('ds-modal-title'),
                 style: TextStyle(
                   color: tokens.fg,
                   fontSize: 18 * tokens.fontScale,
@@ -73,9 +72,10 @@ class DsModal extends StatelessWidget {
                 ),
               ),
             ),
-            const Divider(height: 1),
+            const Divider(height: 1, key: ValueKey('ds-modal-divider-title')),
             Flexible(
               child: SingleChildScrollView(
+                key: const ValueKey('ds-modal-content-scroll'),
                 padding: const EdgeInsets.fromLTRB(
                   DsSpacing.lg,
                   DsSpacing.md,
@@ -86,7 +86,10 @@ class DsModal extends StatelessWidget {
               ),
             ),
             if (actions != null && actions!.isNotEmpty) ...[
-              const Divider(height: 1),
+              const Divider(
+                height: 1,
+                key: ValueKey('ds-modal-divider-actions'),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   DsSpacing.md,
@@ -95,7 +98,8 @@ class DsModal extends StatelessWidget {
                   DsSpacing.md,
                 ),
                 child: Row(
-                  children: actions!,
+                  key: const ValueKey('ds-modal-actions'),
+                  children: actions!.map((a) => Expanded(child: a)).toList(),
                 ),
               ),
             ],

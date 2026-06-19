@@ -1,7 +1,7 @@
 <template>
   <div class="app-container">
     <!-- Main chatbot container -->
-    <div class="chatbot-container">
+    <div class="chatbot-container" data-test-id="chatbot-container">
       <!-- New Chat Confirmation Dialog -->
       <ConfirmDialog
         :visible="showNewChatConfirm"
@@ -94,21 +94,37 @@
       </div>
       <!-- The scrollable chat window -->
       <div ref="chatWindow" class="chat-window" aria-live="polite">
-        <div v-for="(msg, index) in chatMessages" :key="index" class="chat-message" :class="msg.sender">
+        <div
+          v-for="(msg, index) in chatMessages"
+          :key="`${msg.sender}-${msg.timestamp || ''}-${index}`"
+          class="chat-message"
+          :class="msg.sender"
+        >
           <div class="message-wrapper">
             <div class="message-bubble">
               <!-- Render bot messages as sanitized HTML for Markdown, user messages as plain text -->
               <span v-if="msg.sender === 'user'">{{ msg.content }}</span>
-              <!-- eslint-disable-next-line vue/no-v-html -->
-              <div v-else v-html="renderMarkdown(msg.content)"></div>
+              <template v-else>
+                <div v-if="msg.isStreaming && !msg.content" class="streaming-indicator">
+                  <DsSpinner size="sm" />
+                  <span>{{ translate('chatbot.thinking', 'Thinking...') }}</span>
+                </div>
+                <!-- eslint-disable-next-line vue/no-v-html -->
+                <div v-else v-html="renderMarkdown(msg.content)"></div>
+              </template>
             </div>
             <span class="message-time">{{ formatMessageTime(msg.timestamp) }}</span>
           </div>
           <!-- Feedback and confidence score for bot messages -->
           <div v-if="msg.sender === 'bot'" class="bot-message-meta">
-            <div v-if="msg.confidenceScore" class="confidence-score">
+            <div v-if="msg.confidenceScore && msg.isGrounded !== false" class="confidence-score">
               <Brain :size="16" />
               <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
+            </div>
+            <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
+            <div v-else-if="msg.isGrounded === false" class="grounding-flag">
+              <Sparkles :size="16" />
+              <span>{{ translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents') }}</span>
             </div>
             <div class="feedback-trigger">
               <DsPill>
@@ -121,11 +137,6 @@
         </div>
         <!-- Auto-scroll anchor element -->
         <div ref="messagesEnd"></div>
-      </div>
-      <!-- Loading spinner with "Thinking..." text (non-streaming fallback only) -->
-      <div v-if="isLoading && !isStreaming" class="loading-spinner" aria-label="Processing your request">
-        <Loader2 :size="16" class="animate-spin" />
-        <span class="loading-text">Thinking...</span>
       </div>
       <!-- Quick Help Overlay -->
       <div v-if="showQuickHelp && selectedContextItems.length === 0" class="quick-help-overlay">
@@ -146,7 +157,7 @@
               @click="selectQuickHelpOption(button)"
             >
               <img class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
-              <div class="quick-help-text">{{ $t(button.textKey) }}</div>
+              <div class="quick-help-text">{{ button.service }}</div>
             </DsCard>
           </div>
         </div>
@@ -170,6 +181,7 @@
             v-if="chatMessages.length > 0"
             variant="ghost"
             :title="translate('chatbot.saveChat')"
+            data-testid="save-chat-btn"
             :disabled="isSaving"
             @click="saveChatToHistory"
           >
@@ -259,7 +271,7 @@
 </template>
 
 <script>
-import { Brain, Loader2, Plus, Save, FileText } from 'lucide-vue-next';
+import { Brain, Loader2, Plus, Save, FileText, Sparkles } from 'lucide-vue-next';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -271,6 +283,7 @@ import chatbotService from '../services/chatbotService';
 import serviceTreeService from '../services/serviceTreeService'; // *** NEW: Import serviceTreeService
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import chatHistoryService from '../services/chatHistoryService';
+import DsSpinner from './ds/Spinner.vue';
 import DsPill from './ds/Pill.vue';
 import DsButton from './ds/Button.vue';
 import DsCard from './ds/Card.vue';
@@ -279,6 +292,7 @@ import DsSelect from './ds/Select.vue';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import jsPDF from 'jspdf';
+import { resolveConfigText } from '../utils/configResolver';
 
 export default {
   name: 'ChatBotComponent',
@@ -288,11 +302,13 @@ export default {
     Plus,
     Save,
     FileText,
+    Sparkles,
     ChatResponseFeedbackDialog,
     ModalDialog,
     RightSideBarComponent,
     ConfirmDialog,
     DsPill,
+    DsSpinner,
     DsButton,
     DsCard,
     DsInput,
@@ -302,7 +318,6 @@ export default {
   data() {
     return {
       conversationId: null,
-      messages: [],
       chatMessages: [],
       newMessage: '',
       selectedContextItems: [],
@@ -321,7 +336,8 @@ export default {
       },
       currentChatId: null,
       currentChatTitle: '',
-      currentLocale: 'en',
+      cachedConfig: null,
+      currentLocale: (navigator.language || 'en').split('-')[0],
       showQuickHelp: true,
       currentCategoryId: null,
       serviceCategories: [], // This will now hold the transformed tree data
@@ -382,6 +398,10 @@ export default {
   watch: {
     currentLocale: function () {
       this.updateDialogTexts();
+    },
+    '$i18n.locale'(newLocale) {
+      this.currentLocale = newLocale;
+      this.loadQuickHelpButtons();
     }
   },
 
@@ -393,7 +413,7 @@ export default {
         this.chatMessages = [
           {
             sender: 'bot',
-            content: this.translate('chatbot.welcomeMessage'),
+            content: this.getWelcomeMessage(),
             timestamp: new Date().toISOString(),
             isSaved: true
           }
@@ -430,7 +450,7 @@ export default {
     if (this.chatMessages.length === 0) {
       this.chatMessages.push({
         sender: 'bot',
-        content: this.translate('chatbot.welcomeMessage')
+        content: this.getWelcomeMessage()
       });
     }
 
@@ -496,7 +516,7 @@ export default {
     getCategoryLabelById(id) {
       if (id === null || id === undefined) {
         const selectedServices = this.selectedContextItems.map((item) => item.serviceKey);
-        if (selectedServices.includes('quickhelp.justChat')) {
+        if (selectedServices.includes('just-chat')) {
           return 'General';
         }
         return null;
@@ -518,19 +538,19 @@ export default {
 
       const warnings = [];
       if (context.categoryLabel && /^Category \d+$/.test(context.categoryLabel)) {
-        warnings.push(`Category "${context.categoryLabel}" not found in knowledge hierarchy`);
+        warnings.push(this.translate('chatbot.categoryNotFound', '').replace('{label}', context.categoryLabel));
       }
       if (context.serviceLabels?.length > 0) {
         for (const label of context.serviceLabels) {
           const item = this.selectedContextItems.find((i) => i.service === label);
-          if (item?.serviceKey?.startsWith('quickhelp.') && item.serviceKey !== 'quickhelp.justChat') {
-            warnings.push(`Service "${label}" uses a UI label that may not match the knowledge hierarchy`);
+          if (!item) {
+            warnings.push(this.translate('chatbot.serviceLabelMismatch', '').replace('{label}', label));
           }
         }
       }
       if (warnings.length > 0) {
         notificationService.warning(
-          `Configuration mismatch: ${warnings.join('; ')}. Please check the Quick Help and knowledge hierarchy configuration.`,
+          this.translate('chatbot.configMismatchWarning', '').replace('{warnings}', warnings.join('; ')),
           8000
         );
       }
@@ -579,14 +599,21 @@ export default {
       try {
         const { loadConfig } = await import('../main.js');
         const config = await loadConfig();
+        this.cachedConfig = config;
         const buttons = config?.features?.chat?.quickHelp?.buttons || [];
+        const locale = this.currentLocale;
+
         this.quickHelpButtons = buttons.map((button) => {
+          const title = resolveConfigText(button.title, locale);
+          const visibleText = resolveConfigText(button.action?.visibleText, locale);
+          const hiddenPrompt = resolveConfigText(button.action?.hiddenPrompt, locale);
+
           return {
-            service: this.$t(button.title),
+            service: title,
             textKey: button.title,
-            visibleTextKey: button.action.visibleText,
-            hiddenPromptKey: button.action.hiddenPrompt,
-            icon: button.icon.value,
+            visibleText: visibleText,
+            hiddenPrompt: hiddenPrompt,
+            icon: button.icon?.value,
             category: button.category,
             id: button.id
           };
@@ -595,6 +622,14 @@ export default {
         console.error('[ChatBotComponent] Failed to load Quick Help config:', error);
         this.quickHelpButtons = [];
       }
+    },
+
+    getWelcomeMessage() {
+      const configWelcome = this.cachedConfig?.features?.chat?.welcomeMessage;
+      if (configWelcome) {
+        return resolveConfigText(configWelcome, this.currentLocale);
+      }
+      return this.translate('chatbot.welcomeMessage');
     },
 
     // formatUptime method removed
@@ -607,8 +642,9 @@ export default {
       // Document opened
     },
 
-    translate(key) {
-      return this.$t(key);
+    translate(key, fallback) {
+      const value = this.$t(key);
+      return value !== key ? value : fallback || key;
     },
 
     selectQuickHelpOption(option) {
@@ -616,7 +652,7 @@ export default {
       if (!rawOption.service) {
         return;
       }
-      const categoryId = rawOption.category || (rawOption.service !== this.$t('quickhelp.justChat') ? 'general' : null);
+      const categoryId = rawOption.category || (rawOption.id !== 'just-chat' ? 'general' : null);
 
       const contextExists = this.selectedContextItems.some(
         (item) => item.service === rawOption.service && item.category === categoryId
@@ -625,26 +661,26 @@ export default {
       if (!contextExists) {
         this.selectedContextItems.push({
           service: rawOption.service,
-          serviceKey: rawOption.textKey,
+          serviceKey: rawOption.id || rawOption.service,
           category: categoryId,
           selected: true
         });
       }
 
-      if (rawOption.service !== this.$t('quickhelp.justChat')) {
+      if (rawOption.id !== 'just-chat') {
         this.currentCategoryId = categoryId;
       } else {
         this.currentCategoryId = this.currentCategoryId || null;
       }
 
       this.showQuickHelp = false;
-      if (rawOption.hiddenPromptKey) {
+      if (rawOption.hiddenPromptKey || rawOption.hiddenPrompt) {
         // Display the visible text in the chat (what user sees)
-        const visibleMessage = this.$t(rawOption.visibleTextKey);
+        const visibleMessage = rawOption.visibleText || this.$t(rawOption.visibleTextKey);
         this.newMessage = visibleMessage;
 
         // Store the hidden prompt to send to backend (what LLM sees)
-        this.hiddenPromptForNextMessage = this.$t(rawOption.hiddenPromptKey);
+        this.hiddenPromptForNextMessage = rawOption.hiddenPrompt || this.$t(rawOption.hiddenPromptKey);
         this.sendMessage();
       }
     },
@@ -698,8 +734,8 @@ export default {
         if (quickHelpOption) {
           this.selectedContextItems = [
             {
-              service: this.safeTranslate(quickHelpOption.textKey),
-              serviceKey: quickHelpOption.textKey,
+              service: quickHelpOption.service,
+              serviceKey: quickHelpOption.id || quickHelpOption.service,
               category: this.currentCategoryId,
               selected: true
             }
@@ -801,6 +837,9 @@ export default {
             if (metadata.confidence_score) {
               this.chatMessages[lastMessageIndex].confidenceScore = metadata.confidence_score;
             }
+            // is_grounded: true = answer backed by retrieved document chunks;
+            // false = generated from the LLM's own knowledge (no document basis).
+            this.chatMessages[lastMessageIndex].isGrounded = metadata.is_grounded;
             if (metadata.responseTime) {
               this.systemStatus.lastResponseTime = metadata.responseTime;
             }
@@ -972,7 +1011,7 @@ export default {
         if (this.chatMessages.length === 0) {
           this.chatMessages.push({
             sender: 'bot',
-            content: this.translate('chatbot.welcomeMessage'),
+            content: this.getWelcomeMessage(),
             timestamp: new Date().toISOString(),
             queryId: null,
             isSaved: true
@@ -1138,7 +1177,7 @@ export default {
             continue;
           }
 
-          if (message.sender === 'user' || (message.sender === 'bot' && message.queryId)) {
+          if ((message.sender === 'user' || (message.sender === 'bot' && message.queryId)) && message.content) {
             const messageData = {
               conversationId: conversation._key,
               content: message.content,
@@ -1213,7 +1252,7 @@ export default {
           if (message.isSaved) {
             continue;
           }
-          if (message.sender === 'user' || (message.sender === 'bot' && message.queryId)) {
+          if ((message.sender === 'user' || (message.sender === 'bot' && message.queryId)) && message.content) {
             const messageData = {
               conversationId: this.conversationId,
               content: message.content,
@@ -1260,7 +1299,7 @@ export default {
           this.chatMessages = [
             {
               sender: 'bot',
-              content: this.translate('chatbot.welcomeMessage')
+              content: this.getWelcomeMessage()
             }
           ];
         }
@@ -1326,14 +1365,12 @@ export default {
 
     startNewChatConfirmed() {
       this.showNewChatConfirm = false;
-      this.chatMessages = [
-        {
-          sender: 'bot',
-          content: this.translate('chatbot.welcomeMessage'),
-          timestamp: new Date().toISOString(),
-          isSaved: true
-        }
-      ];
+      this.chatMessages.splice(0, this.chatMessages.length, {
+        sender: 'bot',
+        content: this.getWelcomeMessage(),
+        timestamp: new Date().toISOString(),
+        isSaved: true
+      });
       this.currentChatId = null;
       this.conversationId = null;
       this.selectedContextItems = [];
@@ -1346,7 +1383,9 @@ export default {
         messages: JSON.parse(JSON.stringify(this.chatMessages)),
         contextItems: []
       };
-      this.scrollToBottom();
+      this.$nextTick(() => {
+        this.scrollToBottom();
+      });
       notificationService.info(this.translate('chatbot.newChatStarted'), 1500);
     },
 
@@ -1911,30 +1950,14 @@ export default {
   border-radius: var(--radius-sm);
 }
 
-/* Loading Spinner Styles */
-.loading-spinner {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+/* Streaming Indicator — shown inside bot bubble while waiting for first chunk */
+.streaming-indicator {
   display: flex;
-  justify-content: center;
   align-items: center;
   gap: var(--space-sm);
-  background: var(--overlay-bg); /* Semi-transparent background for visibility */
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-md);
-  z-index: 100; /* Ensure it overlays other content */
-}
-
-.loading-spinner :deep(svg) {
-  color: var(--accent); /* Match button colors */
-}
-
-.loading-spinner .loading-text {
-  font-size: var(--text-base);
-  color: var(--fg);
-  font-weight: 500;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  padding: var(--space-xs) 0;
 }
 
 .bot-message-meta {
@@ -1950,6 +1973,18 @@ export default {
   font-size: var(--text-sm);
   color: var(--muted-soft);
   background: var(--surface);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+/* Shown when the answer is not backed by retrieved documents (LLM-only). */
+.grounding-flag {
+  font-size: var(--text-sm);
+  color: var(--warning);
+  background: var(--warning-bg);
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
   display: flex;

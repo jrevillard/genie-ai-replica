@@ -57,8 +57,10 @@ void main() {
         final result = await storage.getAccessTokenExpiration();
         expect(result, isNotNull);
         // Compare as UTC ISO string to avoid local timezone drift
-        expect(result!.toUtc().toIso8601String(),
-            equals(expiration.toUtc().toIso8601String()));
+        expect(
+          result!.toUtc().toIso8601String(),
+          equals(expiration.toUtc().toIso8601String()),
+        );
       });
 
       test('returns ~1 hour from now when expiresIn=3600', () async {

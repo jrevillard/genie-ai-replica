@@ -265,8 +265,6 @@ export default {
       network: 'Bande passante réseau'
     },
     databaseManagement: 'Gestion de la base de données',
-    reindexDatabase: 'Réindexer la base de données',
-    lastReindex: 'Dernière réindexation',
     databaseSize: 'Taille de la base de données',
     totalTables: 'Nombre total de tables',
     logManagement: 'Gestion des journaux',
@@ -297,18 +295,14 @@ export default {
     roleUser: 'Utilisateur',
     statusActive: 'Actif',
     dbActions: {
-      reindex: 'Réindexer',
       backup: 'Sauvegarder',
       optimize: 'Optimiser',
-      reindexDesc: 'Reconstruire les index de la base de données',
       backupDesc: 'Créer une sauvegarde de la base de données',
       optimizeDesc: 'Optimiser les performances des requêtes'
     },
     operations: {
-      reindexTitle: 'Résultats de la réindexation de la base de données',
       backupTitle: 'Résultats de la sauvegarde de la base de données',
       optimizeTitle: "Résultats de l'optimisation de la base de données",
-      reindexResults: 'Résultats de réindexation',
       optimizeResults: "Résultats d'optimisation",
       collection: 'Collection',
       status: 'Statut',
@@ -320,11 +314,7 @@ export default {
       errorDetails: "Détails de l'erreur",
       close: 'Fermer',
       resultsTitle: "Résultats de l'opération",
-      reindexDatabase: {
-        success: 'Réindexation de la base de données terminée avec succès',
-        error: 'Erreur lors de la réindexation de la base de données',
-        loading: 'Réindexation de la base de données...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'Sauvegarde de la base de données terminée avec succès',
         error: 'Erreur lors de la sauvegarde de la base de données',
@@ -682,6 +672,7 @@ export default {
     drivingLicense: 'Permis de conduire'
   },
   sidebar: {
+    chats: 'Discussions',
     governmentServices: 'Domaines de connaissance',
     chatHistory: 'Historique des discussions',
     searchPlaceholder: 'Rechercher des domaines de connaissance...',
@@ -1373,6 +1364,13 @@ export default {
     }
   },
   chatbot: {
+    serviceLabelMismatch:
+      "Le service « {label} » utilise une étiquette d'interface qui peut ne pas correspondre à la hiérarchie de connaissances",
+    categoryNotFound: 'Catégorie « {label} » introuvable dans la hiérarchie de connaissances',
+    configMismatchWarning:
+      "Incohérence de configuration : {warnings}. Vérifiez la configuration de l'Aide rapide et la hiérarchie de connaissances.",
+    streamingError: 'La réponse a été interrompue. Veuillez réessayer.',
+    aiGeneratedNoDocs: 'Généré par IA — non basé sur les documents de la bibliothèque',
     placeholder: 'Tapez votre requête ici...',
     sendButton: 'Envoyer',
     fileReceived: 'Fichier reçu avec succès.',
@@ -1391,7 +1389,7 @@ export default {
     unsavedChanges:
       'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir commencer une nouvelle discussion ?',
     whatCanIHelp: "Comment puis-je vous aider aujourd'hui ?",
-    justChat: 'Simplement discuter',
+
     queryContext: 'Contexte de la requête',
     contextAdded: 'Contexte ajouté à votre requête',
     contextRemoved: 'Contexte supprimé de votre requête',
@@ -1421,26 +1419,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'Demander une CNI',
-    payTaxes: 'Payer les impôts',
-    startBusiness: 'Créer une entreprise',
-    findHealthcare: 'Santé',
-    educationServices: 'Éducation',
-    transportLicenses: 'Transport',
-    housingPrograms: 'Logement',
-    findJobs: 'Emplois',
-    justChat: 'Discuter',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: "J'aimerais discuter des services gouvernementaux",
-    applyForIDUserPrompt: "J'ai besoin d'informations sur la manière de demander une carte d'identité nationale",
-    payTaxesUserPrompt: 'Quel est le processus pour payer mes impôts en ligne ?',
-    startBusinessUserPrompt: 'Guidez-moi à travers les étapes pour enregistrer une nouvelle entreprise',
-    findHealthcareUserPrompt: 'Où puis-je trouver des informations sur les services de santé publics ?',
-    educationServicesUserPrompt: 'Quels services éducatifs sont disponibles pour mes enfants ?',
-    transportLicensesUserPrompt: 'Comment puis-je renouveler mon permis de conduire ?',
-    housingProgramsUserPrompt: 'Parlez-moi des programmes de logement abordable au Kenya',
-    findJobsUserPrompt: "Quelles opportunités d'emploi gouvernementales sont actuellement disponibles ?",
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

@@ -34,3 +34,28 @@ export const availableLanguages = [
   { code: 'th', name: 'Thai' },
   { code: 'zh', name: 'Chinese' }
 ];
+
+/**
+ * Per-deployment locale whitelist injected at runtime by docker-entrypoint.sh
+ * (window.APP_CONFIG.availableLocales). Empty/unset = all locales active.
+ * @returns {string[]} lowercase locale codes, or [] when no whitelist is set.
+ */
+function getLocaleWhitelist() {
+  const raw = (typeof window !== 'undefined' && window.APP_CONFIG && window.APP_CONFIG.availableLocales) || '';
+  return raw
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/**
+ * The active set of selectable languages for THIS deployment, honoring the
+ * runtime locale whitelist. Used by AdminDashboard.vue translation controls.
+ * Unset whitelist = full `availableLanguages` set.
+ * @returns {{ code: string, name: string }[]}
+ */
+export function getAvailableLanguages() {
+  const whitelist = getLocaleWhitelist();
+  if (!whitelist.length) return availableLanguages;
+  return availableLanguages.filter((lang) => whitelist.includes(lang.code.toLowerCase()));
+}

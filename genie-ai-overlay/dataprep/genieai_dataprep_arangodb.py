@@ -10,8 +10,15 @@ import re
 from typing import Any
 
 import aiohttp
+from opentelemetry import propagate
+
+from tracing import get_tracer, setup_trace_logging
+
+tracer = get_tracer(__name__)
 
 # Import exceptions for robust error handling
+# Import Parent Class
+import comps.dataprep.src.integrations.arangodb as _parent_mod
 from arango.exceptions import AQLQueryExecuteError
 
 # Import OPEA Core
@@ -22,10 +29,14 @@ from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDo
 
 # Import Custom Utils
 from comps.dataprep.src.genieai_dataprep_utils import docling_document_loader, document_loader, is_valid_content
-
-# Import Parent Class
 from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep
 from comps.dataprep.src.utils import get_separators
+
+# Align OPEA parent with GENIE convention: use ARANGO_DB (default: genie-ai)
+# instead of ARANGO_DB_NAME (default: _system). Both retriever and dataprep
+# must target the same database for RAG retrieval to find graph data.
+_parent_mod.ARANGO_DB_NAME = os.getenv("ARANGO_DB", os.getenv("ARANGO_DB_NAME", "_system"))
+
 from fastapi import HTTPException
 from langchain_arangodb import ArangoGraph
 from langchain_core.documents import Document
@@ -37,6 +48,7 @@ from pydantic import ValidationError  # Import Pydantic validation error
 from rank_bm25 import BM25Okapi
 
 logger = CustomLogger("GENIE_DATAPREP_ARANGODB")
+setup_trace_logging("GENIE_DATAPREP_ARANGODB")
 logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 
 # --- GENIE-Specific Configuration ---
@@ -104,18 +116,54 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     def _log_environment_variables(self):
         """Debug: Print all critical environment variables at startup."""
-        logger.debug(f"GENIE-AI DATAPREP CONFIGURATION: "
-                     f"DOC_REPO={DOCUMENT_REPOSITORY_URL}, "
-                     f"BACKEND={BACKEND_SERVICE_URL}, "
-                     f"GUARDRAIL={GUARDRAIL_ENABLED} ({GUARDRAIL_URL}), "
-                     f"LABELING={LABELING_STRATEGY}, "
-                     f"EMBED_THRESHOLD={EMBEDDING_LABEL_THRESHOLD}, "
-                     f"BM25_THRESHOLD={BM25_LABEL_THRESHOLD}, "
-                     f"EXTRACTION={CONTENT_EXTRACTION_METHOD}, "
-                     f"LLM={os.getenv('VLLM_ENDPOINT')}, "
-                     f"ARANGO_DB={os.getenv('ARANGO_DB')}, "
-                     f"PROMPT_LEN={len(LABEL_SELECTOR_SYSTEM_PROMPT)}, "
-                     f"BATCHES={MAX_CONCURRENT_BATCHES}")
+        logger.debug(
+            f"GENIE-AI DATAPREP CONFIGURATION: "
+            f"DOC_REPO={DOCUMENT_REPOSITORY_URL}, "
+            f"BACKEND={BACKEND_SERVICE_URL}, "
+            f"GUARDRAIL={GUARDRAIL_ENABLED} ({GUARDRAIL_URL}), "
+            f"LABELING={LABELING_STRATEGY}, "
+            f"EMBED_THRESHOLD={EMBEDDING_LABEL_THRESHOLD}, "
+            f"BM25_THRESHOLD={BM25_LABEL_THRESHOLD}, "
+            f"EXTRACTION={CONTENT_EXTRACTION_METHOD}, "
+            f"LLM={os.getenv('VLLM_ENDPOINT')}, "
+            f"ARANGO_DB={os.getenv('ARANGO_DB')}, "
+            f"PROMPT_LEN={len(LABEL_SELECTOR_SYSTEM_PROMPT)}, "
+            f"BATCHES={MAX_CONCURRENT_BATCHES}"
+        )
+
+    def _initialize_llm(self, *args, **kwargs):
+        """Override parent to auto-detect model on remote GPU node.
+
+        The parent reads VLLM_MODEL_ID from env var, which may not match
+        the model actually loaded on the remote GPU node. When GPU_NODE_HOST
+        is set, probe the vLLM /v1/models API and override the env var
+        before calling the parent method.
+        """
+        import requests as req
+
+        _vllm_endpoint = os.getenv("VLLM_ENDPOINT", "")
+        _api_key = os.getenv("VLLM_API_KEY", "")
+
+        if os.getenv("GPU_NODE_HOST") and _vllm_endpoint:
+            try:
+                resp = req.get(
+                    f"{_vllm_endpoint}/v1/models",
+                    headers={"Authorization": f"Bearer {_api_key}"},
+                    timeout=10,
+                )
+                resp.raise_for_status()
+                models = resp.json().get("data", [])
+                if models:
+                    os.environ["VLLM_MODEL_ID"] = models[0]["id"]
+                    # Also patch the parent module constant (evaluated at import time)
+                    import comps.dataprep.src.integrations.arangodb as _parent_mod
+
+                    _parent_mod.VLLM_MODEL_ID = models[0]["id"]
+                    logger.info(f"Auto-detected remote vLLM model for graph extraction: {models[0]['id']}")
+            except Exception as e:
+                logger.warning(f"Failed to auto-detect model for graph extraction: {e}")
+
+        super()._initialize_llm(*args, **kwargs)
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
 
@@ -144,6 +192,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             payload["chunk_count"] = chunk_count
 
         try:
+            propagate.inject(headers)
             # Also apply semaphore here to be safe
             async with (
                 self._log_semaphore,
@@ -170,6 +219,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             "message": message,
         }
         try:
+            propagate.inject(headers)
             # FIX: Limit concurrency of log writes to prevent 429 flooding
             async with (
                 self._log_semaphore,
@@ -197,6 +247,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         url = f"{BACKEND_SERVICE_URL}/api/service-categories/categories"
 
         try:
+            propagate.inject(headers)
             async with (
                 self._log_semaphore,
                 aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
@@ -257,20 +308,23 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 separators=get_separators(),
             )
 
-        if isinstance(content, list):
-            raw_chunks = []
-            for item in content:
-                item_str = str(item)
-                if len(item_str) > doc_path.chunk_size:
-                    raw_chunks.extend(text_splitter.split_text(item_str))
-                else:
-                    raw_chunks.append(item_str)
-            plain_chunks = raw_chunks
-        else:
-            docs = text_splitter.create_documents([content])
-            plain_chunks = [d.page_content for d in docs]
+        with tracer.start_as_current_span("dataprep.chunking") as span:
+            if isinstance(content, list):
+                raw_chunks = []
+                for item in content:
+                    item_str = str(item)
+                    if len(item_str) > doc_path.chunk_size:
+                        raw_chunks.extend(text_splitter.split_text(item_str))
+                    else:
+                        raw_chunks.append(item_str)
+                plain_chunks = raw_chunks
+            else:
+                docs = text_splitter.create_documents([content])
+                plain_chunks = [d.page_content for d in docs]
 
-        valid_chunks = [c for c in plain_chunks if is_valid_content(c)]
+            valid_chunks = [c for c in plain_chunks if is_valid_content(c)]
+            span.set_attribute("dataprep.chunk_count", len(valid_chunks))
+
         return valid_chunks
 
     async def _run_guardrail(self, plain_chunks: list[str]) -> dict[str, Any]:
@@ -296,14 +350,32 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _label_with_llm(self, chunks: list[str], all_labels: list[str], file_labels: list[str], file_id: str):
         """Labels chunks using VLLM with Retry Logic and Advisory Warnings (Spec 5.3)."""
-        client = AsyncOpenAI(api_key=os.getenv("VLLM_API_KEY", "EMPTY"), base_url=f"{os.getenv('VLLM_ENDPOINT')}/v1")
+        _api_key = os.getenv("VLLM_API_KEY", "EMPTY")
+        _vllm_endpoint = os.getenv("VLLM_ENDPOINT")
+        client = AsyncOpenAI(
+            api_key=_api_key,
+            base_url=f"{_vllm_endpoint}/v1",
+        )
         model = os.getenv("VLLM_MODEL_ID")
+        # When using remote GPU node, auto-detect model to avoid
+        # config mismatch with GPU node deployment
+        if os.getenv("GPU_NODE_HOST"):
+            try:
+                models = await client.models.list()
+                model = models.data[0].id if models.data else model
+                logger.info(f"Auto-detected remote vLLM model: {model}")
+            except Exception as e:
+                logger.warning(f"Failed to auto-detect model from vLLM API: {e}")
+        if not model:
+            raise RuntimeError("VLLM_MODEL_ID not set and auto-detection failed")
 
         # Debug: Log what is sent to LLM
-        logger.debug(f"LLM LABELING INPUTS: "
-                     f"taxonomy ({len(all_labels)} labels): {all_labels}, "
-                     f"file_labels: {file_labels}, "
-                     f"system_prompt ({len(LABEL_SELECTOR_SYSTEM_PROMPT)} chars)")
+        logger.debug(
+            f"LLM LABELING INPUTS: "
+            f"taxonomy ({len(all_labels)} labels): {all_labels}, "
+            f"file_labels: {file_labels}, "
+            f"system_prompt ({len(LABEL_SELECTOR_SYSTEM_PROMPT)} chars)"
+        )
 
         # Parallel Processing with Semaphore
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)  # Reuse same concurrency limit or define a new one
@@ -478,23 +550,34 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
                 # We need to wrap the synchronous graph transformer calls in asyncio.to_thread
                 # to avoid blocking the event loop if they are heavy CPU tasks.
-                graph_docs = await asyncio.to_thread(self.llm_transformer.convert_to_graph_documents, batch_docs)
+                try:
+                    graph_docs = await asyncio.to_thread(self.llm_transformer.convert_to_graph_documents, batch_docs)
+                except Exception as ge:
+                    logger.error(f"Batch {current_batch_num} graph conversion failed: {type(ge).__name__}: {ge}")
+                    raise
 
                 if graph_docs:
+                    logger.info(f"Batch {current_batch_num}: {len(graph_docs)} graph_docs extracted")
                     # Run graph insertion in a thread as well if it's blocking
-                    await asyncio.to_thread(
-                        self.graph.add_graph_documents,
-                        graph_documents=graph_docs,
-                        include_source=getattr(input, "include_chunks", True),
-                        graph_name=graph_name,
-                        use_one_entity_collection=True,
-                        embeddings=self.embeddings,
-                        embedding_field="embedding",
-                        embed_source=getattr(input, "embed_chunks", True),
-                        embed_nodes=getattr(input, "embed_nodes", True),
-                        embed_relationships=getattr(input, "embed_edges", True),
-                        capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper"),
-                    )
+                    try:
+                        await asyncio.to_thread(
+                            self.graph.add_graph_documents,
+                            graph_documents=graph_docs,
+                            include_source=getattr(input, "include_chunks", True),
+                            graph_name=graph_name,
+                            use_one_entity_collection=True,
+                            embeddings=self.embeddings,
+                            embedding_field="embedding",
+                            embed_source=getattr(input, "embed_chunks", True),
+                            embed_nodes=getattr(input, "embed_nodes", True),
+                            embed_relationships=getattr(input, "embed_edges", True),
+                            capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper"),
+                        )
+                    except Exception as embed_err:
+                        logger.error(
+                            f"Batch {current_batch_num} graph insertion failed: {type(embed_err).__name__}: {embed_err}"
+                        )
+                        raise
             except (ValidationError, Exception) as ve:
                 logger.warning(f"Batch {current_batch_num} failed graph extraction: {ve}")
                 await self._write_ingestion_log(

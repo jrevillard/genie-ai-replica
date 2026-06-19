@@ -339,6 +339,32 @@ restore_config() {
 
     # Patch rate-limiting
     log "Patching global rate-limiting plugin"
+
+    # Toggle opentelemetry plugin based on ENABLE_OBSERVABILITY
+    # Plugin defaults to disabled in kong_config.json; enable only when obs stack is active
+    # Uses OTEL_EXPORTER_OTLP_ENDPOINT (same var as backend and OPEA services) for the collector URL
+    log "Checking ENABLE_OBSERVABILITY for opentelemetry plugin"
+    OTel_ID=$(curl -s "${KONG_ADMIN_URL}/plugins" | jq -r '.data[] | select(.name=="opentelemetry") | .id' | sed -n '1p')
+    if [ -z "${OTel_ID}" ] || [ "${OTel_ID}" = "null" ]; then
+      if [ "${ENABLE_OBSERVABILITY}" = "1" ]; then
+        log "ERROR: opentelemetry plugin not found in Kong — cannot enable tracing"
+        errors=$((errors + 1))
+      else
+        log "opentelemetry plugin not found — skipping toggle (observability disabled)"
+      fi
+    elif [ "${ENABLE_OBSERVABILITY}" = "1" ]; then
+      OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}"
+      log "Enabling opentelemetry plugin (ENABLE_OBSERVABILITY=1, endpoint=${OTLP_ENDPOINT}/v1/traces)"
+      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PATCH "${KONG_ADMIN_URL}/plugins/${OTel_ID}" \
+        --data-urlencode "enabled=true" \
+        --data-urlencode "config.traces_endpoint=${OTLP_ENDPOINT}/v1/traces")
+      if [ "${HTTP_CODE}" -ne 200 ]; then
+        log "ERROR: Failed to enable opentelemetry plugin (HTTP ${HTTP_CODE})"
+        errors=$((errors + 1))
+      fi
+    else
+      log "Observability disabled (ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY}) — opentelemetry plugin remains disabled"
+    fi
     RATE_LIMIT_PLUGIN_ID=$(curl -s "$KONG_ADMIN_URL/plugins" | jq -r '.data[] | select(.name == "rate-limiting") | .id' | sed -n '1p')
     if [ -z "$RATE_LIMIT_PLUGIN_ID" ]; then
         log "WARNING: No rate-limiting plugin found, skipping patch"

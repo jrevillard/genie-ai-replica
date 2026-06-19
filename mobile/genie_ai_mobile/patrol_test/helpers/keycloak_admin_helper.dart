@@ -10,11 +10,9 @@ class KeycloakAdminHelper {
   final AuthHelper _auth;
   final http.Client _client;
 
-  KeycloakAdminHelper({
-    required AuthHelper auth,
-    http.Client? client,
-  })  : _auth = auth,
-        _client = client ?? AuthHelper.insecureClient();
+  KeycloakAdminHelper({required AuthHelper auth, http.Client? client})
+    : _auth = auth,
+      _client = client ?? AuthHelper.insecureClient();
 
   /// Create a Keycloak user. Returns the user ID.
   /// firstName, lastName, and emailVerified are required for ROPC login
@@ -75,9 +73,7 @@ class KeycloakAdminHelper {
     );
     final response = await _client.delete(
       uri,
-      headers: {
-        'Authorization': 'Bearer $adminToken',
-      },
+      headers: {'Authorization': 'Bearer $adminToken'},
     );
     // 204 = success, 404 = already deleted — both acceptable
     if (response.statusCode != 204 && response.statusCode != 404) {
@@ -98,9 +94,7 @@ class KeycloakAdminHelper {
     );
     final response = await _client.get(
       uri,
-      headers: {
-        'Authorization': 'Bearer $adminToken',
-      },
+      headers: {'Authorization': 'Bearer $adminToken'},
     );
     return response.statusCode == 200;
   }
@@ -117,9 +111,7 @@ class KeycloakAdminHelper {
     );
     final response = await _client.get(
       uri,
-      headers: {
-        'Authorization': 'Bearer $adminToken',
-      },
+      headers: {'Authorization': 'Bearer $adminToken'},
     );
     if (response.statusCode != 200) return null;
     final users = jsonDecode(response.body) as List<dynamic>;
@@ -138,9 +130,7 @@ class KeycloakAdminHelper {
     );
     final response = await _client.get(
       uri,
-      headers: {
-        'Authorization': 'Bearer $adminToken',
-      },
+      headers: {'Authorization': 'Bearer $adminToken'},
     );
 
     if (response.statusCode != 200) {
@@ -186,9 +176,7 @@ class KeycloakAdminHelper {
     required String adminToken,
     required String realm,
   }) async {
-    final uri = Uri.parse(
-      '${_auth.keycloakUrl}/admin/realms/$realm/keys',
-    );
+    final uri = Uri.parse('${_auth.keycloakUrl}/admin/realms/$realm/keys');
     final getResponse = await _client.get(
       uri,
       headers: {'Authorization': 'Bearer $adminToken'},
@@ -232,7 +220,9 @@ class KeycloakAdminHelper {
     required String? userId,
     required String username,
   }) async {
-    final id = userId ?? await getUserIdByUsername(
+    final id =
+        userId ??
+        await getUserIdByUsername(
           adminToken: adminToken,
           realm: realm,
           username: username,

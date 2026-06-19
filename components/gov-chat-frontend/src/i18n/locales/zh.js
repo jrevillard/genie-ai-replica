@@ -265,8 +265,6 @@ export default {
       network: '网络带宽'
     },
     databaseManagement: '数据库管理',
-    reindexDatabase: '重新索引数据库',
-    lastReindex: '上次重新索引',
     databaseSize: '数据库大小',
     totalTables: '总表数',
     logManagement: '日志管理',
@@ -297,18 +295,14 @@ export default {
     roleUser: '用户',
     statusActive: '活跃',
     dbActions: {
-      reindex: '重新索引',
       backup: '备份',
       optimize: '优化',
-      reindexDesc: '重建数据库索引',
       backupDesc: '创建数据库备份',
       optimizeDesc: '优化查询性能'
     },
     operations: {
-      reindexTitle: '数据库重新索引结果',
       backupTitle: '数据库备份结果',
       optimizeTitle: '数据库优化结果',
-      reindexResults: '重新索引结果',
       optimizeResults: '优化结果',
       collection: '集合',
       status: '状态',
@@ -320,11 +314,7 @@ export default {
       errorDetails: '错误详情',
       close: '关闭',
       resultsTitle: '操作结果',
-      reindexDatabase: {
-        success: '数据库重新索引成功完成',
-        error: '数据库重新索引过程中出错',
-        loading: '正在重新索引数据库...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: '数据库备份成功完成',
         error: '数据库备份过程中出错',
@@ -855,7 +845,6 @@ export default {
     manageMyAccountDesc: '管理您的个人资料、安全设置和账户偏好。',
     resetUserData: '重置用户数据',
     resetUserDataDesc: '这将清除您的所有资料数据和聊天历史。',
-    edit: '编辑',
     standardAccount: '标准账户',
     cancel: '取消',
     account: {
@@ -1300,12 +1289,17 @@ export default {
     }
   },
   chatbot: {
+    streamingError: '回复已中断。请重试。',
+    aiGeneratedNoDocs: 'AI 生成 — 不基于文库文档',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning: '配置不匹配：{warnings}。请检查快速帮助和知识层次结构的配置。',
+    categoryNotFound: '在知识层次结构中未找到类别"{label}"',
+    serviceLabelMismatch: '服务"{label}"使用的UI标签可能与知识层次结构不匹配',
     placeholder: '在此输入您的查询...',
     sendButton: '发送',
     fileReceived: '文件接收成功。',
     fileUploadError: '上传文件出错。',
     processingError: '处理您的请求出错。',
-    welcomeMessage: '欢迎！今天我如何帮助您处理肯尼亚政府服务？',
     attachFile: '附加文件',
     fileTooLarge: '文件太大。最大大小为 {maxSize}。',
     saveChat: '保存聊天',
@@ -1317,7 +1311,7 @@ export default {
     clearContext: '清除上下文并开始新对话',
     unsavedChanges: '您有未保存的更改。您确定要开始新聊天吗？',
     whatCanIHelp: '今天我能帮您什么？',
-    justChat: '只是聊天',
+
     queryContext: '查询上下文',
     contextAdded: '上下文添加到您的查询',
     contextRemoved: '上下文从您的查询移除',
@@ -1346,26 +1340,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: '申请身份证',
-    payTaxes: '缴税',
-    startBusiness: '创业',
-    findHealthcare: '医疗',
-    educationServices: '教育',
-    transportLicenses: '交通',
-    housingPrograms: '住房',
-    findJobs: '工作',
-    justChat: '聊天',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: '我想聊聊政府服务',
-    applyForIDUserPrompt: '我需要关于如何申请居民身份证的信息',
-    payTaxesUserPrompt: '在线缴税的过程是什么？',
-    startBusinessUserPrompt: '指导我完成开创新事业的步骤',
-    findHealthcareUserPrompt: '哪里可以找到公共医疗服务的信息？',
-    educationServicesUserPrompt: '我的孩子有哪些教育服务可用？',
-    transportLicensesUserPrompt: '如何续签我的驾照？',
-    housingProgramsUserPrompt: '告诉我肯尼亚的负担得起的住房计划',
-    findJobsUserPrompt: '目前有哪些政府工作机会？',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

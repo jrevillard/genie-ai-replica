@@ -2,9 +2,11 @@
   <component
     :is="tag"
     class="ds-btn"
-    :class="[`ds-btn--${variant}`, { 'ds-btn--sm': small }]"
+    :class="[`ds-btn--${variant}`, { 'ds-btn--sm': small, 'ds-btn--disabled': disabled && tag !== 'button' }]"
     :disabled="tag === 'button' ? disabled : undefined"
+    :aria-disabled="disabled && tag !== 'button' ? 'true' : undefined"
     v-bind="$attrs"
+    @click="!disabled && $emit('click', $event)"
   >
     <slot />
   </component>
@@ -34,7 +36,8 @@ export default {
       type: Boolean,
       default: false
     }
-  }
+  },
+  emits: ['click']
 };
 </script>
 

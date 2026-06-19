@@ -1,0 +1,18 @@
+# =============================================================================
+# GENIE.AI — Grafana Alerting Notification Policies
+# =============================================================================
+# Defines how alerts are routed to contact points.
+# All observability alerts are routed to the default-webhook contact point.
+# =============================================================================
+
+apiVersion: 1
+
+policies:
+  - orgId: 1
+    receiver: default-webhook
+    group_by:
+      - alertname
+      - component
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h

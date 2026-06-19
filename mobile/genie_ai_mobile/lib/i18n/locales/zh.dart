@@ -435,7 +435,8 @@ const Map<String, dynamic> zhLocale = {
     "resetUserDataDesc": "这将清除您的所有个人资料数据和聊天记录。",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "删除账户",
     "deleteAccountDesc": "这将永久删除您的账户和所有相关数据。",
     "edit": "编辑",
@@ -907,12 +908,12 @@ const Map<String, dynamic> zhLocale = {
     },
   },
   "chatbot": {
+    "aiGeneratedNoDocs": "AI 生成 — 不基于文库文档",
     "placeholder": "在此处输入您的问题...",
     "sendButton": "发送",
     "fileReceived": "文件接收成功。",
     "fileUploadError": "文件上传错误。",
     "processingError": "处理您的请求时出错。",
-    "welcomeMessage": "欢迎！今天我能为您提供哪些关于肯尼亚政府服务的帮助？",
     "attachFile": "附加文件",
     "fileTooLarge": "文件过大。最大大小为 {maxSize}。",
     "saveChat": "保存聊天",
@@ -924,7 +925,6 @@ const Map<String, dynamic> zhLocale = {
     "clearContext": "清除上下文并开始新对话",
     "unsavedChanges": "您有未保存的更改。您确定要开始新聊天吗？",
     "whatCanIHelp": "今天我能为您提供什么帮助？",
-    "justChat": "仅聊天",
     "queryContext": "查询上下文",
     "contextAdded": "上下文已添加到您的查询",
     "contextRemoved": "上下文已从您的查询中移除",
@@ -971,44 +971,7 @@ const Map<String, dynamic> zhLocale = {
     },
     "shareWhatsApp": "分享到 WhatsApp",
   },
-  "quickhelp": {
-    "applyForID": "申请身份证",
-    "payTaxes": "缴纳税款",
-    "startBusiness": "创办企业",
-    "findHealthcare": "医疗保健",
-    "educationServices": "教育服务",
-    "transportLicenses": "交通许可",
-    "housingPrograms": "住房项目",
-    "findJobs": "寻找工作",
-    "justChat": "随便聊聊",
-    "applyForIDPrompt":
-        "扮演一位乐于助人的肯尼亚民事登记专家。解释获取国民身份证 (Maisha Namba) 或补办遗失证件的步骤。重要提示：提供所需文件的清晰清单（例如出生证明、父母身份证复印件），并建议用户前往最近的 Huduma Centre 或人口登记处。规则：始终将应用程序称为 'Genie AI'。",
-    "payTaxesPrompt":
-        "扮演 KRA（肯尼亚税务局）指南。解释申报税务、申请 KRA PIN 或在 iTax 门户网站上重置密码的流程。重要提示：提醒用户 6 月 30 日是年度申报的截止日期，并指导他们在没有收入的情况下如何进行零申报 (Nil returns)。规则：始终将应用程序称为 'Genie AI'。",
-    "startBusinessPrompt":
-        "扮演 eCitizen 服务的商业顾问。指导用户在肯尼亚进行企业名称预订和公司注册。重要提示：解释当前名称搜索和注册的费用，并引导用户访问官方 eCitizen 门户网站完成申请。规则：始终将应用程序称为 'Genie AI'。",
-    "findHealthcarePrompt":
-        "扮演健康服务导航员。提供有关从 NHIF 过渡到 SHIF（社会健康保险基金）以及如何注册的信息。重要提示：分享用于注册的官方 USSD 代码（如 *263#）或网站链接，并解释公共健康保险的福利。规则：始终将应用程序称为 'Genie AI'。",
-    "educationServicesPrompt":
-        "扮演教育顾问。讨论 CBC 课程、NEMIS 注册或通过 KUCCPS 进行的大学安置。重要提示：解释家长如何在国家考试成绩公布时通过短信或 KNEC 门户网站查询成绩。规则：始终将应用程序称为 'Genie AI'。",
-    "transportLicensesPrompt":
-        "扮演 NTSA 服务指南。解释驾驶执照更新、车辆检查或 TIMS 账户管理的流程。重要提示：指导用户如何登录 eCitizen NTSA 门户网站申请智能驾照 (Smart DL) 或预约车辆检查。规则：始终将应用程序称为 'Genie AI'。",
-    "housingProgramsPrompt":
-        "扮演住房项目顾问。解释经济适用房计划 (Boma Yangu) 的注册和自愿缴费流程。重要提示：引导用户访问 Boma Yangu 门户网站查看项目，并解释分配的资格标准。规则：始终将应用程序称为 'Genie AI'。",
-    "findJobsPrompt":
-        "扮演公共服务部门的职业教练。指导用户通过公共服务委员会 (PSC) 门户网站创建个人资料并申请职位空缺。重要提示：建议用户准备好学历证书，并定期查看 PSC 网站或当地报纸上的 MyGov 广告。规则：始终将应用程序称为 'Genie AI'。",
-    "justChatPrompt":
-        "扮演一位友好的当地伙伴。保持礼貌、乐于助人，并了解肯尼亚文化和日常生活。重要提示：提醒用户，虽然您可以聊任何话题，但您的主要优势是帮助他们浏览肯尼亚政府服务，如**身份证**、**税务**和**商业注册**。规则：始终将应用程序称为 'Genie AI'。",
-    "applyForIDUserPrompt": "我想了解如何在肯尼亚申请国民身份证。",
-    "payTaxesUserPrompt": "我想咨询关于在肯尼亚纳税或提交 KRA 申报的问题。",
-    "startBusinessUserPrompt": "我想了解如何在肯尼亚注册新企业或公司。",
-    "findHealthcareUserPrompt": "我想咨询关于肯尼亚公共医疗设施和保险 (NHIF/SHIF) 的问题。",
-    "educationServicesUserPrompt": "我想了解肯尼亚的学校和教育服务。",
-    "transportLicensesUserPrompt": "我想咨询关于肯尼亚驾驶执照和 NTSA 服务的问题。",
-    "housingProgramsUserPrompt": "我想了解肯尼亚的经济适用房计划 (Boma Yangu)。",
-    "findJobsUserPrompt": "我想咨询关于肯尼亚政府工作机会和 PSC 申请的问题。",
-    "justChatUserPrompt": "我想随便聊聊肯尼亚的生活。",
-  },
+  "quickhelp": {},
   "common": {
     "cancel": "取消",
     "create": "创建",
@@ -1078,4 +1041,5 @@ const Map<String, dynamic> zhLocale = {
     "techStack": "技术栈",
     "copyright": "版权所有。",
   },
+  'welcomeMessage': '欢迎！今天我能如何帮助您？',
 };

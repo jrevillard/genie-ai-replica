@@ -24,7 +24,9 @@ Future<void> clearSecureStorage() async {
 
 /// Clear secure storage via the ProviderContainer's token storage.
 /// Use this when a container with tokenStorageProvider override is available.
-Future<void> clearSecureStorageFromContainer(ProviderContainer container) async {
+Future<void> clearSecureStorageFromContainer(
+  ProviderContainer container,
+) async {
   try {
     await container.read(tokenStorageProvider).deleteAll();
   } catch (_) {}

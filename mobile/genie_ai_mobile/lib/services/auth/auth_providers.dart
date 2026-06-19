@@ -21,8 +21,9 @@ final authLoggerProvider = Provider<AuthLogger>((ref) {
 
 final keycloakServiceProvider = Provider<KeycloakService>((ref) {
   final config = getConfig();
-  final http.Client client =
-      config.allowInsecureConnections ? InsecureHttpClient() : http.Client();
+  final http.Client client = config.allowInsecureConnections
+      ? InsecureHttpClient()
+      : http.Client();
   ref.onDispose(client.close);
   return KeycloakService(
     keycloakConfig: config,

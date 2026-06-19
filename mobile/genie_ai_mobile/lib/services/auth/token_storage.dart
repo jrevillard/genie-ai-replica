@@ -21,7 +21,7 @@ class SecureTokenStorage implements TokenStorage {
   final FlutterSecureStorage _storage;
 
   SecureTokenStorage({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   @override
   Future<String?> getAccessToken() async {
@@ -60,7 +60,9 @@ class SecureTokenStorage implements TokenStorage {
       'access_token': accessToken,
       'id_token': idToken,
       'refresh_token': refreshToken,
-      'access_token_expiration': accessTokenExpiration.toUtc().toIso8601String(),
+      'access_token_expiration': accessTokenExpiration
+          .toUtc()
+          .toIso8601String(),
     });
     await _storage.write(key: _storageKey, value: blob);
   }
@@ -115,8 +117,9 @@ class InMemoryTokenStorage implements TokenStorage {
     _store['access_token'] = accessToken;
     _store['id_token'] = idToken;
     _store['refresh_token'] = refreshToken;
-    _store['access_token_expiration'] =
-        accessTokenExpiration.toUtc().toIso8601String();
+    _store['access_token_expiration'] = accessTokenExpiration
+        .toUtc()
+        .toIso8601String();
   }
 
   @override

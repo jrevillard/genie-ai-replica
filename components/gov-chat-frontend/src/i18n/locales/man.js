@@ -262,8 +262,6 @@ export default {
       network: 'Netwookoo kandaa'
     },
     databaseManagement: 'Detabeesi Lataramoo',
-    reindexDatabase: 'Detabeesi indexi kura',
-    lastReindex: 'Indexi kura labang',
     databaseSize: 'Detabeesi warayaa',
     totalTables: 'Tebulol bee kafung',
     logManagement: 'Log Lataramoo',
@@ -294,18 +292,14 @@ export default {
     roleUser: 'Moo (User)',
     statusActive: 'A ka baara',
     dbActions: {
-      reindex: 'Indexi kura',
       backup: 'Bakaap (Mara)',
       optimize: 'A dadiyaa',
-      reindexDesc: 'Detabeesi indexolu lo-kura',
       backupDesc: 'Detabeesi marol ke',
       optimizeDesc: 'Koori baara-coko dadiyaa'
     },
     operations: {
-      reindexTitle: 'Detabeesi Indexi kura Fata',
       backupTitle: 'Detabeesi Mara Fata',
       optimizeTitle: 'Detabeesi Dadiyaa Fata',
-      reindexResults: 'Indexi kura Fatal',
       optimizeResults: 'Dadiyaa Fatal',
       collection: 'Kafung-da',
       status: 'Cokoyaa',
@@ -317,11 +311,7 @@ export default {
       errorDetails: 'Filiya kumpa-kumol',
       close: 'A dade',
       resultsTitle: 'Baara Fatal',
-      reindexDatabase: {
-        success: 'Detabeesi indexi kura benta',
-        error: 'Filiyata detabeesi indexi kura to',
-        loading: 'A ka detabeesi indexi kura...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'Detabeesi mara benta',
         error: 'Filiyata detabeesi mara to',
@@ -864,7 +854,6 @@ export default {
     accountManagement: 'Akaanti Lataramoo',
     resetUserData: 'Moo Kibaroo Fitindi',
     resetUserDataDesc: 'Nying si i la moo-kibaroo bee fiti ani kuma koto.',
-    edit: 'A dada',
     standardAccount: 'Akaanti Kilingo',
     cancel: 'A bula',
     account: {
@@ -1312,12 +1301,18 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'Jɛɛmɔgɔya labɛnnen na. A ñaa ma ñɔɔrɔ.',
+    aiGeneratedNoDocs: 'AI-generated — not based on library documents',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',
+    categoryNotFound: 'Category "{label}" not found in knowledge hierarchy',
+    serviceLabelMismatch: 'Service "{label}" uses a UI label that may not match the knowledge hierarchy',
     placeholder: 'I la ñiningo nyining jang...',
     sendButton: 'Kii',
     fileReceived: 'Fayiloo yeleta benta.',
     fileUploadError: 'Filiyata fayiloo yele to.',
     processingError: 'Filiyata i la ñiningo dada to.',
-    welcomeMessage: 'Bismillay! Mbe ñaadi ka i makaamoo ning Keniya gomnati baaralu bii?',
     attachFile: 'Fayiloo Kafu',
     fileTooLarge: 'Fayiloo warata baa. Tambi-da mu {maxSize} ti.',
     saveChat: 'Kuma Mara',
@@ -1329,7 +1324,7 @@ export default {
     clearContext: 'Kuma fiti ani kuma kura damina',
     unsavedChanges: 'I la yailamawol ti mara. I lafiya la ka kuma kura damina le ti?',
     whatCanIHelp: 'Mbe ñaadi ka i makaamoo bii?',
-    justChat: 'Kuma Dorong',
+
     queryContext: 'Ñiningo Coko',
     contextAdded: 'Cokoyaa kafuta i la ñiningo to',
     contextRemoved: 'Cokoyaa botata i la ñiningo to',
@@ -1359,26 +1354,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'ID Ñiningo',
-    payTaxes: 'Jooyaa muta',
-    startBusiness: 'Bita damina',
-    findHealthcare: 'Kenda-yaa',
-    educationServices: 'Karandiri',
-    transportLicenses: 'Moto',
-    housingPrograms: 'Suw',
-    findJobs: 'Baara',
-    justChat: 'Kuma Dorong',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'N lafiya la ka kuma gomnati baaralu kang',
-    applyForIDUserPrompt: 'N lafiya la ka long ñaadi mbe ID kaard ñiningo ke',
-    payTaxesUserPrompt: 'Jooyaa muta onlayin coko mu munne ti?',
-    startBusinessUserPrompt: 'N makaamoo bita lataramoo to',
-    findHealthcareUserPrompt: 'Mbe kenda-yaa dulaa kibaroo soto minto?',
-    educationServicesUserPrompt: 'Karandiri baaralu munne soto nna dingingolu ye?',
-    transportLicensesUserPrompt: 'Ñaadi mbe nna moto laisins kurandi?',
-    housingProgramsUserPrompt: 'Maa Keniya suw baaralu kang (affordable housing)',
-    findJobsUserPrompt: 'Gomnati baara munne ka nyining saaying?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

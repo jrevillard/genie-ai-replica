@@ -262,8 +262,6 @@ export default {
       network: 'Bandwidth ya Marangrang'
     },
     databaseManagement: 'Tsamaiso ya Datha (Database)',
-    reindexDatabase: 'Etsa Indekse Botjha (Reindex)',
-    lastReindex: 'Tlhahlobo ya Indekse ya ho qetela',
     databaseSize: 'Boholo ba Datha (Database)',
     totalTables: 'Ditafole kaofela',
     logManagement: 'Tsamaiso ya Lilog',
@@ -294,18 +292,14 @@ export default {
     roleUser: 'Mosebedisi',
     statusActive: 'E sebetsang',
     dbActions: {
-      reindex: 'Etsa Indekse Botjha',
       backup: 'Bokella (Backup)',
       optimize: 'Ntlafatsa',
-      reindexDesc: 'Tsosolosa di-index tsa database',
       backupDesc: 'Etsa backup ya database',
       optimizeDesc: 'Ntlafatsa tshebetso ya dipotso (queries)'
     },
     operations: {
-      reindexTitle: 'Diphetho tsa ho Etsa Indekse Botjha',
       backupTitle: 'Diphetho tsa Backup ya Database',
       optimizeTitle: 'Diphetho tsa ho Ntlafatsa Database',
-      reindexResults: 'Diphetho tsa Indekse',
       optimizeResults: 'Diphetho tsa ho Ntlafatsa',
       collection: 'Pokello',
       status: 'Boemo',
@@ -317,11 +311,7 @@ export default {
       errorDetails: 'Dintlha tsa Phoso',
       close: 'Kwala',
       resultsTitle: 'Diphetho tsa Tshebetso',
-      reindexDatabase: {
-        success: 'Ho etsa indekse botjha ya database ho phethetswe ka katleho',
-        error: 'Phoso nakong ya ho etsa indekse botjha ya database',
-        loading: 'E etsa indekse botjha ya database...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'Backup ya database e phethetswe ka katleho',
         error: 'Phoso nakong ya backup ya database',
@@ -915,7 +905,6 @@ export default {
     accountManagement: 'Tsamaiso ya Akhaonto',
     resetUserData: 'Seta Datha ya Mosebedisi Botjha',
     resetUserDataDesc: 'Sena se tla hlakola datha yohle ya profaele ya hao le nalane ya moqoqo.',
-    edit: 'Fetola',
     standardAccount: 'Akhaonto e Tlwaelehileng',
     cancel: 'Hlakola',
     account: {
@@ -1366,12 +1355,18 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'Karabo e emisetsoe. Re leke hape.',
+    aiGeneratedNoDocs: 'AI-generated — not based on library documents',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',
+    categoryNotFound: 'Category "{label}" not found in knowledge hierarchy',
+    serviceLabelMismatch: 'Service "{label}" uses a UI label that may not match the knowledge hierarchy',
     placeholder: 'Ngola potso ya hao mona...',
     sendButton: 'Romela',
     fileReceived: 'Faele e amohetswe ka katleho.',
     fileUploadError: 'Phoso ha ho kenngwa faele.',
     processingError: 'Phoso ha ho thehwa kopo ya hao.',
-    welcomeMessage: 'Kena ka kgotso! Nka o thusa jwang ka ditshebeletso tsa mmuso wa Kenya kajeno?',
     attachFile: 'Lema Faele (Attach)',
     fileTooLarge: 'Faele e kgolo haholo. Boholo bo kgethehileng ke {maxSize}.',
     saveChat: 'Boloka Moqoqo',
@@ -1383,7 +1378,7 @@ export default {
     clearContext: 'Hlakola nalane mme o qale moqoqo o motjha',
     unsavedChanges: 'O na le diphetoho tse sa bolokoang. Na o na le bonnete ba hore o batla ho qala moqoqo o motjha?',
     whatCanIHelp: 'Nka o thusa jwang kajeno?',
-    justChat: 'Moqoqo Feela',
+
     queryContext: 'Mongolo wa Potso',
     contextAdded: 'Tlhaloso e ekeditswe potsong ya hao',
     contextRemoved: 'Tlhaloso e tlositswe potsong ya hao',
@@ -1413,26 +1408,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'Kopa ID',
-    payTaxes: 'Lefa lekgetho',
-    startBusiness: 'Qala kgwebo',
-    findHealthcare: 'Bophelo',
-    educationServices: 'Thuto',
-    transportLicenses: 'Dipalangwang',
-    housingPrograms: 'Matlo',
-    findJobs: 'Mosebetsi',
-    justChat: 'Moqoqo Feela',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'Ke rata ho qoqa ka ditshebeletso tsa mmuso',
-    applyForIDUserPrompt: 'Ke hloka tlhahisoleseding mabapi le hore na nka etsa kopo ya karata ya naha ya ID jwang',
-    payTaxesUserPrompt: 'Ke tshebetso efe bakeng sa ho lefa lekgetho la ka inthaneteng?',
-    startBusinessUserPrompt: 'Ntsamaise mehatong ya ho ngodisa kgwebo e ntjha',
-    findHealthcareUserPrompt: 'Nka fumana hokae tlhahisoleseding ka ditshebeletso tsa setjhaba tsa bophelo bo botle?',
-    educationServicesUserPrompt: 'Ke ditshebeletso dife tsa thuto tse fumanehang bakeng sa bana ba ka?',
-    transportLicensesUserPrompt: 'Nka ntjhafatsa laesense ya ka ya ho kganna jwang?',
-    housingProgramsUserPrompt: 'Bolelle ka mananeo a matlo a theko e tlase a Kenya',
-    findJobsUserPrompt: 'Ke menyetla efe ya mosebetsi ya mmuso e fumanehang ha jwale?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

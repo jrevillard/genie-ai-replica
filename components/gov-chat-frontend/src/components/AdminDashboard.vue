@@ -1,6 +1,6 @@
 <template>
   <div class="admin-page">
-    <div class="admin-dashboard">
+    <div class="admin-dashboard" data-test-id="admin-dashboard">
       <div class="dashboard">
         <div class="sidebar">
           <div class="nav-section">
@@ -72,6 +72,16 @@
                 >
                   <i>📋</i>
                   <span>{{ translate('admin.logs', 'Logs') }}</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'queryInspector' }]"
+                  @click.prevent="setActiveTab('queryInspector')"
+                >
+                  <i>🔍</i>
+                  <span>{{ translate('admin.queryInspector', 'Query Inspector') }}</span>
                 </a>
               </li>
             </ul>
@@ -795,6 +805,15 @@
                       }}
                     </span>
                   </div>
+                </div>
+
+                <div v-if="activeTab === 'queryInspector'" class="dashboard-card" style="grid-column: span 2">
+                  <div class="card-header">
+                    <div class="card-title">
+                      {{ translate('admin.queryInspector', 'Query Inspector') }}
+                    </div>
+                  </div>
+                  <QueryInspector />
                 </div>
 
                 <div v-if="activeTab === 'security'" class="dashboard-card" style="grid-column: span 2">
@@ -1536,6 +1555,7 @@ import UploadFilesDialog from './UploadFilesDialog.vue';
 import AddFromLinkDialog from './AddFromLinkDialog.vue';
 import FileDetailsDialog from './FileDetailsDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue'; // IMPORT ConfirmDialog
+import QueryInspector from './admin/QueryInspector/QueryInspector.vue';
 import DsButton from './ds/Button.vue';
 import DsInput from './ds/Input.vue';
 import DsStatusTag from './ds/StatusTag.vue';
@@ -1545,7 +1565,7 @@ import DsTabs from './ds/Tabs.vue';
 import DsSelect from './ds/Select.vue';
 import { Loader2 } from 'lucide-vue-next';
 import { eventBus } from '../eventBus.js';
-import { availableLanguages } from '../config/languageConfig.js';
+import { getAvailableLanguages } from '../config/languageConfig.js';
 import oidcConfig from '../config/oidcConfig.js';
 import documentFileService from '../services/documentFileService.js';
 import { formatFileSize } from '../utils/fileUtils.js';
@@ -1560,6 +1580,7 @@ export default {
     AddFromLinkDialog,
     FileDetailsDialog,
     ConfirmDialog, // REGISTER ConfirmDialog
+    QueryInspector,
     DsButton,
     DsInput,
     DsStatusTag,
@@ -1587,8 +1608,8 @@ export default {
       // State for loading translations
       isTranslationsLoading: false,
 
-      // Configuration for language dropdowns in translations tables
-      availableLanguages: availableLanguages,
+      // Configuration for language dropdowns in translations tables (deployment-scoped)
+      availableLanguages: getAvailableLanguages(),
 
       // Current locale for translations
       currentLocale: this.getCurrentLanguage(),
@@ -1605,6 +1626,7 @@ export default {
         { id: 'documents', label: 'Document Management' },
         { id: 'database', label: 'Database' },
         { id: 'logs', label: 'Logs' },
+        { id: 'queryInspector', label: 'Query Inspector' },
         { id: 'security', label: 'Security' },
         { id: 'users', label: 'Users' }
       ],
@@ -1992,30 +2014,6 @@ export default {
       return 'en';
     },
 
-    // Change language
-    changeLanguage() {
-      if (this.$i18n) {
-        // Set the i18n locale
-        this.$i18n.locale = this.currentLocale;
-
-        // Save to localStorage
-        try {
-          localStorage.setItem('userLocale', this.currentLocale);
-        } catch {
-          // Error saving language preference to localStorage
-        }
-
-        // Force update this component
-        this.$forceUpdate();
-      }
-    },
-
-    // Toggle between light and dark theme
-    toggleTheme() {
-      const newTheme = this.currentTheme === 'light' ? 'dark' : 'light';
-      this.applyTheme(newTheme);
-    },
-
     // Apply theme
     applyTheme(theme) {
       // Update local state
@@ -2033,11 +2031,6 @@ export default {
       if (event.detail && event.detail.theme) {
         this.applyTheme(event.detail.theme);
       }
-    },
-
-    // Get current effective theme
-    getCurrentTheme() {
-      return this.currentTheme;
     },
 
     // Set active tab

@@ -95,11 +95,20 @@ lib/design_system/
 | `tokens.fg` | Config or default | Near white |
 | `tokens.surface` | White | Brand-tinted (22% L) |
 | `tokens.muted` | Medium gray | Brand-tinted (58% L) |
+| `tokens.mutedSoft` | Light gray | Brand-tinted |
 | `tokens.border` | Light gray | Brand-tinted (30% L) |
+| `tokens.borderLight` | Very light gray | Brand-tinted (light) |
 | `tokens.accent` | Brand color | Lightened brand |
+| `tokens.accentHover` | Darkened brand | Lightened brand |
+| `tokens.accentMuted` | Tinted brand (muted) | Tinted brand |
 | `tokens.accentFg` | White | Dark brand |
-| `tokens.danger` | Red | Red |
+| `tokens.accentSecondary` | Secondary tint | Secondary tint |
+| `tokens.navbarBg` | Config or default | Brand-tinted |
+| `tokens.navbarFg` | Config or default | Near white |
 | `tokens.success` | Green | Green |
+| `tokens.warning` | Amber/orange | Amber/orange |
+| `tokens.danger` | Red | Red |
+| `tokens.info` | Blue | Blue |
 
 ## Prerequisites
 
@@ -158,6 +167,16 @@ cd flutter_appauth
 git fetch upstream
 git rebase upstream/main
 ```
+
+## Localization
+
+All 14 locale source files (`lib/i18n/locales/*.dart`) stay in the repo. The set
+of **active** locales for a deployment is driven per-flavor by
+`KeycloakConfig.supportedLocaleCodes` (`lib/config/keycloak_config.dart`); the
+default is every shipped locale (`allSupportedLocaleCodes`).
+`I18nService.supportedLanguages` derives from the active flavor's codes —
+`main.dart`'s `supportedLocales` is unchanged. A restricted deployment (e.g.
+El Salvador `['en','es']`) exposes a locale subset without deleting files.
 
 ## Build & Run
 
@@ -423,7 +442,6 @@ unzip -p build/ios/ipa/*.ipa Payload/Runner.app/Info.plist | plutil -p -
 - **flutter_appauth `InsecureConnectionBuilder` bug:** Upstream `InsecureConnectionBuilder` is a no-op — it doesn't disable SSL verification. On iOS, `allowInsecureConnections` is completely ignored. Open upstream issue: [MaikuB/flutter_appauth#386](https://github.com/MaikuB/flutter_appauth/issues/386). **Fix:** local fork at `flutter_appauth/` patches both platforms — Android uses a real `TrustManager` + `HostnameVerifier`, iOS uses `NSURLProtocol` to intercept and trust all certs. Only active when `allowInsecureConnections=true`. Does NOT affect production (production uses CA-signed certs and `allowInsecureConnections=false`). **Revert `pubspec.yaml` before merge.**
 - **`taskAffinity=""` on MainActivity:** Flutter 3.x adds this by default. It prevents `AuthorizationManagementActivity` from receiving the OIDC callback on Android 12+ because `RedirectUriReceiverActivity` launches in a different task. The fix in `AndroidManifest.xml` removes `taskAffinity=""` from `MainActivity` and adds `taskAffinity="${applicationId}"` on `RedirectUriReceiverActivity` with `tools:replace`.
 - **`network_security_config.xml`:** Allows cleartext to `10.0.2.2`/`localhost` and trusts user certs in debug builds. Dev-only — harmless in production but only needed for local self-signed cert development.
-- **ChatbotProxy bypasses AuthInterceptor:** `ChatbotProxy` creates `ApiService()` directly instead of using `apiServiceProvider`. API calls from the chatbot will return 401 until consumer migration (future epic).
 
 ## E2E Test Rules
 

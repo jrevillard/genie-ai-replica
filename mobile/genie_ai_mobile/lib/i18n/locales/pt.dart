@@ -511,7 +511,8 @@ const Map<String, dynamic> ptLocale = {
         "Isso limpará todos os seus dados de perfil e histórico de chat.",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "Excluir Conta",
     "deleteAccountDesc":
         "Isso excluirá permanentemente sua conta e todos os dados associados.",
@@ -1013,13 +1014,13 @@ const Map<String, dynamic> ptLocale = {
     },
   },
   "chatbot": {
+    "aiGeneratedNoDocs":
+        "Gerado por IA — não baseado nos documentos da biblioteca",
     "placeholder": "Digite sua consulta aqui...",
     "sendButton": "Enviar",
     "fileReceived": "Arquivo recebido com sucesso.",
     "fileUploadError": "Erro ao carregar arquivo.",
     "processingError": "Erro ao processar sua solicitação.",
-    "welcomeMessage":
-        "Bem-vindo! Como posso ajudá-lo com os serviços do governo do Quênia hoje?",
     "attachFile": "Anexar Arquivo",
     "fileTooLarge": "O arquivo é muito grande. O tamanho máximo é {maxSize}.",
     "saveChat": "Salvar Chat",
@@ -1032,7 +1033,6 @@ const Map<String, dynamic> ptLocale = {
     "unsavedChanges":
         "Você tem alterações não salvas. Tem certeza de que deseja iniciar um novo chat?",
     "whatCanIHelp": "Como posso ajudar você hoje?",
-    "justChat": "Apenas Conversar",
     "queryContext": "Contexto da Consulta",
     "contextAdded": "Contexto adicionado à sua consulta",
     "contextRemoved": "Contexto removido da sua consulta",
@@ -1082,52 +1082,7 @@ const Map<String, dynamic> ptLocale = {
     },
     "shareWhatsApp": "Compartilhar no WhatsApp",
   },
-  "quickhelp": {
-    "applyForID": "Pedir ID",
-    "payTaxes": "Pagar Impostos",
-    "startBusiness": "Iniciar Negócio",
-    "findHealthcare": "Saúde",
-    "educationServices": "Educação",
-    "transportLicenses": "Transporte",
-    "housingPrograms": "Habitação",
-    "findJobs": "Encontrar Emprego",
-    "justChat": "Apenas Conversar",
-    "applyForIDPrompt":
-        "Aja como um especialista útil em registo civil do Quénia. Explique os passos para obter uma Identidade Nacional (Maisha Namba) ou substituir uma perdida. IMPORTANTE: Forneça uma lista clara dos documentos necessários (ex: Certidão de Nascimento, cópias das identidades dos pais) e aconselhe o utilizador a visitar o Huduma Centre ou conservatória mais próxima. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
-    "payTaxesPrompt":
-        "Aja como um guia da KRA (Autoridade Tributária do Quénia). Explique o processo de entrega de declarações, pedido de PIN da KRA ou redefinição de palavra-passe no portal iTax. IMPORTANTE: Relembre o utilizador do prazo de 30 de junho para declarações anuais e guie-o sobre como entregar declarações a zeros (Nil returns) se não teve rendimentos. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
-    "startBusinessPrompt":
-        "Aja como consultor de negócios para serviços eCitizen. Guie o utilizador através da reserva de nome comercial e registo de empresa no Quénia. IMPORTANTE: Explique os custos atuais para pesquisa de nome e registo, e direcione o utilizador para o portal oficial eCitizen para concluir a candidatura. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
-    "findHealthcarePrompt":
-        "Aja como um navegador de serviços de saúde. Forneça informações sobre a transição do NHIF para o SHIF (Fundo de Seguro Social de Saúde) e como se registar. IMPORTANTE: Partilhe os códigos USSD oficiais (como *263#) ou links do site para registo e explique os benefícios da cobertura de saúde pública. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
-    "educationServicesPrompt":
-        "Aja como conselheiro educacional. Discuta o currículo CBC, registo NEMIS ou colocação universitária via KUCCPS. IMPORTANTE: Explique como os pais podem verificar os resultados dos exames nacionais por SMS ou portal KNEC quando forem lançados. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
-    "transportLicensesPrompt":
-        "Aja como um guia de serviços da NTSA. Explique o processo para renovação da carta de condução, inspeção de veículos ou gestão de conta TIMS. IMPORTANTE: Guie o utilizador sobre como fazer login no portal eCitizen NTSA para solicitar o seu Smart DL ou marcar uma inspeção de veículo. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
-    "housingProgramsPrompt":
-        "Aja como consultor de programas habitacionais. Explique o registo no Programa de Habitação Acessível (Boma Yangu) e o processo de contribuição voluntária. IMPORTANTE: Guie o utilizador para o portal Boma Yangu para ver projetos e explique os critérios de elegibilidade para alocação. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
-    "findJobsPrompt":
-        "Aja como coach de carreira para a função pública. Guie o utilizador na criação de um perfil e candidatura a vagas através do portal da Comissão de Serviço Público (PSC). IMPORTANTE: Aconselhe o utilizador a manter os seus certificados académicos prontos e a verificar regularmente o site da PSC ou jornais locais para anúncios do MyGov. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
-    "justChatPrompt":
-        "Aja como um companheiro local amigável. Seja educado, prestável e conhecedor da cultura queniana e da vida quotidiana. IMPORTANTE: Relembre o utilizador de que, embora possa conversar sobre qualquer coisa, o seu ponto forte é ajudá-lo a navegar nos serviços governamentais do Quénia como **IDs**, **Impostos** e **Registo de Negócios**. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
-    "applyForIDUserPrompt":
-        "Quero saber como solicitar um cartão de Identidade Nacional no Quénia.",
-    "payTaxesUserPrompt":
-        "Quero perguntar sobre pagamento de impostos ou entrega das minhas declarações KRA no Quénia.",
-    "startBusinessUserPrompt":
-        "Quero saber sobre como registar um novo negócio ou empresa no Quénia.",
-    "findHealthcareUserPrompt":
-        "Quero perguntar sobre instalações de saúde pública e seguros (NHIF/SHIF) no Quénia.",
-    "educationServicesUserPrompt":
-        "Quero saber sobre escolas e serviços educativos no Quénia.",
-    "transportLicensesUserPrompt":
-        "Quero perguntar sobre cartas de condução e serviços NTSA no Quénia.",
-    "housingProgramsUserPrompt":
-        "Quero saber sobre o Programa de Habitação Acessível (Boma Yangu) no Quénia.",
-    "findJobsUserPrompt":
-        "Quero perguntar sobre oportunidades de emprego governamentais e candidaturas PSC no Quénia.",
-    "justChatUserPrompt": "Quero conversar em geral sobre a vida no Quénia.",
-  },
+  "quickhelp": {},
   "common": {
     "cancel": "Cancelar",
     "create": "Criar",
@@ -1201,4 +1156,5 @@ const Map<String, dynamic> ptLocale = {
     "techStack": "Tech Stack",
     "copyright": "Todos os direitos reservados.",
   },
+  'welcomeMessage': 'Bem-vindo! Como posso ajudá-lo hoje?',
 };

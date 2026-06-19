@@ -4,6 +4,7 @@ const { logger, dbService } = require('../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
+const api = require('@opentelemetry/api');
 
 class QueryService {
   constructor() {
@@ -220,6 +221,23 @@ class QueryService {
     if (trimmed === '[DONE]') {
       return { type: 'done' };
     }
+    // chatqna metadata event: a raw JSON object (NOT a Python-repr token chunk).
+    // Carries the reranker-grounded source documents, confidence, and is_grounded flag.
+    if (trimmed.startsWith('{')) {
+      try {
+        const obj = JSON.parse(trimmed);
+        if (obj && obj.type === 'metadata') {
+          return {
+            type: 'metadata',
+            source_documents: obj.source_documents ?? [],
+            confidence_score: obj.confidence_score ?? 0,
+            is_grounded: obj.is_grounded ?? false
+          };
+        }
+      } catch {
+        // Not valid JSON — fall through to token-chunk handling.
+      }
+    }
     // Match Python repr: b'...' or b"..."
     const match = trimmed.match(/^b(['"])(.*)\1$/s);
     if (match) {
@@ -254,7 +272,7 @@ class QueryService {
    * @param {Object} authHeaders - Auth headers to forward to OPEA
    * @returns {Promise<Object>} { queryId, opeaUrl, opeaPayload, queryData }
    */
-  async initStreamQuery(queryData, _authHeaders) {
+  async initStreamQuery(queryData, authHeaders) {
     logger.info('QueryService.init_stream_query_start');
 
     // Validation (reuse same logic as createQuery)
@@ -361,7 +379,7 @@ class QueryService {
       };
     }
 
-    return { queryId, opeaUrl, opeaPayload, queryData };
+    return { queryId, opeaUrl, opeaPayload, authHeaders, queryData };
   }
 
   /**
@@ -591,8 +609,8 @@ class QueryService {
             messages: queryText,
             stream: false,
             context: {
-              language: queryData.context?.language,
-            },
+              language: queryData.context?.language
+            }
           };
         } else {
           logger.info('[DEBUG] Backend mode is "conversation-with-labels". Formatting payload with full context.');
@@ -610,8 +628,13 @@ class QueryService {
         logger.info('[DEBUG] Sending request to OPEA via Worker Thread...');
         logger.info(`[DEBUG] OPEA Payload: ${JSON.stringify(opeaPayload, null, 2)}`);
 
+        // Inject traceparent from active OTel context so OPEA services join the distributed trace
+        const traceHeaders = {};
+        api.propagation.inject(api.context.active(), traceHeaders);
+        const workerHeaders = { ...headers, ...traceHeaders };
+
         // *** CHANGED: Use Worker Thread for OPEA Call ***
-        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload, headers);
+        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload, workerHeaders);
 
         opeaResponseTime = workerResult.responseTime;
         opeaResponseContent = workerResult.response;
@@ -1562,6 +1585,174 @@ class QueryService {
       logger.error('QueryService.link_query_to_message_failed', {
         queryId,
         messageId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
+      throw error;
+    }
+  }
+
+  async getQueriesForInspector(options = {}) {
+    const startTime = Date.now();
+    try {
+      const limit = parseInt(options.limit) || 50;
+      const offset = parseInt(options.offset) || 0;
+
+      logger.info('QueryService.get_queries_for_inspector_start', { options });
+
+      const filterConditions = [];
+
+      if (options.userId) {
+        filterConditions.push(aql`q.userId == ${options.userId}`);
+      }
+
+      if (options.startDate) {
+        const startDate = new Date(options.startDate);
+        if (!isNaN(startDate.getTime())) {
+          filterConditions.push(aql`q.timestamp >= ${startDate.toISOString()}`);
+        }
+      }
+
+      if (options.endDate) {
+        const endDate = new Date(options.endDate);
+        if (!isNaN(endDate.getTime())) {
+          filterConditions.push(aql`q.timestamp <= ${endDate.toISOString()}`);
+        }
+      }
+
+      if (options.minConfidence !== undefined && options.minConfidence !== '') {
+        const minConf = parseFloat(options.minConfidence);
+        if (!isNaN(minConf)) {
+          filterConditions.push(aql`q.metadata.confidence_score >= ${minConf}`);
+        }
+      }
+
+      if (options.maxConfidence !== undefined && options.maxConfidence !== '') {
+        const maxConf = parseFloat(options.maxConfidence);
+        if (!isNaN(maxConf)) {
+          filterConditions.push(aql`q.metadata.confidence_score <= ${maxConf}`);
+        }
+      }
+
+      if (options.searchText) {
+        filterConditions.push(aql`LOWER(q.text) LIKE CONCAT("%", LOWER(${options.searchText}), "%")`);
+      }
+
+      filterConditions.push(aql`q.isAnswered == true`);
+
+      let filterQuery;
+      if (filterConditions.length > 0) {
+        filterQuery = aql`FILTER `;
+        for (let i = 0; i < filterConditions.length; i++) {
+          if (i > 0) {
+            filterQuery = aql`${filterQuery} AND `;
+          }
+          filterQuery = aql`${filterQuery} ${filterConditions[i]}`;
+        }
+      } else {
+        filterQuery = aql``;
+      }
+
+      const query = aql`
+        FOR q IN queries
+          ${filterQuery}
+          SORT q.timestamp DESC
+          LIMIT ${offset}, ${limit}
+          RETURN {
+            _key: q._key,
+            userId: q.userId,
+            timestamp: q.timestamp,
+            text: q.text,
+            response: q.response,
+            responseTime: q.responseTime,
+            context: q.context,
+            metadata: q.metadata,
+            userFeedback: q.userFeedback,
+            contextOption: q.contextOption
+          }
+      `;
+
+      const cursor = await this.db.query(query);
+      const queries = await cursor.all();
+
+      const countQuery = aql`
+        FOR q IN queries
+          ${filterQuery}
+          COLLECT WITH COUNT INTO total
+          RETURN total
+      `;
+      const countCursor = await this.db.query(countQuery);
+      const totalCount = (await countCursor.next()) || 0;
+
+      logger.info('QueryService.get_queries_for_inspector_complete', {
+        resultCount: queries.length,
+        totalCount,
+        durationMs: Date.now() - startTime
+      });
+
+      return {
+        success: true,
+        data: {
+          queries,
+          pagination: {
+            total: totalCount,
+            limit,
+            offset,
+            pages: Math.ceil(totalCount / limit),
+            currentPage: Math.floor(offset / limit) + 1
+          }
+        }
+      };
+    } catch (error) {
+      logger.error('QueryService.get_queries_for_inspector_failed', {
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
+      throw error;
+    }
+  }
+
+  async getQueryInspectorDetails(queryId) {
+    const startTime = Date.now();
+    try {
+      logger.info('QueryService.get_query_inspector_details_start', { queryId });
+
+      const queryDoc = await this.queries.document(queryId);
+
+      let userName = null;
+      if (queryDoc.userId) {
+        try {
+          const userCursor = await this.db.query(aql`
+            FOR u IN users
+              FILTER u._key == ${queryDoc.userId}
+              RETURN { fullName: u.fullName, email: u.email }
+          `);
+          const user = await userCursor.next();
+          if (user) {
+            userName = user.fullName || user.email;
+          }
+        } catch (e) {
+          logger.warn('QueryService.user_lookup_failed', { userId: queryDoc.userId, error: e.message });
+        }
+      }
+
+      logger.info('QueryService.get_query_inspector_details_complete', {
+        queryId,
+        durationMs: Date.now() - startTime
+      });
+
+      return {
+        success: true,
+        data: {
+          ...queryDoc,
+          userName
+        }
+      };
+    } catch (error) {
+      logger.error('QueryService.get_query_inspector_details_failed', {
+        queryId,
         error: error.message,
         stack: error.stack,
         durationMs: Date.now() - startTime

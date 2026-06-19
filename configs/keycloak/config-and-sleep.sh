@@ -2,7 +2,7 @@
 set -e
 
 # Validate required environment variables
-for var in KEYCLOAK_ADMIN_PASSWORD KC_PROXY_CLIENT_SECRET KC_DATAPREP_CLIENT_SECRET GENIE_ADMIN_PASSWORD; do
+for var in KEYCLOAK_PASSWORD KC_PROXY_CLIENT_SECRET KC_DATAPREP_CLIENT_SECRET GENIE_ADMIN_PASSWORD; do
   eval "val=\$var"
   if [ -z "$val" ]; then
     echo "ERROR: Required environment variable $var is not set. Aborting." >&2

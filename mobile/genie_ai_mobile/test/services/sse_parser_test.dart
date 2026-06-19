@@ -66,6 +66,22 @@ void main() {
       expect(meta.responseTime, 1200);
     });
 
+    test('parses is_grounded flag in metadata event', () {
+      final events = parser.parseChunk(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":0,"is_grounded":true}\n\n',
+      );
+      final meta = events[0] as SseMetadataEvent;
+      expect(meta.isGrounded, isTrue);
+    });
+
+    test('defaults is_grounded to false when absent', () {
+      final events = parser.parseChunk(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":0.9}\n\n',
+      );
+      final meta = events[0] as SseMetadataEvent;
+      expect(meta.isGrounded, isFalse);
+    });
+
     test('parses translation event', () {
       final events = parser.parseChunk(
         'data: {"type":"translation","content":"Bonjour"}\n\n',

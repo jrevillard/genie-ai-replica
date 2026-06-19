@@ -13,7 +13,8 @@
 import { createApp } from 'vue';
 import App from './App.vue';
 import router from './router';
-import i18n from './i18n';
+import i18n, { availableLocales } from './i18n';
+import { detectInitialLocale } from './utils/localeDetection';
 import store from './store'; // Import the Vuex store
 import FileDialogSafe from './fileDialogSafe'; // Import our custom directive
 
@@ -82,6 +83,17 @@ export async function loadConfig() {
     root.style.setProperty('--font-scale', String(theme.typography.fontScale));
   }
 
+  // Set favicon from config if available
+  if (config.app?.icon?.type === 'file' && config.app.icon.value) {
+    const favicon32 = document.querySelector('link[sizes="32x32"]');
+    const favicon16 = document.querySelector('link[sizes="16x16"]');
+    const appleTouch = document.querySelector('link[sizes="180x180"]');
+    const iconPath = config.app.icon.value;
+    if (favicon32) favicon32.href = iconPath;
+    if (favicon16) favicon16.href = iconPath;
+    if (appleTouch) appleTouch.href = iconPath;
+  }
+
   return config;
 }
 
@@ -100,29 +112,16 @@ const getSavedLocale = () => {
   }
 };
 
-const savedLanguage = localStorage.getItem('userLocale');
-if (savedLanguage && i18n) {
-  i18n.locale = savedLanguage;
-  document.documentElement.setAttribute('lang', savedLanguage);
-}
-
-const getBrowserLocale = () => {
-  // Get browser language (e.g. 'en-US' -> 'en')
-  const browserLang = navigator.language || navigator.userLanguage;
-  const shortLang = browserLang.split('-')[0];
-
-  // Check if we support this language
-  const supportedLocales = ['en', 'fr', 'sw'];
-  return supportedLocales.includes(shortLang) ? shortLang : null;
-};
-
-// Set the initial locale based on our prioritization logic
-const savedLocale = getSavedLocale();
-const browserLocale = getBrowserLocale();
-const initialLocale = savedLocale || browserLocale || 'en';
+// Determine initial locale using dynamic locale detection
+const initialLocale = detectInitialLocale(
+  getSavedLocale(),
+  navigator.language || navigator.userLanguage,
+  availableLocales
+);
 
 // Set the locale directly as a string (not as a ref)
 i18n.global.locale = initialLocale;
+document.documentElement.setAttribute('lang', initialLocale);
 
 // ThemeManager singleton handles initial theme detection and DOM application
 // (initialized at import time via its constructor)

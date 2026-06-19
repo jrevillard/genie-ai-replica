@@ -606,6 +606,11 @@ describe('requireAdmin', () => {
       name: 'Admin User',
       roles: ['user', 'admin']
     };
+    req.claims = {
+      realm_access: {
+        roles: ['user', 'admin']
+      }
+    };
 
     keycloakAuthMiddleware.requireAdmin(req, res, next);
 
@@ -622,6 +627,11 @@ describe('requireAdmin', () => {
       name: 'Regular User',
       roles: ['user']
     };
+    req.claims = {
+      realm_access: {
+        roles: ['user']
+      }
+    };
 
     keycloakAuthMiddleware.requireAdmin(req, res, next);
 
@@ -634,14 +644,15 @@ describe('requireAdmin', () => {
     });
   });
 
-  it('should return 403 when user.roles is missing', async () => {
+  it('should return 403 when claims.realm_access.roles is missing', async () => {
     req.user = {
       _key: 'users/789',
       iss_sub: 'http://localhost:8080/realms/genie#789',
       email: 'no-roles@example.com',
       name: 'No Roles User'
-      // No roles field
     };
+    // No realm_access in claims
+    req.claims = {};
 
     keycloakAuthMiddleware.requireAdmin(req, res, next);
 
@@ -654,13 +665,17 @@ describe('requireAdmin', () => {
     });
   });
 
-  it('should return 403 when user.roles is not an array', async () => {
+  it('should return 403 when claims.realm_access.roles is not an array', async () => {
     req.user = {
       _key: 'users/999',
       iss_sub: 'http://localhost:8080/realms/genie#999',
       email: 'invalid-roles@example.com',
-      name: 'Invalid Roles User',
-      roles: 'not-an-array' // String instead of array
+      name: 'Invalid Roles User'
+    };
+    req.claims = {
+      realm_access: {
+        roles: 'not-an-array'
+      }
     };
 
     keycloakAuthMiddleware.requireAdmin(req, res, next);
@@ -674,8 +689,36 @@ describe('requireAdmin', () => {
     });
   });
 
-  it('should return 403 when user is undefined', async () => {
-    req.user = undefined;
+  it('should return 403 when claims is undefined', async () => {
+    req.user = {
+      _key: 'users/111',
+      iss_sub: 'http://localhost:8080/realms/genie#111',
+      email: 'user@example.com',
+      name: 'Undefined Claims User'
+    };
+    req.claims = undefined;
+
+    keycloakAuthMiddleware.requireAdmin(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'FORBIDDEN',
+      message: 'Admin access required',
+      details: {}
+    });
+  });
+
+  it('should return 403 when claims.realm_access exists but has no roles', async () => {
+    req.user = {
+      _key: 'users/333',
+      iss_sub: 'http://localhost:8080/realms/genie#333',
+      email: 'no-roles-prop@example.com',
+      name: 'No Roles Prop User'
+    };
+    req.claims = {
+      realm_access: {}
+    };
 
     keycloakAuthMiddleware.requireAdmin(req, res, next);
 
@@ -693,8 +736,12 @@ describe('requireAdmin', () => {
       _key: 'users/000',
       iss_sub: 'http://localhost:8080/realms/genie#000',
       email: 'empty-roles@example.com',
-      name: 'Empty Roles User',
-      roles: []
+      name: 'Empty Roles User'
+    };
+    req.claims = {
+      realm_access: {
+        roles: []
+      }
     };
 
     keycloakAuthMiddleware.requireAdmin(req, res, next);

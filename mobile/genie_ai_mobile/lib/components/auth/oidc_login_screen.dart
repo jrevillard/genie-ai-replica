@@ -109,10 +109,7 @@ class OidcLoginScreen extends ConsumerWidget {
     }
   }
 
-  Widget _buildSignInButton(
-    BuildContext context,
-    WidgetRef ref,
-  ) {
+  Widget _buildSignInButton(BuildContext context, WidgetRef ref) {
     return Semantics(
       label: 'Sign in with your institution account',
       button: true,

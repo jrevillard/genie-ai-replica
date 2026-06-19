@@ -1,16 +1,32 @@
 # Copyright (C) 2024 Intel Corporation
 # Copyright (C) 2025 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0 Developed by Intel. Adapted by ITU
+
 import argparse
 import asyncio
 import copy
 import json
 import os
 import re
+import time
 from datetime import date, datetime
+
+from metrics import (
+    chat_rag_duration_seconds,
+    chat_requests_total,
+    sanitize_attributes,
+)
+
+from tracing import get_tracer, setup_trace_logging, setup_tracing
+
+setup_tracing("genieai-chatqna")
 
 import aiohttp  # for async http requests
 import httpx
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+HTTPXClientInstrumentor().instrument()
+
 from comps import CustomLogger, MegaServiceEndpoint, MicroService, ServiceOrchestrator, ServiceRoleType, ServiceType
 from comps.cores.proto.docarray import LLMParams, RerankerParms, RetrieverParms
 from comps.cores.proto.genieai_api_protocol import (
@@ -22,6 +38,7 @@ from langdetect import detect
 from transformers import AutoTokenizer
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
+setup_trace_logging("GENIE.AI_CHATQNA")
 logflag = os.getenv("LOGFLAG", True)
 
 
@@ -54,8 +71,58 @@ RERANK_SERVER_HOST_IP = os.getenv("RERANK_SERVER_HOST_IP", "0.0.0.0")
 RERANK_SERVER_PORT = int(os.getenv("RERANK_SERVER_PORT", 80))
 LLM_SERVER_HOST_IP = os.getenv("LLM_SERVER_HOST_IP", "0.0.0.0")
 LLM_SERVER_PORT = int(os.getenv("LLM_SERVER_PORT", 80))
+LLM_SERVER_PROTOCOL = "http"
+# When VLLM_LLM_ENDPOINT is set (e.g. https://gpu-host/llm for remote GPU node),
+# override host/port/protocol so MicroService constructs the correct URL.
+_VLLM_LLM_ENDPOINT = os.getenv("VLLM_LLM_ENDPOINT", "")
+if _VLLM_LLM_ENDPOINT:
+    from urllib.parse import urlparse
+
+    _parsed = urlparse(_VLLM_LLM_ENDPOINT)
+    LLM_SERVER_HOST_IP = _parsed.hostname or LLM_SERVER_HOST_IP
+    LLM_SERVER_PORT = _parsed.port or 443
+    LLM_SERVER_PROTOCOL = _parsed.scheme or "https"
+    LLM_SERVER_ENDPOINT_PREFIX = _parsed.path.rstrip("/") or ""
+else:
+    LLM_SERVER_ENDPOINT_PREFIX = ""
 LLM_MODEL = os.getenv("LLM_MODEL", "ibm-granite/granite-3.3-2b-instruct")
 LLM_TRANS_MODEL = os.getenv("LLM_TRANS_MODEL", "google/gemma-3-1b-it")
+
+
+def _auto_detect_model(endpoint_url: str, env_var: str) -> str | None:
+    """Auto-detect model ID from remote vLLM /v1/models endpoint."""
+    import httpx
+
+    try:
+        headers = {}
+        api_key = os.getenv("VLLM_API_KEY", "")
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        resp = httpx.get(f"{endpoint_url}/v1/models", headers=headers, timeout=10, verify=False)
+        resp.raise_for_status()
+        models = resp.json()
+        if models.get("data"):
+            return models["data"][0]["id"]
+        logger.warning(f"Auto-detect {env_var}: no models in response")
+    except Exception as e:
+        logger.warning(f"Auto-detect {env_var} failed: {e}")
+    return None
+
+
+# Auto-detect LLM and translation models from remote vLLM when GPU_NODE_HOST is set
+_GPU_NODE_HOST = os.getenv("GPU_NODE_HOST", "")
+if _GPU_NODE_HOST:
+    if _VLLM_LLM_ENDPOINT:
+        detected = _auto_detect_model(_VLLM_LLM_ENDPOINT, "LLM_MODEL")
+        if detected:
+            LLM_MODEL = detected
+            logger.info(f"Auto-detected LLM_MODEL={LLM_MODEL}")
+    if _VLLM_TRANSLATION_ENDPOINT:
+        detected = _auto_detect_model(_VLLM_TRANSLATION_ENDPOINT, "VLLM_TRANSLATION_MODEL_ID")
+        if detected:
+            TRANSLATION_MODEL_ID = detected
+            LLM_TRANS_MODEL = detected
+            logger.info(f"Auto-detected TRANSLATION_MODEL_ID={TRANSLATION_MODEL_ID}")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 
 RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "chunk")  # node | edge | chunk
@@ -175,6 +242,11 @@ class GenieUserProfileClient:
         url = f"{BACKEND_SERVICE_URL}/api/me/context"
 
         headers = {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
+
+        # Inject W3C traceparent for distributed tracing
+        from opentelemetry.propagate import inject
+
+        inject(headers)
 
         try:
             _timeout = aiohttp.ClientTimeout(total=30)
@@ -397,8 +469,8 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         retriever_parameters = kwargs.get("retriever_parameters")
         if retriever_parameters:
-            # inputs.update(retriever_parameters.dict())
-            safe_params = retriever_parameters.dict(exclude_unset=True, exclude_none=True)
+            # inputs.update(retriever_parameters.model_dump())
+            safe_params = retriever_parameters.model_dump(exclude_unset=True, exclude_none=True)
             inputs.update(safe_params)
 
         retrieval_context = kwargs.get("retrieval_context", {})
@@ -408,7 +480,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
     elif self.services[cur_node].service_type == ServiceType.RERANK:
         reranker_parameters = kwargs.get("reranker_parameters")
         if reranker_parameters:
-            inputs.update(reranker_parameters.dict())
+            inputs.update(reranker_parameters.model_dump())
         if logflag:
             logger.debug(f"Aligned input of the reranker: {inputs}")
 
@@ -543,16 +615,23 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
 
     elif self.services[cur_node].service_type == ServiceType.EMBEDDING:
         if logflag:
-            logger.debug(f"Raw output of the embedding\n {data}\n")
+            logger.debug(
+                f"Raw output of the embedding: {type(data).__name__}, "
+                f"keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'}"
+            )
         # OPEA embedding microservice returns {"data": [{"index": 0, "embedding": [...]}]}
         if isinstance(data, dict) and "data" in data:
             data = data["data"]
-        assert isinstance(data, list)
+        if not isinstance(data, list):
+            raise ValueError(f"Embedding service returned unexpected type: {type(data).__name__}, expected list")
         next_data = {"text": inputs["input"], "embedding": data[0]["embedding"]}
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         if logflag:
-            logger.debug(f"Raw output of the retriever\n {data}\n")
+            logger.debug(
+                f"Raw output of the retriever: {type(data).__name__}, "
+                f"keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'}"
+            )
         retrieved_docs = data.get("retrieved_docs", [])
         [doc["text"] for doc in retrieved_docs]
 
@@ -601,7 +680,8 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         if logflag:
             logger.debug(f"File ID Pairs: {file_id_pairs}")
 
-        with_rerank = runtime_graph.downstream(cur_node)[0].startswith("rerank")
+        downstream_nodes = runtime_graph.downstream(cur_node)
+        with_rerank = downstream_nodes and downstream_nodes[0].startswith("rerank")
         if with_rerank and retrieved_docs:
             # prepare inputs for rerank
             next_data["initial_query"] = data["initial_query"]
@@ -770,7 +850,9 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         next_data = data
 
     if logflag:
-        logger.info(f"\n[ DEBUG ] FINAL ALIGNED DATA FOR NEXT NODE:\n{json.dumps(next_data, indent=2, default=str)}\n")
+        logger.debug(
+            f"FINAL ALIGNED DATA keys: {list(next_data.keys())}, text length: {len(next_data.get('text', ''))}"
+        )
 
     return next_data
 
@@ -842,6 +924,11 @@ class ChatQnAService:
         file_get_metadata_url = f"{DOC_REPO_URL}/api/files/{file_id}"
         headers = {"Authorization": f"Bearer {token}"}
 
+        # Inject W3C traceparent for distributed tracing
+        from opentelemetry.propagate import inject
+
+        inject(headers)
+
         try:
             async with (
                 aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
@@ -862,6 +949,170 @@ class ChatQnAService:
 
         return None
         # return []
+
+    async def _assemble_source_documents(self, result_dict: dict) -> tuple[list, float, bool]:
+        """Build the source-document list, confidence, and grounding flag from the graph output.
+
+        Source documents reflect the **reranker's verdict**, not the retriever's raw cosine
+        hits (which are always moderate-high for same-domain text and would surface
+        irrelevant references with a misleading confidence whenever the reranker found
+        nothing relevant).
+
+        Grounding (``is_grounded``):
+          - With a reranker in the pipeline: True iff at least one doc passed the relevance
+            threshold (i.e. the LLM had document backing for its answer).
+          - Without a reranker: True iff the retriever returned at least one doc.
+        When not grounded, no source documents are returned and confidence is 0.0; the
+        frontend flags the response as AI-generated rather than showing a score.
+
+        Args:
+            result_dict: The megaservice orchestrator output keyed by node name.
+
+        Returns:
+            (source_documents, confidence_score, is_grounded)
+        """
+        rerank_key = self._find_node_key("rerank", result_dict)
+        retriever_key = self._find_node_key("retriever", result_dict)
+
+        retriever_node_output = result_dict.get(retriever_key, {})
+        file_id_pairs = retriever_node_output.get("file_id_pairs", {})
+        # Retriever docs carry the orchestrator id + text + similarity score (metadata.score).
+        retrieved_docs = retriever_node_output.get("retrieved_docs", [])
+
+        # The reranker's verdict. NOTE: align_outputs (RERANK branch) stores the reranked
+        # docs under the "retrieved_docs" key — with id + reranker score already
+        # reconstructed — NOT under "reranked_docs" (that key is empty in the orchestrator
+        # output). Each verdict doc is {id, text, score} where score is the reranker score.
+        reranker_node_output = result_dict.get(rerank_key, {}) if rerank_key else {}
+        rerank_verdict = reranker_node_output.get("retrieved_docs", []) if rerank_key else []
+
+        # Normalize the documents to display into (id, score) tuples.
+        if rerank_key:
+            display_docs = [{"id": doc.get("id", "N/A"), "score": doc.get("score", 0.0)} for doc in rerank_verdict]
+        else:
+            display_docs = [
+                {
+                    "id": doc.get("id", "N/A"),
+                    "score": (doc.get("metadata") or {}).get("score", doc.get("score", 0.0)),
+                }
+                for doc in retrieved_docs
+            ]
+        is_grounded = bool(display_docs)
+        logger.info(
+            f"Grounding decision: is_grounded={is_grounded} "
+            f"(reranker_present={bool(rerank_key)}, "
+            f"rerank_verdict={len(rerank_verdict)}, retriever_docs={len(retrieved_docs)})"
+        )
+
+        source_documents_formatted = []
+        scores = []
+        source_documents_file_ids = []
+
+        if logflag:
+            logger.debug(f"display docs count: {len(display_docs)}, scores: {[d.get('score') for d in display_docs]}")
+
+        for item in display_docs:
+            doc_id_by_orchestrator = item.get("id", "N/A")
+            if doc_id_by_orchestrator not in file_id_pairs:
+                logger.warning(f"Warning: Document ID {doc_id_by_orchestrator} not found in file_id_pairs mapping.")
+                continue
+
+            file_id = file_id_pairs[doc_id_by_orchestrator]
+            if not file_id:
+                logger.warning(f"Warning: No File ID mapped for Document ID {doc_id_by_orchestrator}.")
+                continue
+            if file_id in source_documents_file_ids:
+                logger.info(f"Note: Duplicate File ID {file_id} found. Skipping duplicate.")
+                scores.append(item.get("score", 0.0))
+                continue
+
+            logger.info(f"Document ID {doc_id_by_orchestrator} mapped to File ID {file_id}.")
+            source_documents_file_ids.append(file_id)
+
+            score = item.get("score", 0.0)
+            # Clients (web + mobile) build the view URL from their own public base + file_id.
+            # Emitting the internal BACKEND_SERVICE_URL here would give the browser an
+            # unreachable hostname (DNS_PROBE_FINISHED_NXDOMAIN), so leave it empty for
+            # normal files. Crawled HTML pages carry a real external source_url (set below).
+            file_read_url = ""
+
+            labels = []
+            file_name = ""
+            if file_id:
+                file_metadata = await self.fetch_file_metadata(file_id)
+                if file_metadata and isinstance(file_metadata, dict):
+                    labels = file_metadata["labels"]
+                    file_name = file_metadata.get("file_name", "")
+                    logger.info(f"Labels for file ID {file_id}: {labels}")
+                    logger.info(f"File name for file ID {file_id}: {file_name}")
+                    author = file_metadata.get("author", "")
+                    if author == "crawler" and file_name.endswith(".html"):
+                        # If the author is 'crawler' and the file is an HTML, we can assume it's a web page
+                        file_read_url = file_metadata.get("source_url", file_read_url)
+                        logger.info(f"Updated file read URL for crawled HTML: {file_read_url}")
+                else:
+                    logger.warning(f"Skipping metadata for file ID {file_id} due to fetch failure.")
+                    # Assigning error values to avoid service crashing [to be optimised]
+                    labels = "error"
+                    file_id = "error"
+                    file_name = "error"
+                    file_read_url = "error"
+                    score = 0
+
+            source_documents_formatted.append(
+                {
+                    "document_id": file_id,
+                    "document_name": file_name,
+                    "url": file_read_url,
+                    "categoryLabel": labels,
+                    "serviceLabels": [],
+                    "score": score,
+                }
+            )
+            scores.append(score)
+            logger.debug(f"appending document conf score: {score} ")
+
+        # Average of the displayed (reranker) scores; 0.0 when not grounded.
+        confidence_score = sum(scores) / len(scores) if scores else 0.0
+        logger.debug(f"document confidence scores: {scores}")
+
+        return source_documents_formatted, confidence_score, is_grounded
+
+    async def _stream_with_metadata(self, body_iterator, result_dict):
+        """Forward the LLM token stream, then append a `metadata` SSE event.
+
+        The metadata event carries the reranker-grounded source documents, confidence,
+        and ``is_grounded`` flag, emitted as plain JSON **before** the terminal ``[DONE]``
+        so downstream consumers (backend → web/mobile) receive document backing for the
+        streamed answer instead of re-running retrieval themselves.
+
+        Token chunks are forwarded verbatim (they are Python-repr-encoded by the
+        orchestrator's ``align_generator``); the terminal ``[DONE]`` is suppressed and
+        re-emitted after the metadata. Metadata is computed **after** the token stream so
+        it never delays Time-To-First-Token (it does up to N ``fetch_file_metadata`` calls).
+        """
+        async for chunk in body_iterator:
+            text = chunk.decode("utf-8") if isinstance(chunk, (bytes, bytearray)) else str(chunk)
+            if text.strip() == "data: [DONE]":
+                # Suppress the terminal [DONE]; re-emit it after the metadata event.
+                continue
+            yield text
+
+        # Compute metadata after tokens so TTFT is unaffected by the doc-metadata fetches.
+        source_documents, confidence_score, is_grounded = await self._assemble_source_documents(result_dict)
+        yield (
+            "data: "
+            + json.dumps(
+                {
+                    "type": "metadata",
+                    "source_documents": source_documents,
+                    "confidence_score": round(confidence_score, 2),
+                    "is_grounded": is_grounded,
+                }
+            )
+            + "\n\n"
+        )
+        yield "data: [DONE]\n\n"
 
     def add_remote_service(self):
 
@@ -896,8 +1147,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -930,8 +1181,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -972,7 +1223,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            endpoint="/v1/faqgen",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/faqgen",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -1018,8 +1270,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -1066,8 +1318,8 @@ class ChatQnAService:
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
-            api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            protocol=LLM_SERVER_PROTOCOL,
+            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
@@ -1078,8 +1330,13 @@ class ChatQnAService:
         self.megaservice.flow_to(rerank, llm)
 
     @staticmethod
-    def _build_translategemma_prompt(text: str, source_lang_code: str, target_lang_code: str,
-                                      source_lang_name: str = "English", target_lang_name: str = "English") -> str:
+    def _build_translategemma_prompt(
+        text: str,
+        source_lang_code: str,
+        target_lang_code: str,
+        source_lang_name: str = "English",
+        target_lang_name: str = "English",
+    ) -> str:
         """Build a prompt for TranslateGemma using the completions API.
 
         Duplicated in document-translation/genieai_pdf_translator.py — keep in sync.
@@ -1101,7 +1358,9 @@ class ChatQnAService:
             f"<end_of_turn>\n<start_of_turn>model\n"
         )
 
-    async def _get_translated_history_string(self, history: list, target_language: str, source_lang_code: str = "en") -> str:
+    async def _get_translated_history_string(
+        self, history: list, target_language: str, source_lang_code: str = "en"
+    ) -> str:
         """
         A helper that:
         1. Truncates history to stay within a token limit.
@@ -1119,7 +1378,9 @@ class ChatQnAService:
 
         # Single-message mode sends history as a plain string — translate it
         if isinstance(history, str):
-            return await self._translate_text_chunk(history, target_language, source_lang_code=source_lang_code, iso_code="en")
+            return await self._translate_text_chunk(
+                history, target_language, source_lang_code=source_lang_code, iso_code="en"
+            )
 
         max_translation_chars = MAX_TRANSLATION_CHARS
         current_chars = 0
@@ -1136,7 +1397,6 @@ class ChatQnAService:
             messages_to_process.append(message)
             current_chars += message_chars
         messages_to_process.reverse()
-
 
         flattened_history_parts = []
         for message in messages_to_process:
@@ -1155,27 +1415,28 @@ class ChatQnAService:
                 source_lang_code=source_lang_code,
                 target_lang_code="en",
                 source_lang_name=source_lang_code.upper(),
-                target_lang_name="English"
+                target_lang_name="English",
             )
             payload = {
                 "model": TRANSLATION_MODEL_ID,
                 "prompt": prompt,
                 "temperature": 0.0,
                 "max_tokens": min(max(len(flattened_history_string) // 2, 512), 4096),
-                "repetition_penalty": 1.2
+                "repetition_penalty": 1.2,
             }
             url = TRANSLATION_COMPLETIONS_URL
         else:
-            prompt = f"Translate the following chat history to {target_language}. Preserve the role markers (e.g., 'USER:', 'ASSISTANT:').\n\nHISTORY:\n{flattened_history_string}"
-            payload = {
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0,
-                "stream": False
-            }
+            prompt = (
+                f"Translate the following chat history to {target_language}. "
+                f"Preserve the role markers (e.g., 'USER:', 'ASSISTANT:')."
+                f"\n\nHISTORY:\n{flattened_history_string}"
+            )
+            payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0, "stream": False}
             url = TRANSLATION_LLM_URL
 
         if logflag:
-            logger.debug(f"Payload for translation service ({'TranslateGemma' if IS_TRANSLATEGEMMA else 'generic'}): {payload}")
+            svc = "TranslateGemma" if IS_TRANSLATEGEMMA else "generic"
+            logger.debug(f"Payload for translation service ({svc}): {payload}")
 
         try:
             async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
@@ -1237,7 +1498,9 @@ class ChatQnAService:
 
         return chunks
 
-    async def _translate_text_chunk(self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en") -> str:
+    async def _translate_text_chunk(
+        self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en"
+    ) -> str:
         """Translate a single chunk of text.
 
         Automatically uses TranslateGemma completions API (with pre-formatted prompt)
@@ -1256,32 +1519,37 @@ class ChatQnAService:
                 source_lang_code=source_lang_code,
                 target_lang_code=target_lang_code,
                 source_lang_name=source_lang_code.upper(),
-                target_lang_name=target_lang
+                target_lang_name=target_lang,
             )
             payload = {
                 "model": TRANSLATION_MODEL_ID,
                 "prompt": prompt,
                 "temperature": 0.0,
                 "max_tokens": min(max(len(text) // 2, 512), 4096),
-                "repetition_penalty": 1.2
+                "repetition_penalty": 1.2,
             }
             url = TRANSLATION_COMPLETIONS_URL
         else:
             language_notes = {
                 "Sesotho": "NOTE: Sesotho is spoken in Lesotho and South Africa. It is NOT Afrikaans.",
                 "Bengali": "NOTE: Bengali is spoken in Bangladesh and India. It is NOT Hindi.",
-                "Mandinka": "NOTE: Mandinka is spoken in West Africa (Gambia, Senegal, Mali)."
+                "Mandinka": "NOTE: Mandinka is spoken in West Africa (Gambia, Senegal, Mali).",
             }
             note = language_notes.get(target_lang, "")
             if iso_code:
-                prompt = f"Translate the following text to {target_lang} (ISO 639-1 code: {iso_code}). {note} Only output the translated text, nothing else.\n\nText: {text}\n\nTranslation:"
+                prompt = (
+                    f"Translate the following text to {target_lang} "
+                    f"(ISO 639-1 code: {iso_code}). {note} "
+                    f"Only output the translated text, nothing else."
+                    f"\n\nText: {text}\n\nTranslation:"
+                )
             else:
-                prompt = f"Translate the following text to {target_lang}. {note} Only output the translated text.\n\nText: {text}\n\nTranslation:"
-            payload = {
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0,
-                "stream": False
-            }
+                prompt = (
+                    f"Translate the following text to {target_lang}. "
+                    f"{note} Only output the translated text."
+                    f"\n\nText: {text}\n\nTranslation:"
+                )
+            payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0, "stream": False}
             url = TRANSLATION_LLM_URL
 
         if logflag:
@@ -1304,7 +1572,9 @@ class ChatQnAService:
             logger.warning(f"Failed to translate chunk, returning original: {type(e).__name__}: {e}")
             return text
 
-    async def _translate_with_chunking(self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en") -> str:
+    async def _translate_with_chunking(
+        self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en"
+    ) -> str:
         """Translate long text by splitting into chunks and translating separately."""
         chunks = self._split_text_into_chunks(text, max_chars=2000)
 
@@ -1313,7 +1583,10 @@ class ChatQnAService:
 
         # Translate chunks concurrently
         translated_chunks = await asyncio.gather(
-            *[self._translate_text_chunk(chunk, target_lang, iso_code, source_lang_code=source_lang_code) for chunk in chunks]
+            *[
+                self._translate_text_chunk(chunk, target_lang, iso_code, source_lang_code=source_lang_code)
+                for chunk in chunks
+            ]
         )
 
         return " ".join(translated_chunks)
@@ -1350,7 +1623,7 @@ class ChatQnAService:
 
         # -----------------------------------------------
 
-        chat_request = ChatCompletionRequest.parse_obj(data)
+        chat_request = ChatCompletionRequest.model_validate(data)
 
         # --- LOGGING FOR DEBUGGING CHAT REQUEST ---
         logger.debug(f"Parsed chat request: {chat_request}")
@@ -1361,8 +1634,8 @@ class ChatQnAService:
             try:
                 retrieval_context = chat_request.context.model_dump(exclude_unset=True)
             except Exception:
-                retrieval_context = chat_request.context.dict(exclude_unset=True)
-        logger.debug(f"Context: {retrieval_context}")
+                retrieval_context = chat_request.context.model_dump(exclude_unset=True)
+        logger.debug(f"Context keys: {list(retrieval_context.keys())}")
         # -----------------------------------------------
 
         if logflag:
@@ -1465,7 +1738,9 @@ class ChatQnAService:
                 logger.debug(
                     f"Original language detected: {original_language}. Proceeding with translation of chat history."
                 )
-            translated_history_string = await self._get_translated_history_string(full_chat_history, "English", source_lang_code=original_language.lower())
+            translated_history_string = await self._get_translated_history_string(
+                full_chat_history, "English", source_lang_code=original_language.lower()
+            )
         else:
             # If already English, flatten without translation
             if isinstance(full_chat_history, str):
@@ -1503,7 +1778,11 @@ class ChatQnAService:
                 logger.warning(".model_dump method not supported")
                 retrieval_context = chat_request.context.dict(exclude_unset=True)
         if logflag:
-            logger.debug(f"Retrieval Context: {retrieval_context}")
+            if isinstance(retrieval_context, dict):
+                ctx_desc = list(retrieval_context.keys())
+            else:
+                ctx_desc = type(retrieval_context).__name__
+            logger.debug(f"Retrieval Context: {ctx_desc}")
 
         parameters = LLMParams(
             max_tokens=chat_request.max_tokens if chat_request.max_tokens else 1024,
@@ -1556,24 +1835,83 @@ class ChatQnAService:
             else RERANKING_THRESHOLD,
         )
 
-        result_dict, runtime_graph = await self.megaservice.schedule(
-            initial_inputs={"text": last_translated_message_content},
-            llm_parameters=parameters,
-            retriever_parameters=retriever_parameters,
-            reranker_parameters=reranker_parameters,
-            full_chat_history_string=translated_history_string,
-            retrieval_context=retrieval_context,
-            original_language=original_language,
-            user_details=user_details,
-        )
+        # RAG orchestration with tracing span
+        tracer = get_tracer("chatqna.orchestrate")
+        with tracer.start_as_current_span("chatqna.orchestrate") as span:
+            span.set_attribute("rag.query_length", len(last_translated_message_content))
+            span.set_attribute("rag.model_id", LLM_MODEL)
+
+            _rag_start = time.time()
+            try:
+                result_dict, runtime_graph = await self.megaservice.schedule(
+                    initial_inputs={"text": last_translated_message_content},
+                    llm_parameters=parameters,
+                    retriever_parameters=retriever_parameters,
+                    reranker_parameters=reranker_parameters,
+                    full_chat_history_string=translated_history_string,
+                    retrieval_context=retrieval_context,
+                    original_language=original_language,
+                    user_details=user_details,
+                )
+                _rag_duration = time.time() - _rag_start
+
+                # Count retrieved documents from result
+                chunk_count = 0
+                for _key, val in result_dict.items():
+                    if hasattr(val, "retrieved_docs"):
+                        chunk_count = len(val.retrieved_docs)
+                        break
+                span.set_attribute("rag.chunk_count", chunk_count)
+
+                # Record custom application metrics
+                response_type = "streaming" if chat_request.stream else "sync"
+                _metric_attrs = sanitize_attributes(
+                    {
+                        "response_type": response_type,
+                        "abstained": "false",
+                        "error": "false",
+                        "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
+                    }
+                )
+                chat_requests_total.add(1, _metric_attrs)
+                chat_rag_duration_seconds.record(_rag_duration, _metric_attrs)
+
+            except Exception as e:
+                from opentelemetry.trace import StatusCode
+
+                # Record error metric
+                _err_duration = time.time() - _rag_start
+                _err_attrs = sanitize_attributes(
+                    {
+                        "response_type": "streaming" if chat_request.stream else "sync",
+                        "abstained": "false",
+                        "error": "true",
+                        "retrieval_source": getattr(retriever_parameters, "search_type", "hybrid"),
+                    }
+                )
+                chat_requests_total.add(1, _err_attrs)
+                chat_rag_duration_seconds.record(_err_duration, _err_attrs)
+
+                span.set_status(StatusCode.ERROR)
+                span.record_exception(e)
+                raise
 
         if logflag:
-            logger.debug(f"\nResult Dict: {result_dict}")
+            logger.debug(
+                f"Result Dict: "
+                f"{list(result_dict.keys()) if isinstance(result_dict, dict) else type(result_dict).__name__}"
+            )
             logger.debug(f"\nRuntime Graph: {runtime_graph}")
 
         for _node, response in result_dict.items():
             if isinstance(response, StreamingResponse):
-                return response
+                # Wrap the token stream so the reranker-grounded metadata (source docs,
+                # confidence, is_grounded) is emitted before [DONE]. Without this the
+                # backend would re-run retrieval without the category filter / reranker.
+                return StreamingResponse(
+                    self._stream_with_metadata(response.body_iterator, result_dict),
+                    media_type="text/event-stream",
+                )
 
         llm_response = result_dict.get(self._find_node_key("llm", result_dict), {}).get(
             "text", "Sorry, I could not generate a response."
@@ -1635,94 +1973,9 @@ class ChatQnAService:
         if logflag:
             logger.debug(f"\nFinal Text Response: {final_text_response}")
 
-        rerank_key = self._find_node_key("rerank", result_dict)
-        retriever_key = self._find_node_key("retriever", result_dict)
-
-        source_node_key = rerank_key if rerank_key else retriever_key
-
-        source_node_output = result_dict.get(
-            source_node_key, {}
-        )  # reranker microservice output or retriever microservice output
-        retrieved_docs_with_scores = source_node_output.get(
-            "retrieved_docs", []
-        )  # downstream_black_list, id, text, score
-
-        retriever_node_output = result_dict.get(retriever_key, {})
-        file_id_pairs = retriever_node_output.get("file_id_pairs", {})
-
-        # Format the source documents list
-        source_documents_formatted = []
-        scores = []
-        source_documents_file_ids = []
-
-        if logflag:
-            logger.info(f"\n\n[ DEBUG ] retrieved docs with scores: {retrieved_docs_with_scores}\n")
-
-        for item in retrieved_docs_with_scores:
-            doc_id_by_orchestrator = item.get("id", "N/A")
-            if doc_id_by_orchestrator not in file_id_pairs:
-                logger.warning(f"Warning: Document ID {doc_id_by_orchestrator} not found in file_id_pairs mapping.")
-                continue
-            else:
-                file_id = file_id_pairs[doc_id_by_orchestrator]
-                if not file_id:
-                    logger.warning(f"Warning: No File ID mapped for Document ID {doc_id_by_orchestrator}.")
-                    continue
-                else:
-                    if file_id in source_documents_file_ids:
-                        logger.info(f"Note: Duplicate File ID {file_id} found. Skipping duplicate.")
-                        score = item.get("score", 0.0)
-                        scores.append(score)
-                        continue
-                    else:
-                        logger.info(f"Document ID {doc_id_by_orchestrator} mapped to File ID {file_id}.")
-                        source_documents_file_ids.append(file_id)
-
-                        score = item.get("score", 0.0)
-                        # Construct the file read URL (assuming a standard pattern)
-                        file_read_url = f"{BACKEND_SERVICE_URL}/api/files/{file_id}/viewbrowser" if file_id else ""
-
-                        labels = []
-                        file_name = ""
-                        if file_id:
-                            file_metadata = await self.fetch_file_metadata(file_id)
-                            if file_metadata and isinstance(file_metadata, dict):
-                                labels = file_metadata["labels"]
-                                file_name = file_metadata.get("file_name", "")
-                                logger.info(f"Labels for file ID {file_id}: {labels}")
-                                logger.info(f"File name for file ID {file_id}: {file_name}")
-                                author = file_metadata.get("author", "")
-                                if author == "crawler" and file_name.endswith(".html"):
-                                    # If the author is 'crawler' and the file is an HTML, we can assume it's a web page
-                                    file_read_url = file_metadata.get("source_url", file_read_url)
-                                    logger.info(f"Updated file read URL for crawled HTML: {file_read_url}")
-                            else:
-                                logger.warning(f"Skipping metadata for file ID {file_id} due to fetch failure.")
-                                # Assigning error values to avoid service crashing [to be optimised]
-                                labels = "error"
-                                file_id = "error"
-                                file_name = "error"
-                                file_read_url = "error"
-                                score = 0
-
-                        source_documents_formatted.append(
-                            {
-                                "document_id": file_id,
-                                "document_name": file_name,
-                                "url": file_read_url,
-                                "categoryLabel": labels,
-                                "serviceLabels": [],
-                                "score": score,
-                            }
-                        )
-
-                        scores.append(score)
-
-            logger.info(f"\n\n[ DEBUG ] appendding document conf score: {score} ")
-
-        # Calculate overall confidence score (e.g., average of top documents)
-        confidence_score = sum(scores) / len(scores) if scores else 0.0
-        logger.info(f"\n\n[ DEBUG ] document confidence scores: {scores} ")
+        # Assemble source documents + confidence + grounding flag. Reflects the reranker's
+        # verdict; not grounded (is_grounded=False) when the reranker found nothing relevant.
+        source_documents_formatted, confidence_score, is_grounded = await self._assemble_source_documents(result_dict)
 
         # Construct the final JSON payload
         final_response_payload = {
@@ -1730,6 +1983,10 @@ class ChatQnAService:
             "metadata": {
                 "source_documents": source_documents_formatted,
                 "confidence_score": round(confidence_score, 2),
+                # Whether the answer is backed by retrieved document chunks (true) or
+                # generated from the LLM's parametric knowledge (false). Frontend uses
+                # this to flag responses that have no document basis.
+                "is_grounded": is_grounded,
             },
         }
 
@@ -1750,6 +2007,10 @@ class ChatQnAService:
         )
 
         self.service.add_route(self.endpoint, self.handle_request, methods=["POST"])
+
+        # FastAPI auto-instrumentation is handled globally by tracing.py
+        # setup_tracing() → FastAPIInstrumentor().instrument() runs before
+        # OPEA comps creates the FastAPI app, so traceparent extraction works.
 
         self.service.start()
 

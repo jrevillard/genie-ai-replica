@@ -749,7 +749,13 @@ class AnalyticsService {
         stack: error.stack,
         method: 'getSatisfactionGaugeData'
       });
-      throw error;
+      return {
+        currentValue: 0,
+        previousValue: 0,
+        changePercentage: 0,
+        target: 85,
+        historicalData: []
+      };
     }
   }
 

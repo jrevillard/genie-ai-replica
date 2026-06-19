@@ -7,8 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
-import 'package:genie_ai_mobile/services/api_service.dart';
+import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/auth/app_auth.dart';
+import 'package:openapi/api.dart';
 import 'package:genie_ai_mobile/services/auth/auth_logger.dart';
 import 'package:genie_ai_mobile/services/auth/auth_providers.dart';
 import 'package:genie_ai_mobile/services/auth/auth_state.dart';
@@ -21,7 +22,7 @@ import 'package:flutter/widgets.dart';
 class MockAppAuth implements AppAuth {
   AuthorizationTokenResponse Function(AuthorizationTokenRequest)? onAuthorize;
   Future<AuthorizationTokenResponse> Function(AuthorizationTokenRequest)?
-      onAuthorizeAsync;
+  onAuthorizeAsync;
   TokenResponse Function(TokenRequest)? onToken;
   Future<TokenResponse> Function(TokenRequest)? onTokenAsync;
   Exception? authorizeException;
@@ -106,29 +107,16 @@ class RecordingAuthLogger extends AuthLogger {
   }
 }
 
-class FakeApiService extends ApiService {
+class FakeAuthenticationApi extends AuthenticationApi {
   bool postLogoutCalled = false;
   bool postLogoutThrows = false;
 
-  FakeApiService() : super(httpClient: _FakeHttpClient());
+  FakeAuthenticationApi() : super();
 
   @override
-  Future<http.Response> post(String endpoint, Map<String, dynamic> data) async {
-    if (endpoint == 'auth/logout') {
-      postLogoutCalled = true;
-      if (postLogoutThrows) throw Exception('Backend logout failed');
-    }
-    return http.Response('{"ok": true}', 200);
-  }
-}
-
-class _FakeHttpClient extends http.BaseClient {
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    return http.StreamedResponse(
-      const Stream.empty(),
-      200,
-    );
+  Future<void> apiAuthLogoutPost() async {
+    if (postLogoutThrows) throw Exception('Backend logout failed');
+    postLogoutCalled = true;
   }
 }
 
@@ -158,10 +146,14 @@ const testConfig = KeycloakConfig(
 );
 
 const testEndpoints = OidcEndpoints(
-  authorizationEndpoint: 'http://localhost:8080/realms/genie/protocol/openid-connect/auth',
-  tokenEndpoint: 'http://localhost:8080/realms/genie/protocol/openid-connect/token',
-  userinfoEndpoint: 'http://localhost:8080/realms/genie/protocol/openid-connect/userinfo',
-  endSessionEndpoint: 'http://localhost:8080/realms/genie/protocol/openid-connect/logout',
+  authorizationEndpoint:
+      'http://localhost:8080/realms/genie/protocol/openid-connect/auth',
+  tokenEndpoint:
+      'http://localhost:8080/realms/genie/protocol/openid-connect/token',
+  userinfoEndpoint:
+      'http://localhost:8080/realms/genie/protocol/openid-connect/userinfo',
+  endSessionEndpoint:
+      'http://localhost:8080/realms/genie/protocol/openid-connect/logout',
 );
 
 void main() {
@@ -171,14 +163,14 @@ void main() {
   late MockAppAuth mockAppAuth;
   late FakeKeycloakService keycloakService;
   late RecordingAuthLogger recordingLogger;
-  late FakeApiService fakeApiService;
+  late FakeAuthenticationApi fakeAuthenticationApi;
 
   ProviderContainer makeContainer({
     InMemoryTokenStorage? storage,
     MockAppAuth? appAuth,
     FakeKeycloakService? kcService,
     RecordingAuthLogger? logger,
-    FakeApiService? apiService,
+    FakeAuthenticationApi? authenticationApi,
     FakeConnectivityChecker? connectivityChecker,
   }) {
     return ProviderContainer(
@@ -187,7 +179,9 @@ void main() {
         keycloakServiceProvider.overrideWithValue(kcService ?? keycloakService),
         appAuthProvider.overrideWithValue(appAuth ?? mockAppAuth),
         authLoggerProvider.overrideWithValue(logger ?? recordingLogger),
-        apiServiceProvider.overrideWithValue(apiService ?? fakeApiService),
+        authenticationApiProvider.overrideWithValue(
+          authenticationApi ?? fakeAuthenticationApi,
+        ),
         connectivityCheckerProvider.overrideWithValue(
           connectivityChecker ?? FakeConnectivityChecker(),
         ),
@@ -199,7 +193,7 @@ void main() {
     tokenStorage = InMemoryTokenStorage();
     mockAppAuth = MockAppAuth();
     recordingLogger = RecordingAuthLogger();
-    fakeApiService = FakeApiService();
+    fakeAuthenticationApi = FakeAuthenticationApi();
     keycloakService = FakeKeycloakService(
       keycloakConfig: testConfig,
       endpointsToReturn: testEndpoints,
@@ -258,21 +252,24 @@ void main() {
       expect(state.errorMessage, equals('No internet connection'));
     });
 
-    test('discovery failure — state becomes error with retryable true', () async {
-      final noEndpointsService = FakeKeycloakService(
-        keycloakConfig: testConfig,
-        endpointsToReturn: null,
-      );
-      final c = makeContainer(kcService: noEndpointsService);
+    test(
+      'discovery failure — state becomes error with retryable true',
+      () async {
+        final noEndpointsService = FakeKeycloakService(
+          keycloakConfig: testConfig,
+          endpointsToReturn: null,
+        );
+        final c = makeContainer(kcService: noEndpointsService);
 
-      await c.read(authProvider.notifier).authorize();
-      final state = c.read(authProvider);
+        await c.read(authProvider.notifier).authorize();
+        final state = c.read(authProvider);
 
-      expect(state.status, equals(AuthStatus.error));
-      expect(state.retryable, isTrue);
-      expect(state.errorMessage, equals('Network unreachable'));
-      c.dispose();
-    });
+        expect(state.status, equals(AuthStatus.error));
+        expect(state.retryable, isTrue);
+        expect(state.errorMessage, equals('Network unreachable'));
+        c.dispose();
+      },
+    );
   });
 
   group('refreshToken', () {
@@ -356,56 +353,65 @@ void main() {
       c.dispose();
     });
 
-    test('expired tokens — _initializeAuth triggers refresh (AC #10)', () async {
-      final preloadedStorage = InMemoryTokenStorage();
-      await preloadedStorage.saveTokens(
-        accessToken: 'expired-at',
-        idToken: 'idt',
-        refreshToken: 'rt',
-        accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
-      );
+    test(
+      'expired tokens — _initializeAuth triggers refresh (AC #10)',
+      () async {
+        final preloadedStorage = InMemoryTokenStorage();
+        await preloadedStorage.saveTokens(
+          accessToken: 'expired-at',
+          idToken: 'idt',
+          refreshToken: 'rt',
+          accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
+        );
 
-      final refreshAuth = MockAppAuth();
-      refreshAuth.onToken = (_) => TokenResponse(
-        'refreshed-at',
-        'refreshed-rt',
-        DateTime.now().add(Duration(hours: 1)),
-        null,
-        'Bearer',
-        null,
-        null,
-      );
+        final refreshAuth = MockAppAuth();
+        refreshAuth.onToken = (_) => TokenResponse(
+          'refreshed-at',
+          'refreshed-rt',
+          DateTime.now().add(Duration(hours: 1)),
+          null,
+          'Bearer',
+          null,
+          null,
+        );
 
-      final c = makeContainer(storage: preloadedStorage, appAuth: refreshAuth);
-      c.read(authProvider.notifier);
-      await Future.delayed(Duration.zero);
+        final c = makeContainer(
+          storage: preloadedStorage,
+          appAuth: refreshAuth,
+        );
+        c.read(authProvider.notifier);
+        await Future.delayed(Duration.zero);
 
-      final state = c.read(authProvider);
-      expect(state.status, equals(AuthStatus.authenticated));
-      expect(await preloadedStorage.getAccessToken(), equals('refreshed-at'));
-      c.dispose();
-    });
+        final state = c.read(authProvider);
+        expect(state.status, equals(AuthStatus.authenticated));
+        expect(await preloadedStorage.getAccessToken(), equals('refreshed-at'));
+        c.dispose();
+      },
+    );
 
-    test('expired tokens with refresh failure — state unauthenticated', () async {
-      final preloadedStorage = InMemoryTokenStorage();
-      await preloadedStorage.saveTokens(
-        accessToken: 'expired-at',
-        idToken: 'idt',
-        refreshToken: 'rt',
-        accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
-      );
+    test(
+      'expired tokens with refresh failure — state unauthenticated',
+      () async {
+        final preloadedStorage = InMemoryTokenStorage();
+        await preloadedStorage.saveTokens(
+          accessToken: 'expired-at',
+          idToken: 'idt',
+          refreshToken: 'rt',
+          accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
+        );
 
-      final failAuth = MockAppAuth();
-      failAuth.tokenException = Exception('Refresh failed');
+        final failAuth = MockAppAuth();
+        failAuth.tokenException = Exception('Refresh failed');
 
-      final c = makeContainer(storage: preloadedStorage, appAuth: failAuth);
-      c.read(authProvider.notifier);
-      await Future.delayed(Duration.zero);
+        final c = makeContainer(storage: preloadedStorage, appAuth: failAuth);
+        c.read(authProvider.notifier);
+        await Future.delayed(Duration.zero);
 
-      final state = c.read(authProvider);
-      expect(state.status, equals(AuthStatus.unauthenticated));
-      c.dispose();
-    });
+        final state = c.read(authProvider);
+        expect(state.status, equals(AuthStatus.unauthenticated));
+        c.dispose();
+      },
+    );
   });
 
   group('refreshToken — error message on failure (AC3)', () {
@@ -503,7 +509,9 @@ void main() {
       await Future.delayed(Duration.zero);
       recordingLogger.events.clear();
 
-      c.read(authProvider.notifier).didChangeAppLifecycleState(AppLifecycleState.paused);
+      c
+          .read(authProvider.notifier)
+          .didChangeAppLifecycleState(AppLifecycleState.paused);
       await Future.delayed(Duration.zero);
 
       expect(
@@ -529,7 +537,9 @@ void main() {
       await Future.delayed(Duration.zero);
       recordingLogger.events.clear();
 
-      c.read(authProvider.notifier).didChangeAppLifecycleState(AppLifecycleState.inactive);
+      c
+          .read(authProvider.notifier)
+          .didChangeAppLifecycleState(AppLifecycleState.inactive);
       await Future.delayed(Duration.zero);
 
       expect(
@@ -541,44 +551,54 @@ void main() {
       c.dispose();
     });
 
-    test('resumed when unauthenticated does NOT call validateTokens (AC7)', () async {
-      // Default state after build() is unauthenticated (no tokens)
-      recordingLogger.events.clear();
+    test(
+      'resumed when unauthenticated does NOT call validateTokens (AC7)',
+      () async {
+        // Default state after build() is unauthenticated (no tokens)
+        recordingLogger.events.clear();
 
-      container.read(authProvider.notifier).didChangeAppLifecycleState(AppLifecycleState.resumed);
-      await Future.delayed(Duration.zero);
+        container
+            .read(authProvider.notifier)
+            .didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await Future.delayed(Duration.zero);
 
-      expect(
-        recordingLogger.events.any(
-          (e) => e.contains('AuthNotifier.validateTokens'),
-        ),
-        isFalse,
-      );
-    });
+        expect(
+          recordingLogger.events.any(
+            (e) => e.contains('AuthNotifier.validateTokens'),
+          ),
+          isFalse,
+        );
+      },
+    );
 
-    test('resumed when in error state does NOT call validateTokens (AC7)', () async {
-      // Force error state by failing discovery during authorize
-      final noEndpointsService = FakeKeycloakService(
-        keycloakConfig: testConfig,
-        endpointsToReturn: null,
-      );
-      final c = makeContainer(kcService: noEndpointsService);
+    test(
+      'resumed when in error state does NOT call validateTokens (AC7)',
+      () async {
+        // Force error state by failing discovery during authorize
+        final noEndpointsService = FakeKeycloakService(
+          keycloakConfig: testConfig,
+          endpointsToReturn: null,
+        );
+        final c = makeContainer(kcService: noEndpointsService);
 
-      await c.read(authProvider.notifier).authorize();
-      expect(c.read(authProvider).status, equals(AuthStatus.error));
-      recordingLogger.events.clear();
+        await c.read(authProvider.notifier).authorize();
+        expect(c.read(authProvider).status, equals(AuthStatus.error));
+        recordingLogger.events.clear();
 
-      c.read(authProvider.notifier).didChangeAppLifecycleState(AppLifecycleState.resumed);
-      await Future.delayed(Duration.zero);
+        c
+            .read(authProvider.notifier)
+            .didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await Future.delayed(Duration.zero);
 
-      expect(
-        recordingLogger.events.any(
-          (e) => e.contains('AuthNotifier.validateTokens'),
-        ),
-        isFalse,
-      );
-      c.dispose();
-    });
+        expect(
+          recordingLogger.events.any(
+            (e) => e.contains('AuthNotifier.validateTokens'),
+          ),
+          isFalse,
+        );
+        c.dispose();
+      },
+    );
 
     test('valid token on resume — no state change (AC2)', () async {
       final preloadedStorage = InMemoryTokenStorage();
@@ -596,7 +616,9 @@ void main() {
       final stateBefore = c.read(authProvider);
       expect(stateBefore.status, equals(AuthStatus.authenticated));
 
-      c.read(authProvider.notifier).didChangeAppLifecycleState(AppLifecycleState.resumed);
+      c
+          .read(authProvider.notifier)
+          .didChangeAppLifecycleState(AppLifecycleState.resumed);
       await Future.delayed(Duration.zero);
 
       final stateAfter = c.read(authProvider);
@@ -611,67 +633,80 @@ void main() {
       c.dispose();
     });
 
-    test('expired access token on resume — refreshToken called, state stays authenticated (AC3)', () async {
-      final preloadedStorage = InMemoryTokenStorage();
-      await preloadedStorage.saveTokens(
-        accessToken: 'expired-at',
-        idToken: 'idt',
-        refreshToken: 'valid-rt',
-        accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
-      );
+    test(
+      'expired access token on resume — refreshToken called, state stays authenticated (AC3)',
+      () async {
+        final preloadedStorage = InMemoryTokenStorage();
+        await preloadedStorage.saveTokens(
+          accessToken: 'expired-at',
+          idToken: 'idt',
+          refreshToken: 'valid-rt',
+          accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
+        );
 
-      final refreshAuth = MockAppAuth();
-      refreshAuth.onToken = (_) => TokenResponse(
-        'new-at',
-        'new-rt',
-        DateTime.now().add(Duration(hours: 1)),
-        null,
-        'Bearer',
-        null,
-        null,
-      );
+        final refreshAuth = MockAppAuth();
+        refreshAuth.onToken = (_) => TokenResponse(
+          'new-at',
+          'new-rt',
+          DateTime.now().add(Duration(hours: 1)),
+          null,
+          'Bearer',
+          null,
+          null,
+        );
 
-      final c = makeContainer(storage: preloadedStorage, appAuth: refreshAuth);
-      c.read(authProvider.notifier);
-      await Future.delayed(Duration.zero);
+        final c = makeContainer(
+          storage: preloadedStorage,
+          appAuth: refreshAuth,
+        );
+        c.read(authProvider.notifier);
+        await Future.delayed(Duration.zero);
 
-      c.read(authProvider.notifier).didChangeAppLifecycleState(AppLifecycleState.resumed);
-      await Future.delayed(Duration.zero);
+        c
+            .read(authProvider.notifier)
+            .didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await Future.delayed(Duration.zero);
 
-      final state = c.read(authProvider);
-      expect(state.status, equals(AuthStatus.authenticated));
-      expect(await preloadedStorage.getAccessToken(), equals('new-at'));
-      c.dispose();
-    });
+        final state = c.read(authProvider);
+        expect(state.status, equals(AuthStatus.authenticated));
+        expect(await preloadedStorage.getAccessToken(), equals('new-at'));
+        c.dispose();
+      },
+    );
 
-    test('both tokens expired on resume — state transitions to unauthenticated with error message (AC4)', () async {
-      final preloadedStorage = InMemoryTokenStorage();
-      await preloadedStorage.saveTokens(
-        accessToken: 'expired-at',
-        idToken: 'idt',
-        refreshToken: 'expired-rt',
-        accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
-      );
+    test(
+      'both tokens expired on resume — state transitions to unauthenticated with error message (AC4)',
+      () async {
+        final preloadedStorage = InMemoryTokenStorage();
+        await preloadedStorage.saveTokens(
+          accessToken: 'expired-at',
+          idToken: 'idt',
+          refreshToken: 'expired-rt',
+          accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
+        );
 
-      final failAuth = MockAppAuth();
-      failAuth.tokenException = Exception('Refresh failed');
+        final failAuth = MockAppAuth();
+        failAuth.tokenException = Exception('Refresh failed');
 
-      final c = makeContainer(storage: preloadedStorage, appAuth: failAuth);
-      c.read(authProvider.notifier);
-      await Future.delayed(Duration.zero);
+        final c = makeContainer(storage: preloadedStorage, appAuth: failAuth);
+        c.read(authProvider.notifier);
+        await Future.delayed(Duration.zero);
 
-      c.read(authProvider.notifier).didChangeAppLifecycleState(AppLifecycleState.resumed);
-      await Future.delayed(Duration.zero);
+        c
+            .read(authProvider.notifier)
+            .didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await Future.delayed(Duration.zero);
 
-      final state = c.read(authProvider);
-      expect(state.status, equals(AuthStatus.unauthenticated));
-      expect(
-        state.errorMessage,
-        equals('Your session has expired. Please sign in again.'),
-      );
-      expect(await preloadedStorage.getAccessToken(), isNull);
-      c.dispose();
-    });
+        final state = c.read(authProvider);
+        expect(state.status, equals(AuthStatus.unauthenticated));
+        expect(
+          state.errorMessage,
+          equals('Your session has expired. Please sign in again.'),
+        );
+        expect(await preloadedStorage.getAccessToken(), isNull);
+        c.dispose();
+      },
+    );
 
     test('observer added in build — verify addObserver called (AC6)', () {
       // Creating the container triggers build() which calls addObserver
@@ -692,63 +727,72 @@ void main() {
       // No exception means removeObserver succeeded
     });
 
-    test('idempotence — calling resumed twice does not trigger double refresh', () async {
-      final preloadedStorage = InMemoryTokenStorage();
-      await preloadedStorage.saveTokens(
-        accessToken: 'expired-at',
-        idToken: 'idt',
-        refreshToken: 'valid-rt',
-        accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
-      );
-
-      var refreshCallCount = 0;
-      final refreshAuth = MockAppAuth();
-      refreshAuth.onToken = (_) {
-        refreshCallCount++;
-        return TokenResponse(
-          'new-at',
-          'new-rt',
-          DateTime.now().add(Duration(hours: 1)),
-          null,
-          'Bearer',
-          null,
-          null,
+    test(
+      'idempotence — calling resumed twice does not trigger double refresh',
+      () async {
+        final preloadedStorage = InMemoryTokenStorage();
+        await preloadedStorage.saveTokens(
+          accessToken: 'expired-at',
+          idToken: 'idt',
+          refreshToken: 'valid-rt',
+          accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
         );
-      };
 
-      final c = makeContainer(storage: preloadedStorage, appAuth: refreshAuth);
-      c.read(authProvider.notifier);
-      await Future.delayed(Duration.zero);
+        var refreshCallCount = 0;
+        final refreshAuth = MockAppAuth();
+        refreshAuth.onToken = (_) {
+          refreshCallCount++;
+          return TokenResponse(
+            'new-at',
+            'new-rt',
+            DateTime.now().add(Duration(hours: 1)),
+            null,
+            'Bearer',
+            null,
+            null,
+          );
+        };
 
-      final notifier = c.read(authProvider.notifier);
-      notifier.didChangeAppLifecycleState(AppLifecycleState.resumed);
-      notifier.didChangeAppLifecycleState(AppLifecycleState.resumed);
-      await Future.delayed(Duration.zero);
+        final c = makeContainer(
+          storage: preloadedStorage,
+          appAuth: refreshAuth,
+        );
+        c.read(authProvider.notifier);
+        await Future.delayed(Duration.zero);
 
-      // Both calls will trigger validateTokens, but the second one should see
-      // the token is now valid (refreshed by first call) and skip refresh.
-      // So refreshCallCount should be 1, not 2.
-      expect(refreshCallCount, equals(1));
-      c.dispose();
-    });
+        final notifier = c.read(authProvider.notifier);
+        notifier.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        notifier.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await Future.delayed(Duration.zero);
+
+        // Both calls will trigger validateTokens, but the second one should see
+        // the token is now valid (refreshed by first call) and skip refresh.
+        // So refreshCallCount should be 1, not 2.
+        expect(refreshCallCount, equals(1));
+        c.dispose();
+      },
+    );
   });
 
   group('logout', () {
-    test('success — endSession called, deleteAll called, state unauthenticated', () async {
-      await tokenStorage.saveTokens(
-        accessToken: 'at',
-        idToken: 'idt',
-        refreshToken: 'rt',
-        accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
-      );
+    test(
+      'success — endSession called, deleteAll called, state unauthenticated',
+      () async {
+        await tokenStorage.saveTokens(
+          accessToken: 'at',
+          idToken: 'idt',
+          refreshToken: 'rt',
+          accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
+        );
 
-      await container.read(authProvider.notifier).logout();
-      final state = container.read(authProvider);
+        await container.read(authProvider.notifier).logout();
+        final state = container.read(authProvider);
 
-      expect(keycloakService.endSessionCalled, isTrue);
-      expect(await tokenStorage.getAccessToken(), isNull);
-      expect(state.status, equals(AuthStatus.unauthenticated));
-    });
+        expect(keycloakService.endSessionCalled, isTrue);
+        expect(await tokenStorage.getAccessToken(), isNull);
+        expect(state.status, equals(AuthStatus.unauthenticated));
+      },
+    );
 
     test('logs initiated and completed events (AC8)', () async {
       await tokenStorage.saveTokens(
@@ -769,41 +813,47 @@ void main() {
       );
     });
 
-    test('Keycloak failure — deleteAll still called, state unauthenticated', () async {
-      await tokenStorage.saveTokens(
-        accessToken: 'at',
-        idToken: 'idt',
-        refreshToken: 'rt',
-        accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
-      );
+    test(
+      'Keycloak failure — deleteAll still called, state unauthenticated',
+      () async {
+        await tokenStorage.saveTokens(
+          accessToken: 'at',
+          idToken: 'idt',
+          refreshToken: 'rt',
+          accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
+        );
 
-      keycloakService.endSessionResult = false;
+        keycloakService.endSessionResult = false;
 
-      await container.read(authProvider.notifier).logout();
-      final state = container.read(authProvider);
+        await container.read(authProvider.notifier).logout();
+        final state = container.read(authProvider);
 
-      expect(keycloakService.endSessionCalled, isTrue);
-      expect(await tokenStorage.getAccessToken(), isNull);
-      expect(state.status, equals(AuthStatus.unauthenticated));
-    });
+        expect(keycloakService.endSessionCalled, isTrue);
+        expect(await tokenStorage.getAccessToken(), isNull);
+        expect(state.status, equals(AuthStatus.unauthenticated));
+      },
+    );
 
-    test('Keycloak throws — catchError absorbs it, deleteAll still called', () async {
-      await tokenStorage.saveTokens(
-        accessToken: 'at',
-        idToken: 'idt',
-        refreshToken: 'rt',
-        accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
-      );
+    test(
+      'Keycloak throws — catchError absorbs it, deleteAll still called',
+      () async {
+        await tokenStorage.saveTokens(
+          accessToken: 'at',
+          idToken: 'idt',
+          refreshToken: 'rt',
+          accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
+        );
 
-      keycloakService.endSessionException = Exception('Network error');
+        keycloakService.endSessionException = Exception('Network error');
 
-      await container.read(authProvider.notifier).logout();
-      final state = container.read(authProvider);
+        await container.read(authProvider.notifier).logout();
+        final state = container.read(authProvider);
 
-      expect(keycloakService.endSessionCalled, isTrue);
-      expect(await tokenStorage.getAccessToken(), isNull);
-      expect(state.status, equals(AuthStatus.unauthenticated));
-    });
+        expect(keycloakService.endSessionCalled, isTrue);
+        expect(await tokenStorage.getAccessToken(), isNull);
+        expect(state.status, equals(AuthStatus.unauthenticated));
+      },
+    );
 
     test('post-logout re-auth — authorize() works after logout()', () async {
       await tokenStorage.saveTokens(
@@ -814,7 +864,10 @@ void main() {
       );
 
       await container.read(authProvider.notifier).logout();
-      expect(container.read(authProvider).status, equals(AuthStatus.unauthenticated));
+      expect(
+        container.read(authProvider).status,
+        equals(AuthStatus.unauthenticated),
+      );
 
       mockAppAuth.onAuthorize = (_) => AuthorizationTokenResponse(
         'new-at',
@@ -834,37 +887,49 @@ void main() {
       expect(await tokenStorage.getAccessToken(), equals('new-at'));
     });
 
-    test('Future.wait — backend logout called alongside endSession (AC11)', () async {
-      await tokenStorage.saveTokens(
-        accessToken: 'at',
-        idToken: 'idt',
-        refreshToken: 'rt',
-        accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
-      );
+    test(
+      'Future.wait — backend logout called alongside endSession (AC11)',
+      () async {
+        await tokenStorage.saveTokens(
+          accessToken: 'at',
+          idToken: 'idt',
+          refreshToken: 'rt',
+          accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
+        );
 
-      await container.read(authProvider.notifier).logout();
+        await container.read(authProvider.notifier).logout();
 
-      expect(fakeApiService.postLogoutCalled, isTrue);
-      expect(keycloakService.endSessionCalled, isTrue);
-      expect(await tokenStorage.getAccessToken(), isNull);
-    });
+        expect(fakeAuthenticationApi.postLogoutCalled, isTrue);
+        expect(keycloakService.endSessionCalled, isTrue);
+        expect(await tokenStorage.getAccessToken(), isNull);
+      },
+    );
 
-    test('Future.wait — backend fails, endSession still called (AC11)', () async {
-      await tokenStorage.saveTokens(
-        accessToken: 'at',
-        idToken: 'idt',
-        refreshToken: 'rt',
-        accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
-      );
+    test(
+      'Future.wait — backend fails, endSession still called (AC11)',
+      () async {
+        await tokenStorage.saveTokens(
+          accessToken: 'at',
+          idToken: 'idt',
+          refreshToken: 'rt',
+          accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
+        );
 
-      fakeApiService.postLogoutThrows = true;
+        fakeAuthenticationApi.postLogoutThrows = true;
 
-      await container.read(authProvider.notifier).logout();
+        container.read(authProvider.notifier);
+        await Future.delayed(Duration.zero);
 
-      expect(keycloakService.endSessionCalled, isTrue);
-      expect(await tokenStorage.getAccessToken(), isNull);
-      expect(container.read(authProvider).status, equals(AuthStatus.unauthenticated));
-    });
+        await container.read(authProvider.notifier).logout();
+
+        expect(keycloakService.endSessionCalled, isTrue);
+        expect(await tokenStorage.getAccessToken(), isNull);
+        expect(
+          container.read(authProvider).status,
+          equals(AuthStatus.unauthenticated),
+        );
+      },
+    );
 
     test('Future.wait — Keycloak fails, backend still called (AC11)', () async {
       await tokenStorage.saveTokens(
@@ -876,33 +941,44 @@ void main() {
 
       keycloakService.endSessionResult = false;
 
+      container.read(authProvider.notifier);
+      await Future.delayed(Duration.zero);
+
       await container.read(authProvider.notifier).logout();
 
-      expect(fakeApiService.postLogoutCalled, isTrue);
+      expect(fakeAuthenticationApi.postLogoutCalled, isTrue);
       expect(await tokenStorage.getAccessToken(), isNull);
-      expect(container.read(authProvider).status, equals(AuthStatus.unauthenticated));
+      expect(
+        container.read(authProvider).status,
+        equals(AuthStatus.unauthenticated),
+      );
     });
   });
 
   // ── Story 3.2: Network Error Detection & Recovery ──
 
   group('authorize — offline fast-fail (AC1)', () {
-    test('when offline — error state with retryable true, no AppAuth call', () async {
-      final checker = FakeConnectivityChecker()..isOnline = false;
-      final c = makeContainer(connectivityChecker: checker);
+    test(
+      'when offline — error state with retryable true, no AppAuth call',
+      () async {
+        final checker = FakeConnectivityChecker()..isOnline = false;
+        final c = makeContainer(connectivityChecker: checker);
 
-      await c.read(authProvider.notifier).authorize();
-      final state = c.read(authProvider);
+        await c.read(authProvider.notifier).authorize();
+        final state = c.read(authProvider);
 
-      expect(state.status, equals(AuthStatus.error));
-      expect(state.retryable, isTrue);
-      expect(state.errorMessage, equals('No internet connection'));
-      expect(
-        recordingLogger.failures,
-        contains('AuthNotifier.authorize: AUTH_NETWORK_OFFLINE - No internet connection'),
-      );
-      c.dispose();
-    });
+        expect(state.status, equals(AuthStatus.error));
+        expect(state.retryable, isTrue);
+        expect(state.errorMessage, equals('No internet connection'));
+        expect(
+          recordingLogger.failures,
+          contains(
+            'AuthNotifier.authorize: AUTH_NETWORK_OFFLINE - No internet connection',
+          ),
+        );
+        c.dispose();
+      },
+    );
 
     test('when online — normal flow (existing test still passes)', () async {
       mockAppAuth.onAuthorize = (_) => AuthorizationTokenResponse(
@@ -924,32 +1000,37 @@ void main() {
   });
 
   group('refreshToken — offline fast-fail (AC4)', () {
-    test('when offline — error state with retryable true, NOT unauthenticated, tokens preserved', () async {
-      await tokenStorage.saveTokens(
-        accessToken: 'at',
-        idToken: 'idt',
-        refreshToken: 'rt',
-        accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
-      );
+    test(
+      'when offline — error state with retryable true, NOT unauthenticated, tokens preserved',
+      () async {
+        await tokenStorage.saveTokens(
+          accessToken: 'at',
+          idToken: 'idt',
+          refreshToken: 'rt',
+          accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
+        );
 
-      final checker = FakeConnectivityChecker()..isOnline = false;
-      final c = makeContainer(connectivityChecker: checker);
+        final checker = FakeConnectivityChecker()..isOnline = false;
+        final c = makeContainer(connectivityChecker: checker);
 
-      await c.read(authProvider.notifier).refreshToken();
-      final state = c.read(authProvider);
+        await c.read(authProvider.notifier).refreshToken();
+        final state = c.read(authProvider);
 
-      expect(state.status, equals(AuthStatus.error));
-      expect(state.retryable, isTrue);
-      expect(state.errorMessage, equals('No internet connection'));
-      // Tokens MUST be preserved on network error
-      expect(await tokenStorage.getAccessToken(), equals('at'));
-      expect(await tokenStorage.getRefreshToken(), equals('rt'));
-      expect(
-        recordingLogger.failures,
-        contains('AuthNotifier.refreshToken: REFRESH_NETWORK_OFFLINE - No internet connection'),
-      );
-      c.dispose();
-    });
+        expect(state.status, equals(AuthStatus.error));
+        expect(state.retryable, isTrue);
+        expect(state.errorMessage, equals('No internet connection'));
+        // Tokens MUST be preserved on network error
+        expect(await tokenStorage.getAccessToken(), equals('at'));
+        expect(await tokenStorage.getRefreshToken(), equals('rt'));
+        expect(
+          recordingLogger.failures,
+          contains(
+            'AuthNotifier.refreshToken: REFRESH_NETWORK_OFFLINE - No internet connection',
+          ),
+        );
+        c.dispose();
+      },
+    );
 
     test('when online — normal flow (existing test still passes)', () async {
       await tokenStorage.saveTokens(
@@ -1025,7 +1106,10 @@ void main() {
     test('when state is not error — no-op', () async {
       // State is unauthenticated by default
       await container.read(authProvider.notifier).retryAuthorize();
-      expect(container.read(authProvider).status, equals(AuthStatus.unauthenticated));
+      expect(
+        container.read(authProvider).status,
+        equals(AuthStatus.unauthenticated),
+      );
     });
 
     test('when error is not retryable — no-op', () async {
@@ -1157,32 +1241,37 @@ void main() {
   });
 
   group('refreshToken — network drops mid-operation (AC5)', () {
-    test('SocketException during token call — retryable error, tokens preserved', () async {
-      await tokenStorage.saveTokens(
-        accessToken: 'at',
-        idToken: 'idt',
-        refreshToken: 'rt',
-        accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
-      );
+    test(
+      'SocketException during token call — retryable error, tokens preserved',
+      () async {
+        await tokenStorage.saveTokens(
+          accessToken: 'at',
+          idToken: 'idt',
+          refreshToken: 'rt',
+          accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
+        );
 
-      mockAppAuth.tokenException = const SocketException('Network unreachable');
+        mockAppAuth.tokenException = const SocketException(
+          'Network unreachable',
+        );
 
-      await container.read(authProvider.notifier).refreshToken();
-      final state = container.read(authProvider);
+        await container.read(authProvider.notifier).refreshToken();
+        final state = container.read(authProvider);
 
-      expect(state.status, equals(AuthStatus.error));
-      expect(state.retryable, isTrue);
-      expect(state.errorMessage, equals('No internet connection'));
-      // Tokens preserved — no deleteAll
-      expect(await tokenStorage.getAccessToken(), equals('at'));
-      expect(await tokenStorage.getRefreshToken(), equals('rt'));
-      expect(
-        recordingLogger.failures,
-        contains(
-          'AuthNotifier.refreshToken: REFRESH_NETWORK_OFFLINE_MID_OP - Network lost during token refresh',
-        ),
-      );
-    });
+        expect(state.status, equals(AuthStatus.error));
+        expect(state.retryable, isTrue);
+        expect(state.errorMessage, equals('No internet connection'));
+        // Tokens preserved — no deleteAll
+        expect(await tokenStorage.getAccessToken(), equals('at'));
+        expect(await tokenStorage.getRefreshToken(), equals('rt'));
+        expect(
+          recordingLogger.failures,
+          contains(
+            'AuthNotifier.refreshToken: REFRESH_NETWORK_OFFLINE_MID_OP - Network lost during token refresh',
+          ),
+        );
+      },
+    );
   });
 
   group('NetworkErrorClassifier — used by AuthNotifier', () {
@@ -1196,70 +1285,85 @@ void main() {
       expect(classifier.isNetworkError(http.ClientException('test')), isTrue);
     });
 
-    test('FlutterAppAuthPlatformException with network code classified as network error', () {
-      expect(
-        classifier.isNetworkError(
-          FlutterAppAuthPlatformException(
-            code: 'network_error',
-            message: 'test',
-            platformErrorDetails: FlutterAppAuthPlatformErrorDetails(),
+    test(
+      'FlutterAppAuthPlatformException with network code classified as network error',
+      () {
+        expect(
+          classifier.isNetworkError(
+            FlutterAppAuthPlatformException(
+              code: 'network_error',
+              message: 'test',
+              platformErrorDetails: FlutterAppAuthPlatformErrorDetails(),
+            ),
           ),
-        ),
-        isTrue,
-      );
-    });
+          isTrue,
+        );
+      },
+    );
 
-    test('FlutterAppAuthPlatformException with connection code classified as network error', () {
-      expect(
-        classifier.isNetworkError(
-          FlutterAppAuthPlatformException(
-            code: 'connection_refused',
-            message: 'test',
-            platformErrorDetails: FlutterAppAuthPlatformErrorDetails(),
+    test(
+      'FlutterAppAuthPlatformException with connection code classified as network error',
+      () {
+        expect(
+          classifier.isNetworkError(
+            FlutterAppAuthPlatformException(
+              code: 'connection_refused',
+              message: 'test',
+              platformErrorDetails: FlutterAppAuthPlatformErrorDetails(),
+            ),
           ),
-        ),
-        isTrue,
-      );
-    });
+          isTrue,
+        );
+      },
+    );
 
-    test('FlutterAppAuthPlatformException with timeout code classified as network error', () {
-      expect(
-        classifier.isNetworkError(
-          FlutterAppAuthPlatformException(
-            code: 'timeout',
-            message: 'test',
-            platformErrorDetails: FlutterAppAuthPlatformErrorDetails(),
+    test(
+      'FlutterAppAuthPlatformException with timeout code classified as network error',
+      () {
+        expect(
+          classifier.isNetworkError(
+            FlutterAppAuthPlatformException(
+              code: 'timeout',
+              message: 'test',
+              platformErrorDetails: FlutterAppAuthPlatformErrorDetails(),
+            ),
           ),
-        ),
-        isTrue,
-      );
-    });
+          isTrue,
+        );
+      },
+    );
 
-    test('FlutterAppAuthPlatformException with no_browser code classified as network error', () {
-      expect(
-        classifier.isNetworkError(
-          FlutterAppAuthPlatformException(
-            code: 'no_browser_available',
-            message: 'test',
-            platformErrorDetails: FlutterAppAuthPlatformErrorDetails(),
+    test(
+      'FlutterAppAuthPlatformException with no_browser code classified as network error',
+      () {
+        expect(
+          classifier.isNetworkError(
+            FlutterAppAuthPlatformException(
+              code: 'no_browser_available',
+              message: 'test',
+              platformErrorDetails: FlutterAppAuthPlatformErrorDetails(),
+            ),
           ),
-        ),
-        isTrue,
-      );
-    });
+          isTrue,
+        );
+      },
+    );
 
-    test('FlutterAppAuthPlatformException with invalid_grant NOT classified as network error', () {
-      expect(
-        classifier.isNetworkError(
-          FlutterAppAuthPlatformException(
-            code: 'invalid_grant',
-            message: 'test',
-            platformErrorDetails: FlutterAppAuthPlatformErrorDetails(),
+    test(
+      'FlutterAppAuthPlatformException with invalid_grant NOT classified as network error',
+      () {
+        expect(
+          classifier.isNetworkError(
+            FlutterAppAuthPlatformException(
+              code: 'invalid_grant',
+              message: 'test',
+              platformErrorDetails: FlutterAppAuthPlatformErrorDetails(),
+            ),
           ),
-        ),
-        isFalse,
-      );
-    });
+          isFalse,
+        );
+      },
+    );
 
     test('generic Exception NOT classified as network error', () {
       expect(classifier.isNetworkError(Exception('some error')), isFalse);
@@ -1267,145 +1371,32 @@ void main() {
   });
 
   group('network flapping — bounded retries (AC2)', () {
-    test('rapid offline/online transitions — retry count stays bounded', () async {
-      final checker = FakeConnectivityChecker()..isOnline = false;
-      final c = makeContainer(connectivityChecker: checker);
-      final notifier = c.read(authProvider.notifier);
+    test(
+      'rapid offline/online transitions — retry count stays bounded',
+      () async {
+        final checker = FakeConnectivityChecker()..isOnline = false;
+        final c = makeContainer(connectivityChecker: checker);
+        final notifier = c.read(authProvider.notifier);
 
-      // Let _initializeAuth microtask complete
-      await Future.delayed(Duration.zero);
+        // Let _initializeAuth microtask complete
+        await Future.delayed(Duration.zero);
 
-      // First call authorize() to establish the error state
-      await notifier.authorize();
-      expect(c.read(authProvider).status, equals(AuthStatus.error));
+        // First call authorize() to establish the error state
+        await notifier.authorize();
+        expect(c.read(authProvider).status, equals(AuthStatus.error));
 
-      // Simulate 10 rapid retries while still offline
-      for (var i = 0; i < 10; i++) {
-        await notifier.retryAuthorize();
-      }
+        // Simulate 10 rapid retries while still offline
+        for (var i = 0; i < 10; i++) {
+          await notifier.retryAuthorize();
+        }
 
-      final state = c.read(authProvider);
-      expect(state.status, equals(AuthStatus.error));
-      expect(state.retryable, isTrue);
+        final state = c.read(authProvider);
+        expect(state.status, equals(AuthStatus.error));
+        expect(state.retryable, isTrue);
 
-      // Now go online and retry once — should succeed
-      checker.setOnline(true);
-      mockAppAuth.onAuthorize = (_) => AuthorizationTokenResponse(
-        'at',
-        'rt',
-        DateTime.now().add(Duration(hours: 1)),
-        'idt',
-        'Bearer',
-        null,
-        null,
-        null,
-      );
-      await notifier.retryAuthorize();
-      expect(c.read(authProvider).status, equals(AuthStatus.authenticated));
-
-      c.dispose();
-    });
-  });
-
-  // ── Story 3.3: Auth Error State Machine ──
-
-  group('auto-recovery — offline→online triggers retry (7.1)', () {
-    test('retryable error + network return triggers auto-retry of authorize', () async {
-      final checker = FakeConnectivityChecker()..isOnline = false;
-      final c = makeContainer(connectivityChecker: checker);
-      final notifier = c.read(authProvider.notifier);
-
-      await Future.delayed(Duration.zero);
-
-      // Establish error state via authorize while offline
-      await notifier.authorize();
-      expect(c.read(authProvider).status, equals(AuthStatus.error));
-      expect(c.read(authProvider).retryable, isTrue);
-
-      // Go online and provide success response
-      checker.setOnline(true);
-      mockAppAuth.onAuthorize = (_) => AuthorizationTokenResponse(
-        'at',
-        'rt',
-        DateTime.now().add(Duration(hours: 1)),
-        'idt',
-        'Bearer',
-        null,
-        null,
-        null,
-      );
-
-      // Wait for debounce (500ms) + authorize completion
-      await Future.delayed(Duration(milliseconds: 700));
-
-      expect(c.read(authProvider).status, equals(AuthStatus.authenticated));
-      c.dispose();
-    });
-
-    test('retryable error + network return triggers auto-retry of refreshToken', () async {
-      final preloadedStorage = InMemoryTokenStorage();
-      await preloadedStorage.saveTokens(
-        accessToken: 'expired-at',
-        idToken: 'idt',
-        refreshToken: 'rt',
-        accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
-      );
-
-      final checker = FakeConnectivityChecker()..isOnline = false;
-      final refreshAuth = MockAppAuth();
-      final c = makeContainer(
-        storage: preloadedStorage,
-        appAuth: refreshAuth,
-        connectivityChecker: checker,
-      );
-      c.read(authProvider.notifier);
-      await Future.delayed(Duration.zero);
-
-      // State should be error from refresh failure (offline)
-      // _initializeAuth calls refreshToken, which fails with offline error
-      expect(c.read(authProvider).status, equals(AuthStatus.error));
-      expect(c.read(authProvider).retryable, isTrue);
-
-      // Go online and provide success response
-      checker.setOnline(true);
-      refreshAuth.onToken = (_) => TokenResponse(
-        'new-at',
-        'new-rt',
-        DateTime.now().add(Duration(hours: 1)),
-        null,
-        'Bearer',
-        null,
-        null,
-      );
-
-      // Wait for debounce + refresh completion
-      await Future.delayed(Duration(milliseconds: 700));
-
-      expect(c.read(authProvider).status, equals(AuthStatus.authenticated));
-      c.dispose();
-    });
-  });
-
-  group('auto-recovery — debounce prevents rapid retries (7.2, 7.15)', () {
-    test('rapid offline→online→offline→online within 500ms → single retry', () async {
-      final checker = FakeConnectivityChecker()..isOnline = false;
-      var authorizeCallCount = 0;
-      mockAppAuth.authorizeException = Exception('fail');
-      final c = makeContainer(connectivityChecker: checker);
-      final notifier = c.read(authProvider.notifier);
-
-      await Future.delayed(Duration.zero);
-
-      // Establish error state
-      await notifier.authorize();
-      expect(c.read(authProvider).status, equals(AuthStatus.error));
-
-      // Setup success response to count calls
-      authorizeCallCount = 0;
-      mockAppAuth.authorizeException = null;
-      mockAppAuth.onAuthorize = (_) {
-        authorizeCallCount++;
-        return AuthorizationTokenResponse(
+        // Now go online and retry once — should succeed
+        checker.setOnline(true);
+        mockAppAuth.onAuthorize = (_) => AuthorizationTokenResponse(
           'at',
           'rt',
           DateTime.now().add(Duration(hours: 1)),
@@ -1415,22 +1406,147 @@ void main() {
           null,
           null,
         );
-      };
+        await notifier.retryAuthorize();
+        expect(c.read(authProvider).status, equals(AuthStatus.authenticated));
 
-      // Rapid flapping: online, offline, online within 500ms
-      checker.setOnline(true);
-      await Future.delayed(Duration(milliseconds: 100));
-      checker.setOnline(false);
-      await Future.delayed(Duration(milliseconds: 100));
-      checker.setOnline(true);
+        c.dispose();
+      },
+    );
+  });
 
-      // Wait for debounce to fire
-      await Future.delayed(Duration(milliseconds: 700));
+  // ── Story 3.3: Auth Error State Machine ──
 
-      // Should have retried at most once (debounce collapses flapping)
-      expect(authorizeCallCount, equals(1));
-      c.dispose();
-    });
+  group('auto-recovery — offline→online triggers retry (7.1)', () {
+    test(
+      'retryable error + network return triggers auto-retry of authorize',
+      () async {
+        final checker = FakeConnectivityChecker()..isOnline = false;
+        final c = makeContainer(connectivityChecker: checker);
+        final notifier = c.read(authProvider.notifier);
+
+        await Future.delayed(Duration.zero);
+
+        // Establish error state via authorize while offline
+        await notifier.authorize();
+        expect(c.read(authProvider).status, equals(AuthStatus.error));
+        expect(c.read(authProvider).retryable, isTrue);
+
+        // Go online and provide success response
+        checker.setOnline(true);
+        mockAppAuth.onAuthorize = (_) => AuthorizationTokenResponse(
+          'at',
+          'rt',
+          DateTime.now().add(Duration(hours: 1)),
+          'idt',
+          'Bearer',
+          null,
+          null,
+          null,
+        );
+
+        // Wait for debounce (500ms) + authorize completion
+        await Future.delayed(Duration(milliseconds: 700));
+
+        expect(c.read(authProvider).status, equals(AuthStatus.authenticated));
+        c.dispose();
+      },
+    );
+
+    test(
+      'retryable error + network return triggers auto-retry of refreshToken',
+      () async {
+        final preloadedStorage = InMemoryTokenStorage();
+        await preloadedStorage.saveTokens(
+          accessToken: 'expired-at',
+          idToken: 'idt',
+          refreshToken: 'rt',
+          accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
+        );
+
+        final checker = FakeConnectivityChecker()..isOnline = false;
+        final refreshAuth = MockAppAuth();
+        final c = makeContainer(
+          storage: preloadedStorage,
+          appAuth: refreshAuth,
+          connectivityChecker: checker,
+        );
+        c.read(authProvider.notifier);
+        await Future.delayed(Duration.zero);
+
+        // State should be error from refresh failure (offline)
+        // _initializeAuth calls refreshToken, which fails with offline error
+        expect(c.read(authProvider).status, equals(AuthStatus.error));
+        expect(c.read(authProvider).retryable, isTrue);
+
+        // Go online and provide success response
+        checker.setOnline(true);
+        refreshAuth.onToken = (_) => TokenResponse(
+          'new-at',
+          'new-rt',
+          DateTime.now().add(Duration(hours: 1)),
+          null,
+          'Bearer',
+          null,
+          null,
+        );
+
+        // Wait for debounce + refresh completion
+        await Future.delayed(Duration(milliseconds: 700));
+
+        expect(c.read(authProvider).status, equals(AuthStatus.authenticated));
+        c.dispose();
+      },
+    );
+  });
+
+  group('auto-recovery — debounce prevents rapid retries (7.2, 7.15)', () {
+    test(
+      'rapid offline→online→offline→online within 500ms → single retry',
+      () async {
+        final checker = FakeConnectivityChecker()..isOnline = false;
+        var authorizeCallCount = 0;
+        mockAppAuth.authorizeException = Exception('fail');
+        final c = makeContainer(connectivityChecker: checker);
+        final notifier = c.read(authProvider.notifier);
+
+        await Future.delayed(Duration.zero);
+
+        // Establish error state
+        await notifier.authorize();
+        expect(c.read(authProvider).status, equals(AuthStatus.error));
+
+        // Setup success response to count calls
+        authorizeCallCount = 0;
+        mockAppAuth.authorizeException = null;
+        mockAppAuth.onAuthorize = (_) {
+          authorizeCallCount++;
+          return AuthorizationTokenResponse(
+            'at',
+            'rt',
+            DateTime.now().add(Duration(hours: 1)),
+            'idt',
+            'Bearer',
+            null,
+            null,
+            null,
+          );
+        };
+
+        // Rapid flapping: online, offline, online within 500ms
+        checker.setOnline(true);
+        await Future.delayed(Duration(milliseconds: 100));
+        checker.setOnline(false);
+        await Future.delayed(Duration(milliseconds: 100));
+        checker.setOnline(true);
+
+        // Wait for debounce to fire
+        await Future.delayed(Duration(milliseconds: 700));
+
+        // Should have retried at most once (debounce collapses flapping)
+        expect(authorizeCallCount, equals(1));
+        c.dispose();
+      },
+    );
   });
 
   group('auto-recovery — does NOT auto-retry non-retryable errors (7.3)', () {
@@ -1470,42 +1586,45 @@ void main() {
   });
 
   group('auto-recovery — subscription cancelled on dispose (7.4, 7.17)', () {
-    test('dispose during debounce → timer cancelled, no phantom callback', () async {
-      final checker = FakeConnectivityChecker()..isOnline = false;
-      var authorizeCallCount = 0;
-      mockAppAuth.onAuthorize = (_) {
-        authorizeCallCount++;
-        return AuthorizationTokenResponse(
-          'at',
-          'rt',
-          DateTime.now().add(Duration(hours: 1)),
-          'idt',
-          'Bearer',
-          null,
-          null,
-          null,
-        );
-      };
-      final c = makeContainer(connectivityChecker: checker);
-      final notifier = c.read(authProvider.notifier);
+    test(
+      'dispose during debounce → timer cancelled, no phantom callback',
+      () async {
+        final checker = FakeConnectivityChecker()..isOnline = false;
+        var authorizeCallCount = 0;
+        mockAppAuth.onAuthorize = (_) {
+          authorizeCallCount++;
+          return AuthorizationTokenResponse(
+            'at',
+            'rt',
+            DateTime.now().add(Duration(hours: 1)),
+            'idt',
+            'Bearer',
+            null,
+            null,
+            null,
+          );
+        };
+        final c = makeContainer(connectivityChecker: checker);
+        final notifier = c.read(authProvider.notifier);
 
-      await Future.delayed(Duration.zero);
-      await notifier.authorize();
-      expect(c.read(authProvider).status, equals(AuthStatus.error));
+        await Future.delayed(Duration.zero);
+        await notifier.authorize();
+        expect(c.read(authProvider).status, equals(AuthStatus.error));
 
-      // Go online — debounce timer starts (500ms)
-      checker.setOnline(true);
+        // Go online — debounce timer starts (500ms)
+        checker.setOnline(true);
 
-      // Dispose BEFORE debounce fires (within 500ms)
-      await Future.delayed(Duration(milliseconds: 100));
-      c.dispose();
+        // Dispose BEFORE debounce fires (within 500ms)
+        await Future.delayed(Duration(milliseconds: 100));
+        c.dispose();
 
-      // Wait past the debounce window
-      await Future.delayed(Duration(milliseconds: 700));
+        // Wait past the debounce window
+        await Future.delayed(Duration(milliseconds: 700));
 
-      // No auto-retry should have happened after dispose
-      expect(authorizeCallCount, equals(0));
-    });
+        // No auto-retry should have happened after dispose
+        expect(authorizeCallCount, equals(0));
+      },
+    );
   });
 
   group('timeout — authorize() (7.5)', () {
@@ -1525,10 +1644,17 @@ void main() {
       final state = c.read(authProvider);
       expect(state.status, equals(AuthStatus.error));
       expect(state.retryable, isTrue);
-      expect(state.errorMessage, equals('Request timed out. Please check your connection and try again.'));
+      expect(
+        state.errorMessage,
+        equals(
+          'Request timed out. Please check your connection and try again.',
+        ),
+      );
       expect(
         recordingLogger.failures,
-        contains('AuthNotifier.authorize: DISCOVERY_TIMEOUT - Request timed out. Please check your connection and try again.'),
+        contains(
+          'AuthNotifier.authorize: DISCOVERY_TIMEOUT - Request timed out. Please check your connection and try again.',
+        ),
       );
       c.dispose();
     });
@@ -1565,7 +1691,12 @@ void main() {
       final state = c.read(authProvider);
       expect(state.status, equals(AuthStatus.error));
       expect(state.retryable, isTrue);
-      expect(state.errorMessage, equals('Request timed out. Please check your connection and try again.'));
+      expect(
+        state.errorMessage,
+        equals(
+          'Request timed out. Please check your connection and try again.',
+        ),
+      );
       expect(
         recordingLogger.failures.any((f) => f.contains('REFRESH')),
         isTrue,
@@ -1591,7 +1722,9 @@ void main() {
       expect(state.retryable, isTrue);
       expect(
         recordingLogger.failures,
-        contains('AuthNotifier.authorize: DISCOVERY_TIMEOUT - Request timed out. Please check your connection and try again.'),
+        contains(
+          'AuthNotifier.authorize: DISCOVERY_TIMEOUT - Request timed out. Please check your connection and try again.',
+        ),
       );
       c.dispose();
     });
@@ -1623,19 +1756,22 @@ void main() {
       expect(state.status, equals(AuthStatus.unauthenticated));
     });
 
-    test('platform error (non-network) on authorize → error (non-retryable)', () async {
-      mockAppAuth.authorizeException = FlutterAppAuthPlatformException(
-        code: 'invalid_grant',
-        message: 'Invalid grant',
-        platformErrorDetails: FlutterAppAuthPlatformErrorDetails(),
-      );
+    test(
+      'platform error (non-network) on authorize → error (non-retryable)',
+      () async {
+        mockAppAuth.authorizeException = FlutterAppAuthPlatformException(
+          code: 'invalid_grant',
+          message: 'Invalid grant',
+          platformErrorDetails: FlutterAppAuthPlatformErrorDetails(),
+        );
 
-      await container.read(authProvider.notifier).authorize();
-      final state = container.read(authProvider);
+        await container.read(authProvider.notifier).authorize();
+        final state = container.read(authProvider);
 
-      expect(state.status, equals(AuthStatus.error));
-      expect(state.retryable, isFalse);
-    });
+        expect(state.status, equals(AuthStatus.error));
+        expect(state.retryable, isFalse);
+      },
+    );
 
     test('generic exception on authorize → error (non-retryable)', () async {
       mockAppAuth.authorizeException = Exception('Unexpected error');
@@ -1664,55 +1800,67 @@ void main() {
       c.dispose();
     });
 
-    test('network error on refreshToken → error (retryable), tokens preserved', () async {
-      final testStorage = InMemoryTokenStorage();
-      await testStorage.saveTokens(
-        accessToken: 'at', idToken: 'idt', refreshToken: 'rt',
-        accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
-      );
+    test(
+      'network error on refreshToken → error (retryable), tokens preserved',
+      () async {
+        final testStorage = InMemoryTokenStorage();
+        await testStorage.saveTokens(
+          accessToken: 'at',
+          idToken: 'idt',
+          refreshToken: 'rt',
+          accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
+        );
 
-      final failAuth = MockAppAuth();
-      failAuth.tokenException = const SocketException('Network unreachable');
-      final c = makeContainer(storage: testStorage, appAuth: failAuth);
-      c.read(authProvider.notifier);
-      await Future.delayed(Duration.zero);
+        final failAuth = MockAppAuth();
+        failAuth.tokenException = const SocketException('Network unreachable');
+        final c = makeContainer(storage: testStorage, appAuth: failAuth);
+        c.read(authProvider.notifier);
+        await Future.delayed(Duration.zero);
 
-      // _initializeAuth set authenticated (valid tokens). Now manually trigger refresh
-      // by saving expired tokens and calling refreshToken.
-      await testStorage.saveTokens(
-        accessToken: 'expired-at', idToken: 'idt', refreshToken: 'rt',
-        accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
-      );
+        // _initializeAuth set authenticated (valid tokens). Now manually trigger refresh
+        // by saving expired tokens and calling refreshToken.
+        await testStorage.saveTokens(
+          accessToken: 'expired-at',
+          idToken: 'idt',
+          refreshToken: 'rt',
+          accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
+        );
 
-      await c.read(authProvider.notifier).refreshToken();
-      final state = c.read(authProvider);
+        await c.read(authProvider.notifier).refreshToken();
+        final state = c.read(authProvider);
 
-      expect(state.status, equals(AuthStatus.error));
-      expect(state.retryable, isTrue);
-      expect(await testStorage.getAccessToken(), equals('expired-at'));
-      expect(await testStorage.getRefreshToken(), equals('rt'));
-      expect(
-        recordingLogger.failures,
-        contains(
-          'AuthNotifier.refreshToken: REFRESH_NETWORK_OFFLINE_MID_OP - Network lost during token refresh',
-        ),
-      );
-      c.dispose();
-    });
+        expect(state.status, equals(AuthStatus.error));
+        expect(state.retryable, isTrue);
+        expect(await testStorage.getAccessToken(), equals('expired-at'));
+        expect(await testStorage.getRefreshToken(), equals('rt'));
+        expect(
+          recordingLogger.failures,
+          contains(
+            'AuthNotifier.refreshToken: REFRESH_NETWORK_OFFLINE_MID_OP - Network lost during token refresh',
+          ),
+        );
+        c.dispose();
+      },
+    );
 
-    test('non-network error on refreshToken → unauthenticated, tokens deleted', () async {
-      await tokenStorage.saveTokens(
-        accessToken: 'at', idToken: 'idt', refreshToken: 'rt',
-        accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
-      );
-      mockAppAuth.tokenException = Exception('Refresh failed');
+    test(
+      'non-network error on refreshToken → unauthenticated, tokens deleted',
+      () async {
+        await tokenStorage.saveTokens(
+          accessToken: 'at',
+          idToken: 'idt',
+          refreshToken: 'rt',
+          accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
+        );
+        mockAppAuth.tokenException = Exception('Refresh failed');
 
-      await container.read(authProvider.notifier).refreshToken();
-      final state = container.read(authProvider);
+        await container.read(authProvider.notifier).refreshToken();
+        final state = container.read(authProvider);
 
-      expect(state.status, equals(AuthStatus.unauthenticated));
-      expect(await tokenStorage.getAccessToken(), isNull);
-    });
+        expect(state.status, equals(AuthStatus.unauthenticated));
+        expect(await tokenStorage.getAccessToken(), isNull);
+      },
+    );
   });
 
   group('state machine — _lastFailedOperation tracked correctly (7.9)', () {
@@ -1726,8 +1874,14 @@ void main() {
       // Now go online and provide success — auto-retry should call authorize
       checker.setOnline(true);
       mockAppAuth.onAuthorize = (_) => AuthorizationTokenResponse(
-        'at', 'rt', DateTime.now().add(Duration(hours: 1)),
-        'idt', 'Bearer', null, null, null,
+        'at',
+        'rt',
+        DateTime.now().add(Duration(hours: 1)),
+        'idt',
+        'Bearer',
+        null,
+        null,
+        null,
       );
 
       await Future.delayed(Duration(milliseconds: 700));
@@ -1738,12 +1892,21 @@ void main() {
 
     test('success clears _lastFailedOperation (7.10)', () async {
       mockAppAuth.onAuthorize = (_) => AuthorizationTokenResponse(
-        'at', 'rt', DateTime.now().add(Duration(hours: 1)),
-        'idt', 'Bearer', null, null, null,
+        'at',
+        'rt',
+        DateTime.now().add(Duration(hours: 1)),
+        'idt',
+        'Bearer',
+        null,
+        null,
+        null,
       );
 
       await container.read(authProvider.notifier).authorize();
-      expect(container.read(authProvider).status, equals(AuthStatus.authenticated));
+      expect(
+        container.read(authProvider).status,
+        equals(AuthStatus.authenticated),
+      );
 
       // Now trigger a connectivity change — should NOT auto-retry
       final checker = FakeConnectivityChecker()..isOnline = false;
@@ -1755,99 +1918,126 @@ void main() {
   });
 
   group('deep link callback failure (7.11)', () {
-    test('authorize hangs (no callback) → timeout → error state with retry', () async {
-      // Simulates: user opens browser, network drops, callback never arrives.
-      // Use slow discovery (10s timeout) to test the timeout path within 30s test limit.
-      final slowDiscovery = FakeKeycloakService(
-        keycloakConfig: testConfig,
-        endpointsToReturn: testEndpoints,
-        delayDiscovery: Duration(minutes: 5),
-      );
+    test(
+      'authorize hangs (no callback) → timeout → error state with retry',
+      () async {
+        // Simulates: user opens browser, network drops, callback never arrives.
+        // Use slow discovery (10s timeout) to test the timeout path within 30s test limit.
+        final slowDiscovery = FakeKeycloakService(
+          keycloakConfig: testConfig,
+          endpointsToReturn: testEndpoints,
+          delayDiscovery: Duration(minutes: 5),
+        );
 
-      final c = makeContainer(kcService: slowDiscovery);
-      await c.read(authProvider.notifier).authorize();
+        final c = makeContainer(kcService: slowDiscovery);
+        await c.read(authProvider.notifier).authorize();
 
-      final state = c.read(authProvider);
-      expect(state.status, equals(AuthStatus.error));
-      expect(state.retryable, isTrue);
-      c.dispose();
-    });
+        final state = c.read(authProvider);
+        expect(state.status, equals(AuthStatus.error));
+        expect(state.retryable, isTrue);
+        c.dispose();
+      },
+    );
   });
 
   group('error screen — retry button calls correct method (7.12, 7.13)', () {
     test('retryAuthorize is no-op when not in error state', () async {
       await container.read(authProvider.notifier).retryAuthorize();
-      expect(container.read(authProvider).status, equals(AuthStatus.unauthenticated));
-    });
-
-    test('retryAuthorize delegates to authorize when in retryable error state', () async {
-      final checker = FakeConnectivityChecker()..isOnline = false;
-      final c = makeContainer(connectivityChecker: checker);
-
-      await c.read(authProvider.notifier).authorize();
-      expect(c.read(authProvider).status, equals(AuthStatus.error));
-
-      // Now go online and set up success
-      checker.setOnline(true);
-      mockAppAuth.onAuthorize = (_) => AuthorizationTokenResponse(
-        'at', 'rt', DateTime.now().add(Duration(hours: 1)),
-        'idt', 'Bearer', null, null, null,
+      expect(
+        container.read(authProvider).status,
+        equals(AuthStatus.unauthenticated),
       );
-
-      await c.read(authProvider.notifier).retryAuthorize();
-      expect(c.read(authProvider).status, equals(AuthStatus.authenticated));
-      c.dispose();
     });
+
+    test(
+      'retryAuthorize delegates to authorize when in retryable error state',
+      () async {
+        final checker = FakeConnectivityChecker()..isOnline = false;
+        final c = makeContainer(connectivityChecker: checker);
+
+        await c.read(authProvider.notifier).authorize();
+        expect(c.read(authProvider).status, equals(AuthStatus.error));
+
+        // Now go online and set up success
+        checker.setOnline(true);
+        mockAppAuth.onAuthorize = (_) => AuthorizationTokenResponse(
+          'at',
+          'rt',
+          DateTime.now().add(Duration(hours: 1)),
+          'idt',
+          'Bearer',
+          null,
+          null,
+          null,
+        );
+
+        await c.read(authProvider.notifier).retryAuthorize();
+        expect(c.read(authProvider).status, equals(AuthStatus.authenticated));
+        c.dispose();
+      },
+    );
   });
 
-  group('auto-recovery — failed auto-retry persists error, does NOT loop (7.14)', () {
-    test('auto-retry failure → error state persists, no second auto-retry', () async {
-      final checker = FakeConnectivityChecker()..isOnline = false;
-      var retryCallCount = 0;
-      final failingAuth = MockAppAuth();
-      failingAuth.authorizeException = Exception('Offline');
-      final c = makeContainer(
-        connectivityChecker: checker,
-        appAuth: failingAuth,
+  group(
+    'auto-recovery — failed auto-retry persists error, does NOT loop (7.14)',
+    () {
+      test(
+        'auto-retry failure → error state persists, no second auto-retry',
+        () async {
+          final checker = FakeConnectivityChecker()..isOnline = false;
+          var retryCallCount = 0;
+          final failingAuth = MockAppAuth();
+          failingAuth.authorizeException = Exception('Offline');
+          final c = makeContainer(
+            connectivityChecker: checker,
+            appAuth: failingAuth,
+          );
+          final notifier = c.read(authProvider.notifier);
+
+          await Future.delayed(Duration.zero);
+
+          // Establish error state
+          await notifier.authorize();
+          expect(c.read(authProvider).status, equals(AuthStatus.error));
+
+          // Go online but authorize still fails (different error)
+          checker.setOnline(true);
+          failingAuth.authorizeException = null;
+          failingAuth.onAuthorizeAsync = (_) async {
+            retryCallCount++;
+            throw Exception('Server error');
+          };
+
+          // Wait for debounce + auto-retry
+          await Future.delayed(Duration(milliseconds: 700));
+
+          expect(c.read(authProvider).status, equals(AuthStatus.error));
+          expect(c.read(authProvider).retryable, isFalse);
+          expect(retryCallCount, equals(1));
+
+          // Wait longer — no second auto-retry should happen
+          await Future.delayed(Duration(milliseconds: 1000));
+
+          // Call count should not have increased
+          expect(retryCallCount, equals(1));
+          c.dispose();
+        },
       );
-      final notifier = c.read(authProvider.notifier);
-
-      await Future.delayed(Duration.zero);
-
-      // Establish error state
-      await notifier.authorize();
-      expect(c.read(authProvider).status, equals(AuthStatus.error));
-
-      // Go online but authorize still fails (different error)
-      checker.setOnline(true);
-      failingAuth.authorizeException = null;
-      failingAuth.onAuthorizeAsync = (_) async {
-        retryCallCount++;
-        throw Exception('Server error');
-      };
-
-      // Wait for debounce + auto-retry
-      await Future.delayed(Duration(milliseconds: 700));
-
-      expect(c.read(authProvider).status, equals(AuthStatus.error));
-      expect(c.read(authProvider).retryable, isFalse);
-      expect(retryCallCount, equals(1));
-
-      // Wait longer — no second auto-retry should happen
-      await Future.delayed(Duration(milliseconds: 1000));
-
-      // Call count should not have increased
-      expect(retryCallCount, equals(1));
-      c.dispose();
-    });
-  });
+    },
+  );
 
   group('auto-recovery — race condition prevention (7.16)', () {
     test('authorize in progress + network return → no double retry', () async {
       final checker = FakeConnectivityChecker()..isOnline = true;
       mockAppAuth.onAuthorize = (_) => AuthorizationTokenResponse(
-        'at', 'rt', DateTime.now().add(Duration(hours: 1)),
-        'idt', 'Bearer', null, null, null,
+        'at',
+        'rt',
+        DateTime.now().add(Duration(hours: 1)),
+        'idt',
+        'Bearer',
+        null,
+        null,
+        null,
       );
 
       final c = makeContainer(connectivityChecker: checker);

@@ -913,7 +913,6 @@ export default {
     manageMyAccountDesc: 'Administre su perfil, configuración de seguridad y preferencias de cuenta.',
     resetUserData: 'Restablecer Datos de Usuario',
     resetUserDataDesc: 'Esto borrará todos sus datos de perfil e historial de chat.',
-    edit: 'Editar',
     standardAccount: 'Cuenta Estándar',
     cancel: 'Cancelar',
     account: {
@@ -1361,12 +1360,19 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'Se interrumpió la respuesta. Inténtelo de nuevo.',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    aiGeneratedNoDocs: 'Generado por IA — no basado en los documentos de la biblioteca',
+    configMismatchWarning:
+      'Incoherencia de configuración: {warnings}. Verifique la configuración de Ayuda Rápida y la jerarquía de conocimiento.',
+    categoryNotFound: 'Categoría "{label}" no encontrada en la jerarquía de conocimiento',
+    serviceLabelMismatch:
+      'Servicio "{label}" utiliza una etiqueta de UI que puede no coincidir con la jerarquía de conocimiento',
     placeholder: 'Escriba su consulta aquí...',
     sendButton: 'Enviar',
     fileReceived: 'Archivo recibido con éxito.',
     fileUploadError: 'Error subiendo archivo.',
     processingError: 'Error procesando su solicitud.',
-    welcomeMessage: '¡Bienvenido! ¿Cómo puedo asistirlo con los servicios gubernamentales de Kenia hoy?',
     attachFile: 'Adjuntar Archivo',
     fileTooLarge: 'El archivo es demasiado grande. El tamaño máximo es {maxSize}.',
     saveChat: 'Guardar Chat',
@@ -1378,7 +1384,7 @@ export default {
     clearContext: 'Limpiar contexto e iniciar una nueva conversación',
     unsavedChanges: 'Tiene cambios no guardados. ¿Está seguro de que desea iniciar un nuevo chat?',
     whatCanIHelp: '¿Cómo puedo ayudarlo hoy?',
-    justChat: 'Solo Chatear',
+
     queryContext: 'Contexto de Consulta',
     contextAdded: 'Contexto agregado a su consulta',
     contextRemoved: 'Contexto eliminado de su consulta',
@@ -1408,26 +1414,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'Solicitar ID',
-    payTaxes: 'Pagar impuestos',
-    startBusiness: 'Iniciar negocio',
-    findHealthcare: 'Salud',
-    educationServices: 'Educación',
-    transportLicenses: 'Transporte',
-    housingPrograms: 'Vivienda',
-    findJobs: 'Empleos',
-    justChat: 'Solo Chatear',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'Me gustaría chatear sobre servicios gubernamentales',
-    applyForIDUserPrompt: 'Necesito información sobre cómo solicitar una tarjeta de ID nacional',
-    payTaxesUserPrompt: '¿Cuál es el proceso para pagar mis impuestos en línea?',
-    startBusinessUserPrompt: 'Guíeme a través de los pasos para registrar un nuevo negocio',
-    findHealthcareUserPrompt: '¿Dónde puedo encontrar información sobre servicios de salud pública?',
-    educationServicesUserPrompt: '¿Qué servicios educativos están disponibles para mis hijos?',
-    transportLicensesUserPrompt: '¿Cómo renuevo mi licencia de conducir?',
-    housingProgramsUserPrompt: 'Cuénteme sobre programas de vivienda asequible en Kenia',
-    findJobsUserPrompt: '¿Qué oportunidades de empleo gubernamentales están disponibles actualmente?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

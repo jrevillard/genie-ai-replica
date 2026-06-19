@@ -56,12 +56,16 @@ void main() {
     });
 
     test('has dev-specific values', () {
-      expect(devConfig.keycloakUrl, equals('https://10.0.2.2:8443/auth'));
+      // devConfig uses dart-defines DEV_SERVER/DEV_PORT (default: localhost/443)
+      expect(devConfig.keycloakUrl, equals('https://localhost:443/auth'));
       expect(devConfig.realm, equals('genie'));
-      expect(devConfig.realmUrl, equals('https://10.0.2.2:8443/auth/realms/genie'));
+      expect(
+        devConfig.realmUrl,
+        equals('https://localhost:443/auth/realms/genie'),
+      );
       expect(devConfig.clientId, equals('genie-mobile-dev'));
       expect(devConfig.redirectScheme, equals('com.itu.genieai.dev'));
-      expect(devConfig.backendUrl, equals('https://10.0.2.2:8443/api'));
+      expect(devConfig.backendUrl, equals('https://localhost:443'));
     });
   });
 
@@ -75,12 +79,21 @@ void main() {
     });
 
     test('has staging-specific values', () {
-      expect(stagingConfig.keycloakUrl, equals('https://staging-keycloak.example.com'));
+      expect(
+        stagingConfig.keycloakUrl,
+        equals('https://staging-keycloak.example.com'),
+      );
       expect(stagingConfig.realm, equals('genie'));
-      expect(stagingConfig.realmUrl, equals('https://staging-keycloak.example.com/realms/genie'));
+      expect(
+        stagingConfig.realmUrl,
+        equals('https://staging-keycloak.example.com/realms/genie'),
+      );
       expect(stagingConfig.clientId, equals('genie-mobile-staging'));
       expect(stagingConfig.redirectScheme, equals('com.itu.genieai.staging'));
-      expect(stagingConfig.backendUrl, equals('https://staging-api.example.com'));
+      expect(
+        stagingConfig.backendUrl,
+        equals('https://staging-api.example.com'),
+      );
     });
   });
 
@@ -94,12 +107,16 @@ void main() {
     });
 
     test('has e2e-specific values', () {
-      expect(e2eConfig.keycloakUrl, equals('https://localhost:8443/auth'));
+      // e2eConfig is hardcoded to emulator host 10.0.2.2
+      expect(e2eConfig.keycloakUrl, equals('https://10.0.2.2:8443/auth'));
       expect(e2eConfig.realm, equals('genie'));
-      expect(e2eConfig.realmUrl, equals('https://localhost:8443/auth/realms/genie'));
+      expect(
+        e2eConfig.realmUrl,
+        equals('https://10.0.2.2:8443/auth/realms/genie'),
+      );
       expect(e2eConfig.clientId, equals('genie-mobile-e2e'));
       expect(e2eConfig.redirectScheme, equals('com.itu.genieai.e2e'));
-      expect(e2eConfig.backendUrl, equals('https://localhost:8443/api'));
+      expect(e2eConfig.backendUrl, equals('https://10.0.2.2:8443'));
       expect(e2eConfig.allowInsecureConnections, isTrue);
     });
   });
@@ -116,10 +133,128 @@ void main() {
     test('has ITU-specific values', () {
       expect(flavors.config.keycloakUrl, equals('https://keycloak.itu.int'));
       expect(flavors.config.realm, equals('genie'));
-      expect(flavors.config.realmUrl, equals('https://keycloak.itu.int/realms/genie'));
+      expect(
+        flavors.config.realmUrl,
+        equals('https://keycloak.itu.int/realms/genie'),
+      );
       expect(flavors.config.clientId, equals('genie-mobile-itu'));
       expect(flavors.config.redirectScheme, equals('com.itu.genieai'));
       expect(flavors.config.backendUrl, equals('https://api.itu.int'));
+    });
+  });
+
+  group('equality & locale whitelist', () {
+    test('allSupportedLocaleCodes lists every shipped locale', () {
+      expect(allSupportedLocaleCodes, hasLength(14));
+      expect(
+        allSupportedLocaleCodes,
+        containsAll(<String>[
+          'ar',
+          'bn',
+          'zh',
+          'en',
+          'fr',
+          'de',
+          'id',
+          'man',
+          'pt',
+          'ru',
+          'st',
+          'es',
+          'sw',
+          'th',
+        ]),
+      );
+    });
+
+    test('supportedLocaleCodes defaults to all shipped locales', () {
+      const KeycloakConfig config = KeycloakConfig(
+        keycloakUrl: 'u',
+        realm: 'r',
+        clientId: 'c',
+        redirectScheme: 's',
+        backendUrl: 'b',
+      );
+      expect(config.supportedLocaleCodes, allSupportedLocaleCodes);
+    });
+
+    test('supportedLocaleCodes can be restricted per flavor', () {
+      const KeycloakConfig restricted = KeycloakConfig(
+        keycloakUrl: 'u',
+        realm: 'r',
+        clientId: 'c',
+        redirectScheme: 's',
+        backendUrl: 'b',
+        supportedLocaleCodes: ['en', 'es'],
+      );
+      expect(restricted.supportedLocaleCodes, <String>['en', 'es']);
+    });
+
+    test('an instance equals itself', () {
+      const KeycloakConfig a = KeycloakConfig(
+        keycloakUrl: 'u',
+        realm: 'r',
+        clientId: 'c',
+        redirectScheme: 's',
+        backendUrl: 'b',
+      );
+      expect(a == a, isTrue);
+    });
+
+    test(
+      'distinct instances with identical fields are equal and share hashCode',
+      () {
+        // Non-const local prevents const canonicalization so the field-by-field
+        // equality path (incl. listEquals) is actually exercised.
+        final String url = 'https://example.com';
+        final KeycloakConfig a = KeycloakConfig(
+          keycloakUrl: url,
+          realm: 'genie',
+          clientId: 'c',
+          redirectScheme: 's',
+          backendUrl: 'b',
+        );
+        final KeycloakConfig b = KeycloakConfig(
+          keycloakUrl: url,
+          realm: 'genie',
+          clientId: 'c',
+          redirectScheme: 's',
+          backendUrl: 'b',
+        );
+        expect(identical(a, b), isFalse);
+        expect(a == b, isTrue);
+        expect(a.hashCode, equals(b.hashCode));
+      },
+    );
+
+    test('configs differing only in supportedLocaleCodes are not equal', () {
+      const KeycloakConfig def = KeycloakConfig(
+        keycloakUrl: 'u',
+        realm: 'r',
+        clientId: 'c',
+        redirectScheme: 's',
+        backendUrl: 'b',
+      );
+      const KeycloakConfig restricted = KeycloakConfig(
+        keycloakUrl: 'u',
+        realm: 'r',
+        clientId: 'c',
+        redirectScheme: 's',
+        backendUrl: 'b',
+        supportedLocaleCodes: ['en'],
+      );
+      expect(def == restricted, isFalse);
+    });
+
+    test('is not equal to an unrelated object', () {
+      const KeycloakConfig a = KeycloakConfig(
+        keycloakUrl: 'u',
+        realm: 'r',
+        clientId: 'c',
+        redirectScheme: 's',
+        backendUrl: 'b',
+      );
+      expect(a == Object(), isFalse);
     });
   });
 }

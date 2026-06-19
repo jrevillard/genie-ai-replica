@@ -23,6 +23,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:genie_ai_mobile/utils/config_resolver.dart';
 
 class ChatBotComponent extends ConsumerStatefulWidget {
   final String userId;
@@ -53,7 +54,6 @@ class ChatBotComponent extends ConsumerStatefulWidget {
 }
 
 class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
-
   // Conversation State
   String? _currentConversationId;
   String _conversationTitle = "New Chat";
@@ -100,6 +100,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // Welcome message
   late String _welcomeMessage;
 
+  // Cached config and locale
+  Map<String, dynamic>? _cachedConfig;
+  String _currentLocale = 'en';
+
   bool get _hasUnsavedChanges {
     if (_currentConversationId == null) {
       return _messages.length > 1;
@@ -114,7 +118,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
     // Initialize default text from I18n
     _conversationTitle = tr('chatbot.newChatTitle');
-    _welcomeMessage = tr('chatbot.welcomeMessage');
+    _welcomeMessage = _getConfigWelcomeMessage();
 
     _loadQuickHelpConfig();
     _titleController.text = _conversationTitle;
@@ -142,8 +146,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
+    // Track current locale
+    _currentLocale = Localizations.localeOf(context).languageCode;
+
     // Check for language changes and update welcome message
-    final String newWelcomeMessage = tr('chatbot.welcomeMessage');
+    final String newWelcomeMessage = _getConfigWelcomeMessage();
 
     if (_welcomeMessage != newWelcomeMessage) {
       // If the first message is the welcome message, update it in the UI
@@ -154,10 +161,19 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _messages.first['content'] = newWelcomeMessage;
         });
       }
-
-      // Update the state variable for future resets
+      // Reload quick help buttons with new locale
+      _loadQuickHelpConfig();
       _welcomeMessage = newWelcomeMessage;
     }
+  }
+
+  String _getConfigWelcomeMessage() {
+    final welcomeConfig =
+        _cachedConfig?['features']?['chat']?['welcomeMessage'];
+    if (welcomeConfig != null) {
+      return resolveConfigText(welcomeConfig, _currentLocale);
+    }
+    return tr('chatbot.welcomeMessage');
   }
 
   Future<void> _loadQuickHelpConfig() async {
@@ -166,6 +182,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'assets/config/genie-ai-config.json',
       );
       final Map<String, dynamic> config = jsonDecode(configString);
+
+      // Cache the config for later use
+      _cachedConfig = config;
 
       final Map<String, dynamic> quickHelpConfig =
           config['features']?['chat']?['quickHelp'] ?? {};
@@ -187,12 +206,27 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             ? 'assets/config/quickhelp/${iconPath.split('/').last}'
             : 'assets/config/quickhelp/default.svg';
 
+        // Resolve text with locale maps
+        final resolvedTitle = resolveConfigText(btn['title'], _currentLocale);
+        final action = btn['action'] as Map<String, dynamic>?;
+        final resolvedVisibleText = resolveConfigText(
+          action?['visibleText'],
+          _currentLocale,
+        );
+        final resolvedHiddenPrompt = resolveConfigText(
+          action?['hiddenPrompt'],
+          _currentLocale,
+        );
+
         loadedButtons.add({
           'id': btn['id'],
           'category': btn['category'],
-          'action': btn['action'] ?? {},
+          'action': action ?? {},
           'appearance': appearance ?? {},
           'iconAsset': localIconAsset,
+          'resolvedTitle': resolvedTitle,
+          'resolvedVisibleText': resolvedVisibleText,
+          'resolvedHiddenPrompt': resolvedHiddenPrompt,
         });
       }
 
@@ -258,9 +292,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     try {
       final cleanId = conversationId.replaceFirst('conversations/', '');
       final chatHistoryApi = ref.read(chatHistoryApiProvider);
-      final res = await chatHistoryApi.apiChatConversationsConversationIdGetWithHttpInfo(
-        cleanId,
-      );
+      final res = await chatHistoryApi
+          .apiChatConversationsConversationIdGetWithHttpInfo(cleanId);
 
       if (res.statusCode != 200) {
         throw Exception("Failed to load conversation: ${res.statusCode}");
@@ -423,8 +456,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     String accumulatedContent = '';
     List<dynamic>? sources;
     double? confidence;
+    bool? isGrounded;
 
-    final String streamingId = 'stream_${DateTime.now().millisecondsSinceEpoch}';
+    final String streamingId =
+        'stream_${DateTime.now().millisecondsSinceEpoch}';
     setState(() {
       _isStreaming = true;
       _messages.add({
@@ -459,102 +494,115 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _streamSubscription = streamedResponse.stream
           .transform(utf8.decoder)
           .listen(
-        (chunk) {
-          if (!mounted) return;
-          for (final event in parser.parseChunk(chunk)) {
-            final msg = findStreamingMessage();
-            if (msg == null) {
-              _streamSubscription?.cancel();
-              return;
-            }
-            switch (event) {
-              case SseChunkEvent(:final content):
-                accumulatedContent += content;
-                setState(() { msg['content'] = accumulatedContent; });
-                _scrollToBottom();
-              case SseMetadataEvent(
-                :final sourceDocuments,
-                :final confidenceScore,
-              ):
-                sources = sourceDocuments;
-                confidence = confidenceScore;
-              case SseTranslationEvent(:final content):
-                accumulatedContent = content;
-                setState(() { msg['content'] = content; });
-                _scrollToBottom();
-              case SseDoneEvent(:final queryId):
-                streamQueryId = queryId;
-              case SseErrorEvent(:final message):
-                debugPrint('[SSE] Error event: $message');
-            }
-          }
-        },
-        onDone: () {
-          if (!mounted) return;
-          for (final event in parser.flush()) {
-            switch (event) {
-              case SseChunkEvent(:final content):
-                accumulatedContent += content;
-              case SseDoneEvent(:final queryId):
-                streamQueryId = queryId;
-              case SseMetadataEvent(
-                :final sourceDocuments,
-                :final confidenceScore,
-              ):
-                sources = sourceDocuments;
-                confidence = confidenceScore;
-              case SseTranslationEvent(:final content):
-                accumulatedContent = content;
-              case SseErrorEvent(:final message):
-                debugPrint('[SSE] Error event (flush): $message');
-            }
-          }
+            (chunk) {
+              if (!mounted) return;
+              for (final event in parser.parseChunk(chunk)) {
+                final msg = findStreamingMessage();
+                if (msg == null) {
+                  _streamSubscription?.cancel();
+                  return;
+                }
+                switch (event) {
+                  case SseChunkEvent(:final content):
+                    accumulatedContent += content;
+                    setState(() {
+                      msg['content'] = accumulatedContent;
+                    });
+                    _scrollToBottom();
+                  case SseMetadataEvent(
+                    :final sourceDocuments,
+                    :final confidenceScore,
+                    isGrounded: final grounded,
+                  ):
+                    sources = sourceDocuments;
+                    confidence = confidenceScore;
+                    isGrounded = grounded;
+                  case SseTranslationEvent(:final content):
+                    accumulatedContent = content;
+                    setState(() {
+                      msg['content'] = content;
+                    });
+                    _scrollToBottom();
+                  case SseDoneEvent(:final queryId):
+                    streamQueryId = queryId;
+                  case SseErrorEvent(:final message):
+                    debugPrint('[SSE] Error event: $message');
+                }
+              }
+            },
+            onDone: () {
+              if (!mounted) return;
+              for (final event in parser.flush()) {
+                switch (event) {
+                  case SseChunkEvent(:final content):
+                    accumulatedContent += content;
+                  case SseDoneEvent(:final queryId):
+                    streamQueryId = queryId;
+                  case SseMetadataEvent(
+                    :final sourceDocuments,
+                    :final confidenceScore,
+                    isGrounded: final grounded,
+                  ):
+                    sources = sourceDocuments;
+                    confidence = confidenceScore;
+                    isGrounded = grounded;
+                  case SseTranslationEvent(:final content):
+                    accumulatedContent = content;
+                  case SseErrorEvent(:final message):
+                    debugPrint('[SSE] Error event (flush): $message');
+                }
+              }
 
-          final msg = findStreamingMessage();
-          if (msg != null) {
-            setState(() {
-              msg['content'] = accumulatedContent.isNotEmpty
-                  ? accumulatedContent
-                  : 'No response received';
-              msg['queryId'] = streamQueryId;
-              msg['sources'] = sources ?? [];
-              msg['confidence'] = confidence;
-              msg['metadata'] = {
-                'sources': sources,
-                'confidence_score': confidence,
-              }..removeWhere((key, value) => value == null);
-            });
-          }
+              final msg = findStreamingMessage();
+              if (msg != null) {
+                setState(() {
+                  msg['content'] = accumulatedContent.isNotEmpty
+                      ? accumulatedContent
+                      : 'No response received';
+                  msg['queryId'] = streamQueryId;
+                  msg['sources'] = sources ?? [];
+                  msg['confidence'] = confidence;
+                  msg['isGrounded'] = isGrounded;
+                  msg['metadata'] = {
+                    'sources': sources,
+                    'confidence_score': confidence,
+                    'is_grounded': isGrounded,
+                  }..removeWhere((key, value) => value == null);
+                });
+              }
 
-          setState(() {
-            _isStreaming = false;
-            _isLoading = false;
-          });
+              setState(() {
+                _isStreaming = false;
+                _isLoading = false;
+              });
 
-          if (sources != null && sources!.isNotEmpty) {
-            _relatedDocuments = _mergeUniqueDocs(sources!, _relatedDocuments);
-            widget.onRelatedDocumentsUpdate(_relatedDocuments);
-          }
-          _updateQuickHelpVisibility();
-        },
-        onError: (error) {
-          if (!mounted) return;
-          debugPrint('[SSE] Stream error: $error');
-          final msg = findStreamingMessage();
-          if (msg != null) {
-            setState(() {
-              msg['content'] = accumulatedContent.isNotEmpty
-                  ? accumulatedContent
-                  : 'Streaming error';
-            });
-          }
-          setState(() {
-            _isStreaming = false;
-            _isLoading = false;
-          });
-        },
-        cancelOnError: true,
-      );
+              if (sources != null && sources!.isNotEmpty) {
+                _relatedDocuments = _mergeUniqueDocs(
+                  sources!,
+                  _relatedDocuments,
+                );
+                widget.onRelatedDocumentsUpdate(_relatedDocuments);
+              }
+              _updateQuickHelpVisibility();
+            },
+            onError: (error) {
+              if (!mounted) return;
+              debugPrint('[SSE] Stream error: $error');
+              final msg = findStreamingMessage();
+              if (msg != null) {
+                setState(() {
+                  msg['content'] = accumulatedContent.isNotEmpty
+                      ? accumulatedContent
+                      : 'Streaming error';
+                });
+              }
+              setState(() {
+                _isStreaming = false;
+                _isLoading = false;
+              });
+            },
+            cancelOnError: true,
+          );
     } catch (e) {
       debugPrint('[SSE] Connection error: $e');
       if (!mounted) return;
@@ -583,12 +631,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
       final request = ApiQueriesPostRequest(
         sessionId: sessionId,
-        messages: messagesForApi.map((m) => ApiQueriesPostRequestMessagesInner(
-          role: m['role'] == 'user'
-              ? ApiQueriesPostRequestMessagesInnerRoleEnum.user
-              : ApiQueriesPostRequestMessagesInnerRoleEnum.assistant,
-          content: m['content'] as String,
-        )).toList(),
+        messages: messagesForApi
+            .map(
+              (m) => ApiQueriesPostRequestMessagesInner(
+                role: m['role'] == 'user'
+                    ? ApiQueriesPostRequestMessagesInnerRoleEnum.user
+                    : ApiQueriesPostRequestMessagesInnerRoleEnum.assistant,
+                content: m['content'] as String,
+              ),
+            )
+            .toList(),
         categoryId: _selectedCategoryId,
         timestamp: DateTime.now().toUtc(),
       );
@@ -674,14 +726,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       return;
     }
 
-    // Translate both
-    final String visibleText = visibleTextKey.isNotEmpty
-        ? tr(visibleTextKey)
-        : '';
+    // Use pre-resolved values from button map with i18n fallback
+    final String visibleText =
+        button['resolvedVisibleText'] ??
+        (visibleTextKey.isNotEmpty ? tr(visibleTextKey) : '');
     // If hiddenPromptKey is empty, fallback to visible text
-    final String hiddenPrompt = hiddenPromptKey.isNotEmpty
-        ? tr(hiddenPromptKey)
-        : visibleText;
+    final String hiddenPrompt =
+        button['resolvedHiddenPrompt'] ??
+        (hiddenPromptKey.isNotEmpty ? tr(hiddenPromptKey) : visibleText);
 
     setState(() {
       _showQuickHelpOverlay = false;
@@ -710,16 +762,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           try {
             final queriesApi = ref.read(queriesApiProvider);
             final cleanQueryId = queryId.replaceFirst('queries/', '');
-            
+
             final feedbackRequest = ApiQueriesQueryIdFeedbackPostRequest(
               rating: feedbackData['rating'],
               comment: feedbackData['text'],
             );
 
-            final res = await queriesApi.apiQueriesQueryIdFeedbackPostWithHttpInfo(
-              cleanQueryId,
-              feedbackRequest,
-            );
+            final res = await queriesApi
+                .apiQueriesQueryIdFeedbackPostWithHttpInfo(
+                  cleanQueryId,
+                  feedbackRequest,
+                );
 
             if (res.statusCode != 200 && res.statusCode != 201) {
               throw Exception("Feedback failed: ${res.statusCode}");
@@ -753,18 +806,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     try {
       dynamic conversationResponse;
       final chatHistoryApi = ref.read(chatHistoryApiProvider);
-      
+
       if (_currentConversationId == null) {
         final createRequest = ApiChatConversationsPostRequest(
           title: _conversationTitle,
           categoryId: _selectedCategoryId,
         );
-        final res = await chatHistoryApi.apiChatConversationsPostWithHttpInfo(createRequest);
-        
+        final res = await chatHistoryApi.apiChatConversationsPostWithHttpInfo(
+          createRequest,
+        );
+
         if (res.statusCode != 200 && res.statusCode != 201) {
           throw Exception("Create conversation failed: ${res.statusCode}");
         }
-        
+
         conversationResponse = jsonDecode(res.body);
       } else {
         final id = _currentConversationId!.replaceFirst('conversations/', '');
@@ -772,15 +827,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           title: _conversationTitle,
           categoryId: _selectedCategoryId,
         );
-        final res = await chatHistoryApi.apiChatConversationsConversationIdPatchWithHttpInfo(
-          id,
-          updateRequest,
-        );
-        
+        final res = await chatHistoryApi
+            .apiChatConversationsConversationIdPatchWithHttpInfo(
+              id,
+              updateRequest,
+            );
+
         if (res.statusCode != 200 && res.statusCode != 201) {
           throw Exception("Update conversation failed: ${res.statusCode}");
         }
-        
+
         conversationResponse = jsonDecode(res.body);
       }
 
@@ -798,20 +854,24 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         // CRITICAL: We save msg['content'] (Visible prompt), NOT actualContent (hidden prompt).
         // This ensures the user sees exactly what they clicked in history.
         try {
-          final addMessageRequest = ApiChatConversationsConversationIdMessagesPostRequest(
-            content: msg['content'] as String,
-            sender: msg['role'] == 'user' 
-                ? ApiChatConversationsConversationIdMessagesPostRequestSenderEnum.user 
-                : ApiChatConversationsConversationIdMessagesPostRequestSenderEnum.assistant,
-            queryId: msg['queryId']?.toString(),
-            metadata: msg['metadata'] as Map<String, dynamic>?,
-          );
-          
-          final res = await chatHistoryApi.apiChatConversationsConversationIdMessagesPostWithHttpInfo(
-            conversationIdClean,
-            addMessageRequest,
-          );
-          
+          final addMessageRequest =
+              ApiChatConversationsConversationIdMessagesPostRequest(
+                content: msg['content'] as String,
+                sender: msg['role'] == 'user'
+                    ? ApiChatConversationsConversationIdMessagesPostRequestSenderEnum
+                          .user
+                    : ApiChatConversationsConversationIdMessagesPostRequestSenderEnum
+                          .assistant,
+                queryId: msg['queryId']?.toString(),
+                metadata: msg['metadata'] as Map<String, dynamic>?,
+              );
+
+          final res = await chatHistoryApi
+              .apiChatConversationsConversationIdMessagesPostWithHttpInfo(
+                conversationIdClean,
+                addMessageRequest,
+              );
+
           if (res.statusCode != 200 && res.statusCode != 201) {
             throw Exception("Add message failed: ${res.statusCode}");
           }
@@ -1192,7 +1252,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   itemCount:
                       _messages.length + (_isLoading || _isStreaming ? 1 : 0),
                   itemBuilder: (context, index) {
-                    if (index == _messages.length && (_isLoading || _isStreaming)) {
+                    if (index == _messages.length &&
+                        (_isLoading || _isStreaming)) {
                       return Padding(
                         padding: const EdgeInsets.symmetric(
                           vertical: DsSpacing.md,
@@ -1274,7 +1335,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    if (msg['confidence'] != null)
+                                    if (msg['isGrounded'] == false)
+                                      Text(
+                                        tr('chatbot.aiGeneratedNoDocs'),
+                                        style: TextStyle(
+                                          fontSize: tokens.textXs,
+                                          color: tokens.warning,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      )
+                                    else if (msg['confidence'] != null)
                                       Text(
                                         "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
                                         style: TextStyle(

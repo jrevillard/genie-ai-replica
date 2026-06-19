@@ -265,8 +265,6 @@ export default {
       network: 'Netzwerkbandbreite'
     },
     databaseManagement: 'Datenbankverwaltung',
-    reindexDatabase: 'Datenbank neu indizieren',
-    lastReindex: 'Letzte Neuindizierung',
     databaseSize: 'Datenbankgröße',
     totalTables: 'Gesamttabellen',
     logManagement: 'Protokollverwaltung',
@@ -297,18 +295,14 @@ export default {
     roleUser: 'Benutzer',
     statusActive: 'Aktiv',
     dbActions: {
-      reindex: 'Neu indizieren',
       backup: 'Sichern',
       optimize: 'Optimieren',
-      reindexDesc: 'Datenbankindizes neu erstellen',
       backupDesc: 'Datenbanksicherung erstellen',
       optimizeDesc: 'Abfrageleistung optimieren'
     },
     operations: {
-      reindexTitle: 'Ergebnisse der Datenbankneuindizierung',
       backupTitle: 'Ergebnisse der Datenbanksicherung',
       optimizeTitle: 'Ergebnisse der Datenbankoptimierung',
-      reindexResults: 'Neuindizierungsergebnisse',
       optimizeResults: 'Optimierungsergebnisse',
       collection: 'Sammlung',
       status: 'Status',
@@ -320,11 +314,7 @@ export default {
       errorDetails: 'Fehlerdetails',
       close: 'Schließen',
       resultsTitle: 'Operationsergebnisse',
-      reindexDatabase: {
-        success: 'Datenbankneuindizierung erfolgreich abgeschlossen',
-        error: 'Fehler bei der Datenbankneuindizierung',
-        loading: 'Datenbank wird neu indiziert...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'Datenbanksicherung erfolgreich abgeschlossen',
         error: 'Fehler bei der Datenbanksicherung',
@@ -920,7 +910,6 @@ export default {
     manageMyAccountDesc: 'Verwalten Sie Ihr Profil, Sicherheitseinstellungen und Kontopräferenzen.',
     resetUserData: 'Benutzerdaten zurücksetzen',
     resetUserDataDesc: 'Dies löscht alle Ihre Profildaten und den Chatverlauf.',
-    edit: 'Bearbeiten',
     standardAccount: 'Standardkonto',
     cancel: 'Abbrechen',
     account: {
@@ -1371,12 +1360,19 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'Die Antwort wurde unterbrochen. Bitte versuchen Sie es erneut.',
+    aiGeneratedNoDocs: 'KI-generiert — nicht auf Bibliotheksdokumenten basierend',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'Konfigurationsfehler: {warnings}. Bitte überprüfen Sie die Schnellhilfe- und Wissenshierarchie-Konfiguration.',
+    categoryNotFound: 'Kategorie "{label}" nicht in der Wissenshierarchie gefunden',
+    serviceLabelMismatch:
+      'Dienst "{label}" verwendet ein UI-Label, das möglicherweise nicht zur Wissenshierarchie passt',
     placeholder: 'Geben Sie Ihre Anfrage hier ein...',
     sendButton: 'Senden',
     fileReceived: 'Datei erfolgreich empfangen.',
     fileUploadError: 'Fehler beim Hochladen der Datei.',
     processingError: 'Fehler beim Verarbeiten Ihrer Anfrage.',
-    welcomeMessage: 'Willkommen! Wie kann ich Ihnen heute bei den kenianischen Regierungsdiensten helfen?',
     attachFile: 'Datei anhängen',
     fileTooLarge: 'Datei ist zu groß. Maximale Größe ist {maxSize}.',
     saveChat: 'Chat speichern',
@@ -1388,7 +1384,7 @@ export default {
     clearContext: 'Kontext löschen und neues Gespräch starten',
     unsavedChanges: 'Sie haben ungespeicherte Änderungen. Sind Sie sicher, dass Sie einen neuen Chat starten möchten?',
     whatCanIHelp: 'Wie kann ich Ihnen heute helfen?',
-    justChat: 'Nur chatten',
+
     queryContext: 'Anfragekontext',
     contextAdded: 'Kontext zu Ihrer Anfrage hinzugefügt',
     contextRemoved: 'Kontext aus Ihrer Anfrage entfernt',
@@ -1418,26 +1414,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'ID beantragen',
-    payTaxes: 'Steuern zahlen',
-    startBusiness: 'Unternehmen gründen',
-    findHealthcare: 'Gesundheitswesen',
-    educationServices: 'Bildung',
-    transportLicenses: 'Verkehr',
-    housingPrograms: 'Wohnen',
-    findJobs: 'Arbeitsplätze',
-    justChat: 'Nur chatten',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'Ich möchte über Regierungsdienste chatten',
-    applyForIDUserPrompt: 'Ich möchte herausfinden, wie ich einen nationalen Personalausweis beantrage.',
-    payTaxesUserPrompt: 'Wie ist der Prozess, um meine Steuern online zu zahlen?',
-    startBusinessUserPrompt: 'Führen Sie mich durch die Schritte zur Registrierung eines neuen Unternehmens.',
-    findHealthcareUserPrompt: 'Wo finde ich Informationen über öffentliche Gesundheitsdienste?',
-    educationServicesUserPrompt: 'Welche Bildungsdienste stehen meinen Kindern zur Verfügung?',
-    transportLicensesUserPrompt: 'Wie erneuere ich meinen Führerschein?',
-    housingProgramsUserPrompt: 'Erzählen Sie mir von erschwinglichen Wohnungsprogrammen in Kenia.',
-    findJobsUserPrompt: 'Welche staatlichen Arbeitsmöglichkeiten gibt es derzeit?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

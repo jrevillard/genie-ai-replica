@@ -190,17 +190,21 @@ export default {
 
     // Enhanced moveChat action to sync with backend
     async moveChat({ commit, rootGetters }, { chatId, fromFolderId, toFolderId }) {
+      // auth module is NOT namespaced — getter lives in global namespace
+      const currentUser = rootGetters['currentUser'];
+      if (!currentUser) throw new Error('User is missing');
+      // Authoritative backend operation — a failure here must propagate
+      await chatHistoryService.moveConversation(chatId, fromFolderId, toFolderId);
+      // Reflect the move locally regardless of the subsequent folder refresh
+      commit('MOVE_CHAT', { chatId, fromFolderId, toFolderId });
+      // Best-effort folder refresh — a failure here must NOT fail the move,
+      // since the backend operation already succeeded (issue #827)
       try {
-        const currentUser = rootGetters['auth/currentUser'];
-        if (!currentUser) throw new Error('User is missing');
-        await chatHistoryService.moveConversation(chatId, fromFolderId, toFolderId);
         const folder = await chatHistoryService.getFolder(toFolderId);
-        const chatIds = folder.conversations.map((conv) => conv._key);
+        const chatIds = (folder?.conversations || []).map((conv) => conv._key);
         commit('SET_FOLDER_CHATS', { folderId: toFolderId, chats: chatIds });
-        commit('MOVE_CHAT', { chatId, fromFolderId, toFolderId });
       } catch (error) {
-        console.error(`Error moving chat ${chatId}:`, error);
-        throw error;
+        console.error(`Failed to refresh folder ${toFolderId} after moving chat ${chatId}:`, error);
       }
     },
 

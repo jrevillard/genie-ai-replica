@@ -2,7 +2,8 @@
 global.console = {
   ...console,
   warn: jest.fn(),
-  debug: jest.fn()
+  debug: jest.fn(),
+  error: jest.fn()
 };
 
 // Mock window.APP_CONFIG for tests that don't override it

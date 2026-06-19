@@ -105,9 +105,17 @@ module.exports = (userService) => {
         return res.status(404).json({ message: 'User not found' });
       }
 
+      // Use JWT claims for roles — always fresh from the current token,
+      // unlike ArangoDB user document which may be cached (60s TTL).
+      // Filter out Keycloak built-in roles (matches frontend filtering).
+      const allRoles = (req.claims && req.claims.realm_access && req.claims.realm_access.roles) || [];
+      const roles = allRoles.filter(
+        (r) => r !== 'offline_access' && r !== 'uma_authorization' && !r.startsWith('default-roles-')
+      );
+
       res.json({
         name: user.name || 'User',
-        role: user.roles || [],
+        role: roles,
         emailVerified: user.emailVerified || false
       });
     } catch (error) {

@@ -1,12 +1,14 @@
 # Configuration Directory
 
-This directory contains OPEA (Open Platform for Enterprise AI) configuration files.
+This directory contains application configuration files.
 
 ## Contents
 
 - `keycloak/` - Keycloak Identity Provider (Dockerfiles, realm configuration)
 - `opea-config/` - OPEA service configuration files
 - `postgres/` - PostgreSQL initialization (multi-database setup)
+- `otel/` - OpenTelemetry Collector configuration (observability stack)
+- `grafana/` - Grafana provisioning (datasources, dashboards)
 
 ## LLM Prompts
 

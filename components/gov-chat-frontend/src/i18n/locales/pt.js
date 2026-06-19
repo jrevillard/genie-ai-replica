@@ -172,7 +172,6 @@ export default {
     SE: 'Suécia',
     CH: 'Suíça',
     SY: 'Síria',
-    TW: 'Taiwan',
     TJ: 'Tadjiquistão',
     TZ: 'Tanzânia',
     TH: 'Tailândia',
@@ -266,8 +265,6 @@ export default {
       network: 'Largura de Banda de Rede'
     },
     databaseManagement: 'Gerenciamento de Banco de Dados',
-    reindexDatabase: 'Reindexar Banco de Dados',
-    lastReindex: 'Última Reindexação',
     databaseSize: 'Tamanho do Banco de Dados',
     totalTables: 'Total de Tabelas',
     logManagement: 'Gerenciamento de Logs',
@@ -298,18 +295,14 @@ export default {
     roleUser: 'Usuário',
     statusActive: 'Ativo',
     dbActions: {
-      reindex: 'Reindexar',
       backup: 'Backup',
       optimize: 'Otimizar',
-      reindexDesc: 'Reconstruir índices do banco de dados',
       backupDesc: 'Criar backup do banco de dados',
       optimizeDesc: 'Otimizar desempenho de consultas'
     },
     operations: {
-      reindexTitle: 'Resultados da Reindexação do Banco de Dados',
       backupTitle: 'Resultados do Backup do Banco de Dados',
       optimizeTitle: 'Resultados da Otimização do Banco de Dados',
-      reindexResults: 'Resultados da Reindexação',
       optimizeResults: 'Resultados da Otimização',
       collection: 'Coleção',
       status: 'Status',
@@ -321,11 +314,7 @@ export default {
       errorDetails: 'Detalhes do Erro',
       close: 'Fechar',
       resultsTitle: 'Resultados da Operação',
-      reindexDatabase: {
-        success: 'Reindexação do banco de dados concluída com sucesso',
-        error: 'Erro durante a reindexação do banco de dados',
-        loading: 'Reindexando banco de dados...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'Backup do banco de dados concluído com sucesso',
         error: 'Erro durante o backup do banco de dados',
@@ -925,7 +914,6 @@ export default {
     accountManagement: 'Gerenciamento de Conta',
     resetUserData: 'Redefinir Dados do Usuário',
     resetUserDataDesc: 'Isso limpará todos os dados do seu perfil e histórico de chat.',
-    edit: 'Editar',
     standardAccount: 'Conta Padrão',
     cancel: 'Cancelar',
     account: {
@@ -1373,12 +1361,19 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'A resposta foi interrompida. Tente novamente.',
+    aiGeneratedNoDocs: 'Gerado por IA — não baseado nos documentos da biblioteca',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'Incompatibilidade de configuração: {warnings}. Verifique a configuração de Ajuda Rápida e hierarquia de conhecimento.',
+    categoryNotFound: 'Categoria "{label}" não encontrada na hierarquia de conhecimento',
+    serviceLabelMismatch:
+      'Serviço "{label}" usa um rótulo de UI que pode não corresponder à hierarquia de conhecimento',
     placeholder: 'Digite sua consulta aqui...',
     sendButton: 'Enviar',
     fileReceived: 'Arquivo recebido com sucesso.',
     fileUploadError: 'Erro ao carregar arquivo.',
     processingError: 'Erro ao processar sua solicitação.',
-    welcomeMessage: 'Bem-vindo! Como posso ajudá-lo com os serviços governamentais do Quênia hoje?',
     attachFile: 'Anexar Arquivo',
     fileTooLarge: 'Arquivo muito grande. Tamanho máximo é {maxSize}.',
     saveChat: 'Salvar Chat',
@@ -1390,7 +1385,7 @@ export default {
     clearContext: 'Limpar contexto e iniciar uma nova conversa',
     unsavedChanges: 'Você tem alterações não salvas. Tem certeza de que deseja iniciar um novo chat?',
     whatCanIHelp: 'Como posso ajudá-lo hoje?',
-    justChat: 'Apenas Chat',
+
     queryContext: 'Contexto da Consulta',
     contextAdded: 'Contexto adicionado à sua consulta',
     contextRemoved: 'Contexto removido da sua consulta',
@@ -1420,26 +1415,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'Solicitar ID',
-    payTaxes: 'Pagar Impostos',
-    startBusiness: 'Iniciar Negócio',
-    findHealthcare: 'Saúde',
-    educationServices: 'Educação',
-    transportLicenses: 'Transporte',
-    housingPrograms: 'Habitação',
-    findJobs: 'Empregos',
-    justChat: 'Apenas Conversar',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'Gostaria de conversar sobre serviços governamentais',
-    applyForIDUserPrompt: 'Preciso de informações sobre como solicitar um cartão de ID nacional',
-    payTaxesUserPrompt: 'Qual é o processo para pagar meus impostos online?',
-    startBusinessUserPrompt: 'Guie-me pelos passos para registrar um novo negócio',
-    findHealthcareUserPrompt: 'Onde posso encontrar informações sobre serviços de saúde pública?',
-    educationServicesUserPrompt: 'Quais serviços de educação estão disponíveis para meus filhos?',
-    transportLicensesUserPrompt: 'Como renovo minha carteira de motorista?',
-    housingProgramsUserPrompt: 'Conte-me sobre programas de habitação acessível no Quênia',
-    findJobsUserPrompt: 'Quais oportunidades de emprego governamental estão disponíveis atualmente?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

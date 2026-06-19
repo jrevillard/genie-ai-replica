@@ -264,8 +264,6 @@ export default {
       network: 'Bandwidth Jaringan'
     },
     databaseManagement: 'Manajemen Database',
-    reindexDatabase: 'Indeks Ulang Database',
-    lastReindex: 'Indeks Ulang Terakhir',
     databaseSize: 'Ukuran Database',
     totalTables: 'Total Tabel',
     logManagement: 'Manajemen Log',
@@ -296,18 +294,14 @@ export default {
     roleUser: 'Pengguna',
     statusActive: 'Aktif',
     dbActions: {
-      reindex: 'Indeks Ulang',
       backup: 'Cadangkan',
       optimize: 'Optimalkan',
-      reindexDesc: 'Bangun ulang indeks database',
       backupDesc: 'Buat cadangan database',
       optimizeDesc: 'Optimalkan kinerja query'
     },
     operations: {
-      reindexTitle: 'Hasil Indeks Ulang Database',
       backupTitle: 'Hasil Cadangan Database',
       optimizeTitle: 'Hasil Optimasi Database',
-      reindexResults: 'Hasil Indeks Ulang',
       optimizeResults: 'Hasil Optimasi',
       collection: 'Koleksi',
       status: 'Status',
@@ -319,11 +313,7 @@ export default {
       errorDetails: 'Detail Kesalahan',
       close: 'Tutup',
       resultsTitle: 'Hasil Operasi',
-      reindexDatabase: {
-        success: 'Indeks ulang database berhasil diselesaikan',
-        error: 'Kesalahan saat indeks ulang database',
-        loading: 'Mengindeks ulang database...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'Pencadangan database berhasil diselesaikan',
         error: 'Kesalahan saat pencadangan database',
@@ -529,6 +519,16 @@ export default {
       linkSubmitSuccess: 'Berhasil merayapi dan menyimpan "{fileName}".',
       actionSuccess: 'Tindakan "{action}" pada file {fileId} berhasil.',
       metadataUpdateSuccess: 'Metadata untuk file {fileId} telah diperbarui.'
+    }
+  },
+  auth: {
+    errors: {
+      tokenExpired: 'Sesi Anda telah berakhir. Silakan masuk kembali.',
+      tokenInvalid: 'Sesi Anda tidak valid. Silakan masuk kembali.',
+      insufficientRoles: 'Anda tidak memiliki izin yang diperlukan. Hubungi administrator Anda.',
+      serviceUnavailable: 'Layanan autentikasi sementara tidak tersedia. Silakan coba lagi nanti.',
+      provisioningFailed: 'Terjadi kesalahan sistem. Silakan coba lagi nanti.',
+      default: 'Terjadi kesalahan'
     }
   },
   charts: {
@@ -1348,12 +1348,18 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'Respons terputus. Silakan coba lagi.',
+    aiGeneratedNoDocs: 'Dihasilkan oleh AI — tidak berdasarkan dokumen perpustakaan',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'Ketidakcocokan konfigurasi: {warnings}. Silakan periksa konfigurasi Bantuan Cepat dan hierarki pengetahuan.',
+    categoryNotFound: 'Kategori "{label}" tidak ditemukan dalam hierarki pengetahuan',
+    serviceLabelMismatch: 'Layanan "{label}" menggunakan label UI yang mungkin tidak cocok dengan hierarki pengetahuan',
     placeholder: 'Ketik pertanyaan Anda di sini...',
     sendButton: 'Kirim',
     fileReceived: 'File berhasil diterima.',
     fileUploadError: 'Kesalahan mengunggah file.',
     processingError: 'Kesalahan memproses permintaan Anda.',
-    welcomeMessage: 'Selamat datang! Bagaimana saya bisa membantu Anda dengan layanan pemerintah Kenya hari ini?',
     attachFile: 'Lampirkan File',
     fileTooLarge: 'File terlalu besar. Ukuran maksimum adalah {maxSize}.',
     saveChat: 'Simpan Obrolan',
@@ -1365,7 +1371,7 @@ export default {
     clearContext: 'Hapus konteks dan mulai percakapan baru',
     unsavedChanges: 'Anda memiliki perubahan yang belum disimpan. Apakah Anda yakin ingin memulai obrolan baru?',
     whatCanIHelp: 'Ada yang bisa saya bantu hari ini?',
-    justChat: 'Hanya Mengobrol',
+
     queryContext: 'Konteks Pertanyaan',
     contextAdded: 'Konteks ditambahkan ke pertanyaan Anda',
     contextRemoved: 'Konteks dihapus dari pertanyaan Anda',
@@ -1395,26 +1401,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'Ajukan KTP',
-    payTaxes: 'Bayar Pajak',
-    startBusiness: 'Mulai Usaha',
-    findHealthcare: 'Kesehatan',
-    educationServices: 'Pendidikan',
-    transportLicenses: 'Transportasi',
-    housingPrograms: 'Perumahan',
-    findJobs: 'Pekerjaan',
-    justChat: 'Ngobrol',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'Saya ingin mengobrol tentang layanan pemerintah',
-    applyForIDUserPrompt: 'Saya butuh informasi cara mengajukan KTP',
-    payTaxesUserPrompt: 'Bagaimana proses membayar pajak saya secara online?',
-    startBusinessUserPrompt: 'Bimbing saya melalui langkah-langkah untuk mendaftarkan bisnis baru',
-    findHealthcareUserPrompt: 'Di mana saya bisa mencari informasi tentang layanan kesehatan masyarakat?',
-    educationServicesUserPrompt: 'Layanan pendidikan apa yang tersedia untuk anak-anak saya?',
-    transportLicensesUserPrompt: 'Bagaimana cara memperpanjang SIM saya?',
-    housingProgramsUserPrompt: 'Beri tahu saya tentang program perumahan terjangkau di Kenya',
-    findJobsUserPrompt: 'Peluang kerja pemerintah apa yang saat ini tersedia?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

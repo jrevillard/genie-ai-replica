@@ -265,8 +265,6 @@ export default {
       network: 'แบนด์วิดธ์เครือข่าย'
     },
     databaseManagement: 'การจัดการฐานข้อมูล',
-    reindexDatabase: 'รีอินเด็กซ์ฐานข้อมูล',
-    lastReindex: 'รีอินเด็กซ์ล่าสุด',
     databaseSize: 'ขนาดฐานข้อมูล',
     totalTables: 'ตารางทั้งหมด',
     logManagement: 'การจัดการบันทึก',
@@ -297,18 +295,14 @@ export default {
     roleUser: 'ผู้ใช้',
     statusActive: 'ใช้งาน',
     dbActions: {
-      reindex: 'รีอินเด็กซ์',
       backup: 'สำรองข้อมูล',
       optimize: 'ปรับปรุง',
-      reindexDesc: 'สร้างดัชนีฐานข้อมูลใหม่',
       backupDesc: 'สร้างสำรองฐานข้อมูล',
       optimizeDesc: 'ปรับปรุงประสิทธิภาพการสอบถาม'
     },
     operations: {
-      reindexTitle: 'ผลลัพธ์การรีอินเด็กซ์ฐานข้อมูล',
       backupTitle: 'ผลลัพธ์การสำรองฐานข้อมูล',
       optimizeTitle: 'ผลลัพธ์การปรับปรุงฐานข้อมูล',
-      reindexResults: 'ผลลัพธ์รีอินเด็กซ์',
       optimizeResults: 'ผลลัพธ์การปรับปรุง',
       collection: 'คอลเลกชัน',
       status: 'สถานะ',
@@ -320,11 +314,7 @@ export default {
       errorDetails: 'รายละเอียดข้อผิดพลาด',
       close: 'ปิด',
       resultsTitle: 'ผลลัพธ์การดำเนินการ',
-      reindexDatabase: {
-        success: 'รีอินเด็กซ์ฐานข้อมูลเสร็จสิ้นสำเร็จ',
-        error: 'ข้อผิดพลาดระหว่างรีอินเด็กซ์ฐานข้อมูล',
-        loading: 'กำลังรีอินเด็กซ์ฐานข้อมูล...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'สำรองฐานข้อมูลเสร็จสิ้นสำเร็จ',
         error: 'ข้อผิดพลาดระหว่างสำรองฐานข้อมูล',
@@ -910,7 +900,6 @@ export default {
     manageMyAccountDesc: 'จัดการข้อมูลส่วนตัว การตั้งค่าความปลอดภัย และการตั้งค่าบัญชี',
     resetUserData: 'รีเซ็ตข้อมูลผู้ใช้',
     resetUserDataDesc: 'นี้จะล้างข้อมูลโปรไฟล์และประวัติแชททั้งหมดของคุณ',
-    edit: 'แก้ไข',
     standardAccount: 'บัญชีมาตรฐาน',
     cancel: 'ยกเลิก',
     account: {
@@ -1356,12 +1345,18 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'การตอบกลับถูกขัดจังหวะ โปรดลองอีกครั้ง',
+    aiGeneratedNoDocs: 'สร้างโดย AI — ไม่อิงจากเอกสารในคลังเอกสาร',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'การกำหนดค่าไม่ตรงกัน: {warnings}. กรุณาตรวจสอบการกำหนดค่าความช่วยเหลือด่วนและลำดับชั้นความรู้',
+    categoryNotFound: 'ไม่พบหมวดหมู่ "{label}" ในลำดับชั้นความรู้',
+    serviceLabelMismatch: 'บริการ "{label}" ใช้ป้าย UI ที่อาจไม่ตรงกับลำดับชั้นความรู้',
     placeholder: 'พิมพ์คำถามของคุณที่นี่...',
     sendButton: 'ส่ง',
     fileReceived: 'ได้รับไฟล์สำเร็จ',
     fileUploadError: 'ข้อผิดพลาดในการอัปโหลดไฟล์',
     processingError: 'ข้อผิดพลาดในการประมวลผลคำขอของคุณ',
-    welcomeMessage: 'ยินดีต้อนรับ! ฉันสามารถช่วยเหลือคุณเกี่ยวกับบริการรัฐบาลเคนยาได้อย่างไรวันนี้?',
     attachFile: 'แนบไฟล์',
     fileTooLarge: 'ไฟล์ใหญ่เกินไป ขนาดสูงสุดคือ {maxSize}',
     saveChat: 'บันทึกแชท',
@@ -1373,7 +1368,7 @@ export default {
     clearContext: 'ล้างบริบทและเริ่มการสนทนาใหม่',
     unsavedChanges: 'คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก คุณแน่ใจว่าต้องการเริ่มแชทใหม่หรือไม่?',
     whatCanIHelp: 'ฉันสามารถช่วยอะไรคุณได้วันนี้?',
-    justChat: 'แค่แชท',
+
     queryContext: 'บริบทคำถาม',
     contextAdded: 'เพิ่มบริบทในคำถามของคุณ',
     contextRemoved: 'ลบบริบทจากคำถามของคุณ',
@@ -1403,26 +1398,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'สมัครบัตรประชาชน',
-    payTaxes: 'ชำระภาษี',
-    startBusiness: 'เริ่มธุรกิจ',
-    findHealthcare: 'สุขภาพ',
-    educationServices: 'การศึกษา',
-    transportLicenses: 'การขนส่ง',
-    housingPrograms: 'ที่อยู่อาศัย',
-    findJobs: 'งาน',
-    justChat: 'แชทเท่านั้น',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'ฉันอยากแชทเกี่ยวกับบริการรัฐบาล',
-    applyForIDUserPrompt: 'ฉันต้องการข้อมูลเกี่ยวกับวิธีสมัครบัตรประชาชนแห่งชาติ',
-    payTaxesUserPrompt: 'กระบวนการชำระภาษีออนไลน์คืออะไร?',
-    startBusinessUserPrompt: 'นำฉันผ่านขั้นตอนการจดทะเบียนธุรกิจใหม่',
-    findHealthcareUserPrompt: 'ฉันสามารถหาข้อมูลเกี่ยวกับบริการสุขภาพสาธารณะได้ที่ไหน?',
-    educationServicesUserPrompt: 'บริการการศึกษาอะไรที่มีสำหรับลูกของฉัน?',
-    transportLicensesUserPrompt: 'ฉันจะต่ออายุใบขับขี่อย่างไร?',
-    housingProgramsUserPrompt: 'บอกฉันเกี่ยวกับโปรแกรมที่อยู่อาศัยราคาไม่แพงในเคนยา',
-    findJobsUserPrompt: 'โอกาสงานรัฐบาลอะไรที่มีอยู่ในปัจจุบัน?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

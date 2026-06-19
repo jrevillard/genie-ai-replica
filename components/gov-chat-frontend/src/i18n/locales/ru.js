@@ -265,8 +265,6 @@ export default {
       network: 'Пропускная способность сети'
     },
     databaseManagement: 'Управление базой данных',
-    reindexDatabase: 'Переиндексировать базу данных',
-    lastReindex: 'Последняя переиндексация',
     databaseSize: 'Размер базы данных',
     totalTables: 'Всего таблиц',
     logManagement: 'Управление журналами',
@@ -297,18 +295,14 @@ export default {
     roleUser: 'Пользователь',
     statusActive: 'Активен',
     dbActions: {
-      reindex: 'Переиндексировать',
       backup: 'Резервное копирование',
       optimize: 'Оптимизировать',
-      reindexDesc: 'Перестроить индексы базы данных',
       backupDesc: 'Создать резервную копию базы данных',
       optimizeDesc: 'Оптимизировать производительность запросов'
     },
     operations: {
-      reindexTitle: 'Результаты переиндексации базы данных',
       backupTitle: 'Результаты резервного копирования базы данных',
       optimizeTitle: 'Результаты оптимизации базы данных',
-      reindexResults: 'Результаты переиндексации',
       optimizeResults: 'Результаты оптимизации',
       collection: 'Коллекция',
       status: 'Статус',
@@ -320,11 +314,7 @@ export default {
       errorDetails: 'Детали ошибки',
       close: 'Закрыть',
       resultsTitle: 'Результаты операции',
-      reindexDatabase: {
-        success: 'Переиндексация базы данных успешно завершена',
-        error: 'Ошибка при переиндексации базы данных',
-        loading: 'Переиндексация базы данных...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'Резервное копирование базы данных успешно завершено',
         error: 'Ошибка при резервном копировании базы данных',
@@ -920,7 +910,6 @@ export default {
     accountManagement: 'Управление учётной записью',
     resetUserData: 'Сбросить данные пользователя',
     resetUserDataDesc: 'Это удалит все данные вашего профиля и историю чатов.',
-    edit: 'Редактировать',
     standardAccount: 'Стандартная учётная запись',
     cancel: 'Отмена',
     account: {
@@ -1368,12 +1357,19 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'Ответ был прерван. Повторите попытку.',
+    aiGeneratedNoDocs: 'Сгенерировано ИИ — не основано на документах библиотеки',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'Несоответствие конфигурации: {warnings}. Проверьте конфигурацию быстрой помощи и иерархии знаний.',
+    categoryNotFound: 'Категория "{label}" не найдена в иерархии знаний',
+    serviceLabelMismatch:
+      'Сервис "{label}" использует метку интерфейса, которая может не соответствовать иерархии знаний',
     placeholder: 'Введите ваш запрос здесь...',
     sendButton: 'Отправить',
     fileReceived: 'Файл успешно получен.',
     fileUploadError: 'Ошибка загрузки файла.',
     processingError: 'Ошибка обработки вашего запроса.',
-    welcomeMessage: 'Добро пожаловать! Чем я могу помочь вам с государственными услугами Кении сегодня?',
     attachFile: 'Прикрепить файл',
     fileTooLarge: 'Файл слишком большой. Максимальный размер {maxSize}.',
     saveChat: 'Сохранить чат',
@@ -1385,7 +1381,7 @@ export default {
     clearContext: 'Очистить контекст и начать новый разговор',
     unsavedChanges: 'У вас есть несохранённые изменения. Вы уверены, что хотите начать новый чат?',
     whatCanIHelp: 'Чем я могу помочь вам сегодня?',
-    justChat: 'Просто чат',
+
     queryContext: 'Контекст запроса',
     contextAdded: 'Контекст добавлен к вашему запросу',
     contextRemoved: 'Контекст удалён из вашего запроса',
@@ -1415,26 +1411,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'Получить ID',
-    payTaxes: 'Оплатить налоги',
-    startBusiness: 'Начать бизнес',
-    findHealthcare: 'Здравоохранение',
-    educationServices: 'Образование',
-    transportLicenses: 'Транспорт',
-    housingPrograms: 'Жильё',
-    findJobs: 'Работа',
-    justChat: 'Просто чат',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'Я хотел бы поболтать о государственных услугах',
-    applyForIDUserPrompt: 'Мне нужна информация о том, как подать заявку на национальное удостоверение личности',
-    payTaxesUserPrompt: 'Каков процесс оплаты налогов онлайн?',
-    startBusinessUserPrompt: 'Проведите меня через шаги регистрации нового бизнеса',
-    findHealthcareUserPrompt: 'Где я могу найти информацию об общественных медицинских услугах?',
-    educationServicesUserPrompt: 'Какие образовательные услуги доступны для моих детей?',
-    transportLicensesUserPrompt: 'Как мне продлить водительские права?',
-    housingProgramsUserPrompt: 'Расскажите о доступных жилищных программах в Кении',
-    findJobsUserPrompt: 'Какие государственные вакансии доступны в настоящее время?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

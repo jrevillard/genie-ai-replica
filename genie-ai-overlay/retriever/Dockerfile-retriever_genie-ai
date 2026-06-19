@@ -36,6 +36,26 @@ RUN ./fix_dependencies.sh ${REQ_PATH}
 # This installs the *real* 'docarray' package
 RUN pip install --no-cache-dir -r ${REQ_PATH}
 
+# Install OpenTelemetry dependencies for distributed tracing
+RUN pip install --no-cache-dir \
+    "opentelemetry-api>=1.22" "opentelemetry-sdk>=1.22" \
+    "opentelemetry-instrumentation-fastapi>=0.43b0" \
+    "opentelemetry-instrumentation-httpx>=0.43b0" \
+    "opentelemetry-instrumentation-aiohttp-client>=0.43b0" \
+    "opentelemetry-instrumentation-requests>=0.43b0" \
+    "opentelemetry-exporter-otlp-proto-http>=1.22"
+
+# Upgrade langchain-huggingface to fix InferenceClient.post() removal in huggingface_hub>=0.24
+# OPEA v1.3 pins langchain-huggingface==0.1.2 which is incompatible with newer huggingface_hub
+# Pin to 0.3.x series to stay compatible with langchain-core<1.0 (required by langchain-community, langchain-arangodb, etc.)
+RUN pip install --no-cache-dir --upgrade "langchain-huggingface>=0.3.1,<1.0.0"
+
+# Upgrade langchain-arangodb: OPEA v1.3 pins 0.0.4, whose similarity search ignores any
+# `filter_clause` kwarg (silently swallowed by **kwargs, no FILTER in the AQL). This makes
+# category/label filtering a no-op, so every query scans the whole collection. 1.2.0 supports
+# `filter_clause` natively and is compatible with the pinned langchain-core 0.3.x / python-arango 8.x.
+RUN pip install --no-cache-dir --upgrade "langchain-arangodb>=1.2.0,<2.0.0"
+
 # Step D: Fix docarray circular import
 # Reverting to the original, correct "rename hack".
 # 1. Rename the conflicting local file to avoid name collision.
@@ -46,6 +66,9 @@ RUN mv /app/comps/cores/proto/docarray.py /app/comps/cores/proto/opea_docarray.p
     sed -i 's/from \.\.proto.docarray import/from \.\.proto.opea_docarray import/' /app/comps/cores/mega/micro_service.py
 
 # Step E: "Overlay" our custom GENIE-AI files
+# Copy the shared OTel tracing module (importable from PYTHONPATH=/app)
+COPY genie-ai-overlay/tracing.py /app/tracing.py
+
 # Copy overlay files to their correct new locations within /app/comps/
 COPY genie-ai-overlay/retriever/genieai_retriever_arangodb.py /app/comps/retrievers/src/integrations/genieai_retriever_arangodb.py
 # Add the custom config.py from the overlay to fix the ImportError
@@ -59,6 +82,14 @@ COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/geniea
 RUN useradd -ms /bin/bash user && \
     chown -R user:user /app /home/user
 
-# Step G: Run the new GENIE-AI entry point from its new location
+# Step G: Copy SSL bypass runtime patch as sitecustomize (no-op unless OPEA_SSL_SKIP_VERIFY=1)
+# NOTE: Copy to site-packages, NOT dist-packages. Pip installs packages to
+# site-packages in this image, and Python's site module only loads sitecustomize
+# from getsitepackages() dirs.
+COPY configs/ssl/genie_ssl_patch.py /usr/local/lib/python3.10/site-packages/sitecustomize.py
+# Remove system sitecustomize (Ubuntu apport handler) so our patch runs first
+RUN rm -f /usr/lib/python3.10/sitecustomize.py
+
+# Step H: Run the new GENIE-AI entry point from its new location
 USER user
 CMD ["python", "comps/retrievers/src/genieai_retriever_microservice.py"]

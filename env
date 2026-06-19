@@ -209,6 +209,13 @@ HUGGING_FACE_HUB_TOKEN=
 # They serve the same purpose but at different stages (build-time vs runtime).
 # VUE_APP_CSP_CONNECT_SRC=
 
+# Available UI locales for this deployment (comma-separated locale codes)
+# Restricts the language picker + vue-i18n loaded messages to the listed codes.
+# Default: unset (all locales under src/i18n/locales/ are active)
+# Example (El Salvador): en,es
+# Locale source files are never deleted — this only filters which are exposed.
+# VUE_APP_AVAILABLE_LOCALES=
+
 # =============================================================================
 # SECTION 6: BACKEND SERVICE CONFIGURATION
 # =============================================================================
@@ -375,6 +382,10 @@ KEYCLOAK_ADMIN_PASSWORD=
 # Used by: keycloak-config-cli (creates admin user in GENIE realm)
 GENIE_ADMIN_PASSWORD=
 
+# GENIE realm admin email (REQUIRED — must be a valid email address)
+# Used by: keycloak-config-cli (creates admin user in GENIE realm)
+GENIE_ADMIN_EMAIL=
+
 # Keycloak PostgreSQL password (REQUIRED — must differ from POSTGRES_PASSWORD)
 # Used by: postgres-init (creates dedicated 'keycloak' DB user), keycloak service
 # Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
@@ -402,7 +413,9 @@ KEYCLOAK_DB_PASSWORD=
 # Production: https://your-domain.com
 # KEYCLOAK_WEB_ORIGINS=http://localhost:8090
 
-# TLS verification for backend → NGINX OIDC discovery/JWKS fetches
+# TLS verification for Node.js services (backend, document-repository).
+# Affects all HTTPS connections: backend → NGINX OIDC/JWKS fetches,
+# backend → Keycloak token introspection, document-repository → NGINX.
 # Default: 1 (strict, production). Set to 0 for local dev with self-signed NGINX certs.
 # NODE_TLS_REJECT_UNAUTHORIZED=0
 
@@ -466,7 +479,7 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 # Password policy (Keycloak policy syntax)
 # Default (in docker-compose.yaml): length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)
 # To simplify: KEYCLOAK_PASSWORD_POLICY=length(8)
-# KEYCLOAK_PASSWORD_POLICY=
+# KEYCLOAK_PASSWORD_POLICY=length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)
 
 # Theme for login, account console, and email (default: genie — custom GENIE.AI theme)
 # KEYCLOAK_THEME=genie
@@ -476,6 +489,12 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 
 # Default locale for login pages (default: en)
 # KEYCLOAK_LOCALE=en
+
+# Supported locales for login/account pages — JSON array of locale codes.
+# Restricts the Keycloak language picker. Default (unset): the curated set
+# ["ar","de","en","es","fr","pt","ru","th","zh-Hans"].
+# Example (El Salvador): ["en","es"]
+# KEYCLOAK_SUPPORTED_LOCALES=
 
 # Access token lifespan in seconds (default: 300 = 5 minutes)
 # KEYCLOAK_ACCESS_TOKEN_LIFESPAN=300
@@ -539,6 +558,50 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 # TELEMETRY_ENDPOINT=http://127.0.0.1:4318/v1/traces
 
 # =============================================================================
+# SECTION 12C: OBSERVABILITY STACK (OPTIONAL)
+# =============================================================================
+# Deploy OTel Collector + VictoriaMetrics + VictoriaLogs + Grafana alongside the application.
+# All services use the fluentd logging driver to forward container logs to the
+# OTel Collector's fluent_forward receiver (port 24224, localhost only).
+# Docker dual logging (20.10+) keeps `docker logs` functional.
+# Enable via: docker compose --profile observability up -d
+#   or Swarm:  ENABLE_OBSERVABILITY=1 in .env (MUST be 0 or 1, not true/false)
+#   or Ansible: enable_observability: "1" in group_vars/all.yml
+#
+# Uncomment to override defaults (all have sensible defaults in docker-compose):
+# ENABLE_OBSERVABILITY=0
+# GRAFANA_ADMIN_USER=admin
+# GRAFANA_PORT=3002
+# VICTORIAMETRICS_RETENTION=30d
+# VICTORIALOGS_RETENTION=30d
+# VICTORIATRACES_RETENTION=30d
+# OTEL_TRACES_SAMPLER_RATE=100.0
+# KONG_TRACING_INSTRUMENTATIONS=request
+# KONG_TRACING_SAMPLING_RATE=1.0
+# OpenTelemetry OTLP endpoint — backend (Node.js) and OPEA services (Python) export traces here
+# Default in docker-compose: http://otel-collector:4318 — override only for external collectors
+# OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+
+# Grafana alerting contact points (optional — configure via Grafana UI for production)
+# Used by: grafana service (alerting notification channels)
+# GRAFANA_ALERT_WEBHOOK_URL=
+# GRAFANA_ALERT_EMAIL=
+
+# Grafana admin password (required secret, no default)
+# Used by: grafana service
+GRAFANA_ADMIN_PASSWORD=
+
+# Grafana OIDC client (required secret, no default)
+# Used by: keycloak-config service (creates grafana OIDC client), grafana service (OAuth)
+KC_GRAFANA_CLIENT_ID=grafana
+KC_GRAFANA_CLIENT_SECRET=
+
+# Grafana OAuth configuration (override defaults in docker-compose):
+# GF_AUTH_GENERIC_OAUTH_ENABLED=true
+# GF_AUTH_GENERIC_OAUTH_NAME=Keycloak
+# GF_AUTH_GENERIC_OAUTH_SCOPES=openid profile email
+
+# =============================================================================
 # SECTION 13: DOCKER SWARM MULTI-NODE (OPTIONAL)
 # =============================================================================
 # Override these variables when deploying with Docker Swarm (docker stack deploy).
@@ -593,4 +656,74 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 #
 # GPU-specific overrides work the same as Docker:
 #   set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
+
+# =============================================================================
+# SECTION 14: REMOTE GPU NODE (OPTIONAL)
+# =============================================================================
+# When deploying a dedicated GPU node with the remote architecture (issue #758),
+# override the default local Docker DNS endpoints to point to the GPU node via HTTPS.
+# The GPU node runs nginx with TLS and API key authentication on port 443
+# with path-based routing: /llm/, /translation/, /embed/, /rerank/, /docling/.
+#
+# GPU_NODE_HOST=gpu.example.com
+#   DNS hostname or IP of the remote GPU node.
+#   All services below derive their URLs from this variable.
+#
+# GPU_MODEL_REPLICAS=0
+#   Set to 0 to skip GPU-heavy containers (vllm, tei, tei_reranker,
+#   vllm-translation-guardrail) on the app node when using a remote GPU node.
+#   Docker Compose: use --profile opea only (gpu-models profile is excluded).
+#   Docker Swarm: set in .env; defaults to DEPLOY_OPEA value when unset.
+#   Ansible: set automatically when gpu_node_host is configured.
+#
+# GPU_PUBLIC_DOMAIN=gpu.example.com
+#   Public domain for the GPU node (used by certbot for TLS certificates).
+#   Typically same as GPU_NODE_HOST. Set on the GPU node in .env.
+#
+# VLLM_ENDPOINT=https://${GPU_NODE_HOST}/llm
+# VLLM_TRANSLATION_ENDPOINT=https://${GPU_NODE_HOST}/translation
+# EMBEDDING_SERVICE_URL=https://${GPU_NODE_HOST}/embed
+# RERANKER_SERVICE_URL=https://${GPU_NODE_HOST}/rerank
+#
+# DOCLING_ENDPOINT=https://${GPU_NODE_HOST}/docling
+#   Remote docling-serve endpoint for document extraction.
+#   When set, dataprep sends documents to the remote GPU node for processing.
+#   When empty, dataprep uses the in-process docling converter (existing behavior).
+#
+# DOCLING_ENDPOINT_TIMEOUT=120
+#   HTTP timeout (seconds) for remote docling-serve calls. Default: 120.
+#
+# VLLM_API_KEY=<api-key-for-your-instance>
+#   API key for authenticating with the GPU node nginx proxy.
+#   Sent as standard Authorization: Bearer header by all clients:
+#   - OpenAI-compatible clients (ChatOpenAI, AsyncOpenAI) use api_key param → Bearer natively.
+#   - OPEA TEI wrapper services (embedding, reranker) use huggingface_hub SDK →
+#     HF_TOKEN env var (automatically set from VLLM_API_KEY in docker-compose.yaml).
+#   - Custom HTTP clients (backend translation, dataprep docling) set Authorization header explicitly.
+#   One key per GENIE.AI instance, shared across all 5 GPU services.
+#   Contact the GPU node administrator to obtain your key.
+#
+# Self-signed TLS certificate:
+#   If the GPU node uses a self-signed certificate (private IP, no Let's Encrypt),
+#   Option A — Disable TLS verification (simpler, private network only):
+#     NODE_TLS_REJECT_UNAUTHORIZED=0
+#   Option B — Trust the certificate (recommended for production):
+#     Copy gpu-node.crt from the GPU node and set:
+#     NODE_EXTRA_CA_CERTS=/path/to/gpu-node.crt      (Node.js)
+#     REQUESTS_CA_BUNDLE=/path/to/gpu-node.crt         (Python)
+#
+# OPEA_SSL_SKIP_VERIFY=0
+#   Set to 1 to disable SSL certificate verification in OPEA Python services
+#   (embedding, reranker, textgen, chatqna, retriever, dataprep). Required when
+#   the remote GPU node uses a self-signed certificate. Baked into Docker images
+#   via genie_ssl_patch.py — no volume mounts needed. Default: 0 (verify certs).
+#   When using Let's Encrypt or a recognized CA, leave at 0 (default).
+#
+# KEYCLOAK_SSL_SKIP_VERIFY=0
+#   Set to 1 to disable SSL certificate verification for dataprep's Keycloak
+#   service account token fetch (aiohttp connector in keycloak_service_account.py).
+#   Required when Keycloak is behind NGINX with a self-signed certificate.
+#   Independent of OPEA_SSL_SKIP_VERIFY. Default: 0 (verify certs).
+#   Only affects dataprep-arango-service. Backend and chatqna use NODE_TLS_REJECT_UNAUTHORIZED
+#   for NGINX TLS verification instead.
 

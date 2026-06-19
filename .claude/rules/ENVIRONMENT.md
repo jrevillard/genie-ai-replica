@@ -71,6 +71,19 @@ In Swarm mode, only nginx and ArangoDB are exposed on the host. All other servic
 | ChatQnA | 8888 |
 | Translation | 9031 |
 
+### Internal — Observability (`ENABLE_OBSERVABILITY` controlled, container-only)
+| Service | Port | Notes |
+|---------|------|-------|
+| OTel Collector (OTLP HTTP) | 4318 | Receives traces/metrics from app services |
+| OTel Collector (fluent_forward) | 24224 | Receives container logs via Docker fluentd driver (localhost only) |
+| OTel Collector (healthcheck) | 13133 | Internal only |
+| VictoriaMetrics | 8428 | Internal only, Grafana queries this |
+| VictoriaLogs | 9428 | Internal only, Grafana queries this |
+| VictoriaTraces | 10428 | Internal only, Grafana queries this via Jaeger datasource |
+| Grafana | 3000 (container) | Accessible via Kong route `/grafana/` (no direct host port) |
+
+All services use the fluentd logging driver to forward stdout/stderr to the Collector. Docker dual logging (20.10+) keeps `docker logs` functional.
+
 ### Disabled (`replicas: 0`, not running)
 | Service | Port | Reason |
 |---------|------|--------|

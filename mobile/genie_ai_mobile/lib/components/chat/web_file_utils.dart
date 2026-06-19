@@ -92,10 +92,15 @@ Future<void> openWebFile({
 
     final tokens = ThemeManager().tokens;
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      backgroundColor: tokens.surface,
-      content: Text("${tr('sidebar.launchError')}: $e", style: TextStyle(color: tokens.fg)),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: tokens.surface,
+        content: Text(
+          "${tr('sidebar.launchError')}: $e",
+          style: TextStyle(color: tokens.fg),
+        ),
+      ),
+    );
   }
 }
 

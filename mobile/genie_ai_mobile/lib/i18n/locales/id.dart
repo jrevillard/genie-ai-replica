@@ -507,7 +507,8 @@ const Map<String, dynamic> idLocale = {
         "Ini akan menghapus semua data profil dan riwayat obrolan Anda.",
     "manageMyAccount": "Manage My Account",
     "manageMyAccountDesc": "Update your email, password, and account settings.",
-    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "deleteAccount": "Hapus Akun",
     "deleteAccountDesc":
         "Ini akan menghapus akun Anda dan semua data terkait secara permanen.",
@@ -1006,13 +1007,13 @@ const Map<String, dynamic> idLocale = {
     },
   },
   "chatbot": {
+    "aiGeneratedNoDocs":
+        "Dihasilkan oleh AI — tidak berdasarkan dokumen perpustakaan",
     "placeholder": "Ketik pertanyaan Anda di sini...",
     "sendButton": "Kirim",
     "fileReceived": "Berkas berhasil diterima.",
     "fileUploadError": "Kesalahan mengunggah berkas.",
     "processingError": "Kesalahan memproses permintaan Anda.",
-    "welcomeMessage":
-        "Selamat datang! Bagaimana saya dapat membantu Anda dengan layanan pemerintah Kenya hari ini?",
     "attachFile": "Lampirkan Berkas",
     "fileTooLarge": "Berkas terlalu besar. Ukuran maksimum adalah {maxSize}.",
     "saveChat": "Simpan Obrolan",
@@ -1025,7 +1026,6 @@ const Map<String, dynamic> idLocale = {
     "unsavedChanges":
         "Anda memiliki perubahan yang belum disimpan. Apakah Anda yakin ingin memulai obrolan baru?",
     "whatCanIHelp": "Bagaimana saya bisa membantu Anda hari ini?",
-    "justChat": "Hanya Mengobrol",
     "queryContext": "Konteks Kueri",
     "contextAdded": "Konteks ditambahkan ke kueri Anda",
     "contextRemoved": "Konteks dihapus dari kueri Anda",
@@ -1075,53 +1075,7 @@ const Map<String, dynamic> idLocale = {
     },
     "shareWhatsApp": "Bagikan di WhatsApp",
   },
-  "quickhelp": {
-    "applyForID": "Ajukan KTP",
-    "payTaxes": "Bayar Pajak",
-    "startBusiness": "Mulai Bisnis",
-    "findHealthcare": "Layanan Kesehatan",
-    "educationServices": "Pendidikan",
-    "transportLicenses": "Transportasi",
-    "housingPrograms": "Perumahan",
-    "findJobs": "Cari Kerja",
-    "justChat": "Obrolan Santai",
-    "applyForIDPrompt":
-        "Bertindaklah sebagai ahli pendaftaran sipil Kenya yang membantu. Jelaskan langkah-langkah untuk mendapatkan KTP Nasional (Maisha Namba) atau mengganti yang hilang. PENTING: Berikan daftar dokumen yang diperlukan dengan jelas (misalnya, Akta Kelahiran, salinan KTP orang tua) dan sarankan pengguna untuk mengunjungi Huduma Centre atau kantor Pencatatan Sipil terdekat. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    "payTaxesPrompt":
-        "Bertindaklah sebagai panduan KRA (Otoritas Pendapatan Kenya). Jelaskan proses pengajuan SPT, pengajuan PIN KRA, atau pengaturan ulang kata sandi di portal iTax. PENTING: Ingatkan pengguna tentang batas waktu 30 Juni untuk SPT tahunan dan pandu mereka tentang cara mengajukan SPT Nihil (Nil returns) jika mereka tidak memiliki penghasilan. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    "startBusinessPrompt":
-        "Bertindaklah sebagai konsultan bisnis untuk layanan eCitizen. Pandu pengguna melalui pemesanan nama bisnis dan pendaftaran perusahaan di Kenya. PENTING: Jelaskan biaya saat ini untuk pencarian nama dan pendaftaran, dan arahkan pengguna ke portal resmi eCitizen untuk menyelesaikan aplikasi. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    "findHealthcarePrompt":
-        "Bertindaklah sebagai navigator layanan kesehatan. Berikan informasi tentang transisi dari NHIF ke SHIF (Dana Asuransi Kesehatan Sosial) dan cara mendaftar. PENTING: Bagikan kode USSD resmi (seperti *263#) atau tautan situs web untuk pendaftaran dan jelaskan manfaat jaminan kesehatan masyarakat. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    "educationServicesPrompt":
-        "Bertindaklah sebagai konselor pendidikan. Diskusikan kurikulum CBC, pendaftaran NEMIS, atau penempatan universitas melalui KUCCPS. PENTING: Jelaskan bagaimana orang tua dapat memeriksa hasil ujian nasional melalui SMS atau portal KNEC saat dirilis. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    "transportLicensesPrompt":
-        "Bertindaklah sebagai panduan layanan NTSA. Jelaskan proses perpanjangan SIM, pemeriksaan kendaraan, atau pengelolaan akun TIMS. PENTING: Pandu pengguna tentang cara masuk ke portal eCitizen NTSA untuk mengajukan Smart DL atau memesan pemeriksaan kendaraan. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    "housingProgramsPrompt":
-        "Bertindaklah sebagai penasihat program perumahan. Jelaskan pendaftaran Program Perumahan Terjangkau (Boma Yangu) dan proses kontribusi sukarela. PENTING: Pandu pengguna ke portal Boma Yangu untuk melihat proyek dan jelaskan kriteria kelayakan untuk alokasi. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    "findJobsPrompt":
-        "Bertindaklah sebagai pelatih karir untuk layanan publik. Pandu pengguna membuat profil dan melamar lowongan melalui portal Komisi Layanan Publik (PSC). PENTING: Sarankan pengguna untuk menyiapkan sertifikat akademik mereka dan secara teratur memeriksa situs web PSC atau harian lokal untuk iklan MyGov. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    "justChatPrompt":
-        "Bertindaklah sebagai teman lokal yang ramah. Bersikap sopan, membantu, dan berpengetahuan tentang budaya Kenya dan kehidupan sehari-hari. PENTING: Ingatkan pengguna bahwa meskipun Anda dapat mengobrol tentang apa saja, kekuatan utama Anda adalah membantu mereka menavigasi layanan pemerintah Kenya seperti **KTP**, **Pajak**, dan **Pendaftaran Bisnis**. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
-    "applyForIDUserPrompt":
-        "Saya ingin mencari tahu tentang cara mengajukan kartu KTP Nasional di Kenya.",
-    "payTaxesUserPrompt":
-        "Saya ingin bertanya tentang membayar pajak atau mengajukan SPT KRA saya di Kenya.",
-    "startBusinessUserPrompt":
-        "Saya ingin mencari tahu tentang mendaftarkan bisnis atau perusahaan baru di Kenya.",
-    "findHealthcareUserPrompt":
-        "Saya ingin bertanya tentang fasilitas kesehatan masyarakat dan asuransi (NHIF/SHIF) di Kenya.",
-    "educationServicesUserPrompt":
-        "Saya ingin mencari tahu tentang sekolah dan layanan pendidikan di Kenya.",
-    "transportLicensesUserPrompt":
-        "Saya ingin bertanya tentang SIM dan layanan NTSA di Kenya.",
-    "housingProgramsUserPrompt":
-        "Saya ingin mencari tahu tentang Program Perumahan Terjangkau (Boma Yangu) di Kenya.",
-    "findJobsUserPrompt":
-        "Saya ingin bertanya tentang peluang kerja pemerintah dan lamaran PSC di Kenya.",
-    "justChatUserPrompt":
-        "Saya ingin mengobrol secara umum tentang kehidupan di Kenya.",
-  },
+  "quickhelp": {},
   "common": {
     "cancel": "Batal",
     "create": "Buat",
@@ -1195,4 +1149,6 @@ const Map<String, dynamic> idLocale = {
     "techStack": "Tech Stack",
     "copyright": "Hak cipta dilindungi undang-undang.",
   },
+  'welcomeMessage':
+      'Selamat datang! Bagaimana saya bisa membantu Anda hari ini?',
 };

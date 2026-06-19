@@ -21,7 +21,7 @@ GENIE.AI services are placed on nodes using three labels:
 | Placement | Constraint | Services |
 |-----------|------------|----------|
 | **Gateway** (label) | `node.labels.gateway == true` | Kong, NGINX, PostgreSQL |
-| **GENIE.AI** (label) | `node.labels.genieai == true` | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Keycloak |
+| **GENIE.AI** (label) | `node.labels.genieai == true` | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Keycloak, OTel Collector (global mode), VictoriaMetrics, VictoriaLogs, Grafana |
 | **GPU** (label) | `node.labels.gpu == true` | vLLM, TEI embedding, TEI reranking, Retriever, Dataprep, ChatQnA, Translation, Guardrail |
 
 All three labels (`gateway=true`, `genieai=true`, `gpu=true`) must be applied manually to the target nodes. A single node can have multiple labels.
@@ -45,6 +45,14 @@ Manager (gateway=true)                → Gateway only (Kong, NGINX, PostgreSQL)
 Worker  (genieai=true)                → GENIE.AI services
 Worker  (gpu=true)                     → GPU services
 ```
+
+**Remote GPU node** — dedicated GPU node deployed separately:
+```
+App node (gateway=true, genieai=true)  → All app services (no OPEA/GPU)
+GPU node (standalone)                   → 5 AI services behind nginx proxy
+```
+
+See [Remote GPU Node](#remote-gpu-node) below for details.
 
 ## Step 1: Initialize Swarm
 
@@ -215,7 +223,7 @@ docker build -f genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai -t genie-ai
 docker build -f genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai -t genie-ai-reranker:latest .
 ```
 
-This builds 14 services. Skip the OPEA builds if `DEPLOY_OPEA=0`.
+This builds 13 services (9 base + 4 OPEA). Skip the OPEA builds if `DEPLOY_OPEA=0`.
 
 ### 5b. Tag images for local registry
 
@@ -275,6 +283,9 @@ docker pull opea/embedding:latest
 docker pull opea/chatqna-ui:latest
 docker pull opea/nginx:latest
 docker pull ghcr.io/huggingface/text-embeddings-inference:1.9.3
+docker pull otel/opentelemetry-collector-contrib:0.152.0
+docker pull victoriametrics/victoria-metrics:v1.138.0
+docker pull grafana/grafana:12.4
 docker pull nginx:alpine
 docker pull quay.io/keycloak/keycloak:26.6.1
 docker pull adorsys/keycloak-config-cli:6.5.0-26
@@ -333,6 +344,28 @@ To skip OPEA/AI services (no GPU required), set in `.env`:
 ```bash
 DEPLOY_OPEA=0
 ```
+
+To enable the observability stack (OTel Collector, VictoriaMetrics, VictoriaLogs, Grafana), set in `.env`:
+
+```bash
+ENABLE_OBSERVABILITY=1
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=<strong-password>
+KC_GRAFANA_CLIENT_ID=grafana
+KC_GRAFANA_CLIENT_SECRET=<strong-secret>
+```
+
+**Note:** `ENABLE_OBSERVABILITY` must be `0` or `1`, not `true`/`false`.
+
+### Observability stack details
+
+When `ENABLE_OBSERVABILITY=1`:
+
+- **Log collection**: All services use the fluentd logging driver (`driver: fluentd`) to forward container logs to the OTel Collector's `fluent_forward` receiver on port 24224 (localhost only). Docker dual logging (20.10+) keeps `docker logs` functional.
+- **Collector placement**: The OTel Collector runs in `mode: global` with placement constraint `node.labels.genieai == true`, ensuring one Collector instance per application node (multi-node Swarm compatible).
+- **Grafana access**: Accessible via Kong route `/grafana/` with Keycloak OIDC SSO (no direct host port exposure). Three dashboards are pre-configured: **Service Health**, **RAG Pipeline Trace Waterfall**, and **Service Logs**.
+
+See `configs/otel/README.md` for Collector configuration details.
 
 ### Kong trusted IPs (required for Swarm)
 
@@ -397,9 +430,12 @@ Fix any errors before proceeding. This catches missing variables and syntax issu
 
 From the project root on the **manager node**:
 
+> **Important:** `docker stack deploy` does not substitute `${VAR}` references from environment variables. `docker compose config` pre-resolves them into a flat YAML file suitable for Swarm deployment.
+
 ```bash
 set -a && source .env && set +a
-docker stack deploy -c docker-compose.yaml genieai
+docker compose config > docker-compose.resolved.yaml
+docker stack deploy -c docker-compose.resolved.yaml genieai
 ```
 
 This creates a stack named `genieai`. All services start according to their placement constraints.
@@ -407,7 +443,9 @@ This creates a stack named `genieai`. All services start according to their plac
 ### With GPU-specific overrides:
 
 ```bash
-set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
+set -a && source .env && source env.t4 && set +a
+docker compose config > docker-compose.resolved.yaml
+docker stack deploy -c docker-compose.resolved.yaml genieai
 ```
 
 ## Step 9: Post-Deploy — Kong Configuration
@@ -563,6 +601,8 @@ docker volume rm genieai_postgres_data
 docker volume rm genieai_redis_data
 docker volume rm genieai_doc_repo_uploads
 docker volume rm genieai_arango_data
+docker volume rm genieai_vm-data
+docker volume rm genieai_grafana-data
 
 # Remove local registry (if no longer needed)
 docker stop registry && docker rm registry
@@ -599,7 +639,8 @@ cp env .env
 
 # Deploy
 set -a && source .env && set +a
-docker stack deploy -c docker-compose.yaml genieai
+docker compose config > docker-compose.resolved.yaml
+docker stack deploy -c docker-compose.resolved.yaml genieai
 
 # Remove the stack
 docker stack rm genieai
@@ -649,7 +690,8 @@ docker push localhost:5000/genie-ai-kong-config:latest
 
 # 5. Deploy
 set -a && source .env && set +a
-docker stack deploy -c docker-compose.yaml genieai
+docker compose config > docker-compose.resolved.yaml
+docker stack deploy -c docker-compose.resolved.yaml genieai
 
 # 6. Verify
 docker service ls
@@ -718,3 +760,81 @@ docker exec $(docker ps -q | head -1) ping -c 1 backend
 ### DNS resolution delays
 
 Swarm overlay DNS may have delays on first resolution. This causes services to fail on startup and get restarted by the restart policy. This is normal behavior — services stabilize after a few restart cycles.
+
+## Remote GPU Node
+
+GENIE.AI supports deploying AI services on a dedicated GPU node, separate from the
+app stack. The GPU node runs 5 AI services behind nginx with TLS termination and
+API key authentication (default port 443, configurable via `gpu_https_port`), using path-based routing.
+
+### Architecture
+
+```
+App node (Docker Swarm)                    GPU node (standalone)
+┌─────────────────────────┐                ┌─────────────────────────────┐
+│ Frontend, Backend,      │                │ nginx-gpu (port 443)       │
+│ ArangoDB, Redis, ...    │   HTTPS 443    │   /llm/        → vLLM LLM   │
+│                         │ ────────────── │   /translation/ → vLLM T    │
+│ ChatQnA ──────────────────────────────→ │   /embed/      → TEI Emb   │
+│ Retriever ────────────────────────────→ │   /rerank/     → TEI Rer   │
+│ Dataprep ────────────────────────────→ │   /docling/    → docling    │
+└─────────────────────────┘                └─────────────────────────────┘
+```
+
+### Connect the App Node
+
+Set in the app node's `.env` (Section 14):
+
+```bash
+GPU_NODE_HOST=<gpu-node-host>       # GPU node IP or hostname
+GPU_MODEL_REPLICAS=0                # Skip local GPU containers (vllm, tei, etc.)
+VLLM_API_KEY=<your-api-key>         # API key from the GPU node administrator (Authorization: Bearer)
+OPEA_SSL_SKIP_VERIFY=1              # If GPU node uses self-signed certs
+```
+
+`GPU_MODEL_REPLICAS=0` tells Swarm to deploy 0 replicas of GPU-heavy containers
+(vllm, tei, tei_reranker, vllm-translation-guardrail). Orchestrators (ChatQnA,
+Retriever, Dataprep) still deploy and connect to the remote GPU node via the
+override endpoints.
+
+`VLLM_API_KEY` authenticates with the GPU node nginx via standard `Authorization: Bearer`
+header. All OpenAI-compatible clients (ChatOpenAI, AsyncOpenAI, OpenAIEmbeddings)
+send this natively — no custom injection needed.
+
+`OPEA_SSL_SKIP_VERIFY=1` disables SSL certificate verification in OPEA services
+via a runtime patch (`configs/ssl/genie_ssl_patch.py`). Only use with self-signed
+certs. Omit if the GPU node uses Let's Encrypt or a public CA.
+
+`KEYCLOAK_SSL_SKIP_VERIFY=1` independently disables SSL verification for
+dataprep's Keycloak service account token fetch. Set this if Keycloak uses a
+self-signed certificate.
+
+#### Self-Signed Certificates — Decision Matrix
+
+Three environment variables control TLS verification for self-signed certificates. Each covers a different layer:
+
+| Variable | Services | Mechanism | When to set |
+|---|---|---|---|
+| `NODE_TLS_REJECT_UNAUTHORIZED=0` | backend, document-repository | Node.js built-in (all HTTPS connections) | NGINX uses self-signed cert |
+| `OPEA_SSL_SKIP_VERIFY=1` | embedding, reranker, textgen, dataprep, retriever, chatqna (7 Python services) | `configs/ssl/genie_ssl_patch.py` (patches Python ssl module) | Remote GPU node uses self-signed cert |
+| `KEYCLOAK_SSL_SKIP_VERIFY=1` | dataprep-arango-service only | aiohttp connector in `keycloak_service_account.py` | Keycloak behind NGINX with self-signed cert |
+
+**Quick reference — which variables to set by scenario:**
+
+| Scenario | `NODE_TLS_REJECT_...` | `OPEA_SSL_...` | `KEYCLOAK_SSL_...` |
+|---|---|---|---|
+| Swarm deploy, self-signed NGINX, no remote GPU | `0` | — | — |
+| Swarm deploy, remote GPU with self-signed cert | `0` | `1` | — |
+| Production, real CA certificates on all hosts | — | — | — |
+| Production/air-gapped, self-signed NGINX | `0` | `1`* | `1` |
+
+`—` = use default (verify certs). \* Only if remote GPU node also uses self-signed cert.
+Set these in `.env` before running Ansible (see `env` Section 14 for GPU node variables).
+
+**Warning:** `DEPLOY_OPEA` must remain `1` — it controls the orchestrator services.
+Setting `DEPLOY_OPEA=0` disables ALL OPEA services (including orchestrators) and
+breaks the RAG pipeline. Use `GPU_MODEL_REPLICAS=0` to skip only GPU containers.
+
+Ansible sets `GPU_MODEL_REPLICAS=0` automatically when `gpu_node_host` is configured.
+
+For GPU node deployment, see `deploy/ansible/README.md` (Remote GPU Node section).

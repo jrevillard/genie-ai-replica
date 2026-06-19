@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const securityScanService = require('../services/security-scan-service');
+const queryService = require('../services/query-service');
 const { logger } = require('../shared-lib');
 
 /**
@@ -574,6 +575,135 @@ module.exports = (adminService, logsService) => {
       res.json(result);
     } catch (error) {
       logger.error(`[ADMIN-ROUTES] Error searching users: ${error.message}`, { stack: error.stack });
+      next(error);
+    }
+  });
+
+  // ============================================================
+  // QUERY INSPECTOR ROUTES
+  // ============================================================
+
+  /**
+   * @swagger
+   * /admin/queries/inspect:
+   *   get:
+   *     summary: Get recent queries for admin inspection (Query Inspector)
+   *     tags: [Admin]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
+   *     parameters:
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *         description: Maximum number of queries to return (default 50)
+   *       - in: query
+   *         name: offset
+   *         schema:
+   *           type: integer
+   *         description: Offset for pagination
+   *       - in: query
+   *         name: userId
+   *         schema:
+   *           type: string
+   *         description: Filter by user ID
+   *       - in: query
+   *         name: searchText
+   *         schema:
+   *           type: string
+   *         description: Search in query text
+   *       - in: query
+   *         name: startDate
+   *         schema:
+   *           type: string
+   *         description: Filter from date (ISO string)
+   *       - in: query
+   *         name: endDate
+   *         schema:
+   *           type: string
+   *         description: Filter to date (ISO string)
+   *       - in: query
+   *         name: minConfidence
+   *         schema:
+   *           type: number
+   *         description: Minimum confidence score (0-1)
+   *       - in: query
+   *         name: maxConfidence
+   *         schema:
+   *           type: number
+   *         description: Maximum confidence score (0-1)
+   *     responses:
+   *       200:
+   *         description: Queries retrieved successfully
+   *       401:
+   *         description: Unauthorized
+   *       403:
+   *         description: Forbidden - admin access required
+   *       500:
+   *         description: Server error
+   */
+  router.get('/queries/inspect', async (req, res, next) => {
+    try {
+      const allowedParams = [
+        'limit',
+        'offset',
+        'userId',
+        'searchText',
+        'startDate',
+        'endDate',
+        'minConfidence',
+        'maxConfidence'
+      ];
+      const params = {};
+      for (const key of allowedParams) {
+        if (req.query[key] !== undefined) params[key] = req.query[key];
+      }
+      logger.info('[ADMIN-ROUTES] Query Inspector - fetching queries', { query: params });
+      const result = await queryService.getQueriesForInspector(params);
+      res.json(result);
+    } catch (error) {
+      logger.error(`[ADMIN-ROUTES] Error in Query Inspector: ${error.message}`, { stack: error.stack });
+      next(error);
+    }
+  });
+
+  /**
+   * @swagger
+   * /admin/queries/inspect/{queryId}:
+   *   get:
+   *     summary: Get full query details for admin inspection
+   *     tags: [Admin]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
+   *     parameters:
+   *       - in: path
+   *         name: queryId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The query ID to inspect
+   *     responses:
+   *       200:
+   *         description: Query details retrieved successfully
+   *       401:
+   *         description: Unauthorized
+   *       403:
+   *         description: Forbidden - admin access required
+   *       404:
+   *         description: Query not found
+   *       500:
+   *         description: Server error
+   */
+  router.get('/queries/inspect/:queryId', async (req, res, next) => {
+    try {
+      logger.info('[ADMIN-ROUTES] Query Inspector - fetching query details', { queryId: req.params.queryId });
+      const result = await queryService.getQueryInspectorDetails(req.params.queryId);
+      res.json(result);
+    } catch (error) {
+      if (error.message === 'document not found' || (error.errorNum && error.errorNum === 1202)) {
+        return res.status(404).json({ success: false, message: 'Query not found' });
+      }
+      logger.error(`[ADMIN-ROUTES] Error in Query Inspector details: ${error.message}`, { stack: error.stack });
       next(error);
     }
   });

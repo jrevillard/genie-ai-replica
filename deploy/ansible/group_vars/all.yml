@@ -35,6 +35,14 @@ stack_name: genieai
 compose_file: docker-compose.yaml
 deploy_stabilization_timeout: 900
 deploy_opea: "1"
+enable_observability: "0"
+grafana_admin_user: "admin"
+victoriametrics_retention: "30d"
+victorialogs_retention: "30d"
+victoriatraces_retention: "30d"
+otel_traces_sampler_rate: "100.0"
+grafana_alert_webhook_url: ""
+grafana_alert_email: ""
 registry_port: "5000"
 
 # =============================================================================
@@ -49,6 +57,7 @@ repo_branch: main
 nginx_public_domain: "localhost"
 nginx_http_port: "80"
 nginx_https_port: "443"
+nginx_permissions_policy: "camera=(), microphone=(), geolocation=()"
 
 # Kong trusted IPs for X-Forwarded-* header passthrough.
 # Kong must trust nginx (on the Docker network) to pass through X-Forwarded-Proto,
@@ -83,3 +92,43 @@ teardown_remove_registry: false
 #   gitlab_runner_use_socket_proxy: false
 #   in group_vars/gitlab_runners/vars.yml
 gitlab_url: "https://opensource.unicc.org"
+
+# =============================================================================
+# GPU NODE (defaults — override in group_vars/<env>/vars.yml)
+# =============================================================================
+gpu_deploy_dir: /opt/genieai-gpu
+gpu_data_dir: ./data
+gpu_generated_dir: configs/nginx-gpu
+
+gpu_public_domain: gpu.example.com
+gpu_https_port: "443"
+gpu_self_signed_certs: true
+gpu_env_file: ""
+nvidia_visible_devices: "all"
+
+# Remote GPU node (set in group_vars/<env>/vars.yml to route AI services to a dedicated GPU host)
+gpu_node_host: ""
+vllm_api_key: ""
+
+# OPEA runtime patches (set in group_vars/<env>/vars.yml when needed)
+# These are independent of gpu_node_host. For example:
+#   - Remote GPU node with Let's Encrypt: no need to set opea_ssl_skip_verify
+#   - Remote GPU node with self-signed cert: set opea_ssl_skip_verify = "1"
+opea_ssl_skip_verify: ""
+
+# Keycloak SSL verification (independent of OPEA settings)
+# Set to "1" when Keycloak uses a self-signed certificate.
+# Only affects dataprep's Keycloak service account token fetch.
+keycloak_ssl_skip_verify: ""
+
+vllm_llm_image: vllm/vllm-openai:latest
+vllm_translation_image: vllm/vllm-openai:v0.10.0
+tei_embedding_image: ghcr.io/huggingface/text-embeddings-inference:1.9.3
+tei_reranker_image: ghcr.io/huggingface/text-embeddings-inference:1.9.3
+docling_serve_image: ghcr.io/docling-project/docling-serve:v1.21.0
+nginx_image: nginx:1.28-alpine
+
+vllm_llm_model_id: ibm-granite/granite-3.3-2b-instruct
+vllm_translation_model_id: google/gemma-3-4b-it
+embedding_model_id: BAAI/bge-base-en-v1.5
+reranker_model_id: cross-encoder/ms-marco-MiniLM-L-6-v2

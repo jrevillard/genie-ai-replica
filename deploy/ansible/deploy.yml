@@ -274,7 +274,6 @@
             dest: "{{ deploy_dir }}"
             version: "{{ repo_branch }}"
             accept_hostkey: true
-            depth: 1
           when: not git_dir.stat.exists
 
         - name: Pull latest changes
@@ -319,6 +318,7 @@
         -keyout {{ deploy_dir }}/secrets/ssl/server.key
         -out {{ deploy_dir }}/secrets/ssl/server.crt
         -subj "/CN={{ nginx_public_domain | default('localhost') }}"
+        -addext "subjectAltName={{ nginx_public_domain | default('localhost') | ipaddr | ternary('IP', 'DNS') }}:{{ nginx_public_domain | default('localhost') }}"
       when:
         - self_signed_certs | default(false) | bool
         - not ssl_files.results[0].stat.exists or not ssl_files.results[1].stat.exists
@@ -383,6 +383,9 @@
   tags: [build]
   become: true
   tasks:
+    - name: Initialize shared facts (registry URL, image tag)
+      ansible.builtin.include_tasks: tasks/deploy-shared-facts.yml
+
     - name: Define image build list
       ansible.builtin.set_fact:
         genieai_images:
@@ -390,87 +393,107 @@
             dockerfile: components/gov-chat-frontend/Dockerfile
             context: components/gov-chat-frontend/
             source_tag: genieai_mvp_frontend:latest
-            registry_tag: genie-ai-frontend:latest
+            registry_tag: "genie-ai-frontend:{{ image_tag }}"
             opea: false
           - name: backend
             dockerfile: components/gov-chat-backend/Dockerfile
             context: components
             source_tag: genieai_mvp_backend:latest
-            registry_tag: genie-ai-backend:latest
+            registry_tag: "genie-ai-backend:{{ image_tag }}"
             opea: false
           - name: document-repository
             dockerfile: components/document-repository/Dockerfile
             context: components
             source_tag: genieai_mvp_document-repository:latest
-            registry_tag: genie-ai-document-repository:latest
+            registry_tag: "genie-ai-document-repository:{{ image_tag }}"
             opea: false
           - name: nginx
             dockerfile: api-gateway-solution/nginx/Dockerfile
             context: api-gateway-solution/nginx/
             source_tag: genie-ai-nginx:latest
-            registry_tag: genie-ai-nginx:latest
+            registry_tag: "genie-ai-nginx:{{ image_tag }}"
             opea: false
           - name: kong-config
             dockerfile: api-gateway-solution/new-config/Dockerfile
             context: api-gateway-solution/new-config/
             source_tag: genie-ai-kong-config:latest
-            registry_tag: genie-ai-kong-config:latest
+            registry_tag: "genie-ai-kong-config:{{ image_tag }}"
             opea: false
           - name: postgres-init
             dockerfile: configs/postgres/Dockerfile
             context: configs/postgres/
             source_tag: genie-ai-postgres-init:latest
-            registry_tag: genie-ai-postgres-init:latest
+            registry_tag: "genie-ai-postgres-init:{{ image_tag }}"
             opea: false
           - name: keycloak
             dockerfile: configs/keycloak/Dockerfile
             context: configs/keycloak/
             source_tag: genie-ai-keycloak:latest
-            registry_tag: genie-ai-keycloak:latest
+            registry_tag: "genie-ai-keycloak:{{ image_tag }}"
             opea: false
           - name: keycloak-config
             dockerfile: configs/keycloak/Dockerfile.config-cli
             context: configs/keycloak/
             source_tag: genie-ai-keycloak-config:latest
-            registry_tag: genie-ai-keycloak-config:latest
+            registry_tag: "genie-ai-keycloak-config:{{ image_tag }}"
             opea: false
           - name: db-migrations
             dockerfile: components/gov-chat-backend/Dockerfile.migrations
             context: .
             source_tag: genie-ai-db-migrations:latest
-            registry_tag: genie-ai-db-migrations:latest
+            registry_tag: "genie-ai-db-migrations:{{ image_tag }}"
             opea: false
           - name: dataprep-arango
             dockerfile: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
             context: .
             source_tag: genie-ai-dataprep-arango:latest
-            registry_tag: genie-ai-dataprep-arango:latest
+            registry_tag: "genie-ai-dataprep-arango:{{ image_tag }}"
             opea: true
           - name: retriever-arango
             dockerfile: genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
             context: .
             source_tag: genie-ai-retriever-arango:latest
-            registry_tag: genie-ai-retriever-arango:latest
+            registry_tag: "genie-ai-retriever-arango:{{ image_tag }}"
             opea: true
           - name: chatqna-server
             dockerfile: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
             context: .
             source_tag: genie-ai-chatqna-server:latest
-            registry_tag: genie-ai-chatqna-server:latest
+            registry_tag: "genie-ai-chatqna-server:{{ image_tag }}"
             opea: true
           - name: reranker
             dockerfile: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
             context: .
             source_tag: genie-ai-reranker:latest
-            registry_tag: genie-ai-reranker:latest
+            registry_tag: "genie-ai-reranker:{{ image_tag }}"
+            opea: true
+          - name: textgen
+            dockerfile: genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
+            context: .
+            source_tag: genie-ai-textgen:latest
+            registry_tag: "genie-ai-textgen:{{ image_tag }}"
+            opea: true
+          - name: embedding
+            dockerfile: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
+            context: .
+            source_tag: genie-ai-embedding:latest
+            registry_tag: "genie-ai-embedding:{{ image_tag }}"
             opea: true
 
-    - name: Get current git commit SHA
-      ansible.builtin.command: git rev-parse HEAD
-      args:
-        chdir: "{{ deploy_dir }}"
-      register: git_sha
-      changed_when: false
+    # Observability images (built only when enable_observability != "0")
+    - name: Define observability image list
+      ansible.builtin.set_fact:
+        observability_images:
+          - name: tempo-proxy
+            dockerfile: tools/tempo-proxy/Dockerfile
+            context: tools/tempo-proxy/
+            source_tag: tempo-proxy:latest
+            registry_tag: "genieai/tempo-proxy:{{ image_tag }}"
+            opea: false
+
+    - name: Merge image lists (include observability when enabled)
+      ansible.builtin.set_fact:
+        genieai_images: "{{ genieai_images + (observability_images if enable_observability != '0' else []) }}"
 
     - name: Check if images need rebuild
       ansible.builtin.command: >
@@ -498,7 +521,7 @@
       loop_control:
         label: "{{ item.item.name }}"
       register: build_results
-      async: 300
+      async: 600
       poll: 30
 
     - name: Tag image for registry
@@ -549,9 +572,8 @@
           kc_dataprep_client_secret, kc_mobile_client_id, kc_mobile_redirect_scheme.
         quiet: true
 
-    - name: Set swarm registry URL
-      ansible.builtin.set_fact:
-        swarm_registry_url: "{{ swarm_registry_url | default('localhost:' + (registry_port | default('5000'))) }}"
+    - name: Initialize shared facts (registry URL, image tag)
+      ansible.builtin.include_tasks: tasks/deploy-shared-facts.yml
 
     - name: Generate .env file from template
       ansible.builtin.template:
@@ -565,6 +587,7 @@
         _compose_profiles: >-
           {% if deploy_opea is not defined or deploy_opea != '0' %}--profile opea {% endif %}
           {% if certbot_replicas is defined and certbot_replicas != '0' %}--profile letsencrypt {% endif %}
+          {% if enable_observability is defined and enable_observability == '1' %}--profile observability {% endif %}
 
     - name: Validate compose configuration
       ansible.builtin.shell: >
@@ -602,33 +625,36 @@
           {% if gpu_env_file and gpu_env_file | length > 0 %}--env-file {{ deploy_dir }}/{{ gpu_env_file }}{% endif %}
           --env-file {{ deploy_dir }}/.env \
           {{ _compose_profiles }} \
-          -f {{ deploy_dir }}/{{ compose_file }} config > {{ deploy_dir }}/docker-compose.yaml.tmp
+          -f {{ deploy_dir }}/{{ compose_file }} config > {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
 
         # Fix port types: convert quoted port numbers to bare integers
-        sed -i 's/published: "\([0-9]*\)"/published: \1/g' {{ deploy_dir }}/docker-compose.yaml.tmp
+        sed -i 's/published: "\([0-9]*\)"/published: \1/g' {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
 
         # Remove 'name' properties not supported by docker stack deploy
-        sed -i '/^[[:space:]]*name:/d' {{ deploy_dir }}/docker-compose.yaml.tmp
+        sed -i '/^[[:space:]]*name:/d' {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
+
+        # Remove 'host_ip' properties not supported by docker stack deploy
+        sed -i '/^[[:space:]]*host_ip:/d' {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
 
         # Remove 'profiles' blocks not supported by docker stack deploy
         # (profiles is a multi-line YAML block: 'profiles:' + '- xxx' items)
         awk '/^[[:space:]]*profiles:/{match($0,/^[[:space:]]*/);n=RLENGTH;next} n{match($0,/^[[:space:]]*/);if(RLENGTH<=n)n=0} !n' \
-          {{ deploy_dir }}/docker-compose.yaml.tmp > {{ deploy_dir }}/docker-compose.yaml.tmp2
-        mv {{ deploy_dir }}/docker-compose.yaml.tmp2 {{ deploy_dir }}/docker-compose.yaml.tmp
+          {{ deploy_dir }}/docker-compose.resolved.yaml.tmp > {{ deploy_dir }}/docker-compose.resolved.yaml.tmp2
+        mv {{ deploy_dir }}/docker-compose.resolved.yaml.tmp2 {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
 
         # Remove depends_on blocks (not supported by docker stack deploy)
         # docker compose config normalizes depends_on to mapping format which
         # Swarm rejects. Startup ordering relies on healthchecks + restart policy.
         awk '/^[[:space:]]*depends_on:/{match($0,/^[[:space:]]*/);n=RLENGTH;next} n{match($0,/^[[:space:]]*/);if(RLENGTH<=n)n=0} !n' \
-          {{ deploy_dir }}/docker-compose.yaml.tmp > {{ deploy_dir }}/docker-compose.yaml.tmp2
-        mv {{ deploy_dir }}/docker-compose.yaml.tmp2 {{ deploy_dir }}/docker-compose.yaml.tmp
+          {{ deploy_dir }}/docker-compose.resolved.yaml.tmp > {{ deploy_dir }}/docker-compose.resolved.yaml.tmp2
+        mv {{ deploy_dir }}/docker-compose.resolved.yaml.tmp2 {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
 
         # Check if changed and atomically replace
-        if ! diff -q {{ deploy_dir }}/docker-compose.yaml.tmp {{ deploy_dir }}/docker-compose.yaml > /dev/null 2>&1; then
-          mv {{ deploy_dir }}/docker-compose.yaml.tmp {{ deploy_dir }}/docker-compose.yaml
+        if ! diff -q {{ deploy_dir }}/docker-compose.resolved.yaml.tmp {{ deploy_dir }}/docker-compose.resolved.yaml > /dev/null 2>&1; then
+          mv {{ deploy_dir }}/docker-compose.resolved.yaml.tmp {{ deploy_dir }}/docker-compose.resolved.yaml
           echo "COMPOSE_CHANGED"
         else
-          rm {{ deploy_dir }}/docker-compose.yaml.tmp
+          rm {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
           echo "COMPOSE_UNCHANGED"
         fi
       args:
@@ -639,14 +665,14 @@
 
     - name: Set permissions on resolved compose file (contains secrets)
       ansible.builtin.file:
-        path: "{{ deploy_dir }}/docker-compose.yaml"
+        path: "{{ deploy_dir }}/docker-compose.resolved.yaml"
         mode: '0600'
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
 
     - name: Deploy Docker stack
       ansible.builtin.shell: |
-        docker stack deploy -c {{ deploy_dir }}/docker-compose.yaml {{ stack_name }}
+        docker stack deploy -c {{ deploy_dir }}/docker-compose.resolved.yaml {{ stack_name }}
       args:
         chdir: "{{ deploy_dir }}"
       register: stack_deploy
@@ -698,6 +724,7 @@
         | reject('search', 'postgres-init')
         | reject('search', 'keycloak-config')
         | reject('search', 'db-migrations')
+        | reject('search', 'otel-collector-init')
         | reject('search', '0/0')
         | select('search', '0/')
         | length == 0

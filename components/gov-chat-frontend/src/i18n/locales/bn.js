@@ -262,8 +262,6 @@ export default {
       network: 'নেটওয়ার্ক ব্যান্ডউইথ'
     },
     databaseManagement: 'ডেটাবেস ম্যানেজমেন্ট',
-    reindexDatabase: 'ডেটাবেস রি-ইনডেক্স করুন',
-    lastReindex: 'সর্বশেষ রি-ইনডেক্স',
     databaseSize: 'ডেটাবেসের আকার',
     totalTables: 'মোট টেবিল',
     logManagement: 'লগ ম্যানেজমেন্ট',
@@ -294,18 +292,14 @@ export default {
     roleUser: 'ব্যবহারকারী',
     statusActive: 'সক্রিয়',
     dbActions: {
-      reindex: 'রি-ইনডেক্স',
       backup: 'ব্যাকআপ',
       optimize: 'অপ্টিমাইজ করুন',
-      reindexDesc: 'ডেটাবেস ইনডেক্স পুনর্নির্মাণ করুন',
       backupDesc: 'ডেটাবেস ব্যাকআপ তৈরি করুন',
       optimizeDesc: 'কোয়েরি পারফরম্যান্স অপ্টিমাইজ করুন'
     },
     operations: {
-      reindexTitle: 'ডেটাবেস রি-ইনডেক্স ফলাফল',
       backupTitle: 'ডেটাবেস ব্যাকআপ ফলাফল',
       optimizeTitle: 'ডেটাবেস অপ্টিমাইজেশন ফলাফল',
-      reindexResults: 'রি-ইনডেক্স ফলাফল',
       optimizeResults: 'অপ্টিমাইজেশন ফলাফল',
       collection: 'সংগ্রহ (Collection)',
       status: 'স্ট্যাটাস',
@@ -317,11 +311,7 @@ export default {
       errorDetails: 'ত্রুটির বিবরণ',
       close: 'বন্ধ করুন',
       resultsTitle: 'অপারেশনের ফলাফল',
-      reindexDatabase: {
-        success: 'ডেটাবেস রি-ইনডেক্স সফলভাবে সম্পন্ন হয়েছে',
-        error: 'ডেটাবেস রি-ইনডেক্স করার সময় ত্রুটি',
-        loading: 'ডেটাবেস রি-ইনডেক্স করা হচ্ছে...'
-      },
+      reindexDatabase: {},
       backupDatabase: {
         success: 'ডেটাবেস ব্যাকআপ সফলভাবে সম্পন্ন হয়েছে',
         error: 'ডেটাবেস ব্যাকআপ করার সময় ত্রুটি',
@@ -890,7 +880,6 @@ export default {
     accountManagement: 'অ্যাকাউন্ট ব্যবস্থাপনা',
     resetUserData: 'ব্যবহারকারীর ডেটা রিসেট করুন',
     resetUserDataDesc: 'এটি আপনার প্রোফাইলের সমস্ত ডেটা এবং চ্যাটের ইতিহাস মুছে ফেলবে।',
-    edit: 'সম্পাদনা করুন',
     standardAccount: 'স্ট্যান্ডার্ড অ্যাকাউন্ট',
     cancel: 'বাতিল করুন',
     account: {
@@ -1338,12 +1327,18 @@ export default {
     }
   },
   chatbot: {
+    streamingError: 'প্রতিক্রিয়া ব্যাহত হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
+    aiGeneratedNoDocs: 'এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়',
+    welcomeMessage: 'Welcome! How can I assist you today?',
+    configMismatchWarning:
+      'কনফিগারেশন অসমঞ্জতা: {warnings}. দয়া করে দ্রুত সাহায্য এবং জ্ঞান শ্রেণিবিন্যাস কনফিগারেশন পরীক্ষা করুন।',
+    categoryNotFound: 'ক্যাটাগরি "{label}" জ্ঞান শ্রেণিবিন্যাসে পাওয়া যায়নি',
+    serviceLabelMismatch: 'সার্ভিস "{label}" একটি UI লেবেল ব্যবহার করে যা জ্ঞান শ্রেণিবিন্যাসের সাথে মেলে না',
     placeholder: 'আপনার জিজ্ঞাসা এখানে লিখুন...',
     sendButton: 'পাঠান',
     fileReceived: 'ফাইল সফলভাবে গৃহীত হয়েছে।',
     fileUploadError: 'ফাইল আপলোড করতে ত্রুটি।',
     processingError: 'আপনার অনুরোধ প্রক্রিয়া করতে ত্রুটি।',
-    welcomeMessage: 'স্বাগতম! আমি আজ কিভাবে আপনাকে কেনিয়া সরকারের পরিষেবাগুলির সাথে সহায়তা করতে পারি?',
     attachFile: 'ফাইল সংযুক্ত করুন',
     fileTooLarge: 'ফাইলটি অনেক বড়। সর্বোচ্চ আকার হলো {maxSize}।',
     saveChat: 'চ্যাট সেভ করুন',
@@ -1355,7 +1350,7 @@ export default {
     clearContext: 'প্রসঙ্গ পরিষ্কার করুন এবং একটি নতুন চ্যাট শুরু করুন',
     unsavedChanges: 'আপনার অসংরক্ষিত পরিবর্তন আছে। আপনি কি নিশ্চিত যে আপনি একটি নতুন চ্যাট শুরু করতে চান?',
     whatCanIHelp: 'আমি আজ আপনাকে কীভাবে সাহায্য করতে পারি?',
-    justChat: 'শুধু চ্যাট করুন',
+
     queryContext: 'কোয়েরি প্রসঙ্গ',
     contextAdded: 'আপনার কোয়েরিতে প্রসঙ্গ যোগ করা হয়েছে',
     contextRemoved: 'আপনার কোয়েরি থেকে প্রসঙ্গ সরানো হয়েছে',
@@ -1385,26 +1380,8 @@ export default {
   },
   quickhelp: {
     // Labels (Short for UI)
-    applyForID: 'আইডি-এর জন্য আবেদন',
-    payTaxes: 'ট্যাক্স প্রদান',
-    startBusiness: 'ব্যবসা শুরু করুন',
-    findHealthcare: 'স্বাস্থ্যসেবা',
-    educationServices: 'শিক্ষা',
-    transportLicenses: 'পরিবহন',
-    housingPrograms: 'আবাসন',
-    findJobs: 'চাকরি খুঁজুন',
-    justChat: 'শুধু চ্যাট করুন',
 
     // User Prompts (Visible Text - First Person - what user sees in chat)
-    justChatUserPrompt: 'আমি সরকারি পরিষেবা নিয়ে চ্যাট করতে চাই',
-    applyForIDUserPrompt: 'কীভাবে একটি জাতীয় পরিচয়পত্রের জন্য আবেদন করতে হয় সে সম্পর্কে আমার তথ্য প্রয়োজন',
-    payTaxesUserPrompt: 'অনলাইনে আমার কর পরিশোধ করার প্রক্রিয়া কী?',
-    startBusinessUserPrompt: 'একটি নতুন ব্যবসা নিবন্ধন করার ধাপগুলোর মাধ্যমে আমাকে গাইড করুন',
-    findHealthcareUserPrompt: 'আমি পাবলিক স্বাস্থ্যসেবা সম্পর্কে কোথায় তথ্য পেতে পারি?',
-    educationServicesUserPrompt: 'আমার সন্তানদের জন্য কী কী শিক্ষা পরিষেবা উপলব্ধ আছে?',
-    transportLicensesUserPrompt: 'কীভাবে আমি আমার ড্রাইভিং লাইসেন্স নবায়ন করব?',
-    housingProgramsUserPrompt: 'কেনিয়ায় সাশ্রয়ী মূল্যের আবাসন কর্মসূচি সম্পর্কে আমাকে বলুন',
-    findJobsUserPrompt: 'বর্তমানে সরকারি চাকরির কী সুযোগ রয়েছে?',
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:

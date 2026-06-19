@@ -670,7 +670,7 @@ These variables control the specific AI models used for generation, guardrails, 
 | TEI\_EMBEDDING\_ENDPOINT | TEI Endpoint (Note: duplicate of Dataprep config). | http://tei:80 |
 | RERANKER\_MODEL\_ENDPOINT | Endpoint for the reranking service. | http://tei\_reranker:80 |
 | TEI\_RERANKING\_ENDPOINT | Endpoint alias for reranking. | http://tei\_reranker:80 |
-| RERANKER\_MODEL\_ID | Model ID for reranking results. | cross-encoder/ms-marco-MiniLM-L-6-v2 |
+| RERANKER\_MODEL\_ID | Model ID for reranking results. | BAAI/bge-reranker-v2-m3 |
 
 #### 3\. Model Selection and GPU Compatibility
 
@@ -733,7 +733,7 @@ After launching services and waiting for the service startup: the following is a
 * **Recommended Configuration:**  
   * **LLM:** ibm-granite/granite-3.3-2b-instruct or meta-llama/Meta-Llama-3.1-70B-Instruct-AWQ (Quantized).  
   * **Embeddings:** BAAI/bge-base-en-v1.5 or BAAI/bge-m3.  
-  * **Reranker:** cross-encoder/ms-marco-MiniLM-L-6-v2.  
+  * **Reranker:** BAAI/bge-reranker-v2-m3.  
   * **Env Settings:** Use VLLM\_DTYPE=bfloat16 and enable VLLM\_ATTENTION\_BACKEND=FLASH\_ATTN (if supported) for maximum throughput.
 
 After launching services and waiting for the service startup: the following is about how the enterprise profile should look in the GPU:

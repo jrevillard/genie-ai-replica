@@ -48,10 +48,12 @@ flush needed.
 
 If stale entries are already cached and you cannot bump the version (or want a
 clean slate), flush from the backend container (correct Redis auth via env;
-`redis-cli` shell-escapes the password poorly):
+`redis-cli` shell-escapes the password poorly). The backend service name varies
+per deployment (`genieai_<env>_backend`), so match it generically and exclude
+the chatqna backend:
 
 ```bash
-C=$(docker ps --format '{{.Names}}' | grep genieai-el-salvador_backend | head -1)
+C=$(docker ps --format '{{.Names}}' | grep -E 'genieai.*_backend\.' | head -1)
 docker exec "$C" node -e "const Redis=require('ioredis');const r=new Redis({host:process.env.TRANSLATION_CACHE_HOST,port:process.env.TRANSLATION_CACHE_PORT,password:process.env.TRANSLATION_CACHE_PASSWORD});(async()=>{const k=await r.keys('translation:*');console.log('deleting',k.length);if(k.length)await r.del(k);r.disconnect();})().catch(e=>{console.error(e.message);process.exit(1);});"
 ```
 

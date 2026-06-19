@@ -290,20 +290,19 @@ class GenieTEIReranking(OpeaTEIReranking):
                     )
 
                     if not embeddings_valid:
-                        logger.warning(
-                            "[ADAPTIVE] Missing or misaligned embeddings "
-                            f"(query_embedding={'present' if query_embedding else 'missing'}, "
+                        # Hard-fail: adaptive has no legitimate graceful-degradation
+                        # case (if the embedding service is down, the whole RAG
+                        # pipeline fails regardless). Raise rather than silently
+                        # degrading to slice, which masks integration errors.
+                        msg = (
+                            "[ADAPTIVE] Cannot run adaptive reranking — embeddings missing "
+                            f"or misaligned (query_embedding={'present' if query_embedding else 'missing'}, "
                             f"chunk_embeddings={len(chunk_embeddings)} vs docs={len(input.retrieved_docs)}). "
-                            "Falling back to slice strategy."
+                            "Fix the embedding propagation chain (retriever -> chatqna) before using adaptive."
                         )
-                        top_n = reranker_top_n if reranker_top_n else 1
-                        for best_response in decoded_response[:top_n]:
-                            reranking_results.append(
-                                {
-                                    "text": input.retrieved_docs[best_response["index"]].text,
-                                    "score": best_response["score"],
-                                }
-                            )
+                        logger.error(msg)
+                        span.set_status(Status(StatusCode.ERROR, msg))
+                        raise RuntimeError(msg)
                     else:
                         # decoded_response is TEI score-sorted descending, each with
                         # an 'index' pointing back to its original position in

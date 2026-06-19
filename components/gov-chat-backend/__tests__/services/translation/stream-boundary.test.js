@@ -18,10 +18,13 @@ describe('stream-boundary', () => {
       expect(lastBoundaryEnd('Hello. World')).toEqual({ contentEnd: 6, separator: ' ' });
     });
 
-    test('detects sentence terminator at end of string (empty separator)', () => {
-      expect(lastBoundaryEnd('Hello.')).toEqual({ contentEnd: 6, separator: '' });
-      expect(lastBoundaryEnd('Done!')).toEqual({ contentEnd: 5, separator: '' });
-      expect(lastBoundaryEnd('Really?')).toEqual({ contentEnd: 7, separator: '' });
+    test('a terminator at end-of-buffer (no trailing whitespace) is NOT a boundary', () => {
+      // The whitespace that should become the separator hasn't arrived yet;
+      // committing now would lose the cross-chunk space. Held until it does
+      // (or flushed at stream end with an empty separator).
+      expect(lastBoundaryEnd('Hello.')).toBeNull();
+      expect(lastBoundaryEnd('Done!')).toBeNull();
+      expect(lastBoundaryEnd('Really?')).toBeNull();
     });
 
     test('handles closing quote/paren after terminator', () => {
@@ -30,8 +33,8 @@ describe('stream-boundary', () => {
     });
 
     test('picks the LAST boundary when several present', () => {
-      // Final '.' at index 7, end of string -> empty separator.
-      expect(lastBoundaryEnd('A. B. C.')).toEqual({ contentEnd: 8, separator: '' });
+      // 'C.' at end has no trailing whitespace -> not a boundary; last is 'B.'.
+      expect(lastBoundaryEnd('A. B. C.')).toEqual({ contentEnd: 5, separator: ' ' });
     });
 
     test('does NOT treat a list marker / decimal as a sentence boundary', () => {
@@ -77,14 +80,18 @@ describe('stream-boundary', () => {
       expect(r.remainder).toBe('Line two partial');
     });
 
-    test('does not split a markdown list at its numeric markers', () => {
-      // '1.' and '2.' markers are not boundaries; the list commits whole.
-      const buf = '1. First item. 2. Second item.';
-      const r = extractCommittableUnit(buf);
-      expect(r).not.toBeNull();
-      expect(r.content).toBe('1. First item. 2. Second item.');
-      expect(r.separator).toBe('');
-      expect(r.remainder).toBe('');
+    test('a list with sentence periods commits at the period, not the marker', () => {
+      // '1.'/'2.' markers are NOT split points (digit-preceded terminator);
+      // the real period after "First item" is. Each piece stays a valid list.
+      const r = extractCommittableUnit('1. First item. 2. Second item.');
+      expect(r.content).toBe('1. First item.');
+      expect(r.separator).toBe(' ');
+      expect(r.remainder).toBe('2. Second item.');
+    });
+
+    test('numeric markers alone are never boundaries', () => {
+      // No real terminator -> null (held until more stream arrives).
+      expect(extractCommittableUnit('1. First item 2. Second item')).toBeNull();
     });
 
     test('forces a commit at last whitespace when buffer exceeds maxBuffer', () => {

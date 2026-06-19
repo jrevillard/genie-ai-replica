@@ -5,6 +5,7 @@ const Redis = require('ioredis'); // For Redis cache
 // Import backend modules
 const CpuTranslateBackend = require('./translation/cpu-translate-backend');
 const GpuTranslateBackend = require('./translation/gpu-translate-backend');
+const { withOriginalWhitespace } = require('./translation/whitespace-preserve');
 
 // --- Read settings from environment variables ---
 const DEFAULT_THREADS = 4;
@@ -426,10 +427,12 @@ class TranslationService {
           throw new Error('Translation failed due to text count mismatch.');
         }
 
-        // Replace original texts with translated ones
+        // Replace original texts with translated ones. Re-apply each node's
+        // original edge whitespace: the backend trims model output, which would
+        // otherwise collapse the space after inline markup like **bold**.
         logger.debug('[TRANSLATION-SERVICE] Replacing translated text in AST...');
         textNodes.forEach((node, index) => {
-          node.value = translatedTexts[index];
+          node.value = withOriginalWhitespace(node.value, translatedTexts[index]);
         });
         logger.debug('[TRANSLATION-SERVICE] Text replacement completed');
 

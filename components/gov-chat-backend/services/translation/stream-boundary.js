@@ -11,11 +11,13 @@
  * marker ("1.", "2.") or a decimal ("3.14"), neither of which ends a sentence.
  * Splitting there would fragment markdown lists.
  *
- * Returns the split as `{ contentEnd, separator }`:
- *   - contentEnd  : index just past the unit CONTENT (the terminator is
- *                   included; the trailing whitespace is NOT).
- *   - separator   : the exact trailing whitespace that followed the content in
- *                   the source ("\n\n", " ", or "" at end-of-string).
+ * A terminator with NO following whitespace does NOT count: in a stream, that
+ * whitespace typically arrives in the NEXT chunk and MUST become the separator
+ * (re-appended verbatim after translation). Committing on a bare end-of-buffer
+ * terminator yields an empty separator; the space then lands at the START of
+ * the next unit's content and the translator trims it — collapsing
+ * "Sentence one. Sentence two" into "Sentence one.Sentence two". So the
+ * boundary requires an actual whitespace character, not end-of-string.
  *
  * Keeping the separator separate is what preserves markdown structure BETWEEN
  * units: the caller translates the content only and re-appends `separator`
@@ -39,10 +41,11 @@ function lastBoundaryEnd(buffer) {
   // Sentence terminators. group 1 = terminator + optional closing quote/bracket
   // (stays in the content); group 2 = trailing whitespace (the separator).
   // Negative lookbehind on a digit skips list markers ("1.") and decimals.
-  const re = /(?<![0-9])([.!?]["')\]]?)(\s|$)/g;
+  // Requires an actual whitespace char (not end-of-string): see header note.
+  const re = /(?<![0-9])([.!?]["')\]]?)(\s)/g;
   let m;
   while ((m = re.exec(buffer)) !== null) {
-    const candidate = { contentEnd: m.index + m[1].length, separator: m[2] || '' };
+    const candidate = { contentEnd: m.index + m[1].length, separator: m[2] };
     const candidateTotal = candidate.contentEnd + candidate.separator.length;
     const bestTotal = best ? best.contentEnd + best.separator.length : -1;
     if (candidateTotal > bestTotal) best = candidate;

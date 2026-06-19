@@ -33,4 +33,22 @@ function splitEdges(value) {
   return { lead, core, trail };
 }
 
-module.exports = { splitEdges };
+// Scripts that use inter-word spaces. Used to decide whether injecting a space
+// after inline markup (**bold**) is appropriate: yes for Latin/Cyrillic/Greek,
+// no for CJK/Thai/Lao/Khmer (those scripts do not separate words with spaces, so
+// "**标题**内容" is correct as-is). Conservative: Arabic/Hebrew/Devanagari etc.
+// are excluded too (RTL / different conventions) — they keep source spacing.
+const WORD_SPACED_SCRIPT_RE = /^[\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}]/u;
+
+/**
+ * Whether `value` starts with a letter from a word-spaced script (Latin,
+ * Cyrillic, Greek). Used by the run-in-bold normalization so a space is only
+ * injected where inter-word spaces are idiomatic.
+ * @param {string} value
+ * @returns {boolean}
+ */
+function startsWithWordSpacedScript(value) {
+  return WORD_SPACED_SCRIPT_RE.test(value || '');
+}
+
+module.exports = { splitEdges, startsWithWordSpacedScript };

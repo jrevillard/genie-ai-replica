@@ -1,8 +1,5 @@
 # Translation Cache — Agent Guide
 
-> `AGENTS.md` in this directory is a symlink to this file. Both names resolve
-> here so any agent (Claude Code, Codex, etc.) finds the same rules.
-
 This directory implements markdown translation for the chat streaming path
 (issue #829) and the post-stream batch path. Translations are cached in Redis
 **permanently** (`SET` with no TTL). Getting cache invalidation wrong silently

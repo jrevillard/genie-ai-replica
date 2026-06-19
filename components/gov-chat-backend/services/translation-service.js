@@ -5,7 +5,9 @@ const Redis = require('ioredis'); // For Redis cache
 // Import backend modules
 const CpuTranslateBackend = require('./translation/cpu-translate-backend');
 const GpuTranslateBackend = require('./translation/gpu-translate-backend');
-const { splitEdges, startsWithWordSpacedScript } = require('./translation/text-edges');
+const { splitEdges } = require('./translation/text-edges');
+const { normalizeInlineSpacing } = require('./translation/markdown-normalize');
+const { translationCacheKey } = require('./translation/translation-cache-key');
 
 // --- Read settings from environment variables ---
 const DEFAULT_THREADS = 4;
@@ -332,8 +334,10 @@ class TranslationService {
     // --- REDIS CACHE LOGIC (GET) ---
     // Generate a unique <name> by hashing the markdown content.
     const docName = nodeCrypto.createHash('md5').update(markdownContent).digest('hex');
-    // Create the cache key in the format <prefix>:<name>:<locale>
-    const cacheKey = `translation:${docName}:${targetLang}`;
+    // Cache key includes the model id so switching the translation model
+    // invalidates the cache automatically (no stale translations on model change).
+    const modelId = this.backend && this.backend.getBackendInfo ? this.backend.getBackendInfo().model : undefined;
+    const cacheKey = translationCacheKey(docName, targetLang, modelId);
     // Key for in-flight tracking (combines doc hash and target language)
     const inFlightKey = `${docName}:${targetLang}`;
 
@@ -375,27 +379,10 @@ class TranslationService {
         logger.debug('[TRANSLATION-SERVICE] Markdown parsed successfully');
 
         // Normalize: ensure a space between inline strong/emphasis and an
-        // immediately following word. chatqna sometimes emits run-in
-        // "**Heading**Text"; inserting a leading space on the following text
-        // node fixes that while leaving "**Heading**: text" (colon attached)
-        // untouched. Gated to word-spaced scripts (Latin/Cyrillic/Greek) only —
-        // CJK/Thai do not use inter-word spaces, so injecting one would be wrong
-        // ("**标题**内容" is correct as-is).
-        this.visit(tree, (node) => {
-          if (!Array.isArray(node.children)) return;
-          for (let i = 0; i < node.children.length - 1; i++) {
-            const cur = node.children[i];
-            const next = node.children[i + 1];
-            if (
-              (cur.type === 'strong' || cur.type === 'emphasis') &&
-              next.type === 'text' &&
-              next.value &&
-              startsWithWordSpacedScript(next.value)
-            ) {
-              next.value = ` ${next.value}`;
-            }
-          }
-        });
+        // immediately following word (chatqna sometimes emits run-in
+        // "**Heading**Text"). Gated to word-spaced scripts — see
+        // markdown-normalize.js + text-edges.js.
+        normalizeInlineSpacing(tree);
 
         // Collect all text nodes
         const textNodes = [];

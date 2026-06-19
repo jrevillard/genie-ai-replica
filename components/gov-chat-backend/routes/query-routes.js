@@ -233,10 +233,12 @@ module.exports = (queryService) => {
             const translated = await translationService.translateMarkdown(content, 'en', targetLanguage);
             const body =
               translated && translated.trim() ? `${translated.trim()}${separator}` : `${content}${separator}`;
-            // DIAGNOSTIC (#829): reveal the unit/separator the real chatqna stream
-            // produces and what the translator returns, so we can localize where
-            // markdown structure is lost. Remove once formatting is confirmed.
-            logger.info(
+            // Debug instrumentation for the streaming-translation path: the unit
+            // content the real chatqna stream produced, its separator, and the
+            // translator's output (head/tail). Emitted at debug level only —
+            // silent in production (LOG_LEVEL=info), toggle debug to investigate
+            // formatting/structure issues without a redeploy.
+            logger.debug(
               `[STREAM-TRANSLATE] IN=${JSON.stringify(content)} sep=${JSON.stringify(separator)} OUT_head=${JSON.stringify(
                 (translated || '').slice(0, 60)
               )} OUT_tail=${JSON.stringify((translated || '').slice(-60))}`,
@@ -301,9 +303,9 @@ module.exports = (queryService) => {
               // Buffer EN; commit complete units to the translator at boundaries.
               if (!loggedStreamTranslateActive) {
                 loggedStreamTranslateActive = true;
-                // DIAGNOSTIC (#829): confirms the streaming-translation path is
-                // active for this request. Absent => flag/path not triggering.
-                logger.info(`[STREAM-TRANSLATE] active lang=${targetLanguage}`, { queryId });
+                // Debug: confirms the streaming-translation path is active for
+                // this request (absent => flag/path not triggering).
+                logger.debug(`[STREAM-TRANSLATE] active lang=${targetLanguage}`, { queryId });
               }
               pendingEn += parsed.content;
               let extracted = extractCommittableUnit(pendingEn);

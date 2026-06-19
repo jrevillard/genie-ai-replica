@@ -214,6 +214,7 @@ module.exports = (queryService) => {
       let pendingEn = '';
       let translationChain = Promise.resolve();
       let streamingTranslationFailed = false;
+      let loggedStreamTranslateActive = false;
 
       // Translate one COMPLETE unit (see services/translation/stream-boundary.js)
       // using the AST-based translateMarkdown. translateMarkdown parses the unit
@@ -232,6 +233,13 @@ module.exports = (queryService) => {
             const translated = await translationService.translateMarkdown(content, 'en', targetLanguage);
             const body =
               translated && translated.trim() ? `${translated.trim()}${separator}` : `${content}${separator}`;
+            // DIAGNOSTIC (#829): reveal the unit/separator the real chatqna stream
+            // produces and what the translator returns, so we can localize where
+            // markdown structure is lost. Remove once formatting is confirmed.
+            logger.info(
+              `[STREAM-TRANSLATE] unitLen=${content.length} sep=${JSON.stringify(separator)} -> transLen=${(translated || '').length} preview=${JSON.stringify((translated || '').slice(0, 80))}`,
+              { queryId }
+            );
             if (!res.writableEnded) {
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: body })}\n\n`);
             }
@@ -289,6 +297,12 @@ module.exports = (queryService) => {
             fullResponseText += parsed.content;
             if (useStreamingTranslation && !streamingTranslationFailed) {
               // Buffer EN; commit complete units to the translator at boundaries.
+              if (!loggedStreamTranslateActive) {
+                loggedStreamTranslateActive = true;
+                // DIAGNOSTIC (#829): confirms the streaming-translation path is
+                // active for this request. Absent => flag/path not triggering.
+                logger.info(`[STREAM-TRANSLATE] active lang=${targetLanguage}`, { queryId });
+              }
               pendingEn += parsed.content;
               let extracted = extractCommittableUnit(pendingEn);
               while (extracted) {

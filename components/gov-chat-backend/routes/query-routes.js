@@ -212,40 +212,36 @@ module.exports = (queryService) => {
         streamingTranslationEnabled && targetLanguage && targetLanguage.toUpperCase() !== 'EN';
 
       let pendingEn = '';
-      const contextWindow = [];
       let translationChain = Promise.resolve();
-      const CONTEXT_WINDOW_SIZE = 3;
       let streamingTranslationFailed = false;
 
-      const scheduleUnitTranslation = (unit) => {
+      // Translate one COMPLETE unit (see services/translation/stream-boundary.js)
+      // using the AST-based translateMarkdown. translateMarkdown parses the unit
+      // as markdown, translates ONLY the text leaf nodes, and reassembles the
+      // AST — so structure WITHIN the unit (bold, lists, inner paragraphs) is
+      // preserved by the skeleton, never left to the model. `separator` is the
+      // exact trailing whitespace that followed the unit in the source; we pass
+      // it through verbatim, so structure BETWEEN units (the "\n\n" paragraph
+      // breaks, line breaks) survives too. This is what keeps formatting intact
+      // during streaming translation (issue #829).
+      const scheduleUnitTranslation = (content, separator) => {
         translationChain = translationChain.then(async () => {
           if (res.writableEnded) return;
           try {
             await translationService.init();
-            const translated = await translationService.translateStream(
-              unit,
-              'en',
-              targetLanguage,
-              contextWindow,
-              (delta) => {
-                if (!res.writableEnded) {
-                  res.write(`data: ${JSON.stringify({ type: 'chunk', content: delta })}\n\n`);
-                }
-              }
-            );
-            contextWindow.push({ source: unit, target: translated });
-            if (contextWindow.length > CONTEXT_WINDOW_SIZE) contextWindow.shift();
+            const translated = await translationService.translateMarkdown(content, 'en', targetLanguage);
+            const body =
+              translated && translated.trim() ? `${translated.trim()}${separator}` : `${content}${separator}`;
+            if (!res.writableEnded) {
+              res.write(`data: ${JSON.stringify({ type: 'chunk', content: body })}\n\n`);
+            }
           } catch (error) {
             logger.warn(
-              `QueryService.stream_translation_unit_failed: ${error.message} (lang=${targetLanguage}, unitLen=${unit.length}, unitPreview=${unit.slice(0, 80)})`,
+              `QueryService.stream_translation_unit_failed: ${error.message} (lang=${targetLanguage}, unitLen=${content.length}, unitPreview=${content.slice(0, 80)})`,
               { queryId }
             );
             if (!res.writableEnded) {
-              res.write(`data: ${JSON.stringify({ type: 'chunk', content: unit })}\n\n`);
-            }
-            if (pendingEn && !res.writableEnded) {
-              res.write(`data: ${JSON.stringify({ type: 'chunk', content: pendingEn })}\n\n`);
-              pendingEn = '';
+              res.write(`data: ${JSON.stringify({ type: 'chunk', content: `${content}${separator}` })}\n\n`);
             }
             streamingTranslationFailed = true;
           }
@@ -264,7 +260,7 @@ module.exports = (queryService) => {
             }
           } else {
             if (pendingEn.trim()) {
-              scheduleUnitTranslation(pendingEn);
+              scheduleUnitTranslation(pendingEn, '');
               pendingEn = '';
             }
             // Each scheduled unit swallows its own errors (see scheduleUnitTranslation),
@@ -297,7 +293,7 @@ module.exports = (queryService) => {
               let extracted = extractCommittableUnit(pendingEn);
               while (extracted) {
                 pendingEn = extracted.remainder;
-                scheduleUnitTranslation(extracted.unit);
+                scheduleUnitTranslation(extracted.content, extracted.separator);
                 extracted = extractCommittableUnit(pendingEn);
               }
             } else {

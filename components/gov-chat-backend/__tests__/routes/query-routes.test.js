@@ -332,13 +332,10 @@ describe('POST /stream', () => {
     queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
     queryService.finalizeStreamQuery.mockResolvedValue(undefined);
 
-    // translateStream: invokes onToken with the "translated" text and returns it.
+    // translateMarkdown returns the translated unit (AST-based; structure
+    // preserved). The streaming path appends the original separator verbatim.
     translationService.init.mockResolvedValue(undefined);
-    translationService.translateStream.mockImplementation(async (unit, src, tgt, ctx, onToken) => {
-      const translated = `[ES]${unit}`;
-      if (onToken) onToken(translated);
-      return translated;
-    });
+    translationService.translateMarkdown.mockImplementation(async (content) => `[ES]${content}`);
 
     const mockStream = new Readable({ read() {} });
     axios.post.mockResolvedValue({ data: mockStream });
@@ -358,8 +355,9 @@ describe('POST /stream', () => {
     const response = await responsePromise;
     expect(response.status).toBe(200);
     const body = response.text || '';
-    // The streamed chunk is the TRANSLATED unit, not the EN source.
-    expect(body).toContain('[ES]Hello world');
+    // The streamed chunk is the TRANSLATED unit, not the EN source. The trailing
+    // space separator is re-appended verbatim after the translated content.
+    expect(body).toContain('[ES]Hello world. ');
     // The streaming path must NOT emit a post-stream 'translation' event.
     expect(body).not.toMatch(/"type":"translation"/);
     delete process.env.STREAMING_TRANSLATION_ENABLED;
@@ -376,7 +374,7 @@ describe('POST /stream', () => {
     queryService.finalizeStreamQuery.mockResolvedValue(undefined);
     translationService.init.mockResolvedValue(undefined);
     // Translator fails -> the catch emits the original EN unit as a fallback.
-    translationService.translateStream.mockRejectedValue(new Error('vLLM down'));
+    translationService.translateMarkdown.mockRejectedValue(new Error('vLLM down'));
 
     const mockStream = new Readable({ read() {} });
     axios.post.mockResolvedValue({ data: mockStream });
@@ -399,7 +397,7 @@ describe('POST /stream', () => {
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 
-  it('should flush a trailing partial unit at stream end + keep context window (#829)', async () => {
+  it('should flush a trailing partial unit at stream end (#829)', async () => {
     process.env.STREAMING_TRANSLATION_ENABLED = '1';
     queryService.initStreamQuery.mockResolvedValue({
       queryId: 'q1',
@@ -409,11 +407,7 @@ describe('POST /stream', () => {
     queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
     queryService.finalizeStreamQuery.mockResolvedValue(undefined);
     translationService.init.mockResolvedValue(undefined);
-    translationService.translateStream.mockImplementation(async (unit, src, tgt, ctx, onToken) => {
-      const t = `[ES]${unit}`;
-      if (onToken) onToken(t);
-      return t;
-    });
+    translationService.translateMarkdown.mockImplementation(async (content) => `[ES]${content}`);
 
     const mockStream = new Readable({ read() {} });
     axios.post.mockResolvedValue({ data: mockStream });
@@ -433,16 +427,17 @@ describe('POST /stream', () => {
     const response = await responsePromise;
     expect(response.status).toBe(200);
     const body = response.text || '';
+    // Both the boundary-committed unit and the trailing partial are translated.
     expect(body).toContain('[ES]Sentence one');
     expect(body).toContain('[ES]partial trailing');
-    // Second unit should have received the first as context (context window grows).
-    expect(translationService.translateStream).toHaveBeenCalledTimes(2);
-    const secondCallCtx = translationService.translateStream.mock.calls[1][3];
-    expect(secondCallCtx.length).toBeGreaterThanOrEqual(1);
+    expect(translationService.translateMarkdown).toHaveBeenCalledTimes(2);
+    // The committed unit's content excludes the trailing separator (the space
+    // is re-appended by the route, not passed to the translator).
+    expect(translationService.translateMarkdown.mock.calls[0][0]).toBe('Sentence one.');
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 
-  it('should degrade to direct EN forwarding after translateStream failure (#829)', async () => {
+  it('should degrade to direct EN forwarding after a streaming translation unit failure (#829)', async () => {
     process.env.STREAMING_TRANSLATION_ENABLED = '1';
     queryService.initStreamQuery.mockResolvedValue({
       queryId: 'q1',
@@ -452,7 +447,7 @@ describe('POST /stream', () => {
     queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
     queryService.finalizeStreamQuery.mockResolvedValue(undefined);
     translationService.init.mockResolvedValue(undefined);
-    translationService.translateStream.mockRejectedValue(new Error('GPU down'));
+    translationService.translateMarkdown.mockRejectedValue(new Error('GPU down'));
 
     const mockStream = new Readable({ read() {} });
     axios.post.mockResolvedValue({ data: mockStream });
@@ -464,7 +459,7 @@ describe('POST /stream', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    // First chunk: complete sentence → translateStream fails → degradation flag set
+    // First chunk: complete sentence → translateMarkdown fails → degradation flag set
     mockStream.push('data: {"type":"chunk","content":"First sentence. "}\n\n');
     await new Promise((resolve) => setTimeout(resolve, 50));
     // Second chunk: should be forwarded DIRECTLY (not buffered/translated)
@@ -480,6 +475,49 @@ describe('POST /stream', () => {
     expect(body).toContain('Raw English');
     // No post-stream translation event (streaming path skipPostStreamTranslation=true)
     expect(body).not.toMatch(/"type":"translation"/);
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+  });
+
+  it('should preserve inter-unit paragraph breaks (\\n\\n) during streaming (#829)', async () => {
+    // Regression guard for the formatting bug: the separator between units must
+    // be passed through verbatim so paragraphs/lists survive streaming. The EN
+    // answer arrives as two paragraphs; the output must keep the "\n\n" between
+    // the translated units (model never sees the separator).
+    process.env.STREAMING_TRANSLATION_ENABLED = '1';
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    translationService.init.mockResolvedValue(undefined);
+    translationService.translateMarkdown.mockImplementation(async (content) => `[ES]${content}`);
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hola' }],
+      context: { language: 'es' }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Two paragraphs, each ending in a blank line (markdown paragraph separator).
+    mockStream.push('data: {"type":"chunk","content":"First para.\\n\\n"}\n\n');
+    mockStream.push('data: {"type":"chunk","content":"Second para.\\n\\n"}\n\n');
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    const body = response.text || '';
+    // JSON-stringified in the SSE body, so \n appears escaped as the two chars
+    // backslash-n. The separator between translated units is intact.
+    expect(body).toContain('[ES]First para.\\n\\n');
+    expect(body).toContain('[ES]Second para.');
+    // The translator only ever receives the content (no separator leaked in).
+    expect(translationService.translateMarkdown).toHaveBeenCalledWith('First para.', 'en', 'es');
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 

@@ -374,6 +374,29 @@ class TranslationService {
         const tree = processor.parse(markdownContent);
         logger.debug('[TRANSLATION-SERVICE] Markdown parsed successfully');
 
+        // Normalize: ensure a space between inline strong/emphasis and an
+        // immediately following word. chatqna sometimes emits run-in
+        // "**Heading**Text"; inserting a leading space on the following text
+        // node fixes that while leaving "**Heading**: text" (colon attached)
+        // untouched. Gated to word-spaced scripts (Latin/Cyrillic/Greek) only —
+        // CJK/Thai do not use inter-word spaces, so injecting one would be wrong
+        // ("**标题**内容" is correct as-is).
+        this.visit(tree, (node) => {
+          if (!Array.isArray(node.children)) return;
+          for (let i = 0; i < node.children.length - 1; i++) {
+            const cur = node.children[i];
+            const next = node.children[i + 1];
+            if (
+              (cur.type === 'strong' || cur.type === 'emphasis') &&
+              next.type === 'text' &&
+              next.value &&
+              /^[\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}]/u.test(next.value)
+            ) {
+              next.value = ` ${next.value}`;
+            }
+          }
+        });
+
         // Collect all text nodes
         const textNodes = [];
         this.visit(tree, 'text', (node) => {

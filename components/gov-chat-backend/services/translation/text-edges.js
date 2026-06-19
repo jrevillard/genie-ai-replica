@@ -1,29 +1,36 @@
 /**
- * Split a markdown text-node value into structural edges and a translatable core.
+ * Split a markdown text-node value into a leading edge, a translatable core, and
+ * a trailing edge — so structural characters survive translation.
  *
- * `lead` and `trail` are the leading/trailing characters that are NOT letters or
- * digits (whitespace AND punctuation — e.g. ": ", ". ", " - ", quotes). The
- * `core` is the word-bounded text between them.
+ * - `lead` = leading non-letter/non-digit chars (whitespace AND punctuation, e.g.
+ *   ": ", " ", "«", quotes). The translator model drops leading structure, so it
+ *   is stripped, the core translated, and `lead` re-applied verbatim.
+ * - `trail` = trailing WHITESPACE only. The model trims trailing whitespace, so
+ *   it is stripped and re-applied.
+ * - `core` = everything between — INCLUDING any trailing punctuation (".", "?",
+ *   closing quotes). Trailing punctuation stays in the core on purpose: the
+ *   model keeps/produces sentence-ending punctuation, so re-applying it would
+ *   double it ("word.."). Keeping it in the core means the model sees it and
+ *   preserves a single copy.
  *
- * Why: a text node that adjoins inline markup often starts with structural
- * punctuation, e.g. `**Hive Selection**: Choose hives` parses into
- *   strong["Hive Selection"] + text[": Choose hives..."].
- * The translator model tends to DROP that leading ": " (and the backend trims
- * output), which collapses the rendered markdown from "Selection: Choose" into
- * "SelectionChoose". By translating only the `core` and re-applying the
- * original `lead`/`trail` verbatim, the structure is preserved deterministically
- * — the model never sees the edge characters, so it cannot drop or duplicate
- * them. (For nodes with no edge punctuation this is a no-op: lead/trail are "".)
+ * Why leading ≠ trailing: empirically the model DROPS leading edge chars (e.g.
+ * the ": " after `**bold**`, collapsing "Heading: text" → "Headingtext") but
+ * KEEPS/adds trailing punctuation. So lead is fully preserved (whitespace +
+ * punctuation) while trail preserves only whitespace.
  *
- * Unicode-aware: `\p{L}`/`\p{N}` treat accented letters (á, é, …) and digits as
- * core, not edges.
+ * Unicode-aware (`\p{L}`/`\p{N}`): accented letters (á, é, …) and digits count
+ * as core, not edges.
  *
  * @param {string} value - original text node value
  * @returns {{ lead: string, core: string, trail: string }}
  */
 function splitEdges(value) {
-  const m = (value || '').match(/^([^\p{L}\p{N}]*)([\s\S]*?)([^\p{L}\p{N}]*)$/u);
-  return { lead: m[1], core: m[2], trail: m[3] };
+  const src = value || '';
+  const lead = (src.match(/^[^\p{L}\p{N}]*/u) || [''])[0];
+  const after = src.slice(lead.length);
+  const trail = (after.match(/\s*$/) || [''])[0];
+  const core = after.slice(0, after.length - trail.length);
+  return { lead, core, trail };
 }
 
 module.exports = { splitEdges };

@@ -354,14 +354,18 @@ class TestInvoke:
         assert len(result) >= 1
         # Adaptive path attaches each chunk's embedding to its own metadata
         assert result[0]["doc"].metadata.get("chunk_embedding") == [0.1, 0.2, 0.3]
+        # Query embedding is always echoed (for adaptive novelty scoring)
+        assert "query_embedding" in result[0]["doc"].metadata
 
     @pytest.mark.asyncio
     async def test_non_adaptive_skips_chunk_embedding_fetch(self, invoke_env):
         input_mock = create_mock_input(search_start="chunk", reranking_strategy="slice")
         result = await invoke_env["retriever"].invoke(input_mock)
         assert len(result) >= 1
-        # Non-adaptive retrieval must not attach chunk embeddings
+        # Non-adaptive retrieval must not attach chunk embeddings...
         assert "chunk_embedding" not in (result[0]["doc"].metadata or {})
+        # ...but the query embedding is always echoed (cheap, single vector)
+        assert "query_embedding" in (result[0]["doc"].metadata or {})
 
     @pytest.mark.asyncio
     async def test_hybrid_search_calls_fetch_neighborhoods(self, invoke_env):

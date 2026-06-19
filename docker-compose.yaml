@@ -918,6 +918,12 @@ services:
       # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      # Adaptive utility-cost selection (read at reranker startup; only used
+      # when RERANKING_STRATEGY=adaptive)
+      - NOVELTY_SIGMOID_A=${NOVELTY_SIGMOID_A:-20.0}
+      - NOVELTY_SIGMOID_B=${NOVELTY_SIGMOID_B:-0.25}
+      - TOKEN_COST_ALPHA=${TOKEN_COST_ALPHA:-0.0025}
+      - MIN_VALUE_THRESHOLD=${MIN_VALUE_THRESHOLD:-0.0}
 
     # Internal only
     # ports:

@@ -153,10 +153,7 @@ describe('GpuTranslateBackend streaming', () => {
         process.nextTick(() => {
           res.statusCode = 200;
           cb(res);
-          res.emit(
-            'data',
-            JSON.stringify({ choices: [{ message: { content: 'Hola mundo' } }] })
-          );
+          res.emit('data', JSON.stringify({ choices: [{ message: { content: 'Hola mundo' } }] }));
           res.emit('end');
         });
         return req;

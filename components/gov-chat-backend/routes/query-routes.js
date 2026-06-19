@@ -207,7 +207,7 @@ module.exports = (queryService) => {
       const streamingTranslationEnabled = ['1', 'true'].includes(
         (process.env.STREAMING_TRANSLATION_ENABLED || '').toLowerCase()
       );
-      const targetLanguage = queryData.context?.language;
+      const targetLanguage = queryData.context?.language?.toLowerCase();
       const useStreamingTranslation =
         streamingTranslationEnabled && targetLanguage && targetLanguage.toUpperCase() !== 'EN';
 

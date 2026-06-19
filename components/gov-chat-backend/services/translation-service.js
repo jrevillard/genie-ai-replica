@@ -262,6 +262,10 @@ class TranslationService {
    * @returns {Promise<string>} Full translated unit
    */
   async translateStream(unit, sourceLang, targetLang, context, onToken) {
+    // Normalize to lowercase — the frontend may send uppercase locale codes
+    // (e.g. "ES") but the language maps use lowercase keys ("es").
+    sourceLang = (sourceLang || '').toLowerCase();
+    targetLang = (targetLang || '').toLowerCase();
     if (!this.initialized || !this.backend) {
       throw new Error('[TRANSLATION-SERVICE] Service is not ready.');
     }

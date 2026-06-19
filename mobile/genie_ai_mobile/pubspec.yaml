@@ -111,3 +111,6 @@ flutter_launcher_icons:
   ios: true              # This generates the iOS icons
   image_path: "assets/images/genie_ai_icon.png" # YOUR custom icon path
   min_sdk_android: 21
+# Per-flavor overrides live in separate files flutter_launcher_icons-<flavor>.yaml
+# (the tool's convention); the default above is the generic genie icon and each
+# institutional deployment pins its own branding in its own flavor file.

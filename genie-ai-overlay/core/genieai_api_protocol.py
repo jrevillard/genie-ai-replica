@@ -29,6 +29,17 @@ class RetrievalRequestArangoDB(RetrievalRequest):
     context: dict[str, Any] | None = None  # need to update in other files filter --> context
 
 
+class GenieRetrievalResponse(RetrievalResponse):
+    """RetrievalResponse carrying chunk embeddings for the adaptive reranker.
+
+    The base OPEA RetrievalResponse has no embeddings field; this subclass lets
+    the retriever propagate per-chunk embeddings to the reranker when the
+    adaptive strategy is active.
+    """
+
+    chunk_embeddings: list[list[float]] = Field(default_factory=list)
+
+
 class RequestContext(BaseModel):
     """
     A model to hold structured context for metadata filtering during retrieval.

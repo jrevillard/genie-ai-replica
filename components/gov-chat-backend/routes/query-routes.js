@@ -237,7 +237,9 @@ module.exports = (queryService) => {
             // produces and what the translator returns, so we can localize where
             // markdown structure is lost. Remove once formatting is confirmed.
             logger.info(
-              `[STREAM-TRANSLATE] unitLen=${content.length} sep=${JSON.stringify(separator)} -> transLen=${(translated || '').length} preview=${JSON.stringify((translated || '').slice(0, 80))}`,
+              `[STREAM-TRANSLATE] IN=${JSON.stringify(content)} sep=${JSON.stringify(separator)} OUT_head=${JSON.stringify(
+                (translated || '').slice(0, 60)
+              )} OUT_tail=${JSON.stringify((translated || '').slice(-60))}`,
               { queryId }
             );
             if (!res.writableEnded) {

@@ -33,6 +33,7 @@ class GenieSearchedDoc(SearchedDoc):
     reranking_strategy: str | None = None
     reranking_threshold: float | None = None
     top_n: int | None = None
+    embedding: list[float] = Field(default_factory=list)
     chunk_embeddings: list[list[float]] = Field(default_factory=list)
 
 

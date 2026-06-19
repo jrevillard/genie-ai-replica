@@ -128,6 +128,7 @@ async def retrieve_docs(
             )
         else:
             chunk_embeddings = []
+            query_embedding = []
             for r in response:
                 if isinstance(r, str):
                     retrieved_docs.append(RetrievalResponseData(text=r, metadata=None))
@@ -141,15 +142,22 @@ async def retrieve_docs(
                     # don't bloat retrieved_docs metadata sent to the reranker.
                     chunk_emb = (r["doc"].metadata or {}).pop("chunk_embedding", None)
                     chunk_embeddings.append(chunk_emb if isinstance(chunk_emb, list) else [])
+                    # Echo the query embedding (stored on the first doc by the
+                    # retriever) so the adaptive reranker can compute novelty.
+                    if not query_embedding:
+                        qe = (r["doc"].metadata or {}).pop("query_embedding", None)
+                        if isinstance(qe, list) and qe:
+                            query_embedding = qe
                     retrieved_docs.append(RetrievalResponseData(text=r["doc"].page_content, metadata=r["doc"].metadata))
             if isinstance(input, RetrievalRequest):
                 result = RetrievalResponse(retrieved_docs=retrieved_docs)
             elif isinstance(input, ChatCompletionRequest):
                 input.retrieved_docs = retrieved_docs
                 input.documents = [doc.text for doc in retrieved_docs]
-                # Propagate chunk embeddings for adaptive reranking. Only set when
-                # every chunk has a non-empty embedding (full alignment with docs);
-                # otherwise the reranker falls back to slice.
+                # Propagate embeddings for adaptive reranking: the query embedding
+                # (echoed by the retriever) + chunk embeddings when fully aligned.
+                if query_embedding:
+                    input.embedding = query_embedding
                 if chunk_embeddings and all(ce for ce in chunk_embeddings):
                     input.chunk_embeddings = chunk_embeddings
                 result = input

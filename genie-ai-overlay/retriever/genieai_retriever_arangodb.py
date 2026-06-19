@@ -917,6 +917,11 @@ class GenieaiArangoRetriever(OpeaComponent):
                         r["doc"].metadata["chunk_embedding"] = []
                 logger.info(f"Fetched chunk embeddings for {len(search_res)} chunks (adaptive reranking)")
 
+            # Echo the query embedding via metadata so the microservice propagates
+            # it to the reranker (adaptive novelty scoring needs the query vector).
+            if search_res:
+                search_res[0]["doc"].metadata["query_embedding"] = embedding
+
             if logflag:
                 logger.debug(f"Final results of retrievers/src/integrations/arangodb_genieai.py: {search_res}")
 

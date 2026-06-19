@@ -5,7 +5,7 @@ const Redis = require('ioredis'); // For Redis cache
 // Import backend modules
 const CpuTranslateBackend = require('./translation/cpu-translate-backend');
 const GpuTranslateBackend = require('./translation/gpu-translate-backend');
-const { withOriginalWhitespace } = require('./translation/whitespace-preserve');
+const { splitEdges } = require('./translation/text-edges');
 
 // --- Read settings from environment variables ---
 const DEFAULT_THREADS = 4;
@@ -380,7 +380,12 @@ class TranslationService {
           textNodes.push(node);
         });
 
-        const texts = textNodes.map((node) => node.value);
+        // Split each text node into structural edges (lead/trail: whitespace +
+        // punctuation) and a word-bounded core. Translate ONLY the cores so the
+        // model never sees/drops edge chars like the ": " after **bold** — then
+        // re-apply the original edges verbatim. Keeps "Heading: text" intact.
+        const edges = textNodes.map((node) => splitEdges(node.value));
+        const texts = edges.map((e) => e.core);
         logger.info(`[TRANSLATION-SERVICE] Extracted ${texts.length} text nodes for translation`);
 
         if (texts.length === 0) {
@@ -427,12 +432,12 @@ class TranslationService {
           throw new Error('Translation failed due to text count mismatch.');
         }
 
-        // Replace original texts with translated ones. Re-apply each node's
-        // original edge whitespace: the backend trims model output, which would
-        // otherwise collapse the space after inline markup like **bold**.
+        // Replace each node's core with its translation and re-apply the
+        // original structural edges (lead/trail) verbatim.
         logger.debug('[TRANSLATION-SERVICE] Replacing translated text in AST...');
         textNodes.forEach((node, index) => {
-          node.value = withOriginalWhitespace(node.value, translatedTexts[index]);
+          const e = edges[index];
+          node.value = e.lead + (translatedTexts[index] || '') + e.trail;
         });
         logger.debug('[TRANSLATION-SERVICE] Text replacement completed');
 

@@ -5,6 +5,9 @@ const Redis = require('ioredis'); // For Redis cache
 // Import backend modules
 const CpuTranslateBackend = require('./translation/cpu-translate-backend');
 const GpuTranslateBackend = require('./translation/gpu-translate-backend');
+const { splitEdges } = require('./translation/text-edges');
+const { normalizeInlineSpacing } = require('./translation/markdown-normalize');
+const { translationCacheKey } = require('./translation/translation-cache-key');
 
 // --- Read settings from environment variables ---
 const DEFAULT_THREADS = 4;
@@ -247,6 +250,73 @@ class TranslationService {
   }
 
   /**
+   * @method translateStream
+   * @description Stream-translate a single COMPLETE unit (sentence/paragraph) from
+   * sourceLang to targetLang, invoking onToken for each output delta. Used by the
+   * chat streaming handler to show the target language WHILE streaming (issue #829)
+   * instead of flipping at the end. The caller buffers source chunks into complete
+   * units first (see services/translation/stream-boundary.js) — the translator must
+   * receive a complete unit.
+   * @param {string} unit - A complete source-language unit to translate
+   * @param {string} sourceLang - Source language code (e.g. 'en')
+   * @param {string} targetLang - Target language code (e.g. 'es')
+   * @param {{source: string, target: string}[]} [context] - Prior units EN+target for consistency
+   * @param {(delta: string) => void} [onToken] - Streaming callback
+   * @returns {Promise<string>} Full translated unit
+   */
+  async translateStream(unit, sourceLang, targetLang, context, onToken) {
+    // Normalize to lowercase — the frontend may send uppercase locale codes
+    // (e.g. "ES") but the language maps use lowercase keys ("es").
+    sourceLang = (sourceLang || '').toLowerCase();
+    targetLang = (targetLang || '').toLowerCase();
+    if (!this.initialized || !this.backend) {
+      throw new Error('[TRANSLATION-SERVICE] Service is not ready.');
+    }
+    if (!unit || unit.trim() === '') return '';
+
+    const sourceLangCode = this.backend.getLanguageCode(sourceLang);
+    if (!sourceLangCode) throw new Error(`Unsupported source language: ${sourceLang}`);
+
+    if (!this.backend.isLanguageSupported(targetLang)) {
+      const fallbackLang = this.backend.getFallbackLanguage(targetLang);
+      if (fallbackLang) {
+        logger.warn(`[TRANSLATION-SERVICE] Stream target ${targetLang} not supported, using fallback ${fallbackLang}`);
+        return this.translateStream(unit, sourceLang, fallbackLang, context, onToken);
+      }
+      throw new Error(`Unsupported target language: ${targetLang}`);
+    }
+    const targetLangCode = this.backend.getLanguageCode(targetLang);
+
+    try {
+      if (typeof this.backend.translateStream === 'function') {
+        return await this.backend.translateStream(unit, sourceLangCode, targetLangCode, context, onToken);
+      }
+      // Backend has no streaming support (e.g. CPU) — translate the unit in one
+      // shot and emit it as a single delta so the caller keeps streaming.
+      const [translated] = await this.backend.translate([unit], sourceLangCode, targetLangCode);
+      if (translated && onToken) onToken(translated);
+      return translated || '';
+    } catch (error) {
+      // GPU failure in auto mode -> CPU fallback (non-streaming) for this unit.
+      if (this.backendType === 'gpu' && translationBackend === 'auto') {
+        logger.warn(`[TRANSLATION-SERVICE] GPU stream failed, CPU fallback (non-streaming): ${error.message}`);
+        try {
+          const cpuBackend = new CpuTranslateBackend();
+          await cpuBackend.init();
+          const sCode = cpuBackend.getLanguageCode(sourceLang);
+          const tCode = cpuBackend.getLanguageCode(targetLang);
+          const [translated] = await cpuBackend.translate([unit], sCode, tCode);
+          if (translated && onToken) onToken(translated);
+          return translated || '';
+        } catch (cpuError) {
+          throw new Error('Stream translation failed on both GPU and CPU', { cause: cpuError });
+        }
+      }
+      throw error;
+    }
+  }
+
+  /**
    * @method translateMarkdown
    * @description Translates the content of a markdown file while preserving the markdown structure.
    * Caches the result to Redis permanently if caching is enabled.
@@ -264,8 +334,10 @@ class TranslationService {
     // --- REDIS CACHE LOGIC (GET) ---
     // Generate a unique <name> by hashing the markdown content.
     const docName = nodeCrypto.createHash('md5').update(markdownContent).digest('hex');
-    // Create the cache key in the format <prefix>:<name>:<locale>
-    const cacheKey = `translation:${docName}:${targetLang}`;
+    // Cache key includes the model id so switching the translation model
+    // invalidates the cache automatically (no stale translations on model change).
+    const modelId = this.backend && this.backend.getBackendInfo ? this.backend.getBackendInfo().model : undefined;
+    const cacheKey = translationCacheKey(docName, targetLang, modelId);
     // Key for in-flight tracking (combines doc hash and target language)
     const inFlightKey = `${docName}:${targetLang}`;
 
@@ -306,13 +378,24 @@ class TranslationService {
         const tree = processor.parse(markdownContent);
         logger.debug('[TRANSLATION-SERVICE] Markdown parsed successfully');
 
+        // Normalize: ensure a space between inline strong/emphasis and an
+        // immediately following word (chatqna sometimes emits run-in
+        // "**Heading**Text"). Gated to word-spaced scripts — see
+        // markdown-normalize.js + text-edges.js.
+        normalizeInlineSpacing(tree);
+
         // Collect all text nodes
         const textNodes = [];
         this.visit(tree, 'text', (node) => {
           textNodes.push(node);
         });
 
-        const texts = textNodes.map((node) => node.value);
+        // Split each text node into structural edges (lead/trail: whitespace +
+        // punctuation) and a word-bounded core. Translate ONLY the cores so the
+        // model never sees/drops edge chars like the ": " after **bold** — then
+        // re-apply the original edges verbatim. Keeps "Heading: text" intact.
+        const edges = textNodes.map((node) => splitEdges(node.value));
+        const texts = edges.map((e) => e.core);
         logger.info(`[TRANSLATION-SERVICE] Extracted ${texts.length} text nodes for translation`);
 
         if (texts.length === 0) {
@@ -359,10 +442,12 @@ class TranslationService {
           throw new Error('Translation failed due to text count mismatch.');
         }
 
-        // Replace original texts with translated ones
+        // Replace each node's core with its translation and re-apply the
+        // original structural edges (lead/trail) verbatim.
         logger.debug('[TRANSLATION-SERVICE] Replacing translated text in AST...');
         textNodes.forEach((node, index) => {
-          node.value = translatedTexts[index];
+          const e = edges[index];
+          node.value = e.lead + (translatedTexts[index] || '') + e.trail;
         });
         logger.debug('[TRANSLATION-SERVICE] Text replacement completed');
 

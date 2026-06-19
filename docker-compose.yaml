@@ -471,6 +471,9 @@ services:
       - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
       # Remote GPU node translation endpoint override
       - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}
+      # Stream the target-language translation during chat (#829): stream the UI
+      # language while generating instead of English-then-flip. 0 = current behavior.
+      - STREAMING_TRANSLATION_ENABLED=${STREAMING_TRANSLATION_ENABLED:-0}
       # OPEA runtime patches for remote GPU node (SSL bypass)
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-}
       # GPU node API key for Authorization: Bearer (translation, vLLM calls)

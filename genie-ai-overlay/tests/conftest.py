@@ -118,8 +118,8 @@ sys.modules.setdefault("arango.exceptions", MagicMock())
 sys.modules.setdefault("langchain_core", MagicMock())
 sys.modules.setdefault("langchain_core.documents", MagicMock())
 sys.modules.setdefault("langchain_text_splitters", MagicMock())
-sys.modules.setdefault("numpy", MagicMock())
-sys.modules.setdefault("numpy.linalg", MagicMock())
+# numpy is a real (declared) test dependency — used directly by the adaptive
+# reranker's cosine_similarity. Do NOT mock it, or real math is untestable.
 sys.modules.setdefault("rank_bm25", MagicMock())
 sys.modules.setdefault("keycloak_service_account", MagicMock())
 

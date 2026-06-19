@@ -150,8 +150,7 @@ class ChatCompletionRequest(BaseModel):
     encoding_format: str | None = Field("float", pattern="^(float|base64)$")
     dimensions: int | None = None
     embedding: Union[EmbeddingResponse, list[float]] = Field(default_factory=list)
-    query_embedding: list[float] = Field(default_factory=list, description="Query embedding vector for adaptive reranking")
-    chunk_embeddings: list[list[float]] = Field(default_factory=list, description="Chunk embedding vectors for adaptive reranking")
+    chunk_embeddings: list[list[float]] = Field(default_factory=list)
 
     # retrieval
     search_type: str = "similarity_score_threshold"  # "similarity"

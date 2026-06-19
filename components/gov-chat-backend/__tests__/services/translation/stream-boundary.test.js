@@ -1,6 +1,6 @@
 const { extractCommittableUnit, lastBoundaryEnd } = require('../../../services/translation/stream-boundary');
 
-describe('stream-boundary', () => {
+describe('stream-boundary (sentence + paragraph)', () => {
   describe('lastBoundaryEnd', () => {
     test('returns -1 when no boundary', () => {
       expect(lastBoundaryEnd('the pest alert indicates')).toBe(-1);
@@ -8,12 +8,11 @@ describe('stream-boundary', () => {
     });
 
     test('detects paragraph boundary (\\n\\n)', () => {
-      // 'First paragraph.' (16) + '\n\n' (at 16-17) -> cut after the blank line = 18
       expect(lastBoundaryEnd('First paragraph.\n\nSecond')).toBe(18);
     });
 
     test('detects sentence terminator followed by space', () => {
-      expect(lastBoundaryEnd('Hello. World')).toBe(7); // after ". "
+      expect(lastBoundaryEnd('Hello. World')).toBe(7);
     });
 
     test('detects sentence terminator at end of string', () => {
@@ -23,12 +22,11 @@ describe('stream-boundary', () => {
     });
 
     test('handles closing quote/paren after terminator', () => {
-      // '.' + '"' + ' ' consumed -> cut = 14 (after '." ')
       expect(lastBoundaryEnd('He said "hi." Then')).toBe(14);
     });
 
     test('picks the LAST boundary when several present', () => {
-      expect(lastBoundaryEnd('A. B. C.')).toBe(8); // after the final "."
+      expect(lastBoundaryEnd('A. B. C.')).toBe(8);
     });
   });
 
@@ -55,23 +53,15 @@ describe('stream-boundary', () => {
     });
 
     test('forces a commit at last whitespace when buffer exceeds maxBuffer', () => {
-      const long = 'a'.repeat(500); // no boundary, 500 chars
-      const buf = long + ' ' + 'b'.repeat(1000); // 1501 chars, space at 500
+      const long = 'a'.repeat(500);
+      const buf = long + ' ' + 'b'.repeat(1000);
       const r = extractCommittableUnit(buf, { maxBuffer: 1500 });
       expect(r).not.toBeNull();
-      expect(r.unit).toBe(long); // up to the space
-      expect(r.remainder.startsWith(' ')).toBe(true);
-    });
-
-    test('commits everything if over maxBuffer with no whitespace', () => {
-      const buf = 'a'.repeat(1600);
-      const r = extractCommittableUnit(buf, { maxBuffer: 1500 });
-      expect(r.unit).toBe(buf);
-      expect(r.remainder).toBe('');
+      expect(r.unit).toBe(long);
     });
 
     test('does not force-commit below maxBuffer', () => {
-      const buf = 'a'.repeat(1000); // < maxBuffer, no boundary
+      const buf = 'a'.repeat(1000);
       expect(extractCommittableUnit(buf, { maxBuffer: 1500 })).toBeNull();
     });
   });

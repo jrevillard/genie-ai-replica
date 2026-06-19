@@ -111,6 +111,29 @@ describe('GpuTranslateBackend streaming', () => {
       backend.modelId = 'google/gemma-3-4b-it';
       spy.mockRestore();
     });
+
+    it('dynamically caps max_tokens so input + output never exceeds maxModelLen', async () => {
+      const spy = jest.spyOn(backend, 'callVllmStream').mockResolvedValue('OK');
+      // Large context window (simulates many prior translation units)
+      const bigContext = Array.from({ length: 10 }, (_, i) => ({
+        source: `Previous unit ${i} with some meaningful translation context.`,
+        target: `Unidad previa ${i} con contexto de traducción significativo.`
+      }));
+      await backend.translateStream('Final sentence.', 'en', 'es', bigContext, () => {});
+      const requestBody = spy.mock.calls[0][0];
+      const inputTokens = Math.ceil(JSON.stringify(requestBody.messages).length / 4);
+      // Invariant: input + max_tokens must fit within maxModelLen
+      expect(requestBody.max_tokens + inputTokens).toBeLessThanOrEqual(backend.maxModelLen);
+      spy.mockRestore();
+    });
+
+    it('keeps generous max_tokens for short input without context', async () => {
+      const spy = jest.spyOn(backend, 'callVllmStream').mockResolvedValue('OK');
+      await backend.translateStream('Short text.', 'en', 'es', null, () => {});
+      const requestBody = spy.mock.calls[0][0];
+      expect(requestBody.max_tokens).toBeGreaterThan(1000);
+      spy.mockRestore();
+    });
   });
 
   describe('pre-existing methods (coverage)', () => {

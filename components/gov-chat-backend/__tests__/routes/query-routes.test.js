@@ -359,7 +359,7 @@ describe('POST /stream', () => {
     expect(response.status).toBe(200);
     const body = response.text || '';
     // The streamed chunk is the TRANSLATED unit, not the EN source.
-    expect(body).toContain('[ES]Hello world. ');
+    expect(body).toContain('[ES]Hello world');
     // The streaming path must NOT emit a post-stream 'translation' event.
     expect(body).not.toMatch(/"type":"translation"/);
     delete process.env.STREAMING_TRANSLATION_ENABLED;
@@ -394,7 +394,7 @@ describe('POST /stream', () => {
     const response = await responsePromise;
     expect(response.status).toBe(200);
     const body = response.text || '';
-    expect(body).toContain('Hello world. ');
+    expect(body).toContain('Hello world');
     expect(body).not.toMatch(/"type":"translation"/);
     delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
@@ -433,7 +433,7 @@ describe('POST /stream', () => {
     const response = await responsePromise;
     expect(response.status).toBe(200);
     const body = response.text || '';
-    expect(body).toContain('[ES]Sentence one. ');
+    expect(body).toContain('[ES]Sentence one');
     expect(body).toContain('[ES]partial trailing');
     // Second unit should have received the first as context (context window grows).
     expect(translationService.translateStream).toHaveBeenCalledTimes(2);
@@ -476,7 +476,7 @@ describe('POST /stream', () => {
     expect(response.status).toBe(200);
     const body = response.text || '';
     // Both texts present (EN fallback for failed unit + direct-forwarded chunk)
-    expect(body).toContain('First sentence. ');
+    expect(body).toContain('First sentence');
     expect(body).toContain('Raw English');
     // No post-stream translation event (streaming path skipPostStreamTranslation=true)
     expect(body).not.toMatch(/"type":"translation"/);

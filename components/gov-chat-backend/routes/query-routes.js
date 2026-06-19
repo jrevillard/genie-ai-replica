@@ -240,9 +240,6 @@ module.exports = (queryService) => {
               `QueryService.stream_translation_unit_failed: ${error.message} (lang=${targetLanguage}, unitLen=${unit.length}, unitPreview=${unit.slice(0, 80)})`,
               { queryId }
             );
-            // Fallback: emit the original EN unit, flush pending buffer, then stop
-            // buffering and forward subsequent EN chunks directly (preserves
-            // original markdown formatting instead of fragmenting into units).
             if (!res.writableEnded) {
               res.write(`data: ${JSON.stringify({ type: 'chunk', content: unit })}\n\n`);
             }

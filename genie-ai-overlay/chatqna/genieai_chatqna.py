@@ -709,6 +709,10 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
                 chunk_embeddings.append(ce if isinstance(ce, list) and ce else [])
             if chunk_embeddings and all(ce for ce in chunk_embeddings):
                 next_data["chunk_embeddings"] = chunk_embeddings
+            logger.info(
+                f"[ADAPTIVE-DIAG5] assembled chunk_embeddings: "
+                f"{sum(1 for c in chunk_embeddings if c)}/{len(chunk_embeddings)} non-empty"
+            )
 
             # Expected data format if using tei_reranker directly (bypassing reranker service):
             # next_data["query"] = data["initial_query"]

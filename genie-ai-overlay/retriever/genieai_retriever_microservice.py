@@ -159,6 +159,14 @@ async def retrieve_docs(
                     f"{list((result.retrieved_docs[0].metadata or {}).keys()) if result.retrieved_docs else 'empty'}"
                 )
 
+            # DIAG3: check serialized form (does metadata survive Pydantic serialization?)
+            try:
+                _dumped = result.model_dump()
+                _rd0_md = (_dumped.get("retrieved_docs") or [{}])[0].get("metadata", {})
+                logger.info(f"[ADAPTIVE-DIAG3] serialized rd[0].metadata keys: {list((_rd0_md or {}).keys())}")
+            except Exception as e:
+                logger.info(f"[ADAPTIVE-DIAG3] serialization check failed: {e}")
+
         # Record statistics
         statistics_dict["opea_service@retrievers"].append_latency(time.time() - start, None)
 

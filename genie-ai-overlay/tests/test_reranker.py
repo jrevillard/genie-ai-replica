@@ -940,34 +940,32 @@ class TestAdaptiveStrategy:
     @pytest.mark.asyncio
     async def test_happy_path_returns_chat_request_with_reranked_docs(self):
         reranker = create_reranker()
+        reranker._embed_texts = AsyncMock(return_value=[[1.0, 0.0], [0.7, 0.3], [0.1, 0.9]])
         tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
         input_doc = create_mock_chat_request(
             texts=["alpha", "beta", "gamma"],
             embedding=[1.0, 0.0],
-            chunk_embeddings=[[1.0, 0.0], [0.7, 0.3], [0.1, 0.9]],
             reranking_strategy="adaptive",
             top_n=3,
         )
         mock_session = create_mock_aiohttp_session(tei_response)
         with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
             result = await reranker.invoke(input_doc)
-        # ChatCompletionRequest path returns the input with reranked_docs set
         assert result is input_doc
         assert len(result.reranked_docs) >= 1
         assert all(0.0 <= d.score <= 1.0 for d in result.reranked_docs)
 
     @pytest.mark.asyncio
     async def test_alignment_with_nonsequential_indices(self):
-        """Regression: TEI sorts descending but shuffles order; output text and
-        score must stay aligned via each result's 'index' field."""
+        """TEI sorts descending but shuffles order; output text and score must
+        stay aligned via each result's 'index' field."""
         reranker = create_reranker()
-        # Sorted desc by score, indices shuffled: docC(2)=0.95, docA(0)=0.82, docB(1)=0.61
+        reranker._embed_texts = AsyncMock(return_value=[[0.90, 0.10], [0.10, 0.90], [0.95, 0.05]])
         tei_response = create_tei_rerank_response_shuffled([(2, 0.95), (0, 0.82), (1, 0.61)])
         texts = ["docA", "docB", "docC"]
         input_doc = create_mock_chat_request(
             texts=texts,
             embedding=[1.0, 0.0],
-            chunk_embeddings=[[0.90, 0.10], [0.10, 0.90], [0.95, 0.05]],  # aligned with texts
             reranking_strategy="adaptive",
         )
         mock_session = create_mock_aiohttp_session(tei_response)
@@ -977,20 +975,18 @@ class TestAdaptiveStrategy:
         expected = {"docA": 0.82, "docB": 0.61, "docC": 0.95}
         for rdoc in result.reranked_docs:
             assert rdoc.text in expected
-            # Misalignment would pair a doc with another doc's score
             assert rdoc.score == expected[rdoc.text]
-        # The strongest match (docC) must always be among the selected
         assert "docC" in {d.text for d in result.reranked_docs}
 
     @pytest.mark.asyncio
     async def test_raises_when_query_embedding_missing(self):
-        """Adaptive with no query embedding -> hard-fail (no silent slice fallback)."""
+        """Adaptive with no query embedding -> hard-fail."""
         reranker = create_reranker()
+        reranker._embed_texts = AsyncMock(return_value=[[1.0, 0.0], [0.5, 0.5], [0.0, 1.0]])
         tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
         input_doc = create_mock_chat_request(
             texts=["a", "b", "c"],
             embedding=[],
-            chunk_embeddings=[[1.0, 0.0], [0.5, 0.5], [0.0, 1.0]],
             reranking_strategy="adaptive",
             top_n=1,
         )
@@ -1005,11 +1001,11 @@ class TestAdaptiveStrategy:
     async def test_raises_when_chunk_embeddings_misaligned(self):
         """Adaptive with chunk_embeddings count != docs -> hard-fail."""
         reranker = create_reranker()
+        reranker._embed_texts = AsyncMock(return_value=[[1.0, 0.0], [0.0, 1.0]])
         tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
         input_doc = create_mock_chat_request(
             texts=["a", "b", "c"],
             embedding=[1.0, 0.0],
-            chunk_embeddings=[[1.0, 0.0], [0.0, 1.0]],  # only 2 -> misaligned with 3 docs
             reranking_strategy="adaptive",
             top_n=1,
         )
@@ -1024,11 +1020,11 @@ class TestAdaptiveStrategy:
     async def test_raises_when_chunk_embedding_empty(self):
         """Adaptive with an empty chunk embedding -> hard-fail."""
         reranker = create_reranker()
+        reranker._embed_texts = AsyncMock(return_value=[[1.0, 0.0], [], [0.0, 1.0]])
         tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
         input_doc = create_mock_chat_request(
             texts=["a", "b", "c"],
             embedding=[1.0, 0.0],
-            chunk_embeddings=[[1.0, 0.0], [], [0.0, 1.0]],  # middle empty
             reranking_strategy="adaptive",
             top_n=1,
         )

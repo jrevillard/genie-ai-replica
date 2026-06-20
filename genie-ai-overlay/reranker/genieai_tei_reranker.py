@@ -50,7 +50,7 @@ RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 1))
 NOVELTY_SIGMOID_A = float(os.getenv("NOVELTY_SIGMOID_A", 20.0))
 NOVELTY_SIGMOID_B = float(os.getenv("NOVELTY_SIGMOID_B", 0.25))
 TOKEN_COST_ALPHA = float(os.getenv("TOKEN_COST_ALPHA", 0.0025))
-MIN_VALUE_THRESHOLD = float(os.getenv("MIN_VALUE_THRESHOLD", 0.0))
+MIN_VALUE_THRESHOLD = float(os.getenv("MIN_VALUE_THRESHOLD", -1.0))
 
 
 # Helper functions for the adaptive strategy

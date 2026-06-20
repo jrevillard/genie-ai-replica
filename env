@@ -187,7 +187,7 @@ HUGGING_FACE_HUB_TOKEN=
 # NOVELTY_SIGMOID_A=20.0       # novelty->weight logistic steepness
 # NOVELTY_SIGMOID_B=0.25       # novelty->weight logistic midpoint
 # TOKEN_COST_ALPHA=0.0025      # per-token context-window cost coefficient
-# MIN_VALUE_THRESHOLD=0.0      # select a chunk only if marginal value > threshold
+# MIN_VALUE_THRESHOLD=-1.0     # select a chunk only if marginal value > threshold
 
 # =============================================================================
 # SECTION 5: FRONTEND CONFIGURATION

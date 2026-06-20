@@ -136,7 +136,7 @@ RETRIEVER_TRAVERSAL_MAX_RETURNED = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX
 RETRIEVER_TRAVERSAL_SCORE_THRESHOLD = float(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD", 0.5))
 RETRIEVER_LAMBDA_MULT = float(os.getenv("RETRIEVER_ARANGO_LAMBDA_MULT", 0.5))
 
-RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "threshold")  # slice | threshold | knee_threshold
+RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "adaptive")  # slice | threshold | knee_threshold | adaptive
 RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 2))  # if RERANKING_STRATEGY set to 'slice'
 RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.9))  # if RERANKING_STRATEGY set to 'threshold'
 

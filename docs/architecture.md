@@ -609,7 +609,7 @@ cost    = token_cost + confusion_cost
 
 This yields a non-redundant, confidence- and budget-aware context set — useful under tight context limits or noisy retrieval.
 
-**Embedding flow (adaptive only):** the query embedding (produced by the embedding node, carried in the `embedding` field) and per-chunk embeddings (fetched by the retriever from ArangoDB) are propagated through `ChatQnA.align_outputs` to the reranker. If embeddings are missing or misaligned, `adaptive` falls back to `slice` gracefully.
+**Embedding flow (adaptive only):** the query embedding (produced by the embedding node, carried in the `embedding` field) and per-chunk embeddings (fetched by the retriever from ArangoDB) are propagated through `ChatQnA.align_outputs` to the reranker. If embeddings are missing or misaligned, `adaptive` raises a `RuntimeError` (no silent fallback — this surfaces integration bugs immediately).
 
 **Tuning parameters** (reranker service environment):
 

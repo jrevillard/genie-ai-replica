@@ -30,14 +30,11 @@ class RetrievalRequestArangoDB(RetrievalRequest):
 
 
 class GenieRetrievalResponse(RetrievalResponse):
-    """RetrievalResponse carrying chunk embeddings for the adaptive reranker.
+    """Marker subclass for retrieval responses (RetrievalRequest path).
 
-    The base OPEA RetrievalResponse has no embeddings field; this subclass lets
-    the retriever propagate per-chunk embeddings to the reranker when the
-    adaptive strategy is active.
+    Chunk embeddings for adaptive reranking propagate via the
+    SearchedMultimodalDoc metadata list (EmbedDoc path), not here.
     """
-
-    chunk_embeddings: list[list[float]] = Field(default_factory=list)
 
 
 class RequestContext(BaseModel):

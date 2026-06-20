@@ -551,10 +551,13 @@ class TestAlignOutputs:
             data = {
                 "initial_query": "test",
                 "retrieved_docs": [
-                    {"id": "d1", "text": "doc1", "metadata": {"chunk_embedding": [0.1, 0.2]}},
-                    {"id": "d2", "text": "doc2", "metadata": {"chunk_embedding": [0.3, 0.4]}},
+                    {"id": "d1", "text": "doc1"},
+                    {"id": "d2", "text": "doc2"},
                 ],
-                "metadata": [{"file_ids": ["f1"]}, {"file_ids": ["f2"]}],
+                "metadata": [
+                    {"file_ids": ["f1"], "chunk_embedding": [0.1, 0.2]},
+                    {"file_ids": ["f2"], "chunk_embedding": [0.3, 0.4]},
+                ],
             }
             inputs = {"input": "test", "embedding": [0.5, 0.6, 0.7]}
             llm_params = {}
@@ -582,10 +585,13 @@ class TestAlignOutputs:
             data = {
                 "initial_query": "test",
                 "retrieved_docs": [
-                    {"id": "d1", "text": "doc1", "metadata": {"chunk_embedding": [0.1, 0.2]}},
-                    {"id": "d2", "text": "doc2", "metadata": {"chunk_embedding": [0.3, 0.4]}},
+                    {"id": "d1", "text": "doc1"},
+                    {"id": "d2", "text": "doc2"},
                 ],
-                "metadata": [{"file_ids": ["f1"]}, {"file_ids": ["f2"]}],
+                "metadata": [
+                    {"file_ids": ["f1"], "chunk_embedding": [0.1, 0.2]},
+                    {"file_ids": ["f2"], "chunk_embedding": [0.3, 0.4]},
+                ],
             }
             inputs = {"input": "test", "embedding": [0.5, 0.6, 0.7]}
             llm_params = {}

@@ -694,25 +694,17 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
                 query_embedding = data.get("embedding")
             if query_embedding:
                 next_data["embedding"] = query_embedding
-            # Assemble chunk embeddings from retrieved_docs metadata. The retriever
-            # stashes each chunk's embedding there; top-level fields are stripped by
-            # the megaservice hop, but retrieved_docs metadata survives.
-            logger.info(
-                "[ADAPTIVE] retrieved_docs count="
-                f"{len(retrieved_docs)}, metadata keys="
-                f"{[list((d.get('metadata') or {}).keys()) for d in retrieved_docs if isinstance(d, dict)]}"
-            )
+            # Assemble chunk embeddings from the retriever's metadata list.
+            # The retriever (EmbedDoc path) returns a SearchedMultimodalDoc where
+            # metadata is a separate top-level list, not embedded in retrieved_docs
+            # (TextDoc has no metadata field). The arangodb stashes each chunk's
+            # embedding in this metadata list during the adaptive fetch.
             chunk_embeddings = []
-            for doc in retrieved_docs:
-                md = doc.get("metadata") if isinstance(doc, dict) else None
+            for md in data.get("metadata", []):
                 ce = (md or {}).pop("chunk_embedding", None)
                 chunk_embeddings.append(ce if isinstance(ce, list) and ce else [])
             if chunk_embeddings and all(ce for ce in chunk_embeddings):
                 next_data["chunk_embeddings"] = chunk_embeddings
-            logger.info(
-                f"[ADAPTIVE-DIAG5] assembled chunk_embeddings: "
-                f"{sum(1 for c in chunk_embeddings if c)}/{len(chunk_embeddings)} non-empty"
-            )
 
             # Expected data format if using tei_reranker directly (bypassing reranker service):
             # next_data["query"] = data["initial_query"]

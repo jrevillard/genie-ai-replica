@@ -45,7 +45,6 @@ logflag = os.getenv("LOGFLAG", False)
 RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice")
 RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.75))
 RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 1))
-EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "")
 
 # Adaptive utility-cost selection parameters
 NOVELTY_SIGMOID_A = float(os.getenv("NOVELTY_SIGMOID_A", 20.0))
@@ -167,36 +166,6 @@ class GenieTEIReranking(OpeaTEIReranking):
     Adds: Multi-strategy reranking (slice, threshold, knee_threshold)
     """
 
-    async def _embed_texts(self, texts, headers=None):
-        """Embed texts via the TEI embedding service (one batch call).
-
-        Used by the adaptive strategy to obtain chunk embeddings directly,
-        since the OPEA megaservice strips custom fields from the retriever
-        response.
-        """
-        if not texts or not EMBEDDING_SERVER_ENDPOINT:
-            return []
-        try:
-            async with (
-                aiohttp.ClientSession() as session,
-                session.post(
-                    f"{EMBEDDING_SERVER_ENDPOINT}/embed",
-                    json={"inputs": texts},
-                    headers=headers or {},
-                ) as resp,
-            ):
-                data = await resp.json()
-                if isinstance(data, list) and data:
-                    if isinstance(data[0], list):
-                        return data
-                    if isinstance(data[0], dict) and "embedding" in data[0]:
-                        return [d["embedding"] for d in data]
-                logger.error(f"[ADAPTIVE] Unexpected embedding response: {type(data)}")
-                return []
-        except Exception as e:
-            logger.error(f"[ADAPTIVE] Failed to embed chunk texts: {e}")
-            return []
-
     async def invoke(
         self, input: GenieSearchedDoc | RerankingRequest | ChatCompletionRequest
     ) -> LLMParamsDoc | RerankingResponse | ChatCompletionRequest:
@@ -307,11 +276,7 @@ class GenieTEIReranking(OpeaTEIReranking):
 
                 elif reranking_strategy == "adaptive":
                     query_embedding = input.embedding if isinstance(getattr(input, "embedding", None), list) else []
-                    # Embed chunk texts directly — the megaservice strips chunk
-                    # embeddings from the retriever response.
-                    chunk_embeddings = await self._embed_texts(
-                        [doc.text for doc in input.retrieved_docs], headers
-                    )
+                    chunk_embeddings = input.chunk_embeddings if hasattr(input, "chunk_embeddings") else []
 
                     embeddings_valid = (
                         bool(query_embedding)

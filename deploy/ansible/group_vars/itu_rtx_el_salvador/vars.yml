@@ -8,26 +8,57 @@
 deploy_dir: /opt/genieai-el-salvador
 stack_name: genieai-el-salvador
 gpu_env_file: env.rtx6000
-repo_branch: el-salvador-merge-test
+repo_branch: release/el-salvador-ds-port
 arango_db: el-salvador
+
+# Remote GPU node (vLLM, TEI run on 10.0.0.110)
+gpu_node_host: "10.0.0.110"
+
+# =============================================================================
+# OBSERVABILITY (Section 12C)
+# =============================================================================
+enable_observability: "1"
+gpu_https_port: "444"
+
+# Self-signed certificates (IP-based access, no domain/Let's Encrypt)
+self_signed_certs: true
+
+# SSL verification — self-signed certs on both app node and remote GPU node
+node_tls_reject_unauthorized: "0"
+opea_ssl_skip_verify: "1"
+keycloak_ssl_skip_verify: "1"
+
+# KEYCLOAK THEME
+keycloak_theme: genie-el-salvador
+# Supported locales for Keycloak login/account pages (JSON array; envsubst into the realm)
+keycloak_supported_locales: '["en","es"]'
+
+# MOBILE OIDC CLIENT
+kc_mobile_client_id: genie-mobile-el-salvador
+kc_mobile_redirect_scheme: sv.gov.agrogenio
 
 # =============================================================================
 # API GATEWAY
 # =============================================================================
-nginx_public_domain: "ai.assembly.govstack.global"
+nginx_public_domain: "10.0.0.102"
 
 # =============================================================================
 # FRONTEND
 # =============================================================================
-vue_app_api_url: "https://ai.assembly.govstack.global/api"
-vue_app_csp_connect_src: "'self' https://ai.assembly.govstack.global https://api.worldbank.org http://localhost:8010 https://localhost:8010 http://localhost:8090 https://localhost:8090 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
+vue_app_api_url: "https://10.0.0.102/api"
+vue_app_csp_connect_src: "'self' https://10.0.0.102 https://10.0.0.110 https://api.worldbank.org http://localhost:8010 https://localhost:8010 http://localhost:8090 https://localhost:8090 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
+# Available UI locales — El Salvador serves English + Spanish only (all 14 source locale files stay in the repo)
+vue_app_available_locales: "en,es"
 
 # =============================================================================
 # BACKEND
 # =============================================================================
-cors_allowed_origins: 'https://ai.assembly.govstack.global,http://localhost,https://localhost,http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/'
-csp_connect_src: "'self' https://ai.assembly.govstack.global https://api.worldbank.org http://localhost https://localhost http://localhost:8010 https://localhost:8010 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
+cors_allowed_origins: 'https://10.0.0.102,http://localhost,https://localhost,http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/'
+csp_connect_src: "'self' https://10.0.0.102 https://10.0.0.110 https://api.worldbank.org http://localhost https://localhost http://localhost:8010 https://localhost:8010 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
 nginx_permissions_policy: "camera=(), microphone=()"
+# Stream the target-language translation during chat (#829): stream Spanish
+# during generation instead of English-then-flip. Set "0" to revert.
+streaming_translation_enabled: "1"
 
 # =============================================================================
 # EMAIL (non-secret)
@@ -67,7 +98,7 @@ vllm_translation_dtype: bfloat16
 vllm_translation_gpu_utilization: "0.35"
 vllm_translation_kv_cache_dtype: auto
 embedding_model_id: BAAI/bge-base-en-v1.5
-reranker_model_id: cross-encoder/ms-marco-MiniLM-L-6-v2
+reranker_model_id: BAAI/bge-reranker-v2-m3
 chatqna_enforce_abstention: "false"
 chatqna_system_prompt: |-
   <INSTRUCTIONS>You are a friendly and polite information assistant. Your task is to answer the user's latest question using only the content provided from the knowledge base. Do not invent or assume information; if the answer is not in the provided content, inform the user that the information is unavailable. Use the user's name, gender, age, preferences, and chat history to tailor and personalise your responses. Keep answers informative but concise; provide detailed explanations only when necessary or explicitly requested.</INSTRUCTIONS>CRITICAL LANGUAGE REQUIREMENTS:You MUST respond in the same language as the user's question. If the user asks in English, respond in English. If the user asks in Spanish, respond in Spanish.If any retrieved content from the knowledge base is in a different language than the user's question, you MUST translate that content to match the user's language before using it in your response.NEVER mix languages in your response. Your entire response must be in the same language as the user's question.If the user's language is unclear from the question, default to English.In line with the above instructions, generate a reply to the user's latest message in the chat history based on the relevant content provided.

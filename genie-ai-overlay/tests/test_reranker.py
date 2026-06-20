@@ -940,11 +940,11 @@ class TestAdaptiveStrategy:
     @pytest.mark.asyncio
     async def test_happy_path_returns_chat_request_with_reranked_docs(self):
         reranker = create_reranker()
-        reranker._embed_texts = AsyncMock(return_value=[[1.0, 0.0], [0.7, 0.3], [0.1, 0.9]])
         tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
         input_doc = create_mock_chat_request(
             texts=["alpha", "beta", "gamma"],
             embedding=[1.0, 0.0],
+            chunk_embeddings=[[1.0, 0.0], [0.7, 0.3], [0.1, 0.9]],
             reranking_strategy="adaptive",
             top_n=3,
         )
@@ -960,12 +960,12 @@ class TestAdaptiveStrategy:
         """TEI sorts descending but shuffles order; output text and score must
         stay aligned via each result's 'index' field."""
         reranker = create_reranker()
-        reranker._embed_texts = AsyncMock(return_value=[[0.90, 0.10], [0.10, 0.90], [0.95, 0.05]])
         tei_response = create_tei_rerank_response_shuffled([(2, 0.95), (0, 0.82), (1, 0.61)])
         texts = ["docA", "docB", "docC"]
         input_doc = create_mock_chat_request(
             texts=texts,
             embedding=[1.0, 0.0],
+            chunk_embeddings=[[0.90, 0.10], [0.10, 0.90], [0.95, 0.05]],
             reranking_strategy="adaptive",
         )
         mock_session = create_mock_aiohttp_session(tei_response)
@@ -982,11 +982,11 @@ class TestAdaptiveStrategy:
     async def test_raises_when_query_embedding_missing(self):
         """Adaptive with no query embedding -> hard-fail."""
         reranker = create_reranker()
-        reranker._embed_texts = AsyncMock(return_value=[[1.0, 0.0], [0.5, 0.5], [0.0, 1.0]])
         tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
         input_doc = create_mock_chat_request(
             texts=["a", "b", "c"],
             embedding=[],
+            chunk_embeddings=[[1.0, 0.0], [0.5, 0.5], [0.0, 1.0]],
             reranking_strategy="adaptive",
             top_n=1,
         )
@@ -1001,11 +1001,11 @@ class TestAdaptiveStrategy:
     async def test_raises_when_chunk_embeddings_misaligned(self):
         """Adaptive with chunk_embeddings count != docs -> hard-fail."""
         reranker = create_reranker()
-        reranker._embed_texts = AsyncMock(return_value=[[1.0, 0.0], [0.0, 1.0]])
         tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
         input_doc = create_mock_chat_request(
             texts=["a", "b", "c"],
             embedding=[1.0, 0.0],
+            chunk_embeddings=[[1.0, 0.0], [0.0, 1.0]],
             reranking_strategy="adaptive",
             top_n=1,
         )
@@ -1020,11 +1020,11 @@ class TestAdaptiveStrategy:
     async def test_raises_when_chunk_embedding_empty(self):
         """Adaptive with an empty chunk embedding -> hard-fail."""
         reranker = create_reranker()
-        reranker._embed_texts = AsyncMock(return_value=[[1.0, 0.0], [], [0.0, 1.0]])
         tei_response = create_tei_rerank_response([0.95, 0.82, 0.61])
         input_doc = create_mock_chat_request(
             texts=["a", "b", "c"],
             embedding=[1.0, 0.0],
+            chunk_embeddings=[[1.0, 0.0], [], [0.0, 1.0]],
             reranking_strategy="adaptive",
             top_n=1,
         )

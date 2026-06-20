@@ -104,11 +104,6 @@ async def retrieve_docs(
         with tracer.start_as_current_span("retriever.hybrid_search") as span:
             response = await loader.invoke(input)
 
-            # DIAGNOSTIC: trace where chunk_embedding metadata is lost
-            if isinstance(response, list) and response and not isinstance(response[0], str):
-                _md = response[0].get("doc").metadata if isinstance(response[0], dict) else None
-                logger.info(f"[ADAPTIVE-DIAG] post-loader metadata keys: {list((_md or {}).keys())}")
-
             # Set RAG attributes (metadata only — no PII)
             if isinstance(response, list):
                 span.set_attribute("rag.chunk_count", len(response))
@@ -146,26 +141,10 @@ async def retrieve_docs(
                     retrieved_docs.append(RetrievalResponseData(text=r["doc"].page_content, metadata=r["doc"].metadata))
             if isinstance(input, RetrievalRequest):
                 result = GenieRetrievalResponse(retrieved_docs=retrieved_docs)
-                logger.info(
-                    f"[ADAPTIVE-DIAG2] built result retrieved_docs[0].metadata keys: "
-                    f"{list((retrieved_docs[0].metadata or {}).keys()) if retrieved_docs else 'empty'}"
-                )
             elif isinstance(input, ChatCompletionRequest):
                 input.retrieved_docs = retrieved_docs
                 input.documents = [doc.text for doc in retrieved_docs]
                 result = input
-                logger.info(
-                    f"[ADAPTIVE-DIAG2] CCR result retrieved_docs[0].metadata keys: "
-                    f"{list((result.retrieved_docs[0].metadata or {}).keys()) if result.retrieved_docs else 'empty'}"
-                )
-
-            # DIAG3: check serialized form (does metadata survive Pydantic serialization?)
-            try:
-                _dumped = result.model_dump()
-                _rd0_md = (_dumped.get("retrieved_docs") or [{}])[0].get("metadata", {})
-                logger.info(f"[ADAPTIVE-DIAG3] serialized rd[0].metadata keys: {list((_rd0_md or {}).keys())}")
-            except Exception as e:
-                logger.info(f"[ADAPTIVE-DIAG3] serialization check failed: {e}")
 
         # Record statistics
         statistics_dict["opea_service@retrievers"].append_latency(time.time() - start, None)

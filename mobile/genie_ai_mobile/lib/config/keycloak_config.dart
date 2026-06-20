@@ -4,6 +4,7 @@ import 'dev_config.dart';
 import 'staging_config.dart';
 import 'e2e_config.dart';
 import 'flavors/itu.dart' as flavors;
+import 'flavors/el_salvador.dart' as el_salvador;
 
 /// The full set of locale codes shipped in every build. A deployment flavor
 /// exposes a subset via [KeycloakConfig.supportedLocaleCodes].
@@ -79,6 +80,8 @@ KeycloakConfig getConfig() {
   switch (flavor) {
     case 'itu':
       return flavors.config;
+    case 'el_salvador':
+      return el_salvador.config;
     case 'staging':
       return stagingConfig;
     case 'e2e':
@@ -87,7 +90,7 @@ KeycloakConfig getConfig() {
       return devConfig;
     default:
       throw ArgumentError(
-        'Unknown FLAVOR: "$flavor". Expected: dev, staging, e2e, or itu.',
+        'Unknown FLAVOR: "$flavor". Expected: dev, staging, e2e, itu, or el_salvador.',
       );
   }
 }

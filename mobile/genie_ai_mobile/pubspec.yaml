@@ -64,6 +64,17 @@ dependencies:
 
   shared_preferences: ^2.5.5
 
+  # Share functionality for Pest Alerts
+  share_plus: ^10.1.3
+
+  # Charts for agricultural data visualization
+  fl_chart: ^0.66.0
+
+  # CSV parsing for HDX NDVI data
+  csv: ^6.0.0
+  # XML parsing for USDA RSS feed
+  xml: ^6.5.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -80,7 +91,10 @@ flutter:
   assets:
     - assets/images/
     - assets/images/genie-ai-icon-light.svg
+    - assets/images/sv.svg
+    - assets/images/agro-genio-logo.png
     - assets/config/genie-ai-icon-light.svg
+    - assets/config/agro-genio-icon.svg
     - assets/config/
     - assets/config/genie-ai-config.json
     - assets/config/quickhelp/
@@ -97,3 +111,6 @@ flutter_launcher_icons:
   ios: true              # This generates the iOS icons
   image_path: "assets/images/genie_ai_icon.png" # YOUR custom icon path
   min_sdk_android: 21
+# Per-flavor overrides live in separate files flutter_launcher_icons-<flavor>.yaml
+# (the tool's convention); the default above is the generic genie icon and each
+# institutional deployment pins its own branding in its own flavor file.

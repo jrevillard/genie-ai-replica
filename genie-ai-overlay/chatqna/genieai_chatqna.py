@@ -697,6 +697,11 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             # Assemble chunk embeddings from retrieved_docs metadata. The retriever
             # stashes each chunk's embedding there; top-level fields are stripped by
             # the megaservice hop, but retrieved_docs metadata survives.
+            logger.info(
+                "[ADAPTIVE] retrieved_docs count="
+                f"{len(retrieved_docs)}, metadata keys="
+                f"{[list((d.get('metadata') or {}).keys()) for d in retrieved_docs if isinstance(d, dict)]}"
+            )
             chunk_embeddings = []
             for doc in retrieved_docs:
                 md = doc.get("metadata") if isinstance(doc, dict) else None

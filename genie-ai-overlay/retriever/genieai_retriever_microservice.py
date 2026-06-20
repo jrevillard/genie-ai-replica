@@ -104,6 +104,11 @@ async def retrieve_docs(
         with tracer.start_as_current_span("retriever.hybrid_search") as span:
             response = await loader.invoke(input)
 
+            # DIAGNOSTIC: trace where chunk_embedding metadata is lost
+            if isinstance(response, list) and response and not isinstance(response[0], str):
+                _md = response[0].get("doc").metadata if isinstance(response[0], dict) else None
+                logger.info(f"[ADAPTIVE-DIAG] post-loader metadata keys: {list((_md or {}).keys())}")
+
             # Set RAG attributes (metadata only — no PII)
             if isinstance(response, list):
                 span.set_attribute("rag.chunk_count", len(response))

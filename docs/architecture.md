@@ -580,6 +580,46 @@ All spans include:
 - **Attributes** (model IDs, chunk counts, latency, error codes)
 - **Events** (LLM prompt start, retrieval completion, etc.)
 
+### 9.3 Reranker Strategies
+
+The reranker (`genie-ai-overlay/reranker/genieai_tei_reranker.py`) re-scores retrieved chunks with the TEI cross-encoder model and selects the subset forwarded to the LLM. The selection strategy is controlled by `RERANKING_STRATEGY` (default `adaptive`; set on the ChatQnA orchestrator and forwarded in the rerank request):
+
+| Strategy | Behaviour |
+|----------|-----------|
+| `slice` | Top-N by reranker score (N = `RERANKER_TOP_N`). |
+| `threshold` | All chunks scoring ≥ `RERANKING_THRESHOLD`. |
+| `slice_threshold` | Top-N, but only chunks scoring ≥ `RERANKING_THRESHOLD` (early-exit on TEI's descending sort). |
+| `knee_threshold` | Keep chunks up to the "knee" of the score curve ([kneed](https://kneed.readthedocs.io/) algorithm), else all. |
+| `adaptive` | **Utility-cost selection** (see below). **Default.** |
+
+#### Adaptive utility-cost selection
+
+Instead of a fixed count or hard threshold, the `adaptive` strategy keeps each chunk only when its **marginal value** exceeds `MIN_VALUE_THRESHOLD`:
+
+```
+value   = utility − cost
+utility = relevance × novelty_weight
+cost    = token_cost + confusion_cost
+```
+
+- **relevance** — reranker score, boosted above the skew-adjusted mean.
+- **novelty** — penalises redundancy with already-selected chunks (cosine similarity), MMR-style; candidates are processed in descending score order.
+- **token_cost** — each chunk consumes context-window budget.
+- **confusion_cost** — low-confidence chunks risk degrading the answer.
+
+This yields a non-redundant, confidence- and budget-aware context set — useful under tight context limits or noisy retrieval.
+
+**Embedding flow (adaptive only):** the query embedding (produced by the embedding node, carried in the `embedding` field) and per-chunk embeddings (fetched by the retriever from ArangoDB) are propagated through `ChatQnA.align_outputs` to the reranker. If embeddings are missing or misaligned, `adaptive` falls back to `slice` gracefully.
+
+**Tuning parameters** (reranker service environment):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `NOVELTY_SIGMOID_A` | `20.0` | novelty→weight logistic steepness |
+| `NOVELTY_SIGMOID_B` | `0.25` | novelty→weight logistic midpoint |
+| `TOKEN_COST_ALPHA` | `0.0025` | per-token context cost coefficient |
+| `MIN_VALUE_THRESHOLD` | `-1.0` | marginal-value cutoff (keep a chunk only if value > threshold) |
+
 ---
 
 ## 10. Document Upload and Ingestion

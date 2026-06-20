@@ -914,6 +914,7 @@ services:
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-reranker:${IMAGE_TAG:-latest}
     environment:
       - TEI_RERANKING_ENDPOINT=${RERANKER_SERVICE_URL:-http://tei_reranker:80}
+      - EMBEDDING_SERVER_ENDPOINT=${EMBEDDING_SERVICE_URL:-http://tei:80}
       - RERANK_COMPONENT_NAME=GENIE_TEI_RERANKING
       - HF_TOKEN=${VLLM_API_KEY:-}
       - VLLM_API_KEY=${VLLM_API_KEY:-}

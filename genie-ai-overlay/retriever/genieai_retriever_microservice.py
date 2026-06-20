@@ -154,6 +154,10 @@ async def retrieve_docs(
                 input.retrieved_docs = retrieved_docs
                 input.documents = [doc.text for doc in retrieved_docs]
                 result = input
+                logger.info(
+                    f"[ADAPTIVE-DIAG2] CCR result retrieved_docs[0].metadata keys: "
+                    f"{list((result.retrieved_docs[0].metadata or {}).keys()) if result.retrieved_docs else 'empty'}"
+                )
 
         # Record statistics
         statistics_dict["opea_service@retrievers"].append_latency(time.time() - start, None)

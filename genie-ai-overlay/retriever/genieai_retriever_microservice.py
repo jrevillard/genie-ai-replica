@@ -146,6 +146,10 @@ async def retrieve_docs(
                     retrieved_docs.append(RetrievalResponseData(text=r["doc"].page_content, metadata=r["doc"].metadata))
             if isinstance(input, RetrievalRequest):
                 result = GenieRetrievalResponse(retrieved_docs=retrieved_docs)
+                logger.info(
+                    f"[ADAPTIVE-DIAG2] built result retrieved_docs[0].metadata keys: "
+                    f"{list((retrieved_docs[0].metadata or {}).keys()) if retrieved_docs else 'empty'}"
+                )
             elif isinstance(input, ChatCompletionRequest):
                 input.retrieved_docs = retrieved_docs
                 input.documents = [doc.text for doc in retrieved_docs]

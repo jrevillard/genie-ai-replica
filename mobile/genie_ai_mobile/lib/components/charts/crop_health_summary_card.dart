@@ -1,8 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:genie_ai_mobile/services/agri_api_service.dart';
+import 'package:genie_ai_mobile/services/agricultural_proxy.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
-import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'crop_health_chart.dart';
 
 /// Simple crop health indicator for QuickHelp overlay
@@ -17,7 +16,7 @@ class CropHealthSummaryCard extends StatefulWidget {
 }
 
 class _CropHealthSummaryCardState extends State<CropHealthSummaryCard> {
-  final AgriApiService _agriService = AgriApiService();
+  final AgriculturalProxy _agriculturalProxy = AgriculturalProxy();
   Map<String, dynamic>? _healthData;
   bool _isLoading = true;
   String _currentLangCode = '';
@@ -47,7 +46,9 @@ class _CropHealthSummaryCardState extends State<CropHealthSummaryCard> {
 
   Future<void> _loadData() async {
     try {
-      final data = await _agriService.getCropHealth(); // region is server-side
+      final data = await _agriculturalProxy.getCropHealth(
+        region: widget.region,
+      );
       if (mounted) {
         setState(() {
           _healthData = data;
@@ -66,7 +67,7 @@ class _CropHealthSummaryCardState extends State<CropHealthSummaryCard> {
 
   double get _healthPercent {
     if (_healthData == null) return 0.0;
-    final average = (_healthData!['average'] as Map?)?.cast<String, dynamic>();
+    final average = _healthData!['average'] as Map<String, dynamic>?;
     if (average == null) return 0.0;
     final ndvi = average['ndvi'] as num?;
     if (ndvi == null) return 0.0;
@@ -113,24 +114,23 @@ class _CropHealthSummaryCardState extends State<CropHealthSummaryCard> {
   }
 
   Color get _healthColor {
-    // DS token values — the web pill palette (success/warning/danger).
-    final tokens = ThemeManager().tokens;
     final health = _overallHealth;
     switch (health) {
       case 'good':
-        return tokens.success;
+        return Colors.green;
       case 'moderate':
-        return tokens.warning;
+        return Colors.orange;
       case 'warning':
-        return tokens.danger;
+        return Colors.red;
       default:
-        return tokens.muted;
+        return Colors.grey;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return InkWell(
       onTap: () => _showFullChart(context),
@@ -139,7 +139,7 @@ class _CropHealthSummaryCardState extends State<CropHealthSummaryCard> {
         height: 70,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: ThemeManager().tokens.surface,
+          color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: _healthColor.withValues(alpha: 0.5),
@@ -181,7 +181,9 @@ class _CropHealthSummaryCardState extends State<CropHealthSummaryCard> {
                                       ?.length ??
                                   0
                             : 0,
-                        backgroundColor: ThemeManager().tokens.border,
+                        backgroundColor: isDark
+                            ? Colors.grey.shade700
+                            : Colors.grey.shade300,
                       ),
                       child: Center(
                         child: Text(
@@ -241,11 +243,10 @@ class _CropHealthSummaryCardState extends State<CropHealthSummaryCard> {
     showDialog(
       context: context,
       builder: (context) => Dialog(
-        insetPadding: EdgeInsets.zero,
-        shape: const RoundedRectangleBorder(),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         child: SizedBox(
-          width: MediaQuery.of(context).size.width,
-          height: MediaQuery.of(context).size.height,
+          width: MediaQuery.of(context).size.width * 0.95,
+          height: MediaQuery.of(context).size.height * 0.85,
           child: Column(
             children: [
               // Header
@@ -312,12 +313,11 @@ class _HealthDonutPainter extends CustomPainter {
 
     if (total == 0) return;
 
-    // DS token values for each health status (web pill palette)
-    final tokens = ThemeManager().tokens;
+    // Define colors for each health status
     final colors = {
-      'good': tokens.success,
-      'moderate': tokens.warning,
-      'warning': tokens.danger,
+      'good': Colors.green,
+      'moderate': Colors.orange,
+      'warning': Colors.red,
     };
 
     // Calculate and draw each segment
@@ -328,7 +328,7 @@ class _HealthDonutPainter extends CustomPainter {
       if (count == 0) return;
 
       final paint = Paint()
-        ..color = colors[status] ?? tokens.muted
+        ..color = colors[status] ?? Colors.grey
         ..style = PaintingStyle.stroke
         ..strokeWidth = strokeWidth
         ..strokeCap = StrokeCap.round;

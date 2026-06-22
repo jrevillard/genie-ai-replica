@@ -1,0 +1,88 @@
+/* AgroGenio El Salvador Keycloak Login Theme — Dark Mode
+ * Activated by upstream keycloak.v2 darkMode=true
+ *
+ * El Salvador DS dark token mapping:
+ *   accent  = Genie Glow #4FC3F7 (cyan/blue for AI-active states)
+ *   green   = Accent Green #81C784 (desaturated green)
+ *   fg      = #E2E2E6 (high-emphasis white)
+ *   muted   = #9CA3AF
+ *   border  = #2D3748
+ *   bg      = #0D1117
+ *   surface = #1C1F22 (raised elements)
+ */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Primary — Genie Glow cyan */
+    --pf-v5-global--primary-color--100: #4FC3F7;
+    --pf-v5-global--primary-color--200: #39A8D8;
+    --pf-v5-global--primary-color--300: #66D4FF;
+
+    /* Background — dark bg / surface */
+    --pf-v5-global--BackgroundColor--100: #0D1117;
+    --pf-v5-global--BackgroundColor--200: #1C1F22;
+
+    /* Text */
+    --pf-v5-global--Color--100: #E2E2E6;
+    --pf-v5-global--Color--200: #9CA3AF;
+    --pf-v5-global--Color--300: #6B7280;
+
+    /* Borders */
+    --pf-v5-global--BorderColor--100: #2D3748;
+    --pf-v5-global--BorderColor--200: #1E2533;
+
+    /* Success — Accent Green */
+    --pf-v5-global--success-color--100: #81C784;
+
+    /* Link — Genie Glow */
+    --pf-v5-global--link--Color: #4FC3F7;
+    --pf-v5-global--link--Color--hover: #66D4FF;
+
+    /* Login-specific */
+    --pf-v5-c-login__main-header--BorderTopColor: #4FC3F7;
+    --pf-v5-c-login__main-body--BackgroundColor: #1C1F22;
+    --pf-v5-c-login__main-header--BackgroundColor: #1C1F22;
+
+    /* Buttons — Genie Glow */
+    --pf-v5-c-button--m-primary--BackgroundColor: #4FC3F7;
+    --pf-v5-c-button--m-primary--hover--BackgroundColor: #39A8D8;
+    --pf-v5-c-button--m-primary--active--BackgroundColor: #66D4FF;
+    --pf-v5-c-button--m-primary--focus--BackgroundColor: #4FC3F7;
+    --pf-v5-c-button--m-secondary--BorderColor: #4FC3F7;
+    --pf-v5-c-button--m-secondary--Color: #4FC3F7;
+
+    /* Form control */
+    --pf-v5-c-form-control--BackgroundColor: #1C1F22;
+    --pf-v5-c-form-control--BorderColor: #2D3748;
+    --pf-v5-c-form-control--Color: #E2E2E6;
+    --pf-v5-c-form-control--focus--BorderColor: #4FC3F7;
+    --pf-v5-c-form-control--focus--BoxShadowColor: rgba(79, 195, 247, 0.25);
+
+    /* Page background */
+    --pf-v5-c-page--BackgroundColor: #0D1117;
+  }
+
+  body {
+    background-color: #0D1117;
+  }
+
+  #keycloak-bg {
+    background-color: #0D1117;
+  }
+
+  .pf-v5-c-login__main {
+    background-color: #1C1F22;
+  }
+
+  #kc-header-wrapper {
+    color: #4FC3F7;
+  }
+
+  #kc-page-title {
+    color: #E2E2E6;
+  }
+
+  #kc-footer-wrapper {
+    color: #6B7280;
+  }
+}

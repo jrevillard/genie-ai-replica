@@ -1,0 +1,50 @@
+/* AgroGenio El Salvador Account Console — Light Mode
+ * Overrides parent genie theme with El Salvador color tokens.
+ * Inherits fg, muted, border, bg, grays (identical to parent).
+ *
+ * El Salvador DS token mapping:
+ *   accent  = Cobalt Blue #0073AA
+ *   green   = Growth Green #2E7D32
+ */
+
+:root {
+  /* ── Primary — Cobalt Blue ── */
+  --pf-v5-global--primary-color--100: #0073AA;
+  --pf-v5-global--primary-color--200: #005f8c;
+  --pf-v5-global--primary-color--300: #005f8c;
+  --pf-v5-global--primary-color--400: #f9fbfd;
+  --pf-v5-global--primary-color--500: #005f8c;
+  --pf-v5-global--primary-color--dark-100: #0073AA;
+  --pf-v5-global--primary-color--light-100: #0073AA;
+
+  /* ── Active color ── */
+  --pf-v5-global--active-color--100: #0073AA;
+  --pf-v5-global--active-color--200: rgba(0, 115, 170, 0.12);
+  --pf-v5-global--active-color--300: #005f8c;
+  --pf-v5-global--active-color--400: #3399CC;
+
+  /* ── Background dark variants (header, toolbar) ── */
+  --pf-v5-global--BackgroundColor--dark-100: #0073AA;
+  --pf-v5-global--BackgroundColor--dark-200: #005f8c;
+  --pf-v5-global--BackgroundColor--dark-300: #005f8c;
+  --pf-v5-global--BackgroundColor--dark-400: #005f8c;
+
+  /* ── Link — Cobalt Blue ── */
+  --pf-v5-global--link--Color: #0073AA;
+  --pf-v5-global--link--Color--hover: #005f8c;
+  --pf-v5-global--link--Color--dark: #0073AA;
+  --pf-v5-global--link--Color--dark--hover: #005f8c;
+  --pf-v5-global--link--Color--light: #0073AA;
+  --pf-v5-global--link--Color--light--hover: #005f8c;
+
+  /* ── Info ── */
+  --pf-v5-global--info-color--100: #3399CC;
+  --pf-v5-global--info-color--200: #005f8c;
+
+  /* ── Success — Growth Green ── */
+  --pf-v5-global--success-color--100: #2E7D32;
+  --pf-v5-global--success-color--200: #1B5E20;
+
+  /* ── Page layout — Cobalt Blue header ── */
+  --pf-v5-c-page__header--BackgroundColor: #0073AA;
+}

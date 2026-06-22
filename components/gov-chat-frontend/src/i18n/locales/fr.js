@@ -535,49 +535,8 @@ export default {
     }
   },
   charts: {
-    news: {
-      addFromNews: 'Ajouter des actualités récentes',
-      insert: 'Insérer la sélection',
-      noItems: 'Aucun élément récent'
-    },
-
-    caveats: {
-      aboutData: 'À propos de ces données',
-      source: 'Source',
-      coverage: 'Couverture',
-      estimation: 'Estimations',
-      quality: 'Qualité',
-      estimated: 'Estimé',
-      actual: 'Réel',
-      estimatedSeries: '{name} (estimé)',
-      bundledSnapshot: 'Instantané intégré',
-      savedDataAge: 'Données enregistrées — il y a {age}',
-      updatedAgo: 'Mis à jour il y a {age}',
-      ageMinutes: '{n} min',
-      ageHours: '{n} h',
-      ageDays: '{n} j',
-      regionalWith: '{label} : {country}',
-      estimatedWith: '{label} ({years})',
-      annualWith: '{label} (jusqu’à {year})',
-      codes: {
-        REGIONAL_DATA: 'Données régionales',
-        ESTIMATED_CPI: 'Estimation ajustée par l’inflation',
-        GAP_YEARS: 'Années manquantes',
-        ANNUAL_ONLY: 'Données annuelles',
-        SINGLE_MARKET: 'Marché unique',
-        COMMUNITY_DATA: 'Données communautaires',
-        CURATED_STAT: 'Statistique curée',
-        PROXY_INDEX: 'Indice proxy',
-        STALE_CACHE: 'Données en cache'
-      }
-    },
-
     loading: 'Chargement des données...',
     loadDataError: 'Échec du chargement des données',
-    filterSeverity: 'Filtrer par gravité',
-    advisory: 'Advisory',
-    regional: 'Regional',
-    sighting: 'Sighting',
     insights: 'Aperçus',
     fastActions: 'Actions rapides',
     cropHealth: 'Santé des cultures',
@@ -635,7 +594,7 @@ export default {
     shareError: 'Erreur lors du partage',
     market: {
       sectionTitle: 'Prix du marché',
-      maizeGrains: 'Maïs, Haricots et Céréales',
+      maizeGrains: 'Maïs et grains',
       cropProtection: 'Protection des cultures',
       fruitsVeggies: 'Fruits et légumes',
       livestock: 'Bétail',
@@ -650,29 +609,10 @@ export default {
       latest: 'Dernier',
       trend: 'Tendance',
       priceHistory: 'Historique des prix',
-      startYear: 'À partir de',
-      series: 'Series',
       dataTable: 'Tableau de données',
-      period: 'Période',
-      exportCsv: 'Exporter en CSV',
-      latestTip: 'Latest month-end price of {name} — {value}{unit}',
       lastUpdated: 'Dernière mise à jour',
       commodity: 'Produit',
       noData: 'Aucune donnée disponible',
-      unitQuintal:
-        'Prix en dollars US par quintal, la mesure centro-américaine à la ferme. 1 quintal = 46 kg ; les données sources en USD/kg sont converties à 45,97 kg par quintal.',
-      unitPpi:
-        'Indice des prix à la production américain pour la fabrication de pesticides et de produits chimiques agricoles (BLS). Les valeurs d’indice sont relatives à une période de base, pas des prix absolus — la tendance montre la direction du coût.',
-      unitIndex:
-        'Les valeurs d’indice sont relatives à une période de base (par ex. 2016 = 100), pas des prix absolus — la tendance montre la direction et l’ampleur du changement.',
-      unitPercent:
-        'Dernier = la part de la récolte alimentaire centraméricaine, en masse, perdue entre la récolte et la vente au détail (estimation régionale modélisée FAO ODD 12.3.1 — pas un prix). Exemple : 8.3 signifie que près de 8 kg sur 100 produits ne parviennent jamais au consommateur.',
-      unitUsdKg: 'Dollars US par kilogramme.',
-      unitUsdMt: 'Dollars US par tonne métrique (1 000 kg) — marchés de référence internationaux.',
-      unitShortTon: 'Dollars US par tonne courte (907,18 kg) — convention du marché américain.',
-      unitUsdLb: 'Dollars US par livre (0,4536 kg).',
-      unitDozen: 'Dollars US par douzaine.',
-      unitGeneric: 'Unité de mesure de cette série.',
       year: 'Année',
       value: 'Valeur',
       getPredictions: 'Obtenir des prédictions IA',
@@ -1528,7 +1468,6 @@ export default {
     }
   },
   chatbot: {
-    thinking: 'Réflexion...',
     serviceLabelMismatch:
       "Le service « {label} » utilise une étiquette d'interface qui peut ne pas correspondre à la hiérarchie de connaissances",
     noFilterWarning: 'Aucun filtre de contexte actif — la requête sera non filtrée.',
@@ -1581,13 +1520,7 @@ export default {
     exportButton: 'Exporter',
     exportSuccess: 'Discussion exportée avec succès',
     exportError: "Échec de l'exportation de la discussion. Veuillez réessayer.",
-    removeItem: 'Supprimer',
-    chatUpdated: 'Conversation mise à jour',
-    feedbackError: "Erreur lors de l'envoi des commentaires",
-    feedbackMissingQueryId: 'ID de requête manquant pour les commentaires',
-    feedbackSubmitted: 'Commentaires envoyés',
-    saving: 'Enregistrement...',
-    savingConversation: 'Enregistrement de la conversation...'
+    removeItem: 'Supprimer'
   },
   quickhelp: {
     // Labels (Short for UI)

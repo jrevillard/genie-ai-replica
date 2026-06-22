@@ -525,49 +525,8 @@ export default {
     }
   },
   charts: {
-    news: {
-      addFromNews: 'Add from recent news',
-      insert: 'Insert selected',
-      noItems: 'No recent items'
-    },
-
-    caveats: {
-      aboutData: 'About this data',
-      source: 'Source',
-      coverage: 'Coverage',
-      estimation: 'Estimates',
-      quality: 'Quality',
-      estimated: 'Estimated',
-      actual: 'Actual',
-      estimatedSeries: '{name} (estimated)',
-      bundledSnapshot: 'Bundled snapshot',
-      savedDataAge: 'Saved data — {age} old',
-      updatedAgo: 'Updated {age} ago',
-      ageMinutes: '{n} min',
-      ageHours: '{n} h',
-      ageDays: '{n} d',
-      regionalWith: '{label}: {country}',
-      estimatedWith: '{label} ({years})',
-      annualWith: '{label} (through {year})',
-      codes: {
-        REGIONAL_DATA: 'Regional data',
-        ESTIMATED_CPI: 'Inflation-adjusted estimate',
-        GAP_YEARS: 'Missing years',
-        ANNUAL_ONLY: 'Annual data',
-        SINGLE_MARKET: 'Single market',
-        COMMUNITY_DATA: 'Community data',
-        CURATED_STAT: 'Curated statistic',
-        PROXY_INDEX: 'Proxy index',
-        STALE_CACHE: 'Cached data'
-      }
-    },
-
     loading: 'Hlahisa data...',
     loadDataError: 'Ho hlolehile ho hlahisa data',
-    filterSeverity: 'Filter by severity',
-    advisory: 'Advisory',
-    regional: 'Regional',
-    sighting: 'Sighting',
     insights: 'Mehlolo',
     fastActions: 'Tiriso tse Potlakileng',
     cropHealth: 'Bophelo ba Dijo',
@@ -625,7 +584,7 @@ export default {
     shareError: 'Phoso ea arolelano',
     market: {
       sectionTitle: 'Theko ea Tšehetso',
-      maizeGrains: 'Maize, Beans & Grains',
+      maizeGrains: 'Polo le Boholo',
       cropProtection: 'Tšireletso ea Dijo',
       fruitsVeggies: 'Fruite le Meroho',
       livestock: 'Diphulo',
@@ -640,29 +599,10 @@ export default {
       latest: 'Ba ho feta',
       trend: 'Mokhoa',
       priceHistory: 'Histori ya Theko',
-      startYear: 'From',
-      series: 'Series',
       dataTable: 'Tafole ya Data',
-      period: 'Period',
-      exportCsv: 'Export CSV',
-      latestTip: 'Latest month-end price of {name} — {value}{unit}',
       lastUpdated: 'Holisitsoe ho feta',
       commodity: 'Thepa',
       noData: 'Ha ho data',
-      unitQuintal:
-        'Prices are US dollars per quintal, the Central American farm-gate measure. 1 quintal = 46 kg; source data in USD/kg is converted at 45.97 kg per quintal.',
-      unitPpi:
-        'US Producer Price Index for pesticide and agricultural chemical manufacturing (BLS). Index values are relative to a base period, not absolute prices — the trend shows input-cost direction, not a price level.',
-      unitIndex:
-        'Index values are relative to a base period (for example 2016 = 100), not absolute prices — the trend shows direction and magnitude of change.',
-      unitPercent:
-        'Latest = the share of the Central American food harvest, by mass, lost between harvest and retail (FAO SDG 12.3.1 modeled regional estimate — not a price). Example: 8.3 means about 8 of every 100 kg of food grown never reaches a consumer.',
-      unitUsdKg: 'US dollars per kilogram.',
-      unitUsdMt: 'US dollars per metric tonne (1,000 kg) — international benchmark markets.',
-      unitShortTon: 'US dollars per short ton (907.18 kg) — US market convention.',
-      unitUsdLb: 'US dollars per pound (0.4536 kg).',
-      unitDozen: 'US dollars per dozen.',
-      unitGeneric: 'Unit of measurement for this series.',
       year: 'Selemo',
       value: 'Boleng',
       getPredictions: 'Fumana Lipalo tsa AI',
@@ -1519,7 +1459,6 @@ export default {
     }
   },
   chatbot: {
-    thinking: 'Thinking...',
     streamingError: 'Karabo e emisetsoe. Re leke hape.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     welcomeMessage: 'Welcome! How can I assist you today?',
@@ -1570,13 +1509,7 @@ export default {
     exportButton: 'Ntshetsa Kantle',
     exportSuccess: 'Moqoqo o ntsheditswe kantle ka katleho',
     exportError: 'Ho hlolehile ho ntshetsa moqoqo kantle. Ka kopo leka hape.',
-    removeItem: 'Susa',
-    chatUpdated: 'Puisano e ntlafalitsoe',
-    feedbackError: 'Phoso ha ho romela maikutlo',
-    feedbackMissingQueryId: 'Ha ho ID ya potso bakeng sa maikutlo',
-    feedbackSubmitted: 'Maikutlo a rometsoe',
-    saving: 'E boloka...',
-    savingConversation: 'E boloka puisano...'
+    removeItem: 'Susa'
   },
   quickhelp: {
     // Labels (Short for UI)

@@ -534,49 +534,8 @@ export default {
     }
   },
   charts: {
-    news: {
-      addFromNews: 'Adicionar de notícias recentes',
-      insert: 'Inserir selecionadas',
-      noItems: 'Nenhum item recente'
-    },
-
-    caveats: {
-      aboutData: 'Sobre estes dados',
-      source: 'Fonte',
-      coverage: 'Cobertura',
-      estimation: 'Estimativas',
-      quality: 'Qualidade',
-      estimated: 'Estimado',
-      actual: 'Real',
-      estimatedSeries: '{name} (estimado)',
-      bundledSnapshot: 'Instantâneo incluído',
-      savedDataAge: 'Dados salvos — há {age}',
-      updatedAgo: 'Atualizado há {age}',
-      ageMinutes: '{n} min',
-      ageHours: '{n} h',
-      ageDays: '{n} d',
-      regionalWith: '{label}: {country}',
-      estimatedWith: '{label} ({years})',
-      annualWith: '{label} (até {year})',
-      codes: {
-        REGIONAL_DATA: 'Dados regionais',
-        ESTIMATED_CPI: 'Estimativa ajustada pela inflação',
-        GAP_YEARS: 'Anos ausentes',
-        ANNUAL_ONLY: 'Dados anuais',
-        SINGLE_MARKET: 'Mercado único',
-        COMMUNITY_DATA: 'Dados da comunidade',
-        CURATED_STAT: 'Estatística curada',
-        PROXY_INDEX: 'Índice proxy',
-        STALE_CACHE: 'Dados em cache'
-      }
-    },
-
     loading: 'Carregando dados...',
     loadDataError: 'Falha ao carregar dados',
-    filterSeverity: 'Filtrar por gravidade',
-    advisory: 'Advisory',
-    regional: 'Regional',
-    sighting: 'Sighting',
     insights: 'Insights',
     fastActions: 'Ações Rápidas',
     cropHealth: 'Saúde das Culturas',
@@ -634,7 +593,7 @@ export default {
     shareError: 'Erro ao compartilhar',
     market: {
       sectionTitle: 'Preços de Mercado',
-      maizeGrains: 'Milho, Feijões e Grãos',
+      maizeGrains: 'Milho e Grãos',
       cropProtection: 'Proteção de Culturas',
       fruitsVeggies: 'Frutas e Vegetais',
       livestock: 'Pecuária',
@@ -649,29 +608,10 @@ export default {
       latest: 'Mais recente',
       trend: 'Tendência',
       priceHistory: 'Histórico de Preços',
-      startYear: 'A partir de',
-      series: 'Series',
       dataTable: 'Tabela de Dados',
-      period: 'Período',
-      exportCsv: 'Exportar CSV',
-      latestTip: 'Latest month-end price of {name} — {value}{unit}',
       lastUpdated: 'Última atualização',
       commodity: 'Produto',
       noData: 'Sem dados disponíveis',
-      unitQuintal:
-        'Preços em dólares americanos por quintal, a medida centro-americana de portão de fazenda. 1 quintal = 46 kg; os dados de origem em USD/kg são convertidos a 45,97 kg por quintal.',
-      unitPpi:
-        'Índice de Preços ao Produtor dos EUA para fabricação de pesticidas e produtos químicos agrícolas (BLS). Os valores do índice são relativos a um período-base, não preços absolutos — a tendência mostra a direção do custo.',
-      unitIndex:
-        'Os valores do índice são relativos a um período-base (por exemplo 2016 = 100), não preços absolutos — a tendência mostra direção e magnitude da mudança.',
-      unitPercent:
-        'Último = a parcela da colheita de alimentos da América Central, em massa, perdida entre a colheita e o varejo (estimativa regional modelada FAO ODS 12.3.1 — não é um preço). Exemplo: 8.3 significa que cerca de 8 em cada 100 kg de alimentos produzidos nunca chegam ao consumidor.',
-      unitUsdKg: 'Dólares americanos por quilograma.',
-      unitUsdMt: 'Dólares americanos por tonelada métrica (1.000 kg) — mercados internacionais de referência.',
-      unitShortTon: 'Dólares americanos por tonelada curta (907,18 kg) — convenção do mercado dos EUA.',
-      unitUsdLb: 'Dólares americanos por libra (0,4536 kg).',
-      unitDozen: 'Dólares americanos por dúzia.',
-      unitGeneric: 'Unidade de medida desta série.',
       year: 'Ano',
       value: 'Valor',
       getPredictions: 'Obter Previsões da IA',
@@ -1525,7 +1465,6 @@ export default {
     }
   },
   chatbot: {
-    thinking: 'Pensando...',
     streamingError: 'A resposta foi interrompida. Tente novamente.',
     aiGeneratedNoDocs: 'Gerado por IA — não baseado nos documentos da biblioteca',
     welcomeMessage: 'Welcome! How can I assist you today?',
@@ -1577,13 +1516,7 @@ export default {
     exportButton: 'Exportar',
     exportSuccess: 'Chat exportado com sucesso',
     exportError: 'Falha ao exportar chat. Por favor, tente novamente.',
-    removeItem: 'Remover',
-    chatUpdated: 'Conversa atualizada',
-    feedbackError: 'Erro ao enviar feedback',
-    feedbackMissingQueryId: 'ID da consulta ausente para feedback',
-    feedbackSubmitted: 'Feedback enviado',
-    saving: 'Salvando...',
-    savingConversation: 'Salvando conversa...'
+    removeItem: 'Remover'
   },
   quickhelp: {
     // Labels (Short for UI)

@@ -78,8 +78,7 @@
 </template>
 
 <script>
-import agriApiService from '../../services/agriApiService.js';
-import { agriDateLocale } from '../../utils/agri-i18n.js';
+import agriculturalService from '../../services/agriculturalService.js';
 import { useChartTheme } from '../../composables/useChartTheme.js';
 import DsCard from '../ds/Card.vue';
 import DsPill from '../ds/Pill.vue';
@@ -193,22 +192,7 @@ export default {
           gradient: { shadeIntensity: 1, opacityFrom: 0.5, opacityTo: 0.1, stops: [0, 90, 100] }
         },
         markers: { size: 6, colors: pointColors, strokeColors: cssVars.backgroundColor, strokeWidth: 2 },
-        // Tooltip shows the NDVI value AND the observation date (user req)
-        tooltip: {
-          y: {
-            formatter: (v, opts) => {
-              const dp = this.departmentData[(opts && opts.dataPointIndex) || 0];
-              if (dp && dp.date) {
-                const when = new Date(`${String(dp.date).slice(0, 10)}T00:00:00`);
-                if (!Number.isNaN(when.getTime())) {
-                  const uiLocale = (this.$i18n && this.$i18n.locale) || 'en';
-                  return `${v.toFixed(3)} — ${when.toLocaleDateString(agriDateLocale(uiLocale), { year: 'numeric', month: 'short', day: 'numeric' })}`;
-                }
-              }
-              return v.toFixed(3);
-            }
-          }
-        },
+        tooltip: { y: { formatter: (v) => v.toFixed(3) }, theme: this.isDarkMode ? 'dark' : 'light' },
         grid: { borderColor: cssVars.gridColor, strokeDashArray: 4 }
       };
     },
@@ -256,8 +240,8 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        const data = await agriApiService.getCropHealth();
-        this.cropData = { ...data, lastUpdated: (data.meta && data.meta.fetchedAt) || new Date().toISOString() };
+        const data = await agriculturalService.getCropHealth(this.region);
+        this.cropData = { ...data, lastUpdated: new Date().toISOString() };
       } catch (err) {
         this.error = this.$t('charts.loadDataError', 'Failed to load data');
         console.error('Error loading crop health data:', err);

@@ -521,49 +521,8 @@ export default {
     }
   },
   charts: {
-    news: {
-      addFromNews: 'Add from recent news',
-      insert: 'Insert selected',
-      noItems: 'No recent items'
-    },
-
-    caveats: {
-      aboutData: 'About this data',
-      source: 'Source',
-      coverage: 'Coverage',
-      estimation: 'Estimates',
-      quality: 'Quality',
-      estimated: 'Estimated',
-      actual: 'Actual',
-      estimatedSeries: '{name} (estimated)',
-      bundledSnapshot: 'Bundled snapshot',
-      savedDataAge: 'Saved data — {age} old',
-      updatedAgo: 'Updated {age} ago',
-      ageMinutes: '{n} min',
-      ageHours: '{n} h',
-      ageDays: '{n} d',
-      regionalWith: '{label}: {country}',
-      estimatedWith: '{label} ({years})',
-      annualWith: '{label} (through {year})',
-      codes: {
-        REGIONAL_DATA: 'Regional data',
-        ESTIMATED_CPI: 'Inflation-adjusted estimate',
-        GAP_YEARS: 'Missing years',
-        ANNUAL_ONLY: 'Annual data',
-        SINGLE_MARKET: 'Single market',
-        COMMUNITY_DATA: 'Community data',
-        CURATED_STAT: 'Curated statistic',
-        PROXY_INDEX: 'Proxy index',
-        STALE_CACHE: 'Cached data'
-      }
-    },
-
     loading: 'ডেটা লোড হচ্ছে...',
     loadDataError: 'ডেটা লোড করতে ব্যর্থ',
-    filterSeverity: 'Filter by severity',
-    advisory: 'Advisory',
-    regional: 'Regional',
-    sighting: 'Sighting',
     insights: 'অন্তর্দৃষ্টি',
     fastActions: 'দ্রুত ক্রিয়া',
     cropHealth: 'ফসলের স্বাস্থ্য',
@@ -621,7 +580,7 @@ export default {
     shareError: 'শেয়ার করতে ত্রুটি',
     market: {
       sectionTitle: 'বাজার মূল্য',
-      maizeGrains: 'Maize, Beans & Grains',
+      maizeGrains: 'ভুট্টা ও শস্য',
       cropProtection: 'ফসল সুরক্ষা',
       fruitsVeggies: 'ফল ও শাকসবজি',
       livestock: 'পশুপাল',
@@ -636,29 +595,10 @@ export default {
       latest: 'সর্বশেষ',
       trend: 'প্রবণতা',
       priceHistory: 'মূল্যের ইতিহাস',
-      startYear: 'From',
-      series: 'Series',
       dataTable: 'ডেটা টেবিল',
-      period: 'Period',
-      exportCsv: 'Export CSV',
-      latestTip: 'Latest month-end price of {name} — {value}{unit}',
       lastUpdated: 'সর্বশেষ আপডেট',
       commodity: 'পণ্য',
       noData: 'কোনো ডেটা নেই',
-      unitQuintal:
-        'Prices are US dollars per quintal, the Central American farm-gate measure. 1 quintal = 46 kg; source data in USD/kg is converted at 45.97 kg per quintal.',
-      unitPpi:
-        'US Producer Price Index for pesticide and agricultural chemical manufacturing (BLS). Index values are relative to a base period, not absolute prices — the trend shows input-cost direction, not a price level.',
-      unitIndex:
-        'Index values are relative to a base period (for example 2016 = 100), not absolute prices — the trend shows direction and magnitude of change.',
-      unitPercent:
-        'Latest = the share of the Central American food harvest, by mass, lost between harvest and retail (FAO SDG 12.3.1 modeled regional estimate — not a price). Example: 8.3 means about 8 of every 100 kg of food grown never reaches a consumer.',
-      unitUsdKg: 'US dollars per kilogram.',
-      unitUsdMt: 'US dollars per metric tonne (1,000 kg) — international benchmark markets.',
-      unitShortTon: 'US dollars per short ton (907.18 kg) — US market convention.',
-      unitUsdLb: 'US dollars per pound (0.4536 kg).',
-      unitDozen: 'US dollars per dozen.',
-      unitGeneric: 'Unit of measurement for this series.',
       year: 'বছর',
       value: 'মান',
       getPredictions: 'AI পূর্বাভাস পান',
@@ -1491,7 +1431,6 @@ export default {
     }
   },
   chatbot: {
-    thinking: 'Thinking...',
     streamingError: 'প্রতিক্রিয়া ব্যাহত হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
     aiGeneratedNoDocs: 'এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়',
     welcomeMessage: 'Welcome! How can I assist you today?',
@@ -1542,13 +1481,7 @@ export default {
     exportButton: 'এক্সপোর্ট',
     exportSuccess: 'চ্যাট সফলভাবে এক্সপোর্ট করা হয়েছে',
     exportError: 'চ্যাট এক্সপোর্ট করতে ব্যর্থ। অনুগ্রহ করে আবার চেষ্টা করুন।',
-    removeItem: 'আইটেম সরান',
-    chatUpdated: 'চ্যাট আপডেট হয়েছে',
-    feedbackError: 'মতামত পাঠাতে ত্রুটি',
-    feedbackMissingQueryId: 'মতামতের জন্য প্রশ্ন আইডি অনুপস্থিত',
-    feedbackSubmitted: 'মতামত জমা হয়েছে',
-    saving: 'সংরক্ষণ করা হচ্ছে...',
-    savingConversation: 'কথোপকথন সংরক্ষণ করা হচ্ছে...'
+    removeItem: 'আইটেম সরান'
   },
   quickhelp: {
     // Labels (Short for UI)

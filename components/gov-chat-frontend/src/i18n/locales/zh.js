@@ -527,49 +527,8 @@ export default {
     }
   },
   charts: {
-    news: {
-      addFromNews: 'Add from recent news',
-      insert: 'Insert selected',
-      noItems: 'No recent items'
-    },
-
-    caveats: {
-      aboutData: 'About this data',
-      source: 'Source',
-      coverage: 'Coverage',
-      estimation: 'Estimates',
-      quality: 'Quality',
-      estimated: 'Estimated',
-      actual: 'Actual',
-      estimatedSeries: '{name} (estimated)',
-      bundledSnapshot: 'Bundled snapshot',
-      savedDataAge: 'Saved data — {age} old',
-      updatedAgo: 'Updated {age} ago',
-      ageMinutes: '{n} min',
-      ageHours: '{n} h',
-      ageDays: '{n} d',
-      regionalWith: '{label}: {country}',
-      estimatedWith: '{label} ({years})',
-      annualWith: '{label} (through {year})',
-      codes: {
-        REGIONAL_DATA: 'Regional data',
-        ESTIMATED_CPI: 'Inflation-adjusted estimate',
-        GAP_YEARS: 'Missing years',
-        ANNUAL_ONLY: 'Annual data',
-        SINGLE_MARKET: 'Single market',
-        COMMUNITY_DATA: 'Community data',
-        CURATED_STAT: 'Curated statistic',
-        PROXY_INDEX: 'Proxy index',
-        STALE_CACHE: 'Cached data'
-      }
-    },
-
     loading: '正在加载数据...',
     loadDataError: '加载数据失败',
-    filterSeverity: 'Filter by severity',
-    advisory: 'Advisory',
-    regional: 'Regional',
-    sighting: 'Sighting',
     insights: '洞察',
     fastActions: '快速操作',
     cropHealth: '作物健康',
@@ -627,7 +586,7 @@ export default {
     shareError: '分享出错',
     market: {
       sectionTitle: '市场价格',
-      maizeGrains: 'Maize, Beans & Grains',
+      maizeGrains: '玉米和谷物',
       cropProtection: '作物保护',
       fruitsVeggies: '水果和蔬菜',
       livestock: '牲畜',
@@ -642,29 +601,10 @@ export default {
       latest: '最新',
       trend: '趋势',
       priceHistory: '价格历史',
-      startYear: 'From',
-      series: 'Series',
       dataTable: '数据表',
-      period: 'Period',
-      exportCsv: 'Export CSV',
-      latestTip: 'Latest month-end price of {name} — {value}{unit}',
       lastUpdated: '最后更新',
       commodity: '商品',
       noData: '无数据',
-      unitQuintal:
-        'Prices are US dollars per quintal, the Central American farm-gate measure. 1 quintal = 46 kg; source data in USD/kg is converted at 45.97 kg per quintal.',
-      unitPpi:
-        'US Producer Price Index for pesticide and agricultural chemical manufacturing (BLS). Index values are relative to a base period, not absolute prices — the trend shows input-cost direction, not a price level.',
-      unitIndex:
-        'Index values are relative to a base period (for example 2016 = 100), not absolute prices — the trend shows direction and magnitude of change.',
-      unitPercent:
-        'Latest = the share of the Central American food harvest, by mass, lost between harvest and retail (FAO SDG 12.3.1 modeled regional estimate — not a price). Example: 8.3 means about 8 of every 100 kg of food grown never reaches a consumer.',
-      unitUsdKg: 'US dollars per kilogram.',
-      unitUsdMt: 'US dollars per metric tonne (1,000 kg) — international benchmark markets.',
-      unitShortTon: 'US dollars per short ton (907.18 kg) — US market convention.',
-      unitUsdLb: 'US dollars per pound (0.4536 kg).',
-      unitDozen: 'US dollars per dozen.',
-      unitGeneric: 'Unit of measurement for this series.',
       year: '年',
       value: '值',
       getPredictions: '获取 AI 预测',
@@ -1453,7 +1393,6 @@ export default {
     }
   },
   chatbot: {
-    thinking: 'Thinking...',
     streamingError: '回复已中断。请重试。',
     aiGeneratedNoDocs: 'AI 生成 — 不基于文库文档',
     welcomeMessage: 'Welcome! How can I assist you today?',
@@ -1502,13 +1441,7 @@ export default {
     exportButton: '导出',
     exportSuccess: '聊天导出成功',
     exportError: '导出聊天失败。请重试。',
-    removeItem: '移除',
-    chatUpdated: '对话已更新',
-    feedbackError: '提交反馈时出错',
-    feedbackMissingQueryId: '提交反馈时缺少查询ID',
-    feedbackSubmitted: '反馈已提交',
-    saving: '正在保存...',
-    savingConversation: '正在保存对话...'
+    removeItem: '移除'
   },
   quickhelp: {
     // Labels (Short for UI)

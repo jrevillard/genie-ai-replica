@@ -541,47 +541,6 @@ export default {
     usageTrend: 'Usage Trend',
     loading: 'Loading data...',
     loadDataError: 'Failed to load data',
-    filterSeverity: 'Filter by severity',
-
-    advisory: 'Advisory',
-    regional: 'Regional',
-    sighting: 'Sighting',
-    news: {
-      addFromNews: 'Add from recent news',
-      insert: 'Insert selected',
-      noItems: 'No recent items'
-    },
-
-    caveats: {
-      aboutData: 'About this data',
-      source: 'Source',
-      coverage: 'Coverage',
-      estimation: 'Estimates',
-      quality: 'Quality',
-      estimated: 'Estimated',
-      actual: 'Actual',
-      estimatedSeries: '{name} (estimated)',
-      bundledSnapshot: 'Bundled snapshot',
-      savedDataAge: 'Saved data — {age} old',
-      updatedAgo: 'Updated {age} ago',
-      ageMinutes: '{n} min',
-      ageHours: '{n} h',
-      ageDays: '{n} d',
-      regionalWith: '{label}: {country}',
-      estimatedWith: '{label} ({years})',
-      annualWith: '{label} (through {year})',
-      codes: {
-        REGIONAL_DATA: 'Regional data',
-        ESTIMATED_CPI: 'Inflation-adjusted estimate',
-        GAP_YEARS: 'Missing years',
-        ANNUAL_ONLY: 'Annual data',
-        SINGLE_MARKET: 'Single market',
-        COMMUNITY_DATA: 'Community data',
-        CURATED_STAT: 'Curated statistic',
-        PROXY_INDEX: 'Proxy index',
-        STALE_CACHE: 'Cached data'
-      }
-    },
 
     // Section headers
     insights: 'Insights',
@@ -647,7 +606,7 @@ export default {
     // Market Price Charts
     market: {
       sectionTitle: 'Market Prices',
-      maizeGrains: 'Maize, Beans & Grains',
+      maizeGrains: 'Maize & Grains',
       cropProtection: 'Crop Protection',
       fruitsVeggies: 'Fruits & Veggies',
       livestock: 'Livestock',
@@ -662,29 +621,10 @@ export default {
       latest: 'Latest',
       trend: 'Trend',
       priceHistory: 'Price History',
-      startYear: 'From',
-      series: 'Series',
       dataTable: 'Data Table',
-      period: 'Period',
-      exportCsv: 'Export CSV',
-      latestTip: 'Latest month-end price of {name} — {value}{unit}',
       lastUpdated: 'Last updated',
       commodity: 'Commodity',
       noData: 'No data available',
-      unitQuintal:
-        'Prices are US dollars per quintal, the Central American farm-gate measure. 1 quintal = 46 kg; source data in USD/kg is converted at 45.97 kg per quintal.',
-      unitPpi:
-        'US Producer Price Index for pesticide and agricultural chemical manufacturing (BLS). Index values are relative to a base period, not absolute prices — the trend shows input-cost direction, not a price level.',
-      unitIndex:
-        'Index values are relative to a base period (for example 2016 = 100), not absolute prices — the trend shows direction and magnitude of change.',
-      unitPercent:
-        'Latest = the share of the Central American food harvest, by mass, lost between harvest and retail (FAO SDG 12.3.1 modeled regional estimate — not a price). Example: 8.3 means about 8 of every 100 kg of food grown never reaches a consumer.',
-      unitUsdKg: 'US dollars per kilogram.',
-      unitUsdMt: 'US dollars per metric tonne (1,000 kg) — international benchmark markets.',
-      unitShortTon: 'US dollars per short ton (907.18 kg) — US market convention.',
-      unitUsdLb: 'US dollars per pound (0.4536 kg).',
-      unitDozen: 'US dollars per dozen.',
-      unitGeneric: 'Unit of measurement for this series.',
       year: 'Year',
       value: 'Value',
       getPredictions: 'Get AI Predictions',
@@ -1522,7 +1462,6 @@ export default {
     }
   },
   chatbot: {
-    thinking: 'Thinking...',
     welcomeMessage: 'Welcome! How can I assist you today?',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     configMismatchWarning:
@@ -1573,13 +1512,7 @@ export default {
     exportSuccess: 'Chat exported successfully',
     exportError: 'Failed to export chat. Please try again.',
     streamingError: 'Response was interrupted. Please try again.',
-    removeItem: 'Remove item',
-    chatUpdated: 'Chat updated',
-    feedbackError: 'Error submitting feedback',
-    feedbackMissingQueryId: 'Missing query ID for feedback',
-    feedbackSubmitted: 'Feedback submitted',
-    saving: 'Saving...',
-    savingConversation: 'Saving conversation...'
+    removeItem: 'Remove item'
   },
   quickhelp: {
     // Labels (Short for UI)

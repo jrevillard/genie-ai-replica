@@ -31,9 +31,15 @@ class GenieAiConfig {
         if (appConfig['icon'] != null && appConfig['icon']['value'] != null) {
           iconPath = appConfig['icon']['value'];
 
-          // Remove leading slash if present (e.g. "/assets/..." -> "assets/...")
+          // The shared config.json uses web public-root paths (e.g.
+          // "/config/agro-genio-icon.svg"); Flutter assets live under "assets/".
+          // Strip a leading slash, then map to the asset bundle key:
+          // "/config/x.svg" -> "config/x.svg" -> "assets/config/x.svg".
           if (iconPath.startsWith('/')) {
             iconPath = iconPath.substring(1);
+          }
+          if (!iconPath.startsWith('assets/')) {
+            iconPath = 'assets/$iconPath';
           }
         }
       }

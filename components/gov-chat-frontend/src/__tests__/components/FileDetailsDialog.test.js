@@ -327,6 +327,27 @@ describe('FileDetailsDialog', () => {
       expect(mockGetCrawlJob).toHaveBeenCalledWith('test-file-123');
       expect(wrapper.vm.crawlJob).toEqual({ status: 'Crawling' });
     });
+
+    it('sets crawlJob to null (no throw) when getCrawlJob rejects for a crawl-origin file', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({ source_url: 'https://example.com/page' }));
+      mockGetCrawlJob.mockRejectedValue(new Error('Crawl job not found'));
+      const wrapper = createFileDetailsDialogWrapper();
+
+      await expect(wrapper.vm.fetchData('test-file-123')).resolves.toBeUndefined();
+
+      expect(mockGetCrawlJob).toHaveBeenCalledWith('test-file-123');
+      expect(wrapper.vm.crawlJob).toBeNull();
+    });
+
+    it('leaves crawlJob null when getCrawlJob resolves without data for a crawl-origin file', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({ source_url: 'https://example.com/page' }));
+      mockGetCrawlJob.mockResolvedValue(null);
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.fetchData('test-file-123');
+
+      expect(mockGetCrawlJob).toHaveBeenCalledWith('test-file-123');
+      expect(wrapper.vm.crawlJob).toBeNull();
+    });
   });
 
   // -------------------------------------------------------------------------

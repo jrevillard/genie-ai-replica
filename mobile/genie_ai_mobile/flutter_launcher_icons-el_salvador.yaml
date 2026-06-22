@@ -1,0 +1,10 @@
+# Per-flavor launcher icons for the el_salvador (AgroGenio AI) deployment.
+# flutter_launcher_icons auto-detects `flutter_launcher_icons-<flavor>.yaml`
+# files and generates per-flavor icons into android/app/src/<flavor>/res/.
+# The default (genie) icon stays in pubspec.yaml; this overrides it for
+# el_salvador only with the AgroGenio logo (1080x1080 RGBA PNG).
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/images/agro-genio-logo.png"
+  min_sdk_android: 21

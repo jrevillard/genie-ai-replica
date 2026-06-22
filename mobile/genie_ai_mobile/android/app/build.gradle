@@ -70,6 +70,13 @@ android {
                 appAuthRedirectScheme: "com.itu.genieai"
             ]
         }
+        el_salvador {
+            dimension "environment"
+            applicationIdSuffix ".elsalvador"
+            manifestPlaceholders = [
+                appAuthRedirectScheme: "sv.gov.agrogenio"
+            ]
+        }
     }
 
     signingConfigs {

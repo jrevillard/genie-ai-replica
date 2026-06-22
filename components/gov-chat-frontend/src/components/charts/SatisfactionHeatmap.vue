@@ -288,25 +288,19 @@ export default {
         const goodText = this.translate('analytics.ratings.good', 'Good');
         const excellentText = this.translate('analytics.ratings.excellent', 'Excellent');
 
-        if (theme.isDarkMode) {
-          return {
-            ranges: [
-              { from: 0, to: 69.99, color: '#7D3030', name: poorText },
-              { from: 70, to: 79.99, color: '#A36624', name: averageText },
-              { from: 80, to: 89.99, color: '#3D7242', name: goodText },
-              { from: 90, to: 100, color: '#1A9350', name: excellentText }
-            ]
-          };
-        } else {
-          return {
-            ranges: [
-              { from: 0, to: 69.99, color: '#EF4444', name: poorText },
-              { from: 70, to: 79.99, color: '#F59E0B', name: averageText },
-              { from: 80, to: 89.99, color: '#84CC16', name: goodText },
-              { from: 90, to: 100, color: '#22C55E', name: excellentText }
-            ]
-          };
-        }
+        const danger = getComputedStyle(document.documentElement).getPropertyValue('--danger').trim();
+        const warning = getComputedStyle(document.documentElement).getPropertyValue('--warning').trim();
+        const info = getComputedStyle(document.documentElement).getPropertyValue('--info').trim();
+        const success = getComputedStyle(document.documentElement).getPropertyValue('--success').trim();
+
+        return {
+          ranges: [
+            { from: 0, to: 69.99, color: danger, name: poorText },
+            { from: 70, to: 79.99, color: warning, name: averageText },
+            { from: 80, to: 89.99, color: info, name: goodText },
+            { from: 90, to: 100, color: success, name: excellentText }
+          ]
+        };
       };
 
       this.chartOptions = {

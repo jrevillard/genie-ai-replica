@@ -296,6 +296,14 @@
             </i18n-t>
             <p class="quick-help-subtitle">{{ translate('chatbot.quickHelpSubtitle') }}</p>
           </div>
+
+          <!-- Mascot guide bubble (el-salvador): framed speech-bubble
+               anchored bottom-right of the banner artwork — the farmer in
+               the hero image appears to be speaking. Absolute inside the
+               banner, which this component anchors itself. -->
+          <div class="welcome-mascot-bubble" role="note">
+            {{ translate('chatbot.mascotGreeting') }}
+          </div>
         </div>
 
         <!-- The composer is the just-chat entry: between the banner and
@@ -345,7 +353,43 @@
             <div class="quick-help-text">{{ button.service }}</div>
           </DsCard>
         </div>
+
+        <!-- Insights Section (el-salvador) -->
+        <div class="insights-section">
+          <div class="section-header">
+            <h3 class="section-title">{{ translate('charts.insights') }}</h3>
+          </div>
+          <div class="insights-cards">
+            <CropHealthSummaryCard @open-chart="openChart('crop-health')" />
+            <PestAlertSummaryCard @open-chart="openChart('pest-alert')" />
+          </div>
+        </div>
+
+        <!-- Market Prices Section (el-salvador). The closing tags for this
+             section and the overlay are the shared lines that follow. -->
+        <div class="market-prices-section">
+          <div class="section-header">
+            <h3 class="section-title">{{ translate('charts.market.sectionTitle') }}</h3>
+          </div>
+          <div class="market-cards">
+            <MarketPriceSummaryCard category="maize" @open-chart="openChart('market-price', 'maize')" />
+            <MarketPriceSummaryCard
+              category="cropProtection"
+              @open-chart="openChart('market-price', 'cropProtection')"
+            />
+            <MarketPriceSummaryCard category="vegetables" @open-chart="openChart('market-price', 'vegetables')" />
+            <MarketPriceSummaryCard category="livestock" @open-chart="openChart('market-price', 'livestock')" />
+            <MarketPriceSummaryCard category="fertilizer" @open-chart="openChart('market-price', 'fertilizer')" />
+            <MarketPriceSummaryCard category="apiary" @open-chart="openChart('market-price', 'apiary')" />
+            <MarketPriceSummaryCard category="aquaculture" @open-chart="openChart('market-price', 'aquaculture')" />
+            <MarketPriceSummaryCard
+              category="harvestStorage"
+              @open-chart="openChart('market-price', 'harvestStorage')"
+            />
+          </div>
+        </div>
       </div>
+
       <!-- Input Area -->
       <div v-else class="chat-input">
         <ChatComposer
@@ -363,6 +407,12 @@
         >
         </ChatComposer>
       </div>
+      <!-- Chart Dialog -->
+      <ChartDialog :visible="chartDialog.visible" :title="chartDialog.title" @close="closeChartDialog">
+        <CropHealthChart v-if="chartDialog.type === 'crop-health'" />
+        <PestAlertChart v-if="chartDialog.type === 'pest-alert'" />
+        <MarketPriceChart v-if="chartDialog.type === 'market-price'" :category="chartDialog.category || 'maize'" />
+      </ChartDialog>
       <!-- Feedback Dialog -->
       <chat-response-feedback-dialog
         v-if="feedbackDialog.visible"
@@ -492,6 +542,13 @@ import DsButton from './ds/Button.vue';
 import DsCard from './ds/Card.vue';
 import DsInput from './ds/Input.vue';
 import DsSelect from './ds/Select.vue';
+import ChartDialog from './charts/ChartDialog.vue';
+import CropHealthSummaryCard from './charts/CropHealthSummaryCard.vue';
+import PestAlertSummaryCard from './charts/PestAlertSummaryCard.vue';
+import MarketPriceSummaryCard from './charts/MarketPriceSummaryCard.vue';
+import CropHealthChart from './charts/CropHealthChart.vue';
+import PestAlertChart from './charts/PestAlertChart.vue';
+import MarketPriceChart from './charts/MarketPriceChart.vue';
 import { marked, Renderer } from 'marked';
 import DOMPurify from 'dompurify';
 import jsPDF from 'jspdf';
@@ -611,7 +668,14 @@ export default {
     DsButton,
     DsCard,
     DsInput,
-    DsSelect
+    DsSelect,
+    ChartDialog,
+    CropHealthSummaryCard,
+    PestAlertSummaryCard,
+    MarketPriceSummaryCard,
+    CropHealthChart,
+    PestAlertChart,
+    MarketPriceChart
   },
 
   data() {
@@ -667,7 +731,9 @@ export default {
       // has a reactive dependency. App.vue is the single writer.
       leftWidthSnapshot: SIDEBAR_DEFAULTS.left,
       // rAF handle for the resize coalescing; 0 = no pending frame.
-      resizeRaf: 0
+      resizeRaf: 0,
+      // el-salvador agri charts: the dialog the Insights / Market cards open.
+      chartDialog: { visible: false, type: null, title: '', category: null }
     };
   },
 
@@ -1253,6 +1319,18 @@ export default {
     translate(key, fallback) {
       const value = this.$t(key);
       return value !== key ? value : fallback || key;
+    },
+
+    openChart(type, category) {
+      const titles = {
+        'crop-health': this.translate('charts.cropHealthTitle', 'Crop Health - NDVI Index'),
+        'pest-alert': this.translate('charts.pestAlertTitle', 'Pest & Disease Alerts'),
+        'market-price': this.translate('charts.market.sectionTitle', 'Market Prices')
+      };
+      this.chartDialog = { visible: true, type, title: titles[type] || type, category };
+    },
+    closeChartDialog() {
+      this.chartDialog.visible = false;
     },
 
     selectQuickHelpOption(option) {
@@ -3136,6 +3214,81 @@ export default {
   color: color-mix(in oklch, var(--fg) 60%, var(--accent));
 }
 
+/* el-salvador agri sections (Insights / Market Prices) — they render
+   under the quick-help grid in the welcome overlay. */
+.quick-help-banner {
+  /* App-owned anchor for the mascot bubble: the Living Intelligence
+     layer also positions this banner when it is switched on, but the
+     bubble must hold bottom-right whether that layer is on or off. */
+  position: relative;
+}
+
+.welcome-mascot-bubble {
+  position: absolute;
+  right: 4%;
+  bottom: 14%;
+  width: clamp(180px, 36%, 340px);
+  padding: clamp(6px, 0.9cqw, 12px) clamp(10px, 1.5cqw, 20px);
+  background: var(--surface);
+  color: var(--fg);
+  border: 2px solid var(--accent-gold, var(--accent));
+  border-radius: 16px;
+  font-size: clamp(14px, 1.8cqw, 22px);
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+.welcome-mascot-bubble::after {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 16%;
+  transform: rotate(45deg);
+  width: 14px;
+  height: 14px;
+  background: var(--surface);
+  border-top: 2px solid var(--accent-gold, var(--accent));
+  border-left: 2px solid var(--accent-gold, var(--accent));
+}
+
+.insights-section,
+.market-prices-section {
+  width: 100%;
+  max-width: 800px;
+  margin-inline: auto;
+  margin-bottom: var(--space-lg);
+}
+
+.section-header {
+  margin-bottom: var(--space-md);
+}
+
+.section-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--fg);
+  margin: 0;
+}
+
+.insights-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.insights-cards > * {
+  grid-column: span 2;
+}
+
+.market-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-sm);
+}
+
 /* The welcome composer shares the grid's measured width — same cap,
    same auto-margin centering — so the bar and the card row present
    one visual strip rather than a shrinking pill next to a wide grid.
@@ -3229,6 +3382,42 @@ export default {
   font-size: var(--text-base);
   color: var(--fg);
   font-weight: 500;
+}
+
+/* el-salvador agri sections responsive — the quick-help grid is NOT
+   listed here: it is auto-fit against the panel width (see the grid
+   block below), so viewport steps would fight it. */
+@media (max-width: 1024px) {
+  .insights-cards,
+  .market-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .insights-cards > * {
+    grid-column: span 3;
+  }
+}
+
+@media (max-width: 768px) {
+  .insights-cards,
+  .market-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .insights-cards > * {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 480px) {
+  .insights-cards,
+  .market-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .insights-cards > * {
+    grid-column: span 1;
+  }
 }
 
 /* Chat Input Styles — the chat-view composer sits in this wrapper.

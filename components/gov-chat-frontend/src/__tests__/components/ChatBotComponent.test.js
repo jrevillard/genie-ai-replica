@@ -8,7 +8,7 @@
  */
 const { mount, flushPromises } = require('@vue/test-utils');
 const { createStore } = require('vuex');
-const { createAuthenticatedState } = require('../fixtures/store-state');
+const { createAuthenticatedState, defaultAuthenticatedUser } = require('../fixtures/store-state');
 // The real en locale — the wording the notification must end up showing.
 const enChatbot = require('../../i18n/locales/en.js').default.chatbot;
 
@@ -2799,5 +2799,141 @@ describe('ChatBotComponent welcome heading', () => {
     // fallback path rendered).
     expect(heading.text()).not.toMatch(/[{}]/);
     expect(heading.text()).not.toMatch(/[<>]/);
+  });
+
+  // el-salvador: context-config admin warning contract
+  // -----------------------------------------------------------------------
+  // Dashboard overlay and chart functionality
+  // -----------------------------------------------------------------------
+  describe('Dashboard overlay visibility', () => {
+    it('shows quick help overlay by default with no context items', () => {
+      const wrapper = createChatBotWrapper();
+      expect(wrapper.vm.showQuickHelp).toBe(true);
+      expect(wrapper.vm.selectedContextItems.length).toBe(0);
+    });
+
+    it('hides quick help overlay when context items exist', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Simulate selecting a quick help option which sets both conditions
+      const option = {
+        service: 'Test Service',
+        visibleText: 'Test',
+        hiddenPrompt: 'Test prompt',
+        category: 'general',
+        id: 'test-id'
+      };
+      jest.spyOn(vm, 'sendMessage').mockImplementation(() => {});
+      vm.selectQuickHelpOption(option);
+
+      expect(vm.showQuickHelp).toBe(false);
+    });
+  });
+
+  describe('openChart method', () => {
+    it('opens chart dialog with crop-health type', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.openChart('crop-health');
+
+      expect(vm.chartDialog.visible).toBe(true);
+      expect(vm.chartDialog.type).toBe('crop-health');
+      expect(vm.chartDialog.title).toBeTruthy();
+    });
+
+    it('opens chart dialog with pest-alert type', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.openChart('pest-alert');
+
+      expect(vm.chartDialog.visible).toBe(true);
+      expect(vm.chartDialog.type).toBe('pest-alert');
+    });
+
+    it('opens chart dialog with market-price type and category', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.openChart('market-price', 'maize');
+
+      expect(vm.chartDialog.visible).toBe(true);
+      expect(vm.chartDialog.type).toBe('market-price');
+      expect(vm.chartDialog.category).toBe('maize');
+    });
+
+    it('handles unknown chart type with fallback title', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.openChart('unknown-type');
+
+      expect(vm.chartDialog.visible).toBe(true);
+      expect(vm.chartDialog.type).toBe('unknown-type');
+      expect(vm.chartDialog.title).toBe('unknown-type');
+    });
+
+    it('passes category through to chartDialog state', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.openChart('market-price', 'fertilizer');
+
+      expect(vm.chartDialog.category).toBe('fertilizer');
+    });
+  });
+
+  describe('checkContextConfig warning logic', () => {
+    it('does not warn for admin when context has no mismatches', () => {
+      // Admin comes from the state factory: the store mock has no SET_USER
+      // mutation, so the commit would be a silent no-op.
+      const wrapper = createChatBotWrapper({
+        user: { ...defaultAuthenticatedUser, roles: ['admin'], _key: 'test-admin' }
+      });
+      const vm = wrapper.vm;
+
+      // Add a properly matched context item — matched, under the main
+      // contract, by the label being in the item's serviceLabels array or
+      // equal to its serviceKey.
+      vm.selectedContextItems.push({
+        service: 'Test Service',
+        serviceKey: 'Test Service',
+        serviceLabels: ['Test Service'],
+        category: 'general',
+        selected: true
+      });
+
+      const context = {
+        categoryLabel: 'Agriculture',
+        serviceLabels: ['Test Service']
+      };
+
+      // Should not throw or call warning
+      expect(() => vm.checkContextConfig(context)).not.toThrow();
+      expect(mockNotificationWarning).not.toHaveBeenCalled();
+    });
+
+    it('warns when service label has no matching context item', () => {
+      // Admin comes from the state factory: the store mock has no SET_USER
+      // mutation, so the commit would be a silent no-op.
+      const wrapper = createChatBotWrapper({
+        user: { ...defaultAuthenticatedUser, roles: ['admin'], _key: 'test-admin' }
+      });
+      const vm = wrapper.vm;
+
+      const context = {
+        categoryLabel: 'Valid Category',
+        serviceLabels: ['NonExistent Service']
+      };
+
+      console.log('DEBUG user:', JSON.stringify(vm.$store.getters.currentUser));
+      console.log('DEBUG items:', JSON.stringify(vm.selectedContextItems));
+      const __r = vm.checkContextConfig(context);
+      console.log('DEBUG result:', __r);
+
+      expect(mockNotificationWarning).toHaveBeenCalled();
+    });
   });
 });

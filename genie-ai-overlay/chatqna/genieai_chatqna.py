@@ -150,31 +150,31 @@ MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max cha
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 
 # ---------------------------------------------------------------------------
-# Streaming-safe stripping of leaked conversation markers.
+# Stripping of leaked conversation markers (shared by streaming + non-streaming).
 #
-# The non-streaming path (handle_request) strips |<-MSG->| delimiters and
-# USER:/ASSISTANT: role markers that the LLM sometimes echoes back from the
-# chat history block (see the re.sub calls on the assembled llm_response). The
-# streaming path returns early via _stream_with_metadata, so the same markers
-# would otherwise leak through the SSE token stream to the frontend. The
-# helpers below apply the same stripping to streamed chunks.
+# The LLM sometimes echoes back the internal |<-MSG->| delimiters and
+# USER:/ASSISTANT: role markers used to format chat history in the prompt. Both
+# the assembled-response path (handle_request) and the streaming path
+# (_stream_with_metadata) must strip them, so the patterns below are defined
+# once and consumed by both — there is a single source of truth for what a
+# "conversation marker" looks like.
 #
-# A marker may arrive split across token chunks (e.g. "|<-M" then "SG->|"), so
-# content is buffered: only the settled head is emitted and a tail that could
-# be the start of a marker is held back until the marker either completes (and
-# is stripped) or enough non-marker text arrives to prove it is real content.
+# In the streaming path a marker may arrive split across token chunks (e.g.
+# "|<-M" then "SG->|"), so content is buffered: only the settled head is emitted
+# and a tail that could be the start of a marker is held back until the marker
+# either completes (and is stripped) or enough non-marker text arrives to prove
+# it is real content.
 # ---------------------------------------------------------------------------
 _CONV_MSG_SEPARATOR = "|<-MSG->|"
-# Same shape as the non-streaming stripper, applied to streamed text.
-_STREAM_SEP_RE = re.compile(r"\s*\|<-MSG->\|\s*")
-# Tolerate leading whitespace before the role marker so a marker split from its
-# preceding separator across chunks (separator -> "\n" in one chunk, " USER:"
-# arriving in the next) is still stripped. Matches the non-streaming intent of
-# removing role labels that follow a (now-replaced) separator.
-_STREAM_ROLE_RE = re.compile(r"^[ \t]*(?:USER|ASSISTANT):\s*", re.MULTILINE)
-# Marker literals whose partial occurrence at the buffer tail must be withheld
-# so a split marker is never emitted as literal text.
-_STREAM_MARKER_PREFIXES = (_CONV_MSG_SEPARATOR, "USER:", "ASSISTANT:")
+# Separator with surrounding whitespace collapsed to a single newline.
+_CONV_SEP_RE = re.compile(r"\s*\|<-MSG->\|\s*")
+# Role marker at line start, tolerating leading whitespace so a marker split
+# from its preceding separator across chunks (separator -> "\n" in one chunk,
+# " USER:" arriving in the next) is still stripped.
+_CONV_ROLE_RE = re.compile(r"^[ \t]*(?:USER|ASSISTANT):\s*", re.MULTILINE)
+# Marker literals whose partial occurrence at the streaming buffer tail must be
+# withheld so a split marker is never emitted as literal text.
+_CONV_MARKER_PREFIXES = (_CONV_MSG_SEPARATOR, "USER:", "ASSISTANT:")
 
 
 def _streaming_marker_tail_len(buffer: str) -> int:
@@ -195,7 +195,7 @@ def _streaming_marker_tail_len(buffer: str) -> int:
     if trailing_ws:
         best = trailing_ws
     # Longest proper (non-full) prefix of any marker literal sitting at the tail.
-    for marker in _STREAM_MARKER_PREFIXES:
+    for marker in _CONV_MARKER_PREFIXES:
         limit = min(n, len(marker) - 1)
         for k in range(limit, 0, -1):
             if marker.startswith(buffer[-k:]):
@@ -1160,8 +1160,8 @@ class ChatQnAService:
                 yield text
                 continue
             buffer += content
-            buffer = _STREAM_SEP_RE.sub("\n", buffer)
-            buffer = _STREAM_ROLE_RE.sub("", buffer)
+            buffer = _CONV_SEP_RE.sub("\n", buffer)
+            buffer = _CONV_ROLE_RE.sub("", buffer)
             tail = _streaming_marker_tail_len(buffer)
             if tail >= len(buffer):
                 # Whole buffer is a potential partial marker (or trailing
@@ -1177,8 +1177,8 @@ class ChatQnAService:
         # Flush whatever remains (final pass: a partial marker that never completed
         # is real content and must be emitted, not dropped).
         if buffer:
-            buffer = _STREAM_SEP_RE.sub("\n", buffer)
-            buffer = _STREAM_ROLE_RE.sub("", buffer)
+            buffer = _CONV_SEP_RE.sub("\n", buffer)
+            buffer = _CONV_ROLE_RE.sub("", buffer)
             if buffer:
                 yield f"data: {buffer.encode('utf-8')!r}\n\n"
 
@@ -2026,9 +2026,10 @@ class ChatQnAService:
         # Strip leaked conversation markers from LLM response.
         # The LLM sometimes echoes back the |<-MSG->| delimiters and
         # USER:/ASSISTANT: role markers that are used internally to
-        # format chat history in the prompt.
-        llm_response = re.sub(r"\s*\|<-MSG->\|\s*", "\n", llm_response)
-        llm_response = re.sub(r"^(USER|ASSISTANT):\s*", "", llm_response, flags=re.MULTILINE)
+        # format chat history in the prompt. Same shared patterns as the
+        # streaming path (_stream_with_metadata) — see _CONV_SEP_RE / _CONV_ROLE_RE.
+        llm_response = _CONV_SEP_RE.sub("\n", llm_response)
+        llm_response = _CONV_ROLE_RE.sub("", llm_response)
 
         if original_language and original_language.strip() != "EN":
             if logflag:

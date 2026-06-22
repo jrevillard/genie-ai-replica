@@ -1482,3 +1482,55 @@ class TestStreamWithMetadata:
         assert "|<-MSG->|" not in decoded
         assert "Réponse" in decoded
         assert "über Straße" in decoded
+
+
+# ===========================================================================
+# Shared conversation-marker stripping patterns (_CONV_SEP_RE / _CONV_ROLE_RE)
+# Both the assembled-response (handle_request) and streaming
+# (_stream_with_metadata) paths strip the same leaked |<-MSG->| delimiters
+# and USER:/ASSISTANT: role markers, so the patterns are defined once at
+# module level. These tests lock the canonical behaviour both paths inherit.
+# ===========================================================================
+class TestConvMarkerPatterns:
+    def test_separator_replaced_by_newline(self):
+        from chatqna.genieai_chatqna import _CONV_SEP_RE
+
+        assert _CONV_SEP_RE.sub("\n", "a |<-MSG->| b") == "a\nb"
+
+    def test_separator_collapses_surrounding_whitespace(self):
+        from chatqna.genieai_chatqna import _CONV_SEP_RE
+
+        assert _CONV_SEP_RE.sub("\n", "a   |<-MSG->|   b") == "a\nb"
+
+    def test_role_marker_stripped_at_line_start(self):
+        from chatqna.genieai_chatqna import _CONV_ROLE_RE
+
+        assert _CONV_ROLE_RE.sub("", "\nUSER: hello") == "\nhello"
+        assert _CONV_ROLE_RE.sub("", "\nASSISTANT: reply") == "\nreply"
+
+    def test_role_marker_tolerates_leading_whitespace(self):
+        # A role marker split from its preceding separator across streaming
+        # chunks lands after a space; the shared regex must still strip it.
+        from chatqna.genieai_chatqna import _CONV_ROLE_RE
+
+        assert _CONV_ROLE_RE.sub("", "\n USER: hello") == "\nhello"
+
+    def test_role_marker_not_stripped_mid_line(self):
+        from chatqna.genieai_chatqna import _CONV_ROLE_RE
+
+        # Must not touch "USER:" that is real content in the middle of a line.
+        assert _CONV_ROLE_RE.sub("", "the USER: field is here") == "the USER: field is here"
+
+    def test_assembled_history_echo_matches_streaming_output(self):
+        # Non-streaming and streaming stripping must produce the same result
+        # for a realistic history echo — the single source of truth guarantee.
+        from chatqna.genieai_chatqna import _CONV_ROLE_RE, _CONV_SEP_RE
+
+        echo = "|<-MSG->| USER: q\n|<-MSG->| ASSISTANT: a\nreal answer"
+        assembled = _CONV_ROLE_RE.sub("", _CONV_SEP_RE.sub("\n", echo))
+        assert "|<-MSG->|" not in assembled
+        assert "USER:" not in assembled
+        assert "ASSISTANT:" not in assembled
+        assert "real answer" in assembled
+        assert "q" in assembled
+        assert "a" in assembled

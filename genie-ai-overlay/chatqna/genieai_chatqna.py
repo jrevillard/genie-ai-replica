@@ -175,6 +175,12 @@ _CONV_ROLE_RE = re.compile(r"^[ \t]*(?:USER|ASSISTANT):\s*", re.MULTILINE)
 # Marker literals whose partial occurrence at the streaming buffer tail must be
 # withheld so a split marker is never emitted as literal text.
 _CONV_MARKER_PREFIXES = (_CONV_MSG_SEPARATOR, "USER:", "ASSISTANT:")
+# Cap on how much trailing whitespace is withheld as a candidate lead-in
+# (the ``\s*`` / ``[ \t]*`` before a marker). In practice that lead-in is only a
+# few characters; capping bounds memory and regex cost if a misbehaving upstream
+# emits a very long run of whitespace (the excess is flushed as plain content,
+# which only costs a few cosmetic trailing spaces before the next newline).
+_MAX_TRAILING_WS_WITHHOLD = 32
 
 
 def _streaming_marker_tail_len(buffer: str) -> int:
@@ -191,9 +197,11 @@ def _streaming_marker_tail_len(buffer: str) -> int:
         return 0
     best = 0
     # Trailing whitespace: candidate lead-in (\s* / [ \t]*) for the next marker.
+    # Capped so a pathological long-whitespace run cannot grow the buffer
+    # unboundedly (the cap-flushed excess becomes plain content).
     trailing_ws = n - len(buffer.rstrip())
     if trailing_ws:
-        best = trailing_ws
+        best = min(trailing_ws, _MAX_TRAILING_WS_WITHHOLD)
     # Longest proper (non-full) prefix of any marker literal sitting at the tail.
     for marker in _CONV_MARKER_PREFIXES:
         limit = min(n, len(marker) - 1)

@@ -1416,6 +1416,33 @@ class TestStreamWithMetadata:
         assert "reply" in decoded
 
     @pytest.mark.asyncio
+    async def test_strips_role_marker_split_at_newline_without_separator(self):
+        # Bare role marker (no preceding |<-MSG->|) split across a newline
+        # boundary: "\nUS" then "ER: hello". The [ \t]* tolerance in _CONV_ROLE_RE
+        # exists for this case — the streaming buffer must still strip it.
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body([self._chunk("intro\nUS"), self._chunk("ER: hello"), "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        decoded = self._decode_content(out)
+        assert "USER:" not in decoded
+        assert "intro" in decoded
+        assert "hello" in decoded
+
+    @pytest.mark.asyncio
+    async def test_whitespace_run_does_not_grow_buffer_unboundedly(self):
+        # Regression guard: a long trailing-whitespace run must not be withheld
+        # forever (capped lead-in). The excess flushes as content and the stream
+        # still terminates with all real text present.
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body([self._chunk("a" + " " * 200 + "b"), "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        decoded = self._decode_content(out)
+        assert decoded.startswith("a")
+        assert decoded.endswith("b")
+
+    @pytest.mark.asyncio
     async def test_preserves_normal_content_unchanged(self):
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))

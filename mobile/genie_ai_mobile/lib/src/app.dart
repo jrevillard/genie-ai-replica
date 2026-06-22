@@ -39,8 +39,7 @@ class MyApp extends StatelessWidget {
           ],
           supportedLocales: const [
             Locale('en', ''), // English
-            Locale('de', ''), // German
-            Locale('ar', ''), // Arabic
+            Locale('es', ''), // Spanish
           ],
 
           // Use your custom I18nService to translate the title

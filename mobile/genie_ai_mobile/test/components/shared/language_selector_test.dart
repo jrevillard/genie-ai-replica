@@ -47,8 +47,8 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('language-selector')));
         await tester.pumpAndSettle();
 
-        // Find and tap the French item by key
-        await tester.tap(find.byKey(const ValueKey('lang-item-fr')));
+        // Find and tap the Spanish item by key
+        await tester.tap(find.byKey(const ValueKey('lang-item-es')));
         await tester.pumpAndSettle();
 
         expect(changed, isTrue);

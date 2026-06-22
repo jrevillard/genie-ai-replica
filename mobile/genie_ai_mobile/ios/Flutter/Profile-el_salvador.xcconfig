@@ -1,0 +1,4 @@
+#include "Generated.xcconfig"
+#include "Profile.xcconfig"
+PRODUCT_BUNDLE_IDENTIFIER = com.example.genieAiMobile.elsalvador
+APP_AUTH_REDIRECT_SCHEME = sv.gov.agrogenio

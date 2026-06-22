@@ -1,0 +1,46 @@
+/* AgroGenio El Salvador Keycloak Login Theme — Light Mode
+ * Overrides parent genie theme with El Salvador color tokens.
+ * Inherits fg, muted, border, bg from parent (identical values).
+ *
+ * El Salvador DS token mapping:
+ *   accent  = Cobalt Blue #0073AA (Salvadoran national identity + ENA brand)
+ *   green   = Growth Green #2E7D32 (agricultural heritage)
+ *   fg      = #344049 (same as parent)
+ *   muted   = #818b91 (same as parent)
+ *   border  = #bdc5cb (same as parent)
+ *   bg      = #f9fbfd (same as parent)
+ *   surface = #ffffff (same as parent)
+ */
+
+:root {
+  /* Primary — Cobalt Blue */
+  --pf-v5-global--primary-color--100: #0073AA;
+  --pf-v5-global--primary-color--200: #005f8c;
+
+  /* Link — Cobalt Blue */
+  --pf-v5-global--link--Color: #0073AA;
+  --pf-v5-global--link--Color--hover: #005f8c;
+
+  /* Buttons — Cobalt Blue */
+  --pf-v5-c-button--m-primary--BackgroundColor: #0073AA;
+  --pf-v5-c-button--m-primary--hover--BackgroundColor: #005f8c;
+  --pf-v5-c-button--m-primary--active--BackgroundColor: #004d73;
+  --pf-v5-c-button--m-primary--focus--BackgroundColor: #0073AA;
+  --pf-v5-c-button--m-secondary--BorderColor: #0073AA;
+  --pf-v5-c-button--m-secondary--Color: #0073AA;
+
+  /* Form focus — Cobalt Blue */
+  --pf-v5-c-form-control--focus--BorderColor: #0073AA;
+  --pf-v5-c-form-control--focus--BoxShadowColor: rgba(0, 115, 170, 0.25);
+
+  /* Login header — Cobalt Blue */
+  --pf-v5-c-login__main-header--BorderTopColor: #0073AA;
+
+  /* Success — Growth Green */
+  --pf-v5-global--success-color--100: #2E7D32;
+}
+
+/* Header brand — Cobalt Blue */
+#kc-header-wrapper {
+  color: #0073AA;
+}

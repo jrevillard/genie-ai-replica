@@ -4,6 +4,7 @@ import 'dev_config.dart';
 import 'staging_config.dart';
 import 'e2e_config.dart';
 import 'flavors/itu.dart' as flavors;
+import 'flavors/el_salvador.dart' as el_salvador;
 
 /// The full set of locale codes shipped in every build. A deployment flavor
 /// exposes a subset via [KeycloakConfig.supportedLocaleCodes].
@@ -98,6 +99,7 @@ final _flavorTable = <String, KeycloakConfig>{
   'staging': stagingConfig,
   'e2e': e2eConfig,
   'itu': flavors.config,
+  'el_salvador': el_salvador.config,
 };
 
 String get _knownFlavors => _flavorTable.keys.join(', ');

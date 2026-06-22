@@ -751,14 +751,20 @@ export default {
 
         this.file = fileResponse;
 
-        // Try to fetch crawl job status
-        try {
-          const crawlResponse = await documentFileService.getCrawlJob(id);
-          if (crawlResponse && crawlResponse.data) {
-            this.crawlJob = crawlResponse.data;
+        // Fetch crawl-job status only for link/crawl-origin files (source_url set).
+        // Regular uploads never have a crawl_job; querying would 404 noisily and
+        // surface a misleading error toast via the global httpService interceptor.
+        if (fileResponse.source_url) {
+          try {
+            const crawlResponse = await documentFileService.getCrawlJob(id);
+            if (crawlResponse && crawlResponse.data) {
+              this.crawlJob = crawlResponse.data;
+            }
+          } catch {
+            // No crawl job (yet), or deleted — not an error.
+            this.crawlJob = null;
           }
-        } catch {
-          // Not a crawl job or not found, ignore
+        } else {
           this.crawlJob = null;
         }
 

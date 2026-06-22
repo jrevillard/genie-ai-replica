@@ -226,7 +226,7 @@ describe('documentFileService', () => {
 
         const result = await documentFileService.getCrawlJob('file-1');
 
-        expect(mockGet).toHaveBeenCalledWith('/files/file-1/crawl-job');
+        expect(mockGet).toHaveBeenCalledWith('/files/file-1/crawl-job', {}, { silent: true });
         expect(result.status).toBe('running');
       });
     });
@@ -239,7 +239,7 @@ describe('documentFileService', () => {
 
         const result = await documentFileService.getCrawlMetrics('file-1');
 
-        expect(mockGet).toHaveBeenCalledWith('/files/file-1/crawl-metrics');
+        expect(mockGet).toHaveBeenCalledWith('/files/file-1/crawl-metrics', {}, { silent: true });
         expect(result.data.pagesCrawled).toBe(100);
       });
     });
@@ -250,7 +250,7 @@ describe('documentFileService', () => {
 
         const result = await documentFileService.getCrawlLogs('file-1');
 
-        expect(mockGet).toHaveBeenCalledWith('/files/file-1/crawl-log');
+        expect(mockGet).toHaveBeenCalledWith('/files/file-1/crawl-log', {}, { silent: true });
         expect(result.logs).toHaveLength(1);
       });
     });

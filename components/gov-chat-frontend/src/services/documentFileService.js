@@ -193,13 +193,11 @@ const documentFileService = {
    * @returns {Promise<Object>} The API response containing the crawl job details.
    */
   async getCrawlJob(fileId) {
-    try {
-      const response = await httpService.get(`/files/${fileId}/crawl-job`);
-      return response.data;
-    } catch (error) {
-      console.error(`Error fetching crawl job for file ${fileId}:`, error);
-      throw error;
-    }
+    // { silent: true }: a 404 ("no crawl job") is an expected, handled outcome
+    // for crawl-origin files whose job is not (yet) present — it must not
+    // surface a user-facing error toast via the global httpService interceptor.
+    const response = await httpService.get(`/files/${fileId}/crawl-job`, {}, { silent: true });
+    return response.data;
   },
 
   /**
@@ -209,7 +207,9 @@ const documentFileService = {
    */
   async getCrawlMetrics(fileId) {
     try {
-      const response = await httpService.get(`/files/${fileId}/crawl-metrics`);
+      // { silent: true }: metrics may be absent while no crawl is running; avoid
+      // a user-facing toast for this expected-no-data case.
+      const response = await httpService.get(`/files/${fileId}/crawl-metrics`, {}, { silent: true });
       // Expected return: { success: true, data: { ...metrics } }
       return response.data;
     } catch (error) {
@@ -225,7 +225,9 @@ const documentFileService = {
    */
   async getCrawlLogs(fileId) {
     try {
-      const response = await httpService.get(`/files/${fileId}/crawl-log`);
+      // { silent: true }: an empty/missing log set is a normal state, not a
+      // user-facing error.
+      const response = await httpService.get(`/files/${fileId}/crawl-log`, {}, { silent: true });
       return response.data;
     } catch (error) {
       console.error(`Error fetching crawl logs for file ${fileId}:`, error);

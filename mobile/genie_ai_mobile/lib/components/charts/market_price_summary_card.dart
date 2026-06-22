@@ -1,10 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:genie_ai_mobile/services/agri_api_service.dart';
-import 'package:genie_ai_mobile/components/charts/agri_i18n.dart';
-import 'package:genie_ai_mobile/components/charts/series_chart_core.dart';
-import 'package:genie_ai_mobile/components/charts/series_display.dart';
-import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/services/world_bank_service.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'market_price_chart.dart';
 
@@ -22,10 +18,7 @@ class MarketPriceSummaryCard extends StatefulWidget {
 }
 
 class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
-  final AgriApiService _agriService = AgriApiService();
-
-  /// Full multi-series envelope (S21 chips) — null until loaded.
-  Map<String, dynamic>? _fullEnvelope;
+  final WorldBankService _worldBankService = WorldBankService();
   Map<String, dynamic>? _priceData;
   bool _isLoading = true;
   String _currentLangCode = '';
@@ -85,7 +78,7 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
   @override
   void dispose() {
     I18nService().removeListener(_onLanguageChange);
-    // AgriApiService holds no disposable resources
+    _worldBankService.dispose();
     super.dispose();
   }
 
@@ -100,18 +93,38 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
 
   Future<void> _loadData() async {
     try {
-      final data = await _agriService.getMarketPricesLegacy(widget.category);
-      Map<String, dynamic>? full;
-      try {
-        full = await _agriService.getMarketPricesFull(widget.category);
-      } catch (_) {
-        // chips degrade silently — the headline still renders
+      Map<String, dynamic>? data;
+
+      switch (widget.category) {
+        case 'maize':
+          data = await _worldBankService.getMaizePrices();
+          break;
+        case 'cropProtection':
+          data = await _worldBankService.getCropProtectionCosts();
+          break;
+        case 'vegetables':
+          data = await _worldBankService.getVegetablePrices();
+          break;
+        case 'livestock':
+          data = await _worldBankService.getPoultryPorkFeedCosts();
+          break;
+        case 'fertilizer':
+          data = await _worldBankService.getFertilizerPrices();
+          break;
+        case 'apiary':
+          data = await _worldBankService.getHoneyMarketData();
+          break;
+        case 'aquaculture':
+          data = await _worldBankService.getTilapiaMarketData();
+          break;
+        case 'harvestStorage':
+          data = await _worldBankService.getHarvestStorageData();
+          break;
       }
 
       if (mounted) {
         setState(() {
           _priceData = data;
-          _fullEnvelope = full;
           _isLoading = false;
         });
       }
@@ -138,7 +151,7 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
     if (colorHex != null) {
       return Color(int.parse(colorHex.replaceFirst('#', '0xFF')));
     }
-    return ThemeManager().tokens.accent;
+    return Colors.blue;
   }
 
   IconData get _categoryIcon {
@@ -190,16 +203,16 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return InkWell(
       onTap: () => _showDetailedChart(context),
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        // 170: headline row + the 5-row acronym-chip grid (Vue parity).
-        height: 170,
+        height: 100,
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: ThemeManager().tokens.surface,
+          color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: _categoryColor.withValues(alpha: 0.5),
@@ -217,206 +230,85 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
                   ),
                 ),
               )
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+            : Row(
                 children: [
-                  Row(
-                    children: [
-                      // Sparkline chart
-                      SizedBox(
-                        width: 36,
-                        height: 36,
-                        child: CustomPaint(
-                          painter: _PriceSparklinePainter(
-                            data: _timeSeries,
-                            lineColor: _categoryColor,
-                            fillColor: _categoryColor.withValues(alpha: 0.2),
-                            backgroundColor: ThemeManager().tokens.border,
-                          ),
-                          child: Center(
-                            child: Icon(
-                              _categoryIcon,
-                              size: 16,
-                              color: _categoryColor,
-                            ),
-                          ),
+                  // Sparkline chart
+                  SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: CustomPaint(
+                      painter: _PriceSparklinePainter(
+                        data: _timeSeries,
+                        lineColor: _categoryColor,
+                        fillColor: _categoryColor.withValues(alpha: 0.2),
+                        backgroundColor: isDark
+                            ? Colors.grey.shade700
+                            : Colors.grey.shade300,
+                      ),
+                      child: Center(
+                        child: Icon(
+                          _categoryIcon,
+                          size: 16,
+                          color: _categoryColor,
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _title,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: 9,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.7,
+                            ),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              _title,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                fontSize: 8,
-                                color: theme.colorScheme.onSurface.withValues(
-                                  alpha: 0.7,
+                            Flexible(
+                              child: Text(
+                                _latestValue,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: _categoryColor,
+                                  fontSize: 10,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 2),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    _latestValue,
-                                    style: theme.textTheme.titleSmall?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: _categoryColor,
-                                      fontSize: 10,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 2),
-                                Icon(
-                                  _trend == 'up'
-                                      ? Icons.trending_up
-                                      : _trend == 'down'
-                                      ? Icons.trending_down
-                                      : Icons.trending_flat,
-                                  size: 9,
-                                  // DS tokens: success/danger/muted.
-                                  color: _trend == 'up'
-                                      ? ThemeManager().tokens.success
-                                      : _trend == 'down'
-                                      ? ThemeManager().tokens.danger
-                                      : ThemeManager().tokens.muted,
-                                ),
-                              ],
+                            const SizedBox(width: 2),
+                            Icon(
+                              _trend == 'up'
+                                  ? Icons.trending_up
+                                  : _trend == 'down'
+                                  ? Icons.trending_down
+                                  : Icons.trending_flat,
+                              size: 9,
+                              color: _trend == 'up'
+                                  ? Colors.green
+                                  : _trend == 'down'
+                                  ? Colors.red
+                                  : Colors.grey,
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  // S21 acronym chips: every series (incl. primary) as
-                  // dot + code + latest value; long-press = full name
-                  // + price (web tooltip parity).
-                  if (_fullEnvelope != null) _buildSeriesChips(),
-                ],
-              ),
-      ),
-    );
-  }
-
-  Widget _buildSeriesChips() {
-    final list = _fullEnvelope!['series'] as List?;
-    if (list == null || list.isEmpty) return const SizedBox.shrink();
-    final series = list.whereType<Map<String, dynamic>>().toList();
-    final palette = AgriPalette.fromTokens(
-      tokens: ThemeManager().tokens,
-      categoryColor: _categoryColor,
-    );
-    final unit = (_fullEnvelope!['unit'] as String?) ?? '';
-
-    // Vue parity: a strict 3-column grid of outlined acronym chips
-    // (small NON-bold text, colored dot, no values — the headline carries
-    // the price). The PRIMARY chip (index 0) gets the heavy border.
-    // Long-press tooltip = full name + latest price (web :title parity).
-    Widget chip(int i) {
-      final s = series[i];
-      final name = s['name'] as String? ?? '';
-      final code = commodityCode(name);
-      final color = palette.colorForSeriesIndex(i);
-      final primary = i == 0;
-      final points = (s['points'] as List?) ?? const [];
-      double? latest;
-      for (final p in points.whereType<Map<String, dynamic>>()) {
-        final v = p['value'] as double?;
-        if (v != null) latest = v;
-      }
-      final fullName = localizeFullName(
-        name,
-        I18nService().currentLocale.languageCode,
-      );
-      final tip = latest == null
-          ? fullName
-          : latestTooltipText(
-              fullSeriesName: fullName,
-              value: latest,
-              unit: unit,
-            );
-      return Expanded(
-        child: Tooltip(
-          message: tip,
-          triggerMode: TooltipTriggerMode.longPress,
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            decoration: BoxDecoration(
-              color: ThemeManager().tokens.surface,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: primary
-                    ? ThemeManager().tokens.fg
-                    : ThemeManager().tokens.border,
-                width: primary ? 1.6 : 1,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 5,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 3),
-                Expanded(
-                  child: Text(
-                    code,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 8,
-                      fontWeight: FontWeight.w500,
-                      color: ThemeManager().tokens.fg,
+                      ],
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    final rows = <Widget>[
-      for (var r = 0; r < (series.length / 3).ceil(); r++)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 2),
-          child: Row(
-            children: [
-              for (var c = 0; c < 3; c++)
-                (r * 3 + c < series.length)
-                    ? chip(r * 3 + c)
-                    : const Expanded(child: SizedBox()),
-            ],
-          ),
-        ),
-    ];
-
-    // Overflow protection: clip if a category ever exceeds the space.
-    return SizedBox(
-      height: 108,
-      child: ClipRect(
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: Column(children: rows),
-        ),
+                ],
+              ),
       ),
     );
   }
@@ -424,13 +316,11 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
   void _showDetailedChart(BuildContext context) {
     showDialog(
       context: context,
-      useSafeArea: true,
       builder: (context) => Dialog(
-        insetPadding: EdgeInsets.zero,
-        shape: const RoundedRectangleBorder(),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         child: SizedBox(
-          width: MediaQuery.of(context).size.width,
-          height: MediaQuery.of(context).size.height,
+          width: MediaQuery.of(context).size.width * 0.95,
+          height: MediaQuery.of(context).size.height * 0.85,
           child: Column(
             children: [
               // Header
@@ -455,7 +345,7 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
                       tooltip: 'Refresh data',
                       onPressed: () async {
                         // Clear cache and reload
-                        _agriService.get('agri/health');
+                        _worldBankService.clearCache();
                         await _loadData();
                         if (mounted) {
                           setState(() {});

@@ -92,6 +92,7 @@
             selection: install
           loop: "{{ nvidia_hold_packages }}"
           when: nvidia_upgrade_check.stdout == "upgrade"
+          failed_when: false
 
         - name: Install NVIDIA Container Toolkit (pinned version)
           ansible.builtin.apt:
@@ -106,6 +107,7 @@
             selection: hold
           loop: "{{ nvidia_hold_packages }}"
           when: nvidia_upgrade_check.stdout == "upgrade"
+          failed_when: false
 
         - name: Configure Docker daemon for NVIDIA runtime
           block:
@@ -118,8 +120,8 @@
             - name: Set daemon.json content (merge NVIDIA config)
               ansible.builtin.set_fact:
                 daemon_json_final: >-
-                  {{ (daemon_json_existing.content | b64decode | from_json
-                      if daemon_json_existing is succeeded else {})
+                  {{ ((daemon_json_existing.content | default('') | b64decode | from_json)
+                      if daemon_json_existing.content is defined else {})
                     | combine({'runtimes': {'nvidia': {
                       'path': 'nvidia-container-runtime',
                       'runtimeArgs': []
@@ -180,9 +182,11 @@
       register: node_labels
       changed_when: false
 
-    - name: Add gpu=true label
+    - name: Add gpu=true label (only on nodes with physical GPU)
       ansible.builtin.command: docker node update --label-add gpu=true {{ node_hostname.stdout }}
-      when: node_labels.stdout is not search('gpu:')
+      when:
+        - node_labels.stdout is not search('gpu:')
+        - inventory_hostname in groups.get('gpu_nodes', [])
       changed_when: true
 
     - name: Add gateway=true label
@@ -521,8 +525,6 @@
       loop_control:
         label: "{{ item.item.name }}"
       register: build_results
-      async: 600
-      poll: 30
 
     - name: Tag image for registry
       ansible.builtin.command: >

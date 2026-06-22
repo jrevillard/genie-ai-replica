@@ -368,10 +368,14 @@ export default {
      * Get gauge color based on value
      */
     getGaugeColor(value) {
-      if (value >= 90) return '#22C55E'; // Green - matches var(--success)
-      if (value >= 80) return '#84CC16'; // Light green
-      if (value >= 70) return '#F59E0B'; // Orange - matches var(--warning)
-      return '#EF4444'; // Red - matches var(--danger)
+      const danger = getComputedStyle(document.documentElement).getPropertyValue('--danger').trim();
+      const warning = getComputedStyle(document.documentElement).getPropertyValue('--warning').trim();
+      const info = getComputedStyle(document.documentElement).getPropertyValue('--info').trim();
+      const success = getComputedStyle(document.documentElement).getPropertyValue('--success').trim();
+      if (value >= 90) return success;
+      if (value >= 80) return info;
+      if (value >= 70) return warning;
+      return danger;
     },
 
     /**
@@ -389,12 +393,11 @@ export default {
       const trackColor = isDarkMode ? 'var(--muted)' : 'var(--border)';
 
       const getGradientColors = (value) => {
-        const colors = {
-          poor: '#EF4444', // var(--danger)
-          low: '#F59E0B', // var(--warning)
-          medium: '#84CC16',
-          high: '#22C55E' // var(--success)
-        };
+        const danger = getComputedStyle(document.documentElement).getPropertyValue('--danger').trim();
+        const warning = getComputedStyle(document.documentElement).getPropertyValue('--warning').trim();
+        const info = getComputedStyle(document.documentElement).getPropertyValue('--info').trim();
+        const success = getComputedStyle(document.documentElement).getPropertyValue('--success').trim();
+        const colors = { poor: danger, low: warning, medium: info, high: success };
 
         if (value < 60) return [colors.poor, colors.poor];
         if (value < 70) return [colors.poor, colors.low];

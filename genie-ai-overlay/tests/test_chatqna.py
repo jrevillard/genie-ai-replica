@@ -1293,3 +1293,271 @@ class TestStreamWithMetadata:
         joined = "".join(out)
         assert '"type": "metadata"' in joined
         assert joined.rstrip().endswith("data: [DONE]")
+
+    # ----------------------------------------------------------------------
+    # Conversation-marker stripping in the streaming path (issue #830).
+    # The non-streaming path strips |<-MSG->| delimiters and USER:/ASSISTANT:
+    # role markers the LLM sometimes echoes back. The streaming path used to
+    # forward chunks verbatim, leaking those internal markers to the frontend.
+    # ----------------------------------------------------------------------
+
+    @staticmethod
+    def _chunk(content):
+        """Build a ``data: b'...'`` SSE chunk from a content string.
+
+        Mirrors ``align_generator``'s output format exactly so the stripper is
+        exercised against realistic chunks.
+        """
+        return f"data: {repr(content.encode('utf-8'))}\n\n"
+
+    @staticmethod
+    def _decode_content(out):
+        """Concatenate decoded text from all ``data: b'...'`` chunks.
+
+        Excludes metadata and ``[DONE]`` events so assertions target only the
+        forwarded token text.
+        """
+        import ast
+
+        parts = []
+        for item in out:
+            text = item.decode("utf-8") if isinstance(item, (bytes, bytearray)) else str(item)
+            if not text.startswith("data: ") or text.strip() == "data: [DONE]":
+                continue
+            payload = text[len("data: ") :].rstrip()
+            if payload.startswith("b'") or payload.startswith('b"'):
+                try:
+                    raw = ast.literal_eval(payload)
+                    if isinstance(raw, (bytes, bytearray)):
+                        parts.append(raw.decode("utf-8"))
+                except (ValueError, SyntaxError):
+                    pass
+        return "".join(parts)
+
+    @pytest.mark.asyncio
+    async def test_strips_complete_separator_single_chunk(self):
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body([self._chunk("Hello |<-MSG->| World"), "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        decoded = self._decode_content(out)
+        assert "|<-MSG->|" not in decoded
+        assert "Hello" in decoded
+        assert "World" in decoded
+
+    @pytest.mark.asyncio
+    async def test_strips_separator_split_across_chunks(self):
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body([self._chunk("Hello |<-M"), self._chunk("SG->| World"), "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        decoded = self._decode_content(out)
+        assert "|<-MSG->|" not in decoded
+        assert "Hello" in decoded
+        assert "World" in decoded
+
+    @pytest.mark.asyncio
+    async def test_strips_user_role_marker_after_separator(self):
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body([self._chunk("|<-MSG->| USER: what is genai?"), "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        decoded = self._decode_content(out)
+        assert "|<-MSG->|" not in decoded
+        assert "USER:" not in decoded
+        assert "what is genai?" in decoded
+
+    @pytest.mark.asyncio
+    async def test_strips_assistant_role_marker(self):
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body([self._chunk("|<-MSG->| ASSISTANT: it is ai."), "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        decoded = self._decode_content(out)
+        assert "ASSISTANT:" not in decoded
+        assert "it is ai." in decoded
+
+    @pytest.mark.asyncio
+    async def test_strips_role_marker_split_from_separator(self):
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        # Separator replaced -> "\n", then " US" in one chunk and "ER: q" in the
+        # next: the role marker is split from its preceding separator across
+        # chunk boundaries AND its connecting whitespace.
+        body = self._make_body(
+            [
+                self._chunk("|<-MSG->|"),
+                self._chunk(" US"),
+                self._chunk("ER: the answer"),
+                "data: [DONE]\n\n",
+            ]
+        )
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        decoded = self._decode_content(out)
+        assert "|<-MSG->|" not in decoded
+        assert "USER:" not in decoded
+        assert "the answer" in decoded
+
+    @pytest.mark.asyncio
+    async def test_strips_assistant_role_split_across_chunks(self):
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body(
+            [
+                self._chunk("|<-MSG->| ASS"),
+                self._chunk("ISTANT: reply"),
+                "data: [DONE]\n\n",
+            ]
+        )
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        decoded = self._decode_content(out)
+        assert "ASSISTANT:" not in decoded
+        assert "ASS" not in decoded
+        assert "reply" in decoded
+
+    @pytest.mark.asyncio
+    async def test_strips_role_marker_split_at_newline_without_separator(self):
+        # Bare role marker (no preceding |<-MSG->|) split across a newline
+        # boundary: "\nUS" then "ER: hello". The [ \t]* tolerance in _CONV_ROLE_RE
+        # exists for this case — the streaming buffer must still strip it.
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body([self._chunk("intro\nUS"), self._chunk("ER: hello"), "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        decoded = self._decode_content(out)
+        assert "USER:" not in decoded
+        assert "intro" in decoded
+        assert "hello" in decoded
+
+    @pytest.mark.asyncio
+    async def test_whitespace_run_does_not_grow_buffer_unboundedly(self):
+        # Regression guard: a long trailing-whitespace run must not be withheld
+        # forever (capped lead-in). The excess flushes as content and the stream
+        # still terminates with all real text present.
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body([self._chunk("a" + " " * 200 + "b"), "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        decoded = self._decode_content(out)
+        assert decoded.startswith("a")
+        assert decoded.endswith("b")
+
+    @pytest.mark.asyncio
+    async def test_preserves_normal_content_unchanged(self):
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body([self._chunk("The capital of France is Paris."), "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        assert self._decode_content(out) == "The capital of France is Paris."
+
+    @pytest.mark.asyncio
+    async def test_preserves_pipe_in_normal_content(self):
+        # A lone "|" that is NOT part of the separator must survive.
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body([self._chunk("Use cmd | grep | sort"), "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        assert self._decode_content(out) == "Use cmd | grep | sort"
+
+    @pytest.mark.asyncio
+    async def test_partial_separator_at_stream_end_emitted_as_literal(self):
+        # Characters that look like the start of a separator but never complete
+        # are real content and must be flushed, not silently dropped.
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body([self._chunk("result |<-M"), "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        assert self._decode_content(out) == "result |<-M"
+
+    @pytest.mark.asyncio
+    async def test_unparseable_chunk_forwarded_verbatim(self):
+        # A chunk not in the data: b'...' format must pass through untouched so
+        # an unexpected orchestrator format never breaks the stream.
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body(["data: not-bytes-repr\n\n", "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        joined = "".join(out)
+        assert "data: not-bytes-repr\n\n" in joined
+
+    @pytest.mark.asyncio
+    async def test_realistic_history_echo_fully_stripped(self):
+        # The LLM echoes the entire internal chat-history block; every marker
+        # and role label must be gone, real content preserved.
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        history_echo = (
+            "|<-MSG->| USER: previous question\n|<-MSG->| ASSISTANT: previous answer\nThe real answer is here."
+        )
+        body = self._make_body([self._chunk(history_echo), "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        decoded = self._decode_content(out)
+        assert "|<-MSG->|" not in decoded
+        assert "USER:" not in decoded
+        assert "ASSISTANT:" not in decoded
+        assert "previous question" in decoded
+        assert "previous answer" in decoded
+        assert "The real answer is here." in decoded
+
+    @pytest.mark.asyncio
+    async def test_strips_separator_from_unicode_content(self):
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = self._make_body([self._chunk("Réponse |<-MSG->| über Straße"), "data: [DONE]\n\n"])
+        out = await self._drain(svc._stream_with_metadata(body, {}))
+        decoded = self._decode_content(out)
+        assert "|<-MSG->|" not in decoded
+        assert "Réponse" in decoded
+        assert "über Straße" in decoded
+
+
+# ===========================================================================
+# Shared conversation-marker stripping patterns (_CONV_SEP_RE / _CONV_ROLE_RE)
+# Both the assembled-response (handle_request) and streaming
+# (_stream_with_metadata) paths strip the same leaked |<-MSG->| delimiters
+# and USER:/ASSISTANT: role markers, so the patterns are defined once at
+# module level. These tests lock the canonical behaviour both paths inherit.
+# ===========================================================================
+class TestConvMarkerPatterns:
+    def test_separator_replaced_by_newline(self):
+        from chatqna.genieai_chatqna import _CONV_SEP_RE
+
+        assert _CONV_SEP_RE.sub("\n", "a |<-MSG->| b") == "a\nb"
+
+    def test_separator_collapses_surrounding_whitespace(self):
+        from chatqna.genieai_chatqna import _CONV_SEP_RE
+
+        assert _CONV_SEP_RE.sub("\n", "a   |<-MSG->|   b") == "a\nb"
+
+    def test_role_marker_stripped_at_line_start(self):
+        from chatqna.genieai_chatqna import _CONV_ROLE_RE
+
+        assert _CONV_ROLE_RE.sub("", "\nUSER: hello") == "\nhello"
+        assert _CONV_ROLE_RE.sub("", "\nASSISTANT: reply") == "\nreply"
+
+    def test_role_marker_tolerates_leading_whitespace(self):
+        # A role marker split from its preceding separator across streaming
+        # chunks lands after a space; the shared regex must still strip it.
+        from chatqna.genieai_chatqna import _CONV_ROLE_RE
+
+        assert _CONV_ROLE_RE.sub("", "\n USER: hello") == "\nhello"
+
+    def test_role_marker_not_stripped_mid_line(self):
+        from chatqna.genieai_chatqna import _CONV_ROLE_RE
+
+        # Must not touch "USER:" that is real content in the middle of a line.
+        assert _CONV_ROLE_RE.sub("", "the USER: field is here") == "the USER: field is here"
+
+    def test_assembled_history_echo_matches_streaming_output(self):
+        # Non-streaming and streaming stripping must produce the same result
+        # for a realistic history echo — the single source of truth guarantee.
+        from chatqna.genieai_chatqna import _CONV_ROLE_RE, _CONV_SEP_RE
+
+        echo = "|<-MSG->| USER: q\n|<-MSG->| ASSISTANT: a\nreal answer"
+        assembled = _CONV_ROLE_RE.sub("", _CONV_SEP_RE.sub("\n", echo))
+        assert "|<-MSG->|" not in assembled
+        assert "USER:" not in assembled
+        assert "ASSISTANT:" not in assembled
+        assert "real answer" in assembled
+        assert "q" in assembled
+        assert "a" in assembled

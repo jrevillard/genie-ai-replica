@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0 Developed by Intel. Adapted by ITU
 
 import argparse
+import ast
 import asyncio
 import copy
 import json
@@ -147,6 +148,70 @@ MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max tok
 
 MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max characters for translation models
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
+
+# ---------------------------------------------------------------------------
+# Stripping of leaked conversation markers (shared by streaming + non-streaming).
+#
+# The LLM sometimes echoes back the internal |<-MSG->| delimiters and
+# USER:/ASSISTANT: role markers used to format chat history in the prompt. Both
+# the assembled-response path (handle_request) and the streaming path
+# (_stream_with_metadata) must strip them, so the patterns below are defined
+# once and consumed by both — there is a single source of truth for what a
+# "conversation marker" looks like.
+#
+# In the streaming path a marker may arrive split across token chunks (e.g.
+# "|<-M" then "SG->|"), so content is buffered: only the settled head is emitted
+# and a tail that could be the start of a marker is held back until the marker
+# either completes (and is stripped) or enough non-marker text arrives to prove
+# it is real content.
+# ---------------------------------------------------------------------------
+_CONV_MSG_SEPARATOR = "|<-MSG->|"
+# Separator with surrounding whitespace collapsed to a single newline.
+_CONV_SEP_RE = re.compile(r"\s*\|<-MSG->\|\s*")
+# Role marker at line start, tolerating leading whitespace so a marker split
+# from its preceding separator across chunks (separator -> "\n" in one chunk,
+# " USER:" arriving in the next) is still stripped.
+_CONV_ROLE_RE = re.compile(r"^[ \t]*(?:USER|ASSISTANT):\s*", re.MULTILINE)
+# Marker literals whose partial occurrence at the streaming buffer tail must be
+# withheld so a split marker is never emitted as literal text.
+_CONV_MARKER_PREFIXES = (_CONV_MSG_SEPARATOR, "USER:", "ASSISTANT:")
+# Cap on how much trailing whitespace is withheld as a candidate lead-in
+# (the ``\s*`` / ``[ \t]*`` before a marker). In practice that lead-in is only a
+# few characters; capping bounds memory and regex cost if a misbehaving upstream
+# emits a very long run of whitespace (the excess is flushed as plain content,
+# which only costs a few cosmetic trailing spaces before the next newline).
+_MAX_TRAILING_WS_WITHHOLD = 32
+
+
+def _streaming_marker_tail_len(buffer: str) -> int:
+    """Length of the longest buffer suffix that could grow into a marker.
+
+    A marker (``|<-MSG->|``, ``USER:``, ``ASSISTANT:``) may arrive split across
+    token chunks. This returns the size of the trailing slice that must stay
+    buffered so a partial marker is never emitted as literal text. Trailing
+    whitespace is included because it can be the ``\\s*`` that precedes a
+    separator or the ``[ \\t]*`` that precedes a role marker.
+    """
+    n = len(buffer)
+    if n == 0:
+        return 0
+    best = 0
+    # Trailing whitespace: candidate lead-in (\s* / [ \t]*) for the next marker.
+    # Capped so a pathological long-whitespace run cannot grow the buffer
+    # unboundedly (the cap-flushed excess becomes plain content).
+    trailing_ws = n - len(buffer.rstrip())
+    if trailing_ws:
+        best = min(trailing_ws, _MAX_TRAILING_WS_WITHHOLD)
+    # Longest proper (non-full) prefix of any marker literal sitting at the tail.
+    for marker in _CONV_MARKER_PREFIXES:
+        limit = min(n, len(marker) - 1)
+        for k in range(limit, 0, -1):
+            if marker.startswith(buffer[-k:]):
+                if k > best:
+                    best = k
+                break
+    return best
+
 
 # Two-tier priority: ENV VAR (override) > Hardcoded default
 _CHATQNA_SYSTEM_DEFAULT = """You are a friendly and polite information assistant.
@@ -1080,17 +1145,50 @@ class ChatQnAService:
         so downstream consumers (backend → web/mobile) receive document backing for the
         streamed answer instead of re-running retrieval themselves.
 
-        Token chunks are forwarded verbatim (they are Python-repr-encoded by the
-        orchestrator's ``align_generator``); the terminal ``[DONE]`` is suppressed and
-        re-emitted after the metadata. Metadata is computed **after** the token stream so
-        it never delays Time-To-First-Token (it does up to N ``fetch_file_metadata`` calls).
+        Token chunks are Python-repr-encoded by the orchestrator's ``align_generator``.
+        Before forwarding, the same ``|<-MSG->|`` / ``USER:`` / ``ASSISTANT:`` stripping
+        that the non-streaming path applies to the assembled response is applied here, so
+        internal conversation markers the LLM echoes back never leak to the frontend. A
+        marker may be split across token chunks, so content is buffered: only the settled
+        head is re-emitted and a tail that could be the start of a marker is held back.
+
+        The terminal ``[DONE]`` is suppressed and re-emitted after the metadata. Metadata
+        is computed **after** the token stream so it never delays Time-To-First-Token.
         """
+        buffer = ""
         async for chunk in body_iterator:
             text = chunk.decode("utf-8") if isinstance(chunk, (bytes, bytearray)) else str(chunk)
             if text.strip() == "data: [DONE]":
                 # Suppress the terminal [DONE]; re-emit it after the metadata event.
                 continue
-            yield text
+            content = self._extract_sse_content(text)
+            if content is None:
+                # Unparseable chunk (not data: b'...'): forward verbatim so an
+                # unexpected orchestrator format never breaks the stream.
+                yield text
+                continue
+            buffer += content
+            buffer = _CONV_SEP_RE.sub("\n", buffer)
+            buffer = _CONV_ROLE_RE.sub("", buffer)
+            tail = _streaming_marker_tail_len(buffer)
+            if tail >= len(buffer):
+                # Whole buffer is a potential partial marker (or trailing
+                # whitespace lead-in) — withhold until more input arrives.
+                continue
+            if tail:
+                emit, buffer = buffer[:-tail], buffer[-tail:]
+            else:
+                emit, buffer = buffer, ""
+            if emit:
+                yield f"data: {emit.encode('utf-8')!r}\n\n"
+
+        # Flush whatever remains (final pass: a partial marker that never completed
+        # is real content and must be emitted, not dropped).
+        if buffer:
+            buffer = _CONV_SEP_RE.sub("\n", buffer)
+            buffer = _CONV_ROLE_RE.sub("", buffer)
+            if buffer:
+                yield f"data: {buffer.encode('utf-8')!r}\n\n"
 
         # Compute metadata after tokens so TTFT is unaffected by the doc-metadata fetches.
         source_documents, confidence_score, is_grounded = await self._assemble_source_documents(result_dict)
@@ -1107,6 +1205,28 @@ class ChatQnAService:
             + "\n\n"
         )
         yield "data: [DONE]\n\n"
+
+    @staticmethod
+    def _extract_sse_content(text: str) -> str | None:
+        """Decode the text payload of a ``data: b'...'`` SSE chunk.
+
+        Returns ``None`` if the chunk is not in the expected bytes-repr format so
+        the caller can forward it verbatim (an unexpected orchestrator format must
+        never break the stream). The orchestrator's ``align_generator`` emits every
+        token chunk as ``data: {repr(content.encode('utf-8'))}\\n\\n``.
+        """
+        if not (text.startswith("data: ") and text.endswith("\n\n")):
+            return None
+        payload = text[len("data: ") : -2]
+        if not (payload.startswith("b'") or payload.startswith('b"')):
+            return None
+        try:
+            raw = ast.literal_eval(payload)
+        except (ValueError, SyntaxError):
+            return None
+        if not isinstance(raw, (bytes, bytearray)):
+            return None
+        return raw.decode("utf-8", errors="replace")
 
     def add_remote_service(self):
 
@@ -1914,9 +2034,10 @@ class ChatQnAService:
         # Strip leaked conversation markers from LLM response.
         # The LLM sometimes echoes back the |<-MSG->| delimiters and
         # USER:/ASSISTANT: role markers that are used internally to
-        # format chat history in the prompt.
-        llm_response = re.sub(r"\s*\|<-MSG->\|\s*", "\n", llm_response)
-        llm_response = re.sub(r"^(USER|ASSISTANT):\s*", "", llm_response, flags=re.MULTILINE)
+        # format chat history in the prompt. Same shared patterns as the
+        # streaming path (_stream_with_metadata) — see _CONV_SEP_RE / _CONV_ROLE_RE.
+        llm_response = _CONV_SEP_RE.sub("\n", llm_response)
+        llm_response = _CONV_ROLE_RE.sub("", llm_response)
 
         if original_language and original_language.strip() != "EN":
             if logflag:

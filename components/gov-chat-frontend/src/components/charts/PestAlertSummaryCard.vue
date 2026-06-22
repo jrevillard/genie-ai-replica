@@ -42,7 +42,7 @@
 import DsCard from '../ds/Card.vue';
 import DsPill from '../ds/Pill.vue';
 import DsSpinner from '../ds/Spinner.vue';
-import agriApiService from '../../services/agriApiService.js';
+import agriculturalService from '../../services/agriculturalService.js';
 
 export default {
   name: 'PestAlertSummaryCard',
@@ -94,7 +94,7 @@ export default {
     async fetchPestAlerts() {
       this.loading = true;
       try {
-        this.pestData = await agriApiService.getPestAlerts(this.$i18n ? this.$i18n.locale : null);
+        this.pestData = await agriculturalService.getPestAlerts(this.region);
       } catch (error) {
         console.error('Failed to fetch pest alerts:', error);
         this.pestData = null;

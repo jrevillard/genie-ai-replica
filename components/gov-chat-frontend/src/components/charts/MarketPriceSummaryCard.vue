@@ -1,51 +1,28 @@
 <template>
   <DsCard variant="outline" hoverable class="market-price-summary-card" @click="openChart">
     <div class="card-content">
-      <div class="card-main">
-        <!-- Sparkline Chart -->
-        <div class="sparkline-container">
-          <div v-if="loading" class="sparkline-loading">
-            <DsSpinner size="sm" />
-          </div>
-          <div v-else-if="timeSeries.length >= 2" class="sparkline-chart">
-            <apexchart type="line" :height="40" :options="chartOptions" :series="chartSeries" />
-          </div>
-          <div v-else class="sparkline-empty">
-            {{ $t('charts.market.noData', 'No data') }}
-          </div>
+      <!-- Sparkline Chart -->
+      <div class="sparkline-container">
+        <div v-if="loading" class="sparkline-loading">
+          <DsSpinner size="sm" />
         </div>
-
-        <!-- Card Info -->
-        <div class="card-info">
-          <div class="card-label">{{ cardTitle }}</div>
-          <div class="card-value-row">
-            <div class="card-value" :title="latestTooltip" tabindex="0" :aria-label="latestTooltip">
-              {{ latestValue }}
-            </div>
-            <DsPill :variant="trendVariant" size="sm" class="trend-pill">
-              {{ trendText }}
-            </DsPill>
-          </div>
+        <div v-else-if="timeSeries.length >= 2" class="sparkline-chart">
+          <apexchart type="line" :height="40" :options="chartOptions" :series="chartSeries" />
+        </div>
+        <div v-else class="sparkline-empty">
+          {{ $t('charts.market.noData', 'No data') }}
         </div>
       </div>
 
-      <!-- Commodity chips: left-aligned UNDER the sparkline on every card
-           (user req 2026-09-19); 3-column grid when numerous (grains) so
-           the card stays short. Includes the primary series — Livestock
-           must show chicken AND beef. -->
-      <div v-if="codeChips.length > 0" class="card-codes" :class="{ 'card-codes--grid': codeChips.length > 4 }">
-        <span
-          v-for="item in codeChips"
-          :key="item.code"
-          class="card-code"
-          :class="{ 'card-code--primary': item.isPrimary }"
-          :title="item.tip"
-          tabindex="0"
-          :aria-label="item.tip"
-        >
-          <span class="card-code__dot" :style="{ background: item.color }" aria-hidden="true"></span>
-          {{ item.code }}
-        </span>
+      <!-- Card Info -->
+      <div class="card-info">
+        <div class="card-label">{{ cardTitle }}</div>
+        <div class="card-value-row">
+          <div class="card-value">{{ latestValue }}</div>
+          <DsPill :variant="trendVariant" size="sm" class="trend-pill">
+            {{ trendText }}
+          </DsPill>
+        </div>
       </div>
     </div>
   </DsCard>
@@ -55,8 +32,8 @@
 import DsCard from '../ds/Card.vue';
 import DsSpinner from '../ds/Spinner.vue';
 import DsPill from '../ds/Pill.vue';
-import agriApiService from '../../services/agriApiService.js';
-import { localizeFullName } from '../../utils/agri-i18n.js';
+import worldBankService from '../../services/worldBankService.js';
+import { useChartTheme } from '../../composables/useChartTheme.js';
 
 export default {
   name: 'MarketPriceSummaryCard',
@@ -91,14 +68,14 @@ export default {
   emits: ['open-chart'],
 
   setup() {
-    return {};
+    const { getCssVarStrings } = useChartTheme({});
+    return { getCssVarStrings };
   },
   data() {
     return {
       priceData: null,
       loading: true,
-      timeSeries: [],
-      allSeries: []
+      timeSeries: []
     };
   },
 
@@ -123,66 +100,6 @@ export default {
       }
       const latest = this.timeSeries[this.timeSeries.length - 1];
       return latest.value ? latest.value.toFixed(2) : this.$t('charts.market.noData', 'N/A');
-    },
-
-    /** Explains what the headline number IS (user req 2026-09-19): the
-     *  primary commodity's latest month-end observation, not an average,
-     *  sum or index. Localized (i18n req 2026-09-19). */
-    latestTooltip() {
-      const primary = this.allSeries[0];
-      if (!primary) return '';
-      const points = (primary.data || []).filter((p) => Number.isFinite(p.value));
-      const last = points[points.length - 1];
-      const value = last ? last.value.toFixed(2) : '--';
-      const unit = this.unit ? ` ${this.unit}` : '';
-      return this.$t('charts.market.latestTip', 'Latest month-end price of {name} — {value}{unit}', {
-        name: localizeFullName(primary.name, this.uiLocale()),
-        value,
-        unit
-      });
-    },
-
-    /**
-     * Acronym chips for the NON-primary commodities on multi-commodity
-     * cards — "CAB-GT", "DAP-US", "TIL-HN"… Tooltip carries the full
-     * description + latest price. Codes: first word (≤3 letters) + country
-     * tag on same-base collisions; a uniqueness counter guarantees no two
-     * chips share a code (i18n-session fix: "(" and "?" no longer leak
-     * into codes — BEA-( → BEA-SV, RIC-? → RIC-SV/RIC-GT).
-     */
-    codeChips() {
-      const palette = [this.resolvedCategoryColor, 'var(--warning)', 'var(--muted)', 'var(--info)', 'var(--danger)'];
-      // ALL series incl. the primary (user req: Livestock must show chicken
-      // AND beef) — the headline number stays the primary's.
-      const items = this.allSeries.slice(0, 24);
-      const codes = items.map((s) => this.commodityCode(s.name));
-      const counts = new Map();
-      codes.forEach((c) => counts.set(c, (counts.get(c) || 0) + 1));
-      const seen = new Map();
-      return items.map((s, i) => {
-        let code = codes[i];
-        if ((counts.get(code) || 0) > 1 && !code.includes('-')) {
-          const tag = this.chipCountryTag(s.name);
-          if (tag) code = `${code}-${tag}`;
-        }
-        const n = (seen.get(code) || 0) + 1;
-        seen.set(code, n);
-        if (n > 1) code = `${code}-${n}`;
-        const points = (s.data || []).filter((p) => Number.isFinite(p.value));
-        const last = points[points.length - 1];
-        const value = last ? last.value.toFixed(2) : '--';
-        const unit = this.unit || '';
-        return {
-          code,
-          isPrimary: i === 0,
-          tip: this.$t('charts.market.latestTip', 'Latest month-end price of {name} — {value}{unit}', {
-            name: localizeFullName(s.name, this.uiLocale()),
-            value,
-            unit: unit ? ` ${unit}` : ''
-          }),
-          color: palette[i % palette.length]
-        };
-      });
     },
 
     unit() {
@@ -225,6 +142,8 @@ export default {
     },
 
     chartOptions() {
+      const cssVars = this.getCssVarStrings();
+
       return {
         chart: {
           type: 'line',
@@ -238,17 +157,17 @@ export default {
         },
         stroke: {
           curve: 'smooth',
-          width: 4
+          width: 2
         },
-        // Resolved at render time (see resolvedCategoryColor). Falls back to
-        // the raw var() string if getComputedStyle returns empty.
-        colors: [this.resolvedCategoryColor],
-        // Solid fill (light opacity) instead of gradient — the gradient
-        // version made the line stroke appear to fade because ApexCharts
-        // applies the fill opacity to the line border as well.
+        colors: [cssVars.accentColor],
         fill: {
-          type: 'solid',
-          opacity: 0.2
+          type: 'gradient',
+          gradient: {
+            shadeIntensity: 1,
+            opacityFrom: 0.3,
+            opacityTo: 0,
+            stops: [0, 100]
+          }
         },
         xaxis: {
           categories: this.timeSeries.map((d) => d.year),
@@ -269,10 +188,22 @@ export default {
           show: false
         },
         tooltip: {
-          // Disabled on the sparkline (60x60 button) — full chart details
-          // are available by clicking through to the panel. The ApexCharts
-          // dark tooltip on a small surface is also hard to read.
-          enabled: false
+          enabled: true,
+          theme: 'dark',
+          x: {
+            formatter: (value) => {
+              const index = value - 1;
+              if (this.timeSeries[index]) {
+                return this.timeSeries[index].year;
+              }
+              return value;
+            }
+          },
+          y: {
+            formatter: (value) => {
+              return value ? value.toFixed(2) : this.$t('charts.market.noData', 'N/A');
+            }
+          }
         },
         dataLabels: {
           enabled: false
@@ -292,132 +223,51 @@ export default {
         harvestStorage: 'var(--muted)'
       };
       return colorMap[this.category] || 'var(--muted)';
-    },
-
-    // Resolve CSS var() to actual hex value. ApexCharts builds SVG internally
-    // and does not always inherit CSS custom properties from the host element,
-    // so we resolve to hex at render time. Re-resolved on theme change via the
-    // themeKey watcher below.
-    //
-    // Use --fg (text color) directly: it gives guaranteed contrast against
-    // --bg in both light and dark modes without introducing new DS tokens.
-    // Per-category colors were too pale on dark bg; --fg (dark text in light
-    // mode, warm off-white in dark mode) reads cleanly in both.
-    resolvedCategoryColor() {
-      const value = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
-      return value || this.categoryColor;
-    },
-
-    // Bump on theme change to force ApexCharts to re-render with new colors.
-    themeKey() {
-      return document.documentElement.getAttribute('data-theme') || 'light';
-    }
-  },
-
-  watch: {
-    themeKey() {
-      // Watching themeKey causes chartOptions to re-compute (resolvedCategoryColor
-      // depends on document.documentElement), which triggers ApexCharts re-render.
     }
   },
 
   async mounted() {
-    // Listen for theme changes so the sparkline color updates without a route
-    // change. Without this, toggling dark mode leaves the curve the old color.
-    this.themeObserver = new MutationObserver(() => {
-      // Trigger chartOptions re-computation by reading the attr (already in
-      // themeKey getter). Forcing a no-op update via $forceUpdate is needed
-      // because Vue's reactivity does not track DOM attribute reads.
-      this.$forceUpdate();
-    });
-    this.themeObserver.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme']
-    });
-
     await this.loadPriceData();
   },
 
-  beforeUnmount() {
-    if (this.themeObserver) {
-      this.themeObserver.disconnect();
-      this.themeObserver = null;
-    }
-  },
-
   methods: {
-    /**
-     * Country tag from the RAW series name — mirrors the chart's
-     * countryTag so chips and legends agree. SAN SALVADOR counts as SV;
-     * intl benchmarks collapse to INT. Method, NOT computed (a computed
-     * cannot be invoked as a function — the shortSeriesName crash class).
-     */
-    chipCountryTag(rawName) {
-      const up = String(rawName).toUpperCase();
-      const map = [
-        ['EL SALVADOR', 'SV'],
-        ['SAN SALVADOR', 'SV'],
-        ['GUATEMALA', 'GT'],
-        ['NICARAGUA', 'NI'],
-        ['HONDURAS', 'HN'],
-        ['COSTA RICA', 'CR'],
-        ['BRAZIL', 'BR'],
-        ['US GULF', 'US'],
-        ['UNITED STATES', 'US'],
-        ['MIDDLE EAST', 'ME'],
-        ['WORLD', 'INT'],
-        ['INTL', 'INT'],
-        ['BENCHMARK', 'INT']
-      ];
-      const hit = map.find(([needle]) => up.includes(needle));
-      return hit ? hit[1] : '';
-    },
-    /** UI language ('en'|'es') — drives the data-layer localization.
-     *  Method, NOT computed (a computed cannot be invoked as a function). */
-    uiLocale() {
-      return (this.$i18n && this.$i18n.locale) || localStorage.getItem('userLocale') || 'en';
-    },
-    /** Compact commodity name — SAME algorithm as the chart's
-     *  baseSeriesName (MarketPriceChart.vue) so codes and legends agree.
-     *  Method, NOT computed. */
-    baseSeriesName(name) {
-      const raw = typeof name === 'string' ? name : '';
-      let s = raw.replace(/\s*\[(regional|converted[^\]]*)\]/gi, '');
-      s = s.replace(/\s*\([^)]*(?:intl|international|benchmark|fob|cif)[^)]*\)/gi, '');
-      s = s.split(',')[0].trim();
-      const opens = (s.match(/\(/g) || []).length;
-      const closes = (s.match(/\)/g) || []).length;
-      if (opens > closes) s = s.replace(/\s*\([^)]*$/, '').trim();
-      return s || raw;
-    },
-    /** ≤3-letter commodity code + country tag, e.g. "CAB-GT", "DAP-US". */
-    commodityCode(name) {
-      const raw = typeof name === 'string' ? name : '';
-      const short = this.baseSeriesName(raw);
-      const base = (
-        (short.split(/\s+/)[0] || '')
-          .replace(/[^A-Za-z]/g, '')
-          .slice(0, 3)
-          .toUpperCase() || '???'
-      ).slice(0, 3);
-      const tag = this.chipCountryTag(raw);
-      return tag ? `${base}-${tag}` : base;
-    },
     async loadPriceData() {
       this.loading = true;
       try {
-        const envelope = await agriApiService.getMarketPrices(this.category);
-        const series = (envelope.data && envelope.data.series) || [];
-        this.allSeries = series;
-        const primary = series[0];
-        if (primary && primary.data && primary.data.length > 0) {
-          // Legacy shape: {title, unit, data:[{year, value}], trend, dataSource}
-          this.priceData = {
-            ...envelope.data,
-            dataSource: envelope.meta.source,
-            data: primary.data.map((p) => ({ year: p.date, value: p.value }))
-          };
-          this.timeSeries = this.priceData.data;
+        let data;
+        switch (this.category) {
+          case 'maize':
+            data = await worldBankService.getMaizePrices();
+            break;
+          case 'cropProtection':
+            data = await worldBankService.getCropProtectionCosts();
+            break;
+          case 'vegetables':
+            data = await worldBankService.getVegetablePrices();
+            break;
+          case 'livestock':
+            data = await worldBankService.getPoultryPorkFeedCosts();
+            break;
+          case 'fertilizer':
+            data = await worldBankService.getFertilizerPrices();
+            break;
+          case 'apiary':
+            data = await worldBankService.getHoneyMarketData();
+            break;
+          case 'aquaculture':
+            data = await worldBankService.getTilapiaMarketData();
+            break;
+          case 'harvestStorage':
+            data = await worldBankService.getHarvestStorageData();
+            break;
+          default:
+            console.warn(`Unknown category: ${this.category}`);
+            data = null;
+        }
+
+        if (data && data.data) {
+          this.priceData = data;
+          this.timeSeries = data.data;
         }
       } catch (error) {
         console.error(`Error loading price data for ${this.category}:`, error);
@@ -440,13 +290,6 @@ export default {
 }
 
 .card-content {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-}
-
-.card-main {
   display: flex;
   gap: var(--space-sm);
   width: 100%;
@@ -509,50 +352,6 @@ export default {
 .trend-pill {
   font-size: var(--text-xs);
   flex-shrink: 0;
-}
-
-/* Commodity acronym chips — left-aligned under the sparkline; grid of 3
-   columns when numerous (grains) so the card never gets tall */
-.card-codes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  overflow: hidden;
-}
-
-.card-codes--grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  justify-items: start;
-}
-
-.card-code {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.65rem;
-  line-height: 1.1;
-  font-weight: 600;
-  color: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 6px);
-  padding: 2px 5px;
-  white-space: nowrap;
-  cursor: help;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.card-code--primary {
-  border-color: var(--accent);
-  color: var(--fg);
-}
-
-.card-code__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex: 0 0 auto;
 }
 
 @media (max-width: 768px) {

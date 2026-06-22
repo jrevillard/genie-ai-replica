@@ -394,15 +394,17 @@ After the retriever fetches candidate chunks, the reranker performs a more compu
 
 | Model | VRAM | Language | License | Notes |
 |-------|------|----------|---------|-------|
-| **cross-encoder/ms-marco-MiniLM-L-6-v2** | ~200 MB | English | Apache 2.0 | Default. Fast, reliable, well-tested. |
+| **BAAI/bge-reranker-v2-m3** | ~2 GB | Multilingual | MIT | Default. Multilingual; enterprise GPUs (>=24 GB). **Do not use on T4.** |
+| **cross-encoder/ms-marco-MiniLM-L-6-v2** | ~200 MB | English | Apache 2.0 | Use on T4 / constrained GPUs (English). Fast, reliable. |
 | **cross-encoder/ms-marco-MiniLM-L-12-v2** | ~400 MB | English | Apache 2.0 | Higher quality, more memory. |
-| **BAAI/bge-reranker-v2-m3** | ~2 GB | Multilingual | MIT | **Do not use on T4.** Good for enterprise GPUs. |
 
 ### Configuration
 
 ```bash
-# In your .env file
-RERANKER_MODEL_ID=cross-encoder/ms-marco-MiniLM-L-6-v2
+# In your .env file (default; multilingual, requires >=24 GB VRAM)
+RERANKER_MODEL_ID=BAAI/bge-reranker-v2-m3
+# T4 / constrained GPUs (English only) — override with the lighter model:
+# RERANKER_MODEL_ID=cross-encoder/ms-marco-MiniLM-L-6-v2
 ```
 
 ---
@@ -652,7 +654,7 @@ VLLM_TRANSLATION_MAX_MODEL_LEN=2048
 VLLM_TRANSLATION_DTYPE=auto
 
 EMBEDDING_MODEL_ID=BAAI/bge-m3          # Multilingual upgrade
-RERANKER_MODEL_ID=cross-encoder/ms-marco-MiniLM-L-6-v2
+RERANKER_MODEL_ID=BAAI/bge-reranker-v2-m3   # Multilingual reranker (enterprise GPU)
 ```
 
 ### Profile D: Multi-GPU / Separate Nodes
@@ -760,7 +762,7 @@ Do you need high-quality translation for many languages?
 |----------|---------|---------|
 | `EMBEDDING_MODEL_ID` | `BAAI/bge-base-en-v1.5` | Embedding model |
 | `TEI_EMBED_MODEL` | (must match above) | TEI embedding model |
-| `RERANKER_MODEL_ID` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Reranking model |
+| `RERANKER_MODEL_ID` | `BAAI/bge-reranker-v2-m3` | Reranking model (use MiniLM on T4) |
 
 ### Document Extraction (Non-LLM AI)
 

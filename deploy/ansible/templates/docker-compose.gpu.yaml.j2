@@ -92,7 +92,7 @@ services:
   tei-reranker:
     restart: unless-stopped
     image: {{ tei_reranker_image | default('ghcr.io/huggingface/text-embeddings-inference:1.9.3') }}
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id {{ reranker_model_id | default('cross-encoder/ms-marco-MiniLM-L-6-v2') }} --max-batch-tokens {{ tei_reranking_max_batch_tokens | default('1024') }} --max-concurrent-requests {{ tei_reranking_max_concurrent_requests | default('8') }} --auto-truncate"
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id {{ reranker_model_id | default('BAAI/bge-reranker-v2-m3') }} --max-batch-tokens {{ tei_reranking_max_batch_tokens | default('1024') }} --max-concurrent-requests {{ tei_reranking_max_concurrent_requests | default('8') }} --auto-truncate"
     volumes:
       - {{ gpu_data_dir | default('./data') }}/huggingface:/data
     environment:

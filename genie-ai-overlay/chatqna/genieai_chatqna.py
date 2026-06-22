@@ -136,7 +136,7 @@ RETRIEVER_TRAVERSAL_MAX_RETURNED = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX
 RETRIEVER_TRAVERSAL_SCORE_THRESHOLD = float(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD", 0.5))
 RETRIEVER_LAMBDA_MULT = float(os.getenv("RETRIEVER_ARANGO_LAMBDA_MULT", 0.5))
 
-RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "threshold")  # slice | threshold | knee_threshold
+RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "adaptive")  # slice | threshold | knee_threshold | adaptive
 RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 2))  # if RERANKING_STRATEGY set to 'slice'
 RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.9))  # if RERANKING_STRATEGY set to 'threshold'
 
@@ -687,6 +687,24 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             next_data["initial_query"] = data["initial_query"]
             next_data["retrieved_docs"] = retrieved_docs
             next_data["file_id_pairs"] = file_id_pairs
+            # Forward the query embedding for adaptive reranking. Prefer the
+            # request's embedding (inputs) — always present — then the retriever echo.
+            query_embedding = inputs.get("embedding") if isinstance(inputs, dict) else None
+            if not query_embedding:
+                query_embedding = data.get("embedding")
+            if query_embedding:
+                next_data["embedding"] = query_embedding
+            # Assemble chunk embeddings from the retriever's metadata list.
+            # The retriever (EmbedDoc path) returns a SearchedMultimodalDoc where
+            # metadata is a separate top-level list, not embedded in retrieved_docs
+            # (TextDoc has no metadata field). The arangodb stashes each chunk's
+            # embedding in this metadata list during the adaptive fetch.
+            chunk_embeddings = []
+            for md in data.get("metadata", []):
+                ce = (md or {}).pop("chunk_embedding", None)
+                chunk_embeddings.append(ce if isinstance(ce, list) and ce else [])
+            if chunk_embeddings and all(ce for ce in chunk_embeddings):
+                next_data["chunk_embeddings"] = chunk_embeddings
 
             # Expected data format if using tei_reranker directly (bypassing reranker service):
             # next_data["query"] = data["initial_query"]

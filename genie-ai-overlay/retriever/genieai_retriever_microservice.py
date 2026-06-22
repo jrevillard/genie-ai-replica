@@ -52,6 +52,7 @@ from comps import (
 )
 from comps.cores.proto.genieai_api_protocol import (
     ChatCompletionRequest,
+    GenieRetrievalResponse,
     RetrievalRequest,
     RetrievalRequestArangoDB,
     RetrievalResponse,
@@ -134,9 +135,12 @@ async def retrieve_docs(
                     # Inject score into metadata so downstream consumers can read it
                     if r.get("score") is not None and r["doc"].metadata is not None:
                         r["doc"].metadata["score"] = r["score"]
+                    # Leave chunk_embedding in the doc metadata — ChatQnA assembles
+                    # chunk embeddings from retrieved_docs metadata (top-level fields
+                    # are stripped by the megaservice hop, but metadata survives).
                     retrieved_docs.append(RetrievalResponseData(text=r["doc"].page_content, metadata=r["doc"].metadata))
             if isinstance(input, RetrievalRequest):
-                result = RetrievalResponse(retrieved_docs=retrieved_docs)
+                result = GenieRetrievalResponse(retrieved_docs=retrieved_docs)
             elif isinstance(input, ChatCompletionRequest):
                 input.retrieved_docs = retrieved_docs
                 input.documents = [doc.text for doc in retrieved_docs]

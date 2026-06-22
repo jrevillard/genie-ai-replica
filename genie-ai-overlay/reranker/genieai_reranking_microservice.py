@@ -38,6 +38,7 @@ from comps.cores.proto.api_protocol import ChatCompletionRequest, RerankingReque
 from comps.cores.proto.opea_docarray import LLMParamsDoc, LVMVideoDoc, RerankedDoc, SearchedDoc, SearchedMultimodalDoc
 from comps.cores.telemetry.opea_telemetry import opea_telemetry
 from comps.rerankings.src.integrations.genieai_tei_reranker import GenieTEIReranking  # noqa: F401
+from pydantic import Field
 
 logger = CustomLogger("opea_reranking_microservice")
 setup_trace_logging("opea_reranking_microservice")
@@ -49,6 +50,8 @@ class GenieSearchedDoc(SearchedDoc):
     reranking_strategy: str | None = None
     reranking_threshold: float | None = None
     top_n: int | None = None
+    embedding: list[float] = Field(default_factory=list)
+    chunk_embeddings: list[list[float]] = Field(default_factory=list)
 
 
 rerank_component_name = os.getenv("RERANK_COMPONENT_NAME", "GENIE_TEI_RERANKING")

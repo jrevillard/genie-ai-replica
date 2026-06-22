@@ -1666,4 +1666,139 @@ describe('ChatBotComponent', () => {
       expect(wrapper.vm.translate('chatbot.thinking')).toBe('chatbot.thinking');
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Dashboard overlay and chart functionality
+  // -----------------------------------------------------------------------
+  describe('Dashboard overlay visibility', () => {
+    it('shows quick help overlay by default with no context items', () => {
+      const wrapper = createChatBotWrapper();
+      expect(wrapper.vm.showQuickHelp).toBe(true);
+      expect(wrapper.vm.selectedContextItems.length).toBe(0);
+    });
+
+    it('hides quick help overlay when context items exist', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Simulate selecting a quick help option which sets both conditions
+      const option = {
+        service: 'Test Service',
+        visibleText: 'Test',
+        hiddenPrompt: 'Test prompt',
+        category: 'general',
+        id: 'test-id'
+      };
+      jest.spyOn(vm, 'sendMessage').mockImplementation(() => {});
+      vm.selectQuickHelpOption(option);
+
+      expect(vm.showQuickHelp).toBe(false);
+    });
+  });
+
+  describe('openChart method', () => {
+    it('opens chart dialog with crop-health type', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.openChart('crop-health');
+
+      expect(vm.chartDialog.visible).toBe(true);
+      expect(vm.chartDialog.type).toBe('crop-health');
+      expect(vm.chartDialog.title).toBeTruthy();
+    });
+
+    it('opens chart dialog with pest-alert type', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.openChart('pest-alert');
+
+      expect(vm.chartDialog.visible).toBe(true);
+      expect(vm.chartDialog.type).toBe('pest-alert');
+    });
+
+    it('opens chart dialog with market-price type and category', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.openChart('market-price', 'maize');
+
+      expect(vm.chartDialog.visible).toBe(true);
+      expect(vm.chartDialog.type).toBe('market-price');
+      expect(vm.chartDialog.category).toBe('maize');
+    });
+
+    it('handles unknown chart type with fallback title', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.openChart('unknown-type');
+
+      expect(vm.chartDialog.visible).toBe(true);
+      expect(vm.chartDialog.type).toBe('unknown-type');
+      expect(vm.chartDialog.title).toBe('unknown-type');
+    });
+
+    it('passes category through to chartDialog state', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.openChart('market-price', 'fertilizer');
+
+      expect(vm.chartDialog.category).toBe('fertilizer');
+    });
+  });
+
+  describe('checkContextConfig warning logic', () => {
+    it('does not warn for admin when context has no mismatches', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Set admin role via store mutation
+      vm.$store.commit('SET_USER', {
+        ...vm.$store.state.user,
+        roles: ['admin'],
+        _key: 'test-admin'
+      });
+
+      // Add a properly matched context item
+      vm.selectedContextItems.push({
+        service: 'Test Service',
+        serviceKey: 'test-key',
+        category: 'general',
+        selected: true
+      });
+
+      const context = {
+        categoryLabel: 'Agriculture',
+        serviceLabels: ['Test Service']
+      };
+
+      // Should not throw or call warning
+      expect(() => vm.checkContextConfig(context)).not.toThrow();
+      expect(mockNotificationWarning).not.toHaveBeenCalled();
+    });
+
+    it('warns when service label has no matching context item', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Set admin role via store mutation
+      vm.$store.commit('SET_USER', {
+        ...vm.$store.state.user,
+        roles: ['admin'],
+        _key: 'test-admin'
+      });
+
+      const context = {
+        categoryLabel: 'Valid Category',
+        serviceLabels: ['NonExistent Service']
+      };
+
+      vm.checkContextConfig(context);
+
+      expect(mockNotificationWarning).toHaveBeenCalled();
+    });
+  });
 });

@@ -1,83 +1,46 @@
-/* El Salvador Keycloak Login Theme — Light Mode
- * Overrides parent genie theme tokens for el-salvador deployment.
+/* AgroGenio El Salvador Keycloak Login Theme — Light Mode
+ * Overrides parent genie theme with El Salvador color tokens.
+ * Inherits fg, muted, border, bg from parent (identical values).
  *
- * Palette:
- *   brand        #1E5631
- *   brand hover  #0D4B28
- *   secondary    #4CAF50
- *   success      #4CAF50
- *   warning      #B86B00
- *   danger       #B42318
- *   info         #1565A8
- *   text         #17231C
- *   bg           #F7F8F4
+ * El Salvador DS token mapping:
+ *   accent  = Cobalt Blue #0073AA (Salvadoran national identity + ENA brand)
+ *   green   = Growth Green #2E7D32 (agricultural heritage)
+ *   fg      = #344049 (same as parent)
+ *   muted   = #818b91 (same as parent)
+ *   border  = #bdc5cb (same as parent)
+ *   bg      = #f9fbfd (same as parent)
+ *   surface = #ffffff (same as parent)
  */
 
 :root {
-  /* Primary */
-  --pf-v5-global--primary-color--100: #1e5631;
-  --pf-v5-global--primary-color--200: #0d4b28;
+  /* Primary — Cobalt Blue */
+  --pf-v5-global--primary-color--100: #0073AA;
+  --pf-v5-global--primary-color--200: #005f8c;
 
-  /* Link */
-  --pf-v5-global--link--Color: #1e5631;
-  --pf-v5-global--link--Color--hover: #0d4b28;
+  /* Link — Cobalt Blue */
+  --pf-v5-global--link--Color: #0073AA;
+  --pf-v5-global--link--Color--hover: #005f8c;
 
-  /* Buttons */
-  --pf-v5-c-button--m-primary--BackgroundColor: #1e5631;
-  --pf-v5-c-button--m-primary--hover--BackgroundColor: #0d4b28;
-  --pf-v5-c-button--m-primary--active--BackgroundColor: #0a3a1f;
-  --pf-v5-c-button--m-primary--focus--BackgroundColor: #1e5631;
-  --pf-v5-c-button--m-secondary--BorderColor: #1e5631;
-  --pf-v5-c-button--m-secondary--Color: #1e5631;
+  /* Buttons — Cobalt Blue */
+  --pf-v5-c-button--m-primary--BackgroundColor: #0073AA;
+  --pf-v5-c-button--m-primary--hover--BackgroundColor: #005f8c;
+  --pf-v5-c-button--m-primary--active--BackgroundColor: #004d73;
+  --pf-v5-c-button--m-primary--focus--BackgroundColor: #0073AA;
+  --pf-v5-c-button--m-secondary--BorderColor: #0073AA;
+  --pf-v5-c-button--m-secondary--Color: #0073AA;
 
-  /* Form focus */
-  --pf-v5-c-form-control--focus--BorderColor: #1e5631;
-  --pf-v5-c-form-control--focus--BoxShadowColor: rgba(30, 86, 49, 0.25);
+  /* Form focus — Cobalt Blue */
+  --pf-v5-c-form-control--focus--BorderColor: #0073AA;
+  --pf-v5-c-form-control--focus--BoxShadowColor: rgba(0, 115, 170, 0.25);
 
-  /* Login header */
-  --pf-v5-c-login__main-header--BorderTopColor: #1e5631;
+  /* Login header — Cobalt Blue */
+  --pf-v5-c-login__main-header--BorderTopColor: #0073AA;
 
-  /* Success */
-  --pf-v5-global--success-color--100: #4caf50;
+  /* Success — Growth Green */
+  --pf-v5-global--success-color--100: #2E7D32;
 }
 
+/* Header brand — Cobalt Blue */
 #kc-header-wrapper {
-  color: #1e5631;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  /* Collapse the raw "genie" text node rendered after the <img> in the
-     template; the logo carries the brand wordmark. font-size:0 hides the
-     text node (unwrappable by selectors) while leaving the <img> size
-     unaffected. */
-  font-size: 0;
-}
-#kc-header-wrapper img {
-  width: 320px;
-  max-width: 90%;
-  height: auto;
-  margin-bottom: 1rem;
-}
-
-/* Login splash — farmer hero image mirrors web splash + mobile launch splash.
-   Layered on a subtle AgroGenio gradient using the brand palette. */
-.login-pf-page {
-  background:
-    url('../img/team_agro.png') no-repeat right bottom / 40% auto fixed,
-    linear-gradient(135deg, #f7f8f4 0%, #e8f5e9 45%, #c8e6c9 100%);
-}
-@media (max-width: 768px) {
-  .login-pf-page {
-    background:
-      url('../img/team_agro.png') no-repeat right bottom / 80% auto fixed,
-      linear-gradient(135deg, #f7f8f4 0%, #e8f5e9 45%, #c8e6c9 100%);
-  }
-}
-
-/* Form card — AgroGenio accents: top stripe in brand green, green-tinted
-   border + shadow, rounded corners. */
-.pf-v5-c-login__main {
-  border-top: 4px solid #4caf50;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(30, 86, 49, 0.18);
+  color: #0073AA;
 }

@@ -140,18 +140,8 @@
       </div>
       <!-- Quick Help Overlay -->
       <div v-if="showQuickHelp && selectedContextItems.length === 0" class="quick-help-overlay">
-        <div
-          v-if="config.app.banner && config.app.banner.url"
-          class="welcome-banner"
-          :style="{ backgroundImage: `url(${config.app.banner.url})` }"
-          role="img"
-          aria-label="AgroGenio hero banner"
-        >
-          <!-- Bubble visually anchored to the banner's mascot (right side):
-               the farmer in the banner image appears to be speaking. -->
-          <div class="welcome-mascot-bubble" role="note">
-            {{ translate('chatbot.whatCanIHelp') }}
-          </div>
+        <div class="welcome-header">
+          <h2 class="quick-help-heading">{{ translate('chatbot.whatCanIHelp') }}</h2>
         </div>
 
         <!-- Insights Section -->
@@ -193,18 +183,16 @@
             <h3 class="section-title">{{ translate('charts.market.sectionTitle') }}</h3>
           </div>
           <div class="market-cards">
-            <!-- Order per user req 2026-09-19: grains, veg, livestock,
-                 aquaculture, apiary, fertilizer, crop protection, harvest -->
             <MarketPriceSummaryCard category="maize" @open-chart="openChart('market-price', 'maize')" />
-            <MarketPriceSummaryCard category="vegetables" @open-chart="openChart('market-price', 'vegetables')" />
-            <MarketPriceSummaryCard category="livestock" @open-chart="openChart('market-price', 'livestock')" />
-            <MarketPriceSummaryCard category="aquaculture" @open-chart="openChart('market-price', 'aquaculture')" />
-            <MarketPriceSummaryCard category="apiary" @open-chart="openChart('market-price', 'apiary')" />
-            <MarketPriceSummaryCard category="fertilizer" @open-chart="openChart('market-price', 'fertilizer')" />
             <MarketPriceSummaryCard
               category="cropProtection"
               @open-chart="openChart('market-price', 'cropProtection')"
             />
+            <MarketPriceSummaryCard category="vegetables" @open-chart="openChart('market-price', 'vegetables')" />
+            <MarketPriceSummaryCard category="livestock" @open-chart="openChart('market-price', 'livestock')" />
+            <MarketPriceSummaryCard category="fertilizer" @open-chart="openChart('market-price', 'fertilizer')" />
+            <MarketPriceSummaryCard category="apiary" @open-chart="openChart('market-price', 'apiary')" />
+            <MarketPriceSummaryCard category="aquaculture" @open-chart="openChart('market-price', 'aquaculture')" />
             <MarketPriceSummaryCard
               category="harvestStorage"
               @open-chart="openChart('market-price', 'harvestStorage')"
@@ -468,7 +456,6 @@ export default {
     PestAlertChart,
     MarketPriceChart
   },
-  inject: ['config'],
 
   data() {
     return {
@@ -842,24 +829,10 @@ export default {
     },
 
     openChart(type, category) {
-      // Market dialogs carry the commodity in the title (user req
-      // 2026-09-19): "Market Prices - Maize & Grains" etc.
-      const categoryNames = {
-        maize: this.translate('charts.market.maizeGrains', 'Maize & Grains'),
-        cropProtection: this.translate('charts.market.cropProtection', 'Crop Protection'),
-        vegetables: this.translate('charts.market.fruitsVeggies', 'Fruits & Vegetables'),
-        livestock: this.translate('charts.market.livestock', 'Livestock'),
-        fertilizer: this.translate('charts.market.fertilizer', 'Fertilizer'),
-        apiary: this.translate('charts.market.apiary', 'Apiary & Honey'),
-        aquaculture: this.translate('charts.market.aquaculture', 'Aquaculture'),
-        harvestStorage: this.translate('charts.market.harvestStorage', 'Harvest & Storage')
-      };
       const titles = {
         'crop-health': this.translate('charts.cropHealthTitle', 'Crop Health - NDVI Index'),
         'pest-alert': this.translate('charts.pestAlertTitle', 'Pest & Disease Alerts'),
-        'market-price': `${this.translate('charts.market.sectionTitle', 'Market Prices')} - ${
-          categoryNames[category] || ''
-        }`
+        'market-price': this.translate('charts.market.sectionTitle', 'Market Prices')
       };
       this.chartDialog = { visible: true, type, title: titles[type] || type, category };
     },
@@ -2291,11 +2264,7 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* Top-aligned + auto-margin centering: justify-content:center CLIPS THE
-     TOP when content overflows a scroll container — the heading became
-     unreachable once the market cards grew (found live 2026-09-19). Auto
-     margins center when short and collapse to 0 (scrollable) when tall. */
-  justify-content: flex-start;
+  justify-content: center;
   padding: var(--space-lg);
   overflow-y: auto;
 }
@@ -2303,94 +2272,9 @@ export default {
 .welcome-header {
   text-align: center;
   margin-bottom: var(--space-lg);
-  position: relative;
-  overflow: visible;
-  /* flex children of .quick-help-overlay — never let the flex container
-     collapse our mascot + bubble + heading down to height 0 when the
-     overlay's content exceeds its scroll viewport. */
-  flex-shrink: 0;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.welcome-banner {
-  width: 100%;
-  margin: calc(-1 * var(--space-lg)) auto var(--space-md);
-  /* Maintain 2019:464 ratio — aspect-ratio is unreliable when the parent's
-     flex sizing collapses height to 0 in some browsers; padding-bottom
-     always works. */
-  padding-bottom: calc(464 / 2019 * 100%);
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
-  position: relative;
-  /* Banner is flush against the navbar — no top radius, rounded only at
-     the bottom corners. */
-  border-radius: 0 0 var(--radius-md) var(--radius-md);
-  overflow: hidden;
-  /* flex child of .quick-help-overlay — never shrink the banner down. */
-  flex-shrink: 0;
-}
-[data-theme='dark'] .welcome-banner {
-  filter: brightness(0.85);
-}
-
-/* Mascot guide bubble: framed speech-bubble carrying the welcome text.
-   Positioned INSIDE the banner (bottom-right), arrow at top-LEFT pointing
-   UP — so the mascot inside the banner image visually appears to be
-   speaking. Sized responsively: every dimension is a percentage or
-   clamp() so the bubble scales with the banner, never overflows it,
-   and stays legible from 360px mobile to 1920px desktop. */
-.welcome-mascot-bubble {
-  position: absolute;
-  right: 4%;
-  bottom: 14%;
-  width: clamp(180px, 36%, 340px);
-  padding: clamp(6px, 0.9cqw, 12px) clamp(10px, 1.5cqw, 20px);
-  background: var(--ag-bubble, var(--surface));
-  color: var(--fg);
-  border: 2px solid var(--ag-sol, var(--accent-gold));
-  border-radius: 16px;
-  font-size: clamp(14px, 1.8cqw, 22px);
-  font-weight: 600;
-  line-height: 1.3;
-  text-align: center;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
-}
-.welcome-banner {
-  container-type: inline-size;
-}
-
-.welcome-mascot-bubble::after {
-  content: '';
-  position: absolute;
-  top: -7px;
-  left: 16%;
-  transform: rotate(45deg);
-  width: 14px;
-  height: 14px;
-  background: var(--ag-bubble, var(--surface));
-  border-top: 2px solid var(--ag-sol, var(--accent-gold));
-  border-left: 2px solid var(--ag-sol, var(--accent-gold));
-}
-[data-theme='dark'] .welcome-mascot-bubble {
-  background: var(--ag-bubble, var(--surface));
-  color: var(--fg);
-}
-[data-theme='dark'] .welcome-mascot-bubble::after {
-  background: var(--ag-bubble, var(--surface));
-}
-
-.quick-help-overlay > :last-child {
-  margin-bottom: auto;
 }
 
 .quick-help-heading {
-  position: relative;
-  z-index: 2;
   text-align: center;
   font-size: var(--text-xl);
   font-weight: 600;
@@ -2414,12 +2298,6 @@ export default {
   font-weight: 600;
   color: var(--fg);
   margin: 0;
-  /* "Field notebook" accent — soft underline in the AgroGenio sol (sun)
-     tone. Visually anchors the section without competing with the
-     mascot hero. */
-  display: inline-block;
-  padding-bottom: 4px;
-  border-bottom: 2px solid var(--ag-sol, var(--accent-gold));
 }
 
 .insights-cards {

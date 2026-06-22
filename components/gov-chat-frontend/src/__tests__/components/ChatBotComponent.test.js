@@ -157,22 +157,10 @@ function createChatBotStore(stateOverrides = {}) {
 
 function createChatBotWrapper(storeOverrides = {}) {
   const store = createChatBotStore(storeOverrides);
-  const configMock = {
-    app: {
-      icon: { type: 'inline', value: '' },
-      title: 'AgroGenio',
-      banner: { url: '/assets/agrogenio/banner.png' },
-      mascot: { url: '/assets/agrogenio/mascot-avatar.png', alt: 'Mascot' },
-      leaves: { url: '/assets/agrogenio/leaves-large.png' },
-      sidebarLeaf: { url: '/assets/agrogenio/leaf-particles.png' }
-    }
-  };
   return mount(ChatBotComponent, {
     global: {
       plugins: [store],
-      provide: { config: configMock },
       mocks: {
-        config: configMock,
         $t: (key) => key,
         $i18n: { locale: 'en' }
       },
@@ -1841,12 +1829,10 @@ describe('ChatBotComponent', () => {
         _key: 'test-admin'
       });
 
-      // Add a properly matched context item. Under the new contract the retriever
-      // filter label is the item's serviceKey (English KB label), not the
-      // localized `service`. serviceKey must match the sent serviceLabels entry.
+      // Add a properly matched context item
       vm.selectedContextItems.push({
         service: 'Test Service',
-        serviceKey: 'Test Service',
+        serviceKey: 'test-key',
         category: 'general',
         selected: true
       });
@@ -1880,48 +1866,6 @@ describe('ChatBotComponent', () => {
       vm.checkContextConfig(context);
 
       expect(mockNotificationWarning).toHaveBeenCalled();
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // AgroGenio brand integration — banner sits above welcome-header inside
-  // quick-help-overlay so it appears ABOVE the Insights section. The
-  // mascot lives in the banner image (single source of truth, no
-  // duplicate floating avatar); only a framed speech bubble carries
-  // the welcome prompt below the banner.
-  // -----------------------------------------------------------------------
-  describe('AgroGenio banner + speech-bubble integration', () => {
-    it('renders .welcome-banner inside .quick-help-overlay (no leaves on banner)', () => {
-      const wrapper = createChatBotWrapper();
-      const overlay = wrapper.find('.quick-help-overlay');
-      expect(overlay.exists()).toBe(true);
-      expect(overlay.find('.welcome-banner').exists()).toBe(true);
-      // Leaves decoration was moved to the right sidebar only —
-      // banner stays clean so the mascot+bubble read as a single scene.
-      expect(wrapper.find('.welcome-banner-leaves').exists()).toBe(false);
-    });
-
-    it('anchors speech bubble INSIDE the banner so the mascot appears to speak', () => {
-      const wrapper = createChatBotWrapper();
-      const banner = wrapper.find('.welcome-banner');
-      expect(banner.exists()).toBe(true);
-      const bubble = banner.find('.welcome-mascot-bubble');
-      expect(bubble.exists()).toBe(true);
-      // translate() is stubbed in tests to echo the key (no real i18n),
-      // so the bubble renders the i18n key verbatim.
-      expect(bubble.text()).toContain('chatbot.whatCanIHelp');
-      // No duplicate raw h2 outside the banner.
-      expect(wrapper.find('.welcome-header h2').exists()).toBe(false);
-    });
-
-    it('preserves the market-prices section (regression check)', () => {
-      const wrapper = createChatBotWrapper();
-      expect(wrapper.find('.market-prices-section').exists()).toBe(true);
-    });
-
-    it('preserves the chat-input area (regression check)', () => {
-      const wrapper = createChatBotWrapper();
-      expect(wrapper.find('.chat-input').exists()).toBe(true);
     });
   });
 });

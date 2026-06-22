@@ -14,6 +14,17 @@ jest.mock('../services/keycloakAuthService', () => ({
   }
 }));
 
+// Mock notificationService (default export) — lets us assert error-toast calls
+const mockNotificationError = jest.fn();
+jest.mock('../services/notificationService', () => ({
+  __esModule: true,
+  default: {
+    error: mockNotificationError,
+    success: jest.fn(),
+    info: jest.fn()
+  }
+}));
+
 // Mock axios
 const mockCapturedRequestHandlers = [];
 const mockCapturedResponseHandlers = [];
@@ -54,6 +65,7 @@ describe('httpService', () => {
   let mockAxiosInstance;
   let requestHandler;
   let responseSuccessHandler;
+  let responseErrorHandler;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -65,6 +77,7 @@ describe('httpService', () => {
     // Store the handlers that were registered during module load
     requestHandler = mockCapturedRequestHandlers[0];
     responseSuccessHandler = mockCapturedResponseHandlers[0]?.success;
+    responseErrorHandler = mockCapturedResponseHandlers[0]?.error;
 
     // Reset mock implementations to return empty responses
     mockAxiosInstance.get.mockResolvedValue({ data: {} });
@@ -227,6 +240,31 @@ describe('httpService', () => {
       const result = responseSuccessHandler(response);
 
       expect(result).toEqual(response);
+    });
+  });
+
+  describe('Response Interceptor - Error', () => {
+    // Build a non-401 error (404) that skips the token-refresh branch and
+    // exercises the user-facing notification path.
+    const make404Error = (silent) => ({
+      config: silent ? { silent: true } : {},
+      response: {
+        status: 404,
+        statusText: 'Not Found',
+        data: { message: 'Crawl job not found' }
+      }
+    });
+
+    it('shows a user-facing error notification by default', async () => {
+      await expect(responseErrorHandler(make404Error(false))).rejects.toBeDefined();
+
+      expect(mockNotificationError).toHaveBeenCalledWith('Crawl job not found');
+    });
+
+    it('suppresses the notification when config.silent is true', async () => {
+      await expect(responseErrorHandler(make404Error(true))).rejects.toBeDefined();
+
+      expect(mockNotificationError).not.toHaveBeenCalled();
     });
   });
 

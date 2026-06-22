@@ -298,6 +298,38 @@ describe('FileDetailsDialog', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Crawl-job lookup gating in fetchData (only for crawl/link-origin files)
+  // -------------------------------------------------------------------------
+  describe('fetchData — crawl-job lookup gating on source_url', () => {
+    it('does not call getCrawlJob for a regular upload (source_url null)', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({ source_url: null }));
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.fetchData('test-file-123');
+
+      expect(mockGetCrawlJob).not.toHaveBeenCalled();
+      expect(wrapper.vm.crawlJob).toBeNull();
+    });
+
+    it('does not call getCrawlJob when source_url is empty', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({ source_url: '' }));
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.fetchData('test-file-123');
+
+      expect(mockGetCrawlJob).not.toHaveBeenCalled();
+    });
+
+    it('calls getCrawlJob for a crawl/link-origin file (source_url set)', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({ source_url: 'https://example.com/page' }));
+      mockGetCrawlJob.mockResolvedValue({ data: { status: 'Crawling' } });
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.fetchData('test-file-123');
+
+      expect(mockGetCrawlJob).toHaveBeenCalledWith('test-file-123');
+      expect(wrapper.vm.crawlJob).toEqual({ status: 'Crawling' });
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // 4c — Label management (areAllLabelsSelected getter/setter, mapEnglishToLocale)
   // -------------------------------------------------------------------------
   describe('4c — Label management', () => {

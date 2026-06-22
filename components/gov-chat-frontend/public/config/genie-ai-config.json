@@ -19,7 +19,10 @@
           "properties": {
             "type": {
               "type": "string",
-              "enum": ["file", "inline"],
+              "enum": [
+                "file",
+                "inline"
+              ],
               "description": "Type of icon source",
               "default": "file"
             },
@@ -28,10 +31,16 @@
               "description": "Path to SVG file (for 'file') or inline SVG content (for 'inline')"
             }
           },
-          "required": ["type", "value"]
+          "required": [
+            "type",
+            "value"
+          ]
         }
       },
-      "required": ["title", "icon"]
+      "required": [
+        "title",
+        "icon"
+      ]
     },
     "theme": {
       "type": "object",
@@ -101,7 +110,9 @@
           }
         }
       },
-      "required": ["brandColor"]
+      "required": [
+        "brandColor"
+      ]
     },
     "features": {
       "type": "object",
@@ -145,7 +156,10 @@
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": ["file", "inline"],
+                            "enum": [
+                              "file",
+                              "inline"
+                            ],
                             "description": "Type of icon source"
                           },
                           "value": {
@@ -153,10 +167,16 @@
                             "description": "Path to SVG file or inline SVG content"
                           }
                         },
-                        "required": ["type", "value"]
+                        "required": [
+                          "type",
+                          "value"
+                        ]
                       },
                       "category": {
-                        "type": ["string", "null"],
+                        "type": [
+                          "string",
+                          "null"
+                        ],
                         "description": "Category ID for the button (null for general)"
                       },
                       "action": {
@@ -172,7 +192,10 @@
                             "description": "i18n key for detailed prompt sent to LLM"
                           }
                         },
-                        "required": ["visibleText", "hiddenPrompt"]
+                        "required": [
+                          "visibleText",
+                          "hiddenPrompt"
+                        ]
                       },
                       "styles": {
                         "type": "object",
@@ -191,14 +214,27 @@
                             "description": "Border/outline color"
                           }
                         },
-                        "required": ["backgroundColor", "hoverColor", "outlineColor"]
+                        "required": [
+                          "backgroundColor",
+                          "hoverColor",
+                          "outlineColor"
+                        ]
                       }
                     },
-                    "required": ["id", "title", "icon", "category", "action", "styles"]
+                    "required": [
+                      "id",
+                      "title",
+                      "icon",
+                      "category",
+                      "action",
+                      "styles"
+                    ]
                   }
                 }
               },
-              "required": ["buttons"]
+              "required": [
+                "buttons"
+              ]
             }
           }
         }
@@ -210,45 +246,23 @@
       "additionalProperties": true
     }
   },
-  "required": ["app", "theme"],
+  "required": [
+    "app",
+    "theme"
+  ],
   "app": {
     "title": "AgroGenio AI",
     "icon": {
-      "type": "inline",
-      "value": "<img src=\"/config/agro-genio-navbar-white.png\" alt=\"AgroGenio\" style=\"height:40px;width:auto\">"
+      "type": "file",
+      "value": "/config/agro-genio-icon.svg"
     },
     "splash": {
       "type": "file",
       "value": "/config/agro-genio-splash.png"
-    },
-    "banner": {
-      "url": "/assets/agrogenio/banner.png"
-    },
-    "mascot": {
-      "url": "/assets/agrogenio/mascot-avatar.png",
-      "alt": "AgroGenio mascot"
-    },
-    "leaves": {
-      "url": "/assets/agrogenio/leaves-large.png"
-    },
-    "sidebarLeaf": {
-      "url": "/assets/agrogenio/leaf-particles.png"
     }
   },
   "theme": {
-    "brandColor": "#4CAF50",
-    "bg": "#F7F8F3",
-    "fg": "#173323",
-    "navbar": {
-      "background": "linear-gradient(135deg, #1E5631 0%, #4CAF50 100%)",
-      "text": "#FFFFFF"
-    },
-    "colors": {
-      "success": "#4CAF50",
-      "warning": "#E9C46A",
-      "danger": "#D95C4F",
-      "info": "#4CAF50"
-    }
+    "brandColor": "#4071cb"
   },
   "features": {
     "chat": {
@@ -301,8 +315,7 @@
                 "en": "You are a Crop and Livestock Health Diagnostician for CENTA El Salvador. Help farmers identify pests, diseases, and nutrient deficiencies affecting their crops or animals. Ask follow-up questions about symptoms, affected parts, duration, and environmental conditions. Recommend integrated pest management (IPM) strategies, organic and chemical treatment options, and prevention measures appropriate for El Salvador. RULE: Always refer to the application as 'Genie AI'.",
                 "es": "Eres un Diagnóstico de Salud de Cultivos y Ganado de CENTA El Salvador. Ayuda a los agricultores a identificar plagas, enfermedades y deficiencias de nutrientes que afectan sus cultivos o animales. Haz preguntas de seguimiento sobre síntomas, partes afectadas, duración y condiciones ambientales. Recomienda estrategias de Manejo Integrado de Plagas (MIP), opciones de tratamiento orgánico y químico, y medidas de prevención apropiadas para El Salvador. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
               }
-            },
-            "serviceLabels": ["Pest/ Disease Health"]
+            }
           },
           {
             "id": "grow-fruits-veggies",
@@ -314,7 +327,7 @@
               "type": "file",
               "value": "/config/quickhelp/grow-fruits-veggies.svg"
             },
-            "category": "28486647",
+            "category": "26653264",
             "action": {
               "visibleText": {
                 "en": "I need cultivation guides for specific fruits or vegetables.",
@@ -324,8 +337,7 @@
                 "en": "You are a Horticulture Specialist for CENTA El Salvador. Provide detailed cultivation guides for fruits and vegetables commonly grown in El Salvador (tomatoes, peppers, papaya, mango, citrus, plantains, etc.). Cover planting, pruning, fertilization, irrigation, harvesting, and post-harvest handling. Adapt advice to local conditions: tropical climate, volcanic soils, dry/wet seasons. RULE: Always refer to the application as 'Genie AI'.",
                 "es": "Eres un Especialista en Horticultura de CENTA El Salvador. Proporciona guías de cultivo detalladas para frutas y vegetales comúnmente cultivados en El Salvador (tomates, chiles, papaya, mango, cítricos, plátanos, etc.). Cubre siembra, poda, fertilización, riego, cosecha y manejo poscosecha. Adapta los consejos a las condiciones locales: clima tropical, suelos volcánicos, estaciones seca/lluviosa. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
               }
-            },
-            "serviceLabels": ["Tomato", "Onion", "Cucumber", "Potato"]
+            }
           },
           {
             "id": "manage-poultry-pigs",
@@ -369,8 +381,7 @@
                 "en": "You are a Soil and Fertilizer Specialist for CENTA El Salvador. Help farmers understand their soil type, recommend soil preparation techniques, and advise on appropriate fertilizer formulas and application schedules for El Salvador's volcanic and clay soils. Cover organic amendments, composting, pH management, and erosion control. Reference CENTA soil analysis services when appropriate. RULE: Always refer to the application as 'Genie AI'.",
                 "es": "Eres un Especialista en Suelos y Fertilizantes de CENTA El Salvador. Ayuda a los agricultores a entender su tipo de suelo, recomienda técnicas de preparación del suelo y asesora sobre fórmulas de fertilizantes apropiadas y calendarios de aplicación para los suelos volcánicos y arcillosos de El Salvador. Cubre enmiendas orgánicas, compostaje, manejo de pH y control de erosión. Referencia los servicios de análisis de suelos de CENTA cuando sea apropiado. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
               }
-            },
-            "serviceLabels": ["Nutrition", "Establishment"]
+            }
           },
           {
             "id": "start-manage-apiary",
@@ -448,7 +459,17 @@
               "type": "file",
               "value": "/config/quickhelp/just-chat.svg"
             },
-            "category": null
+            "category": null,
+            "action": {
+              "visibleText": {
+                "en": "I'd like to chat about agricultural topics in El Salvador.",
+                "es": "Me gustaría chatear sobre temas agrícolas en El Salvador."
+              },
+              "hiddenPrompt": {
+                "en": "Act as a friendly agricultural companion for CENTA El Salvador. Be polite, helpful, and knowledgeable about Salvadoran agriculture, rural life, and CENTA programs. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them with agricultural guidance — planting, pest management, livestock care, soil health, and market information. RULE: Always refer to the application as 'Genie AI'.",
+                "es": "Actúa como un compañero agrícola amigable de CENTA El Salvador. Sé educado, útil y conocedor sobre la agricultura salvadoreña, la vida rural y los programas de CENTA. IMPORTANTE: Recuerda al usuario que aunque puede charlar sobre cualquier tema, tu fortaleza principal es ayudarle con orientación agrícola — siembra, manejo de plagas, cuidado de ganado, salud del suelo e información de mercado. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
+              }
+            }
           }
         ]
       }

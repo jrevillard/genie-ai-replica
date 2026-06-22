@@ -56,6 +56,7 @@ from pydantic import BaseModel as _PydanticBaseModel  # noqa: F401, I001 – nee
 
 _api_protocol_mock = MagicMock()
 _api_protocol_mock.RetrievalRequest = type("RetrievalRequest", (), {"__init__": lambda self, **kw: None})
+_api_protocol_mock.RetrievalResponse = type("RetrievalResponse", (), {"__init__": lambda self, **kw: None})
 _api_protocol_mock.ArangoDBDataprepRequest = type("ArangoDBDataprepRequest", (), {"__init__": lambda self, **kw: None})
 # Types used only in annotations — use dict so Pydantic can handle Union with dict
 _api_protocol_mock.ResponseFormat = dict
@@ -75,6 +76,7 @@ _api_protocol_mock.Literal = _Literal
 # Make `from api_protocol import *` work by exposing all public names
 _api_protocol_mock.__all__ = [
     "RetrievalRequest",
+    "RetrievalResponse",
     "ArangoDBDataprepRequest",
     "ResponseFormat",
     "StreamOptions",
@@ -118,8 +120,8 @@ sys.modules.setdefault("arango.exceptions", MagicMock())
 sys.modules.setdefault("langchain_core", MagicMock())
 sys.modules.setdefault("langchain_core.documents", MagicMock())
 sys.modules.setdefault("langchain_text_splitters", MagicMock())
-sys.modules.setdefault("numpy", MagicMock())
-sys.modules.setdefault("numpy.linalg", MagicMock())
+# numpy is a real (declared) test dependency — used directly by the adaptive
+# reranker's cosine_similarity. Do NOT mock it, or real math is untestable.
 sys.modules.setdefault("rank_bm25", MagicMock())
 sys.modules.setdefault("keycloak_service_account", MagicMock())
 

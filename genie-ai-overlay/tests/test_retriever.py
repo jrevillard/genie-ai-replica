@@ -101,7 +101,7 @@ def _make_mock_vector_db(db_mock):
     mock_doc = MagicMock()
     mock_doc.id = "doc1"
     mock_doc.page_content = "relevant text"
-    mock_doc.metadata = {}
+    mock_doc.metadata = {"embedding": [0.1, 0.2, 0.3]}
 
     mock_vdb = MagicMock()
     mock_vdb.db = db_mock
@@ -343,6 +343,27 @@ class TestInvoke:
     async def test_vector_only_search_returns_results(self, invoke_env):
         result = await invoke_env["retriever"].invoke(create_mock_input())
         assert isinstance(result, list)
+
+    @pytest.mark.asyncio
+    async def test_adaptive_strategy_attaches_chunk_embeddings(self, invoke_env):
+        # The mock doc's metadata carries the chunk embedding (as langchain does).
+        input_mock = create_mock_input(search_start="chunk", reranking_strategy="adaptive")
+        result = await invoke_env["retriever"].invoke(input_mock)
+        assert len(result) >= 1
+        # Adaptive path exposes the chunk's embedding (read from metadata) as chunk_embedding
+        assert result[0]["doc"].metadata.get("chunk_embedding") == [0.1, 0.2, 0.3]
+        # Query embedding is always echoed (for adaptive novelty scoring)
+        assert "query_embedding" in result[0]["doc"].metadata
+
+    @pytest.mark.asyncio
+    async def test_non_adaptive_skips_chunk_embedding_fetch(self, invoke_env):
+        input_mock = create_mock_input(search_start="chunk", reranking_strategy="slice")
+        result = await invoke_env["retriever"].invoke(input_mock)
+        assert len(result) >= 1
+        # Non-adaptive retrieval must not attach chunk embeddings...
+        assert "chunk_embedding" not in (result[0]["doc"].metadata or {})
+        # ...but the query embedding is always echoed (cheap, single vector)
+        assert "query_embedding" in (result[0]["doc"].metadata or {})
 
     @pytest.mark.asyncio
     async def test_hybrid_search_calls_fetch_neighborhoods(self, invoke_env):

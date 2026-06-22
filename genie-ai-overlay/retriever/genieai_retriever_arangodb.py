@@ -890,6 +890,48 @@ class GenieaiArangoRetriever(OpeaComponent):
 
                     r["doc"].page_content = summarized_text
 
+            ##################################################################
+            # Attach Chunk Embeddings (for adaptive reranking)                #
+            ##################################################################
+            # When adaptive reranking is requested, expose each chunk's stored
+            # embedding. langchain already returns the embedding field in the
+            # search-result metadata, so read it directly — no extra ArangoDB
+            # round-trip and no chunk-key matching. The retriever microservice
+            # assembles these into an ordered chunk_embeddings list for the reranker.
+            reranking_strategy = input_dict.get("reranking_strategy", os.getenv("RERANKING_STRATEGY", "slice"))
+            if reranking_strategy == "adaptive" and search_res:
+                for r in search_res:
+                    metadata = r["doc"].metadata or {}
+                    # The chunk embedding is in the search-result metadata (langchain
+                    # returns it via embedding_field). Read it directly; fall back to an
+                    # AQL lookup by _key if it is absent.
+                    emb = metadata.pop(ARANGO_EMBEDDING_FIELD, None)
+                    if not (isinstance(emb, list) and emb):
+                        chunk_key = r["doc"].id
+                        if chunk_key and "/" in str(chunk_key):
+                            chunk_key = str(chunk_key).rsplit("/", 1)[-1]
+                        if chunk_key:
+                            try:
+                                aql = (
+                                    f"FOR doc IN {collection_name} FILTER doc._key == @k"
+                                    f" RETURN doc.{ARANGO_EMBEDDING_FIELD}"
+                                )
+                                emb = next(iter(self.db.aql.execute(aql, bind_vars={"k": chunk_key})), [])
+                            except Exception as e:
+                                logger.error(f"[ADAPTIVE] AQL fetch failed for {chunk_key}: {e}")
+                                emb = []
+                    r["doc"].metadata["chunk_embedding"] = emb if isinstance(emb, list) and emb else []
+                    logger.info(
+                        f"[ADAPTIVE] doc_id={r['doc'].id!r} meta_keys={list(metadata.keys())} "
+                        f"chunk_emb_len={len(r['doc'].metadata['chunk_embedding'])}"
+                    )
+                logger.info(f"Attached chunk embeddings for {len(search_res)} chunks (adaptive reranking)")
+
+            # Echo the query embedding via metadata so the microservice propagates
+            # it to the reranker (adaptive novelty scoring needs the query vector).
+            if search_res:
+                search_res[0]["doc"].metadata["query_embedding"] = embedding
+
             if logflag:
                 logger.debug(f"Final results of retrievers/src/integrations/arangodb_genieai.py: {search_res}")
 

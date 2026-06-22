@@ -29,6 +29,14 @@ class RetrievalRequestArangoDB(RetrievalRequest):
     context: dict[str, Any] | None = None  # need to update in other files filter --> context
 
 
+class GenieRetrievalResponse(RetrievalResponse):
+    """Marker subclass for retrieval responses (RetrievalRequest path).
+
+    Chunk embeddings for adaptive reranking propagate via the
+    SearchedMultimodalDoc metadata list (EmbedDoc path), not here.
+    """
+
+
 class RequestContext(BaseModel):
     """
     A model to hold structured context for metadata filtering during retrieval.
@@ -150,6 +158,7 @@ class ChatCompletionRequest(BaseModel):
     encoding_format: str | None = Field("float", pattern="^(float|base64)$")
     dimensions: int | None = None
     embedding: Union[EmbeddingResponse, list[float]] = Field(default_factory=list)
+    chunk_embeddings: list[list[float]] = Field(default_factory=list)
 
     # retrieval
     search_type: str = "similarity_score_threshold"  # "similarity"

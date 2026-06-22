@@ -2,9 +2,12 @@
 # Copyright (C) 2025 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0 Developed by Intel. Adapted by ITU
 
+import math
 import os
+import statistics
 
 import aiohttp
+import numpy as np
 from comps import CustomLogger, LLMParamsDoc, OpeaComponentRegistry, SearchedDoc
 from comps.cores.proto.api_protocol import (
     ChatCompletionRequest,
@@ -18,6 +21,7 @@ from integrations.tei import OpeaTEIReranking
 from kneed import KneeLocator
 from opentelemetry import propagate
 from opentelemetry.trace import Status, StatusCode
+from pydantic import Field
 
 from tracing import get_tracer, setup_trace_logging
 
@@ -29,15 +33,130 @@ class GenieSearchedDoc(SearchedDoc):
     reranking_strategy: str | None = None
     reranking_threshold: float | None = None
     top_n: int | None = None
+    embedding: list[float] = Field(default_factory=list)
+    chunk_embeddings: list[list[float]] = Field(default_factory=list)
 
 
 logger = CustomLogger("genie_tei_reranking")
 setup_trace_logging("genie_tei_reranking")
 logflag = os.getenv("LOGFLAG", False)
 
-RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice")  # slice, threshold, knee_threshold
+# Strategies: slice, threshold, slice_threshold, knee_threshold, adaptive
+RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice")
 RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.75))
 RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 1))
+
+# Adaptive utility-cost selection parameters
+NOVELTY_SIGMOID_A = float(os.getenv("NOVELTY_SIGMOID_A", 20.0))
+NOVELTY_SIGMOID_B = float(os.getenv("NOVELTY_SIGMOID_B", 0.25))
+TOKEN_COST_ALPHA = float(os.getenv("TOKEN_COST_ALPHA", 0.0025))
+MIN_VALUE_THRESHOLD = float(os.getenv("MIN_VALUE_THRESHOLD", -1.0))
+
+
+# Helper functions for the adaptive strategy
+def cosine_similarity(vec_a, vec_b):
+    """Cosine similarity between two vectors (0.0 when either is zero-length)."""
+    vec_a = np.array(vec_a, dtype=float)
+    vec_b = np.array(vec_b, dtype=float)
+    norm_a = np.linalg.norm(vec_a)
+    norm_b = np.linalg.norm(vec_b)
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return float(np.dot(vec_a, vec_b) / (norm_a * norm_b))
+
+
+def novelty_sigmoid(novelty, a=NOVELTY_SIGMOID_A, b=NOVELTY_SIGMOID_B):
+    """Map a novelty score to a [0, 1] weight via a logistic curve."""
+    return 1.0 / (1.0 + math.exp(-a * (novelty - b)))
+
+
+def estimate_token_count(text):
+    """Rough token estimate (~4 chars/token), floored to 1."""
+    return max(1, len(text) / 4.0)
+
+
+def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranker_scores):
+    """Utility-cost context selection.
+
+    Picks documents whose marginal value (utility minus cost) exceeds
+    ``MIN_VALUE_THRESHOLD``. Utility = relevance * novelty-weight; cost =
+    token cost + confusion cost. Candidates are processed in descending
+    score order: the strongest match seeds the selected set, then each
+    subsequent chunk is scored for marginal value against what is already
+    selected.
+
+    Callers MUST pass ``texts``, ``chunk_embeddings`` and ``reranker_scores``
+    aligned to the same candidate order, with ``reranker_scores`` sorted
+    descending (so ``reranker_scores[0]`` is the maximum).
+
+    Returns:
+        list[int]: Selected candidate indices (positions in the input arrays).
+    """
+    n = len(texts)
+    if n == 0:
+        return []
+
+    avg_score = statistics.mean(reranker_scores)
+    median_score = statistics.median(reranker_scores)
+    skew = (avg_score - median_score) / avg_score if avg_score != 0 else 0.0
+
+    max_score = reranker_scores[0]  # caller passes scores sorted descending
+
+    selected_indices = []
+
+    for i in range(n):
+        score = reranker_scores[i]
+
+        # Relevance — boosts chunks whose score exceeds the (skew-adjusted) mean
+        relevance = score + (score - avg_score + skew)
+
+        # Novelty — penalises redundancy with already-selected chunks
+        if not selected_indices:
+            novelty = 1.0
+        else:
+            best_similarity = -1.0
+            best_selected_index = selected_indices[0]
+            for j in selected_indices:
+                similarity = cosine_similarity(chunk_embeddings[i], chunk_embeddings[j])
+                if similarity > best_similarity:
+                    best_similarity = similarity
+                    best_selected_index = j
+
+            sim_i_q = cosine_similarity(chunk_embeddings[i], query_embedding)
+            sim_j_q = cosine_similarity(chunk_embeddings[best_selected_index], query_embedding)
+            delta_q = abs(sim_i_q - sim_j_q)
+
+            novelty = 1 - best_similarity * (1 - delta_q)
+            novelty = max(0.0, min(1.0, novelty))
+
+        novelty_weight = novelty_sigmoid(novelty)
+
+        # Utility
+        utility = relevance * novelty_weight
+
+        # Token cost — each chunk consumes context-window budget
+        token_count = estimate_token_count(texts[i])
+        token_cost = TOKEN_COST_ALPHA * token_count
+
+        # Confusion cost — low-confidence chunks risk degrading the answer
+        denominator = max_score - avg_score + skew
+        if abs(denominator) < 1e-6:
+            denominator = 1e-6
+        confusion_cost = (1 - score) + ((max_score - score) / denominator)
+
+        # Total cost
+        total_cost = token_cost + confusion_cost
+
+        # Marginal value
+        value = utility - total_cost
+        logger.info(
+            f"[ADAPTIVE] idx={i} score={score:.4f} R={relevance:.4f} "
+            f"N={novelty:.4f} U={utility:.4f} C={total_cost:.4f} V={value:.4f}"
+        )
+        if value > MIN_VALUE_THRESHOLD:
+            selected_indices.append(i)
+
+    return selected_indices
 
 
 @OpeaComponentRegistry.register("GENIE_TEI_RERANKING")
@@ -136,6 +255,76 @@ class GenieTEIReranking(OpeaTEIReranking):
                         reranking_results.append(
                             {"text": input.retrieved_docs[best_response["index"]].text, "score": best_response["score"]}
                         )
+
+                elif reranking_strategy == "slice_threshold":
+                    # Top-N, but only chunks scoring at/above the threshold.
+                    # decoded_response is pre-sorted descending by TEI, so we can
+                    # break as soon as a score drops below the threshold.
+                    top_n = reranker_top_n if reranker_top_n else 1
+                    for best_response in decoded_response:
+                        if best_response["score"] >= reranking_threshold:
+                            reranking_results.append(
+                                {
+                                    "text": input.retrieved_docs[best_response["index"]].text,
+                                    "score": best_response["score"],
+                                }
+                            )
+                            if len(reranking_results) >= top_n:
+                                break
+                        else:
+                            break
+
+                elif reranking_strategy == "adaptive":
+                    query_embedding = input.embedding if isinstance(getattr(input, "embedding", None), list) else []
+                    chunk_embeddings = input.chunk_embeddings if hasattr(input, "chunk_embeddings") else []
+
+                    embeddings_valid = (
+                        bool(query_embedding)
+                        and len(chunk_embeddings) == len(input.retrieved_docs)
+                        and all(isinstance(ce, list) and len(ce) > 0 for ce in chunk_embeddings)
+                    )
+
+                    if not embeddings_valid:
+                        # Hard-fail: adaptive has no legitimate graceful-degradation
+                        # case (if the embedding service is down, the whole RAG
+                        # pipeline fails regardless). Raise rather than silently
+                        # degrading to slice, which masks integration errors.
+                        msg = (
+                            "[ADAPTIVE] Cannot run adaptive reranking — embeddings missing "
+                            f"or misaligned (query_embedding={'present' if query_embedding else 'missing'}, "
+                            f"chunk_embeddings={len(chunk_embeddings)} vs docs={len(input.retrieved_docs)}). "
+                            "Fix the embedding propagation chain (retriever -> chatqna) before using adaptive."
+                        )
+                        logger.error(msg)
+                        span.set_status(Status(StatusCode.ERROR, msg))
+                        raise RuntimeError(msg)
+                    else:
+                        # decoded_response is TEI score-sorted descending, each with
+                        # an 'index' pointing back to its original position in
+                        # retrieved_docs. Reorder texts + chunk_embeddings into the
+                        # same score-sorted order so each candidate's text, embedding
+                        # and score stay aligned for the selector.
+                        ranked_texts = [input.retrieved_docs[r["index"]].text for r in decoded_response]
+                        ranked_chunk_embeddings = [chunk_embeddings[r["index"]] for r in decoded_response]
+                        ranked_scores = [r["score"] for r in decoded_response]
+
+                        selected_positions = adaptive_context_selection(
+                            texts=ranked_texts,
+                            chunk_embeddings=ranked_chunk_embeddings,
+                            query_embedding=query_embedding,
+                            reranker_scores=ranked_scores,
+                        )
+                        logger.info(f"[ADAPTIVE] Selected candidate positions: {selected_positions}")
+
+                        for pos in selected_positions:
+                            original_index = decoded_response[pos]["index"]
+                            reranking_results.append(
+                                {
+                                    "text": input.retrieved_docs[original_index].text,
+                                    "score": decoded_response[pos]["score"],
+                                }
+                            )
+
                 else:
                     logger.warning(f"Unknown strategy {reranking_strategy}. Defaulting to slice.")
                     for best_response in decoded_response[:reranker_top_n]:

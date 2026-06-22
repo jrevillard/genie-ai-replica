@@ -1,0 +1,123 @@
+/* AgroGenio El Salvador Admin Console — Dark Mode
+ * Activated by upstream keycloak.v2 darkMode=true via pf-v5-theme-dark class.
+ *
+ * El Salvador DS dark tokens (same as account console dark).
+ */
+
+.pf-v5-theme-dark {
+  /* ── Primary — Genie Glow cyan ── */
+  --pf-v5-global--primary-color--100: #4FC3F7;
+  --pf-v5-global--primary-color--200: #39A8D8;
+  --pf-v5-global--primary-color--300: #66D4FF;
+  --pf-v5-global--primary-color--400: #E2E2E6;
+  --pf-v5-global--primary-color--500: #4FC3F7;
+  --pf-v5-global--primary-color--dark-100: #4FC3F7;
+  --pf-v5-global--primary-color--light-100: #4FC3F7;
+
+  /* ── Active color ── */
+  --pf-v5-global--active-color--100: #4FC3F7;
+  --pf-v5-global--active-color--200: rgba(79, 195, 247, 0.15);
+  --pf-v5-global--active-color--300: #39A8D8;
+  --pf-v5-global--active-color--400: #66D4FF;
+
+  /* ── Background ── */
+  --pf-v5-global--BackgroundColor--100: #0D1117;
+  --pf-v5-global--BackgroundColor--150: #121820;
+  --pf-v5-global--BackgroundColor--200: #1C1F22;
+  --pf-v5-global--BackgroundColor--300: #252A30;
+  --pf-v5-global--BackgroundColor--400: #2D3748;
+  --pf-v5-global--BackgroundColor--dark-100: #4FC3F7;
+  --pf-v5-global--BackgroundColor--dark-200: #39A8D8;
+  --pf-v5-global--BackgroundColor--dark-300: #66D4FF;
+  --pf-v5-global--BackgroundColor--dark-400: #66D4FF;
+  --pf-v5-global--BackgroundColor--light-100: #0D1117;
+  --pf-v5-global--BackgroundColor--light-200: #1C1F22;
+  --pf-v5-global--BackgroundColor--light-300: #252A30;
+
+  /* ── Text ── */
+  --pf-v5-global--Color--100: #E2E2E6;
+  --pf-v5-global--Color--200: #9CA3AF;
+  --pf-v5-global--Color--300: #6B7280;
+  --pf-v5-global--Color--400: #9CA3AF;
+  --pf-v5-global--Color--dark-100: #E2E2E6;
+  --pf-v5-global--Color--dark-200: #9CA3AF;
+  --pf-v5-global--Color--light-100: #E2E2E6;
+  --pf-v5-global--Color--light-200: #9CA3AF;
+  --pf-v5-global--Color--light-300: #6B7280;
+
+  /* ── Borders ── */
+  --pf-v5-global--BorderColor--100: #2D3748;
+  --pf-v5-global--BorderColor--200: #2D3748;
+  --pf-v5-global--BorderColor--300: #4A5568;
+  --pf-v5-global--BorderColor--400: #6B7280;
+  --pf-v5-global--BorderColor--dark-100: #2D3748;
+  --pf-v5-global--BorderColor--light-100: #2D3748;
+
+  /* ── Link ── */
+  --pf-v5-global--link--Color: #4FC3F7;
+  --pf-v5-global--link--Color--hover: #39A8D8;
+  --pf-v5-global--link--Color--visited: #A78BFA;
+  --pf-v5-global--link--Color--dark: #4FC3F7;
+  --pf-v5-global--link--Color--dark--hover: #39A8D8;
+  --pf-v5-global--link--Color--light: #4FC3F7;
+  --pf-v5-global--link--Color--light--hover: #39A8D8;
+
+  /* ── Success — Accent Green ── */
+  --pf-v5-global--success-color--100: #81C784;
+  --pf-v5-global--success-color--200: #66BB6A;
+
+  /* ── Info ── */
+  --pf-v5-global--info-color--100: #4FC3F7;
+  --pf-v5-global--info-color--200: #66D4FF;
+
+  /* ── Disabled ── */
+  --pf-v5-global--disabled-color--100: #6B7280;
+  --pf-v5-global--disabled-color--200: #4A5568;
+  --pf-v5-global--disabled-color--300: #6B7280;
+
+  /* ── Icon ── */
+  --pf-v5-global--icon--Color--dark: #E2E2E6;
+  --pf-v5-global--icon--Color--light: #9CA3AF;
+  --pf-v5-global--icon--Color--dark--dark: #E2E2E6;
+  --pf-v5-global--icon--Color--dark--light: #9CA3AF;
+  --pf-v5-global--icon--Color--light--dark: #6B7280;
+  --pf-v5-global--icon--Color--light--light: #6B7280;
+
+  /* ── Secondary ── */
+  --pf-v5-global--secondary-color--100: #6B7280;
+
+  /* ── Palette — black scale ── */
+  --pf-v5-global--palette--black-50: #E2E2E6;
+  --pf-v5-global--palette--black-100: #9CA3AF;
+  --pf-v5-global--palette--black-150: #6B7280;
+  --pf-v5-global--palette--black-200: #4A5568;
+  --pf-v5-global--palette--black-300: #2D3748;
+  --pf-v5-global--palette--black-400: #1E2533;
+  --pf-v5-global--palette--black-500: #1A1F27;
+  --pf-v5-global--palette--black-600: #1C1F22;
+  --pf-v5-global--palette--black-700: #121820;
+  --pf-v5-global--palette--black-800: #0D1117;
+  --pf-v5-global--palette--black-850: #0A0E14;
+  --pf-v5-global--palette--black-900: #080C11;
+  --pf-v5-global--palette--black-1000: #000000;
+
+  /* ── Page layout ── */
+  --pf-v5-c-page__header--BackgroundColor: #1C1F22;
+  --pf-v5-c-page__header-brand-link--c-brand--Color: #E2E2E6;
+  --pf-v5-c-page__sidebar--BackgroundColor: #121820;
+  --pf-v5-c-page__sidebar--m-light--BackgroundColor: #121820;
+  --pf-v5-c-page__sidebar--m-light--BorderRightColor: #2D3748;
+  --pf-v5-c-page--BackgroundColor: #1C1F22;
+}
+
+/* ── Nav: selected item ── */
+.pf-v5-theme-dark .pf-v5-c-nav__link.pf-m-current,
+.pf-v5-theme-dark .pf-v5-c-nav__item.pf-m-current:not(.pf-m-expanded) .pf-v5-c-nav__link {
+  color: #E2E2E6 !important;
+}
+
+/* ── Logo sizing ── */
+img.keycloak__pageheader_brand {
+  height: 32px;
+  width: auto;
+}

@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:genie_ai_mobile/components/charts/agri_caveat_banner.dart';
-import 'package:genie_ai_mobile/services/agri_api_service.dart';
+import 'package:genie_ai_mobile/services/agricultural_proxy.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
-import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
 /// Crop Health Chart Widget
 ///
@@ -28,7 +26,7 @@ class CropHealthChart extends StatefulWidget {
 }
 
 class _CropHealthChartState extends State<CropHealthChart> {
-  final AgriApiService _agriService = AgriApiService();
+  final AgriculturalProxy _agriculturalProxy = AgriculturalProxy();
   Map<String, dynamic>? _cropData;
   bool _loading = true;
   String? _error;
@@ -51,7 +49,9 @@ class _CropHealthChartState extends State<CropHealthChart> {
     });
 
     try {
-      final data = await _agriService.getCropHealth(); // region is server-side
+      final data = await _agriculturalProxy.getCropHealth(
+        region: widget.region,
+      );
       setState(() {
         _cropData = data;
         _loading = false;
@@ -119,27 +119,6 @@ class _CropHealthChartState extends State<CropHealthChart> {
                   ),
               ],
             ),
-            // Data caveats + About-this-data panel (user requirement)
-            AgriCaveatBanner(
-              data: _cropData == null
-                  ? null
-                  : {
-                      'caveats': (_cropData!['meta'] as Map?)
-                          ?.cast<String, dynamic>()['caveats'],
-                      'coverage': (_cropData!['meta'] as Map?)
-                          ?.cast<String, dynamic>()['coverage'],
-                      'estimation': (_cropData!['meta'] as Map?)
-                          ?.cast<String, dynamic>()['estimation'],
-                      'dataSource': (_cropData!['meta'] as Map?)
-                          ?.cast<String, dynamic>()['source'],
-                      'fetchedAt': (_cropData!['meta'] as Map?)
-                          ?.cast<String, dynamic>()['fetchedAt'],
-                      'seeded': (_cropData!['meta'] as Map?)
-                          ?.cast<String, dynamic>()['seeded'],
-                      'stale': (_cropData!['meta'] as Map?)
-                          ?.cast<String, dynamic>()['stale'],
-                    },
-            ),
             const SizedBox(height: 20),
 
             // Loading State
@@ -205,8 +184,7 @@ class _CropHealthChartState extends State<CropHealthChart> {
                             if (value.toInt() >= 0 &&
                                 value.toInt() < departments.length) {
                               final dept = departments[value.toInt()];
-                              final name =
-                                  (dept['department'] as String?) ?? '';
+                              final name = dept['department'] as String;
                               // Show first 3 chars for mobile
                               return Padding(
                                 padding: const EdgeInsets.only(top: 8.0),
@@ -274,7 +252,7 @@ class _CropHealthChartState extends State<CropHealthChart> {
                           show: true,
                           getDotPainter: (spot, percent, barData, index) {
                             final dept = _cropData!['data'][index];
-                            final health = (dept['health'] as String?) ?? '';
+                            final health = dept['health'] as String;
                             return FlDotCirclePainter(
                               radius: 5,
                               color: _getHealthColor(health),
@@ -300,24 +278,10 @@ class _CropHealthChartState extends State<CropHealthChart> {
                         getTooltipItems: (touchedSpots) {
                           return touchedSpots.map((spot) {
                             final dept = _cropData!['data'][spot.x.toInt()];
-                            final name = dept['department'] as String? ?? '';
-                            // API may return int or null NDVI — never crash
-                            // the tooltip on live data.
-                            final ndvi =
-                                (dept['ndvi'] as num?)?.toDouble() ?? 0.0;
-                            // Show the observation date with the value (user req)
-                            final rawDate = dept['date'] as String?;
-                            var dateLine = '';
-                            if (rawDate != null && rawDate.length >= 10) {
-                              final d = DateTime.tryParse(
-                                rawDate.substring(0, 10),
-                              );
-                              if (d != null) {
-                                dateLine = '\n${d.day}/${d.month}/${d.year}';
-                              }
-                            }
+                            final name = dept['department'] as String;
+                            final ndvi = dept['ndvi'] as double;
                             return LineTooltipItem(
-                              '$name\nNDVI: ${ndvi.toStringAsFixed(3)}$dateLine',
+                              '$name\nNDVI: ${ndvi.toStringAsFixed(3)}',
                               TextStyle(
                                 color: isDark ? Colors.white : Colors.black,
                                 fontWeight: FontWeight.bold,
@@ -343,13 +307,8 @@ class _CropHealthChartState extends State<CropHealthChart> {
                       iconColor: Colors.green,
                       label: _translate('charts.averageNDVI') ?? 'Average NDVI',
                       value: _cropData!['average']['ndvi'].toString(),
-                      trend:
-                          (_cropData!['average']['trend'] as String?) ??
-                          'unknown',
-                      change:
-                          (_cropData!['average']['change'] as num?)
-                              ?.toDouble() ??
-                          0.0,
+                      trend: _cropData!['average']['trend'],
+                      change: _cropData!['average']['change'],
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -377,10 +336,7 @@ class _CropHealthChartState extends State<CropHealthChart> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        // Vue parity: show the SERVER's fetch time, not
-                        // DateTime.now() — a cached payload must not claim
-                        // to be fresh.
-                        '${_translate('charts.lastUpdated') ?? 'Last updated'}: ${_formatDate(_fetchedAt ?? DateTime.now())}',
+                        '${_translate('charts.lastUpdated') ?? 'Last updated'}: ${_formatDate(DateTime.now())}',
                         style: TextStyle(
                           fontSize: 12,
                           color: theme.colorScheme.onSurface.withValues(
@@ -405,7 +361,7 @@ class _CropHealthChartState extends State<CropHealthChart> {
     final data = _cropData!['data'] as List<dynamic>;
     return List.generate(data.length, (index) {
       final item = data[index];
-      final ndvi = (item['ndvi'] as num?)?.toDouble() ?? 0.0;
+      final ndvi = (item['ndvi'] as num).toDouble();
       return FlSpot(index.toDouble(), ndvi);
     });
   }
@@ -555,10 +511,10 @@ class _CropHealthChartState extends State<CropHealthChart> {
         const SizedBox(height: 8),
         ...departments.map((dept) {
           final name = dept['department'] as String;
-          final ndvi = (dept['ndvi'] as num?)?.toDouble() ?? 0.0;
+          final ndvi = (dept['ndvi'] as num).toDouble();
           final health = dept['health'] as String;
-          final trend = (dept['trend'] as String?) ?? 'unknown';
-          final change = (dept['change'] as num?)?.toDouble() ?? 0.0;
+          final trend = dept['trend'] as String;
+          final change = (dept['change'] as num).toDouble();
 
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
@@ -599,42 +555,18 @@ class _CropHealthChartState extends State<CropHealthChart> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Health badge (Vue parity: DsPill Good/Moderate/Warning)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _getHealthColor(health).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        _translate('charts.$health') ?? health,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: _getHealthColor(health),
-                        ),
-                      ),
+                    Icon(
+                      _getTrendIcon(trend),
+                      color: _getTrendColor(trend),
+                      size: 16,
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _getTrendIcon(trend),
-                          color: _getTrendColor(trend),
-                          size: 14,
-                        ),
-                        Text(
-                          '${change > 0 ? '+' : ''}${change.toStringAsFixed(1)}%',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: _getTrendColor(trend),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      '${change > 0 ? '+' : ''}${change.toStringAsFixed(1)}%',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: _getTrendColor(trend),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -658,17 +590,15 @@ class _CropHealthChartState extends State<CropHealthChart> {
   }
 
   Color _getHealthColor(String health) {
-    // DS token values — the same colors the web DsPill variants resolve to.
-    final tokens = ThemeManager().tokens;
     switch (health) {
       case 'good':
-        return tokens.success;
+        return Colors.green;
       case 'moderate':
-        return tokens.warning;
+        return Colors.orange;
       case 'warning':
-        return tokens.danger;
+        return Colors.red;
       default:
-        return tokens.muted;
+        return Colors.grey;
     }
   }
 
@@ -697,28 +627,18 @@ class _CropHealthChartState extends State<CropHealthChart> {
   }
 
   Color _getTrendColor(String trend) {
-    // DS token values — success/danger/warning, matching the web pills.
-    final tokens = ThemeManager().tokens;
     switch (trend) {
       case 'improving':
-        return tokens.success;
+        return Colors.green;
       case 'declining':
-        return tokens.danger;
+        return Colors.red;
       default:
-        return tokens.warning;
+        return Colors.amber;
     }
   }
 
   String? _translate(String key) {
     return tr(key);
-  }
-
-  /// Server fetch timestamp from the envelope meta (null on legacy payloads).
-  DateTime? get _fetchedAt {
-    final meta = (_cropData?['meta'] as Map?)?.cast<String, dynamic>();
-    final raw = meta?['fetchedAt'] as String?;
-    if (raw == null) return null;
-    return DateTime.tryParse(raw);
   }
 
   String _formatDate(DateTime date) {

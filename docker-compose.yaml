@@ -808,7 +808,7 @@ services:
       replicas: ${DEPLOY_OPEA:-1}
       placement:
         constraints:
-          - node.labels.gpu == true
+          - node.labels.genieai == true
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -891,7 +891,7 @@ services:
       replicas: ${GPU_MODEL_REPLICAS:-${DEPLOY_OPEA:-1}}
       placement:
         constraints:
-          - node.labels.gpu == true
+          - node.labels.genieai == true
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -927,7 +927,7 @@ services:
       replicas: 0
       placement:
         constraints:
-          - node.labels.gpu == true
+          - node.labels.genieai == true
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -1006,7 +1006,7 @@ services:
       replicas: ${DEPLOY_OPEA:-1}
       placement:
         constraints:
-          - node.labels.gpu == true
+          - node.labels.genieai == true
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -1093,7 +1093,7 @@ services:
       replicas: ${DEPLOY_OPEA:-1}
       placement:
         constraints:
-          - node.labels.gpu == true
+          - node.labels.genieai == true
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -1188,7 +1188,7 @@ services:
       replicas: ${DEPLOY_OPEA:-1}
       placement:
         constraints:
-          - node.labels.gpu == true
+          - node.labels.genieai == true
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -1277,7 +1277,7 @@ services:
       replicas: ${DEPLOY_OPEA:-1}
       placement:
         constraints:
-          - node.labels.gpu == true
+          - node.labels.genieai == true
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -1382,7 +1382,7 @@ services:
       replicas: ${DEPLOY_OPEA:-1}
       placement:
         constraints:
-          - node.labels.gpu == true
+          - node.labels.genieai == true
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -1417,7 +1417,7 @@ services:
       replicas: 0
       placement:
         constraints:
-          - node.labels.gpu == true
+          - node.labels.genieai == true
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -1460,7 +1460,7 @@ services:
       replicas: 0
       placement:
         constraints:
-          - node.labels.gpu == true
+          - node.labels.genieai == true
       restart_policy:
         condition: on-failure
         delay: 10s

@@ -5,6 +5,5 @@
     state: restarted
 
 - name: Reload udev rules
-  ansible.builtin.command:
-    cmd: udevadm control --reload-rules && udevadm trigger --name-match=kvm
+  ansible.builtin.shell: udevadm control --reload-rules && udevadm trigger --name-match=kvm
   changed_when: true

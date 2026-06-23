@@ -7,6 +7,7 @@ import ast
 import asyncio
 import copy
 import json
+import math
 import os
 import re
 import time
@@ -203,7 +204,12 @@ def _streaming_marker_tail_len(buffer: str) -> int:
     if trailing_ws:
         best = min(trailing_ws, _MAX_TRAILING_WS_WITHHOLD)
     # Longest proper (non-full) prefix of any marker literal sitting at the tail.
-    for marker in _CONV_MARKER_PREFIXES:
+    # When the LLM self-grade is enabled, also withhold a partial `[[CONF:`
+    # sentinel so it does not leak mid-stream before its value is captured.
+    markers = (
+        _CONV_MARKER_PREFIXES + (_SELF_CONF_SENTINEL_PREFIX,) if LLM_SELF_CONFIDENCE_ENABLED else _CONV_MARKER_PREFIXES
+    )
+    for marker in markers:
         limit = min(n, len(marker) - 1)
         for k in range(limit, 0, -1):
             if marker.startswith(buffer[-k:]):
@@ -211,6 +217,111 @@ def _streaming_marker_tail_len(buffer: str) -> int:
                     best = k
                 break
     return best
+
+
+# ---------------------------------------------------------------------------
+# Confidence scoring
+#
+# The user-facing confidence is a *rank-weighted* aggregate of calibrated
+# reranker scores, not the flat mean used initially. Two orthogonal knobs:
+#   - calibration (`RERANKER_SCORE_CALIBRATION`): map raw reranker logits onto an
+#     interpretable [0,1] scale. Default `none` — enable `sigmoid` only after
+#     verifying the TEI/model output is raw logits, otherwise this *compresses*
+#     scores (0.95 -> 0.72) and worsens the symptom.
+#   - rank decay (`CONFIDENCE_RANK_DECAY`): exponential weight decay per rank so
+#     the most relevant document dominates the aggregate.
+# An optional LLM self-grade (`LLM_SELF_CONFIDENCE_ENABLED`, default off) lets the
+# model rate how well the retrieved documents support its own answer; it is
+# exposed alongside the retrieval confidence but never replaces the grounding
+# decision, which stays driven by `is_grounded`. See docs/architecture.md §9.3.
+# ---------------------------------------------------------------------------
+
+RERANKER_SCORE_CALIBRATION = os.getenv("RERANKER_SCORE_CALIBRATION", "none").strip().lower()
+RERANKER_SCORE_TEMPERATURE = float(os.getenv("RERANKER_SCORE_TEMPERATURE", "1.0") or "1.0")
+CONFIDENCE_RANK_DECAY = float(os.getenv("CONFIDENCE_RANK_DECAY", "0.5") or "0.5")
+# Opt-in: when on, the model appends a `[[CONF:<0-100>]]` self-grade sentinel and
+# we expose it as `self_confidence`. Off by default — surface to users only after
+# the eval harness (see research doc) confirms it is calibrated.
+LLM_SELF_CONFIDENCE_ENABLED = os.getenv("LLM_SELF_CONFIDENCE_ENABLED", "0").strip() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+
+
+def _calibrate_reranker_score(score: float) -> float:
+    """Map a raw reranker score onto an interpretable [0,1] scale.
+
+    Cross-encoder rerankers (incl. ``bge-reranker-v2-m3``) emit relevance *logits*
+    whose absolute values are not calibrated probabilities. ``sigmoid`` maps them
+    to [0,1]; ``none`` (default) leaves the score untouched for deployments where
+    the model or TEI already returns normalised scores — applying sigmoid there
+    would compress values (0.95 -> 0.72) and *worsen* the symptom. Operators must
+    verify the TEI output range before enabling ``sigmoid``.
+    """
+    if RERANKER_SCORE_CALIBRATION != "sigmoid":
+        return float(score)
+    temperature = RERANKER_SCORE_TEMPERATURE or 1.0
+    return 1.0 / (1.0 + math.exp(-float(score) / temperature))
+
+
+def _rank_weighted_confidence(scores: list[float]) -> float:
+    """Exponential rank-decay weighted average of reranker scores.
+
+    ``scores`` is in the reranker's descending display order, so rank 0 is the
+    most relevant document. Exponential decay (``CONFIDENCE_RANK_DECAY``) lets the
+    strongest match dominate, so a long tail of low-scoring chunks kept by the
+    adaptive strategy for novelty no longer depresses the score. Returns 0.0 for
+    an empty list (ungrounded).
+    """
+    if not scores:
+        return 0.0
+    decay = CONFIDENCE_RANK_DECAY if CONFIDENCE_RANK_DECAY > 0 else 0.5
+    weights = [math.exp(-decay * i) for i in range(len(scores))]
+    return sum(w * s for w, s in zip(weights, scores, strict=True)) / sum(weights)
+
+
+# LLM self-grade sentinel: when LLM_SELF_CONFIDENCE_ENABLED, the model ends its
+# reply with `[[CONF:<0-100>]]`. We strip it before the text reaches the user or
+# the translation pipeline, and expose its value as `self_confidence`.
+_SELF_CONF_SENTINEL_RE = re.compile(r"\[\[CONF:\s*(\d{1,3})\s*\]\]")
+_SELF_CONF_SENTINEL_PREFIX = "[[CONF:"
+# Trailing partial sentinel (no closing `]]`), dropped on the final stream flush
+# so a malformed/incomplete marker never leaks to the user as literal text.
+_SELF_CONF_PARTIAL_RE = re.compile(r"\s*\[\[CONF:[^\]\[]*$")
+
+
+def _extract_self_confidence(text: str) -> tuple[str, float | None]:
+    """Strip a trailing LLM self-grade sentinel, returning (clean_text, value).
+
+    The model ends its reply (when ``LLM_SELF_CONFIDENCE_ENABLED``) with
+    ``[[CONF:<0-100>]]`` rating how well the retrieved documents support it. This
+    removes the marker so it never reaches the user or the translation pipeline
+    and returns its value normalised to [0,1]. A missing, malformed, or
+    out-of-range sentinel yields ``None``; this never raises.
+    """
+    if not text:
+        return text, None
+    match = _SELF_CONF_SENTINEL_RE.search(text)
+    if not match:
+        return text, None
+    try:
+        raw = int(match.group(1))
+    except (TypeError, ValueError):
+        return text, None
+    if not 0 <= raw <= 100:
+        return text, None
+    cleaned = (text[: match.start()] + text[match.end() :]).rstrip()
+    return cleaned, raw / 100.0
+
+
+_CHATQNA_SELF_CONF_INSTRUCTION = (
+    "\n\nAfter your reply, on a final new line, output exactly "
+    "`[[CONF:<integer 0-100>]]` rating how well the Retrieved Documents support "
+    "your reply (100 = fully grounded in the documents, 0 = not supported at "
+    "all). Do not output anything after that line."
+)
 
 
 # Two-tier priority: ENV VAR (override) > Hardcoded default
@@ -227,7 +338,12 @@ Your task is to answer the user's latest question using only the content provide
 
 In line with the above instructions, generate a reply to the user's latest
 message in the chat history based on the relevant content provided."""
-CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", "").strip() or _CHATQNA_SYSTEM_DEFAULT
+_CHATQNA_SYSTEM_PROMPT_BASE = os.getenv("CHATQNA_SYSTEM_PROMPT", "").strip() or _CHATQNA_SYSTEM_DEFAULT
+# When the LLM self-grade is enabled, instruct the model to emit the confidence
+# sentinel. Additive and inert while LLM_SELF_CONFIDENCE_ENABLED is off.
+CHATQNA_SYSTEM_PROMPT = _CHATQNA_SYSTEM_PROMPT_BASE + (
+    _CHATQNA_SELF_CONF_INSTRUCTION if LLM_SELF_CONFIDENCE_ENABLED else ""
+)
 CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "") or "true"
 CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", "").strip() or None
 SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
@@ -1100,13 +1216,13 @@ class ChatQnAService:
                 continue
             if file_id in source_documents_file_ids:
                 logger.info(f"Note: Duplicate File ID {file_id} found. Skipping duplicate.")
-                scores.append(item.get("score", 0.0))
+                scores.append(_calibrate_reranker_score(item.get("score", 0.0)))
                 continue
 
             logger.info(f"Document ID {doc_id_by_orchestrator} mapped to File ID {file_id}.")
             source_documents_file_ids.append(file_id)
 
-            score = item.get("score", 0.0)
+            score = _calibrate_reranker_score(item.get("score", 0.0))
             # Clients (web + mobile) build the view URL from their own public base + file_id.
             # Emitting the internal BACKEND_SERVICE_URL here would give the browser an
             # unreachable hostname (DNS_PROBE_FINISHED_NXDOMAIN), so leave it empty for
@@ -1128,13 +1244,18 @@ class ChatQnAService:
                         file_read_url = file_metadata.get("source_url", file_read_url)
                         logger.info(f"Updated file read URL for crawled HTML: {file_read_url}")
                 else:
-                    logger.warning(f"Skipping metadata for file ID {file_id} due to fetch failure.")
-                    # Assigning error values to avoid service crashing [to be optimised]
-                    labels = "error"
-                    file_id = "error"
-                    file_name = "error"
-                    file_read_url = "error"
-                    score = 0
+                    # D1 fix: a failed metadata lookup must not surface a fake
+                    # "error" source document, and must not inject a forced 0.0
+                    # into the confidence aggregation. Previously this branch fell
+                    # through to `scores.append(score)` with score=0, which tanked
+                    # the confidence mean whenever the document-repository/backend
+                    # metadata call failed intermittently — the prime cause of
+                    # "anormally low" confidence reported in production.
+                    logger.warning(
+                        f"Skipping document {doc_id_by_orchestrator}: metadata fetch "
+                        f"failed for file ID {file_id}; not surfacing as a source."
+                    )
+                    continue
 
             source_documents_formatted.append(
                 {
@@ -1149,8 +1270,15 @@ class ChatQnAService:
             scores.append(score)
             logger.debug(f"appending document conf score: {score} ")
 
-        # Average of the displayed (reranker) scores; 0.0 when not grounded.
-        confidence_score = sum(scores) / len(scores) if scores else 0.0
+        # Rank-weighted retrieval confidence; 0.0 when not grounded.
+        #
+        # The plain arithmetic mean is count-dependent and tail-sensitive: the
+        # adaptive reranker strategy keeps low-scoring-but-novel chunks, each of
+        # which dragged the mean down, so richer context was *punished*. Weighting
+        # by rank (rank 0 = most relevant, since reranker verdicts are descending
+        # and `scores` preserves that display order) lets the strongest match
+        # dominate instead. See docs/architecture.md §9.3.
+        confidence_score = _rank_weighted_confidence(scores)
         logger.debug(f"document confidence scores: {scores}")
 
         return source_documents_formatted, confidence_score, is_grounded
@@ -1174,6 +1302,7 @@ class ChatQnAService:
         is computed **after** the token stream so it never delays Time-To-First-Token.
         """
         buffer = ""
+        self_confidence = None  # LLM self-grade value, captured from the sentinel
         async for chunk in body_iterator:
             text = chunk.decode("utf-8") if isinstance(chunk, (bytes, bytearray)) else str(chunk)
             if text.strip() == "data: [DONE]":
@@ -1188,6 +1317,12 @@ class ChatQnAService:
             buffer += content
             buffer = _CONV_SEP_RE.sub("\n", buffer)
             buffer = _CONV_ROLE_RE.sub("", buffer)
+            # Strip a complete self-grade sentinel and capture its value so it
+            # never reaches the user (or the downstream translation pipeline).
+            if LLM_SELF_CONFIDENCE_ENABLED:
+                buffer, _sc = _extract_self_confidence(buffer)
+                if _sc is not None:
+                    self_confidence = _sc
             tail = _streaming_marker_tail_len(buffer)
             if tail >= len(buffer):
                 # Whole buffer is a potential partial marker (or trailing
@@ -1205,23 +1340,28 @@ class ChatQnAService:
         if buffer:
             buffer = _CONV_SEP_RE.sub("\n", buffer)
             buffer = _CONV_ROLE_RE.sub("", buffer)
+            if LLM_SELF_CONFIDENCE_ENABLED:
+                # Capture any sentinel that completed on the final chunk, and drop
+                # a malformed trailing partial sentinel so it never leaks as text.
+                buffer, _sc = _extract_self_confidence(buffer)
+                if _sc is not None:
+                    self_confidence = _sc
+                buffer = _SELF_CONF_PARTIAL_RE.sub("", buffer)
             if buffer:
                 yield f"data: {buffer.encode('utf-8')!r}\n\n"
 
         # Compute metadata after tokens so TTFT is unaffected by the doc-metadata fetches.
         source_documents, confidence_score, is_grounded = await self._assemble_source_documents(result_dict)
-        yield (
-            "data: "
-            + json.dumps(
-                {
-                    "type": "metadata",
-                    "source_documents": source_documents,
-                    "confidence_score": round(confidence_score, 2),
-                    "is_grounded": is_grounded,
-                }
-            )
-            + "\n\n"
-        )
+        metadata = {
+            "type": "metadata",
+            "source_documents": source_documents,
+            "confidence_score": round(confidence_score, 2),
+            "is_grounded": is_grounded,
+        }
+        if LLM_SELF_CONFIDENCE_ENABLED:
+            # None when the model omitted/malformed the sentinel; never hard-fail.
+            metadata["self_confidence"] = round(self_confidence, 2) if self_confidence is not None else None
+        yield "data: " + json.dumps(metadata) + "\n\n"
         yield "data: [DONE]\n\n"
 
     @staticmethod
@@ -2057,6 +2197,12 @@ class ChatQnAService:
         llm_response = _CONV_SEP_RE.sub("\n", llm_response)
         llm_response = _CONV_ROLE_RE.sub("", llm_response)
 
+        # Strip the LLM self-grade sentinel before translation so it never reaches
+        # the user or the translation pipeline; capture its value for metadata.
+        self_confidence = None
+        if LLM_SELF_CONFIDENCE_ENABLED:
+            llm_response, self_confidence = _extract_self_confidence(llm_response)
+
         if original_language and original_language.strip() != "EN":
             if logflag:
                 lang_type = type(original_language).__name__
@@ -2111,16 +2257,24 @@ class ChatQnAService:
         source_documents_formatted, confidence_score, is_grounded = await self._assemble_source_documents(result_dict)
 
         # Construct the final JSON payload
+        metadata = {
+            "source_documents": source_documents_formatted,
+            "confidence_score": round(confidence_score, 2),
+            # Whether the answer is backed by retrieved document chunks (true) or
+            # generated from the LLM's parametric knowledge (false). Frontend uses
+            # this to flag responses that have no document basis.
+            "is_grounded": is_grounded,
+        }
+        if LLM_SELF_CONFIDENCE_ENABLED:
+            # LLM self-assessed groundedness; None when the sentinel was omitted or
+            # malformed. Supplementary to (not a replacement for) the retrieval
+            # confidence and is_grounded. Surface to users only after calibration
+            # is confirmed by the eval harness.
+            metadata["self_confidence"] = round(self_confidence, 2) if self_confidence is not None else None
+
         final_response_payload = {
             "response": final_text_response,
-            "metadata": {
-                "source_documents": source_documents_formatted,
-                "confidence_score": round(confidence_score, 2),
-                # Whether the answer is backed by retrieved document chunks (true) or
-                # generated from the LLM's parametric knowledge (false). Frontend uses
-                # this to flag responses that have no document basis.
-                "is_grounded": is_grounded,
-            },
+            "metadata": metadata,
         }
 
         # Return as a JSONResponse

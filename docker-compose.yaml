@@ -1152,6 +1152,12 @@ services:
       KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
+      # Confidence scoring — rank-weighted aggregate of calibrated reranker scores.
+      CONFIDENCE_RANK_DECAY: ${CONFIDENCE_RANK_DECAY:-0.5}
+      RERANKER_SCORE_CALIBRATION: ${RERANKER_SCORE_CALIBRATION:-none}
+      RERANKER_SCORE_TEMPERATURE: ${RERANKER_SCORE_TEMPERATURE:-1.0}
+      # Opt-in LLM self-grade (off by default; surface only after eval calibration).
+      LLM_SELF_CONFIDENCE_ENABLED: ${LLM_SELF_CONFIDENCE_ENABLED:-0}
       OPENAI_API_KEY: ${VLLM_API_KEY:-}
       OPEA_SSL_SKIP_VERIFY: ${OPEA_SSL_SKIP_VERIFY:-0}
       # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1

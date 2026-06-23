@@ -25,7 +25,7 @@ Ansible playbook to install and configure a GitLab Runner with Docker executor f
 
 | Layer | Mechanism | Purpose |
 |-------|-----------|---------|
-| API filtering | docker-socket-proxy | Default-deny, only CONTAINERS/IMAGES/NETWORKS/VOLUMES/EXEC/POST allowed |
+| API filtering | docker-socket-proxy | Default-deny; CONTAINERS/IMAGES/NETWORKS/VOLUMES/EXEC/POST/BUILD/AUTH/DISTRIBUTION allowed (AUTH + DISTRIBUTION required for CI registry login/push) |
 | UID remapping | userns-remap (`dockremap`) | Container root (uid 0) → unprivileged host uid |
 | Container restrictions | config.toml | `privileged=false`, memory/CPU limits, KVM device passthrough |
 | Socket proxy isolation | `userns_mode: host` on proxy | Required for proxy to access Docker socket despite userns-remap |

@@ -584,22 +584,22 @@ workflow:
     CONTEXT: api-gateway-solution/new-config/
     DOCKERFILE: api-gateway-solution/new-config/Dockerfile
   - IMAGE_NAME: chatqna
-    CONTEXT: genie-ai-overlay/chatqna/
+    CONTEXT: .
     DOCKERFILE: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
   - IMAGE_NAME: dataprep
-    CONTEXT: genie-ai-overlay/dataprep/
+    CONTEXT: .
     DOCKERFILE: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
   - IMAGE_NAME: retriever
-    CONTEXT: genie-ai-overlay/retriever/
+    CONTEXT: .
     DOCKERFILE: genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
   - IMAGE_NAME: reranker
-    CONTEXT: genie-ai-overlay/reranker/
+    CONTEXT: .
     DOCKERFILE: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
   - IMAGE_NAME: embedding
-    CONTEXT: genie-ai-overlay/embedding/
+    CONTEXT: .
     DOCKERFILE: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
   - IMAGE_NAME: textgen
-    CONTEXT: genie-ai-overlay/textgen/
+    CONTEXT: .
     DOCKERFILE: genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
   - IMAGE_NAME: postgres-init
     CONTEXT: configs/postgres/

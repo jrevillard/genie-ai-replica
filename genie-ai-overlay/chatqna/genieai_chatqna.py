@@ -203,14 +203,18 @@ def _streaming_marker_tail_len(buffer: str) -> int:
     trailing_ws = n - len(buffer.rstrip())
     if trailing_ws:
         best = min(trailing_ws, _MAX_TRAILING_WS_WITHHOLD)
-    # Longest proper (non-full) prefix of any marker literal sitting at the tail.
-    # When the LLM self-grade is enabled, also withhold a partial `[[CONF:`
-    # sentinel so it does not leak mid-stream before its value is captured.
+    # Longest tail of the buffer that could grow into a marker literal (withhold it
+    # so a split marker never leaks as literal text). Conversation markers never
+    # appear here in full (they are regex-substituted before this check), but the
+    # `[[CONF:` sentinel prefix has no bare-form substitute — only the COMPLETE
+    # `[[CONF:<n>]]` is extracted — so when the tokenizer emits `[[CONF:` as a chunk
+    # boundary the full prefix sits at the tail and must ALSO be withheld, or it
+    # leaks and the value is never captured. Allow the full marker length.
     markers = (
         _CONV_MARKER_PREFIXES + (_SELF_CONF_SENTINEL_PREFIX,) if LLM_SELF_CONFIDENCE_ENABLED else _CONV_MARKER_PREFIXES
     )
     for marker in markers:
-        limit = min(n, len(marker) - 1)
+        limit = min(n, len(marker))
         for k in range(limit, 0, -1):
             if marker.startswith(buffer[-k:]):
                 if k > best:

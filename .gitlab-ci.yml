@@ -687,8 +687,11 @@ build:image:
       LOCAL_REF="$IMAGE_NAME:${CANDIDATE_TAG}"
       REGISTRY_REF="$CI_REGISTRY_IMAGE/$IMAGE_NAME:${CANDIDATE_TAG}"
       echo "Building $IMAGE_NAME → ${REGISTRY_REF}"
-    # Build in the daemon (base images from Docker Hub — reachable).
-    - DOCKER_BUILDKIT=0 docker build -f "$DOCKERFILE" -t "$LOCAL_REF" "$CONTEXT"
+    # Build in the daemon with in-daemon BuildKit (DOCKER_BUILDKIT=1) — needed
+    # because several Dockerfiles use BuildKit-only syntax (COPY --chmod, etc.).
+    # In-daemon BuildKit is NOT rootless (no rootlesskit, no seccomp issue) —
+    # it runs inside the daemon process wherever `docker build` already works.
+    - DOCKER_BUILDKIT=1 docker build -f "$DOCKERFILE" -t "$LOCAL_REF" "$CONTEXT"
     # Export the built image to a tarball, then push via skopeo over HTTPS from
     # the container. Decouples: the daemon builds+saves (reachable by the docker
     # CLI via DOCKER_HOST), the container pushes (bypasses the daemon proxy that

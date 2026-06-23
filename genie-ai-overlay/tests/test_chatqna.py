@@ -14,6 +14,7 @@ from chatqna.genieai_chatqna import (
     GenieUserProfileClient,
     UserContextBuilder,
     _calibrate_reranker_score,
+    _display_confidence,
     _extract_self_confidence,
     _rank_weighted_confidence,
     align_generator,
@@ -1809,6 +1810,16 @@ class TestConfidenceAggregation:
         scores = [0.9, 0.5, 0.3]
         assert _rank_weighted_confidence(scores) == sum(scores) / len(scores)
 
+    def test_display_confidence_prefers_self_when_present(self):
+        assert _display_confidence(0.3, 0.9) == 0.9
+
+    def test_display_confidence_falls_back_to_retrieval_when_self_none(self):
+        assert _display_confidence(0.42, None) == 0.42
+
+    def test_display_confidence_treats_zero_self_as_present(self):
+        # 0.0 is a valid self-grade, not "missing" — only None falls back.
+        assert _display_confidence(0.7, 0.0) == 0.0
+
 
 # ===========================================================================
 # LLM self-grade sentinel (opt-in via LLM_SELF_CONFIDENCE_ENABLED)
@@ -1854,9 +1865,13 @@ class TestSelfConfidenceSentinel:
         # The sentinel never reaches the user.
         assert "[[CONF:" not in joined
         assert "It is 42." in joined
-        # self_confidence emitted in the metadata event.
+        # self_confidence (raw) + retrieval_confidence_score (raw) emitted for admin/eval.
         assert '"self_confidence": 0.8' in joined
-        assert '"confidence_score": 0.9' in joined
+        assert '"retrieval_confidence_score": 0.9' in joined
+        # Citizen-facing confidence_score reflects the LLM self-grade (transparent to
+        # clients), NOT the retrieval value, when the feature is on + sentinel present.
+        assert '"confidence_score": 0.8' in joined
+        assert '"confidence_score": 0.9' not in joined
 
     @pytest.mark.asyncio
     async def test_streaming_self_confidence_null_when_sentinel_missing(self, monkeypatch):
@@ -1867,6 +1882,10 @@ class TestSelfConfidenceSentinel:
         out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
         joined = "".join(out)
         assert '"self_confidence": null' in joined
+        # Fallback: with no sentinel, the citizen-facing confidence_score falls back
+        # to the retrieval confidence so the badge never disappears.
+        assert '"confidence_score": 0.0' in joined
+        assert '"retrieval_confidence_score": 0.0' in joined
 
     @pytest.mark.asyncio
     async def test_streaming_no_self_confidence_field_when_flag_off(self):
@@ -1877,6 +1896,10 @@ class TestSelfConfidenceSentinel:
         out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
         joined = "".join(out)
         assert "self_confidence" not in joined
+        # retrieval_confidence_score is always present (admin/eval) even with the
+        # flag off; confidence_score equals retrieval when the flag is off.
+        assert '"retrieval_confidence_score": 0.0' in joined
+        assert '"confidence_score": 0.0' in joined
 
     @pytest.mark.asyncio
     async def test_streaming_sentinel_split_across_chunks_is_stitched(self, monkeypatch):

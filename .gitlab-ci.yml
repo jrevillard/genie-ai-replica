@@ -1,11 +1,8 @@
 stages:
-  - build       # publish candidate images to GitLab Container Registry
-  - scan        # Trivy gate (HIGH/CRITICAL) + Syft SBOM artifact
-  # NOTE: build/scan placed before lint/test TEMPORARILY for faster debug
-  # feedback (lint+test take ~10min). Revert to lint → test → build → scan
-  # once the pipeline is green.
   - lint
   - test
+  - build       # publish candidate images to GitLab Container Registry
+  - scan        # Trivy gate (HIGH/CRITICAL) + Syft SBOM artifact
   - config
   - e2e
   - promote     # retag tested digests to deployable tags (main/tags only)
@@ -659,26 +656,16 @@ diag:registry-reachability:
         echo "DAEMON_LOGIN_FAILED (proxy block if 403 HTML above)"
       fi
 
-# Build with the host docker daemon (DOCKER_BUILDKIT=0) — the reliable baseline
-# on this runner. BuildKit rootless was attempted (moby/buildkit:v0.20.0-rootless)
-# but the runner's seccomp profile blocks rootlesskit's user-namespace setup:
-# "fork/exec /proc/self/exe: operation not permitted". Enabling BuildKit rootless
-# requires `security_opt = ["seccomp=unconfined","apparmor=unconfined"]` in the
-# runner's config.toml — tracked as a future infra change. Until then, classic
-# `docker build` (same approach the E2E job uses) is the working path.
-#
-# PUSH uses skopeo from the container (HTTPS, inline creds) — it BYPASSES the
-# worker's docker daemon, whose proxy returns 403 for registry.opensource.unicc.org.
-# Containers use the host bridge NAT and don't inherit the daemon's proxy, so
-# skopeo reaches the registry where `docker push` cannot. Auth is explicit and
-# per-job (--dest-creds), never delegated to the daemon's credential store.
+# Build candidate images and push to the GitLab Container Registry. The runner's
+# docker-socket-proxy now allows AUTH + DISTRIBUTION (see deploy/ansible/roles/
+# docker_socket_proxy), so `docker login` + `docker push` work natively.
 build:image:
   stage: build
-  image: docker:24
+  image: docker:28
   tags: [docker]
   interruptible: true
   before_script:
-    - apk add --no-cache skopeo
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
     - |
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
@@ -686,21 +673,15 @@ build:image:
       else
         CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
       fi
-      LOCAL_REF="$IMAGE_NAME:${CANDIDATE_TAG}"
       REGISTRY_REF="$CI_REGISTRY_IMAGE/$IMAGE_NAME:${CANDIDATE_TAG}"
       echo "Building $IMAGE_NAME → ${REGISTRY_REF}"
-    # Build in the daemon. DOCKER_BUILDKIT is intentionally NOT set here — the
-    # daemon manages BuildKit (on by default in Docker 23+, pinned to 28.x on
-    # the runner). Setting it in the job would override the daemon's policy and
-    # is the wrong layer. Several Dockerfiles use BuildKit syntax (--chmod), so
-    # the daemon default (BuildKit on) is required.
-    - docker build -f "$DOCKERFILE" -t "$LOCAL_REF" "$CONTEXT"
-    # Export the built image to a tarball, then push via skopeo over HTTPS from
-    # the container. Decouples: the daemon builds+saves (reachable by the docker
-    # CLI via DOCKER_HOST), the container pushes (bypasses the daemon proxy that
-    # 403s registry.opensource.unicc.org). No `docker login`, no daemon push.
-    - docker save "$LOCAL_REF" -o /tmp/image.tar
-    - skopeo copy --dest-creds "$CI_REGISTRY_USER:$CI_REGISTRY_PASSWORD" docker-archive:/tmp/image.tar "docker://$REGISTRY_REF"
+    # Pull a previous image as a layer-cache source (no-op on first run).
+    - docker pull "$CI_REGISTRY_IMAGE/$IMAGE_NAME:main" 2>/dev/null || docker pull "$CI_REGISTRY_IMAGE/$IMAGE_NAME:latest" 2>/dev/null || true
+    # DOCKER_BUILDKIT is intentionally NOT set — the daemon manages it (on by
+    # default in Docker 23+, runner pinned to 28.x). Several Dockerfiles use
+    # BuildKit syntax (--chmod), which the daemon default handles.
+    - docker build --cache-from "$CI_REGISTRY_IMAGE/$IMAGE_NAME:main" -f "$DOCKERFILE" -t "$REGISTRY_REF" "$CONTEXT"
+    - docker push "$REGISTRY_REF"
   parallel:
     matrix: *image_matrix
   rules: *build_rules
@@ -766,16 +747,15 @@ scan:image:
 
 # Promote the scanned candidate's immutable digest to deployable tags.
 # Runs only on main + tags. Phase 2 will add `cosign verify` before retag.
-# Pure skopeo — no docker daemon, all transfers over HTTPS from the container
-# with inline creds. Bypasses the daemon proxy that blocks the registry.
 promote:image:
   stage: promote
-  image: quay.io/skopeo/stable:latest
+  image: docker:28
   tags: [docker]
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
-    - CREDS="$CI_REGISTRY_USER:$CI_REGISTRY_PASSWORD"
     - SRC="$CI_REGISTRY_IMAGE/$IMAGE_NAME:pending-$CI_COMMIT_SHORT_SHA"
-    - DIGEST=$(skopeo inspect --creds "$CREDS" "docker://$SRC" --format '{{.Digest}}')
+    - DIGEST=$(docker buildx imagetools inspect "$SRC" --format '{{.Manifest.Digest}}')
     - echo "Promoting $IMAGE_NAME digest ${DIGEST:0:32}..."
     - |
       if [ -n "$CI_COMMIT_TAG" ]; then
@@ -785,12 +765,11 @@ promote:image:
       fi
     - |
       for t in $FINAL_TAGS; do
-        # Copy by immutable digest — never the mutable pending tag. (single
-        # line inside the loop: `\`+newline would escape the leading space.)
-        skopeo copy --src-creds "$CREDS" --dest-creds "$CREDS" "docker://$SRC@${DIGEST}" "docker://$CI_REGISTRY_IMAGE/$IMAGE_NAME:$t"
+        # Retag by immutable digest, never by the mutable pending tag.
+        docker buildx imagetools create -t "$CI_REGISTRY_IMAGE/$IMAGE_NAME:$t" "$CI_REGISTRY_IMAGE/$IMAGE_NAME@${DIGEST}"
       done
     # Quarantine tag cleanup — promoted digest now lives under final tags
-    - skopeo delete --creds "$CREDS" "docker://$SRC" || true
+    - docker buildx imagetools rm "$SRC" 2>/dev/null || true
   parallel:
     matrix: *image_matrix
   rules: *promote_rules

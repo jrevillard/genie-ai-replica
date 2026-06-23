@@ -85,7 +85,7 @@
     name: "{{ item }}"
     selection: install
   loop: "{{ docker_hold_packages }}"
-  when: docker_is_installed.rc == 0 and docker_upgrade_check.stdout == "upgrade"
+  when: docker_is_installed.rc == 0 and docker_upgrade_check.stdout == "upgrade" and docker_upgrade_enabled | bool
 
 - name: Install Docker Engine (pinned version)
   ansible.builtin.apt:
@@ -96,14 +96,14 @@
       - docker-compose-plugin
     update_cache: true
     state: latest
-  when: docker_upgrade_check.stdout == "upgrade"
+  when: docker_upgrade_check.stdout == "upgrade" and docker_upgrade_enabled | bool
 
 - name: Hold Docker packages
   ansible.builtin.dpkg_selections:
     name: "{{ item }}"
     selection: hold
   loop: "{{ docker_hold_packages }}"
-  when: docker_is_installed.rc == 0 and docker_upgrade_check.stdout == "upgrade"
+  when: docker_is_installed.rc == 0 and docker_upgrade_check.stdout == "upgrade" and docker_upgrade_enabled | bool
 
 - name: Ensure Docker service is started and enabled
   ansible.builtin.systemd:
@@ -139,7 +139,7 @@
     dest: /etc/docker/daemon.json
     mode: "0644"
   notify: Restart Docker
-  when: docker_userns_remap | bool
+  when: docker_manage_daemon_json | bool and docker_userns_remap | bool
 
 - name: Clear Docker daemon userns-remap config (when disabled)
   ansible.builtin.copy:
@@ -148,7 +148,8 @@
     dest: /etc/docker/daemon.json
     mode: "0644"
   notify: Restart Docker
-  when: not (docker_userns_remap | bool)
-  # NOTE: this role is the sole manager of daemon.json on runner hosts. On GPU
-  # hosts deploy-gpu.yml merges NVIDIA config separately — keep these roles on
-  # different hosts to avoid clobbering.
+  when: not (docker_userns_remap | bool) and docker_manage_daemon_json | bool
+  # NOTE: gated by docker_manage_daemon_json (default true). Set it false on hosts
+  # where another playbook owns /etc/docker/daemon.json — e.g. the GPU node, whose
+  # daemon.json (nvidia runtime + DNS) is managed by deploy-gpu.yml. Otherwise this
+  # task would clobber that config and Restart Docker, killing the GPU API.

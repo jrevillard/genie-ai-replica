@@ -86,7 +86,8 @@ teardown_remove_registry: false
 # GITLAB RUNNER
 # =============================================================================
 # gitlab_url is the GitLab instance URL used in config.toml.
-# gitlab_runner_token MUST be set in environment-specific vault files.
+# gitlab_runner_tokens (dict keyed by inventory hostname) MUST be set in
+# environment-specific vault files — one glrt- token per runner host.
 #
 # To disable the socket proxy (mount docker.sock directly):
 #   gitlab_runner_use_socket_proxy: false

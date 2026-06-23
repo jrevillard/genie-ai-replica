@@ -27,3 +27,7 @@ gitlab_runner_cpu_limit: "2.0"
 # KVM passthrough for Android emulator
 # Requires /dev/kvm on host and user in kvm group
 gitlab_runner_kvm_device: "/dev/kvm"
+
+# Docker runtime for CI job containers. Set "runc" on hosts whose daemon.json uses
+# "default-runtime": "nvidia" (e.g. the GPU node) so CI jobs never inherit GPU access.
+gitlab_runner_docker_runtime: ""

@@ -3,20 +3,24 @@
 #
 # Required variables:
 #   gitlab_url            — GitLab instance URL (group_vars/all.yml)
-#   gitlab_runner_token   — Runner authentication token from GitLab UI (vault)
+#   gitlab_runner_tokens  — Dict of runner tokens keyed by inventory hostname (vault)
 #
-# How to get gitlab_runner_token:
+# How to get a runner token (one per host):
 #   GitLab > Project > Settings > CI/CD > Runners > New project runner
-#   Configure tags, then copy the glrt-xxx token into vault.
+#   Configure tags, then copy the glrt-xxx token into the gitlab_runner_tokens
+#   dict in group_vars/gitlab_runners/vault.yml under that host's alias.
 
 - name: Validate required variables
   ansible.builtin.assert:
     that:
       - gitlab_url is defined and gitlab_url | length > 0
-      - gitlab_runner_token is defined and gitlab_runner_token | length > 0
+      - gitlab_runner_tokens is defined
+      - gitlab_runner_tokens[inventory_hostname] is defined
+      - gitlab_runner_tokens[inventory_hostname] | length > 0
     fail_msg: >-
-      Missing required variables: gitlab_url or gitlab_runner_token.
-      Set gitlab_url in group_vars/all.yml, gitlab_runner_token in vault.
+      Missing required variables: gitlab_url or gitlab_runner_tokens[inventory_hostname].
+      Set gitlab_url in group_vars/all.yml; set each host's glrt- token in the
+      gitlab_runner_tokens dict in group_vars/gitlab_runners/vault.yml.
     quiet: true
 
 # === Install gitlab-runner binary ===

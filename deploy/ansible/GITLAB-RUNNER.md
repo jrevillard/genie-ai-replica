@@ -73,9 +73,11 @@ ansible-galaxy collection install -r requirements.yml
 # 2. Create inventory (or use existing gitlab-runner.ini)
 # Edit inventory/gitlab-runner.ini with your host IP
 
-# 3. Set the runner token in vault
-# Edit group_vars/gitlab_runners/vault.yml
-# Replace CHANGE_ME with the glrt-xxx token from GitLab UI
+# 3. Set runner tokens in the vault (one glrt- per host, keyed by inventory hostname)
+# Edit group_vars/gitlab_runners/vault.yml:
+#   gitlab_runner_tokens:
+#     genieai-runner:     "glrt-<token for 10.0.0.100>"
+#     genieai-runner-gpu: "glrt-<token for 10.0.0.110>"
 
 # 4. Encrypt the vault
 ansible-vault encrypt group_vars/gitlab_runners/vault.yml --vault-id gitlab@prompt
@@ -94,7 +96,7 @@ deploy/ansible/
 │   ├── all.yml                          # Shared: gitlab_url
 │   └── gitlab_runners/
 │       ├── vars.yml                     # docker_userns_remap + runner overrides
-│       └── vault.yml                    # Encrypted: gitlab_runner_token
+│       └── vault.yml                    # Encrypted: gitlab_runner_tokens dict
 └── roles/
     ├── docker/                          # Shared: Docker installation (reused by deploy.yml)
     │   ├── defaults/main.yml            # docker_userns_remap: false (opt-in)
@@ -123,7 +125,7 @@ deploy/ansible/
 
 | Variable | Description |
 |----------|-------------|
-| `gitlab_runner_token` | Runner authentication token from GitLab UI (`glrt-xxx`) |
+| `gitlab_runner_tokens` | Dict of runner auth tokens keyed by inventory hostname (`glrt-xxx`); one entry per host in `[gitlab_runners]` |
 
 ### Security (group_vars/gitlab_runners/vars.yml)
 
@@ -131,6 +133,8 @@ deploy/ansible/
 |----------|---------|-------------|
 | `docker_userns_remap` | `true` | Enable UID remapping (container root → unprivileged host uid) |
 | `gitlab_runner_use_socket_proxy` | `true` | Route Docker access through socket proxy |
+| `docker_manage_daemon_json` | `true` | Role owns daemon.json; set `false` on co-managed hosts (e.g. GPU node) |
+| `docker_upgrade_enabled` | `true` | Role may upgrade Docker packages; set `false` on co-managed hosts |
 
 ### Runner Configuration (roles/gitlab_runner/defaults/main.yml)
 
@@ -144,6 +148,33 @@ Override in `group_vars/gitlab_runners/vars.yml` if needed:
 | `gitlab_runner_cpu_limit` | `2.0` | CPU limit per job container |
 | `gitlab_runner_docker_image` | `docker:28` | Default image for jobs without `image:` |
 | `gitlab_runner_kvm_device` | `/dev/kvm` | KVM device passthrough (set to `""` to disable) |
+| `gitlab_runner_docker_runtime` | `""` | Docker runtime for CI containers (`runc` bypasses a nvidia default-runtime) |
+
+## Shared / Co-managed Host (e.g. GPU node)
+
+The playbook targets a **dedicated** runner host by default. To also run a runner on a host
+whose Docker is owned by another playbook (e.g. `deploy-gpu.yml` on the GPU node
+`bb-ai-gpu-01`, which runs the vLLM/TEI inference API), set two flags so the docker role
+cannot disrupt that host's daemon:
+
+- `docker_manage_daemon_json=false` — skip the daemon.json write/clear tasks (they call
+  `notify: Restart Docker`; clobbering the GPU node's `nvidia` runtime + DNS would kill the
+  inference API and prevent it restarting).
+- `docker_upgrade_enabled=false` — skip the unhold / `state: latest` / hold block (upgrading
+  `docker-ce` restarts the daemon via its postinst).
+
+The role's safe tasks (apt packages, repo/pin, `python3-docker`, docker-group membership,
+`state: started`) still run for consistency. To isolate CI from the GPU API, also set on
+that host:
+
+- `gitlab_runner_docker_runtime="runc"` — CI containers use `runc`, bypassing the daemon's
+  `default-runtime: nvidia` so a job can never touch the GPU.
+- `gitlab_runner_concurrent` / `gitlab_runner_limit` / `gitlab_runner_memory_limit` /
+  `gitlab_runner_cpu_limit` — cap CI load so it never starves vLLM model loads.
+- The socket proxy still applies, so a CI job cannot `docker rm` the API containers (the
+  proxy's `--remove-orphans` is scoped to its own project and never touches the GPU stack).
+
+See `inventory/gitlab-runner.ini` (`genieai-runner-gpu`) for the worked example.
 
 ## Playbook Tags
 

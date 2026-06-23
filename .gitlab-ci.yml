@@ -580,8 +580,6 @@ gemnasium-dependency_scanning:
   rules: *security_run_rules
 gemnasium-python-dependency_scanning:
   rules: *security_run_rules
-gemnasium-npm-dependency_scanning:
-  rules: *security_run_rules
 kics-iac-sast:
   rules: *security_run_rules
 

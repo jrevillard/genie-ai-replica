@@ -656,6 +656,34 @@ diag:registry-reachability:
         echo "DAEMON_LOGIN_FAILED (proxy block if 403 HTML above)"
       fi
 
+# Diagnostic — gather evidence on WHY `docker build` picks the docker-container
+# buildx driver (which fails: privileged mode incompatible with userns-remap).
+# In standard docker the "default" builder uses the docker (in-daemon) driver;
+# a docker-container builder should only exist if explicitly created. This job
+# shows what buildx actually sees so we can fix at the right layer. No fix here.
+diag:buildx:
+  stage: .pre
+  image: docker:28
+  rules: *build_rules
+  allow_failure: true
+  script:
+    - echo "=== docker version ==="
+    - docker version
+    - echo "=== buildx version ==="
+    - docker buildx version
+    - echo "=== buildx builders (NAME/DRIVER/ENDPOINT) — KEY EVIDENCE ==="
+    - docker buildx ls
+    - echo "=== docker contexts ==="
+    - docker context ls
+    - echo "=== relevant env ==="
+    - env | grep -iE "BUILDKIT|BUILDX|DOCKER_HOST|DOCKER_CONFIG" || echo "(none)"
+    - echo "=== inspect default builder ==="
+    - docker buildx inspect default || true
+    - echo "=== minimal build test (BuildKit syntax) — which driver + result ==="
+    - |
+      mkdir -p /tmp/ctx && printf 'FROM busybox\nCOPY --chmod=755 /etc/hostname /tmp/h\n' > /tmp/ctx/Dockerfile
+      docker build -t test:buildx-probe /tmp/ctx 2>&1 | head -25 || echo "(build failed — see driver + error above)"
+
 # Build candidate images and push to the GitLab Container Registry. The runner's
 # docker-socket-proxy now allows AUTH + DISTRIBUTION (see deploy/ansible/roles/
 # docker_socket_proxy), so `docker login` + `docker push` work natively.

@@ -1946,6 +1946,40 @@ class TestSelfConfidenceSentinel:
         assert '"confidence_score": 1.0' in joined
         assert '"confidence_score": 0.04' not in joined
 
+    @pytest.mark.parametrize(
+        "chunks",
+        [
+            ("It is 42.", "[[CONF:80]]"),  # complete sentinel in one chunk
+            ("It is 42.", "[[CO", "NF:80]]"),  # split mid-prefix (proper prefix)
+            ("It is 42.", "[[CONF:", "80]]"),  # split at the full prefix
+            ("It is 42.", "[[CONF:8", "0]]"),  # split AFTER a digit (prod tokenization)
+            ("It is 42.", "[[CONF:80", "]]"),  # split after all digits
+            ("It is 42.", "[[CONF:80]", "]"),  # split after one closing bracket
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_streaming_sentinel_never_leaks_any_chunk_boundary(self, monkeypatch, chunks):
+        """The sentinel is a VARIABLE pattern [[CONF:<digits>]], not a fixed literal.
+        Any chunk boundary the tokenizer chooses — mid-prefix, after digits, after a
+        closing bracket — must be withheld and stitched, never leaked, and the value
+        must always be captured. Regression for the prod leak where a digit-bearing
+        partial (`[[CONF:100`) was not withheld."""
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", True)
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([{"document_id": "f1"}], 0.04, True))
+        body = TestStreamWithMetadata._make_body([f"data: b'{c}'\n\n" for c in chunks] + ["data: [DONE]\n\n"])
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        joined = "".join(out)
+        # No fragment of the sentinel leaks (uppercase CONF:/brackets only appear in it;
+        # the metadata JSON is lowercase "confidence_*").
+        assert "[[CONF" not in joined
+        assert "80]]" not in joined
+        assert "It is 42." in joined
+        # Value always captured -> citizen confidence reflects the self-grade.
+        assert '"self_confidence": 0.8' in joined
+        assert '"confidence_score": 0.8' in joined
+        assert '"confidence_score": 0.04' not in joined
+
     def test_extraction_yields_translation_safe_text_multilingual(self, monkeypatch):
         """Strip-before-translate invariant (the #1 sentinel/translation collision
         risk): extraction must leave text safe to pass to the translation pipeline —

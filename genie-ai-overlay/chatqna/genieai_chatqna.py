@@ -260,11 +260,17 @@ def _calibrate_reranker_score(score: float) -> float:
     would compress values (0.95 -> 0.72) and *worsen* the symptom. Operators must
     verify the TEI output range before enabling ``sigmoid``.
     """
+    try:
+        score = float(score)
+    except (TypeError, ValueError):
+        # Non-numeric score (should not occur — reranker scores are numeric);
+        # treat as no signal rather than crashing the chat.
+        return 0.0
     if RERANKER_SCORE_CALIBRATION != "sigmoid":
-        return float(score)
+        return score
     temperature = RERANKER_SCORE_TEMPERATURE or 1.0
     try:
-        return 1.0 / (1.0 + math.exp(-float(score) / temperature))
+        return 1.0 / (1.0 + math.exp(-score / temperature))
     except OverflowError:
         # Extreme logits (possible from cross-encers on out-of-distribution
         # inputs, or a low operator-configured temperature) would overflow
@@ -1153,6 +1159,80 @@ class ChatQnAService:
 
         return None
         # return []
+
+    async def _finalize_llm_response(
+        self, llm_response: str, original_language: str | None
+    ) -> tuple[str, float | None]:
+        """Strip leaked conversation markers + the self-grade sentinel, then translate.
+
+        Extracted from handle_request so the strip-before-translate ordering (the #1
+        sentinel/translation collision risk) is unit-testable: the sentinel is removed
+        from ``llm_response`` BEFORE it is handed to the translation pipeline. Returns
+        ``(final_text_response, self_confidence_or_None)``.
+        """
+        # Strip leaked conversation markers from the LLM response. The LLM sometimes
+        # echoes back the |<-MSG->| delimiters and USER:/ASSISTANT: role markers used
+        # internally to format chat history in the prompt. Same shared patterns as the
+        # streaming path (_stream_with_metadata) — see _CONV_SEP_RE / _CONV_ROLE_RE.
+        llm_response = _CONV_SEP_RE.sub("\n", llm_response)
+        llm_response = _CONV_ROLE_RE.sub("", llm_response)
+
+        # Strip the self-grade sentinel before translation so it never reaches the
+        # user or the translation pipeline; capture its value for metadata.
+        self_confidence = None
+        if LLM_SELF_CONFIDENCE_ENABLED:
+            llm_response, self_confidence = _extract_self_confidence(llm_response)
+
+        if original_language and original_language.strip() != "EN":
+            if logflag:
+                lang_type = type(original_language).__name__
+                logger.info(f"Translation requested - original_language: '{original_language}' (type: {lang_type})")
+
+            # Load Language Codes
+            language_codes = self.load_language_codes(LANGUAGE_CODES_FILEPATH)
+
+            if logflag:
+                keys_preview = list(language_codes.keys())[:10]
+                logger.info(f"Language codes loaded - keys: {keys_preview}... (total: {len(language_codes)})")
+
+            # Fallback logic for language codes. If not in map, use the original code.
+            target_lang_name = original_language
+            lookup_key = original_language.lower()
+
+            if logflag:
+                logger.info(f"Looking up language code: '{lookup_key}' in language_codes")
+
+            if lookup_key in language_codes:
+                target_lang_name = language_codes[lookup_key]
+                if logflag:
+                    logger.info(f"Found language code mapping: '{lookup_key}' -> '{target_lang_name}'")
+            else:
+                msg = (
+                    f"Warning: Language '{original_language}' not found in "
+                    f"language codes (lookup key: '{lookup_key}'). "
+                    "Attempting to translate using code directly."
+                )
+                logger.warning(msg)
+
+            if logflag:
+                logger.debug(f"LLM response to be translated into: {target_lang_name}")
+
+            try:
+                final_text_response = await self._translate_with_chunking(
+                    llm_response, target_lang_name, original_language
+                )
+                if logflag:
+                    logger.info("Translation completed successfully")
+            except Exception as e:
+                logger.error(f"Translation failed: {e}, returning original response")
+                final_text_response = llm_response
+        else:
+            final_text_response = llm_response
+
+        if logflag:
+            logger.debug(f"\nFinal Text Response: {final_text_response}")
+
+        return final_text_response, self_confidence
 
     async def _assemble_source_documents(self, result_dict: dict) -> tuple[list, float, bool]:
         """Build the source-document list, confidence, and grounding flag from the graph output.
@@ -2210,68 +2290,11 @@ class ChatQnAService:
             "text", "Sorry, I could not generate a response."
         )
 
-        # Strip leaked conversation markers from LLM response.
-        # The LLM sometimes echoes back the |<-MSG->| delimiters and
-        # USER:/ASSISTANT: role markers that are used internally to
-        # format chat history in the prompt. Same shared patterns as the
-        # streaming path (_stream_with_metadata) — see _CONV_SEP_RE / _CONV_ROLE_RE.
-        llm_response = _CONV_SEP_RE.sub("\n", llm_response)
-        llm_response = _CONV_ROLE_RE.sub("", llm_response)
-
-        # Strip the LLM self-grade sentinel before translation so it never reaches
-        # the user or the translation pipeline; capture its value for metadata.
-        self_confidence = None
-        if LLM_SELF_CONFIDENCE_ENABLED:
-            llm_response, self_confidence = _extract_self_confidence(llm_response)
-
-        if original_language and original_language.strip() != "EN":
-            if logflag:
-                lang_type = type(original_language).__name__
-                logger.info(f"Translation requested - original_language: '{original_language}' (type: {lang_type})")
-
-            # Load Language Codes
-            language_codes = self.load_language_codes(LANGUAGE_CODES_FILEPATH)
-
-            if logflag:
-                keys_preview = list(language_codes.keys())[:10]
-                logger.info(f"Language codes loaded - keys: {keys_preview}... (total: {len(language_codes)})")
-
-            # Fallback logic for language codes. If not in map, use the original code.
-            target_lang_name = original_language
-            lookup_key = original_language.lower()
-
-            if logflag:
-                logger.info(f"Looking up language code: '{lookup_key}' in language_codes")
-
-            if lookup_key in language_codes:
-                target_lang_name = language_codes[lookup_key]
-                if logflag:
-                    logger.info(f"Found language code mapping: '{lookup_key}' -> '{target_lang_name}'")
-            else:
-                msg = (
-                    f"Warning: Language '{original_language}' not found in "
-                    f"language codes (lookup key: '{lookup_key}'). "
-                    "Attempting to translate using code directly."
-                )
-                logger.warning(msg)
-
-            if logflag:
-                logger.debug(f"LLM response to be translated into: {target_lang_name}")
-
-            try:
-                final_text_response = await self._translate_with_chunking(
-                    llm_response, target_lang_name, original_language
-                )
-                if logflag:
-                    logger.info("Translation completed successfully")
-            except Exception as e:
-                logger.error(f"Translation failed: {e}, returning original response")
-                final_text_response = llm_response
-        else:
-            final_text_response = llm_response
-
-        if logflag:
-            logger.debug(f"\nFinal Text Response: {final_text_response}")
+        # Strip leaked conversation markers + the self-grade sentinel, then translate.
+        # Extracted into _finalize_llm_response so the strip-before-translate ordering
+        # (the #1 sentinel/translation collision risk) is unit-testable without the
+        # full handle_request megaservice flow.
+        final_text_response, self_confidence = await self._finalize_llm_response(llm_response, original_language)
 
         # Assemble source documents + confidence + grounding flag. Reflects the reranker's
         # verdict; not grounded (is_grounded=False) when the reranker found nothing relevant.

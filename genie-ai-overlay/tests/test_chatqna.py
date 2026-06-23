@@ -1788,6 +1788,27 @@ class TestConfidenceAggregation:
         assert _calibrate_reranker_score(10.0) > 0.99
         assert _calibrate_reranker_score(-10.0) < 0.01
 
+    def test_calibration_sigmoid_saturates_on_overflow(self, monkeypatch):
+        # A large negative logit with a tiny temperature makes math.exp overflow;
+        # the guard saturates to the asymptote instead of raising OverflowError.
+        monkeypatch.setattr(chatqna_module, "RERANKER_SCORE_CALIBRATION", "sigmoid")
+        monkeypatch.setattr(chatqna_module, "RERANKER_SCORE_TEMPERATURE", 0.01)
+        assert _calibrate_reranker_score(-1000.0) == 0.0  # overflow -> guard
+        assert _calibrate_reranker_score(1000.0) == 1.0  # underflow -> natural 1.0
+
+    def test_calibration_handles_non_numeric_score(self, monkeypatch):
+        # A None / non-numeric score must not crash the chat; treated as no signal.
+        monkeypatch.setattr(chatqna_module, "RERANKER_SCORE_CALIBRATION", "sigmoid")
+        assert _calibrate_reranker_score(None) == 0.0
+        monkeypatch.setattr(chatqna_module, "RERANKER_SCORE_CALIBRATION", "none")
+        assert _calibrate_reranker_score("not-a-number") == 0.0
+
+    def test_decay_zero_yields_flat_mean(self, monkeypatch):
+        # decay=0 means equal weighting (exp(0)=1) -> the flat arithmetic mean.
+        monkeypatch.setattr(chatqna_module, "CONFIDENCE_RANK_DECAY", 0.0)
+        scores = [0.9, 0.5, 0.3]
+        assert _rank_weighted_confidence(scores) == sum(scores) / len(scores)
+
 
 # ===========================================================================
 # LLM self-grade sentinel (opt-in via LLM_SELF_CONFIDENCE_ENABLED)
@@ -1900,3 +1921,38 @@ class TestSelfConfidenceSentinel:
         text, val = _extract_self_confidence(original)
         assert val is None
         assert text == original
+
+    @pytest.mark.asyncio
+    async def test_finalize_strips_sentinel_before_translation(self, monkeypatch):
+        """Real integration of the strip-before-translate ordering (I3): the
+        translator receives text WITHOUT the sentinel, and self_confidence is
+        captured. Mocks only the translator — no megaservice harness needed."""
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", True)
+        svc = create_chatqna_service()
+        svc.load_language_codes = MagicMock(return_value={})
+        captured = {}
+
+        async def fake_translate(text, target_lang, original_language):
+            captured["text"] = text
+            return f"[ES]{text}"
+
+        svc._translate_with_chunking = fake_translate
+        final_text, self_conf = await svc._finalize_llm_response("Respuesta.\n[[CONF:90]]", "ES")
+        # Translator received clean text (sentinel stripped before the call).
+        assert "[[CONF:" not in captured["text"]
+        assert captured["text"].rstrip().endswith("Respuesta.")
+        # self_confidence captured; final text is the sentinel-free translation.
+        assert self_conf == 0.9
+        assert "[[CONF:" not in final_text
+
+    @pytest.mark.asyncio
+    async def test_finalize_flag_off_en_returns_conv_stripped_text(self, monkeypatch):
+        """Flag off + EN: finalize returns conv-marker-stripped text unchanged and
+        self_confidence None (metadata contract stable, no translation invoked)."""
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", False)
+        svc = create_chatqna_service()
+        final_text, self_conf = await svc._finalize_llm_response("|<-MSG->| USER: hi\nanswer", "EN")
+        assert self_conf is None
+        assert "|<-MSG->|" not in final_text
+        assert "USER:" not in final_text
+        assert "answer" in final_text

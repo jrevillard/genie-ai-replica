@@ -686,6 +686,31 @@ diag:buildx:
       mkdir -p /tmp/ctx && printf 'FROM busybox\nCOPY --chmod=755 /etc/hostname /tmp/h\n' > /tmp/ctx/Dockerfile
       docker build -t test:buildx-probe /tmp/ctx 2>&1 | head -25 || echo "(build failed — see driver + error above)"
 
+# Decisive test: does an explicit docker CONTEXT over the tcp socket proxy make
+# buildx use the 'docker' (in-daemon buildkit) driver? If yes, the docker driver
+# supports --chmod + works WITH userns-remap (no separate container, no privileged,
+# no nested userns) → clean fix with ZERO tradeoff (just context create + use).
+diag:buildx-docker-driver:
+  stage: .pre
+  image: docker:28
+  rules: *build_rules
+  allow_failure: true
+  script:
+    - |
+      set +e
+      echo "=== current buildx ls ==="
+      docker buildx ls
+      echo "=== create explicit docker context over the tcp socket proxy ==="
+      docker context create tcpctx --docker host=tcp://172.17.0.1:2375
+      docker context use tcpctx
+      echo "=== buildx ls after context switch (KEY: driver of tcpctx) ==="
+      docker buildx ls
+      echo "=== try docker build with BuildKit syntax (does docker driver work over tcp?) ==="
+      mkdir -p /tmp/ctx
+      printf 'FROM busybox\nCOPY --chmod=755 /etc/hostname /tmp/h\n' > /tmp/ctx/Dockerfile
+      docker build -t test:drvprobe /tmp/ctx 2>&1 | tail -20
+      echo "BUILD_EXIT=$?"
+
 # Build candidate images with BuildKit rootless and push to the GitLab Container
 # Registry. Rootless buildkit runs WITHOUT the docker daemon (no socket-proxy
 # interaction for the build) and WITHOUT privileged mode — it creates its own

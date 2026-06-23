@@ -4,6 +4,11 @@ gitlab_runner_executor: docker
 gitlab_runner_docker_image: "docker:28"
 gitlab_runner_concurrent: 2
 gitlab_runner_limit: 2
+# security_opt applied to job containers. Required for BuildKit rootless
+# (rootlesskit needs unshare/clone, blocked by the default seccomp profile).
+# userns-remap still isolates container root from host root, so this remains
+# contained. Empty list = default seccomp (strict).
+gitlab_runner_security_opt: []
 gitlab_runner_docker_volumes:
   - "/var/run/docker.sock:/var/run/docker.sock"
   - "/cache"

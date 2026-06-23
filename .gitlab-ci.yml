@@ -1,14 +1,19 @@
 stages:
   - lint
   - test
+  - build       # publish candidate images to GitLab Container Registry (tmp/ namespace)
+  - scan        # GitLab official Container Scanning template (advisory + dashboard)
   - config
   - e2e
+  - promote     # retag tested digests to deployable tags (main/tags only)
   - scheduled
   - manual
 
 variables:
   FLUTTER_VERSION: "3.41.7"
   FLUTTER_ARCHIVE: "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz"
+  # --- Container build/scan/promote pipeline (see docs/adr/0001-gitlab-registry-build-scan-pipeline.md) ---
+  GIT_DEPTH: "0"  # full history needed for CI_COMMIT_SHORT_SHA stability across matrix jobs
 
 # Prevent duplicate branch+MR pipelines — first match wins
 workflow:
@@ -80,6 +85,9 @@ workflow:
   image: docker:24
   variables:
     COMPOSE_PROJECT_NAME: "ci-$CI_PIPELINE_ID"
+    # Pull candidate images from the tmp/ quarantine namespace (where build:image
+    # pushes pre-promote candidates). IMAGE_TAG matches the candidate tag.
+    SWARM_REGISTRY_URL: "$CI_REGISTRY_IMAGE/tmp"
   allow_failure: false
   tags: [docker]
   timeout: 30m
@@ -90,6 +98,8 @@ workflow:
       - unknown_failure
   before_script:
     - apk add --no-cache docker-cli-compose curl
+    # Authenticate to the GitLab registry so `docker compose pull` succeeds
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - |
       for p in $(docker compose ls -q 2>/dev/null | grep '^ci-'); do
         echo "Cleaning up previous project: $p"
@@ -125,11 +135,22 @@ workflow:
       # Backend must verify JWTs via JWKS at https://nginx/auth/... which uses
       # a self-signed certificate.  Safe for CI — never use in production.
       echo "NODE_TLS_REJECT_UNAUTHORIZED=0" >> .env
-    # Build frontend from source so E2E tests run against the current branch
-    # (pre-built images from the registry don't include pending changes).
-    # DOCKER_BUILDKIT=0 avoids privileged-mode requirement on CI runners.
-    - DOCKER_BUILDKIT=0 docker compose build frontend
-    - docker compose up -d || (docker compose logs --tail=50 > docker-compose-logs.txt 2>&1; cat docker-compose-logs.txt; exit 1)
+    # Pull pre-built candidate images from the GitLab registry so E2E tests run
+    # against the exact artifact produced by build:image (not a local rebuild).
+    # Candidate tag matches build:image's CANDIDATE_TAG logic.
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        E2E_TAG="mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
+      else
+        E2E_TAG="pending-${CI_COMMIT_SHORT_SHA}"
+      fi
+      sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${E2E_TAG}|" .env
+      echo "E2E pulling candidate images tagged :${E2E_TAG}"
+    # Pull all custom services from the registry. `up --no-build` below fails
+    # loudly if a build:image job didn't publish its candidate, surfacing the
+    # breakage here instead of silently rebuilding a different artifact.
+    - docker compose pull frontend backend document-repository nginx kong-config db-migrations keycloak keycloak-config postgres-init || true
+    - docker compose up -d --no-build || (docker compose logs --tail=50 > docker-compose-logs.txt 2>&1; cat docker-compose-logs.txt; exit 1)
     - |
       for i in $(seq 1 60); do
         if docker exec "ci-${CI_PIPELINE_ID}-backend-1" curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
@@ -522,6 +543,188 @@ workflow:
     reports:
       junit: reports/playwright-report.xml
 
+# GitLab official Container Scanning template — produces the correct-schema report
+# (GitLab security dashboard + MR widget) + CycloneDX SBOM. Overridden below to
+# scan each of the 16 candidate images in tmp/. Blocking on HIGH/CRITICAL is via
+# MR approval rules (see docs/adr/0001).
+include:
+  - template: Jobs/Container-Scanning.gitlab-ci.yml
+
+# --- Container Registry pipeline (build → scan → promote) ---
+# Publishes the 16 custom images to the GitLab Container Registry. See
+# docs/adr/0001-gitlab-registry-build-scan-pipeline.md for the full architecture.
+#
+# Flow per image:
+#   build:image  →  scan:image  →  [e2e on merge trains]  →  promote:image
+#   candidate tag (:pending-<sha> on main/tag, :mr-<iid>-<sha> on MR)
+#   is scanned; only its immutable digest is promoted to deployable tags
+#   (:main / :main-<sha> / :<vX.Y.Z> / :latest) on main and tags.
+#
+# Promote ordering note: e2e jobs run only on merge trains, so promote on main/tag
+# is gated by scan (stage ordering) and relies on the merge-train e2e having
+# already validated the merged content (standard GitLab merge-train design).
+
+# 16 custom images — single source of truth for the build/scan/promote matrix.
+.image_matrix: &image_matrix
+  - IMAGE_NAME: genie-ai-frontend
+    CONTEXT: components/gov-chat-frontend/
+    DOCKERFILE: components/gov-chat-frontend/Dockerfile
+  - IMAGE_NAME: genie-ai-backend
+    CONTEXT: components/
+    DOCKERFILE: components/gov-chat-backend/Dockerfile
+  - IMAGE_NAME: genie-ai-db-migrations
+    CONTEXT: .
+    DOCKERFILE: components/gov-chat-backend/Dockerfile.migrations
+  - IMAGE_NAME: genie-ai-document-repository
+    CONTEXT: components/
+    DOCKERFILE: components/document-repository/Dockerfile
+  - IMAGE_NAME: genie-ai-nginx
+    CONTEXT: api-gateway-solution/nginx/
+    DOCKERFILE: api-gateway-solution/nginx/Dockerfile
+  - IMAGE_NAME: genie-ai-kong-config
+    CONTEXT: api-gateway-solution/new-config/
+    DOCKERFILE: api-gateway-solution/new-config/Dockerfile
+  - IMAGE_NAME: genie-ai-chatqna-server
+    CONTEXT: .
+    DOCKERFILE: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
+  - IMAGE_NAME: genie-ai-dataprep-arango
+    CONTEXT: .
+    DOCKERFILE: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
+  - IMAGE_NAME: genie-ai-retriever-arango
+    CONTEXT: .
+    DOCKERFILE: genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
+  - IMAGE_NAME: genie-ai-reranker
+    CONTEXT: .
+    DOCKERFILE: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
+  - IMAGE_NAME: genie-ai-embedding
+    CONTEXT: .
+    DOCKERFILE: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
+  - IMAGE_NAME: genie-ai-textgen
+    CONTEXT: .
+    DOCKERFILE: genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
+  - IMAGE_NAME: genie-ai-postgres-init
+    CONTEXT: configs/postgres/
+    DOCKERFILE: configs/postgres/Dockerfile
+  - IMAGE_NAME: genie-ai-keycloak
+    CONTEXT: configs/keycloak/
+    DOCKERFILE: configs/keycloak/Dockerfile
+  - IMAGE_NAME: genie-ai-keycloak-config
+    CONTEXT: configs/keycloak/
+    DOCKERFILE: configs/keycloak/Dockerfile.config-cli
+  - IMAGE_NAME: genie-ai-tempo-proxy
+    CONTEXT: tools/tempo-proxy/
+    DOCKERFILE: tools/tempo-proxy/Dockerfile
+
+# Build/scan run on MR, main, and tags. Skip schedules and web pipelines.
+.build_rules: &build_rules
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    when: never
+  - if: $CI_PIPELINE_SOURCE == "web"
+    when: never
+  - if: $CI_COMMIT_TAG
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Promote only on protected refs (main + tags). MR candidate images are ephemeral
+# (:mr-<iid>-<sha>) and never promoted to deployable tags.
+.promote_rules: &promote_rules
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    when: never
+  - if: $CI_PIPELINE_SOURCE == "web"
+    when: never
+  - if: $CI_COMMIT_TAG
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Build candidate images with docker buildx (docker-container buildkit driver)
+# and push to the GitLab Container Registry. This is the modern path: supports
+# all BuildKit syntax (--chmod, --mount) + the registry cache backend.
+#
+# Requires privileged buildkit container, which needs userns-remap DISABLED on
+# the runner daemon (see deploy/ansible/group_vars/gitlab_runners/vars.yml).
+# userns-remap was incompatible with every container-based buildkit mode
+# (docker-container: privileged conflict; rootless: nested userns). The socket
+# proxy still filters the Docker API; the dedicated runner VM provides isolation.
+build:image:
+  stage: build
+  image: docker:28
+  tags: [docker]
+  interruptible: true
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        CANDIDATE_TAG="mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
+      else
+        CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
+      fi
+      REGISTRY_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
+      CACHE_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:cache"
+      echo "Building $IMAGE_NAME → ${REGISTRY_REF} (tmp/ quarantine namespace)"
+      docker buildx build \
+        --push \
+        -t "$REGISTRY_REF" \
+        -f "$DOCKERFILE" \
+        --cache-from "type=registry,ref=$CACHE_REF" \
+        --cache-to "type=registry,ref=$CACHE_REF,mode=max" \
+        "$CONTEXT"
+  parallel:
+    matrix: *image_matrix
+  rules: *build_rules
+
+# Override GitLab's container_scanning job (from the included template) to scan
+# each of the 16 candidate images in tmp/. The template's `gtcs scan` reads
+# $CS_IMAGE and produces the correct-schema report + CycloneDX SBOM.
+container_scanning:
+  stage: scan
+  tags: [docker]
+  interruptible: true
+  variables:
+    CS_REGISTRY_USER: "$CI_REGISTRY_USER"
+    CS_REGISTRY_PASSWORD: "$CI_REGISTRY_PASSWORD"
+    CS_SEVERITY: "High,Critical"
+  before_script:
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        export CS_IMAGE="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
+      else
+        export CS_IMAGE="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:pending-${CI_COMMIT_SHORT_SHA}"
+      fi
+      echo "Scanning $CS_IMAGE"
+  parallel:
+    matrix: *image_matrix
+  rules: *build_rules
+
+# Promote the scanned candidate's immutable digest to deployable tags.
+# Runs only on main + tags. Phase 2 will add `cosign verify` before retag.
+promote:image:
+  stage: promote
+  image: docker:28
+  tags: [docker]
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:pending-$CI_COMMIT_SHORT_SHA"
+    - DIGEST=$(docker buildx imagetools inspect "$SRC" --format '{{.Manifest.Digest}}')
+    - echo "Promoting $IMAGE_NAME digest ${DIGEST:0:32}... (tmp/ → real namespace)"
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        FINAL_TAGS="$CI_COMMIT_TAG latest"
+      else
+        FINAL_TAGS="${CI_COMMIT_BRANCH}-${CI_COMMIT_SHORT_SHA} ${CI_COMMIT_BRANCH}"
+      fi
+    - |
+      for t in $FINAL_TAGS; do
+        # Cross-repo copy by immutable digest: tmp/<image> → <image>. Blob-mount,
+        # no re-upload. The real namespace receives ONLY deployable tags.
+        docker buildx imagetools create -t "$CI_REGISTRY_IMAGE/$IMAGE_NAME:$t" "$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME@${DIGEST}"
+      done
+    # Quarantine cleanup — delete the candidate tag from tmp/ (cache ref preserved)
+    - docker buildx imagetools rm "$SRC" 2>/dev/null || true
+  parallel:
+    matrix: *image_matrix
+  rules: *promote_rules
+
 # --- Lint jobs ---
 
 lint:backend:
@@ -893,7 +1096,12 @@ e2e:integration:
   extends: .e2e_integration_base
   stage: e2e
   resource_group: e2e-runner
-  needs: []
+  # Wait for all candidate images before pulling them. e2e:integration is not a
+  # matrix job, so referencing build:image without a matrix sub-key depends on
+  # every parallel build instance.
+  needs:
+    - job: build:image
+      artifacts: false
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
       changes:

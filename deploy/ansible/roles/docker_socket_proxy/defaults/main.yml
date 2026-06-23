@@ -13,6 +13,10 @@ docker_socket_proxy_post: "1"
 docker_socket_proxy_tasks: "0"
 docker_socket_proxy_swarm: "0"
 docker_socket_proxy_secrets: "0"
-docker_socket_proxy_auth: "0"
+# AUTH + DISTRIBUTION are REQUIRED for CI registry operations (docker login to
+# the GitLab Container Registry, docker push/pull). Without them the socket
+# proxy returns 403 "Request forbidden by administrative rules" on login.
+docker_socket_proxy_auth: "1"
+docker_socket_proxy_distribution: "1"
 docker_socket_proxy_plugins: "0"
 docker_socket_proxy_build: "1"

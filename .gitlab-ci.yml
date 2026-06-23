@@ -15,10 +15,6 @@ variables:
   FLUTTER_VERSION: "3.41.7"
   FLUTTER_ARCHIVE: "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz"
   # --- Container build/scan/promote pipeline (see docs/adr/0001-gitlab-registry-build-scan-pipeline.md) ---
-  TRIVY_SEVERITY: "HIGH,CRITICAL"
-  TRIVY_IGNORE_UNFIXED: "true"
-  TRIVY_IMAGE_TAG: "aquasec/trivy:0.57.0"
-  SYFT_VERSION: "v1.26.0"
   GIT_DEPTH: "0"  # full history needed for CI_COMMIT_SHORT_SHA stability across matrix jobs
 
 # Prevent duplicate branch+MR pipelines — first match wins
@@ -549,6 +545,13 @@ workflow:
     reports:
       junit: reports/playwright-report.xml
 
+# GitLab official Container Scanning template — produces the correct-schema report
+# (GitLab security dashboard + MR widget) + CycloneDX SBOM. Overridden below to
+# scan each of the 16 candidate images in tmp/. Blocking on HIGH/CRITICAL is via
+# MR approval rules (see docs/adr/0001).
+include:
+  - template: Jobs/Container-Scanning.gitlab-ci.yml
+
 # --- Container Registry pipeline (build → scan → promote) ---
 # Publishes the 16 custom images to the GitLab Container Registry. See
 # docs/adr/0001-gitlab-registry-build-scan-pipeline.md for the full architecture.
@@ -671,63 +674,25 @@ build:image:
     matrix: *image_matrix
   rules: *build_rules
 
-# Syft SBOM (artifact, 1-year retention for EU CRA audit) + Trivy blocking gate
-# on fixable HIGH/CRITICAL CVEs. Trivy DB freshness also gated (>24h = fail).
-# NOTE: no `needs:` here — stage ordering (build → scan) gates this. GitLab 17.5
-# predates `$[[ matrix.X ]]` expressions (18.6+), so 1:1 matrix deps aren't
-# expressible; stage ordering ensures all build:image jobs finish before any
-# scan:image starts. Upgrade GitLab to 18.6+ to enable per-image DAG chaining.
-scan:image:
+# Override GitLab's container_scanning job (from the included template) to scan
+# each of the 16 candidate images in tmp/. The template's `gtcs scan` reads
+# $CS_IMAGE and produces the correct-schema report + CycloneDX SBOM.
+container_scanning:
   stage: scan
-  image:
-    name: $TRIVY_IMAGE_TAG
-    entrypoint: [""]   # clear trivy ENTRYPOINT so the shell runs the script
   tags: [docker]
   interruptible: true
   variables:
-    TRIVY_NO_PROGRESS: "true"
-    TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.trivycache/"
-  cache:
-    - key: "trivy-db"
-      paths: [".trivycache/"]
+    CS_REGISTRY_USER: "$CI_REGISTRY_USER"
+    CS_REGISTRY_PASSWORD: "$CI_REGISTRY_PASSWORD"
+    CS_SEVERITY: "High,Critical"
   before_script:
-    # Manual docker config so syft & trivy authenticate when pulling the image
-    # over HTTPS from the container. No `docker login` (daemon proxy-blocked);
-    # both tools read ~/.docker/config.json and fetch via their own HTTP clients.
-    - mkdir -p ~/.docker
-    - |
-      AUTH=$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')
-      echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$AUTH\"}}}" > ~/.docker/config.json
-    - wget -qO- https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin "$SYFT_VERSION"
-    - trivy image --download-db-only
-    - |
-      DB="$TRIVY_CACHE_DIR/db/trivy.db"
-      [ -f "$DB" ] || { echo "Trivy DB missing"; exit 1; }
-      AGE=$(( $(date +%s) - $(stat -c %Y "$DB") ))
-      [ "$AGE" -lt 86400 ] || { echo "Trivy DB stale ($AGE s > 86400)"; exit 1; }
-  script:
     - |
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
-        CANDIDATE_TAG="mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
+        export CS_IMAGE="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
       else
-        CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
+        export CS_IMAGE="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:pending-${CI_COMMIT_SHORT_SHA}"
       fi
-      IMAGE="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
-      echo "Scanning $IMAGE"
-    # 1. SBOM (SPDX JSON) — composition source of truth + audit artifact
-    - syft -o spdx-json "$IMAGE" > sbom.spdx.json
-    # 2. Non-blocking report for the GitLab Container Scanning UI widget (single
-    # line — a bare newline in a `- |` block ends the command)
-    - trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --format json --output gl-container-scanning-report.json --exit-code 0 "$IMAGE"
-    # 3. Blocking gate — fail on fixable HIGH/CRITICAL (honors .trivyignore)
-    - trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format table --exit-code 1 "$IMAGE"
-  artifacts:
-    when: always
-    expire_in: 1 year
-    paths:
-      - sbom.spdx.json
-    reports:
-      container_scanning: gl-container-scanning-report.json
+      echo "Scanning $CS_IMAGE"
   parallel:
     matrix: *image_matrix
   rules: *build_rules

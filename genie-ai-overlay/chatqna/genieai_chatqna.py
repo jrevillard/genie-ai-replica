@@ -233,7 +233,7 @@ def _streaming_marker_tail_len(buffer: str) -> int:
 # An optional LLM self-grade (`LLM_SELF_CONFIDENCE_ENABLED`, default off) lets the
 # model rate how well the retrieved documents support its own answer; it is
 # exposed alongside the retrieval confidence but never replaces the grounding
-# decision, which stays driven by `is_grounded`. See docs/architecture.md §9.3.
+# decision, which stays driven by `is_grounded`. See docs/architecture.md §9.4.
 # ---------------------------------------------------------------------------
 
 RERANKER_SCORE_CALIBRATION = os.getenv("RERANKER_SCORE_CALIBRATION", "none").strip().lower()
@@ -263,7 +263,13 @@ def _calibrate_reranker_score(score: float) -> float:
     if RERANKER_SCORE_CALIBRATION != "sigmoid":
         return float(score)
     temperature = RERANKER_SCORE_TEMPERATURE or 1.0
-    return 1.0 / (1.0 + math.exp(-float(score) / temperature))
+    try:
+        return 1.0 / (1.0 + math.exp(-float(score) / temperature))
+    except OverflowError:
+        # Extreme logits (possible from cross-encers on out-of-distribution
+        # inputs, or a low operator-configured temperature) would overflow
+        # math.exp; saturate to the asymptote instead of crashing the chat.
+        return 0.0 if score < 0 else 1.0
 
 
 def _rank_weighted_confidence(scores: list[float]) -> float:
@@ -277,7 +283,8 @@ def _rank_weighted_confidence(scores: list[float]) -> float:
     """
     if not scores:
         return 0.0
-    decay = CONFIDENCE_RANK_DECAY if CONFIDENCE_RANK_DECAY > 0 else 0.5
+    # Allow 0 (equal weighting = flat mean); only fall back for an invalid negative.
+    decay = CONFIDENCE_RANK_DECAY if CONFIDENCE_RANK_DECAY >= 0 else 0.5
     weights = [math.exp(-decay * i) for i in range(len(scores))]
     return sum(w * s for w, s in zip(weights, scores, strict=True)) / sum(weights)
 
@@ -1277,9 +1284,16 @@ class ChatQnAService:
         # which dragged the mean down, so richer context was *punished*. Weighting
         # by rank (rank 0 = most relevant, since reranker verdicts are descending
         # and `scores` preserves that display order) lets the strongest match
-        # dominate instead. See docs/architecture.md §9.3.
+        # dominate instead. See docs/architecture.md §9.4.
         confidence_score = _rank_weighted_confidence(scores)
         logger.debug(f"document confidence scores: {scores}")
+
+        if not source_documents_formatted and is_grounded:
+            # Edge case (e.g. document-repository outage): the reranker found
+            # documents (is_grounded=True) but none could be resolved into sources.
+            # Force not-grounded so the UI does not claim backing that is absent.
+            logger.warning("No source documents could be assembled; forcing is_grounded=False.")
+            is_grounded = False
 
         return source_documents_formatted, confidence_score, is_grounded
 

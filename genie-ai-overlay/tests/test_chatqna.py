@@ -1292,6 +1292,47 @@ class TestAssembleSourceDocuments:
         assert grounded is True
 
     @pytest.mark.asyncio
+    async def test_sigmoid_calibration_applied_end_to_end(self, monkeypatch):
+        """Calibration must actually be applied inside _assemble_source_documents,
+        not just exist as an unused helper (guards against someone removing the
+        _calibrate_reranker_score call from the loop while unit tests still pass)."""
+        monkeypatch.setattr(chatqna_module, "RERANKER_SCORE_CALIBRATION", "sigmoid")
+        monkeypatch.setattr(chatqna_module, "RERANKER_SCORE_TEMPERATURE", 1.0)
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["X"], "file_name": "a.pdf"})
+        # Raw logits as reranker scores: sigmoid(2.0) ~ 0.881, sigmoid(0.0) = 0.5.
+        result_dict = self._result_dict(
+            rerank_verdict=[
+                {"id": "d1", "text": "hives", "score": 2.0},
+                {"id": "d2", "text": "honey", "score": 0.0},
+            ],
+            retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
+            file_id_pairs={"d1": "f1", "d2": "f2"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        # Per-doc displayed scores are the calibrated values, not the raw logits.
+        assert 0.880 <= docs[0]["score"] <= 0.881  # sigmoid(2.0) ~ 0.8808
+        assert docs[1]["score"] == 0.5
+        assert grounded is True
+
+    @pytest.mark.asyncio
+    async def test_all_metadata_fail_forces_not_grounded(self):
+        """When the reranker found docs but none resolve to sources (e.g. a
+        document-repository outage), is_grounded is forced False so the UI does
+        not claim backing that is absent."""
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value=None)  # every lookup fails
+        result_dict = self._result_dict(
+            rerank_verdict=[{"id": "d1", "text": "hives", "score": 0.95}],
+            retrieved_docs=[{"id": "d1", "text": "hives"}],
+            file_id_pairs={"d1": "f1"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        assert docs == []
+        assert confidence == 0.0
+        assert grounded is False
+
+    @pytest.mark.asyncio
     async def test_not_grounded_when_reranker_rejects_all(self):
         svc = create_chatqna_service()
         svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["Fruit"], "file_name": "fruit.pdf"})
@@ -1773,3 +1814,37 @@ class TestSelfConfidenceSentinel:
         out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
         joined = "".join(out)
         assert "self_confidence" not in joined
+
+    @pytest.mark.asyncio
+    async def test_streaming_sentinel_split_across_chunks_is_stitched(self, monkeypatch):
+        """The sentinel may arrive split across token chunks; the marker-tail
+        withholding must stitch it and neither leak a fragment nor lose the value."""
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", True)
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([{"document_id": "f1"}], 0.9, True))
+        body = TestStreamWithMetadata._make_body(
+            ["data: b'It is 42.'\n\n", "data: b'[[CO'\n\n", "data: b'NF:80]]'\n\n", "data: [DONE]\n\n"]
+        )
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        joined = "".join(out)
+        # No fragment of the sentinel leaks to the user.
+        assert "[[CO" not in joined
+        assert "NF:80" not in joined
+        assert "[[CONF:" not in joined
+        assert "It is 42." in joined
+        assert '"self_confidence": 0.8' in joined
+
+    def test_extraction_yields_translation_safe_text_multilingual(self, monkeypatch):
+        """Strip-before-translate invariant (the #1 sentinel/translation collision
+        risk): extraction must leave text safe to pass to the translation pipeline —
+        no sentinel and no trailing partial marker — including for multilingual
+        answers. (Full handle_request + translation integration is deferred:
+        handle_request has no existing test harness.)"""
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", True)
+        from chatqna.genieai_chatqna import _SELF_CONF_PARTIAL_RE
+
+        text, val = _extract_self_confidence("Respuesta en español sobre apicultura.\n[[CONF:90]]")
+        assert val == 0.9
+        assert "[[CONF:" not in text
+        assert _SELF_CONF_PARTIAL_RE.search(text) is None
+        assert "español" in text  # answer content preserved for translation

@@ -306,24 +306,42 @@ If the runner token is compromised or expired:
 
 ## Network Requirements (MTU/MSS Clamping)
 
-The runner host uses an overlay network with a reduced MTU (e.g. 1342 on OpenStack/Hetzner Cloud). Docker containers default to MTU 1500, which causes large TCP transfers (Flutter SDK downloads, `pub get`) to fail with `Connection reset by peer` after a few minutes. Small requests (HEAD, small GETs) work fine — only sustained large transfers break.
+The runner host uses an overlay network with a reduced MTU (e.g. 1342 on OpenStack/Hetzner Cloud). Docker containers default to MTU 1500, which causes large TCP transfers (Flutter SDK downloads, `pub get`, large `git clone`) to fail with `Connection reset by peer` after a few minutes. Small requests (HEAD, small GETs) work fine — only sustained large transfers break.
 
-**Fix:** MSS clamping via iptables ensures TCP negotiates the correct segment size through the overlay.
+**Fix:** MSS clamping via iptables ensures TCP negotiates the correct segment size through the overlay. The runner hosts use **systemd-networkd**, so the rule MUST be applied via a **systemd service** — the legacy `/etc/network/if-pre-up.d/` hook does **not fire** under systemd-networkd (it only fires under legacy ifupdown), so the rule would silently disappear after a reboot. (This was the root cause of a CI flap where `git clone` from containers died with `Connection reset by peer`.)
 
-Create `/etc/network/if-pre-up.d/mss-clamp` (mode 0755):
+Create `/etc/systemd/system/mss-clamp.service`:
+
+```ini
+[Unit]
+Description=MSS clamping for overlay network (ens3, MTU 1342)
+After=network-online.target systemd-networkd.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c "/sbin/iptables -t mangle -C POSTROUTING -o ens3 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || /sbin/iptables -t mangle -A POSTROUTING -o ens3 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu"
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then:
 
 ```bash
-#!/bin/bash
-iptables -t mangle -C POSTROUTING -o ens3 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || iptables -t mangle -A POSTROUTING -o ens3 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+sudo systemctl daemon-reload
+sudo systemctl enable --now mss-clamp.service
 ```
 
 This rule:
-- Persists across reboots (if-pre-up.d hook)
-- Is idempotent (`-C` checks before `-A` adds)
-- Adjusts `ens3` to match your VM's primary interface name
+- **Persists across reboots** (systemd service, fires on boot after network-online) — unlike the if-pre-up.d hook, which systemd-networkd ignores
+- Is **idempotent** (`-C` checks before `-A` adds)
+- Adjust `ens3` to match the VM's primary interface name (`ip route get 1.1.1.1`)
 
 **Symptoms without it:**
 - `curl: (56) Recv failure: Connection reset by peer` after ~3min on large HTTPS downloads from CI containers
+- `git clone` of the repo failing mid-clone from CI containers
 - `flutter pub get` hanging for 1 hour then timing out
 - Small HTTP/HTTPS requests work fine, only large sustained transfers fail
 

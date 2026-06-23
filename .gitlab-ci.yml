@@ -1238,52 +1238,6 @@ config:validate:
 #
 # CI variables override empty values from the env template (shell env > .env file).
 # The env template provides non-secret config (KEYCLOAK_URL, KEYCLOAK_REALM, etc.).
-# Purge orphan candidate tags from the tmp/ quarantine namespace. Keeps :cache
-# (build cache, must persist) and any non-candidate tags. Runs daily so orphaned
-# pending-*/mr-* tags (failed pipelines, abandoned MRs) don't accumulate. The
-# real namespace (genie-ai/<image>) is never touched — only tmp/* repos.
-scheduled:purge-tmp:
-  stage: scheduled
-  image: alpine:3.20
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-  variables:
-    PURGE_AGE_HOURS: "24"
-  before_script:
-    - apk add --no-cache curl jq
-  script:
-    - |
-      set -e
-      # List all registry repositories, keep only those under tmp/
-      page=1
-      while :; do
-        repos=$(curl -sk --header "PRIVATE-TOKEN: $PURGE_TMP_TOKEN" \
-          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/registry/repositories?per_page=100&page=$page")
-        echo "$repos" | jq -r '.[].path' | grep '/tmp/' || true
-        [ "$(echo "$repos" | jq 'length')" -lt 100 ] && break
-        page=$((page+1))
-      done > /tmp/tmp_repos.txt
-      echo "tmp/ repos to clean:"
-      cat /tmp/tmp_repos.txt
-      # For each tmp/ repo, delete candidate tags (pending-*/mr-*) older than PURGE_AGE_HOURS, keep :cache
-      while read -r repo_path; do
-        [ -z "$repo_path" ] && continue
-        repo_id=$(curl -sk --header "PRIVATE-TOKEN: $PURGE_TMP_TOKEN" \
-          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/registry/repositories" | \
-          jq -r ".[] | select(.path==\"$repo_path\") | .id")
-        tags=$(curl -sk --header "PRIVATE-TOKEN: $PURGE_TMP_TOKEN" \
-          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/registry/repositories/$repo_id/tags?per_page=100")
-        echo "$tags" | jq -r '.[] | select(.name|test("^(pending-|mr-)")) | "\(.name) \(.created_at)"' | while read -r tag_name created; do
-          age_h=$(( ($(date +%s) - $(date -d "$created" +%s)) / 3600 ))
-          if [ "$age_h" -ge "$PURGE_AGE_HOURS" ]; then
-            echo "  deleting $repo_path:$tag_name (age ${age_h}h)"
-            curl -sk -X DELETE --header "PRIVATE-TOKEN: $PURGE_TMP_TOKEN" \
-              "$CI_API_V4_URL/projects/$CI_PROJECT_ID/registry/repositories/$repo_id/tags/$tag_name" || true
-          fi
-        done
-      done < /tmp/tmp_repos.txt
-      echo "purge complete"
-
 scheduled:integration:
   extends: .e2e_integration_base
   stage: scheduled

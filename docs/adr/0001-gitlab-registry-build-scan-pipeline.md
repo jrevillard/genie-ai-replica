@@ -168,3 +168,21 @@ entry must reference a ticket and is reviewed quarterly.
 - SBOM + Container Signing on GitLab CI (2026): https://www.bitslovers.com/sbom-supply-chain-security-gitlab-ci/
 - SLSA framework: https://slsa.dev/
 - Plan file: `/home/jerome/.claude/plans/snuggly-noodling-flamingo.md`
+
+## Container Registry cleanup policy (replaces a CI purge job)
+
+Candidate images build into a `tmp/` quarantine namespace
+(`registry.../genie-ai/tmp/<image>:<candidat>`); promote copies them to the
+real namespace. Orphan candidate tags (failed pipelines, abandoned MRs) are
+reaped by GitLab's native **Container Registry cleanup policy** — server-side,
+no CI job, no token:
+
+- **Settings → CI/CD → Container Registry → Cleanup policies**
+- `name_regex_keep`: `main|latest|v.*|cache` (preserve deployable + build cache)
+- `older_than`: `24h`
+- `enabled`: true
+
+Any tag not matching the keep-regex and older than 24h is deleted, in **both**
+namespaces. Real-namespace tags (`main`/`latest`/`vX.Y.Z`) and `:cache` refs
+match keep → preserved. Candidate tags (`pending-*`/`mr-*`) → deleted after 24h.
+The real namespace therefore only ever holds deployable tags.

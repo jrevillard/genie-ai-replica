@@ -984,7 +984,6 @@ class FileController {
       fileName: file.file_name,
       fileType: file.file_type,
       fileLabels: file.labels,
-      uploadDate: file.uploaded_date,
       storagePath: file.storage_path,
       fileBase64: base64String
     });

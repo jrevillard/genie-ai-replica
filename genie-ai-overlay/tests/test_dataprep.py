@@ -1125,3 +1125,38 @@ class TestLoadWithDoclingRemote:
 
         _, kwargs = mock_aiohttp_session.ClientSession.call_args
         assert kwargs["headers"] == {}
+
+
+# DocRepoIngestPayload contract
+# ---------------------------------------------------------------------------
+class TestDocRepoIngestPayload:
+    """The dataprep ingest endpoint must not require uploadDate.
+
+    uploadDate is document-repository metadata that dataprep never consumes
+    (see ingest_file_with_guardrail — upload_date is never read). Requiring it
+    caused a 422 → 500 whenever a legacy file had uploaded_date == null in the
+    files collection. The field must be absent from the contract.
+    """
+
+    def _payload(self, **overrides):
+        base = {
+            "fileId": "test-file-123",
+            "fileName": "doc.md",
+            "fileType": "text/markdown",
+            "fileBase64": "dGVzdCBjb250ZW50",  # "test content"
+        }
+        base.update(overrides)
+        return base
+
+    def test_validates_without_upload_date(self):
+        from dataprep.genieai_dataprep_microservice import DocRepoIngestPayload
+
+        payload = DocRepoIngestPayload(**self._payload())
+        assert payload.fileId == "test-file-123"
+
+    def test_upload_date_null_does_not_raise(self):
+        """Reproduces the production 422: legacy file with uploaded_date=null."""
+        from dataprep.genieai_dataprep_microservice import DocRepoIngestPayload
+
+        payload = DocRepoIngestPayload(**self._payload(uploadDate=None))
+        assert payload.fileId == "test-file-123"

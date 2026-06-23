@@ -94,12 +94,11 @@ promote on `main`/tag is gated by `scan` (stage ordering) and by the
 GitLab merge-train guarantee. Code does not reach `main` without passing the
 train's e2e.
 
-### 4. SBOM: Syft, 1-year retention
+### 4. SBOM: CycloneDX (from the GitLab template)
 
-Syft generates `sbom.spdx.json` (SPDX 3.0 JSON) — higher quality than Trivy's
-built-in SBOM. Retained as a CI artifact for 1 year (EU Cyber Resilience Act
-audit horizon). Trivy scans the same image; phase 2 will attach the SBOM to the
-image via `cosign attest`.
+The GitLab Container Scanning template (`gtcs scan`) produces a CycloneDX SBOM
+(`gl-sbom-*.cdx.json`) per image, retained as a CI artifact for 1 year (EU CRA
+audit horizon). Phase 2 attaches it to the image via `cosign attest`.
 
 ### 5. Signing: deferred to phase 2
 
@@ -116,12 +115,19 @@ When phase 2 lands, the choice is **cosign key-based** (not keyless):
   key is committed at `configs/cosign/cosign.pub` for deploy-time verification.
 - Transparency log upload disabled (`--tlog-upload=false`) for sovereignty.
 
-### 6. Trivy gate governance
+### 6. Scanning: GitLab official template + MR approval rule (blocking)
 
-The blocking gate is `trivy image --severity HIGH,CRITICAL --ignore-unfixed
---exit-code 1 --ignorefile .trivyignore`. Unfixable CVEs are filtered
-automatically; fixable exceptions are governed via `.trivyignore`, where every
-entry must reference a ticket and is reviewed quarterly.
+Scanning uses GitLab's **official Container Scanning template**
+(`Jobs/Container-Scanning.gitlab-ci.yml`, analyzer `gtcs scan`) over each
+candidate. The template produces the correct-schema report (GitLab security
+dashboard + MR widget) + CycloneDX SBOM, and is **advisory** by default
+(`allow_failure: true`).
+
+**Blocking** on HIGH/CRITICAL is enforced by a **Merge Request approval rule**
+(project setting) tied to the security report — the GitLab-native gate. Accepted
+risks go into `vulnerability-allowlist.yml` (GitLab format), each entry governed
+by a ticket + review date. This replaces the earlier custom `trivy --exit-code`
+gate, which produced raw JSON that GitLab could not ingest (wrong schema).
 
 ## Alternatives considered
 

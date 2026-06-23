@@ -689,11 +689,12 @@ build:image:
       echo "Building $IMAGE_NAME → ${REGISTRY_REF}"
     # Build in the daemon (base images from Docker Hub — reachable).
     - DOCKER_BUILDKIT=0 docker build -f "$DOCKERFILE" -t "$LOCAL_REF" "$CONTEXT"
-    # Push via skopeo — reads from the daemon, transfers over HTTPS from the
-    # container. No `docker login` (daemon proxy-blocked), no daemon push.
-    # (single line: YAML plain-scalar `\`+newline would escape the space and
-    # produce a leading-space in the transport name — " docker-daemon".)
-    - skopeo copy --dest-creds "$CI_REGISTRY_USER:$CI_REGISTRY_PASSWORD" "docker-daemon:$LOCAL_REF" "docker://$REGISTRY_REF"
+    # Export the built image to a tarball, then push via skopeo over HTTPS from
+    # the container. Decouples: the daemon builds+saves (reachable by the docker
+    # CLI via DOCKER_HOST), the container pushes (bypasses the daemon proxy that
+    # 403s registry.opensource.unicc.org). No `docker login`, no daemon push.
+    - docker save "$LOCAL_REF" -o /tmp/image.tar
+    - skopeo copy --dest-creds "$CI_REGISTRY_USER:$CI_REGISTRY_PASSWORD" docker-archive:/tmp/image.tar "docker://$REGISTRY_REF"
   parallel:
     matrix: *image_matrix
   rules: *build_rules

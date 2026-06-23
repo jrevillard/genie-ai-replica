@@ -7,3 +7,12 @@ docker_hold_packages:
   - containerd.io
   - docker-compose-plugin
   - docker-ce-rootless-extras
+
+# Docker daemon proxy — applied as a systemd drop-in
+# (/etc/systemd/system/docker.service.d/proxy.conf). The dockerd process honors
+# HTTP_PROXY/HTTPS_PROXY/NO_PROXY; CI job containers do NOT inherit them.
+# Set in group_vars when the host sits behind a forward proxy that should be
+# bypassed for internal registries (e.g. registry.opensource.unicc.org).
+docker_http_proxy: ""
+docker_https_proxy: ""
+docker_no_proxy: []

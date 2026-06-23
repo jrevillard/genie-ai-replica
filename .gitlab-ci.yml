@@ -635,27 +635,29 @@ workflow:
   - if: $CI_COMMIT_TAG
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-# Diagnostic — confirms the container (not the daemon) can reach the registry
-# over HTTPS. The daemon's proxy may block registry.opensource.unicc.org while
-# containers (bridge NAT) can still reach it. Runs first so we know whether
-# skopeo-based push/scan will succeed. allow_failure so it never blocks.
+# Diagnostic — confirms BOTH container and daemon can reach the registry, and
+# reveals the daemon's proxy config so we know whether the ansible NO_PROXY fix
+# (roles/docker) applies. allow_failure so it never blocks the pipeline.
 diag:registry-reachability:
   stage: .pre
-  image: alpine:3.20
+  image: docker:28
   rules: *build_rules
   allow_failure: true
   script:
-    - echo "CI_REGISTRY=$CI_REGISTRY"
-    - echo "--- proxy env (container) ---"
-    - env | grep -i proxy || echo "(no proxy env in container)"
-    - echo "--- DNS ---"
-    - getent hosts "$CI_REGISTRY" || nslookup "$CI_REGISTRY" 2>&1 | head -5
-    - echo "--- container HTTPS reachability to $CI_REGISTRY/v2/ ---"
+    - echo "CI_REGISTRY=$CI_REGISTRY  DOCKER_HOST=$DOCKER_HOST"
+    - echo "=== container proxy env ==="
+    - env | grep -iE "http_proxy|https_proxy|no_proxy" || echo "(no proxy env in container)"
+    - echo "=== container HTTPS reachability ==="
+    - wget -q -S -O /dev/null "https://$CI_REGISTRY/v2/" 2>&1 | grep -E "HTTP/|401|403" | head -3 || echo "(container cannot reach registry)"
+    - echo "=== daemon proxy config (docker info) ==="
+    - docker info 2>/dev/null | grep -iE "http proxy|https proxy|no proxy|registry" || echo "(no proxy shown by daemon)"
+    - echo "=== daemon → registry reachability (docker login dry-run via catalog) ==="
     - |
-      wget -q -S -O /dev/null "https://$CI_REGISTRY/v2/" 2>&1 | grep -E "HTTP/|401|403|Connected|Saving" | head -10 \
-        || echo "wget failed (container cannot reach registry)"
-    - echo "--- daemon reachability (docker pull hello-world would prove daemon<->registry) ---"
-    - echo "(daemon test omitted — docker login 403 already observed)"
+      if docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY" 2>&1 | tee /tmp/login.txt; then
+        echo "DAEMON_LOGIN_OK"
+      else
+        echo "DAEMON_LOGIN_FAILED (proxy block if 403 HTML above)"
+      fi
 
 # Build with the host docker daemon (DOCKER_BUILDKIT=0) — the reliable baseline
 # on this runner. BuildKit rootless was attempted (moby/buildkit:v0.20.0-rootless)
@@ -687,11 +689,12 @@ build:image:
       LOCAL_REF="$IMAGE_NAME:${CANDIDATE_TAG}"
       REGISTRY_REF="$CI_REGISTRY_IMAGE/$IMAGE_NAME:${CANDIDATE_TAG}"
       echo "Building $IMAGE_NAME → ${REGISTRY_REF}"
-    # Build in the daemon with in-daemon BuildKit (DOCKER_BUILDKIT=1) — needed
-    # because several Dockerfiles use BuildKit-only syntax (COPY --chmod, etc.).
-    # In-daemon BuildKit is NOT rootless (no rootlesskit, no seccomp issue) —
-    # it runs inside the daemon process wherever `docker build` already works.
-    - DOCKER_BUILDKIT=1 docker build -f "$DOCKERFILE" -t "$LOCAL_REF" "$CONTEXT"
+    # Build in the daemon. DOCKER_BUILDKIT is intentionally NOT set here — the
+    # daemon manages BuildKit (on by default in Docker 23+, pinned to 28.x on
+    # the runner). Setting it in the job would override the daemon's policy and
+    # is the wrong layer. Several Dockerfiles use BuildKit syntax (--chmod), so
+    # the daemon default (BuildKit on) is required.
+    - docker build -f "$DOCKERFILE" -t "$LOCAL_REF" "$CONTEXT"
     # Export the built image to a tarball, then push via skopeo over HTTPS from
     # the container. Decouples: the daemon builds+saves (reachable by the docker
     # CLI via DOCKER_HOST), the container pushes (bypasses the daemon proxy that

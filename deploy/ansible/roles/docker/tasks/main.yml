@@ -140,3 +140,26 @@
     mode: "0644"
   notify: Restart Docker
   when: docker_userns_remap | bool
+
+# Docker daemon proxy — systemd drop-in (NO_PROXY is essential when the host
+# sits behind a forward proxy: dockerd inherits HTTP(S)_PROXY from the systemd
+# environment / /etc/environment, but CI job containers do not. Without
+# NO_PROXY for internal registries, `docker pull`/`docker push` to them 403
+# through the forward proxy while container-native tools reach them directly.)
+- name: Configure Docker daemon proxy (systemd drop-in)
+  ansible.builtin.copy:
+    content: |
+      [Service]
+      {% if docker_http_proxy %}Environment="HTTP_PROXY={{ docker_http_proxy }}"{% endif %}
+      {% if docker_https_proxy %}Environment="HTTPS_PROXY={{ docker_https_proxy }}"{% endif %}
+      {% if docker_no_proxy | length > 0 %}Environment="NO_PROXY={{ docker_no_proxy | join(',') }}"{% endif %}
+    dest: /etc/systemd/system/docker.service.d/proxy.conf
+    mode: "0644"
+  notify: Restart Docker
+  when: docker_http_proxy or docker_https_proxy or docker_no_proxy | length > 0
+
+- name: Remove Docker daemon proxy drop-in (when no proxy configured)
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d/proxy.conf
+    state: absent
+  when: not (docker_http_proxy or docker_https_proxy or docker_no_proxy | length > 0)

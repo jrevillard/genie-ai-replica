@@ -8,6 +8,21 @@
 docker_userns_remap: true
 
 # =============================================================================
+# DOCKER DAEMON PROXY
+# =============================================================================
+# Bypass the host's forward proxy for internal endpoints. dockerd inherits
+# HTTP(S)_PROXY from the systemd environment (the forward proxy returns 403
+# "administrative rules" for registry.opensource.unicc.org); CI job containers
+# on the bridge NAT bypass the proxy but dockerd does not. Listing the registry
+# here lets `docker pull`/`docker push` reach it directly.
+docker_no_proxy:
+  - registry.opensource.unicc.org
+  - opensource.unicc.org
+  - localhost
+  - 127.0.0.1
+  - ::1
+
+# =============================================================================
 # GITLAB RUNNER TUNING
 # =============================================================================
 # Override defaults from roles/gitlab_runner/defaults/main.yml if needed.

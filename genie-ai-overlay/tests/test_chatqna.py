@@ -1920,6 +1920,32 @@ class TestSelfConfidenceSentinel:
         assert "It is 42." in joined
         assert '"self_confidence": 0.8' in joined
 
+    @pytest.mark.asyncio
+    async def test_streaming_sentinel_split_at_full_prefix_is_withheld(self, monkeypatch):
+        """Regression: when the tokenizer emits the FULL `[[CONF:` prefix as a chunk
+        boundary (number + closing arriving later), the bare prefix has no regex
+        substitute, so the marker-tail withholding must withhold the full literal —
+        not only proper prefixes. Otherwise `[[CONF:` leaks and the value is lost
+        (the production symptom: sentinel visible to the user + confidence fell back
+        to the retrieval value)."""
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", True)
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([{"document_id": "f1"}], 0.04, True))
+        body = TestStreamWithMetadata._make_body(
+            ["data: b'It is 42.'\n\n", "data: b'\\n[[CONF:'\n\n", "data: b'100]]'\n\n", "data: [DONE]\n\n"]
+        )
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        joined = "".join(out)
+        # No fragment of the sentinel leaks.
+        assert "[[CONF:" not in joined
+        assert "100]]" not in joined
+        assert "It is 42." in joined
+        # Value captured -> citizen-facing confidence_score reflects the self-grade
+        # (1.0), NOT the fallback retrieval value (0.04).
+        assert '"self_confidence": 1.0' in joined
+        assert '"confidence_score": 1.0' in joined
+        assert '"confidence_score": 0.04' not in joined
+
     def test_extraction_yields_translation_safe_text_multilingual(self, monkeypatch):
         """Strip-before-translate invariant (the #1 sentinel/translation collision
         risk): extraction must leave text safe to pass to the translation pipeline —

@@ -15,7 +15,7 @@ variables:
   # --- Container build/scan/promote pipeline (see docs/adr/0001-gitlab-registry-build-scan-pipeline.md) ---
   TRIVY_SEVERITY: "HIGH,CRITICAL"
   TRIVY_IGNORE_UNFIXED: "true"
-  BUILDKIT_IMAGE: "moby/buildkit:rootless:v0.20.0"
+  BUILDKIT_IMAGE: "moby/buildkit:v0.20.0-rootless"
   TRIVY_IMAGE_TAG: "aquasec/trivy:0.57.0"
   SYFT_VERSION: "v1.26.0"
   GIT_DEPTH: "0"  # full history needed for CI_COMMIT_SHORT_SHA stability across matrix jobs

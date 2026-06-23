@@ -91,9 +91,9 @@ workflow:
   image: docker:24
   variables:
     COMPOSE_PROJECT_NAME: "ci-$CI_PIPELINE_ID"
-    # Resolve compose `image:` fields to the GitLab registry so E2E pulls
-    # the pre-built candidate from build:image instead of rebuilding locally.
-    SWARM_REGISTRY_URL: "$CI_REGISTRY_IMAGE"
+    # Pull candidate images from the tmp/ quarantine namespace (where build:image
+    # pushes pre-promote candidates). IMAGE_TAG matches the candidate tag.
+    SWARM_REGISTRY_URL: "$CI_REGISTRY_IMAGE/tmp"
   allow_failure: false
   tags: [docker]
   timeout: 30m
@@ -565,52 +565,52 @@ workflow:
 
 # 16 custom images — single source of truth for the build/scan/promote matrix.
 .image_matrix: &image_matrix
-  - IMAGE_NAME: frontend
+  - IMAGE_NAME: genie-ai-frontend
     CONTEXT: components/gov-chat-frontend/
     DOCKERFILE: components/gov-chat-frontend/Dockerfile
-  - IMAGE_NAME: backend
+  - IMAGE_NAME: genie-ai-backend
     CONTEXT: components/
     DOCKERFILE: gov-chat-backend/Dockerfile
-  - IMAGE_NAME: db-migrations
+  - IMAGE_NAME: genie-ai-db-migrations
     CONTEXT: .
     DOCKERFILE: components/gov-chat-backend/Dockerfile.migrations
-  - IMAGE_NAME: document-repository
+  - IMAGE_NAME: genie-ai-document-repository
     CONTEXT: components/
     DOCKERFILE: document-repository/Dockerfile
-  - IMAGE_NAME: nginx
+  - IMAGE_NAME: genie-ai-nginx
     CONTEXT: api-gateway-solution/nginx/
     DOCKERFILE: api-gateway-solution/nginx/Dockerfile
-  - IMAGE_NAME: kong-config
+  - IMAGE_NAME: genie-ai-kong-config
     CONTEXT: api-gateway-solution/new-config/
     DOCKERFILE: api-gateway-solution/new-config/Dockerfile
-  - IMAGE_NAME: chatqna
+  - IMAGE_NAME: genie-ai-chatqna-server
     CONTEXT: .
     DOCKERFILE: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
-  - IMAGE_NAME: dataprep
+  - IMAGE_NAME: genie-ai-dataprep-arango
     CONTEXT: .
     DOCKERFILE: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
-  - IMAGE_NAME: retriever
+  - IMAGE_NAME: genie-ai-retriever-arango
     CONTEXT: .
     DOCKERFILE: genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
-  - IMAGE_NAME: reranker
+  - IMAGE_NAME: genie-ai-reranker
     CONTEXT: .
     DOCKERFILE: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
-  - IMAGE_NAME: embedding
+  - IMAGE_NAME: genie-ai-embedding
     CONTEXT: .
     DOCKERFILE: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
-  - IMAGE_NAME: textgen
+  - IMAGE_NAME: genie-ai-textgen
     CONTEXT: .
     DOCKERFILE: genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
-  - IMAGE_NAME: postgres-init
+  - IMAGE_NAME: genie-ai-postgres-init
     CONTEXT: configs/postgres/
     DOCKERFILE: configs/postgres/Dockerfile
-  - IMAGE_NAME: keycloak
+  - IMAGE_NAME: genie-ai-keycloak
     CONTEXT: configs/keycloak/
     DOCKERFILE: configs/keycloak/Dockerfile
-  - IMAGE_NAME: keycloak-config
+  - IMAGE_NAME: genie-ai-keycloak-config
     CONTEXT: configs/keycloak/
     DOCKERFILE: configs/keycloak/Dockerfile.config-cli
-  - IMAGE_NAME: tempo-proxy
+  - IMAGE_NAME: genie-ai-tempo-proxy
     CONTEXT: tools/tempo-proxy/
     DOCKERFILE: tools/tempo-proxy/Dockerfile
 
@@ -657,9 +657,9 @@ build:image:
       else
         CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
       fi
-      REGISTRY_REF="$CI_REGISTRY_IMAGE/$IMAGE_NAME:${CANDIDATE_TAG}"
-      CACHE_REF="$CI_REGISTRY_IMAGE/$IMAGE_NAME/cache"
-      echo "Building $IMAGE_NAME → ${REGISTRY_REF}"
+      REGISTRY_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
+      CACHE_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:cache"
+      echo "Building $IMAGE_NAME → ${REGISTRY_REF} (tmp/ quarantine namespace)"
       docker buildx build \
         --push \
         -t "$REGISTRY_REF" \
@@ -710,7 +710,7 @@ scan:image:
       else
         CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
       fi
-      IMAGE="$CI_REGISTRY_IMAGE/$IMAGE_NAME:${CANDIDATE_TAG}"
+      IMAGE="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
       echo "Scanning $IMAGE"
     # 1. SBOM (SPDX JSON) — composition source of truth + audit artifact
     - syft -o spdx-json "$IMAGE" > sbom.spdx.json
@@ -739,9 +739,9 @@ promote:image:
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
-    - SRC="$CI_REGISTRY_IMAGE/$IMAGE_NAME:pending-$CI_COMMIT_SHORT_SHA"
+    - SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:pending-$CI_COMMIT_SHORT_SHA"
     - DIGEST=$(docker buildx imagetools inspect "$SRC" --format '{{.Manifest.Digest}}')
-    - echo "Promoting $IMAGE_NAME digest ${DIGEST:0:32}..."
+    - echo "Promoting $IMAGE_NAME digest ${DIGEST:0:32}... (tmp/ → real namespace)"
     - |
       if [ -n "$CI_COMMIT_TAG" ]; then
         FINAL_TAGS="$CI_COMMIT_TAG latest"
@@ -750,10 +750,11 @@ promote:image:
       fi
     - |
       for t in $FINAL_TAGS; do
-        # Retag by immutable digest, never by the mutable pending tag.
-        docker buildx imagetools create -t "$CI_REGISTRY_IMAGE/$IMAGE_NAME:$t" "$CI_REGISTRY_IMAGE/$IMAGE_NAME@${DIGEST}"
+        # Cross-repo copy by immutable digest: tmp/<image> → <image>. Blob-mount,
+        # no re-upload. The real namespace receives ONLY deployable tags.
+        docker buildx imagetools create -t "$CI_REGISTRY_IMAGE/$IMAGE_NAME:$t" "$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME@${DIGEST}"
       done
-    # Quarantine tag cleanup — promoted digest now lives under final tags
+    # Quarantine cleanup — delete the candidate tag from tmp/ (cache ref preserved)
     - docker buildx imagetools rm "$SRC" 2>/dev/null || true
   parallel:
     matrix: *image_matrix
@@ -1237,6 +1238,52 @@ config:validate:
 #
 # CI variables override empty values from the env template (shell env > .env file).
 # The env template provides non-secret config (KEYCLOAK_URL, KEYCLOAK_REALM, etc.).
+# Purge orphan candidate tags from the tmp/ quarantine namespace. Keeps :cache
+# (build cache, must persist) and any non-candidate tags. Runs daily so orphaned
+# pending-*/mr-* tags (failed pipelines, abandoned MRs) don't accumulate. The
+# real namespace (genie-ai/<image>) is never touched — only tmp/* repos.
+scheduled:purge-tmp:
+  stage: scheduled
+  image: alpine:3.20
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  variables:
+    PURGE_AGE_HOURS: "24"
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - |
+      set -e
+      # List all registry repositories, keep only those under tmp/
+      page=1
+      while :; do
+        repos=$(curl -sk --header "PRIVATE-TOKEN: $PURGE_TMP_TOKEN" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/registry/repositories?per_page=100&page=$page")
+        echo "$repos" | jq -r '.[].path' | grep '/tmp/' || true
+        [ "$(echo "$repos" | jq 'length')" -lt 100 ] && break
+        page=$((page+1))
+      done > /tmp/tmp_repos.txt
+      echo "tmp/ repos to clean:"
+      cat /tmp/tmp_repos.txt
+      # For each tmp/ repo, delete candidate tags (pending-*/mr-*) older than PURGE_AGE_HOURS, keep :cache
+      while read -r repo_path; do
+        [ -z "$repo_path" ] && continue
+        repo_id=$(curl -sk --header "PRIVATE-TOKEN: $PURGE_TMP_TOKEN" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/registry/repositories" | \
+          jq -r ".[] | select(.path==\"$repo_path\") | .id")
+        tags=$(curl -sk --header "PRIVATE-TOKEN: $PURGE_TMP_TOKEN" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/registry/repositories/$repo_id/tags?per_page=100")
+        echo "$tags" | jq -r '.[] | select(.name|test("^(pending-|mr-)")) | "\(.name) \(.created_at)"' | while read -r tag_name created; do
+          age_h=$(( ($(date +%s) - $(date -d "$created" +%s)) / 3600 ))
+          if [ "$age_h" -ge "$PURGE_AGE_HOURS" ]; then
+            echo "  deleting $repo_path:$tag_name (age ${age_h}h)"
+            curl -sk -X DELETE --header "PRIVATE-TOKEN: $PURGE_TMP_TOKEN" \
+              "$CI_API_V4_URL/projects/$CI_PROJECT_ID/registry/repositories/$repo_id/tags/$tag_name" || true
+          fi
+        done
+      done < /tmp/tmp_repos.txt
+      echo "purge complete"
+
 scheduled:integration:
   extends: .e2e_integration_base
   stage: scheduled

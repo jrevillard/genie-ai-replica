@@ -140,3 +140,15 @@
     mode: "0644"
   notify: Restart Docker
   when: docker_userns_remap | bool
+
+- name: Clear Docker daemon userns-remap config (when disabled)
+  ansible.builtin.copy:
+    content: |
+      {}
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+  notify: Restart Docker
+  when: not (docker_userns_remap | bool)
+  # NOTE: this role is the sole manager of daemon.json on runner hosts. On GPU
+  # hosts deploy-gpu.yml merges NVIDIA config separately — keep these roles on
+  # different hosts to avoid clobbering.

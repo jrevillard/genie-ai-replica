@@ -705,7 +705,11 @@ promote:image:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
     - SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:pending-$CI_COMMIT_SHORT_SHA"
-    - DIGEST=$(docker buildx imagetools inspect "$SRC" --format '{{.Manifest.Digest}}')
+    # Extract the manifest digest. `buildx imagetools inspect --format` templates
+    # don't expose the digest cleanly on the tplInputs type (field errors / silent
+    # default dump). Compute it from the raw manifest — the digest IS the sha256
+    # of the manifest bytes (verified to match the inspect Digest field).
+    - DIGEST="sha256:$(docker buildx imagetools inspect --raw "$SRC" | sha256sum | awk '{print $1}')"
     - echo "Promoting $IMAGE_NAME digest ${DIGEST:0:32}... (tmp/ → real namespace)"
     - |
       if [ -n "$CI_COMMIT_TAG" ]; then

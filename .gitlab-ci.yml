@@ -1,8 +1,11 @@
 stages:
-  - lint
-  - test
   - build       # publish candidate images to GitLab Container Registry
   - scan        # Trivy gate (HIGH/CRITICAL) + Syft SBOM artifact
+  # NOTE: build/scan placed before lint/test TEMPORARILY for faster debug
+  # feedback (lint+test take ~10min). Revert to lint → test → build → scan
+  # once the pipeline is green.
+  - lint
+  - test
   - config
   - e2e
   - promote     # retag tested digests to deployable tags (main/tags only)

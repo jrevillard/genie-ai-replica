@@ -321,9 +321,12 @@ def _display_confidence(retrieval_confidence: float, self_confidence: float | No
 # the answer). `\s*$` tolerates trailing whitespace/newlines from the orchestrator.
 _SELF_CONF_SENTINEL_RE = re.compile(r"\[\[CONF:\s*(\d{1,3})\s*\]\]\s*$")
 _SELF_CONF_SENTINEL_PREFIX = "[[CONF:"
-# Trailing partial sentinel (no closing `]]`), dropped on the final stream flush
-# so a malformed/incomplete marker never leaks to the user as literal text.
-_SELF_CONF_PARTIAL_RE = re.compile(r"\s*\[\[CONF:[^\]\[]*$")
+# Trailing PARTIAL sentinel: an in-progress `[[CONF:<digits>]]` that has not yet
+# completed (digits / closing brackets still arriving). Used (a) in the streaming
+# loop to withhold such a tail so it never leaks mid-stream, and (b) on the final
+# flush to drop any malformed/incomplete marker. Allows `]` (closing brackets are
+# part of the partial); disallows `[` so a new marker can't be swallowed.
+_SELF_CONF_PARTIAL_RE = re.compile(r"\s*\[\[CONF:[^\[]*$")
 
 
 def _extract_self_confidence(text: str) -> tuple[str, float | None]:
@@ -1441,7 +1444,16 @@ class ChatQnAService:
                 buffer, _sc = _extract_self_confidence(buffer)
                 if _sc is not None:
                     self_confidence = _sc
-            tail = _streaming_marker_tail_len(buffer)
+                # The sentinel is a VARIABLE pattern [[CONF:<digits>]]; a chunk
+                # boundary landing after digits or a closing bracket leaves a tail
+                # that is not a prefix of the literal "[[CONF:" (so the fixed-marker
+                # tail check misses it) and would leak. Withhold any in-progress
+                # sentinel so it is stitched, not emitted.
+                pm = _SELF_CONF_PARTIAL_RE.search(buffer)
+                partial_tail = len(buffer) - pm.start() if pm else 0
+            else:
+                partial_tail = 0
+            tail = max(_streaming_marker_tail_len(buffer), partial_tail)
             if tail >= len(buffer):
                 # Whole buffer is a potential partial marker (or trailing
                 # whitespace lead-in) — withhold until more input arrives.

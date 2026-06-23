@@ -549,6 +549,14 @@ workflow:
 # MR approval rules (see docs/adr/0001).
 include:
   - template: Jobs/Container-Scanning.gitlab-ci.yml
+  # --- Security testing suite (GitLab Ultimate) ---
+  # All run in the `test` stage, advisory (allow_failure), findings land in the
+  # security dashboard + MR widget. Blocking via MR approval rules, same model
+  # as container scanning.
+  - template: Jobs/Secret-Detection.gitlab-ci.yml   # leaked tokens/passwords in source + history
+  - template: Jobs/SAST.gitlab-ci.yml               # source-code vulns (JS/Vue, Python, Dart)
+  - template: Jobs/Dependency-Scanning.gitlab-ci.yml # known vulns in npm/pip/pub deps
+  - template: Jobs/SAST-IaC.gitlab-ci.yml           # misconfigs in docker-compose / ansible / k8s
 
 # --- Container Registry pipeline (build → scan → promote) ---
 # Publishes the 16 custom images to the GitLab Container Registry. See

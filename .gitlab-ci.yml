@@ -634,104 +634,22 @@ workflow:
   - if: $CI_COMMIT_TAG
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-# Diagnostic — confirms BOTH container and daemon can reach the registry, and
-# reveals the daemon's proxy config so we know whether the ansible NO_PROXY fix
-# (roles/docker) applies. allow_failure so it never blocks the pipeline.
-diag:registry-reachability:
-  stage: .pre
-  image: docker:28
-  rules: *build_rules
-  allow_failure: true
-  script:
-    - echo "CI_REGISTRY=$CI_REGISTRY  DOCKER_HOST=$DOCKER_HOST"
-    - echo "=== container proxy env ==="
-    - env | grep -iE "http_proxy|https_proxy|no_proxy" || echo "(no proxy env in container)"
-    - echo "=== container HTTPS reachability ==="
-    - wget -q -S -O /dev/null "https://$CI_REGISTRY/v2/" 2>&1 | grep -E "HTTP/|401|403" | head -3 || echo "(container cannot reach registry)"
-    - echo "=== daemon proxy config (docker info) ==="
-    - docker info 2>/dev/null | grep -iE "http proxy|https proxy|no proxy|registry" || echo "(no proxy shown by daemon)"
-    - echo "=== daemon → registry reachability (docker login dry-run via catalog) ==="
-    - |
-      if docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY" 2>&1 | tee /tmp/login.txt; then
-        echo "DAEMON_LOGIN_OK"
-      else
-        echo "DAEMON_LOGIN_FAILED (proxy block if 403 HTML above)"
-      fi
-
-# Diagnostic — gather evidence on WHY `docker build` picks the docker-container
-# buildx driver (which fails: privileged mode incompatible with userns-remap).
-# In standard docker the "default" builder uses the docker (in-daemon) driver;
-# a docker-container builder should only exist if explicitly created. This job
-# shows what buildx actually sees so we can fix at the right layer. No fix here.
-diag:buildx:
-  stage: .pre
-  image: docker:28
-  rules: *build_rules
-  allow_failure: true
-  script:
-    - echo "=== docker version ==="
-    - docker version
-    - echo "=== buildx version ==="
-    - docker buildx version
-    - echo "=== buildx builders (NAME/DRIVER/ENDPOINT) — KEY EVIDENCE ==="
-    - docker buildx ls
-    - echo "=== docker contexts ==="
-    - docker context ls
-    - echo "=== relevant env ==="
-    - env | grep -iE "BUILDKIT|BUILDX|DOCKER_HOST|DOCKER_CONFIG" || echo "(none)"
-    - echo "=== inspect default builder ==="
-    - docker buildx inspect default || true
-    - echo "=== minimal build test (BuildKit syntax) — which driver + result ==="
-    - |
-      mkdir -p /tmp/ctx && printf 'FROM busybox\nCOPY --chmod=755 /etc/hostname /tmp/h\n' > /tmp/ctx/Dockerfile
-      docker build -t test:buildx-probe /tmp/ctx 2>&1 | head -25 || echo "(build failed — see driver + error above)"
-
-# Decisive test: does an explicit docker CONTEXT over the tcp socket proxy make
-# buildx use the 'docker' (in-daemon buildkit) driver? If yes, the docker driver
-# supports --chmod + works WITH userns-remap (no separate container, no privileged,
-# no nested userns) → clean fix with ZERO tradeoff (just context create + use).
-diag:buildx-docker-driver:
-  stage: .pre
-  image: docker:28
-  rules: *build_rules
-  allow_failure: true
-  script:
-    - |
-      set +e
-      echo "=== current buildx ls ==="
-      docker buildx ls
-      echo "=== create explicit docker context over the tcp socket proxy ==="
-      docker context create tcpctx --docker host=tcp://172.17.0.1:2375
-      docker context use tcpctx
-      echo "=== buildx ls after context switch (KEY: driver of tcpctx) ==="
-      docker buildx ls
-      echo "=== try docker build with BuildKit syntax (does docker driver work over tcp?) ==="
-      mkdir -p /tmp/ctx
-      printf 'FROM busybox\nCOPY --chmod=755 /etc/hostname /tmp/h\n' > /tmp/ctx/Dockerfile
-      docker build -t test:drvprobe /tmp/ctx 2>&1 | tail -20
-      echo "BUILD_EXIT=$?"
-
-# Build candidate images with BuildKit rootless and push to the GitLab Container
-# Registry. Rootless buildkit runs WITHOUT the docker daemon (no socket-proxy
-# interaction for the build) and WITHOUT privileged mode — it creates its own
-# user namespace via rootlesskit, which needs seccomp/apparmor unconfinement
-# (set via the runner's security_opt, see deploy/ansible/roles/gitlab_runner).
-# This is the GitLab-blessed Kaniko replacement and supports all BuildKit
-# syntax (--chmod, --mount) + the registry cache backend.
+# Build candidate images with docker buildx (docker-container buildkit driver)
+# and push to the GitLab Container Registry. This is the modern path: supports
+# all BuildKit syntax (--chmod, --mount) + the registry cache backend.
+#
+# Requires privileged buildkit container, which needs userns-remap DISABLED on
+# the runner daemon (see deploy/ansible/group_vars/gitlab_runners/vars.yml).
+# userns-remap was incompatible with every container-based buildkit mode
+# (docker-container: privileged conflict; rootless: nested userns). The socket
+# proxy still filters the Docker API; the dedicated runner VM provides isolation.
 build:image:
   stage: build
-  image:
-    name: moby/buildkit:rootless
-    entrypoint: [""]
+  image: docker:28
   tags: [docker]
   interruptible: true
-  variables:
-    BUILDKITD_FLAGS: "--oci-worker-no-process-sandbox"
   before_script:
-    # BuildKit rootless does NOT use the docker daemon, so `docker login` is
-    # useless here. Write a docker config so buildctl authenticates when pushing.
-    - mkdir -p ~/.docker
-    - printf '{"auths":{"%s":{"auth":"%s"}}}' "$CI_REGISTRY" "$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')" > ~/.docker/config.json
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
     - |
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
@@ -740,15 +658,15 @@ build:image:
         CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
       fi
       REGISTRY_REF="$CI_REGISTRY_IMAGE/$IMAGE_NAME:${CANDIDATE_TAG}"
+      CACHE_REF="$CI_REGISTRY_IMAGE/$IMAGE_NAME/cache"
       echo "Building $IMAGE_NAME → ${REGISTRY_REF}"
-      buildctl-daemonless.sh build \
-        --frontend dockerfile.v0 \
-        --local context="$CONTEXT" \
-        --local dockerfile="$(dirname "$DOCKERFILE")" \
-        --opt filename="$(basename "$DOCKERFILE")" \
-        --output type=image,name="${REGISTRY_REF}",push=true \
-        --cache-from type=registry,ref="$CI_REGISTRY_IMAGE/$IMAGE_NAME/cache" \
-        --cache-to type=registry,ref="$CI_REGISTRY_IMAGE/$IMAGE_NAME/cache",mode=max
+      docker buildx build \
+        --push \
+        -t "$REGISTRY_REF" \
+        -f "$DOCKERFILE" \
+        --cache-from "type=registry,ref=$CACHE_REF" \
+        --cache-to "type=registry,ref=$CACHE_REF,mode=max" \
+        "$CONTEXT"
   parallel:
     matrix: *image_matrix
   rules: *build_rules

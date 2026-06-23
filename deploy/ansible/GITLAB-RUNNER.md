@@ -23,6 +23,8 @@ Ansible playbook to install and configure a GitLab Runner with Docker executor f
 
 ### Security layers
 
+> **CHANGE (2026-06)**: `userns-remap` is now **disabled** (`docker_userns_remap: false` in `group_vars/gitlab_runners/vars.yml`). It was incompatible with every container-based BuildKit mode (docker-container driver needs privileged; rootless needs a nested userns), blocking `docker buildx` entirely. Isolation now relies on the **socket proxy** (API filtering) + **dedicated VM**. The `userns-remap` references below are kept for historical context / re-enable guidance. See `docs/adr/0001-gitlab-registry-build-scan-pipeline.md`.
+
 | Layer | Mechanism | Purpose |
 |-------|-----------|---------|
 | API filtering | docker-socket-proxy | Default-deny; CONTAINERS/IMAGES/NETWORKS/VOLUMES/EXEC/POST/BUILD/AUTH/DISTRIBUTION allowed (AUTH + DISTRIBUTION required for CI registry login/push) |

@@ -5,19 +5,12 @@
 # =============================================================================
 # DOCKER SECURITY
 # =============================================================================
-docker_userns_remap: true
-
-# =============================================================================
-# JOB CONTAINER security_opt
-# =============================================================================
-# BuildKit rootless (used by build:image) needs unshare/clone syscalls to create
-# its user namespace via rootlesskit. The default seccomp profile blocks those,
-# producing "fork/exec /proc/self/exe: operation not permitted". Relaxing seccomp
-# (+ apparmor) for job containers unblocks rootless buildkit. userns-remap still
-# isolates container root → unprivileged host uid, so the relaxation is contained.
-gitlab_runner_security_opt:
-  - "seccomp=unconfined"
-  - "apparmor=unconfined"
+# userns-remap DISABLED: it was incompatible with every container-based buildkit
+# mode (docker-container driver needs privileged; rootless needs a nested userns).
+# The socket proxy still filters the Docker API, and the runner runs on a
+# dedicated VM, so isolation is maintained at those layers. See
+# docs/adr/0001-gitlab-registry-build-scan-pipeline.md for the full rationale.
+docker_userns_remap: false
 
 # =============================================================================
 # GITLAB RUNNER TUNING

@@ -549,6 +549,39 @@ workflow:
 # MR approval rules (see docs/adr/0001).
 include:
   - template: Jobs/Container-Scanning.gitlab-ci.yml
+  # --- Security testing suite (GitLab Ultimate) ---
+  # All run in the `test` stage, advisory (allow_failure), findings land in the
+  # security dashboard + MR widget. Blocking via MR approval rules, same model
+  # as container scanning.
+  - template: Jobs/Secret-Detection.gitlab-ci.yml   # leaked tokens/passwords in source + history
+  - template: Jobs/SAST.gitlab-ci.yml               # source-code vulns (JS/Vue, Python, Dart)
+  - template: Jobs/Dependency-Scanning.gitlab-ci.yml # known vulns in npm/pip/pub deps
+  - template: Jobs/SAST-IaC.gitlab-ci.yml           # misconfigs in docker-compose / ansible / k8s
+
+# Override the security templates' default rules (which run on branch pipelines
+# only via `if: $CI_COMMIT_BRANCH`) so they ALSO run on MR + release branches —
+# pre-merge coverage. Applied to the jobs active for the GENIE.AI stack
+# (JS/Vue + Python + npm/pip deps + IaC + secrets). Other language-specific
+# SAST jobs keep template defaults (won't activate for absent languages).
+.security_run_rules: &security_run_rules
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    when: never
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - if: $CI_COMMIT_BRANCH =~ /^release\//
+
+secret_detection:
+  rules: *security_run_rules
+semgrep-sast:
+  rules: *security_run_rules
+nodejs-scan-sast:
+  rules: *security_run_rules
+gemnasium-dependency_scanning:
+  rules: *security_run_rules
+gemnasium-python-dependency_scanning:
+  rules: *security_run_rules
+kics-iac-sast:
+  rules: *security_run_rules
 
 # --- Container Registry pipeline (build → scan → promote) ---
 # Publishes the 16 custom images to the GitLab Container Registry. See

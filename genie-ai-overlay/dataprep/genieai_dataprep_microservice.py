@@ -112,7 +112,6 @@ class DocRepoIngestPayload(BaseModel):
     fileName: str
     fileBase64: str
     fileType: str
-    uploadDate: str
     fileLabels: list[str] | None = None
     storagePath: str | None = None
 
@@ -189,7 +188,6 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 file_path=save_path,
                 file_type=payload.fileType,
                 file_labels=payload.fileLabels,
-                upload_date=payload.uploadDate,
                 graph_name=ARANGO_GRAPH_NAME,
                 insert_async=ARANGO_INSERT_ASYNC,
                 insert_batch_size=ARANGO_BATCH_SIZE,

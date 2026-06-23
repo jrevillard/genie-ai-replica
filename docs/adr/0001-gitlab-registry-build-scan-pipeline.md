@@ -22,72 +22,69 @@ registry — and progressively retire the local Swarm registry.
 
 ### Constraints
 
-- **CI runner is non-privileged.** The existing comment at
-  `.gitlab-ci.yml:130` ("DOCKER_BUILDKIT=0 avoids privileged-mode requirement
-  on CI runners") documented a real 2024 constraint: BuildKit (default), DinD,
-  and buildx docker-container driver all require privileged mode.
+- **CI runner is non-privileged**, hardened with a docker-socket-proxy (API
+  filtering) on a tcp endpoint. E2E jobs run only on merge trains.
 - **Self-hosted GitLab** — `opensource.unicc.org` is not a trusted OIDC issuer
   for public Sigstore Fulcio.
 - **Sovereign public-sector project** — roots of trust should be self-owned.
-- E2E jobs run **only on merge trains** (`$CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"`).
+
+### The userns-remap × buildkit conflict (architectural finding)
+
+The runner originally enabled `userns-remap` on the daemon for UID isolation.
+Systematic debugging proved this is **fundamentally incompatible with every
+container-based BuildKit mode**:
+
+| BuildKit mode | Blocked by |
+|---------------|-----------|
+| docker-container driver (buildx default) | privileged container ↔ userns-remap ("privileged mode is incompatible with user namespaces") |
+| rootless (standalone) | rootlesskit's nested userns (`newuidmap: write to uid_map failed`) |
+| docker driver (in-daemon) | buildx refuses the docker driver on non-local (tcp) endpoints — only unix sockets qualify |
+
+Every avenue was tested empirically (see git history: rootless, security_opt,
+docker-container driver-opt, explicit docker context). The triangle
+**userns-remap × socket-proxy-tcp × BuildKit features** is impossible — one
+constraint must give. The decision (option 1) was to **disable userns-remap**:
+it was the only constraint blocking modern BuildKit, and its marginal security
+value is low given the socket proxy (API filtering) + dedicated runner VM
+already provide isolation.
 
 ## Decision
 
 Implement a 3-stage pipeline — `build` → `scan` → `promote` — using 2026
 supply-chain best practices. Signing is deferred to phase 2.
 
-### 1. Builder: classic `docker build` (DOCKER_BUILDKIT=0)
+### 1. Builder: docker buildx (docker-container BuildKit driver), native
 
-**Originally chosen: BuildKit rootless** (`moby/buildkit:v0.20.0-rootless`),
-GitLab's designated Kaniko replacement for non-privileged runners. The first
-pipeline attempt failed because the runner's seccomp profile blocks
-rootlesskit's user-namespace setup:
+With userns-remap disabled (see above), the buildx **docker-container driver**
+runs its privileged BuildKit container without conflict. `build:image` uses
+`docker buildx build --push` with the **registry cache backend**
+(`--cache-to/--cache-from type=registry,mode=max`) — the modern path: supports
+all BuildKit syntax (`--chmod`, `--mount`), multi-platform ready, efficient
+layer caching. No `DOCKER_BUILDKIT` env manipulation (the daemon manages
+BuildKit, on by default in Docker 23+; runner pinned to 28.x).
 
-```
-could not connect to unix:///run/user/1000/buildkit/buildkitd.sock
-[rootlesskit:parent] error: failed to start the child: fork/exec /proc/self/exe: operation not permitted
-```
-
-BuildKit rootless needs `security_opt = ["seccomp=unconfined","apparmor=unconfined"]`
-in the runner's `config.toml`, which is an infra change outside this MR's scope.
-
-**Working baseline**: classic `docker build` with `DOCKER_BUILDKIT=0` — the
-same approach the existing E2E job uses (`.e2e_integration_base`), proven on
-this runner. Reliability over novelty; the build/scan/promote **flow** (the
-actual security value of this MR) is builder-agnostic.
-
-**Cache**: classic `--cache-from` with a `docker pull` of the previous image
-first. Less efficient than BuildKit's registry cache backend, but works on the
-current runner. A follow-up enables BuildKit rootless (or in-daemon BuildKit)
-once the runner security_opt is relaxed — see "Future builder upgrade" below.
-
-**Future builder upgrade**: either (a) relax the runner's seccomp/AppArmor and
-switch to BuildKit rootless for the registry cache backend + multi-platform
-support, or (b) try `DOCKER_BUILDKIT=1` (in-daemon BuildKit) which avoids
-rootlesskit entirely and may work without seccomp changes. Both tracked as
-separate infra tickets.
-
-### 2. Flow: scan-before-publish with digest promotion
+### 2. Flow: tmp/ quarantine namespace → scan → promote (digest)
 
 ```
-build:image → :pending-<sha> (main/tag) or :mr-<iid>-<sha> (MR)
+build:image  → tmp/<image>:pending-<sha> (main/tag) | tmp/<image>:mr-<iid>-<sha> (MR)
      ↓
-scan:image → Syft SBOM + Trivy gate (HIGH/CRITICAL fixable) + DB freshness gate
+scan:image   → Syft SBOM + Trivy gate on tmp/<image>:<candidat>
      ↓
-[e2e:integration on merge trains — pulls candidate, runs --no-build]
+[e2e:integration on merge trains — pulls tmp/ candidate, runs --no-build]
      ↓
-promote:image → retag immutable DIGEST → :main / :main-<sha> / :<vX.Y.Z> / :latest
-              → delete :pending-<sha>
+promote:image → cross-repo copy tmp/<image>@DIGEST → <image>:main / :main-<sha> / :vX.Y.Z / :latest
+              → delete tmp/<image>:<candidat>
 ```
 
-- Vulnerable images never reach a deployable tag — they sit under the
-  quarantine `:pending-<sha>` tag, which no deployment references and which is
-  deleted after successful promotion.
-- Promotion is by **immutable digest**, never by the mutable pending tag. The
-  exact bytes that were scanned are the bytes that get deployed.
-- E2E pulls the candidate from the registry (`docker compose pull` + `up
-  --no-build`) instead of rebuilding locally — tests validate the exact
-  artifact that would be promoted.
+- Candidates live in a **separate `tmp/` namespace** (`registry.../genie-ai/tmp/<image>`).
+  The real namespace (`genie-ai/<image>`) only ever holds deployable tags —
+  orphan candidates never pollute it, which matters for registry audit clarity.
+- Promotion is a **cross-repo copy by immutable digest** (blob-mount, no
+  re-upload). The exact bytes scanned are the bytes deployed.
+- E2E pulls the candidate from `tmp/` (`docker compose pull` + `up --no-build`)
+  instead of rebuilding locally — tests validate the exact artifact promoted.
+- Orphan `tmp/` tags (failed pipelines, abandoned MRs) are reaped by GitLab's
+  native cleanup policy — see the last section of this ADR.
 
 ### 3. Promote ordering and the merge-train design
 
@@ -130,12 +127,13 @@ entry must reference a ticket and is reviewed quarterly.
 
 | Alternative | Status |
 |-------------|--------|
-| Kaniko | Rejected — deprecated; Google no longer actively develops it. |
-| DinD + `docker buildx` | Rejected — requires privileged runner. |
-| BuildKit rootless (`moby/buildkit:v0.20.0-rootless`) | **Attempted, failed** — runner seccomp blocks rootlesskit user-namespace setup. Needs `security_opt` change in runner config.toml. Tracked for future. |
-| `DOCKER_BUILDKIT=1` (in-daemon BuildKit) | Not yet tried — middle ground that may work without seccomp changes and gives the registry cache backend. Tracked for follow-up. |
-| Build → push → scan | Rejected — anti-pattern: publishes vulnerable images to deployable tags before scanning. |
-| Build → scan local tar → push (Pattern D) | Rejected — image tarballs (100 MB–1 GB × 16) exceed GitLab artifact limits. |
+| Keep userns-remap + find a working buildkit mode | **Impossible** — proven exhaustively (see conflict table above). |
+| Disable userns-remap (chosen) | **Selected** — unblocks docker-container BuildKit; isolation retained via socket proxy + dedicated VM. |
+| Disable socket proxy (unix socket direct) | Rejected — loses API filtering; would enable docker-driver BuildKit but weakens security. |
+| Legacy builder (`DOCKER_BUILDKIT=0`) + Dockerfile rewrites | Rejected — deprecated builder (debt) + couples app code to infra limits. |
+| BuildKit rootless | Rejected — needs nested userns, blocked by userns-remap (now moot since userns disabled, but docker-container is simpler). |
+| External BuildKit service (remote driver) | Rejected — extra infra for a configurable limit. |
+| Build → push → scan (no quarantine) | Rejected — anti-pattern: unscanned images under deployable tags. |
 | Cosign keyless now | Deferred — requires self-hosted Sigstore stack, separate infra initiative. |
 
 ## Consequences

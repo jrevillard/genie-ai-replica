@@ -36,19 +36,36 @@ registry — and progressively retire the local Swarm registry.
 Implement a 3-stage pipeline — `build` → `scan` → `promote` — using 2026
 supply-chain best practices. Signing is deferred to phase 2.
 
-### 1. Builder: BuildKit rootless
+### 1. Builder: classic `docker build` (DOCKER_BUILDKIT=0)
 
-Use `moby/buildkit:rootless` with `buildctl-daemonless.sh` and
-`BUILDKITD_FLAGS: --oci-worker-no-process-sandbox`. Per GitLab's official docs
-(docs.gitlab.com/ci/docker/using_buildkit), BuildKit rootless is the
-**designated Kaniko replacement** and works on non-privileged runners with no
-docker daemon and no privileged container. This supersedes the 2024-era
-`DOCKER_BUILDKIT=0` workaround.
+**Originally chosen: BuildKit rootless** (`moby/buildkit:v0.20.0-rootless`),
+GitLab's designated Kaniko replacement for non-privileged runners. The first
+pipeline attempt failed because the runner's seccomp profile blocks
+rootlesskit's user-namespace setup:
 
-**Cache**: BuildKit registry cache backend (`--cache-to/--cache-from
-type=registry,ref=…/cache,mode=max`) — a dedicated cache image holding all
-intermediate layers. Far more effective than classic `--cache-from`, which
-pulls the full image each build.
+```
+could not connect to unix:///run/user/1000/buildkit/buildkitd.sock
+[rootlesskit:parent] error: failed to start the child: fork/exec /proc/self/exe: operation not permitted
+```
+
+BuildKit rootless needs `security_opt = ["seccomp=unconfined","apparmor=unconfined"]`
+in the runner's `config.toml`, which is an infra change outside this MR's scope.
+
+**Working baseline**: classic `docker build` with `DOCKER_BUILDKIT=0` — the
+same approach the existing E2E job uses (`.e2e_integration_base`), proven on
+this runner. Reliability over novelty; the build/scan/promote **flow** (the
+actual security value of this MR) is builder-agnostic.
+
+**Cache**: classic `--cache-from` with a `docker pull` of the previous image
+first. Less efficient than BuildKit's registry cache backend, but works on the
+current runner. A follow-up enables BuildKit rootless (or in-daemon BuildKit)
+once the runner security_opt is relaxed — see "Future builder upgrade" below.
+
+**Future builder upgrade**: either (a) relax the runner's seccomp/AppArmor and
+switch to BuildKit rootless for the registry cache backend + multi-platform
+support, or (b) try `DOCKER_BUILDKIT=1` (in-daemon BuildKit) which avoids
+rootlesskit entirely and may work without seccomp changes. Both tracked as
+separate infra tickets.
 
 ### 2. Flow: scan-before-publish with digest promotion
 
@@ -111,14 +128,15 @@ entry must reference a ticket and is reviewed quarterly.
 
 ## Alternatives considered
 
-| Alternative | Rejected because |
-|-------------|------------------|
-| Kaniko | Deprecated; Google no longer actively develops it. BuildKit rootless is the GitLab-blessed replacement. |
-| DinD + `docker buildx` | Requires privileged runner. BuildKit rootless removes that constraint. |
-| Classic `docker build` (`DOCKER_BUILDKIT=0`) | Works (the 2024 workaround) but gives up BuildKit features: multi-stage caching, registry cache backend, concurrent stage resolution. |
-| Build → push → scan | Anti-pattern: publishes vulnerable images to deployable tags before scanning. |
-| Build → scan local tar → push (Pattern D) | Image tarballs (100 MB–1 GB × 16) exceed GitLab artifact limits. |
-| Cosign keyless now | Requires self-hosted Sigstore stack — separate infra initiative, out of scope. |
+| Alternative | Status |
+|-------------|--------|
+| Kaniko | Rejected — deprecated; Google no longer actively develops it. |
+| DinD + `docker buildx` | Rejected — requires privileged runner. |
+| BuildKit rootless (`moby/buildkit:v0.20.0-rootless`) | **Attempted, failed** — runner seccomp blocks rootlesskit user-namespace setup. Needs `security_opt` change in runner config.toml. Tracked for future. |
+| `DOCKER_BUILDKIT=1` (in-daemon BuildKit) | Not yet tried — middle ground that may work without seccomp changes and gives the registry cache backend. Tracked for follow-up. |
+| Build → push → scan | Rejected — anti-pattern: publishes vulnerable images to deployable tags before scanning. |
+| Build → scan local tar → push (Pattern D) | Rejected — image tarballs (100 MB–1 GB × 16) exceed GitLab artifact limits. |
+| Cosign keyless now | Deferred — requires self-hosted Sigstore stack, separate infra initiative. |
 
 ## Consequences
 

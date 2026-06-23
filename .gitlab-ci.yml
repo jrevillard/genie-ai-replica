@@ -693,25 +693,28 @@ diag:buildx-probe:
   rules: *build_rules
   allow_failure: true
   script:
-    - echo "=== buildx create help (look for driver-opt / userns / privileged) ==="
-    - docker buildx create --help 2>&1 | sed -n '/driver-opt/,+8p'
-    - echo "=== attempt 1: default docker-container builder + BuildKit-syntax build ==="
-    - docker buildx create --name probe-bk --driver docker-container 2>&1 || true
-    - docker buildx inspect probe-bk --bootstrap 2>&1 | tail -15 || true
-    - mkdir -p /tmp/ctx && printf 'FROM busybox\nCOPY --chmod=755 /etc/hostname /tmp/h\n' > /tmp/ctx/Dockerfile
-    - docker buildx build --builder probe-bk --load -t test:g /tmp/ctx 2>&1 | tail -15 || echo "ATTEMPT1_FAILED"
-    - echo "=== inspect the buildkit container's UsernsMode + Privileged ==="
-    - docker inspect buildx_buildkit_probe-bk0 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin)[0]; hc=d['HostConfig']; print('Privileged:', hc.get('Privileged')); print('UsernsMode:', hc.get('UsernsMode'))" 2>&1 || echo "(container not found/inspectable)"
-    - docker buildx rm probe-bk 2>/dev/null || true
-    - echo "=== attempt 2: try driver-opt flags that might force host userns ==="
-    - for opt in "network=host" "image=moby/buildkit:latest" "rootless=false"; do
-        echo "--- trying --driver-opt $opt ---";
-        docker buildx create --name probe-bk2 --driver docker-container --driver-opt "$opt" 2>&1 | tail -3;
-        docker buildx build --builder probe-bk2 --load -t test:g2 /tmp/ctx 2>&1 | tail -5 && echo "OK_WITH:$opt" || echo "FAIL_WITH:$opt";
-        docker buildx rm probe-bk2 2>/dev/null || true;
+    - |
+      set +e
+      echo "=== buildx create help (driver-opt / userns / privileged) ==="
+      docker buildx create --help 2>&1 | sed -n '/driver-opt/,+8p'
+      echo "=== attempt 1: default docker-container builder + BuildKit-syntax build ==="
+      docker buildx create --name probe-bk --driver docker-container 2>&1
+      docker buildx inspect probe-bk --bootstrap 2>&1 | tail -15
+      mkdir -p /tmp/ctx
+      printf 'FROM busybox\nCOPY --chmod=755 /etc/hostname /tmp/h\n' > /tmp/ctx/Dockerfile
+      docker buildx build --builder probe-bk --load -t test:g /tmp/ctx 2>&1 | tail -15
+      echo "ATTEMPT1_EXIT=$?"
+      echo "=== inspect the buildkit container UsernsMode + Privileged ==="
+      docker inspect buildx_buildkit_probe-bk0 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin)[0]; hc=d['HostConfig']; print('Privileged:', hc.get('Privileged')); print('UsernsMode:', hc.get('UsernsMode'))" 2>&1 || echo "(container not found/inspectable)"
+      docker buildx rm probe-bk 2>/dev/null
+      echo "=== attempt 2: driver-opt flags that might allow host userns ==="
+      for opt in "network=host" "image=moby/buildkit:latest" "rootless=false"; do
+        echo "--- trying --driver-opt $opt ---"
+        docker buildx rm probe-bk2 2>/dev/null
+        docker buildx create --name probe-bk2 --driver docker-container --driver-opt "$opt" 2>&1 | tail -3
+        docker buildx build --builder probe-bk2 --load -t test:g2 /tmp/ctx 2>&1 | tail -5
+        echo "EXIT_WITH_$opt=$?"
       done
-
-# Build candidate images and push to the GitLab Container Registry. The runner's
 # docker-socket-proxy now allows AUTH + DISTRIBUTION (see deploy/ansible/roles/
 # docker_socket_proxy), so `docker login` + `docker push` work natively.
 build:image:

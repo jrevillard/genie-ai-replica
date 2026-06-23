@@ -235,9 +235,7 @@ class QueryService {
             // admin/eval (QueryInspector). confidence_score above is the
             // citizen-facing value (LLM self-grade when enabled, else retrieval).
             retrieval_confidence_score: obj.retrieval_confidence_score ?? null,
-            self_confidence: Object.prototype.hasOwnProperty.call(obj, 'self_confidence')
-              ? obj.self_confidence
-              : null,
+            self_confidence: Object.prototype.hasOwnProperty.call(obj, 'self_confidence') ? obj.self_confidence : null,
             is_grounded: obj.is_grounded ?? false
           };
         }

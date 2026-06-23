@@ -292,7 +292,11 @@ def _rank_weighted_confidence(scores: list[float]) -> float:
 # LLM self-grade sentinel: when LLM_SELF_CONFIDENCE_ENABLED, the model ends its
 # reply with `[[CONF:<0-100>]]`. We strip it before the text reaches the user or
 # the translation pipeline, and expose its value as `self_confidence`.
-_SELF_CONF_SENTINEL_RE = re.compile(r"\[\[CONF:\s*(\d{1,3})\s*\]\]")
+# Terminal-only: the sentinel is the model's final line, so anchor to end-of-text.
+# This also prevents an inline `[[CONF:N]]` that is real answer content from being
+# stripped (a misplaced/earlier sentinel is left untouched rather than corrupting
+# the answer). `\s*$` tolerates trailing whitespace/newlines from the orchestrator.
+_SELF_CONF_SENTINEL_RE = re.compile(r"\[\[CONF:\s*(\d{1,3})\s*\]\]\s*$")
 _SELF_CONF_SENTINEL_PREFIX = "[[CONF:"
 # Trailing partial sentinel (no closing `]]`), dropped on the final stream flush
 # so a malformed/incomplete marker never leaks to the user as literal text.
@@ -1227,7 +1231,6 @@ class ChatQnAService:
                 continue
 
             logger.info(f"Document ID {doc_id_by_orchestrator} mapped to File ID {file_id}.")
-            source_documents_file_ids.append(file_id)
 
             score = _calibrate_reranker_score(item.get("score", 0.0))
             # Clients (web + mobile) build the view URL from their own public base + file_id.
@@ -1264,6 +1267,10 @@ class ChatQnAService:
                     )
                     continue
 
+            # Mark this file as surfaced only after a successful metadata resolution,
+            # so a duplicate of a file whose metadata failed does not contribute its
+            # score to the aggregate while the file remains invisible (M3).
+            source_documents_file_ids.append(file_id)
             source_documents_formatted.append(
                 {
                     "document_id": file_id,

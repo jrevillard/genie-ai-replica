@@ -1333,6 +1333,48 @@ class TestAssembleSourceDocuments:
         assert grounded is False
 
     @pytest.mark.asyncio
+    async def test_duplicate_of_failed_metadata_does_not_inject_score(self):
+        """M3: a duplicate of a file whose metadata failed must not contribute its
+        score to the aggregation while the file remains invisible. The file_id is
+        marked surfaced only after a successful metadata lookup, so the duplicate
+        re-attempts (and re-fails) instead of being counted as a dedup hit."""
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value=None)  # all lookups fail
+        result_dict = self._result_dict(
+            rerank_verdict=[
+                {"id": "d1", "text": "hives", "score": 0.95},
+                {"id": "d2", "text": "honey", "score": 0.80},  # same file f1
+            ],
+            retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
+            file_id_pairs={"d1": "f1", "d2": "f1"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        assert docs == []  # nothing surfaced
+        assert confidence == 0.0  # no invisible-doc score counted
+        assert grounded is False
+
+    @pytest.mark.asyncio
+    async def test_duplicate_of_surfaced_doc_counts_score(self):
+        """A duplicate of a successfully-surfaced file still contributes its score
+        (unchanged dedup behaviour) — locks that the M3 fix only excludes duplicates
+        of *failed* files, not of surfaced ones."""
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["X"], "file_name": "a.pdf"})
+        result_dict = self._result_dict(
+            rerank_verdict=[
+                {"id": "d1", "text": "hives", "score": 0.95},
+                {"id": "d2", "text": "honey", "score": 0.90},  # same file f1
+            ],
+            retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
+            file_id_pairs={"d1": "f1", "d2": "f1"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        # One source row (deduped), but both scores count toward confidence.
+        assert [d["document_id"] for d in docs] == ["f1"]
+        assert 0.90 < confidence < 0.95  # rank-weighted over [0.95, 0.90]
+        assert grounded is True
+
+    @pytest.mark.asyncio
     async def test_not_grounded_when_reranker_rejects_all(self):
         svc = create_chatqna_service()
         svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["Fruit"], "file_name": "fruit.pdf"})
@@ -1848,3 +1890,13 @@ class TestSelfConfidenceSentinel:
         assert "[[CONF:" not in text
         assert _SELF_CONF_PARTIAL_RE.search(text) is None
         assert "español" in text  # answer content preserved for translation
+
+    def test_inline_non_terminal_sentinel_is_not_stripped(self, monkeypatch):
+        """The sentinel regex is terminal-only: an inline `[[CONF:N]]` that is real
+        answer content (not the trailing self-grade) must NOT be stripped or corrupt
+        the answer. Only the trailing sentinel is extracted."""
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", True)
+        original = "See [[CONF:50]] in the docs for details."
+        text, val = _extract_self_confidence(original)
+        assert val is None
+        assert text == original

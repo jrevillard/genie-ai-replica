@@ -679,7 +679,9 @@ build:image:
 # scan:image starts. Upgrade GitLab to 18.6+ to enable per-image DAG chaining.
 scan:image:
   stage: scan
-  image: $TRIVY_IMAGE_TAG
+  image:
+    name: $TRIVY_IMAGE_TAG
+    entrypoint: [""]   # clear trivy ENTRYPOINT so the shell runs the script
   tags: [docker]
   interruptible: true
   variables:

@@ -273,6 +273,10 @@ Set in `group_vars/<env>/vars.yml`:
 | `novelty_sigmoid_b` | `0.25` | Adaptive: novelty-to-weight logistic midpoint |
 | `token_cost_alpha` | `0.0025` | Adaptive: per-token context-window cost coefficient |
 | `min_value_threshold` | `-1.0` | Adaptive: select a chunk only if marginal value > threshold |
+| `confidence_rank_decay` | `0.5` | Confidence: exponential rank-decay weight (rank 0 = best doc) |
+| `reranker_score_calibration` | `none` | Confidence: `none` \| `sigmoid` — enable sigmoid only if TEI returns raw logits |
+| `reranker_score_temperature` | `1.0` | Confidence: temperature for sigmoid calibration |
+| `llm_self_confidence_enabled` | `0` | Confidence: opt-in LLM self-grade (`[[CONF:0-100]]` → `self_confidence`); off by default |
 
 ### ChatQnA Service
 

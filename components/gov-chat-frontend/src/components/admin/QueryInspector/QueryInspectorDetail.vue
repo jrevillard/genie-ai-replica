@@ -134,6 +134,22 @@
             </DsPill>
             <span v-else class="qi-detail__muted">N/A</span>
           </span>
+          <span v-if="query.metadata?.retrieval_confidence_score != null">
+            <strong>{{ translate('admin.queryInspector.retrievalConfidenceScore', 'Retrieval Confidence') }}:</strong>
+            <DsPill :variant="confidenceVariant(query.metadata.retrieval_confidence_score)">
+              {{ formatConfidence(query.metadata.retrieval_confidence_score) }}
+            </DsPill>
+          </span>
+          <span v-if="query.metadata && Object.prototype.hasOwnProperty.call(query.metadata, 'self_confidence')">
+            <strong>{{ translate('admin.queryInspector.selfConfidence', 'Self-Confidence (LLM)') }}:</strong>
+            <DsPill
+              v-if="query.metadata.self_confidence != null"
+              :variant="confidenceVariant(query.metadata.self_confidence)"
+            >
+              {{ formatConfidence(query.metadata.self_confidence) }}
+            </DsPill>
+            <span v-else class="qi-detail__muted">N/A (no sentinel)</span>
+          </span>
         </div>
       </DsCard>
 

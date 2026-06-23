@@ -295,6 +295,19 @@ def _rank_weighted_confidence(scores: list[float]) -> float:
     return sum(w * s for w, s in zip(weights, scores, strict=True)) / sum(weights)
 
 
+def _display_confidence(retrieval_confidence: float, self_confidence: float | None) -> float:
+    """Citizen-facing confidence value.
+
+    When the LLM self-grade feature is on, the model's self-assessed groundedness is
+    surfaced to clients via the existing ``confidence_score`` field (transparent — no
+    client change). Falls back to the retrieval confidence when the model omitted the
+    sentinel, so the badge never disappears. The raw retrieval and self values are
+    emitted separately (``retrieval_confidence_score`` / ``self_confidence``) for
+    admin/eval.
+    """
+    return self_confidence if self_confidence is not None else retrieval_confidence
+
+
 # LLM self-grade sentinel: when LLM_SELF_CONFIDENCE_ENABLED, the model ends its
 # reply with `[[CONF:<0-100>]]`. We strip it before the text reaches the user or
 # the translation pipeline, and expose its value as `self_confidence`.
@@ -1253,7 +1266,7 @@ class ChatQnAService:
             result_dict: The megaservice orchestrator output keyed by node name.
 
         Returns:
-            (source_documents, confidence_score, is_grounded)
+            (source_documents, retrieval_confidence_score, is_grounded)
         """
         rerank_key = self._find_node_key("rerank", result_dict)
         retriever_key = self._find_node_key("retriever", result_dict)
@@ -1372,7 +1385,7 @@ class ChatQnAService:
         # by rank (rank 0 = most relevant, since reranker verdicts are descending
         # and `scores` preserves that display order) lets the strongest match
         # dominate instead. See docs/architecture.md §9.4.
-        confidence_score = _rank_weighted_confidence(scores)
+        retrieval_confidence_score = _rank_weighted_confidence(scores)
         logger.debug(f"document confidence scores: {scores}")
 
         if not source_documents_formatted and is_grounded:
@@ -1382,7 +1395,7 @@ class ChatQnAService:
             logger.warning("No source documents could be assembled; forcing is_grounded=False.")
             is_grounded = False
 
-        return source_documents_formatted, confidence_score, is_grounded
+        return source_documents_formatted, retrieval_confidence_score, is_grounded
 
     async def _stream_with_metadata(self, body_iterator, result_dict):
         """Forward the LLM token stream, then append a `metadata` SSE event.
@@ -1452,15 +1465,27 @@ class ChatQnAService:
                 yield f"data: {buffer.encode('utf-8')!r}\n\n"
 
         # Compute metadata after tokens so TTFT is unaffected by the doc-metadata fetches.
-        source_documents, confidence_score, is_grounded = await self._assemble_source_documents(result_dict)
+        source_documents, retrieval_confidence, is_grounded = await self._assemble_source_documents(result_dict)
         metadata = {
             "type": "metadata",
             "source_documents": source_documents,
-            "confidence_score": round(confidence_score, 2),
+            # Raw retrieval confidence (rank-weighted) — always present for admin/eval.
+            "retrieval_confidence_score": round(retrieval_confidence, 2),
+            # Citizen-facing: the LLM self-grade when the feature is on (fallback to
+            # retrieval so the badge never disappears), else the retrieval confidence.
+            # Clients render this field unchanged — surfacing the self-grade needs no
+            # client change beyond enabling LLM_SELF_CONFIDENCE_ENABLED.
+            "confidence_score": round(
+                _display_confidence(retrieval_confidence, self_confidence)
+                if LLM_SELF_CONFIDENCE_ENABLED
+                else retrieval_confidence,
+                2,
+            ),
             "is_grounded": is_grounded,
         }
         if LLM_SELF_CONFIDENCE_ENABLED:
-            # None when the model omitted/malformed the sentinel; never hard-fail.
+            # Raw LLM self-assessed groundedness; None when the sentinel was
+            # omitted/malformed. Never hard-fails the chat.
             metadata["self_confidence"] = round(self_confidence, 2) if self_confidence is not None else None
         yield "data: " + json.dumps(metadata) + "\n\n"
         yield "data: [DONE]\n\n"
@@ -2298,22 +2323,33 @@ class ChatQnAService:
 
         # Assemble source documents + confidence + grounding flag. Reflects the reranker's
         # verdict; not grounded (is_grounded=False) when the reranker found nothing relevant.
-        source_documents_formatted, confidence_score, is_grounded = await self._assemble_source_documents(result_dict)
+        source_documents_formatted, retrieval_confidence, is_grounded = await self._assemble_source_documents(
+            result_dict
+        )
 
         # Construct the final JSON payload
         metadata = {
             "source_documents": source_documents_formatted,
-            "confidence_score": round(confidence_score, 2),
+            # Raw retrieval confidence (rank-weighted) — always present for admin/eval.
+            "retrieval_confidence_score": round(retrieval_confidence, 2),
+            # Citizen-facing: the LLM self-grade when the feature is on (fallback to
+            # retrieval so the badge never disappears), else the retrieval confidence.
+            # Surfacing the self-grade is transparent to clients (they already render
+            # confidence_score); only LLM_SELF_CONFIDENCE_ENABLED needs enabling.
+            "confidence_score": round(
+                _display_confidence(retrieval_confidence, self_confidence)
+                if LLM_SELF_CONFIDENCE_ENABLED
+                else retrieval_confidence,
+                2,
+            ),
             # Whether the answer is backed by retrieved document chunks (true) or
             # generated from the LLM's parametric knowledge (false). Frontend uses
             # this to flag responses that have no document basis.
             "is_grounded": is_grounded,
         }
         if LLM_SELF_CONFIDENCE_ENABLED:
-            # LLM self-assessed groundedness; None when the sentinel was omitted or
-            # malformed. Supplementary to (not a replacement for) the retrieval
-            # confidence and is_grounded. Surface to users only after calibration
-            # is confirmed by the eval harness.
+            # Raw LLM self-assessed groundedness; None when the sentinel was omitted
+            # or malformed.
             metadata["self_confidence"] = round(self_confidence, 2) if self_confidence is not None else None
 
         final_response_payload = {

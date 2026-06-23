@@ -397,6 +397,41 @@ describe('QueryService', () => {
       expect(result.is_grounded).toBe(true);
       expect(result.confidence_score).toBe(0.9);
       expect(result.source_documents).toHaveLength(1);
+      // Retrieval/self confidence default to null when chatqna omits them
+      // (feature off or pre-feature queries).
+      expect(result.retrieval_confidence_score).toBeNull();
+      expect(result.self_confidence).toBeNull();
+    });
+
+    it('should pass through retrieval_confidence_score and self_confidence', () => {
+      const meta = {
+        type: 'metadata',
+        source_documents: [],
+        // Citizen-facing value (LLM self-grade when feature on, fallback retrieval).
+        confidence_score: 0.82,
+        retrieval_confidence_score: 0.91,
+        self_confidence: 0.82,
+        is_grounded: true
+      };
+      const result = queryService.parseChatQnASSELine(JSON.stringify(meta));
+      expect(result.confidence_score).toBe(0.82);
+      expect(result.retrieval_confidence_score).toBe(0.91);
+      expect(result.self_confidence).toBe(0.82);
+    });
+
+    it('should preserve explicit null self_confidence (sentinel missing)', () => {
+      const meta = {
+        type: 'metadata',
+        source_documents: [],
+        confidence_score: 0.5,
+        retrieval_confidence_score: 0.5,
+        self_confidence: null,
+        is_grounded: true
+      };
+      const result = queryService.parseChatQnASSELine(JSON.stringify(meta));
+      // hasOwnProperty guard: explicit null must round-trip as null, not be dropped.
+      expect(result.self_confidence).toBeNull();
+      expect(result.retrieval_confidence_score).toBe(0.5);
     });
 
     it('should treat non-metadata JSON object as error', () => {

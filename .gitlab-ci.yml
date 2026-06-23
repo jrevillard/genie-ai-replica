@@ -688,8 +688,9 @@ build:image:
     - DOCKER_BUILDKIT=0 docker build -f "$DOCKERFILE" -t "$LOCAL_REF" "$CONTEXT"
     # Push via skopeo — reads from the daemon, transfers over HTTPS from the
     # container. No `docker login` (daemon proxy-blocked), no daemon push.
-    - skopeo copy --dest-creds "$CI_REGISTRY_USER:$CI_REGISTRY_PASSWORD" \
-        "docker-daemon:$LOCAL_REF" "docker://$REGISTRY_REF"
+    # (single line: YAML plain-scalar `\`+newline would escape the space and
+    # produce a leading-space in the transport name — " docker-daemon".)
+    - skopeo copy --dest-creds "$CI_REGISTRY_USER:$CI_REGISTRY_PASSWORD" "docker-daemon:$LOCAL_REF" "docker://$REGISTRY_REF"
   parallel:
     matrix: *image_matrix
   rules: *build_rules
@@ -737,14 +738,11 @@ scan:image:
       echo "Scanning $IMAGE"
     # 1. SBOM (SPDX JSON) — composition source of truth + audit artifact
     - syft -o spdx-json "$IMAGE" > sbom.spdx.json
-    # 2. Non-blocking report for the GitLab Container Scanning UI widget
-    - trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed
-        --format json --output gl-container-scanning-report.json
-        --exit-code 0 "$IMAGE"
+    # 2. Non-blocking report for the GitLab Container Scanning UI widget (single
+    # line — a bare newline in a `- |` block ends the command)
+    - trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --format json --output gl-container-scanning-report.json --exit-code 0 "$IMAGE"
     # 3. Blocking gate — fail on fixable HIGH/CRITICAL (honors .trivyignore)
-    - trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed
-        --ignorefile .trivyignore
-        --format table --exit-code 1 "$IMAGE"
+    - trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format table --exit-code 1 "$IMAGE"
   artifacts:
     when: always
     expire_in: 1 year
@@ -777,9 +775,9 @@ promote:image:
       fi
     - |
       for t in $FINAL_TAGS; do
-        # Copy by immutable digest — never the mutable pending tag.
-        skopeo copy --src-creds "$CREDS" --dest-creds "$CREDS" \
-          "docker://$SRC@${DIGEST}" "docker://$CI_REGISTRY_IMAGE/$IMAGE_NAME:$t"
+        # Copy by immutable digest — never the mutable pending tag. (single
+        # line inside the loop: `\`+newline would escape the leading space.)
+        skopeo copy --src-creds "$CREDS" --dest-creds "$CREDS" "docker://$SRC@${DIGEST}" "docker://$CI_REGISTRY_IMAGE/$IMAGE_NAME:$t"
       done
     # Quarantine tag cleanup — promoted digest now lives under final tags
     - skopeo delete --creds "$CREDS" "docker://$SRC" || true

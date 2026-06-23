@@ -189,6 +189,24 @@ HUGGING_FACE_HUB_TOKEN=
 # TOKEN_COST_ALPHA=0.0025      # per-token context-window cost coefficient
 # MIN_VALUE_THRESHOLD=-1.0     # select a chunk only if marginal value > threshold
 
+# Confidence scoring (chatqna) — rank-weighted aggregate of calibrated reranker
+# scores. The flat mean was count-dependent and tail-sensitive (a long tail of
+# low-scoring chunks kept by the adaptive strategy for novelty depressed it);
+# rank-weighting lets the most relevant document dominate. See docs/architecture.md §9.4.
+# CONFIDENCE_RANK_DECAY=0.5          # exponential weight decay per rank (rank 0 = best)
+# RERANKER_SCORE_CALIBRATION=none    # none | sigmoid — enable sigmoid ONLY if TEI
+#                                    #   returns raw logits (verify first: sigmoid on
+#                                    #   already-normalised scores compresses them and
+#                                    #   worsens the symptom). Default none is safe.
+# RERANKER_SCORE_TEMPERATURE=1.0     # temperature for sigmoid calibration
+# LLM_SELF_CONFIDENCE_ENABLED=0      # 0|1 — opt-in LLM self-grade: the model appends a
+#                                    #   [[CONF:<0-100>]] sentinel rating how well the
+#                                    #   retrieved documents support its answer; we strip
+#                                    #   it from the visible text and expose it as
+#                                    #   self_confidence alongside confidence_score.
+#                                    #   OFF by default — surface to users only after the
+#                                    #   eval harness confirms it is calibrated.
+
 # =============================================================================
 # SECTION 5: FRONTEND CONFIGURATION
 # =============================================================================

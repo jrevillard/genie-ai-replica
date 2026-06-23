@@ -620,6 +620,28 @@ This yields a non-redundant, confidence- and budget-aware context set — useful
 | `TOKEN_COST_ALPHA` | `0.0025` | per-token context cost coefficient |
 | `MIN_VALUE_THRESHOLD` | `-1.0` | marginal-value cutoff (keep a chunk only if value > threshold) |
 
+### 9.4 Confidence Scoring
+
+The user-facing `confidence_score` (emitted in the chat metadata event) is a **rank-weighted aggregate of calibrated reranker scores**, computed in `ChatQnA._assemble_source_documents` (`genie-ai-overlay/chatqna/genieai_chatqna.py`). It replaced an earlier arithmetic mean of the displayed reranker scores, which had three problems:
+
+1. **Metadata-failure bug** — a failed document-metadata lookup previously injected `score = 0` into the aggregation (and surfaced a synthetic `document_id:"error"` source), intermittently tanking the score. Failed lookups now skip the document entirely.
+2. **Uncalibrated scale** — cross-encoder rerankers (`bge-reranker-v2-m3`) emit relevance *logits*, not probabilities; the flat mean had no probabilistic meaning.
+3. **Mean pathology** — count-dependent and tail-sensitive: low-scoring-but-novel chunks kept by the `adaptive` strategy depressed the mean, so richer context was *punished*.
+
+**Aggregation:** scores are aggregated with exponential rank-decay weighting (rank 0 = most relevant, since reranker verdicts are descending), so the strongest match dominates and the tail no longer depresses the score. The grounding decision itself is unchanged — `is_grounded` is `True` iff at least one document passed the reranker.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `CONFIDENCE_RANK_DECAY` | `0.5` | exponential weight decay per rank; higher → top document dominates more. |
+| `RERANKER_SCORE_CALIBRATION` | `none` | `none` \| `sigmoid` — map raw logits to [0,1]. Enable `sigmoid` **only** after verifying the TEI/model returns raw logits (sigmoid on already-normalised scores compresses them). |
+| `RERANKER_SCORE_TEMPERATURE` | `1.0` | temperature for `sigmoid` calibration. |
+
+#### LLM self-grade (opt-in, off by default)
+
+When `LLM_SELF_CONFIDENCE_ENABLED=1`, the system prompt instructs the model to end its reply with a `[[CONF:<0-100>]]` sentinel rating how well the retrieved documents support the answer. ChatQnA strips the sentinel **before** the text reaches the user or the translation pipeline (streaming and non-streaming) and exposes the value as a supplementary `self_confidence` field in the metadata event, alongside `confidence_score`. A missing/malformed sentinel yields `null` (never a hard failure).
+
+This is an **LLM self-assessment**, not an independent measurement of groundedness — it is exposed for evaluation, not as a replacement for the retrieval confidence or the `is_grounded` flag. Surface it to end users only after the calibration eval harness confirms it tracks answer correctness.
+
 ---
 
 ## 10. Document Upload and Ingestion

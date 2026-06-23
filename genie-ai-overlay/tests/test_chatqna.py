@@ -7,11 +7,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import chatqna.genieai_chatqna as chatqna_module
 from chatqna.genieai_chatqna import (
     ChatQnAService,
     ChatTemplate,
     GenieUserProfileClient,
     UserContextBuilder,
+    _calibrate_reranker_score,
+    _extract_self_confidence,
+    _rank_weighted_confidence,
     align_generator,
     align_inputs,
     align_outputs,
@@ -1253,10 +1257,122 @@ class TestAssembleSourceDocuments:
         )
         docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
         assert grounded is True
-        # confidence is returned unrounded; handle_request rounds it for the payload
-        assert round(confidence, 2) == round((0.95 + 0.85) / 2, 2)
+        # Rank-weighted confidence (CONFIDENCE_RANK_DECAY default 0.5): the top doc
+        # (0.95) dominates the second (0.85), so the result (~0.91) sits above the
+        # flat mean (0.90) and below the top score — richer context is no longer
+        # punished by a tail of lower scores.
+        assert round(confidence, 2) == 0.91
+        assert 0.90 < confidence < 0.95
         assert [d["document_id"] for d in docs] == ["f1", "f2"]
         assert [round(d["score"], 2) for d in docs] == [0.95, 0.85]
+
+    @pytest.mark.asyncio
+    async def test_metadata_failure_excludes_doc_and_does_not_zero_confidence(self):
+        """D1 regression: a failed metadata lookup must neither surface a fake
+        'error' source document nor inject score=0 into the confidence aggregation.
+        Previously the else-branch fell through to ``scores.append(0)``, which
+        tanked the mean whenever the document-repository metadata call failed."""
+        svc = create_chatqna_service()
+        # f1 metadata resolves; f2 metadata fetch fails (returns None).
+        svc.fetch_file_metadata = AsyncMock(side_effect=[{"labels": ["Beekeeping"], "file_name": "bee.pdf"}, None])
+        result_dict = self._result_dict(
+            rerank_verdict=[
+                {"id": "d1", "text": "hives", "score": 0.95},
+                {"id": "d2", "text": "honey", "score": 0.85},
+            ],
+            retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
+            file_id_pairs={"d1": "f1", "d2": "f2"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        # Only the resolvable doc is surfaced; no synthetic 'error' document.
+        assert [d["document_id"] for d in docs] == ["f1"]
+        assert all(d["document_id"] != "error" for d in docs)
+        # Confidence reflects the kept doc only (0.95), NOT the bug's (0.95+0.0)/2.
+        assert round(confidence, 2) == 0.95
+        assert grounded is True
+
+    @pytest.mark.asyncio
+    async def test_sigmoid_calibration_applied_end_to_end(self, monkeypatch):
+        """Calibration must actually be applied inside _assemble_source_documents,
+        not just exist as an unused helper (guards against someone removing the
+        _calibrate_reranker_score call from the loop while unit tests still pass)."""
+        monkeypatch.setattr(chatqna_module, "RERANKER_SCORE_CALIBRATION", "sigmoid")
+        monkeypatch.setattr(chatqna_module, "RERANKER_SCORE_TEMPERATURE", 1.0)
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["X"], "file_name": "a.pdf"})
+        # Raw logits as reranker scores: sigmoid(2.0) ~ 0.881, sigmoid(0.0) = 0.5.
+        result_dict = self._result_dict(
+            rerank_verdict=[
+                {"id": "d1", "text": "hives", "score": 2.0},
+                {"id": "d2", "text": "honey", "score": 0.0},
+            ],
+            retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
+            file_id_pairs={"d1": "f1", "d2": "f2"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        # Per-doc displayed scores are the calibrated values, not the raw logits.
+        assert 0.880 <= docs[0]["score"] <= 0.881  # sigmoid(2.0) ~ 0.8808
+        assert docs[1]["score"] == 0.5
+        assert grounded is True
+
+    @pytest.mark.asyncio
+    async def test_all_metadata_fail_forces_not_grounded(self):
+        """When the reranker found docs but none resolve to sources (e.g. a
+        document-repository outage), is_grounded is forced False so the UI does
+        not claim backing that is absent."""
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value=None)  # every lookup fails
+        result_dict = self._result_dict(
+            rerank_verdict=[{"id": "d1", "text": "hives", "score": 0.95}],
+            retrieved_docs=[{"id": "d1", "text": "hives"}],
+            file_id_pairs={"d1": "f1"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        assert docs == []
+        assert confidence == 0.0
+        assert grounded is False
+
+    @pytest.mark.asyncio
+    async def test_duplicate_of_failed_metadata_does_not_inject_score(self):
+        """M3: a duplicate of a file whose metadata failed must not contribute its
+        score to the aggregation while the file remains invisible. The file_id is
+        marked surfaced only after a successful metadata lookup, so the duplicate
+        re-attempts (and re-fails) instead of being counted as a dedup hit."""
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value=None)  # all lookups fail
+        result_dict = self._result_dict(
+            rerank_verdict=[
+                {"id": "d1", "text": "hives", "score": 0.95},
+                {"id": "d2", "text": "honey", "score": 0.80},  # same file f1
+            ],
+            retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
+            file_id_pairs={"d1": "f1", "d2": "f1"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        assert docs == []  # nothing surfaced
+        assert confidence == 0.0  # no invisible-doc score counted
+        assert grounded is False
+
+    @pytest.mark.asyncio
+    async def test_duplicate_of_surfaced_doc_counts_score(self):
+        """A duplicate of a successfully-surfaced file still contributes its score
+        (unchanged dedup behaviour) — locks that the M3 fix only excludes duplicates
+        of *failed* files, not of surfaced ones."""
+        svc = create_chatqna_service()
+        svc.fetch_file_metadata = AsyncMock(return_value={"labels": ["X"], "file_name": "a.pdf"})
+        result_dict = self._result_dict(
+            rerank_verdict=[
+                {"id": "d1", "text": "hives", "score": 0.95},
+                {"id": "d2", "text": "honey", "score": 0.90},  # same file f1
+            ],
+            retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
+            file_id_pairs={"d1": "f1", "d2": "f1"},
+        )
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        # One source row (deduped), but both scores count toward confidence.
+        assert [d["document_id"] for d in docs] == ["f1"]
+        assert 0.90 < confidence < 0.95  # rank-weighted over [0.95, 0.90]
+        assert grounded is True
 
     @pytest.mark.asyncio
     async def test_not_grounded_when_reranker_rejects_all(self):
@@ -1631,3 +1747,214 @@ class TestConvMarkerPatterns:
         assert "real answer" in assembled
         assert "q" in assembled
         assert "a" in assembled
+
+
+# ===========================================================================
+# Confidence aggregation helpers (rank-weighted retrieval confidence)
+# ===========================================================================
+class TestConfidenceAggregation:
+    """The flat mean was count-dependent and tail-sensitive; rank-weighting lets the
+    most relevant document dominate so a long tail of low-scoring chunks no longer
+    depresses the score."""
+
+    def test_empty_is_zero(self):
+        assert _rank_weighted_confidence([]) == 0.0
+
+    def test_single_is_the_score(self):
+        assert _rank_weighted_confidence([0.77]) == 0.77
+
+    def test_top_dominates_over_flat_mean(self):
+        # Flat mean would be ~0.35; rank-weighting keeps the strong top doc dominant.
+        scores = [0.95, 0.2, 0.15, 0.1]
+        weighted = _rank_weighted_confidence(scores)
+        flat = sum(scores) / len(scores)
+        assert weighted > flat
+        assert weighted < scores[0]
+
+    def test_rank_order_matters(self):
+        # rank 0 = first element = most relevant; swapping the order changes the result.
+        assert _rank_weighted_confidence([0.9, 0.1]) > _rank_weighted_confidence([0.1, 0.9])
+
+    def test_calibration_none_is_identity(self, monkeypatch):
+        monkeypatch.setattr(chatqna_module, "RERANKER_SCORE_CALIBRATION", "none")
+        # Already-[0,1] scores are NOT compressed under the default.
+        assert _calibrate_reranker_score(0.42) == 0.42
+        assert _calibrate_reranker_score(0.95) == 0.95
+
+    def test_calibration_sigmoid_maps_logits(self, monkeypatch):
+        monkeypatch.setattr(chatqna_module, "RERANKER_SCORE_CALIBRATION", "sigmoid")
+        monkeypatch.setattr(chatqna_module, "RERANKER_SCORE_TEMPERATURE", 1.0)
+        assert _calibrate_reranker_score(0.0) == 0.5
+        assert _calibrate_reranker_score(10.0) > 0.99
+        assert _calibrate_reranker_score(-10.0) < 0.01
+
+    def test_calibration_sigmoid_saturates_on_overflow(self, monkeypatch):
+        # A large negative logit with a tiny temperature makes math.exp overflow;
+        # the guard saturates to the asymptote instead of raising OverflowError.
+        monkeypatch.setattr(chatqna_module, "RERANKER_SCORE_CALIBRATION", "sigmoid")
+        monkeypatch.setattr(chatqna_module, "RERANKER_SCORE_TEMPERATURE", 0.01)
+        assert _calibrate_reranker_score(-1000.0) == 0.0  # overflow -> guard
+        assert _calibrate_reranker_score(1000.0) == 1.0  # underflow -> natural 1.0
+
+    def test_calibration_handles_non_numeric_score(self, monkeypatch):
+        # A None / non-numeric score must not crash the chat; treated as no signal.
+        monkeypatch.setattr(chatqna_module, "RERANKER_SCORE_CALIBRATION", "sigmoid")
+        assert _calibrate_reranker_score(None) == 0.0
+        monkeypatch.setattr(chatqna_module, "RERANKER_SCORE_CALIBRATION", "none")
+        assert _calibrate_reranker_score("not-a-number") == 0.0
+
+    def test_decay_zero_yields_flat_mean(self, monkeypatch):
+        # decay=0 means equal weighting (exp(0)=1) -> the flat arithmetic mean.
+        monkeypatch.setattr(chatqna_module, "CONFIDENCE_RANK_DECAY", 0.0)
+        scores = [0.9, 0.5, 0.3]
+        assert _rank_weighted_confidence(scores) == sum(scores) / len(scores)
+
+
+# ===========================================================================
+# LLM self-grade sentinel (opt-in via LLM_SELF_CONFIDENCE_ENABLED)
+# ===========================================================================
+class TestSelfConfidenceSentinel:
+    """When enabled, the model appends a `[[CONF:<0-100>]]` self-grade. We strip it
+    before the text reaches the user or the translation pipeline and expose its value
+    as `self_confidence`. Missing/malformed sentinels yield None — never a hard fail."""
+
+    def test_extract_valid_trailing_sentinel(self):
+        text, val = _extract_self_confidence("The answer is 42.\n[[CONF:85]]")
+        assert val == 0.85
+        assert "[[CONF:" not in text
+        assert text.rstrip().endswith("42.")
+
+    def test_extract_missing_returns_none(self):
+        text, val = _extract_self_confidence("No sentinel here.")
+        assert val is None
+        assert text == "No sentinel here."
+
+    def test_extract_malformed_preserves_text(self):
+        text, val = _extract_self_confidence("Answer.\n[[CONF:abc]]")
+        assert val is None
+        assert text == "Answer.\n[[CONF:abc]]"
+
+    def test_extract_out_of_range_returns_none(self):
+        _, val = _extract_self_confidence("Answer.\n[[CONF:150]]")
+        assert val is None
+
+    def test_extract_empty_text(self):
+        assert _extract_self_confidence("")[1] is None
+
+    @pytest.mark.asyncio
+    async def test_streaming_strips_sentinel_and_emits_self_confidence(self, monkeypatch):
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", True)
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([{"document_id": "f1"}], 0.9, True))
+        body = TestStreamWithMetadata._make_body(
+            ["data: b'It is 42.'\n\n", "data: b'[[CONF:80]]'\n\n", "data: [DONE]\n\n"]
+        )
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        joined = "".join(out)
+        # The sentinel never reaches the user.
+        assert "[[CONF:" not in joined
+        assert "It is 42." in joined
+        # self_confidence emitted in the metadata event.
+        assert '"self_confidence": 0.8' in joined
+        assert '"confidence_score": 0.9' in joined
+
+    @pytest.mark.asyncio
+    async def test_streaming_self_confidence_null_when_sentinel_missing(self, monkeypatch):
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", True)
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = TestStreamWithMetadata._make_body(["data: b'Hi'\n\n", "data: [DONE]\n\n"])
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        joined = "".join(out)
+        assert '"self_confidence": null' in joined
+
+    @pytest.mark.asyncio
+    async def test_streaming_no_self_confidence_field_when_flag_off(self):
+        # Default flag off: the metadata contract must stay stable (no new field).
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
+        body = TestStreamWithMetadata._make_body(["data: b'Hi'\n\n", "data: [DONE]\n\n"])
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        joined = "".join(out)
+        assert "self_confidence" not in joined
+
+    @pytest.mark.asyncio
+    async def test_streaming_sentinel_split_across_chunks_is_stitched(self, monkeypatch):
+        """The sentinel may arrive split across token chunks; the marker-tail
+        withholding must stitch it and neither leak a fragment nor lose the value."""
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", True)
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([{"document_id": "f1"}], 0.9, True))
+        body = TestStreamWithMetadata._make_body(
+            ["data: b'It is 42.'\n\n", "data: b'[[CO'\n\n", "data: b'NF:80]]'\n\n", "data: [DONE]\n\n"]
+        )
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        joined = "".join(out)
+        # No fragment of the sentinel leaks to the user.
+        assert "[[CO" not in joined
+        assert "NF:80" not in joined
+        assert "[[CONF:" not in joined
+        assert "It is 42." in joined
+        assert '"self_confidence": 0.8' in joined
+
+    def test_extraction_yields_translation_safe_text_multilingual(self, monkeypatch):
+        """Strip-before-translate invariant (the #1 sentinel/translation collision
+        risk): extraction must leave text safe to pass to the translation pipeline —
+        no sentinel and no trailing partial marker — including for multilingual
+        answers. (Full handle_request + translation integration is deferred:
+        handle_request has no existing test harness.)"""
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", True)
+        from chatqna.genieai_chatqna import _SELF_CONF_PARTIAL_RE
+
+        text, val = _extract_self_confidence("Respuesta en español sobre apicultura.\n[[CONF:90]]")
+        assert val == 0.9
+        assert "[[CONF:" not in text
+        assert _SELF_CONF_PARTIAL_RE.search(text) is None
+        assert "español" in text  # answer content preserved for translation
+
+    def test_inline_non_terminal_sentinel_is_not_stripped(self, monkeypatch):
+        """The sentinel regex is terminal-only: an inline `[[CONF:N]]` that is real
+        answer content (not the trailing self-grade) must NOT be stripped or corrupt
+        the answer. Only the trailing sentinel is extracted."""
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", True)
+        original = "See [[CONF:50]] in the docs for details."
+        text, val = _extract_self_confidence(original)
+        assert val is None
+        assert text == original
+
+    @pytest.mark.asyncio
+    async def test_finalize_strips_sentinel_before_translation(self, monkeypatch):
+        """Real integration of the strip-before-translate ordering (I3): the
+        translator receives text WITHOUT the sentinel, and self_confidence is
+        captured. Mocks only the translator — no megaservice harness needed."""
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", True)
+        svc = create_chatqna_service()
+        svc.load_language_codes = MagicMock(return_value={})
+        captured = {}
+
+        async def fake_translate(text, target_lang, original_language):
+            captured["text"] = text
+            return f"[ES]{text}"
+
+        svc._translate_with_chunking = fake_translate
+        final_text, self_conf = await svc._finalize_llm_response("Respuesta.\n[[CONF:90]]", "ES")
+        # Translator received clean text (sentinel stripped before the call).
+        assert "[[CONF:" not in captured["text"]
+        assert captured["text"].rstrip().endswith("Respuesta.")
+        # self_confidence captured; final text is the sentinel-free translation.
+        assert self_conf == 0.9
+        assert "[[CONF:" not in final_text
+
+    @pytest.mark.asyncio
+    async def test_finalize_flag_off_en_returns_conv_stripped_text(self, monkeypatch):
+        """Flag off + EN: finalize returns conv-marker-stripped text unchanged and
+        self_confidence None (metadata contract stable, no translation invoked)."""
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", False)
+        svc = create_chatqna_service()
+        svc._translate_with_chunking = AsyncMock()  # EN must not invoke translation
+        final_text, self_conf = await svc._finalize_llm_response("|<-MSG->| USER: hi\nanswer", "EN")
+        svc._translate_with_chunking.assert_not_called()
+        assert self_conf is None
+        assert "|<-MSG->|" not in final_text
+        assert "USER:" not in final_text
+        assert "answer" in final_text

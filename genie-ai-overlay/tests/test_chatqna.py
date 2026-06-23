@@ -1951,7 +1951,9 @@ class TestSelfConfidenceSentinel:
         self_confidence None (metadata contract stable, no translation invoked)."""
         monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", False)
         svc = create_chatqna_service()
+        svc._translate_with_chunking = AsyncMock()  # EN must not invoke translation
         final_text, self_conf = await svc._finalize_llm_response("|<-MSG->| USER: hi\nanswer", "EN")
+        svc._translate_with_chunking.assert_not_called()
         assert self_conf is None
         assert "|<-MSG->|" not in final_text
         assert "USER:" not in final_text

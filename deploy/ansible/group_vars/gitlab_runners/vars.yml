@@ -8,6 +8,18 @@
 docker_userns_remap: true
 
 # =============================================================================
+# JOB CONTAINER security_opt
+# =============================================================================
+# BuildKit rootless (used by build:image) needs unshare/clone syscalls to create
+# its user namespace via rootlesskit. The default seccomp profile blocks those,
+# producing "fork/exec /proc/self/exe: operation not permitted". Relaxing seccomp
+# (+ apparmor) for job containers unblocks rootless buildkit. userns-remap still
+# isolates container root → unprivileged host uid, so the relaxation is contained.
+gitlab_runner_security_opt:
+  - "seccomp=unconfined"
+  - "apparmor=unconfined"
+
+# =============================================================================
 # GITLAB RUNNER TUNING
 # =============================================================================
 # Override defaults from roles/gitlab_runner/defaults/main.yml if needed.

@@ -570,13 +570,13 @@ workflow:
     DOCKERFILE: components/gov-chat-frontend/Dockerfile
   - IMAGE_NAME: genie-ai-backend
     CONTEXT: components/
-    DOCKERFILE: gov-chat-backend/Dockerfile
+    DOCKERFILE: components/gov-chat-backend/Dockerfile
   - IMAGE_NAME: genie-ai-db-migrations
     CONTEXT: .
     DOCKERFILE: components/gov-chat-backend/Dockerfile.migrations
   - IMAGE_NAME: genie-ai-document-repository
     CONTEXT: components/
-    DOCKERFILE: document-repository/Dockerfile
+    DOCKERFILE: components/document-repository/Dockerfile
   - IMAGE_NAME: genie-ai-nginx
     CONTEXT: api-gateway-solution/nginx/
     DOCKERFILE: api-gateway-solution/nginx/Dockerfile

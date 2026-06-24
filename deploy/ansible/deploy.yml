@@ -402,6 +402,12 @@
       changed_when: false
       no_log: true
 
+  post_tasks:
+    - name: Docker logout from GitLab registry (clean credentials)
+      ansible.builtin.shell: "docker logout {{ swarm_registry_url }}"
+      changed_when: false
+      when: true
+
 - name: GENIE.AI - Generate .env and deploy stack
   hosts: swarm_managers
   tags: [deploy]

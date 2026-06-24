@@ -9,6 +9,8 @@
 - name: Set global image tag (promoted CI tag, not git SHA)
   ansible.builtin.set_fact:
     genie_ai_global_tag: "{{ genie_ai_global_tag | default('main') }}"
+    # Per-image tag overrides (optional): {genie-ai-frontend: v1.2.3} pins
+    #    one image to a specific version; others use genie_ai_global_tag.
     image_tag_overrides: "{{ image_tag_overrides | default({}) }}"
 
 - name: Set genieai_images list (16 custom images — used by env.j2 per-service vars)

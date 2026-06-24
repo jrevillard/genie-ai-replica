@@ -20,8 +20,6 @@ approval_policy:
     enabled: true
     rules:
       - type: scan_finding
-        branches:
-          - main
         scanners:
           - container_scanning
           - sast
@@ -50,8 +48,6 @@ approval_policy:
     enabled: true
     rules:
       - type: license_finding
-        branches:
-          - main
         license_states:
           - detected
         license_types:

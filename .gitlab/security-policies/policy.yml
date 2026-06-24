@@ -1,0 +1,66 @@
+# GitLab Security Orchestration Policies for GENIE.AI.
+#
+# Stored in the project's own security policy project (this repo self-linked:
+# Settings → Security & Compliance → Policies → Policy project = this project).
+# Policies are versioned here, reviewed via MR, enforced by GitLab.
+#
+# See docs/adr/0001-gitlab-registry-build-scan-pipeline.md for context.
+
+---
+approval_policy:
+  # 1. Block merge on HIGH/CRITICAL security findings (all scanners).
+  #    Enforces the advisory container_scanning/SAST/dep/secret jobs that have
+  #    allow_failure:true — a HIGH/CRITICAL finding now blocks the MR (requires
+  #    approval) instead of being advisory-only.
+  - name: Require approval on HIGH/CRITICAL vulnerabilities
+    description: |
+      Blocks merge when any HIGH or CRITICAL vulnerability is found by container
+      scanning, SAST, dependency scanning, or secret detection. The finding must
+      be triaged (fixed or added to the relevant allowlist) before the MR can merge.
+    enabled: true
+    rules:
+      - type: scan_finding
+        scanners:
+          - container_scanning
+          - sast
+          - dependency_scanning
+          - secret_detection
+        severity_levels:
+          - critical
+          - high
+        number_of_changes_required: 1
+    actions:
+      - type: require_approval
+        approvals_required: 1
+        role_approvers:
+          - maintainer
+
+  # 2. DPG license compliance — deny strong copyleft + non-OSI licenses.
+  #    GENIE.AI is a DPG-compliant public-sector project; strong copyleft
+  #    (AGPL/GPL) can be infectious for downstream, and SSPL/BUSL are not OSI-
+  #    approved. Permissive (MIT/Apache/BSD) + weak copyleft (MPL/LGPL) allowed.
+  - name: DPG license compliance (deny strong copyleft + non-OSI)
+    description: |
+      Requires approval when a strong-copyleft (AGPL, GPL) or non-OSI license
+      (SSPL, BUSL, Commons Clause) is detected in dependencies. Permissive and
+      weak-copyleft licenses (MIT, Apache-2.0, BSD, ISC, MPL, LGPL) are allowed
+      without approval.
+    enabled: true
+    rules:
+      - type: license_finding
+        license_states:
+          - detected
+        license_types:
+          - AGPL-1.0
+          - AGPL-3.0
+          - GPL-2.0
+          - GPL-3.0
+          - SSPL
+          - BUSL-1.1
+          - Commons-Clause
+        match_on_inclusion_license: false
+    actions:
+      - type: require_approval
+        approvals_required: 1
+        role_approvers:
+          - maintainer

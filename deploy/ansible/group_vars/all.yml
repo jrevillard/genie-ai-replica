@@ -129,7 +129,7 @@ tei_reranker_image: ghcr.io/huggingface/text-embeddings-inference:1.9.3
 docling_serve_image: ghcr.io/docling-project/docling-serve:v1.21.0
 nginx_image: nginx:1.28-alpine
 
-vllm_llm_model_id: ibm-granite/granite-3.3-2b-instruct
+vllm_llm_model_id: ibm-granite/granite-4.1-8b
 vllm_translation_model_id: google/gemma-3-4b-it
 embedding_model_id: BAAI/bge-base-en-v1.5
 reranker_model_id: BAAI/bge-reranker-v2-m3

@@ -33,8 +33,10 @@ def _clean_cache():
 class TestModelCacheProbe:
     """Tests for core.model_cache._probe function."""
 
-    def test_returns_model_id_on_success(self, monkeypatch):
+    def test_returns_model_id_on_success_with_ssl_skip(self, monkeypatch):
+        """When OPEA_SSL_SKIP_VERIFY=1, probe uses verify=False (self-signed certs)."""
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("OPEA_SSL_SKIP_VERIFY", "1")
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "ibm-granite/granite-3.3-2b-instruct"}]}
@@ -47,6 +49,20 @@ class TestModelCacheProbe:
         call_kwargs = mock_get.call_args
         assert call_kwargs.kwargs["verify"] is False
         assert call_kwargs.kwargs["headers"]["Authorization"] == "Bearer test-key"
+
+    def test_returns_model_id_on_success_with_ca_certs(self, monkeypatch):
+        """Without OPEA_SSL_SKIP_VERIFY, probe uses verify=True (CA-signed certs)."""
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.delenv("OPEA_SSL_SKIP_VERIFY", raising=False)
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"data": [{"id": "ibm-granite/granite-3.3-2b-instruct"}]}
+
+        with patch("httpx.get", return_value=mock_resp) as mock_get:
+            result = model_cache._probe("https://gpu-host/llm")
+
+        assert result == "ibm-granite/granite-3.3-2b-instruct"
+        assert mock_get.call_args.kwargs["verify"] is True
 
     def test_returns_none_when_no_models_in_response(self):
         mock_resp = MagicMock()
@@ -429,11 +445,13 @@ class TestRetrieverInitializeLlmAutoDetect:
 
     def test_get_llm_recreates_on_model_change(self, monkeypatch):
         """_get_llm recreates the ChatOpenAI client when the detected model changes."""
-        from retriever.genieai_retriever_arangodb import GenieaiArangoRetriever
+        from retriever.genieai_retriever_arangodb import ChatOpenAI, GenieaiArangoRetriever
 
         r = GenieaiArangoRetriever.__new__(GenieaiArangoRetriever)
+        ChatOpenAI.reset_mock()
         r._llm_model_id = "old-model"
-        r.llm = MagicMock()
+        old_client = MagicMock()
+        r.llm = old_client
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "new-model"}]}
@@ -442,7 +460,7 @@ class TestRetrieverInitializeLlmAutoDetect:
             r._get_llm()
 
         assert r._llm_model_id == "new-model"
-        assert r.llm is not mock_resp  # client was recreated
+        assert r.llm is not old_client  # ChatOpenAI was recreated, old client discarded
 
     def test_get_llm_keeps_client_when_unchanged(self, monkeypatch):
         """_get_llm does NOT recreate the client when the model is unchanged."""

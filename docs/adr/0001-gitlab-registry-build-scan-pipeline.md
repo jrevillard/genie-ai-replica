@@ -179,14 +179,27 @@ Candidate images build into a `tmp/` quarantine namespace
 (`registry.../genie-ai/tmp/<image>:<candidat>`); promote copies them to the
 real namespace. Orphan candidate tags (failed pipelines, abandoned MRs) are
 reaped by GitLab's native **Container Registry cleanup policy** — server-side,
-no CI job, no token:
+no CI job, no token. Applied on project 90 via the UI
+(Settings → CI/CD → Container Registry → Cleanup policies):
 
-- **Settings → CI/CD → Container Registry → Cleanup policies**
-- `name_regex_keep`: `main|latest|v.*|cache` (preserve deployable + build cache)
-- `older_than`: `24h`
 - `enabled`: true
+- `cadence`: `1d` (runs daily)
+- `keep_n`: 5 (keep the 5 most recent matching tags per image, safety net)
+- `name_regex` (delete): `.*` (every tag is a deletion candidate)
+- `name_regex_keep`: `main.*|latest|v.*|release.*`
+- `older_than`: `7d`
 
-Any tag not matching the keep-regex and older than 24h is deleted, in **both**
-namespaces. Real-namespace tags (`main`/`latest`/`vX.Y.Z`) and `:cache` refs
-match keep → preserved. Candidate tags (`pending-*`/`mr-*`) → deleted after 24h.
-The real namespace therefore only ever holds deployable tags.
+**Regex anchoring**: GitLab wraps keep/remove patterns with `\A...\Z`, so each
+must match the **full** tag name. `main.*` catches `main` + `main-<sha>`;
+`release.*` catches `release-el-salvador` + `release-el-salvador-<sha>` (NOT
+`release-*`, which in regex means `release` + zero-or-more hyphens — a trap).
+`cache` is intentionally NOT kept: the build cache tag is rewritten on every
+build, so active images keep fresh cache automatically; cache for an image not
+built in 7d is stale and safe to reap (self-healing on next build).
+
+Effect: any tag not matching the keep-regex and older than 7d is deleted, in
+**both** namespaces. Deployable tags (`main`/`main-<sha>`/`latest`/`vX.Y.Z`/
+`release-*`) match keep → preserved. Candidate tags (`pending-*`/`mr-*`) and
+stale `:cache` → reaped after 7d. The real namespace only ever holds deployable
+tags. `release.*` in the keep-regex is **critical** once release-branch image
+tags exist — without it the policy would purge release rolling tags.

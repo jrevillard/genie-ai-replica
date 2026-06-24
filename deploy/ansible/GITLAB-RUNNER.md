@@ -6,8 +6,8 @@ Ansible playbook to install and configure a GitLab Runner with Docker executor f
 
 ```
 10.0.0.100 (dedicated runner host)
-├── Docker Engine (userns-remap enabled)
-│   └── daemon.json: {"userns-remap": "default"}
+├── Docker Engine (userns-remap DISABLED — see note below)
+│   └── daemon.json: {} (no userns-remap; required for docker buildx)
 ├── docker-socket-proxy (tecnativa/docker-socket-proxy)
 │   ├── Listens on 127.0.0.1:2375
 │   ├── Mounts /var/run/docker.sock:ro
@@ -23,15 +23,15 @@ Ansible playbook to install and configure a GitLab Runner with Docker executor f
 
 ### Security layers
 
-> **CHANGE (2026-06)**: `userns-remap` is now **disabled** (`docker_userns_remap: false` in `group_vars/gitlab_runners/vars.yml`). It was incompatible with every container-based BuildKit mode (docker-container driver needs privileged; rootless needs a nested userns), blocking `docker buildx` entirely. Isolation now relies on the **socket proxy** (API filtering) + **dedicated VM**. The `userns-remap` references below are kept for historical context / re-enable guidance. See `docs/adr/0001-gitlab-registry-build-scan-pipeline.md`.
-
 | Layer | Mechanism | Purpose |
 |-------|-----------|---------|
 | API filtering | docker-socket-proxy | Default-deny; CONTAINERS/IMAGES/NETWORKS/VOLUMES/EXEC/POST/BUILD/AUTH/DISTRIBUTION allowed (AUTH + DISTRIBUTION required for CI registry login/push) |
-| UID remapping | userns-remap (`dockremap`) | Container root (uid 0) → unprivileged host uid |
 | Container restrictions | config.toml | `privileged=false`, memory/CPU limits, KVM device passthrough |
-| Socket proxy isolation | `userns_mode: host` on proxy | Required for proxy to access Docker socket despite userns-remap |
+| Socket proxy isolation | `userns_mode: host` on proxy | Proxy container runs in host user namespace to reach the docker socket |
 | Network isolation | 127.0.0.1 binding | Proxy only accessible from localhost |
+| Host isolation | Dedicated VM | Runner host is single-purpose; no other workload shares the daemon |
+
+**Why userns-remap is disabled**: it was fundamentally incompatible with every container-based BuildKit mode (`docker buildx` docker-container driver needs privileged; rootless needs a nested userns), blocking the CI image-build pipeline entirely. Isolation is retained via the socket proxy (API filtering) + the dedicated VM. See `docs/adr/0001-gitlab-registry-build-scan-pipeline.md` for the full conflict analysis.
 
 **Registration:** The runner is created manually in GitLab UI (Settings > CI/CD > Runners > New project runner). GitLab generates an authentication token (`glrt-xxx`) which is stored in the Ansible vault and deployed to `config.toml` (mode `0600`, owned by `gitlab-runner`).
 
@@ -48,7 +48,7 @@ ansible-galaxy collection install -r requirements.yml
 - Ubuntu 22.04+ (tested)
 - SSH access with sudo privileges
 - No Docker pre-installed (the playbook handles it)
-- **Dedicated host recommended** (userns-remap affects all containers)
+- **Dedicated host recommended** (single-purpose; no other workload shares the daemon — this is the primary isolation layer now that userns-remap is disabled)
 
 ### GitLab
 
@@ -95,12 +95,12 @@ deploy/ansible/
 ├── group_vars/
 │   ├── all.yml                          # Shared: gitlab_url
 │   └── gitlab_runners/
-│       ├── vars.yml                     # docker_userns_remap + runner overrides
+│       ├── vars.yml                     # runner overrides (userns-remap disabled)
 │       └── vault.yml                    # Encrypted: gitlab_runner_tokens dict
 └── roles/
     ├── docker/                          # Shared: Docker installation (reused by deploy.yml)
-    │   ├── defaults/main.yml            # docker_userns_remap: false (opt-in)
-    │   ├── tasks/main.yml               # Install + optional userns-remap config
+    │   ├── defaults/main.yml            # docker_userns_remap: false (disabled by default)
+    │   ├── tasks/main.yml               # Install + daemon.json (userns-remap on/off)
     │   └── handlers/main.yml            # Restart Docker
     ├── docker_socket_proxy/             # Socket proxy deployment
     │   ├── defaults/main.yml            # API permissions
@@ -131,7 +131,7 @@ deploy/ansible/
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `docker_userns_remap` | `true` | Enable UID remapping (container root → unprivileged host uid) |
+| `docker_userns_remap` | `false` | UID remapping. **Disabled** — incompatible with container-based BuildKit (`docker buildx`), which the CI image pipeline requires. Re-enabling breaks the build pipeline. Isolation via socket proxy + dedicated VM. |
 | `gitlab_runner_use_socket_proxy` | `true` | Route Docker access through socket proxy |
 | `docker_manage_daemon_json` | `true` | Role owns daemon.json; set `false` on co-managed hosts (e.g. GPU node) |
 | `docker_upgrade_enabled` | `true` | Role may upgrade Docker packages; set `false` on co-managed hosts |
@@ -205,9 +205,9 @@ sudo gitlab-runner status
 # Verify socket proxy
 curl -sf http://127.0.0.1:2375/_ping  # Should print: OK
 
-# Verify userns-remap
-docker run --rm alpine cat /proc/self/uid_map
-# Should show remapped range (not 0 0 4294967295)
+# Verify userns-remap is OFF (required for docker buildx — the image pipeline)
+cat /etc/docker/daemon.json           # should be {} (no userns-remap)
+docker run --rm alpine cat /proc/self/uid_map   # should show 0 0 4294967295 (host identity)
 
 # Verify runner connection
 sudo gitlab-runner verify
@@ -250,17 +250,17 @@ To disable the socket proxy (mount docker.sock directly), add to `group_vars/git
 gitlab_runner_use_socket_proxy: false
 ```
 
-To disable userns-remap:
+**userns-remap is DISABLED by default** (`docker_userns_remap: false`). The docker role writes `/etc/docker/daemon.json` as `{}` when disabled (no manual removal needed). To **re-enable** (not recommended — breaks `docker buildx` and the CI image pipeline):
 
 ```yaml
-docker_userns_remap: false
+docker_userns_remap: true   # WARN: incompatible with container-based BuildKit
 ```
 
-Then re-deploy and manually remove `/etc/docker/daemon.json` + restart Docker.
+Then re-deploy (`--tags docker`). See `docs/adr/0001-gitlab-registry-build-scan-pipeline.md` for the conflict analysis.
 
 ### Why no `cap_drop = ["ALL"]`
 
-`cap_drop = ["ALL"]` is intentionally not set in the runner config. With `userns-remap` already providing container isolation at the host level, dropping all capabilities inside containers breaks CI jobs that need `setuid`/`setgid` for package installation (`apt-get`, `pip`) in their `before_script`. The security model relies on userns-remap + socket proxy filtering instead.
+`cap_drop = ["ALL"]` is intentionally not set in the runner config. Dropping all capabilities inside containers breaks CI jobs that need `setuid`/`setgid` for package installation (`apt-get`, `pip`) in their `before_script`. The security model relies on the **socket proxy** (API filtering) + the **dedicated VM** (host isolation) rather than in-container capability dropping. (userns-remap was previously part of this model but is disabled — it conflicts with buildkit.)
 
 ## KVM Passthrough (Android Emulator)
 
@@ -306,24 +306,42 @@ If the runner token is compromised or expired:
 
 ## Network Requirements (MTU/MSS Clamping)
 
-The runner host uses an overlay network with a reduced MTU (e.g. 1342 on OpenStack/Hetzner Cloud). Docker containers default to MTU 1500, which causes large TCP transfers (Flutter SDK downloads, `pub get`) to fail with `Connection reset by peer` after a few minutes. Small requests (HEAD, small GETs) work fine — only sustained large transfers break.
+The runner host uses an overlay network with a reduced MTU (e.g. 1342 on OpenStack/Hetzner Cloud). Docker containers default to MTU 1500, which causes large TCP transfers (Flutter SDK downloads, `pub get`, large `git clone`) to fail with `Connection reset by peer` after a few minutes. Small requests (HEAD, small GETs) work fine — only sustained large transfers break.
 
-**Fix:** MSS clamping via iptables ensures TCP negotiates the correct segment size through the overlay.
+**Fix:** MSS clamping via iptables ensures TCP negotiates the correct segment size through the overlay. The runner hosts use **systemd-networkd**, so the rule MUST be applied via a **systemd service** — the legacy `/etc/network/if-pre-up.d/` hook does **not fire** under systemd-networkd (it only fires under legacy ifupdown), so the rule would silently disappear after a reboot. (This was the root cause of a CI flap where `git clone` from containers died with `Connection reset by peer`.)
 
-Create `/etc/network/if-pre-up.d/mss-clamp` (mode 0755):
+Create `/etc/systemd/system/mss-clamp.service`:
+
+```ini
+[Unit]
+Description=MSS clamping for overlay network (ens3, MTU 1342)
+After=network-online.target systemd-networkd.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c "/sbin/iptables -t mangle -C POSTROUTING -o ens3 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || /sbin/iptables -t mangle -A POSTROUTING -o ens3 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu"
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then:
 
 ```bash
-#!/bin/bash
-iptables -t mangle -C POSTROUTING -o ens3 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || iptables -t mangle -A POSTROUTING -o ens3 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+sudo systemctl daemon-reload
+sudo systemctl enable --now mss-clamp.service
 ```
 
 This rule:
-- Persists across reboots (if-pre-up.d hook)
-- Is idempotent (`-C` checks before `-A` adds)
-- Adjusts `ens3` to match your VM's primary interface name
+- **Persists across reboots** (systemd service, fires on boot after network-online) — unlike the if-pre-up.d hook, which systemd-networkd ignores
+- Is **idempotent** (`-C` checks before `-A` adds)
+- Adjust `ens3` to match the VM's primary interface name (`ip route get 1.1.1.1`)
 
 **Symptoms without it:**
 - `curl: (56) Recv failure: Connection reset by peer` after ~3min on large HTTPS downloads from CI containers
+- `git clone` of the repo failing mid-clone from CI containers
 - `flutter pub get` hanging for 1 hour then timing out
 - Small HTTP/HTTPS requests work fine, only large sustained transfers fail
 
@@ -356,15 +374,12 @@ curl -sf http://127.0.0.1:2375/_ping
 curl -sf http://127.0.0.1:2375/v1.24/containers/json | python3 -m json.tool
 ```
 
-### userns-remap issues
+### userns-remap / buildkit issues
+
+userns-remap is **disabled** (incompatible with container-based BuildKit). If `docker buildx build` fails with `privileged mode is incompatible with user namespaces`, userns-remap was re-enabled — disable it (`docker_userns_remap: false`, redeploy `--tags docker`):
 
 ```bash
-# Verify remap is active
-cat /etc/docker/daemon.json
-grep dockremap /etc/subuid /etc/subgid
-
-# Check UID mapping in a container
-docker run --rm alpine cat /proc/self/uid_map
+cat /etc/docker/daemon.json   # should be {} (no userns-remap) for buildx to work
 ```
 
 ### Config.toml changes not applied

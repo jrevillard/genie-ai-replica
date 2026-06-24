@@ -83,6 +83,9 @@ RUN pip install --no-cache-dir rank_bm25 docling opencv-python-headless hf_xet "
 # Step F.5: Copy shared OTel tracing module (importable from PYTHONPATH=/app)
 COPY genie-ai-overlay/tracing.py /app/tracing.py
 
+# Copy shared TTL-cached model probe (importable as core.model_cache from PYTHONPATH=/app)
+COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py
+
 # Step F.6: Install OpenTelemetry dependencies for distributed tracing
 RUN pip install --no-cache-dir \
     "opentelemetry-api>=1.22" "opentelemetry-sdk>=1.22" \

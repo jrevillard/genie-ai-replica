@@ -88,7 +88,6 @@ if _VLLM_LLM_ENDPOINT:
 else:
     LLM_SERVER_ENDPOINT_PREFIX = ""
 LLM_MODEL = os.getenv("LLM_MODEL", "ibm-granite/granite-3.3-2b-instruct")
-LLM_TRANS_MODEL = os.getenv("LLM_TRANS_MODEL", "google/gemma-3-1b-it")
 
 # Auto-detect remote vLLM models with TTL caching (see core/model_cache.py).
 # GPU_NODE_HOST gates this: local GPU deployments keep their explicit config

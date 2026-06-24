@@ -130,11 +130,12 @@ class GenieaiArangoRetriever(OpeaComponent):
 
         Auto-detects (TTL-cached) from the remote vLLM when GPU_NODE_HOST is set;
         otherwise returns the VLLM_MODEL_ID env/config default.
+
+        Logging is deferred to _get_llm() which logs only on model change.
         """
         if os.getenv("GPU_NODE_HOST") and VLLM_ENDPOINT:
             detected = get_model_id(VLLM_ENDPOINT)
             if detected:
-                logger.info(f"Auto-detected remote vLLM model for summarization: {detected}")
                 os.environ["VLLM_MODEL_ID"] = detected
                 return detected
         return os.getenv("VLLM_MODEL_ID", VLLM_MODEL_ID)

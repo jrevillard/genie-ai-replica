@@ -3510,7 +3510,7 @@ export default {
 
 .page-btn {
   height: 1.8rem;
-  width: 1.8rem;
+  min-width: 1.8rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3898,6 +3898,7 @@ input:checked + .slider:before {
 /* Update search bar for better spacing with button */
 .search-bar {
   display: flex;
+  flex-wrap: wrap;
   margin-bottom: var(--space-md);
   gap: var(--space-md);
   align-items: center;
@@ -3905,7 +3906,25 @@ input:checked + .slider:before {
 
 .search-input-container {
   position: relative;
-  flex: 1;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+/* Position the magnifier icon inside the field so it never displaces the input */
+.search-icon {
+  position: absolute;
+  left: var(--space-sm);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/* Reserve room for the icon so typed text doesn't run under it */
+.search-input-container .search-input {
+  padding-left: calc(var(--space-sm) * 2 + 14px);
 }
 
 /* Pagination styles */
@@ -4308,6 +4327,7 @@ input:checked + .slider:before {
 /* --- STYLES FOR DOCUMENT MANAGEMENT --- */
 .filter-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-md);
   align-items: center;
   margin-bottom: var(--space-md);

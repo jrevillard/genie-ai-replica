@@ -75,10 +75,12 @@ LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
 # bottleneck (~70% of wall time; see perf analysis on release/el-salvador).
 # Tunable via env.
 MAX_CONCURRENT_BATCHES = int(os.getenv("DATAPREP_MAX_CONCURRENT_BATCHES", "20"))
-# Number of chunks sent per LLM labeling call. 1 = one call per chunk (legacy,
-# safest). >1 batches chunks into a single call to cut network round-trips to a
-# remote vLLM. Off by default; enable after validating label quality.
-LABEL_LLM_BATCH_SIZE = max(1, int(os.getenv("DATAPREP_LLM_LABEL_BATCH_SIZE", "1")))
+# Number of chunks sent per LLM labeling call. >1 batches chunks into a single
+# call to cut network round-trips to a (often remote) vLLM. Default 4 balances
+# throughput (4x fewer calls) with compatibility across models; raise to 8 on
+# capable models validated for batched JSON (e.g. granite-4.1-8b). Batches that
+# fail to parse fall back to per-chunk labeling, so output is always correct.
+LABEL_LLM_BATCH_SIZE = max(1, int(os.getenv("DATAPREP_LLM_LABEL_BATCH_SIZE", "4")))
 # Sampling temperature for LLM labeling. 0.0 = greedy → deterministic, maximal
 # format adherence (clean JSON) for a classification task; correct default for
 # every instruction model. Tunable per model if ever needed.

@@ -193,9 +193,11 @@ HUGGING_FACE_HUB_TOKEN=
 # vLLM call per chunk). Defaults are safe; raise on a remote vLLM with spare
 # capacity to cut ingestion time. See genieai_dataprep_arangodb.py.
 # DATAPREP_MAX_CONCURRENT_BATCHES=20  # concurrent LLM label calls (default 20; was 5)
-# DATAPREP_LLM_LABEL_BATCH_SIZE=1     # chunks per LLM call. 1 = per-chunk (safest);
+# DATAPREP_LLM_LABEL_BATCH_SIZE=4     # chunks per LLM labeling call (default 4).
 #                                     #   >1 batches chunks to cut network round-trips
-#                                     #   to a remote vLLM; validate label quality first.
+#                                     #   to a remote vLLM. Raise to 8 on capable models
+#                                     #   (e.g. granite-4.1-8b); batches fall back to
+#                                     #   per-chunk on parse failure, so output is correct.
 
 # Confidence scoring (chatqna) — rank-weighted aggregate of calibrated reranker
 # scores. The flat mean was count-dependent and tail-sensitive (a long tail of

@@ -581,6 +581,12 @@ semgrep-sast:
 nodejs-scan-sast:
   rules:
     - when: never
+# spotbugs-sast is the Java analyzer — GENIE.AI has no Java, so it tries to
+# build a non-existent Gradle project and fails (advisory noise). semgrep-sast
+# covers our stack. Disable it.
+spotbugs-sast:
+  rules:
+    - when: never
 gemnasium-dependency_scanning:
   rules: *security_run_rules
 gemnasium-python-dependency_scanning:

@@ -18,9 +18,12 @@ docker_manage_daemon_json: false   # do NOT clobber the NVIDIA daemon.json (Rest
 docker_upgrade_enabled: false      # do NOT upgrade docker-ce (postinst restarts daemon)
 
 # Runner tuning — cap CI load so it never starves vLLM model loads.
+# Memory aligned to the main runner default (4g) so heavy CI jobs (jest
+# frontend tests) don't OOM on the GPU host. NOTE: concurrent=5 × 4g = 20g
+# worst-case CI memory — watch vLLM under load; reduce concurrent if it starves.
 gitlab_runner_concurrent: 5
 gitlab_runner_limit: 5
-gitlab_runner_memory_limit: "2g"
+gitlab_runner_memory_limit: "4g"
 gitlab_runner_cpu_limit: "1.0"
 
 # Force runc so CI job containers bypass the daemon's default-runtime: nvidia.

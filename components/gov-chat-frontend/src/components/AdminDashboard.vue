@@ -3510,7 +3510,7 @@ export default {
 
 .page-btn {
   height: 1.8rem;
-  width: 1.8rem;
+  min-width: 1.8rem;
   display: flex;
   align-items: center;
   justify-content: center;

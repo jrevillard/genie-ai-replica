@@ -19,6 +19,7 @@ from metrics import (
     sanitize_attributes,
 )
 
+from core.model_cache import get_model_id
 from tracing import get_tracer, setup_trace_logging, setup_tracing
 
 setup_tracing("genieai-chatqna")
@@ -53,7 +54,6 @@ TRANSLATION_SERVICE_TIMEOUT = int(
     os.getenv("TRANSLATION_SERVICE_TIMEOUT", 180)
 )  # Timeout in seconds for translation service (default: 3 minutes)
 TRANSLATION_MODEL_ID = os.getenv("VLLM_TRANSLATION_MODEL_ID", "")
-IS_TRANSLATEGEMMA = "translategemma" in TRANSLATION_MODEL_ID.lower()
 # Connect directly to vLLM for translation when VLLM_TRANSLATION_ENDPOINT is set,
 # bypassing the OPEA translation microservice which reformats payloads and breaks
 # TranslateGemma's structured chat template. Falls back to OPEA proxy if not set.
@@ -90,41 +90,47 @@ else:
 LLM_MODEL = os.getenv("LLM_MODEL", "ibm-granite/granite-3.3-2b-instruct")
 LLM_TRANS_MODEL = os.getenv("LLM_TRANS_MODEL", "google/gemma-3-1b-it")
 
-
-def _auto_detect_model(endpoint_url: str, env_var: str) -> str | None:
-    """Auto-detect model ID from remote vLLM /v1/models endpoint."""
-    import httpx
-
-    try:
-        headers = {}
-        api_key = os.getenv("VLLM_API_KEY", "")
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-        resp = httpx.get(f"{endpoint_url}/v1/models", headers=headers, timeout=10, verify=False)
-        resp.raise_for_status()
-        models = resp.json()
-        if models.get("data"):
-            return models["data"][0]["id"]
-        logger.warning(f"Auto-detect {env_var}: no models in response")
-    except Exception as e:
-        logger.warning(f"Auto-detect {env_var} failed: {e}")
-    return None
-
-
-# Auto-detect LLM and translation models from remote vLLM when GPU_NODE_HOST is set
+# Auto-detect remote vLLM models with TTL caching (see core/model_cache.py).
+# GPU_NODE_HOST gates this: local GPU deployments keep their explicit config
+# (VLLM_ENDPOINT has a compose default http://vllm:8000). See issue #758.
 _GPU_NODE_HOST = os.getenv("GPU_NODE_HOST", "")
-if _GPU_NODE_HOST:
-    if _VLLM_LLM_ENDPOINT:
-        detected = _auto_detect_model(_VLLM_LLM_ENDPOINT, "LLM_MODEL")
+
+
+def _get_llm_model() -> str:
+    """Return the LLM model ID.
+
+    Auto-detects from remote vLLM (with TTL cache) when GPU_NODE_HOST is set;
+    otherwise returns the LLM_MODEL env/config default.
+    """
+    if _GPU_NODE_HOST and _VLLM_LLM_ENDPOINT:
+        detected = get_model_id(_VLLM_LLM_ENDPOINT)
         if detected:
-            LLM_MODEL = detected
-            logger.info(f"Auto-detected LLM_MODEL={LLM_MODEL}")
-    if _VLLM_TRANSLATION_ENDPOINT:
-        detected = _auto_detect_model(_VLLM_TRANSLATION_ENDPOINT, "VLLM_TRANSLATION_MODEL_ID")
+            return detected
+    return LLM_MODEL
+
+
+def _get_translation_model_id() -> str:
+    """Return the translation model ID.
+
+    Auto-detects from remote vLLM (with TTL cache) when GPU_NODE_HOST is set;
+    otherwise returns the TRANSLATION_MODEL_ID env/config default.
+    """
+    if _GPU_NODE_HOST and _VLLM_TRANSLATION_ENDPOINT:
+        detected = get_model_id(_VLLM_TRANSLATION_ENDPOINT)
         if detected:
-            TRANSLATION_MODEL_ID = detected
-            LLM_TRANS_MODEL = detected
-            logger.info(f"Auto-detected TRANSLATION_MODEL_ID={TRANSLATION_MODEL_ID}")
+            return detected
+    return TRANSLATION_MODEL_ID
+
+
+def _is_translategemma() -> bool:
+    """True when the active translation model is TranslateGemma.
+
+    TranslateGemma uses the completions API with a pre-formatted prompt;
+    other models use the chat completions API.
+    """
+    return "translategemma" in _get_translation_model_id().lower()
+
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 
 RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "chunk")  # node | edge | chunk
@@ -641,7 +647,7 @@ def get_tokenizer():
     global TOKENIZER
     if TOKENIZER is None:
         TOKENIZER = AutoTokenizer.from_pretrained(
-            LLM_MODEL,
+            _get_llm_model(),
             use_fast=True,
             # local_files_only=True
         )
@@ -705,7 +711,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
     elif self.services[cur_node].service_type == ServiceType.LLM:
         # convert TGI/vLLM to unified OpenAI /v1/chat/completions format
         next_inputs = {}
-        next_inputs["model"] = LLM_MODEL
+        next_inputs["model"] = _get_llm_model()
 
         rag_augmented_prompt = inputs["inputs"]
         # Get the full translated history *string* from kwargs
@@ -1821,7 +1827,7 @@ class ChatQnAService:
         flattened_history_string = " |<-MSG->| ".join(flattened_history_parts)
 
         # Build payload based on model type
-        if IS_TRANSLATEGEMMA:
+        if _is_translategemma():
             # Use completions API with pre-formatted prompt (vLLM v0.10.0 cannot
             # pass structured content through chat completions to TranslateGemma's template)
             prompt = self._build_translategemma_prompt(
@@ -1832,7 +1838,7 @@ class ChatQnAService:
                 target_lang_name="English",
             )
             payload = {
-                "model": TRANSLATION_MODEL_ID,
+                "model": _get_translation_model_id(),
                 "prompt": prompt,
                 "temperature": 0.0,
                 "max_tokens": min(max(len(flattened_history_string) // 2, 512), 4096),
@@ -1849,7 +1855,7 @@ class ChatQnAService:
             url = TRANSLATION_LLM_URL
 
         if logflag:
-            svc = "TranslateGemma" if IS_TRANSLATEGEMMA else "generic"
+            svc = "TranslateGemma" if _is_translategemma() else "generic"
             logger.debug(f"Payload for translation service ({svc}): {payload}")
 
         try:
@@ -1861,7 +1867,7 @@ class ChatQnAService:
                 )
                 response.raise_for_status()
                 response_data = response.json()
-                if IS_TRANSLATEGEMMA:
+                if _is_translategemma():
                     translated_blob = response_data["choices"][0]["text"]
                 else:
                     translated_blob = response_data["choices"][0]["message"]["content"]
@@ -1926,7 +1932,7 @@ class ChatQnAService:
             iso_code: Target ISO language code (e.g. "st").
             source_lang_code: Source ISO language code (e.g. "en"). Defaults to "en".
         """
-        if IS_TRANSLATEGEMMA:
+        if _is_translategemma():
             target_lang_code = iso_code.lower() if iso_code else target_lang.lower()
             prompt = self._build_translategemma_prompt(
                 text=text,
@@ -1936,7 +1942,7 @@ class ChatQnAService:
                 target_lang_name=target_lang,
             )
             payload = {
-                "model": TRANSLATION_MODEL_ID,
+                "model": _get_translation_model_id(),
                 "prompt": prompt,
                 "temperature": 0.0,
                 "max_tokens": min(max(len(text) // 2, 512), 4096),
@@ -1967,7 +1973,7 @@ class ChatQnAService:
             url = TRANSLATION_LLM_URL
 
         if logflag:
-            logger.debug(f"Translation payload ({'TranslateGemma' if IS_TRANSLATEGEMMA else 'generic'}): {payload}")
+            logger.debug(f"Translation payload ({'TranslateGemma' if _is_translategemma() else 'generic'}): {payload}")
 
         try:
             async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
@@ -1978,7 +1984,7 @@ class ChatQnAService:
                 )
                 response.raise_for_status()
                 response_data = response.json()
-                if IS_TRANSLATEGEMMA:
+                if _is_translategemma():
                     return response_data["choices"][0]["text"].strip()
                 else:
                     return response_data["choices"][0]["message"]["content"].strip()
@@ -2253,7 +2259,7 @@ class ChatQnAService:
         tracer = get_tracer("chatqna.orchestrate")
         with tracer.start_as_current_span("chatqna.orchestrate") as span:
             span.set_attribute("rag.query_length", len(last_translated_message_content))
-            span.set_attribute("rag.model_id", LLM_MODEL)
+            span.set_attribute("rag.model_id", _get_llm_model())
 
             _rag_start = time.time()
             try:

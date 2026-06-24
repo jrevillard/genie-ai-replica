@@ -12,6 +12,7 @@ from typing import Any
 import aiohttp
 from opentelemetry import propagate
 
+from core.model_cache import get_model_id
 from tracing import get_tracer, setup_trace_logging
 
 tracer = get_tracer(__name__)
@@ -136,32 +137,20 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
         The parent reads VLLM_MODEL_ID from env var, which may not match
         the model actually loaded on the remote GPU node. When GPU_NODE_HOST
-        is set, probe the vLLM /v1/models API and override the env var
-        before calling the parent method.
+        is set, probe the vLLM /v1/models API (TTL-cached, see core/model_cache.py)
+        and override the env var before calling the parent method.
         """
-        import requests as req
-
         _vllm_endpoint = os.getenv("VLLM_ENDPOINT", "")
-        _api_key = os.getenv("VLLM_API_KEY", "")
 
         if os.getenv("GPU_NODE_HOST") and _vllm_endpoint:
-            try:
-                resp = req.get(
-                    f"{_vllm_endpoint}/v1/models",
-                    headers={"Authorization": f"Bearer {_api_key}"},
-                    timeout=10,
-                )
-                resp.raise_for_status()
-                models = resp.json().get("data", [])
-                if models:
-                    os.environ["VLLM_MODEL_ID"] = models[0]["id"]
-                    # Also patch the parent module constant (evaluated at import time)
-                    import comps.dataprep.src.integrations.arangodb as _parent_mod
+            detected = get_model_id(_vllm_endpoint)
+            if detected:
+                os.environ["VLLM_MODEL_ID"] = detected
+                # Also patch the parent module constant (evaluated at import time)
+                import comps.dataprep.src.integrations.arangodb as _parent_mod
 
-                    _parent_mod.VLLM_MODEL_ID = models[0]["id"]
-                    logger.info(f"Auto-detected remote vLLM model for graph extraction: {models[0]['id']}")
-            except Exception as e:
-                logger.warning(f"Failed to auto-detect model for graph extraction: {e}")
+                _parent_mod.VLLM_MODEL_ID = detected
+                logger.info(f"Auto-detected remote vLLM model for graph extraction: {detected}")
 
         super()._initialize_llm(*args, **kwargs)
 
@@ -357,15 +346,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             base_url=f"{_vllm_endpoint}/v1",
         )
         model = os.getenv("VLLM_MODEL_ID")
-        # When using remote GPU node, auto-detect model to avoid
-        # config mismatch with GPU node deployment
+        # When using remote GPU node, auto-detect model (TTL-cached) to avoid
+        # config mismatch with GPU node deployment. See core/model_cache.py.
         if os.getenv("GPU_NODE_HOST"):
-            try:
-                models = await client.models.list()
-                model = models.data[0].id if models.data else model
+            detected = get_model_id(_vllm_endpoint)
+            if detected:
+                model = detected
                 logger.info(f"Auto-detected remote vLLM model: {model}")
-            except Exception as e:
-                logger.warning(f"Failed to auto-detect model from vLLM API: {e}")
         if not model:
             raise RuntimeError("VLLM_MODEL_ID not set and auto-detection failed")
 

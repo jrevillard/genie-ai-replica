@@ -195,4 +195,81 @@ describe('fileController', () => {
       expect(result.filePath).toContain('uploads');
     });
   });
+
+  describe('_ingestFileById (re-ingestion guard)', () => {
+    const axios = require('axios');
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('blocks re-ingestion when status is "Ingested" (canonical capitalized form)', async () => {
+      jest.spyOn(fileController, '_getFileBase64').mockResolvedValue({
+        file: { file_id: 'f1', dataprep: { status: 'Ingested' } },
+        base64String: 'b64'
+      });
+
+      const result = await fileController._ingestFileById('f1');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/already been ingested/i);
+      expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    it('blocks re-ingestion case-insensitively (lowercase "ingested")', async () => {
+      jest.spyOn(fileController, '_getFileBase64').mockResolvedValue({
+        file: { file_id: 'f1', dataprep: { status: 'ingested' } },
+        base64String: 'b64'
+      });
+
+      const result = await fileController._ingestFileById('f1');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/already been ingested/i);
+      expect(axios.post).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('_retractFileById (retraction guard)', () => {
+    const axios = require('axios');
+    const metadataService = require('../../../services/metadataService');
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('blocks retraction when status is "Retracted" (canonical capitalized form)', async () => {
+      metadataService.getMetadataById = jest.fn().mockResolvedValue({
+        file_id: 'f1',
+        dataprep: { status: 'Retracted' }
+      });
+
+      const result = await fileController._retractFileById('f1');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/already been retracted/i);
+      expect(axios.post).not.toHaveBeenCalled();
+    });
+
+    it('blocks retraction case-insensitively (lowercase "retracted")', async () => {
+      metadataService.getMetadataById = jest.fn().mockResolvedValue({
+        file_id: 'f1',
+        dataprep: { status: 'retracted' }
+      });
+
+      const result = await fileController._retractFileById('f1');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/already been retracted/i);
+      expect(axios.post).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -76,6 +76,9 @@ RUN pip install --no-cache-dir langdetect transformers "python-jose[cryptography
 # Copy the shared OTel tracing module (importable from PYTHONPATH=/app)
 COPY genie-ai-overlay/tracing.py /app/tracing.py
 
+# Copy shared TTL-cached model probe (importable as core.model_cache from PYTHONPATH=/app)
+COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py
+
 # --- FIX: Copy the original api_protocol.py to /app to make it importable as top-level 'api_protocol' ---
 # This path '/home/user/comps/...' will now be correct
 RUN cp /home/user/comps/cores/proto/api_protocol.py /app/api_protocol.py

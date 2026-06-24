@@ -1,68 +1,82 @@
 # Copyright (c) 2024-2026 International Telecommunication Union (ITU)
 #
-# Tests for module-level vLLM auto-detection in chatqna.
-# These tests must run AFTER test_chatqna.py (alphabetically)
-# because they use importlib.reload() which replaces module objects.
+# Tests for lazy (TTL-cached) vLLM model resolution in chatqna.
+#
+# Previously the module probed /v1/models at import time. Now detection is
+# lazy — the getters (_get_llm_model, _get_translation_model_id) probe on
+# first call and cache the result. These tests verify that import does NOT
+# trigger probes, and that the getters resolve correctly at call time.
 
 import importlib
 import sys
 from unittest.mock import MagicMock, patch
 
 import httpx
+import pytest
+
+from core.model_cache import clear_cache
 
 
-class TestModuleLevelAutoDetect:
-    """Tests that module-level auto-detect runs when GPU_NODE_HOST is set.
+@pytest.fixture(autouse=True)
+def _clean_cache():
+    clear_cache()
+    yield
+    clear_cache()
 
-    These tests reload the module with specific env vars.
-    httpx.get is mocked to avoid real network calls.
-    IMPORTANT: importlib.reload() replaces function/class objects,
-    so this test class must run AFTER test_chatqna.py (which imports
-    specific references at collection time).
-    """
 
-    def test_auto_detect_fires_when_gpu_node_host_set(self, monkeypatch):
+class TestLazyModelResolution:
+    """Module import must not probe; getters resolve lazily."""
+
+    def test_module_import_does_not_probe(self, monkeypatch):
+        """Importing the module triggers zero /v1/models probes (lazy detection)."""
         monkeypatch.setenv("GPU_NODE_HOST", "10.0.0.110")
         monkeypatch.setenv("VLLM_LLM_ENDPOINT", "https://10.0.0.110/llm")
         monkeypatch.setenv("VLLM_TRANSLATION_ENDPOINT", "https://10.0.0.110/translation")
-        monkeypatch.setenv("VLLM_API_KEY", "test-key")
         monkeypatch.setenv("LLM_MODEL", "default-llm")
-        monkeypatch.setenv("VLLM_TRANSLATION_MODEL_ID", "default-trans")
-        monkeypatch.setenv("LLM_TRANS_MODEL", "default-trans")
+
+        with patch("httpx.get") as mock_get:
+            importlib.reload(sys.modules["chatqna.genieai_chatqna"])
+
+        mock_get.assert_not_called()
+
+    def test_getter_returns_detected_model(self, monkeypatch):
+        """_get_llm_model probes and returns the detected model."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
+        monkeypatch.setattr(mod, "_VLLM_LLM_ENDPOINT", "https://10.0.0.110/llm")
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"data": [{"id": "detected-llm-model"}]}
 
         with patch("httpx.get", return_value=mock_resp) as mock_get:
-            mod = importlib.reload(sys.modules["chatqna.genieai_chatqna"])
+            result = mod._get_llm_model()
 
-        assert mod.LLM_MODEL == "detected-llm-model"
-        mock_get.assert_called()
+        assert result == "detected-llm-model"
+        mock_get.assert_called_once()
 
-    def test_auto_detect_skipped_when_no_gpu_node_host(self, monkeypatch):
-        monkeypatch.delenv("GPU_NODE_HOST", raising=False)
+    def test_getter_returns_default_when_no_gpu_host(self, monkeypatch):
+        """Without GPU_NODE_HOST, getter returns the config default without probing."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "")
         monkeypatch.setenv("LLM_MODEL", "default-llm")
 
         with patch("httpx.get") as mock_get:
-            mod = importlib.reload(sys.modules["chatqna.genieai_chatqna"])
+            result = mod._get_llm_model()
 
-        assert mod.LLM_MODEL == "default-llm"
+        assert result == "default-llm"
         mock_get.assert_not_called()
 
-    def test_auto_detect_both_llm_and_translation(self, monkeypatch):
-        monkeypatch.setenv("GPU_NODE_HOST", "10.0.0.110")
-        monkeypatch.setenv("VLLM_LLM_ENDPOINT", "https://10.0.0.110/llm")
-        monkeypatch.setenv("VLLM_TRANSLATION_ENDPOINT", "https://10.0.0.110/translation")
-        monkeypatch.setenv("VLLM_API_KEY", "test-key")
-        monkeypatch.setenv("LLM_MODEL", "default-llm")
-        monkeypatch.setenv("VLLM_TRANSLATION_MODEL_ID", "default-trans")
-        monkeypatch.setenv("LLM_TRANS_MODEL", "default-trans")
+    def test_both_llm_and_translation_resolve(self, monkeypatch):
+        """Both getters probe independently and return different models."""
+        import chatqna.genieai_chatqna as mod
 
-        call_count = 0
+        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
+        monkeypatch.setattr(mod, "_VLLM_LLM_ENDPOINT", "https://10.0.0.110/llm")
+        monkeypatch.setattr(mod, "_VLLM_TRANSLATION_ENDPOINT", "https://10.0.0.110/translation")
 
         def mock_get_fn(url, **kwargs):
-            nonlocal call_count
-            call_count += 1
             resp = MagicMock()
             if "/llm/" in url:
                 resp.json.return_value = {"data": [{"id": "detected-llm"}]}
@@ -70,21 +84,23 @@ class TestModuleLevelAutoDetect:
                 resp.json.return_value = {"data": [{"id": "detected-trans"}]}
             return resp
 
-        with patch("httpx.get", side_effect=mock_get_fn):
-            mod = importlib.reload(sys.modules["chatqna.genieai_chatqna"])
+        with patch("httpx.get", side_effect=mock_get_fn) as mock_get:
+            llm = mod._get_llm_model()
+            trans = mod._get_translation_model_id()
 
-        assert mod.LLM_MODEL == "detected-llm"
-        assert mod.TRANSLATION_MODEL_ID == "detected-trans"
-        assert mod.LLM_TRANS_MODEL == "detected-trans"
-        assert call_count == 2
+        assert llm == "detected-llm"
+        assert trans == "detected-trans"
+        assert mock_get.call_count == 2
 
-    def test_auto_detect_failure_keeps_default_model(self, monkeypatch):
-        monkeypatch.setenv("GPU_NODE_HOST", "10.0.0.110")
-        monkeypatch.setenv("VLLM_LLM_ENDPOINT", "https://10.0.0.110/llm")
-        monkeypatch.setenv("VLLM_TRANSLATION_ENDPOINT", "")
+    def test_getter_failure_returns_default(self, monkeypatch):
+        """When the probe fails, getter returns the config default."""
+        import chatqna.genieai_chatqna as mod
+
+        monkeypatch.setattr(mod, "_GPU_NODE_HOST", "10.0.0.110")
+        monkeypatch.setattr(mod, "_VLLM_LLM_ENDPOINT", "https://10.0.0.110/llm")
         monkeypatch.setenv("LLM_MODEL", "default-llm")
 
         with patch("httpx.get", side_effect=httpx.ConnectError("fail")):
-            mod = importlib.reload(sys.modules["chatqna.genieai_chatqna"])
+            result = mod._get_llm_model()
 
-        assert mod.LLM_MODEL == "default-llm"
+        assert result == "default-llm"

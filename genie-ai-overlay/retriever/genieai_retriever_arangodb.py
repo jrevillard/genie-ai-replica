@@ -17,6 +17,7 @@ from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
+from core.model_cache import get_model_id
 from tracing import setup_trace_logging
 
 from .config import (
@@ -95,8 +96,8 @@ class GenieaiArangoRetriever(OpeaComponent):
     def _initialize_llm(self):
         """Initialize the language model for summarization if enabled.
 
-        When GPU_NODE_HOST is set, probes the vLLM /v1/models API and
-        overrides VLLM_MODEL_ID before creating the ChatOpenAI client.
+        When GPU_NODE_HOST is set, auto-detects the vLLM model (with TTL cache,
+        see core/model_cache.py) instead of using the config default VLLM_MODEL_ID.
         Falls back to the config default on any probe failure.
         """
         if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
@@ -112,42 +113,58 @@ class GenieaiArangoRetriever(OpeaComponent):
                 self.llm = ChatOpenAI(
                     temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL, max_tokens=OPENAI_CHAT_MAX_TOKENS
                 )
+                self._llm_model_id = OPENAI_CHAT_MODEL
             except openai.error.AuthenticationError:
                 logger.error("OpenAI API Key is invalid.")
             except Exception as e:
                 logger.error(f"An error occurred while verifying the API Key: {e}")
 
         elif VLLM_ENDPOINT:
-            # Auto-detect remote vLLM model when GPU node is used.
-            # The config default VLLM_MODEL_ID may not match the model
-            # actually loaded on the remote GPU node.
-            if os.getenv("GPU_NODE_HOST") and VLLM_ENDPOINT:
-                try:
-                    import requests as req
-
-                    resp = req.get(
-                        f"{VLLM_ENDPOINT}/v1/models",
-                        headers={"Authorization": f"Bearer {os.getenv('VLLM_API_KEY', '')}"},
-                        timeout=10,
-                    )
-                    resp.raise_for_status()
-                    models = resp.json().get("data", [])
-                    if models:
-                        os.environ["VLLM_MODEL_ID"] = models[0]["id"]
-                        logger.info(f"Auto-detected remote vLLM model for summarization: {models[0]['id']}")
-                except Exception as e:
-                    logger.warning(f"Failed to auto-detect model for summarization: {e}")
-            self.llm = ChatOpenAI(
-                openai_api_key=VLLM_API_KEY,
-                openai_api_base=f"{VLLM_ENDPOINT}/v1",
-                model=os.getenv("VLLM_MODEL_ID", VLLM_MODEL_ID),
-                temperature=VLLM_TEMPERATURE,
-                max_tokens=VLLM_MAX_NEW_TOKENS,
-                top_p=VLLM_TOP_P,
-                timeout=VLLM_TIMEOUT,
-            )
+            self._llm_model_id = self._resolve_vllm_model_id()
+            self.llm = self._create_vllm_client(self._llm_model_id)
         else:
             raise HTTPException(status_code=400, detail="No LLM environment variables are set, cannot generate graphs.")
+
+    def _resolve_vllm_model_id(self) -> str:
+        """Return the vLLM model ID for summarization.
+
+        Auto-detects (TTL-cached) from the remote vLLM when GPU_NODE_HOST is set;
+        otherwise returns the VLLM_MODEL_ID env/config default.
+        """
+        if os.getenv("GPU_NODE_HOST") and VLLM_ENDPOINT:
+            detected = get_model_id(VLLM_ENDPOINT)
+            if detected:
+                logger.info(f"Auto-detected remote vLLM model for summarization: {detected}")
+                os.environ["VLLM_MODEL_ID"] = detected
+                return detected
+        return os.getenv("VLLM_MODEL_ID", VLLM_MODEL_ID)
+
+    def _create_vllm_client(self, model_id: str) -> ChatOpenAI:
+        """Create a ChatOpenAI client targeting the vLLM endpoint."""
+        return ChatOpenAI(
+            openai_api_key=VLLM_API_KEY,
+            openai_api_base=f"{VLLM_ENDPOINT}/v1",
+            model=model_id,
+            temperature=VLLM_TEMPERATURE,
+            max_tokens=VLLM_MAX_NEW_TOKENS,
+            top_p=VLLM_TOP_P,
+            timeout=VLLM_TIMEOUT,
+        )
+
+    def _get_llm(self) -> ChatOpenAI:
+        """Return the summarizer LLM, recreating it if the auto-detected model changed.
+
+        On each call the TTL-cached model ID is re-checked. If it differs from the
+        model baked into the current client (e.g. the GPU node changed models), the
+        ChatOpenAI client is recreated.
+        """
+        if VLLM_ENDPOINT and os.getenv("GPU_NODE_HOST"):
+            current_id = self._resolve_vllm_model_id()
+            if current_id != getattr(self, "_llm_model_id", None):
+                logger.info(f"Summarizer model changed: {self._llm_model_id} -> {current_id}, recreating client")
+                self._llm_model_id = current_id
+                self.llm = self._create_vllm_client(current_id)
+        return self.llm
 
     def _initialize_client(self):
         """Initialize the ArangoDB connection."""
@@ -883,7 +900,7 @@ class GenieaiArangoRetriever(OpeaComponent):
             if enable_summarizer:
                 for r in search_res:
                     prompt = self.generate_summarization_prompt(query, r["doc"].page_content)
-                    res = self.llm.invoke(prompt)
+                    res = self._get_llm().invoke(prompt)
                     summarized_text = res.content
 
                     logger.info(f"Summarized {r['doc'].id}")

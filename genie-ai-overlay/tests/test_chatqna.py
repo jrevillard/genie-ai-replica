@@ -1057,7 +1057,7 @@ class TestTranslationHelpers:
 
         with (
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
-            patch("chatqna.genieai_chatqna.IS_TRANSLATEGEMMA", False),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
         ):
@@ -1079,7 +1079,7 @@ class TestTranslationHelpers:
 
         with (
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
-            patch("chatqna.genieai_chatqna.IS_TRANSLATEGEMMA", False),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
         ):
@@ -1100,7 +1100,7 @@ class TestTranslationHelpers:
 
         with (
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
-            patch("chatqna.genieai_chatqna.IS_TRANSLATEGEMMA", True),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=True),
             patch("chatqna.genieai_chatqna.TRANSLATION_COMPLETIONS_URL", "http://localhost/v1/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "translategemma-test"),
         ):
@@ -1121,7 +1121,7 @@ class TestTranslationHelpers:
 
         with (
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", return_value=mock_client),
-            patch("chatqna.genieai_chatqna.IS_TRANSLATEGEMMA", False),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
             patch("chatqna.genieai_chatqna.TRANSLATION_MODEL_ID", "test-model"),
         ):
@@ -1133,7 +1133,7 @@ class TestTranslationHelpers:
         svc = create_chatqna_service()
         with (
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", side_effect=Exception("Connection error")),
-            patch("chatqna.genieai_chatqna.IS_TRANSLATEGEMMA", False),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
         ):
             result = await svc._translate_text_chunk("Original text", "French")
@@ -1144,7 +1144,7 @@ class TestTranslationHelpers:
         svc = create_chatqna_service()
         with (
             patch("chatqna.genieai_chatqna.httpx.AsyncClient", side_effect=TimeoutError("Request timed out")),
-            patch("chatqna.genieai_chatqna.IS_TRANSLATEGEMMA", False),
+            patch("chatqna.genieai_chatqna._is_translategemma", return_value=False),
             patch("chatqna.genieai_chatqna.TRANSLATION_LLM_URL", "http://localhost/v1/chat/completions"),
         ):
             result = await svc._translate_text_chunk("Original text", "French")

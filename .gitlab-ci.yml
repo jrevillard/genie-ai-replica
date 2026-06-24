@@ -100,6 +100,7 @@ workflow:
     - apk add --no-cache docker-cli-compose curl
     # Authenticate to the GitLab registry so `docker compose pull` succeeds
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - if [ -n "$DOCKER_HUB_USER" ]; then echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin docker.io; fi  # avoid anonymous Docker Hub rate limits
     - |
       for p in $(docker compose ls -q 2>/dev/null | grep '^ci-'); do
         echo "Cleaning up previous project: $p"
@@ -684,6 +685,7 @@ build:image:
   interruptible: true
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - if [ -n "$DOCKER_HUB_USER" ]; then echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin docker.io; fi  # avoid anonymous Docker Hub rate limits
   script:
     - |
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
@@ -736,6 +738,7 @@ promote:image:
   tags: [docker]
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - if [ -n "$DOCKER_HUB_USER" ]; then echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin docker.io; fi  # avoid anonymous Docker Hub rate limits
   script:
     - SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:pending-$CI_COMMIT_SHORT_SHA"
     # Extract the manifest digest. `buildx imagetools inspect --format` templates

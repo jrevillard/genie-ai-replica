@@ -90,7 +90,7 @@ workflow:
     COMPOSE_PROJECT_NAME: "ci-$CI_PIPELINE_ID"
     # Pull candidate images from the tmp/ quarantine namespace (where build:image
     # pushes pre-promote candidates). IMAGE_TAG matches the candidate tag.
-    SWARM_REGISTRY_URL: "$CI_REGISTRY_IMAGE/tmp"
+    GENIE_AI_REGISTRY: "$CI_REGISTRY_IMAGE/tmp"  # e2e pulls candidates from tmp/ namespace
   allow_failure: false
   tags: [docker]
   timeout: 30m
@@ -148,7 +148,7 @@ workflow:
       else
         E2E_TAG="pending-${CI_COMMIT_SHORT_SHA}"
       fi
-      sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${E2E_TAG}|" .env
+      sed -i "s|^GENIE_AI_GLOBAL_TAG=.*|GENIE_AI_GLOBAL_TAG=${E2E_TAG}|" .env
       echo "E2E pulling candidate images tagged :${E2E_TAG}"
     # Pull all custom services from the registry. `up --no-build` below fails
     # loudly if a build:image job didn't publish its candidate, surfacing the

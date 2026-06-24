@@ -610,54 +610,73 @@ kics-iac-sast:
 
 # 16 custom images — single source of truth for the build/scan/promote matrix.
 .image_matrix: &image_matrix
+  # WATCH = regex alternation of paths that, if changed, warrant rebuilding the
+  # image. Always includes 'gitlab-ci.yml' (a CI config change rebuilds all).
+  # Used by .skip_if_unchanged to skip builds whose sources didn't change.
   - IMAGE_NAME: genie-ai-frontend
     CONTEXT: components/gov-chat-frontend/
     DOCKERFILE: components/gov-chat-frontend/Dockerfile
+    WATCH: "components/gov-chat-frontend/|gitlab-ci.yml"
   - IMAGE_NAME: genie-ai-backend
     CONTEXT: components/
     DOCKERFILE: components/gov-chat-backend/Dockerfile
+    WATCH: "components/gov-chat-backend/|components/shared/|gitlab-ci.yml"
   - IMAGE_NAME: genie-ai-db-migrations
     CONTEXT: .
     DOCKERFILE: components/gov-chat-backend/Dockerfile.migrations
+    WATCH: "components/gov-chat-backend/migrations|gitlab-ci.yml"
   - IMAGE_NAME: genie-ai-document-repository
     CONTEXT: components/
     DOCKERFILE: components/document-repository/Dockerfile
+    WATCH: "components/document-repository/|components/shared/|gitlab-ci.yml"
   - IMAGE_NAME: genie-ai-nginx
     CONTEXT: api-gateway-solution/nginx/
     DOCKERFILE: api-gateway-solution/nginx/Dockerfile
+    WATCH: "api-gateway-solution/nginx/|gitlab-ci.yml"
   - IMAGE_NAME: genie-ai-kong-config
     CONTEXT: api-gateway-solution/new-config/
     DOCKERFILE: api-gateway-solution/new-config/Dockerfile
+    WATCH: "api-gateway-solution/new-config/|gitlab-ci.yml"
   - IMAGE_NAME: genie-ai-chatqna-server
     CONTEXT: .
     DOCKERFILE: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
+    WATCH: "genie-ai-overlay/chatqna/|genie-ai-overlay/core/|configs/ssl/|gitlab-ci.yml"
   - IMAGE_NAME: genie-ai-dataprep-arango
     CONTEXT: .
     DOCKERFILE: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
+    WATCH: "genie-ai-overlay/dataprep/|genie-ai-overlay/core/|configs/ssl/|gitlab-ci.yml"
   - IMAGE_NAME: genie-ai-retriever-arango
     CONTEXT: .
     DOCKERFILE: genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
+    WATCH: "genie-ai-overlay/retriever/|genie-ai-overlay/core/|configs/ssl/|gitlab-ci.yml"
   - IMAGE_NAME: genie-ai-reranker
     CONTEXT: .
     DOCKERFILE: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
+    WATCH: "genie-ai-overlay/reranker/|genie-ai-overlay/core/|configs/ssl/|gitlab-ci.yml"
   - IMAGE_NAME: genie-ai-embedding
     CONTEXT: .
     DOCKERFILE: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
+    WATCH: "genie-ai-overlay/embedding/|genie-ai-overlay/core/|configs/ssl/|gitlab-ci.yml"
   - IMAGE_NAME: genie-ai-textgen
     CONTEXT: .
     DOCKERFILE: genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
+    WATCH: "genie-ai-overlay/textgen/|genie-ai-overlay/core/|configs/ssl/|gitlab-ci.yml"
   - IMAGE_NAME: genie-ai-postgres-init
     CONTEXT: configs/postgres/
     DOCKERFILE: configs/postgres/Dockerfile
+    WATCH: "configs/postgres/|gitlab-ci.yml"
   - IMAGE_NAME: genie-ai-keycloak
     CONTEXT: configs/keycloak/
     DOCKERFILE: configs/keycloak/Dockerfile
+    WATCH: "configs/keycloak/|gitlab-ci.yml"
   - IMAGE_NAME: genie-ai-keycloak-config
     CONTEXT: configs/keycloak/
     DOCKERFILE: configs/keycloak/Dockerfile.config-cli
+    WATCH: "configs/keycloak/|gitlab-ci.yml"
   - IMAGE_NAME: genie-ai-tempo-proxy
     CONTEXT: tools/tempo-proxy/
     DOCKERFILE: tools/tempo-proxy/Dockerfile
+    WATCH: "tools/tempo-proxy/|gitlab-ci.yml"
 
 # Build/scan run on MR, main, and tags. Skip schedules and web pipelines.
 .build_rules: &build_rules
@@ -680,6 +699,43 @@ kics-iac-sast:
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   - if: $CI_COMMIT_BRANCH =~ /^release\//   # release branches promote to their own rolling tag
 
+# Detect which images' sources changed → changed-images.txt (one IMAGE_NAME per line).
+# build:image / container_scanning / promote:image skip if their IMAGE_NAME isn't
+# listed (tag/release branches always rebuild everything). Centralised here so the
+# per-image jobs (buildkit rootless / trivy / docker — none have git) only grep.
+detect-changes:
+  stage: .pre
+  image: alpine:3.20
+  rules: *build_rules
+  before_script:
+    - apk add --no-cache git python3 py3-yaml
+  script:
+    - |
+      set -e
+      if [ -n "$CI_MERGE_REQUEST_DIFF_BASE_SHA" ]; then BASE="$CI_MERGE_REQUEST_DIFF_BASE_SHA";
+      elif [ -n "$CI_COMMIT_BEFORE_SHA" ] && [ "$CI_COMMIT_BEFORE_SHA" != "$CI_COMMIT_SHA" ] && [ "${CI_COMMIT_BEFORE_SHA#0}" != "$CI_COMMIT_BEFORE_SHA" ] && [ -n "${CI_COMMIT_BEFORE_SHA#0000000000000000000000000000000000000000}" ]; then BASE="$CI_COMMIT_BEFORE_SHA";
+      else BASE=""; fi
+      # tag / release / unknown-base → build everything (safe)
+      if [ -n "$CI_COMMIT_TAG" ] || echo "$CI_COMMIT_BRANCH" | grep -q '^release/' || [ -z "$BASE" ]; then
+        echo "build-all trigger (tag/release/no-base) — listing every image"
+        python3 -c "import yaml; [print(e['IMAGE_NAME']) for e in yaml.safe_load(open('.gitlab-ci.yml'))['.image_matrix']]" > changed-images.txt
+      else
+        git diff --name-only "${BASE}...${CI_COMMIT_SHA}" > changed-files.txt
+        python3 - << 'PYEOF2' > changed-images.txt
+      import yaml, re
+      ci = yaml.safe_load(open('.gitlab-ci.yml'))
+      changed = open('changed-files.txt').read()
+      for e in ci['.image_matrix']:
+          if re.search(e['WATCH'], changed, re.M):
+              print(e['IMAGE_NAME'])
+      PYEOF2
+      fi
+      echo "Images to build:"; cat changed-images.txt
+  artifacts:
+    paths:
+      - changed-images.txt
+    expire_in: 1 day
+
 # Build candidate images with docker buildx (docker-container buildkit driver)
 # and push to the GitLab Container Registry. This is the modern path: supports
 # all BuildKit syntax (--chmod, --mount) + the registry cache backend.
@@ -697,6 +753,7 @@ build:image:
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - if [ -n "$DOCKER_HUB_USER" ]; then echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin docker.io; fi  # avoid anonymous Docker Hub rate limits
+    -     - if [ -f changed-images.txt ] && ! grep -qx "$IMAGE_NAME" changed-images.txt; then echo "No source change for $IMAGE_NAME → skip"; exit 0; fi
   script:
     - |
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
@@ -729,7 +786,9 @@ container_scanning:
     CS_REGISTRY_USER: "$CI_REGISTRY_USER"
     CS_REGISTRY_PASSWORD: "$CI_REGISTRY_PASSWORD"
     CS_SEVERITY: "High,Critical"
+    TRIVY_TIMEOUT: "30m"  # heavy OPEA images (retriever/dataprep) need >15min default
   before_script:
+    -     - if [ -f changed-images.txt ] && ! grep -qx "$IMAGE_NAME" changed-images.txt; then echo "No source change for $IMAGE_NAME → skip"; exit 0; fi
     - |
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
         export CS_IMAGE="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
@@ -750,6 +809,7 @@ promote:image:
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - if [ -n "$DOCKER_HUB_USER" ]; then echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin docker.io; fi  # avoid anonymous Docker Hub rate limits
+    -     - if [ -f changed-images.txt ] && ! grep -qx "$IMAGE_NAME" changed-images.txt; then echo "No source change for $IMAGE_NAME → skip"; exit 0; fi
   script:
     - SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:pending-$CI_COMMIT_SHORT_SHA"
     # Extract the manifest digest. `buildx imagetools inspect --format` templates

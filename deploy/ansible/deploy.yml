@@ -386,6 +386,16 @@
     - name: Initialize shared facts (registry URL, image tag)
       ansible.builtin.include_tasks: tasks/deploy-shared-facts.yml
 
+    - name: Assert GitLab deploy token is provided (vault)
+      ansible.builtin.assert:
+        that:
+          - gitlab_deploy_token_user is defined
+          - gitlab_deploy_token is defined
+          - gitlab_deploy_token | length > 0
+        fail_msg: >-
+          GitLab deploy token required (gitlab_deploy_token_user + gitlab_deploy_token
+          in vault). Create at Settings → Repository → Deploy tokens (read_registry scope).
+
     - name: Docker login to GitLab Container Registry
       ansible.builtin.shell: |
         echo "{{ gitlab_deploy_token }}" | docker login -u "{{ gitlab_deploy_token_user }}" --password-stdin {{ swarm_registry_url }}

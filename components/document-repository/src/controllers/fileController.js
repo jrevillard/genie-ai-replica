@@ -974,7 +974,8 @@ class FileController {
 
   async _ingestFileById(fileId) {
     const { file, base64String } = await this._getFileBase64(fileId);
-    if (file.dataprep && file.dataprep.status === 'ingested') {
+    // Case-insensitive: dataprep persists the status capitalized ('Ingested'), not lowercase
+    if (file.dataprep && (file.dataprep.status || '').toLowerCase() === 'ingested') {
       return { success: false, error: 'File has already been ingested' };
     }
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
@@ -1057,7 +1058,8 @@ class FileController {
   async _retractFileById(fileId) {
     const file = await metadataService.getMetadataById(fileId);
     if (!file) return { success: false, error: 'File not found' };
-    if (!file.dataprep || file.dataprep.status === 'retracted') {
+    // Case-insensitive: dataprep persists the status capitalized ('Retracted'), not lowercase
+    if (!file.dataprep || (file.dataprep.status || '').toLowerCase() === 'retracted') {
       return { success: false, error: 'File has already been retracted' };
     }
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.retractPath}`;

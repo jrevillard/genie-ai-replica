@@ -12,8 +12,9 @@ deploy_opea: "1"
 repo_branch: main
 enable_observability: "0"
 
-# Remote GPU endpoint
-gpu_node_host: "ai.assembly.govstack.global"
+# Remote GPU endpoint (LAN address; public hostname ai.assembly.govstack.global
+# has port 444 firewalled from this network — use the LAN IP 10.0.0.110)
+gpu_node_host: "10.0.0.110"
 gpu_https_port: "444"
 opea_ssl_skip_verify: "1"
 keycloak_ssl_skip_verify: "1"

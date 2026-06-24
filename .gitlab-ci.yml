@@ -687,6 +687,7 @@ kics-iac-sast:
   - if: $CI_COMMIT_TAG
   - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - if: $CI_COMMIT_BRANCH =~ /^release\//   # release branches build candidates too
 
 # Promote only on protected refs (main + tags). MR candidate images are ephemeral
 # (:mr-<iid>-<sha>) and never promoted to deployable tags.

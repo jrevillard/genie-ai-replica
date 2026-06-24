@@ -488,6 +488,107 @@ class TestLabelWithLlm:
         assert result[1]["labels"] == ["Healthcare"]
 
     @pytest.mark.asyncio
+    async def test_batch_handles_null_labels_without_fallback(self, monkeypatch):
+        """A null value for a chunk (no labels) is coerced to [] — no batch fallback."""
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        # chunk 0 -> labels, chunk 1 -> null (model's "no labels" convention)
+        mock_response.choices[0].message.content = json.dumps({"0": ["Healthcare"], "1": None})
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._label_with_llm(["chunk0", "chunk1"], ["Healthcare"], [], "file1")
+
+        # No fallback — one batch call, null coerced to [].
+        assert mock_client.chat.completions.create.call_count == 1
+        assert result[0]["labels"] == ["Healthcare"]
+        assert result[1]["labels"] == []
+
+    @pytest.mark.asyncio
+    async def test_single_handles_null_labels(self, monkeypatch):
+        """A null labels value in single-chunk mode returns [] instead of retrying."""
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps({"labels": None})
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
+
+        assert result[0]["labels"] == []
+        assert mock_client.chat.completions.create.call_count == 1  # no retry
+
+    @pytest.mark.asyncio
+    async def test_batch_wraps_bare_string_label(self, monkeypatch):
+        """A bare string label (not a list) is wrapped — no batch fallback."""
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps({"0": "Healthcare", "1": ["Education"]})
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._label_with_llm(["chunk0", "chunk1"], ["Healthcare", "Education"], [], "file1")
+
+        assert mock_client.chat.completions.create.call_count == 1  # no fallback
+        assert result[0]["labels"] == ["Healthcare"]
+        assert result[1]["labels"] == ["Education"]
+
+    @pytest.mark.asyncio
+    async def test_batch_skips_unusable_label_value(self, monkeypatch):
+        """A per-chunk unusable value (e.g. a number) is skipped to [] — no batch fallback."""
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        # chunk 0 -> number (unusable), chunk 1 -> valid list
+        mock_response.choices[0].message.content = json.dumps({"0": 123, "1": ["Education"]})
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._label_with_llm(["chunk0", "chunk1"], ["Education"], [], "file1")
+
+        assert mock_client.chat.completions.create.call_count == 1  # no fallback
+        assert result[0]["labels"] == []  # unusable -> skipped
+        assert result[1]["labels"] == ["Education"]
+
+    @pytest.mark.asyncio
     async def test_consolidated_logging_writes_one_entry_per_chunk(self, monkeypatch):
         """Per-label progress logs collapse to a single summary per chunk."""
         dp = create_dataprep()

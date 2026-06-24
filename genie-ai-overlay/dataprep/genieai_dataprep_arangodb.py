@@ -98,13 +98,16 @@ Rules:
 - Most chunks get 1–3 labels. Never exceed 5.
 - Do NOT "maximize" coverage.
 - Do NOT suggest new labels.
-- If nothing fits well → return empty list.
 - Use ONLY exact strings from the list.
 
 Labels:
 {labels_list}
 
-Output strict JSON only:
+Output format (STRICT):
+- Return ONLY a JSON object — no prose, no markdown, no code fences.
+- The value is ALWAYS an array of strings.
+- For a chunk with no matching label, use an empty array [] (never null).
+Example:
 {"labels": ["Label1", "Label2"]}
 </SYSTEM INSTRUCTIONS>
 """.strip()
@@ -461,7 +464,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     )
                     parsed = json.loads(response.choices[0].message.content)
                     suggested = parsed.get("labels", [])
-                    if isinstance(suggested, list) and all(isinstance(x, str) for x in suggested):
+                    # Lenient: null -> []; a bare string -> [string]; drop non-strings.
+                    if suggested is None:
+                        suggested = []
+                    elif isinstance(suggested, str):
+                        suggested = [suggested]
+                    if isinstance(suggested, list):
+                        suggested = [x for x in suggested if isinstance(x, str)]
                         span.set_attribute("dataprep.labels_suggested", len(suggested))
                         return suggested
                     await self._write_ingestion_log(
@@ -491,9 +500,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """One LLM call labeling a whole batch of chunks. Returns None on parse failure."""
         indices = [i for i, _ in batch]
         user_content = (
-            "For each numbered chunk below, assign labels from the taxonomy. "
-            "Respond with ONLY a JSON object mapping each chunk index (as a string key) "
-            'to its labels, e.g. {"0": ["Healthcare"], "1": ["Education"]}. No other text.\n'
+            "For each numbered chunk below, assign labels. Respond with ONLY a JSON object "
+            "mapping EVERY chunk index (string key) to an ARRAY of label strings, e.g. "
+            '{"0": ["Healthcare"], "1": ["Education"]}. Every index MUST be present; values '
+            "are ALWAYS arrays (never null, never a bare string); use [] for chunks with no "
+            "matching label. No prose, no markdown.\n"
         )
         for i, text in batch:
             user_content += f"\n[{i}] {text}"
@@ -528,19 +539,22 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         continue
                     if idx not in index_set:
                         continue
-                    if not isinstance(labels, list) or not all(isinstance(x, str) for x in labels):
-                        return None
+                    # Lenient: accept the model's varied shapes (null / string / list);
+                    # an unusable value skips the chunk (-> empty) instead of failing the batch.
+                    if labels is None:
+                        labels = []
+                    elif isinstance(labels, str):
+                        labels = [labels]
+                    elif not isinstance(labels, list):
+                        continue
+                    labels = [x for x in labels if isinstance(x, str)]
                     suggestions[idx] = labels
                 # Missing indices = the model chose not to label them (valid → empty).
                 for i in indices:
                     suggestions.setdefault(i, [])
                 span.set_attribute("dataprep.labels_suggested", sum(len(v) for v in suggestions.values()))
                 return suggestions
-            except Exception as e:
-                logger.warning(
-                    f"Batch LLM labeling failed ({len(batch)} chunks {[i for i, _ in batch]}): "
-                    f"{type(e).__name__}: {str(e)[:200]}"
-                )
+            except Exception:
                 return None
 
     async def _finalize_chunk_labels(self, index, suggested, all_labels, file_id) -> list[str]:

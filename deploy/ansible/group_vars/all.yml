@@ -122,6 +122,12 @@ opea_ssl_skip_verify: ""
 # Only affects dataprep's Keycloak service account token fetch.
 keycloak_ssl_skip_verify: ""
 
+# Dataprep LLM labeling tuning (defaults live in code; set in group_vars/<env>/vars.yml to override).
+# LLM labeling is the dominant document-ingestion cost (one vLLM call per chunk).
+#   dataprep_max_concurrent_batches: 20  # concurrent LLM label calls (code default 20; was 5)
+#   dataprep_llm_label_batch_size: 1     # chunks per LLM call. 1 = per-chunk (safest); >1 batches
+#                                        #   chunks to cut network round-trips to a remote vLLM.
+
 vllm_llm_image: vllm/vllm-openai:latest
 vllm_translation_image: vllm/vllm-openai:v0.10.0
 tei_embedding_image: ghcr.io/huggingface/text-embeddings-inference:1.9.3

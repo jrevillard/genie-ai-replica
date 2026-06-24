@@ -383,6 +383,9 @@ class TestLabelWithLlm:
         call_kwargs = mock_client.chat.completions.create.call_args.kwargs
         assert call_kwargs["model"] == "test-model"
         assert "Healthcare" in call_kwargs["messages"][0]["content"]
+        # Deterministic sampling → clean JSON (granite adds prose at higher temp).
+        assert call_kwargs["temperature"] == 0.0
+        assert call_kwargs["max_tokens"] == 160
 
     @pytest.mark.asyncio
     async def test_retry_and_fallback_on_failure(self, monkeypatch):
@@ -425,6 +428,170 @@ class TestLabelWithLlm:
             result = await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
 
         assert "Healthcare" in result[0]["labels"]
+
+    @pytest.mark.asyncio
+    async def test_batch_labeling_makes_one_call_per_batch(self, monkeypatch):
+        """With LABEL_LLM_BATCH_SIZE>1, multiple chunks share a single LLM call."""
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps({"0": ["Healthcare"], "1": ["Education"]})
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._label_with_llm(
+                ["health chunk", "school chunk"], ["Healthcare", "Education"], [], "file1"
+            )
+
+        # 2 chunks / batch_size 2 → exactly one LLM call.
+        assert mock_client.chat.completions.create.call_count == 1
+        assert result[0]["labels"] == ["Healthcare"]
+        assert result[1]["labels"] == ["Education"]
+
+    @pytest.mark.asyncio
+    async def test_batch_labeling_falls_back_on_parse_failure(self, monkeypatch):
+        """A malformed batch response triggers per-chunk fallback (labels still correct)."""
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)
+
+        bad = MagicMock()
+        bad.choices = [MagicMock()]
+        bad.choices[0].message.content = "not json"
+        good = MagicMock()
+        good.choices = [MagicMock()]
+        good.choices[0].message.content = json.dumps({"labels": ["Healthcare"]})
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=[bad, good, good])
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._label_with_llm(["chunk0", "chunk1"], ["Healthcare"], [], "file1")
+
+        # 1 batch attempt (fails) + 2 per-chunk fallback calls.
+        assert mock_client.chat.completions.create.call_count == 3
+        assert result[0]["labels"] == ["Healthcare"]
+        assert result[1]["labels"] == ["Healthcare"]
+
+    @pytest.mark.asyncio
+    async def test_consolidated_logging_writes_one_entry_per_chunk(self, monkeypatch):
+        """Per-label progress logs collapse to a single summary per chunk."""
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        # Two exact-match labels → previously 2 per-label logs + 1 final = 3.
+        mock_response.choices[0].message.content = json.dumps({"labels": ["Healthcare", "Education"]})
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        log_mock = AsyncMock()
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new=log_mock),
+        ):
+            result = await dp._label_with_llm(["chunk"], ["Healthcare", "Education"], [], "file1")
+
+        assert set(result[0]["labels"]) == {"Healthcare", "Education"}
+        assert log_mock.call_count == 1  # one consolidated summary, not per-label
+
+    @pytest.mark.asyncio
+    async def test_consolidated_logging_warns_on_new_labels(self, monkeypatch):
+        """Non-taxonomy suggestions surface as a single WARN, not one log per label."""
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps({"labels": ["Healthcare", "QuantumAgriculture"]})
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        log_mock = AsyncMock()
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new=log_mock),
+        ):
+            await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
+
+        assert log_mock.call_count == 1
+        args = log_mock.call_args.args
+        # _write_ingestion_log(file_id, level, stage, message) — positional.
+        assert args[1] == "WARN"
+        assert "QuantumAgriculture" in args[3]
+
+    @pytest.mark.asyncio
+    async def test_llm_labeling_emits_span(self, monkeypatch):
+        """Each LLM call is wrapped in a dataprep.llm.label_chunk span."""
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps({"labels": ["Healthcare"]})
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        span = MagicMock()
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(return_value=span)
+        cm.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp_module, "with_span", return_value=cm) as ws,
+        ):
+            await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
+
+        ws.assert_called_once()
+        assert ws.call_args.args[0] == "dataprep.llm.label_chunk"
+        assert ws.call_args.kwargs["attributes"]["dataprep.chunk_index"] == 0
+
+    @pytest.mark.asyncio
+    async def test_failed_attempt_logs_exception_reason(self, monkeypatch):
+        """A failed LLM attempt logs the exception type+message for diagnosis."""
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=TimeoutError("simulated timeout"))
+
+        log_mock = AsyncMock()
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new=log_mock),
+        ):
+            result = await dp._label_with_llm(["chunk"], ["Healthcare"], ["Healthcare"], "file1")
+
+        # 3 failed attempts → fallback to file labels (Healthcare is in taxonomy, survives).
+        assert result[0]["labels"] == ["Healthcare"]
+        # Each failure must surface the exception type so it is diagnosable.
+        logged_msgs = [c.args[3] for c in log_mock.call_args_list]
+        assert any("TimeoutError" in m and "attempt" in m for m in logged_msgs)
 
 
 # ---------------------------------------------------------------------------

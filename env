@@ -189,6 +189,14 @@ HUGGING_FACE_HUB_TOKEN=
 # TOKEN_COST_ALPHA=0.0025      # per-token context-window cost coefficient
 # MIN_VALUE_THRESHOLD=-1.0     # select a chunk only if marginal value > threshold
 
+# Dataprep LLM labeling tuning — labeling is the dominant ingestion cost (one
+# vLLM call per chunk). Defaults are safe; raise on a remote vLLM with spare
+# capacity to cut ingestion time. See genieai_dataprep_arangodb.py.
+# DATAPREP_MAX_CONCURRENT_BATCHES=20  # concurrent LLM label calls (default 20; was 5)
+# DATAPREP_LLM_LABEL_BATCH_SIZE=1     # chunks per LLM call. 1 = per-chunk (safest);
+#                                     #   >1 batches chunks to cut network round-trips
+#                                     #   to a remote vLLM; validate label quality first.
+
 # Confidence scoring (chatqna) — rank-weighted aggregate of calibrated reranker
 # scores. The flat mean was count-dependent and tail-sensitive (a long tail of
 # low-scoring chunks kept by the adaptive strategy for novelty depressed it);

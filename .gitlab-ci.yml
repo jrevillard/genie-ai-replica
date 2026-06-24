@@ -569,6 +569,7 @@ include:
     when: never
   - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - if: $CI_COMMIT_BRANCH =~ /^release\//   # release branches build candidates too
   - if: $CI_COMMIT_BRANCH =~ /^release\//
 
 secret_detection:
@@ -671,6 +672,7 @@ kics-iac-sast:
     when: never
   - if: $CI_COMMIT_TAG
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - if: $CI_COMMIT_BRANCH =~ /^release\//   # release branches promote to their own rolling tag
 
 # Build candidate images with docker buildx (docker-container buildkit driver)
 # and push to the GitLab Container Registry. This is the modern path: supports
@@ -754,7 +756,10 @@ promote:image:
       if [ -n "$CI_COMMIT_TAG" ]; then
         FINAL_TAGS="$CI_COMMIT_TAG latest"
       else
-        FINAL_TAGS="${CI_COMMIT_BRANCH}-${CI_COMMIT_SHORT_SHA} ${CI_COMMIT_BRANCH}"
+        # Sanitize slashes for tag names (release/el-salvador → release-el-salvador).
+        # main has no slash so it's unaffected (main-<sha> + main).
+        BRANCH_TAG="${CI_COMMIT_BRANCH//\//-}"
+        FINAL_TAGS="${BRANCH_TAG}-${CI_COMMIT_SHORT_SHA} ${BRANCH_TAG}"
       fi
     - |
       for t in $FINAL_TAGS; do

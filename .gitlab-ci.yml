@@ -575,8 +575,11 @@ secret_detection:
   rules: *security_run_rules
 semgrep-sast:
   rules: *security_run_rules
+# nodejs-scan-sast is DEPRECATED (GitLab 16.8, removed 17.0) — the template
+# ships it as an exit-1 stub. semgrep-sast covers JS. Disable it explicitly.
 nodejs-scan-sast:
-  rules: *security_run_rules
+  rules:
+    - when: never
 gemnasium-dependency_scanning:
   rules: *security_run_rules
 gemnasium-python-dependency_scanning:

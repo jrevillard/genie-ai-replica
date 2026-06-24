@@ -110,6 +110,9 @@
         state: present
       notify: Restart Docker
 
+    - name: Apply daemon.json + NVIDIA config before verifying runtime
+      ansible.builtin.meta: flush_handlers
+
     - name: Verify NVIDIA runtime
       ansible.builtin.command: docker info --format '{{ "{{" }}.Runtimes{{ "}}" }}'
       register: nvidia_verify

@@ -142,14 +142,22 @@
   when: docker_manage_daemon_json | bool and docker_userns_remap | bool
 
 - name: Clear Docker daemon userns-remap config (when disabled)
-  ansible.builtin.copy:
-    content: |
-      {}
-    dest: /etc/docker/daemon.json
-    mode: "0644"
-  notify: Restart Docker
   when: not (docker_userns_remap | bool) and docker_manage_daemon_json | bool
-  # NOTE: gated by docker_manage_daemon_json (default true). Set it false on hosts
-  # where another playbook owns /etc/docker/daemon.json — e.g. the GPU node, whose
-  # daemon.json (nvidia runtime + DNS) is managed by deploy-gpu.yml. Otherwise this
-  # task would clobber that config and Restart Docker, killing the GPU API.
+  block:
+    - name: Slurp current daemon.json (for userns-remap cleanup)
+      ansible.builtin.slurp:
+        src: /etc/docker/daemon.json
+      register: _docker_daemon_json
+      ignore_errors: true
+
+    - name: Strip userns-remap from daemon.json (preserve nvidia runtime + other keys)
+      ansible.builtin.copy:
+        # Strip ONLY the userns-remap key. Previously this wrote a bare `{}`,
+        # clobbering daemon.json — including the GPU node's nvidia runtime config
+        # owned by deploy-gpu.yml — so the nvidia runtime vanished on every run
+        # (manual Docker restarts didn't help: the next run wiped it again).
+        content: "{{ (_docker_daemon_json.content | default('e30=') | b64decode | from_json) | dict2items | rejectattr('key', 'equalto', 'userns-remap') | items2dict | to_nice_json }}"
+        dest: /etc/docker/daemon.json
+        mode: "0644"
+      notify: Restart Docker
+      when: _docker_daemon_json is success

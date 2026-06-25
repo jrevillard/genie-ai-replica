@@ -26,7 +26,10 @@ function parseComposeEnvVars(filePath) {
     .split('\n')
     .filter((line) => !line.trim().startsWith('#'))
     .join('\n');
-  const regex = /\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}/g;
+  // Regex: /\$\{([A-Z_][A-Z0-9_]*)(?::-((?:[^{}]|\$\{[^}]*\})*))?\}/g
+  // Default group uses (?:[^{}]|\$\{[^}]*\})* to handle ONE level of nested
+  // ${...} in defaults (e.g. ${VAR:-${OTHER:-fallback}}).
+  const regex = /\$\{([A-Z_][A-Z0-9_]*)(?::-((?:[^{}]|\$\{[^}]*\})*))?\}/g;
   const seen = new Map();
 
   let match;

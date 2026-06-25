@@ -305,6 +305,8 @@ Disabled by default. Enable: `docker compose --profile observability up -d` or `
 
 → Full details: `.claude/rules/OBSERVABILITY.md`
 
+→ Debugging recipes (query traces/logs to debug the dataprep/RAG pipeline): `.claude/rules/DEBUGGING-TRACING.md`
+
 ## i18n System
 
 - English (`nameEN`) is the source of truth for RAG compatibility

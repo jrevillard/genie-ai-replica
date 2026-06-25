@@ -41,6 +41,7 @@ Our approach solves these problems by combining:
   - **Which labels from the domain schema apply to each chunk**,  
   - **Which entities from the KG are mentioned or implied in each chunk**.
 - The LLM operates in a **bounded context** (restricted to the predefined label schema), which improves labeling accuracy and reduces drift.
+- **Output format (strict JSON):** the LLM must return a JSON object mapping each chunk to its labels. Dataprep enforces this at the token level via `response_format={"type": "json_object"}` (OpenAI-compatible guided JSON decoding), so the labeling LLM/vLLM **must support guided JSON**. Models without it produce markdown-wrapped or malformed JSON → per-chunk fallback (slower, lower label quality). See `GENIE-AI-ChoosingLLMs.md` → "Role 2: Chunk Labeling" for model requirements.
 
 ### 5. Knowledge Graph Update
 - Chunks, labels, and entities are written into the knowledge graph.

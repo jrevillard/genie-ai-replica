@@ -139,9 +139,9 @@ During document ingestion, the dataprep service sends each chunk of text to the 
 | Capability | Required | Notes |
 |-----------|----------|-------|
 | Chat completion API | Yes | Must support OpenAI-compatible `/v1/chat/completions` |
-| Function calling | No | Uses prompt-based JSON extraction |
-| JSON output | **Yes** | Must reliably return `{"labels": ["Label1", "Label2"]}` |
-| Consistency | **Yes** | Must return the same format on every call (no dict values in arrays) |
+| Guided JSON output | **Yes** | Must support `response_format={"type": "json_object"}` (vLLM guided JSON decoding). Dataprep requests a strict JSON object per chunk; without guided JSON, models wrap output in markdown or return malformed JSON → per-chunk fallback (slower, lower label quality). Validated on `ibm-granite/granite-4.1-8b`. |
+| Function calling | No | Uses `response_format` + prompt-based label extraction |
+| Consistency | **Yes** | Must return the same format on every call (`DATAPREP_LLM_TEMPERATURE=0.0` is set); no dict values in arrays |
 | Multi-language | Helpful | If documents are in multiple languages |
 
 ### How It Is Called
@@ -149,8 +149,9 @@ During document ingestion, the dataprep service sends each chunk of text to the 
 The dataprep service sends:
 - **System prompt:** `LABEL_SELECTOR_SYSTEM_PROMPT` (configurable in `.env`)
 - **User prompt:** `"Input: {chunk_text}\nLabels: {taxonomy_list}"`
+- **Sampling:** `temperature=0.0`, `response_format={"type": "json_object"}` (guided JSON), bounded `max_tokens`. Chunks may be batched (`DATAPREP_LLM_LABEL_BATCH_SIZE`, default 4) into one call returning `{"0": ["..."], "1": [...]}`.
 
-The LLM must return **only** a JSON object with a `"labels"` key containing an **array of plain strings**. Any deviation (dicts, nested objects, missing keys) causes failures.
+The LLM must return **only** a JSON object with a `"labels"` key (or an index→labels map when batched) containing an **array of plain strings**. `response_format` enforces valid JSON at the token level; lenient client-side parsing tolerates residual variations (null → `[]`, bare string → `[string]`).
 
 ### What Goes Wrong with Small Models
 

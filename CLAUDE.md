@@ -233,6 +233,7 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 **Deployment-Specific:**
 - `VLLM_TRANSLATION_MODEL_ID` - GPU translation model ID
 - `EMBEDDING_MODEL_ID` / `RERANKER_MODEL_ID` - AI model IDs
+- `VLLM_LLM_MODEL_ID` - Labeling/chat LLM. **Must support OpenAI-compatible `response_format={"type":"json_object"}`** (vLLM guided JSON); dataprep requests strict JSON label output per chunk. Models without guided JSON produce malformed output → per-chunk fallback (slower, lower label quality). Validated on `ibm-granite/granite-4.1-8b`.
 - `CORS_ALLOWED_ORIGINS` - CORS allowed origins
 - `CSP_CONNECT_SRC` - Content Security Policy connect sources
 - `NGINX_PUBLIC_DOMAIN` - Public domain for Nginx

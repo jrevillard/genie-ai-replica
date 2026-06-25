@@ -181,6 +181,21 @@ graph TB
 - RAM: 32 GB
 - Storage: 500 GB NVMe SSD
 
+### Model Requirements (LLM labeling)
+
+Chunk labeling sends one LLM call per batch of chunks and requests **strict JSON
+object output** via OpenAI-compatible `response_format={"type": "json_object"}`.
+The labeling LLM (`VLLM_LLM_MODEL_ID`, served by vLLM) **must support guided JSON
+decoding** (`response_format`):
+
+- ✅ Supported: vLLM ≥ 0.6 with a JSON-capable model (validated on
+  `ibm-granite/granite-4.1-8b`).
+- ❌ Unsupported models / vLLM builds return markdown-wrapped or malformed JSON →
+  `json.loads` fails → per-chunk fallback (slower ingestion, lower label quality).
+
+Tuning knobs: `DATAPREP_MAX_CONCURRENT_BATCHES` (concurrency), `DATAPREP_LLM_LABEL_BATCH_SIZE`
+(chunks per call), `DATAPREP_LLM_TEMPERATURE` (use 0.0 for deterministic JSON).
+
 ---
 
 ## Installation

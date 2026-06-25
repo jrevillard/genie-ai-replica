@@ -192,6 +192,12 @@ HUGGING_FACE_HUB_TOKEN=
 # Dataprep LLM labeling tuning — labeling is the dominant ingestion cost (one
 # vLLM call per chunk). Defaults are safe; raise on a remote vLLM with spare
 # capacity to cut ingestion time. See genieai_dataprep_arangodb.py.
+#
+# REQUIREMENT: the labeling LLM (VLLM_LLM_MODEL_ID) MUST support OpenAI-compatible
+# `response_format={"type":"json_object"}` (vLLM guided JSON decoding). Dataprep
+# requests strict JSON object output per chunk; a model/vLLM without guided JSON
+# produces markdown-wrapped or malformed JSON -> per-chunk fallback (slower,
+# lower label quality). Validated on ibm-granite/granite-4.1-8b.
 # DATAPREP_MAX_CONCURRENT_BATCHES=20  # concurrent LLM label calls (default 20; was 5)
 # DATAPREP_LLM_LABEL_BATCH_SIZE=4     # chunks per LLM labeling call (default 4).
 #                                     #   >1 batches chunks to cut network round-trips

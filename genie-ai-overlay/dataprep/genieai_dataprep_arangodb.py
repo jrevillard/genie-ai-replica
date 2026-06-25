@@ -461,6 +461,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         ],
                         temperature=LLM_LABEL_TEMPERATURE,
                         max_tokens=160,
+                        response_format={"type": "json_object"},
                     )
                     parsed = json.loads(response.choices[0].message.content)
                     suggested = parsed.get("labels", [])
@@ -526,6 +527,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     ],
                     temperature=LLM_LABEL_TEMPERATURE,
                     max_tokens=len(batch) * 96 + 64,
+                    response_format={"type": "json_object"},
                 )
                 parsed = json.loads(response.choices[0].message.content)
                 if not isinstance(parsed, dict):

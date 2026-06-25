@@ -386,6 +386,7 @@ class TestLabelWithLlm:
         # Deterministic sampling → clean JSON (granite adds prose at higher temp).
         assert call_kwargs["temperature"] == 0.0
         assert call_kwargs["max_tokens"] == 160
+        assert call_kwargs["response_format"] == {"type": "json_object"}
 
     @pytest.mark.asyncio
     async def test_retry_and_fallback_on_failure(self, monkeypatch):

@@ -529,7 +529,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         {"role": "user", "content": user_content},
                     ],
                     temperature=LLM_LABEL_TEMPERATURE,
-                    max_tokens=len(batch) * 96 + 64,
+                    max_tokens=len(batch) * 256 + 512,
                     response_format={"type": "json_object"},
                 )
                 parsed = json.loads(response.choices[0].message.content)

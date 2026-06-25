@@ -326,13 +326,14 @@ Set in `group_vars/<env>/vars.yml`:
 | `bm25_label_threshold` | `5.0` | BM25 score threshold for labeling |
 | `content_extraction_method` | `docling` | Content extraction method (docling, unstructured) |
 | `docling_device` | `cpu` | Docling processing device (cpu, cuda, mps) |
-| `dataprep_chunk_size_pdf` | `1000` | Chunk size for PDF documents (tokens) |
-| `dataprep_chunk_size_docx` | `1000` | Chunk size for DOCX documents (tokens) |
-| `dataprep_chunk_size_xlsx` | `1000` | Chunk size for XLSX documents (tokens) |
-| `dataprep_chunk_size_pptx` | `1000` | Chunk size for PPTX documents (tokens) |
-| `dataprep_chunk_size_html` | `1000` | Chunk size for HTML documents (tokens) |
-| `dataprep_chunk_size_txt` | `1000` | Chunk size for TXT documents (tokens) |
-| `dataprep_chunk_size_md` | `1000` | Chunk size for Markdown documents (tokens) |
+| `dataprep_chunk_size_pdf` | `1000` | Chunk size for PDF documents (characters) |
+| `dataprep_chunk_size_docx` | `1000` | Chunk size for DOCX documents (characters) |
+| `dataprep_chunk_size_xlsx` | `1000` | Chunk size for XLSX documents (characters) |
+| `dataprep_chunk_size_pptx` | `1000` | Chunk size for PPTX documents (characters) |
+| `dataprep_chunk_size_html` | `1000` | Chunk size for HTML documents (characters) |
+| `dataprep_chunk_size_txt` | `1000` | Chunk size for TXT documents (characters) |
+| `dataprep_chunk_size_md` | `1000` | Chunk size for Markdown documents (characters) |
+| `dataprep_chunk_overlap` | `50` | Overlap between chunks (characters) |
 | `dataprep_max_concurrent_batches` | `1` | Max concurrent processing batches |
 
 ### Label Selector Prompt

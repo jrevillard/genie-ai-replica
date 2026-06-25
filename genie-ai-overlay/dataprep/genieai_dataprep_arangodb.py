@@ -473,6 +473,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     if isinstance(suggested, list):
                         suggested = [x for x in suggested if isinstance(x, str)]
                         span.set_attribute("dataprep.labels_suggested", len(suggested))
+                        _usage = getattr(response, "usage", None)
+                        if getattr(_usage, "completion_tokens", None) is not None:
+                            span.set_attribute("dataprep.llm.completion_tokens", _usage.completion_tokens)
                         return suggested
                     await self._write_ingestion_log(
                         file_id,
@@ -555,6 +558,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 for i in indices:
                     suggestions.setdefault(i, [])
                 span.set_attribute("dataprep.labels_suggested", sum(len(v) for v in suggestions.values()))
+                _usage = getattr(response, "usage", None)
+                if getattr(_usage, "completion_tokens", None) is not None:
+                    span.set_attribute("dataprep.llm.completion_tokens", _usage.completion_tokens)
+                    span.set_attribute("dataprep.llm.prompt_tokens", getattr(_usage, "prompt_tokens", 0))
                 return suggestions
             except Exception:
                 return None

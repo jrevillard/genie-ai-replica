@@ -837,7 +837,7 @@ promote:image:
         docker buildx imagetools create -t "$CI_REGISTRY_IMAGE/$IMAGE_NAME:$t" "$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME@${DIGEST}"
       done
     # Quarantine cleanup — delete the candidate tag from tmp/ (cache ref preserved)
-    - docker buildx imagetools rm "$SRC" 2>/dev/null || true
+    - skopeo delete "docker://$SRC" 2>/dev/null || true  # imagetools has no rm subcommand
   parallel:
     matrix: *image_matrix
   rules: *promote_rules

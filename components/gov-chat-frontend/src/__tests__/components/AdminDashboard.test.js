@@ -785,6 +785,36 @@ describe('AdminDashboard', () => {
 
       expect(wrapper.vm.filteredDocuments).toHaveLength(2);
     });
+
+    it('filteredDocuments matches status case-insensitively (dataprep persists Title Case)', () => {
+      // Regression for #832: dataprep persists status capitalized ('Ingested',
+      // 'Pending', 'Retracted') but the filter option values are lowercase.
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', dataprep: { status: 'Ingested' } },
+        { _key: 'b', dataprep: { status: 'Pending' } },
+        { _key: 'c', dataprep: { status: 'Retracted' } }
+      ];
+      wrapper.vm.documentFilters.status = 'ingested';
+
+      const result = wrapper.vm.filteredDocuments;
+      expect(result).toHaveLength(1);
+      expect(result[0]._key).toBe('a');
+    });
+
+    it('filteredDocuments matches Retracted/Pending status case-insensitively', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: 'a', dataprep: { status: 'Ingested' } },
+        { _key: 'b', dataprep: { status: 'Pending' } },
+        { _key: 'c', dataprep: { status: 'Retracted' } }
+      ];
+      wrapper.vm.documentFilters.status = 'retracted';
+
+      const result = wrapper.vm.filteredDocuments;
+      expect(result).toHaveLength(1);
+      expect(result[0]._key).toBe('c');
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -820,6 +850,15 @@ describe('AdminDashboard', () => {
         { _key: 'doc-2', dataprep: { status: 'ingested' } }
       ];
       wrapper.vm.selectedDocuments = ['doc-1', 'doc-2'];
+
+      expect(wrapper.vm.showIngestButton).toBe(false);
+    });
+
+    it('returns false when selected document has Title-Case ingested status (#832)', () => {
+      // Regression for #832: dataprep.status persisted as 'Ingested' (Title Case).
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [{ _key: 'doc-1', dataprep: { status: 'Ingested' } }];
+      wrapper.vm.selectedDocuments = ['doc-1'];
 
       expect(wrapper.vm.showIngestButton).toBe(false);
     });

@@ -1799,14 +1799,16 @@ export default {
      * Performs client-side filtering on the documents array based on the selected status.
      */
     filteredDocuments() {
-      const selectedStatus = this.documentFilters.status;
+      const selectedStatus = String(this.documentFilters.status).toLowerCase().trim();
       if (!this.documents || this.documents.length === 0) {
         return [];
       }
       if (selectedStatus === 'all') {
         return this.documents; // If 'All' is selected, return the full list
       }
-      return this.documents.filter((doc) => doc.dataprep && doc.dataprep.status === selectedStatus);
+      return this.documents.filter(
+        (doc) => doc.dataprep && String(doc.dataprep.status).toLowerCase().trim() === selectedStatus
+      );
     },
 
     sortedAndFilteredDocuments() {
@@ -1852,7 +1854,9 @@ export default {
       const selectedDocObjects = this.documents.filter((doc) => selectedKeys.has(doc._key));
 
       // 4. Check if ANY of the selected documents have the status 'ingested'
-      const hasIngestedFile = selectedDocObjects.some((doc) => doc.dataprep && doc.dataprep.status === 'ingested');
+      const hasIngestedFile = selectedDocObjects.some(
+        (doc) => doc.dataprep && String(doc.dataprep.status).toLowerCase().trim() === 'ingested'
+      );
 
       // 5. Only show the button if there are selected files AND none of them are ingested
       return !hasIngestedFile;

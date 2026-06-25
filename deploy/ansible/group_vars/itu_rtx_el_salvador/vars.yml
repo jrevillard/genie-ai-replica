@@ -93,6 +93,12 @@ reranking_threshold: "0.6"
 # Dataprep LLM labeling: granite-4.1-8b handles 8-chunk batches reliably
 # (validated), cutting label-call round-trips to the remote vLLM ~8x.
 dataprep_llm_label_batch_size: 8
+
+# Chunking configuration. Values are character counts — dataprep uses LangChain's
+# RecursiveCharacterTextSplitter, which measures chunk length in characters.
+# 2000 chars ≈ 500 tokens and 300 chars ≈ 75 tokens for the embedding tokenizer.
+dataprep_chunk_size_md: 2000
+dataprep_chunk_overlap: 300
 vllm_llm_model_id: ibm-granite/granite-3.3-2b-instruct
 vllm_max_model_len: "16384"
 vllm_gpu_utilization: "0.35"

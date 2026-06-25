@@ -722,7 +722,9 @@ class FileService {
         await db.query('FOR job IN crawl_job FILTER job.file_id == @id REMOVE job IN crawl_job', { id: fileId });
         await db.query('FOR log IN crawl_log FILTER log.file_id == @id REMOVE log IN crawl_log', { id: fileId });
         await db.query('FOR m IN crawl_metrics FILTER m.file_id == @id REMOVE m IN crawl_metrics', { id: fileId });
-        await db.query('FOR log IN ingestion_log FILTER log.file_id == @id REMOVE log IN ingestion_log', { id: fileId });
+        await db.query('FOR log IN ingestion_log FILTER log.file_id == @id REMOVE log IN ingestion_log', {
+          id: fileId
+        });
         logger.debug(`Cleaned up crawl logs, jobs, metrics, and ingestion logs for ${fileId}`);
       } catch (e) {
         logger.warn(`Failed to cleanup crawl data for ${fileId}: ${e.message}`);

@@ -286,7 +286,10 @@ describe('fileController', () => {
       const result = await fileController._retractFileById('f1');
 
       expect(result.success).toBe(true);
-      expect(metadataService.updateMetadata).toHaveBeenCalledWith('f1', expect.objectContaining({ dataprep: expect.objectContaining({ status: 'retracted' }) }));
+      expect(metadataService.updateMetadata).toHaveBeenCalledWith(
+        'f1',
+        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'retracted' }) })
+      );
       expect(fileService.deleteIngestionLogs).toHaveBeenCalledWith('f1');
     });
   });

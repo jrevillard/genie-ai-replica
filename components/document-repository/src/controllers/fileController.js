@@ -1073,6 +1073,12 @@ class FileController {
           retract_date: new Date().toISOString()
         }
       });
+      // Clean up the ingestion log entries for this file (no longer relevant once retracted).
+      try {
+        await fileService.deleteIngestionLogs(file.file_id);
+      } catch (logErr) {
+        logger.warn(`Retract: failed to clean ingestion logs for ${fileId}: ${logErr.message}`);
+      }
       return { success: true };
     } else {
       return { success: false, error: response.data };

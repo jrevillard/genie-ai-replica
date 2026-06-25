@@ -189,6 +189,22 @@ HUGGING_FACE_HUB_TOKEN=
 # TOKEN_COST_ALPHA=0.0025      # per-token context-window cost coefficient
 # MIN_VALUE_THRESHOLD=-1.0     # select a chunk only if marginal value > threshold
 
+# Dataprep LLM labeling tuning — labeling is the dominant ingestion cost (one
+# vLLM call per chunk). Defaults are safe; raise on a remote vLLM with spare
+# capacity to cut ingestion time. See genieai_dataprep_arangodb.py.
+#
+# REQUIREMENT: the labeling LLM (VLLM_LLM_MODEL_ID) MUST support OpenAI-compatible
+# `response_format={"type":"json_object"}` (vLLM guided JSON decoding). Dataprep
+# requests strict JSON object output per chunk; a model/vLLM without guided JSON
+# produces markdown-wrapped or malformed JSON -> per-chunk fallback (slower,
+# lower label quality). Validated on ibm-granite/granite-4.1-8b.
+# DATAPREP_MAX_CONCURRENT_BATCHES=20  # concurrent LLM label calls (default 20; was 5)
+# DATAPREP_LLM_LABEL_BATCH_SIZE=4     # chunks per LLM labeling call (default 4).
+#                                     #   >1 batches chunks to cut network round-trips
+#                                     #   to a remote vLLM. Raise to 8 on capable models
+#                                     #   (e.g. granite-4.1-8b); batches fall back to
+#                                     #   per-chunk on parse failure, so output is correct.
+
 # Confidence scoring (chatqna) — rank-weighted aggregate of calibrated reranker
 # scores. The flat mean was count-dependent and tail-sensitive (a long tail of
 # low-scoring chunks kept by the adaptive strategy for novelty depressed it);

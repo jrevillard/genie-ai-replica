@@ -722,7 +722,8 @@ class FileService {
         await db.query('FOR job IN crawl_job FILTER job.file_id == @id REMOVE job IN crawl_job', { id: fileId });
         await db.query('FOR log IN crawl_log FILTER log.file_id == @id REMOVE log IN crawl_log', { id: fileId });
         await db.query('FOR m IN crawl_metrics FILTER m.file_id == @id REMOVE m IN crawl_metrics', { id: fileId });
-        logger.debug(`Cleaned up crawl logs, jobs, and metrics for ${fileId}`);
+        await db.query('FOR log IN ingestion_log FILTER log.file_id == @id REMOVE log IN ingestion_log', { id: fileId });
+        logger.debug(`Cleaned up crawl logs, jobs, metrics, and ingestion logs for ${fileId}`);
       } catch (e) {
         logger.warn(`Failed to cleanup crawl data for ${fileId}: ${e.message}`);
         // Proceed, as main file is deleted
@@ -874,6 +875,27 @@ class FileService {
       return logs;
     } catch (error) {
       logger.error(`Error getting ingestion logs for file ${fileId}: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete all ingestion log entries for a file (on retract / hard delete).
+   * @param {string} fileId - The ID of the file
+   * @returns {number} Count of removed entries
+   */
+  async deleteIngestionLogs(fileId) {
+    try {
+      const db = await this.getDb();
+      const cursor = await db.query(
+        'FOR log IN ingestion_log FILTER log.file_id == @fileId REMOVE log IN ingestion_log',
+        { fileId }
+      );
+      const removed = cursor.extra?.stats?.writesExecuted ?? 0;
+      logger.debug(`[FILE-SERVICE] Removed ${removed} ingestion_log entries for ${fileId}`);
+      return removed;
+    } catch (error) {
+      logger.error(`Error deleting ingestion logs for file ${fileId}: ${error}`);
       throw error;
     }
   }

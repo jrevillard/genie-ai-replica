@@ -271,5 +271,23 @@ describe('fileController', () => {
       expect(result.error).toMatch(/already been retracted/i);
       expect(axios.post).not.toHaveBeenCalled();
     });
+
+    it('cleans up ingestion logs on successful retraction', async () => {
+      const fileService = require('../../../services/fileService');
+      fileService.deleteIngestionLogs = jest.fn().mockResolvedValue(3);
+
+      metadataService.getMetadataById = jest.fn().mockResolvedValue({
+        file_id: 'f1',
+        dataprep: { status: 'Ingested', ingest_date: '2025-01-01T00:00:00Z' }
+      });
+      metadataService.updateMetadata = jest.fn().mockResolvedValue(true);
+      axios.post = jest.fn().mockResolvedValue({ data: { success: true } });
+
+      const result = await fileController._retractFileById('f1');
+
+      expect(result.success).toBe(true);
+      expect(metadataService.updateMetadata).toHaveBeenCalledWith('f1', expect.objectContaining({ dataprep: expect.objectContaining({ status: 'retracted' }) }));
+      expect(fileService.deleteIngestionLogs).toHaveBeenCalledWith('f1');
+    });
   });
 });

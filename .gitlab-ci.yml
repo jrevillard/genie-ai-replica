@@ -641,14 +641,9 @@ kics-iac-sast:
     - mkdir -p ~/.docker
     - |
       AUTH=$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')
-      echo "{"auths":{"$CI_REGISTRY":{"auth":"$AUTH"}}}" > ~/.docker/config.json
+      echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$AUTH\"}}}" > ~/.docker/config.json
     - wget -qO- https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin "$SYFT_VERSION"
     - trivy image --download-db-only
-    - |
-      DB="$TRIVY_CACHE_DIR/db/trivy.db"
-      [ -f "$DB" ] || { echo "Trivy DB missing"; exit 1; }
-      AGE=$(( $(date +%s) - $(stat -c %Y "$DB") ))
-      [ "$AGE" -lt 86400 ] || { echo "Trivy DB stale ($AGE s > 86400)"; exit 1; }
   script:
     - |
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then

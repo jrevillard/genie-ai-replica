@@ -629,8 +629,9 @@ kics-iac-sast:
   interruptible: true
   variables:
     TRIVY_NO_PROGRESS: "true"
+    TRIVY_TIMEOUT: "30m"
     TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.trivycache/"
-    CS_SEVERITY: "High,Critical"
+    TRIVY_SEVERITY: "HIGH,CRITICAL"
   cache:
     - key: "trivy-db"
       paths: [".trivycache/"]

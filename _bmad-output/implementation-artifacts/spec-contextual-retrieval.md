@@ -1,5 +1,5 @@
 ---
-title: Per-chunk Contextual Retrieval — dataprep contextualization
+title: Contextual Retrieval — dataprep contextualization (Part A)
 type: feature
 status: done
 slug: contextual-retrieval
@@ -7,100 +7,106 @@ created: 2026-06-26
 baseline_commit: f825d8fff
 ---
 
-# Per-chunk Contextual Retrieval — Dataprep Contextualization (A)
+# Contextual Retrieval — Dataprep Contextualization (Part A)
 
 ## Intent
 
-Per-chunk labeling and embedding lose document-level context. A chunk about a generic technique (e.g. irrigation) inside a cucumber cultivation guide is embedded and labeled without knowing it belongs to cucumber, so both vector and label-filtered retrieval miss roughly two thirds of a document's chunks (cucumber case: 11/34). Recurs for every document across all topics.
+Per-chunk labeling/embedding lose document-level context → chunks miss the document's subject (cucumber case: 11/34). Add an LLM-generated document-context prefix in the dataprep, prepended to each chunk before embedding + labeling. Two strategies via `CONTEXTUAL_STRATEGY`:
 
-Add an LLM-generated, per-chunk document-context prefix (Anthropic "Contextual Retrieval") in the dataprep. The contextualized text `<context> + <chunk>` is used for **both embedding and labeling**, and stored in the chunk vertex `text` field. Gated by a feature flag, default off. This is part A of the SOTA recipe; part B (retriever BM25 hybrid + RRF fusion over the same `text` field) is a separate spec tracked in `deferred-work.md`.
+- `per_chunk` (default) — one section-tailored context per chunk (the Anthropic recipe), **batched** so the document context is sent once per batch.
+- `doc_level` — ONE document-level context prepended to every chunk (N× cheaper; uses a larger doc budget).
+
+Gated by `CONTEXTUAL_RETRIEVAL_ENABLED` (default off → true no-op). Part A of the SOTA recipe; Part B (retriever BM25 hybrid + RRF) is a separate spec in `deferred-work.md`. Flags are orthogonal (A off + B on = plain lexical hybrid).
 
 ## Boundaries
 
 **Always**
-- Behind `CONTEXTUAL_RETRIEVAL_ENABLED` flag, default off → identical current behavior when off.
-- Ingestion never fails because of context generation: on any LLM error/timeout for a chunk, fall back to the raw chunk and continue.
-- Self-hosted vLLM only (reuse `VLLM_ENDPOINT`/`VLLM_API_KEY`/`VLLM_MODEL_ID`). No external API.
-- Ingestion corpus is English.
-- Preserve original chunk text in chunk metadata (`chunk_text`) for display/debug.
-- Emit OTel spans (`dataprep.llm.context_chunk`, `context_batch` if batched) and ingestion-log progress, mirroring labeling instrumentation.
-- Store the contextualized text in vertex field `text` (the field ArangoGraph writes from `page_content` and that part B's BM25 will index).
+- Behind `CONTEXTUAL_RETRIEVAL_ENABLED`, default off → identical current behavior when off (no client construction, no `chunk_text` field).
+- Ingestion never fails because of context generation: client-build guard + per-chunk/batch fallback + 0/N ERROR summary.
+- Self-hosted vLLM only (`_build_vllm_client`, shared with the labeling hot-path).
+- English ingestion; `response_format={"type":"json_object"}` (validated on `ibm-granite/granite-4.1-8b`).
+- Original chunk preserved in metadata `chunk_text` (flag-gated, index-guarded).
+- Vertex `text` stores the contextualized text → Part B's BM25 will index it.
+- OTel spans: `dataprep.llm.context_chunk` (per-chunk fallback), `context_batch` (per_chunk batch), `context_doc` (doc_level).
+- Ingestion-log progress; WARN when the document context is truncated.
 
 **Ask First**
-- Storage semantics: `page_content`/vertex `text` becomes `<context> + <chunk>`, so the generator LLM (and any UI reading `text`) will see the context preamble. Confirm acceptable; otherwise switch to embed-contextualized / store-original (pre-embedding) design — but note this breaks part B's "contextual BM25".
+- Storage semantics: vertex `text` becomes `<context> + <chunk>` (generator LLM + UI reading `text` see the preamble). Confirmed acceptable — Part B relies on this contract.
 
 **Never**
-- External API dependencies.
-- Retriever / reranker / chatqna code changes (part B).
-- Schema migration that breaks already-ingested chunks.
-- Enabling by default.
+- External API dependencies; retrieval / reranker / chatqna changes (Part B); schema migration that breaks existing chunks; enable by default.
 
 ## I/O Matrix
 
-| Scenario | Input / state | Expected | Error handling |
-|---|---|---|---|
-| Happy path | flag on, N-chunk document | each chunk embedded and labeled against `<context> + <chunk>`; vertex `text` = contextualized; original in metadata | n/a |
-| Flag off | flag off | identical to current pipeline; zero context-gen LLM calls | n/a |
-| Context-gen LLM failure | LLM errors or times out for a chunk | that chunk embedded/labeled as raw text; ingestion completes | WARN log; continue, never block |
-| Empty document | 0 chunks | no-op | n/a |
-| Large document | many chunks | bounded by existing concurrency + batching | n/a |
+| Scenario | Expected | Error handling |
+|---|---|---|
+| Flag off | identical pipeline; zero context-gen calls; no `chunk_text` field | n/a |
+| `per_chunk` on | each chunk embedded+labeled with its own context; contexts produced via batched calls | n/a |
+| `doc_level` on | the same document context on every chunk; 1 LLM call | n/a |
+| Context-gen failure (chunk / batch / doc / client-init) | raw chunk(s); ingestion completes | WARN/ERROR log; 0/N → ERROR summary |
+| Document larger than budget | document context truncated; WARN logged | n/a |
+| Empty document | no-op | n/a |
 
-## Code Map
+## Code Map (`genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py`)
 
-- `genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py` — only change site.
-  - Config flags near the existing `os.getenv` block (~line 87) + log in `_log_environment_variables` (~134).
-  - New `_generate_chunk_contexts()` (reuse the local `AsyncOpenAI` construction from `_label_with_llm`, 358-362).
-  - Wire into `ingest_file_with_guardrail` between chunking (756) and labeling (770): when flag on, contextualize; pass contextualized text to `_apply_labels` (labeling) and to `Document.page_content` (779, → embedding + vertex `text`); keep original in metadata `chunk_text`.
-- `genie-ai-overlay/tests/test_dataprep.py` — new test class mirroring `TestLabelWithLlm`.
-- `genie-ai-overlay/tests/conftest.py` — no change (already mocks `comps`, `AsyncOpenAI`, arango, langchain).
+- Config L95-114: `CONTEXTUAL_RETRIEVAL_ENABLED`, `DATAPREP_CONTEXTUAL_MODEL`, `DATAPREP_CONTEXTUAL_DOC_BUDGET` (6000), `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` (30000), `CONTEXTUAL_STRATEGY`; prompt defaults; `_build_vllm_client` L196; `_log_environment_variables`.
+- `_build_doc_context` L501 — budget param + truncation WARN.
+- `_apply_contextualization` L530 — entry, client-build guard, strategy dispatch.
+- `per_chunk`: `_contextualize_per_chunk` L575 (batched) + `_context_batch_call` L629 (batch JSON, per-chunk fallback) + `_context_single_call` L783 (3 retries).
+- `doc_level`: `_contextualize_doc_level` L702 + `_context_doc_call` L722 (1 call, larger budget).
+- Orchestrator L1196-1222 — contextualization → labeling; metadata `chunk_text` (flag-gated, index-guarded).
+- Tests: `genie-ai-overlay/tests/test_dataprep.py` → `TestContextualRetrieval` L1446.
 
 ## Tasks
 
-- `genieai_dataprep_arangodb.py` — add config: `CONTEXTUAL_RETRIEVAL_ENABLED` (default false), `DATAPREP_CONTEXTUAL_MODEL` (default = `VLLM_MODEL_ID`), `CONTEXTUAL_RETRIEVAL_PROMPT` (built-in default, env-overridable, following the `LABEL_SELECTOR_SYSTEM_PROMPT` pattern). Log them.
-- `genieai_dataprep_arangodb.py` — add `_generate_chunk_contexts(chunks, input, file_id)`: batched + concurrency-bounded (reuse `MAX_CONCURRENT_BATCHES` + `LABEL_LLM_BATCH_SIZE`), OTel span per call, returns contextualized text per chunk; per-chunk failure → raw chunk + WARN ingestion-log.
-- `genieai_dataprep_arangodb.py` — integrate after chunking, before labeling (flag on): feed contextualized text to `_apply_labels` and to `Document.page_content`; store original in metadata `chunk_text`. Flag off → unchanged.
-- `genie-ai-overlay/tests/test_dataprep.py` — TDD: flag-off no-op; happy-path prefix reaches embed + label inputs, original retained in metadata; LLM-failure fallback; batching/concurrency; span emission.
+- Config flags + prompt defaults + log-env (match the `os.getenv` convention).
+- `_build_vllm_client` extracted (DRY with labeling).
+- `_apply_contextualization`: client-build guard + per_chunk/doc_level dispatch.
+- per_chunk: `_contextualize_per_chunk` (batched) + `_context_batch_call` (batch → per-chunk fallback) + `_context_single_call`.
+- doc_level: `_contextualize_doc_level` + `_context_doc_call` (1 call, `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL`).
+- Orchestrator wiring + `chunk_text` metadata (flag-gated).
+- Tests: flag-off no-op; per_chunk batch happy / split / parse-failure-fallback; doc_level happy / failure; client-build guard; 0/N summary; ingest wiring (on/off).
 
 ## Acceptance Criteria
 
-- **Given** `CONTEXTUAL_RETRIEVAL_ENABLED=false`, **when** a document is ingested, **then** the pipeline is identical to today (the context-generation `AsyncOpenAI` client is never constructed/called).
-- **Given** the flag is on, **when** an N-chunk document is ingested, **then** every chunk's `page_content` passed to `embeddings.embed_query` begins with its generated context; `_apply_labels` receives the contextualized text; the stored vertex `text` is contextualized; and metadata retains the original `chunk_text`.
-- **Given** the flag is on and the context LLM raises for a chunk, **when** the document is ingested, **then** that chunk is embedded/labeled as raw text, ingestion completes, and a WARN is written to the ingestion log.
-- **Given** the flag is on, **when** a document is ingested, **then** a `dataprep.llm.context_chunk` OTel span is emitted per chunk (or `context_batch` per batched call).
+- **Given** flag off, **when** ingest, **then** identical pipeline (no client built, no `chunk_text` field).
+- **Given** `per_chunk` on, **when** ingest, **then** every chunk's `page_content` begins with its context; labeling receives contextualized text; `chunk_text` retained; a `dataprep.llm.context_batch` span is emitted per batch.
+- **Given** `doc_level` on, **when** ingest, **then** exactly 1 context-gen LLM call; the same context on every chunk; a `dataprep.llm.context_doc` span is emitted.
+- **Given** any context-gen failure, **when** ingest, **then** chunk(s) stored raw, ingestion completes, WARN/ERROR logged; 0/N → ERROR summary.
+- **Given** a document larger than the budget, **when** ingest, **then** the document context is truncated and a WARN is logged.
+- **Given** client-build failure, **when** ingest, **then** raw chunks; ingestion not blocked.
 
 ## Design Notes
 
-- Canonical Contextual Retrieval stores `<context> + <chunk>` as the indexed text so both embedder and generator see context. Here `page_content`/vertex `text` = contextualized; original kept in metadata `chunk_text`. This storage contract is what part B (BM25 over `text`) relies on — do not change it without coordinating B.
-- Context-gen input: filename + `file_labels` + token-budgeted join of document chunks + the specific chunk → ~50-100 word context. Batch chunks/call (reuse labeling batch size); concurrency via existing semaphore.
-- Cost: per-chunk LLM call (the "most promising, complexity-ignored" variant). Mitigations: batching + vLLM prompt caching (`--enable-prefix-caching`, repeated doc prefix). Flag default-off → no regression. Cheaper doc-level (1 call/file) alternative in the research report if cost blocks.
-- Labeling consumes the contextualized text → fixes the 11/34 doc-subject gap even before part B ships.
+- Canonical Contextual Retrieval stores `<context> + <chunk>` (embedder + generator both see context). vertex `text` = contextualized; original in metadata `chunk_text`.
+- **Strategy trade-off**: `per_chunk` = max quality (section-tailored, batched → fewer calls + doc_context once per batch); `doc_level` = N× cheaper (1 call, larger budget), enough to propagate the document subject. Choose `doc_level` for large / cost-sensitive docs.
+- **Large docs**: `doc_level` can use a large budget (1 call within `VLLM_MAX_MODEL_LEN`). `per_chunk` uses the smaller `DATAPREP_CONTEXTUAL_DOC_BUDGET` (repeated per batch). Truncation WARN fires when exceeded. For docs beyond the model window, **Map-Reduce** (summarize in windows → combine) is the future fix — not implemented.
+- Cost mitigations: per_chunk batching + vLLM prompt caching (`--enable-prefix-caching`, repeated doc prefix).
+- Labeling consumes the contextualized text → fixes 11/34 even before Part B ships.
 
 ## Verification
 
-- `cd genie-ai-overlay && ruff check .`
-- `cd genie-ai-overlay && pytest tests/test_dataprep.py -k context`
-- `cd genie-ai-overlay && pytest tests/test_dataprep.py`
+- `cd genie-ai-overlay && ruff check .` ✓
+- `cd genie-ai-overlay && ruff format --check .` ✓
+- `cd genie-ai-overlay && pytest tests/test_dataprep.py tests/test_dataprep_tracing.py` → 85 pass
+- `cd tests/config-validator && npm test` → 25/25
 
 ## Spec Change Log
 
-- 2026-06-26 — Adversarial review (blind hunter + edge-case hunter + acceptance auditor). Blind + edge returned REQUEST CHANGES; acceptance auditor APPROVE. Review-driven changes implemented:
-  - **Never-block guarantee (HIGH)**: `_apply_contextualization` wraps `_build_vllm_client()` in try/except → on init failure logs ERROR + returns raw chunks (ingestion proceeds). Regression test added.
-  - **Silent-degradation guard (MED)**: if 0/N contexts generated, emit one ERROR-level log + ingestion_log entry (a misconfigured `DATAPREP_CONTEXTUAL_MODEL` that rejects guided JSON is now visible). Regression test added.
-  - **Progress logging (MED)**: log contextualization progress every 50 chunks + final count.
-  - **Index safety + true no-op (MED)**: `metadata["chunk_text"]` write guarded by `i < len(original_chunks)`; field gated to flag-on only → flag-off writes no schema field (true no-op).
-  - **Cheap**: ASCII truncation marker; `dataprep.llm.prompt_tokens` span attr; `CHUNK:` user-message label; `DOC_BUDGET<=0` → no truncation.
-- Deferred (non-blocking): per-chunk call batching (cost optimization); separate concurrency limit for context-gen; single shared client across contextualization + labeling; `return_exceptions=True` on gather. Captured in `deferred-work.md` where relevant.
-- Result: 81/81 tests pass (11 in `TestContextualRetrieval`), `ruff check` + `ruff format` clean.
+- 2026-06-26 — Adversarial review (blind + edge-case + acceptance). Changes: client-build guard (never-block); 0/N ERROR summary; progress logging; index safety + `chunk_text` flag-gating; ASCII truncation marker; `prompt_tokens` span attr; `CHUNK:` user label; `DOC_BUDGET<=0` → no truncation. Acceptance auditor APPROVE.
+- 2026-06-26 — `CONTEXTUAL_STRATEGY` flag (`per_chunk` default | `doc_level`). `doc_level` = 1 call/doc (N× cheaper), same context on every chunk, dedicated doc-level prompt + `dataprep.llm.context_doc` span.
+- 2026-06-26 — `per_chunk` **batching** (`LABEL_LLM_BATCH_SIZE`; document context once per batch; `_context_batch_call` with per-chunk fallback; `dataprep.llm.context_batch` span). `doc_level` larger budget (`DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL`=30000) for large docs. `_build_doc_context` budget param + truncation WARN. Motivated by the large-doc context-size concern + yesterday's labeling-batching pattern.
+- Config + docs rolled out across `env`, `docker-compose.yaml`, ansible (`env.j2` + `all.yml`), config-validator, `CLAUDE.md`, install guide, labeling-strategy §7, dataprep README, ChoosingLLMs — for every variable.
+- Result: 85 tests pass (15 in `TestContextualRetrieval`); `ruff check` + `ruff format` clean; config-validator 25/25.
 
 ## Suggested Review Order
 
-Ordered by concern (clickable links). Paths relative to this spec file.
+Ordered by concern (clickable). Paths relative to this spec.
 
-1. **Design intent / pipeline wiring** — [`genieai_dataprep_arangodb.py:977`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L977) (orchestrator: contextualization → labeling step), [`:984`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L984) (the contextualization call), [`:1003`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L1003) (`metadata.chunk_text` — flag-gated, index-guarded).
-2. **Core: context generation** — [`_apply_contextualization :482`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L482), [`_context_single_call :564`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L564) (per-chunk LLM, 3 retries, OTel span).
-3. **Resilience (never-block boundary)** — client-build guard [`:496`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L496); silent-degradation (0/N) guard [`:545`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L545).
-4. **Shared client (DRY refactor of the labeling hot-path)** — [`_build_vllm_client :157`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L157).
-5. **Config + prompt** — flags [`:95`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L95), prompt default [`:133`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L133).
-6. **Tests** — [`TestContextualRetrieval :1446`](../../genie-ai-overlay/tests/test_dataprep.py#L1446).
-
-
+1. **Pipeline wiring** — orchestrator [`:1196`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L1196), contextualization call [`:1203`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L1203), metadata `chunk_text` gate [`:1222`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L1222).
+2. **Entry + strategy dispatch** — [`_apply_contextualization :530`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L530) (client-build guard + per_chunk/doc_level branch).
+3. **per_chunk (batched)** — [`_contextualize_per_chunk :575`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L575), [`_context_batch_call :629`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L629), [`_context_single_call :783`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L783).
+4. **doc_level** — [`_contextualize_doc_level :702`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L702), [`_context_doc_call :722`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L722).
+5. **Doc context + truncation** — [`_build_doc_context :501`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L501).
+6. **Shared client + config** — [`_build_vllm_client :196`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L196), flags [`:95`](../../genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py#L95).
+7. **Tests** — [`TestContextualRetrieval :1446`](../../genie-ai-overlay/tests/test_dataprep.py#L1446).

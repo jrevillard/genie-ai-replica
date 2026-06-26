@@ -56,6 +56,7 @@ This service extends the standard OPEA dataprep implementation with advanced fea
 
 - **Embedding Generation**:
   - Vector embeddings for chunks
+  - Contextual Retrieval (optional, `CONTEXTUAL_RETRIEVAL_ENABLED`, default off): an LLM-generated document-context prefix is prepended to each chunk before embedding + labeling, so chunks carry the document's subject (Anthropic-style; raw-chunk fallback on any failure — ingestion never blocks)
   - Batch processing
   - GPU acceleration support
   - Multiple embedding models

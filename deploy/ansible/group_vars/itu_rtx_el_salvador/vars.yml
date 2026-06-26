@@ -11,6 +11,14 @@ gpu_env_file: env.rtx6000
 repo_branch: el-salvador-contextual
 arango_db: el-salvador
 
+# Contextual Retrieval (dataprep) — TEMPORARY TEST on this branch.
+# Per-chunk LLM doc-context prefix → embedding + labeling (see
+# _bmad-output/implementation-artifacts/spec-contextual-retrieval.md). Default
+# off; enabled here to test on the cucumber doc. Delete these lines (or set
+# contextual_retrieval_enabled: "false") before merging anything back.
+contextual_retrieval_enabled: "true"
+contextual_strategy: doc_level   # per_chunk (1 call/chunk, tailored) | doc_level (1 call/doc, cheaper)
+
 # Remote GPU node (vLLM, TEI run on 10.0.0.110)
 gpu_node_host: "10.0.0.110"
 

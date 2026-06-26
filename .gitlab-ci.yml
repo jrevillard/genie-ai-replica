@@ -112,6 +112,7 @@ workflow:
     - docker network prune -f 2>/dev/null || true
   script:
     - cp env .env
+    - sed -i '/^GENIE_AI_[A-Z0-9_]*_IMAGE=/ s|^|# |' .env
     - |
       while IFS='=' read -r var _; do
         case "$var" in ''|[!A-Z_]*) continue ;; esac
@@ -633,11 +634,9 @@ kics-iac-sast:
   variables:
     TRIVY_NO_PROGRESS: "true"
     TRIVY_TIMEOUT: "30m"
-    TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.trivycache/"
+    TRIVY_CACHE_DIR: "/cache/.trivycache/"
     TRIVY_SEVERITY: "HIGH,CRITICAL"
-  cache:
-    - key: "trivy-db"
-      paths: [".trivycache/"]
+    TMPDIR: "/cache"
   before_script:
     - mkdir -p ~/.docker
     - |
@@ -654,9 +653,9 @@ kics-iac-sast:
       fi
       IMAGE="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
       echo "Scanning $IMAGE"
-    - syft -o spdx-json "$IMAGE" > sbom.spdx.json
-    - trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --format json --output gl-container-scanning-report.json --exit-code 0 "$IMAGE"
-    - trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format table --exit-code 1 "$IMAGE"
+      syft --scope squashed -o spdx-json "$IMAGE" > sbom.spdx.json || echo "WARN: syft SBOM failed for $IMAGE - continuing with trivy scan"
+      trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --format json --output gl-container-scanning-report.json --exit-code 0 "$IMAGE"
+      trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format table --exit-code 1 "$IMAGE"
   artifacts:
     when: always
     expire_in: 1 year

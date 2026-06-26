@@ -18,6 +18,7 @@ arango_db: el-salvador
 # contextual_retrieval_enabled: "false") before merging anything back.
 contextual_retrieval_enabled: "true"
 contextual_strategy: doc_level   # per_chunk (1 call/chunk, tailored) | doc_level (1 call/doc, cheaper)
+contextual_label_raw: "true"     # decoupled: label RAW chunk, use context for embedding only (4th variant test)
 
 # Remote GPU node (vLLM, TEI run on 10.0.0.110)
 gpu_node_host: "10.0.0.110"

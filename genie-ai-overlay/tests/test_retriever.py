@@ -12,7 +12,28 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from retriever.genieai_retriever_arangodb import GenieaiArangoRetriever
+from retriever.genieai_retriever_arangodb import (
+    ARANGO_GRAPH_NAME,
+    GenieaiArangoRetriever,
+    _chunk_passes_label_filter,
+    _normalize_chunk_id,
+    rrf_fuse,
+)
+
+# NOTE: conftest.py mocks the langchain stack (langchain_core/community/...) via
+# sys.modules.setdefault, so langchain_core.documents.Document is a MagicMock at
+# test time. The pure RRF logic and BM25 wiring only need objects exposing
+# ``.id``/``.page_content``/``.metadata``, so we use a lightweight real stand-in
+# instead of the real Document (and patch the module's Document with it where the
+# production code constructs one).
+
+
+class _FakeDoc:
+    def __init__(self, id=None, page_content="", metadata=None):
+        self.id = id
+        self.page_content = page_content
+        self.metadata = metadata if metadata is not None else {}
+
 
 # ---------------------------------------------------------------------------
 # Helper functions
@@ -625,3 +646,293 @@ class TestGenerateSummarizationPrompt:
         prompt = retriever.generate_summarization_prompt("What is AI?", "AI is artificial intelligence.")
         assert "What is AI?" in prompt
         assert "AI is artificial intelligence." in prompt
+
+
+# ---------------------------------------------------------------------------
+# Test: rrf_fuse — Reciprocal Rank Fusion (Contextual Retrieval Part B, AC3)
+# ---------------------------------------------------------------------------
+
+
+def _mk_result(key, score=0.0):
+    """Build a {"doc", "score"} result element for fusion tests."""
+    return {"doc": _FakeDoc(id=key), "score": score}
+
+
+class TestRrfFuse:
+    """Unit tests for the pure rrf_fuse fusion function."""
+
+    def test_doc_in_both_channels_gets_both_contributions(self):
+        fused = rrf_fuse([_mk_result("a")], [_mk_result("a")], k=60, dense_weight=1.0, lexical_weight=1.0)
+        a_score = next(r["score"] for r in fused if r["doc"].id == "a")
+        assert a_score == pytest.approx(1 / 61 + 1 / 61)
+
+    def test_doc_in_one_channel_gets_single_contribution(self):
+        fused = rrf_fuse([_mk_result("a")], [], k=60, dense_weight=1.0, lexical_weight=1.0)
+        assert fused[0]["score"] == pytest.approx(1 / 61)
+
+    def test_doc_in_both_ranks_above_doc_in_one(self):
+        # "a" is rank-1 in BOTH channels; "b" is rank-1 in dense only.
+        fused = rrf_fuse([_mk_result("a"), _mk_result("b")], [_mk_result("a")], k=60)
+        scores = {r["doc"].id: r["score"] for r in fused}
+        assert scores["a"] > scores["b"]
+
+    def test_lexical_only_doc_surfaces(self):
+        fused = rrf_fuse([_mk_result("a")], [_mk_result("b")], k=60)
+        assert {r["doc"].id for r in fused} == {"a", "b"}
+
+    def test_returns_sorted_descending(self):
+        fused = rrf_fuse([_mk_result("a"), _mk_result("b")], [_mk_result("a"), _mk_result("b")], k=60)
+        scores = [r["score"] for r in fused]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_weights_applied(self):
+        fused = rrf_fuse([_mk_result("a")], [_mk_result("a")], k=60, dense_weight=2.0, lexical_weight=0.5)
+        assert fused[0]["score"] == pytest.approx(2.0 / 61 + 0.5 / 61)
+
+    def test_does_not_mutate_inputs(self):
+        dense = [_mk_result("a")]
+        bm25 = [_mk_result("a")]
+        dense_copy = list(dense)
+        rrf_fuse(dense, bm25, k=60)
+        assert dense == dense_copy
+
+    def test_dense_empty_bm25_rescues(self):
+        # The signature case for a lexical channel: dense finds nothing, BM25 does.
+        fused = rrf_fuse([], [_mk_result("a"), _mk_result("b")], k=60)
+        assert {r["doc"].id for r in fused} == {"a", "b"}
+        assert fused[0]["score"] == pytest.approx(1 / 61)  # "a" rank-1 BM25
+
+    def test_both_empty_returns_empty(self):
+        assert rrf_fuse([], [], k=60) == []
+
+    def test_dedup_within_channel_keeps_best_rank(self):
+        # A duplicate id in one channel must not double-count (best rank wins).
+        fused = rrf_fuse([_mk_result("a"), _mk_result("a")], [], k=60)
+        assert len(fused) == 1
+        assert fused[0]["score"] == pytest.approx(1 / 61)  # rank-1 only
+
+    def test_unkeyed_doc_not_dropped_or_mismerged(self):
+        none_doc = _FakeDoc(id=None)
+        fused = rrf_fuse([{"doc": none_doc, "score": 0.0}], [_mk_result("a")], k=60)
+        assert len(fused) == 2  # the unkeyed doc is kept standalone, "a" separate
+
+
+class TestNormalizeChunkId:
+    """Tests for the chunk-id normalization used by RRF cross-channel matching."""
+
+    def test_bare_key_passthrough(self):
+        assert _normalize_chunk_id(_FakeDoc(id="chunk_42")) == "chunk_42"
+
+    def test_collection_slash_key_stripped(self):
+        assert _normalize_chunk_id(_FakeDoc(id="GRAPH_SOURCE/chunk_42")) == "chunk_42"
+
+    def test_none_returns_none(self):
+        assert _normalize_chunk_id(_FakeDoc(id=None)) is None
+
+    def test_missing_id_attr_returns_none(self):
+        assert _normalize_chunk_id(_FakeDoc()) is None
+
+
+class TestChunkPassesLabelFilter:
+    """Unit tests for the Python label-filter helper (mirrors dense AQL)."""
+
+    def test_no_labels_passes(self):
+        assert _chunk_passes_label_filter(["Health"], [], "OR") is True
+
+    def test_or_strategy_any_match(self):
+        assert _chunk_passes_label_filter(["Health"], ["Health", "Education"], "OR") is True
+
+    def test_or_strategy_no_match(self):
+        assert _chunk_passes_label_filter(["Agriculture"], ["Health"], "OR") is False
+
+    def test_and_strategy_all_present(self):
+        assert _chunk_passes_label_filter(["Health", "Education"], ["Health", "Education"], "AND") is True
+
+    def test_and_strategy_missing_one(self):
+        assert _chunk_passes_label_filter(["Health"], ["Health", "Education"], "AND") is False
+
+    def test_null_chunk_labels_filtered(self):
+        assert _chunk_passes_label_filter(None, ["Health"], "OR") is False
+
+
+# ---------------------------------------------------------------------------
+# Test: _ensure_bm25_view — idempotent lazy view creation (Part B, AC5)
+# ---------------------------------------------------------------------------
+
+
+class TestEnsureBm25View:
+    """Tests for idempotent ArangoSearch view creation."""
+
+    def test_creates_view_when_missing(self):
+        db = MagicMock()
+        db.has_view.return_value = False
+        retriever = create_retriever(db_mock=db)
+        retriever._ensure_bm25_view("GRAPH")
+        db.create_arangosearch_view.assert_called_once()
+        view_name, properties = db.create_arangosearch_view.call_args.args
+        assert view_name == "GRAPH_BM25_VIEW"
+        assert "GRAPH_SOURCE" in properties["links"]
+
+    def test_skips_when_exists(self):
+        db = MagicMock()
+        db.has_view.return_value = True
+        retriever = create_retriever(db_mock=db)
+        retriever._ensure_bm25_view("GRAPH")
+        db.create_arangosearch_view.assert_not_called()
+
+    def test_cached_no_repeat_call(self):
+        db = MagicMock()
+        db.has_view.return_value = False
+        retriever = create_retriever(db_mock=db)
+        retriever._ensure_bm25_view("GRAPH")
+        retriever._ensure_bm25_view("GRAPH")  # cached: second call must not hit ArangoDB
+        assert db.has_view.call_count == 1
+        assert db.create_arangosearch_view.call_count == 1
+
+    def test_failure_not_cached_so_retries(self):
+        # A transient create failure must NOT be cached (otherwise the channel
+        # dies silently forever).
+        db = MagicMock()
+        db.has_view.return_value = False
+        db.create_arangosearch_view.side_effect = Exception("transient")
+        retriever = create_retriever(db_mock=db)
+        retriever._ensure_bm25_view("GRAPH")  # logs, does not raise
+        retriever._ensure_bm25_view("GRAPH")  # retries (not cached)
+        assert db.has_view.call_count == 2
+
+    def test_init_ensures_default_view_when_enabled(self):
+        # _initialize_client must ensure the default-graph BM25 view at boot when
+        # the hybrid flag is ON (mirrors has_database/create_database).
+        with (
+            patch("retriever.genieai_retriever_arangodb.HYBRID_RETRIEVAL_ENABLED", True),
+            patch("retriever.genieai_retriever_arangodb.ArangoClient") as client_cls,
+            patch.object(GenieaiArangoRetriever, "_ensure_bm25_view") as ensure,
+        ):
+            sys_db = MagicMock()
+            sys_db.has_database.return_value = True
+            client_cls.return_value.db.side_effect = [sys_db, MagicMock()]
+            retriever = GenieaiArangoRetriever.__new__(GenieaiArangoRetriever)
+            retriever._bm25_views_ensured = set()
+            retriever._initialize_client()
+        ensure.assert_called_once_with(ARANGO_GRAPH_NAME)
+
+    def test_init_skips_view_when_disabled(self):
+        with (
+            patch("retriever.genieai_retriever_arangodb.HYBRID_RETRIEVAL_ENABLED", False),
+            patch("retriever.genieai_retriever_arangodb.ArangoClient") as client_cls,
+            patch.object(GenieaiArangoRetriever, "_ensure_bm25_view") as ensure,
+        ):
+            sys_db = MagicMock()
+            sys_db.has_database.return_value = True
+            client_cls.return_value.db.side_effect = [sys_db, MagicMock()]
+            retriever = GenieaiArangoRetriever.__new__(GenieaiArangoRetriever)
+            retriever._bm25_views_ensured = set()
+            retriever._initialize_client()
+        ensure.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Test: _bm25_search — BM25 channel + label filter (Part B, AC4)
+# ---------------------------------------------------------------------------
+
+
+def _make_bm25_cursor(rows):
+    cursor = MagicMock()
+    cursor.__iter__ = MagicMock(return_value=iter(rows))
+    return cursor
+
+
+class TestBm25Search:
+    """Tests for the BM25 lexical search method."""
+
+    @pytest.fixture(autouse=True)
+    def _real_document(self):
+        # _bm25_search constructs Document(...); use a real stand-in so .id is a
+        # string (conftest mocks langchain_core, making Document a MagicMock).
+        with patch("retriever.genieai_retriever_arangodb.Document", _FakeDoc):
+            yield
+
+    def test_returns_result_shape_and_filters_by_label(self):
+        db = MagicMock()
+        db.has_view.return_value = True
+        db.aql.execute.return_value = _make_bm25_cursor(
+            [
+                {"key": "c1", "text": "health info", "chunk_labels": ["Health"], "file_id": "f1", "score": 3.0},
+                {"key": "c2", "text": "agri info", "chunk_labels": ["Agriculture"], "file_id": "f2", "score": 2.0},
+            ]
+        )
+        retriever = create_retriever(db_mock=db)
+        results = retriever._bm25_search("query", "GRAPH", n=50, labels_to_filter=["Health"], filter_strategy="OR")
+        assert [r["doc"].id for r in results] == ["c1"]  # c2 cross-category, filtered out
+        assert results[0]["doc"].page_content == "health info"
+        assert isinstance(results[0]["score"], float)
+
+    def test_no_labels_returns_all(self):
+        db = MagicMock()
+        db.has_view.return_value = True
+        db.aql.execute.return_value = _make_bm25_cursor(
+            [{"key": "c1", "text": "x", "chunk_labels": ["Health"], "file_id": "f1", "score": 1.0}]
+        )
+        retriever = create_retriever(db_mock=db)
+        results = retriever._bm25_search("query", "GRAPH", n=50, labels_to_filter=[], filter_strategy="OR")
+        assert len(results) == 1
+
+    def test_never_raises_on_db_error(self):
+        db = MagicMock()
+        db.has_view.return_value = True
+        db.aql.execute.side_effect = Exception("boom")
+        retriever = create_retriever(db_mock=db)
+        assert retriever._bm25_search("query", "GRAPH", n=50, labels_to_filter=[], filter_strategy="OR") == []
+
+
+# ---------------------------------------------------------------------------
+# Test: invoke hybrid wiring (Contextual Retrieval Part B, AC1/AC2/AC6/AC7)
+# ---------------------------------------------------------------------------
+
+
+class TestHybridInvoke:
+    """Integration tests for the hybrid BM25+RRF hook inside invoke()."""
+
+    async def test_off_is_no_op(self, invoke_env):
+        # AC1: with the flag off, the BM25 channel must never be invoked.
+        retriever = invoke_env["retriever"]
+        with (
+            patch("retriever.genieai_retriever_arangodb.HYBRID_RETRIEVAL_ENABLED", False),
+            patch.object(retriever, "_bm25_search") as bm25,
+        ):
+            result = await retriever.invoke(create_mock_input(search_start="chunk"))
+        assert isinstance(result, list)
+        bm25.assert_not_called()
+
+    async def test_on_fuses_bm25_doc_into_results(self, invoke_env):
+        # AC2: with the flag on and a chunk start, a BM25-only doc must surface.
+        retriever = invoke_env["retriever"]
+        bm25_doc = _FakeDoc(id="bm25_only", page_content="exact keyword match", metadata={})
+        with (
+            patch("retriever.genieai_retriever_arangodb.HYBRID_RETRIEVAL_ENABLED", True),
+            patch.object(retriever, "_bm25_search", return_value=[{"doc": bm25_doc, "score": 1.5}]),
+        ):
+            result = await retriever.invoke(create_mock_input(search_start="chunk"))
+        ids = {r["doc"].id for r in result}
+        assert "bm25_only" in ids  # BM25 channel contributed a doc dense did not find
+
+    async def test_graceful_degradation_on_bm25_error(self, invoke_env):
+        # AC6: a failing BM25 channel must not break the request.
+        retriever = invoke_env["retriever"]
+        with (
+            patch("retriever.genieai_retriever_arangodb.HYBRID_RETRIEVAL_ENABLED", True),
+            patch.object(retriever, "_bm25_search", side_effect=Exception("view down")),
+        ):
+            result = await retriever.invoke(create_mock_input(search_start="chunk"))
+        assert isinstance(result, list)
+        assert len(result) >= 1  # dense-only result returned
+
+    async def test_skipped_for_non_chunk_start(self, invoke_env):
+        # AC7: node/edge starts must stay dense-only even with the flag on.
+        retriever = invoke_env["retriever"]
+        with (
+            patch("retriever.genieai_retriever_arangodb.HYBRID_RETRIEVAL_ENABLED", True),
+            patch.object(retriever, "_bm25_search") as bm25,
+        ):
+            await retriever.invoke(create_mock_input(search_start="node"))
+        bm25.assert_not_called()

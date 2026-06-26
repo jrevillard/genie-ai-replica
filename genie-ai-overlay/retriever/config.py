@@ -220,6 +220,17 @@ ARANGO_TRAVERSAL_QUERY = os.getenv("ARANGO_TRAVERSAL_QUERY")
 ARANGO_TRAVERSAL_CONCURRENT_BATCHES = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES", 1))
 ARANGO_FILTER_STRATEGY = os.getenv("ARANGO_FILTER_STRATEGY", "OR")  # for label filtering
 
+# Hybrid BM25 + RRF Retrieval (Contextual Retrieval Part B)
+# Opt-in lexical (BM25) channel over <GRAPH>_SOURCE.text, fused with the dense
+# results via weighted Reciprocal Rank Fusion. OFF = true no-op (dense-only).
+# See _bmad-output/implementation-artifacts/spec-hybrid-retrieval-bm25-rrf.md
+HYBRID_RETRIEVAL_ENABLED = os.getenv("RETRIEVER_HYBRID_RETRIEVAL_ENABLED", "false").lower() == "true"
+HYBRID_RRF_K = int(os.getenv("RETRIEVER_HYBRID_RRF_K", "60"))
+HYBRID_BM25_CANDIDATES = int(os.getenv("RETRIEVER_HYBRID_BM25_CANDIDATES", "50"))
+HYBRID_DENSE_WEIGHT = float(os.getenv("RETRIEVER_HYBRID_DENSE_WEIGHT", "1.0"))
+HYBRID_LEXICAL_WEIGHT = float(os.getenv("RETRIEVER_HYBRID_LEXICAL_WEIGHT", "1.0"))
+HYBRID_BM25_ANALYZER = os.getenv("RETRIEVER_HYBRID_BM25_ANALYZER", "text_en")
+
 # Summarizer Configuration
 SUMMARIZER_ENABLED = os.getenv("RETRIEVER_SUMMARIZER_ENABLED", "false").lower() == "true"
 

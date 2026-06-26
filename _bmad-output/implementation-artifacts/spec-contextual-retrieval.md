@@ -88,7 +88,7 @@ Gated by `CONTEXTUAL_RETRIEVAL_ENABLED` (default off → true no-op). Part A of 
 
 - `cd genie-ai-overlay && ruff check .` ✓
 - `cd genie-ai-overlay && ruff format --check .` ✓
-- `cd genie-ai-overlay && pytest tests/test_dataprep.py tests/test_dataprep_tracing.py` → 85 pass
+- `cd genie-ai-overlay && pytest` → 537 pass (full overlay suite — incl. `test_auto_detect_model.py`, `test_dataprep_tracing.py`)
 - `cd tests/config-validator && npm test` → 25/25
 
 ## Spec Change Log
@@ -97,7 +97,8 @@ Gated by `CONTEXTUAL_RETRIEVAL_ENABLED` (default off → true no-op). Part A of 
 - 2026-06-26 — `CONTEXTUAL_STRATEGY` flag (`per_chunk` default | `doc_level`). `doc_level` = 1 call/doc (N× cheaper), same context on every chunk, dedicated doc-level prompt + `dataprep.llm.context_doc` span.
 - 2026-06-26 — `per_chunk` **batching** (`LABEL_LLM_BATCH_SIZE`; document context once per batch; `_context_batch_call` with per-chunk fallback; `dataprep.llm.context_batch` span). `doc_level` larger budget (`DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL`=30000) for large docs. `_build_doc_context` budget param + truncation WARN. Motivated by the large-doc context-size concern + yesterday's labeling-batching pattern.
 - Config + docs rolled out across `env`, `docker-compose.yaml`, ansible (`env.j2` + `all.yml`), config-validator, `CLAUDE.md`, install guide, labeling-strategy §7, dataprep README, ChoosingLLMs — for every variable.
-- Result: 85 tests pass (15 in `TestContextualRetrieval`); `ruff check` + `ruff format` clean; config-validator 25/25.
+- 2026-06-26 — CI fix: `TestDataprepAutoDetect` source-inspection tests retargeted to `_build_vllm_client` (the DRY-extracted helper where the auth / GPU-node auto-detect / shared-cache logic now lives — used by labeling + context generation). Lesson: verify with the FULL overlay suite (`pytest`), not only `test_dataprep.py`.
+- Result: full overlay **537** tests pass (15 in `TestContextualRetrieval`, 34 in `TestDataprepAutoDetect`); `ruff check` + `ruff format` clean; config-validator 25/25.
 
 ## Suggested Review Order
 

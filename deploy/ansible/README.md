@@ -342,6 +342,20 @@ Set in `group_vars/<env>/vars.yml`:
 |----------|---------|-------------|
 | `label_selector_system_prompt` | (built-in) | System prompt for automatic document labeling (optional, has built-in default with `{labels_list}` placeholder) |
 
+### Contextual Retrieval (Optional, default off)
+
+Per-chunk LLM document-context prefix → embedding (+ optionally labeling) so chunks carry the document's subject. See `GENIE.AI-Data-Labelling-Strategy.md` §7 + `_bmad-output/implementation-artifacts/spec-contextual-retrieval.md`.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `contextual_retrieval_enabled` | `false` | Opt-in: prepend an LLM document-context prefix to each chunk so it carries the document's subject |
+| `contextual_strategy` | `per_chunk` | `per_chunk` (one call/chunk, section-tailored) or `doc_level` (one call/doc, same context on every chunk — N× cheaper) |
+| `contextual_label_raw` | `false` | Decoupled mode: label the RAW chunk, use the context ONLY for the embedding (recommended — keeps label precision) |
+| `dataprep_contextual_model` | (empty) | Model for context generation; empty = reuse `vllm_llm_model_id`; must support guided JSON |
+| `dataprep_contextual_doc_budget` | `6000` | Max chars of doc text fed to the per_chunk context LLM |
+| `dataprep_contextual_doc_budget_doc_level` | `30000` | Max chars of doc text fed to the doc_level context LLM (one call — can afford a larger window) |
+| `contextual_retrieval_prompt` | (built-in) | Prompt for per-chunk context generation (has `{document_context}` placeholder) |
+
 ### Keycloak Identity Provider (Required)
 
 | Variable | Default | Description |

@@ -707,6 +707,8 @@ sequenceDiagram
 
 Dataprep uses a dedicated Keycloak client with the `client_credentials` grant type. This service account is separate from user tokens and has permissions scoped to document ingestion operations. The ingestion pipeline extracts content, chunks it, labels each chunk against the service taxonomy, constructs a knowledge graph (entities + relationships), generates vector embeddings, and stores everything in ArangoDB.
 
+> **Contextual Retrieval (optional).** When `CONTEXTUAL_RETRIEVAL_ENABLED=true`, the dataprep generates an LLM document-context prefix per chunk (after chunking, before embedding) so chunks carry the document's subject. `CONTEXTUAL_STRATEGY` selects `per_chunk` (one call/chunk, tailored) or `doc_level` (one call/doc, N× cheaper). `CONTEXTUAL_LABEL_RAW=true` (recommended) decouples: label the **raw** chunk, use the context only for the **embedding** — keeps label precision while propagating the subject via the vector. Default off (true no-op). See `GENIE.AI-Data-Labelling-Strategy.md` §7.
+
 ### 10.3 Document Retraction
 
 ```mermaid

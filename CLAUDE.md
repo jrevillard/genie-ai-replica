@@ -238,6 +238,7 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `DATAPREP_CONTEXTUAL_MODEL` - Model for context generation (empty = reuse `VLLM_LLM_MODEL_ID`); must support guided JSON.
 - `DATAPREP_CONTEXTUAL_DOC_BUDGET` - Max chars of doc text fed to the context LLM (~1500 tokens); <=0 disables truncation (default 6000).
 - `CONTEXTUAL_STRATEGY` - `per_chunk` (default; one call/chunk, section-tailored context — the Anthropic recipe) or `doc_level` (ONE call/doc, same context on every chunk — N× cheaper, still propagates the doc subject).
+- `CONTEXTUAL_LABEL_RAW` - Decoupled mode (default false): label the RAW chunk, use the generated context ONLY for the embedding (keeps label precision while propagating the subject via vectors).
 - `CORS_ALLOWED_ORIGINS` - CORS allowed origins
 - `CSP_CONNECT_SRC` - Content Security Policy connect sources
 - `NGINX_PUBLIC_DOMAIN` - Public domain for Nginx

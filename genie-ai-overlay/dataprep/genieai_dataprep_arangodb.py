@@ -86,6 +86,20 @@ LABEL_LLM_BATCH_SIZE = max(1, int(os.getenv("DATAPREP_LLM_LABEL_BATCH_SIZE", "4"
 # every instruction model. Tunable per model if ever needed.
 LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
 
+# Contextual Retrieval (Anthropic-style): per-chunk LLM-generated document
+# context prepended to each chunk before embedding + labeling, so chunks carry
+# document-level subject (fixes label/embedding context loss; see
+# spec-contextual-retrieval.md). Default OFF — opt-in. Adds one LLM call per
+# chunk (concurrency-bounded) when enabled. Part B (retriever BM25 hybrid) is a
+# separate spec.
+CONTEXTUAL_RETRIEVAL_ENABLED = os.getenv("CONTEXTUAL_RETRIEVAL_ENABLED", "false").lower() == "true"
+# Model used for context generation. Empty → reuse VLLM_MODEL_ID (auto-detected
+# on remote GPU nodes). Set to a smaller/cheaper model to cut context-gen cost.
+DATAPREP_CONTEXTUAL_MODEL = os.getenv("DATAPREP_CONTEXTUAL_MODEL", "")
+# Max chars of the joined document chunks fed to the context-generation LLM
+# (bounds the prompt; ~1500 tokens). Filename + file_labels are always included.
+DATAPREP_CONTEXTUAL_DOC_BUDGET = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET", "6000"))
+
 # Spec 5.3: Externalized Prompt - Two-tier priority
 # Level 1: ENV VAR (highest priority) - override via .env
 # Level 2: Hardcoded default (fallback) - works out-of-the-box
@@ -113,6 +127,52 @@ Example:
 """.strip()
 _env_value = os.getenv("LABEL_SELECTOR_SYSTEM_PROMPT", "")
 LABEL_SELECTOR_SYSTEM_PROMPT = _env_value.strip() or _LABEL_SELECTOR_DEFAULT
+
+# Contextual Retrieval prompt (two-tier: env override, else built-in default).
+# {document_context} is replaced per ingestion with filename + labels + doc text.
+_CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT = """
+<SYSTEM INSTRUCTIONS>
+You place a text chunk inside its parent document so the chunk can be
+retrieved even when it does not name the document's subject.
+
+Given the DOCUMENT CONTEXT (the document's subject and scope) and one CHUNK
+from that document, write a 50-100 word context that states what the document
+is and what this specific chunk is about, so the chunk can be found by searches
+about the document's subject. Use only facts from the document context and the
+chunk — do not invent details.
+
+DOCUMENT CONTEXT:
+{document_context}
+
+Output format (STRICT): return ONLY a JSON object — no prose, no markdown, no
+code fences.
+Example: {"context": "This chunk is from the CENTA cucumber cultivation guide.
+It covers irrigation scheduling for cucumber crops."}
+</SYSTEM INSTRUCTIONS>
+""".strip()
+_ctx_env = os.getenv("CONTEXTUAL_RETRIEVAL_PROMPT", "")
+CONTEXTUAL_RETRIEVAL_PROMPT = _ctx_env.strip() or _CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT
+
+
+def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
+    """Construct the AsyncOpenAI client for the self-hosted vLLM and resolve the model.
+
+    Auto-detects the loaded model on a remote GPU node (TTL-cached, see
+    core/model_cache.py) so VLLM_MODEL_ID need not match the GPU deployment.
+    Shared by labeling and Contextual-Retrieval context generation.
+    """
+    _api_key = os.getenv("VLLM_API_KEY", "EMPTY")
+    _vllm_endpoint = os.getenv("VLLM_ENDPOINT")
+    client = AsyncOpenAI(api_key=_api_key, base_url=f"{_vllm_endpoint}/v1")
+    model = os.getenv("VLLM_MODEL_ID")
+    if os.getenv("GPU_NODE_HOST"):
+        detected = get_model_id(_vllm_endpoint)
+        if detected:
+            model = detected
+            logger.info(f"Auto-detected remote vLLM model: {model}")
+    if not model:
+        raise RuntimeError("VLLM_MODEL_ID not set and auto-detection failed")
+    return client, model
 
 
 @OpeaComponentRegistry.register("GENIE_DATAPREP_ARANGODB")
@@ -145,7 +205,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             f"LLM={os.getenv('VLLM_ENDPOINT')}, "
             f"ARANGO_DB={os.getenv('ARANGO_DB')}, "
             f"PROMPT_LEN={len(LABEL_SELECTOR_SYSTEM_PROMPT)}, "
-            f"BATCHES={MAX_CONCURRENT_BATCHES}"
+            f"BATCHES={MAX_CONCURRENT_BATCHES}, "
+            f"CONTEXTUAL_RETRIEVAL={CONTEXTUAL_RETRIEVAL_ENABLED}"
         )
 
     def _initialize_llm(self, *args, **kwargs):
@@ -355,22 +416,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _label_with_llm(self, chunks: list[str], all_labels: list[str], file_labels: list[str], file_id: str):
         """Labels chunks using VLLM with Retry Logic and Advisory Warnings (Spec 5.3)."""
-        _api_key = os.getenv("VLLM_API_KEY", "EMPTY")
-        _vllm_endpoint = os.getenv("VLLM_ENDPOINT")
-        client = AsyncOpenAI(
-            api_key=_api_key,
-            base_url=f"{_vllm_endpoint}/v1",
-        )
-        model = os.getenv("VLLM_MODEL_ID")
-        # When using remote GPU node, auto-detect model (TTL-cached) to avoid
-        # config mismatch with GPU node deployment. See core/model_cache.py.
-        if os.getenv("GPU_NODE_HOST"):
-            detected = get_model_id(_vllm_endpoint)
-            if detected:
-                model = detected
-                logger.info(f"Auto-detected remote vLLM model: {model}")
-        if not model:
-            raise RuntimeError("VLLM_MODEL_ID not set and auto-detection failed")
+        client, model = _build_vllm_client()
 
         # Precompute the system prompt once (the taxonomy is identical for every chunk).
         system_prompt = LABEL_SELECTOR_SYSTEM_PROMPT.replace("{labels_list}", str(all_labels))
@@ -412,6 +458,169 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             if n % 200 == 0 or n == total:
                 logger.info(f"Labeling progress: {n}/{total} chunks finalized")
         return results
+
+    def _build_doc_context(self, chunks: list[str], input) -> str:
+        """Build the document-context string fed to the context-generation LLM.
+
+        Combines filename, file labels, and a token-budgeted join of the
+        document's chunks. The LLM uses this to place each individual chunk.
+        """
+        filename = os.path.basename(getattr(input, "storage_path", "") or getattr(input, "file_path", "") or "")
+        file_labels = list(getattr(input, "file_labels", []) or [])
+        joined = "\n".join(chunks)
+        budget = DATAPREP_CONTEXTUAL_DOC_BUDGET
+        if budget > 0 and len(joined) > budget:
+            joined = joined[:budget] + "...[truncated]"
+        parts = []
+        if filename:
+            parts.append(f"Filename: {filename}")
+        if file_labels:
+            parts.append(f"Document labels: {', '.join(file_labels)}")
+        parts.append(f"Document content (may be truncated):\n{joined}")
+        return "\n".join(parts)
+
+    async def _apply_contextualization(self, chunks: list[str], input, file_id: str) -> list[str]:
+        """Prepend an LLM-generated document context to each chunk.
+
+        No-op when CONTEXTUAL_RETRIEVAL_ENABLED is false (returns chunks
+        unchanged). When enabled, returns contextualized texts (same order and
+        length) of the form ``<context>\\n\\n<chunk>``. Chunks whose context
+        generation fails fall back to the raw chunk so ingestion never blocks.
+        """
+        if not CONTEXTUAL_RETRIEVAL_ENABLED or not chunks:
+            return list(chunks)
+
+        # Build the client outside the per-chunk retry loop. If construction fails
+        # (e.g. model auto-detection failure on the GPU node), skip contextualization
+        # entirely and ingest raw chunks — never block ingestion (spec boundary).
+        try:
+            client, default_model = _build_vllm_client()
+        except Exception as e:
+            err = f"{type(e).__name__}: {str(e)[:200]}"
+            logger.error(
+                f"Contextual Retrieval disabled for {file_id}: vLLM client init failed ({err}); using raw chunks."
+            )
+            await self._write_ingestion_log(
+                file_id,
+                "ERROR",
+                "Contextualization",
+                f"vLLM client init failed ({err}); using raw chunks.",
+            )
+            return list(chunks)
+
+        model = DATAPREP_CONTEXTUAL_MODEL.strip() or default_model
+        doc_context = self._build_doc_context(chunks, input)
+        system_prompt = CONTEXTUAL_RETRIEVAL_PROMPT.replace("{document_context}", doc_context)
+        total = len(chunks)
+        logger.info(
+            f"Contextual Retrieval: generating context for {total} chunks "
+            f"(model={model}, concurrency={MAX_CONCURRENT_BATCHES})"
+        )
+
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
+        done = 0
+
+        async def _one(i: int, chunk: str):
+            nonlocal done
+            async with semaphore:
+                ctx = await self._context_single_call(client, model, system_prompt, i, chunk, file_id)
+                done += 1
+                if done % 50 == 0 or done == total:
+                    logger.info(f"Contextual Retrieval progress: {done}/{total} chunks")
+                return i, chunk, ctx
+
+        # gather preserves input order → outcomes align with chunks.
+        outcomes = await asyncio.gather(*[_one(i, c) for i, c in enumerate(chunks)])
+
+        result = []
+        with_context = 0
+        for _i, chunk, ctx in outcomes:
+            ctx = (ctx or "").strip()
+            if ctx:
+                with_context += 1
+                result.append(f"{ctx}\n\n{chunk}")
+            else:
+                result.append(chunk)
+
+        if with_context == 0:
+            # Silent-degradation guard: a misconfigured DATAPREP_CONTEXTUAL_MODEL
+            # (e.g. one that rejects response_format=json_object) makes every chunk
+            # fall back with no error — surface one loud signal so operators notice.
+            logger.error(
+                f"Contextual Retrieval produced 0/{total} contexts for {file_id} — "
+                f"likely {model} does not support guided JSON or is unreachable. "
+                f"Check DATAPREP_CONTEXTUAL_MODEL / VLLM_ENDPOINT."
+            )
+            await self._write_ingestion_log(
+                file_id,
+                "ERROR",
+                "Contextualization",
+                f"0/{total} contexts generated — verify the model supports guided JSON and is reachable.",
+            )
+        else:
+            logger.info(f"Contextual Retrieval: {with_context}/{total} chunks contextualized.")
+        return result
+
+    async def _context_single_call(self, client, model, system_prompt, index: int, text: str, file_id: str) -> str:
+        """One LLM call generating the context for a single chunk (3 retries).
+
+        Returns the context string, or "" if all attempts fail (caller falls
+        back to the raw chunk). Emits a ``dataprep.llm.context_chunk`` span.
+        """
+        for attempt in range(1, 4):
+            with with_span(
+                "dataprep.llm.context_chunk",
+                attributes={
+                    "dataprep.chunk_index": index,
+                    "dataprep.llm_attempt": attempt,
+                    "dataprep.llm_batched": False,
+                    "dataprep.llm_model": model or "",
+                    "dataprep.contextual_retrieval": True,
+                },
+            ) as span:
+                try:
+                    response = await client.chat.completions.create(
+                        model=model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": f"CHUNK:\n{text}"},
+                        ],
+                        temperature=LLM_LABEL_TEMPERATURE,
+                        max_tokens=200,
+                        response_format={"type": "json_object"},
+                    )
+                    parsed = json.loads(response.choices[0].message.content)
+                    ctx = parsed.get("context", "")
+                    if isinstance(ctx, str) and ctx.strip():
+                        _usage = getattr(response, "usage", None)
+                        if getattr(_usage, "completion_tokens", None) is not None:
+                            span.set_attribute("dataprep.llm.completion_tokens", _usage.completion_tokens)
+                        if getattr(_usage, "prompt_tokens", None) is not None:
+                            span.set_attribute("dataprep.llm.prompt_tokens", _usage.prompt_tokens)
+                        span.set_attribute("dataprep.context_chars", len(ctx))
+                        return ctx.strip()
+                    await self._write_ingestion_log(
+                        file_id,
+                        "WARN",
+                        "Contextualization",
+                        f"Chunk {index}: empty context (attempt {attempt}/3).",
+                    )
+                except Exception as e:
+                    err = f"{type(e).__name__}: {str(e)[:200]}"
+                    logger.warning(f"Chunk {index}: context attempt {attempt}/3 failed: {err}")
+                    await self._write_ingestion_log(
+                        file_id,
+                        "WARN",
+                        "Contextualization",
+                        f"Chunk {index}: context attempt {attempt}/3 failed: {err}",
+                    )
+        await self._write_ingestion_log(
+            file_id,
+            "WARN",
+            "Contextualization",
+            f"Chunk {index}: context generation failed after 3 attempts — using raw chunk.",
+        )
+        return ""
 
     async def _llm_suggest_labels(
         self, client, model, system_prompt, batch, file_id, file_labels
@@ -765,8 +974,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     await self._write_ingestion_log(input.file_id, "ERROR", "Guardrail", gr_result["message"])
                     raise Exception("Guardrail Violation")
 
-                # 4. Labeling (Spec 5.3, 5.4)
+                # 4. Contextual Retrieval (optional) + Labeling (Spec 5.3, 5.4)
                 file_labels = getattr(input, "file_labels", [])
+                original_chunks = list(chunks)
+                # When enabled, prepend an LLM-generated document context to each
+                # chunk so embedding + labeling carry the document's subject (see
+                # spec-contextual-retrieval.md). No-op (returns chunks unchanged)
+                # when CONTEXTUAL_RETRIEVAL_ENABLED=false.
+                chunks = await self._apply_contextualization(original_chunks, input, input.file_id)
                 labelled_docs = await self._apply_labels(chunks, all_labels, file_labels, input.file_id)
 
                 # 5. Graph Insertion (BATCHED & CONCURRENT)
@@ -774,17 +989,20 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
                 documents_to_process = []
                 for i, doc in enumerate(labelled_docs):
-                    documents_to_process.append(
-                        Document(
-                            page_content=doc["text"],
-                            metadata={
-                                "file_id": input.file_id,
-                                "file_path": input.storage_path,
-                                "chunk_index": i,
-                                "chunk_labels": doc["labels"],
-                            },
-                        )
-                    )
+                    # metadata.chunk_text preserves the original (un-contextualized)
+                    # chunk for display/debug. Only written when contextualization is
+                    # enabled (flag off → true no-op, page_content already == original).
+                    # Guard i so a future _apply_labels change that altered chunk
+                    # count/order can never raise here (never block ingestion).
+                    metadata = {
+                        "file_id": input.file_id,
+                        "file_path": input.storage_path,
+                        "chunk_index": i,
+                        "chunk_labels": doc["labels"],
+                    }
+                    if CONTEXTUAL_RETRIEVAL_ENABLED and i < len(original_chunks):
+                        metadata["chunk_text"] = original_chunks[i]
+                    documents_to_process.append(Document(page_content=doc["text"], metadata=metadata))
 
                 BATCH_SIZE = 10
                 total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE

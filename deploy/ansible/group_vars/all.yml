@@ -128,6 +128,16 @@ keycloak_ssl_skip_verify: ""
 #   dataprep_llm_label_batch_size: 4     # chunks per LLM call (code default 4); raise to 8 on
 #                                        #   capable models (e.g. granite-4.1-8b). Batches fall
 #                                        #   back to per-chunk on parse failure.
+# Contextual Retrieval (optional, default OFF) — per-chunk LLM doc-context prefix
+# prepended before embedding + labeling (Anthropic-style). Adds one vLLM
+# call/chunk at ingest; never blocks ingestion (raw-chunk fallback). Override in
+# group_vars/<env>/vars.yml:
+#   contextual_retrieval_enabled: false   # opt-in; flag-off is a true no-op
+#   dataprep_contextual_model: ""         # empty = reuse vllm_llm_model_id; must support
+#                                         #   guided JSON (response_format=json_object)
+#   dataprep_contextual_doc_budget: 6000  # max chars of doc text fed to the context LLM
+#   contextual_strategy: per_chunk        # per_chunk (default; one call/chunk) | doc_level
+#                                         #   (one call/doc, N× cheaper, same context on all chunks)
 
 vllm_llm_image: vllm/vllm-openai:latest
 vllm_translation_image: vllm/vllm-openai:v0.10.0

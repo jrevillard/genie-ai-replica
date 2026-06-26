@@ -205,6 +205,25 @@ HUGGING_FACE_HUB_TOKEN=
 #                                     #   (e.g. granite-4.1-8b); batches fall back to
 #                                     #   per-chunk on parse failure, so output is correct.
 
+# Contextual Retrieval (Anthropic-style) — OPTIONAL, default OFF.
+# When enabled, the dataprep generates a short LLM document-context prefix per
+# chunk and prepends it before EMBEDDING and LABELING, so chunks carry the
+# document's subject (fixes label/embedding context loss — e.g. a generic
+# irrigation chunk in a cucumber guide becomes retrievable by "cucumber"). Adds
+# one vLLM call per chunk (concurrency-bounded) at ingest time. On any failure
+# (per-chunk or client-init) the chunk is stored raw — ingestion never blocks.
+# See GENIE.AI-Data-Labelling-Strategy.md + _bmad-output spec-contextual-retrieval.md.
+# CONTEXTUAL_RETRIEVAL_ENABLED=false   # opt-in (default false; flag-off is a true no-op)
+# DATAPREP_CONTEXTUAL_MODEL=           # model for context generation; empty = reuse
+#                                      #   VLLM_LLM_MODEL_ID. MUST support guided JSON
+#                                      #   (response_format=json_object) like granite-4.1-8b.
+# DATAPREP_CONTEXTUAL_DOC_BUDGET=6000  # max chars of doc text fed to the context LLM
+#                                      #   (~1500 tokens); <=0 disables truncation.
+# CONTEXTUAL_STRATEGY=per_chunk        # per_chunk (default; one call/chunk, section-tailored
+#                                      #   context — the Anthropic recipe) | doc_level (ONE
+#                                      #   call/doc, same context on every chunk — N× cheaper,
+#                                      #   still propagates the document subject).
+
 # Confidence scoring (chatqna) — rank-weighted aggregate of calibrated reranker
 # scores. The flat mean was count-dependent and tail-sensitive (a long tail of
 # low-scoring chunks kept by the adaptive strategy for novelty depressed it);
@@ -372,6 +391,9 @@ HUGGING_FACE_HUB_TOKEN=
 # CHATQNA_ABSTENTION_INSTRUCTIONS="If no information found in the context..."
 # CHATQNA_ENFORCE_ABSTENTION="false"
 # LABEL_SELECTOR_SYSTEM_PROMPT="Categorize this document..."
+# CONTEXTUAL_RETRIEVAL_PROMPT="..."    # per-chunk doc-context generation prompt
+#                                      #   (Contextual Retrieval; contains a
+#                                      #   {document_context} placeholder).
 
 # =============================================================================
 # SECTION 9: KEYCLOAK IDENTITY PROVIDER (REQUIRED)

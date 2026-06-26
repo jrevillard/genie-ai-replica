@@ -219,6 +219,10 @@ HUGGING_FACE_HUB_TOKEN=
 #                                      #   (response_format=json_object) like granite-4.1-8b.
 # DATAPREP_CONTEXTUAL_DOC_BUDGET=6000  # max chars of doc text fed to the context LLM
 #                                      #   (~1500 tokens); <=0 disables truncation.
+# CONTEXTUAL_STRATEGY=per_chunk        # per_chunk (default; one call/chunk, section-tailored
+#                                      #   context — the Anthropic recipe) | doc_level (ONE
+#                                      #   call/doc, same context on every chunk — N× cheaper,
+#                                      #   still propagates the document subject).
 
 # Confidence scoring (chatqna) — rank-weighted aggregate of calibrated reranker
 # scores. The flat mean was count-dependent and tail-sensitive (a long tail of

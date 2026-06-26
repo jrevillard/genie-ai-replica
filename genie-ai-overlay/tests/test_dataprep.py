@@ -1666,3 +1666,49 @@ class TestContextualRetrieval:
             result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
         assert result == chunks  # all raw
         assert any(call.args[1] == "ERROR" for call in log.call_args_list)
+
+    @pytest.mark.asyncio
+    async def test_doc_level_strategy_one_call_prepends_same_context(self, monkeypatch):
+        dp = create_dataprep()
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_RETRIEVAL_ENABLED", True)
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_STRATEGY", "doc_level")
+        monkeypatch.setenv("VLLM_API_KEY", "k")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://x")
+        monkeypatch.setenv("VLLM_MODEL_ID", "m")
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps({"context": "CUCUMBER GUIDE"})
+        mock_response.usage = MagicMock(completion_tokens=10, prompt_tokens=40)
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+        chunks = ["c1", "c2", "c3"]
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
+        # doc_level = ONE call for the whole document
+        assert mock_client.chat.completions.create.call_count == 1
+        # the same context is prepended to every chunk
+        assert all(r.startswith("CUCUMBER GUIDE\n\nc") for r in result)
+        assert [r.split("\n\n", 1)[1] for r in result] == chunks
+
+    @pytest.mark.asyncio
+    async def test_doc_level_strategy_failure_falls_back_to_raw(self, monkeypatch):
+        dp = create_dataprep()
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_RETRIEVAL_ENABLED", True)
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_STRATEGY", "doc_level")
+        monkeypatch.setenv("VLLM_API_KEY", "k")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://x")
+        monkeypatch.setenv("VLLM_MODEL_ID", "m")
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=Exception("boom"))
+        chunks = ["c1", "c2"]
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as log,
+        ):
+            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
+        assert result == chunks  # all raw; ingestion not blocked
+        assert mock_client.chat.completions.create.call_count == 3  # 3 retries, single doc call
+        assert any(call.args[1] == "ERROR" for call in log.call_args_list)

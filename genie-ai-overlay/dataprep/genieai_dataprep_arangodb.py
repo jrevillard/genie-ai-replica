@@ -99,6 +99,13 @@ DATAPREP_CONTEXTUAL_MODEL = os.getenv("DATAPREP_CONTEXTUAL_MODEL", "")
 # Max chars of the joined document chunks fed to the context-generation LLM
 # (bounds the prompt; ~1500 tokens). Filename + file_labels are always included.
 DATAPREP_CONTEXTUAL_DOC_BUDGET = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET", "6000"))
+# Strategy when CONTEXTUAL_RETRIEVAL_ENABLED=true:
+#   "per_chunk" (default) — one LLM call per chunk; each chunk gets a context
+#      tailored to its section (Anthropic recipe; highest quality, N calls/doc).
+#   "doc_level"           — ONE LLM call for the whole document; the same
+#      document-level context is prepended to every chunk (N× cheaper; still
+#      propagates the document subject — enough to fix label/embedding loss).
+CONTEXTUAL_STRATEGY = os.getenv("CONTEXTUAL_STRATEGY", "per_chunk").strip().lower() or "per_chunk"
 
 # Spec 5.3: Externalized Prompt - Two-tier priority
 # Level 1: ENV VAR (highest priority) - override via .env
@@ -152,6 +159,28 @@ It covers irrigation scheduling for cucumber crops."}
 """.strip()
 _ctx_env = os.getenv("CONTEXTUAL_RETRIEVAL_PROMPT", "")
 CONTEXTUAL_RETRIEVAL_PROMPT = _ctx_env.strip() or _CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT
+
+# Document-level context prompt (used by the CONTEXTUAL_STRATEGY=doc_level path;
+# built-in default, not env-overridable — customize CONTEXTUAL_RETRIEVAL_PROMPT
+# for the per_chunk path if needed).
+_CONTEXTUAL_DOC_PROMPT_DEFAULT = """
+<SYSTEM INSTRUCTIONS>
+You write a short context that describes what a document IS, so any chunk from
+it can be retrieved by searches about the document's subject.
+
+Given the DOCUMENT CONTEXT (subject + scope), write a 50-100 word description of
+the document: what it is, its subject, and its scope. Use only facts from the
+document context — do not invent details.
+
+DOCUMENT CONTEXT:
+{document_context}
+
+Output format (STRICT): return ONLY a JSON object — no prose, no markdown, no
+code fences.
+Example: {"context": "A CENTA cucumber cultivation guide covering planning
+through post-harvest for cucumber crops in tropical climates."}
+</SYSTEM INSTRUCTIONS>
+""".strip()
 
 
 def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
@@ -510,8 +539,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
         model = DATAPREP_CONTEXTUAL_MODEL.strip() or default_model
         doc_context = self._build_doc_context(chunks, input)
-        system_prompt = CONTEXTUAL_RETRIEVAL_PROMPT.replace("{document_context}", doc_context)
         total = len(chunks)
+
+        # doc_level: one LLM call for the whole document → same context on every
+        # chunk (N× cheaper than per_chunk). per_chunk (default): one call per
+        # chunk, section-tailored context (Anthropic recipe).
+        if CONTEXTUAL_STRATEGY == "doc_level":
+            return await self._contextualize_doc_level(client, model, doc_context, chunks, file_id, total)
+
+        system_prompt = CONTEXTUAL_RETRIEVAL_PROMPT.replace("{document_context}", doc_context)
         logger.info(
             f"Contextual Retrieval: generating context for {total} chunks "
             f"(model={model}, concurrency={MAX_CONCURRENT_BATCHES})"
@@ -560,6 +596,87 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         else:
             logger.info(f"Contextual Retrieval: {with_context}/{total} chunks contextualized.")
         return result
+
+    async def _contextualize_doc_level(self, client, model, doc_context, chunks, file_id, total) -> list[str]:
+        """doc_level strategy: one LLM call → one document context prepended to every chunk."""
+        system_prompt = _CONTEXTUAL_DOC_PROMPT_DEFAULT.replace("{document_context}", doc_context)
+        logger.info(f"Contextual Retrieval (doc_level): 1 call for {total} chunks (model={model}).")
+        summary = (await self._context_doc_call(client, model, system_prompt, file_id) or "").strip()
+        if not summary:
+            logger.error(
+                f"Contextual Retrieval (doc_level) produced no context for {file_id} — "
+                f"check DATAPREP_CONTEXTUAL_MODEL / VLLM_ENDPOINT."
+            )
+            await self._write_ingestion_log(
+                file_id,
+                "ERROR",
+                "Contextualization",
+                "0 doc-level contexts generated — verify the model supports guided JSON and is reachable.",
+            )
+            return list(chunks)
+        logger.info(f"Contextual Retrieval (doc_level): context generated, prepending to {total} chunks.")
+        return [f"{summary}\n\n{chunk}" for chunk in chunks]
+
+    async def _context_doc_call(self, client, model, system_prompt, file_id: str) -> str:
+        """One LLM call generating a single document-level context (3 retries).
+
+        Returns the context string, or "" if all attempts fail (caller falls
+        back to raw chunks). Emits a ``dataprep.llm.context_doc`` span.
+        """
+        for attempt in range(1, 4):
+            with with_span(
+                "dataprep.llm.context_doc",
+                attributes={
+                    "dataprep.llm_attempt": attempt,
+                    "dataprep.llm_batched": False,
+                    "dataprep.llm_model": model or "",
+                    "dataprep.contextual_retrieval": True,
+                    "dataprep.contextual_strategy": "doc_level",
+                },
+            ) as span:
+                try:
+                    response = await client.chat.completions.create(
+                        model=model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": "Write the document-level context."},
+                        ],
+                        temperature=LLM_LABEL_TEMPERATURE,
+                        max_tokens=200,
+                        response_format={"type": "json_object"},
+                    )
+                    parsed = json.loads(response.choices[0].message.content)
+                    ctx = parsed.get("context", "")
+                    if isinstance(ctx, str) and ctx.strip():
+                        _usage = getattr(response, "usage", None)
+                        if getattr(_usage, "completion_tokens", None) is not None:
+                            span.set_attribute("dataprep.llm.completion_tokens", _usage.completion_tokens)
+                        if getattr(_usage, "prompt_tokens", None) is not None:
+                            span.set_attribute("dataprep.llm.prompt_tokens", _usage.prompt_tokens)
+                        span.set_attribute("dataprep.context_chars", len(ctx))
+                        return ctx.strip()
+                    await self._write_ingestion_log(
+                        file_id,
+                        "WARN",
+                        "Contextualization",
+                        f"Doc-level context empty (attempt {attempt}/3).",
+                    )
+                except Exception as e:
+                    err = f"{type(e).__name__}: {str(e)[:200]}"
+                    logger.warning(f"Doc-level context attempt {attempt}/3 failed: {err}")
+                    await self._write_ingestion_log(
+                        file_id,
+                        "WARN",
+                        "Contextualization",
+                        f"Doc-level context attempt {attempt}/3 failed: {err}",
+                    )
+        await self._write_ingestion_log(
+            file_id,
+            "WARN",
+            "Contextualization",
+            "Doc-level context generation failed after 3 attempts — using raw chunks.",
+        )
+        return ""
 
     async def _context_single_call(self, client, model, system_prompt, index: int, text: str, file_id: str) -> str:
         """One LLM call generating the context for a single chunk (3 retries).

@@ -67,6 +67,7 @@ A weakness of §3-§5 is that each chunk is labeled and embedded in isolation, s
 - **Cost**: one vLLM call per chunk (concurrency-bounded) at ingest — independent of query-time cost. Mitigations: vLLM prompt caching (`--enable-prefix-caching`) reuses the repeated document prefix; batching is tracked as future work.
 - **Resilience**: on any per-chunk or client-init failure the chunk is stored raw — **ingestion never blocks**. If 0/N contexts are produced (e.g. a model that rejects guided JSON), an ERROR is logged so operators notice.
 - **Model**: `DATAPREP_CONTEXTUAL_MODEL` (empty = reuse `VLLM_LLM_MODEL_ID`); must support guided JSON like `ibm-granite/granite-4.1-8b`.
+- **Strategy**: `CONTEXTUAL_STRATEGY=per_chunk` (default; one call per chunk, section-tailored context — the Anthropic recipe) or `doc_level` (ONE call for the whole document; the same document-level context is prepended to every chunk — N× cheaper, and enough to propagate the document subject). Choose `doc_level` for cost-sensitive deployments where subject propagation is the goal.
 - **Orthogonal to retrieval hybrid**: a planned Part B adds BM25 lexical retrieval + RRF fusion over the same contextualized text for the full SOTA recipe (`dense + sparse → reranker`). The two flags are independent (this flag off + BM25 on = plain lexical hybrid).
 
 ---

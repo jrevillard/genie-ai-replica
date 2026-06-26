@@ -99,6 +99,12 @@ DATAPREP_CONTEXTUAL_MODEL = os.getenv("DATAPREP_CONTEXTUAL_MODEL", "")
 # Max chars of the joined document chunks fed to the context-generation LLM
 # (bounds the prompt; ~1500 tokens). Filename + file_labels are always included.
 DATAPREP_CONTEXTUAL_DOC_BUDGET = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET", "6000"))
+# Doc-context budget for the doc_level strategy (ONE call, so it can afford a
+# much larger window than per_chunk). ~4 chars/token; keep below the model's
+# VLLM_MAX_MODEL_LEN minus prompt/output overhead. Docs larger than this (or the
+# model window) are truncated — Map-Reduce hierarchical summarization is the
+# future fix for that case.
+DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL", "30000"))
 # Strategy when CONTEXTUAL_RETRIEVAL_ENABLED=true:
 #   "per_chunk" (default) — one LLM call per chunk; each chunk gets a context
 #      tailored to its section (Anthropic recipe; highest quality, N calls/doc).
@@ -153,8 +159,12 @@ DOCUMENT CONTEXT:
 
 Output format (STRICT): return ONLY a JSON object — no prose, no markdown, no
 code fences.
-Example: {"context": "This chunk is from the CENTA cucumber cultivation guide.
-It covers irrigation scheduling for cucumber crops."}
+- Single chunk input → {"context": "<50-100 word context>"}.
+- Multiple chunks input (a JSON list of {"index": i, "text": ...}) →
+  {"contexts": {"<index>": "<50-100 word context>", ...}} with one entry per
+  input chunk.
+Example (single): {"context": "This chunk is from the CENTA cucumber cultivation
+guide. It covers irrigation scheduling for cucumber crops."}
 </SYSTEM INSTRUCTIONS>
 """.strip()
 _ctx_env = os.getenv("CONTEXTUAL_RETRIEVAL_PROMPT", "")
@@ -488,24 +498,33 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 logger.info(f"Labeling progress: {n}/{total} chunks finalized")
         return results
 
-    def _build_doc_context(self, chunks: list[str], input) -> str:
+    def _build_doc_context(self, chunks: list[str], input, budget: int = DATAPREP_CONTEXTUAL_DOC_BUDGET) -> str:
         """Build the document-context string fed to the context-generation LLM.
 
-        Combines filename, file labels, and a token-budgeted join of the
-        document's chunks. The LLM uses this to place each individual chunk.
+        Combines filename, file labels, and a budgeted join of the document's
+        chunks. ``budget`` lets the doc_level path pass a larger window (it is a
+        single call); per_chunk uses the smaller default (it is repeated per
+        batch). Logs a WARN when the content is truncated so operators notice.
         """
         filename = os.path.basename(getattr(input, "storage_path", "") or getattr(input, "file_path", "") or "")
         file_labels = list(getattr(input, "file_labels", []) or [])
         joined = "\n".join(chunks)
-        budget = DATAPREP_CONTEXTUAL_DOC_BUDGET
+        truncated = False
         if budget > 0 and len(joined) > budget:
             joined = joined[:budget] + "...[truncated]"
+            truncated = True
         parts = []
         if filename:
             parts.append(f"Filename: {filename}")
         if file_labels:
             parts.append(f"Document labels: {', '.join(file_labels)}")
         parts.append(f"Document content (may be truncated):\n{joined}")
+        if truncated:
+            logger.warning(
+                f"Contextual Retrieval: document context truncated to {budget} chars "
+                f"(full doc {len(chunks)} chunks). Deep chunks may get weaker context; "
+                f"raise the budget (or use Map-Reduce for very large docs)."
+            )
         return "\n".join(parts)
 
     async def _apply_contextualization(self, chunks: list[str], input, file_id: str) -> list[str]:
@@ -538,40 +557,50 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             return list(chunks)
 
         model = DATAPREP_CONTEXTUAL_MODEL.strip() or default_model
-        doc_context = self._build_doc_context(chunks, input)
         total = len(chunks)
 
         # doc_level: one LLM call for the whole document → same context on every
-        # chunk (N× cheaper than per_chunk). per_chunk (default): one call per
-        # chunk, section-tailored context (Anthropic recipe).
+        # chunk (uses a larger doc budget — it is a single call; N× cheaper).
         if CONTEXTUAL_STRATEGY == "doc_level":
+            doc_context = self._build_doc_context(chunks, input, DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL)
             return await self._contextualize_doc_level(client, model, doc_context, chunks, file_id, total)
 
+        # per_chunk (default): batched calls so the document context lives once
+        # per batch (system prompt), not per chunk; per-chunk fallback on any
+        # batch parse failure (Anthropic recipe).
+        doc_context = self._build_doc_context(chunks, input, DATAPREP_CONTEXTUAL_DOC_BUDGET)
         system_prompt = CONTEXTUAL_RETRIEVAL_PROMPT.replace("{document_context}", doc_context)
+        return await self._contextualize_per_chunk(client, model, system_prompt, chunks, file_id, total)
+
+    async def _contextualize_per_chunk(self, client, model, system_prompt, chunks, file_id, total) -> list[str]:
+        """per_chunk strategy: batched LLM calls → one section-tailored context per chunk.
+
+        Chunks are batched (``LABEL_LLM_BATCH_SIZE``) so the document context is
+        sent once per batch (system prompt), not per chunk; concurrency is
+        bounded by ``MAX_CONCURRENT_BATCHES``. Any batch parse failure falls back
+        to per-chunk calls; chunks whose context fails fall back to raw text.
+        """
         logger.info(
-            f"Contextual Retrieval: generating context for {total} chunks "
-            f"(model={model}, concurrency={MAX_CONCURRENT_BATCHES})"
+            f"Contextual Retrieval (per_chunk): {total} chunks "
+            f"(batch_size={LABEL_LLM_BATCH_SIZE}, concurrency={MAX_CONCURRENT_BATCHES}, model={model})"
         )
-
+        indexed = list(enumerate(chunks))
+        batches = [indexed[i : i + LABEL_LLM_BATCH_SIZE] for i in range(0, len(indexed), LABEL_LLM_BATCH_SIZE)]
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
-        done = 0
 
-        async def _one(i: int, chunk: str):
-            nonlocal done
+        async def _process_batch(batch):
             async with semaphore:
-                ctx = await self._context_single_call(client, model, system_prompt, i, chunk, file_id)
-                done += 1
-                if done % 50 == 0 or done == total:
-                    logger.info(f"Contextual Retrieval progress: {done}/{total} chunks")
-                return i, chunk, ctx
+                return await self._context_batch_call(client, model, system_prompt, batch, file_id)
 
-        # gather preserves input order → outcomes align with chunks.
-        outcomes = await asyncio.gather(*[_one(i, c) for i, c in enumerate(chunks)])
+        batch_results = await asyncio.gather(*[_process_batch(b) for b in batches])
+        contexts: dict[int, str] = {}
+        for partial in batch_results:
+            contexts.update(partial)
 
         result = []
         with_context = 0
-        for _i, chunk, ctx in outcomes:
-            ctx = (ctx or "").strip()
+        for i, chunk in indexed:
+            ctx = (contexts.get(i, "") or "").strip()
             if ctx:
                 with_context += 1
                 result.append(f"{ctx}\n\n{chunk}")
@@ -596,6 +625,79 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         else:
             logger.info(f"Contextual Retrieval: {with_context}/{total} chunks contextualized.")
         return result
+
+    async def _context_batch_call(self, client, model, system_prompt, batch, file_id) -> dict[int, str]:
+        """One LLM call generating contexts for a batch of chunks.
+
+        Returns ``{chunk_index: context}``. On parse failure (or a single-chunk
+        batch), falls back to per-chunk ``_context_single_call`` so context
+        generation always completes. Emits a ``dataprep.llm.context_batch`` span
+        (per-chunk spans on fallback).
+        """
+        if len(batch) > 1:
+            with with_span(
+                "dataprep.llm.context_batch",
+                attributes={
+                    "dataprep.llm_batched": True,
+                    "dataprep.llm_batch_size": len(batch),
+                    "dataprep.llm_model": model or "",
+                    "dataprep.contextual_retrieval": True,
+                    "dataprep.contextual_strategy": "per_chunk",
+                },
+            ) as span:
+                try:
+                    response = await client.chat.completions.create(
+                        model=model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {
+                                "role": "user",
+                                "content": json.dumps([{"index": i, "text": t} for i, t in batch]),
+                            },
+                        ],
+                        temperature=LLM_LABEL_TEMPERATURE,
+                        max_tokens=200 * len(batch),
+                        response_format={"type": "json_object"},
+                    )
+                    parsed = json.loads(response.choices[0].message.content)
+                    raw = parsed.get("contexts", parsed) if isinstance(parsed, dict) else {}
+                    valid_ids = {i for i, _ in batch}
+                    out: dict[int, str] = {}
+                    for k, v in raw.items():
+                        try:
+                            idx = int(k)
+                        except (TypeError, ValueError):
+                            continue
+                        if idx in valid_ids and isinstance(v, str) and v.strip():
+                            out[idx] = v.strip()
+                    if out:
+                        _usage = getattr(response, "usage", None)
+                        if getattr(_usage, "completion_tokens", None) is not None:
+                            span.set_attribute("dataprep.llm.completion_tokens", _usage.completion_tokens)
+                        if getattr(_usage, "prompt_tokens", None) is not None:
+                            span.set_attribute("dataprep.llm.prompt_tokens", _usage.prompt_tokens)
+                        span.set_attribute("dataprep.contexts_generated", len(out))
+                        return out
+                    await self._write_ingestion_log(
+                        file_id,
+                        "WARN",
+                        "Contextualization",
+                        f"Batch context parse failure for chunks {[i for i, _ in batch]}; falling back to per-chunk.",
+                    )
+                except Exception as e:
+                    err = f"{type(e).__name__}: {str(e)[:200]}"
+                    logger.warning(f"Batch context failed {[i for i, _ in batch]}: {err}; falling back to per-chunk.")
+                    await self._write_ingestion_log(
+                        file_id,
+                        "WARN",
+                        "Contextualization",
+                        f"Batch context failed ({err}); falling back to per-chunk.",
+                    )
+        # per-chunk fallback (single-chunk batch, parse failure, or call error)
+        fallback: dict[int, str] = {}
+        for i, text in batch:
+            fallback[i] = await self._context_single_call(client, model, system_prompt, i, text, file_id)
+        return fallback
 
     async def _contextualize_doc_level(self, client, model, doc_context, chunks, file_id, total) -> list[str]:
         """doc_level strategy: one LLM call → one document context prepended to every chunk."""

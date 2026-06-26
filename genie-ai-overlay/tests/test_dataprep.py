@@ -1468,7 +1468,7 @@ class TestContextualRetrieval:
     def test_build_doc_context_includes_filename_labels_and_truncates(self, monkeypatch):
         dp = create_dataprep()
         monkeypatch.setattr(dp_module, "DATAPREP_CONTEXTUAL_DOC_BUDGET", 40)
-        ctx = dp._build_doc_context(["aaaaaaaaaa" * 20, "tail"], create_mock_ingest_input())
+        ctx = dp._build_doc_context(["aaaaaaaaaa" * 20, "tail"], create_mock_ingest_input(), 40)
         assert "Filename: test_document.pdf" in ctx
         assert "Document labels: Healthcare, Public Services" in ctx
         assert "[truncated]" in ctx  # joined content exceeded the 40-char budget
@@ -1482,12 +1482,13 @@ class TestContextualRetrieval:
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
 
         async def fake_create(*args, **kwargs):
-            content = kwargs["messages"][1]["content"]
-            chunk = content.split("\n", 1)[1] if content.startswith("CHUNK:") else content
+            # per_chunk batches chunks → user message is a JSON list of {index, text}.
+            items = json.loads(kwargs["messages"][1]["content"])
+            contexts = {str(it["index"]): f"CTX[{it['text'][:5]}]" for it in items}
             r = MagicMock()
             r.choices = [MagicMock()]
-            r.choices[0].message.content = json.dumps({"context": f"CTX[{chunk[:5]}]"})
-            r.usage = MagicMock(completion_tokens=12, prompt_tokens=50)
+            r.choices[0].message.content = json.dumps({"contexts": contexts})
+            r.usage = MagicMock(completion_tokens=20, prompt_tokens=80)
             return r
 
         mock_client = AsyncMock()
@@ -1502,7 +1503,8 @@ class TestContextualRetrieval:
         assert len(result) == 2
         assert result[0].startswith("CTX[alpha") and result[0].endswith("alpha chunk text")
         assert result[1].startswith("CTX[beta ") and result[1].endswith("beta chunk text")
-        assert mock_client.chat.completions.create.call_count == 2
+        # 2 chunks with default batch_size=4 → ONE batched call.
+        assert mock_client.chat.completions.create.call_count == 1
         # Deterministic, JSON-mode, doc context (filename) carried in the system prompt.
         sys_content = mock_client.chat.completions.create.call_args_list[0].kwargs["messages"][0]["content"]
         assert "test_document.pdf" in sys_content
@@ -1519,12 +1521,13 @@ class TestContextualRetrieval:
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "m")
 
-        async def fake_single(client, model, sys_prompt, index, text, file_id):
-            return "GOOD CONTEXT" if index == 1 else ""
+        async def fake_batch(client, model, sys_prompt, batch, file_id):
+            # batch returns {index: context}; index 0 gets none → raw fallback.
+            return {0: "", 1: "GOOD CONTEXT"}
 
         with (
             patch.object(dp_module, "AsyncOpenAI", return_value=AsyncMock()),
-            patch.object(dp, "_context_single_call", new=AsyncMock(side_effect=fake_single)),
+            patch.object(dp, "_context_batch_call", new=AsyncMock(side_effect=fake_batch)),
             patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
         ):
             result = await dp._apply_contextualization(["raw zero", "raw one"], create_mock_ingest_input(), "f")
@@ -1712,3 +1715,62 @@ class TestContextualRetrieval:
         assert result == chunks  # all raw; ingestion not blocked
         assert mock_client.chat.completions.create.call_count == 3  # 3 retries, single doc call
         assert any(call.args[1] == "ERROR" for call in log.call_args_list)
+
+    @pytest.mark.asyncio
+    async def test_per_chunk_batch_size_splits_into_batches(self, monkeypatch):
+        dp = create_dataprep()
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_RETRIEVAL_ENABLED", True)
+        monkeypatch.setattr(dp_module, "LABEL_LLM_BATCH_SIZE", 2)  # 5 chunks → 3 batches
+        monkeypatch.setenv("VLLM_API_KEY", "k")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "m")
+
+        async def fake_create(*args, **kwargs):
+            items = json.loads(kwargs["messages"][1]["content"])
+            ctxmap = {str(it["index"]): f"C{it['index']}" for it in items}
+            r = MagicMock()
+            r.choices = [MagicMock()]
+            r.choices[0].message.content = json.dumps({"contexts": ctxmap})
+            r.usage = MagicMock(completion_tokens=10, prompt_tokens=40)
+            return r
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=fake_create)
+        chunks = ["c0", "c1", "c2", "c3", "c4", "c5"]
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._apply_contextualization(chunks, create_mock_ingest_input(), "f")
+        assert mock_client.chat.completions.create.call_count == 3  # 6 chunks / batch_size 2
+        assert [r.split("\n\n", 1)[1] for r in result] == chunks  # originals preserved, in order
+        assert result[0] == "C0\n\nc0" and result[5] == "C5\n\nc5"
+
+    @pytest.mark.asyncio
+    async def test_per_chunk_batch_parse_failure_falls_back_to_single(self, monkeypatch):
+        dp = create_dataprep()
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_RETRIEVAL_ENABLED", True)
+        monkeypatch.setenv("VLLM_API_KEY", "k")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "m")
+        # Batch response unparseable → _context_batch_call falls back to per-chunk.
+        bad = MagicMock()
+        bad.choices = [MagicMock()]
+        bad.choices[0].message.content = "not json"
+        bad.usage = MagicMock(completion_tokens=1, prompt_tokens=1)
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=bad)
+        called = []
+
+        async def fake_single(client, model, sys_prompt, index, text, file_id):
+            called.append(index)
+            return f"S{index}"
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_context_single_call", new=AsyncMock(side_effect=fake_single)),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._apply_contextualization(["c0", "c1"], create_mock_ingest_input(), "f")
+        assert sorted(called) == [0, 1]  # both chunks fell back to per-chunk
+        assert result[0] == "S0\n\nc0" and result[1] == "S1\n\nc1"

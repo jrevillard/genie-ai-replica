@@ -280,6 +280,52 @@ class TestLoadAndChunk:
 
         assert result == ["item1", "item2"]
 
+    @pytest.mark.asyncio
+    async def test_custom_markdown_paragraph_chunking(self):
+        """Markdown files (.md) route to _chunk_markdown_by_paragraphs and use it."""
+        dp = create_dataprep()
+
+        doc_path = MagicMock()
+        doc_path.path = "doc.md"
+        doc_path.chunk_size = 1500
+        doc_path.chunk_overlap = 150
+
+        markdown_content = (
+            "## TITLE 1\n\n"
+            "This is the first paragraph under Title 1, which should be kept with the title.\n\n"
+            "This is the second paragraph. It will be combined if the token count allows.\n\n"
+            "## TITLE 2\n\n"
+            "This is Title 2 content. We want to see how packing works."
+        )
+
+        with (
+            patch.object(dp_module, "CONTENT_EXTRACTION_METHOD", "opea"),
+            patch.object(dp_module, "document_loader", new_callable=AsyncMock, return_value=markdown_content),
+            patch.object(dp_module, "is_valid_content", return_value=True),
+        ):
+            result = await dp._load_and_chunk(doc_path)
+
+        assert len(result) == 1
+        assert "## TITLE 1\n\nThis is the first paragraph" in result[0]
+        assert "## TITLE 2\n\nThis is Title 2" in result[0]
+
+    @pytest.mark.asyncio
+    async def test_custom_markdown_chunking_token_limits(self):
+        """Markdown chunking respects the 500-1000 token limits and splits oversized paragraphs."""
+        dp = create_dataprep()
+
+        # Under 1000 tokens (approx 600 words * 1.3 = 780 tokens) -> 1 chunk
+        long_paragraph = "word " * 600 + "."
+        chunks = dp._chunk_markdown_by_paragraphs(long_paragraph)
+        assert len(chunks) == 1
+
+        # Over 1000 tokens (approx 900 words * 1.3 = 1170 tokens) -> split into multiple chunks
+        very_long_paragraph = "word " * 900 + "."
+        chunks = dp._chunk_markdown_by_paragraphs(very_long_paragraph)
+        assert len(chunks) > 1
+        for chunk in chunks:
+            assert len(chunk.split()) * 1.3 <= 1000
+
 
 # ---------------------------------------------------------------------------
 # TestApplyLabels

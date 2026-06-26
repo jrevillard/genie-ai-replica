@@ -286,6 +286,126 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     # --- Core Pipeline Steps ---
 
+    def _chunk_markdown_by_paragraphs(self, content: str) -> list[str]:
+        """
+        Dynamically groups markdown content by paragraphs, ensuring that headers
+        (titles) are kept with their paragraphs. Packs paragraphs into chunks between
+        500 and 1000 tokens to minimize the number of chunks.
+        """
+        # Normalize newlines
+        content = content.replace("\r\n", "\n")
+
+        # Split into blocks by double newlines
+        raw_blocks = [b.strip() for b in content.split("\n\n") if b.strip()]
+
+        # Group headers with the text block immediately following them.
+        paragraph_units = []
+        i = 0
+        while i < len(raw_blocks):
+            block = raw_blocks[i]
+            # If the block is a header (starts with one or more '#'), try to merge it with the next block
+            if block.startswith("#") and i + 1 < len(raw_blocks):
+                merged = block + "\n\n" + raw_blocks[i + 1]
+                paragraph_units.append(merged)
+                i += 2
+            else:
+                paragraph_units.append(block)
+                i += 1
+
+        # Helper to count tokens (estimate using word count: 1 word ≈ 1.3 tokens)
+        def count_tokens(text: str) -> int:
+            return int(len(text.split()) * 1.3)
+
+        # Helper to split large paragraph if it exceeds 1000 tokens
+        def split_large_paragraph(text: str, max_tokens: int = 1000) -> list[str]:
+            # Split by sentences (simple regex-based sentence splitter)
+            sentences = re.split(r"(?<=[.!?])\s+", text)
+            sub_units = []
+            current_sub = []
+            current_tokens = 0
+
+            for sent in sentences:
+                sent_tokens = count_tokens(sent)
+                if sent_tokens > max_tokens:
+                    # If a single sentence is > 1000 tokens, split by words
+                    if current_sub:
+                        sub_units.append(" ".join(current_sub))
+                        current_sub = []
+                        current_tokens = 0
+                    words = sent.split()
+                    current_words = []
+                    word_tokens = 0.0
+                    for word in words:
+                        # Estimate word tokens consistently (1 word ≈ 1.3 tokens)
+                        w_tokens = 1.3
+                        if word_tokens + w_tokens > max_tokens:
+                            sub_units.append(" ".join(current_words))
+                            current_words = [word]
+                            word_tokens = w_tokens
+                        else:
+                            current_words.append(word)
+                            word_tokens += w_tokens
+                    if current_words:
+                        sub_units.append(" ".join(current_words))
+                elif current_tokens + sent_tokens <= max_tokens:
+                    current_sub.append(sent)
+                    current_tokens += sent_tokens
+                else:
+                    if current_sub:
+                        sub_units.append(" ".join(current_sub))
+                    current_sub = [sent]
+                    current_tokens = sent_tokens
+
+            if current_sub:
+                sub_units.append(" ".join(current_sub))
+            return sub_units
+
+        # Greedy packing of paragraph units into chunks
+        chunks = []
+        current_chunk_paragraphs = []
+        current_chunk_tokens = 0
+
+        for unit in paragraph_units:
+            unit_tokens = count_tokens(unit)
+
+            if unit_tokens > 1000:
+                # Flush current chunk
+                if current_chunk_paragraphs:
+                    chunks.append("\n\n".join(current_chunk_paragraphs))
+                    current_chunk_paragraphs = []
+                    current_chunk_tokens = 0
+
+                # Split the oversized paragraph into smaller parts
+                sub_units = split_large_paragraph(unit, max_tokens=1000)
+                for sub_unit in sub_units:
+                    sub_tokens = count_tokens(sub_unit)
+                    if current_chunk_tokens + sub_tokens <= 1000:
+                        current_chunk_paragraphs.append(sub_unit)
+                        current_chunk_tokens += sub_tokens
+                    else:
+                        if current_chunk_paragraphs:
+                            chunks.append("\n\n".join(current_chunk_paragraphs))
+                        current_chunk_paragraphs = [sub_unit]
+                        current_chunk_tokens = sub_tokens
+                continue
+
+            # Fits in current chunk
+            if current_chunk_tokens + unit_tokens <= 1000:
+                current_chunk_paragraphs.append(unit)
+                current_chunk_tokens += unit_tokens
+            else:
+                # Start new chunk
+                if current_chunk_paragraphs:
+                    chunks.append("\n\n".join(current_chunk_paragraphs))
+                current_chunk_paragraphs = [unit]
+                current_chunk_tokens = unit_tokens
+
+        # Flush the last remaining chunk
+        if current_chunk_paragraphs:
+            chunks.append("\n\n".join(current_chunk_paragraphs))
+
+        return chunks
+
     async def _load_and_chunk(self, doc_path: DocPath) -> list[str]:
         path = doc_path.path
 
@@ -302,6 +422,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
         if not content:
             return []
+
+        if path.endswith(".md"):
+            logger.info(f"Using custom dynamic paragraph chunking for Markdown file: {path}")
+            text_content = "\n\n".join([str(item) for item in content]) if isinstance(content, list) else str(content)
+
+            with tracer.start_as_current_span("dataprep.chunking") as span:
+                plain_chunks = self._chunk_markdown_by_paragraphs(text_content)
+                valid_chunks = [c for c in plain_chunks if is_valid_content(c)]
+                span.set_attribute("dataprep.chunk_count", len(valid_chunks))
+            return valid_chunks
 
         if path.endswith(".html"):
             text_splitter = HTMLHeaderTextSplitter(headers_to_split_on=[("h1", "H1"), ("h2", "H2")])

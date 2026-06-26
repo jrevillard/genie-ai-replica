@@ -112,6 +112,11 @@ DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL = int(os.getenv("DATAPREP_CONTEXTUAL_DO
 #      document-level context is prepended to every chunk (N× cheaper; still
 #      propagates the document subject — enough to fix label/embedding loss).
 CONTEXTUAL_STRATEGY = os.getenv("CONTEXTUAL_STRATEGY", "per_chunk").strip().lower() or "per_chunk"
+# Decoupled mode: when true, label the RAW chunk and use the generated context
+# ONLY for the embedding. Recommended — keeps label precision (the labeler sees
+# the raw chunk) while propagating the document subject via the vector. Default
+# false (context fed to both embedding and labeling).
+CONTEXTUAL_LABEL_RAW = os.getenv("CONTEXTUAL_LABEL_RAW", "false").lower() == "true"
 
 # Spec 5.3: Externalized Prompt - Two-tier priority
 # Level 1: ENV VAR (highest priority) - override via .env
@@ -1197,11 +1202,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 file_labels = getattr(input, "file_labels", [])
                 original_chunks = list(chunks)
                 # When enabled, prepend an LLM-generated document context to each
-                # chunk so embedding + labeling carry the document's subject (see
+                # chunk so the embedding carries the document's subject (see
                 # spec-contextual-retrieval.md). No-op (returns chunks unchanged)
                 # when CONTEXTUAL_RETRIEVAL_ENABLED=false.
-                chunks = await self._apply_contextualization(original_chunks, input, input.file_id)
-                labelled_docs = await self._apply_labels(chunks, all_labels, file_labels, input.file_id)
+                contextualized = await self._apply_contextualization(original_chunks, input, input.file_id)
+                # Decoupled mode (CONTEXTUAL_LABEL_RAW): label the RAW chunk (the
+                # context prefix distorts labeling — over/under-label) and use the
+                # contextualized text ONLY for the embedding. Default: label the
+                # contextualized text (context fed to both).
+                label_input = original_chunks if CONTEXTUAL_LABEL_RAW else contextualized
+                labelled_docs = await self._apply_labels(label_input, all_labels, file_labels, input.file_id)
 
                 # 5. Graph Insertion (BATCHED & CONCURRENT)
                 graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH"))
@@ -1221,7 +1231,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     }
                     if CONTEXTUAL_RETRIEVAL_ENABLED and i < len(original_chunks):
                         metadata["chunk_text"] = original_chunks[i]
-                    documents_to_process.append(Document(page_content=doc["text"], metadata=metadata))
+                    # Embed the contextualized text (subject propagation); falls back
+                    # to the labelled text when indexing is somehow misaligned.
+                    embed_text = contextualized[i] if i < len(contextualized) else doc["text"]
+                    documents_to_process.append(Document(page_content=embed_text, metadata=metadata))
 
                 BATCH_SIZE = 10
                 total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE

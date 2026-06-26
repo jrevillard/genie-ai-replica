@@ -1774,3 +1774,49 @@ class TestContextualRetrieval:
             result = await dp._apply_contextualization(["c0", "c1"], create_mock_ingest_input(), "f")
         assert sorted(called) == [0, 1]  # both chunks fell back to per-chunk
         assert result[0] == "S0\n\nc0" and result[1] == "S1\n\nc1"
+
+    @pytest.mark.asyncio
+    async def test_ingest_label_raw_decouples_labeling_from_embedding(self, monkeypatch):
+        """CONTEXTUAL_LABEL_RAW: label the RAW chunk, embed the CONTEXTUALIZED one."""
+        dp = create_dataprep()
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_RETRIEVAL_ENABLED", True)
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_LABEL_RAW", True)
+        inp = create_mock_ingest_input()
+        original = ["raw chunk one", "raw chunk two"]
+        contextualized = ["CTX one\n\nraw chunk one", "CTX two\n\nraw chunk two"]
+        captured = {"ctx_in": None, "labels_in": None}
+        built = []
+
+        async def fake_context(chunks, _inp, file_id):
+            captured["ctx_in"] = list(chunks)
+            return contextualized
+
+        async def fake_labels(chunks, all_labels, file_labels, file_id):
+            captured["labels_in"] = list(chunks)
+            return [{"text": c, "labels": ["L"]} for c in chunks]
+
+        async def fake_process_batch(batch_docs, *a, **k):
+            built.extend(batch_docs)
+
+        with (
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["L"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=original),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            patch.object(dp, "_apply_contextualization", new=AsyncMock(side_effect=fake_context)),
+            patch.object(dp, "_apply_labels", new=AsyncMock(side_effect=fake_labels)),
+            patch.object(dp, "_process_batch", new=AsyncMock(side_effect=fake_process_batch)),
+            patch.object(dp_module, "Document", _recordable_doc),
+            patch.object(dp_module, "ArangoGraph"),
+        ):
+            await dp.ingest_file_with_guardrail(inp)
+
+        # Decoupled: labeling got the RAW chunks; contextualization got the originals.
+        assert captured["labels_in"] == original
+        assert captured["ctx_in"] == original
+        # Embedding gets the CONTEXTUALIZED text; metadata.chunk_text keeps the raw.
+        assert len(built) == 2
+        assert built[0].page_content == contextualized[0]
+        assert built[0].metadata["chunk_text"] == original[0]
+        assert built[1].page_content == contextualized[1]

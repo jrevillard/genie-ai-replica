@@ -117,7 +117,7 @@
           </div>
           <!-- Feedback and confidence score for bot messages -->
           <div v-if="msg.sender === 'bot'" class="bot-message-meta">
-            <div v-if="msg.confidenceScore && msg.isGrounded !== false" class="confidence-score">
+            <div v-if="msg.confidenceScore != null && msg.isGrounded !== false" class="confidence-score">
               <Brain :size="16" />
               <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
             </div>
@@ -834,7 +834,7 @@ export default {
           },
           onMetadata: (metadata) => {
             this.chatMessages[lastMessageIndex].metadata = metadata;
-            if (metadata.confidence_score) {
+            if (metadata.confidence_score != null) {
               this.chatMessages[lastMessageIndex].confidenceScore = metadata.confidence_score;
             }
             // is_grounded: true = answer backed by retrieved document chunks;

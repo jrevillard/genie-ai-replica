@@ -153,6 +153,7 @@ def invoke_env():
         patch("retriever.genieai_retriever_arangodb.OPENAI_API_KEY", None),
         patch("retriever.genieai_retriever_arangodb.TEI_EMBEDDING_ENDPOINT", ""),
         patch("retriever.genieai_retriever_arangodb.HF_TOKEN", ""),
+        patch("retriever.genieai_retriever_arangodb.HYBRID_RETRIEVAL_ENABLED", False),
     ]
     for p in patches:
         p.start()
@@ -765,7 +766,7 @@ class TestEnsureBm25View:
 
     def test_creates_view_when_missing(self):
         db = MagicMock()
-        db.has_view.return_value = False
+        db.views.return_value = []
         retriever = create_retriever(db_mock=db)
         retriever._ensure_bm25_view("GRAPH")
         db.create_arangosearch_view.assert_called_once()
@@ -775,30 +776,30 @@ class TestEnsureBm25View:
 
     def test_skips_when_exists(self):
         db = MagicMock()
-        db.has_view.return_value = True
+        db.views.return_value = [{"name": "GRAPH_BM25_VIEW"}]
         retriever = create_retriever(db_mock=db)
         retriever._ensure_bm25_view("GRAPH")
         db.create_arangosearch_view.assert_not_called()
 
     def test_cached_no_repeat_call(self):
         db = MagicMock()
-        db.has_view.return_value = False
+        db.views.return_value = []
         retriever = create_retriever(db_mock=db)
         retriever._ensure_bm25_view("GRAPH")
         retriever._ensure_bm25_view("GRAPH")  # cached: second call must not hit ArangoDB
-        assert db.has_view.call_count == 1
+        assert db.views.call_count == 1
         assert db.create_arangosearch_view.call_count == 1
 
     def test_failure_not_cached_so_retries(self):
         # A transient create failure must NOT be cached (otherwise the channel
         # dies silently forever).
         db = MagicMock()
-        db.has_view.return_value = False
+        db.views.return_value = []
         db.create_arangosearch_view.side_effect = Exception("transient")
         retriever = create_retriever(db_mock=db)
         retriever._ensure_bm25_view("GRAPH")  # logs, does not raise
         retriever._ensure_bm25_view("GRAPH")  # retries (not cached)
-        assert db.has_view.call_count == 2
+        assert db.views.call_count == 2
 
     def test_init_ensures_default_view_when_enabled(self):
         # _initialize_client must ensure the default-graph BM25 view at boot when
@@ -854,7 +855,7 @@ class TestBm25Search:
 
     def test_returns_result_shape_and_filters_by_label(self):
         db = MagicMock()
-        db.has_view.return_value = True
+        db.views.return_value = [{"name": "GRAPH_BM25_VIEW"}]
         db.aql.execute.return_value = _make_bm25_cursor(
             [
                 {"key": "c1", "text": "health info", "chunk_labels": ["Health"], "file_id": "f1", "score": 3.0},
@@ -869,7 +870,7 @@ class TestBm25Search:
 
     def test_no_labels_returns_all(self):
         db = MagicMock()
-        db.has_view.return_value = True
+        db.views.return_value = [{"name": "GRAPH_BM25_VIEW"}]
         db.aql.execute.return_value = _make_bm25_cursor(
             [{"key": "c1", "text": "x", "chunk_labels": ["Health"], "file_id": "f1", "score": 1.0}]
         )
@@ -879,7 +880,7 @@ class TestBm25Search:
 
     def test_never_raises_on_db_error(self):
         db = MagicMock()
-        db.has_view.return_value = True
+        db.views.return_value = [{"name": "GRAPH_BM25_VIEW"}]
         db.aql.execute.side_effect = Exception("boom")
         retriever = create_retriever(db_mock=db)
         assert retriever._bm25_search("query", "GRAPH", n=50, labels_to_filter=[], filter_strategy="OR") == []

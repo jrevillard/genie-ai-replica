@@ -483,6 +483,11 @@ Configuration for how documents are chunked and prepared for the knowledge graph
 | BM25\_LABEL\_THRESHOLD | Threshold score for BM25-based labeling.  | 2.00 |
 | CONTENT\_EXTRACTION\_METHOD | Method for text extraction (`opea` or `docling`).  | docling |
 | LABEL\_SELECTOR\_SYSTEM\_PROMPT | System prompt defining the rules for LLM semantic labeling.  | You are a precise semantic... |
+| `CONTEXTUAL_RETRIEVAL_ENABLED` | Opt-in Contextual Retrieval: prepend an LLM doc-context prefix to each chunk before embedding + labeling (default off; flag-off is a no-op).  | false |
+| `DATAPREP_CONTEXTUAL_MODEL` | Model used for context generation (empty = reuse `VLLM_LLM_MODEL_ID`); must support guided JSON.  | (empty) |
+| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | Max chars of document text fed to the context-generation LLM (~1500 tokens); <=0 disables truncation.  | 6000 |
+| `CONTEXTUAL_STRATEGY` | `per_chunk` (default; one call/chunk, section-tailored context) or `doc_level` (one call/doc, same context on every chunk — N× cheaper).  | per_chunk |
+| `CONTEXTUAL_RETRIEVAL_PROMPT` | Prompt for per-chunk doc-context generation (contains a `{document_context}` placeholder).  | (built-in default) |
 
 **Retriever Configuration**  
 Configuration for the retrieval logic (hybrid search, traversals, etc.).

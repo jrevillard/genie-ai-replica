@@ -270,10 +270,12 @@ class TestChatqnaGetters:
 
 
 # ---------------------------------------------------------------------------
-# Dataprep _label_with_llm — source-level assertions
+# Dataprep _build_vllm_client — source-level assertions
+# (the auth + GPU auto-detect + shared cache logic; shared by _label_with_llm
+# and Contextual Retrieval context generation.)
 # ---------------------------------------------------------------------------
 class TestDataprepAutoDetect:
-    """Tests for dataprep _label_with_llm auto-detect when GPU_NODE_HOST is set.
+    """Tests for dataprep _build_vllm_client auto-detect when GPU_NODE_HOST is set.
 
     Uses source file inspection since the module is mocked in test environment.
     """
@@ -285,28 +287,28 @@ class TestDataprepAutoDetect:
         return src.read_text()
 
     def test_uses_vllm_api_key_for_auth(self, source):
-        idx = source.find("def _label_with_llm")
+        idx = source.find("def _build_vllm_client")
         chunk = source[idx : idx + 2000]
 
         assert "VLLM_API_KEY" in chunk
         assert "OPEA_API_KEY" not in chunk
 
     def test_no_custom_default_headers(self, source):
-        idx = source.find("def _label_with_llm")
+        idx = source.find("def _build_vllm_client")
         chunk = source[idx : idx + 2000]
 
         assert "default_headers" not in chunk
         assert "X-API-Key" not in chunk
 
     def test_auto_detect_condition_checks_gpu_node_host(self, source):
-        idx = source.find("def _label_with_llm")
+        idx = source.find("def _build_vllm_client")
         chunk = source[idx : idx + 2000]
 
         assert 'os.getenv("GPU_NODE_HOST")' in chunk
 
     def test_auto_detect_uses_shared_cache(self, source):
-        """_label_with_llm uses the shared TTL-cached get_model_id()."""
-        idx = source.find("def _label_with_llm")
+        """_build_vllm_client uses the shared TTL-cached get_model_id()."""
+        idx = source.find("def _build_vllm_client")
         chunk = source[idx : idx + 2000]
 
         assert "get_model_id" in chunk

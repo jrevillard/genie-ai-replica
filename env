@@ -205,6 +205,43 @@ HUGGING_FACE_HUB_TOKEN=
 #                                     #   (e.g. granite-4.1-8b); batches fall back to
 #                                     #   per-chunk on parse failure, so output is correct.
 
+# Contextual Retrieval (Anthropic-style) — OPTIONAL, default OFF.
+# When enabled, the dataprep generates a short LLM document-context prefix per
+# chunk and prepends it before EMBEDDING and LABELING, so chunks carry the
+# document's subject (fixes label/embedding context loss — e.g. a generic
+# irrigation chunk in a cucumber guide becomes retrievable by "cucumber"). Adds
+# one vLLM call per chunk (concurrency-bounded) at ingest time. On any failure
+# (per-chunk or client-init) the chunk is stored raw — ingestion never blocks.
+# See GENIE.AI-Data-Labelling-Strategy.md + _bmad-output spec-contextual-retrieval.md.
+# CONTEXTUAL_RETRIEVAL_ENABLED=false   # opt-in (default false; flag-off is a true no-op)
+# DATAPREP_CONTEXTUAL_MODEL=           # model for context generation; empty = reuse
+#                                      #   VLLM_LLM_MODEL_ID. MUST support guided JSON
+#                                      #   (response_format=json_object) like granite-4.1-8b.
+# DATAPREP_CONTEXTUAL_DOC_BUDGET=6000  # max chars of doc text fed to the context LLM
+#                                      #   (~1500 tokens); <=0 disables truncation.
+# CONTEXTUAL_STRATEGY=per_chunk        # per_chunk (default; one call/chunk, section-tailored
+#                                      #   context — the Anthropic recipe) | doc_level (ONE
+#                                      #   call/doc, same context on every chunk — N× cheaper,
+#                                      #   still propagates the document subject).
+# CONTEXTUAL_LABEL_RAW=false           # decoupled mode: label the RAW chunk and use the context
+#                                      #   ONLY for the embedding (recommended — keeps label
+#                                      #   precision while propagating the subject via vectors).
+
+# Hybrid Retrieval — BM25 + Reciprocal Rank Fusion (Contextual Retrieval Part B) — OPTIONAL, default OFF.
+# When enabled, the retriever runs a lexical (BM25) channel over <GRAPH>_SOURCE.text
+# alongside the dense vector search and fuses the two result sets with weighted
+# Reciprocal Rank Fusion. Recovers exact-match / rare-term / keyword-heavy queries
+# that dense embeddings rank poorly. Both channels read the same `text` field
+# (contextualized by Part A). Opt-in; OFF = true no-op (dense-only, byte-for-byte).
+# The BM25 ArangoSearch view is created idempotently + lazily per graph_name.
+# See _bmad-output/implementation-artifacts/spec-hybrid-retrieval-bm25-rrf.md
+# RETRIEVER_HYBRID_RETRIEVAL_ENABLED=false  # opt-in (default false; OFF = true no-op)
+# RETRIEVER_HYBRID_RRF_K=60                 # RRF ranking constant (literature standard)
+# RETRIEVER_HYBRID_BM25_CANDIDATES=50       # BM25 candidate fetch depth; fused then cut to top_k
+# RETRIEVER_HYBRID_DENSE_WEIGHT=1.0         # weight on the dense channel's rank contribution
+# RETRIEVER_HYBRID_LEXICAL_WEIGHT=1.0       # weight on the BM25 channel's rank contribution
+# RETRIEVER_HYBRID_BM25_ANALYZER=text_en    # ArangoSearch analyzer on the text field
+
 # Confidence scoring (chatqna) — rank-weighted aggregate of calibrated reranker
 # scores. The flat mean was count-dependent and tail-sensitive (a long tail of
 # low-scoring chunks kept by the adaptive strategy for novelty depressed it);
@@ -372,6 +409,9 @@ HUGGING_FACE_HUB_TOKEN=
 # CHATQNA_ABSTENTION_INSTRUCTIONS="If no information found in the context..."
 # CHATQNA_ENFORCE_ABSTENTION="false"
 # LABEL_SELECTOR_SYSTEM_PROMPT="Categorize this document..."
+# CONTEXTUAL_RETRIEVAL_PROMPT="..."    # per-chunk doc-context generation prompt
+#                                      #   (Contextual Retrieval; contains a
+#                                      #   {document_context} placeholder).
 
 # =============================================================================
 # SECTION 9: KEYCLOAK IDENTITY PROVIDER (REQUIRED)

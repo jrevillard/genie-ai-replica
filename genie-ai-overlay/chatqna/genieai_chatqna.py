@@ -42,6 +42,21 @@ from transformers import AutoTokenizer
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
 setup_trace_logging("GENIE.AI_CHATQNA")
+# Respect LOG_LEVEL: patch uvicorn's LOGGING_CONFIG (applied at startup via
+# dictConfig — this overrides import-time setLevel) so DEBUG actually works.
+# uvicorn 0.34 default config has NO "root" key (root implicit at WARNING) and
+# its "default" handler has no level (NOTSET), so app debug() never propagated.
+import uvicorn.config
+
+_log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+uvicorn.config.LOGGING_CONFIG["handlers"]["default"]["level"] = _log_level
+uvicorn.config.LOGGING_CONFIG["root"] = {"handlers": ["default"], "level": _log_level}
+uvicorn.config.LOGGING_CONFIG["loggers"]["GENIE.AI_CHATQNA"] = {
+    "handlers": ["default"],
+    "level": _log_level,
+    "propagate": False,
+}
+
 logflag = os.getenv("LOGFLAG", True)
 
 
@@ -359,10 +374,14 @@ def _extract_self_confidence(text: str) -> tuple[str, float | None]:
 
 
 _CHATQNA_SELF_CONF_INSTRUCTION = (
-    "\n\nAfter your reply, on a final new line, output exactly "
-    "`[[CONF:<integer 0-100>]]` rating how well the Retrieved Documents support "
-    "your reply (100 = fully grounded in the documents, 0 = not supported at "
-    "all). Do not output anything after that line."
+    "\n\n---\nCRITICAL: You MUST end EVERY reply with a final line containing "
+    "EXACTLY `[[CONF:<0-100>]]` (nothing after it). The number rates how well the "
+    "Retrieved Documents support your reply (100 = fully grounded, 0 = not).\n"
+    "Example:\n"
+    "User: What soil for cucumber?\n"
+    "Assistant: Cucumber grows best in well-drained sandy loam (pH 5.5-6.8).\n"
+    "[[CONF:90]]\n"
+    "---"
 )
 
 
@@ -1398,6 +1417,10 @@ class ChatQnAService:
         # and `scores` preserves that display order) lets the strongest match
         # dominate instead. See docs/architecture.md §9.4.
         retrieval_confidence_score = _rank_weighted_confidence(scores)
+        logger.debug(
+            f"Retrieval confidence: scores={scores} -> confidence={retrieval_confidence_score} "
+            f"(display_docs={len(display_docs)}, source_docs={len(source_documents_formatted)})"
+        )
         logger.debug(f"document confidence scores: {scores}")
 
         if not source_documents_formatted and is_grounded:
@@ -1487,6 +1510,17 @@ class ChatQnAService:
 
         # Compute metadata after tokens so TTFT is unaffected by the doc-metadata fetches.
         source_documents, retrieval_confidence, is_grounded = await self._assemble_source_documents(result_dict)
+        _cs = round(
+            _display_confidence(retrieval_confidence, self_confidence)
+            if LLM_SELF_CONFIDENCE_ENABLED
+            else retrieval_confidence,
+            2,
+        )
+        logger.debug(
+            f"Streaming confidence emission: retrieval={retrieval_confidence} "
+            f"self={self_confidence} self_conf_enabled={LLM_SELF_CONFIDENCE_ENABLED} "
+            f"-> confidence_score={_cs}"
+        )
         metadata = {
             "type": "metadata",
             "source_documents": source_documents,
@@ -2346,6 +2380,17 @@ class ChatQnAService:
         # verdict; not grounded (is_grounded=False) when the reranker found nothing relevant.
         source_documents_formatted, retrieval_confidence, is_grounded = await self._assemble_source_documents(
             result_dict
+        )
+        _conf_score = round(
+            _display_confidence(retrieval_confidence, self_confidence)
+            if LLM_SELF_CONFIDENCE_ENABLED
+            else retrieval_confidence,
+            2,
+        )
+        logger.debug(
+            "Non-streaming confidence emission: "
+            f"retrieval={retrieval_confidence} self={self_confidence} "
+            f"is_grounded={is_grounded} -> confidence_score={_conf_score}"
         )
 
         # Construct the final JSON payload

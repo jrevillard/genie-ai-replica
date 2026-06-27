@@ -224,7 +224,7 @@ ARANGO_FILTER_STRATEGY = os.getenv("ARANGO_FILTER_STRATEGY", "OR")  # for label 
 # Opt-in lexical (BM25) channel over <GRAPH>_SOURCE.text, fused with the dense
 # results via weighted Reciprocal Rank Fusion. OFF = true no-op (dense-only).
 # See _bmad-output/implementation-artifacts/spec-hybrid-retrieval-bm25-rrf.md
-HYBRID_RETRIEVAL_ENABLED = os.getenv("RETRIEVER_HYBRID_RETRIEVAL_ENABLED", "false").lower() == "true"
+HYBRID_RETRIEVAL_ENABLED = os.getenv("RETRIEVER_HYBRID_RETRIEVAL_ENABLED", "true").lower() == "true"
 HYBRID_RRF_K = int(os.getenv("RETRIEVER_HYBRID_RRF_K", "60"))
 HYBRID_BM25_CANDIDATES = int(os.getenv("RETRIEVER_HYBRID_BM25_CANDIDATES", "50"))
 HYBRID_DENSE_WEIGHT = float(os.getenv("RETRIEVER_HYBRID_DENSE_WEIGHT", "1.0"))

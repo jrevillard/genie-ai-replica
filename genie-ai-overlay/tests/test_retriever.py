@@ -153,6 +153,7 @@ def invoke_env():
         patch("retriever.genieai_retriever_arangodb.OPENAI_API_KEY", None),
         patch("retriever.genieai_retriever_arangodb.TEI_EMBEDDING_ENDPOINT", ""),
         patch("retriever.genieai_retriever_arangodb.HF_TOKEN", ""),
+        patch("retriever.genieai_retriever_arangodb.HYBRID_RETRIEVAL_ENABLED", False),
     ]
     for p in patches:
         p.start()

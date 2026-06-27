@@ -92,7 +92,7 @@ LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
 # spec-contextual-retrieval.md). Default OFF — opt-in. Adds one LLM call per
 # chunk (concurrency-bounded) when enabled. Part B (retriever BM25 hybrid) is a
 # separate spec.
-CONTEXTUAL_RETRIEVAL_ENABLED = os.getenv("CONTEXTUAL_RETRIEVAL_ENABLED", "false").lower() == "true"
+CONTEXTUAL_RETRIEVAL_ENABLED = os.getenv("CONTEXTUAL_RETRIEVAL_ENABLED", "true").lower() == "true"
 # Model used for context generation. Empty → reuse VLLM_MODEL_ID (auto-detected
 # on remote GPU nodes). Set to a smaller/cheaper model to cut context-gen cost.
 DATAPREP_CONTEXTUAL_MODEL = os.getenv("DATAPREP_CONTEXTUAL_MODEL", "")
@@ -111,12 +111,12 @@ DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL = int(os.getenv("DATAPREP_CONTEXTUAL_DO
 #   "doc_level"           — ONE LLM call for the whole document; the same
 #      document-level context is prepended to every chunk (N× cheaper; still
 #      propagates the document subject — enough to fix label/embedding loss).
-CONTEXTUAL_STRATEGY = os.getenv("CONTEXTUAL_STRATEGY", "per_chunk").strip().lower() or "per_chunk"
+CONTEXTUAL_STRATEGY = os.getenv("CONTEXTUAL_STRATEGY", "doc_level").strip().lower() or "doc_level"
 # Decoupled mode: when true, label the RAW chunk and use the generated context
 # ONLY for the embedding. Recommended — keeps label precision (the labeler sees
 # the raw chunk) while propagating the document subject via the vector. Default
 # false (context fed to both embedding and labeling).
-CONTEXTUAL_LABEL_RAW = os.getenv("CONTEXTUAL_LABEL_RAW", "false").lower() == "true"
+CONTEXTUAL_LABEL_RAW = os.getenv("CONTEXTUAL_LABEL_RAW", "true").lower() == "true"
 
 # Spec 5.3: Externalized Prompt - Two-tier priority
 # Level 1: ENV VAR (highest priority) - override via .env

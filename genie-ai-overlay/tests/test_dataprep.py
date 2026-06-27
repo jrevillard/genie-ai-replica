@@ -1446,6 +1446,12 @@ def _recordable_doc(**kwargs):
 class TestContextualRetrieval:
     """Tests for _apply_contextualization() / _context_single_call()."""
 
+    @pytest.fixture(autouse=True)
+    def _isolate_defaults(self, monkeypatch):
+        """Explicit flags so tests don't depend on module defaults."""
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_STRATEGY", "per_chunk")
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_LABEL_RAW", False)
+
     @pytest.mark.asyncio
     async def test_flag_off_returns_chunks_unchanged(self, monkeypatch):
         dp = create_dataprep()

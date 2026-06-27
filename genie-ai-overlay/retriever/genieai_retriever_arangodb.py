@@ -14,6 +14,7 @@ from comps.cores.proto.genieai_api_protocol import ChatCompletionRequest, Retrie
 from fastapi import HTTPException
 from langchain_arangodb import ArangoVector
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
+from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
@@ -39,6 +40,12 @@ from .config import (
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
     HF_TOKEN,
+    HYBRID_BM25_ANALYZER,
+    HYBRID_BM25_CANDIDATES,
+    HYBRID_DENSE_WEIGHT,
+    HYBRID_LEXICAL_WEIGHT,
+    HYBRID_RETRIEVAL_ENABLED,
+    HYBRID_RRF_K,
     OPENAI_API_KEY,
     OPENAI_CHAT_ENABLED,
     OPENAI_CHAT_MAX_TOKENS,
@@ -77,6 +84,80 @@ ARANGO_EMBEDDING_FIELD = "embedding"
 ARANGO_FILE_ID_FIELD = "file_id"
 
 
+def _chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
+    """Replicate the dense-path AQL label filter in Python (Contextual Retrieval Part B).
+
+    A chunk passes when its ``chunk_labels`` satisfies the requested labels under
+    the given strategy: ``AND`` = all required labels present, ``OR`` = any one.
+    No requested labels (or empty) means "no filter" → always passes.
+    """
+    if not labels_to_filter:
+        return True
+    if not chunk_labels:
+        return False
+    if str(filter_strategy).upper() == "AND":
+        return all(label in chunk_labels for label in labels_to_filter)
+    return any(label in chunk_labels for label in labels_to_filter)
+
+
+def _normalize_chunk_id(doc) -> str | None:
+    """Normalize a chunk's identity to its bare ArangoDB ``_key``.
+
+    Both the dense channel (langchain-arangodb sets ``Document.id = _key``) and
+    the BM25 channel (``Document(id=_key)``) use the bare key, but this defends
+    against the ``COLLECTION/_key`` form and a missing id so cross-channel fusion
+    never mis-merges or silently drops a document.
+    """
+    cid = getattr(doc, "id", None)
+    if cid is None:
+        return None
+    cid = str(cid)
+    return cid.rsplit("/", 1)[-1]  # COLLECTION/_key -> _key
+
+
+def rrf_fuse(dense, bm25, k=HYBRID_RRF_K, dense_weight=HYBRID_DENSE_WEIGHT, lexical_weight=HYBRID_LEXICAL_WEIGHT):
+    """Fuse dense + BM25 result lists via weighted Reciprocal Rank Fusion.
+
+    Pure function — no I/O, no side effects. Each input element is
+    ``{"doc": Document, "score": float}``; the chunk identity is the normalized
+    ``doc.id`` (ArangoDB ``_key``). A document present in both channels receives
+    both rank contributions; a document in only one receives that single
+    contribution. Within a channel, duplicate identities are de-duplicated
+    (best rank kept). A document whose id cannot be normalized is kept as a
+    standalone entry (never dropped, never mis-merged).
+
+    Args:
+        dense: dense retrieval results (best-first).
+        bm25: BM25 retrieval results (best-first).
+        k: RRF ranking constant (default 60, literature standard).
+        dense_weight: weight applied to the dense channel contribution.
+        lexical_weight: weight applied to the BM25 channel contribution.
+
+    Returns:
+        A NEW list of ``{"doc": Document, "score": float}`` sorted by fused
+        score descending.
+    """
+    scores: dict[str, dict] = {}
+    none_counter = 0
+    for channel, weight in ((dense, dense_weight), (bm25, lexical_weight)):
+        seen: set[str] = set()
+        rank = 0
+        for item in channel:
+            chunk_id = _normalize_chunk_id(item["doc"])
+            if chunk_id is None:
+                # Unkeyable doc: keep it standalone so it is neither dropped nor
+                # mis-merged with other unkeyed docs.
+                chunk_id = f"__unkeyed_{none_counter}"
+                none_counter += 1
+            if chunk_id in seen:
+                continue  # de-dup within a channel (keep best rank)
+            seen.add(chunk_id)
+            rank += 1
+            entry = scores.setdefault(chunk_id, {"doc": item["doc"], "score": 0.0})
+            entry["score"] += weight / (k + rank)
+    return sorted(scores.values(), key=lambda x: x["score"], reverse=True)
+
+
 @OpeaComponentRegistry.register("GENIE_RETRIEVER_ARANGODB")
 class GenieaiArangoRetriever(OpeaComponent):
     """A specialized retriever component derived from OpeaComponent for ArangoDB retriever services.
@@ -87,6 +168,11 @@ class GenieaiArangoRetriever(OpeaComponent):
 
     def __init__(self, name: str, description: str, config: dict = None):
         super().__init__(name, ServiceType.RETRIEVER.name.lower(), description, config)
+
+        # Cache of graph_names for which the BM25 ArangoSearch view has been
+        # ensured (Contextual Retrieval Part B). graph_name is per-request, so
+        # view creation is lazy; this set avoids repeated ArangoDB round-trips.
+        self._bm25_views_ensured: set[str] = set()
 
         self._initialize_client()
 
@@ -178,6 +264,100 @@ class GenieaiArangoRetriever(OpeaComponent):
         self.db = self.client.db(name=ARANGO_DB, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
         if logflag:
             logger.debug(f"Connected to ArangoDB {self.db.version()}.")
+
+        # Ensure the BM25 ArangoSearch view for the default graph (Contextual
+        # Retrieval Part B). Mirrors the has_database/create_database idiom;
+        # other graph_names are ensured lazily in _bm25_search on first use.
+        if HYBRID_RETRIEVAL_ENABLED:
+            try:
+                self._ensure_bm25_view(ARANGO_GRAPH_NAME)
+            except Exception as e:
+                logger.error(f"Could not ensure default BM25 view for graph '{ARANGO_GRAPH_NAME}': {e}")
+
+    def _ensure_bm25_view(self, graph_name: str) -> None:
+        """Idempotently create the ArangoSearch BM25 view over <graph_name>_SOURCE.text.
+
+        Best-effort: never raises. Cached in ``self._bm25_views_ensured`` on
+        **success only**, so a transient failure (e.g. ArangoDB unreachable,
+        view API mismatch) is retried on the next request rather than silently
+        disabling the BM25 channel forever. The view indexes the chunk ``text``
+        field (the same field Part A populates with contextual prefixes) plus
+        ``chunk_labels`` so BM25 candidates can be label-filtered; the file id is
+        resolved downstream by the existing per-chunk enrichment AQL.
+        """
+        if graph_name in self._bm25_views_ensured:
+            return
+
+        view_name = f"{graph_name}_BM25_VIEW"
+        collection = f"{graph_name}_SOURCE"
+        try:
+            if not self.db.has_view(view_name):
+                properties = {
+                    "links": {
+                        collection: {
+                            "analyzers": [HYBRID_BM25_ANALYZER],
+                            "fields": {
+                                ARANGO_TEXT_FIELD: {},
+                                "chunk_labels": {},
+                            },
+                            "includeAllFields": False,
+                            "storeValues": "none",
+                        }
+                    }
+                }
+                self.db.create_arangosearch_view(view_name, properties)
+                logger.info(f"Created ArangoSearch BM25 view '{view_name}' on collection '{collection}'.")
+            # Cache on success only (exists or created). A failure leaves the
+            # graph uncached so the next request retries instead of dying silently.
+            self._bm25_views_ensured.add(graph_name)
+        except Exception as e:
+            logger.error(f"Failed to ensure BM25 view '{view_name}': {e}")
+
+    def _bm25_search(self, query: str, graph_name: str, n: int, labels_to_filter: list, filter_strategy: str) -> list:
+        """Run a BM25 lexical search over the chunk view (Contextual Retrieval Part B).
+
+        Returns the same shape as the dense search: ``[{"doc": Document, "score": float}]``.
+        Candidates are filtered by the same ``chunk_labels`` semantics as the dense
+        path (OR/AND) before fusion. ``doc.id`` is the chunk ``_key`` so RRF can
+        match identities across channels. Never raises — logs and returns [].
+        """
+        self._ensure_bm25_view(graph_name)
+        view_name = f"{graph_name}_BM25_VIEW"
+
+        aql = f"""
+            FOR doc IN {view_name}
+                SEARCH ANALYZER(doc.{ARANGO_TEXT_FIELD} IN TOKENS(@query, @analyzer), @analyzer)
+                LET _bm25_score = BM25(doc)
+                SORT _bm25_score DESC
+                LIMIT @n
+                RETURN {{
+                    "key": doc._key,
+                    "text": doc.{ARANGO_TEXT_FIELD},
+                    "chunk_labels": doc.chunk_labels,
+                    "score": _bm25_score
+                }}
+        """
+        bind_vars = {"query": query, "analyzer": HYBRID_BM25_ANALYZER, "n": n}
+
+        results = []
+        try:
+            cursor = self.db.aql.execute(aql, bind_vars=bind_vars)
+            for row in cursor:
+                chunk_labels = row.get("chunk_labels")
+                if not _chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
+                    continue
+                doc = Document(
+                    id=row.get("key"),
+                    page_content=row.get("text") or "",
+                    # file_ids is resolved uniformly (dense + BM25) by the
+                    # existing per-chunk enrichment AQL downstream; keep only
+                    # chunk_labels here so the metadata shape stays consistent.
+                    metadata={"chunk_labels": chunk_labels or []},
+                )
+                results.append({"doc": doc, "score": float(row.get("score") or 0.0)})
+        except Exception as e:
+            logger.error(f"BM25 search failed on view '{view_name}': {e}")
+        return results
 
     def check_health(self) -> bool:
         """Checks the health of the retriever service."""
@@ -787,6 +967,29 @@ class GenieaiArangoRetriever(OpeaComponent):
             except Exception as e:
                 logger.error(f"Error during similarity search: {e}")
                 return []
+
+            # Hybrid BM25 + RRF fusion (Contextual Retrieval Part B)
+            # Opt-in lexical (BM25) channel over <GRAPH>_SOURCE.text fused with
+            # the dense results via weighted Reciprocal Rank Fusion. Runs BEFORE
+            # the empty-check so a BM25 hit can rescue a dense-empty result (the
+            # exact case lexical search excels at). OFF is a true no-op (the
+            # whole block is skipped). Only applies to a chunk search start.
+            if HYBRID_RETRIEVAL_ENABLED and search_start == "chunk":
+                try:
+                    bm25_n = max(int(input.k), HYBRID_BM25_CANDIDATES)
+                    bm25_res = self._bm25_search(
+                        query=query,
+                        graph_name=graph_name,
+                        n=bm25_n,
+                        labels_to_filter=labels_to_filter,
+                        filter_strategy=filter_strategy,
+                    )
+                    if bm25_res:
+                        search_res = rrf_fuse(search_res, bm25_res)[: int(input.k)]
+                        logger.info(f"Hybrid RRF fusion: {len(search_res)} documents after fusing dense + BM25.")
+                except Exception as e:
+                    # Graceful degradation: never let the hybrid channel break the request.
+                    logger.error(f"Hybrid BM25+RRF fusion failed, falling back to dense-only: {e}")
 
             if not search_res:
                 logger.info("No documents found.")

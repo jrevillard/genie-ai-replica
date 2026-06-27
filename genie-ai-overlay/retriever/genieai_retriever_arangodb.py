@@ -291,7 +291,9 @@ class GenieaiArangoRetriever(OpeaComponent):
         view_name = f"{graph_name}_BM25_VIEW"
         collection = f"{graph_name}_SOURCE"
         try:
-            if not self.db.has_view(view_name):
+            # python-arango StandardDatabase has no has_view(); use views().
+            _existing_views = {v.get("name") for v in (self.db.views() or [])}
+            if view_name not in _existing_views:
                 properties = {
                     "links": {
                         collection: {

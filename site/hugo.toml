@@ -1,28 +1,11 @@
-# Hugo configuration for the GENIE.AI documentation site.
-# Published to GitLab Pages at https://genie-ai-7e342b.opensource.unicc.org/
-
+# GENIE.AI documentation site — Hugo + Docsy
+# Full config is built up in Task 2; this is the minimal buildable form.
 baseURL = "https://genie-ai-7e342b.opensource.unicc.org/"
-title = "GENIE.AI"
 languageCode = "en-us"
+title = "GENIE.AI"
 
-# Docsy requires these theme knobs.
-theme = ["github.com/google/docsy/theme"]
-
-# Hugo feature flags.
-enableRobotsTXT = true
-enableGitInfo = true
-
-# Syntax highlighting (Docsy pairs with Chroma).
-pygmentsCodeFences = true
-pygmentsUseClasses = true
-
-# Docsy version pin — informational; the actual module version is pinned
-# in go.mod / go.sum so it is reproducible across builds.
-[params.docsy]
-version = "0.110.0"
-
-# Module imports — Docsy pulled in as a Hugo Module.
 [module]
+  hugoVersion = { extended = true, min = "0.110.0" }
   [[module.imports]]
     path = "github.com/google/docsy/theme"
     disable = false

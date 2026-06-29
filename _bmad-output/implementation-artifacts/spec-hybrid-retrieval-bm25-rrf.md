@@ -120,6 +120,12 @@ Driven by review findings (verbatim findings in `_bmad-output/implementation-art
 
 - **Pre-limit label filter** (findings-2 #5) — pushing `aql_filter_clause` into the BM25 AQL before `LIMIT` (preserves in-category recall when cross-category docs dominate the top-N) is deferred: it cannot be validated without a live ArangoDB and a syntax error would silently disable the channel. v1 applies the label filter post-fetch in Python (`_chunk_passes_label_filter`, same OR/AND semantics); compensated by `HYBRID_BM25_CANDIDATES=50`. Follow-up under real ArangoDB.
 
+### 2026-06-29 — pre-limit label filter IMPLEMENTED (the v1 deferred item)
+
+The previously-deferred "Pre-limit label filter" is now **implemented and validated live**. The label filter (`aql_filter_clause`, the same clause the dense path uses) is injected into the BM25 AQL between `SEARCH` and `BM25()`, before `LIMIT`, preserving in-category recall when cross-category docs dominate the top-N. The Python `_chunk_passes_label_filter` is retained as a defense-in-depth safety net on the already-filtered rows.
+
+**Live validation** on the el-salvador deployment (ArangoDB 3.12.4, `GRAPH_TEST` cucumber corpus, 34 chunks): the optimized AQL returns **17** `"Cucumber"`-labeled hits vs **34** unfiltered — confirming the `FILTER`-in-ArangoSearch syntax is accepted and behaves correctly on the real engine. New test `test_aql_filter_clause_injected_before_limit` asserts the clause is injected pre-`LIMIT`.
+
 **Rejected (not defects):**
 
 - **AQL injection via `graph_name`** (findings-1 #1, findings-2 #4) — `graph_name` is interpolated into the view/AQL via f-string, but this matches the pre-existing, codebase-wide pattern (`fetch_neighborhoods`, `_build_subquery`, the file-id enrichment AQL all f-string `graph_name`/`collection_name`). It is a server-internal value from `ARANGO_GRAPH_NAME` config or the validated request field, not raw user input. Not a regression; hardening it is a codebase-wide change, out of Part B scope.

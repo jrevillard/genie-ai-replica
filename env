@@ -186,7 +186,7 @@ HUGGING_FACE_HUB_TOKEN=
 # Adaptive utility-cost selection (only used when RERANKING_STRATEGY=adaptive):
 # NOVELTY_SIGMOID_A=20.0       # novelty->weight logistic steepness
 # NOVELTY_SIGMOID_B=0.25       # novelty->weight logistic midpoint
-# TOKEN_COST_ALPHA=0.0025      # per-token context-window cost coefficient
+# CONTEXT_DECAY_FACTOR=0.0025      # per-token context-window cost coefficient
 # MIN_VALUE_THRESHOLD=-1.0     # select a chunk only if marginal value > threshold
 
 # Dataprep LLM labeling tuning — labeling is the dominant ingestion cost (one

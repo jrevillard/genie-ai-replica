@@ -6,7 +6,7 @@ const fs = require('fs');
 const GPU_RANGES = {
   // Main LLM
   VLLM_GPU_UTILIZATION: { min: 0.1, max: 0.95, type: 'float' },
-  VLLM_MAX_MODEL_LEN: { min: 512, max: 8192, type: 'int' },
+  VLLM_MAX_MODEL_LEN: { min: 512, max: 131072, type: 'int' },
   VLLM_MAX_NUM_SEQS: { min: 1, max: 2048, type: 'int' },
   VLLM_DTYPE: {
     type: 'enum',

@@ -108,7 +108,7 @@ def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranke
         score = reranker_scores[i]
 
         # Relevance — boosts chunks whose score exceeds the (skew-adjusted) mean
-        relevance = score + (score - avg_score + skew)
+        relevance = score + (score - avg_score * (1 + np.tanh(skew)))
 
         # Novelty — penalises redundancy with already-selected chunks
         if not selected_indices:
@@ -139,7 +139,7 @@ def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranke
         context_decay_cost = CONTEXT_DECAY_FACTOR * token_count
 
         # Confusion cost — low-confidence chunks risk degrading the answer
-        denominator = max_score - avg_score + skew
+        denominator = max_score - avg_score
         if abs(denominator) < 1e-6:
             denominator = 1e-6
         confusion_cost = (1 - score) + ((max_score - score) / denominator)

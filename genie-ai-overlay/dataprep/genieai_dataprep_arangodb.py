@@ -865,8 +865,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     "Labeling",
                     f"Batch labeling parse failure for chunks {[i for i, _ in batch]}; falling back to per-chunk.",
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                err = f"{type(e).__name__}: {str(e)[:200]}"
+                batch_indices = [i for i, _ in batch]
+                await self._write_ingestion_log(
+                    file_id,
+                    "WARN",
+                    "Labeling",
+                    f"Batch labeling call failed for chunks {batch_indices} ({err}); falling back to per-chunk.",
+                )
         # Per-chunk path (default, and batch fallback).
         out: dict[int, list[str]] = {}
         for i, text in batch:
@@ -996,7 +1003,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     span.set_attribute("dataprep.llm.completion_tokens", _usage.completion_tokens)
                     span.set_attribute("dataprep.llm.prompt_tokens", getattr(_usage, "prompt_tokens", 0))
                 return suggestions
-            except Exception:
+            except Exception as e:
+                err = f"{type(e).__name__}: {str(e)[:200]}"
+                await self._write_ingestion_log(
+                    file_id,
+                    "WARN",
+                    "Labeling",
+                    f"Batch labeling call failed for chunks {indices} ({err}); returning None for per-chunk fallback.",
+                )
                 return None
 
     async def _finalize_chunk_labels(self, index, suggested, all_labels, file_id) -> list[str]:

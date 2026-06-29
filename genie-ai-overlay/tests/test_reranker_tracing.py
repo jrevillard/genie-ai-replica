@@ -82,7 +82,7 @@ class TestRerankingEndpointSpan:
             await rms_module.reranking(input_data)
 
             tracer.start_as_current_span.assert_called_with("reranker.rerank")
-            span.set_attribute.assert_any_call("reranker.strategy", "slice")
+            span.set_attribute.assert_any_call("reranker.strategy", "adaptive")
 
     @pytest.mark.asyncio
     async def test_reranking_records_input_and_output_doc_counts(self, mock_tracer):

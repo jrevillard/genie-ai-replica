@@ -77,7 +77,7 @@ async def reranking(
     if logflag:
         logger.info(f"Input received: {input}")
 
-    reranking_strategy = os.getenv("RERANKING_STRATEGY", "slice")
+    reranking_strategy = os.getenv("RERANKING_STRATEGY", "adaptive")
     input_doc_count = len(input.retrieved_docs) if hasattr(input, "retrieved_docs") and input.retrieved_docs else 0
 
     with tracer.start_as_current_span("reranker.rerank") as span:

@@ -707,7 +707,9 @@ class TestEnvDefaults:
     def test_reranking_strategy_default(self):
         import reranker.genieai_tei_reranker as mod
 
-        assert mod.RERANKING_STRATEGY == "slice"
+        # Default is "adaptive" (dynamic top-N) — aligned with chatqna's default
+        # and the env template recommendation; "slice" (fixed top-N) is opt-in.
+        assert mod.RERANKING_STRATEGY == "adaptive"
 
     def test_reranking_threshold_default(self):
         import reranker.genieai_tei_reranker as mod

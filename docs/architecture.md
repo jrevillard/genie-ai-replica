@@ -617,7 +617,7 @@ This yields a non-redundant, confidence- and budget-aware context set — useful
 |----------|---------|---------|
 | `NOVELTY_SIGMOID_A` | `20.0` | novelty→weight logistic steepness |
 | `NOVELTY_SIGMOID_B` | `0.25` | novelty→weight logistic midpoint |
-| `TOKEN_COST_ALPHA` | `0.0025` | per-token context cost coefficient |
+| `CONTEXT_DECAY_FACTOR` | `0.0025` | per-token context cost coefficient |
 | `MIN_VALUE_THRESHOLD` | `-1.0` | marginal-value cutoff (keep a chunk only if value > threshold) |
 
 ### 9.4 Confidence Scoring

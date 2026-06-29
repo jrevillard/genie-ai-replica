@@ -104,7 +104,7 @@ DATAPREP_CONTEXTUAL_DOC_BUDGET = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET",
 # VLLM_MAX_MODEL_LEN minus prompt/output overhead. Docs larger than this (or the
 # model window) are truncated — Map-Reduce hierarchical summarization is the
 # future fix for that case.
-DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL", "30000"))
+DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL", "100000"))
 # Strategy when CONTEXTUAL_RETRIEVAL_ENABLED=true:
 #   "per_chunk" (default) — one LLM call per chunk; each chunk gets a context
 #      tailored to its section (Anthropic recipe; highest quality, N calls/doc).

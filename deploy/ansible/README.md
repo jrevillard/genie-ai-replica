@@ -353,7 +353,7 @@ Per-chunk LLM document-context prefix → embedding (+ optionally labeling) so c
 | `contextual_label_raw` | `false` | Decoupled mode: label the RAW chunk, use the context ONLY for the embedding (recommended — keeps label precision) |
 | `dataprep_contextual_model` | (empty) | Model for context generation; empty = reuse `vllm_llm_model_id`; must support guided JSON |
 | `dataprep_contextual_doc_budget` | `6000` | Max chars of doc text fed to the per_chunk context LLM |
-| `dataprep_contextual_doc_budget_doc_level` | `30000` | Max chars of doc text fed to the doc_level context LLM (one call — can afford a larger window) |
+| `dataprep_contextual_doc_budget_doc_level` | `100000` | Max chars of doc text fed to the doc_level context LLM (one call — can afford a larger window) |
 | `contextual_retrieval_prompt` | (built-in) | Prompt for per-chunk context generation (has `{document_context}` placeholder) |
 
 ### Keycloak Identity Provider (Required)

@@ -8,6 +8,7 @@ stages:
   - promote     # retag tested digests to deployable tags (main/tags only)
   - scheduled
   - manual
+  - deploy
 
 variables:
   FLUTTER_VERSION: "3.41.7"
@@ -2360,3 +2361,29 @@ manual:rag-quality:
     expire_in: 30 days
     reports:
       junit: genie-ai-overlay/reports/rag-quality.xml
+
+
+# --- Documentation site -> GitLab Pages ---
+# Builds the Hugo + Docsy site in site/ and publishes to GitLab Pages.
+# Docsy is a Hugo Module (needs Go); assets need Node. hugomods/hugo:exts
+# provides all three (latest stable).
+pages:
+  stage: deploy
+  image: docker.io/hugomods/hugo:exts
+  variables:
+    GIT_SUBMODULE_STRATEGY: none
+  script:
+    - cd site
+    - sh scripts/sync-docs.sh
+    - hugo mod tidy
+    - hugo --gc --minify --baseURL "$CI_PAGES_URL/" --destination "$CI_PROJECT_DIR/public"
+  artifacts:
+    paths:
+      - public
+  rules:
+    # Build-check in MR pipelines: verifies the Hugo build + produces the public/
+    # artifact in CI. GitLab Pages only deploys from the default branch, so an MR
+    # run does NOT publish — it is a build/CI gate only.
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    # Publish to GitLab Pages on the default branch.
+    - if: $CI_COMMIT_BRANCH == "main"

@@ -2381,4 +2381,9 @@ pages:
     paths:
       - public
   rules:
+    # Build-check in MR pipelines: verifies the Hugo build + produces the public/
+    # artifact in CI. GitLab Pages only deploys from the default branch, so an MR
+    # run does NOT publish — it is a build/CI gate only.
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    # Publish to GitLab Pages on the default branch.
     - if: $CI_COMMIT_BRANCH == "main"

@@ -352,6 +352,22 @@ _SELF_CONF_SENTINEL_PREFIX = "[[CONF:"
 _SELF_CONF_PARTIAL_RE = re.compile(r"\s*\[\[CONF:[^\[]*$")
 
 
+def _count_final_chunks(result_dict: dict) -> int:
+    """Count the chunks actually fed to the LLM from the orchestrator result.
+
+    Node outputs are dicts shaped like ``{"retrieved_docs": [...]}``; iterate all
+    nodes and keep the deepest stage's count (the reranker, after slicing) so the
+    metric reflects the final chunk set, not an earlier pipeline stage. Returns 0
+    when no node exposes retrieved_docs.
+    """
+    chunk_count = 0
+    for val in (result_dict or {}).values():
+        docs = val.get("retrieved_docs") if isinstance(val, dict) else getattr(val, "retrieved_docs", None)
+        if docs:
+            chunk_count = len(docs)
+    return chunk_count
+
+
 def _extract_self_confidence(text: str) -> tuple[str, float | None]:
     """Strip a trailing LLM self-grade sentinel, returning (clean_text, value).
 
@@ -2307,13 +2323,10 @@ class ChatQnAService:
                 )
                 _rag_duration = time.time() - _rag_start
 
-                # Count retrieved documents from result
-                chunk_count = 0
-                for _key, val in result_dict.items():
-                    if hasattr(val, "retrieved_docs"):
-                        chunk_count = len(val.retrieved_docs)
-                        break
-                span.set_attribute("rag.chunk_count", chunk_count)
+                # Count the chunks fed to the LLM. (Was always 0: node outputs
+                # are dicts but the old code used hasattr(dict, "retrieved_docs"),
+                # which is always False — docs are a key, not an attribute.)
+                span.set_attribute("rag.chunk_count", _count_final_chunks(result_dict))
 
                 # Record custom application metrics
                 response_type = "streaming" if chat_request.stream else "sync"

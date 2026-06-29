@@ -14,6 +14,7 @@ from chatqna.genieai_chatqna import (
     GenieUserProfileClient,
     UserContextBuilder,
     _calibrate_reranker_score,
+    _count_final_chunks,
     _display_confidence,
     _extract_self_confidence,
     _rank_weighted_confidence,
@@ -2041,3 +2042,33 @@ class TestSelfConfidenceSentinel:
         assert "|<-MSG->|" not in final_text
         assert "USER:" not in final_text
         assert "answer" in final_text
+
+
+class TestCountFinalChunks:
+    """Tests for _count_final_chunks — the rag.chunk_count metric helper.
+
+    Regression: the old code used hasattr(dict, "retrieved_docs") which is always
+    False, so the metric was stuck at 0 even when chunks were retrieved.
+    """
+
+    def test_empty_result_is_zero(self):
+        assert _count_final_chunks({}) == 0
+
+    def test_dict_node_returns_count(self):
+        result = {"retriever": {"retrieved_docs": ["a", "b", "c", "d"]}}
+        assert _count_final_chunks(result) == 4
+
+    def test_keeps_deepest_stage_reranker_wins(self):
+        # retriever returns 4, reranker slices to 1 -> final = 1 (post-rerank).
+        result = {
+            "retriever": {"retrieved_docs": ["a", "b", "c", "d"]},
+            "reranker": {"retrieved_docs": ["a"]},
+        }
+        assert _count_final_chunks(result) == 1
+
+    def test_node_without_retrieved_docs_skipped(self):
+        result = {"llm": {"text": "answer"}, "retriever": {"retrieved_docs": ["x", "y"]}}
+        assert _count_final_chunks(result) == 2
+
+    def test_none_safe(self):
+        assert _count_final_chunks(None) == 0

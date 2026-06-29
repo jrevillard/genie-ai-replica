@@ -49,7 +49,7 @@ RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 1))
 # Adaptive utility-cost selection parameters
 NOVELTY_SIGMOID_A = float(os.getenv("NOVELTY_SIGMOID_A", 20.0))
 NOVELTY_SIGMOID_B = float(os.getenv("NOVELTY_SIGMOID_B", 0.25))
-TOKEN_COST_ALPHA = float(os.getenv("TOKEN_COST_ALPHA", 0.0025))
+CONTEXT_DECAY_FACTOR = float(os.getenv("CONTEXT_DECAY_FACTOR", 0.0025))
 MIN_VALUE_THRESHOLD = float(os.getenv("MIN_VALUE_THRESHOLD", -1.0))
 
 
@@ -136,7 +136,7 @@ def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranke
 
         # Token cost — each chunk consumes context-window budget
         token_count = estimate_token_count(texts[i])
-        token_cost = TOKEN_COST_ALPHA * token_count
+        context_decay_cost = CONTEXT_DECAY_FACTOR * token_count
 
         # Confusion cost — low-confidence chunks risk degrading the answer
         denominator = max_score - avg_score + skew
@@ -145,7 +145,7 @@ def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranke
         confusion_cost = (1 - score) + ((max_score - score) / denominator)
 
         # Total cost
-        total_cost = token_cost + confusion_cost
+        total_cost = context_decay_cost + confusion_cost
 
         # Marginal value
         value = utility - total_cost

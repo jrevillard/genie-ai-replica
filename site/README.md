@@ -17,6 +17,7 @@ Published to GitLab Pages: <https://genie-ai-7e342b.opensource.unicc.org/>
 
 ```bash
 cd site
+npm install               # Docsy PostCSS/PurgeCSS deps (first run only)
 sh scripts/sync-docs.sh      # copy curated docs/*.md -> content/en/docs/
 hugo server -D               # http://127.0.0.1:1313  (-D includes drafts)
 ```

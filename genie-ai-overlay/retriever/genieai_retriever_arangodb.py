@@ -1133,7 +1133,7 @@ class GenieaiArangoRetriever(OpeaComponent):
             # search-result metadata, so read it directly — no extra ArangoDB
             # round-trip and no chunk-key matching. The retriever microservice
             # assembles these into an ordered chunk_embeddings list for the reranker.
-            reranking_strategy = input_dict.get("reranking_strategy", os.getenv("RERANKING_STRATEGY", "slice"))
+            reranking_strategy = input_dict.get("reranking_strategy", os.getenv("RERANKING_STRATEGY", "adaptive"))
             if reranking_strategy == "adaptive" and search_res:
                 for r in search_res:
                     metadata = r["doc"].metadata or {}

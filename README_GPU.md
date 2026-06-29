@@ -41,7 +41,7 @@ set -a && source .env && source env.t4 && set +a && docker stack deploy -c docke
 
 **Characteristics:**
 - gpu_memory_utilization: 0.4 (6.4 GB VRAM)
-- max_model_len: 2048 tokens
+- max_model_len: 65536 tokens
 - max_num_seqs: 64 (main LLM), 16 (translation)
 - dtype: half (FP16)
 - TEI images: v1.9.3 (unified for all GPUs)
@@ -58,7 +58,7 @@ set -a && source .env && source env.rtx6000 && set +a && docker stack deploy -c 
 
 **Characteristics:**
 - gpu_memory_utilization: 0.6 (14.4 GB VRAM)
-- max_model_len: 4096 tokens (main), 8192 (translation)
+- max_model_len: 65536 tokens (main), 8192 (translation)
 - max_num_seqs: 1024 (main), 32 (translation)
 - dtype: auto (optimized by framework)
 - TEI images: v1.9.3 (unified for all GPUs)
@@ -84,8 +84,8 @@ Uses default values from your `.env` file.
 
 | Variable | T4 (16GB) | RTX6000 (24GB) | Description |
 |----------|------------|-----------------|-------------|
-| `VLLM_GPU_UTILIZATION` | 0.4 | 0.6 | % VRAM to use |
-| `VLLM_MAX_MODEL_LEN` | 2048 | 4096 | Max context length |
+| `VLLM_GPU_UTILIZATION` | 0.55 | 0.7 | % VRAM to use |
+| `VLLM_MAX_MODEL_LEN` | 65536 | 65536 | Max context length |
 | `VLLM_MAX_NUM_SEQS` | 64 | 1024 | Concurrent sequences |
 | `VLLM_DTYPE` | half | auto | Data type |
 
@@ -159,14 +159,14 @@ To adapt to your GPU:
 ### Error: Out of Memory
 ```bash
 # Reduce GPU utilization
-VLLM_GPU_UTILIZATION=0.3
-VLLM_MAX_MODEL_LEN=1024
+VLLM_GPU_UTILIZATION=0.55
+VLLM_MAX_MODEL_LEN=65536
 ```
 
 ### Error: Model Too Long
 ```bash
 # Reduce model length
-VLLM_MAX_MODEL_LEN=2048
+VLLM_MAX_MODEL_LEN=65536
 ```
 
 ### Check GPU availability

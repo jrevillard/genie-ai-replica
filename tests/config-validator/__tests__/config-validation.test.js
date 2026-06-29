@@ -79,7 +79,7 @@ describe('Configuration Validation Suite', () => {
     test('compose vars are extracted with correct defaults', () => {
       const varWithDefault = composeVars.find((v) => v.name === 'VLLM_GPU_UTILIZATION');
       expect(varWithDefault).toBeDefined();
-      expect(varWithDefault.default).toBe('0.4');
+      expect(varWithDefault.default).toBe('0.55');
     });
 
     test('compose vars without defaults have null default', () => {

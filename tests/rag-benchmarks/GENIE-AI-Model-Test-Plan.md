@@ -40,7 +40,7 @@ Before running any tests, ensure the baseline is healthy:
 # .env overrides for Profile 1 (start from the env template)
 VLLM_LLM_MODEL_ID=Qwen/Qwen2.5-7B-Instruct
 VLLM_GPU_UTIL=0.6
-VLLM_MAX_MODEL_LEN=4096
+VLLM_MAX_MODEL_LEN=65536
 VLLM_DTYPE=auto
 LABELING_STRATEGY=llm
 
@@ -146,7 +146,7 @@ The A40 uses Ampere architecture (compute 8.6) vs Ada (compute 8.9). The practic
 # .env overrides for Profile 3 (start from the env-T4 template)
 VLLM_LLM_MODEL_ID=ibm-granite/granite-3.3-2b-instruct
 VLLM_GPU_UTIL=0.4
-VLLM_MAX_MODEL_LEN=2048
+VLLM_MAX_MODEL_LEN=65536
 VLLM_DTYPE=half
 LABELING_STRATEGY=embedding
 
@@ -223,7 +223,7 @@ Same as 3A but with `LABELING_STRATEGY=bm25` and `BM25_LABEL_THRESHOLD=2.0`.
 **Steps:**
 
 1. Change `VLLM_LLM_MODEL_ID=mistralai/Mistral-7B-Instruct-v0.3` in `.env`
-2. Set `VLLM_GPU_UTIL=0.4`, `VLLD_DTYPE=half`, `VLLM_MAX_MODEL_LEN=2048`
+2. Set `VLLM_GPU_UTIL=0.4`, `VLLD_DTYPE=half`, `VLLM_MAX_MODEL_LEN=65536`
 3. Rebuild and restart
 
 **Risk:** Mistral 7B at FP16 is ~14 GB. With translation and TEI, this will almost certainly OOM on a single T4. This test is primarily to confirm that fact.

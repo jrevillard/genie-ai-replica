@@ -40,9 +40,9 @@ services:
     image: vllm/vllm-openai:latest
     command: >
       --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-3.3-2b-instruct}
-      --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.4}
+      --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
       --served-model-name ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-3.3-2b-instruct}
-      --max_model_len ${VLLM_MAX_MODEL_LEN:-16384}
+      --max_model_len ${VLLM_MAX_MODEL_LEN:-65536}
       --max_num_seqs ${VLLM_MAX_NUM_SEQS:-64}
       --dtype=${VLLM_DTYPE:-half}
       --enforce-eager

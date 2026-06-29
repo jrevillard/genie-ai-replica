@@ -616,7 +616,7 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 #
 # Common GPU variables (see env.t4/env.rtx6000 for full list):
 # - VLLM_GPU_UTILIZATION: GPU memory fraction (0.1-1.0)
-# - VLLM_MAX_MODEL_LEN: Maximum context length
+# - VLLM_MAX_MODEL_LEN: Maximum context length (default: 65536 — granite-4.1-8b supports 128K; fits all RAG pipeline calls)
 # - VLLM_MAX_NUM_SEQS: Maximum concurrent sequences
 # - VLLM_DTYPE: Data type (half, float32, etc.)
 #

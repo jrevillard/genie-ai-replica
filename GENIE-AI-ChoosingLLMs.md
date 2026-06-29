@@ -122,7 +122,7 @@ The ChatQnA orchestrator sends retrieved chunks as system/user context and asks 
 # In your .env file
 VLLM_LLM_MODEL_ID=Qwen/Qwen2.5-7B-Instruct
 VLLM_GPU_UTIL=0.6
-VLLM_MAX_MODEL_LEN=4096
+VLLM_MAX_MODEL_LEN=65536
 VLLM_DTYPE=auto
 ```
 
@@ -582,7 +582,7 @@ This is the most constrained profile. Multiple models must share a single 16GB G
 # T4 Configuration
 VLLM_LLM_MODEL_ID=ibm-granite/granite-3.3-2b-instruct
 VLLM_GPU_UTIL=0.4
-VLLM_MAX_MODEL_LEN=2048
+VLLM_MAX_MODEL_LEN=65536
 VLLM_DTYPE=half
 LABELING_STRATEGY=embedding    # Do NOT use llm with 2B model
 
@@ -606,7 +606,7 @@ RERANKER_MODEL_ID=cross-encoder/ms-marco-MiniLM-L-6-v2
 ```bash
 VLLM_LLM_MODEL_ID=google/gemma-3-4b-it
 VLLM_GPU_UTIL=0.30
-VLLM_MAX_MODEL_LEN=2048
+VLLM_MAX_MODEL_LEN=65536
 VLLM_DTYPE=half
 LABELING_STRATEGY=embedding
 
@@ -647,7 +647,7 @@ This profile has room for high-quality models across all roles. These GPUs suppo
 # Enterprise Configuration (Recommended)
 VLLM_LLM_MODEL_ID=Qwen/Qwen2.5-7B-Instruct
 VLLM_GPU_UTIL=0.6
-VLLM_MAX_MODEL_LEN=4096
+VLLM_MAX_MODEL_LEN=65536
 VLLM_DTYPE=auto
 LABELING_STRATEGY=llm    # LLM strategy works well with 7B+ models
 
@@ -737,7 +737,7 @@ Do you need high-quality translation for many languages?
 | `VLLM_MODEL_ID` | (alias of above) | Used by dataprep for labeling & graph |
 | `VLLM_ENDPOINT` | `http://vllm:8000` | Main vLLM endpoint |
 | `VLLM_GPU_UTIL` | `0.6` | GPU memory fraction |
-| `VLLM_MAX_MODEL_LEN` | `4096` | Max context window |
+| `VLLM_MAX_MODEL_LEN` | `65536` | Max context window |
 | `VLLM_DTYPE` | `auto` | Weight precision (half/auto/bfloat16) |
 
 ### Translation (Role 4)

@@ -315,12 +315,22 @@ class GenieaiArangoRetriever(OpeaComponent):
         except Exception as e:
             logger.error(f"Failed to ensure BM25 view '{view_name}': {e}")
 
-    def _bm25_search(self, query: str, graph_name: str, n: int, labels_to_filter: list, filter_strategy: str) -> list:
+    def _bm25_search(
+        self,
+        query: str,
+        graph_name: str,
+        n: int,
+        labels_to_filter: list,
+        filter_strategy: str,
+        aql_filter_clause: str = "",
+    ) -> list:
         """Run a BM25 lexical search over the chunk view (Contextual Retrieval Part B).
 
         Returns the same shape as the dense search: ``[{"doc": Document, "score": float}]``.
-        Candidates are filtered by the same ``chunk_labels`` semantics as the dense
-        path (OR/AND) before fusion. ``doc.id`` is the chunk ``_key`` so RRF can
+        Candidates are filtered by the same ``chunk_labels`` clause as the dense
+        path (``aql_filter_clause``, injected pre-``LIMIT`` to preserve in-category
+        recall); the Python ``_chunk_passes_label_filter`` is a defense-in-depth
+        safety net on the already-filtered rows. ``doc.id`` is the chunk ``_key`` so RRF can
         match identities across channels. Never raises — logs and returns [].
         """
         self._ensure_bm25_view(graph_name)
@@ -329,6 +339,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         aql = f"""
             FOR doc IN {view_name}
                 SEARCH ANALYZER(doc.{ARANGO_TEXT_FIELD} IN TOKENS(@query, @analyzer), @analyzer)
+                {aql_filter_clause}
                 LET _bm25_score = BM25(doc)
                 SORT _bm25_score DESC
                 LIMIT @n
@@ -985,6 +996,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                         n=bm25_n,
                         labels_to_filter=labels_to_filter,
                         filter_strategy=filter_strategy,
+                        aql_filter_clause=aql_filter_clause if search_start == "chunk" else "",
                     )
                     if bm25_res:
                         search_res = rrf_fuse(search_res, bm25_res)[: int(input.k)]

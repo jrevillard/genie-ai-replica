@@ -868,6 +868,28 @@ class TestBm25Search:
         assert results[0]["doc"].page_content == "health info"
         assert isinstance(results[0]["score"], float)
 
+    def test_aql_filter_clause_injected_before_limit(self):
+        # Optimization: the label filter is pushed INTO the AQL (pre-LIMIT) so
+        # in-category recall is preserved when cross-category docs dominate top-N
+        # (validated live on ArangoDB 3.12.4). Captures the executed AQL string.
+        db = MagicMock()
+        db.views.return_value = [{"name": "GRAPH_BM25_VIEW"}]
+        db.aql.execute.return_value = _make_bm25_cursor([])
+        retriever = create_retriever(db_mock=db)
+        retriever._bm25_search(
+            "query",
+            "GRAPH",
+            n=50,
+            labels_to_filter=["Cucumber"],
+            filter_strategy="OR",
+            aql_filter_clause='FILTER (doc.chunk_labels != null) AND (["Cucumber"] ANY IN doc.chunk_labels)',
+        )
+        executed_aql = db.aql.execute.call_args.args[0]
+        assert "doc.chunk_labels" in executed_aql  # filter clause present in AQL
+        assert executed_aql.index("FILTER") < executed_aql.index("LIMIT")  # injected pre-LIMIT
+        assert "BM25(doc)" in executed_aql  # core BM25 scoring intact
+        assert "SEARCH ANALYZER" in executed_aql  # ArangoSearch search intact
+
     def test_no_labels_returns_all(self):
         db = MagicMock()
         db.views.return_value = [{"name": "GRAPH_BM25_VIEW"}]

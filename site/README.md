@@ -4,14 +4,14 @@ Published to GitLab Pages: <https://genie-ai-7e342b.opensource.unicc.org/>
 
 ## Prerequisites
 
-- **Hugo extended** (≥ 0.158.0) — Docsy (pinned to `/theme` HEAD) requires a recent
-  Hugo and needs the extended SCSS pipeline.
-  Check: `hugo version` must contain `+extended`.
+- **Hugo extended** (≥ 0.146.0; CI runs 0.154.5 via `hugomods/hugo:exts`) — Docsy needs
+  the extended SCSS pipeline. Check: `hugo version` must contain `+extended`.
 - **Go** ≥ 1.21 — resolves the Docsy Hugo Module.
 - **Node.js** ≥ 18 + npm — Docsy PostCSS/PurgeCSS asset pipeline.
 
-> **Note:** CI uses the `hugomods/hugo:exts` image (latest stable) which always
-> satisfies the floors above.
+> **Note:** CI uses the `hugomods/hugo:exts` image. That image currently ships Hugo
+> 0.154.5 (the maintainer lags upstream Hugo releases), so Docsy is pinned to a `/theme`
+> commit compatible with 0.154.5 rather than the latest HEAD (which needs Hugo ≥ 0.158).
 
 ## Local preview
 

@@ -9,4 +9,4 @@ go 1.26.0
 // raised its min Hugo version to 0.158.0 in 5c5733d (2026-06-11).  Our installed
 // Hugo is 0.154.5; this commit declares min_version = "0.146.0" in theme.toml.
 // If Hugo is upgraded to >= 0.158.0, this can move to @latest.
-require github.com/google/docsy/theme v0.0.0-20260531183939-cfc902046af7 // indirect
+require github.com/google/docsy/theme v0.0.0-20260626210851-93948e65e6c1 // indirect

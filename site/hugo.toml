@@ -1,6 +1,6 @@
 # GENIE.AI documentation site — Hugo + Docsy
 baseURL = "https://genie-ai-7e342b.opensource.unicc.org/"
-languageCode = "en-us"
+locale = "en-us"
 defaultContentLanguage = "en"
 defaultContentLanguageInSubdir = false
 title = "GENIE.AI"
@@ -16,7 +16,7 @@ enableGitInfo = true
 
 # English (source of truth per project i18n policy). Add [languages.es] later.
 [languages.en]
-  languageName = "English"
+  label = "English"
   title = "GENIE.AI"
   weight = 1
   contentDir = "content/en"

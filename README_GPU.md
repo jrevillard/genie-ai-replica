@@ -84,7 +84,7 @@ Uses default values from your `.env` file.
 
 | Variable | T4 (16GB) | RTX6000 (24GB) | Description |
 |----------|------------|-----------------|-------------|
-| `VLLM_GPU_UTILIZATION` | 0.4 | 0.6 | % VRAM to use |
+| `VLLM_GPU_UTILIZATION` | 0.55 | 0.7 | % VRAM to use |
 | `VLLM_MAX_MODEL_LEN` | 65536 | 65536 | Max context length |
 | `VLLM_MAX_NUM_SEQS` | 64 | 1024 | Concurrent sequences |
 | `VLLM_DTYPE` | half | auto | Data type |
@@ -159,7 +159,7 @@ To adapt to your GPU:
 ### Error: Out of Memory
 ```bash
 # Reduce GPU utilization
-VLLM_GPU_UTILIZATION=0.3
+VLLM_GPU_UTILIZATION=0.55
 VLLM_MAX_MODEL_LEN=65536
 ```
 

@@ -82,7 +82,12 @@ rewrite_links() {
   # does not touch them. ](./X.md) is a same-section link -> /docs/<src-section>/X/.
   # ../X.md where X is NOT in the MAP (e.g. ../CLAUDE.md, ../README.md, ../.claude/...)
   # is left as-is (non-ported ref).
-  sed -E -e "$2" \
+  # Redirect bare ](deployment.md) to the deployment section landing (no
+  # deployment.md exists in the MAP; the section has compose/swarm/mobile guides).
+  # Placed FIRST so it takes precedence over the generic MAP-driven basename rewrite
+  # (which would otherwise emit /core/deployment/ — a 404).
+  sed -E -e 's#\](deployment\.md)#](/docs/deployment/#g' \
+         -e "$2" \
          -e "$3" \
          -e 's#\]\(\./([a-zA-Z0-9_-]+)\.md\)#](/docs/'"$1"'/\1/)#g'
 }

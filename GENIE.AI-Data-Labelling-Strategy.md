@@ -41,6 +41,7 @@ Our approach solves these problems by combining:
   - **Which labels from the domain schema apply to each chunk**,  
   - **Which entities from the KG are mentioned or implied in each chunk**.
 - The LLM operates in a **bounded context** (restricted to the predefined label schema), which improves labeling accuracy and reduces drift.
+- **Document scope (`file_labels`):** each document carries its own candidate label set (`file_labels`, see §2). Although the LLM is prompted with the full taxonomy, resolved labels are scoped to the document's `file_labels` — any taxonomy-valid label that falls outside the document's scope is dropped before storage (e.g. a sibling crop suggested on a single-crop guide). Documents without `file_labels` keep all taxonomy-validated labels. Dropped labels are recorded in the ingestion log for observability.
 - **Output format (strict JSON):** the LLM must return a JSON object mapping each chunk to its labels. Dataprep enforces this at the token level via `response_format={"type": "json_object"}` (OpenAI-compatible guided JSON decoding), so the labeling LLM/vLLM **must support guided JSON**. Models without it produce markdown-wrapped or malformed JSON → per-chunk fallback (slower, lower label quality). See `GENIE-AI-ChoosingLLMs.md` → "Role 2: Chunk Labeling" for model requirements.
 
 ### 5. Knowledge Graph Update

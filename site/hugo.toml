@@ -65,3 +65,9 @@ enableGitInfo = true
   noClasses = false
   lineNos = false
   tabWidth = 2
+
+# Goldmark raw-HTML pass-through. Trusted-content docs site (no user-uploaded
+# markdown); required so the portal-landing card grid (_index.md) and other
+# inline Bootstrap markup survive the Markdown -> HTML render.
+[markup.goldmark.renderer]
+  unsafe = true

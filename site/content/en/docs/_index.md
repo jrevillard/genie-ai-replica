@@ -21,13 +21,64 @@ New to GENIE.AI? Read in this order:
 
 ## Sections
 
-- **[Core](/docs/core/)** — Project overview, source tree, and integration architecture.
-- **[Frontend](/docs/frontend/)** — Vue 3 UI component inventory and theme system.
-- **[Backend](/docs/backend/)** — Node.js API contracts for the gov-chat backend.
-- **[Mobile](/docs/mobile/)** — Flutter app inventory and architecture.
-- **[Architecture](/docs/architecture/)** — System-wide C4 container view and logging strategy.
-- **[Deployment](/docs/deployment/)** — Docker Compose, Docker Swarm, and mobile deployment.
-- **[Configuration](/docs/configuration/)** — Keycloak admin guide and external IdP integration.
+<div class="row row-cols-1 row-cols-md-2 g-4">
+  <div class="col">
+    <a class="card h-100 text-decoration-none" href="/docs/core/">
+      <div class="card-body">
+        <h5 class="card-title">Core</h5>
+        <p class="card-text">Project overview, source tree, and integration architecture.</p>
+      </div>
+    </a>
+  </div>
+  <div class="col">
+    <a class="card h-100 text-decoration-none" href="/docs/frontend/">
+      <div class="card-body">
+        <h5 class="card-title">Frontend</h5>
+        <p class="card-text">Vue 3 UI component inventory and theme system.</p>
+      </div>
+    </a>
+  </div>
+  <div class="col">
+    <a class="card h-100 text-decoration-none" href="/docs/backend/">
+      <div class="card-body">
+        <h5 class="card-title">Backend</h5>
+        <p class="card-text">Node.js API contracts for the gov-chat backend.</p>
+      </div>
+    </a>
+  </div>
+  <div class="col">
+    <a class="card h-100 text-decoration-none" href="/docs/mobile/">
+      <div class="card-body">
+        <h5 class="card-title">Mobile</h5>
+        <p class="card-text">Flutter app inventory and architecture.</p>
+      </div>
+    </a>
+  </div>
+  <div class="col">
+    <a class="card h-100 text-decoration-none" href="/docs/architecture/">
+      <div class="card-body">
+        <h5 class="card-title">Architecture</h5>
+        <p class="card-text">System-wide C4 container view and logging strategy.</p>
+      </div>
+    </a>
+  </div>
+  <div class="col">
+    <a class="card h-100 text-decoration-none" href="/docs/deployment/">
+      <div class="card-body">
+        <h5 class="card-title">Deployment</h5>
+        <p class="card-text">Docker Compose, Docker Swarm, and mobile deployment.</p>
+      </div>
+    </a>
+  </div>
+  <div class="col">
+    <a class="card h-100 text-decoration-none" href="/docs/configuration/">
+      <div class="card-body">
+        <h5 class="card-title">Configuration</h5>
+        <p class="card-text">Keycloak admin guide and external IdP integration.</p>
+      </div>
+    </a>
+  </div>
+</div>
 
 ## Guides vs. Reference
 

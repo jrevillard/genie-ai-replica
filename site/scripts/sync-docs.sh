@@ -47,8 +47,12 @@ inject_front_matter() {
 # Build a sed fragment once: for each MAP entry, rewrite bare ](srcname) -> ](/docs/section/tgt/).
 # This resolves cross-section bare links (e.g. ](architecture.md) inside deployment docs)
 # to the section where the target actually lives, not the source's section.
+# The SAME fragment also resolves ](../srcname.md): a `../architecture.md` link from a
+# backend doc must land in the MAP's architecture section, not the source's (backend) section.
+# We rewrite BOTH ](Name.md) and ](../Name.md) forms to the same MAP-resolved target.
 # Reads MAP without a pipe so the loop body updates survive (no subshell).
 BARE_LINK_REWRITE=""
+DOTDOT_LINK_REWRITE=""
 _bare_first=1
 _bare_IFS_old="$IFS"
 IFS='
@@ -58,26 +62,29 @@ for _bare_line in $MAP; do
 $_bare_line
 EOF
   [ -z "$_bare_s" ] && { continue; }
+  _bare_src_ere=$(printf "%s" "${_bare_src}" | sed "s#\.#\\.#g")
   if [ "$_bare_first" -eq 1 ]; then
-    _bare_src_ere=$(printf "%s" "${_bare_src}" | sed "s#\.#\\.#g")
     BARE_LINK_REWRITE="s#]\(${_bare_src_ere}\)#](/docs/${_bare_s}/${_bare_tgt}/)#g"
+    DOTDOT_LINK_REWRITE="s#\]\(\.\./${_bare_src_ere}\)#](/docs/${_bare_s}/${_bare_tgt}/)#g"
     _bare_first=0
   else
-    _bare_src_ere=$(printf "%s" "${_bare_src}" | sed "s#\.#\\.#g")
     BARE_LINK_REWRITE="${BARE_LINK_REWRITE};s#]\(${_bare_src_ere}\)#](/docs/${_bare_s}/${_bare_tgt}/)#g"
+    DOTDOT_LINK_REWRITE="${DOTDOT_LINK_REWRITE};s#\]\(\.\./${_bare_src_ere}\)#](/docs/${_bare_s}/${_bare_tgt}/)#g"
   fi
 done
 IFS="$_bare_IFS_old"
 
 rewrite_links() {
-  # $1 = target section (for ./ and ../ same-section rewrite).
+  # $1 = target section (for ./X.md same-section rewrite).
   # $2 = pre-built bare-link sed fragment (resolves ](foo.md) via the MAP).
-  # Order matters: apply bare-link rewrite FIRST so explicit ./ or ../ prefixes
-  # are not touched by the bare rule (bare rule requires no leading ./ ../).
-  # Bare links: ](Name.md) with no ./ or ../ prefix.
+  # $3 = pre-built ../-link sed fragment (resolves ](../foo.md) via the MAP).
+  # Order matters: apply MAP-resolving rewrites FIRST so the ./-prefixed rule
+  # does not touch them. ](./X.md) is a same-section link -> /docs/<src-section>/X/.
+  # ../X.md where X is NOT in the MAP (e.g. ../CLAUDE.md, ../README.md, ../.claude/...)
+  # is left as-is (non-ported ref).
   sed -E -e "$2" \
-         -e 's#\]\(\./([a-zA-Z0-9_-]+)\.md\)#](/'"$1"'/\1/)#g' \
-         -e 's#\]\(\.\./([a-zA-Z0-9_-]+)\.md\)#](/'"$1"'/\1/)#g'
+         -e "$3" \
+         -e 's#\]\(\./([a-zA-Z0-9_-]+)\.md\)#](/docs/'"$1"'/\1/)#g'
 }
 
 # Remove stale copied docs (*.md except _index.md) but PRESERVE authored landings.
@@ -86,7 +93,7 @@ echo "$MAP" | while IFS=: read -r section weight src tgt; do
   [ -z "$section" ] && continue
   mkdir -p "$DEST/$section"
   title=$(printf '%s' "$tgt" | tr '-' ' ' | awk '{for(i=1;i<=NF;i++)$i=toupper(substr($i,1,1))substr($i,2)}1')
-  inject_front_matter "$REPO_DOCS/$src" "$title" "$weight" "$section" | rewrite_links "$section" "$BARE_LINK_REWRITE" > "$DEST/$section/$tgt.md"
+  inject_front_matter "$REPO_DOCS/$src" "$title" "$weight" "$section" | rewrite_links "$section" "$BARE_LINK_REWRITE" "$DOTDOT_LINK_REWRITE" > "$DEST/$section/$tgt.md"
 done
 
 echo "Synced $(echo "$MAP" | grep -c ':') docs -> $DEST"

@@ -11,7 +11,7 @@
       {{- if $cover }} td-navbar-cover td-navbar-transparent {{- end }}"
       {{- if eq (.Param "ui.navbar_theme") "dark" }} data-bs-theme="dark" {{- end }}>
 <div class="td-navbar-container container-fluid flex-column flex-md-row">
-  <!-- Brand: GENIE.AI logo + wordmark with dark-mode variant (replaces Docsy default brand block) -->
+  <!-- Brand: GENIE.AI logo + wordmark (replaces Docsy default brand block) -->
   <a class="navbar-brand ds-brand" href="{{ .Site.Home.RelPermalink }}">
     {{- /**/ -}}
     <span class="navbar-brand__logo navbar-logo">
@@ -21,12 +21,6 @@
                src="{{ .RelPermalink }}"
                width="32" height="32"
                alt="" loading="eager" decoding="async">
-        {{ end -}}
-        {{ with resources.Get "images/genie-ai-icon-light.svg" -}}
-          <img class="ds-logo ds-logo-dark"
-               src="{{ .RelPermalink }}"
-               width="32" height="32"
-               alt="" loading="eager" decoding="async" aria-hidden="true">
         {{ end -}}
       {{ end -}}
     </span>

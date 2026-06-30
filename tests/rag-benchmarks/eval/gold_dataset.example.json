@@ -1,0 +1,21 @@
+{
+  "_doc": "Gold standard for reranker-selection eval. Copy to gold_dataset.json and fill one entry per query. gold_chunk_keys are the ArangoDB _key values of chunks that SHOULD be retrieved (find them via dump_chunks.py or an AQL browse). categoryLabel/serviceLabels/language mirror the payload the backend sends to chatqna (drives label-filtered retrieval) — keep them faithful to a real user flow.",
+  "entries": [
+    {
+      "id": "q1",
+      "query": "How do I apply for an agricultural subsidy?",
+      "categoryLabel": "Agriculture",
+      "serviceLabels": ["Subsidies"],
+      "language": "en",
+      "gold_chunk_keys": ["chunk_123", "chunk_456"]
+    },
+    {
+      "id": "q2",
+      "query": "What documents are required for export certification?",
+      "categoryLabel": "Agriculture",
+      "serviceLabels": ["Export certification"],
+      "language": "en",
+      "gold_chunk_keys": ["chunk_789"]
+    }
+  ]
+}

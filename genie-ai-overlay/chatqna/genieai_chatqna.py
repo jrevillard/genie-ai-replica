@@ -42,6 +42,41 @@ from transformers import AutoTokenizer
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
 setup_trace_logging("GENIE.AI_CHATQNA")
+
+# Tracer for pipeline-node-level spans emitted from align_outputs (e.g. the
+# reranker-selection identity span used by the retrieval-quality eval harness).
+# The orchestrate handler keeps its own scope-local tracer; this one serves the
+# service-merge path where both candidate and selected chunk ids are known.
+align_tracer = get_tracer("chatqna.align_outputs")
+
+
+def _emit_reranker_selection_span(candidate_docs, selected_docs):
+    """Emit reranker selection identity for retrieval-quality evaluation.
+
+    This is the single junction where both the pre-rerank candidates and the
+    post-rerank selection are known with canonical chunk ``_key`` identity
+    (recovered via ``text_to_id`` in ``align_outputs``). The eval harness at
+    ``tests/rag-benchmarks/eval/`` consumes these attributes to compute
+    recall / precision / complete-recall / noise. Extracted as a helper so it
+    is unit-testable without driving the full mega-service pipeline.
+    """
+    with align_tracer.start_as_current_span("chatqna.reranker_selection") as sel_span:
+        sel_span.set_attribute(
+            "rag.candidate_chunk_ids",
+            [d.get("id", "N/A") for d in candidate_docs],
+        )
+        sel_span.set_attribute(
+            "rag.selected_chunk_ids",
+            [d.get("id", "N/A") for d in selected_docs],
+        )
+        sel_span.set_attribute(
+            "rag.selected_scores",
+            [round(float(d.get("score", 0.0)), 6) for d in selected_docs],
+        )
+        sel_span.set_attribute("rag.candidate_count", len(candidate_docs))
+        sel_span.set_attribute("rag.selected_count", len(selected_docs))
+
+
 # Respect LOG_LEVEL: patch uvicorn's LOGGING_CONFIG (applied at startup via
 # dictConfig — this overrides import-time setLevel) so DEBUG actually works.
 # uvicorn 0.34's default config has no "root" key + handler at NOTSET → DEBUG
@@ -1105,6 +1140,9 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             )  # prompt <- change to 'prompt' if you re-introduce the code above
 
         next_data["retrieved_docs"] = reranked_docs_with_scores
+
+        # Emit selection identity for retrieval-quality eval (recall/precision).
+        _emit_reranker_selection_span(original_retrieved_docs, reranked_docs_with_scores)
 
         # 4. Preserve file mappings for citation:
         if "file_id_pairs" in inputs:

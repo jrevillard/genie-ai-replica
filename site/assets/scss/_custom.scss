@@ -249,3 +249,22 @@ blockquote {
   color: var(--ds-muted);
 }
 
+
+// === Task 5: Chroma code-block background =====================================
+// Docsy/Hugo emit highlighted code blocks as <div class="highlight"><pre class="chroma">.
+// Dracula ships its own dark bg via .chroma background-color; we keep Dracula's
+// syntax-token colors but force the block background to the DS surface token so
+// code blocks read as part of the design system (light surface in light mode,
+// dark surface in dark mode via _tokens.scss :root redefinition).
+.highlight,
+.chroma {
+  background-color: var(--ds-surface) !important;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+}
+// Dracula sets inline color on .chroma tokens via inline classes — let those
+// win for token text color, but inherit for plain (untokenised) text so the
+// body text color (high-contrast --ds-fg) applies.
+.chroma {
+  color: var(--ds-fg);
+}

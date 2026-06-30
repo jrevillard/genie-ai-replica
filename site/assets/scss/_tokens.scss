@@ -28,7 +28,9 @@
   --ds-font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
-[data-theme="dark"] {
+[data-bs-theme="dark"],
+[data-theme="dark"],
+html.dark {
   --ds-bg: oklch(15% 0.008 250);
   --ds-surface: oklch(24% 0.01 250);
   --ds-fg: oklch(95% 0.005 250);

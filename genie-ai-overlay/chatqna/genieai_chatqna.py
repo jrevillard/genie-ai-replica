@@ -50,24 +50,40 @@ setup_trace_logging("GENIE.AI_CHATQNA")
 align_tracer = get_tracer("chatqna.align_outputs")
 
 
+def _content_hash(text, prefix_len=200):
+    """Stable content fingerprint — MUST match ``tests/rag-benchmarks/eval/chunk_identity.py``.
+
+    ``sha256(normalize(text)[:prefix_len])[:16]``. Irreversible (no content
+    leak into telemetry). Used because chunk ``_key`` does NOT survive the
+    retriever->chatqna handoff (langchain-arangodb mangles it to a random
+    UUID), so content is the only stable identity across both re-ingest and the
+    service boundary.
+    """
+    import hashlib
+    import re
+
+    norm = re.sub(r"\s+", " ", (text or "").strip().lower())[:prefix_len]
+    return hashlib.sha256(norm.encode("utf-8")).hexdigest()[:16]
+
+
 def _emit_reranker_selection_span(candidate_docs, selected_docs):
     """Emit reranker selection identity for retrieval-quality evaluation.
 
-    This is the single junction where both the pre-rerank candidates and the
-    post-rerank selection are known with canonical chunk ``_key`` identity
-    (recovered via ``text_to_id`` in ``align_outputs``). The eval harness at
-    ``tests/rag-benchmarks/eval/`` consumes these attributes to compute
+    Emits CONTENT HASHES (not ``_key``) — chunk ``_key`` is mangled by langchain
+    during the retriever->chatqna handoff, so content is the only stable
+    identity. The eval harness at ``tests/rag-benchmarks/eval/`` matches these
+    hashes against ``gold_dataset.json`` expected content_hashes to compute
     recall / precision / complete-recall / noise. Extracted as a helper so it
     is unit-testable without driving the full mega-service pipeline.
     """
     with align_tracer.start_as_current_span("chatqna.reranker_selection") as sel_span:
         sel_span.set_attribute(
-            "rag.candidate_chunk_ids",
-            [d.get("id", "N/A") for d in candidate_docs],
+            "rag.candidate_chunk_hashes",
+            [_content_hash(d.get("text", "")) for d in candidate_docs],
         )
         sel_span.set_attribute(
-            "rag.selected_chunk_ids",
-            [d.get("id", "N/A") for d in selected_docs],
+            "rag.selected_chunk_hashes",
+            [_content_hash(d.get("text", "")) for d in selected_docs],
         )
         sel_span.set_attribute(
             "rag.selected_scores",

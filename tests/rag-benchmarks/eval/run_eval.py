@@ -118,8 +118,13 @@ def fetch_selection(start_s: float) -> tuple[list[str], list[str]]:
     return candidates, selected
 
 
-def build_key_maps() -> tuple[dict[str, str], dict[str, str]]:
-    """Return ({_key: content_hash}, {_key: full_text}) from ArangoDB."""
+def build_key_maps(need_text: bool = False) -> tuple[dict[str, str], dict[str, str]]:
+    """Return ({_key: content_hash}, {_key: full_text}) from ArangoDB.
+
+    ``key_to_text`` holds full chunk text for every chunk — only build it when
+    actually needed (dump-tuples mode), to avoid pulling the whole corpus into
+    memory for an anchor-only run.
+    """
     rows = cursor(
         f"""
         FOR doc IN {GRAPH_SOURCE}
@@ -127,27 +132,33 @@ def build_key_maps() -> tuple[dict[str, str], dict[str, str]]:
         """
     )
     key_to_hash = {r["key"]: content_hash(r.get("text", "")) for r in rows}
-    key_to_text = {r["key"]: r.get("text", "") for r in rows}
+    key_to_text = {r["key"]: r.get("text", "") for r in rows} if need_text else {}
     return key_to_hash, key_to_text
 
 
-def score_anchor(entry, selected_keys, candidate_keys, key_to_hash) -> dict:
+def score_anchor(entry, selected_keys, candidate_keys, key_to_hash, trace_found: bool) -> dict:
     gold = [c["content_hash"] for c in entry.get("expected_chunks", [])]
     selected = [key_to_hash[k] for k in selected_keys if k in key_to_hash]
     candidates = [key_to_hash[k] for k in candidate_keys if k in key_to_hash]
     row = {
         "id": entry["id"],
         "query": entry["query"],
+        "trace_found": trace_found,
         "gold": gold,
         "selected": selected,
         "candidates": candidates,
-        "recall": metrics.recall(gold, selected),
-        "precision": metrics.precision(gold, selected),
-        "complete_recall": metrics.complete_recall(gold, selected),
-        "noise": metrics.noise(gold, selected),
     }
-    if candidates:
-        row["retrieval_recall"] = metrics.retrieval_recall(gold, candidates)
+    if trace_found:
+        # Only score when we actually saw a selection span — otherwise selected=[]
+        # would falsely read as total recall failure (or vacuous 1.0 on empty gold).
+        row.update(
+            recall=metrics.recall(gold, selected),
+            precision=metrics.precision(gold, selected),
+            complete_recall=metrics.complete_recall(gold, selected),
+            noise=metrics.noise(gold, selected),
+        )
+        if candidates:
+            row["retrieval_recall"] = metrics.retrieval_recall(gold, candidates)
     return row
 
 
@@ -166,18 +177,27 @@ def main(mode: str, gold_path: str, out_path: str) -> None:
     with open(gold_path) as fh:
         gold = json.load(fh)
     entries = gold["entries"]
-    key_to_hash, key_to_text = build_key_maps()
+    key_to_hash, key_to_text = build_key_maps(need_text=(mode == "dump-tuples"))
 
-    tuples, rows = [], []
+    tuples, rows, missed = [], [], 0
     for entry in entries:
         start, body = drive_query(entry)
         answer = _extract_answer(body)
         candidate_keys, selected_keys = fetch_selection(start)
-        print(f"[{entry['id']}] selected={len(selected_keys)} candidates={len(candidate_keys)}", file=sys.stderr)
+        trace_found = bool(candidate_keys or selected_keys)
+        if not trace_found:
+            missed += 1
+            print(
+                f"[{entry['id']}] WARNING: no reranker_selection span in window — "
+                "trace missed (not scored). Check observability / bump TRACE_FLUSH_WAIT.",
+                file=sys.stderr,
+            )
+        else:
+            print(f"[{entry['id']}] selected={len(selected_keys)} candidates={len(candidate_keys)}", file=sys.stderr)
         if mode == "dump-tuples":
             tuples.append(make_tuple(entry, selected_keys, key_to_text, answer))
         else:  # anchor
-            rows.append(score_anchor(entry, selected_keys, candidate_keys, key_to_hash))
+            rows.append(score_anchor(entry, selected_keys, candidate_keys, key_to_hash, trace_found))
 
     if mode == "dump-tuples":
         with open(out_path, "w") as fh:
@@ -185,14 +205,17 @@ def main(mode: str, gold_path: str, out_path: str) -> None:
         print(f"\nWrote {len(tuples)} eval tuples → {out_path}", file=sys.stderr)
         print("Feed to: run_ragas_eval.py eval_tuples.json", file=sys.stderr)
     else:
-        agg = metrics.aggregate(rows)
-        report = {"per_query": rows, "aggregate": agg}
+        scored = [r for r in rows if r.get("trace_found")]
+        agg = metrics.aggregate(scored)
+        report = {"per_query": rows, "aggregate": agg, "n_missed_traces": missed}
         with open(out_path, "w") as fh:
             json.dump(report, fh, indent=2)
-        print(f"\n=== AGGREGATE (n={agg['n']}) ===", file=sys.stderr)
+        print(f"\n=== AGGREGATE (n={agg['n']}, missed={missed}) ===", file=sys.stderr)
         for k in ("recall", "precision", "complete_recall", "noise", "retrieval_recall"):
             if k in agg:
                 print(f"  {k:20s} {agg[k]:.3f}", file=sys.stderr)
+        if missed:
+            print(f"  {missed} trace(s) missed and excluded — see per_query[].trace_found", file=sys.stderr)
         print(f"\nReport → {out_path}", file=sys.stderr)
 
 

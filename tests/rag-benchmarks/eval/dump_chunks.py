@@ -26,6 +26,9 @@ from chunk_identity import content_hash
 GRAPH_SOURCE = os.getenv("GRAPH_SOURCE", "genieai_graph_SOURCE")
 TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "text")
 # Fetch enough head to compute the content_hash (prefix-based) + a readable preview.
+# Must stay >= chunk_identity's default prefix_len (200) so content_hash gets the
+# full prefix here; dump + eval both call content_hash(), so hashes are consistent
+# by construction regardless of this value (as long as it's >= prefix_len).
 FETCH_LEN = 250
 
 

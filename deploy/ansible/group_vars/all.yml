@@ -136,6 +136,8 @@ keycloak_ssl_skip_verify: ""
 #   dataprep_contextual_model: ""         # empty = reuse vllm_llm_model_id; must support
 #                                         #   guided JSON (response_format=json_object)
 #   dataprep_contextual_doc_budget: 6000  # max chars of doc text fed to the context LLM
+#   dataprep_contextual_max_tokens: 512   # max OUTPUT tokens for the context LLM (doc-level + per-chunk).
+#                                         #   200 truncated the JSON under load → raw-chunk fallback; 512 = safe margin (model stops early ~196).
 #   contextual_strategy: per_chunk        # per_chunk (default; one call/chunk) | doc_level
 #                                         #   (one call/doc, N× cheaper, same context on all chunks)
 #   contextual_label_raw: false           # decoupled: label RAW chunk, context for embedding only (recommended)

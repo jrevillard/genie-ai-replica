@@ -1,7 +1,21 @@
 // GENIE.AI brand overrides — Docsy auto-imports this file.
-// Override Bootstrap/Docsy SCSS variables here.
-// Replace with the official GENIE.AI brand color when known.
+// Design tokens live in CSS custom properties (see _tokens.scss, imported first).
+// Bootstrap SCSS overrides stay hex because BS mix()/color-contrast() reject oklch.
 
-$primary: #1a73e8;     // brand blue (placeholder)
-$secondary: #34a853;   // accent (placeholder)
+@import "tokens";
+
+// Bootstrap variables (hex — required for BS color math)
+$primary: #1b3fad;
+$secondary: #122f87;
 $body-bg: #ffffff;
+
+// Typography (use the CSS-var font stacks so one source of truth)
+$font-family-sans-serif: var(--ds-font-body);
+$font-family-monospace: var(--ds-font-mono);
+
+// Radii (use CSS vars so they scale with tokens)
+$border-radius: var(--ds-radius-md);
+$border-radius-sm: var(--ds-radius-sm);
+$border-radius-lg: var(--ds-radius-lg);
+
+@import "custom";

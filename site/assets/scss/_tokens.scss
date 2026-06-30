@@ -26,6 +26,16 @@
   --ds-shadow-lg: 0 10px 15px oklch(20% 0.02 250 / 0.12);
   --ds-font-body: "Inter", system-ui, -apple-system, sans-serif;
   --ds-font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  // Bridge: drive Bootstrap's color-mode vars from the DS tokens so Bootstrap's
+  // !important body/component rules follow the DS in light mode too.
+  --bs-body-bg: var(--ds-bg);
+  --bs-body-color: var(--ds-fg);
+  --bs-emphasis-color: var(--ds-fg);
+  --bs-secondary-color: var(--ds-muted);
+  --bs-border-color: var(--ds-border);
+  --bs-link-color: var(--ds-accent);
+  --bs-link-hover-color: var(--ds-accent-hover);
 }
 
 [data-bs-theme="dark"],
@@ -42,6 +52,14 @@ html.dark {
   --ds-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
   --ds-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
   --ds-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
+  // Override Bootstrap's hardcoded dark-mode vars with the DS tokens.
+  --bs-body-bg: var(--ds-bg);
+  --bs-body-color: var(--ds-fg);
+  --bs-emphasis-color: var(--ds-fg);
+  --bs-secondary-color: var(--ds-muted);
+  --bs-border-color: var(--ds-border);
+  --bs-link-color: var(--ds-accent);
+  --bs-link-hover-color: var(--ds-accent-hover);
 }
 
 // Self-hosted fonts (sovereign/DPG — no external CDN)

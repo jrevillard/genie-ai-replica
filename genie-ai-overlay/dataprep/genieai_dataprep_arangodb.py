@@ -497,7 +497,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         results = []
         total = len(indexed)
         for n, (i, text) in enumerate(indexed, 1):
-            labels = await self._finalize_chunk_labels(i, suggested_map.get(i, []), all_labels, file_id)
+            labels = await self._finalize_chunk_labels(i, suggested_map.get(i, []), all_labels, file_id, file_labels)
             results.append({"text": text, "labels": labels})
             if n % 200 == 0 or n == total:
                 logger.info(f"Labeling progress: {n}/{total} chunks finalized")
@@ -1013,8 +1013,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 )
                 return None
 
-    async def _finalize_chunk_labels(self, index, suggested, all_labels, file_id) -> list[str]:
-        """Resolve raw LLM suggestions against the taxonomy (exact + synonym match).
+    async def _finalize_chunk_labels(self, index, suggested, all_labels, file_id, file_labels=None) -> list[str]:
+        """Resolve raw LLM suggestions against the taxonomy, then scope to the document.
+
+        Suggestions are first canonicalised against the full taxonomy (exact +
+        synonym match). The LLM is prompted with the full taxonomy, so it may
+        suggest labels that are valid taxonomy entries but outside the document's
+        scope (e.g. a sibling crop on a single-crop guide). ``file_labels`` defines
+        the eligible scope: any resolved label not in ``file_labels`` is dropped
+        before storage. When ``file_labels`` is empty, no scoping is applied
+        (preserves the legacy taxonomy-validated behaviour and avoids dropping
+        every label on documents without a scope).
 
         Consolidates per-label progress logs into a single summary entry per chunk
         (previously ~3.7 logs/chunk flooded the backend ingestion-log endpoint).
@@ -1039,8 +1048,20 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 new_labels.append(label)
 
         labels_list = list(final_labels)
+        # Scope to the document's file_labels: drop taxonomy-valid labels that
+        # fall outside the document's scope (e.g. sibling crops on a single-crop
+        # guide). Skipped when file_labels is empty so documents without a scope
+        # keep all taxonomy-validated labels.
+        dropped = []
+        if file_labels:
+            scope = set(file_labels)
+            dropped = [l for l in labels_list if l not in scope]
+            labels_list = [l for l in labels_list if l in scope]
+
         level = "INFO"
         msg = f"Chunk {index}: Final labels ({len(labels_list)}): {labels_list}."
+        if dropped:
+            msg += f" Dropped (out of document scope): {dropped}."
         if new_labels:
             level = "WARN"
             msg += f" New (non-taxonomy) labels suggested: {new_labels} — consider adding to the Knowledge Hierarchy."

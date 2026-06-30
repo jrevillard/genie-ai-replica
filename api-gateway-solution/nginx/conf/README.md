@@ -49,6 +49,6 @@ keytool -list -v -keystore <path-to-keystore> -alias <alias> | grep SHA256
 
 ### See Also
 
-- [Deployment Guide: Universal Links & App Links](../../../docs/mobile-deployment-guide.md#universal-links--app-links)
+- [Deployment Guide: Universal Links & App Links](../../../site/content/en/docs/deployment/mobile-deployment-guide.md#universal-links--app-links)
 - [Apple App Search Validation Tool](https://search.developer.apple.com/appsearch-validation-tool/)
 - [Android Asset Links Tester](https://developers.google.com/digital-asset-links/tools/generator)

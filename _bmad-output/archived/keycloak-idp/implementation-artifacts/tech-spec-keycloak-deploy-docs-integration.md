@@ -13,7 +13,7 @@ files_to_modify:
   - 'deploy/ansible/group_vars/itu_rtx_test/vault.yml'
   - 'docs/e2e-tests/00-clean-start.md'
   - 'docs/e2e-tests/README.md'
-  - 'docs/docker-compose-setup.md'
+  - 'site/content/en/docs/deployment/docker-compose-setup.md'
 code_patterns:
   - 'Flat Ansible playbook (no roles) — all tasks in deploy.yml'
   - 'Vault AES256 for secrets, group_vars per environment'
@@ -87,8 +87,8 @@ Add `build:` directives to Keycloak services in docker-compose.yaml so `docker c
 | `deploy/ansible/group_vars/itu_rtx_test/vault.yml` | Test env secrets (vault encrypted) | 55 |
 | `docs/e2e-tests/README.md` | E2E test guide — references Swarm | ~65 |
 | `docs/e2e-tests/00-clean-start.md` | Clean start — uses `docker stack` + registry | ~370 |
-| `docs/docker-compose-setup.md` | Compose guide — no Keycloak | ~322 |
-| `docs/docker-swarm-setup.md` | Swarm guide — Keycloak complete | ~618 |
+| `site/content/en/docs/deployment/docker-compose-setup.md` | Compose guide — no Keycloak | ~322 |
+| `site/content/en/docs/deployment/docker-swarm-setup.md` | Swarm guide — Keycloak complete | ~618 |
 | `env` | Template with all Keycloak vars (Section 9, 9B) | ~400 |
 | `config/postgres/Dockerfile` | postgres-init Dockerfile | — |
 | `config/keycloak/Dockerfile` | Keycloak Dockerfile | — |
@@ -170,7 +170,7 @@ Add `build:` directives to Keycloak services in docker-compose.yaml so `docker c
   1. Update any image/service references to include the 3 new Keycloak images (total: 13 images)
   2. Add Keycloak variables to the Configuration Variables section — document each variable from env.j2 Section 9 with description, default, and which service uses it
   3. Update the post-deploy verification section to mention Keycloak health check and admin console URL (`https://{{ NGINX_PUBLIC_DOMAIN }}/auth/admin/`)
-- Notes: Follow existing README documentation style. Reference `docs/keycloak-admin-guide.md` where relevant.
+- Notes: Follow existing README documentation style. Reference `site/content/en/docs/configuration/keycloak-admin-guide.md` where relevant.
 
 ### Task 6: Migrate E2E test setup from Swarm to Compose
 
@@ -196,7 +196,7 @@ Add `build:` directives to Keycloak services in docker-compose.yaml so `docker c
 
 ### Task 8: Add Keycloak section to docker-compose-setup.md
 
-- File: `docs/docker-compose-setup.md`
+- File: `site/content/en/docs/deployment/docker-compose-setup.md`
 - Action:
   1. **Step 3 (Configure Environment)**: Add Keycloak and PostgreSQL required secrets to the existing secrets list: `KONG_DB_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_DB_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_PROXY_CLIENT_SECRET`, `SERVICE_AUTH_TOKEN`
   2. **New section between Step 6 (Deploy) and Step 7 (Kong Config)**: Add "Keycloak Identity Provider" subsection covering:
@@ -204,12 +204,12 @@ Add `build:` directives to Keycloak services in docker-compose.yaml so `docker c
      - How to verify Keycloak is healthy: `docker compose ps keycloak` or access `https://localhost/auth/admin/`
      - Keycloak admin console: URL, default credentials (`admin` / `KEYCLOAK_ADMIN_PASSWORD`)
      - Note that realm configuration is applied automatically by `keycloak-config` service
-     - Reference `docs/keycloak-admin-guide.md` and `docs/external-idp-integration-guide.md`
+     - Reference `site/content/en/docs/configuration/keycloak-admin-guide.md` and `site/content/en/docs/configuration/external-idp-integration-guide.md`
 - Notes: Step 3 update is critical — without Keycloak vars in `.env`, the deploy will fail. The new Keycloak section documents post-deploy verification. Keep both concise.
 
 ### Task 9: Verify docker-swarm-setup.md Keycloak coverage post-rebase
 
-- File: `docs/docker-swarm-setup.md`
+- File: `site/content/en/docs/deployment/docker-swarm-setup.md`
 - Action: Read and verify that Keycloak sections are intact after rebase. Check:
   - Build commands include postgres-init, keycloak, keycloak-config (lines ~200-210)
   - Tag/push commands include the 3 new images
@@ -229,8 +229,8 @@ Add `build:` directives to Keycloak services in docker-compose.yaml so `docker c
 - [ ] AC 6: Given `ansible-playbook deploy.yml --tags build`, when executed against a target host, then 13 images are built and pushed (10 existing + postgres-init + keycloak + keycloak-config)
 - [ ] AC 7: Given `docs/e2e-tests/00-clean-start.md`, when followed by a developer, then the stack starts with `docker compose up -d` (no Swarm commands, no registry steps)
 - [ ] AC 8: Given `docs/e2e-tests/README.md`, when read, then prerequisites reference Docker Compose (not Swarm)
-- [ ] AC 9: Given `docs/docker-compose-setup.md`, when read, then Step 3 lists Keycloak required secrets AND a Keycloak section exists with health verification steps
-- [ ] AC 10: Given `docs/docker-swarm-setup.md`, when read post-rebase, then all Keycloak sections are intact (builds, env vars, admin console, external IdP, teardown volume name)
+- [ ] AC 9: Given `site/content/en/docs/deployment/docker-compose-setup.md`, when read, then Step 3 lists Keycloak required secrets AND a Keycloak section exists with health verification steps
+- [ ] AC 10: Given `site/content/en/docs/deployment/docker-swarm-setup.md`, when read post-rebase, then all Keycloak sections are intact (builds, env vars, admin console, external IdP, teardown volume name)
 - [ ] AC 11: Given the Ansible README, when read, then the Keycloak variables are documented with descriptions, defaults, and service mappings
 
 ## Additional Context

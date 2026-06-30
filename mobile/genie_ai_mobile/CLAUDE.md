@@ -58,7 +58,7 @@ final profile = jsonDecode(response.body);
 
 ## Design System
 
-The mobile app shares the same DS architecture as the web frontend. See `docs/theme-system.md` for the full theming documentation.
+The mobile app shares the same DS architecture as the web frontend. See `site/content/en/docs/frontend/theme-system.md` for the full theming documentation.
 
 ### Architecture
 
@@ -114,7 +114,7 @@ lib/design_system/
 
 ### Keycloak Mobile Client
 
-For creating a new institutional deployment, follow the [Mobile Deployment Onboarding Guide](../../../docs/mobile-deployment-guide.md). The guide covers environment variables, Keycloak client creation, flavor configuration, build commands, and validation.
+For creating a new institutional deployment, follow the [Mobile Deployment Onboarding Guide](../../../site/content/en/docs/deployment/mobile-deployment-guide.md). The guide covers environment variables, Keycloak client creation, flavor configuration, build commands, and validation.
 
 The mobile OIDC client is created automatically by keycloak-config-cli from environment variables. For the legacy manual creation process (kept for reference):
 

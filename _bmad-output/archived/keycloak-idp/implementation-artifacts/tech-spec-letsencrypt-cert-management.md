@@ -6,7 +6,7 @@ status: 'done'
 stepsCompleted: [1, 2, 3, 4]
 baseline_commit: '8f4772c'
 tech_stack: ['Bash (entrypoints)', 'nginx (conf templates + envsubst)', 'Docker Compose (dual-mode)', 'certbot/certbot (official image)']
-files_to_modify: ['docker-compose.yaml', 'api-gateway-solution/nginx/conf/default.conf.template', 'api-gateway-solution/nginx/entrypoint.sh', 'api-gateway-solution/certbot/entrypoint.sh (new)', 'env', 'secrets/README.md', 'docs/docker-compose-setup.md', 'docs/docker-swarm-setup.md']
+files_to_modify: ['docker-compose.yaml', 'api-gateway-solution/nginx/conf/default.conf.template', 'api-gateway-solution/nginx/entrypoint.sh', 'api-gateway-solution/certbot/entrypoint.sh (new)', 'env', 'secrets/README.md', 'site/content/en/docs/deployment/docker-compose-setup.md', 'site/content/en/docs/deployment/docker-swarm-setup.md']
 code_patterns: ['Conditional services: profiles: [xxx] + replicas: ${VAR:-0}', 'Nginx entrypoint manages all SSL logic (volume mount -> self-signed fallback)', 'default.conf.template rendered via envsubst at container start', 'Port 80 server block restructured: ACME location + redirect location']
 test_patterns: ['No existing tests for nginx/certbot infrastructure']
 ---
@@ -234,9 +234,9 @@ Add a `certbot` service to the docker-compose that automatically obtains and ren
     5. Nginx is automatically reloaded after renewal via flag file
 
 - [x] Task 7: Update documentation
-  - File: `docs/docker-compose-setup.md`
+  - File: `site/content/en/docs/deployment/docker-compose-setup.md`
   - Action: Add Let's Encrypt section explaining activation with `--profile letsencrypt` and `CERTBOT_EMAIL`
-  - File: `docs/docker-swarm-setup.md`
+  - File: `site/content/en/docs/deployment/docker-swarm-setup.md`
   - Action: Add Let's Encrypt section explaining activation with `CERTBOT_REPLICAS=1` and `CERTBOT_EMAIL`
 
 ### Acceptance Criteria
@@ -362,7 +362,7 @@ Add a `certbot` service to the docker-compose that automatically obtains and ren
   [`README.md:37`](../../secrets/README.md#L37)
 
 - Docker Compose setup: Option C for Let's Encrypt
-  [`docker-compose-setup.md:100`](../../docs/docker-compose-setup.md#L100)
+  [`docker-compose-setup.md:100`](../../site/content/en/docs/deployment/docker-compose-setup.md#L100)
 
 - Docker Swarm setup: Let's Encrypt in Step 7
-  [`docker-swarm-setup.md:325`](../../docs/docker-swarm-setup.md#L325)
+  [`docker-swarm-setup.md:325`](../../site/content/en/docs/deployment/docker-swarm-setup.md#L325)

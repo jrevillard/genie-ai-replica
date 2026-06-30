@@ -1,0 +1,11 @@
+{{/* Project head-end hook: explicit GENIE.AI favicon + apple-touch-icon links.
+     Files live in site/static/ and are served at site root. */}}
+<link rel="icon" type="image/svg+xml" href="{{ ("favicon.svg" | relURL) }}">
+<link rel="apple-touch-icon" sizes="192x192" href="{{ ("apple-touch-icon.png" | relURL) }}">
+{{/* Task 5: theme persistence + no-FOLC apply. Synchronous in <head> so the
+     stored dark-mode preference is applied before first paint. The script is
+     tiny and reads localStorage only; safe to run pre-DOMContentLoaded. */}}
+{{- with resources.Get "js/theme-toggle.js" -}}
+  {{- $js := . | minify -}}
+  <script>{{ $js.Content | safeJS }}</script>
+{{- end -}}

@@ -260,7 +260,7 @@ def _streaming_marker_tail_len(buffer: str) -> int:
 # An optional LLM self-grade (`LLM_SELF_CONFIDENCE_ENABLED`, default off) lets the
 # model rate how well the retrieved documents support its own answer; it is
 # exposed alongside the retrieval confidence but never replaces the grounding
-# decision, which stays driven by `is_grounded`. See docs/architecture.md §9.4.
+# decision, which stays driven by `is_grounded`. See site/content/en/docs/architecture/architecture.md §9.4.
 # ---------------------------------------------------------------------------
 
 RERANKER_SCORE_CALIBRATION = os.getenv("RERANKER_SCORE_CALIBRATION", "none").strip().lower()
@@ -1434,7 +1434,7 @@ class ChatQnAService:
         # which dragged the mean down, so richer context was *punished*. Weighting
         # by rank (rank 0 = most relevant, since reranker verdicts are descending
         # and `scores` preserves that display order) lets the strongest match
-        # dominate instead. See docs/architecture.md §9.4.
+        # dominate instead. See site/content/en/docs/architecture/architecture.md §9.4.
         retrieval_confidence_score = _rank_weighted_confidence(scores)
         logger.debug(f"document confidence scores: {scores}")
 

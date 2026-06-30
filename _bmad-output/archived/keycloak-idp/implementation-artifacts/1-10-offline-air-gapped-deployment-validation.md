@@ -62,7 +62,7 @@ so that GENIE.AI meets air-gapped/offline deployment requirements.
   - [x] Add findings to Phase E of `docs/e2e-test-plan-external-idp.md`
 
 - [x] Task 3: Cross-check existing air-gapped image list (AC: #2)
-  - [x] Cross-reference Step 5d image list in `docs/docker-swarm-setup.md` against all `image:` directives in `docker-compose.yaml` — confirm no missing images
+  - [x] Cross-reference Step 5d image list in `site/content/en/docs/deployment/docker-swarm-setup.md` against all `image:` directives in `docker-compose.yaml` — confirm no missing images
   - [x] All 16 external images match (13 runtime + 3 build-time Dockerfiles). No gaps found. No changes to Step 5d needed.
 
 - [x] Task 4: Execute and document offline deployment verification (AC: #1, #3, #4, #5)
@@ -176,7 +176,7 @@ From `docker-compose.yaml` analysis, these external images must be pre-pulled an
 | File | Change |
 |------|--------|
 | `docs/e2e-test-plan-external-idp.md` | Add Phase E: Air-Gapped Validation + rows in Test Results Summary |
-| `docs/docker-swarm-setup.md` | Cross-check Step 5d image list; add missing images if any |
+| `site/content/en/docs/deployment/docker-swarm-setup.md` | Cross-check Step 5d image list; add missing images if any |
 
 **Files NOT MODIFIED:**
 | File | Reason |
@@ -241,8 +241,8 @@ From `docker-compose.yaml` analysis, these external images must be pre-pulled an
 - [Source: _bmad-output/planning-artifacts/architecture.md#Open Architectural Questions] — Token revocation in air-gapped mode: documented security trade-off
 - [Source: _bmad-output/planning-artifacts/architecture.md#Decision D6] — Keycloak realm initialization via custom image with keycloak-config-cli, no bind mounts, 100% cloud-native
 - [Source: _bmad-output/planning-artifacts/architecture.md#Key Strengths] — Cloud-native config approach, defense in depth with optional Kong, backend autonomous
-- [Source: docs/docker-swarm-setup.md#Step 5d] — Pre-pull external images for air-gapped deployments (existing but needs update)
-- [Source: docs/external-idp-integration-guide.md#Air-Gapped Deployments] — External IdPs not available in air-gapped
+- [Source: site/content/en/docs/deployment/docker-swarm-setup.md#Step 5d] — Pre-pull external images for air-gapped deployments (existing but needs update)
+- [Source: site/content/en/docs/configuration/external-idp-integration-guide.md#Air-Gapped Deployments] — External IdPs not available in air-gapped
 - [Source: _bmad-output/project-context.md] — Backend conventions (CommonJS, Jest, naming)
 - [Source: _bmad-output/implementation-artifacts/1-9-external-idp-connection-via-keycloak-only.md] — Previous story — auth layer state reference
 
@@ -269,7 +269,7 @@ N/A — no code changes, documentation-only story
 | File | Action | Description |
 |------|--------|-------------|
 | `docs/e2e-test-plan-external-idp.md` | MODIFIED | Added Phase E (Air-Gapped Validation) with 5 test procedures; updated Test Results Summary table with Phase E rows; updated Acceptance Criteria Mapping with Story 1.10 ACs; updated Full Test Run section |
-| `docs/docker-swarm-setup.md` | NOT MODIFIED | Cross-checked Step 5d — all 16 images present, no gaps |
+| `site/content/en/docs/deployment/docker-swarm-setup.md` | NOT MODIFIED | Cross-checked Step 5d — all 16 images present, no gaps |
 
 ## Change Log
 

@@ -10,7 +10,7 @@ So that I can create and publish a new deployment in under a day by following a 
 
 ## Acceptance Criteria
 
-1. **Given** the deployment guide exists at `docs/mobile-deployment-guide.md`
+1. **Given** the deployment guide exists at `site/content/en/docs/deployment/mobile-deployment-guide.md`
    **When** an operator follows it end-to-end
    **Then** it covers: adding `KC_MOBILE_CLIENT_ID` and `KC_MOBILE_REDIRECT_SCHEME` to `.env`, copying and filling the flavor template, configuring build files (gradle product flavor + iOS XCConfig triplet), build commands, and testing steps (FR26)
 
@@ -51,7 +51,7 @@ So that I can create and publish a new deployment in under a day by following a 
 
 ## Tasks / Subtasks
 
-- [x] Task 1: Create `docs/mobile-deployment-guide.md` with complete deployment onboarding content (AC: #1, #2, #3, #4, #5, #6, #7, #8, #9)
+- [x] Task 1: Create `site/content/en/docs/deployment/mobile-deployment-guide.md` with complete deployment onboarding content (AC: #1, #2, #3, #4, #5, #6, #7, #8, #9)
   - [x] 1.1 Write "Overview" section: purpose, target audience (deployment technicians familiar with Flutter), estimated time (under a day), link to prerequisites
   - [x] 1.2 Write "Prerequisites" section: Flutter SDK, Android Studio, Xcode (macOS only), Docker (for Keycloak), device/emulator for testing, access to deployment `.env`
   - [x] 1.3 Write "Step 1: Environment Variables" section: document `KC_MOBILE_CLIENT_ID` and `KC_MOBILE_REDIRECT_SCHEME` in `.env`, explicitly mark them as **required** with no default (unlike `KC_CLIENT_ID` which defaults to `genie-app`), warn that omitting them causes silent keycloak-config-cli failure, reference existing comments in `env` template (lines 390-405), note that these vars are already passed to the `keycloak-config` service in `docker-compose.yaml` (lines 1202-1203) — no manual docker-compose edit needed
@@ -84,7 +84,7 @@ So that I can create and publish a new deployment in under a day by following a 
 
 ### Nature of This Story
 
-This is a **documentation-only story**. No production code changes. The deliverable is a single markdown file at `docs/mobile-deployment-guide.md` plus minor reference updates in `mobile/genie_ai_mobile/CLAUDE.md`.
+This is a **documentation-only story**. No production code changes. The deliverable is a single markdown file at `site/content/en/docs/deployment/mobile-deployment-guide.md` plus minor reference updates in `mobile/genie_ai_mobile/CLAUDE.md`.
 
 ### Target Audience
 
@@ -178,7 +178,7 @@ From `_bmad-output/planning-artifacts/architecture.md`:
 
 ### Project Structure Notes
 
-- New file: `docs/mobile-deployment-guide.md` — follows existing docs/ convention (`docs/architecture.md`, `docs/keycloak-admin-guide.md`, `docs/external-idp-integration-guide.md`)
+- New file: `site/content/en/docs/deployment/mobile-deployment-guide.md` — follows existing docs/ convention (`site/content/en/docs/architecture/architecture.md`, `site/content/en/docs/configuration/keycloak-admin-guide.md`, `site/content/en/docs/configuration/external-idp-integration-guide.md`)
 - Modified file: `mobile/genie_ai_mobile/CLAUDE.md` — update prerequisite note to reference new guide
 - No other files modified
 
@@ -210,7 +210,7 @@ None — documentation-only story, no code debugging required.
 
 ### Completion Notes List
 
-- Created `docs/mobile-deployment-guide.md` with 11 sections covering the complete deployment onboarding flow
+- Created `site/content/en/docs/deployment/mobile-deployment-guide.md` with 11 sections covering the complete deployment onboarding flow
 - Step 1 (Environment Variables): Documents KC_MOBILE_CLIENT_ID and KC_MOBILE_REDIRECT_SCHEME as required, no default, with silent failure warning
 - Step 2 (Keycloak Client): Documents keycloak-config-cli automation with verification curl command
 - Step 3 (Scheme Coherence Rule): 5-layer coherence table with ITU reference example and verification commands
@@ -224,11 +224,11 @@ None — documentation-only story, no code debugging required.
 - Rollback: Keycloak client removal, flavor revert, app store unpublish, end user communication
 - Troubleshooting: 5 common issues with diagnosis and fix (scheme mismatch, missing key.properties, 401 after login, flutter_appauth fork, silent keycloak-config-cli failure)
 - Updated `mobile/genie_ai_mobile/CLAUDE.md`: Replaced "until Epic 4 Story 4.2" prerequisite note with link to deployment guide
-- Updated `env` template: Changed reference from CLAUDE.md to docs/mobile-deployment-guide.md
+- Updated `env` template: Changed reference from CLAUDE.md to site/content/en/docs/deployment/mobile-deployment-guide.md
 
 ### File List
 
-- `docs/mobile-deployment-guide.md` (new)
+- `site/content/en/docs/deployment/mobile-deployment-guide.md` (new)
 - `mobile/genie_ai_mobile/CLAUDE.md` (modified)
 - `env` (modified)
 
@@ -240,14 +240,14 @@ None — documentation-only story, no code debugging required.
 
 #### Patch
 
-- [x] [Review][Patch] XCConfig template structure doesn't match actual files [`docs/mobile-deployment-guide.md:181-206`] — Guide shows `#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"` + `#include "Generated.xcconfig"` but actual XCConfig files use `#include "Generated.xcconfig"` + `#include "Debug.xcconfig"` (or `Release.xcconfig`/`Profile.xcconfig`). Copying the template literally will cause iOS build failures. (AC #7)
-- [x] [Review][Patch] Undefined `<appId>` placeholder in Step 7.2 verification command [`docs/mobile-deployment-guide.md:276-278`] — `adb shell dumpsys package <appId>` references a placeholder never defined in the guide. Operators won't know to substitute the base `applicationId` from `build.gradle` (with optional `applicationIdSuffix`).
+- [x] [Review][Patch] XCConfig template structure doesn't match actual files [`site/content/en/docs/deployment/mobile-deployment-guide.md:181-206`] — Guide shows `#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"` + `#include "Generated.xcconfig"` but actual XCConfig files use `#include "Generated.xcconfig"` + `#include "Debug.xcconfig"` (or `Release.xcconfig`/`Profile.xcconfig`). Copying the template literally will cause iOS build failures. (AC #7)
+- [x] [Review][Patch] Undefined `<appId>` placeholder in Step 7.2 verification command [`site/content/en/docs/deployment/mobile-deployment-guide.md:276-278`] — `adb shell dumpsys package <appId>` references a placeholder never defined in the guide. Operators won't know to substitute the base `applicationId` from `build.gradle` (with optional `applicationIdSuffix`).
 
 #### Deferred
 
-- [x] [Review][Defer] Air-gapped section lacks concrete DNS configuration example [`docs/mobile-deployment-guide.md:310-317`] — deferred, could add /etc/hosts or dnsmasq example
-- [x] [Review][Defer] No Docker service health check before running verification commands [`docs/mobile-deployment-guide.md:269-270`] — deferred, keycloak-config may not have finished client creation
-- [x] [Review][Defer] Missing key.properties file permissions warning [`docs/mobile-deployment-guide.md:212-217`] — deferred, should recommend chmod 600 for signing credentials
-- [x] [Review][Defer] Missing dependency resolution troubleshooting [`docs/mobile-deployment-guide.md`] — deferred, `flutter pub get` failure is a common first-build error not covered
-- [x] [Review][Defer] App Store compliance requirements omitted [`docs/mobile-deployment-guide.md:346-368`] — deferred, Google Play Data Safety and Apple privacy manifests are non-optional
-- [x] [Review][Defer] Version code/name management across deployments [`docs/mobile-deployment-guide.md`] — deferred, app stores require unique version codes per submission
+- [x] [Review][Defer] Air-gapped section lacks concrete DNS configuration example [`site/content/en/docs/deployment/mobile-deployment-guide.md:310-317`] — deferred, could add /etc/hosts or dnsmasq example
+- [x] [Review][Defer] No Docker service health check before running verification commands [`site/content/en/docs/deployment/mobile-deployment-guide.md:269-270`] — deferred, keycloak-config may not have finished client creation
+- [x] [Review][Defer] Missing key.properties file permissions warning [`site/content/en/docs/deployment/mobile-deployment-guide.md:212-217`] — deferred, should recommend chmod 600 for signing credentials
+- [x] [Review][Defer] Missing dependency resolution troubleshooting [`site/content/en/docs/deployment/mobile-deployment-guide.md`] — deferred, `flutter pub get` failure is a common first-build error not covered
+- [x] [Review][Defer] App Store compliance requirements omitted [`site/content/en/docs/deployment/mobile-deployment-guide.md:346-368`] — deferred, Google Play Data Safety and Apple privacy manifests are non-optional
+- [x] [Review][Defer] Version code/name management across deployments [`site/content/en/docs/deployment/mobile-deployment-guide.md`] — deferred, app stores require unique version codes per submission

@@ -7,9 +7,9 @@ inputDocuments:
   - 'GitLab Issue #613 - Migrate Flutter mobile app to Keycloak OIDC authentication'
   - '_bmad-output/planning-artifacts/research/technical-identity-provider-integration-research-2026-03-26.md'
   - '_bmad-output/project-context.md'
-  - 'docs/architecture.md'
-  - 'docs/keycloak-admin-guide.md'
-  - 'docs/external-idp-integration-guide.md'
+  - 'site/content/en/docs/architecture/architecture.md'
+  - 'site/content/en/docs/configuration/keycloak-admin-guide.md'
+  - 'site/content/en/docs/configuration/external-idp-integration-guide.md'
   - 'docs/roadmap-sprint-20-to-25.md'
 validationStepsCompleted: ['step-v-01-discovery', 'step-v-02-format-detection', 'step-v-03-density-validation', 'step-v-04-brief-coverage', 'step-v-05-measurability', 'step-v-06-traceability', 'step-v-07-impl-leakage', 'step-v-08-domain-compliance', 'step-v-09-project-type', 'step-v-10-smart', 'step-v-11-holistic', 'step-v-12-completeness']
 validationStatus: COMPLETE
@@ -29,9 +29,9 @@ overallStatus: Warning
 - GitLab Issue #613 (référencé dans le frontmatter, non chargé en fichier) ✓
 - Recherche technique: `technical-identity-provider-integration-research-2026-03-26.md` ✓
 - Contexte projet: `project-context.md` ✓
-- Architecture: `docs/architecture.md` ✓
-- Guide admin Keycloak: `docs/keycloak-admin-guide.md` ✓
-- Guide intégration IdP externe: `docs/external-idp-integration-guide.md` ✓
+- Architecture: `site/content/en/docs/architecture/architecture.md` ✓
+- Guide admin Keycloak: `site/content/en/docs/configuration/keycloak-admin-guide.md` ✓
+- Guide intégration IdP externe: `site/content/en/docs/configuration/external-idp-integration-guide.md` ✓
 - Roadmap: `docs/roadmap-sprint-20-to-25.md` ✓
 
 ## Validation Findings

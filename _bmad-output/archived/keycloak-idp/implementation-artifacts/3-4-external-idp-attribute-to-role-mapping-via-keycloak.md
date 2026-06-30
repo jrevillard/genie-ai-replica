@@ -31,7 +31,7 @@ so that users from external IdPs automatically receive the correct GENIE.AI role
 
 4. **AC4 — Documentation for attribute mapping configuration:**
    **Given** a functional administrator wants to configure attribute mapping
-   **Then** a clear guide exists in `docs/keycloak-admin-guide.md` explaining how to:
+   **Then** a clear guide exists in `site/content/en/docs/configuration/keycloak-admin-guide.md` explaining how to:
    - Add a Keycloak Identity Provider Mapper for a specific IdP attribute
    - Map the attribute to an existing realm role
    - Add a new realm role if the mapped attribute requires one that doesn't exist yet
@@ -47,7 +47,7 @@ so that users from external IdPs automatically receive the correct GENIE.AI role
 ## Tasks / Subtasks
 
 - [x] Task 1: Document attribute-to-role mapping in Keycloak admin guide (AC: #1, #2, #3, #4)
-  - [x] 1.1 Add a new section to `docs/keycloak-admin-guide.md` covering external IdP attribute mapping
+  - [x] 1.1 Add a new section to `site/content/en/docs/configuration/keycloak-admin-guide.md` covering external IdP attribute mapping
   - [x] 1.2 Explain the difference between **Protocol Mappers** (client-level, control JWT content — already configured via `roles` client scope) and **Identity Provider Mappers** (IdP-level, transform claims during brokering — this is what FR21 needs)
   - [x] 1.3 Provide step-by-step instructions for configuring an IdP mapper to map an attribute (e.g. `groups`) to a realm role
   - [x] 1.4 Include an example for mapping a custom attribute (e.g. `department`) to a realm role
@@ -260,13 +260,13 @@ The current `config/keycloak/genie-realm.yaml` contains:
 ### Cross-Story Dependencies
 
 - **Story 1.9** (External IdP connection) — already done. External IdP is connected via Keycloak admin console. This story adds the attribute mapping layer on top.
-- **Story 3.3** (Role & Group Management) — done. Created `docs/keycloak-admin-guide.md` that this story extends with a new section on protocol/IdP mappers.
+- **Story 3.3** (Role & Group Management) — done. Created `site/content/en/docs/configuration/keycloak-admin-guide.md` that this story extends with a new section on protocol/IdP mappers.
 - **Story 3.5** (Keycloak Admin API Proxy) — will benefit from documented mapper patterns if admin API needs to configure mappers programmatically in the future.
 
 ### References
 
 - [Source: config/keycloak/genie-realm.yaml] — Current realm configuration (no mappers yet)
-- [Source: docs/keycloak-admin-guide.md] — Admin guide created in Story 3.3, to be extended
+- [Source: site/content/en/docs/configuration/keycloak-admin-guide.md] — Admin guide created in Story 3.3, to be extended
 - [Source: components/gov-chat-backend/middleware/keycloak-auth-middleware.js:70] — Role extraction (source-agnostic)
 - [Source: components/gov-chat-backend/services/user-provisioning-service.js:49] — JIT role persistence (source-agnostic)
 - [Source: _bmad-output/planning-artifacts/architecture.md#D6] — Keycloak realm initialization approach
@@ -287,7 +287,7 @@ glm-5-turbo
 
 ### Completion Notes List
 
-- Added Section 8 "External IdP Attribute to Role Mapping" to `docs/keycloak-admin-guide.md` with 9 subsections (8.1-8.9)
+- Added Section 8 "External IdP Attribute to Role Mapping" to `site/content/en/docs/configuration/keycloak-admin-guide.md` with 9 subsections (8.1-8.9)
 - Section 8.1 clarifies Protocol Mappers vs Identity Provider Mappers (FR21 terminology correction)
 - Section 8.2 documents the three mapper types: hardcoded-role, attribute-to-role, oidc-user-attribute
 - Section 8.3 provides step-by-step admin console instructions for groups-to-role and baseline role mapping
@@ -312,7 +312,7 @@ glm-5-turbo
 
 | File | Action |
 |------|--------|
-| `docs/keycloak-admin-guide.md` | Modified — added Section 8 (External IdP Attribute to Role Mapping) |
+| `site/content/en/docs/configuration/keycloak-admin-guide.md` | Modified — added Section 8 (External IdP Attribute to Role Mapping) |
 | `_bmad-output/implementation-artifacts/3-4-external-idp-attribute-to-role-mapping-via-keycloak.md` | Created — story file with tasks, completion notes, and review fixes |
 | `_bmad-output/implementation-artifacts/sprint-status.yaml` | Modified — status updated to done |
 | `_bmad-output/planning-artifacts/epics.md` | Modified — story renumbering, new Story 3.5 |

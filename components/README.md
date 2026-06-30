@@ -51,7 +51,7 @@ cp env .env   # First time: create your .env
 set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
 ```
 
-See `docs/docker-swarm-setup.md` for the full Swarm deployment guide and `docs/docker-compose-setup.md` for local development.
+See `site/content/en/docs/deployment/docker-swarm-setup.md` for the full Swarm deployment guide and `site/content/en/docs/deployment/docker-compose-setup.md` for local development.
 
 ### **Removing the Stack**
 
@@ -170,5 +170,5 @@ All services communicate via the Docker network defined in the root `docker-comp
 - **[Frontend Application](gov-chat-frontend/README.md)** — Vue.js components, configuration
 - **[Document Repository](document-repository/README.md)** — File upload, virus scanning
 - **[ArangoDB Setup](arangodb/README.md)** — Database configuration, backup, restore
-- **[Docker Compose Setup](../docs/docker-compose-setup.md)** — Local development with `docker compose up`
-- **[Docker Swarm Setup](../docs/docker-swarm-setup.md)** — Docker Swarm deployments
+- **[Docker Compose Setup](../site/content/en/docs/deployment/docker-compose-setup.md)** — Local development with `docker compose up`
+- **[Docker Swarm Setup](../site/content/en/docs/deployment/docker-swarm-setup.md)** — Docker Swarm deployments

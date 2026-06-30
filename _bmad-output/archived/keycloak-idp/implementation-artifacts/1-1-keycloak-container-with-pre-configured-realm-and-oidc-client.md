@@ -158,7 +158,7 @@ config/postgres/
 | `api-gateway-solution/new-config/kong_config.json` | MODIFY | Add keycloak service and route |
 | `api-gateway-solution/new-config/restore-kong-config.sh` | MODIFY | Fix stale $service_name variable |
 | `api-gateway-solution/README.md` | MODIFY | Fix postgres references, network driver |
-| `docs/docker-swarm-setup.md` | MODIFY | Add new secrets, build/push steps |
+| `site/content/en/docs/deployment/docker-swarm-setup.md` | MODIFY | Add new secrets, build/push steps |
 | `GENIE.AI-Installation-Configuration-Guide.md` | MODIFY | Add secrets to table and sed commands |
 
 ### Files NOT Modified (by design)
@@ -222,7 +222,7 @@ Claude Opus 4.6 (GLM-5-Turbo)
 | `api-gateway-solution/new-config/kong_config.json` | MODIFIED | Added keycloak service and route |
 | `api-gateway-solution/new-config/restore-kong-config.sh` | MODIFIED | Fixed stale $service_name variable |
 | `api-gateway-solution/README.md` | MODIFIED | Fixed postgres references, network driver, DATA_DIR |
-| `docs/docker-swarm-setup.md` | MODIFIED | Added new secrets, build/tag/push steps for new images |
+| `site/content/en/docs/deployment/docker-swarm-setup.md` | MODIFIED | Added new secrets, build/tag/push steps for new images |
 | `GENIE.AI-Installation-Configuration-Guide.md` | MODIFIED | Added secrets to table and sed commands, fixed Kong variable table |
 | `_bmad-output/implementation-artifacts/tech-spec-kong-cloud-native-init.md` | MODIFIED | Fixed postgres → kong-database reference |
 | `_bmad-output/implementation-artifacts/tech-spec-deployment-regression-plan.md` | MODIFIED | Updated service inventory, secrets table, checklist |

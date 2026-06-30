@@ -164,19 +164,19 @@ None — documentation-only story, no code changes.
 
 ### Completion Notes List
 
-- ✅ Created comprehensive Keycloak Admin Operations Guide (`docs/keycloak-admin-guide.md`) covering all 7 subtasks: console access, user CRUD, role assignment, group management, data flow, curl verification, and security considerations
+- ✅ Created comprehensive Keycloak Admin Operations Guide (`site/content/en/docs/configuration/keycloak-admin-guide.md`) covering all 7 subtasks: console access, user CRUD, role assignment, group management, data flow, curl verification, and security considerations
 - ✅ Added Mermaid sequence diagram for administrator workflow (end-to-end: admin action → Keycloak → JWT → backend → ArangoDB)
 - ✅ Cross-referenced existing architecture diagrams (`keycloak-idp-integration-diagrams.md`) to avoid documentation duplication
 - ✅ Automated role ID extraction in curl verification commands (step 6.6) — fully copy-paste without manual steps
-- ✅ Added "User & Role Management (Post-Deploy)" section to `docs/docker-swarm-setup.md` with Keycloak admin console URL, credentials, first steps, and links to detailed guides
+- ✅ Added "User & Role Management (Post-Deploy)" section to `site/content/en/docs/deployment/docker-swarm-setup.md` with Keycloak admin console URL, credentials, first steps, and links to detailed guides
 - ✅ Structured guide for reuse by Story 3.4 (External IdP attribute mapping) — Section 4.4 explicitly mentions protocol mapper configuration path
 
 ### File List
 
 | Action | File |
 |---|---|
-| Created | `docs/keycloak-admin-guide.md` |
-| Modified | `docs/docker-swarm-setup.md` |
+| Created | `site/content/en/docs/configuration/keycloak-admin-guide.md` |
+| Modified | `site/content/en/docs/deployment/docker-swarm-setup.md` |
 | Modified | `_bmad-output/implementation-artifacts/3-3-role-and-group-management-via-keycloak.md` |
 | Modified | `_bmad-output/implementation-artifacts/sprint-status.yaml` |
 

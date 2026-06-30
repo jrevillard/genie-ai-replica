@@ -58,7 +58,7 @@ test_patterns: []
 
 ### Problem Statement
 
-The Docker Swarm deployment is currently a manual runbook (~13 steps in `docs/docker-swarm-setup.md`). Each deployment or update requires executing these steps by hand on each node, which is slow, error-prone, and non-reproducible.
+The Docker Swarm deployment is currently a manual runbook (~13 steps in `site/content/en/docs/deployment/docker-swarm-setup.md`). Each deployment or update requires executing these steps by hand on each node, which is slow, error-prone, and non-reproducible.
 
 ### Solution
 
@@ -118,7 +118,7 @@ Create an Ansible project (`deploy/ansible/`) that automates the full deployment
 | File | Purpose |
 | ---- | ------- |
 | `docker-compose.yaml` | Swarm-compatible compose (single source of truth, all services) |
-| `docs/docker-swarm-setup.md` | Manual runbook (13 steps to automate) |
+| `site/content/en/docs/deployment/docker-swarm-setup.md` | Manual runbook (13 steps to automate) |
 | `env` | Environment variable template (~20 secrets + config vars) |
 | `components/gov-chat-frontend/Dockerfile` | Frontend image build (multi-stage) |
 | `components/gov-chat-backend/Dockerfile` | Backend image build |

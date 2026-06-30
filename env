@@ -246,7 +246,7 @@ HUGGING_FACE_HUB_TOKEN=
 # Confidence scoring (chatqna) — rank-weighted aggregate of calibrated reranker
 # scores. The flat mean was count-dependent and tail-sensitive (a long tail of
 # low-scoring chunks kept by the adaptive strategy for novelty depressed it);
-# rank-weighting lets the most relevant document dominate. See docs/architecture.md §9.4.
+# rank-weighting lets the most relevant document dominate. See site/content/en/docs/architecture/architecture.md §9.4.
 # CONFIDENCE_RANK_DECAY=0.5          # exponential weight decay per rank (rank 0 = best)
 # RERANKER_SCORE_CALIBRATION=none    # none | sigmoid — enable sigmoid ONLY if TEI
 #                                    #   returns raw logits (verify first: sigmoid on
@@ -522,7 +522,7 @@ KC_DATAPREP_CLIENT_SECRET=
 # Public client with PKCE — no client secret required (RFC 8252).
 # Change per deployment: each institution needs its own clientId and redirect scheme.
 # Used by: keycloak-config-cli (creates the mobile OIDC client in Keycloak at startup)
-# See: docs/mobile-deployment-guide.md (deployment onboarding guide)
+# See: site/content/en/docs/deployment/mobile-deployment-guide.md (deployment onboarding guide)
 KC_MOBILE_CLIENT_ID=genie-mobile-itu
 
 # Mobile app custom URL scheme for OIDC callback redirect.
@@ -589,7 +589,7 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 # SECTION 9B: EXTERNAL IDENTITY PROVIDERS (OPTIONAL)
 # =============================================================================
 # External IdP credentials are configured in Keycloak, NOT in GENIE.AI's .env.
-# See docs/external-idp-integration-guide.md for step-by-step instructions.
+# See site/content/en/docs/configuration/external-idp-integration-guide.md for step-by-step instructions.
 #
 # GENIE.AI's backend and frontend code does NOT need any external IdP configuration.
 # Keycloak handles the entire identity brokering flow and issues standard OIDC tokens
@@ -693,7 +693,7 @@ KC_GRAFANA_CLIENT_SECRET=
 # Override these variables when deploying with Docker Swarm (docker stack deploy).
 # Default values are for single-node Docker deployment (localhost).
 #
-# See docs/docker-swarm-setup.md for the full Swarm deployment guide.
+# See site/content/en/docs/deployment/docker-swarm-setup.md for the full Swarm deployment guide.
 #
 # IMPORTANT: In Swarm, .env variables are resolved once at deploy time on the
 # manager node. Changing a variable requires redeploying the entire stack:

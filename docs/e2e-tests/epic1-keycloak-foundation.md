@@ -442,14 +442,14 @@ grep -rn 'authority\|redirect_uri\|post_logout' \
 
 ### Test E.4 —Image List: All External Images Documented (AC #2)
 
-Verify that all external images referenced in `docker-compose.yaml` have a corresponding pre-pull entry in `docs/docker-swarm-setup.md` Step 5d.
+Verify that all external images referenced in `docker-compose.yaml` have a corresponding pre-pull entry in `site/content/en/docs/deployment/docker-swarm-setup.md` Step 5d.
 
 ```bash
 # Extract unique external images from docker-compose.yaml (non-registry-prefixed)
 grep -oP 'image:\s*\K(?!.*\$\{)[^\s]+' docker-compose.yaml | sort -u
 
 # Compare against Step 5d list
-grep 'docker pull' docs/docker-swarm-setup.md | awk '{print $3}'
+grep 'docker pull' site/content/en/docs/deployment/docker-swarm-setup.md | awk '{print $3}'
 ```
 
 **Expected**: All 16 external images (12 runtime + 4 build-time Dockerfiles) appear in both lists. No gaps.

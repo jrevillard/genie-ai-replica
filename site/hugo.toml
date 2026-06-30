@@ -58,11 +58,10 @@ enableGitInfo = true
   url = "https://opensource.unicc.org/un/itu/genie-ai"
 
 # Chroma code-highlighting style (Task 5).
-# dracula = a dark, high-contrast syntax theme; pairs with the DS dark mode and
-# reads cleanly on the light surface too. Pinned (not `noClasses`) so generated
-# classes are stable for the .chroma background override in _custom.scss.
+# github-dark = a dark, high-contrast syntax theme; pairs with the fixed dark
+# code-block surface in _custom.scss and reads cleanly in both page modes.
 [markup.highlight]
-  style = "dracula"
+  style = "github-dark"
   noClasses = false
   lineNos = false
   tabWidth = 2

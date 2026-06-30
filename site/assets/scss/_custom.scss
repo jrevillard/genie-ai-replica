@@ -251,20 +251,14 @@ blockquote {
 
 
 // === Task 5: Chroma code-block background =====================================
-// Docsy/Hugo emit highlighted code blocks as <div class="highlight"><pre class="chroma">.
-// Dracula ships its own dark bg via .chroma background-color; we keep Dracula's
-// syntax-token colors but force the block background to the DS surface token so
-// code blocks read as part of the design system (light surface in light mode,
-// dark surface in dark mode via _tokens.scss :root redefinition).
+// Code blocks: fixed dark surface in both page modes so the dark Chroma theme reads.
+// (Dark syntax themes have light token colors — they need a dark background
+// regardless of page theme. This is the conventional "dark code slab on a light
+// page" pattern used by GitHub, Stripe, and most modern docs sites.)
 .highlight,
 .chroma {
-  background-color: var(--ds-surface) !important;
+  background-color: oklch(15% 0.008 250) !important;   // DS dark surface, fixed
   border: 1px solid var(--ds-border);
   border-radius: var(--ds-radius-md);
-}
-// Dracula sets inline color on .chroma tokens via inline classes — let those
-// win for token text color, but inherit for plain (untokenised) text so the
-// body text color (high-contrast --ds-fg) applies.
-.chroma {
-  color: var(--ds-fg);
+  color: #f8f8f2;                                       // ensure default text is light
 }

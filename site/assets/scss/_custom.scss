@@ -1,1 +1,8 @@
 // Custom SCSS — project-specific rules. Filled in by Task 4.
+
+// === Task 3: Navbar brand (GENIE.AI mark + wordmark, dark variant via [data-theme=dark]) ===
+.ds-brand { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+.ds-wordmark { font-family: var(--ds-font-body); font-weight: 700; letter-spacing: -0.02em; color: var(--ds-fg); }
+.ds-logo-dark { display: none; }
+[data-theme="dark"] .ds-logo { display: none; }
+[data-theme="dark"] .ds-logo-dark { display: inline; }

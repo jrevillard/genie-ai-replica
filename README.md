@@ -154,7 +154,7 @@ For GPU-specific overrides:
 docker compose --env-file .env --env-file env.t4 --profile opea up -d
 ```
 
-See [docs/docker-compose-setup.md](docs/docker-compose-setup.md) for the full local development guide and [docs/docker-swarm-setup.md](docs/docker-swarm-setup.md) for Docker Swarm deployment.
+See [site/content/en/docs/deployment/docker-compose-setup.md](site/content/en/docs/deployment/docker-compose-setup.md) for the full local development guide and [site/content/en/docs/deployment/docker-swarm-setup.md](site/content/en/docs/deployment/docker-swarm-setup.md) for Docker Swarm deployment.
 
 ### 4. Access Applications
 
@@ -267,7 +267,7 @@ GENIE.AI is built on a microservices architecture with the following layers:
    docker compose up -d
    ```
 
-See [docs/docker-compose-setup.md](docs/docker-compose-setup.md) for the full local development guide.
+See [site/content/en/docs/deployment/docker-compose-setup.md](site/content/en/docs/deployment/docker-compose-setup.md) for the full local development guide.
 
 ### Testing
 
@@ -299,11 +299,11 @@ docker compose up -d
 docker compose --profile opea up -d
 ```
 
-See [docs/docker-compose-setup.md](docs/docker-compose-setup.md) for the full guide.
+See [site/content/en/docs/deployment/docker-compose-setup.md](site/content/en/docs/deployment/docker-compose-setup.md) for the full guide.
 
 ### Docker Swarm Deployment
 
-GENIE.AI is deployed using Docker Swarm. See [docs/docker-swarm-setup.md](docs/docker-swarm-setup.md) for the complete guide.
+GENIE.AI is deployed using Docker Swarm. See [site/content/en/docs/deployment/docker-swarm-setup.md](site/content/en/docs/deployment/docker-swarm-setup.md) for the complete guide.
 
 ```bash
 # Deploy the stack

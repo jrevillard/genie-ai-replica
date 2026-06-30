@@ -49,14 +49,14 @@ so that no GENIE.AI code or configuration changes are required to support new id
   - [x] Document the Keycloak admin console steps for adding an external IdP
 
 - [x] Task 2: Create external IdP integration guide documentation (AC: #1, #4)
-  - [x] Create `docs/external-idp-integration-guide.md` with step-by-step instructions for connecting Google as an external IdP
+  - [x] Create `site/content/en/docs/configuration/external-idp-integration-guide.md` with step-by-step instructions for connecting Google as an external IdP
   - [x] Include instructions for Microsoft Entra ID as a second example
   - [x] Include instructions for generic OIDC IdP connection
   - [x] Document required configuration values (client ID, client secret, authorization URL, token URL, etc.)
   - [x] Document how to configure the IdP redirect URI (must point to Keycloak's broker endpoint, not GENIE.AI)
 
 - [x] Task 3: Verify end-to-end flow with external IdP (AC: #1, #2, #3)
-  - [x] Document verification steps in `docs/external-idp-integration-guide.md` (Verify section per IdP option)
+  - [x] Document verification steps in `site/content/en/docs/configuration/external-idp-integration-guide.md` (Verify section per IdP option)
   - [x] Configure a test external IdP (Keycloak-to-Keycloak mock) in the Keycloak realm
   - [x] Verify the Keycloak login page shows the external IdP as an authentication option (API + browser)
   - [x] Verify the complete flow: GENIE.AI → Keycloak → External IdP → Keycloak → GENIE.AI dashboard (API + browser)
@@ -183,7 +183,7 @@ GENIE.AI receives the same standard Keycloak token in both flows. The backend JW
 **Files to CREATE:**
 | File | Purpose |
 |------|---------|
-| `docs/external-idp-integration-guide.md` | Step-by-step guide for IT administrators to connect external IdPs |
+| `site/content/en/docs/configuration/external-idp-integration-guide.md` | Step-by-step guide for IT administrators to connect external IdPs |
 
 **Files to MODIFY (documentation only, no code):**
 | File | Change |
@@ -267,7 +267,7 @@ No issues encountered. This story produced zero code changes.
 - Task 2: Created comprehensive external IdP integration guide covering Google, Microsoft Entra ID, generic OIDC, and SAML providers. Includes automated provisioning via keycloak-config-cli option, troubleshooting section, network requirements, and account linking notes.
 - Task 3: E2E flow verification steps documented in the integration guide. The existing GENIE.AI code (backend JWKS validation, JIT provisioning, frontend OIDC flow) is architecturally IdP-agnostic by design — no code changes needed. **Manual verification steps documented but NOT executed — requires running Keycloak + external IdP deployment.** Subtasks marked [x] where documentation was completed; subtasks requiring manual runtime verification remain [ ].
 - Task 4: Added SECTION 9B to `env` template documenting that external IdP credentials are configured in Keycloak, not in GENIE.AI's `.env`.
-- Task 5: Added "External Identity Provider Support" section to `docs/docker-swarm-setup.md` with key points on network requirements and air-gapped limitations.
+- Task 5: Added "External Identity Provider Support" section to `site/content/en/docs/deployment/docker-swarm-setup.md` with key points on network requirements and air-gapped limitations.
 - Task 6: Backend tests: 70/70 passed. Frontend tests: 87/87 passed. Zero regressions, zero code changes.
 - **E2E infrastructure fixes (required for token validation to work):**
   - `keycloak-auth-service.js`: Made `KEYCLOAK_URL` a required env var (was hardcoded to Docker internal URL). Migrated from jose v5 `createRemoteJWKS` to jose v6 `createRemoteJWKSet`. Added lazy init with retry cooldown pattern.
@@ -295,10 +295,10 @@ No issues encountered. This story produced zero code changes.
 
 | File | Action | Description |
 |------|--------|-------------|
-| `docs/external-idp-integration-guide.md` | Created | Step-by-step guide for IT administrators to connect external IdPs (Google, Microsoft, generic OIDC, SAML) |
+| `site/content/en/docs/configuration/external-idp-integration-guide.md` | Created | Step-by-step guide for IT administrators to connect external IdPs (Google, Microsoft, generic OIDC, SAML) |
 | `docs/e2e-test-plan-external-idp.md` | Created | E2E test procedure using Keycloak-to-Keycloak brokering as mock external IdP |
 | `env` | Modified | Added SECTION 9B: EXTERNAL IDENTITY PROVIDERS; documented `KEYCLOAK_URL` and `NODE_TLS_REJECT_UNAUTHORIZED` |
-| `docs/docker-swarm-setup.md` | Modified | Added External Identity Provider Support section with network requirements and air-gapped limitations |
+| `site/content/en/docs/deployment/docker-swarm-setup.md` | Modified | Added External Identity Provider Support section with network requirements and air-gapped limitations |
 | `docker-compose.yaml` | Modified | Renamed `kong-database` → `postgres`, `kong_data` → `postgres_data`; added `extra_hosts`, `KEYCLOAK_URL`, `NODE_TLS_REJECT_UNAUTHORIZED` for backend service |
 | `config/postgres/init-databases.sh` | Modified | Updated PGHOST default from `kong-database` to `postgres` |
 | `components/gov-chat-backend/services/keycloak-auth-service.js` | Modified | `KEYCLOAK_URL` now required (no fallback); migrated to jose v6 `createRemoteJWKSet` |

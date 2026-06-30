@@ -54,8 +54,8 @@ files_to_modify:
   - components/gov-chat-backend/routes/README.md (replace X-Service-Token docs with OIDC)
   - components/document-repository/README.md (update auth section if present)
   - deploy/ansible/README.md (remove JWT_SECRET from vault verification list)
-  - docs/docker-compose-setup.md (remove JWT_SECRET template)
-  - docs/docker-swarm-setup.md (remove JWT_SECRET references)
+  - site/content/en/docs/deployment/docker-compose-setup.md (remove JWT_SECRET template)
+  - site/content/en/docs/deployment/docker-swarm-setup.md (remove JWT_SECRET references)
   - GENIE.AI-Installation-Configuration-Guide.md (remove JWT_SECRET from installation steps)
   - docs/e2e-tests/README.md (update prerequisites, remove SERVICE_AUTH_TOKEN)
   - docs/e2e-tests/00-clean-start.md (remove JWT_SECRET and SERVICE_AUTH_TOKEN from env setup)
@@ -488,9 +488,9 @@ Dataprep → Document Repository
     - Lines 151, 470: Replace X-Service-Token references with OIDC Authorization header
   - File: `deploy/ansible/README.md`
     - Line 462: Remove JWT_SECRET from vault verification list
-  - File: `docs/docker-compose-setup.md`
+  - File: `site/content/en/docs/deployment/docker-compose-setup.md`
     - Line 53: Remove `JWT_SECRET=<strong-random-string>` template
-  - File: `docs/docker-swarm-setup.md`
+  - File: `site/content/en/docs/deployment/docker-swarm-setup.md`
     - Lines 295, 596: Remove JWT_SECRET references
   - File: `GENIE.AI-Installation-Configuration-Guide.md`
     - Lines 814, 827, 840: Remove JWT_SECRET from installation steps

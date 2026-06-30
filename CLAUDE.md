@@ -95,7 +95,7 @@ Multi-phase procedure in `docs/e2e-tests/`:
 
 ## Architecture
 
-For the full architecture overview with diagrams (C4 context/container, authentication flows, service auth matrix, token lifecycle, RAG pipeline), see [Architecture Overview](docs/architecture.md).
+For the full architecture overview with diagrams (C4 context/container, authentication flows, service auth matrix, token lifecycle, RAG pipeline), see [Architecture Overview](site/content/en/docs/architecture/architecture.md).
 
 ### Layer Stack
 
@@ -134,6 +134,15 @@ Each RAG pipeline stage emits OTel spans (when observability enabled), propagate
 | `configs/otel/` | OTel Collector configuration |
 | `configs/grafana/provisioning/` | Grafana datasources and dashboard definitions |
 | `tests/` | E2E tests (Playwright), config validation, log assertions, metrics overhead |
+
+## Documentation Structure
+
+User-facing and dev-internal docs live in **separate** places — no duplication, no build-time copy:
+
+- **User-facing docs → `site/content/en/docs/`** — canonical, published to the GitLab Pages docs site, editable in the GitLab Web IDE. Grouped by section (`core/`, `frontend/`, `backend/`, `mobile/`, `architecture/`, `deployment/`, `configuration/`). Hugo + Docsy; see `.claude/rules/SITE-LOCAL-DEV.md` to run locally.
+- **Dev-internal docs → `docs/`** — repo-resident, referenced by code/developers (e.g. `docs/e2e-tests/`, `docs/database-migrations.md`). NOT published.
+
+When adding a doc, pick one home based on audience. Do not duplicate across both.
 
 ## Technology Stack
 
@@ -338,7 +347,7 @@ docker-compose.yaml (dual-mode)
 
 **Remote GPU**: Set `GPU_NODE_HOST` in `.env`, skip `gpu-models` profile. Orchestrator endpoints overridden to GPU node. `VLLM_API_KEY` for auth. See `env` Section 14.
 
-→ Full architecture diagrams: `docs/architecture.md` | Deployment guides: `docs/docker-compose-setup.md`, `docs/docker-swarm-setup.md`
+→ Full architecture diagrams: `site/content/en/docs/architecture/architecture.md` | Deployment guides: `site/content/en/docs/deployment/docker-compose-setup.md`, `site/content/en/docs/deployment/docker-swarm-setup.md`
 
 ## Database Schema (ArangoDB)
 

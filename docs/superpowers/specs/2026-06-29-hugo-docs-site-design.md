@@ -78,10 +78,10 @@ set -eu
 DEST="content/en/docs"
 mkdir -p "$DEST"
 
-cp ../docs/architecture.md           "$DEST/architecture.md"
-cp ../docs/docker-compose-setup.md   "$DEST/deploy.md"
-cp ../docs/docker-swarm-setup.md     "$DEST/deploy-swarm.md"
-cp ../docs/integration-architecture.md "$DEST/integration.md"
+cp ../site/content/en/docs/architecture/architecture.md           "$DEST/architecture.md"
+cp ../site/content/en/docs/deployment/docker-compose-setup.md   "$DEST/deploy.md"
+cp ../site/content/en/docs/deployment/docker-swarm-setup.md     "$DEST/deploy-swarm.md"
+cp ../site/content/en/docs/core/integration-architecture.md "$DEST/integration.md"
 cp ../docs/database-migrations.md    "$DEST/database-migrations.md"
 # ... explicit list, refined iteratively
 ```

@@ -7,9 +7,9 @@ inputDocuments:
   - 'GitLab Issue #613 - Migrate Flutter mobile app to Keycloak OIDC authentication'
   - '_bmad-output/planning-artifacts/research/technical-identity-provider-integration-research-2026-03-26.md'
   - '_bmad-output/project-context.md'
-  - 'docs/architecture.md'
-  - 'docs/keycloak-admin-guide.md'
-  - 'docs/external-idp-integration-guide.md'
+  - 'site/content/en/docs/architecture/architecture.md'
+  - 'site/content/en/docs/configuration/keycloak-admin-guide.md'
+  - 'site/content/en/docs/configuration/external-idp-integration-guide.md'
   - 'docs/roadmap-sprint-20-to-25.md'
 documentCounts:
   briefs: 0

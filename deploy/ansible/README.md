@@ -392,7 +392,7 @@ Per-chunk LLM document-context prefix → embedding (+ optionally labeling) so c
 
 Keycloak is proxied by NGINX at `/auth/*`. The `keycloak-config` service automatically applies realm configuration (clients, roles, mappers) on startup.
 
-See `docs/keycloak-admin-guide.md` for admin console access and `docs/external-idp-integration-guide.md` for external IdP setup.
+See `site/content/en/docs/configuration/keycloak-admin-guide.md` for admin console access and `site/content/en/docs/configuration/external-idp-integration-guide.md` for external IdP setup.
 
 ### Let's Encrypt Certificate Management (optional)
 

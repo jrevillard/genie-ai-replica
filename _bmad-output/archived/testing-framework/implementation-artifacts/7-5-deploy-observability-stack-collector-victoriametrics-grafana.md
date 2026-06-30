@@ -455,8 +455,8 @@ Claude Code (GLM-5-Turbo)
 | `deploy/ansible/group_vars/all.yml` | Modified |
 | `deploy/ansible/templates/env.j2` | Modified |
 | `deploy/ansible/README.md` | Modified |
-| `docs/docker-compose-setup.md` | Modified |
-| `docs/docker-swarm-setup.md` | Modified |
+| `site/content/en/docs/deployment/docker-compose-setup.md` | Modified |
+| `site/content/en/docs/deployment/docker-swarm-setup.md` | Modified |
 | `CLAUDE.md` | Modified |
 | `.claude/rules/ENVIRONMENT.md` | Modified |
 

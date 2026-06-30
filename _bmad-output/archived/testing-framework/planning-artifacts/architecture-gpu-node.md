@@ -562,7 +562,7 @@ VLLM_API_KEY=shared-api-key-for-this-instance
 **Aucun gap critique.**
 
 **Gaps mineurs (non bloquants) :**
-- `docs/architecture.md` devrait être mis à jour pour documenter le GPU node (documentation, pas architecture)
+- `site/content/en/docs/architecture/architecture.md` devrait être mis à jour pour documenter le GPU node (documentation, pas architecture)
 - Le schéma de ports dans `env` template (F8) devra être détaillé lors de l'implémentation
 
 ### Architecture Completeness Checklist

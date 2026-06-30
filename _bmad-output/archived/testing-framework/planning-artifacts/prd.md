@@ -4,13 +4,13 @@ stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-0
 status: complete
 inputDocuments:
   - '_bmad-output/project-context.md'
-  - 'docs/architecture.md'
+  - 'site/content/en/docs/architecture/architecture.md'
   - 'docs/roadmap-sprint-20-to-25.md'
   - 'docs/e2e-tests/README.md'
-  - 'docs/keycloak-admin-guide.md'
-  - 'docs/docker-compose-setup.md'
+  - 'site/content/en/docs/configuration/keycloak-admin-guide.md'
+  - 'site/content/en/docs/deployment/docker-compose-setup.md'
   - 'docs/database-migrations.md'
-  - 'docs/LOGGING-ARCHITECTURE-EVALUATION.md'
+  - 'site/content/en/docs/architecture/logging-architecture.md'
   - 'GitLab Issue #599 - Establish automated test suite for OPEA microservices'
   - '_bmad-output/planning-artifacts/research/technical-identity-provider-integration-research-2026-03-26.md'
 documentCounts:

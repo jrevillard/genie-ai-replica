@@ -48,7 +48,7 @@ so that these links are not intercepted by the app's custom URL scheme handler.
   - [x] 4.5 For non-OIDC links (password reset, email verification), route to system browser via `url_launcher` — do NOT intercept
 
 - [x] Task 5: Update deployment guide (AC: #3)
-  - [x] 5.1 Add "Universal Links & App Links" section to `docs/mobile-deployment-guide.md`
+  - [x] 5.1 Add "Universal Links & App Links" section to `site/content/en/docs/deployment/mobile-deployment-guide.md`
   - [x] 5.2 Document AASA and assetlinks.json JSON structures with placeholder values
   - [x] 5.3 Document nginx configuration requirements
   - [x] 5.4 Document iOS Associated Domains entitlement setup
@@ -292,7 +292,7 @@ Env vars used in `genie-realm.yaml` via `$(env:VARIABLE)` must be listed in the 
 | `mobile/genie_ai_mobile/ios/Runner.xcodeproj/project.pbxproj` | Reference `Runner.entitlements` in signing & capabilities |
 | `mobile/genie_ai_mobile/ios/Flutter/Debug-itu.xcconfig` (+ other flavor xcconfigs) | Add `ASSOCIATED_DOMAINS` variable |
 | `mobile/genie_ai_mobile/lib/main.dart` | Initialize `AppLinks()`, subscribe to `uriLinkStream`, route non-OIDC links to browser |
-| `docs/mobile-deployment-guide.md` | Add Universal Links/App Links section, update Step 7.6 |
+| `site/content/en/docs/deployment/mobile-deployment-guide.md` | Add Universal Links/App Links section, update Step 7.6 |
 
 ### Files Verified — No Change Needed
 
@@ -349,7 +349,7 @@ adb shell am start -a android.intent.action.VIEW \
 - [Source: _bmad-output/implementation-artifacts/5-1-password-reset-via-keycloak-browser.md] — Previous story dev notes, file inventory, transition matrix
 - [Source: app_links package docs](https://pub.dev/packages/app_links) — `AppLinks()` singleton, `uriLinkStream`, platform setup
 - [Source: project-context.md#Mobile] — Flutter 3.10+, Dart, Options API, `app_links` ^6.3.3
-- [Source: docs/mobile-deployment-guide.md] — Existing password reset section, Scheme Coherence Rule, Step 7.6
+- [Source: site/content/en/docs/deployment/mobile-deployment-guide.md] — Existing password reset section, Scheme Coherence Rule, Step 7.6
 
 ## Dev Agent Record
 
@@ -405,7 +405,7 @@ glm-5-turbo
 - `mobile/genie_ai_mobile/ios/Flutter/Release-itu.xcconfig` — ASSOCIATED_DOMAINS
 - `mobile/genie_ai_mobile/ios/Flutter/Profile-itu.xcconfig` — ASSOCIATED_DOMAINS
 - `mobile/genie_ai_mobile/lib/main.dart` — AppLinks + url_launcher integration
-- `docs/mobile-deployment-guide.md` — Universal Links & App Links section + Step 7.6 update
+- `site/content/en/docs/deployment/mobile-deployment-guide.md` — Universal Links & App Links section + Step 7.6 update
 
 ### Change Log
 

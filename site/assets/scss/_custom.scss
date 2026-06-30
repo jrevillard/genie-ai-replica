@@ -3,3 +3,240 @@
 // === Task 3: Navbar brand (GENIE.AI mark + wordmark; single mark on light + dark) ===
 .ds-brand { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
 .ds-wordmark { font-family: var(--ds-font-body); font-weight: 700; letter-spacing: -0.02em; color: var(--ds-fg); }
+
+// === Task 4: Component restyle (token-driven overrides on Docsy/Bootstrap) ===
+// Uses --ds-* CSS vars from _tokens.scss. Keep specificity light so Docsy
+// theme updates can still flow underneath. Real Docsy classes verified against
+// the pinned module (cfc902046af7): td-navbar, td-navbar-nav, td-sidebar-nav,
+// td-content, td-sidebar-toc, td-toc, td-search, td-card.
+
+// --- Body & links ---------------------------------------------------------
+body {
+  font-family: var(--ds-font-body);
+  background-color: var(--ds-bg);
+  color: var(--ds-fg);
+}
+a { color: var(--ds-accent); }
+a:hover { color: var(--ds-accent-hover); }
+
+// --- Navbar ---------------------------------------------------------------
+.td-navbar {
+  background-color: var(--ds-surface);
+  border-bottom: 1px solid var(--ds-border);
+  box-shadow: var(--ds-shadow-sm);
+}
+.td-navbar .navbar-brand { color: var(--ds-fg); }
+.td-navbar .nav-link {
+  color: var(--ds-muted);
+  font-weight: 500;
+}
+.td-navbar .nav-link:hover,
+.td-navbar .nav-link.active { color: var(--ds-accent); }
+
+// --- Sidebar (primary nav) ------------------------------------------------
+.td-sidebar-nav {
+  font-family: var(--ds-font-body);
+}
+.td-sidebar-nav .td-sidebar-nav__section-title,
+.td-sidebar-nav .td-sidebar-nav-title {
+  font-weight: 600;
+  color: var(--ds-fg);
+}
+.td-sidebar-nav a { color: var(--ds-muted); }
+.td-sidebar-nav a:hover { color: var(--ds-accent); }
+// Active section marker
+.td-sidebar-nav-active-item,
+.td-sidebar-nav .active > a {
+  color: var(--ds-accent);
+  background-color: var(--ds-accent-muted);
+  border-left: 3px solid var(--ds-accent);
+}
+
+// --- Right-side ToC -------------------------------------------------------
+.td-toc,
+.td-sidebar-toc {
+  border-left: 1px solid var(--ds-border);
+}
+.td-toc a,
+.td-toc-title__link { color: var(--ds-muted); }
+.td-toc a:hover { color: var(--ds-accent); }
+
+// --- Content area ---------------------------------------------------------
+.td-content {
+  color: var(--ds-fg);
+}
+.td-content h1,
+.td-content h2,
+.td-content h3,
+.td-content h4 {
+  color: var(--ds-fg);
+  font-family: var(--ds-font-body);
+  letter-spacing: -0.01em;
+}
+.td-content h1 { border-bottom: 1px solid var(--ds-border); }
+
+// --- Buttons --------------------------------------------------------------
+.btn {
+  border-radius: var(--ds-radius-md);
+  font-weight: 500;
+  font-family: var(--ds-font-body);
+}
+.btn-primary {
+  background-color: var(--ds-accent);
+  border-color: var(--ds-accent);
+  color: var(--ds-surface);
+}
+.btn-primary:hover {
+  background-color: var(--ds-accent-hover);
+  border-color: var(--ds-accent-hover);
+}
+.btn-outline-secondary {
+  color: var(--ds-fg);
+  border-color: var(--ds-border);
+}
+.btn-outline-secondary:hover {
+  background-color: var(--ds-accent-muted);
+  border-color: var(--ds-accent);
+  color: var(--ds-accent);
+}
+
+// --- Cards ----------------------------------------------------------------
+.td-card,
+.card {
+  background-color: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-sm);
+}
+.card-body { color: var(--ds-fg); }
+.card-title { color: var(--ds-fg); }
+.card-text { color: var(--ds-muted); }
+
+// --- Code (inline + block) ------------------------------------------------
+code,
+pre,
+.td-content code,
+.td-content pre {
+  font-family: var(--ds-font-mono);
+}
+:not(pre) > code {
+  background-color: var(--ds-accent-muted);
+  color: var(--ds-accent-hover);
+  padding: 0.15em 0.4em;
+  border-radius: var(--ds-radius-sm);
+  font-size: 0.875em;
+}
+pre {
+  background-color: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  padding: 0.85rem 1rem;
+}
+pre code { color: inherit; background: transparent; padding: 0; }
+
+// --- Callouts / alerts (Docsy alert shortcode -> .alert variants) ---------
+.alert {
+  border-radius: var(--ds-radius-md);
+  border-width: 1px;
+}
+.alert-info {
+  background-color: var(--ds-accent-muted);
+  border-color: var(--ds-accent);
+  color: var(--ds-fg);
+}
+.alert-warning {
+  background-color: oklch(85% 0.13 85);
+  border-color: oklch(70% 0.16 85);
+  color: oklch(22% 0.02 240);
+}
+.alert-danger {
+  background-color: oklch(85% 0.13 25);
+  border-color: oklch(60% 0.20 25);
+  color: oklch(22% 0.02 240);
+}
+
+// --- Tables ---------------------------------------------------------------
+.table,
+.td-content table {
+  color: var(--ds-fg);
+}
+.table thead th,
+.td-content table thead th {
+  border-bottom: 2px solid var(--ds-accent);
+  color: var(--ds-fg);
+  font-weight: 600;
+}
+.table td,
+.td-content table td,
+.table th,
+.td-content table th {
+  border-color: var(--ds-border);
+}
+.table-striped tbody tr:nth-of-type(odd),
+.td-content table tbody tr:nth-of-type(odd) {
+  background-color: var(--ds-accent-muted);
+}
+
+// --- Inputs ---------------------------------------------------------------
+.form-control,
+.form-select {
+  border-color: var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  color: var(--ds-fg);
+  background-color: var(--ds-surface);
+}
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--ds-accent);
+  box-shadow: 0 0 0 0.2rem var(--ds-accent-muted);
+}
+.td-search input,
+.td-search input.form-control {
+  border-color: var(--ds-border);
+  border-radius: var(--ds-radius-md);
+}
+
+// --- Badges ---------------------------------------------------------------
+.badge {
+  font-family: var(--ds-font-body);
+  font-weight: 600;
+  border-radius: var(--ds-radius-sm);
+}
+.badge-primary,
+.badge.bg-primary {
+  background-color: var(--ds-accent);
+  color: var(--ds-surface);
+}
+.badge-secondary,
+.badge.bg-secondary {
+  background-color: var(--ds-accent-secondary);
+  color: var(--ds-surface);
+}
+
+// --- Blockquote -----------------------------------------------------------
+blockquote {
+  border-left: 4px solid var(--ds-accent);
+  background-color: var(--ds-accent-muted);
+  color: var(--ds-fg);
+  padding: 0.5rem 1rem;
+  border-radius: var(--ds-radius-sm);
+}
+
+// --- Footer ---------------------------------------------------------------
+.td-footer {
+  background-color: var(--ds-surface);
+  border-top: 1px solid var(--ds-border);
+  color: var(--ds-muted);
+}
+
+// --- Breadcrumbs ----------------------------------------------------------
+.td-breadcrumbs,
+.breadcrumb {
+  background-color: transparent;
+}
+.breadcrumb-item a { color: var(--ds-accent); }
+.breadcrumb-item.active { color: var(--ds-muted); }
+
+// --- Page meta (edit/issue links under the title) -------------------------
+.td-page-meta a { color: var(--ds-accent); }
+

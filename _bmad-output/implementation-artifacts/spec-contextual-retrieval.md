@@ -49,7 +49,7 @@ Gated by `CONTEXTUAL_RETRIEVAL_ENABLED` (default off → true no-op). Part A of 
 
 ## Code Map (`genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py`)
 
-- Config L95-114: `CONTEXTUAL_RETRIEVAL_ENABLED`, `DATAPREP_CONTEXTUAL_MODEL`, `DATAPREP_CONTEXTUAL_DOC_BUDGET` (6000), `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` (30000), `CONTEXTUAL_STRATEGY`; prompt defaults; `_build_vllm_client` L196; `_log_environment_variables`.
+- Config L95-114: `CONTEXTUAL_RETRIEVAL_ENABLED`, `DATAPREP_CONTEXTUAL_MODEL`, `DATAPREP_CONTEXTUAL_DOC_BUDGET` (6000), `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` (30000), `DATAPREP_CONTEXTUAL_MAX_TOKENS` (512; output cap for the context LLM — 200 truncated JSON under load), `CONTEXTUAL_STRATEGY`; prompt defaults; `_build_vllm_client` L196; `_log_environment_variables`.
 - `_build_doc_context` L501 — budget param + truncation WARN.
 - `_apply_contextualization` L530 — entry, client-build guard, strategy dispatch.
 - `per_chunk`: `_contextualize_per_chunk` L575 (batched) + `_context_batch_call` L629 (batch JSON, per-chunk fallback) + `_context_single_call` L783 (3 retries).

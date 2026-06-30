@@ -117,6 +117,12 @@ CONTEXTUAL_STRATEGY = os.getenv("CONTEXTUAL_STRATEGY", "doc_level").strip().lowe
 # the raw chunk) while propagating the document subject via the vector. Default
 # false (context fed to both embedding and labeling).
 CONTEXTUAL_LABEL_RAW = os.getenv("CONTEXTUAL_LABEL_RAW", "true").lower() == "true"
+# Max output tokens for the context-generation LLM calls (doc-level + per-chunk).
+# The model writes a 50-100 word context (~196 tokens observed on large docs); the
+# legacy hard cap of 200 left no headroom, so under concurrent vLLM load the JSON
+# `{"context":"..."}` was truncated mid-string -> JSONDecodeError -> raw-chunk
+# fallback. 512 gives comfortable margin at no extra cost (the model stops early).
+CONTEXTUAL_MAX_TOKENS = int(os.getenv("DATAPREP_CONTEXTUAL_MAX_TOKENS", "512"))
 
 # Spec 5.3: Externalized Prompt - Two-tier priority
 # Level 1: ENV VAR (highest priority) - override via .env
@@ -661,7 +667,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             },
                         ],
                         temperature=LLM_LABEL_TEMPERATURE,
-                        max_tokens=200 * len(batch),
+                        max_tokens=CONTEXTUAL_MAX_TOKENS * len(batch),
                         response_format={"type": "json_object"},
                     )
                     parsed = json.loads(response.choices[0].message.content)
@@ -749,7 +755,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             {"role": "user", "content": "Write the document-level context."},
                         ],
                         temperature=LLM_LABEL_TEMPERATURE,
-                        max_tokens=200,
+                        max_tokens=CONTEXTUAL_MAX_TOKENS,
                         response_format={"type": "json_object"},
                     )
                     parsed = json.loads(response.choices[0].message.content)
@@ -810,7 +816,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             {"role": "user", "content": f"CHUNK:\n{text}"},
                         ],
                         temperature=LLM_LABEL_TEMPERATURE,
-                        max_tokens=200,
+                        max_tokens=CONTEXTUAL_MAX_TOKENS,
                         response_format={"type": "json_object"},
                     )
                     parsed = json.loads(response.choices[0].message.content)

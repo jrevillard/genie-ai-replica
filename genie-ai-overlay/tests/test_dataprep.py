@@ -1620,6 +1620,29 @@ class TestContextualRetrieval:
         assert mock_client.chat.completions.create.call_count == 1
 
     @pytest.mark.asyncio
+    async def test_context_doc_call_uses_configurable_max_tokens(self, monkeypatch):
+        """Doc-level context call must use CONTEXTUAL_MAX_TOKENS, not a hardcoded cap.
+
+        Guards against the regression where max_tokens was hardcoded to 200 — too
+        tight for large documents (the model writes ~196 tokens), so the JSON
+        `{"context":"..."}` was intermittently truncated mid-string under concurrent
+        vLLM load, yielding JSONDecodeError and a raw-chunk fallback.
+        """
+        dp = create_dataprep()
+        monkeypatch.setattr(dp_module, "CONTEXTUAL_MAX_TOKENS", 333)
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps({"context": "ctx"})
+        mock_response.usage = MagicMock(completion_tokens=3, prompt_tokens=10)
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            await dp._context_doc_call(mock_client, "m", "sys", "file1")
+        # The call used the env-driven cap, not the legacy hardcoded 200.
+        _, kwargs = mock_client.chat.completions.create.call_args
+        assert kwargs["max_tokens"] == 333
+
+    @pytest.mark.asyncio
     async def test_context_single_call_retries_then_returns_empty(self, monkeypatch):
         dp = create_dataprep()
         mock_client = AsyncMock()

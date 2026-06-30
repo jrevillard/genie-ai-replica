@@ -1,25 +1,60 @@
 #!/usr/bin/env sh
-# Sync curated repo-root docs/ into the Hugo site content.
-# Source of truth: <repo>/docs/*.md  ->  site/content/en/docs/<name>.md
-#
-# This is an allowlist, not a blanket copy: only listed docs are published.
-# A missing source file makes `cp` fail loudly (red CI), never a silent empty page.
-# Add a line to publish a new doc; remove a line to unpublish.
-set -eu
+# Sync curated repo-root docs/ into the Hugo site, sectioned + with front matter.
+# Source of truth: <repo>/docs/*.md  ->  site/content/en/docs/<section>/<name>.md
+# - Idempotent: rm + recopy each run.
+# - Front-matter injection: prepend title/weight if the source has no TOML/YAML FM.
+# - Relative-link rewrite: ](./foo.md) -> ](/docs/<section>/foo/) (best-effort).
+# - Fail-loud: set -eu; missing source = cp error = red CI.
+set -euo pipefail
 
-# Resolve repo root (parent of site/), independent of caller cwd.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SITE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_DOCS="$(cd "$SITE_DIR/../docs" && pwd)"
 DEST="$SITE_DIR/content/en/docs"
 
-mkdir -p "$DEST"
+# section : weight : source-basename : target-name
+MAP="
+core:1:project-overview.md:project-overview
+core:2:source-tree-analysis.md:source-tree-analysis
+core:3:integration-architecture.md:integration-architecture
+core:4:development-guide.md:development-guide
+frontend:1:ui-component-inventory-gov-chat-frontend.md:ui-component-inventory-frontend
+frontend:2:state-management-gov-chat-frontend.md:state-management-frontend
+frontend:3:theme-system.md:theme-system
+backend:1:api-contracts-gov-chat-backend.md:api-contracts-backend
+mobile:1:ui-component-inventory-mobile.md:ui-component-inventory-mobile
+mobile:2:mobile-architecture-genie-ai-mobile.md:mobile-architecture
+architecture:1:architecture.md:architecture
+architecture:2:LOGGING-ARCHITECTURE-EVALUATION.md:logging-architecture
+deployment:1:docker-compose-setup.md:docker-compose-setup
+deployment:2:docker-swarm-setup.md:docker-swarm-setup
+deployment:3:mobile-deployment-guide.md:mobile-deployment-guide
+configuration:1:keycloak-admin-guide.md:keycloak-admin-guide
+configuration:2:external-idp-integration-guide.md:external-idp-integration-guide
+"
 
-# <source>             <target-name>
-cp "$REPO_DOCS/architecture.md"             "$DEST/architecture.md"
-cp "$REPO_DOCS/docker-compose-setup.md"     "$DEST/deploy.md"
-cp "$REPO_DOCS/docker-swarm-setup.md"       "$DEST/deploy-swarm.md"
-cp "$REPO_DOCS/integration-architecture.md" "$DEST/integration.md"
-cp "$REPO_DOCS/database-migrations.md"      "$DEST/database-migrations.md"
+inject_front_matter() {
+  # $1 = source file, $2 = title, $3 = weight, $4 = section
+  if head -1 "$1" | grep -q '^---\|^+++'; then
+    cat "$1"   # already has front matter
+  else
+    printf -- '---\ntitle: "%s"\nweight: %s\nsection: "%s"\n---\n\n' "$2" "$3" "$4"
+    cat "$1"
+  fi
+}
 
-echo "Synced docs -> $DEST"
+rewrite_links() {
+  # $1 = target section. Rewrites ](./foo.md) and ](../foo.md) -> ](/docs/<section>/foo/)
+  # Best-effort: docs sharing a basename in the MAP resolve; others left (linkcheck flags them).
+  sed -E 's#\]\(\./([a-zA-Z0-9_-]+)\.md\)#](/'"$1"'/\1)#g; s#\]\(\.\./([a-zA-Z0-9_-]+)\.md\)#](/'"$1"'/\1)#g'
+}
+
+rm -rf "$DEST"
+echo "$MAP" | while IFS=: read -r section weight src tgt; do
+  [ -z "$section" ] && continue
+  mkdir -p "$DEST/$section"
+  title=$(printf '%s' "$tgt" | tr '-' ' ' | awk '{for(i=1;i<=NF;i++)$i=toupper(substr($i,1,1))substr($i,2)}1')
+  inject_front_matter "$REPO_DOCS/$src" "$title" "$weight" "$section" | rewrite_links "$section" > "$DEST/$section/$tgt.md"
+done
+
+echo "Synced $(echo "$MAP" | grep -c ':') docs -> $DEST"

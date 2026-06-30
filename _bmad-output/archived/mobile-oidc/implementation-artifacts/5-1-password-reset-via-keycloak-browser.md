@@ -40,12 +40,12 @@ So that I can regain access to my account without contacting an administrator.
   - [x] 1.5 Verify SMTP configuration in `env` template (lines ~188-196): `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_SECURE`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM`. These are required for Keycloak to send password reset emails. Ensure they are documented in the deployment guide
 
 - [x] Task 2: Update deployment guide with password reset documentation (AC: #1, #2, #5)
-  - [x] 2.1 Add a "Password Reset" section to `docs/mobile-deployment-guide.md` covering:
+  - [x] 2.1 Add a "Password Reset" section to `site/content/en/docs/deployment/mobile-deployment-guide.md` covering:
     - `KEYCLOAK_RESET_PASSWORD` env var — purpose, default value (`true`), how to disable
     - SMTP prerequisites — `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_SECURE`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM` must be configured in `.env` for password reset emails to work
     - That "Forgot password" is a Keycloak realm setting — the app does not control its visibility. If disabled, no link appears on the Keycloak login page
     - Reference to Keycloak admin console for additional configuration (optional custom email templates, brute force detection, etc.)
-  - [x] 2.2 Add password reset testing steps to the "Step 7: Validate" section of `docs/mobile-deployment-guide.md`:
+  - [x] 2.2 Add password reset testing steps to the "Step 7: Validate" section of `site/content/en/docs/deployment/mobile-deployment-guide.md`:
     - Verify "Forgot password" link appears on Keycloak login page in system browser
     - Test password reset: submit email → receive email → tap link → reset password → sign in with new password
     - Verify password reset link opens in system browser (not intercepted by app)
@@ -157,7 +157,7 @@ These are passed to the Keycloak service. If SMTP is not configured, Keycloak ca
 ### Project Structure Notes
 
 - Modified files: `env` (uncomment/set `KEYCLOAK_RESET_PASSWORD`), possibly `docker-compose.yaml` (Swarm env var passthrough)
-- Modified docs: `docs/mobile-deployment-guide.md` (add password reset section + testing steps)
+- Modified docs: `site/content/en/docs/deployment/mobile-deployment-guide.md` (add password reset section + testing steps)
 - No Flutter code changes expected
 - No new files expected
 - Legacy files documented in "Legacy Code Inventory" section above — not touched in this story, cleaned in Epic 6
@@ -191,7 +191,7 @@ These are passed to the Keycloak service. If SMTP is not configured, Keycloak ca
 - Verification procedures for URL scheme registration
 
 **Story 4.4** established:
-- Deployment guide at `docs/mobile-deployment-guide.md` with 7-step onboarding flow
+- Deployment guide at `site/content/en/docs/deployment/mobile-deployment-guide.md` with 7-step onboarding flow
 - Documentation style: imperative mood, concrete examples, exact file paths, reference existing docs
 - Guide structure: Steps 1-7 (env, Keycloak client, scheme coherence, flavor config, signing, build, validate)
 
@@ -206,22 +206,22 @@ glm-5-turbo
 ### Completion Notes List
 
 - Task 1: Verified Keycloak password reset configuration. `resetPasswordAllowed` references `$(env:KEYCLOAK_RESET_PASSWORD)` in `genie-realm.yaml`. Docker-compose already defaults to `true` (line 1208: `${KEYCLOAK_RESET_PASSWORD:-true}`) — no `env` template change needed. Confirmed env var passed to keycloak-config service for Swarm mode. No custom auth flows exist — Keycloak default browser flow includes Reset Password. SMTP vars documented in `env` template.
-- Task 2: Added "Password Reset" section to `docs/mobile-deployment-guide.md` covering env vars, SMTP prerequisites, how the flow works, and optional Keycloak Admin Console customization. Added Step 7.6 with password reset testing procedure.
+- Task 2: Added "Password Reset" section to `site/content/en/docs/deployment/mobile-deployment-guide.md` covering env vars, SMTP prerequisites, how the flow works, and optional Keycloak Admin Console customization. Added Step 7.6 with password reset testing procedure.
 - Task 3: Verified deep link behavior. Keycloak uses HTTPS URLs for reset links (not custom scheme). `app_links` package is installed but unused — no deep link interception. Behavior documented in deployment guide.
 
 ### File List
 
-- `docs/mobile-deployment-guide.md` (modified — added Password Reset section and Step 7.6)
+- `site/content/en/docs/deployment/mobile-deployment-guide.md` (modified — added Password Reset section and Step 7.6)
 - `_bmad-output/implementation-artifacts/5-1-password-reset-via-keycloak-browser.md` (modified — task tracking)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified — status updates)
 
 ### Review Findings
 
 - [x] [Review][Patch] Improve `KEYCLOAK_RESET_PASSWORD` comment in `env` to mention docker-compose fallback (`${KEYCLOAK_RESET_PASSWORD:-true}` at line 1208) — `env:419-422`
-- [x] [Review][Patch] Add SMTP prerequisite check at the start of Step 7.6 — `docs/mobile-deployment-guide.md:310`
-- [x] [Review][Patch] Document that `keycloak-config` service must be restarted after changing `KEYCLOAK_RESET_PASSWORD` — `docs/mobile-deployment-guide.md`
-- [x] [Review][Patch] Add note about Android disambiguation dialog when tapping HTTPS reset links — `docs/mobile-deployment-guide.md`
-- [x] [Review][Patch] Add negative test case for AC5 (verify link disappears when `KEYCLOAK_RESET_PASSWORD=false`) — `docs/mobile-deployment-guide.md:316`
+- [x] [Review][Patch] Add SMTP prerequisite check at the start of Step 7.6 — `site/content/en/docs/deployment/mobile-deployment-guide.md:310`
+- [x] [Review][Patch] Document that `keycloak-config` service must be restarted after changing `KEYCLOAK_RESET_PASSWORD` — `site/content/en/docs/deployment/mobile-deployment-guide.md`
+- [x] [Review][Patch] Add note about Android disambiguation dialog when tapping HTTPS reset links — `site/content/en/docs/deployment/mobile-deployment-guide.md`
+- [x] [Review][Patch] Add negative test case for AC5 (verify link disappears when `KEYCLOAK_RESET_PASSWORD=false`) — `site/content/en/docs/deployment/mobile-deployment-guide.md:316`
 - [x] [Review][Defer] Legacy `/password-reset` routes still navigable in `main.dart` — `mobile/genie_ai_mobile/lib/main.dart:175-189` — deferred, pre-existing (Epic 6)
 - [x] [Review][Defer] Keycloak Admin Console `resetCredentials` flow verification not documented — deferred, pre-existing (operational risk)
 

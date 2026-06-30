@@ -972,7 +972,7 @@ Kong routes and plugins are applied automatically via the `kong-config` one-shot
 
 **DNS cache:** Kong is configured with `KONG_DNS_STALE_TTL=5` by default. If you recreate a backend container and see 502 errors, wait up to 5 seconds for DNS re-resolution, or run `docker exec <kong-container> kong reload` for immediate flush.
 
-See [docs/docker-swarm-setup.md](docs/docker-swarm-setup.md) Step 9 for the post-deploy Kong configuration procedure.
+See [site/content/en/docs/deployment/docker-swarm-setup.md](site/content/en/docs/deployment/docker-swarm-setup.md) Step 9 for the post-deploy Kong configuration procedure.
 
 ## 4.3 Domain & Security Configuration (CSP & CORS)
 

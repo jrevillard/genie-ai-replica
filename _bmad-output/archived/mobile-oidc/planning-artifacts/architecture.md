@@ -6,7 +6,7 @@ inputDocuments:
   - '_bmad-output/planning-artifacts/architecture-keycloak-idp.md'
   - '_bmad-output/planning-artifacts/research/technical-identity-provider-integration-research-2026-03-26.md'
   - '_bmad-output/project-context.md'
-  - 'docs/architecture.md'
+  - 'site/content/en/docs/architecture/architecture.md'
 workflowType: 'architecture'
 project_name: 'genie-ai'
 user_name: 'Jerome'

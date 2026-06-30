@@ -106,7 +106,7 @@ so that I can query, filter, and correlate logs across all services without expo
   - [x] Update `configs/otel/README.md` with new filelog receiver and logs pipeline documentation
   - [x] Update `CLAUDE.md` observability section with VictoriaLogs info
   - [x] Update `.claude/rules/ENVIRONMENT.md` with VictoriaLogs port
-  - [x] Update `docs/docker-compose-setup.md` and `docs/docker-swarm-setup.md`
+  - [x] Update `site/content/en/docs/deployment/docker-compose-setup.md` and `site/content/en/docs/deployment/docker-swarm-setup.md`
 
 ## Dev Notes
 
@@ -515,8 +515,8 @@ Claude Opus 4.7 (glm-5-turbo)
 | `deploy/ansible/group_vars/all.yml` | Modified (victorialogs_retention) |
 | `deploy/ansible/templates/env.j2` | Modified (new variables) |
 | `deploy/ansible/README.md` | Modified (Grafana SSO docs) |
-| `docs/docker-compose-setup.md` | Modified |
-| `docs/docker-swarm-setup.md` | Modified |
+| `site/content/en/docs/deployment/docker-compose-setup.md` | Modified |
+| `site/content/en/docs/deployment/docker-swarm-setup.md` | Modified |
 | `CLAUDE.md` | Modified |
 | `.claude/rules/ENVIRONMENT.md` | Modified |
 

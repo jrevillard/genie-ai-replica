@@ -43,8 +43,8 @@ Additionally, the user raised a security concern about `SERVICE_AUTH_TOKEN` bein
 - **docker-compose.yaml**: http-service still defined, dataprep still uses GET_AUTH_TOKEN_URL
 - **deploy/ansible/deploy.yml**: Build task for http-service, vault validation for auth_service_*
 - **deploy/ansible/templates/env.j2**: AUTH_SERVICE_USERNAME/PASSWORD template variables
-- **docs/docker-compose-setup.md**: Lists AUTH_SERVICE_* in required secrets, mentions HTTP Service
-- **docs/docker-swarm-setup.md**: Build/push/tag instructions for http-service
+- **site/content/en/docs/deployment/docker-compose-setup.md**: Lists AUTH_SERVICE_* in required secrets, mentions HTTP Service
+- **site/content/en/docs/deployment/docker-swarm-setup.md**: Build/push/tag instructions for http-service
 - **README.md**: http-service in directory tree and component list
 - **GENIE.AI-Installation-Configuration-Guide.md**: GET_AUTH_TOKEN_URL reference
 - **UNICC-ITU-Genie-AI Code Management Process.md**: http-service in tree
@@ -92,11 +92,11 @@ Additionally, the user raised a security concern about `SERVICE_AUTH_TOKEN` bein
 
 ### P7: Update all documentation
 - `CLAUDE.md`: Remove AUTH_SERVICE_USERNAME/PASSWORD from secrets list
-- `docs/docker-compose-setup.md`: Remove AUTH_SERVICE_* from secrets, "HTTP Service" → "Keycloak"
+- `site/content/en/docs/deployment/docker-compose-setup.md`: Remove AUTH_SERVICE_* from secrets, "HTTP Service" → "Keycloak"
 - `deploy/ansible/README.md`: Remove auth_service_username/password from vault secrets table, update image count 13→12
 - `README.md`: Remove http-service from tree and component list
 - `GENIE.AI-Installation-Configuration-Guide.md`: Replace GET_AUTH_TOKEN_URL with SERVICE_AUTH_TOKEN
-- `docs/docker-swarm-setup.md`: Remove http-service build/push/tag instructions
+- `site/content/en/docs/deployment/docker-swarm-setup.md`: Remove http-service build/push/tag instructions
 - `UNICC-ITU-Genie-AI Code Management Process.md`: Remove http-service from tree
 - `tech-spec-ansible-swarm-deployment.md`: Remove http-service build, update AC18 (6→5 non-OPEA images)
 - `tech-spec-docker-swarm-deployment.md`: 9→8 services with build, remove http-service healthcheck/dependencies

@@ -16,7 +16,7 @@ files_to_modify:
   - docker-compose.swarm.yaml (NEW)
   - env (update with swarm comments)
   - CLAUDE.md (update deployment section)
-  - docs/docker-swarm-setup.md (NEW)
+  - site/content/en/docs/deployment/docker-swarm-setup.md (NEW)
 code_patterns:
   - Swarm ignores depends_on — services handle startup ordering via healthcheck + Swarm restart policy
   - Swarm overlay network provides DNS-based service discovery across nodes
@@ -161,7 +161,7 @@ Note: In Swarm, `.env` variables are resolved once at deploy time on the manager
 ### Tasks
 
 - [ ] **Task 0: Set up local Docker registry and pre-build workflow**
-  - Files: `docs/docker-swarm-setup.md` (documented), `docker-compose.swarm.yaml` (image references)
+  - Files: `site/content/en/docs/deployment/docker-swarm-setup.md` (documented), `docker-compose.swarm.yaml` (image references)
   - Action: Document and implement the image build + push workflow:
     1. Start local registry on manager: `docker run -d -p 5000:5000 --name registry --restart=unless-stopped registry:2`
     2. Build all images: `docker compose build`
@@ -186,7 +186,7 @@ Note: In Swarm, `.env` variables are resolved once at deploy time on the manager
   - Notes: This is a cleanup pass — removes everything that is incompatible or unnecessary in Swarm.
 
 - [ ] **Task 3: Convert kong-config to post-deploy script**
-  - File: `docker-compose.swarm.yaml`, `docs/docker-swarm-setup.md`
+  - File: `docker-compose.swarm.yaml`, `site/content/en/docs/deployment/docker-swarm-setup.md`
   - Action:
     1. Remove `kong-config` service from the compose (it uses `network_mode: "service:kong"` which is incompatible with overlay networks)
     2. In the Swarm setup guide, add a post-deploy step: wait for kong to be healthy, then execute the Kong config restore via `docker exec`:
@@ -241,7 +241,7 @@ Note: In Swarm, `.env` variables are resolved once at deploy time on the manager
   - Notes: In Swarm, publishing ports with `mode: ingress` makes them available on every node. We want nginx only on the gateway node, so use `mode: host` combined with placement constraint. For debugging internal services: use `docker exec -it <container> bash` or `docker service logs <service>`.
 
 - [ ] **Task 8: Handle bind mounts for Swarm**
-  - File: `docker-compose.swarm.yaml`, `docs/docker-swarm-setup.md`
+  - File: `docker-compose.swarm.yaml`, `site/content/en/docs/deployment/docker-swarm-setup.md`
   - Action:
     1. Add a comment header in the compose listing which directories must exist on each target node
     2. In the Swarm setup guide, add a directory creation script per node:
@@ -261,7 +261,7 @@ Note: In Swarm, `.env` variables are resolved once at deploy time on the manager
   - Notes: Keep all existing sections unchanged. Only add comments — no variable changes.
 
 - [ ] **Task 10: Create Swarm setup guide documentation**
-  - File: `docs/docker-swarm-setup.md` (NEW)
+  - File: `site/content/en/docs/deployment/docker-swarm-setup.md` (NEW)
   - Action: Write a deployment guide covering:
     1. Prerequisites (Docker Engine 23+, NVIDIA Container Toolkit on GPU nodes, same Docker version on all nodes)
     2. Swarm initialization (`docker swarm init --advertise-addr <manager-ip>`, `docker swarm join --token <token> <manager-ip>:2377`)
@@ -286,7 +286,7 @@ Note: In Swarm, `.env` variables are resolved once at deploy time on the manager
   - Action: Add Docker Swarm deployment section in "Common Commands" and "Docker Compose Structure":
     - Swarm deploy command
     - Reference to `docker-compose.swarm.yaml`
-    - Reference to `docs/docker-swarm-setup.md`
+    - Reference to `site/content/en/docs/deployment/docker-swarm-setup.md`
     - Note about Swarm-specific env variables
   - Notes: Keep existing docker compose sections unchanged. Add Swarm as an additional option.
 

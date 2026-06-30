@@ -3,13 +3,13 @@ validationTarget: '_bmad-output/planning-artifacts/prd.md'
 validationDate: '2026-05-04'
 inputDocuments:
   - '_bmad-output/project-context.md'
-  - 'docs/architecture.md'
+  - 'site/content/en/docs/architecture/architecture.md'
   - 'docs/roadmap-sprint-20-to-25.md'
   - 'docs/e2e-tests/README.md'
-  - 'docs/keycloak-admin-guide.md'
-  - 'docs/docker-compose-setup.md'
+  - 'site/content/en/docs/configuration/keycloak-admin-guide.md'
+  - 'site/content/en/docs/deployment/docker-compose-setup.md'
   - 'docs/database-migrations.md'
-  - 'docs/LOGGING-ARCHITECTURE-EVALUATION.md'
+  - 'site/content/en/docs/architecture/logging-architecture.md'
   - 'GitLab Issue #599 - Establish automated test suite for OPEA microservices'
   - '_bmad-output/planning-artifacts/research/technical-identity-provider-integration-research-2026-03-26.md'
 validationStepsCompleted: ['step-01-discovery', 'step-02-format-detection', 'step-03-density-validation', 'step-04-brief-coverage', 'step-05-measurability', 'step-06-traceability', 'step-07-implementation-leakage', 'step-08-domain-compliance', 'step-09-project-type', 'step-10-smart', 'step-11-holistic-quality', 'step-12-completeness']
@@ -30,13 +30,13 @@ overallStatus: 'Warning'
 
 - PRD: `prd.md` (497 lines) ✓
 - Project Context: `_bmad-output/project-context.md` (47 rules, 230 lines) ✓
-- Architecture: `docs/architecture.md` (C4 diagrams, auth flows) ✓
+- Architecture: `site/content/en/docs/architecture/architecture.md` (C4 diagrams, auth flows) ✓
 - Roadmap: `docs/roadmap-sprint-20-to-25.md` (542 lines, Sprint 22-25 dependencies) ✓
 - E2E Tests: `docs/e2e-tests/README.md` (test conventions) ✓
-- Keycloak Admin Guide: `docs/keycloak-admin-guide.md` ✓
-- Docker Compose Setup: `docs/docker-compose-setup.md` ✓
+- Keycloak Admin Guide: `site/content/en/docs/configuration/keycloak-admin-guide.md` ✓
+- Docker Compose Setup: `site/content/en/docs/deployment/docker-compose-setup.md` ✓
 - Database Migrations: `docs/database-migrations.md` ✓
-- Logging Architecture Evaluation: `docs/LOGGING-ARCHITECTURE-EVALUATION.md` ✓
+- Logging Architecture Evaluation: `site/content/en/docs/architecture/logging-architecture.md` ✓
 - Research: `technical-identity-provider-integration-research-2026-03-26.md` ✓
 - GitLab Issue #599 (referenced) ✓
 

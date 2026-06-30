@@ -538,8 +538,8 @@ Backend API documentation is available at:
 
 ### Generated Documentation
 
-- [API Contracts - Backend](/docs/core/api-contracts-gov-chat-backend/) - Complete API specification
-- [Mobile Architecture](/docs/core/mobile-architecture-genie-ai-mobile/) - Mobile app architecture
+- [API Contracts - Backend](/docs/backend/api-contracts-backend/) - Complete API specification
+- [Mobile Architecture](/docs/mobile/mobile-architecture/) - Mobile app architecture
 - [Integration Architecture](/docs/core/integration-architecture/) - Service integration patterns
 
 ### Key API Endpoints
@@ -766,29 +766,29 @@ Located in `tests/` directory:
 
 ### Core Documentation
 
-- [Architecture Overview](/docs/core/architecture/) - Complete system architecture with C4 diagrams
+- [Architecture Overview](/docs/architecture/architecture/) - Complete system architecture with C4 diagrams
 - [Development Guide](/docs/core/development-guide/) - Developer setup and workflows
-- [Docker Compose Setup](/docs/core/docker-compose-setup/) - Local deployment guide
-- [Docker Swarm Setup](/docs/core/docker-swarm-setup/) - Production deployment guide
-- [Mobile Deployment Guide](/docs/core/mobile-deployment-guide/) - Mobile app deployment
-- [Keycloak Admin Guide](/docs/core/keycloak-admin-guide/) - Keycloak configuration
-- [External IdP Integration](/docs/core/external-idp-integration-guide/) - Google, Microsoft, SAML setup
+- [Docker Compose Setup](/docs/deployment/docker-compose-setup/) - Local deployment guide
+- [Docker Swarm Setup](/docs/deployment/docker-swarm-setup/) - Production deployment guide
+- [Mobile Deployment Guide](/docs/deployment/mobile-deployment-guide/) - Mobile app deployment
+- [Keycloak Admin Guide](/docs/configuration/keycloak-admin-guide/) - Keycloak configuration
+- [External IdP Integration](/docs/configuration/external-idp-integration-guide/) - Google, Microsoft, SAML setup
 
 ### Generated Documentation
 
-- [API Contracts](/docs/core/api-contracts-gov-chat-backend/) - Backend API specification
-- [State Management](/docs/core/state-management-gov-chat-frontend/) - Frontend state management
-- [UI Component Inventory](/docs/core/ui-component-inventory-gov-chat-frontend/) - Frontend components
-- [Mobile Architecture](/docs/core/mobile-architecture-genie-ai-mobile/) - Mobile app architecture
+- [API Contracts](/docs/backend/api-contracts-backend/) - Backend API specification
+- [State Management](/docs/frontend/state-management-frontend/) - Frontend state management
+- [UI Component Inventory](/docs/frontend/ui-component-inventory-frontend/) - Frontend components
+- [Mobile Architecture](/docs/mobile/mobile-architecture/) - Mobile app architecture
 - [Integration Architecture](/docs/core/integration-architecture/) - Service integration
-- [Theme System](/docs/core/theme-system/) - Design system theming
+- [Theme System](/docs/frontend/theme-system/) - Design system theming
 
 ### Project Documentation
 
 - [README.md](../README.md) - Main project README
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution guidelines
 - [CLAUDE.md](../CLAUDE.md) - AI agent development guidelines
-- [Database Migrations](/docs/core/database-migrations/) - ArangoDB schema changes
+- [Database Migrations](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/docs/database-migrations.md) - ArangoDB schema changes
 
 ---
 
@@ -815,7 +815,7 @@ GENIE.AI is open-source and welcomes contributions. See [CONTRIBUTING.md](../CON
 
 ### Current Focus (Sprint 20-25)
 
-See [Roadmap Sprint 20-25](/docs/core/roadmap-sprint-20-to-25/) for detailed sprint planning.
+See [Roadmap Sprint 20-25](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/docs/roadmap-sprint-20-to-25.md) for detailed sprint planning.
 
 ### Upcoming Features
 

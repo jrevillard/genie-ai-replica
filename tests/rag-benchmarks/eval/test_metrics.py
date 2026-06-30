@@ -1,6 +1,7 @@
 # Copyright (C) 2025 ITU
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for retrieval-quality metrics (pure functions, no env deps)."""
+
 import math
 
 import metrics  # noqa: E402 — sys.path manipulated by pytest.ini / conftest
@@ -11,6 +12,7 @@ def _approx(a, b):
 
 
 # --- recall -----------------------------------------------------------------
+
 
 def test_recall_full_hit():
     assert _approx(metrics.recall(["a", "b"], ["a", "b", "c"]), 1.0)
@@ -31,6 +33,7 @@ def test_recall_empty_gold_is_vacuously_one():
 
 # --- precision --------------------------------------------------------------
 
+
 def test_precision_all_relevant():
     assert _approx(metrics.precision(["a", "b"], ["a", "b"]), 1.0)
 
@@ -46,6 +49,7 @@ def test_precision_nothing_selected_is_zero():
 
 # --- complete_recall --------------------------------------------------------
 
+
 def test_complete_recall_all_selected():
     assert _approx(metrics.complete_recall(["a", "b"], ["a", "b", "c"]), 1.0)
 
@@ -55,6 +59,7 @@ def test_complete_recall_partial_is_zero():
 
 
 # --- noise ------------------------------------------------------------------
+
 
 def test_noise_is_one_minus_precision():
     # precision 0.5 → noise 0.5
@@ -67,12 +72,14 @@ def test_noise_zero_when_all_selected_relevant():
 
 # --- retrieval_recall -------------------------------------------------------
 
+
 def test_retrieval_recall_isolates_retriever_failure():
     # gold 'b' never retrieved (not in candidates) → 0.5, even if reranker is perfect
     assert _approx(metrics.retrieval_recall(["a", "b"], ["a", "c"]), 0.5)
 
 
 # --- aggregate --------------------------------------------------------------
+
 
 def _row(gold, selected, candidates=None):
     r = {
@@ -96,8 +103,8 @@ def test_aggregate_means_across_rows():
 
 def test_aggregate_includes_retrieval_recall_when_present():
     rows = [
-        _row(["a"], ["a"], candidates=["a"]),               # retrieval_recall 1.0
-        _row(["b", "c"], ["b", "c"], candidates=["b"]),     # retrieval_recall 0.5 (1 of 2)
+        _row(["a"], ["a"], candidates=["a"]),  # retrieval_recall 1.0
+        _row(["b", "c"], ["b", "c"], candidates=["b"]),  # retrieval_recall 0.5 (1 of 2)
     ]
     agg = metrics.aggregate(rows)
     assert "retrieval_recall" in agg

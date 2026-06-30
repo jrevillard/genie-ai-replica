@@ -16,6 +16,7 @@ When candidate keys are available (pre-rerank), ``retrieval_recall`` separates
 retriever failure (gold never retrieved) from reranker failure (gold retrieved
 but dropped): retrieval_recall = |gold ∩ candidates| / |gold|.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterable

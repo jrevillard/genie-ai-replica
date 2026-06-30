@@ -1,59 +1,58 @@
 #!/usr/bin/env python3
 # Copyright (C) 2025 ITU
 # SPDX-License-Identifier: Apache-2.0
-"""Dump every chunk _key + text preview from ArangoDB for gold annotation.
+"""Dump every chunk _key + content_hash + preview from ArangoDB for gold annotation.
 
 Run on a swarm node (or via SSH + base64 pattern, see
 .claude/rules/DEBUGGING-TRACING.md §5). Produces chunks_registry.json:
 
-    [{"key": "chunk_123", "preview": "First 200 chars...", "labels": [...]}, ...]
+    [{"key": "<uuid>", "content_hash": "a1b2...", "preview": "First 200 chars...",
+      "labels": [...]}, ...]
 
-Browse this file to pick the gold_chunk_keys for each query in gold_dataset.json.
+Browse this file to pick the ``content_hash`` values for each query's expected
+chunks in gold_dataset.json. The hash (not the ``_key``) is what the eval
+matches on — it survives re-ingestion (UUIDs churn, content doesn't).
 """
+
 from __future__ import annotations
 
-import base64
 import json
 import os
 import sys
-import urllib.parse
-import urllib.request
+
+from arango import cursor
+from chunk_identity import content_hash
 
 GRAPH_SOURCE = os.getenv("GRAPH_SOURCE", "genieai_graph_SOURCE")
-ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
-ARANGO_DB = os.getenv("ARANGO_DB", "genieai")
-ARANGO_USER = os.getenv("ARANGO_USER", "root")
-ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "text")
-PREVIEW_LEN = 200
-
-
-def _cursor(aql: str, bind_vars: dict | None = None) -> list:
-    url = f"{ARANGO_URL.rstrip('/')}/_db/{urllib.parse.quote(ARANGO_DB)}/_api/cursor"
-    auth = base64.b64encode(f"{ARANGO_USER}:{ARANGO_PASSWORD}".encode()).decode()
-    body = json.dumps({"query": aql, "bindVars": bind_vars or {}}).encode()
-    req = urllib.request.Request(
-        url, data=body, headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"}
-    )
-    with urllib.request.urlopen(req) as resp:
-        return json.load(resp).get("result", [])
+# Fetch enough head to compute the content_hash (prefix-based) + a readable preview.
+FETCH_LEN = 250
 
 
 def main(out_path: str = "chunks_registry.json") -> None:
-    rows = _cursor(
+    rows = cursor(
         f"""
         FOR doc IN {GRAPH_SOURCE}
             SORT doc._key
             RETURN {{
                 "key": doc._key,
-                "preview": SUBSTRING(doc.{TEXT_FIELD}, 0, {PREVIEW_LEN}),
+                "text_head": SUBSTRING(doc.{TEXT_FIELD}, 0, {FETCH_LEN}),
                 "labels": doc.chunk_labels || []
             }}
         """
     )
+    out = [
+        {
+            "key": r["key"],
+            "content_hash": content_hash(r.get("text_head", "")),
+            "preview": (r.get("text_head") or "")[:200],
+            "labels": r.get("labels", []),
+        }
+        for r in rows
+    ]
     with open(out_path, "w") as fh:
-        json.dump(rows, fh, ensure_ascii=False, indent=2)
-    print(f"Wrote {len(rows)} chunks → {out_path}", file=sys.stderr)
+        json.dump(out, fh, ensure_ascii=False, indent=2)
+    print(f"Wrote {len(out)} chunks → {out_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

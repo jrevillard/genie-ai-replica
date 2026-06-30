@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 # Copyright (C) 2025 ITU
 # SPDX-License-Identifier: Apache-2.0
-"""Reranker-selection eval: drive gold queries, measure recall / precision.
+"""Retrieval eval driver. Two modes, one collection path.
 
-Flow (per gold entry):
-  1. POST {messages, context, stream:false} to chatqna via docker exec (NO OIDC —
-     internal service, faithful label-filtered retrieval, see README).
-  2. Pull the resulting trace from VictoriaTraces by service + time window
-     (robust — does not rely on traceparent in response headers).
-  3. Extract rag.candidate_chunk_ids / rag.selected_chunk_ids from the
-     chatqna.reranker_selection span.
-  4. Match against gold_chunk_keys → recall / precision / complete-recall / noise.
+Both modes drive gold queries through chatqna via docker exec (internal service,
+NO OIDC — faithful label-filtered retrieval) and pull the selection from the
+chatqna.reranker_selection span in VictoriaTraces.
 
-Run twice for an A/B: once per reranker config (redeploy between runs), save each
-report, then diff. See README.md.
+  --mode anchor       Deterministic: match selected/candidate chunk CONTENT
+                      HASHES against gold_dataset.json expected_chunks.
+                      Reproducible, no LLM. recall/precision/complete_recall/noise.
+                      Survives re-ingestion (matches on content, not UUID _key).
+
+  --mode dump-tuples  Collect (question, contexts, answer, reference_answer) per
+                      query → eval_tuples.json. Feed to run_ragas_eval.py (an
+                      external LLM judge) for semantic faithfulness/relevancy.
+
+Run twice (once per reranker config, redeploy between) + diff reports for an A/B.
 """
+
 from __future__ import annotations
 
 import json
@@ -24,29 +28,34 @@ import sys
 import time
 
 import metrics
+from arango import cursor
+from chunk_identity import content_hash
 
 # --- stack config (env-overridable) -----------------------------------------
 CHATQNA_CONTAINER = os.getenv("CHATQNA_CONTAINER", "genieai_el-salvador_chatqna")
 VICTORIATRACES_SVC = os.getenv("VICTORIATRACES_SVC", "genieai_el-salvador_victoriatraces")
 CHATQNA_URL = os.getenv("CHATQNA_URL", "http://localhost:8888/v1/chatqna")
 CHATQNA_SERVICE_NAME = os.getenv("CHATQNA_SERVICE_NAME", "GENIE.AI_CHATQNA")
+GRAPH_SOURCE = os.getenv("GRAPH_SOURCE", "genieai_graph_SOURCE")
+TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "text")
 TRACE_FLUSH_WAIT = float(os.getenv("TRACE_FLUSH_WAIT", "3"))
 TRACE_LOOKUP_SPAN_S = float(os.getenv("TRACE_LOOKUP_SPAN_S", "20"))
 
 
 def _docker_exec(container: str, cmd: str, timeout: float = 120) -> str:
-    """Run `docker exec <container> sh -c '<cmd>'` and return stdout."""
     result = subprocess.run(
         ["docker", "exec", container, "sh", "-c", cmd],
-        capture_output=True, text=True, timeout=timeout,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
     )
     if result.returncode != 0:
         raise RuntimeError(f"docker exec failed: {result.stderr.strip()[:300]}")
     return result.stdout
 
 
-def drive_query(entry: dict) -> float:
-    """POST the gold query to chatqna. Returns request start time (epoch s)."""
+def drive_query(entry: dict) -> tuple[float, str]:
+    """POST the gold query to chatqna. Returns (start_time, response_body)."""
     payload = {
         "messages": [{"role": "user", "content": entry["query"]}],
         "context": {
@@ -56,22 +65,35 @@ def drive_query(entry: dict) -> float:
         },
         "stream": False,
     }
-    # JSON payload without single quotes (so it survives the sh -c '...' wrapper).
     payload_json = json.dumps(payload).replace("'", "'\\''")
     start = time.time()
     cmd = (
-        f"curl -s -o /dev/null -m {int(TRACE_LOOKUP_SPAN_S * 3)} "
+        f"curl -s -m {int(TRACE_LOOKUP_SPAN_S * 3)} "
         f"-X POST {CHATQNA_URL} -H 'Content-Type: application/json' -d '{payload_json}'"
     )
-    _docker_exec(CHATQNA_CONTAINER, cmd, timeout=TRACE_LOOKUP_SPAN_S * 4)
-    return start
+    body = _docker_exec(CHATQNA_CONTAINER, cmd, timeout=TRACE_LOOKUP_SPAN_S * 4)
+    return start, body
+
+
+def _extract_answer(body: str) -> str:
+    """Best-effort answer text from a chatqna sync response."""
+    if not body:
+        return ""
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return body.strip()
+    # OPEA sync response shapes seen in the wild.
+    if isinstance(data, dict):
+        for key in ("text", "answer", "generated_text"):
+            if data.get(key):
+                return data[key]
+        return json.dumps(data)
+    return str(data)
 
 
 def fetch_selection(start_s: float) -> tuple[list[str], list[str]]:
-    """Find the chatqna.reranker_selection span emitted during [start, start+span].
-
-    Returns (candidate_chunk_ids, selected_chunk_ids).
-    """
+    """Find candidate/selected chunk _keys from the reranker_selection span."""
     end_s = start_s + TRACE_LOOKUP_SPAN_S
     start_us, end_us = int(start_s * 1e6), int(end_s * 1e6)
     url = (
@@ -83,13 +105,8 @@ def fetch_selection(start_s: float) -> tuple[list[str], list[str]]:
     time.sleep(TRACE_FLUSH_WAIT)  # spans flush at span end
     raw = _docker_exec(CHATQNA_CONTAINER, f"curl -s '{url}'", timeout=60)
     data = json.loads(raw or "{}")
-    traces = data.get("data", [])
-    if not traces:
-        return [], []
-
-    # Collect selection attrs from every matching span in the window.
     candidates, selected = [], []
-    for tr in traces:
+    for tr in data.get("data", []):
         for sp in tr.get("spans", []):
             tags = {t["key"]: t.get("value") for t in sp.get("tags", [])}
             c = tags.get("rag.candidate_chunk_ids")
@@ -101,49 +118,86 @@ def fetch_selection(start_s: float) -> tuple[list[str], list[str]]:
     return candidates, selected
 
 
-def main(gold_path: str, out_path: str) -> None:
+def build_key_maps() -> tuple[dict[str, str], dict[str, str]]:
+    """Return ({_key: content_hash}, {_key: full_text}) from ArangoDB."""
+    rows = cursor(
+        f"""
+        FOR doc IN {GRAPH_SOURCE}
+            RETURN {{"key": doc._key, "text": doc.{TEXT_FIELD}}}
+        """
+    )
+    key_to_hash = {r["key"]: content_hash(r.get("text", "")) for r in rows}
+    key_to_text = {r["key"]: r.get("text", "") for r in rows}
+    return key_to_hash, key_to_text
+
+
+def score_anchor(entry, selected_keys, candidate_keys, key_to_hash) -> dict:
+    gold = [c["content_hash"] for c in entry.get("expected_chunks", [])]
+    selected = [key_to_hash[k] for k in selected_keys if k in key_to_hash]
+    candidates = [key_to_hash[k] for k in candidate_keys if k in key_to_hash]
+    row = {
+        "id": entry["id"],
+        "query": entry["query"],
+        "gold": gold,
+        "selected": selected,
+        "candidates": candidates,
+        "recall": metrics.recall(gold, selected),
+        "precision": metrics.precision(gold, selected),
+        "complete_recall": metrics.complete_recall(gold, selected),
+        "noise": metrics.noise(gold, selected),
+    }
+    if candidates:
+        row["retrieval_recall"] = metrics.retrieval_recall(gold, candidates)
+    return row
+
+
+def make_tuple(entry, selected_keys, key_to_text, answer) -> dict:
+    contexts = [key_to_text[k] for k in selected_keys if k in key_to_text]
+    return {
+        "id": entry["id"],
+        "question": entry["query"],
+        "contexts": contexts,
+        "answer": answer,
+        "reference_answer": entry.get("reference_answer", ""),
+    }
+
+
+def main(mode: str, gold_path: str, out_path: str) -> None:
     with open(gold_path) as fh:
         gold = json.load(fh)
     entries = gold["entries"]
+    key_to_hash, key_to_text = build_key_maps()
 
-    rows = []
+    tuples, rows = [], []
     for entry in entries:
-        start = drive_query(entry)
-        candidates, selected = fetch_selection(start)
-        gold_keys = entry["gold_chunk_keys"]
-        row = {
-            "id": entry["id"],
-            "query": entry["query"],
-            "gold": gold_keys,
-            "candidates": candidates,
-            "selected": selected,
-            "recall": metrics.recall(gold_keys, selected),
-            "precision": metrics.precision(gold_keys, selected),
-            "complete_recall": metrics.complete_recall(gold_keys, selected),
-            "noise": metrics.noise(gold_keys, selected),
-        }
-        if candidates:
-            row["retrieval_recall"] = metrics.retrieval_recall(gold_keys, candidates)
-        rows.append(row)
-        print(
-            f"[{entry['id']}] recall={row['recall']:.2f} precision={row['precision']:.2f} "
-            f"complete={row['complete_recall']:.0f} noise={row['noise']:.2f} "
-            f"(selected {len(selected)}/{len(candidates) if candidates else '?'})",
-            file=sys.stderr,
-        )
+        start, body = drive_query(entry)
+        answer = _extract_answer(body)
+        candidate_keys, selected_keys = fetch_selection(start)
+        print(f"[{entry['id']}] selected={len(selected_keys)} candidates={len(candidate_keys)}", file=sys.stderr)
+        if mode == "dump-tuples":
+            tuples.append(make_tuple(entry, selected_keys, key_to_text, answer))
+        else:  # anchor
+            rows.append(score_anchor(entry, selected_keys, candidate_keys, key_to_hash))
 
-    agg = metrics.aggregate(rows)
-    report = {"per_query": rows, "aggregate": agg}
-    with open(out_path, "w") as fh:
-        json.dump(report, fh, indent=2)
-    print(f"\n=== AGGREGATE (n={agg['n']}) ===", file=sys.stderr)
-    for k in ("recall", "precision", "complete_recall", "noise", "retrieval_recall"):
-        if k in agg:
-            print(f"  {k:20s} {agg[k]:.3f}", file=sys.stderr)
-    print(f"\nReport → {out_path}", file=sys.stderr)
+    if mode == "dump-tuples":
+        with open(out_path, "w") as fh:
+            json.dump(tuples, fh, ensure_ascii=False, indent=2)
+        print(f"\nWrote {len(tuples)} eval tuples → {out_path}", file=sys.stderr)
+        print("Feed to: run_ragas_eval.py eval_tuples.json", file=sys.stderr)
+    else:
+        agg = metrics.aggregate(rows)
+        report = {"per_query": rows, "aggregate": agg}
+        with open(out_path, "w") as fh:
+            json.dump(report, fh, indent=2)
+        print(f"\n=== AGGREGATE (n={agg['n']}) ===", file=sys.stderr)
+        for k in ("recall", "precision", "complete_recall", "noise", "retrieval_recall"):
+            if k in agg:
+                print(f"  {k:20s} {agg[k]:.3f}", file=sys.stderr)
+        print(f"\nReport → {out_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":
-    gold = sys.argv[1] if len(sys.argv) > 1 else "gold_dataset.json"
-    out = sys.argv[2] if len(sys.argv) > 2 else "eval_report.json"
-    main(gold, out)
+    mode = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] in ("anchor", "dump-tuples") else "anchor"
+    gold = sys.argv[2] if len(sys.argv) > 2 else "gold_dataset.json"
+    out = sys.argv[3] if len(sys.argv) > 3 else ("eval_tuples.json" if mode == "dump-tuples" else "eval_report.json")
+    main(mode, gold, out)

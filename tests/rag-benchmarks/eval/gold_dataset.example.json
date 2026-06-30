@@ -1,5 +1,5 @@
 {
-  "_doc": "Gold standard for reranker-selection eval. Copy to gold_dataset.json and fill one entry per query. gold_chunk_keys are the ArangoDB _key values of chunks that SHOULD be retrieved (find them via dump_chunks.py or an AQL browse). categoryLabel/serviceLabels/language mirror the payload the backend sends to chatqna (drives label-filtered retrieval) — keep them faithful to a real user flow.",
+  "_doc": "Gold standard for retrieval eval. Copy to gold_dataset.json and fill one entry per query. Two ground-truth signals per entry, consumed by two independent eval paths: (1) expected_chunks[].content_hash — deterministic anchor (set intersection, reproducible, no LLM); the hash is the chunk's content fingerprint from dump_chunks.py / chunks_registry.json (NOT the _key UUID, which churns on re-ingest). (2) reference_answer — semantic ground truth for the LLM-judge path (Ragas faithfulness/context_recall/answer_relevancy). categoryLabel/serviceLabels/language mirror the payload the backend sends to chatqna (drives label-filtered retrieval) — keep them faithful to a real user flow.",
   "entries": [
     {
       "id": "q1",
@@ -7,7 +7,10 @@
       "categoryLabel": "Agriculture",
       "serviceLabels": ["Subsidies"],
       "language": "en",
-      "gold_chunk_keys": ["chunk_123", "chunk_456"]
+      "reference_answer": "To apply for an agricultural subsidy, submit form X to the ministry, including proof of land ownership and a valid producer registration.",
+      "expected_chunks": [
+        {"content_hash": "a1b2c3d4e5f60718", "min_rank": 5, "preview": "To apply for an agricultural subsidy..."}
+      ]
     },
     {
       "id": "q2",
@@ -15,7 +18,10 @@
       "categoryLabel": "Agriculture",
       "serviceLabels": ["Export certification"],
       "language": "en",
-      "gold_chunk_keys": ["chunk_789"]
+      "reference_answer": "Export certification requires a phytosanitary certificate, a commercial invoice, and a packing list.",
+      "expected_chunks": [
+        {"content_hash": "b2c3d4e5f6071809", "min_rank": 3, "preview": "Export certification requires..."}
+      ]
     }
   ]
 }

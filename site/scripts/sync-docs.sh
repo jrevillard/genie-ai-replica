@@ -49,7 +49,8 @@ rewrite_links() {
   sed -E 's#\]\(\./([a-zA-Z0-9_-]+)\.md\)#](/'"$1"'/\1)#g; s#\]\(\.\./([a-zA-Z0-9_-]+)\.md\)#](/'"$1"'/\1)#g'
 }
 
-rm -rf "$DEST"
+# Remove stale copied docs (*.md except _index.md) but PRESERVE authored landings.
+find "$DEST" -type f -name '*.md' ! -name '_index.md' -delete 2>/dev/null || true
 echo "$MAP" | while IFS=: read -r section weight src tgt; do
   [ -z "$section" ] && continue
   mkdir -p "$DEST/$section"

@@ -431,6 +431,70 @@ class TestLabelWithLlm:
         assert "Healthcare" in result[0]["labels"]
 
     @pytest.mark.asyncio
+    async def test_file_labels_scope_filters_out_of_scope(self, monkeypatch):
+        """Labels not in file_labels are dropped even if valid taxonomy entries.
+
+        Reproduces the tomato-guide/Cucumber leakage: the LLM is prompted with
+        the full taxonomy and may suggest sibling labels (e.g. Cucumber on a
+        tomato document); the document's file_labels define the eligible scope,
+        so out-of-scope suggestions must be removed before storage.
+        """
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        # LLM suggests a sibling crop (Cucumber) plus the in-scope Tomato.
+        mock_response.choices[0].message.content = json.dumps({"labels": ["Cucumber", "Tomato"]})
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._label_with_llm(
+                ["chunk"],
+                ["Cucumber", "Tomato", "Water"],  # full taxonomy (all_labels)
+                ["Tomato", "Water"],  # document scope (file_labels)
+                "file1",
+            )
+
+        # Cucumber is a valid taxonomy entry but outside file_labels -> dropped.
+        assert "Cucumber" not in result[0]["labels"]
+        assert "Tomato" in result[0]["labels"]
+
+    @pytest.mark.asyncio
+    async def test_file_labels_empty_keeps_taxonomy_labels(self, monkeypatch):
+        """Empty file_labels must NOT filter, else every chunk loses all labels.
+
+        Guards the scope filter so documents without file_labels keep the
+        existing taxonomy-validated behavior.
+        """
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps({"labels": ["Healthcare"]})
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._label_with_llm(["chunk"], ["Healthcare"], [], "file1")
+
+        assert result[0]["labels"] == ["Healthcare"]
+
+    @pytest.mark.asyncio
     async def test_batch_labeling_makes_one_call_per_batch(self, monkeypatch):
         """With LABEL_LLM_BATCH_SIZE>1, multiple chunks share a single LLM call."""
         dp = create_dataprep()

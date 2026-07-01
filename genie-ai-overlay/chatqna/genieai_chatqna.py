@@ -1071,6 +1071,29 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             doc.get("text", ""): (_meta_list[i] if i < len(_meta_list) else {}).get("chunk_key", "N/A")
             for i, doc in enumerate(original_retrieved_docs)
         }
+        # TEMP DEBUG (eval identity diagnosis): reveal the real data structure so
+        # we can locate where chunk_key actually lives. Remove once root cause found.
+        try:
+            _first = original_retrieved_docs[0] if original_retrieved_docs else {}
+            _first_keys = list(_first.keys()) if isinstance(_first, dict) else [str(type(_first))]
+            _first_meta_keys = (
+                list((_first.get("metadata") or {}).keys())
+                if isinstance(_first, dict) and isinstance(_first.get("metadata"), dict)
+                else ["no-metadata-dict"]
+            )
+            with align_tracer.start_as_current_span("chatqna.eval_debug") as _dbg:
+                _dbg.set_attribute("debug.data_keys", str(list(data.keys()) if isinstance(data, dict) else type(data)))
+                _dbg.set_attribute("debug.meta_list_len", len(_meta_list))
+                _dbg.set_attribute("debug.retrieved_docs_len", len(original_retrieved_docs))
+                _dbg.set_attribute("debug.first_doc_keys", str(_first_keys))
+                _dbg.set_attribute("debug.first_doc_metadata_keys", str(_first_meta_keys))
+                _dbg.set_attribute(
+                    "debug.first_doc_id",
+                    str(_first.get("id", "N/A"))[:40] if isinstance(_first, dict) else "N/A",
+                )
+        except Exception as _e:  # noqa: BLE001 — debug must never break the pipeline
+            with align_tracer.start_as_current_span("chatqna.eval_debug") as _dbg:
+                _dbg.set_attribute("debug.error", str(_e)[:200])
 
         # 1. Handle output from custom Genie Python Wrapper
         if isinstance(data, dict):

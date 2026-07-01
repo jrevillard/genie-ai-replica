@@ -13,3 +13,4 @@ Flutter client: UI component inventory and mobile architecture.
 
 1. [UI Component Inventory (mobile)](/docs/mobile/ui-component-inventory-mobile/)
 2. [Mobile Architecture (genie_ai_mobile)](/docs/mobile/mobile-architecture/)
+3. [Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/)

@@ -368,7 +368,7 @@ When `ENABLE_OBSERVABILITY=1`:
 
 - **Log collection**: All services use the fluentd logging driver (`driver: fluentd`) to forward container logs to the OTel Collector's `fluent_forward` receiver on port 24224 (localhost only). Docker dual logging (20.10+) keeps `docker logs` functional.
 - **Collector placement**: The OTel Collector runs in `mode: global` with placement constraint `node.labels.genieai == true`, ensuring one Collector instance per application node (multi-node Swarm compatible).
-- **Grafana access**: Accessible via Kong route `/grafana/` with Keycloak OIDC SSO (no direct host port exposure). Three dashboards are pre-configured: **Service Health**, **RAG Pipeline Trace Waterfall**, and **Service Logs**.
+- **Grafana access**: Accessible via Kong route `/grafana/` with Keycloak OIDC SSO (no direct host port exposure). 9 pre-built dashboards are auto-provisioned (service health, application metrics, service logs, trace explorer, RAG pipeline waterfall, plus observability-stack health and the three Victoria single-node views).
 
 See `configs/otel/README.md` for Collector configuration details.
 

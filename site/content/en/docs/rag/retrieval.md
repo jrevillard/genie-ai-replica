@@ -43,11 +43,11 @@ The dense and lexical result lists are merged with **reciprocal-rank fusion
 (RRF)**, a rank-based combiner that does not need the two scores to be on the
 same scale:
 
-| Variable | Meaning |
-|---|---|
-| `HYBRID_DENSE_WEIGHT` | Weight of the dense-vector ranking. |
-| `HYBRID_LEXICAL_WEIGHT` | Weight of the BM25 ranking. |
-| `HYBRID_RRF_K` | RRF smoothing constant. |
+| Variable | Default | Meaning |
+|---|---|---|
+| `RETRIEVER_HYBRID_DENSE_WEIGHT` | 1.0 | Weight of the dense-vector ranking. |
+| `RETRIEVER_HYBRID_LEXICAL_WEIGHT` | 1.0 | Weight of the BM25 ranking. |
+| `RETRIEVER_HYBRID_RRF_K` | 60 | RRF smoothing constant. |
 
 Graph-traversal hits are merged in alongside the fused set.
 
@@ -63,15 +63,15 @@ itself is documented in [Data labelling]({{< relref "data-labeling" >}}).
 
 | Variable | Default | Effect |
 |---|---|---|
-| `RETRIEVE_K` | 4 | Chunks returned to the reranker. |
-| `RETRIEVE_FETCH_K` | 20 | Wider candidate set fetched before fusion. |
-| `RETRIEVE_SCORE_THRESHOLD` | 0.1 | Minimum fused score to keep a chunk. |
-| `RETRIEVE_DISTANCE_THRESHOLD` | 1 | Maximum cosine distance. |
-| `TRAVERSAL_ENABLED` | false | Turn on knowledge-graph traversal. |
-| `TRAVERSAL_MAX_DEPTH` | 2 | How many graph hops to follow. |
-| `TRAVERSAL_MAX_RETURNED` | 3 | Cap on graph-derived chunks. |
-| `TRAVERSAL_SCORE_THRESHOLD` | 0.5 | Minimum score for a graph chunk. |
-| `RETRIEVE_LAMBDA_MULT` | 0.5 | Fusion blend (dense vs lexical emphasis). |
+| `RETRIEVER_ARANGO_K` | 4 | Chunks returned to the reranker. |
+| `RETRIEVER_ARANGO_FETCH_K` | 20 | Wider candidate set fetched before fusion. |
+| `RETRIEVER_ARANGO_SCORE_THRESHOLD` | 0.1 | Minimum fused score to keep a chunk. |
+| `RETRIEVER_ARANGO_DISTANCE_THRESHOLD` | 1 | Maximum cosine distance. |
+| `RETRIEVER_ARANGO_LAMBDA_MULT` | 0.5 | Fusion blend (dense vs lexical emphasis). |
+| `RETRIEVER_ARANGO_TRAVERSAL_ENABLED` | false | Turn on knowledge-graph traversal. |
+| `RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH` | 1 | How many graph hops to follow. |
+| `RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED` | 3 | Cap on graph-derived chunks. |
+| `RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD` | 0.5 | Minimum score for a graph chunk. |
 
 > **Tuning order.** Start with the defaults, then adjust `RETRIEVE_K` and
 > `RETRIEVE_FETCH_K` for breadth, and the thresholds for precision. Enable graph

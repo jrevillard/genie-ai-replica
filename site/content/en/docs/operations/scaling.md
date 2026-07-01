@@ -35,14 +35,14 @@ Services that scale well (stateless, query-time):
 
 ## Vertical scaling (GPU memory)
 
-GPU memory is allocated per service via `VLLM_GPU_UTIL` (and friends) and the
+GPU memory is allocated per service via `VLLM_GPU_UTILIZATION` (and friends) and the
 profile files `env.t4` / `env.rtx6000`. Multiple model services share one GPU;
 their `_GPU_UTIL` budgets must sum to ≤ 1.0.
 
 ```
 # Example: T4 (16 GB) split between LLM and translation
-VLLM_GPU_UTIL=0.6          # LLM gets ~60% of GPU memory
-VLLM_TRANSLATION_GPU_UTIL=0.4
+VLLM_GPU_UTILIZATION=0.6          # LLM gets ~60% of GPU memory
+VLLM_TRANSLATION_GPU_UTILIZATION=0.4
 ```
 
 To give a service more memory, raise its utilisation and lower another's. See
@@ -60,7 +60,7 @@ memory budgets.
 |---|---|
 | High request latency across all services | Check the [Observability]({{< relref "/docs/observability" >}}) trace waterfall to find the slow stage, then scale *that* stage. |
 | Retrieval latency climbing under load | Inspect ArangoDB resources/queries before adding retrievers. |
-| Generation latency (LLM queueing) | Scale vLLM replicas (each needs GPU memory) or raise `VLLM_GPU_UTIL`. |
+| Generation latency (LLM queueing) | Scale vLLM replicas (each needs GPU memory) or raise `VLLM_GPU_UTILIZATION`. |
 | Ingestion throughput too slow | Scale dataprep replicas; check labelling concurrency. |
 | GPU out-of-memory | Lower `_GPU_UTIL` budgets or move to a larger GPU profile. |
 

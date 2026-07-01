@@ -24,8 +24,7 @@ PII filtering stay consistent):
 
 - **Node.js** — `tracing.withSpan(name, fn)`. Never create spans via the global
   tracer directly.
-- **Python** — `@tracing.trace_span(name)` decorator on FastAPI endpoints, and
-  `with_span(...)` for inner stages.
+- **Python** — FastAPI auto-instrumentation (enabled globally in `setup_tracing()`, no per-endpoint decorator), and `with_span(name, ...)` for inner RAG-stage spans.
 
 See [Tracing]({{< relref "tracing" >}}) for the span taxonomy.
 
@@ -41,9 +40,10 @@ no matter where the scheduler places it.
 |---|---|---|
 | `otlp` (HTTP) | 4318 | Traces and metrics from instrumented app services. |
 | `fluentforward` | 24224 | Container stdout/stderr logs (Docker `fluentd` logging driver). |
-| `prometheus/vm_internal` | 8428 | VictoriaMetrics self-telemetry. |
-| `prometheus/vl_internal` | 9428 | VictoriaLogs self-telemetry. |
-| `prometheus/vt_internal` | 10428 | VictoriaTraces self-telemetry. |
+| `prometheus/victoriametrics_internal` | 8428 | VictoriaMetrics self-telemetry. |
+| `prometheus/victorialogs_internal` | 9428 | VictoriaLogs self-telemetry. |
+| `prometheus/victoriatraces_internal` | 10428 | VictoriaTraces self-telemetry. |
+| `prometheus/collector_self` | 8888 | The collector's own otelcol_* metrics. |
 
 | Exporter | Destination |
 |---|---|
@@ -80,7 +80,7 @@ with Keycloak OIDC SSO.
 
 - **Datasources** (auto-provisioned): VictoriaMetrics, VictoriaLogs,
   VictoriaTraces (as a Jaeger-compatible datasource).
-- **Dashboards**: 10 pre-built dashboards across two folders. See
+- **Dashboards**: 9 pre-built dashboards across two folders. See
   [Dashboards]({{< relref "dashboards" >}}).
 - **Alerting**: rules + notification policies + contact points, auto-provisioned.
   See [Alerting]({{< relref "alerting" >}}).

@@ -10,38 +10,24 @@ The Flutter mobile app (`genie_ai_mobile`) is a sophisticated AI chat applicatio
 
 ## 1. API Layer
 
-### Core HTTP Client (`/lib/services/api_service.dart`)
-- **Purpose**: Centralized HTTP client with logging capabilities
-- **Key Features**:
-  - RESTful methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`
-  - Built-in error logging via `AuthLogger`
-  - JSON response handling
-  - Base URL configuration from flavor-specific configs
+### Service & Provider Layer
 
-### API Proxy Services
-The app uses proxy pattern to encapsulate API business logic:
+The app does **not** use a proxy pattern. API access is structured around
+Riverpod providers and a thin set of domain services:
 
-#### Chat Services
-- **`ChatbotProxy`** (`/lib/services/chatbot_proxy.dart`)
-  - Query submission with context (categoryId, labels, language)
-  - Feedback submission for responses
-  - Session management
+- **Riverpod providers** (`lib/providers/api_providers.dart`) — define the API
+  calls (chat/query, feedback, user profile, analytics, admin) as providers
+  consumed by the UI.
+- **Domain services** (`lib/services/`):
+  - `user_service.dart` — user profile operations.
+  - `connectivity_service.dart` — network connectivity state.
+  - `i18n_service.dart` — locale and translation orchestration.
+  - `notification_service.dart`, `sse_parser.dart`, `genie_ai_config.dart`,
+    `fallback_localizations.dart`.
+  - `auth/` and `keycloak/` subdirectories — OIDC auth state, token storage,
+    and Keycloak integration.
 
-- **`ChatHistoryProxy`** (`/lib/services/chat_history_proxy.dart`)
-  - Conversation persistence
-  - Message history management
-
-#### User Services
-- **`UserService`** (`/lib/services/user_service.dart`)
-  - User profile management
-  - Account settings updates
-  - User data operations
-
-#### Other Service Proxies
-- **`AdminDashboardProxy`** - Admin functionality
-- **`AnalyticsProxy`** - Analytics data
-- **`UserProfileProxy`** - User profile operations
-- **`ConnectivityService`** - Network state management
+The flavor-specific base URL comes from the flavor config (see §2).
 
 ### Authentication API Integration
 - **`AuthInterceptor`** - Automatic Bearer token injection
@@ -68,8 +54,8 @@ The app uses proxy pattern to encapsulate API business logic:
   - Token lifecycle management
 
 ### Configuration Models
-- **`KeycloakConfig`** (`/lib/config/keycloak_config.dart`)
-  - Flavor-specific configurations (dev, staging, e2e, itu)
+- **`KeycloakConfig`** (`/lib/config/keycloak_config.dart`) — base schema + the `getConfig()` flavor switch.
+- **Flavor configs** — `lib/config/flavors/` (`itu.dart`, `template.dart`) plus `lib/config/{dev,staging,e2e}_config.dart`; each defines the per-flavor base URL, Keycloak client, and locale set.
   - OIDC endpoint parameters
   - Security settings
 

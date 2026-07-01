@@ -69,7 +69,7 @@ rate is configurable:
 
 | Variable | Default | Effect |
 |---|---|---|
-| `OTEL_TRACES_SAMPLER_RATE` | 100.0 | Percentage of traces exported (100 = head-based all). |
+| `OTEL_TRACES_SAMPLER_RATE` | 100.0 | Percentage of traces exported by the collector's tail-based sampler (100 = all traces). |
 | `KONG_TRACING_SAMPLING_RATE` | 1.0 | Kong trace sampling rate (0–1), aligned with the above. |
 
 > **Cost lever.** Lower the sample rate in high-volume production to cut

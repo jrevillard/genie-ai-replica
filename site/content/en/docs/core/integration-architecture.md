@@ -236,10 +236,10 @@ POST http://chatqna:8888/v1/chat/completions
 ChatQnA Service
   ↓
 OPEA Microservice Orchestration:
-  1. Embedding Service (TEI + BGE-M3 model)
+  1. Embedding Service (TEI + BAAI/bge-base-en-v1.5)
   2. Retriever Service (ArangoDB vector + graph traversal)
   3. Reranker Service (Cross-encoder model)
-  4. LLM Service (vLLM + Granite-3.3-2b-instruct)
+  4. LLM Service (vLLM + meta-llama/Meta-Llama-3.1-8B-Instruct; recommended ibm-granite/granite-4.1-8b)
   ↓
 Response → Backend → Client (SSE or JSON)
 ```
@@ -1283,7 +1283,7 @@ app.use('/api/', limiter);
 
 **OPEA Services**: Python `logging` module
 
-**Centralized Logging**: Not implemented (planned: ELK stack)
+**Centralized Logging**: VictoriaLogs via the OTel Collector (fluentd receiver) — see the Observability section
 
 ---
 
@@ -1291,9 +1291,9 @@ app.use('/api/', limiter);
 
 **Kong**: Prometheus metrics at `http://kong:8001/metrics`
 
-**Backend**: Planned (Prometheus client)
+**Backend**: OTel SDK (tracing.js, tracing-db.js, tracing-pii.js) + Prometheus metrics (metrics.js)
 
-**OPEA Services**: Planned (Prometheus exporter)
+**OPEA Services**: OTel SDK (tracing.py) emitting per-RAG-stage spans
 
 ---
 

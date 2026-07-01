@@ -437,7 +437,7 @@ These variables define the internal wiring and ports for the AI microservices.
 | EMBEDDING\_SERVER\_HOST\_IP | Hostname for the TEI embedding service. | tei |
 | EMBEDDING\_SERVER\_PORT | Port for the TEI embedding service. | 80 |
 | RETRIEVER\_SERVICE\_HOST\_IP | Hostname for the retriever service. | retriever-arango-service |
-| RETRIEVER\_SERVICE\_PORT | Port for the retriever service. | 7025 |
+| RETRIEVER\_SERVICE\_PORT | Port for the retriever service. | 7000 |
 | RERANK\_SERVER\_HOST\_IP | Hostname for the TEI reranking service. | tei\_reranker |
 | RERANK\_SERVER\_PORT | Port for the TEI reranking service. | 80 |
 | LLM\_SERVER\_HOST\_IP | Hostname for the vLLM inference engine. | vllm |
@@ -653,9 +653,8 @@ These variables control the specific AI models used for generation, guardrails, 
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| VLLM\_LLM\_MODEL\_ID | Model ID for the main chat/generation. | ibm-granite/granite-3.3-2b-instruct |
-| VLLM\_MODEL\_ID | Alias for `VLLM_LLM_MODEL_ID` (it is a duplicate/fallback and needs to be removed).  | ibm-granite/granite-3.3-2b-instruct |
-| VLLM\_GPU\_UTIL | GPU Memory Utilization for main model (0.0 \- 1.0). | 0.6 |
+| VLLM\_LLM\_MODEL\_ID | Model ID for the main chat/generation. | meta-llama/Meta-Llama-3.1-8B-Instruct (recommended: ibm-granite/granite-4.1-8b) |
+| VLLM\_GPU\_UTILIZATION | GPU Memory Utilization for main model (0.0 \- 1.0). | 0.55 |
 | VLLM\_MAX\_MODEL\_LEN | Context window size for main model. | 16384 |
 | VLLM\_DTYPE | Data type for model weights. | half |
 
@@ -665,7 +664,7 @@ These variables control the specific AI models used for generation, guardrails, 
 | :---- | :---- | :---- |
 | VLLM\_TRANSLATION\_ENDPOINT | URL for the translation/guardrail service. | http://vllm-translation-guardrail:9031 |
 | VLLM\_TRANSLATION\_SERVICE\_PORT | Port for the translation/guardrail service. | 9031 |
-| VLLM\_TRANSLATION\_MODEL\_ID | Model ID for guardrails/translation tasks. | google/gemma-3-1b-it |
+| VLLM\_TRANSLATION\_MODEL\_ID | Model ID for guardrails/translation tasks. | google/gemma-3-4b-it |
 | VLLM\_TRANSLATION\_GPU\_UTIL | GPU Memory Utilization for guardrail model. | 0.3 |
 | VLLM\_TRANSLATION\_MAX\_MODEL\_LEN | Context window for guardrail model. | 16384 |
 | VLLM\_TRANSLATION\_DTYPE | Data type for guardrail model. | auto |
@@ -703,7 +702,7 @@ Select the profile below that matches your GPU hardware to avoid "Out of Memory"
 * **Status:** Restricted / Legacy.  
 * **Challenge:** The T4 has limited memory (16GB) and older compute architecture (Turing). It does **not** support bfloat16, requiring float16 (half precision) which impacts stability.  
 * **Recommended Configuration:**  
-  * **LLM:** ibm-granite/granite-3.3-2b-instruct (Small enough to fit alongside other services).  
+  * **LLM:** meta-llama/Meta-Llama-3.1-8B-Instruct (recommended: ibm-granite/granite-4.1-8b; small enough to fit alongside other services).  
   * **Embeddings:** BAAI/bge-base-en-v1.5.  
   * **Reranker:** cross-encoder/ms-marco-MiniLM-L-6-v2.  
     * **CRITICAL:** Do not run BAAI/bge-reranker-v2-m3 on a T4. It uses an XLM-RoBERTa architecture that may cause compatibility issues with the T4-optimized TEI images, and its memory footprint is too large for a shared 16GB card.  
@@ -742,7 +741,7 @@ After launching services and waiting for the service startup: the following is a
 * **Status:** Production Ready.  
 * **Advantage:** These cards support bfloat16 for higher precision and stability. 48GB allows for larger context windows and concurrent processing.  
 * **Recommended Configuration:**  
-  * **LLM:** ibm-granite/granite-3.3-2b-instruct or meta-llama/Meta-Llama-3.1-70B-Instruct-AWQ (Quantized).  
+  * **LLM:** meta-llama/Meta-Llama-3.1-8B-Instruct (default) or meta-llama/Meta-Llama-3.1-70B-Instruct-AWQ (quantized; recommended: ibm-granite/granite-4.1-8b).  
   * **Embeddings:** BAAI/bge-base-en-v1.5 or BAAI/bge-m3.  
   * **Reranker:** BAAI/bge-reranker-v2-m3.  
   * **Env Settings:** Use VLLM\_DTYPE=bfloat16 and enable VLLM\_ATTENTION\_BACKEND=FLASH\_ATTN (if supported) for maximum throughput.
@@ -1268,8 +1267,8 @@ docker service logs genieai_backend \-f
 
 4. Initial Login:  
    Access the application in your browser (e.g., [https://localhost](https://localhost) or your configured domain). Log in using the default Admin credentials created in Step 5.3:  
-   * **Username:** Admin  
-   * **Password:** ADMINadmin
+   * **Username:** genie-admin  
+   * **Password:** the value of `GENIE_ADMIN_PASSWORD` from your `.env`
 
 ---
 

@@ -59,7 +59,7 @@ All endpoints (except where noted) require Keycloak JWT authentication via `Auth
 
 | Method | Path | Auth Required | Description | Notes |
 |--------|------|---------------|-------------|-------|
-| POST | `/stream` | Yes | Stream query response (SSE) | **text/event-stream**, requires `OPEA_STREAMING=true` |
+| POST | `/stream` | Yes | Stream query response (SSE) | **text/event-stream**, requires SSE enabled (default; `OPEA_STREAMING≠false`) |
 | POST | `/` | Yes | Create new query | Standard non-streaming query |
 | GET | `/` | Yes | List queries | Paginated query list |
 | GET | `/:queryId` | Yes | Get query by ID | Full query details |
@@ -373,8 +373,8 @@ data: {"type": "done", "queryId": "123"}
 ```
 
 ### Environment Control
-- Enable: `OPEA_STREAMING=true` (default)
-- Disable: `OPEA_STREAMING=false` (returns 501 error)
+- Enabled by default — any value other than the literal string `false` enables it
+- Disable explicitly: `OPEA_STREAMING=false` (returns 501 error)
 
 ---
 
@@ -442,6 +442,6 @@ Configured in Kong Gateway (`api-gateway-solution/`):
 ## Related Documentation
 
 - [Architecture Overview](/docs/architecture/architecture/)
-- [Server Testing Guide](../.claude/rules/SERVER-TESTING.md)
-- [Environment Configuration](../.claude/rules/ENVIRONMENT.md)
-- [CLAUDE.md](../CLAUDE.md) - Project overview and conventions
+
+
+ - Project overview and conventions

@@ -1,5 +1,5 @@
 {
-  "_doc": "Gold standard for retrieval eval. Copy to gold_dataset.json and fill one entry per query. Two ground-truth signals per entry, consumed by two independent eval paths: (1) expected_chunks[].content_hash — deterministic anchor (set intersection, reproducible, no LLM); the hash is the chunk's content fingerprint from dump_chunks.py / chunks_registry.json (NOT the _key UUID, which churns on re-ingest). (2) reference_answer — semantic ground truth for the LLM-judge path (Ragas faithfulness/context_recall/answer_relevancy). categoryLabel/serviceLabels/language mirror the payload the backend sends to chatqna (drives label-filtered retrieval) — keep them faithful to a real user flow.",
+  "_doc": "Gold standard for retrieval eval. Copy to gold_dataset.json and fill one entry per query. expected_chunks[].chunk_key is the PRIMARY identity — the ArangoDB _key of each chunk that answers the query (find them via dump_chunks.py / chunks_registry.json, which lists every chunk's key + full text + labels). The eval (run_eval.py) matches the chatqna span's candidate/selected chunk_keys against these to compute recall / precision / complete_recall / noise. content_hash is optional (a fallback fingerprint). categoryLabel/serviceLabels/language mirror the payload the backend sends to chatqna (drives label-filtered retrieval) — keep them faithful to a real user flow. reference_answer is the ground-truth answer for the optional LLM-judge path (run_ragas_eval.py).",
   "entries": [
     {
       "id": "q1",
@@ -9,7 +9,11 @@
       "language": "en",
       "reference_answer": "To apply for an agricultural subsidy, submit form X to the ministry, including proof of land ownership and a valid producer registration.",
       "expected_chunks": [
-        {"content_hash": "a1b2c3d4e5f60718", "min_rank": 5, "preview": "To apply for an agricultural subsidy..."}
+        {
+          "chunk_key": "1234567890123456789",
+          "content_hash": "a1b2c3d4e5f60718",
+          "preview": "To apply for an agricultural subsidy..."
+        }
       ]
     },
     {
@@ -20,7 +24,11 @@
       "language": "en",
       "reference_answer": "Export certification requires a phytosanitary certificate, a commercial invoice, and a packing list.",
       "expected_chunks": [
-        {"content_hash": "b2c3d4e5f6071809", "min_rank": 3, "preview": "Export certification requires..."}
+        {
+          "chunk_key": "9876543210987654321",
+          "content_hash": "b2c3d4e5f6071809",
+          "preview": "Export certification requires..."
+        }
       ]
     }
   ]

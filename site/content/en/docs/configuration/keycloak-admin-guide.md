@@ -81,7 +81,7 @@ A disabled user cannot obtain new tokens from Keycloak. Existing tokens remain v
 2. Click **Delete** (trash icon)
 3. Confirm the deletion
 
-The user is permanently removed from Keycloak. Their ArangoDB record remains but will no longer be updated (no more JWTs issued for this user). To fully remove the user's data from GENIE.AI, see Story 3.6 (Right to Erasure).
+The user is permanently removed from Keycloak. Their ArangoDB record remains but will no longer be updated (no more JWTs issued for this user). To fully remove the user's data from GENIE.AI, apply your data-retention / right-to-erasure procedure.
 
 ## 3. Role Assignment
 
@@ -612,7 +612,7 @@ identityProviders:
       clientId: $(env:KEYCLOAK_GOOGLE_CLIENT_ID)
       clientSecret: $(env:KEYCLOAK_GOOGLE_CLIENT_SECRET)
     mappers:
-      # Standard attribute import (already configured via Story 1.9)
+      # Standard attribute import (already configured via the realm setup)
       - name: google-email
         identityProviderAlias: google
         identityProviderMapper: oidc-user-attribute-idp-mapper
@@ -637,7 +637,7 @@ identityProviders:
           claimValue: "genie-admin"
 ```
 
-> **Note:** The external IdP in this project was configured via the Keycloak admin console (Story 1.9), not via `genie-realm.yaml`. The YAML example above is documented for reference — adding a mapper to `genie-realm.yaml` without its parent IdP entry would be orphaned and ignored by keycloak-config-cli. If you manage your IdP via YAML, include the full IdP entry with its mappers.
+> **Note:** The external IdP in this project was configured via the Keycloak admin console, not via `genie-realm.yaml`. The YAML example above is documented for reference — adding a mapper to `genie-realm.yaml` without its parent IdP entry would be orphaned and ignored by keycloak-config-cli. If you manage your IdP via YAML, include the full IdP entry with its mappers.
 >
 > **Environment variables:** The YAML example uses `$(env:KEYCLOAK_GOOGLE_CLIENT_ID)` and `$(env:KEYCLOAK_GOOGLE_CLIENT_SECRET)`. These variables are documented in the `env` template (Section 9B) as Keycloak-only configuration. To use the YAML approach, add them to the `keycloak-config` service environment section in `docker-compose.yaml`:
 >
@@ -673,7 +673,7 @@ For `hardcoded-role-idp-mapper`:
 
 ### 8.8 Verification with curl Commands
 
-These commands verify that attribute-to-role mapping works end-to-end. **Note:** Full verification requires an active external IdP connection (Story 1.9).
+These commands verify that attribute-to-role mapping works end-to-end. **Note:** Full verification requires an active external IdP connection.
 
 ```bash
 # Load environment

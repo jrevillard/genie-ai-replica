@@ -185,7 +185,7 @@ section: "mobile"
 
 ## Internationalization (`lib/i18n/locales/`)
 
-Supported languages (13 locales):
+Supported languages (14 locales):
 
 | Locale | Language | File |
 |--------|----------|------|

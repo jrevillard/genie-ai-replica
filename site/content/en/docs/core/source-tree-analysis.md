@@ -216,7 +216,7 @@ components/gov-chat-backend/
 │   ├── analyticsController.js    # Analytics aggregations
 │   └── authController.js         # Authentication helpers
 ├── middleware/                   # Express middleware
-│   └── keycloak-auth.middleware.js # Keycloak token validation
+│   └── keycloak-auth-middleware.js # Keycloak token validation
 ├── routes/                       # API route definitions
 │   ├── auth-routes.js            # /api/auth/* (login, logout, refresh)
 │   ├── admin-routes.js           # /api/admin/* (admin operations)

@@ -41,7 +41,7 @@ See [Observability]({{< relref "/docs/observability" >}}) for how.
   [Labelling & taxonomy]({{< relref "/docs/knowledge-base/labelling-taxonomy" >}}).
 - **Embedding mismatch**: was the embedding model changed without re-ingestion?
   See [Updates]({{< relref "updates" >}}) — the re-ingestion rule.
-- **Thresholds too strict**: retrieval `SCORE_THRESHOLD` / reranker `THRESHOLD`
+- **Thresholds too strict**: retrieval `RETRIEVER_ARANGO_SCORE_THRESHOLD` / reranker `RERANKING_THRESHOLD`
   may be filtering everything.
 
 ### Gateway errors (502 / 504)

@@ -1,6 +1,6 @@
 ---
 title: Dashboards
-description: The pre-built Grafana dashboards auto-provisioned for GENIE.AI, across application and infrastructure folders.
+description: The pre-built Grafana dashboards auto-provisioned for GENIE.AI, across application and observability folders.
 weight: 3
 ---
 
@@ -18,7 +18,7 @@ Operational views of the GENIE.AI services themselves.
 | **Application metrics** | Business and HTTP metrics: request rates, latency distributions, error rates, custom counters. |
 | **Service logs** | Centralised log search across all services (VictoriaLogs). Pivot from a metric spike to the matching logs. |
 | **Trace explorer** | Distributed-trace search (VictoriaTraces via the Jaeger datasource): filter by service, operation, duration, attribute. |
-| **RAG pipeline trace waterfall** | A waterfall tuned to the RAG stages (embed → retrieve → rerank → generate → translate), so per-stage latency is immediately visible. |
+| **RAG pipeline trace waterfall** | A waterfall charting per-service latency across the RAG pipeline (backend, chatqna, retriever, reranker, dataprep), so the slow stage is immediately visible. |
 
 ## Observability folder
 

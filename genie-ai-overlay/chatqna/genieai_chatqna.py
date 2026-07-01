@@ -42,6 +42,33 @@ from transformers import AutoTokenizer
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
 setup_trace_logging("GENIE.AI_CHATQNA")
+
+# Tracer for pipeline-node-level spans emitted from align_outputs (e.g. the
+# reranker-selection identity span used by the retrieval-quality eval harness).
+# The orchestrate handler keeps its own scope-local tracer; this one serves the
+# service-merge path where both candidate and selected chunk ids are known.
+align_tracer = get_tracer("chatqna.align_outputs")
+
+
+def _emit_reranker_selection_span(candidate_chunk_keys, selected_chunk_keys, selected_scores):
+    """Emit reranker selection identity for retrieval-quality evaluation.
+
+    Emits ``chunk_key`` (the ArangoDB ``_key``) for candidates + selected. The
+    keys are recovered in ``align_outputs`` from the retriever's parallel
+    ``data["metadata"]`` list (same path as ``chunk_embedding`` — TextDoc has no
+    metadata field, so the retriever stashes per-chunk metadata there). The
+    eval harness at ``tests/rag-benchmarks/eval/`` matches ``chunk_key`` against
+    ``gold_dataset.json`` expected ``chunk_key`` to compute recall / precision /
+    complete-recall / noise. Extracted as a helper for isolated unit testing.
+    """
+    with align_tracer.start_as_current_span("chatqna.reranker_selection") as sel_span:
+        sel_span.set_attribute("rag.candidate_chunk_keys", candidate_chunk_keys)
+        sel_span.set_attribute("rag.selected_chunk_keys", selected_chunk_keys)
+        sel_span.set_attribute("rag.selected_scores", selected_scores)
+        sel_span.set_attribute("rag.candidate_count", len(candidate_chunk_keys))
+        sel_span.set_attribute("rag.selected_count", len(selected_chunk_keys))
+
+
 # Respect LOG_LEVEL: patch uvicorn's LOGGING_CONFIG (applied at startup via
 # dictConfig — this overrides import-time setLevel) so DEBUG actually works.
 # uvicorn 0.34's default config has no "root" key + handler at NOTSET → DEBUG
@@ -967,6 +994,19 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             if chunk_embeddings and all(ce for ce in chunk_embeddings):
                 next_data["chunk_embeddings"] = chunk_embeddings
 
+            # chunk_key recovery (parallel path — TextDoc has no metadata field,
+            # so the retriever stashes per-chunk metadata in data["metadata"]).
+            # Map text -> chunk_key here (retriever node, where metadata exists)
+            # and carry it in next_data to the rerank node, where metadata is
+            # stripped but selection happens. Consumed by _emit_reranker_selection_span.
+            _ck_meta = data.get("metadata", [])
+            _text_to_chunk_key = {
+                retrieved_docs[i].get("text", ""): (_ck_meta[i] if i < len(_ck_meta) else {}).get("chunk_key", "N/A")
+                for i in range(len(retrieved_docs))
+            }
+            if any(v != "N/A" for v in _text_to_chunk_key.values()):
+                next_data["text_to_chunk_key"] = _text_to_chunk_key
+
             # Expected data format if using tei_reranker directly (bypassing reranker service):
             # next_data["query"] = data["initial_query"]
             # next_data["documents"] = retrieved_docs
@@ -1035,6 +1075,11 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         # RECOVERY OF IDs: Create a mapping of text to original document ID
         original_retrieved_docs = inputs.get("retrieved_docs", [])
         text_to_id = {doc.get("text", ""): doc.get("id", "N/A") for doc in original_retrieved_docs}
+        # chunk_key was carried here from the retriever node (where metadata
+        # exists) via next_data["text_to_chunk_key"]. At this (rerank) node,
+        # TextDoc has no metadata field, so data["metadata"] is empty — we MUST
+        # use the carried map. Maps text -> ArangoDB _key.
+        text_to_chunk_key = inputs.get("text_to_chunk_key", {}) or {}
 
         # 1. Handle output from custom Genie Python Wrapper
         if isinstance(data, dict):
@@ -1105,6 +1150,14 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             )  # prompt <- change to 'prompt' if you re-introduce the code above
 
         next_data["retrieved_docs"] = reranked_docs_with_scores
+
+        # Emit selection identity for retrieval-quality eval (recall/precision).
+        # Recover chunk_key via text (mirrors text_to_id) from the parallel
+        # data["metadata"] the retriever stashed.
+        candidate_chunk_keys = [text_to_chunk_key.get(doc.get("text", ""), "N/A") for doc in original_retrieved_docs]
+        selected_chunk_keys = [text_to_chunk_key.get(d.get("text", ""), "N/A") for d in reranked_docs_with_scores]
+        selected_scores = [round(float(d.get("score", 0.0)), 6) for d in reranked_docs_with_scores]
+        _emit_reranker_selection_span(candidate_chunk_keys, selected_chunk_keys, selected_scores)
 
         # 4. Preserve file mappings for citation:
         if "file_id_pairs" in inputs:

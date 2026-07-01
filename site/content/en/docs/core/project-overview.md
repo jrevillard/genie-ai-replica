@@ -106,6 +106,7 @@ For the full source-tree walk-through, see
 | Setting up a dev environment | [Development guide]({{< relref "/docs/core/development-guide" >}}) |
 | Frontend theming & components | [Frontend]({{< relref "/docs/frontend" >}}) |
 | Mobile app | [Mobile]({{< relref "/docs/mobile" >}}) |
+| Managing the knowledge base | [Knowledge Base]({{< relref "/docs/knowledge-base" >}}) |
 
 ## Quick reference
 

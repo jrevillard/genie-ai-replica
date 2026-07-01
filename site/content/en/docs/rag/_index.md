@@ -40,6 +40,7 @@ Grafana. See [Observability]({{< relref "/docs/observability" >}}).
   per-chunk context prefix that improves retrieval precision.
 - [Choosing models]({{< relref "choosing-models" >}}) — model and GPU-profile
   selection for embedding, reranking, generation, and translation.
+- [Knowledge base]({{< relref "/docs/knowledge-base" >}}) — managing the documents the pipeline retrieves from (ingestion, taxonomy, lifecycle).
 
 ## Design principles
 

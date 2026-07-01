@@ -22,6 +22,7 @@ match gold_dataset.json expected content_hashes directly.
 
 Run twice (once per reranker config, redeploy between) + diff reports for an A/B.
 """
+
 from __future__ import annotations
 
 import json
@@ -48,7 +49,9 @@ TRACE_FETCH_TIMEOUT = float(os.getenv("TRACE_FETCH_TIMEOUT", "120"))
 def _docker_exec(container: str, cmd: str, timeout: float = 120) -> str:
     result = subprocess.run(
         ["docker", "exec", container, "sh", "-c", cmd],
-        capture_output=True, text=True, timeout=timeout,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
     )
     if result.returncode != 0:
         raise RuntimeError(f"docker exec failed: {result.stderr.strip()[:300]}")
@@ -81,9 +84,7 @@ def drive_query(entry: dict) -> tuple[float, str]:
     }
     payload_json = json.dumps(payload).replace("'", "'\\''")
     start = time.time()
-    cmd = (
-        f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json' -d '{payload_json}'"
-    )
+    cmd = f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json' -d '{payload_json}'"
     body = _docker_exec(CHATQNA_CONTAINER, cmd, timeout=150)
     return start, body
 
@@ -217,8 +218,7 @@ def main(mode: str, gold_path: str, out_path: str) -> None:
                 file=sys.stderr,
             )
         else:
-            print(f"[{entry['id']}] selected={len(sel_hashes)} candidates={len(cand_hashes)}",
-                  file=sys.stderr)
+            print(f"[{entry['id']}] selected={len(sel_hashes)} candidates={len(cand_hashes)}", file=sys.stderr)
         if mode == "dump-tuples":
             tuples.append(make_tuple(entry, sel_hashes, hash_to_text, answer))
         else:
@@ -240,8 +240,7 @@ def main(mode: str, gold_path: str, out_path: str) -> None:
             if k in agg:
                 print(f"  {k:20s} {agg[k]:.3f}", file=sys.stderr)
         if missed:
-            print(f"  {missed} trace(s) missed and excluded — see per_query[].trace_found",
-                  file=sys.stderr)
+            print(f"  {missed} trace(s) missed and excluded — see per_query[].trace_found", file=sys.stderr)
         print(f"\nReport → {out_path}", file=sys.stderr)
 
 

@@ -994,6 +994,19 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             if chunk_embeddings and all(ce for ce in chunk_embeddings):
                 next_data["chunk_embeddings"] = chunk_embeddings
 
+            # chunk_key recovery (parallel path — TextDoc has no metadata field,
+            # so the retriever stashes per-chunk metadata in data["metadata"]).
+            # Map text -> chunk_key here (retriever node, where metadata exists)
+            # and carry it in next_data to the rerank node, where metadata is
+            # stripped but selection happens. Consumed by _emit_reranker_selection_span.
+            _ck_meta = data.get("metadata", [])
+            _text_to_chunk_key = {
+                retrieved_docs[i].get("text", ""): (_ck_meta[i] if i < len(_ck_meta) else {}).get("chunk_key", "N/A")
+                for i in range(len(retrieved_docs))
+            }
+            if any(v != "N/A" for v in _text_to_chunk_key.values()):
+                next_data["text_to_chunk_key"] = _text_to_chunk_key
+
             # Expected data format if using tei_reranker directly (bypassing reranker service):
             # next_data["query"] = data["initial_query"]
             # next_data["documents"] = retrieved_docs
@@ -1062,38 +1075,11 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         # RECOVERY OF IDs: Create a mapping of text to original document ID
         original_retrieved_docs = inputs.get("retrieved_docs", [])
         text_to_id = {doc.get("text", ""): doc.get("id", "N/A") for doc in original_retrieved_docs}
-        # chunk_key recovery: TextDoc has no metadata field, so the retriever
-        # stashes per-chunk metadata in the parallel data["metadata"] list (the
-        # same path chunk_embedding uses for adaptive reranking). Map text ->
-        # chunk_key so the eval span can identify chunks by ArangoDB _key.
-        _meta_list = data.get("metadata", []) if isinstance(data, dict) else []
-        text_to_chunk_key = {
-            doc.get("text", ""): (_meta_list[i] if i < len(_meta_list) else {}).get("chunk_key", "N/A")
-            for i, doc in enumerate(original_retrieved_docs)
-        }
-        # TEMP DEBUG (eval identity diagnosis): reveal the real data structure so
-        # we can locate where chunk_key actually lives. Remove once root cause found.
-        try:
-            _first = original_retrieved_docs[0] if original_retrieved_docs else {}
-            _first_keys = list(_first.keys()) if isinstance(_first, dict) else [str(type(_first))]
-            _first_meta_keys = (
-                list((_first.get("metadata") or {}).keys())
-                if isinstance(_first, dict) and isinstance(_first.get("metadata"), dict)
-                else ["no-metadata-dict"]
-            )
-            with align_tracer.start_as_current_span("chatqna.eval_debug") as _dbg:
-                _dbg.set_attribute("debug.data_keys", str(list(data.keys()) if isinstance(data, dict) else type(data)))
-                _dbg.set_attribute("debug.meta_list_len", len(_meta_list))
-                _dbg.set_attribute("debug.retrieved_docs_len", len(original_retrieved_docs))
-                _dbg.set_attribute("debug.first_doc_keys", str(_first_keys))
-                _dbg.set_attribute("debug.first_doc_metadata_keys", str(_first_meta_keys))
-                _dbg.set_attribute(
-                    "debug.first_doc_id",
-                    str(_first.get("id", "N/A"))[:40] if isinstance(_first, dict) else "N/A",
-                )
-        except Exception as _e:  # noqa: BLE001 — debug must never break the pipeline
-            with align_tracer.start_as_current_span("chatqna.eval_debug") as _dbg:
-                _dbg.set_attribute("debug.error", str(_e)[:200])
+        # chunk_key was carried here from the retriever node (where metadata
+        # exists) via next_data["text_to_chunk_key"]. At this (rerank) node,
+        # TextDoc has no metadata field, so data["metadata"] is empty — we MUST
+        # use the carried map. Maps text -> ArangoDB _key.
+        text_to_chunk_key = inputs.get("text_to_chunk_key", {}) or {}
 
         # 1. Handle output from custom Genie Python Wrapper
         if isinstance(data, dict):

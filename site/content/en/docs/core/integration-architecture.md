@@ -5,6 +5,8 @@ weight: 3
 section: "core"
 ---
 
+> **For integrators and developers.** How the components fit together: service boundaries, dependencies, and the inter-service contract surface.
+
 This document describes the integration points, communication patterns, and data flows between all components of the GENIE.AI platform.
 
 ## Table of Contents

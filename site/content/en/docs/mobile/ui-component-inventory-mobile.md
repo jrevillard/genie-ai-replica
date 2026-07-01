@@ -5,6 +5,8 @@ weight: 1
 section: "mobile"
 ---
 
+> **For mobile developers.** A reference catalogue of the Flutter app widgets.
+
 ---
 
 ## Summary

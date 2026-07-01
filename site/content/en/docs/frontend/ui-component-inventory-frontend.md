@@ -5,6 +5,8 @@ weight: 1
 section: "frontend"
 ---
 
+> **For frontend developers.** A reference catalogue of the web UI components and their props.
+
 ---
 
 ## Summary

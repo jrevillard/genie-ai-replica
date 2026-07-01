@@ -5,6 +5,8 @@ weight: 2
 section: "core"
 ---
 
+> **For developers.** A walk-through of the repository layout — use it to find where a component lives and what it depends on. Operators and content managers do not need this page.
+
 ## Table of Contents
 
 1. [Overview](#overview)

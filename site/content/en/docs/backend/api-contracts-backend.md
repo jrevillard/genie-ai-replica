@@ -5,6 +5,8 @@ weight: 1
 section: "backend"
 ---
 
+> **For integrators.** The backend (BFF) HTTP API contracts — request/response shapes for auth, chat, files, analytics, and admin endpoints.
+
 **Component**: `components/gov-chat-backend/` (Node.js/Express)
 **Base URL**: `https://<domain>/api` (via Kong Gateway)
 **Documentation**: Swagger/OpenAPI available at `/api-docs`

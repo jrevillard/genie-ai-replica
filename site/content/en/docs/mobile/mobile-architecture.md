@@ -5,6 +5,8 @@ weight: 2
 section: "mobile"
 ---
 
+> **For mobile developers and integrators.** The Flutter app's architecture — layers, state, and platform integration.
+
 ## Overview
 The Flutter mobile app (`genie_ai_mobile`) is a sophisticated AI chat application with OIDC authentication, multi-language support, and responsive design patterns.
 

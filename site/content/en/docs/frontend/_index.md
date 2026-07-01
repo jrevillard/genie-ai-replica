@@ -1,7 +1,7 @@
 ---
 title: "Frontend (Gov-Chat Web)"
 description: "Vue 3 + Vuex single-page app: UI component inventory, state-management patterns, and the theme system."
-weight: 2
+weight: 3
 section: "frontend"
 ---
 

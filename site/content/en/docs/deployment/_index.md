@@ -1,7 +1,7 @@
 ---
 title: "Deployment"
 description: "Operational deployment guides for Docker Compose, Docker Swarm, and mobile builds."
-weight: 6
+weight: 7
 section: "deployment"
 ---
 

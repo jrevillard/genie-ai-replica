@@ -1,7 +1,7 @@
 ---
 title: "Architecture"
 description: "System-wide architecture: C4 container view and logging/observability strategy."
-weight: 5
+weight: 6
 section: "architecture"
 ---
 

@@ -1,10 +1,9 @@
 ---
 title: "Source Tree Analysis"
+description: "A walk-through of the GENIE.AI repository structure: every component, its purpose, and its dependencies."
 weight: 2
 section: "core"
 ---
-
-# GENIE.AI Source Tree Analysis
 
 **Generated:** 2026-05-13  
 **Repository:** `/home/jerome/git_projects/ITU/genie-ai`

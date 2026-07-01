@@ -1,5 +1,6 @@
 ---
 title: "Theme System"
+description: "The GENIE.AI web frontend theme system: tokens, variables, and customisation."
 weight: 3
 section: "frontend"
 ---

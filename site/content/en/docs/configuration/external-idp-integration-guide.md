@@ -1,10 +1,9 @@
 ---
 title: "External Idp Integration Guide"
+description: "Integrating external identity providers (Microsoft, Google, etc.) with Keycloak for GENIE.AI."
 weight: 2
 section: "configuration"
 ---
-
-# External Identity Provider Integration Guide
 
 This guide explains how to connect an external identity provider (IdP) to GENIE.AI through Keycloak. Once configured, users can authenticate via the external IdP without any GENIE.AI code or configuration changes.
 

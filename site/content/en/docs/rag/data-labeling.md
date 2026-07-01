@@ -1,4 +1,8 @@
-# Data Labeling Process for Hybrid RAG
+---
+title: Data Labelling Strategy
+description: "The data-labelling strategy for GENIE.AI: per-chunk LLM labelling, label filtering, and contextual retrieval."
+weight: 5
+---
 
 This repository implements a **data labeling and enrichment pipeline** designed to maximize the accuracy and explainability of Retrieval-Augmented Generation (RAG) systems.  
 Unlike conventional data labeling systems that prepare training sets for supervised learning, this process focuses on **labelling document chunks for ingestion into a RAG pipeline**, creating both semantic and structural signals that boost retrieval performance.
@@ -63,14 +67,14 @@ The final set of retrieved chunks is **scored and ranked** by combining these th
 ### 7. Document-Context Propagation (Contextual Retrieval) — optional
 A weakness of §3-§5 is that each chunk is labeled and embedded in isolation, so a chunk that does not name the document's subject (e.g. a generic "irrigation scheduling" chunk inside a cucumber cultivation guide) loses that subject — label-filtered and vector retrieval then miss a large fraction of a document's chunks.
 
-**Contextual Retrieval** (Anthropic-style), gated by `CONTEXTUAL_RETRIEVAL_ENABLED` (default **off**), addresses this: at ingest time the dataprep generates a short LLM document-context prefix (~50-100 words) per chunk and prepends it to the chunk **before both labeling (§4) and embedding (§6)**. The chunk's taxonomy labels and its dense vector therefore carry the document's subject, so generic chunks become retrievable by the document's subject. The original chunk text is preserved in chunk metadata (`chunk_text`).
+**Contextual Retrieval** (Anthropic-style), gated by `CONTEXTUAL_RETRIEVAL_ENABLED` (default **on**), addresses this: at ingest time the dataprep generates a short LLM document-context prefix (~50-100 words) per chunk and prepends it to the chunk **before both labeling (§4) and embedding (§6)**. The chunk's taxonomy labels and its dense vector therefore carry the document's subject, so generic chunks become retrievable by the document's subject. The original chunk text is preserved in chunk metadata (`chunk_text`).
 
 - **Cost**: one vLLM call per chunk (concurrency-bounded) at ingest — independent of query-time cost. Mitigations: vLLM prompt caching (`--enable-prefix-caching`) reuses the repeated document prefix; batching is tracked as future work.
 - **Resilience**: on any per-chunk or client-init failure the chunk is stored raw — **ingestion never blocks**. If 0/N contexts are produced (e.g. a model that rejects guided JSON), an ERROR is logged so operators notice.
 - **Model**: `DATAPREP_CONTEXTUAL_MODEL` (empty = reuse `VLLM_LLM_MODEL_ID`); must support guided JSON like `ibm-granite/granite-4.1-8b`.
-- **Strategy**: `CONTEXTUAL_STRATEGY=per_chunk` (default; one call per chunk, section-tailored context — the Anthropic recipe) or `doc_level` (ONE call for the whole document; the same document-level context is prepended to every chunk — N× cheaper, and enough to propagate the document subject). Choose `doc_level` for cost-sensitive deployments where subject propagation is the goal.
+- **Strategy**: `CONTEXTUAL_STRATEGY=doc_level` (default; ONE call for the whole document; the same document-level context is prepended to every chunk — N× cheaper, and enough to propagate the document subject) or `per_chunk` (one call per chunk, section-tailored context — the Anthropic recipe). Choose `per_chunk` for maximum precision where the extra ingest cost is acceptable.
 - **Output cap**: `DATAPREP_CONTEXTUAL_MAX_TOKENS` bounds the context-generation LLM's output (doc-level + per-chunk). The model writes ~196 tokens; the legacy hard cap of 200 left no headroom, so under concurrent vLLM load the JSON `{"context":"..."}` was truncated mid-string → JSONDecodeError → raw-chunk fallback (silently degrading retrieval). Default 512 gives comfortable margin at no extra cost (the model stops early).
-- **Decouple (recommended)**: `CONTEXTUAL_LABEL_RAW=true` labels the **raw** chunk and uses the generated context **only for the embedding**. A/B testing showed that feeding the context to the labeler distorts it (broad doc context → over-label ×3.6; focused per-chunk context → under-label, 8/34 empty); labeling the raw chunk restores off-quality precision (~2.3 labels/chunk) while the embedding still propagates the subject.
+- **Decoupled (default)**: `CONTEXTUAL_LABEL_RAW=true` (default) labels the **raw** chunk and uses the generated context **only for the embedding**. A/B testing showed that feeding the context to the labeler distorts it (broad doc context → over-label ×3.6; focused per-chunk context → under-label, 8/34 empty); labeling the raw chunk restores off-quality precision (~2.3 labels/chunk) while the embedding still propagates the subject.
 - **Orthogonal to retrieval hybrid**: a planned Part B adds BM25 lexical retrieval + RRF fusion over the same contextualized text for the full SOTA recipe (`dense + sparse → reranker`). The two flags are independent (this flag off + BM25 on = plain lexical hybrid).
 
 ---

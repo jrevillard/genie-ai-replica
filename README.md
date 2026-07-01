@@ -106,8 +106,8 @@ GENIE.AI/
 ├── CONTRIBUTING.md               # Contribution guidelines
 ├── STANDARDS.md                  # Coding standards specification
 ├── THIRD_PARTY.md                # Third-party software disclosure
-├── GENIE.AI-Installation-Configuration-Guide.md  # Installation guide
-├── GENIE.AI-Data-Labelling-Strategy.md           # Data labeling strategy
+├── site/content/en/docs/deployment/install-guide.md  # Installation guide
+├── site/content/en/docs/rag/data-labeling.md           # Data labeling strategy
 ├── UNICC-ITU-Genie-AI Code Management Process.md # Development workflow
 ├── proposed-repo-structure-changes.md            # Repository architecture
 ├── docker-compose.yaml          # Dual-mode Docker Compose (compose up + Swarm)
@@ -174,8 +174,8 @@ See [site/content/en/docs/deployment/docker-compose-setup.md](site/content/en/do
 
 ### Technical Guides
 
-- **[GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)** - Comprehensive installation, setup, and configuration instructions
-- **[GENIE.AI-Data-Labelling-Strategy.md](GENIE.AI-Data-Labelling-Strategy.md)** - Data labeling process for hybrid RAG systems
+- **[site/content/en/docs/deployment/install-guide.md](site/content/en/docs/deployment/install-guide.md)** - Comprehensive installation, setup, and configuration instructions
+- **[site/content/en/docs/rag/data-labeling.md](site/content/en/docs/rag/data-labeling.md)** - Data labeling process for hybrid RAG systems
 - **[proposed-repo-structure-changes.md](proposed-repo-structure-changes.md)** - Repository architecture and component organization
 
 ### Core Components
@@ -331,8 +331,8 @@ docker stack rm genieai
 
 ### Technical Documentation
 
-- **[GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)** - Detailed installation, setup, and configuration instructions
-- **[GENIE.AI-Data-Labelling-Strategy.md](GENIE.AI-Data-Labelling-Strategy.md)** - Data labeling process for hybrid RAG systems
+- **[site/content/en/docs/deployment/install-guide.md](site/content/en/docs/deployment/install-guide.md)** - Detailed installation, setup, and configuration instructions
+- **[site/content/en/docs/rag/data-labeling.md](site/content/en/docs/rag/data-labeling.md)** - Data labeling process for hybrid RAG systems
 - **[UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)** - Development workflow, branching strategy, and code review processes
 - **[proposed-repo-structure-changes.md](proposed-repo-structure-changes.md)** - Repository architecture and component organization
 
@@ -356,7 +356,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for comp
 3. Follow [STANDARDS.md](STANDARDS.md) for all code contributions
 4. Review [THIRD_PARTY.md](THIRD_PARTY.md) for third-party dependency requirements
 5. Follow the workflow in [UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)
-6. Set up your environment using [GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)
+6. Set up your environment using [site/content/en/docs/deployment/install-guide.md](site/content/en/docs/deployment/install-guide.md)
 
 ## License:
 

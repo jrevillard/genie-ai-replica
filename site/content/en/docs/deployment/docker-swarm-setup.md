@@ -1,10 +1,9 @@
 ---
 title: "Docker Swarm Setup"
-weight: 2
+description: "Production Docker Swarm deployment of GENIE.AI: node labels, secrets, and service topology."
+weight: 3
 section: "deployment"
 ---
-
-# Docker Swarm Deployment Guide
 
 This guide covers Docker Swarm deployments (single-node and multi-node). For local single-node development with `docker compose up`, see [Docker Compose Setup Guide](/docs/deployment/docker-compose-setup/).
 

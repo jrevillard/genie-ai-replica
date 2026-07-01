@@ -1,10 +1,9 @@
 ---
 title: "Api Contracts Backend"
+description: "Backend (BFF) HTTP API contracts: auth, chat, files, analytics, and admin endpoints with request/response schemas."
 weight: 1
 section: "backend"
 ---
-
-# GENIE.AI Backend API Contracts
 
 **Component**: `components/gov-chat-backend/` (Node.js/Express)
 **Base URL**: `https://<domain>/api` (via Kong Gateway)

@@ -1,4 +1,8 @@
-# GENIE.AI — Choosing and Configuring LLMs
+---
+title: Choosing and Configuring Models
+description: "Selecting and configuring models for GENIE.AI (LLM, embedding, reranker, translation) across GPU profiles."
+weight: 7
+---
 
 ## Overview
 
@@ -153,7 +157,7 @@ The dataprep service sends:
 
 The LLM must return **only** a JSON object with a `"labels"` key (or an index→labels map when batched) containing an **array of plain strings**. `response_format` enforces valid JSON at the token level; lenient client-side parsing tolerates residual variations (null → `[]`, bare string → `[string]`).
 
-> **Contextual Retrieval (optional).** When `CONTEXTUAL_RETRIEVAL_ENABLED=true`, the same vLLM model (override with `DATAPREP_CONTEXTUAL_MODEL`; empty = reuse this labeling model) is also called once per chunk to generate a ~50-100 word document-context prefix that is prepended before embedding + labeling. It has the **same guided-JSON requirement** (`response_format={"type":"json_object"}`, returning `{"context": "..."}`). On any failure the chunk is stored raw — ingestion never blocks. See `GENIE.AI-Data-Labelling-Strategy.md` §7.
+> **Contextual Retrieval (optional).** On by default (`CONTEXTUAL_RETRIEVAL_ENABLED=true`); the same vLLM model (override with `DATAPREP_CONTEXTUAL_MODEL`; empty = reuse this labeling model) is also called once per chunk to generate a ~50-100 word document-context prefix that is prepended before embedding + labeling. It has the **same guided-JSON requirement** (`response_format={"type":"json_object"}`, returning `{"context": "..."}`). On any failure the chunk is stored raw — ingestion never blocks. See the [Data Labelling Strategy]({{< relref "data-labeling" >}}) doc (§7).
 
 ### What Goes Wrong with Small Models
 

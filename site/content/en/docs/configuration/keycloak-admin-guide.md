@@ -1,10 +1,9 @@
 ---
 title: "Keycloak Admin Guide"
+description: "Keycloak administration for GENIE.AI: realms, clients, service accounts, and token flows."
 weight: 1
 section: "configuration"
 ---
-
-# Keycloak Admin Operations Guide
 
 This guide explains how to manage users, roles, and groups for GENIE.AI entirely through the Keycloak admin console. No GENIE.AI-specific interface is needed for user management.
 

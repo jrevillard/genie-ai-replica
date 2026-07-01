@@ -1,7 +1,7 @@
 ---
 title: "Mobile Deployment Guide"
-weight: 3
-section: "deployment"
+weight: 2
+section: "mobile"
 ---
 
 # GENIE.AI Mobile — Deployment Onboarding Guide

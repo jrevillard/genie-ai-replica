@@ -13,4 +13,3 @@ Operational deployment guides for Docker Compose, Docker Swarm, and mobile build
 
 1. [Docker Compose Setup](/docs/deployment/docker-compose-setup/)
 2. [Docker Swarm Setup](/docs/deployment/docker-swarm-setup/)
-3. [Mobile Deployment Guide](/docs/deployment/mobile-deployment-guide/)

@@ -225,6 +225,8 @@ This pattern allows `supertest` to test Express routes directly without binding 
 
 ## 5. Observability Architecture
 
+> For operational observability — dashboards, alerting, configuration, and tracing — see the [Observability]({{< relref "/docs/observability" >}}) section. This section covers the architecture-level design.
+
 ### 5.1 Distributed Tracing Flow
 
 ```mermaid
@@ -876,6 +878,9 @@ This approach (docs option 1: X-Forwarded-Prefix) avoids hardcoding a full URL i
 ---
 
 ## 16. Further Reading
+
+- [RAG Pipeline]({{< relref "/docs/rag" >}}) -- Retrieval-augmented generation: embedding, hybrid retrieval, reranking, generation, translation
+- [Observability]({{< relref "/docs/observability" >}}) -- Metrics, logs, traces, dashboards, alerting
 
 - [Keycloak Admin Guide](/docs/configuration/keycloak-admin-guide/) -- Realm configuration, user management, client setup
 - [Docker Compose Setup](/docs/deployment/docker-compose-setup/) -- Local development deployment with Docker Compose

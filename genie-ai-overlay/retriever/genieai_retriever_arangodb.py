@@ -362,10 +362,11 @@ class GenieaiArangoRetriever(OpeaComponent):
                 doc = Document(
                     id=row.get("key"),
                     page_content=row.get("text") or "",
-                    # file_ids is resolved uniformly (dense + BM25) by the
-                    # existing per-chunk enrichment AQL downstream; keep only
-                    # chunk_labels here so the metadata shape stays consistent.
-                    metadata={"chunk_labels": chunk_labels or []},
+                    # chunk_key preserved in metadata so it survives the
+                    # retriever->chatqna handoff (langchain mangles Document.id
+                    # to a UUID). chatqna's reranker_selection span reads it for
+                    # retrieval eval. file_ids is resolved uniformly downstream.
+                    metadata={"chunk_labels": chunk_labels or [], "chunk_key": row.get("key")},
                 )
                 results.append({"doc": doc, "score": float(row.get("score") or 0.0)})
         except Exception as e:
@@ -1134,6 +1135,19 @@ class GenieaiArangoRetriever(OpeaComponent):
             # round-trip and no chunk-key matching. The retriever microservice
             # assembles these into an ordered chunk_embeddings list for the reranker.
             reranking_strategy = input_dict.get("reranking_strategy", os.getenv("RERANKING_STRATEGY", "adaptive"))
+            # Preserve chunk_key in metadata for ALL docs (dense + BM25) so it
+            # survives the retriever->chatqna handoff (langchain mangles
+            # Document.id to a UUID). BM25 sets it at construction; dense
+            # (langchain) may expose it via metadata["_key"]; else fallback to
+            # the (possibly mangled) .id. chatqna's reranker_selection span reads
+            # this for retrieval eval (see _emit_reranker_selection_span).
+            if search_res:
+                for r in search_res:
+                    md = r["doc"].metadata or {}
+                    if not md.get("chunk_key"):
+                        md["chunk_key"] = md.get("_key") or r["doc"].id
+                    r["doc"].metadata = md
+
             if reranking_strategy == "adaptive" and search_res:
                 for r in search_res:
                     metadata = r["doc"].metadata or {}

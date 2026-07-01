@@ -1,5 +1,6 @@
 ---
 title: "Architecture"
+description: "System architecture: C4 context and container views, the RAG pipeline flow, database schema, and API structure."
 weight: 1
 section: "architecture"
 ---

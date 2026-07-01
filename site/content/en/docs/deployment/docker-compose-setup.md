@@ -1,10 +1,9 @@
 ---
 title: "Docker Compose Setup"
+description: "Single-host Docker Compose deployment of GENIE.AI: configuration, profiles, and operations."
 weight: 2
 section: "deployment"
 ---
-
-# Docker Compose Setup Guide (Single-Node)
 
 This guide covers local single-node deployment using `docker compose up`. For multi-node production deployments with Docker Swarm, see [Docker Swarm Deployment Guide](/docs/deployment/docker-swarm-setup/).
 

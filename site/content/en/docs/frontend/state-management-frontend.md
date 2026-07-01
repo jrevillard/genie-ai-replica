@@ -1,10 +1,9 @@
 ---
 title: "State Management Frontend"
+description: "State management in the GENIE.AI web frontend: Vuex stores, modules, and data flow."
 weight: 2
 section: "frontend"
 ---
-
-# State Management Analysis - gov-chat-frontend
 
 ## Overview
 The frontend application uses **Vuex 4.x** for centralized state management, with a modular architecture that separates concerns between authentication, chat history, and application state. The implementation follows modern Vue.js 3 patterns with namespaced modules.

@@ -1,5 +1,6 @@
 ---
 title: Choosing and Configuring Models
+description: "Selecting and configuring models for GENIE.AI (LLM, embedding, reranker, translation) across GPU profiles."
 weight: 7
 ---
 

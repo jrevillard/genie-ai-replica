@@ -1,10 +1,9 @@
 ---
 title: "Integration Architecture"
+description: "How the GENIE.AI components integrate: service boundaries, dependencies, and the inter-service contract surface."
 weight: 3
 section: "core"
 ---
-
-# GENIE.AI Integration Architecture
 
 This document describes the integration points, communication patterns, and data flows between all components of the GENIE.AI platform.
 

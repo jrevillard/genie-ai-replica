@@ -1,5 +1,6 @@
 ---
 title: Data Labelling Strategy
+description: "The data-labelling strategy for GENIE.AI: per-chunk LLM labelling, label filtering, and contextual retrieval."
 weight: 5
 ---
 

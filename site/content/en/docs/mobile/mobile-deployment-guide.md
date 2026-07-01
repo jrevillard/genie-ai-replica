@@ -1,10 +1,9 @@
 ---
 title: "Mobile Deployment Guide"
+description: "Building and deploying the GENIE.AI mobile app (Android/iOS): onboarding and release."
 weight: 2
 section: "mobile"
 ---
-
-# GENIE.AI Mobile — Deployment Onboarding Guide
 
 ## Overview
 

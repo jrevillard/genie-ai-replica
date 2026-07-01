@@ -1,10 +1,9 @@
 ---
 title: "Ui Component Inventory Frontend"
+description: "An inventory of the GENIE.AI web frontend UI components and their usage."
 weight: 1
 section: "frontend"
 ---
-
-# UI Component Inventory - GENIE.AI Frontend
 
 **Project**: GENIE.AI Web Application
 **Framework**: Vue 3 (Options API)

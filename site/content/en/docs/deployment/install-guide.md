@@ -1,5 +1,6 @@
 ---
 title: "Installation & Configuration Guide"
+description: "The canonical end-to-end GENIE.AI install procedure: prerequisites, base install, configuration, and knowledge-base population."
 weight: 1
 section: "deployment"
 ---

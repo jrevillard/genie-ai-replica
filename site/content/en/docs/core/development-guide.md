@@ -1,5 +1,6 @@
 ---
 title: "Development Guide"
+description: "Setting up a local development environment across all GENIE.AI components: prerequisites, commands, tests, and linting."
 weight: 4
 section: "core"
 ---

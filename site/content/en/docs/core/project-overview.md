@@ -1,5 +1,6 @@
 ---
 title: "Project Overview"
+description: "What GENIE.AI is, its capabilities, technology stack, architecture layers, and where to read deeper."
 weight: 1
 section: "core"
 ---

@@ -1,5 +1,6 @@
 ---
 title: "NVIDIA A40 Install Guide"
+description: "A worked end-to-end NVIDIA A40 GPU installation walkthrough for GENIE.AI."
 weight: 5
 section: "deployment"
 ---

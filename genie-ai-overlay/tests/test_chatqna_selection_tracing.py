@@ -2,12 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the reranker-selection identity span emitted from align_outputs.
 
-The span emits CONTENT HASHES (rag.candidate_chunk_hashes /
-rag.selected_chunk_hashes / rag.selected_scores) — not ``_key`` values, which
-langchain mangles during the retriever->chatqna handoff. These hashes are the
-single source of truth consumed by the retrieval-quality eval harness
-(tests/rag-benchmarks/eval/) to compute recall / precision / complete-recall /
-noise.
+The span emits ``chunk_key`` (the ArangoDB ``_key``) lists — recovered in
+align_outputs from the retriever's parallel ``data["metadata"]`` (same path as
+chunk_embedding; TextDoc has no metadata field). The eval harness at
+tests/rag-benchmarks/eval/ matches these against gold_dataset.json chunk_key
+values to compute recall / precision / complete-recall / noise.
 """
 
 from unittest.mock import MagicMock, patch
@@ -29,91 +28,54 @@ class TestRerankerSelectionSpan:
         tracer.start_as_current_span.return_value = span
         return tracer, span
 
-    def test_span_name_and_chunk_identity(self, mock_tracer):
-        """Span emits chunk_key (metadata) + content_hash; both identity paths."""
+    def test_span_name_and_keys(self, mock_tracer):
+        """Span named chatqna.reranker_selection; emits candidate/selected keys."""
         tracer, span = mock_tracer
-        h = chatqna_module._content_hash
-        candidates = [
-            {"text": "alpha", "score": 0.1, "metadata": {"chunk_key": "key_a"}},
-            {"text": "beta content", "score": 0.9, "metadata": {"chunk_key": "key_b"}},
-            {"text": "gamma", "score": 0.5, "metadata": {"chunk_key": "key_c"}},
-        ]
-        selected = [
-            {"text": "beta content", "score": 0.9, "metadata": {"chunk_key": "key_b"}},
-            {"text": "gamma", "score": 0.5, "metadata": {"chunk_key": "key_c"}},
-        ]
+        cand_keys = ["key_a", "key_b", "key_c"]
+        sel_keys = ["key_b", "key_c"]
+        sel_scores = [0.9, 0.5]
 
         with patch.object(chatqna_module, "align_tracer", tracer):
-            chatqna_module._emit_reranker_selection_span(candidates, selected)
+            chatqna_module._emit_reranker_selection_span(cand_keys, sel_keys, sel_scores)
 
         tracer.start_as_current_span.assert_called_once_with("chatqna.reranker_selection")
-        # chunk_key (primary — survives the langchain handoff via metadata)
         span.set_attribute.assert_any_call("rag.candidate_chunk_keys", ["key_a", "key_b", "key_c"])
         span.set_attribute.assert_any_call("rag.selected_chunk_keys", ["key_b", "key_c"])
-        # content_hash (fallback)
-        span.set_attribute.assert_any_call("rag.candidate_chunk_hashes", [h("alpha"), h("beta content"), h("gamma")])
         span.set_attribute.assert_any_call("rag.selected_scores", [0.9, 0.5])
         span.set_attribute.assert_any_call("rag.candidate_count", 3)
         span.set_attribute.assert_any_call("rag.selected_count", 2)
 
-    def test_chunk_key_falls_back_to_na_without_metadata(self, mock_tracer):
-        """A doc without metadata.chunk_key serializes as 'N/A' (never raises)."""
+    def test_selected_order_preserved(self, mock_tracer):
+        """Selected keys + scores order must match input (eval relies on it)."""
         tracer, span = mock_tracer
-        selected = [{"text": "no-meta", "score": 0.5}]  # no metadata
+        sel_keys = ["z_last", "a_first", "m_mid"]
+        sel_scores = [0.2, 0.8, 0.5]
 
         with patch.object(chatqna_module, "align_tracer", tracer):
-            chatqna_module._emit_reranker_selection_span([], selected)
+            chatqna_module._emit_reranker_selection_span([], sel_keys, sel_scores)
 
-        span.set_attribute.assert_any_call("rag.selected_chunk_keys", ["N/A"])
-
-    def test_hash_is_text_based_not_id(self, mock_tracer):
-        """Identity must come from TEXT (id is unreliable — langchain-mangled)."""
-        tracer, span = mock_tracer
-        h = chatqna_module._content_hash
-        # Same text, different (langchain-mangled) ids -> same hash.
-        selected = [{"id": "mangled-uuid-1", "text": "same content", "score": 0.8}]
-
-        with patch.object(chatqna_module, "align_tracer", tracer):
-            chatqna_module._emit_reranker_selection_span([], selected)
-
-        span.set_attribute.assert_any_call("rag.selected_chunk_hashes", [h("same content")])
-
-    def test_selected_order_is_preserved(self, mock_tracer):
-        """Selected hashes order must match input (eval relies on it)."""
-        tracer, span = mock_tracer
-        h = chatqna_module._content_hash
-        selected = [
-            {"text": "z last", "score": 0.2},
-            {"text": "a first", "score": 0.8},
-            {"text": "m mid", "score": 0.5},
-        ]
-
-        with patch.object(chatqna_module, "align_tracer", tracer):
-            chatqna_module._emit_reranker_selection_span([], selected)
-
-        span.set_attribute.assert_any_call("rag.selected_chunk_hashes", [h("z last"), h("a first"), h("m mid")])
+        span.set_attribute.assert_any_call("rag.selected_chunk_keys", ["z_last", "a_first", "m_mid"])
         span.set_attribute.assert_any_call("rag.selected_scores", [0.2, 0.8, 0.5])
 
-    def test_scores_are_rounded(self, mock_tracer):
-        """Scores rounded to 6dp so traces stay compact + deterministic."""
+    def test_scores_rounded(self, mock_tracer):
+        """Scores are passed as-is (rounding happens in align_outputs)."""
         tracer, span = mock_tracer
-        selected = [{"text": "c1", "score": 0.123456789}, {"text": "c2", "score": 0.5}]
 
         with patch.object(chatqna_module, "align_tracer", tracer):
-            chatqna_module._emit_reranker_selection_span([], selected)
+            chatqna_module._emit_reranker_selection_span([], [], [0.123457, 0.5])
 
         span.set_attribute.assert_any_call("rag.selected_scores", [0.123457, 0.5])
 
     def test_empty_inputs_do_not_raise(self, mock_tracer):
-        """Empty candidate + selected lists emit empty attrs, not raise."""
+        """Empty lists emit empty attrs, not raise."""
         tracer, span = mock_tracer
 
         with patch.object(chatqna_module, "align_tracer", tracer):
-            chatqna_module._emit_reranker_selection_span([], [])
+            chatqna_module._emit_reranker_selection_span([], [], [])
 
         tracer.start_as_current_span.assert_called_once_with("chatqna.reranker_selection")
-        span.set_attribute.assert_any_call("rag.candidate_chunk_hashes", [])
-        span.set_attribute.assert_any_call("rag.selected_chunk_hashes", [])
+        span.set_attribute.assert_any_call("rag.candidate_chunk_keys", [])
+        span.set_attribute.assert_any_call("rag.selected_chunk_keys", [])
         span.set_attribute.assert_any_call("rag.selected_scores", [])
         span.set_attribute.assert_any_call("rag.candidate_count", 0)
         span.set_attribute.assert_any_call("rag.selected_count", 0)

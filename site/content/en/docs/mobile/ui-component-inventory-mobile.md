@@ -1,10 +1,9 @@
 ---
 title: "Ui Component Inventory Mobile"
+description: "An inventory of the GENIE.AI mobile app UI widgets and their usage."
 weight: 1
 section: "mobile"
 ---
-
-# UI Component Inventory - GENIE.AI Mobile
 
 **Project**: GENIE.AI Mobile Application
 **Framework**: Flutter 3.10+ (Dart)

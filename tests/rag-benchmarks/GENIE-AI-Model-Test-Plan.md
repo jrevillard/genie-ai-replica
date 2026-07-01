@@ -2,7 +2,7 @@
 
 ## Objective
 
-Validate that recommended model combinations from the [Choosing LLMs Guide](GENIE-AI-ChoosingLLMs.md) work correctly across the three supported hardware profiles. This plan tests each model against all the roles it must serve: main inference, chunk labeling, graph extraction, translation, and the full RAG pipeline.
+Validate that recommended model combinations from the [Choosing LLMs Guide](site/content/en/docs/rag/choosing-models.md) work correctly across the three supported hardware profiles. This plan tests each model against all the roles it must serve: main inference, chunk labeling, graph extraction, translation, and the full RAG pipeline.
 
 ---
 
@@ -307,4 +307,4 @@ For every test failure, record:
 - [ ] Cross-profile: GPU utilization table filled
 - [ ] Cross-profile: Ingestion speed table filled
 - [ ] All failures documented
-- [ ] Update GENIE-AI-ChoosingLLMs.md with confirmed results
+- [ ] Update site/content/en/docs/rag/choosing-models.md with confirmed results

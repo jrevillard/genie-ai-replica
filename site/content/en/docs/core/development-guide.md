@@ -1,5 +1,6 @@
 ---
 title: "Development Guide"
+description: "Setting up a local development environment across all GENIE.AI components: prerequisites, commands, tests, and linting."
 weight: 4
 section: "core"
 ---
@@ -624,7 +625,7 @@ try {
 
 #### Keycloak Mobile Client Setup
 
-For institutional deployments, follow the [Mobile Deployment Guide](/docs/deployment/mobile-deployment-guide/).
+For institutional deployments, follow the [Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/).
 
 **Variables to configure in .env:**
 - `KC_MOBILE_CLIENT_ID` — OIDC client ID (e.g., `genie-mobile-itu`)
@@ -2340,6 +2341,6 @@ curl http://localhost:8080/realms/genie/.well-known/openid-configuration
 
 - [Architecture Overview](/docs/architecture/architecture/)
 - [API Documentation](http://localhost:3000/api-docs)
-- [Mobile Deployment Guide](/docs/deployment/mobile-deployment-guide/)
+- [Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/)
 - [E2E Testing Guide](e2e-tests/README.md)
 - [Deployment Guide](deployment.md)

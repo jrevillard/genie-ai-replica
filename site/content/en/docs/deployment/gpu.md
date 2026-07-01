@@ -1,4 +1,9 @@
-# GPU Deployment Guide
+---
+title: "GPU Deployment"
+description: "GPU deployment profiles for GENIE.AI (T4, RTX 6000, A40) with model-memory sizing."
+weight: 4
+section: "deployment"
+---
 
 This guide explains how to deploy GENIE.AI on different NVIDIA GPUs.
 

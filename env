@@ -212,21 +212,21 @@ HUGGING_FACE_HUB_TOKEN=
 # irrigation chunk in a cucumber guide becomes retrievable by "cucumber"). Adds
 # one vLLM call per chunk (concurrency-bounded) at ingest time. On any failure
 # (per-chunk or client-init) the chunk is stored raw — ingestion never blocks.
-# See GENIE.AI-Data-Labelling-Strategy.md + _bmad-output spec-contextual-retrieval.md.
-# CONTEXTUAL_RETRIEVAL_ENABLED=false   # opt-in (default false; flag-off is a true no-op)
+# See site/content/en/docs/rag/data-labeling.md + _bmad-output spec-contextual-retrieval.md.
+# CONTEXTUAL_RETRIEVAL_ENABLED=true    # default true (on by default); set false to disable (no-op beyond skipping context gen)
 # DATAPREP_CONTEXTUAL_MODEL=           # model for context generation; empty = reuse
 #                                      #   VLLM_LLM_MODEL_ID. MUST support guided JSON
 #                                      #   (response_format=json_object) like granite-4.1-8b.
 # DATAPREP_CONTEXTUAL_DOC_BUDGET=6000  # max chars of doc text fed to the context LLM
 # DATAPREP_CONTEXTUAL_MAX_TOKENS=512   # max OUTPUT tokens for the context LLM (doc-level + per-chunk). Model writes ~196 tokens; 200 truncated the JSON under load. 512 = safe margin.
 #                                      #   (~1500 tokens); <=0 disables truncation.
-# CONTEXTUAL_STRATEGY=per_chunk        # per_chunk (default; one call/chunk, section-tailored
-#                                      #   context — the Anthropic recipe) | doc_level (ONE
-#                                      #   call/doc, same context on every chunk — N× cheaper,
-#                                      #   still propagates the document subject).
-# CONTEXTUAL_LABEL_RAW=false           # decoupled mode: label the RAW chunk and use the context
-#                                      #   ONLY for the embedding (recommended — keeps label
-#                                      #   precision while propagating the subject via vectors).
+# CONTEXTUAL_STRATEGY=doc_level         # doc_level (default; ONE call/doc, same context on
+#                                      #   every chunk — N× cheaper, still propagates the doc
+#                                      #   subject) | per_chunk (one call/chunk, section-tailored
+#                                      #   context — the Anthropic recipe).
+# CONTEXTUAL_LABEL_RAW=true            # decoupled mode (default): label the RAW chunk and use the
+#                                      #   context ONLY for the embedding — keeps label precision
+#                                      #   while propagating the subject via vectors).
 
 # Hybrid Retrieval — BM25 + Reciprocal Rank Fusion (Contextual Retrieval Part B) — OPTIONAL, default OFF.
 # When enabled, the retriever runs a lexical (BM25) channel over <GRAPH>_SOURCE.text

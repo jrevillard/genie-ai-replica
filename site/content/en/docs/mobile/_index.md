@@ -1,7 +1,7 @@
 ---
 title: "Mobile (genie_ai_mobile)"
 description: "Flutter client: UI component inventory and mobile architecture."
-weight: 4
+weight: 5
 section: "mobile"
 ---
 

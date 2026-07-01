@@ -1,10 +1,9 @@
 ---
 title: "Mobile Architecture"
+description: "Architecture of the GENIE.AI Flutter mobile app: layers, state, and platform integration."
 weight: 2
 section: "mobile"
 ---
-
-# Flutter Mobile App Architecture Analysis
 
 ## Overview
 The Flutter mobile app (`genie_ai_mobile`) is a sophisticated AI chat application with OIDC authentication, multi-language support, and responsive design patterns.

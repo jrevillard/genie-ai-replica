@@ -5,6 +5,8 @@ weight: 3
 section: "frontend"
 ---
 
+> **For frontend developers.** The web app's theme system — design tokens, SCSS variables, and customisation points.
+
 # Theme System
 
 GENIE.AI uses a CSS-native theming architecture. A single **brand color** drives the entire accent palette, including dark mode — no JavaScript color manipulation.

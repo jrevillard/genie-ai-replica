@@ -23,7 +23,7 @@ A powerful RAG solution is built on a well-designed data model. We recommend usi
 
 This process involves identifying three tiers of data:
 
-* **Primary Data Sets (Core):** This is the essential information that directly addresses the most critical and frequent user queries. It forms the central circles of your diagram \- this totally depends on the scope of your solution. You can address as many facets of this central core set of data as required to serve the specific use case that you have in mind.  
+* **Primary Data Sets (Core):** This is the essential information that directly addresses the most critical and frequent user queries. It forms the central circles of your diagram - this totally depends on the scope of your solution. You can address as many facets of this central core set of data as required to serve the specific use case that you have in mind.  
 * **Secondary Data Sets (Supporting):** This data provides necessary context and is often required to give a more complete answer. It is the second ring of your diagram circles and it overlaps significantly with the primary set. There could also be many bubbles in this secondary tier.  
 * **Tertiary Data Sets (Peripheral):** This information is supplementary/peripheral and enhances the user's understanding, but may not be essential for every query. It has a minor overlap with the primary and secondary sets in specific areas. The Venn diagram is your best allie to get this right up front.
 
@@ -51,13 +51,13 @@ This process involves identifying three tiers of data:
 
 This domain analysis directly informs the structure of your 2-level labeling system. The clear relationships and boundaries identified in the Venn diagrams translate naturally into a logical hierarchy. We suggest that you also use an AI-driven approach to assemble the labeling system design. You can use any of the common RAG tools like ChatGPT, Gemini or Grok for example to accomplish this in minutes. Once this is done, you will need to verify it with subject matter experts to ensure that it meets the needs of indexing the required data sets.
 
-* **Categories (Level 1\)** often emerge from the overarching themes that group your primary and secondary data sets. For example, in Agriculture, the primary set "Corn Crop Management" and secondary sets like "Pesticides" and "Fertilizers" all fall under the logical **Category** of Crop Management.  
-* **Services/Topics (Level 2\)** are the primary, secondary, and even tertiary data sets themselves. They become the specific, actionable knowledge points within a category.
+* **Categories (Level 1)** often emerge from the overarching themes that group your primary and secondary data sets. For example, in Agriculture, the primary set "Corn Crop Management" and secondary sets like "Pesticides" and "Fertilizers" all fall under the logical **Category** of Crop Management.  
+* **Services/Topics (Level 2)** are the primary, secondary, and even tertiary data sets themselves. They become the specific, actionable knowledge points within a category.
 
 **Tier-Based Design Strategy:** To translate your data tiers into a functional hierarchy, apply the following strategy:
 
-1. **Primary Data MUST have dedicated labels:** Every primary data set represents a core user need and must have a distinct, clear Service (Level 2\) label.  
-2. **Secondary Data usually needs dedicated labels:** These should generally have their own Service (Level 2\) labels, typically grouped under the same Category (Level 1\) as the primary data they support.  
+1. **Primary Data MUST have dedicated labels:** Every primary data set represents a core user need and must have a distinct, clear Service (Level 2) label.  
+2. **Secondary Data usually needs dedicated labels:** These should generally have their own Service (Level 2) labels, typically grouped under the same Category (Level 1) as the primary data they support.  
 3. **Group Tertiary Data to avoid clutter:** Avoid creating granular labels for every piece of tertiary data. Instead, group them into broader "Reference" or "General Information" Service labels. This prevents the hierarchy from becoming overwhelming while still making the data accessible.
 
 **AVOID USING THE SAME LABELS FOR SERVICES IN MULTIPLE CATEGORIES**
@@ -66,11 +66,11 @@ This domain analysis directly informs the structure of your 2-level labeling sys
 
 * **User-Centric Naming:** Labels should reflect *user intent*, not internal organizational structures. A user looking for "Pesticides" does not care which government sub-department manages them.  
 * **Mutually Exclusive, Collectively Exhaustive (MECE):** Aim for categories that don't overlap significantly. While documents can have multiple labels, the hierarchy itself should be clean and logical.  
-* **Strict 2-Level Limit:** GENIE.AI uses a shallow hierarchy. Do not try to force a third level by creating overly complex names (e.g., avoid Crops \- Corn \- Pests \- Beetles; instead use Category: Crop Management, Service: Pest Control).
+* **Strict 2-Level Limit:** GENIE.AI uses a shallow hierarchy. Do not try to force a third level by creating overly complex names (e.g., avoid Crops - Corn - Pests - Beetles; instead use Category: Crop Management, Service: Pest Control).
 
 **Applying this to the Agriculture example:**
 
-| Category (Level 1\) | Service/Topic (Level 2\) | Data Source Origin |
+| Category (Level 1) | Service/Topic (Level 2) | Data Source Origin |
 | :---- | :---- | :---- |
 | **Crop Management** | Corn Planting & Harvest Guide | Primary |
 |  | Soil Health and Fertilization | Secondary |
@@ -86,16 +86,16 @@ To deliver an accurate, trustworthy, and useful RAG solution, the underlying dat
 
 **Supported Formats:**
 
-* Web pages (.html, via URL links) \- note that depth of crawling for web sites can be controlled as well as the language accepted.  
-* Documents (.pdf, .docx) \- .doc HAS been removed as it is legacy and problematic (conversion to .docx or .pdf is recommended)  
-* Spreadsheets (.xlsx) \- .xls has been removed for the same problametic legacyt reasons. You can use .xlsx sparingly. We suggest this is done sparingly as there are limitations related to multiple tabs and some of the other salient aspects of spreadsheets (such as calculations and charts etc.) that are problematic.  
+* Web pages (.html, via URL links) - note that depth of crawling for web sites can be controlled as well as the language accepted.  
+* Documents (.pdf, .docx) - .doc HAS been removed as it is legacy and problematic (conversion to .docx or .pdf is recommended)  
+* Spreadsheets (.xlsx) - .xls has been removed for the same problametic legacyt reasons. You can use .xlsx sparingly. We suggest this is done sparingly as there are limitations related to multiple tabs and some of the other salient aspects of spreadsheets (such as calculations and charts etc.) that are problematic.  
 * Markdown (.md)  
 * Plain Text (.txt)
 
 **Supported Language for Ingestion**
 
 * GENIE-AI is set up to support a single language for ingestion purposes.  
-* The single language is configurable \- our default configuration is EN.  
+* The single language is configurable - our default configuration is EN.  
 * File uploads will be constrained to the single configured language (by language detection).  
 * Language detection technology is not perfect (especially with URL links)... you can always convert the required information to a supported file type.  
 * Translations are performed on the fly in and out of the backend by an LLM (also configurable).
@@ -146,19 +146,17 @@ GENIE.AI requires significant computational resources, particularly for AI model
 
 #### CRITICAL - pay strict attention to the prerequisites — all services deploy on a single host
 
-Bash
-
 ##### 1\. Update and install prerequisites
 
 sudo apt-get update
 
-sudo apt-get install \-y ca-certificates curl gnupg
+sudo apt-get install -y ca-certificates curl gnupg
 
 ##### 2\. Add Docker's official GPG key
 
-sudo install \-m 0755 \-d /etc/apt/keyrings
+sudo install -m 0755 -d /etc/apt/keyrings
 
-curl \-fsSL [https://download.docker.com/linux/ubuntu/gpg](https://download.docker.com/linux/ubuntu/gpg) | sudo gpg \--dearmor \-o /etc/apt/keyrings/docker.gpg
+curl -fsSL [https://download.docker.com/linux/ubuntu/gpg](https://download.docker.com/linux/ubuntu/gpg) | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
@@ -178,7 +176,7 @@ sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
 sudo apt-get update
 
-sudo apt-get install \-y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 ##### 5\. Start and enable the Docker daemon
 
@@ -190,7 +188,7 @@ sudo systemctl enable docker
 
 ##### 6\. Grant your user standard Docker permissions
 
-sudo usermod \-aG docker $USER
+sudo usermod -aG docker $USER
 
 newgrp docker
 
@@ -202,23 +200,19 @@ docker run hello-world
 
 ## 2.4 Install Node.js on Every Host and Verify
 
-Bash
+curl -fsSL [https://deb.nodesource.com/setup\_lts.x](https://deb.nodesource.com/setup_lts.x) | sudo -E bash -
 
-curl \-fsSL [https://deb.nodesource.com/setup\_lts.x](https://deb.nodesource.com/setup_lts.x) | sudo \-E bash \-
+sudo apt-get install -y nodejs
 
-sudo apt-get install \-y nodejs
+node -v
 
-node \-v
-
-npm \-v
+npm -v
 
 ---
 
 # Step 3: Base Installation
 
 You must complete the base installation before configuring the application services. The deployment is organized in the repository as follows:
-
-Plaintext
 
 repository-root/
 ├── docker-compose.yaml           # Swarm-compatible deployment (single source of truth)
@@ -242,14 +236,11 @@ This method deploys all services onto a single host using Docker Swarm.
 
 Clone the appropriate repository to your local machine:
 
-* **Public Replica:** https://gitlab.com/fordendk/genie-ai-replica  
+* **Public Replica:** https://opensource.unicc.org/un/itu/genie-ai.git  
 * **Internal UNICC GitLab:** [(Check with administrator)](https://opensource.unicc.org/un/itu/genie-ai/)
 
-
-Bash
-
-git clone https://gitlab.com/fordendk/genie-ai-replica  
-cd genie-ai-replica
+git clone https://opensource.unicc.org/un/itu/genie-ai.git  
+cd genie-ai
 
 ##### 2\. Environment Configuration (.env)
 
@@ -462,7 +453,7 @@ Configuration for how documents are chunked and prepared for the knowledge graph
 | DATAPREP\_CHUNK\_SIZE | Token/Character count per document chunk. | 500 |
 | DATAPREP\_CHUNK\_SIZE\_PDF | The chunk size to use for PDF files | 500 |
 | DATAPREP\_CHUNK\_SIZE\_DOCX | The chunk size to use for DOCX files (better at 1000 or more) | 1000 |
-| DATAPREP\_CHUNK\_SIZE\_XLSX  | The chunk size to use for XLSX files (better to use 1500 or more \- rows can be large \- you don't want to split rows) | 1500 |
+| DATAPREP\_CHUNK\_SIZE\_XLSX  | The chunk size to use for XLSX files (better to use 1500 or more - rows can be large - you don't want to split rows) | 1500 |
 | DATAPREP\_CHUNK\_SIZE\_PPTX  | The chunk size to use for PPTX files | 500 |
 | DATAPREP\_CHUNK\_SIZE\_HTML  | The chunk size to use for HTML files | 500 |
 | DATAPREP\_CHUNK\_SIZE\_TXT  | The chunk size to use for TXT files | 500 |
@@ -584,7 +575,6 @@ Configuration for the reranker logic
 | RERANKER\_TOP\_N | Regulates the number of chunks returned by the reranker if RERANKING_STRATEGY is 'slice'. | 3 | 
 | RERANKING\_THRESHOLD | Defines the minimum relevance score required for a chunk to be included if RERANKING_STRATEGY is 'threshold'. | 0.75 |
 
-
 ## The Reranker
 
 The Reranker acts as the final quality filter. It receives the top candidates from the retriever and performs a more computationally intensive **"cross-encoder"** analysis to re-score the relevance of each chunk against the actual user query.
@@ -626,8 +616,6 @@ Defines the minimum relevance score required for a chunk to be included.
 - Produces more context, potentially leading to more comprehensive responses;
 - Increases noise and adds more 'cost' to response generation;
 
-
-
 ## Crawler Configuration (implemented in the doc repo) 
 These variables control the specifics of how crawls are done.
 
@@ -654,7 +642,7 @@ These variables control the specific AI models used for generation, guardrails, 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
 | VLLM\_LLM\_MODEL\_ID | Model ID for the main chat/generation. | meta-llama/Meta-Llama-3.1-8B-Instruct (recommended: ibm-granite/granite-4.1-8b) |
-| VLLM\_GPU\_UTILIZATION | GPU Memory Utilization for main model (0.0 \- 1.0). | 0.6 |
+| VLLM\_GPU\_UTILIZATION | GPU Memory Utilization for main model (0.0 - 1.0). | 0.6 |
 | VLLM\_MAX\_MODEL\_LEN | Context window size for main model. | 16384 |
 | VLLM\_DTYPE | Data type for model weights. | half |
 
@@ -697,7 +685,7 @@ The GENIE.AI framework relies on four distinct AI models working in concert. Con
 
 Select the profile below that matches your GPU hardware to avoid "Out of Memory" (OOM) crashes or architecture incompatibility errors.
 
-**Profile A: The "Entry Level" Profile (NVIDIA Tesla T4 \- 16GB VRAM)**
+**Profile A: The "Entry Level" Profile (NVIDIA Tesla T4 - 16GB VRAM)**
 
 * **Status:** Restricted / Legacy.  
 * **Challenge:** The T4 has limited memory (16GB) and older compute architecture (Turing). It does **not** support bfloat16, requiring float16 (half precision) which impacts stability.  
@@ -736,7 +724,7 @@ After launching services and waiting for the service startup: the following is a
 
 ***GPU memory profile: Entry Level***
 
-**Profile B: The "Enterprise" Profile (RTX 6000 Ada, L40S, A100 \- 48GB+ VRAM)**
+**Profile B: The "Enterprise" Profile (RTX 6000 Ada, L40S, A100 - 48GB+ VRAM)**
 
 * **Status:** Production Ready.  
 * **Advantage:** These cards support bfloat16 for higher precision and stability. 48GB allows for larger context windows and concurrent processing.  
@@ -779,15 +767,11 @@ After launching services and waiting for the service startup: the following is a
 Prerequisite: Download OCR Models  **CRITICAL**
 Because the framework uses EasyOCR during data prep and model downloads inside containers can be slow or unreliable, you must download these files to the root of your project folder first.
 
-Bash
-
-wget \-O craft\_mlt\_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft\_mlt\_25k.zip  
-wget \-O english\_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english\_g2.zip
+wget -O craft\_mlt\_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft\_mlt\_25k.zip  
+wget -O english\_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english\_g2.zip
 
 Launch Option A: Standard Launch (RTX 6000 Ada / A100 / H100 / A40)
 Use this command if you are running on modern Ampere or Ada generation hardware with sufficient VRAM (24GB+). This uses `env.rtx6000` for GPU-specific overrides:
-
-Bash
 
 set -a && source .env && source env.rtx6000 && set +a && docker stack deploy -c docker-compose.yaml genieai
 
@@ -796,8 +780,6 @@ Use this command for a Tesla T4 (16GB VRAM). This uses `env.t4` for GPU-specific
 
 * **Precision:** Forces dtype=half (float16)
 * **Memory Safety:** Reduces GPU utilization and model length limits
-
-Bash
 
 set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
 
@@ -885,21 +867,17 @@ cp /path/to/your/private-key.key secrets/ssl/server.key
 
 **Important:** These files are listed in `.gitignore` and must never be committed. The docker-compose.yaml mounts them as volumes into the NGINX container.
 
-Bash
-
 set -a && source .env && set +a
 docker stack deploy -c docker-compose.yaml genieai
 
 5\. Initial Verification  
 After the containers launch, check their status. It may take several minutes for the large AI models (vLLM) to download and initialize.
 
-Bash
-
 \# Check service status
 docker service ls
 
 \# Monitor the vLLM initialization (wait for "Application startup complete")
-docker service logs genieai_vllm \-f
+docker service logs genieai_vllm -f
 
 ⚠️ **IMPORTANT: EXPECTED ERRORS**  
 At this stage, while the containers are running, they are not yet configured. If you inspect the backend logs now, you will see errors related to missing databases (ArangoDB) and unconfigured routes (Kong). This is normal. Do NOT attempt to debug these errors yet. Proceed immediately to Step 4 to complete the necessary infrastructure configuration. The primary purpose of booting the containers now is to allow us to continur configuring Kong, NGINX and ArangoDB infrastructure.
@@ -992,8 +970,6 @@ The frontend and backend services rely on specific environment variables to cons
 
 **Example Configuration for genie.agency.gov:**
 
-Bash
-
 \# \========= FRONTEND SERVICE CONFIG \=========
 
 \# 1\. VUE\_APP\_CSP\_CONNECT\_SRC: Used by the Vue build process.  
@@ -1060,8 +1036,6 @@ This method is ideal for initial deployments, migrating an existing instance, or
 
 ### **5.1 Prepare Script Environment** You must source the environment configuration before running schema scripts to set necessary variables like database URLs and credentials: i.e. modify the set\_env.sh script for the correct database environment
 
-Bash
-
 cd components/gov-chat-backend/scripts/new-schema-scripts
 
 chmod \+x set-env.sh 
@@ -1072,8 +1046,6 @@ source set-env.sh
 
 Use the arango-schema-creator.js script to generate the collections, indexes, and graphs.
 
-Bash
-
 \# Ensure you are still in the new-schema-scripts directory and environment is set  
 npm install arangojs 
 
@@ -1082,8 +1054,6 @@ node arango-schema-creator.js ./arango-schema.json
 ### 5.3 Create Initial User Accounts
 
 You must create the default Admin and Manager accounts. These are required for the application to load correctly and for full integration with the Document Repository.
-
-Bash
 
 \# Create the Admin account  
 node create-genie-ai-admin-account.js
@@ -1095,18 +1065,15 @@ node create-genie-ai-manager-account.js
 
 ### **Skip to Step 6 if you like**
 
-
 ### 5.4 Populate Hierarchy
 
 Use the create-knowledge-hierarchy.js script to import your Category/Service structure.
 
 * *Note:* Ensure schema validation is temporarily disabled on serviceCategories, services, and categoryServices collections if using an older schema version.
 
-Bash
-
 \# Return to the parent scripts directory if the hierarchy file is there, or adjust the path.  
 cd ..  
-node create-knowledge-hierarchy.js \--file ./my-hierarchy.json
+node create-knowledge-hierarchy.js --file ./my-hierarchy.json
 
 ### 5.5 Generate Translations
 
@@ -1253,17 +1220,13 @@ Check that all containers are running and healthy.
 
 watch nvidia-smi
 
-Bash
-
 docker service ls
 
 *Look for (healthy) replicas next to critical services like kong, postgres, vllm, and arango-vector-db.* 3\. Check Logs for Errors:
 
 Inspect the logs again to ensure no new critical errors have appeared after the restart.
 
-Bash
-
-docker service logs genieai_backend \-f
+docker service logs genieai_backend -f
 
 4. Initial Login:  
    Access the application in your browser (e.g., [https://localhost](https://localhost) or your configured domain). Log in using the default Admin credentials created in Step 5.3:  
@@ -1349,8 +1312,6 @@ Add or modify the following variables in your .env file to control the behavior.
 
 ### Option A: LLM Strategy (Default / Discovery)
 
-Bash
-
 \# Discovery Mode  
 LABELING\_STRATEGY=llm
 
@@ -1358,8 +1319,6 @@ LABELING\_STRATEGY=llm
 \# LABEL\_SELECTOR\_SYSTEM\_PROMPT="You are a label selector..." 
 
 ### Option B: Embedding Strategy (Production / Semantic)
-
-Bash
 
 \# Semantic Match Mode  
 LABELING\_STRATEGY=embedding
@@ -1369,8 +1328,6 @@ LABELING\_STRATEGY=embedding
 EMBEDDING\_LABEL\_THRESHOLD=0.75
 
 ### Option C: BM25 Strategy (Strict Keyword)
-
-Bash
 
 \# Keyword Match Mode
 LABELING\_STRATEGY=bm25

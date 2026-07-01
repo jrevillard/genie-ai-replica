@@ -1,6 +1,6 @@
 ---
 title: "Docker Swarm Setup"
-weight: 2
+weight: 3
 section: "deployment"
 ---
 

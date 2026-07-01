@@ -1,3 +1,9 @@
+---
+title: "NVIDIA A40 Install Guide"
+weight: 5
+section: "deployment"
+---
+
 
 
 # **Guide: NVIDIA Driver Installation on Ubuntu 22.04**
@@ -256,7 +262,7 @@ docker service logs genieai_backend -f
 
 **NOTE:** that at this point there will be errors in the logs and containers restarting - this is because the configuration is incomplete
 
-## **12\. Proceed to "Step 4: Infrastructure Configuration" in the GENIE.AI-Installation-Configuration-Guide.md 
+## **12\. Proceed to "Step 4: Infrastructure Configuration" in the site/content/en/docs/deployment/install-guide.md 
 
-[GENIE.AI Installation and Configuration Guide](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/GENIE.AI-Installation-Configuration-Guide.md?ref_type=heads)
+[GENIE.AI Installation and Configuration Guide](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/site/content/en/docs/deployment/install-guide.md?ref_type=heads)
 

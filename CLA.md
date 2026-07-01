@@ -102,7 +102,7 @@ For purposes of this definition, "submitted" means any form of electronic, verba
   - Deployment instructions
   - Documentation structure and navigation
 
-- **GENIE.AI-Installation-Configuration-Guide.md:** Technical setup and configuration requirements, including:
+- **site/content/en/docs/deployment/install-guide.md:** Technical setup and configuration requirements, including:
   - Detailed installation and configuration instructions
   - Environment setup and prerequisites
   - Docker and Kubernetes deployment guides
@@ -263,7 +263,7 @@ For purposes of this definition, "submitted" means any form of electronic, verba
    - **UNICC-ITU-Genie-AI Code Management Process.md** - Development workflow and branching strategy
    - **THIRD_PARTY.md** - Third-party integration and licensing requirements
    - **README.md** - Project overview and architecture
-   - **GENIE.AI-Installation-Configuration-Guide.md** - Technical setup and configuration
+   - **site/content/en/docs/deployment/install-guide.md** - Technical setup and configuration
    - **site/content/en/docs/rag/data-labeling.md** - Data labeling and RAG system guidelines (if contributing data or models)
 
 2. Your Contributions will be licensed under the Apache License 2.0

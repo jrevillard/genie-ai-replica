@@ -1,4 +1,8 @@
-# GPU Deployment Guide
+---
+title: "GPU Deployment"
+weight: 4
+section: "deployment"
+---
 
 This guide explains how to deploy GENIE.AI on different NVIDIA GPUs.
 

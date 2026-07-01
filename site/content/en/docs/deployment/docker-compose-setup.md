@@ -1,6 +1,6 @@
 ---
 title: "Docker Compose Setup"
-weight: 1
+weight: 2
 section: "deployment"
 ---
 

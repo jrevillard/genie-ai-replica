@@ -32,7 +32,7 @@ Before contributing to GENIE.AI, all contributors must review and agree to the f
    - Quick start guide and development setup
    - Deployment instructions
 
-5. **[GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)** - Technical Setup
+5. **[site/content/en/docs/deployment/install-guide.md](site/content/en/docs/deployment/install-guide.md)** - Technical Setup
    - Detailed installation and configuration instructions
    - Environment setup and prerequisites
    - Docker and Kubernetes deployment guides
@@ -83,7 +83,7 @@ Before contributing to GENIE.AI, all contributors must review and agree to the f
 ### For All Contributors
 1. **Review Documentation**: Read all required documentation listed above
 2. **Accept CLA**: Review and accept [CLA.md](CLA.md)
-3. **Setup Environment**: Follow [GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)
+3. **Setup Environment**: Follow [site/content/en/docs/deployment/install-guide.md](site/content/en/docs/deployment/install-guide.md)
 4. **Understand Process**: Review [UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)
 5. **Follow Standards**: Ensure all code meets [STANDARDS.md](STANDARDS.md) requirements
 
@@ -98,7 +98,7 @@ If you're participating in the **GenAI for Good Challenge**, please note:
 
 1. **Branch Strategy**: Follow the branching strategy in [UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)
 2. **Code Quality**: Ensure compliance with [STANDARDS.md](STANDARDS.md)
-3. **Testing**: Test thoroughly using guidelines from [GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)
+3. **Testing**: Test thoroughly using guidelines from [site/content/en/docs/deployment/install-guide.md](site/content/en/docs/deployment/install-guide.md)
 4. **Third-Party Check**: Update [THIRD_PARTY.md](THIRD_PARTY.md) for any new dependencies
 5. **Submit**: Create merge request following the code management process
 
@@ -109,7 +109,7 @@ If you're participating in the **GenAI for Good Challenge**, please note:
 - **[STANDARDS.md](STANDARDS.md)** - Coding standards and best practices
 - **[CLA.md](CLA.md)** - Contributor license agreement
 - **[THIRD_PARTY.md](THIRD_PARTY.md)** - Third-party software disclosure
-- **[GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)** - Setup and configuration
+- **[site/content/en/docs/deployment/install-guide.md](site/content/en/docs/deployment/install-guide.md)** - Setup and configuration
 - **[site/content/en/docs/rag/data-labeling.md](site/content/en/docs/rag/data-labeling.md)** - Data labeling guidelines
 - **[UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)** - Development workflow
 - **[proposed-repo-structure-changes.md](proposed-repo-structure-changes.md)** - Repository architecture

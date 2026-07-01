@@ -1,4 +1,8 @@
-# **GENIE.AI Installation and Configuration Guide**
+---
+title: "Installation & Configuration Guide"
+weight: 1
+section: "deployment"
+---
 
 # Introduction
 

@@ -344,7 +344,7 @@ Set in `group_vars/<env>/vars.yml`:
 
 ### Contextual Retrieval (Optional, default off)
 
-Per-chunk LLM document-context prefix → embedding (+ optionally labeling) so chunks carry the document's subject. See `GENIE.AI-Data-Labelling-Strategy.md` §7 + `_bmad-output/implementation-artifacts/spec-contextual-retrieval.md`.
+Per-chunk LLM document-context prefix → embedding (+ optionally labeling) so chunks carry the document's subject. See `site/content/en/docs/rag/data-labeling.md` §7 + `_bmad-output/implementation-artifacts/spec-contextual-retrieval.md`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|

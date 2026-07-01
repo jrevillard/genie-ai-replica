@@ -80,7 +80,7 @@ The repository is organized to support modularity, shared libraries, and third-p
 ├── STANDARDS.md                 # Coding standards and practices
 ├── THIRD_PARTY.md               # Third-party integration guidelines
 ├── GENIE.AI-Installation-Configuration-Guide.md # Installation guide
-├── GENIE.AI-Data-Labelling-Strategy.md # Data labeling strategy
+├── site/content/en/docs/rag/data-labeling.md # Data labeling strategy
 ├── proposed-repo-structure-changes.md # Repository restructuring plan
 ├── README.md                    # Project overview
 ├── docker-compose.yaml          # Main Docker Compose configuration
@@ -533,7 +533,7 @@ All contributors must be familiar with:
   - `CONTRIBUTING.md` - Contribution guidelines
   - `THIRD_PARTY.md` - Third-party integration guidelines
   - `CLA.md` - Contributor License Agreement
-  - `GENIE.AI-Data-Labelling-Strategy.md` - Data labeling guidelines
+  - `site/content/en/docs/rag/data-labeling.md` - Data labeling guidelines
   - `proposed-repo-structure-changes.md` - Repository restructuring plan
 - **Contact**: [TBD, to be provided by UNICC ITU]
 

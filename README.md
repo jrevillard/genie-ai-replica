@@ -107,7 +107,7 @@ GENIE.AI/
 ├── STANDARDS.md                  # Coding standards specification
 ├── THIRD_PARTY.md                # Third-party software disclosure
 ├── GENIE.AI-Installation-Configuration-Guide.md  # Installation guide
-├── GENIE.AI-Data-Labelling-Strategy.md           # Data labeling strategy
+├── site/content/en/docs/rag/data-labeling.md           # Data labeling strategy
 ├── UNICC-ITU-Genie-AI Code Management Process.md # Development workflow
 ├── proposed-repo-structure-changes.md            # Repository architecture
 ├── docker-compose.yaml          # Dual-mode Docker Compose (compose up + Swarm)
@@ -175,7 +175,7 @@ See [site/content/en/docs/deployment/docker-compose-setup.md](site/content/en/do
 ### Technical Guides
 
 - **[GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)** - Comprehensive installation, setup, and configuration instructions
-- **[GENIE.AI-Data-Labelling-Strategy.md](GENIE.AI-Data-Labelling-Strategy.md)** - Data labeling process for hybrid RAG systems
+- **[site/content/en/docs/rag/data-labeling.md](site/content/en/docs/rag/data-labeling.md)** - Data labeling process for hybrid RAG systems
 - **[proposed-repo-structure-changes.md](proposed-repo-structure-changes.md)** - Repository architecture and component organization
 
 ### Core Components
@@ -332,7 +332,7 @@ docker stack rm genieai
 ### Technical Documentation
 
 - **[GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)** - Detailed installation, setup, and configuration instructions
-- **[GENIE.AI-Data-Labelling-Strategy.md](GENIE.AI-Data-Labelling-Strategy.md)** - Data labeling process for hybrid RAG systems
+- **[site/content/en/docs/rag/data-labeling.md](site/content/en/docs/rag/data-labeling.md)** - Data labeling process for hybrid RAG systems
 - **[UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)** - Development workflow, branching strategy, and code review processes
 - **[proposed-repo-structure-changes.md](proposed-repo-structure-changes.md)** - Repository architecture and component organization
 

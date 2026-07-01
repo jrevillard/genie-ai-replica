@@ -1,4 +1,7 @@
-# GENIE.AI — Choosing and Configuring LLMs
+---
+title: Choosing and Configuring Models
+weight: 7
+---
 
 ## Overview
 

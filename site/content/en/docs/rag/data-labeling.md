@@ -1,4 +1,7 @@
-# Data Labeling Process for Hybrid RAG
+---
+title: Data Labelling Strategy
+weight: 5
+---
 
 This repository implements a **data labeling and enrichment pipeline** designed to maximize the accuracy and explainability of Retrieval-Augmented Generation (RAG) systems.  
 Unlike conventional data labeling systems that prepare training sets for supervised learning, this process focuses on **labelling document chunks for ingestion into a RAG pipeline**, creating both semantic and structural signals that boost retrieval performance.

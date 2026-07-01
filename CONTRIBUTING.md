@@ -45,7 +45,7 @@ Before contributing to GENIE.AI, all contributors must review and agree to the f
    - Conflict resolution and communication guidelines
 
 ### Specialized Documentation
-7. **[GENIE.AI-Data-Labelling-Strategy.md](GENIE.AI-Data-Labelling-Strategy.md)** - Data Labeling for RAG
+7. **[site/content/en/docs/rag/data-labeling.md](site/content/en/docs/rag/data-labeling.md)** - Data Labeling for RAG
    - Understanding the hybrid RAG pipeline
    - Data labeling and enrichment strategies
    - Knowledge graph integration
@@ -61,7 +61,7 @@ Before contributing to GENIE.AI, all contributors must review and agree to the f
 ### 1. Collection of Data for Fine-Tuning and Testing
 - **What**: Contribute relevant datasets for refining and testing AI models
 - **Ideal Contributors**: Data scientists, researchers, academic institutions, governmental bodies
-- **Documentation**: Review [GENIE.AI-Data-Labelling-Strategy.md](GENIE.AI-Data-Labelling-Strategy.md) for data preparation guidelines
+- **Documentation**: Review [site/content/en/docs/rag/data-labeling.md](site/content/en/docs/rag/data-labeling.md) for data preparation guidelines
 
 ### 2. Open-Source Fine-Tuned LLMs and Embedding Models
 - **What**: Contribute fully open-source fine-tuned models
@@ -71,7 +71,7 @@ Before contributing to GENIE.AI, all contributors must review and agree to the f
 ### 3. RAG Methods for Public Sector Needs
 - **What**: Develop Retrieval-Augmented Generation methods for public sector applications
 - **Ideal Contributors**: AI researchers, ML engineers, public sector technology experts
-- **Context**: See [GENIE.AI-Data-Labelling-Strategy.md](GENIE.AI-Data-Labelling-Strategy.md) for hybrid RAG approach
+- **Context**: See [site/content/en/docs/rag/data-labeling.md](site/content/en/docs/rag/data-labeling.md) for hybrid RAG approach
 
 ### 4. Under-Served Language Optimization
 - **What**: Optimize AI solutions for under-served languages
@@ -110,7 +110,7 @@ If you're participating in the **GenAI for Good Challenge**, please note:
 - **[CLA.md](CLA.md)** - Contributor license agreement
 - **[THIRD_PARTY.md](THIRD_PARTY.md)** - Third-party software disclosure
 - **[GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)** - Setup and configuration
-- **[GENIE.AI-Data-Labelling-Strategy.md](GENIE.AI-Data-Labelling-Strategy.md)** - Data labeling guidelines
+- **[site/content/en/docs/rag/data-labeling.md](site/content/en/docs/rag/data-labeling.md)** - Data labeling guidelines
 - **[UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)** - Development workflow
 - **[proposed-repo-structure-changes.md](proposed-repo-structure-changes.md)** - Repository architecture
 

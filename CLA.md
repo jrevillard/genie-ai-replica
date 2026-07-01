@@ -110,7 +110,7 @@ For purposes of this definition, "submitted" means any form of electronic, verba
   - Troubleshooting and best practices
   - Configuration management and customization
 
-- **GENIE.AI-Data-Labelling-Strategy.md:** Data labeling and enrichment guidelines for RAG systems, including:
+- **site/content/en/docs/rag/data-labeling.md:** Data labeling and enrichment guidelines for RAG systems, including:
   - Domain-specific labeling schemas
   - Knowledge graph enrichment strategies
   - Hybrid retrieval patterns (vector + graph + labels)
@@ -264,7 +264,7 @@ For purposes of this definition, "submitted" means any form of electronic, verba
    - **THIRD_PARTY.md** - Third-party integration and licensing requirements
    - **README.md** - Project overview and architecture
    - **GENIE.AI-Installation-Configuration-Guide.md** - Technical setup and configuration
-   - **GENIE.AI-Data-Labelling-Strategy.md** - Data labeling and RAG system guidelines (if contributing data or models)
+   - **site/content/en/docs/rag/data-labeling.md** - Data labeling and RAG system guidelines (if contributing data or models)
 
 2. Your Contributions will be licensed under the Apache License 2.0
 3. You are granting the Project the copyright and patent licenses described in this CLA

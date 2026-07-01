@@ -14,7 +14,7 @@ Three files under `configs/grafana/provisioning/alerting/` define the setup:
 |---|---|
 | `alert-rules.yml` | The alert definitions (condition + for-duration). |
 | `notification-policies.yml` | Which alerts route to which contact points, and grouping/escalation. |
-| `contact-points.yml` | Where notifications are sent (Slack, email, webhook… per deployment). |
+| `contact-points.yml` | Where notifications are sent. The shipped default is a single webhook contact point; Slack/SMTP/PagerDuty are added per environment. |
 
 ## Built-in alert rules
 

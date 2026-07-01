@@ -310,11 +310,11 @@ When a user authenticates via an external IdP:
 
 ### Air-Gapped Deployments
 
-External identity providers are **not available** in air-gapped deployments (no internet connectivity). Only local Keycloak credentials work in air-gapped environments. See Story 1.10 for air-gapped deployment details.
+External identity providers are **not available** in air-gapped deployments (no internet connectivity). Only local Keycloak credentials work in air-gapped environments. See the deployment guide for air-gapped details.
 
 ### Role and Attribute Mapping
 
-This guide covers basic authentication only. Advanced role and attribute mapping from external IdP attributes to Keycloak roles is deferred to Story 3.4. By default, externally-authenticated users receive the default realm roles configured in Keycloak.
+This guide covers basic authentication only. Advanced role and attribute mapping from external IdP attributes to Keycloak roles is not covered in this guide. By default, externally-authenticated users receive the default realm roles configured in Keycloak.
 
 ### First Login Flow
 

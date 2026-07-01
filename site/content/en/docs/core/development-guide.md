@@ -372,10 +372,13 @@ router.get('/my-endpoint', authenticateKeycloak, async (req, res) => {
 module.exports = router;
 ```
 
-**Register Route in App**
+**Register a Route**
+
+The backend uses the `createApp()` pattern (exported from `index.js` — there is
+no separate `app.js` or `server.js`). Routes are registered inside `createApp()`:
 
 ```javascript
-// app.js
+// index.js — inside createApp()
 const myRoutes = require('./routes/my-route');
 app.use('/api/my', myRoutes);
 ```

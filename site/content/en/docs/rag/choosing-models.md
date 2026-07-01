@@ -67,7 +67,7 @@ GENIE.AI has **six distinct AI model roles**, served by **two vLLM instances** a
 | 5 | **Embeddings** | `tei` | `EMBEDDING_MODEL_ID` | — | Low — internal pipeline |
 | 6 | **Reranking** | `tei_reranker` | `RERANKER_MODEL_ID` | — | Low — internal pipeline |
 
-**Critical architecture point:** Roles 1, 2, and 3 **all share the same vLLM instance** (the main inference server at `http://vllm:8000`). The model you choose for `VLLM_LLM_MODEL_ID` must be capable of serving **all three** of these roles simultaneously. Role 4 (Translation) has its own dedicated vLLM instance.
+**Critical architecture point:** Roles 1, 2, and 3 **all share the same vLLM instance** (the main inference server at `http://vllm:8000`). The model you choose for `VLLM_LLM_MODEL_ID` must be capable of serving **all three** of these roles simultaneously. Role 4 (Translation) has its own dedicated vLLM instance. In docker-compose, `VLLM_MODEL_ID` is derived from `VLLM_LLM_MODEL_ID`, so setting the latter configures all three shared roles — you only set one.
 
 ---
 
@@ -125,7 +125,7 @@ The ChatQnA orchestrator sends retrieved chunks as system/user context and asks 
 ```bash
 # In your .env file
 VLLM_LLM_MODEL_ID=Qwen/Qwen2.5-7B-Instruct
-VLLM_GPU_UTIL=0.6
+VLLM_GPU_UTILIZATION=0.6
 VLLM_MAX_MODEL_LEN=65536
 VLLM_DTYPE=auto
 ```
@@ -332,7 +332,7 @@ For TranslateGemma fine-tuned models, a specific chat template with language cod
 ```bash
 # In your .env file
 VLLM_TRANSLATION_MODEL_ID=Infomaniak-AI/vllm-translategemma-4b-it
-VLLM_TRANSLATION_GPU_UTIL=0.3
+VLLM_TRANSLATION_GPU_UTILIZATION=0.3
 VLLM_TRANSLATION_MAX_MODEL_LEN=2048
 VLLM_TRANSLATION_DTYPE=auto
 ```
@@ -424,13 +424,13 @@ GENIE.AI runs multiple AI services on the same GPU. Each service claims a portio
 
 | Service | Typical VRAM | Notes |
 |---------|-------------|-------|
-| **Main vLLM** (inference) | 4–40 GB | Depends on model size, `VLLM_GPU_UTIL`, and `VLLM_MAX_MODEL_LEN` |
-| **Translation vLLM** | 4–14 GB | Depends on model size and `VLLM_TRANSLATION_GPU_UTIL` |
+| **Main vLLM** (inference) | 4–40 GB | Depends on model size, `VLLM_GPU_UTILIZATION`, and `VLLM_MAX_MODEL_LEN` |
+| **Translation vLLM** | 4–14 GB | Depends on model size and `VLLM_TRANSLATION_GPU_UTILIZATION` |
 | **TEI Embedding** | 200–1000 MB | Depends on embedding model |
 | **TEI Reranker** | 200–2000 MB | Depends on reranker model |
 | **OS / CUDA overhead** | 500–1000 MB | Always present |
 
-**Key parameter: `VLLM_GPU_UTIL`**
+**Key parameter: `VLLM_GPU_UTILIZATION`**
 
 This controls what fraction of GPU memory vLLM reserves for the model weights and KV cache. It does **not** control the total memory used — vLLM will use the full allocation for model weights plus KV cache for concurrent requests.
 
@@ -543,6 +543,8 @@ curl http://localhost:8000/v1/models
 
 **2. Verify embedding service:**
 ```bash
+# 7000 is the internal retriever port (dev/Compose only). In Swarm, run inside the net:
+# docker exec <retriever-container> curl http://tei:80/embed -X POST ... \
 curl http://localhost:7000/embed -X POST \
   -H "Content-Type: application/json" \
   -d '{"inputs": "test query"}'
@@ -585,13 +587,13 @@ This is the most constrained profile. Multiple models must share a single 16GB G
 ```bash
 # T4 Configuration
 VLLM_LLM_MODEL_ID=ibm-granite/granite-3.3-2b-instruct
-VLLM_GPU_UTIL=0.4
+VLLM_GPU_UTILIZATION=0.4
 VLLM_MAX_MODEL_LEN=65536
 VLLM_DTYPE=half
 LABELING_STRATEGY=embedding    # Do NOT use llm with 2B model
 
 VLLM_TRANSLATION_MODEL_ID=google/gemma-3-4b-it
-VLLM_TRANSLATION_GPU_UTIL=0.4
+VLLM_TRANSLATION_GPU_UTILIZATION=0.4
 VLLM_TRANSLATION_DTYPE=half
 VLLM_TRANSLATION_KV_CACHE_DTYPE=fp8
 
@@ -609,13 +611,13 @@ RERANKER_MODEL_ID=cross-encoder/ms-marco-MiniLM-L-6-v2
 
 ```bash
 VLLM_LLM_MODEL_ID=google/gemma-3-4b-it
-VLLM_GPU_UTIL=0.30
+VLLM_GPU_UTILIZATION=0.30
 VLLM_MAX_MODEL_LEN=65536
 VLLM_DTYPE=half
 LABELING_STRATEGY=embedding
 
 VLLM_TRANSLATION_MODEL_ID=google/gemma-3-4b-it
-VLLM_TRANSLATION_GPU_UTIL=0.35
+VLLM_TRANSLATION_GPU_UTILIZATION=0.35
 VLLM_TRANSLATION_MAX_MODEL_LEN=2048
 VLLM_TRANSLATION_DTYPE=half
 
@@ -650,13 +652,13 @@ This profile has room for high-quality models across all roles. These GPUs suppo
 ```bash
 # Enterprise Configuration (Recommended)
 VLLM_LLM_MODEL_ID=Qwen/Qwen2.5-7B-Instruct
-VLLM_GPU_UTIL=0.6
+VLLM_GPU_UTILIZATION=0.6
 VLLM_MAX_MODEL_LEN=65536
 VLLM_DTYPE=auto
 LABELING_STRATEGY=llm    # LLM strategy works well with 7B+ models
 
 VLLM_TRANSLATION_MODEL_ID=Infomaniak-AI/vllm-translategemma-4b-it
-VLLM_TRANSLATION_GPU_UTIL=0.3
+VLLM_TRANSLATION_GPU_UTILIZATION=0.3
 VLLM_TRANSLATION_MAX_MODEL_LEN=2048
 VLLM_TRANSLATION_DTYPE=auto
 
@@ -672,12 +674,12 @@ If you have multiple GPUs or separate servers, you can dedicate resources more e
 ```bash
 # GPU 1: Main inference + labeling + graph extraction
 VLLM_LLM_MODEL_ID=meta-llama/Meta-Llama-3.1-70B-Instruct-AWQ
-VLLM_GPU_UTIL=0.9
+VLLM_GPU_UTILIZATION=0.9
 NVIDIA_VISIBLE_DEVICES=0
 
 # GPU 2: Translation + embeddings + reranking
 VLLM_TRANSLATION_MODEL_ID=Infomaniak-AI/vllm-translategemma-4b-it
-VLLM_TRANSLATION_GPU_UTIL=0.5
+VLLM_TRANSLATION_GPU_UTILIZATION=0.5
 NVIDIA_VISIBLE_DEVICES=1
 ```
 
@@ -737,10 +739,10 @@ Do you need high-quality translation for many languages?
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `VLLM_LLM_MODEL_ID` | `ibm-granite/granite-3.3-2b-instruct` | Main chat model |
+| `VLLM_LLM_MODEL_ID` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | Main chat model (recommended: `ibm-granite/granite-4.1-8b`) |
 | `VLLM_MODEL_ID` | (alias of above) | Used by dataprep for labeling & graph |
 | `VLLM_ENDPOINT` | `http://vllm:8000` | Main vLLM endpoint |
-| `VLLM_GPU_UTIL` | `0.6` | GPU memory fraction |
+| `VLLM_GPU_UTILIZATION` | `0.55` | GPU memory fraction |
 | `VLLM_MAX_MODEL_LEN` | `65536` | Max context window |
 | `VLLM_DTYPE` | `auto` | Weight precision (half/auto/bfloat16) |
 
@@ -750,7 +752,7 @@ Do you need high-quality translation for many languages?
 |----------|---------|---------|
 | `VLLM_TRANSLATION_MODEL_ID` | `google/gemma-3-4b-it` | Translation model |
 | `VLLM_TRANSLATION_ENDPOINT` | `http://vllm-translation-guardrail:9031` | Translation endpoint |
-| `VLLM_TRANSLATION_GPU_UTIL` | `0.3` | GPU memory fraction |
+| `VLLM_TRANSLATION_GPU_UTILIZATION` | `0.3` | GPU memory fraction |
 | `VLLM_TRANSLATION_MAX_MODEL_LEN` | `2048` | Max context window |
 | `VLLM_TRANSLATION_DTYPE` | `auto` | Weight precision |
 
@@ -761,7 +763,7 @@ Do you need high-quality translation for many languages?
 | `LABELING_STRATEGY` | `llm` | Strategy: `llm`, `embedding`, or `bm25` |
 | `LABEL_SELECTOR_SYSTEM_PROMPT` | (built-in) | System prompt for LLM labeling |
 | `EMBEDDING_LABEL_THRESHOLD` | `0.75` | Threshold for embedding strategy |
-| `BM25_LABEL_THRESHOLD` | `2.0` | Threshold for BM25 strategy |
+| `BM25_LABEL_THRESHOLD` | `2.00` | Threshold for BM25 strategy |
 
 ### Embeddings & Reranking (Roles 5, 6)
 

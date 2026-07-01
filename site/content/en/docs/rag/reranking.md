@@ -15,26 +15,29 @@ The default reranker model is `BAAI/bge-reranker-v2-m3`.
 
 ## Selection strategies
 
-The reranker supports four strategies for turning a scored list into a final set.
-Choose one with `RERANKER_STRATEGY`:
+The reranker supports five strategies for turning a scored list into a final set.
+Choose one with `RERANKING_STRATEGY`:
 
 | Strategy | How it decides the cut | When to use |
 |---|---|---|
 | **`adaptive`** (default) | Picks the strategy automatically based on the score distribution. | General purpose; safe default. |
 | **`slice`** | Keeps a fixed number of top chunks (`RERANKER_TOP_N`). | Predictable context size. |
-| **`threshold`** | Keeps every chunk above `RERANKER_THRESHOLD`. | Strict quality gate. |
+| **`threshold`** | Keeps every chunk above `RERANKING_THRESHOLD`. | Strict quality gate. |
+| **`slice_threshold`** | Top-N, but only chunks that also clear `RERANKING_THRESHOLD`. | Predictable size + a quality floor. |
 | **`knee_threshold`** | Keeps chunks up to the largest score drop ("knee"). | Adapts to varied query difficulty. |
 
-With `slice` (the simplest mental model), `RERANKER_TOP_N=2` sends the two
-best-scoring chunks to the LLM.
+With `slice`, `RERANKER_TOP_N` (default 1) sets how many top chunks go to the
+LLM.
 
 ## Score calibration
 
 Raw reranker outputs are logits and are **not comparable across models or
-queries**. GENIE.AI calibrates them with a sigmoid mapping into the `[0, 1]`
-range (`RERANKER_SCORE_CALIBRATION`) so that scores become meaningful
-probabilities. Calibration is what makes a single threshold usable across
-deployments and is the prerequisite for a sensible confidence score.
+queries**. GENIE.AI *can* map them into the `[0, 1]` range with a sigmoid
+(`RERANKER_SCORE_CALIBRATION=sigmoid`), but this is **off by default** (`none`) —
+raw scores pass through untouched. Enable `sigmoid` only after verifying the TEI
+reranker emits raw logits: applied naively it *compresses* scores and can make
+the displayed confidence misleading. The confidence score below is relative
+either way.
 
 ## The displayed confidence score
 
@@ -59,10 +62,10 @@ signals exist:
 
 | Variable | Default | Effect |
 |---|---|---|
-| `RERANKER_STRATEGY` | `adaptive` | Selection strategy. |
-| `RERANKER_TOP_N` | 2 | Chunks kept (for `slice`, and as a cap elsewhere). |
-| `RERANKER_THRESHOLD` | 0.9 | Score gate (for `threshold` / `knee_threshold`). |
-| `RERANKER_SCORE_CALIBRATION` | sigmoid | Raw-score → `[0,1]` mapping. |
+| `RERANKING_STRATEGY` | `adaptive` | Selection strategy. |
+| `RERANKER_TOP_N` | 1 | Chunks kept (for `slice`/`slice_threshold`, and as a cap). |
+| `RERANKING_THRESHOLD` | 0.75 | Score gate (for `threshold`/`slice_threshold`/`knee_threshold`). |
+| `RERANKER_SCORE_CALIBRATION` | `none` | Raw-score → `[0,1]` mapping (`sigmoid` is opt-in). |
 
 > **Retrieval quality first.** A reranker re-orders; it cannot rescue chunks that
 > were never retrieved. If answers feel off, widen retrieval (`fetch_k`,

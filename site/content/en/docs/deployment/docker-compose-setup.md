@@ -270,7 +270,7 @@ docker compose --profile opea --profile gpu-models --profile observability up -d
 
 **Log collection**: All services use the fluentd logging driver (`driver: fluentd`) to forward container logs to the OTel Collector's `fluent_forward` receiver on port 24224 (localhost only). Docker dual logging (20.10+) keeps `docker logs` functional.
 
-Access Grafana via Kong at `https://<domain>/grafana/` (requires Keycloak OIDC login). Three dashboards are pre-configured: **Service Health**, **RAG Pipeline Trace Waterfall**, and **Service Logs**.
+Access Grafana via Kong at `https://<domain>/grafana/` (requires Keycloak OIDC login). 9 pre-built dashboards are auto-provisioned (service health, application metrics, service logs, trace explorer, RAG pipeline waterfall, plus observability-stack health and the three Victoria single-node views).
 
 See `configs/otel/README.md` for Collector configuration details.
 

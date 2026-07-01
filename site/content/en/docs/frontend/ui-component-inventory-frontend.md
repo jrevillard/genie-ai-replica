@@ -5,11 +5,6 @@ weight: 1
 section: "frontend"
 ---
 
-**Project**: GENIE.AI Web Application
-**Framework**: Vue 3 (Options API)
-**Location**: `/components/gov-chat-frontend/src/`
-**Generated**: 2026-05-13
-
 ---
 
 ## Summary

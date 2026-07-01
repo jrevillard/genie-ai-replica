@@ -30,11 +30,24 @@ file's ingestion in the traces and the ingestion log.
 
 ## Supported formats
 
-| Format | MIME type |
-|---|---|
-| PDF | `application/pdf` |
-| Word | `.docx` (Office Open XML) |
-| Excel | `.xlsx` (Office Open XML) |
+| Format | Extensions | Notes |
+|---|---|---|
+| PDF | `.pdf` | Text-based PDFs only; scanned/image PDFs need OCR first. |
+| Word | `.doc`, `.docx` | Legacy and Office Open XML. |
+| Excel | `.xls`, `.xlsx` | Legacy and Office Open XML. Table-heavy sheets chunk poorly. |
+| Markdown | `.md`, `.markdown` | Cleanest source — well-structured text chunks best. |
+| Plain text | `.txt` | |
+| HTML | `.html` | |
+
+> **Office files reported as ZIP.** Some browsers report `.docx`/`.xlsx` uploads
+> as `application/zip` or `application/x-zip-compressed`; these are accepted so
+> Office uploads are not rejected by MIME sniffing. The authoritative list is
+> `allowedExtensions` / `allowedMimeTypes` in
+> `components/document-repository/src/config/appConfig.js`.
+
+> **Plain, well-structured documents retrieve best.** Scanned images, heavily
+> nested tables, and image-only PDFs produce poor text and therefore poor chunks.
+> See [Content guidance]({{< relref "content-guidance" >}}).
 
 > **Plain, well-structured documents retrieve best.** Documents that are mostly
 > scanned images, heavily nested tables, or image-only PDFs produce poor text and

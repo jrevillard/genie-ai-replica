@@ -5,9 +5,6 @@ weight: 2
 section: "core"
 ---
 
-**Generated:** 2026-05-13  
-**Repository:** `/home/jerome/git_projects/ITU/genie-ai`
-
 ## Table of Contents
 
 1. [Overview](#overview)
@@ -73,8 +70,6 @@ genie-ai/
 ---
 
 ## Part 1: Frontend (Vue 3 Web App)
-
-**Location:** `components/gov-chat-frontend/`  
 **Purpose:** Single-page application for chat interface, analytics dashboard, and admin console  
 **Tech Stack:** Vue 3 (Options API), Vuex, vue-i18n, ApexCharts, Axios, Vue CLI
 
@@ -195,8 +190,6 @@ components/gov-chat-frontend/
 ---
 
 ## Part 2: Backend (Node.js/Express API)
-
-**Location:** `components/gov-chat-backend/`  
 **Purpose:** BFF (Backend for Frontend) API, authentication proxy, business logic  
 **Tech Stack:** Node.js 22, Express, JWT, Winston, ArangoDB driver, Redis client
 
@@ -292,8 +285,6 @@ components/gov-chat-backend/
 ---
 
 ## Part 3: Document Repository
-
-**Location:** `components/document-repository/`  
 **Purpose:** File upload, virus scanning, and document processing pipeline  
 **Tech Stack:** Node.js/Express, Multer, ClamAV, ArangoDB
 
@@ -344,8 +335,6 @@ components/document-repository/
 ---
 
 ## Part 4: Mobile (Flutter App)
-
-**Location:** `mobile/genie_ai_mobile/`  
 **Purpose:** Mobile client for Android/iOS with offline-first architecture  
 **Tech Stack:** Flutter 3.10+, Dart, flutter_appauth, flutter_secure_storage
 
@@ -483,8 +472,6 @@ mobile/genie_ai_mobile/
 ---
 
 ## Part 5: AI/ML (OPEA Microservices)
-
-**Location:** `genie-ai-overlay/`  
 **Purpose:** OPEA (Open Platform for Enterprise AI) microservices for RAG pipeline  
 **Tech Stack:** Python 3.10+, FastAPI, vLLM, TEI (Text Embeddings), ArangoDB driver
 
@@ -554,8 +541,6 @@ User Query → Backend (query-service.js) → ChatQnA Service → Embedding → 
 ---
 
 ## Part 6: API Gateway (Kong/Nginx)
-
-**Location:** `api-gateway-solution/`  
 **Purpose:** API gateway, reverse proxy, SSL termination, security  
 **Tech Stack:** Kong Gateway, NGINX, ModSecurity
 
@@ -680,8 +665,6 @@ api-gateway-solution/
 ## Configuration & Deployment
 
 ### Docker Compose Structure
-
-**Location:** `/docker-compose.yaml` (root)  
 **Purpose:** Single-file orchestration for all 6 parts (dual-mode: `docker compose up` and `docker stack deploy`)
 
 #### Service Groups
@@ -722,8 +705,6 @@ docker compose --env-file .env --env-file env.t4 --profile opea up -d
 ```
 
 ### Ansible Deployment
-
-**Location:** `deploy/ansible/`  
 **Purpose:** Automated Docker Swarm deployment with per-environment secrets
 
 #### Structure
@@ -778,8 +759,6 @@ Prompt Variables:
 ## Testing Structure
 
 ### Integration Tests
-
-**Location:** `tests/`  
 **Purpose:** End-to-end testing of RAG pipeline
 
 #### Structure
@@ -801,8 +780,6 @@ tests/
 ```
 
 ### E2E Tests
-
-**Location:** `docs/e2e-tests/`  
 **Purpose:** Multi-phase E2E testing with Playwright
 
 #### Structure
@@ -822,8 +799,6 @@ docs/e2e-tests/
 
 #### Backend Tests
 
-**Location:** `components/gov-chat-backend/__tests__/`
-
 - `authController.test.js` - Authentication controller tests
 - `keycloak-auth-middleware.test.js` - Keycloak middleware tests
 - `keycloak-auth-service.test.js` - Keycloak service tests
@@ -834,8 +809,6 @@ docs/e2e-tests/
 
 #### Mobile Tests
 
-**Location:** `mobile/genie_ai_mobile/test/`
-
 - `config/keycloak_config_test.dart` - Keycloak config tests
 - `services/api_service_test.dart` - API service tests
 - `services/sse_parser_test.dart` - SSE parser tests
@@ -843,8 +816,6 @@ docs/e2e-tests/
 - `services/auth/*_test.dart` - Auth service tests (token storage, auth notifier, etc.)
 
 #### Frontend Tests
-
-**Location:** `components/gov-chat-frontend/src/__tests__/`
 
 - `store/auth.test.js` - Vuex auth module tests
 

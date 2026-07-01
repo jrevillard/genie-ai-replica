@@ -5,6 +5,8 @@ weight: 3
 section: "core"
 ---
 
+> **For integrators and developers.** How the components fit together: service boundaries, dependencies, and the inter-service contract surface.
+
 This document describes the integration points, communication patterns, and data flows between all components of the GENIE.AI platform.
 
 ## Table of Contents
@@ -77,8 +79,6 @@ GENIE.AI is a monorepo consisting of 6 main parts that communicate through REST 
 
 ### 1. Frontend ↔ Backend
 
-**Location**: `components/gov-chat-frontend/` → `components/gov-chat-backend/`
-
 **Protocol**: HTTP/HTTPS (REST API)
 
 **Authentication**: OIDC Authorization Code Flow with Keycloak
@@ -118,8 +118,6 @@ GENIE.AI is a monorepo consisting of 6 main parts that communicate through REST 
 
 ### 2. Mobile ↔ Backend
 
-**Location**: `mobile/genie_ai_mobile/` → `components/gov-chat-backend/`
-
 **Protocol**: HTTP/HTTPS (REST API + SSE streaming)
 
 **Authentication**: OIDC PKCE Flow with Keycloak via `flutter_appauth` (forked)
@@ -145,8 +143,6 @@ GENIE.AI is a monorepo consisting of 6 main parts that communicate through REST 
 ---
 
 ### 3. Backend ↔ ArangoDB
-
-**Location**: `components/gov-chat-backend/` → ArangoDB container
 
 **Protocol**: HTTP/HTTPS (arangojs driver)
 
@@ -191,8 +187,6 @@ const db = new Database({
 
 ### 4. Backend ↔ Redis
 
-**Location**: `components/gov-chat-backend/` → Redis container
-
 **Protocol**: TCP (Redis protocol)
 
 **Driver**: `ioredis` v5.8.2
@@ -225,8 +219,6 @@ const redis = new Redis({
 ---
 
 ### 5. Backend ↔ ChatQnA (AI/ML Layer)
-
-**Location**: `components/gov-chat-backend/` → `genie-ai-overlay/chatqna/`
 
 **Protocol**: HTTP (REST API + SSE streaming)
 
@@ -310,8 +302,6 @@ data: {"type":"error","message":"Error description"}
 
 ### 6. Backend ↔ Document Repository
 
-**Location**: `components/gov-chat-backend/` → `components/document-repository/`
-
 **Protocol**: HTTP (REST API, internal Docker network)
 
 **Purpose**: File upload, virus scanning, document metadata, labeling
@@ -355,8 +345,6 @@ await clamav.scanFile(filePath);
 ---
 
 ### 7. Backend ↔ Keycloak
-
-**Location**: `components/gov-chat-backend/` → Keycloak container
 
 **Protocol**: HTTPS (OIDC protocol + Admin API)
 
@@ -417,8 +405,6 @@ grant_type=refresh_token&refresh_token=<token>&client_id=<client_id>
 
 ### 8. Client → Kong → Backend (API Gateway)
 
-**Location**: External traffic → Kong → NGINX → Services
-
 **Protocol**: HTTPS (TLS termination at NGINX)
 
 **Kong Configuration**: `api-gateway-solution/new-config/kong_config.json`
@@ -478,8 +464,6 @@ curl http://kong:8001/health/enabled
 ---
 
 ### 9. Backend ↔ Translation Services
-
-**Location**: `components/gov-chat-backend/` → Google Cloud API OR vLLM translation
 
 **Protocol**: HTTPS (REST API)
 
@@ -558,8 +542,6 @@ Frontend/Mobile replaces content with translated text
 ---
 
 ### 10. Dataprep ↔ ArangoDB (Document Ingestion)
-
-**Location**: `genie-ai-overlay/dataprep/` → ArangoDB
 
 **Protocol**: HTTP (arangojs driver) + internal OPEA orchestration
 

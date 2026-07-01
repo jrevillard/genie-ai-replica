@@ -5,10 +5,7 @@ weight: 1
 section: "frontend"
 ---
 
-**Project**: GENIE.AI Web Application
-**Framework**: Vue 3 (Options API)
-**Location**: `/components/gov-chat-frontend/src/`
-**Generated**: 2026-05-13
+> **For frontend developers.** A reference catalogue of the web UI components and their props.
 
 ---
 

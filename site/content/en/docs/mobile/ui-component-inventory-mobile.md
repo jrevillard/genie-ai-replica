@@ -5,10 +5,7 @@ weight: 1
 section: "mobile"
 ---
 
-**Project**: GENIE.AI Mobile Application
-**Framework**: Flutter 3.10+ (Dart)
-**Location**: `/mobile/genie_ai_mobile/lib/`
-**Generated**: 2026-05-13
+> **For mobile developers.** A reference catalogue of the Flutter app widgets.
 
 ---
 

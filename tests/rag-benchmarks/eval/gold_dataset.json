@@ -1,4 +1,0 @@
-{"entries":[
-  {"id":"q1","query":"How to grow cucumbers?","categoryLabel":"Vegetables","serviceLabels":["Cucumber"],"language":"en","reference_answer":"cucumber cultivation guide","expected_chunks":[{"content_hash":"fea0fac28c6c4141","min_rank":5,"preview":"Cucumber guide"}]},
-  {"id":"q2","query":"Tomato cultivation technical guide","categoryLabel":"Vegetables","serviceLabels":["Tomato"],"language":"en","reference_answer":"tomato cultivation","expected_chunks":[{"content_hash":"7244b65c40f4fdb5","min_rank":5,"preview":"Tomato guide"}]}
-]}

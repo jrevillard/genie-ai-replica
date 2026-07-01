@@ -71,14 +71,26 @@ def _content_hash(text):
 def _emit_reranker_selection_span(candidate_docs, selected_docs):
     """Emit reranker selection identity for retrieval-quality evaluation.
 
-    Emits CONTENT HASHES (not ``_key``) — chunk ``_key`` is mangled by langchain
-    during the retriever->chatqna handoff, so content is the only stable
-    identity. The eval harness at ``tests/rag-benchmarks/eval/`` matches these
-    hashes against ``gold_dataset.json`` expected content_hashes to compute
-    recall / precision / complete-recall / noise. Extracted as a helper so it
-    is unit-testable without driving the full mega-service pipeline.
+    Emits ``chunk_key`` (preserved in metadata by the retriever — the ArangoDB
+    ``_key``, which langchain otherwise mangles to a UUID during the
+    retriever->chatqna handoff) alongside content hashes as a fallback. The
+    eval harness at ``tests/rag-benchmarks/eval/`` matches ``chunk_key`` against
+    ``gold_dataset.json`` expected ``chunk_key`` to compute recall / precision /
+    complete-recall / noise. Extracted as a helper for isolated unit testing.
     """
+
+    def _chunk_key(d):
+        return (d.get("metadata") or {}).get("chunk_key", "N/A")
+
     with align_tracer.start_as_current_span("chatqna.reranker_selection") as sel_span:
+        sel_span.set_attribute(
+            "rag.candidate_chunk_keys",
+            [_chunk_key(d) for d in candidate_docs],
+        )
+        sel_span.set_attribute(
+            "rag.selected_chunk_keys",
+            [_chunk_key(d) for d in selected_docs],
+        )
         sel_span.set_attribute(
             "rag.candidate_chunk_hashes",
             [_content_hash(d.get("text", "")) for d in candidate_docs],

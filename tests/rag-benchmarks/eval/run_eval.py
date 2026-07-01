@@ -124,8 +124,8 @@ def _extract_selection(raw: str, start_s: float) -> tuple[list[str], list[str]]:
             if st < query_start_us - 5_000_000:  # >5s before query — older trace
                 continue
             tags = {t["key"]: t.get("value") for t in sp.get("tags", [])}
-            c = _as_list(tags.get("rag.candidate_chunk_hashes"))
-            s = _as_list(tags.get("rag.selected_chunk_hashes"))
+            c = _as_list(tags.get("rag.candidate_chunk_keys"))
+            s = _as_list(tags.get("rag.selected_chunk_keys"))
             if best is None or st > best[0]:
                 best = (st, c, s)
     if best is None:
@@ -166,7 +166,7 @@ def build_hash_to_text() -> dict[str, str]:
 
 
 def score_anchor(entry, cand_hashes, sel_hashes, trace_found: bool) -> dict:
-    gold = [c["content_hash"] for c in entry.get("expected_chunks", [])]
+    gold = [c["chunk_key"] for c in entry.get("expected_chunks", [])]
     row = {
         "id": entry["id"],
         "query": entry["query"],

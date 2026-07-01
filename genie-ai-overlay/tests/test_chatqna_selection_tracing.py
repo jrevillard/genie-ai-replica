@@ -29,29 +29,42 @@ class TestRerankerSelectionSpan:
         tracer.start_as_current_span.return_value = span
         return tracer, span
 
-    def test_span_name_and_chunk_hashes(self, mock_tracer):
-        """Span named chatqna.reranker_selection; hashes computed from chunk TEXT."""
+    def test_span_name_and_chunk_identity(self, mock_tracer):
+        """Span emits chunk_key (metadata) + content_hash; both identity paths."""
         tracer, span = mock_tracer
         h = chatqna_module._content_hash
         candidates = [
-            {"text": "alpha", "score": 0.1},
-            {"text": "beta content", "score": 0.9},
-            {"text": "gamma", "score": 0.5},
+            {"text": "alpha", "score": 0.1, "metadata": {"chunk_key": "key_a"}},
+            {"text": "beta content", "score": 0.9, "metadata": {"chunk_key": "key_b"}},
+            {"text": "gamma", "score": 0.5, "metadata": {"chunk_key": "key_c"}},
         ]
         selected = [
-            {"text": "beta content", "score": 0.9},
-            {"text": "gamma", "score": 0.5},
+            {"text": "beta content", "score": 0.9, "metadata": {"chunk_key": "key_b"}},
+            {"text": "gamma", "score": 0.5, "metadata": {"chunk_key": "key_c"}},
         ]
 
         with patch.object(chatqna_module, "align_tracer", tracer):
             chatqna_module._emit_reranker_selection_span(candidates, selected)
 
         tracer.start_as_current_span.assert_called_once_with("chatqna.reranker_selection")
+        # chunk_key (primary — survives the langchain handoff via metadata)
+        span.set_attribute.assert_any_call("rag.candidate_chunk_keys", ["key_a", "key_b", "key_c"])
+        span.set_attribute.assert_any_call("rag.selected_chunk_keys", ["key_b", "key_c"])
+        # content_hash (fallback)
         span.set_attribute.assert_any_call("rag.candidate_chunk_hashes", [h("alpha"), h("beta content"), h("gamma")])
-        span.set_attribute.assert_any_call("rag.selected_chunk_hashes", [h("beta content"), h("gamma")])
         span.set_attribute.assert_any_call("rag.selected_scores", [0.9, 0.5])
         span.set_attribute.assert_any_call("rag.candidate_count", 3)
         span.set_attribute.assert_any_call("rag.selected_count", 2)
+
+    def test_chunk_key_falls_back_to_na_without_metadata(self, mock_tracer):
+        """A doc without metadata.chunk_key serializes as 'N/A' (never raises)."""
+        tracer, span = mock_tracer
+        selected = [{"text": "no-meta", "score": 0.5}]  # no metadata
+
+        with patch.object(chatqna_module, "align_tracer", tracer):
+            chatqna_module._emit_reranker_selection_span([], selected)
+
+        span.set_attribute.assert_any_call("rag.selected_chunk_keys", ["N/A"])
 
     def test_hash_is_text_based_not_id(self, mock_tracer):
         """Identity must come from TEXT (id is unreliable — langchain-mangled)."""

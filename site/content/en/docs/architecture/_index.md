@@ -1,15 +1,22 @@
 ---
 title: "Architecture"
-description: "System-wide architecture: C4 container view and logging/observability strategy."
+description: "System-wide architecture: C4 container view, authentication flows, and the service-to-service auth matrix."
 weight: 6
 section: "architecture"
 ---
 
 # Architecture
 
-System-wide architecture: C4 container view and logging/observability strategy.
+System-wide architecture: C4 container diagrams, authentication and token flows,
+and the service-to-service authentication matrix.
 
 ## Documents in this section
 
-1. [Architecture Overview](/docs/architecture/architecture/)
-2. [Logging Architecture Evaluation](/docs/architecture/logging-architecture/)
+1. [Architecture Overview](/docs/architecture/architecture/) — C4 context/container
+   view, RAG pipeline flow, database schema, and API structure.
+
+## Related
+
+- For metrics, logs, traces, dashboards, and alerting, see the dedicated
+  [Observability]({{< relref "/docs/observability" >}}) section.
+- For the RAG pipeline, see [RAG Pipeline]({{< relref "/docs/rag" >}}).

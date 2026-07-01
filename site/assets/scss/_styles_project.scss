@@ -1,0 +1,13 @@
+// Docsy's navbar is position:fixed. Section/docs pages offset their content via
+// their layout grid, but standalone pages using the default layout
+// (<main class="td-main">, e.g. /about/) only inherit --td-main-padding-top
+// with no padding-top on the element itself — so content sits under the navbar.
+// Force the offset directly.
+.td-main {
+  --td-main-padding-top: 5rem;
+  padding-top: 5rem !important;
+}
+// Don't hide deep-linked headings under the fixed navbar.
+.td-main :is(h1, h2, h3, h4) {
+  scroll-margin-top: 5rem;
+}

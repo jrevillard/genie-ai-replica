@@ -160,6 +160,8 @@ All endpoints (except where noted) require Keycloak JWT authentication via `Auth
 | POST | `/database-operations/backup` | Admin | Trigger database backup | Backup operation |
 | POST | `/database-operations/optimize` | Admin | Optimize database | DB optimization |
 | GET | `/users/search` | Admin | Search users | User lookup |
+| GET | `/queries/inspect` | Admin | List queries for inspection | Query Inspector |
+| GET | `/queries/inspect/:queryId` | Admin | Inspect a specific query | Query detail |
 
 ---
 

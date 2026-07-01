@@ -5,6 +5,8 @@ weight: 2
 section: "frontend"
 ---
 
+> **For frontend developers.** How the Vue 3 web app manages state — Vuex store, modules, and data flow.
+
 ## Overview
 The frontend application uses **Vuex 4.x** for centralized state management, with a modular architecture that separates concerns between authentication, chat history, and application state. The implementation follows modern Vue.js 3 patterns with namespaced modules.
 

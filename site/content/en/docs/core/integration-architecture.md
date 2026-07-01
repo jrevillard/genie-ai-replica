@@ -154,7 +154,7 @@ GENIE.AI is a monorepo consisting of 6 main parts that communicate through REST 
 const db = new Database({
   url: process.env.ARANGO_URL || 'http://arango:8529',
   databaseName: process.env.ARANGO_DB || 'genieai',
-  auth: { username: 'root', password: process.env.ARANGO_PASSWORD }
+  auth: { username: process.env.ARANGO_USER || 'root', password: process.env.ARANGO_PASSWORD }
 });
 ```
 
@@ -1386,9 +1386,3 @@ app.use('/api/', limiter);
 | `KC_MOBILE_CLIENT_ID` | **Yes** | - | Mobile OIDC client ID |
 
 ---
-
-## Document History
-
-| Date | Version | Changes |
-|------|---------|---------|
-| 2025-01-12 | 1.0 | Initial integration architecture document |

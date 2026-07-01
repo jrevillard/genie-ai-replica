@@ -654,7 +654,7 @@ These variables control the specific AI models used for generation, guardrails, 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
 | VLLM\_LLM\_MODEL\_ID | Model ID for the main chat/generation. | meta-llama/Meta-Llama-3.1-8B-Instruct (recommended: ibm-granite/granite-4.1-8b) |
-| VLLM\_GPU\_UTILIZATION | GPU Memory Utilization for main model (0.0 \- 1.0). | 0.55 |
+| VLLM\_GPU\_UTILIZATION | GPU Memory Utilization for main model (0.0 \- 1.0). | 0.6 |
 | VLLM\_MAX\_MODEL\_LEN | Context window size for main model. | 16384 |
 | VLLM\_DTYPE | Data type for model weights. | half |
 

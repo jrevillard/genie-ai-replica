@@ -742,7 +742,7 @@ Do you need high-quality translation for many languages?
 | `VLLM_LLM_MODEL_ID` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | Main chat model (recommended: `ibm-granite/granite-4.1-8b`) |
 | `VLLM_MODEL_ID` | (alias of above) | Used by dataprep for labeling & graph |
 | `VLLM_ENDPOINT` | `http://vllm:8000` | Main vLLM endpoint |
-| `VLLM_GPU_UTILIZATION` | `0.55` | GPU memory fraction |
+| `VLLM_GPU_UTILIZATION` | `0.6` | GPU memory fraction |
 | `VLLM_MAX_MODEL_LEN` | `65536` | Max context window |
 | `VLLM_DTYPE` | `auto` | Weight precision (half/auto/bfloat16) |
 

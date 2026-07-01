@@ -18,11 +18,14 @@ def test_content_hash_whitespace_insensitive():
     assert ci.content_hash("the quick brown fox") == ci.content_hash("the   quick\tbrown\nfox")
 
 
-def test_content_hash_is_prefix_based():
-    # only the first prefix_len chars matter — tail drift must not change the hash
-    base = "x" * 300
-    variant = base + "different tail beyond the prefix window"
-    assert ci.content_hash(base) == ci.content_hash(variant)
+def test_content_hash_distinguishes_chunks_with_shared_prefix():
+    # Full-text hashing: chunks sharing a header (a doc title or contextual-
+    # retrieval prefix prepended to every chunk) must still get DIFFERENT hashes.
+    # A prefix-based hash would collide here — that was the bug.
+    header = "A comprehensive technical guide for tomato cultivation. " * 10
+    a = header + "unique content about blossom end rot"
+    b = header + "unique content about watering schedule"
+    assert ci.content_hash(a) != ci.content_hash(b)
 
 
 def test_content_hash_distinguishes_different_chunks():

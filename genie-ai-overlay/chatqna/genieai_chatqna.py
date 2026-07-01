@@ -50,19 +50,21 @@ setup_trace_logging("GENIE.AI_CHATQNA")
 align_tracer = get_tracer("chatqna.align_outputs")
 
 
-def _content_hash(text, prefix_len=200):
+def _content_hash(text):
     """Stable content fingerprint — MUST match ``tests/rag-benchmarks/eval/chunk_identity.py``.
 
-    ``sha256(normalize(text)[:prefix_len])[:16]``. Irreversible (no content
-    leak into telemetry). Used because chunk ``_key`` does NOT survive the
-    retriever->chatqna handoff (langchain-arangodb mangles it to a random
-    UUID), so content is the only stable identity across both re-ingest and the
-    service boundary.
+    ``sha256(normalize(text))[:16]`` — full normalized text (NOT a prefix).
+    Irreversible (no content leak into telemetry). Used because chunk ``_key``
+    does NOT survive the retriever->chatqna handoff (langchain-arangodb mangles
+    it to a random UUID), so content is the only stable identity across both
+    re-ingest and the service boundary. Full-text (not prefix) avoids collisions
+    when chunks share a common header (document title / contextual-retrieval
+    prefix prepended to every chunk).
     """
     import hashlib
     import re
 
-    norm = re.sub(r"\s+", " ", (text or "").strip().lower())[:prefix_len]
+    norm = re.sub(r"\s+", " ", (text or "").strip().lower())
     return hashlib.sha256(norm.encode("utf-8")).hexdigest()[:16]
 
 

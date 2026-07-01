@@ -25,21 +25,18 @@ from chunk_identity import content_hash
 
 GRAPH_SOURCE = os.getenv("GRAPH_SOURCE", "genieai_graph_SOURCE")
 TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "text")
-# Fetch enough head to compute the content_hash (prefix-based) + a readable preview.
-# Must stay >= chunk_identity's default prefix_len (200) so content_hash gets the
-# full prefix here; dump + eval both call content_hash(), so hashes are consistent
-# by construction regardless of this value (as long as it's >= prefix_len).
-FETCH_LEN = 250
 
 
 def main(out_path: str = "chunks_registry.json") -> None:
+    # Fetch FULL text — content_hash is full-text (not prefix), so we need the
+    # whole chunk to compute the same hash the chatqna span emits.
     rows = cursor(
         f"""
         FOR doc IN {GRAPH_SOURCE}
             SORT doc._key
             RETURN {{
                 "key": doc._key,
-                "text_head": SUBSTRING(doc.{TEXT_FIELD}, 0, {FETCH_LEN}),
+                "text": doc.{TEXT_FIELD},
                 "labels": doc.chunk_labels || []
             }}
         """
@@ -47,8 +44,8 @@ def main(out_path: str = "chunks_registry.json") -> None:
     out = [
         {
             "key": r["key"],
-            "content_hash": content_hash(r.get("text_head", "")),
-            "preview": (r.get("text_head") or "")[:200],
+            "content_hash": content_hash(r.get("text", "")),
+            "preview": (r.get("text") or "")[:200],
             "labels": r.get("labels", []),
         }
         for r in rows

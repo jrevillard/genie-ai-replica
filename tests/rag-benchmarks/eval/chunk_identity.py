@@ -17,7 +17,6 @@ from __future__ import annotations
 import hashlib
 import re
 
-_DEFAULT_PREFIX_LEN = 200
 _WHITESPACE = re.compile(r"\s+")
 
 
@@ -26,12 +25,14 @@ def normalize(text: str) -> str:
     return _WHITESPACE.sub(" ", (text or "").strip().lower())
 
 
-def content_hash(text: str, prefix_len: int = _DEFAULT_PREFIX_LEN) -> str:
+def content_hash(text: str) -> str:
     """Short stable fingerprint of a chunk's text.
 
-    ``sha256(normalize(text)[:prefix_len])`` — first 16 hex chars. Prefix-based
-    so minor boundary drift at the tail does not change the hash; normalized so
-    whitespace differences do not either.
+    ``sha256(normalize(text))[:16]`` — full normalized text, NOT a prefix. A
+    prefix hash collides when chunks share a common header (e.g. a document
+    title or contextual-retrieval prefix prepended to every chunk) — full-text
+    is unique per chunk while still stable across re-ingest (same text → same
+    hash). Changes only if chunking params alter the text (signal to re-baseline).
     """
-    norm = normalize(text)[:prefix_len]
+    norm = normalize(text)
     return hashlib.sha256(norm.encode("utf-8")).hexdigest()[:16]

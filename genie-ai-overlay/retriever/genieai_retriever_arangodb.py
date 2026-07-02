@@ -742,6 +742,18 @@ class GenieaiArangoRetriever(OpeaComponent):
             #################
 
             input_dict = input.model_dump(exclude_none=True)
+
+            # DATA CONTRACT: decode filter labels from search_start BEFORE any
+            # search_start reads. chatqna encodes labels in search_start because
+            # the OPEA framework drops custom fields between mega-service nodes.
+            # See core/label_contract.py for the format + full documentation.
+            from core.label_contract import decode_filter_labels
+
+            _base_mode, _encoded_labels = decode_filter_labels(str(input_dict.get("search_start", "chunk")))
+            input_dict["search_start"] = _base_mode  # restore base mode
+            if _encoded_labels:
+                input_dict["_encoded_filter_labels"] = _encoded_labels
+
             query = input_dict.get("input", input_dict.get("text"))
             if logflag:
                 logger.info(f"Retriever Input Dict: {input_dict}")
@@ -774,6 +786,11 @@ class GenieaiArangoRetriever(OpeaComponent):
                 labels_to_filter.append(filter_data["categoryLabel"])
             if filter_data.get("serviceLabels"):
                 labels_to_filter.extend(filter_data["serviceLabels"])
+
+            # Add labels encoded in search_start (parsed at the top of invoke,
+            # stored in input_dict["_encoded_filter_labels"]). See the DATA
+            # CONTRACT comment near model_dump() above.
+            labels_to_filter.extend(input_dict.pop("_encoded_filter_labels", []))
 
             # CONSTRUCT THE AQL FILTER CLAUSE
             aql_filter_clause = ""
@@ -981,6 +998,22 @@ class GenieaiArangoRetriever(OpeaComponent):
             except Exception as e:
                 logger.error(f"Error during similarity search: {e}")
                 return []
+
+            # Defense-in-depth label filter on the DENSE results.
+            # langchain-arangodb's filter_clause can be silently ignored in some
+            # versions, letting wrong-label chunks through the dense path.
+            # chunk_labels is stored in langchain Document metadata at ingest,
+            # so dense docs carry it — re-apply _chunk_passes_label_filter.
+            if labels_to_filter and search_res:
+                search_res = [
+                    r
+                    for r in search_res
+                    if _chunk_passes_label_filter(
+                        (r["doc"].metadata or {}).get("chunk_labels", []),
+                        labels_to_filter,
+                        filter_strategy,
+                    )
+                ]
 
             # Hybrid BM25 + RRF fusion (Contextual Retrieval Part B)
             # Opt-in lexical (BM25) channel over <GRAPH>_SOURCE.text fused with

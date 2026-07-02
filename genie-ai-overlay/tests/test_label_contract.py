@@ -95,3 +95,28 @@ class TestRoundtrip:
         mode, labels = decode_filter_labels(encoded)
         assert mode == "chunk"
         assert labels == []
+
+
+class TestMultiCategoryLabels:
+    """Multi-crop queries (categoryLabels as a list)."""
+
+    def test_encode_multiple_category_labels(self):
+        result = encode_filter_labels("chunk", ["Tomato", "Cucumber"])
+        assert result == "chunk::labels:Tomato,Cucumber"
+
+    def test_decode_multiple_category_labels(self):
+        mode, labels = decode_filter_labels("chunk::labels:Tomato,Cucumber")
+        assert mode == "chunk"
+        assert labels == ["Tomato", "Cucumber"]
+
+    def test_roundtrip_multi_crop(self):
+        crops = ["Tomato", "Cucumber", "Onion"]
+        encoded = encode_filter_labels("chunk", crops)
+        mode, labels = decode_filter_labels(encoded)
+        assert mode == "chunk"
+        assert labels == crops
+
+    def test_single_crop_still_works(self):
+        encoded = encode_filter_labels("chunk", ["Tomato"])
+        mode, labels = decode_filter_labels(encoded)
+        assert labels == ["Tomato"]

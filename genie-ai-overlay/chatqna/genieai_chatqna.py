@@ -777,8 +777,8 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # label filter (BM25 aql_filter_clause + dense post-filter).
         retrieval_context = kwargs.get("retrieval_context", {})
         _filter_labels = []
-        if retrieval_context.get("categoryLabel"):
-            _filter_labels.append(retrieval_context["categoryLabel"])
+        if retrieval_context.get("categoryLabels"):
+            _filter_labels.extend(retrieval_context["categoryLabels"])
         if retrieval_context.get("serviceLabels"):
             _filter_labels.extend(retrieval_context["serviceLabels"])
         if _filter_labels:

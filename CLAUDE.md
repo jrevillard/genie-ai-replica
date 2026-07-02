@@ -122,6 +122,12 @@ Each RAG pipeline stage emits OTel spans (when observability enabled), propagate
 | `components/gov-chat-frontend/` | Vue 3 web UI with Vuex state management |
 | `components/gov-chat-frontend/src/__tests__/` | Frontend Jest tests (components, stores, services) |
 | `components/document-repository/` | File upload/processing with ClamAV scanning |
+| `mobile/genie_ai_mobile/` | Flutter mobile app (Android/iOS) |
+| `genie-ai-overlay/embedding/`, `genie-ai-overlay/textgen/` | OPEA embedding + generation service wrappers |
+| `deploy/ansible/` | Automated Docker Swarm deployment |
+| `tests/rag-benchmarks/` | RAG evaluation harness + benchmarking |
+| `tests/config-validator/` | Environment-variable coverage validation |
+| `site/` | Hugo/Docsy documentation site (published on merge → main) |
 | `genie-ai-overlay/chatqna/` | Main chat microservice (Python/FastAPI) |
 | `genie-ai-overlay/retriever/` | Hybrid vector-graph retrieval service |
 | `genie-ai-overlay/dataprep/` | Document ingestion and chunking pipeline |
@@ -139,7 +145,7 @@ Each RAG pipeline stage emits OTel spans (when observability enabled), propagate
 
 User-facing and dev-internal docs live in **separate** places — no duplication, no build-time copy:
 
-- **User-facing docs → `site/content/en/docs/`** — canonical, published to the GitLab Pages docs site, editable in the GitLab Web IDE. Grouped by section (`core/`, `frontend/`, `backend/`, `mobile/`, `architecture/`, `deployment/`, `configuration/`). Hugo + Docsy; see `.claude/rules/SITE-LOCAL-DEV.md` to run locally.
+- **User-facing docs → `site/content/en/docs/`** — canonical, published to the GitLab Pages docs site, editable in the GitLab Web IDE. Grouped by section (`core/`, `rag/`, `observability/`, `knowledge-base/`, `operations/`, `deployment/`, `configuration/`, `architecture/`, `frontend/`, `backend/`, `mobile/`). Hugo + Docsy; see `.claude/rules/SITE-LOCAL-DEV.md` to run locally.
 - **Dev-internal docs → `docs/`** — repo-resident, referenced by code/developers (e.g. `docs/e2e-tests/`, `docs/database-migrations.md`). NOT published.
 
 When adding a doc, pick one home based on audience. Do not duplicate across both.
@@ -180,7 +186,7 @@ npm run format:dart     # Auto-format Dart files
 
 ## Testing
 
-Test frameworks: Jest (backend, frontend, doc-repo), pytest (OPEA), flutter_test (mobile), Playwright (E2E). CI pipeline (`.gitlab-ci.yml`) runs 4 stages (lint → test → config → e2e) on every MR with JUnit XML reports.
+Test frameworks: Jest (backend, frontend, doc-repo), pytest (OPEA), flutter_test (mobile), Playwright (E2E). CI pipeline (`.gitlab-ci.yml`) runs a multi-stage pipeline (lint → test → build → scan → config → e2e → promote; plus scheduled/manual/deploy) on every MR with JUnit XML reports.
 
 - **Backend `createApp()` pattern**: `index.js` exports `createApp()` — tests use `supertest` without starting HTTP server
 - **OPEA shared fixtures**: `genie-ai-overlay/tests/conftest.py` mocks comps library, ArangoDB, model endpoints
@@ -204,7 +210,7 @@ Test frameworks: Jest (backend, frontend, doc-repo), pytest (OPEA), flutter_test
 
 - Controller → Service pattern: Controllers handle HTTP, Services contain business logic
 - **`createApp()` pattern**: Backend `index.js` exports `createApp()` for testability — inject dependencies, create isolated Express app for supertest without starting server
-- Use `dotenv` for configuration, centralized `config/appConfig.js`
+- Use `dotenv` for configuration, centralized `config.js`
 - Security: `helmet`, `express-rate-limit`, proper CORS
 - Logging: `winston` with daily rotation
 - API docs: `swagger-jsdoc` served at `/api-docs`
@@ -301,10 +307,9 @@ To change built-in defaults, edit the Python code:
 - `genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py` - CONTEXTUAL_RETRIEVAL_PROMPT default
 
 **GPU-specific files (`env.t4`, `env.rtx6000`) contain only:**
-- GPU memory utilization settings
-- Model length limits
-- TEI image versions
-- Batch processing configurations
+- GPU memory utilization (`VLLM_GPU_UTILIZATION`, `VLLM_TRANSLATION_GPU_UTILIZATION`)
+- Model length limits (`VLLM_MAX_MODEL_LEN`, `VLLM_TRANSLATION_MAX_MODEL_LEN`)
+- Sequence limits (`VLLM_MAX_NUM_SEQS`, `VLLM_TRANSLATION_MAX_NUM_SEQS`)
 
 **Variables with defaults (NOT in env):**
 - All ports: `FRONTEND_PORT`, `BACKEND_PORT`, etc. (defaults in docker-compose.yaml)
@@ -317,7 +322,7 @@ Disabled by default. Enable: `docker compose --profile observability up -d` or `
 
 - **Tracing**: OTel SDK (Node.js + Python), W3C `traceparent` propagation across RAG pipeline
 - **Storage**: VictoriaMetrics (metrics), VictoriaLogs (logs), VictoriaTraces (traces)
-- **Dashboards**: 10 pre-built Grafana dashboards (auto-provisioned from `configs/grafana/provisioning/`)
+- **Dashboards**: 9 pre-built Grafana dashboards (auto-provisioned from `configs/grafana/provisioning/`)
 - **Access**: Grafana via Kong `/grafana/` with Keycloak SSO
 
 → Full details: `.claude/rules/OBSERVABILITY.md`
@@ -363,8 +368,8 @@ Backend routes are organized by domain:
 - `/api/chat/*` - Chat and conversation handling
 - `/api/analytics/*` - Usage analytics
 - `/api/admin/*` - Admin dashboard functions
-- `/api/files/*` - Document upload/management
-- `/api/categories/*` - Service category hierarchy
+- Document upload/management lives in the **document-repository** service (separate from the BFF), behind the gateway
+- `/api/services/*`, `/api/service-categories/*` - Services and service-category hierarchy
 
 <!-- headroom:learn:start -->
 ## Headroom Learned Patterns

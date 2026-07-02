@@ -8,7 +8,7 @@
 deploy_dir: /opt/genieai-el-salvador
 stack_name: genieai-el-salvador
 gpu_env_file: env.rtx6000
-repo_branch: release/el-salvador
+repo_branch: el-salvador-contextual
 arango_db: el-salvador
 
 # Remote GPU node (vLLM, TEI run on 10.0.0.110)
@@ -152,3 +152,4 @@ label_selector_system_prompt: |-
   ### REQUIRED OUTPUT (NO narration, NO explanation)
   Return ONLY this JSON structure:
   {"labels": ["Label1", "Label2"]}
+log_level: DEBUG   # TEMPORARY diagnostic — revert to INFO after

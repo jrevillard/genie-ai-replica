@@ -42,7 +42,7 @@ class RequestContext(BaseModel):
     A model to hold structured context for metadata filtering during retrieval.
     """
 
-    categoryLabel: str | None = None
+    categoryLabels: list[str] | None = None
     serviceLabels: list[str] | None = None
     language: str | None = None
 

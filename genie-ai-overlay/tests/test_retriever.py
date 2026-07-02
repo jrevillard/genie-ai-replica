@@ -122,7 +122,7 @@ def _make_mock_vector_db(db_mock):
     mock_doc = MagicMock()
     mock_doc.id = "doc1"
     mock_doc.page_content = "relevant text"
-    mock_doc.metadata = {"embedding": [0.1, 0.2, 0.3]}
+    mock_doc.metadata = {"embedding": [0.1, 0.2, 0.3], "chunk_labels": ["health", "education"]}
 
     mock_vdb = MagicMock()
     mock_vdb.db = db_mock

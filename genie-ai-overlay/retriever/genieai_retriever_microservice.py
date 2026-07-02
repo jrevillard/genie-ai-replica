@@ -54,7 +54,6 @@ from comps.cores.proto.genieai_api_protocol import (
     ChatCompletionRequest,
     GenieRetrievalResponse,
     RetrievalRequest,
-    RetrievalRequestArangoDB,
     RetrievalResponse,
     RetrievalResponseData,
 )
@@ -92,7 +91,7 @@ loader = OpeaComponentLoader(
 )
 @register_statistics(names=["opea_service@retrievers"])
 async def retrieve_docs(
-    input: GenieEmbedDoc | EmbedMultimodalDoc | RetrievalRequest | RetrievalRequestArangoDB | ChatCompletionRequest,
+    input: GenieEmbedDoc,
 ) -> SearchedDoc | SearchedMultimodalDoc | RetrievalResponse | ChatCompletionRequest:
     start = time.time()
 

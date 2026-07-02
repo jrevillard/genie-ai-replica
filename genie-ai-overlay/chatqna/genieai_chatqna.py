@@ -761,9 +761,31 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             safe_params = retriever_parameters.model_dump(exclude_unset=True, exclude_none=True)
             inputs.update(safe_params)
 
+        # DATA CONTRACT: encode filter labels into search_start.
+        #
+        # The OPEA MicroService framework creates a dynamic __main__ input type
+        # from the HTTP body when parsing requests at the retriever endpoint.
+        # This dynamic type ONLY preserves standard EmbedDoc fields (text,
+        # embedding, search_type, k, search_start, traversal_*, etc.). Custom
+        # fields like "context" are silently dropped — verified via probes
+        # (POST body has context, retriever's parsed input does not).
+        #
+        # To pass filter labels through this contract boundary, encode them in
+        # search_start (a standard EmbedDoc string field that survives parsing).
+        # Format: "{base_mode}::labels:{label1},{label2},..."
+        # The retriever parses this to build labels_to_filter for its DB-level
+        # label filter (BM25 aql_filter_clause + dense post-filter).
         retrieval_context = kwargs.get("retrieval_context", {})
-        if retrieval_context:
-            inputs["context"] = retrieval_context
+        _filter_labels = []
+        if retrieval_context.get("categoryLabel"):
+            _filter_labels.append(retrieval_context["categoryLabel"])
+        if retrieval_context.get("serviceLabels"):
+            _filter_labels.extend(retrieval_context["serviceLabels"])
+        if _filter_labels:
+            from core.label_contract import encode_filter_labels
+
+            _base_mode = inputs.get("search_start", "chunk")
+            inputs["search_start"] = encode_filter_labels(_base_mode, _filter_labels)
 
     elif self.services[cur_node].service_type == ServiceType.RERANK:
         reranker_parameters = kwargs.get("reranker_parameters")

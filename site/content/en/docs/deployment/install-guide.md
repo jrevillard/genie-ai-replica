@@ -480,6 +480,9 @@ Configuration for how documents are chunked and prepared for the knowledge graph
 | CONTENT\_EXTRACTION\_METHOD | Method for text extraction (`opea` or `docling`).  | docling |
 | LABEL\_SELECTOR\_SYSTEM\_PROMPT | System prompt defining the rules for LLM semantic labeling.  | You are a precise semantic... |
 | `CONTEXTUAL_RETRIEVAL_ENABLED` | Contextual Retrieval: prepend an LLM doc-context prefix to each chunk before embedding + labeling (on by default; set false to disable).  | true |
+| `MULTI_TURN_BLEND_ENABLED` | Multi-turn vector-space blending (query-time): blend the query embedding with the previous N turns (`V = α·EQ + (1-α)·EH`) so pronoun-heavy follow-ups retrieve the prior turn's subject. Off by default. See [Multi-Turn Retrieval]({{< relref "/docs/rag/multi-turn-retrieval" >}}).  | false |
+| `MULTI_TURN_BLEND_ALPHA` | Query weight α for multi-turn blending. `1.0` = query-only, `0.0` = history-only.  | 0.7 |
+| `MULTI_TURN_HISTORY_TURNS` | Number of prior turns blended into the history embedding. `0` disables even if the flag is on.  | 1 |
 | `DATAPREP_CONTEXTUAL_MODEL` | Model used for context generation (empty = reuse `VLLM_LLM_MODEL_ID`); must support guided JSON.  | (empty) |
 | `DATAPREP_CONTEXTUAL_DOC_BUDGET` | Max chars of document text fed to the context-generation LLM (~1500 tokens); <=0 disables truncation.  | 6000 |
 | `DATAPREP_CONTEXTUAL_MAX_TOKENS` | Max output tokens for the context-generation LLM call (doc-level + per-chunk). The model writes ~196 tokens; the legacy cap of 200 truncated the JSON under load. 512 = comfortable margin (model stops early).  | 512 |
@@ -495,6 +498,7 @@ Configuration for the retrieval logic (hybrid search, traversals, etc.).
 | RETRIEVER\_ARANGO\_GRAPH\_NAME | Graph name for retrieving data. | GRAPH |
 | RETRIEVER\_ARANGO\_SEARCH\_START | Starting point for graph search. | node |
 | RETRIEVER\_ARANGO\_SEARCH\_MODE | Search mode (e.g., hybrid, vector). | hybrid |
+| RETRIEVER\_HYBRID\_RETRIEVAL\_ENABLED | Master switch for the hybrid BM25 + dense fusion. When `false`, the retriever skips the BM25 channel entirely (dense-only). | true |
 | RETRIEVER\_ARANGO\_TRAVERSAL\_ENABLED | Enable graph traversal during retrieval. | true |
 | RETRIEVER\_ARANGO\_TRAVERSAL\_MAX\_DEPTH | Max depth for graph traversal. | 3 |
 | RETRIEVER\_ARANGO\_TRAVERSAL\_MAX\_RETURNED | Maximum number of items returned during graph traversal.  | 3 |

@@ -60,6 +60,13 @@ nginx_permissions_policy: "camera=(), microphone=()"
 # during generation instead of English-then-flip. Set "0" to revert.
 streaming_translation_enabled: "1"
 
+# Multi-turn vector-space blending (issue #833 / MR !232). Blends the query
+# embedding with the previous N turns (V = α·EQ + (1-α)·EH) so pronoun-heavy
+# follow-ups retrieve the prior turn's subject. Only the dense leg is blended.
+multi_turn_blend_enabled: "true"
+multi_turn_blend_alpha: "0.7"
+multi_turn_history_turns: "2"
+
 # =============================================================================
 # EMAIL (non-secret)
 # =============================================================================

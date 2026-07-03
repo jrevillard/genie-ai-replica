@@ -294,6 +294,9 @@ The following services must be running (depending on deployment mode):
 | `RERANK_SERVER_PORT` | int | 80 | Reranker server port |
 | `LLM_SERVER_IP` | string | localhost | LLM server host |
 | `LLM_SERVER_PORT` | int | 9000 | LLM server port |
+| `MULTI_TURN_BLEND_ENABLED` | bool | false | Multi-turn vector-space blending (issue #833). When true, the query embedding is blended with the previous N turns' embedding (V = α·EQ + (1-α)·EH) at the retriever's dense leg, so pronoun-heavy follow-ups ("can you elaborate on this?") retrieve the prior turn's subject. Adds one embedding call per multi-turn query. Query-time feature; unrelated to ingest-time `CONTEXTUAL_RETRIEVAL_ENABLED`. |
+| `MULTI_TURN_BLEND_ALPHA` | float | 0.7 | Query weight α in the blend. `1.0` = query-only (equivalent to disabled), `0.0` = history-only. |
+| `MULTI_TURN_HISTORY_TURNS` | int | 1 | Number of prior conversation turns blended into the history vector. `1` = previous turn only. `0` disables blending even if the flag is on. |
 
 ### Language Configuration
 

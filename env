@@ -327,6 +327,17 @@ HUGGING_FACE_HUB_TOKEN=
 # complete sentence/paragraph units as they arrive; 0 (default) = current behavior.
 # STREAMING_TRANSLATION_ENABLED=0
 
+# Multi-turn vector-space blending (issue #833). Blends the query embedding
+# with the previous N turns' embedding (V = α·EQ + (1-α)·EH) at the retriever's
+# dense leg, so pronoun-heavy follow-ups ("can you elaborate on this?") retrieve
+# the prior turn's subject. Default OFF (no-op). Adds ONE embedding call per
+# multi-turn query. Query-time feature; unrelated to ingest-time
+# CONTEXTUAL_RETRIEVAL_ENABLED. Only the dense leg is blended; the BM25/hybrid
+# leg (RETRIEVER_HYBRID_RETRIEVAL_ENABLED) still uses the isolated query text.
+# MULTI_TURN_BLEND_ENABLED=false
+# MULTI_TURN_BLEND_ALPHA=0.7         # query weight α; 1.0 = query-only, 0.0 = history-only
+# MULTI_TURN_HISTORY_TURNS=1         # number of prior turns blended (1 = previous turn only)
+
 # Application session lifetime for automatic purging (MILLISECONDS, NOT seconds or minutes).
 # Controls how long an inactive analytics session is kept before automatic cleanup.
 # Used by: backend (session-service.js)

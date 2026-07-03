@@ -5,3 +5,10 @@
 gpu_public_domain: ai.assembly.govstack.global
 gpu_https_port: "444"
 certbot_email: admin@assembly.govstack.global
+
+# TEI reranker concurrency. Template default is 8, which saturates under k=20
+# RAG load (the reranker batches 20 chunks/query) and returns HTTP 429
+# "Model is overloaded" / "no permits available". Raised to 128 so concurrent
+# chat requests (each fanning out to 20 rerank inputs) do not exhaust the
+# permit semaphore. Tune down if GPU memory pressure appears.
+tei_reranking_max_concurrent_requests: "128"

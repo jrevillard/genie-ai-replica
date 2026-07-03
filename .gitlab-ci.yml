@@ -2204,8 +2204,15 @@ e2e:playwright:
 # `make lock-dataprep`. Catches silent lock drift before it reaches a build.
 verify:dataprep-lock:
   stage: config
-  image: ghcr.io/astral-sh/uv:0.10-python3.10-bookworm
+  image: python:3.10-slim
   interruptible: true
+  variables:
+    # Pin uv to the exact version used to generate the committed lock, so the
+    # resolver behaves identically on re-compile. Bump in lockstep with the
+    # Makefile UV default when regenerating.
+    UV_VERSION: "0.10.6"
+  before_script:
+    - pip install --no-cache-dir "uv==${UV_VERSION}"
   script:
     - cd genie-ai-overlay/dataprep
     - uv pip compile requirements.in --generate-hashes --python-platform x86_64-manylinux_2_31 --python-version 3.10 --output-file /tmp/regen.lock --quiet

@@ -2,6 +2,7 @@
 # Copyright (C) 2025 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0 Developed by Intel. Adapted by ITU
 
+import json
 import math
 import os
 import statistics
@@ -90,11 +91,18 @@ def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranke
     descending (so ``reranker_scores[0]`` is the maximum).
 
     Returns:
-        list[int]: Selected candidate indices (positions in the input arrays).
+        tuple[list[int], list[dict]]: ``(selected_indices, breakdown)`` where
+        ``breakdown`` is a per-candidate record of every term in the
+        utility-cost calculation (score, relevance, novelty, utility,
+        token_count, confusion_cost, context_decay_cost, value, selected).
+        The breakdown lets the eval harness / operators calibrate
+        ``CONTEXT_DECAY_FACTOR`` and the confusion formula offline against
+        real chunk sizes, without redeploying.
     """
     n = len(texts)
+    breakdown: list[dict] = []
     if n == 0:
-        return []
+        return [], breakdown
 
     avg_score = statistics.mean(reranker_scores)
     median_score = statistics.median(reranker_scores)
@@ -149,14 +157,34 @@ def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranke
 
         # Marginal value
         value = utility - total_cost
+        is_selected = value > MIN_VALUE_THRESHOLD
         logger.info(
             f"[ADAPTIVE] idx={i} score={score:.4f} R={relevance:.4f} "
             f"N={novelty:.4f} U={utility:.4f} C={total_cost:.4f} V={value:.4f}"
         )
-        if value > MIN_VALUE_THRESHOLD:
+        # Record every term so the eval harness / operators can recalibrate
+        # CONTEXT_DECAY_FACTOR and the confusion formula offline against real
+        # chunk sizes. Emitted on the reranker span as rag.adaptive_breakdown.
+        breakdown.append(
+            {
+                "idx": i,
+                "score": round(score, 6),
+                "relevance": round(float(relevance), 6),
+                "novelty": round(novelty, 6),
+                "novelty_weight": round(float(novelty_weight), 6),
+                "utility": round(float(utility), 6),
+                "token_count": int(token_count),
+                "context_decay_cost": round(float(context_decay_cost), 6),
+                "confusion_cost": round(float(confusion_cost), 6),
+                "total_cost": round(float(total_cost), 6),
+                "value": round(float(value), 6),
+                "selected": bool(is_selected),
+            }
+        )
+        if is_selected:
             selected_indices.append(i)
 
-    return selected_indices
+    return selected_indices, breakdown
 
 
 @OpeaComponentRegistry.register("GENIE_TEI_RERANKING")
@@ -348,13 +376,27 @@ class GenieTEIReranking(OpeaTEIReranking):
                         ranked_chunk_embeddings = [chunk_embeddings[r["index"]] for r in decoded_response]
                         ranked_scores = [r["score"] for r in decoded_response]
 
-                        selected_positions = adaptive_context_selection(
+                        selected_positions, adaptive_breakdown = adaptive_context_selection(
                             texts=ranked_texts,
                             chunk_embeddings=ranked_chunk_embeddings,
                             query_embedding=query_embedding,
                             reranker_scores=ranked_scores,
                         )
                         logger.info(f"[ADAPTIVE] Selected candidate positions: {selected_positions}")
+                        # Emit the full per-candidate utility-cost breakdown so the
+                        # eval harness / operators can recalibrate CONTEXT_DECAY_FACTOR
+                        # and the confusion formula offline against real chunk sizes.
+                        # JSON-encoded (array attribute); consumed by run_eval.py.
+                        span.set_attribute(
+                            "rag.adaptive_breakdown",
+                            json.dumps(adaptive_breakdown),
+                        )
+                        span.set_attribute(
+                            "rag.adaptive_context_decay_factor", CONTEXT_DECAY_FACTOR
+                        )
+                        span.set_attribute(
+                            "rag.adaptive_min_value_threshold", MIN_VALUE_THRESHOLD
+                        )
 
                         for pos in selected_positions:
                             original_index = decoded_response[pos]["index"]

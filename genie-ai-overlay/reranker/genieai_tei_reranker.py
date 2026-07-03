@@ -400,12 +400,8 @@ class GenieTEIReranking(OpeaTEIReranking):
                             "rag.adaptive_breakdown",
                             json.dumps(adaptive_breakdown),
                         )
-                        span.set_attribute(
-                            "rag.adaptive_context_decay_factor", CONTEXT_DECAY_FACTOR
-                        )
-                        span.set_attribute(
-                            "rag.adaptive_min_value_threshold", MIN_VALUE_THRESHOLD
-                        )
+                        span.set_attribute("rag.adaptive_context_decay_factor", CONTEXT_DECAY_FACTOR)
+                        span.set_attribute("rag.adaptive_min_value_threshold", MIN_VALUE_THRESHOLD)
 
                         for pos in selected_positions:
                             original_index = decoded_response[pos]["index"]

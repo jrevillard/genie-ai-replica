@@ -188,27 +188,27 @@ class TestRetrievalRequestArangoDB:
 class TestRequestContext:
     def test_defaults(self):
         ctx = RequestContext()
-        assert ctx.categoryLabel is None
+        assert ctx.categoryLabels is None
         assert ctx.serviceLabels is None
         assert ctx.language is None
 
     def test_construction_with_values(self):
-        ctx = RequestContext(categoryLabel="Health", serviceLabels=["A", "B"], language="en")
-        assert ctx.categoryLabel == "Health"
+        ctx = RequestContext(categoryLabels=["Health"], serviceLabels=["A", "B"], language="en")
+        assert ctx.categoryLabels == ["Health"]
         assert ctx.serviceLabels == ["A", "B"]
         assert ctx.language == "en"
 
     def test_serialization_round_trip(self):
-        original = RequestContext(categoryLabel="Education", language="fr")
+        original = RequestContext(categoryLabels=["Education"], language="fr")
         data = original.model_dump()
         restored = RequestContext(**data)
-        assert restored.categoryLabel == "Education"
+        assert restored.categoryLabels == ["Education"]
         assert restored.language == "fr"
 
     def test_model_dump_excludes_none(self):
-        ctx = RequestContext(categoryLabel="Test")
+        ctx = RequestContext(categoryLabels=["Test"])
         dumped = ctx.model_dump(exclude_none=True)
-        assert "categoryLabel" in dumped
+        assert "categoryLabels" in dumped
         assert "serviceLabels" not in dumped
         assert "language" not in dumped
 
@@ -238,10 +238,10 @@ class TestChatCompletionRequest:
         assert req.model is None
 
     def test_genieai_context_field(self):
-        ctx = RequestContext(categoryLabel="Health")
+        ctx = RequestContext(categoryLabels=["Health"])
         req = ChatCompletionRequest(messages="hi", context=ctx)
         assert req.context is not None
-        assert req.context.categoryLabel == "Health"
+        assert req.context.categoryLabels == ["Health"]
 
     def test_genieai_language_default(self):
         req = ChatCompletionRequest(messages="hi")
@@ -308,7 +308,7 @@ class TestChatCompletionRequest:
         req = ChatCompletionRequest(
             messages=[{"role": "user", "content": "test"}],
             language="fr",
-            context=RequestContext(categoryLabel="Test"),
+            context=RequestContext(categoryLabels=["Test"]),
             temperature=0.5,
             k=10,
         )

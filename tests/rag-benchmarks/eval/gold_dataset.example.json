@@ -1,34 +1,26 @@
 {
-  "_doc": "Gold standard for retrieval eval. Copy to gold_dataset.json and fill one entry per query. expected_chunks[].chunk_key is the PRIMARY identity — the ArangoDB _key of each chunk that answers the query (find them via dump_chunks.py / chunks_registry.json, which lists every chunk's key + full text + labels). The eval (run_eval.py) matches the chatqna span's candidate/selected chunk_keys against these to compute recall / precision / complete_recall / noise. content_hash is optional (a fallback fingerprint). categoryLabel/serviceLabels/language mirror the payload the backend sends to chatqna (drives label-filtered retrieval) — keep them faithful to a real user flow. reference_answer is the ground-truth answer for the optional LLM-judge path (run_ragas_eval.py).",
+  "_doc": "Gold standard for retrieval eval. Copy to gold_dataset.json and fill one entry per query. expected_chunks[].chunk_key is the PRIMARY identity (ArangoDB _key from dump_chunks.py). categoryLabels is a LIST of crop labels (supports multi-crop queries). serviceLabels narrows by topic. reference_answer is ground truth for the LLM-judge path.",
   "entries": [
     {
       "id": "q1",
       "query": "How do I apply for an agricultural subsidy?",
-      "categoryLabel": "Agriculture",
-      "serviceLabels": ["Subsidies"],
+      "categoryLabels": ["Tomato"],
+      "serviceLabels": ["Economics"],
       "language": "en",
-      "reference_answer": "To apply for an agricultural subsidy, submit form X to the ministry, including proof of land ownership and a valid producer registration.",
+      "reference_answer": "Submit form X to the ministry with proof of land ownership.",
       "expected_chunks": [
-        {
-          "chunk_key": "1234567890123456789",
-          "content_hash": "a1b2c3d4e5f60718",
-          "preview": "To apply for an agricultural subsidy..."
-        }
+        {"chunk_key": "1234567890123456789", "preview": "To apply..."}
       ]
     },
     {
       "id": "q2",
-      "query": "What documents are required for export certification?",
-      "categoryLabel": "Agriculture",
-      "serviceLabels": ["Export certification"],
+      "query": "What are the symptoms of magnesium deficiency in tomato and cucumber?",
+      "categoryLabels": ["Tomato", "Cucumber"],
+      "serviceLabels": ["Nutrition"],
       "language": "en",
-      "reference_answer": "Export certification requires a phytosanitary certificate, a commercial invoice, and a packing list.",
+      "reference_answer": "Interveinal chlorosis on older leaves...",
       "expected_chunks": [
-        {
-          "chunk_key": "9876543210987654321",
-          "content_hash": "b2c3d4e5f6071809",
-          "preview": "Export certification requires..."
-        }
+        {"chunk_key": "9876543210987654321", "preview": "Magnesium deficiency..."}
       ]
     }
   ]

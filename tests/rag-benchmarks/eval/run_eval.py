@@ -76,7 +76,7 @@ def drive_query(entry: dict) -> tuple[float, str]:
     payload = {
         "messages": [{"role": "user", "content": entry["query"]}],
         "context": {
-            "categoryLabel": entry.get("categoryLabel", ""),
+            "categoryLabels": entry.get("categoryLabels", []),
             "serviceLabels": entry.get("serviceLabels", []),
             "language": entry.get("language", "en"),
         },

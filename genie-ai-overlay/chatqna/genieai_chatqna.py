@@ -777,8 +777,8 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # label filter (BM25 aql_filter_clause + dense post-filter).
         retrieval_context = kwargs.get("retrieval_context", {})
         _filter_labels = []
-        if retrieval_context.get("categoryLabel"):
-            _filter_labels.append(retrieval_context["categoryLabel"])
+        if retrieval_context.get("categoryLabels"):
+            _filter_labels.extend(retrieval_context["categoryLabels"])
         if retrieval_context.get("serviceLabels"):
             _filter_labels.extend(retrieval_context["serviceLabels"])
         if _filter_labels:
@@ -1262,7 +1262,7 @@ class ChatQnAService:
             dict: A dictionary containing metadata, including labels.
         """
         if not file_id:
-            return {"categoryLabel": None, "serviceLabels": []}
+            return {"categoryLabels": None, "serviceLabels": []}
 
         token = self.user_profile_client._token
         if not token:
@@ -1494,7 +1494,7 @@ class ChatQnAService:
                     "document_id": file_id,
                     "document_name": file_name,
                     "url": file_read_url,
-                    "categoryLabel": labels,
+                    "categoryLabels": labels if isinstance(labels, list) else [labels] if labels else [],
                     "serviceLabels": [],
                     "score": score,
                 }

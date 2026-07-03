@@ -396,7 +396,7 @@ class TestInvoke:
     @pytest.mark.asyncio
     async def test_label_filter_or_strategy(self, invoke_env):
         input_mock = create_mock_input(
-            context={"categoryLabel": "health", "serviceLabels": ["education"]},
+            context={"categoryLabels": "health", "serviceLabels": ["education"]},
             filter_strategy="OR",
             search_start="chunk",
         )
@@ -408,7 +408,7 @@ class TestInvoke:
     @pytest.mark.asyncio
     async def test_label_filter_and_strategy(self, invoke_env):
         input_mock = create_mock_input(
-            context={"categoryLabel": "health", "serviceLabels": ["education"]},
+            context={"categoryLabels": "health", "serviceLabels": ["education"]},
             filter_strategy="AND",
             search_start="chunk",
         )
@@ -427,7 +427,7 @@ class TestInvoke:
 
     @pytest.mark.asyncio
     async def test_invalid_filter_strategy_raises_400(self, invoke_env):
-        input_mock = create_mock_input(context={"categoryLabel": "test"}, filter_strategy="INVALID")
+        input_mock = create_mock_input(context={"categoryLabels": "test"}, filter_strategy="INVALID")
         with pytest.raises(HTTPException) as exc_info:
             await invoke_env["retriever"].invoke(input_mock)
         assert exc_info.value.status_code == 400
@@ -547,7 +547,7 @@ class TestInvoke:
         invoke_env["retriever"].fetch_neighborhoods = MagicMock(return_value={"doc1": []})
         input_mock = create_mock_input(
             enable_traversal=True,
-            context={"categoryLabel": "health", "serviceLabels": ["education"]},
+            context={"categoryLabels": "health", "serviceLabels": ["education"]},
             filter_strategy="OR",
             search_start="chunk",
         )
@@ -581,7 +581,7 @@ class TestInvoke:
     @pytest.mark.asyncio
     async def test_label_filter_or_includes_chunk_labels_check(self, invoke_env):
         input_mock = create_mock_input(
-            context={"categoryLabel": "health", "serviceLabels": ["education"]},
+            context={"categoryLabels": "health", "serviceLabels": ["education"]},
             filter_strategy="OR",
             search_start="chunk",
         )
@@ -594,7 +594,7 @@ class TestInvoke:
     @pytest.mark.asyncio
     async def test_label_filter_and_includes_chunk_labels_check(self, invoke_env):
         input_mock = create_mock_input(
-            context={"categoryLabel": "health", "serviceLabels": ["education"]},
+            context={"categoryLabels": "health", "serviceLabels": ["education"]},
             filter_strategy="AND",
             search_start="chunk",
         )

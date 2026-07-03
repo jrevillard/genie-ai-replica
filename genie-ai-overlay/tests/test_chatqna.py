@@ -1178,20 +1178,20 @@ class TestFetchFileMetadata:
     async def test_valid_file_id_and_token(self):
         svc = create_chatqna_service()
         svc.user_profile_client.set_token("valid-token")
-        metadata = {"success": True, "data": {"categoryLabel": "Health", "serviceLabels": ["H1"]}}
+        metadata = {"success": True, "data": {"categoryLabels": "Health", "serviceLabels": ["H1"]}}
         mock_session, mock_timeout = create_mock_aiohttp_session(status=200, json_data=metadata)
         with (
             patch("chatqna.genieai_chatqna.aiohttp.ClientSession", return_value=mock_session),
             patch("chatqna.genieai_chatqna.aiohttp.ClientTimeout", return_value=mock_timeout),
         ):
             result = await svc.fetch_file_metadata("file123")
-        assert result == {"categoryLabel": "Health", "serviceLabels": ["H1"]}
+        assert result == {"categoryLabels": "Health", "serviceLabels": ["H1"]}
 
     @pytest.mark.asyncio
     async def test_empty_file_id_returns_default(self):
         svc = create_chatqna_service()
         result = await svc.fetch_file_metadata("")
-        assert result == {"categoryLabel": None, "serviceLabels": []}
+        assert result == {"categoryLabels": None, "serviceLabels": []}
 
     @pytest.mark.asyncio
     async def test_no_token_returns_none(self):

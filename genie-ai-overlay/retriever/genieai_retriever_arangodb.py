@@ -780,10 +780,10 @@ class GenieaiArangoRetriever(OpeaComponent):
             filter_data = input_dict.get("context", {})
             filter_strategy = input_dict.get("filter_strategy", ARANGO_FILTER_STRATEGY).upper()
 
-            # Consolidate all labels into a single list (this will need to change later)
+            # Consolidate all labels into a single list
             labels_to_filter = []
-            if filter_data.get("categoryLabel"):
-                labels_to_filter.append(filter_data["categoryLabel"])
+            if filter_data.get("categoryLabels"):
+                labels_to_filter.extend(filter_data["categoryLabels"])
             if filter_data.get("serviceLabels"):
                 labels_to_filter.extend(filter_data["serviceLabels"])
 

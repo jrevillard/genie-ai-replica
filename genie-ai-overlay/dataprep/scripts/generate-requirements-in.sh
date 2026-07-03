@@ -9,6 +9,13 @@
 # `make lock-dataprep` to regenerate requirements.lock from this .in.
 #
 # Usage: ./generate-requirements-in.sh [OPEA_TAG]  (default: v1.3)
+#
+# === OPEA v1.4+ BUMP — THIS SCRIPT BECOMES REDUNDANT ===
+# OPEA v1.4+ ships its own requirements.in + uv-compiled requirements-cpu.txt
+# (with hashes, docling-core pinned correctly). On bumping OPEA past v1.3, this
+# script, requirements.in, requirements.lock, and the docling-core pin can be
+# deleted in favor of OPEA's compiled lock. See deferred-work.md (Initiative:
+# issue-834) for the full retirement checklist. KEEP smoke:dataprep-arango.
 set -euo pipefail
 
 OPEA_TAG="${1:-v1.3}"

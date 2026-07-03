@@ -1,5 +1,10 @@
 # GENIE.AI — convenience targets for Python dependency management.
 # See genie-ai-overlay/dataprep/scripts/ and GitLab issue #834.
+#
+# NOTE: these targets exist only because OPEA v1.3 ships an unpinned
+# requirements.txt. OPEA v1.4+ ships its own uv-compiled lock — on bumping
+# OPEA past v1.3 these targets + requirements.in/.lock should be retired.
+# See _bmad-output/implementation-artifacts/deferred-work.md (issue-834).
 
 UV ?= uv
 

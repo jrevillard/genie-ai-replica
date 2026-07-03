@@ -70,6 +70,12 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 # --no-deps --require-hashes makes the build bit-for-bit reproducible and
 # supply-chain-pinned: no transitive re-resolution against live PyPI, and
 # every wheel's SHA256 is verified at install time.
+#
+# NOTE: this block (lock + .in + generator + docling-core pin) exists because
+# OPEA v1.3 ships an UNPINNED requirements.txt. OPEA v1.4+ ships its own
+# uv-compiled lock with correct pins — on bumping OPEA past v1.3, replace
+# this with OPEA's requirements-cpu.txt and delete .in/.lock + the generator
+# script. See deferred-work.md (Initiative: issue-834) for the full checklist.
 COPY genie-ai-overlay/dataprep/requirements.lock /app/requirements.lock
 RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements.lock
 

@@ -218,6 +218,46 @@ class GenieTEIReranking(OpeaTEIReranking):
                     span.set_status(Status(StatusCode.ERROR, str(e)))
                     raise
 
+                # Validate the TEI response contract before consuming it. TEI returns
+                # HTTP 200 + a list of {"index": int, "score": float} on success. On
+                # failure (e.g. 429 "Model is overloaded", 5xx), it returns a JSON
+                # error OBJECT like {"error": "...", "error_type": "Overloaded"}.
+                # Without this guard, iterating the error object yields its string
+                # keys, and `r["index"]` later raises a confusing
+                # "TypeError: string indices must be integers" that hides the real
+                # upstream failure. Fail loudly with the actual TEI status + body.
+                if resp.status != 200:
+                    span.set_status(
+                        Status(
+                            StatusCode.ERROR,
+                            f"TEI reranker returned HTTP {resp.status}: {decoded_response}",
+                        )
+                    )
+                    raise RuntimeError(
+                        f"TEI reranker call failed: HTTP {resp.status} from "
+                        f"{self.base_url}/rerank (ndocs={len(docs)}). "
+                        f"Response: {decoded_response}"
+                    )
+                if not isinstance(decoded_response, list):
+                    span.set_status(
+                        Status(
+                            StatusCode.ERROR,
+                            f"TEI reranker returned non-list response: {type(decoded_response).__name__}",
+                        )
+                    )
+                    raise RuntimeError(
+                        f"TEI reranker returned an unexpected response type "
+                        f"{type(decoded_response).__name__} (expected list of "
+                        "{{index, score}} dicts). HTTP was 200 but body is not the "
+                        f"scored-list contract. Response: {decoded_response}"
+                    )
+                if len(decoded_response) != len(docs):
+                    logger.warning(
+                        f"TEI reranker returned {len(decoded_response)} scores for "
+                        f"{len(docs)} input docs — counts differ. Scores may not "
+                        f"align with retrieved_docs."
+                    )
+
                 # Checking reranking_strategy param value:
                 logger.info(f"[ DEBUG ] Selected RERANKING STRATEGY is {reranking_strategy}")
 

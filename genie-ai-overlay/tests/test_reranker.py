@@ -114,10 +114,15 @@ def create_tei_rerank_response(scores=None):
     return [{"index": i, "score": s} for i, s in enumerate(scores)]
 
 
-def create_mock_aiohttp_session(response_data):
-    """Create mock aiohttp session returning specific TEI rerank responses."""
+def create_mock_aiohttp_session(response_data, status=200):
+    """Create mock aiohttp session returning specific TEI rerank responses.
+
+    ``status`` simulates the TEI HTTP status code. Defaults to 200 (success);
+    tests for upstream failures (429 overloaded, 5xx) pass a different status.
+    """
     mock_resp = AsyncMock()
     mock_resp.json = AsyncMock(return_value=response_data)
+    mock_resp.status = status
     mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
     mock_resp.__aexit__ = AsyncMock(return_value=False)
 
@@ -1036,3 +1041,56 @@ class TestAdaptiveStrategy:
             pytest.raises(RuntimeError, match="ADAPTIVE"),
         ):
             await reranker.invoke(input_doc)
+
+
+# ---------------------------------------------------------------------------
+# Upstream TEI failure handling (HTTP non-200 / malformed response contract)
+#
+# Regression: when TEI is overloaded it returns HTTP 429 with a JSON error
+# OBJECT {"error": "Model is overloaded", "error_type": "Overloaded"}. The old
+# code called .json() (which succeeds on valid JSON) then iterated the object
+# directly. Iterating a dict yields its string keys, so `r["index"]` later
+# raised a confusing "TypeError: string indices must be integers" that hid the
+# real upstream 429. These tests pin the new contract: fail loudly with the
+# actual TEI status + body.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_tei_429_overloaded_raises_with_status_and_body():
+    """TEI HTTP 429 (Model overloaded) must raise RuntimeError naming the status."""
+    reranker = create_reranker()
+    tei_error = {"error": "Model is overloaded", "error_type": "Overloaded"}
+    input_doc = create_mock_chat_request(
+        texts=[f"doc {i}" for i in range(20)],
+        embedding=[1.0, 0.0],
+        chunk_embeddings=[[1.0, 0.0]] * 20,
+        reranking_strategy="adaptive",
+        top_n=2,
+    )
+    mock_session = create_mock_aiohttp_session(tei_error, status=429)
+    with (
+        patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+        pytest.raises(RuntimeError, match=r"HTTP 429"),
+    ):
+        await reranker.invoke(input_doc)
+
+
+@pytest.mark.asyncio
+async def test_tei_200_non_list_response_raises():
+    """TEI HTTP 200 but non-list body (contract violation) must raise clearly."""
+    reranker = create_reranker()
+    tei_body = {"unexpected": "shape"}
+    input_doc = create_mock_chat_request(
+        texts=["a", "b"],
+        embedding=[1.0, 0.0],
+        chunk_embeddings=[[1.0, 0.0], [0.0, 1.0]],
+        reranking_strategy="adaptive",
+        top_n=1,
+    )
+    mock_session = create_mock_aiohttp_session(tei_body, status=200)
+    with (
+        patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+        pytest.raises(RuntimeError, match=r"unexpected response type"),
+    ):
+        await reranker.invoke(input_doc)

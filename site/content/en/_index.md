@@ -71,6 +71,7 @@ weight: 1
 <section class="g-strip" aria-label="Stack credentials">
   <span>DPG-COMPLIANT</span><span>·</span>
   <span>ARANGODB GRAPH + VECTOR</span><span>·</span>
+  <span>DOCUMENT PROCESSING WITH DOCLING</span><span>·</span>
   <span>OPENTELEMETRY-NATIVE</span><span>·</span>
   <span>OPEA-INTEGRATED</span><span>·</span>
   <span>MULTILINGUAL</span>

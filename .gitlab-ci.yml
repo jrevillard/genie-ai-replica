@@ -1175,6 +1175,49 @@ build:dataprep-arango:
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
 
+# Smoke-test the dataprep candidate image: import the docling stack + the
+# GENIE overlay module. Catches runtime ImportErrors that a green build does
+# NOT surface (issue #834: docling-core>=2.83.0 removed legacy_doc.BaseText,
+# imported by docling==2.30.0 at startup). Build green != service alive.
+smoke:dataprep-arango:
+  stage: scan
+  image: docker:28
+  tags: [docker]
+  interruptible: true
+  needs:
+    - job: build:dataprep-arango
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-dataprep-arango"
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        CANDIDATE_TAG="mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
+      else
+        CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
+      fi
+      REGISTRY_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
+      echo "Smoke-testing imports in $REGISTRY_REF"
+      docker run --rm --entrypoint python "$REGISTRY_REF" -c "import docling; from docling_core.types.legacy_doc.base import BaseText; print('docling legacy_doc OK'); import comps.dataprep.src.integrations.genieai_dataprep_arangodb; print('genieai_dataprep_arangodb import OK')"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+
 scan:dataprep-arango:
   <<: *scan_template
   needs:
@@ -2155,6 +2198,39 @@ e2e:playwright:
         - .gitlab-ci.yml
 
 # --- Configuration validation ---
+
+# Verify the dataprep requirements.lock is in sync with requirements.in.
+# Fails if someone edited requirements.in (or bumped OPEA) without running
+# `make lock-dataprep`. Catches silent lock drift before it reaches a build.
+verify:dataprep-lock:
+  stage: config
+  image: ghcr.io/astral-sh/uv:0.10-python3.10-bookworm
+  interruptible: true
+  script:
+    - cd genie-ai-overlay/dataprep
+    - uv pip compile requirements.in --generate-hashes --python-platform x86_64-manylinux_2_31 --python-version 3.10 --output-file /tmp/regen.lock --quiet
+    # The first 2 lines of a uv lock are a header embedding the exact output
+    # filename ("--output-file requirements.lock" vs "-o /tmp/regen.lock"), which
+    # is inherently non-reproducible across paths. Compare everything past it.
+    - tail -n +3 requirements.lock > /tmp/committed.body
+    - tail -n +3 /tmp/regen.lock > /tmp/regen.body
+    - diff /tmp/committed.body /tmp/regen.body && echo "requirements.lock in sync" || (echo "LOCK DRIFT — run 'make lock-dataprep' locally and commit the regenerated requirements.lock"; exit 1)
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
+
 
 config:validate:
   extends: .node_base

@@ -382,6 +382,15 @@ class GenieTEIReranking(OpeaTEIReranking):
                             query_embedding=query_embedding,
                             reranker_scores=ranked_scores,
                         )
+                        # Annotate each breakdown record with its ORIGINAL index in
+                        # retrieved_docs (== the order chatqna emits in the
+                        # rag.candidate_chunk_keys span attribute). Without this,
+                        # the offline calibrator can't map a breakdown position
+                        # (TEI rank order) back to a candidate content hash to
+                        # score recall. ranked position i -> decoded_response[i]
+                        # -> ["index"] -> retrieved_docs position.
+                        for rank_pos, rec in enumerate(adaptive_breakdown):
+                            rec["original_index"] = int(decoded_response[rank_pos]["index"])
                         logger.info(f"[ADAPTIVE] Selected candidate positions: {selected_positions}")
                         # Emit the full per-candidate utility-cost breakdown so the
                         # eval harness / operators can recalibrate CONTEXT_DECAY_FACTOR

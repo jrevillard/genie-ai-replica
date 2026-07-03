@@ -9,10 +9,12 @@ survives across sessions and contributors.
 ```
 tests/rag-benchmarks/
 ├── eval/
-│   ├── run_eval.py            # Drives gold queries through chatqna, scores recall/precision
+│   ├── run_eval.py            # Drives gold queries through chatqna, scores recall/precision (chunk-key gold)
+│   ├── run_eval_semantic.py   # REPLAYS an anchor report against passage gold (embedding-similarity), +sweep
+│   ├── semantic_match.py      # SemanticMatcher — embeds passages, matches chunks by cosine; score()/aggregate()
 │   ├── calibrate.py           # Offline adaptive-reranker parameter sweep
 │   ├── run_ragas_eval.py      # LLM-judged semantic eval (faithfulness etc.)
-│   ├── metrics.py             # recall / precision / complete_recall / noise / retrieval_recall
+│   ├── metrics.py             # recall / precision / complete_recall / noise / retrieval_recall (chunk-key)
 │   ├── chunk_identity.py      # content_hash (sha256 of normalized text) — identity is content-based
 │   ├── arango.py              # ArangoDB cursor helper
 │   ├── dump_chunks.py         # Dump chunk keys + labels from ArangoDB for gold annotation
@@ -31,6 +33,84 @@ tests/rag-benchmarks/
 Retrieval quality is invisible end-to-end: a confident answer can hide a
 dropped gold chunk (anchor catches this); a perfect chunk set can still yield a
 wrong answer (semantic catches this). Neither sees the other's failures.
+
+## Two gold formats — chunk-key vs passage (re-ingest-proof)
+
+The anchor eval supports **two gold formats**, scored by different matchers:
+
+| Format | Identity | When it breaks | Files |
+|--------|----------|----------------|-------|
+| **chunk-key** (original) | `expected_chunks[].chunk_key` (ArangoDB `_key`) — exact-match | Any re-ingest that changes chunking params / contextual prefix / chunk_size (chunk text changes → `_key` churns) | `metrics.py`, `run_eval.py` |
+| **passage** (re-ingest-proof) | `expected_passages[].passage` — embedding-similarity matched | Survives re-ingest, chunk-size changes, contextual on/off — gold unit is the ANSWER, not the chunk | `semantic_match.py`, `run_eval_semantic.py` |
+
+**Use both, A/B them on the same retrieval results.** The chunk-key path is
+exact + reproducible but fragile; the passage path is robust to ingestion
+experiments (which is the whole point — lets us tune contextual/chunking
+without re-annotating gold every time).
+
+### Passage matching — how it works
+
+`SemanticMatcher` (semantic_match.py): a retrieved chunk "matches" a gold
+passage when `cosine(embed(chunk), embed(passage)) >= min_similarity`.
+
+- **Chunk embeddings** read from ArangoDB's stored `embedding` field (the SAME
+  vectors the retriever scores against — no re-embedding).
+- **Passage embeddings** computed once via the deployed embedding endpoint
+  (TEI/embedding service, same model as ingestion → vectors in the same space).
+  Cached per passage-text.
+- Metric semantics mirror `metrics.py`: recall (passages covered by selected),
+  precision (selected matching any passage), complete_recall, noise,
+  retrieval_recall (passages covered by candidates).
+
+### `min_similarity` threshold — CALIBRATE IT
+
+The default `0.70` is a placeholder, **not** the production value. The right
+threshold depends on the embedding model. For `BAAI/bge-base-en-v1.5` an
+empirical sweep on the el-salvador corpus found:
+
+| min_sim | recall | precision | retrieval_recall |
+|---------|--------|-----------|------------------|
+| 0.50 | 0.81 | 0.81 | 1.00 |
+| 0.55 | 0.80 | 0.81 | 0.98 |
+| 0.60 | 0.69 | 0.70 | 0.95 |
+| 0.70 | 0.31 | 0.34 | 0.49 |
+
+`run_eval_semantic.py --sweep` walks 0.50-0.85 and reports metrics at each.
+**Calibrate by sweep + manual spot-check** of matched pairs (the threshold that
+cleanly separates real matches from false matches wins), then set via
+`EVAL_MIN_SIMILARITY` env. Don't blindly trust 0.70.
+
+### Running the semantic eval
+
+`run_eval_semantic.py` REPLAYS an existing anchor report against the passage
+gold — no pipeline rerun (the candidate/selected chunk_keys are already
+captured). Lets us A/B chunk-key vs passage metrics on identical retrieval
+results, and sweep `min_similarity` offline.
+
+```bash
+# On the swarm node (retriever container has ArangoDB creds):
+ssh govstack@<node> 'cd /tmp/rag-eval && \
+  export CHATQNA_CONTAINER=$(docker ps --format "{{.Names}}" | grep chatqna-xeon-backend | head -1) && \
+  export RETRIEVER_CONTAINER=$(docker ps --format "{{.Names}}" | grep retriever-arango | head -1) && \
+  python3 run_eval_semantic.py anchor_results.json gold_passages.json --sweep'
+```
+
+### Passage extraction (migration)
+
+Migrating from chunk-key to passage gold is an **LLM extraction task, not a
+script**. The passages must be semantically the answer to each query — a regex
+can't tell which section of a multi-topic chunk answers the question. Workflow:
+
+1. Dump full text of every current gold chunk (`migrate_to_passages.py`-style
+   dumper — ArangoDB lookup).
+2. Spawn a parallel agent team (8 queries each) — each agent reads the query +
+   chunk text, extracts 1-3 minimal answer passages, flags annotation errors.
+3. Produce a review markdown (`gold_passage_review.md`) for human ✅/✏️/❌.
+4. Human review is **mandatory** — the extractor can pick the wrong section.
+5. Apply approvals → final `gold_passages.json`.
+
+Passages survive: re-ingest, chunk-size changes, contextual on/off, prefix
+changes. The gold unit is the answer, not the chunk artifact.
 
 ## How the anchor eval works
 
@@ -300,5 +380,16 @@ top 1-2 cells, THEN do live A/B validation. Don't redeploy per candidate.
   Old datasets/payloads silently deaden the label filter.
 - **Breakdown position ≠ candidate position** — TEI rank order vs retrieved_docs
   order. Map via `original_index`.
+- **chunk-key gold breaks on re-ingest** — chunk `_key` is a fingerprint of
+  exact chunk text; any chunking/contextual-prefix change invalidates it.
+  Use passage gold + `run_eval_semantic.py` for ingestion experiments.
+- **`min_similarity` default 0.70 is a placeholder** — calibrate by sweep +
+  spot-check. For bge-base-en-v1.5 the empirical sweet spot was ~0.55.
+- **chatqna container does NOT have ArangoDB creds** — the retriever/dataprep
+  containers do. Embedding-endpoint calls → chatqna; ArangoDB lookups →
+  retriever (set `RETRIEVER_CONTAINER`).
+- **Passage extraction is an LLM task, not a script** — a regex can't tell
+  which section of a multi-topic chunk answers a query. Use an agent team +
+  mandatory human review of the proposed passages.
 - **Image `git_sha` label ≠ branch commit.** Verify deployed code by
   `docker exec ... grep` inside the container, not by trusting the tag.

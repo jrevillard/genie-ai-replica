@@ -29,29 +29,67 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 
 import semantic_match
-from arango import cursor  # reuses the eval's existing ArangoDB helper
 
 DEFAULT_MIN_SIM = float(os.getenv("EVAL_MIN_SIMILARITY", "0.70"))
+# Same container pattern run_eval.py uses (curl inside a stack container so we
+# stay on the overlay network — no host SSL or published-port concerns).
+# - CHATQNA_CONTAINER: used for embedding-endpoint calls (run_eval.py convention).
+# - RETRIEVER_CONTAINER: the container that has ArangoDB creds (ARANGO_URL/DB/
+#   USERNAME/PASSWORD) in its env. chatqna does NOT carry these; the retriever
+#   and dataprep do. We use the retriever (it owns the chunks).
+CHATQNA_CONTAINER = os.getenv("CHATQNA_CONTAINER", "chatqna-xeon-backend-server")
+RETRIEVER_CONTAINER = os.getenv("RETRIEVER_CONTAINER", "retriever-arango-service")
+ARANGO_GRAPH_SOURCE = os.getenv("GRAPH_SOURCE", "GRAPH_TEST_SOURCE")
+
+
+def _docker_exec(container: str, cmd: str, timeout: float = 120) -> str:
+    """Run a curl cmd inside a container; return stdout. Mirrors run_eval.py."""
+    result = subprocess.run(
+        ["docker", "exec", container, "sh", "-c", cmd],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"docker exec failed: {result.stderr.strip()[:300]}")
+    return result.stdout
 
 
 def fetch_chunk_embeddings(keys: list[str]) -> dict[str, list[float] | None]:
-    """Read the stored embedding field for each chunk straight from ArangoDB."""
+    """Read the stored embedding field for each chunk via the retriever container.
+
+    The retriever container is wired to ArangoDB (its env has ARANGO_URL/DB/
+    USERNAME/PASSWORD). We curl the cursor API from inside it — no host SSL or
+    published-port concerns.
+    """
     if not keys:
         return {}
     keys_str = ",".join(f'"{k}"' for k in keys)
     aql = (
-        f"FOR doc IN GRAPH_TEST_SOURCE "
+        f"FOR doc IN {ARANGO_GRAPH_SOURCE} "
         f"FILTER doc._key IN [{keys_str}] "
         f"RETURN {{key: doc._key, embedding: doc.embedding}}"
     )
-    out = {}
-    for row in cursor(aql):
-        emb = row.get("embedding")
-        out[row["key"]] = emb if isinstance(emb, list) else None
-    # Mark missing chunks as None so the cache treats them as no-vector.
+    payload = json.dumps({"query": aql}).replace("'", "'\\''")
+    cmd = (
+        f"curl -s -m 60 -X POST "
+        f'"${{ARANGO_URL}}/_db/${{ARANGO_DB}}/_api/cursor" '
+        f'-u "$ARANGO_USERNAME:$ARANGO_PASSWORD" '
+        f"-H 'Content-Type: application/json' -d '{payload}'"
+    )
+    raw = _docker_exec(RETRIEVER_CONTAINER, cmd, timeout=90)
+    out: dict[str, list[float] | None] = {}
+    try:
+        data = json.loads(raw)
+        for row in data.get("result", []):
+            emb = row.get("embedding")
+            out[row["key"]] = emb if isinstance(emb, list) else None
+    except json.JSONDecodeError:
+        raise RuntimeError(f"ArangoDB cursor returned non-JSON: {raw[:200]}")
     for k in keys:
         out.setdefault(k, None)
     return out

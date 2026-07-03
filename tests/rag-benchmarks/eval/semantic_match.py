@@ -78,25 +78,38 @@ def embed_via_stack(texts: list[str]) -> list[list[float]]:
 
     Uses the OpenAI-compatible /v1/embeddings contract (TEI + the OPEA embedding
     wrapper both honor it). The endpoint is hit from inside the chatqna
-    container so we stay on the overlay network.
+    container so we stay on the overlay network. Batches at 32 texts/request
+    to stay well under shell-arg / endpoint limits; reassembles in order.
     """
     if not texts:
         return []
-    payload = {"input": texts}
-    if EMBEDDING_MODEL:
-        payload["model"] = EMBEDDING_MODEL
-    # Escape single quotes for shell; payload is JSON so no nested quote hell.
-    body = json.dumps(payload).replace("'", "'\\''")
-    cmd = (
-        f"curl -s -m 120 -X POST '{EMBEDDING_URL}' "
-        f"-H 'Content-Type: application/json' -d '{body}'"
-    )
-    data = _docker_exec_json(CHATQNA_CONTAINER, cmd, timeout=150)
-    # OpenAI shape: {"data": [{"embedding": [...], "index": i}, ...]}
-    if isinstance(data, dict) and "data" in data:
-        items = sorted(data["data"], key=lambda d: d.get("index", 0))
-        return [item["embedding"] for item in items]
-    raise RuntimeError(f"unexpected embedding response shape: {str(data)[:200]}")
+    out: list[list[float]] = []
+    BATCH = 32
+    for i in range(0, len(texts), BATCH):
+        batch = texts[i : i + BATCH]
+        payload = {"input": batch}
+        if EMBEDDING_MODEL:
+            payload["model"] = EMBEDDING_MODEL
+        # Write payload to a temp file inside the container, then curl --data
+        # @file. Avoids shell-arg-length / quote-escaping issues with 32 long
+        # passages on a single -d line. base64 (not xxd) — always present.
+        import base64 as _b64
+
+        body_b64 = _b64.b64encode(json.dumps(payload).encode("utf-8")).decode()
+        cmd = (
+            f"printf '%s' '{body_b64}' | base64 -d > /tmp/_emb_payload.json && "
+            f"curl -s -m 120 -X POST '{EMBEDDING_URL}' "
+            f"-H 'Content-Type: application/json' --data @/tmp/_emb_payload.json"
+        )
+        data = _docker_exec_json(CHATQNA_CONTAINER, cmd, timeout=150)
+        if isinstance(data, dict) and "data" in data:
+            items = sorted(data["data"], key=lambda d: d.get("index", 0))
+            out.extend(item["embedding"] for item in items)
+        else:
+            raise RuntimeError(
+                f"unexpected embedding response shape: {str(data)[:200]}"
+            )
+    return out
 
 
 def cosine(a: list[float], b: list[float]) -> float:

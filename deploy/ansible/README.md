@@ -287,6 +287,9 @@ Set in `group_vars/<env>/vars.yml`:
 | `chatqna_enforce_abstention` | `true` | Whether to enforce abstention |
 | `opea_streaming` | `true` | Enable SSE streaming for ChatQnA responses. Set to `false` to disable |
 | `chatqna_stream_timeout` | `3600000` | Timeout in milliseconds for ChatQnA streaming responses (default: 1 hour). Set to `300000` for 5 minutes |
+| `multi_turn_blend_enabled` | `false` | Multi-turn vector-space blending (issue #833): blend the query embedding with the previous N turns (`V = α·EQ + (1-α)·EH`) so pronoun-heavy follow-ups retrieve the prior turn's subject. Off by default. Only the dense retrieval leg is blended. |
+| `multi_turn_blend_alpha` | `0.7` | Query weight α for blending. `1.0` = query-only (equivalent to disabled), `0.0` = history-only. |
+| `multi_turn_history_turns` | `1` | Number of prior turns blended. `0` disables even if `multi_turn_blend_enabled` is true. |
 
 ### Retriever Configuration
 

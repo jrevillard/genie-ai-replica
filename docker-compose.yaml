@@ -1196,6 +1196,10 @@ services:
       # Opt-in LLM self-grade (off by default; surface only after eval calibration).
       LLM_SELF_CONFIDENCE_ENABLED: ${LLM_SELF_CONFIDENCE_ENABLED:-0}
       OPENAI_API_KEY: ${VLLM_API_KEY:-}
+      # Multi-turn vector-space blending (issue #833). Default OFF (no-op).
+      MULTI_TURN_BLEND_ENABLED: ${MULTI_TURN_BLEND_ENABLED:-false}
+      MULTI_TURN_BLEND_ALPHA: ${MULTI_TURN_BLEND_ALPHA:-0.7}
+      MULTI_TURN_HISTORY_TURNS: ${MULTI_TURN_HISTORY_TURNS:-1}
       OPEA_SSL_SKIP_VERIFY: ${OPEA_SSL_SKIP_VERIFY:-0}
       # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
       ENABLE_OBSERVABILITY: ${ENABLE_OBSERVABILITY:-0}

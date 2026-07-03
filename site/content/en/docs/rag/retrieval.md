@@ -45,6 +45,7 @@ same scale:
 
 | Variable | Default | Meaning |
 |---|---|---|
+| `RETRIEVER_HYBRID_RETRIEVAL_ENABLED` | `true` | Master switch. When `false`, the retriever skips the BM25 channel entirely (dense-only). See [Multi-Turn Retrieval](../multi-turn-retrieval/) for why this matters for query-time blending. |
 | `RETRIEVER_HYBRID_DENSE_WEIGHT` | 1.0 | Weight of the dense-vector ranking. |
 | `RETRIEVER_HYBRID_LEXICAL_WEIGHT` | 1.0 | Weight of the BM25 ranking. |
 | `RETRIEVER_HYBRID_RRF_K` | 60 | RRF smoothing constant. |

@@ -214,12 +214,11 @@ class GenieTEIReranking(OpeaTEIReranking):
                     ):
                         decoded_response = await resp.json()
                         # [DEBUG-K20] capture TEI response shape to diagnose line 307 TypeError
+                        import json as _json
                         logger.info(
                             f"[DEBUG-K20] TEI http={resp.status} ct={resp.headers.get('Content-Type')} "
                             f"ndocs={len(docs)} resp_type={type(decoded_response).__name__} "
-                            f"len={len(decoded_response) if hasattr(decoded_response,'__len__') else 'n/a'} "
-                            f"item0_type={type(decoded_response[0]).__name__ if (hasattr(decoded_response,'__len__') and len(decoded_response)>0) else 'empty'} "
-                            f"item0={repr(decoded_response[0])[:200] if (hasattr(decoded_response,'__len__') and len(decoded_response)>0) else 'empty'}"
+                            f"resp_repr={_json.dumps(decoded_response)[:600] if not isinstance(decoded_response,(bytes,bytearray)) else repr(decoded_response)[:600]}"
                         )
                 except Exception as e:
                     span.record_exception(e)

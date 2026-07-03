@@ -1145,6 +1145,11 @@ services:
       EMBEDDING_SERVER_ENDPOINT: ${EMBEDDING_SERVER_ENDPOINT:-/v1/embeddings}
       RETRIEVER_SERVICE_HOST_IP: retriever-arango-service
       RETRIEVER_SERVICE_PORT: 7000
+      # chatqna reads these and forwards them in the retriever request; they must
+      # live on chatqna (the orchestrator), not only on the retriever service.
+      RETRIEVER_ARANGO_K: ${RETRIEVER_ARANGO_K:-4}
+      RETRIEVER_ARANGO_FETCH_K: ${RETRIEVER_ARANGO_FETCH_K:-20}
+      RETRIEVER_ARANGO_SCORE_THRESHOLD: ${RETRIEVER_ARANGO_SCORE_THRESHOLD:-0.1}
       RERANK_SERVER_HOST_IP: reranker
       RERANK_SERVER_PORT: 8000
       # chatqna reads these and forwards them in the reranker request; they must live

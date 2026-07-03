@@ -72,6 +72,9 @@ COPY genie-ai-overlay/tracing.py /app/tracing.py
 # Copy shared TTL-cached model probe (importable as core.model_cache from PYTHONPATH=/app)
 COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py
 
+# Copy shared label-contract decoder (chatqna encode → retriever decode)
+COPY genie-ai-overlay/core/label_contract.py /app/core/label_contract.py
+
 # Copy overlay files to their correct new locations within /app/comps/
 COPY genie-ai-overlay/retriever/genieai_retriever_arangodb.py /app/comps/retrievers/src/integrations/genieai_retriever_arangodb.py
 # Add the custom config.py from the overlay to fix the ImportError

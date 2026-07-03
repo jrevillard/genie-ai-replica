@@ -390,3 +390,22 @@ Items deferred during code reviews. Revisit when the related component is next m
 ## Deferred from: multi-goal split of spec-contextual-retrieval (2026-06-26)
 
 - **Part B — Retriever hybrid BM25 + RRF fusion (SOTA Contextual Retrieval recipe, part 2 of 2)** — Part A (`spec-contextual-retrieval`, dataprep) stores per-chunk contextualized text in vertex `text`. Part B consumes it: (1) create an ArangoSearch BM25 view over `{GRAPH}_SOURCE.text` at retriever init (`_initialize_client`, ~line 170) — no BM25 view exists today (vector ANN view auto-created by `langchain_arangodb.ArangoVector` only); (2) add a BM25 query path via `self.db.aql.execute()` with ArangoSearch `BM25()` (pattern: file_id AQL at retriever ~line 803); (3) Reciprocal Rank Fusion (RRF) of dense (vector ANN, existing `ArangoVector.asimilarity_search_with_relevance_scores` ~line 778) and sparse (BM25) candidates, inserted after vector `search_res` (~line 787) and before graph traversal (~line 818), in `invoke()` `genie-ai-overlay/retriever/genieai_retriever_arangodb.py`; (4) gated by `HYBRID_BM25_ENABLED` (default off) + knobs `BM25_TOP_K`, `RRF_K=60`, `RRF_DENSE_WEIGHT`, `RRF_SPARSE_WEIGHT` in `genie-ai-overlay/retriever/config.py` after line 221. Text field const `ARANGO_TEXT_FIELD="text"` (line 75). Reranker untouched (separate microservice; receives fused list via retriever microservice wrapper, ~line 114-147). Tests: `test_retriever.py` `TestInvoke` pattern; mock `db.aql.execute` (existing pattern ~line 293) + `ArangoVector`. Independent of A but compounds: with A's contextualized `text` → "contextual BM25" (full SOTA). Works standalone as raw-text BM25 hybrid. Research: `_bmad-output/planning-artifacts/research/deep-research-labeling-retrieval-report.md`.
+
+
+## Initiative: issue-834 / dataprep-cold-cache-build (2026-07)
+
+## Deferred from: MR !231 dependency-lock introduction (2026-07-03)
+
+- **OPEA bump v1.3 -> v1.4+ retires most of the issue-834 machinery** — The lock + pin + CI gates added by MR !231 exist BECAUSE OPEA v1.3 ships an unpinned `requirements.txt`. OPEA v1.4+ switched to `requirements.in` + compiled `requirements-cpu.txt`/`-gpu.txt` with `uv pip compile --generate-hashes` upstream (audited: v1.4 pins `docling-core==2.37.0`, v1.5 `docling-core==2.44.2` — both below the 2.83.0 `legacy_doc` removal). On bumping OPEA, the following become REDUNDANT and should be removed to avoid carrying dead divergence:
+  - `genie-ai-overlay/dataprep/requirements.in` + `requirements.lock` (replace with OPEA's compiled `requirements-cpu.txt`; GPU image variant may use `requirements-gpu.txt`).
+  - `genie-ai-overlay/dataprep/scripts/generate-requirements-in.sh` (OPEA now provides the `.in`).
+  - The `docling-core==2.82.0` pin (upstream pins correctly).
+  - The `openai-whisper` drop (re-evaluate: v1.4 keeps whisper; its build may be fixed or the path exercised).
+  - `Makefile` targets `lock-dataprep` / `requirements-in-dataprep` (or repoint them at OPEA's `.in`).
+  - `verify:dataprep-lock` CI job (OPEA ships the lock; drift check may still add value if we patch their `.in`, but the current "compile from our .in" logic goes away).
+  - The `pip install --upgrade pip setuptools wheel` + `--no-deps --require-hashes` Dockerfile block (keep `--require-hashes` if we consume their compiled lock, but the patched-`.in` pipeline is gone).
+  - KEEP `smoke:dataprep-arango` (runtime import check is valuable independent of how deps are resolved — catches any future docling-style ImportError, upstream-pinned or not).
+  - KEEP the `opencv-python` -> `opencv-python-headless` decision if the image is still displayless (re-confirm against v1.4 reqs).
+- **Dockerfile requirements-patch rewrite (mandatory on bump)** — `ARG REQ_PATH=/app/comps/dataprep/src/requirements.txt` and the sed/`fix_dependencies.sh` blocks target a file that no longer exists in v1.4. Rewrite to target `requirements-cpu.txt` (and adjust pins: `pyspark==4.0.0`, `pathway` line is dead, `unstructured[all-docs]` sed is a no-op). See the v1.3->v1.4 audit in MR !231 description.
+- **`fix_dependencies.sh` is shared by reranker + retriever** — Do NOT delete it in the dataprep-only bump; only the dataprep Dockerfile stops using it (already done in MR !231). Reranker/retriever still consume it until they migrate to locks too (separate follow-up).
+- **Apply the lock pattern to retriever/reranker** — They use `python:*-slim` (modern pip) so they don't hit issue #834, but the same determinism + SBOM story applies. Out of scope for #834; pick up when those images next change.

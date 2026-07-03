@@ -201,6 +201,7 @@ class TestRerankerComponentSpan:
 
         mock_response = AsyncMock()
         mock_response.json = AsyncMock(return_value=response_data)
+        mock_response.status = 200  # TEI success contract (see genieai_tei_reranker guard)
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
 

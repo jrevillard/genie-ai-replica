@@ -41,12 +41,15 @@ cd mobile/genie_ai_mobile && flutter test                 # Flutter unit tests
 
 ## CI Pipeline
 
-GitLab CI pipeline (`.gitlab-ci.yml`) runs on every merge request with 4 stages:
+GitLab CI pipeline (`.gitlab-ci.yml`) runs on every merge request with stages in this order:
 
 1. **Lint** — ESLint (JS), Ruff (Python), Prettier format checks
 2. **Test** — Jest (backend, frontend, doc-repo), pytest (OPEA), flutter_test (mobile)
-3. **Config Validation** — Environment variable coverage and consistency checks
-4. **E2E** — Playwright tests against deployed infrastructure (scheduled only)
+3. **Config** — Environment-variable coverage (`config:validate`) and dependency-lock freshness (`verify:dataprep-lock`). Runs before build so cheap validation fails fast.
+4. **Build** — publish candidate images to GitLab Container Registry (`tmp/` namespace)
+5. **Scan** — Trivy container scanning of candidate images (advisory + dashboard)
+6. **E2E** — Playwright tests against deployed infrastructure (scheduled only)
+7. **Promote** — retag tested digests to deployable tags (main/tags only)
 
 All test runners produce JUnit XML reports as CI artifacts. Pipeline blocks MR on any mandatory stage failure.
 

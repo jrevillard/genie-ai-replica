@@ -1,9 +1,9 @@
 stages:
   - lint
   - test
+  - config      # env-var coverage + dependency-lock freshness (fail-fast before build)
   - build       # publish candidate images to GitLab Container Registry (tmp/ namespace)
   - scan        # GitLab official Container Scanning template (advisory + dashboard)
-  - config
   - e2e
   - promote     # retag tested digests to deployable tags (main/tags only)
   - scheduled

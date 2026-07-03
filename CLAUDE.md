@@ -186,7 +186,7 @@ npm run format:dart     # Auto-format Dart files
 
 ## Testing
 
-Test frameworks: Jest (backend, frontend, doc-repo), pytest (OPEA), flutter_test (mobile), Playwright (E2E). CI pipeline (`.gitlab-ci.yml`) runs a multi-stage pipeline (lint → test → build → scan → config → e2e → promote; plus scheduled/manual/deploy) on every MR with JUnit XML reports.
+Test frameworks: Jest (backend, frontend, doc-repo), pytest (OPEA), flutter_test (mobile), Playwright (E2E). CI pipeline (`.gitlab-ci.yml`) runs a multi-stage pipeline (lint → test → config → build → scan → e2e → promote; plus scheduled/manual/deploy) on every MR with JUnit XML reports.
 
 - **Backend `createApp()` pattern**: `index.js` exports `createApp()` — tests use `supertest` without starting HTTP server
 - **OPEA shared fixtures**: `genie-ai-overlay/tests/conftest.py` mocks comps library, ArangoDB, model endpoints

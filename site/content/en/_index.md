@@ -58,8 +58,28 @@ weight: 1
   </div>
 </section>
 
+<section class="g-section">
+  <h2 class="g-section__title">Building AI for Countries</h2>
+  <p class="g-section__sub">GENIE.AI powers development and deployment of custom, national-level AI assistants in countries.</p>
+
+  <div class="g-grid">
+    <article class="g-card">
+      <h3>El Salvador</h3>
+      <p>AI assistant for rural farming communities</p>
+    </article>
+    <article class="g-card">
+      <h3>Lesotho</h3>
+      <p>AI assistant for agriculture extension workers</p>
+    </article>
+    <article class="g-card">
+      <h3>The Gambia</h3>
+      <p>Preventive health decision support tool</p>
+    </article>
+  </div>
+</section>
+
 <section class="g-section g-section--docs">
-  <h2 class="g-section__title">Start in the documentation</h2>
+  <h2 class="g-section__title">Start Your Journey</h2>
   <div class="g-doclinks">
     <a class="g-doclink" href="/docs/core/project-overview/"><span>Project overview</span><em>What GENIE.AI is and why →</em></a>
     <a class="g-doclink" href="/docs/core/development-guide/"><span>Development guide</span><em>Build and run locally →</em></a>
@@ -70,8 +90,8 @@ weight: 1
 
 <section class="g-strip" aria-label="Stack credentials">
   <span>DPG-COMPLIANT</span><span>·</span>
-  <span>ARANGODB GRAPH + VECTOR</span><span>·</span>
-  <span>DOCUMENT PROCESSING WITH DOCLING</span><span>·</span>
+  <span>HYBRID RAG (VECTORS-TAGS-GRAPHS)</span><span>·</span>
+  <span>ADVANCED DOCUMENT PROCESSING</span><span>·</span>
   <span>OPENTELEMETRY-NATIVE</span><span>·</span>
   <span>OPEA-INTEGRATED</span><span>·</span>
   <span>MULTILINGUAL</span>

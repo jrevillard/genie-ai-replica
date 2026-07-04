@@ -634,7 +634,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 f"0/{total} contexts generated — verify the model supports guided JSON and is reachable.",
             )
         else:
-            logger.info(f"Contextual Retrieval: {with_context}/{total} chunks contextualized.")
+            raw_count = total - with_context
+            # Final post-recovery count: with_context chunks have a non-empty context
+            # (batched or recovered via per-chunk calls). The remaining raw_count
+            # chunks fell back to raw text because BOTH the batch parse AND the
+            # per-chunk recovery returned empty (after 3 retries each). This is NOT
+            # the per-batch "missing" count — partials are already recovered here.
+            logger.info(
+                f"Contextual Retrieval: {with_context}/{total} chunks contextualized "
+                f"({raw_count} using raw text after batch + per-chunk recovery failed)."
+            )
         return result
 
     async def _context_batch_call(self, client, model, system_prompt, batch, file_id) -> dict[int, str]:

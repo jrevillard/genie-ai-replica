@@ -99,6 +99,18 @@ reranking_threshold: "0.6"
 context_decay_factor: "0.0008"
 min_value_threshold: "-0.5"
 
+# Contextual Retrieval strategy: per_chunk (Anthropic recipe) — one LLM call
+# per chunk generates a section-specific context prefix. Diversifies chunk
+# embeddings (doc_level gave every chunk the same prefix → embedding flooding,
+# ~13/20 candidate slots consumed by near-duplicate doc-summary chunks; the
+# semantic eval couldn't even calibrate a threshold — chunk-vs-own-passage < 0.72,
+# chunk-vs-different-doc-chunk > 0.55, no clean separation).
+# Cost: ~142 LLM calls (granite-4.1-8b) for this corpus — acceptable.
+# Re-ingest REQUIRED after this change (only new ingests get per-chunk context).
+# Backup of GRAPH_TEST_SOURCE taken before re-ingest:
+#   ~/Téléchargements/GRAPH_TEST_SOURCE_backup_20260704_081707.json
+contextual_strategy: "per_chunk"
+
 # Dataprep LLM labeling: granite-4.1-8b handles 8-chunk batches reliably
 # (validated), cutting label-call round-trips to the remote vLLM ~8x.
 dataprep_llm_label_batch_size: 8

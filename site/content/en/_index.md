@@ -64,16 +64,19 @@ weight: 1
 
   <div class="g-grid">
     <article class="g-card">
+      <span class="g-card__tag">STATUS: ONGOING</span>
       <h3>El Salvador</h3>
-      <p>AI assistant for rural farming communities</p>
+      <p>AI assistant for farming communities based on CENTA knowledge library</p>
     </article>
     <article class="g-card">
+      <span class="g-card__tag">STATUS: ONGOING</span>
       <h3>Lesotho</h3>
-      <p>AI assistant for agriculture extension workers</p>
+      <p>AI assistant for agriculture extension workers integrated with local data</p>
     </article>
     <article class="g-card">
+      <span class="g-card__tag">STATUS: ONGOING</span>
       <h3>The Gambia</h3>
-      <p>Preventive health decision support tool</p>
+      <p>Preventive health decision support tool for health workers and communities</p>
     </article>
   </div>
 </section>

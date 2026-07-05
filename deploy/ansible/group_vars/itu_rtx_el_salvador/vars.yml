@@ -131,6 +131,18 @@ dataprep_contextual_doc_budget: "100000"
 # improve (chunk context more section-specific)?
 dataprep_llm_label_batch_size: 4
 
+# Reranker strategy + top-N. Switched from `adaptive` to `slice` (simple top-N
+# by TEI cross-encoder score) after offline strategy sweep proved adaptive's
+# novelty cliff drops high-relevance gold chunks (TEI 0.93 dropped despite being
+# 3rd-best). `slice top-3` offline: recall 0.77, precision 0.56 (vs adaptive
+# 0.69/0.54) — dominates adaptive on both. The multiplicative novelty formula
+# (relevance × sigmoid(novelty)) is non-standard and structurally flawed (a
+# high-relevance chunk can be zeroed by low novelty); standard MMR is additive.
+# slice top-3 is the balanced pick (top-2 = precision king, top-5 = recall king).
+# Live validation pending.
+reranking_strategy: "slice"
+reranker_top_n: "3"
+
 # Chunking configuration. Values are character counts — dataprep uses LangChain's
 # RecursiveCharacterTextSplitter, which measures chunk length in characters.
 # 2000 chars ≈ 500 tokens and 300 chars ≈ 75 tokens for the embedding tokenizer.

@@ -854,22 +854,32 @@ class TestAdaptiveHelpers:
 
 
 class TestAdaptiveContextSelection:
-    """Unit tests for the adaptive_context_selection selector."""
+    """Unit tests for the adaptive_context_selection selector.
+
+    The selector returns ``(selected_indices, breakdown)`` — a tuple of the
+    selected candidate positions and a per-candidate record of every utility/cost
+    term (see rag.adaptive_breakdown span emission). Tests unpack the tuple.
+    """
 
     def test_empty_texts_returns_empty(self):
-        assert adaptive_context_selection([], [], [1.0, 0.0], []) == []
+        idxs, breakdown = adaptive_context_selection([], [], [1.0, 0.0], [])
+        assert idxs == []
+        assert breakdown == []
 
     def test_single_high_score_chunk_selected(self):
-        idxs = adaptive_context_selection(
+        idxs, breakdown = adaptive_context_selection(
             texts=["good chunk"],
             chunk_embeddings=[[1.0, 0.0]],
             query_embedding=[1.0, 0.0],
             reranker_scores=[0.95],
         )
         assert idxs == [0]
+        assert len(breakdown) == 1
+        assert breakdown[0]["idx"] == 0
+        assert breakdown[0]["selected"] is True
 
     def test_indices_within_range_and_unique(self):
-        idxs = adaptive_context_selection(
+        idxs, breakdown = adaptive_context_selection(
             texts=["a", "b", "c", "d"],
             chunk_embeddings=[[1.0, 0.0], [0.8, 0.2], [0.2, 0.8], [0.0, 1.0]],
             query_embedding=[1.0, 0.0],
@@ -878,16 +888,24 @@ class TestAdaptiveContextSelection:
         assert len(idxs) >= 1
         assert all(0 <= i < 4 for i in idxs)
         assert len(idxs) == len(set(idxs))
+        # breakdown records every candidate, in input order
+        assert len(breakdown) == 4
+        assert [b["idx"] for b in breakdown] == [0, 1, 2, 3]
+        # the selected flag in each record matches the returned indices
+        assert {b["idx"] for b in breakdown if b["selected"]} == set(idxs)
 
     def test_extreme_threshold_selects_nothing(self):
         with patch("reranker.genieai_tei_reranker.MIN_VALUE_THRESHOLD", 1e9):
-            idxs = adaptive_context_selection(
+            idxs, breakdown = adaptive_context_selection(
                 texts=["a", "b"],
                 chunk_embeddings=[[1.0, 0.0], [0.0, 1.0]],
                 query_embedding=[1.0, 0.0],
                 reranker_scores=[0.95, 0.90],
             )
         assert idxs == []
+        # breakdown still carries every candidate (all unselected)
+        assert len(breakdown) == 2
+        assert all(b["selected"] is False for b in breakdown)
 
 
 # ---------------------------------------------------------------------------

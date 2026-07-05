@@ -634,17 +634,30 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 f"0/{total} contexts generated — verify the model supports guided JSON and is reachable.",
             )
         else:
-            logger.info(f"Contextual Retrieval: {with_context}/{total} chunks contextualized.")
+            raw_count = total - with_context
+            # Final post-recovery count: with_context chunks have a non-empty context
+            # (batched or recovered via per-chunk calls). The remaining raw_count
+            # chunks fell back to raw text because BOTH the batch parse AND the
+            # per-chunk recovery returned empty (after 3 retries each). This is NOT
+            # the per-batch "missing" count — partials are already recovered here.
+            logger.info(
+                f"Contextual Retrieval: {with_context}/{total} chunks contextualized "
+                f"({raw_count} using raw text after batch + per-chunk recovery failed)."
+            )
         return result
 
     async def _context_batch_call(self, client, model, system_prompt, batch, file_id) -> dict[int, str]:
         """One LLM call generating contexts for a batch of chunks.
 
-        Returns ``{chunk_index: context}``. On parse failure (or a single-chunk
-        batch), falls back to per-chunk ``_context_single_call`` so context
-        generation always completes. Emits a ``dataprep.llm.context_batch`` span
-        (per-chunk spans on fallback).
+        Returns ``{chunk_index: context}``. On a parse failure the whole batch
+        falls back to per-chunk ``_context_single_call``. On a PARTIAL response
+        (the LLM returned some but not all chunk contexts — common with
+        temperature-sampled models that skip entries nondeterministically),
+        the missing chunk indices are recovered via per-chunk calls so no chunk
+        silently degrades to raw text. Emits a ``dataprep.llm.context_batch``
+        span (per-chunk spans on fallback).
         """
+        valid_ids = {i for i, _ in batch}
         if len(batch) > 1:
             with with_span(
                 "dataprep.llm.context_batch",
@@ -672,7 +685,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     )
                     parsed = json.loads(response.choices[0].message.content)
                     raw = parsed.get("contexts", parsed) if isinstance(parsed, dict) else {}
-                    valid_ids = {i for i, _ in batch}
                     out: dict[int, str] = {}
                     for k, v in raw.items():
                         try:
@@ -688,6 +700,23 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         if getattr(_usage, "prompt_tokens", None) is not None:
                             span.set_attribute("dataprep.llm.prompt_tokens", _usage.prompt_tokens)
                         span.set_attribute("dataprep.contexts_generated", len(out))
+                        # Recover any chunks the LLM omitted (partial response).
+                        # Without this, missing indices silently degrade to raw
+                        # text — the batch "succeeded" so no fallback fired, but
+                        # some chunks lost their context. Recover them explicitly.
+                        missing = [i for i in valid_ids if i not in out]
+                        if missing:
+                            span.set_attribute("dataprep.partial_recovery_count", len(missing))
+                            await self._write_ingestion_log(
+                                file_id,
+                                "INFO",
+                                "Contextualization",
+                                f"Batch returned {len(out)}/{len(batch)} contexts; "
+                                f"recovering missing chunks {sorted(missing)} via per-chunk calls.",
+                            )
+                            for i in missing:
+                                text = next(t for idx, t in batch if idx == i)
+                                out[i] = await self._context_single_call(client, model, system_prompt, i, text, file_id)
                         return out
                     await self._write_ingestion_log(
                         file_id,

@@ -1913,3 +1913,139 @@ class TestContextualRetrieval:
         assert built[0].page_content == contextualized[0]
         assert built[0].metadata["chunk_text"] == original[0]
         assert built[1].page_content == contextualized[1]
+
+    # ------------------------------------------------------------------
+    # _context_batch_call — partial-response recovery (silent-fallback bug)
+    # ------------------------------------------------------------------
+
+    def _make_batch_response(self, contexts_dict: dict):
+        """Build a mock chat completion response returning ``{"contexts": {...}}``."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps({"contexts": contexts_dict})
+        mock_response.usage = MagicMock(completion_tokens=10, prompt_tokens=20)
+        return mock_response
+
+    @pytest.mark.asyncio
+    async def test_batch_returns_all_contexts_on_full_success(self):
+        """All chunk contexts present in the batch response → returned directly, no recovery."""
+        dp = create_dataprep()
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=self._make_batch_response({"0": "ctx0", "1": "ctx1", "2": "ctx2"})
+        )
+        batch = [(0, "chunk0"), (1, "chunk1"), (2, "chunk2")]
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_context_single_call", new_callable=AsyncMock) as single,
+        ):
+            result = await dp._context_batch_call(mock_client, "m", "sys", batch, "file1")
+        assert result == {0: "ctx0", 1: "ctx1", 2: "ctx2"}
+        single.assert_not_called()  # no recovery needed
+        assert mock_client.chat.completions.create.call_count == 1  # one batch call
+
+    @pytest.mark.asyncio
+    async def test_batch_recovers_missing_chunks_on_partial_response(self):
+        """Partial response (some contexts missing) → missing chunks recovered via per-chunk calls."""
+        dp = create_dataprep()
+        mock_client = AsyncMock()
+        # Batch returns only 0 and 2 — index 1 is missing.
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=self._make_batch_response({"0": "ctx0", "2": "ctx2"})
+        )
+        batch = [(0, "chunk0"), (1, "chunk1"), (2, "chunk2")]
+        recovered = {}
+
+        async def fake_single(client, model, sys_prompt, idx, text, file_id):
+            recovered[idx] = f"recovered-{idx}"
+            return recovered[idx]
+
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_context_single_call", new=AsyncMock(side_effect=fake_single)),
+        ):
+            result = await dp._context_batch_call(mock_client, "m", "sys", batch, "file1")
+        # All three chunks have a context — index 1 recovered, not raw.
+        assert result == {0: "ctx0", 1: "recovered-1", 2: "ctx2"}
+        assert 1 in recovered  # the missing chunk WAS recovered
+
+    @pytest.mark.asyncio
+    async def test_batch_recovers_all_missing_chunks_on_near_empty_response(self):
+        """Near-empty response (1/4 returned) → all 3 missing chunks recovered."""
+        dp = create_dataprep()
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=self._make_batch_response({"1": "ctx1"}))
+        batch = [(0, "c0"), (1, "c1"), (2, "c2"), (3, "c3")]
+        recovered = []
+
+        async def fake_single(client, model, sys_prompt, idx, text, file_id):
+            recovered.append(idx)
+            return f"rec-{idx}"
+
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_context_single_call", new=AsyncMock(side_effect=fake_single)),
+        ):
+            result = await dp._context_batch_call(mock_client, "m", "sys", batch, "file1")
+        assert set(result.keys()) == {0, 1, 2, 3}
+        assert sorted(recovered) == [0, 2, 3]  # exactly the missing ones
+
+    @pytest.mark.asyncio
+    async def test_batch_falls_back_to_per_chunk_on_empty_parse(self):
+        """Batch response with NO valid contexts → full per-chunk fallback for all."""
+        dp = create_dataprep()
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=self._make_batch_response({})  # empty
+        )
+        batch = [(0, "c0"), (1, "c1")]
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as log,
+            patch.object(
+                dp,
+                "_context_single_call",
+                new=AsyncMock(side_effect=lambda *a, **k: "single-ctx"),
+            ),
+        ):
+            result = await dp._context_batch_call(mock_client, "m", "sys", batch, "file1")
+        assert result == {0: "single-ctx", 1: "single-ctx"}  # both via per-chunk fallback
+        # WARN logged (parse failure → full fallback).
+        assert any(call.args[1] == "WARN" for call in log.call_args_list)
+
+    @pytest.mark.asyncio
+    async def test_batch_falls_back_to_per_chunk_on_exception(self):
+        """Batch call raises → full per-chunk fallback for all."""
+        dp = create_dataprep()
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=RuntimeError("vLLM down"))
+        batch = [(0, "c0"), (1, "c1")]
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as log,
+            patch.object(
+                dp,
+                "_context_single_call",
+                new=AsyncMock(side_effect=lambda *a, **k: "single-ctx"),
+            ),
+        ):
+            result = await dp._context_batch_call(mock_client, "m", "sys", batch, "file1")
+        assert result == {0: "single-ctx", 1: "single-ctx"}
+        assert any(call.args[1] == "WARN" for call in log.call_args_list)
+
+    @pytest.mark.asyncio
+    async def test_batch_single_chunk_skips_batch_call(self):
+        """Single-chunk batch → direct per-chunk call (no batch API call)."""
+        dp = create_dataprep()
+        mock_client = AsyncMock()
+        batch = [(0, "only chunk")]
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(
+                dp,
+                "_context_single_call",
+                new=AsyncMock(return_value="single-ctx"),
+            ) as single,
+        ):
+            result = await dp._context_batch_call(mock_client, "m", "sys", batch, "file1")
+        assert result == {0: "single-ctx"}
+        single.assert_awaited_once()
+        mock_client.chat.completions.create.assert_not_called()  # no batch call for single

@@ -36,8 +36,13 @@ from arango import cursor
 from chunk_identity import content_hash
 
 # --- stack config (env-overridable) -----------------------------------------
-CHATQNA_CONTAINER = os.getenv("CHATQNA_CONTAINER", "genieai_el-salvador_chatqna")
-VICTORIATRACES_SVC = os.getenv("VICTORIATRACES_SVC", "genieai_el-salvador_victoriatraces")
+# Defaults are placeholders — set these for your deployment. CHATQNA_CONTAINER
+# has a dynamic Swarm replica suffix, so resolve it live:
+#   export CHATQNA_CONTAINER=$(docker ps --format '{{.Names}}' | grep chatqna-xeon-backend-server | head -1)
+# VICTORIATRACES_SVC = <stack>_victoriatraces (hyphenated swarm service name).
+# See tests/rag-benchmarks/CLAUDE.md for the full run recipe.
+CHATQNA_CONTAINER = os.getenv("CHATQNA_CONTAINER", "chatqna-xeon-backend-server")
+VICTORIATRACES_SVC = os.getenv("VICTORIATRACES_SVC", "victoriatraces")
 CHATQNA_URL = os.getenv("CHATQNA_URL", "http://localhost:8888/v1/chatqna")
 CHATQNA_SERVICE_NAME = os.getenv("CHATQNA_SERVICE_NAME", "genieai-chatqna")
 GRAPH_SOURCE = os.getenv("GRAPH_SOURCE", "GRAPH_TEST_SOURCE")
@@ -107,38 +112,56 @@ def _extract_answer(body: str) -> str:
     return str(data)
 
 
-def _extract_selection(raw: str, start_s: float) -> tuple[list[str], list[str]]:
-    """Return (candidate_hashes, selected_hashes) for THIS query's trace.
+def _extract_selection(raw: str, start_s: float) -> tuple[list[str], list[str], list[dict]]:
+    """Return (candidate_hashes, selected_hashes, adaptive_breakdown) for THIS query's trace.
 
     Picks the newest reranker_selection span at/after the query start. Coerces
     JSON-stringified array attrs (VictoriaTraces does this) via _as_list.
+
+    Also harvests ``rag.adaptive_breakdown`` (a JSON-stringified array of
+    per-candidate utility/cost terms) from the matching ``reranker.tei_invoke``
+    span, so the eval report carries the full adaptive breakdown for offline
+    recalibration of CONTEXT_DECAY_FACTOR and the confusion formula.
     """
     data = json.loads(raw or "{}")
     query_start_us = start_s * 1e6
     best = None  # (startTime, candidates, selected)
+    breakdown_best_st = -1
+    breakdown: list[dict] = []
     for tr in data.get("data", []):
         for sp in tr.get("spans", []):
-            if "reranker_selection" not in sp.get("operationName", ""):
-                continue
+            op = sp.get("operationName", "")
             st = sp.get("startTime", 0)
             if st < query_start_us - 5_000_000:  # >5s before query — older trace
                 continue
             tags = {t["key"]: t.get("value") for t in sp.get("tags", [])}
-            c = _as_list(tags.get("rag.candidate_chunk_keys"))
-            s = _as_list(tags.get("rag.selected_chunk_keys"))
-            if best is None or st > best[0]:
-                best = (st, c, s)
+            if "reranker_selection" in op:
+                c = _as_list(tags.get("rag.candidate_chunk_keys"))
+                s = _as_list(tags.get("rag.selected_chunk_keys"))
+                if best is None or st > best[0]:
+                    best = (st, c, s)
+            elif op == "reranker.tei_invoke" and "rag.adaptive_breakdown" in tags:
+                # newest tei_invoke span carrying a breakdown wins
+                if st > breakdown_best_st:
+                    breakdown_best_st = st
+                    raw_b = tags.get("rag.adaptive_breakdown")
+                    try:
+                        breakdown = json.loads(raw_b) if isinstance(raw_b, str) else raw_b or []
+                    except json.JSONDecodeError:
+                        breakdown = []
     if best is None:
-        return [], []
-    return best[1], best[2]
+        return [], [], breakdown
+    return best[1], best[2], breakdown
 
 
-def fetch_selection(start_s: float) -> tuple[list[str], list[str]]:
+def fetch_selection(start_s: float) -> tuple[list[str], list[str], list[dict]]:
     """Poll VictoriaTraces until the trace is indexed or TRACE_FETCH_TIMEOUT.
 
     Generous window (1h back/1min forward) — VT's tight-window time filter has
     quirky boundary semantics; the trace is disambiguated by startTime in
     _extract_selection. Indexing lag on a busy VT node can exceed a minute.
+
+    Returns ``(candidates, selected, adaptive_breakdown)``.
     """
     deadline = time.time() + TRACE_FETCH_TIMEOUT
     while True:
@@ -151,11 +174,11 @@ def fetch_selection(start_s: float) -> tuple[list[str], list[str]]:
             f"&start={start_us}&end={end_us}&limit=50"
         )
         raw = _docker_exec(CHATQNA_CONTAINER, f"curl -s '{url}'", timeout=60)
-        candidates, selected = _extract_selection(raw, start_s)
+        candidates, selected, breakdown = _extract_selection(raw, start_s)
         if candidates or selected:
-            return candidates, selected
+            return candidates, selected, breakdown
         if time.time() >= deadline:
-            return [], []
+            return [], [], breakdown
 
 
 def build_hash_to_text() -> dict[str, str]:
@@ -165,7 +188,7 @@ def build_hash_to_text() -> dict[str, str]:
     return {content_hash(t): t for t in texts if t}
 
 
-def score_anchor(entry, cand_hashes, sel_hashes, trace_found: bool) -> dict:
+def score_anchor(entry, cand_hashes, sel_hashes, trace_found: bool, adaptive_breakdown=None) -> dict:
     gold = [c["chunk_key"] for c in entry.get("expected_chunks", [])]
     row = {
         "id": entry["id"],
@@ -174,6 +197,7 @@ def score_anchor(entry, cand_hashes, sel_hashes, trace_found: bool) -> dict:
         "gold": gold,
         "selected": sel_hashes,
         "candidates": cand_hashes,
+        "adaptive_breakdown": adaptive_breakdown or [],
     }
     if trace_found:
         row.update(
@@ -208,7 +232,7 @@ def main(mode: str, gold_path: str, out_path: str) -> None:
     for entry in entries:
         start, body = drive_query(entry)
         answer = _extract_answer(body)
-        cand_hashes, sel_hashes = fetch_selection(start)
+        cand_hashes, sel_hashes, adaptive_breakdown = fetch_selection(start)
         trace_found = bool(cand_hashes or sel_hashes)
         if not trace_found:
             missed += 1
@@ -222,7 +246,7 @@ def main(mode: str, gold_path: str, out_path: str) -> None:
         if mode == "dump-tuples":
             tuples.append(make_tuple(entry, sel_hashes, hash_to_text, answer))
         else:
-            rows.append(score_anchor(entry, cand_hashes, sel_hashes, trace_found))
+            rows.append(score_anchor(entry, cand_hashes, sel_hashes, trace_found, adaptive_breakdown))
 
     if mode == "dump-tuples":
         with open(out_path, "w") as fh:

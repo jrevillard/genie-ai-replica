@@ -79,9 +79,11 @@ keep them faithful so retrieval is label-filtered exactly as in production.
 ## Step 2a — Deterministic anchor (per config)
 
 ```bash
-CHATQNA_CONTAINER=genieai_el-salvador_chatqna \
-VICTORIATRACES_SVC=genieai_el-salvador_victoriatraces \
-  python3 run_eval.py anchor gold_dataset.json report_A.json
+# Resolve the dynamic Swarm container name; set the VictoriaTraces service name
+# for your stack (<stack>_victoriatraces, hyphenated). See CLAUDE.md.
+export CHATQNA_CONTAINER=$(docker ps --format '{{.Names}}' | grep chatqna-xeon-backend-server | head -1)
+export VICTORIATRACES_SVC=<stack>_victoriatraces
+python3 run_eval.py anchor gold_dataset.json report_A.json
 ```
 
 Reports per-query + aggregate recall / precision / complete_recall / noise /

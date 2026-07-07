@@ -1461,6 +1461,7 @@ export default {
       'Hitilafu ya usanidi: {warnings}. Tafadhali angalia usanidi wa Msaada wa Haraka na mpangilio wa maarifa.',
     categoryNotFound: 'Kategoria "{label}" haipatikani katika mpangilio wa maarifa',
     serviceLabelMismatch: 'Huduma "{label}" inatumia lebo ya UI ambayo huenda isilingane na mpangilio wa maarifa',
+    noFilterWarning: 'Hakuna kichujio cha muktadha kinachofanya kazi — hoja itakuwa bila kichujio.',
     placeholder: 'Andika swali lako hapa...',
     sendButton: 'Tuma',
     fileReceived: 'Faili imepokelewa.',

@@ -1470,6 +1470,7 @@ export default {
   chatbot: {
     serviceLabelMismatch:
       "Le service « {label} » utilise une étiquette d'interface qui peut ne pas correspondre à la hiérarchie de connaissances",
+    noFilterWarning: 'Aucun filtre de contexte actif — la requête sera non filtrée.',
     categoryNotFound: 'Catégorie « {label} » introuvable dans la hiérarchie de connaissances',
     configMismatchWarning:
       "Incohérence de configuration : {warnings}. Vérifiez la configuration de l'Aide rapide et la hiérarchie de connaissances.",

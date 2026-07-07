@@ -440,7 +440,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final uri = Uri.parse('$streamBaseUrl/api/queries/stream');
     // Quick Help sets _activeServiceLabels; sidebar sets _selectedCategoryId.
     // Either constitutes a context-filtered query.
-    final hasContext = _selectedCategoryId != null || _activeServiceLabels.isNotEmpty;
+    final hasContext =
+        _selectedCategoryId != null || _activeServiceLabels.isNotEmpty;
     final request = http.Request('POST', uri)
       ..headers['Content-Type'] = 'application/json'
       ..headers['Accept'] = 'text/event-stream'
@@ -451,8 +452,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         if (hasContext) ...{
           'messages': messagesForApi,
           'context': {
-            'categoryLabel':
-                _selectedCategoryName.isNotEmpty ? _selectedCategoryName : null,
+            'categoryLabel': _selectedCategoryName.isNotEmpty
+                ? _selectedCategoryName
+                : null,
             'serviceLabels': _activeServiceLabels,
             'language': I18nService().currentLocale.languageCode.toUpperCase(),
           },

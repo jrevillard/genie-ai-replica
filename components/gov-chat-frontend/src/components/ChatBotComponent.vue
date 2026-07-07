@@ -515,10 +515,10 @@ export default {
     // *** UPDATED: Find category label by its key in the transformed tree data ***
     getCategoryLabelById(id) {
       if (id === null || id === undefined) {
-        const selectedServices = this.selectedContextItems.map((item) => item.serviceKey);
-        if (selectedServices.includes('just-chat')) {
-          return 'General';
-        }
+        // Just-Chat and other no-category selections: no category filter.
+        // Returning null (not 'General') keeps it consistent with the backend,
+        // which now preserves null instead of defaulting to 'General'. 'General'
+        // is not a real KB label and would match no chunk under the retriever filter.
         return null;
       }
 
@@ -526,34 +526,58 @@ export default {
       const category = this.serviceCategories.find((cat) => cat.catKey == id.toString());
       if (category) {
         // The service already provides the localized name in the `name` property
-        return category.name || `Category ${id}`;
+        return category.name || null;
       }
 
-      return `Category ${id}`; // Fallback
+      return null; // Unknown category — null means "no category filter" (do NOT send a `Category NN` string to the retriever)
     },
 
     checkContextConfig(context) {
+      // Returns false when the query MUST be blocked (applies to ALL users).
+      // Emits an informational warning to admins only.
       const user = this.$store.getters.currentUser;
-      if (!user || !(user.roles || []).map((r) => r.toLowerCase()).includes('admin')) return;
+      const isAdmin = !!(user && (user.roles || []).map((r) => r.toLowerCase()).includes('admin'));
 
       const warnings = [];
+
+      // Block conditions (all users):
+      // 1. categoryLabel is a raw unresolved `Category NN` string — would filter to zero
+      //    (a prior bug sent the fallback id string as a label; this guards against regressions)
+      // 2. user has context items selected but they resolved to NO labels — a misconfig
+      //    symptom (button clicked, but its serviceLabels/category are empty). A genuinely
+      //    empty context (Just Chat, no items selected) is NOT blocked — it's an unfiltered query.
+      let blocked = false;
       if (context.categoryLabel && /^Category \d+$/.test(context.categoryLabel)) {
+        blocked = true;
         warnings.push(this.translate('chatbot.categoryNotFound', '').replace('{label}', context.categoryLabel));
       }
-      if (context.serviceLabels?.length > 0) {
+      const hasServiceFilter = Array.isArray(context.serviceLabels) && context.serviceLabels.length > 0;
+      if (this.selectedContextItems.length > 0 && !hasServiceFilter && !context.categoryLabel) {
+        blocked = true;
+        warnings.push(this.translate('chatbot.noFilterWarning', 'No context filter active.'));
+      }
+
+      // Mismatch check: each service label must be a known KB label (in some item's
+      // serviceLabels array OR equal to an item's serviceKey). Catches misconfigured
+      // buttons whose title leaks into the filter. Uses array membership, not service===.
+      if (hasServiceFilter) {
         for (const label of context.serviceLabels) {
-          const item = this.selectedContextItems.find((i) => i.service === label);
-          if (!item) {
+          const matched = this.selectedContextItems.some(
+            (item) => (item.serviceLabels || []).includes(label) || item.serviceKey === label
+          );
+          if (!matched) {
             warnings.push(this.translate('chatbot.serviceLabelMismatch', '').replace('{label}', label));
           }
         }
       }
-      if (warnings.length > 0) {
+
+      if (warnings.length > 0 && isAdmin) {
         notificationService.warning(
           this.translate('chatbot.configMismatchWarning', '').replace('{warnings}', warnings.join('; ')),
           8000
         );
       }
+      return !blocked;
     },
 
     // Safely translate a key, with mapping for static strings
@@ -603,21 +627,34 @@ export default {
         const buttons = config?.features?.chat?.quickHelp?.buttons || [];
         const locale = this.currentLocale;
 
-        this.quickHelpButtons = buttons.map((button) => {
-          const title = resolveConfigText(button.title, locale);
-          const visibleText = resolveConfigText(button.action?.visibleText, locale);
-          const hiddenPrompt = resolveConfigText(button.action?.hiddenPrompt, locale);
+        // Filter hidden buttons (no matching corpus content) and resolve display text.
+        // serviceLabels (explicit English KB labels) drives the FILTER only:
+        //   - service       = localized display name (title, resolved per locale) — render only
+        //   - serviceKey    = stable English KB label (first of serviceLabels, or id/title fallback)
+        //   - serviceLabels = full English label array sent as the retriever filter
+        // Display (service) and filter (serviceKey/serviceLabels) are DECOUPLED: the button always
+        // shows its localized title, while the filter always uses English KB labels.
+        // Buttons without serviceLabels fall back to title-based behavior (backward compat).
+        this.quickHelpButtons = buttons
+          .filter((button) => !button.hidden)
+          .map((button) => {
+            const title = resolveConfigText(button.title, locale);
+            const visibleText = resolveConfigText(button.action?.visibleText, locale);
+            const hiddenPrompt = resolveConfigText(button.action?.hiddenPrompt, locale);
+            const explicitLabels = Array.isArray(button.serviceLabels) ? button.serviceLabels : null;
 
-          return {
-            service: title,
-            textKey: button.title,
-            visibleText: visibleText,
-            hiddenPrompt: hiddenPrompt,
-            icon: button.icon?.value,
-            category: button.category,
-            id: button.id
-          };
-        });
+            return {
+              service: title,
+              serviceLabels: explicitLabels,
+              serviceKey: explicitLabels ? explicitLabels[0] : button.id || title,
+              textKey: button.title,
+              visibleText: visibleText,
+              hiddenPrompt: hiddenPrompt,
+              icon: button.icon?.value,
+              category: button.category,
+              id: button.id
+            };
+          });
       } catch (error) {
         console.error('[ChatBotComponent] Failed to load Quick Help config:', error);
         this.quickHelpButtons = [];
@@ -654,18 +691,26 @@ export default {
       }
       const categoryId = rawOption.category || (rawOption.id !== 'just-chat' ? 'general' : null);
 
-      const contextExists = this.selectedContextItems.some(
-        (item) => item.service === rawOption.service && item.category === categoryId
+      // Quick Help is a mode switch: replace any prior Quick Help selection.
+      // Sidebar items (source !== 'quickHelp') are additive and survive.
+      // Also dedup: if the same Quick Help option is already selected, keep it as-is.
+      const existingIdx = this.selectedContextItems.findIndex(
+        (item) => item.source === 'quickHelp' && item.id === rawOption.id
       );
-
-      if (!contextExists) {
-        this.selectedContextItems.push({
-          service: rawOption.service,
-          serviceKey: rawOption.id || rawOption.service,
-          category: categoryId,
-          selected: true
-        });
+      if (existingIdx >= 0) {
+        return; // already selected — no-op (preserves prior dedup behavior)
       }
+      this.selectedContextItems = this.selectedContextItems.filter((item) => item.source !== 'quickHelp');
+
+      this.selectedContextItems.push({
+        service: rawOption.service,
+        serviceLabels: rawOption.serviceLabels || null,
+        serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
+        source: 'quickHelp',
+        id: rawOption.id,
+        category: categoryId,
+        selected: true
+      });
 
       if (rawOption.id !== 'just-chat') {
         this.currentCategoryId = categoryId;
@@ -735,7 +780,10 @@ export default {
           this.selectedContextItems = [
             {
               service: quickHelpOption.service,
-              serviceKey: quickHelpOption.id || quickHelpOption.service,
+              serviceLabels: quickHelpOption.serviceLabels || null,
+              serviceKey: quickHelpOption.serviceKey || quickHelpOption.id || quickHelpOption.service,
+              source: 'quickHelp',
+              id: quickHelpOption.id,
               category: this.currentCategoryId,
               selected: true
             }
@@ -785,7 +833,14 @@ export default {
         let queryData;
         const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
         if (contextOption === 'conversation-with-labels') {
-          const serviceLabels = this.selectedContextItems.map((item) => item.service);
+          // Build the retriever filter from English KB labels:
+          //  - Quick Help items: explicit serviceLabels array (English, may be multi-label)
+          //  - Sidebar items: serviceKey (stable English key; `service` is localized — never use as filter)
+          const serviceLabels = this.selectedContextItems.flatMap((item) =>
+            Array.isArray(item.serviceLabels) && item.serviceLabels.length > 0
+              ? item.serviceLabels
+              : [item.serviceKey || item.service]
+          );
           const messagesForQuery = this.chatMessages.map((msg) => ({
             role: msg.sender === 'user' ? 'user' : 'assistant',
             content: msg.content
@@ -820,7 +875,11 @@ export default {
           };
         }
 
-        this.checkContextConfig(queryData.context);
+        // checkContextConfig returns false when the query must be blocked
+        // (unresolved category id, or no filter active). Abort before sending.
+        if (this.checkContextConfig(queryData.context) === false) {
+          return;
+        }
 
         // Cancel any previous stream
         if (this.streamController) {

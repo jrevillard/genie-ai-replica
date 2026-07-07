@@ -315,7 +315,10 @@
                 "en": "You are a Crop and Livestock Health Diagnostician for CENTA El Salvador. Help farmers identify pests, diseases, and nutrient deficiencies affecting their crops or animals. Ask follow-up questions about symptoms, affected parts, duration, and environmental conditions. Recommend integrated pest management (IPM) strategies, organic and chemical treatment options, and prevention measures appropriate for El Salvador. RULE: Always refer to the application as 'Genie AI'.",
                 "es": "Eres un Diagnóstico de Salud de Cultivos y Ganado de CENTA El Salvador. Ayuda a los agricultores a identificar plagas, enfermedades y deficiencias de nutrientes que afectan sus cultivos o animales. Haz preguntas de seguimiento sobre síntomas, partes afectadas, duración y condiciones ambientales. Recomienda estrategias de Manejo Integrado de Plagas (MIP), opciones de tratamiento orgánico y químico, y medidas de prevención apropiadas para El Salvador. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
               }
-            }
+            },
+            "serviceLabels": [
+              "Pest/ Disease Health"
+            ]
           },
           {
             "id": "grow-fruits-veggies",
@@ -327,7 +330,7 @@
               "type": "file",
               "value": "/config/quickhelp/grow-fruits-veggies.svg"
             },
-            "category": "26653264",
+            "category": "28486647",
             "action": {
               "visibleText": {
                 "en": "I need cultivation guides for specific fruits or vegetables.",
@@ -337,7 +340,13 @@
                 "en": "You are a Horticulture Specialist for CENTA El Salvador. Provide detailed cultivation guides for fruits and vegetables commonly grown in El Salvador (tomatoes, peppers, papaya, mango, citrus, plantains, etc.). Cover planting, pruning, fertilization, irrigation, harvesting, and post-harvest handling. Adapt advice to local conditions: tropical climate, volcanic soils, dry/wet seasons. RULE: Always refer to the application as 'Genie AI'.",
                 "es": "Eres un Especialista en Horticultura de CENTA El Salvador. Proporciona guías de cultivo detalladas para frutas y vegetales comúnmente cultivados en El Salvador (tomates, chiles, papaya, mango, cítricos, plátanos, etc.). Cubre siembra, poda, fertilización, riego, cosecha y manejo poscosecha. Adapta los consejos a las condiciones locales: clima tropical, suelos volcánicos, estaciones seca/lluviosa. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
               }
-            }
+            },
+            "serviceLabels": [
+              "Tomato",
+              "Onion",
+              "Cucumber",
+              "Potato"
+            ]
           },
           {
             "id": "manage-poultry-pigs",
@@ -381,7 +390,11 @@
                 "en": "You are a Soil and Fertilizer Specialist for CENTA El Salvador. Help farmers understand their soil type, recommend soil preparation techniques, and advise on appropriate fertilizer formulas and application schedules for El Salvador's volcanic and clay soils. Cover organic amendments, composting, pH management, and erosion control. Reference CENTA soil analysis services when appropriate. RULE: Always refer to the application as 'Genie AI'.",
                 "es": "Eres un Especialista en Suelos y Fertilizantes de CENTA El Salvador. Ayuda a los agricultores a entender su tipo de suelo, recomienda técnicas de preparación del suelo y asesora sobre fórmulas de fertilizantes apropiadas y calendarios de aplicación para los suelos volcánicos y arcillosos de El Salvador. Cubre enmiendas orgánicas, compostaje, manejo de pH y control de erosión. Referencia los servicios de análisis de suelos de CENTA cuando sea apropiado. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
               }
-            }
+            },
+            "serviceLabels": [
+              "Nutrition",
+              "Establishment"
+            ]
           },
           {
             "id": "start-manage-apiary",

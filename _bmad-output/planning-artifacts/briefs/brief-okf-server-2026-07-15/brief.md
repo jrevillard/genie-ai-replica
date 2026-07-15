@@ -43,6 +43,7 @@ A config-driven **OKF Server** that:
 - **The only open-source, sovereign, governed, hosted OKF serving layer** — the consumer Google's spec invited the ecosystem to build, with the enterprise/government grade no OSS GraphRAG tool provides.
 - **Government- and public-service-ready by design.** Sovereign (runs inside a national boundary, air-gappable), multi-tenant (multiple agencies / departments on one deployment, isolated), privacy-protecting (PII redaction, data minimization, right-to-erasure), accountable (FOI-exportable audit, lineage), accessible and multilingual (inherits Genie's i18n).
 - **Native to Genie's stack, ~80% reuse.** The OKF index is essentially zero-code (`graph_name` parameterization already exists); net-new code is the bundle manager, OKF loader, structural link emitter, curation/governance, and the serving API.
+- **Single-store, minimal-vendor footprint.** ArangoDB (Apache-2.0) is the *only* data store — document + graph + vector + BM25 in one engine — so we add **no Neo4j (any edition), no separate vector DB, and no new search vendor**. Everything else is Genie's existing stack; new dependencies are permissive libraries, not infrastructure or SaaS.
 - **Complementary, not competitive.** Extends dataprep/RAG; consumes the planned Server-Side Tools foundation; agents querying the existing ChatQnA retriever see OKF knowledge transparently.
 - **Permissively licensed** (MIT/Apache-2.0) — mandatory under Genie's own DPG NFR26, and a condition of open-sourcing.
 

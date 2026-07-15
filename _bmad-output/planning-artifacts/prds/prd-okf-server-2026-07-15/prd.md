@@ -74,7 +74,7 @@ The **GENIE.AI OKF Server** is the open-source, enterprise- and government-grade
 - **Concept** — one `.md` document in a bundle. **Concept ID** = file path with `.md` removed.
 - **Frontmatter** — YAML metadata block at the top of a concept; only `type` is required by OKF.
 - **Index file / Log file** — OKF reserved files (`index.md`, `log.md`) for progressive disclosure and change history.
-- **OKF Server** — the new Genie service this PRD specifies (`genie-ai-overlay/okf/`); manages bundles, curation, governance, and serving.
+- **OKF Server** — the new Genie service this PRD specifies: an independent component at `components/okf-server/` (Node.js/Express, CommonJS, imports `components/shared/lib/`), behind Kong, that calls the Python dataprep/retriever for indexing/retrieval; manages bundles, curation, governance, and serving. (Location/stack per ADR-1.)
 - **OKF graph** — the ArangoDB graph/collections holding OKF-indexed knowledge under `graph_name="OKF"` (`OKF_SOURCE`, `OKF_ENTITY`, `OKF_HAS_SOURCE`, `OKF_LINKS_TO`).
 - **Structural link graph** — concept-to-concept edges derived from Markdown cross-links (distinct from dataprep's LLM-extracted entity graph), stored in `OKF_LINKS_TO`.
 - **dataprep / retriever** — existing Genie OPEA services that chunk/embed/store and hybrid-retrieve knowledge; reused unchanged.
@@ -334,7 +334,7 @@ The service exposes `/health` and `/ready` endpoints and Prometheus metrics (ing
 
 - **Licensing**: Permissive only (MIT/Apache-2.0/BSD) — mandated by Genie NFR26 and a condition of open-sourcing. GPL/AGPL tolerated solely for unmodified upstream consumed via API. (Decision log.)
 - **Vendors**: Single data store = ArangoDB; **no Neo4j (any edition)**, no separate vector DB, no Elasticsearch/Solr. Reuse Redis, Keycloak, Kong/Postgres, OTel/Victoria*, Docker Swarm, Ansible, GitLab CI. New deps are permissive libraries (python-frontmatter, markdown-it-py, LangChain `MarkdownHeaderTextSplitter`, FastMCP, Presidio, `jose`). (Decision log.)
-- **Stack**: Python/FastAPI OPEA service in `genie-ai-overlay/okf/`; `@register_microservice`; `CustomLogger` from `comps`; `httpx` (no `requests`); `os.getenv()` config; Ruff; ITU copyright headers. (Project context.)
+- **Stack**: independent Node.js/Express component at `components/okf-server/` (CommonJS, imports `components/shared/lib/`), behind Kong; calls the Python dataprep/retriever for indexing/retrieval (dataprep complement). OKF markdown/frontmatter loader location (Node-side parsing vs dataprep `_load_and_chunk` extension) → sub-ADR in Architecture. Auth mirrors gov-chat-backend (`jose`, JWKS via OIDC discovery). (ADR-1.)
 - **API conventions**: `/v1/...` or `/api/okf/...` prefix; camelCase request / snake_case response; ISO-8601 timestamps. (Project context.)
 
 ## 10. Integration and Dependencies

@@ -32,4 +32,4 @@ Ship a **thin steward surface via the REST API** in the MVP (`/api/okf/admin/*`,
 
 ## References
 
-- PRD §6.2, Open Question 7; SST Epic 4 (planned).
+- PRD §6.2, Open Question 7; SST Epic 4 (planned); Architecture §16 (authoring & curation tooling lanes — incl. the author-side local conformance validator/linter CLI).

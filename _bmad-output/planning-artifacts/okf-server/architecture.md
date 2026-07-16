@@ -102,7 +102,7 @@ All under a single deployment; OKF knowledge indexed at `graph_name="OKF"` (data
 | `OKF_SOURCE` | document (chunk) | `text`, `embedding`, `file_id`, `chunk_labels`, **+`tenant_id`**, **+`bundle_id`**, **+`concept_id`**, **+`bundle_version`**, `source_type:"okf"` |
 | `OKF_ENTITY` | document (LLM entity) | (dataprep-managed) + `tenant_id`, `bundle_id` |
 | `OKF_HAS_SOURCE` | edge | entity → chunk (dataprep) |
-| `OKF_LINKS_TO` | edge | **concept → concept** (structural, from markdown links) + `tenant_id`, `bundle_id` |
+| `OKF_LINKS_TO` | edge | **concept → concept** (structural, from markdown links) + `tenant_id`, `bundle_id`, `label` (anchor text) |
 | `okf_bundles` | document | `bundle_id`, `tenant_id`, `source_ref` (git URL+SHA / s3 uri+version), `version`, `lifecycle_state`, `okf_version`, `curator`, `timestamps`, `retention` |
 | `okf_concepts` | document | `concept_id`, `bundle_id`, `tenant_id`, `frontmatter` (type/title/description/resource/tags/timestamp), `path`, `conformance_issues`, `pii_state` |
 | `okf_acl` | document | `bundle_id`, `tenant_id`, `required_scopes`, `sensitivity` |
@@ -144,6 +144,7 @@ All under a single deployment; OKF knowledge indexed at `graph_name="OKF"` (data
 - **Tools**: `okf_search`, `okf_get_doc`, `okf_list_bundles`, `okf_outline` (same handlers as REST — one core, two transports).
 - Transport: Streamable HTTP (single `/mcp`), fronted by Kong AI MCP Proxy + OAuth2 plugins.
 - Progressive disclosure: 1 static resource (index/manifest) + search-then-fetch (à la Context7).
+- **No raw AQL exposed to agents** (ADR-okf-011): agents get only parameterized, depth-limited traversal (`neighbors?depth=`) + scoped search — they never construct AQL. This is a deliberate security choice for multi-tenant/government deployments (injection + authorization safety).
 
 ## 8. Security & Authorization
 
@@ -192,6 +193,7 @@ All under a single deployment; OKF knowledge indexed at `graph_name="OKF"` (data
 | okf-008 | Bundle content via document-repository (storage+ClamAV+handoff) | [docs/adr/okf-008-bundle-content-store.md](../../../docs/adr/okf-008-bundle-content-store.md) |
 | okf-009 | Performance/freshness targets + supply-chain CI | [docs/adr/okf-009-performance-and-supply-chain.md](../../../docs/adr/okf-009-performance-and-supply-chain.md) |
 | okf-010 | OKF parsing in Node (`components/okf-server/`); header-aware chunking fast-follow | [docs/adr/okf-010-okf-markdown-loader-location.md](../../../docs/adr/okf-010-okf-markdown-loader-location.md) |
+| okf-011 | No raw AQL to agents — parameterized traversal only | [docs/adr/okf-011-no-raw-aql-to-agents.md](../../../docs/adr/okf-011-no-raw-aql-to-agents.md) |
 
 ## 13. Phasing & Roadmap Alignment
 
@@ -205,3 +207,34 @@ All under a single deployment; OKF knowledge indexed at `graph_name="OKF"` (data
 - ArangoDB native vector index recall drift on incremental OKF growth — mitigate via ArangoSearch-view approx path (used by retriever today) or periodic retrain.
 - MCP spec `2026-07-28` RC may shift the post-MVP surface — design MCP handlers against `2025-11-25`, track RC.
 - Keycloak audience-mapper + RFC 8414 gaps — requires deploy-time config (document in ops guide).
+
+## 15. OPEA-overlay (dataprep/retriever) extension requirements
+
+Review of the current `genie-ai-overlay/` services (verified against code @ `0b6189b0b`) confirming the OKF graph is supported with minimal, **additive** change.
+
+**Retriever (`genieai_retriever_arangodb.py`) — essentially NO change required:**
+- `invoke()` reads `graph_name` per-request → OKF queries pass `graph_name="OKF"`.
+- BM25 ArangoSearch view (`<graph>_BM25_VIEW`) is ensured **lazily per `graph_name`** (`_ensure_bm25_view`, cached in `_bm25_views_ensured`) → `OKF_BM25_VIEW` is auto-created on the first OKF query.
+- Hybrid dense (COSINE) + BM25 + RRF + graph traversal (`fetch_neighborhoods` over `{graph}_LINKS_TO`/`_HAS_SOURCE`) are all `graph_name`-parameterized.
+- **ACL filtering reuses the existing `chunk_labels` filter** (`_chunk_passes_label_filter`, AND/OR strategy): encode OKF tenant/bundle as chunk labels (`t:<tenant>`, `b:<bundle>`) → per-tenant/per-bundle isolation with **zero retriever code change** (realizes ADR-okf-002 via the label mechanism Genie already ships).
+
+**dataprep (`genieai_dataprep_arangodb.py`) — small additive extensions:**
+- `_load_and_chunk` (L400) is generic (`RecursiveCharacterTextSplitter`); the **OKF-aware loader** (frontmatter, markdown structure, link extraction) is provided by the OKF Server (ADR-okf-010). Header-aware chunking is a fast-follow.
+- `ingest_file_with_guardrail` (`ArangoDBDataprepRequestFromDocRepo`) writes chunk docs keyed by `file_id` + `chunk_labels`. **Required additive fields** on the chunk doc: `concept_id`, `bundle_version`, `source_type:"okf"` — extend the request model additively (or OKF Server tags post-ingest) so concepts are citable/versioned; tenant/bundle ride on `file_labels` → `chunk_labels`.
+- `retract_file(file_id, graph_name)` cascades `_SOURCE/_ENTITY/_HAS_SOURCE/_LINKS_TO` by `file_id`. **Bundle/version-level retract** is a small extension (retract by `bundle_id` + `version`); OKF chunks/edges must carry that key so the existing cascade cleans them.
+- OKF structural edges written by the OKF Server into `OKF_LINKS_TO` MUST carry `file_id`/`bundle_id` (+ `label`) for the retract cascade + link context.
+
+**Net:** retriever ~unchanged; dataprep = OKF loader + additive metadata fields + bundle-level retract — all additive (NFR-S7, no breaking chunk-schema changes). Dependencies reused unchanged: TEI embedding, `langchain-arangodb`, OPEA `comps`.
+
+## 16. Bundle authoring & curation tooling
+
+Four actor lanes (expands ADR-okf-007):
+
+| Lane | Role | Tooling |
+|---|---|---|
+| **Author** (create) | Write/produce OKF bundles | Hand-author Markdown + YAML frontmatter in a Git repo (knowledge-as-code) **or** generate via a producer (Google enrichment agent, OKFy, catalog exporter). The OKF Server does **not** author. A **local conformance validator/linter** (reuse `Sudhakaran88/okf-conformance`, MIT — or a thin `genie-okf` CLI) lets authors run OKF §9 checks + lint before committing. |
+| **Operator** (ingest) | Register + sync sources | Declare Git/S3 sources in OKF Server config; the server syncs → validates (§9) → ClamAV (via **document-repository**) → PII redact (Presidio) → index (dataprep) → stage in `review`. |
+| **Steward** (curate) | Review/approve/publish/version/govern | MVP: **steward REST admin API** (`/api/okf/admin/*`, `tools-admin` role) — review conformance/PII/quality reports, approve/reject, publish (immutable version), set per-bundle ACL + retention, export FOI audit. A rich UI is deferred to **SST Epic 4** admin (consumes the same REST). |
+| **Agent** (consume) | Search/get/traverse | REST (MVP): search/get/list/outline; MCP (post-Sprint 24). |
+
+**Tooling layer = local validator CLI (authors) + steward REST API (operators/stewards, MVP) + SST Epic 4 admin UI (future).** No standalone OKF UI is built in v1; curation is API-driven and UI-optional.

@@ -151,6 +151,12 @@ Changed/removed concepts are incrementally updated or cascaded-deleted (reusing 
 
 **Feature-specific NFRs:** idempotent, content-hash keyed (NFR-S4); additive schema only (NFR-S7).
 
+#### FR-22: Bundle content via the document-repository (required)
+Bundle content is stored, virus-scanned, and handed to dataprep **through the existing `components/document-repository`** (storage + ClamAV via `securityService.scanBuffer` + dataprep handoff) via a **new bundle-aware ingest route** — reusing the existing component, not introducing a new storage vendor. Realizes UJ-1; ADR-okf-008.
+**Consequences:**
+- Archives/bundle directories are accepted on the new route (the standard upload path's extension allowlist / magic-byte validator / mandatory langdetect are bypassed for bundles).
+- No new object store or scanning infrastructure is introduced; the document-repository remains the single document/knowledge store.
+
 ### 4.3 Bundle Registry & Curation
 
 **Description:** The OKF Server owns the **bundle lifecycle and curation** — the managed, governed knowledge layer that raw feed-ingestion cannot provide. Bundles move through states; provenance/lineage, retention/TTL, and quality metrics are captured; stewards review and approve before publication. Realizes UJ-1, UJ-3.
@@ -270,6 +276,7 @@ The service exposes `/health` and `/ready` endpoints and Prometheus metrics (ing
 ### 6.1 In Scope
 - Config-driven Git + S3 bundle sources, sync, version/provenance, change-detect, incremental re-index (FR-1,2,3,8).
 - OKF-aware ingestion: §9 conformance validation, ClamAV, PII redaction, frontmatter/markdown parsing, structural link graph into the `OKF` ArangoDB graph via dataprep (FR-4,5,6,7).
+- **Bundle content leverages the existing `components/document-repository`** (storage + ClamAV scan + dataprep handoff) via a new bundle-aware ingest route — no new storage vendor. **(FR-22, ADR-okf-008 — required.)**
 - Bundle registry & curation: lifecycle, review/approve, versioning, retention/TTL, quality metrics (FR-9–13).
 - Read-only REST serving: search, get-document, list-bundles, outline; progressive disclosure, token caps, cursor pagination (FR-14,15,16). MCP-ready handlers (FR-17).
 - Access control, governance, traceability: Keycloak OIDC + per-bundle/per-tenant RBAC, FOI-exportable audit, OTel tracing (FR-18,19,20).

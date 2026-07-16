@@ -194,6 +194,10 @@ All under a single deployment; OKF knowledge indexed at `graph_name="OKF"` (data
 | okf-009 | Performance/freshness targets + supply-chain CI | [docs/adr/okf-009-performance-and-supply-chain.md](../../../docs/adr/okf-009-performance-and-supply-chain.md) |
 | okf-010 | OKF parsing in Node (`components/okf-server/`); header-aware chunking fast-follow | [docs/adr/okf-010-okf-markdown-loader-location.md](../../../docs/adr/okf-010-okf-markdown-loader-location.md) |
 | okf-011 | No raw AQL to agents — parameterized traversal only | [docs/adr/okf-011-no-raw-aql-to-agents.md](../../../docs/adr/okf-011-no-raw-aql-to-agents.md) |
+| okf-012 | Multi-graph grounding via retriever extension (CORE) | [docs/adr/okf-012-multi-graph-grounding.md](../../../docs/adr/okf-012-multi-graph-grounding.md) |
+| okf-013 | Thread `graph_name` end-to-end + fix latent bugs | [docs/adr/okf-013-graph-name-wiring.md](../../../docs/adr/okf-013-graph-name-wiring.md) |
+| okf-014 | Repository = OKF bundle = one domain; domains = service-category hierarchy | [docs/adr/okf-014-repository-model.md](../../../docs/adr/okf-014-repository-model.md) |
+| okf-015 | In-app authoring/curation (Markdown editor + repo/bundle CRUD) | [docs/adr/okf-015-in-app-authoring-curation.md](../../../docs/adr/okf-015-in-app-authoring-curation.md) |
 
 ## 13. Phasing & Roadmap Alignment
 

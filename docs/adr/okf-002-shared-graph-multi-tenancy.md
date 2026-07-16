@@ -1,7 +1,7 @@
 # ADR okf-002: Multi-tenancy via a shared OKF graph + tenant/bundle ACL filters
 
-- **Status**: Accepted
-- **Date**: 2026-07-15
+- **Status**: Revised 2026-07-16 — superseded by okf-014 (one graph per repository) + okf-012 (multi-graph grounding). The "shared OKF graph" below is retained as historical context; the production design uses **one graph per repository (`OKF_{repo_id}`)** with ACL via `chunk_labels`.
+- **Date**: 2026-07-15 (revised 2026-07-16)
 - **Decision owners**: Jerome Revillard (architect), Genie.ai Dev
 
 ## Context

@@ -19,6 +19,8 @@ authors: Genie.ai Dev
 
 # PRD: GENIE.AI OKF Server
 
+> ⚠️ **Superseded for production scope by the [Production Specification](../okf-server/okf-production-specification.md).** This PRD's "MVP / post-MVP / deferred" framing is **obsolete** — the OKF Server is a production framework for any RAG use case (any domain, across domains), with multiple OKF repositories (one graph per repo), unified multi-graph grounding, full CRUD, in-app authoring/curation, and a Vue 3 admin ingestion UI. Read this PRD as foundational context (vision, FRs, NFRs); for authoritative production design see the Production Specification + ADRs `okf-001..015`.
+
 ## 0. Document Purpose
 
 This PRD defines the **OKF Server** initiative for an audience of product management, Genie platform stakeholders, and downstream BMAD workflow owners (architecture, epics/stories, QA). It is built on — and does not duplicate — the [Product Brief](../../briefs/brief-okf-server-2026-07-15/brief.md) (vision/scope) and the [Research Addendum](../../briefs/brief-okf-server-2026-07-15/addendum.md) (verified integration map, reuse matrix, competitive/MCP/Keycloak/NFR research). All locked decisions live in the [decision log](../../briefs/brief-okf-server-2026-07-15/.decision-log.md). The PRD is Glossary-anchored; features are grouped with globally-numbered FRs; assumptions are tagged inline (`[ASSUMPTION: …]`) and indexed in §13.

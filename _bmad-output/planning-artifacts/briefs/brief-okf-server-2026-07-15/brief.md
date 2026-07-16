@@ -14,6 +14,8 @@ authors: Genie.ai Dev
 
 # Product Brief: GENIE.AI OKF Server
 
+> **Scope note (2026-07-16):** This brief is the original vision. Scope is refined and **superseded for production** by the [PRD](../../prds/prd-okf-server-2026-07-15/prd.md) — the OKF Server is a **production framework** (any domain, across domains; multiple repositories each in their own graph; unified multi-graph grounding; in-app authoring/curation), not the read-only MVP slice described in the §Scope below. Read the PRD for authoritative scope; read the [Architecture](../../prds/prd-okf-server-2026-07-15/architecture.md) for design.
+
 ## Executive Summary
 
 In June 2026 Google published the **Open Knowledge Format (OKF v0.1)** — a vendor-neutral way to package organizational knowledge as Markdown + YAML frontmatter so any AI agent can read it. Google was explicit that OKF is a *format, not a platform*: it deliberately does not prescribe how knowledge bundles are stored, served, secured, curated, or queried. The result is a gap every agent builder hits — there is no open, sovereign, multi-tenant service that *hosts* many OKF bundles and *serves* them to agents with enterprise-grade governance. Every existing OKF consumer is either a local stdio tool or locked to Google Cloud; every open-source GraphRAG / agent-memory engine ships with **no multi-tenancy, RBAC, audit, or data-residency story** (Graphlit is winding down; KùzuDB is archived).

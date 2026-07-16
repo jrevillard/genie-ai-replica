@@ -40,4 +40,4 @@ The server constructs the AQL internally from these parameters, binding authoriz
 
 ## References
 
-- Architecture §7 (no-AQL note), §8 Security; ADR-okf-002; external review recommendation to expose AQL — deliberately declined.
+- Architecture §8.4, §11 (Security); ADR-okf-002; external review recommendation to expose AQL — deliberately declined.

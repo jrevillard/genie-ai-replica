@@ -33,10 +33,10 @@ OKF concepts need frontmatter → metadata, Markdown-header-aware chunking, and 
 - **Negative**: MVP uses dataprep's generic chunking on concept bodies (header-aware chunking deferred); cross-tier handoff per concept.
 - **Mitigations**: concepts are usually small/structured (generic chunking acceptable for MVP); fast-follow delivers header-aware chunking; idempotent content-hash keys prevent re-embed churn.
 
-## Related — dataprep extensions (Architecture §15)
+## Related — dataprep extensions (Architecture §9)
 
 OKF tenant/bundle ACL is realized by encoding `t:<tenant>` / `b:<bundle>` as `chunk_labels`, reusing the retriever's **existing** label filter (`_chunk_passes_label_filter`, AND/OR) — **zero retriever code change**. The OKF-specific chunk-doc fields (`concept_id`, `bundle_version`, `source_type:"okf"`) are additive; tenant/bundle ride on `file_labels` → `chunk_labels`. OKF link edges written into `OKF_LINKS_TO` carry `file_id`/`bundle_id` + `label` so the existing `retract_file` cascade cleans them.
 
 ## References
 
-- PRD FR-6, FR-7; Architecture §4, §5, §6.1, §15.
+- PRD FR-6, FR-7; Architecture §4, §6, §9.

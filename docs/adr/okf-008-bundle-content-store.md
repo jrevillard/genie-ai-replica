@@ -14,7 +14,7 @@ OKF bundle bytes need persistent storage, virus scanning, and a path into datapr
 
 ## Decision
 
-**Reuse the document-repository as the bundle content + scan + handoff backend**, extended with a **new bundle-aware route** (`/api/files/ingest-bundle`) that accepts archives/directories, reuses `securityService.scanBuffer` (ClamAV), and writes concept docs — **bypassing** text-extraction/langdetect/single-base64. The OKF Server owns bundle registry/curation/serving; the document-repository owns bytes + scan + handoff; ArangoDB (`OKF_*`) owns the indexed knowledge.
+**Reuse the document-repository as the bundle content + scan + handoff backend**, extended with a **new bundle-aware route** (`/api/files/ingest-bundle`) that accepts archives/directories, reuses `securityService.scanBuffer` (ClamAV), and writes concept docs — **bypassing** text-extraction/langdetect/single-base64. The OKF Server owns bundle registry/curation/serving; the document-repository owns bytes + scan + handoff; ArangoDB (`OKF_*`) owns the indexed knowledge. The document-repository **retains the ingested bundle (versioned)** and is the **single source of truth for all internal Genie components after upload** (PRD FR-27); **versioning is consolidated here** (each publish = a versioned snapshot). See [ADR-okf-016](okf-016-external-source-management.md) for the source-of-truth boundaries + external-origin management.
 
 ## Alternatives considered
 
@@ -28,7 +28,8 @@ OKF bundle bytes need persistent storage, virus scanning, and a path into datapr
 - **Positive**: single document repository; reuses ClamAV + storage + handoff; no new vendor.
 - **Negative**: document-repository gets a new route; its upload-oriented model doesn't fit bundles natively (route bypasses most of its pipeline).
 - **Mitigations**: clearly scoped bundle route; reuse only storage + scan + handoff.
+- The retained versioned copy means the external Git/S3 origin can disappear without breaking serving ([ADR-okf-016](okf-016-external-source-management.md)); retention/TTL (PRD FR-12) bounds storage growth.
 
 ## References
 
-- PRD §10; Architecture §2, §6.1; decision log (doc-repo decision).
+- PRD FR-22, FR-27, FR-28; Architecture §6; [ADR-okf-016](okf-016-external-source-management.md); decision log (doc-repo decision).

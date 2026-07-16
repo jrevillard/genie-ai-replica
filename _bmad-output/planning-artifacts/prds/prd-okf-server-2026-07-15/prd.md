@@ -77,6 +77,9 @@ The **GENIE.AI OKF Server** is the open-source, enterprise- and government-grade
 - **dataprep / retriever** — existing Genie OPEA services; reused and **extended additively** (graph_name wiring, multi-graph fan-out, repo-level retract).
 - **Tenant** — an isolated administrative/agency scope on a shared deployment.
 - **SST** — the Server-Side Tools initiative (planned); the foundation OKF Server consumes for the MCP transport (Registry, ToolExecutor, Stream-Ingestor, mcpo).
+- **Source origin** — the **external, user-owned** Git repository or S3-compatible bucket a repository is synced from (any host/provider; distinct from the Genie framework code repo). Not under Genie's control; consulted **only at sync time**.
+- **Source of truth (content)** — after upload + ingestion, the **document-repository** is the single source of truth for all internal Genie components; the external origin is a sync source, not a runtime dependency.
+- **Document reference** — a stable identifier/URL into the document-repository that lets the UI, chat citations, and agents link a user to view the original source document in the browser.
 
 ## 4. Features
 
@@ -91,6 +94,7 @@ An authenticated steward can register a Git or S3 source for a repository (type,
 **Consequences:**
 - Registering an unreachable/inaccessible source yields a structured error with the failing check; nothing is indexed.
 - Credentials never appear in config or logs.
+- Sources are **external, user-owned** repos/buckets (any Git host/provider or S3-compatible store), distinct from the Genie framework code repo; each source carries its own credentials and ref.
 
 #### FR-2: Sync and change-detect
 The system syncs registered sources on schedule or webhook and detects changes (Git: commit-diff `OLD..NEW --name-only`; S3: ETag/LastModified; content SHA-256 idempotency key) without full re-ingest of unchanged concepts. Realizes UJ-1.
@@ -98,12 +102,14 @@ The system syncs registered sources on schedule or webhook and detects changes (
 - A source updated with one new concept re-indexes only that concept within the freshness target (NFR-S4).
 - Re-syncing an unchanged source performs no re-embedding (SHA-256 match).
 - A failed sync is retried with backoff and surfaced as degraded health.
+- The system **periodically checks origin reachability** and detects deletion/inaccessibility; if the external origin disappears, the steward is alerted and serving continues from the **retained document-repository copy** (the runtime source of truth) — no silent breakage, and **no query-time dependency on the origin**.
 
 #### FR-3: Version tracking & provenance
 Each indexed repository version records its source ref (commit SHA / S3 version), fetch timestamp, curator, and a stable version identifier. Realizes UJ-2, UJ-3.
 **Consequences:**
 - A concept served to an agent carries its repository + version + concept ID for citation.
 - An operator can list versions of a repository and pin/diff them.
+- Versioning is consolidated on the **document-repository** (each publish = a versioned snapshot stored there); OKF metadata references the document-repo version, so versions survive even if the external origin is deleted.
 
 #### FR-23: Repository lifecycle & CRUD
 An authenticated steward (`tools-admin`) can **create, read/list, update, and delete** repositories. Creating a repository mints `repo_id` and reserves `graph_name = OKF_{repo_id}` (graph created on first ingest); the repository is bound to a domain (service-category key). Deleting a repository cascades — retracts its entire graph + metadata, audited, with a confirmation + retention grace. Realizes UJ-1, UJ-3. ([ADR-okf-014](../../../../docs/adr/okf-014-repository-model.md), [ADR-okf-002](../../../../docs/adr/okf-002-shared-graph-multi-tenancy.md))
@@ -150,6 +156,12 @@ Changed/removed concepts are incrementally updated or cascaded-deleted. Retracti
 - A concurrent query during re-index sees the last-good index until the new one is consistent.
 
 **Feature-specific NFRs:** idempotent, content-hash keyed (NFR-S4); additive schema only (NFR-S7).
+
+#### FR-22: Bundle content via the document-repository (required)
+Bundle/repository content is stored, scanned, and handed to dataprep **through the existing `components/document-repository`** via a new bundle-aware ingest route — reusing the existing component, **not introducing a new storage vendor**. The document-repository **retains the ingested bundle (versioned)** and is the **single source of truth** for all internal Genie components after upload (see FR-27). Realizes UJ-1; [ADR-okf-008](../../../../docs/adr/okf-008-bundle-content-store.md), [ADR-okf-016](../../../../docs/adr/okf-016-external-source-management.md).
+**Consequences:**
+- Archives/bundle directories are accepted on the new route (the standard upload path's extension allowlist / magic-byte validator / langdetect are bypassed for bundles).
+- No new object store or scanning infrastructure is introduced; the document-repository remains the single document/knowledge store.
 
 ### 4.3 Curation & In-App Authoring
 
@@ -274,6 +286,24 @@ The service exposes `/health` and `/ready` endpoints and Prometheus metrics (ing
 **Consequences:**
 - Orchestrator health checks pass/fail correctly; metrics appear in existing Grafana dashboards.
 
+### 4.8 Source of Truth & Document References
+
+**Description:** After upload + ingestion, the **document-repository is the single source of truth** for OKF content inside Genie — internal components never depend on the external origin at runtime. The external origin (Git/S3) is *retained-but-not-controlled*: the system checks it periodically and degrades gracefully if it disappears. Stable document-repository references let the UI, chat citations, and agents link users to the original source documents. Realizes UJ-1, UJ-2, UJ-3.
+
+**Functional Requirements:**
+
+#### FR-27: Document-repository as single source of truth (post-ingest)
+Once a repository is uploaded, the document-repository holds the retained, versioned copy and is the authoritative content source for all internal Genie components (dataprep, retriever, OKF Server, frontend). Internal components do **not** reach back to the external Git/S3 origin at query/serve time; the origin is consulted only at sync (FR-2). Realizes UJ-1, UJ-2. ([ADR-okf-008](../../../../docs/adr/okf-008-bundle-content-store.md), [ADR-okf-016](../../../../docs/adr/okf-016-external-source-management.md))
+**Consequences:**
+- Removing/deleting the external origin does not break serving — the retained document-repository copy is used and the steward is alerted to the origin's absence.
+- Re-index/re-serve uses the document-repository copy, never the origin.
+
+#### FR-28: Stable document references & "view source" links
+The document-repository exposes **stable document references** (IDs/URLs) for every ingested concept/bundle; the OKF Server, admin UI (FR-26), chat citations, and agent responses (FR-15) use them to link users to **view the original source document in the browser**. Realizes UJ-2.
+**Consequences:**
+- A served concept/chunk carries a resolvable link to its source document in the document-repository.
+- Links remain stable across re-indexes (tied to the document-repo document ID, not a transient path or the external origin).
+
 ## 5. Non-Goals (Explicit — product boundaries, not temporal deferrals)
 
 - **Not a producer-replacement for external catalogs.** Exporting from Dataplex/Collibra/Unity is done by external producers; OKF Server *hosts and serves*, and offers in-app authoring for human curators.
@@ -292,6 +322,7 @@ The service exposes `/health` and `/ready` endpoints and Prometheus metrics (ing
 - Unified multi-graph grounding + agent serving: retriever fan-out+RRF across `GRAPH` + authorized `OKF_*`; search/get/list/outline; MCP-ready handlers (FR-24, 14, 15, 16, 17).
 - Vue 3 admin ingestion & curation UI (FR-26).
 - Access control, governance, traceability; observability & operations (FR-18, 19, 20, 21).
+- Source of truth & document references: document-repository as single source of truth post-ingest; stable doc-repo references + "view source" links; external-origin health checks + deletion detection + graceful fallback (FR-27, 28; FR-2).
 - Open-source packaging (permissive license, ITU copyright headers, CI build/scan/promote per ADR-0001).
 
 **MCP transport** is the only capability sequenced after the REST surface (gated on SST + Sprint 24 #603 — transport only; the handlers ship with REST).

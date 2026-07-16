@@ -25,6 +25,7 @@ adrs:
   - ../../../../docs/adr/okf-013-graph-name-wiring.md
   - ../../../../docs/adr/okf-014-repository-model.md
   - ../../../../docs/adr/okf-015-in-app-authoring-curation.md
+  - ../../../../docs/adr/okf-016-external-source-management.md
 authors: Genie.ai Dev
 ---
 
@@ -118,6 +119,8 @@ All via the OKF Server REST API (`/api/okf/*`, Kong-terminated OIDC, role `tools
 - **Source management** (`/api/okf/repos/{repo}/source`): register/update Git or S3; sync now; webhooks + scheduled poll; change detection; health in `okf_sources`.
 
 ## 6. Ingestion pipeline (floor to ceiling — PRD FR-4..8, FR-22)
+
+> **Source-of-truth boundaries ([ADR-okf-016](../../../../docs/adr/okf-016-external-source-management.md)):** the external Git/S3 origin is a **sync source only** (consulted at sync, never at query/serve time); the **document-repository** retains the versioned copy and is the **single source of truth** for all internal components after upload; ArangoDB is the derived indexed view. Origins are **checked periodically**; deletion/inaccessibility is **detected and handled gracefully** (continue serving from the retained copy + alert the steward). "View source" links resolve to document-repository references, never the external origin URL.
 
 1. **Trigger** — operator action (admin UI "Sync"/"Ingest"), webhook, or schedule → OKF Server `source-sync` enqueues changed concepts (Redis Streams + DLQ).
 2. **Fetch + parse** — OKF Server pulls from Git/S3; `okf-parser` (gray-matter + markdown-it AST) extracts frontmatter, body, structural links (anchor text → `label`).

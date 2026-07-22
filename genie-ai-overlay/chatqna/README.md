@@ -36,11 +36,6 @@ This service extends the standard OPEA ChatQnA implementation with ITU-specific 
 
 ### Advanced Features
 
-- **Translation Modes**:
-  - With translation service (CHATQNA_DAVID)
-  - Without translation (CHATQNA_MACDAVID)
-  - Full GENIE.AI mode (CHATQNA_GENIE_AI)
-
 - **Service Integrations**:
   - Guardrail service for content filtering
   - Translation service for multi-language support
@@ -128,7 +123,6 @@ The service supports three deployment modes configured via environment variables
 
 **Features**:
 - Full translation service integration
-- Guardrail service enabled
 - All RAG pipeline components active
 - Complete multilingual support
 
@@ -139,36 +133,19 @@ export TRANSLATION_SERVICE_ENABLED=true
 export GUARDRAIL_SERVICE_ENABLED=true
 ```
 
-### CHATQNA_DAVID (With Translation)
+### CUSTOM (define as part of the ChatQnAService class)
 
-**Description**: GENIE.AI with translation services
+**Description**: GENIE.AI custom pipeline
 
-**Features**:
-- Translation service enabled
-- Guardrail service enabled
-- RAG pipeline active
-- Optimized for multilingual deployments
+**Custom Features (EXAMPLE)**:
+- Full translation service integration
+- Reranker component disabled  
 
-**Environment Variables**:
+**Environment Variables (EXAMPLE)**:
 ```bash
-export CHATQNA_MODE="CHATQNA_DAVID"
+export CHATQNA_MODE="CUSTOM_MODE_NAME"
 export TRANSLATION_SERVICE_ENABLED=true
-```
-
-### CHATQNA_MACDAVID (Without Translation)
-
-**Description**: GENIE.AI without translation (English-only)
-
-**Features**:
-- Translation service disabled
-- Guardrail service enabled
-- RAG pipeline active
-- Optimized for single-language deployments
-
-**Environment Variables**:
-```bash
-export CHATQNA_MODE="CHATQNA_MACDAVID"
-export TRANSLATION_SERVICE_ENABLED=false
+export RERANKER_SERVICE_ENABLED=false
 ```
 
 ---

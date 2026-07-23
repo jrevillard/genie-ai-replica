@@ -1355,6 +1355,7 @@ export default {
       'Ketidakcocokan konfigurasi: {warnings}. Silakan periksa konfigurasi Bantuan Cepat dan hierarki pengetahuan.',
     categoryNotFound: 'Kategori "{label}" tidak ditemukan dalam hierarki pengetahuan',
     serviceLabelMismatch: 'Layanan "{label}" menggunakan label UI yang mungkin tidak cocok dengan hierarki pengetahuan',
+    noFilterWarning: 'Tidak ada filter konteks aktif — kueri akan tidak difilter.',
     placeholder: 'Ketik pertanyaan Anda di sini...',
     sendButton: 'Kirim',
     fileReceived: 'File berhasil diterima.',

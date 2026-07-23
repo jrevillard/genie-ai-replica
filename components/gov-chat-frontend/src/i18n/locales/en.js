@@ -1356,6 +1356,7 @@ export default {
       'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',
     categoryNotFound: 'Category "{label}" not found in knowledge hierarchy',
     serviceLabelMismatch: 'Service "{label}" uses a UI label that may not match the knowledge hierarchy',
+    noFilterWarning: 'No context filter active — query will be unfiltered.',
     placeholder: 'Type your query here...',
     sendButton: 'Send',
     fileReceived: 'File received successfully.',

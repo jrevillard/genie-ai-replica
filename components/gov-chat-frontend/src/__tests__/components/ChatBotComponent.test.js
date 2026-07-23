@@ -1762,10 +1762,12 @@ describe('ChatBotComponent', () => {
         _key: 'test-admin'
       });
 
-      // Add a properly matched context item
+      // Add a properly matched context item. Under the new contract the retriever
+      // filter label is the item's serviceKey (English KB label), not the
+      // localized `service`. serviceKey must match the sent serviceLabels entry.
       vm.selectedContextItems.push({
         service: 'Test Service',
-        serviceKey: 'test-key',
+        serviceKey: 'Test Service',
         category: 'general',
         selected: true
       });

@@ -566,6 +566,28 @@ describe('QueryService', () => {
       const result = await queryService.initStreamQuery(data, {});
       expect(result.queryId).toBe('stream-1');
     });
+
+    it('should preserve null categoryLabel (no "General" default) when categoryLabel is null', async () => {
+      const data = createMockQueryData({ context: { categoryLabel: null, serviceLabels: ['Tomato'] } });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.opeaPayload.context.categoryLabel).toBeNull();
+      expect(result.opeaPayload.context.serviceLabels).toEqual(['Tomato']);
+    });
+
+    it('should default missing context to null categoryLabel (not "General")', async () => {
+      const data = createMockQueryData({ context: undefined });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.opeaPayload.context.categoryLabel).toBeNull();
+    });
+
+    it('should pass through a valid categoryLabel unchanged', async () => {
+      const data = createMockQueryData({ context: { categoryLabel: 'Crops', serviceLabels: [] } });
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
+      const result = await queryService.initStreamQuery(data, {});
+      expect(result.opeaPayload.context.categoryLabel).toBe('Crops');
+    });
   });
 
   describe('finalizeStreamQuery', () => {

@@ -223,14 +223,6 @@
         and git_token is defined
         and git_token | length > 0)
 
-    - name: Info — cloning public repo (no credentials)
-      ansible.builtin.debug:
-        msg: "Git credentials not provided — cloning public repository"
-      when: >-
-        not (git_username is defined
-        and git_token is defined
-        and git_token | length > 0)
-
     - name: Check if git repository exists
       ansible.builtin.stat:
         path: "{{ deploy_dir }}/.git"

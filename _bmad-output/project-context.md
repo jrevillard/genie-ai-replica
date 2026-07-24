@@ -213,7 +213,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Deploy: `set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai`
 - GPU: `set -a && source .env && source env.t4 && docker stack deploy -c docker-compose.yaml genieai`
 - Remove: `docker stack rm genieai`
-- Build images: `docker build -t <tag> <context>` (see site/content/en/docs/deployment/docker-swarm-setup.md Step 5)
+- Build images (local dev): `docker compose build [service]` (Swarm pulls pre-built CI images from GitLab Container Registry)
 - Validate: `set -a && source .env && set +a && docker compose config > /dev/null`
 
 #### Git

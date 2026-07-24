@@ -746,7 +746,7 @@ GENIE_AI_KEYCLOAK_CONFIG_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/gen
 GENIE_AI_KEYCLOAK_CONFIG_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 GENIE_AI_TEMPO_PROXY_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-tempo-proxy
 GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
-#   Docker: N/A (images pulled from registry or built locally)
+#   Docker: N/A (images built locally for `docker compose up`, pulled from registry for Swarm)
 #   Swarm:  images pulled from GitLab Container Registry (per-service vars above)
 #
 # NGINX_PUBLIC_DOMAIN=<gateway-node-fqdn>

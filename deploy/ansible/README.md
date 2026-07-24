@@ -203,7 +203,6 @@ Set in `group_vars/<env>/vars.yml`:
 | `nginx_https_port` | `443` | HTTPS port (only set if non-default) |
 | `nginx_permissions_policy` | `camera=(), microphone=(), geolocation=()` | Nginx Permissions-Policy header |
 | `kong_trusted_ips` | `10.0.0.0/8` | CIDR range for X-Forwarded-* header passthrough. Kong trusts these IPs for `X-Forwarded-Proto/Host/Port/Prefix`. Docker Compose: `172.16.0.0/12`, Swarm overlay: `10.0.0.0/8` |
-| `registry_port` | `5000` | Local Docker registry port |
 
 ### Frontend Configuration
 
@@ -609,7 +608,6 @@ If ports 80/443 are occupied (e.g. by another stack), override them in your envi
 # group_vars/<env>/vars.yml
 nginx_http_port: "1080"
 nginx_https_port: "1443"
-registry_port: "5001"
 ```
 
 The playbook generates `.env` with these values, and `docker-compose.yaml` uses them as published ports. Only set non-default values — defaults (80, 443, 5000) are omitted from `.env` automatically.

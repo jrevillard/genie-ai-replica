@@ -35,8 +35,8 @@
 #   2. Node labels: docker node update --label-add gpu=true <gpu-node>
 #                docker node update --label-add gateway=true <gateway-node>
 #                docker node update --label-add genieai=true <genieai-node>
-#   3. Local registry: docker run -d -p 5000:5000 --name registry registry:2
-#   4. Images pre-built and pushed to registry
+#   3. Docker login to GitLab Container Registry (all nodes that pull images)
+#   4. Images pre-built by CI and pulled from registry automatically
 #   5. .env configured (see env template)
 # =============================================================================
 

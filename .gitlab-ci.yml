@@ -89,7 +89,7 @@ workflow:
   variables:
     COMPOSE_PROJECT_NAME: "ci-$CI_PIPELINE_ID"
     # Pull candidate images from the tmp/ quarantine namespace (where build:image
-    # pushes pre-promote candidates). IMAGE_TAG matches the candidate tag.
+    # pushes pre-promote candidates). GENIE_AI_GLOBAL_TAG matches the candidate tag.
     GENIE_AI_REGISTRY: "$CI_REGISTRY_IMAGE/tmp"  # e2e pulls candidates from tmp/ namespace
   allow_failure: false
   tags: [docker]

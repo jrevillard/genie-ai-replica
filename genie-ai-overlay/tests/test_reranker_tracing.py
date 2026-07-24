@@ -82,7 +82,7 @@ class TestRerankingEndpointSpan:
             await rms_module.reranking(input_data)
 
             tracer.start_as_current_span.assert_called_with("reranker.rerank")
-            span.set_attribute.assert_any_call("reranker.strategy", "adaptive")
+            span.set_attribute.assert_any_call("reranker.strategy", "slice")
 
     @pytest.mark.asyncio
     async def test_reranking_records_input_and_output_doc_counts(self, mock_tracer):
@@ -201,6 +201,7 @@ class TestRerankerComponentSpan:
 
         mock_response = AsyncMock()
         mock_response.json = AsyncMock(return_value=response_data)
+        mock_response.status = 200  # TEI success contract (see genieai_tei_reranker guard)
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
 

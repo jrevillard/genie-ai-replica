@@ -266,8 +266,9 @@ Set in `group_vars/<env>/vars.yml`:
 | `embedding_server_endpoint` | `/v1/embeddings` | Embedding service API endpoint path |
 | `embedding_model_id` | `BAAI/bge-base-en-v1.5` | Embedding model for vector search |
 | `reranker_model_id` | `BAAI/bge-reranker-v2-m3` | Reranking model |
-| `reranking_strategy` | `hybrid` | Reranker strategy (hybrid, score, all) |
-| `reranking_threshold` | `0.9` | Threshold for reranker strategy |
+| `reranking_strategy` | `slice` | Reranker strategy: `slice` (default; top-N), `threshold`, `slice_threshold`, `knee_threshold`, `adaptive` |
+| `reranker_top_n` | `3` | Chunks kept for slice/slice_threshold strategies |
+| `reranking_threshold` | `0.75` | Threshold for threshold-based strategies |
 | `novelty_sigmoid_a` | `20.0` | Adaptive: novelty-to-weight logistic steepness |
 | `novelty_sigmoid_b` | `0.25` | Adaptive: novelty-to-weight logistic midpoint |
 | `context_decay_factor` | `0.0025` | Adaptive: per-token context-window cost coefficient |
@@ -354,7 +355,7 @@ Per-chunk LLM document-context prefix → embedding (+ optionally labeling) so c
 | `contextual_strategy` | `per_chunk` | `per_chunk` (one call/chunk, section-tailored) or `doc_level` (one call/doc, same context on every chunk — N× cheaper) |
 | `contextual_label_raw` | `false` | Decoupled mode: label the RAW chunk, use the context ONLY for the embedding (recommended — keeps label precision) |
 | `dataprep_contextual_model` | (empty) | Model for context generation; empty = reuse `vllm_llm_model_id`; must support guided JSON |
-| `dataprep_contextual_doc_budget` | `6000` | Max chars of doc text fed to the per_chunk context LLM |
+| `dataprep_contextual_doc_budget` | `100000` | Max chars of doc text fed to the per_chunk context LLM |
 | `dataprep_contextual_doc_budget_doc_level` | `100000` | Max chars of doc text fed to the doc_level context LLM (one call — can afford a larger window) |
 | `dataprep_contextual_max_tokens` | `512` | Max OUTPUT tokens for the context-generation LLM (doc-level + per-chunk). The legacy cap of 200 truncated the JSON under load; 512 = safe margin (model stops early at ~196). |
 | `contextual_retrieval_prompt` | (built-in) | Prompt for per-chunk context generation (has `{document_context}` placeholder) |

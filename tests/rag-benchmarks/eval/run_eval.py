@@ -36,8 +36,13 @@ from arango import cursor
 from chunk_identity import content_hash
 
 # --- stack config (env-overridable) -----------------------------------------
-CHATQNA_CONTAINER = os.getenv("CHATQNA_CONTAINER", "genieai_el-salvador_chatqna")
-VICTORIATRACES_SVC = os.getenv("VICTORIATRACES_SVC", "genieai_el-salvador_victoriatraces")
+# Defaults are placeholders — set these for your deployment. CHATQNA_CONTAINER
+# has a dynamic Swarm replica suffix, so resolve it live:
+#   export CHATQNA_CONTAINER=$(docker ps --format '{{.Names}}' | grep chatqna-xeon-backend-server | head -1)
+# VICTORIATRACES_SVC = <stack>_victoriatraces (hyphenated swarm service name).
+# See tests/rag-benchmarks/CLAUDE.md for the full run recipe.
+CHATQNA_CONTAINER = os.getenv("CHATQNA_CONTAINER", "chatqna-xeon-backend-server")
+VICTORIATRACES_SVC = os.getenv("VICTORIATRACES_SVC", "victoriatraces")
 CHATQNA_URL = os.getenv("CHATQNA_URL", "http://localhost:8888/v1/chatqna")
 CHATQNA_SERVICE_NAME = os.getenv("CHATQNA_SERVICE_NAME", "genieai-chatqna")
 GRAPH_SOURCE = os.getenv("GRAPH_SOURCE", "GRAPH_TEST_SOURCE")

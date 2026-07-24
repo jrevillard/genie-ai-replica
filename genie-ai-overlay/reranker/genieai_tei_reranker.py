@@ -43,9 +43,9 @@ setup_trace_logging("genie_tei_reranking")
 logflag = os.getenv("LOGFLAG", False)
 
 # Strategies: slice, threshold, slice_threshold, knee_threshold, adaptive
-RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "adaptive")
+RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice")
 RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.75))
-RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 1))
+RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 3))
 
 # Adaptive utility-cost selection parameters
 NOVELTY_SIGMOID_A = float(os.getenv("NOVELTY_SIGMOID_A", 20.0))
@@ -400,12 +400,8 @@ class GenieTEIReranking(OpeaTEIReranking):
                             "rag.adaptive_breakdown",
                             json.dumps(adaptive_breakdown),
                         )
-                        span.set_attribute(
-                            "rag.adaptive_context_decay_factor", CONTEXT_DECAY_FACTOR
-                        )
-                        span.set_attribute(
-                            "rag.adaptive_min_value_threshold", MIN_VALUE_THRESHOLD
-                        )
+                        span.set_attribute("rag.adaptive_context_decay_factor", CONTEXT_DECAY_FACTOR)
+                        span.set_attribute("rag.adaptive_min_value_threshold", MIN_VALUE_THRESHOLD)
 
                         for pos in selected_positions:
                             original_index = decoded_response[pos]["index"]

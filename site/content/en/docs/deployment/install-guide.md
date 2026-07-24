@@ -484,9 +484,9 @@ Configuration for how documents are chunked and prepared for the knowledge graph
 | `MULTI_TURN_BLEND_ALPHA` | Query weight α for multi-turn blending. `1.0` = query-only, `0.0` = history-only.  | 0.7 |
 | `MULTI_TURN_HISTORY_TURNS` | Number of prior turns blended into the history embedding. `0` disables even if the flag is on.  | 1 |
 | `DATAPREP_CONTEXTUAL_MODEL` | Model used for context generation (empty = reuse `VLLM_LLM_MODEL_ID`); must support guided JSON.  | (empty) |
-| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | Max chars of document text fed to the context-generation LLM (~1500 tokens); <=0 disables truncation.  | 6000 |
+| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | Max chars of document text fed to the context-generation LLM (~1500 tokens); <=0 disables truncation.  | 100000 |
 | `DATAPREP_CONTEXTUAL_MAX_TOKENS` | Max output tokens for the context-generation LLM call (doc-level + per-chunk). The model writes ~196 tokens; the legacy cap of 200 truncated the JSON under load. 512 = comfortable margin (model stops early).  | 512 |
-| `CONTEXTUAL_STRATEGY` | `doc_level` (default; one call/doc, same context on every chunk — N× cheaper) or `per_chunk` (one call/chunk, section-tailored context).  | doc_level |
+| `CONTEXTUAL_STRATEGY` | `per_chunk` (default; one call/chunk, section-tailored context) or `doc_level` (one call/doc, same context on every chunk — N× cheaper).  | per_chunk |
 | `CONTEXTUAL_RETRIEVAL_PROMPT` | Prompt for per-chunk doc-context generation (contains a `{document_context}` placeholder).  | (built-in default) |
 
 **Retriever Configuration**  

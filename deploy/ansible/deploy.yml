@@ -205,15 +205,22 @@
   become: true
   become_user: "{{ ansible_user }}"
   tasks:
-    - name: Set repo URL (with credentials if provided, public repo otherwise)
+    - name: Set repo URL (public repo, no credentials)
       ansible.builtin.set_fact:
-        repo_url_with_credentials: >-
-          {%- if git_username is defined and git_token is defined and git_token | length > 0 %}
-          {{ repo_url | regex_replace('^https://', 'https://' + git_username + ':' + git_token + '@') }}
-          {%- else %}
-          {{ repo_url }}
-          {%- endif %}
-      no_log: "{{ git_token is defined }}"
+        repo_url_with_credentials: "{{ repo_url }}"
+      when: >-
+        not (git_username is defined
+        and git_token is defined
+        and git_token | length > 0)
+
+    - name: Set repo URL with credentials (private repo)
+      ansible.builtin.set_fact:
+        repo_url_with_credentials: "{{ repo_url | regex_replace('^https://', 'https://' + git_username + ':' + git_token + '@') }}"
+      when: >-
+        git_username is defined
+        and git_token is defined
+        and git_token | length > 0
+      no_log: true
 
     - name: Info — cloning public repo (no credentials)
       ansible.builtin.debug:

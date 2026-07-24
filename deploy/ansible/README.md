@@ -203,7 +203,6 @@ Set in `group_vars/<env>/vars.yml`:
 | `nginx_https_port` | `443` | HTTPS port (only set if non-default) |
 | `nginx_permissions_policy` | `camera=(), microphone=(), geolocation=()` | Nginx Permissions-Policy header |
 | `kong_trusted_ips` | `10.0.0.0/8` | CIDR range for X-Forwarded-* header passthrough. Kong trusts these IPs for `X-Forwarded-Proto/Host/Port/Prefix`. Docker Compose: `172.16.0.0/12`, Swarm overlay: `10.0.0.0/8` |
-| `registry_port` | `5000` | Local Docker registry port |
 
 ### Frontend Configuration
 
@@ -427,7 +426,7 @@ When enabled:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `swarm_registry_url` | `localhost:5000` | Docker registry URL (for multi-node Swarm) |
+| `swarm_registry_url` | `registry.opensource.unicc.org/un/itu/genie-ai` | Container registry URL (GitLab Container Registry) |
 | `data_dir` | `./data` | Data directory (relative to deploy_dir) |
 
 Shared variables in `group_vars/all.yml`:
@@ -451,7 +450,7 @@ Shared variables in `group_vars/all.yml`:
 |-----|-------------|
 | `install` | Docker, NVIDIA toolkit, Swarm init, registry |
 | `prepare` | Git clone, directories, SSL certs |
-| `build` | Build and push images to local registry (16 base + OPEA when enabled + observability when enabled) |
+| `build` | Docker login to GitLab Container Registry (no longer builds — pulls pre-built CI images) |
 | `deploy` | Generate .env, validate, deploy stack, verify |
 
 ```bash
@@ -609,7 +608,6 @@ If ports 80/443 are occupied (e.g. by another stack), override them in your envi
 # group_vars/<env>/vars.yml
 nginx_http_port: "1080"
 nginx_https_port: "1443"
-registry_port: "5001"
 ```
 
 The playbook generates `.env` with these values, and `docker-compose.yaml` uses them as published ports. Only set non-default values — defaults (80, 443, 5000) are omitted from `.env` automatically.
@@ -676,10 +674,10 @@ ansible-playbook -i inventory/itu_rtx_test.ini teardown.yml --vault-id itu_rtx_t
 ansible-playbook -i inventory/itu_rtx_test.ini teardown.yml --vault-id itu_rtx_test@prompt \
   -e "teardown_remove_volumes=true"
 
-# Remove stack + volumes + local registry
+# Remove stack + volumes (+ legacy local registry if present)
 ansible-playbook -i inventory/itu_rtx_test.ini teardown.yml --vault-id itu_rtx_test@prompt \
   -e "teardown_remove_volumes=true" \
-  -e "teardown_remove_registry=true"
+  -e "teardown_remove_registry=true"  # only needed for old deployments with localhost:5000
 ```
 
 ## Troubleshooting

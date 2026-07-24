@@ -132,23 +132,21 @@ docker node update --label-add genieai=true <genieai-worker-hostname>
 docker node update --label-add gpu=true <gpu-worker-hostname>
 ```
 
-## Step 3: Start Local Registry
+## Step 3: Configure Image Registry Authentication
 
-On the **manager node**, start a local Docker registry for image distribution:
+GENIE.AI images are **pre-built by CI** and published to the GitLab Container Registry (`registry.opensource.unicc.org/un/itu/genie-ai`). `docker stack deploy` pulls them automatically — no local build or push needed.
 
-```bash
-docker run -d -p 5000:5000 --name registry --restart=unless-stopped registry:2
-```
-
-Verify:
+On each Swarm node that will pull images, authenticate to the GitLab registry:
 
 ```bash
-curl -s http://localhost:5000/v2/_catalog
+docker login registry.opensource.unicc.org/un/itu/genie-ai
 ```
 
-**Important:** For multi-node deployments, all nodes must be able to reach this registry. Set `SWARM_REGISTRY_URL` in `.env` to the manager node's IP or hostname (e.g., `192.168.1.10:5000`). The default `localhost:5000` only works for single-node Swarm.
+**Multi-node deployments:** Every node (`swarm_managers` inventory group) must run `docker login`. Ansible handles this automatically; for manual deployments, run the login command on each node.
 
-For production, replace with a proper registry (Harbor, ECR, etc.).
+**Image tags:** CI promotes tested images to deployable tags (`main`, `release-el-salvador`, etc.). Set `GENIE_AI_GLOBAL_TAG` in `.env` to the desired tag (default: `main`). Per-service tag overrides are supported via per-image `GENIE_AI_*_IMAGE_TAG` variables — see `env` Section 17 for the full variable list.
+
+For air-gapped deployments or custom registries, override `GENIE_AI_REGISTRY` and the per-service `GENIE_AI_*_IMAGE` variables in `.env` to point to your internal registry.
 
 ## Step 4: Prepare Directories
 
@@ -181,127 +179,58 @@ scp secrets/ssl/server.key gateway-node:/path/to/project/secrets/ssl/
 
 **Important:** SSL certificate files (`server.crt`, `server.key`) must exist at `./secrets/ssl/` on the gateway node before deployment. Unlike Docker secrets, bind mounts silently mount an empty directory if the files are missing — the nginx entrypoint will fall back to self-signed certificates, which is not suitable for production.
 
-## Step 5: Build and Push Images
+## Step 5: Image Distribution
 
-`docker stack deploy` does NOT use `build:` directives — it only reads `image:`. All images must be pre-built and pushed to the registry. The `build:` directives in `docker-compose.yaml` are for `docker compose up` only.
+GENIE.AI images are **built by CI** (`.gitlab-ci.yml` `build:image` job) and published to the GitLab Container Registry under promoted tags (`main`, `release-el-salvador`, etc.). `docker stack deploy` pulls them automatically — **no local build or push needed**.
 
-### 5a. Build all images
+`docker compose up` (single-node dev) still uses `build:` directives and does not pull from the registry.
 
-On the **manager node**, from the project root:
+### 5a. Verify image availability
 
-The frontend image is **generic** — it reads its configuration at runtime via `window.APP_CONFIG` (generated from environment variables at container startup). No rebuild needed for different domains or IPs.
-
-Build contexts vary per service (see `build:` directives in `docker-compose.yaml` for reference):
+Confirm your target tag exists in the registry:
 
 ```bash
-# Frontend (Vue 3) — context is the frontend directory
-docker build -t genieai_mvp_frontend:latest components/gov-chat-frontend/
-
-# Backend (Node.js) — context is components/ (Dockerfile copies gov-chat-backend/ and shared/)
-docker build -f components/gov-chat-backend/Dockerfile -t genieai_mvp_backend:latest components/
-
-# Document Repository — context is components/ (Dockerfile copies document-repository/ and shared/)
-docker build -f components/document-repository/Dockerfile -t genieai_mvp_document-repository:latest components/
-
-# Nginx (API gateway reverse proxy)
-docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
-
-# Kong Config (one-shot init service)
-docker build -t genie-ai-kong-config:latest api-gateway-solution/new-config/
-
-# PostgreSQL Init (one-shot — creates dedicated kong/keycloak users)
-docker build -t genie-ai-postgres-init:latest configs/postgres/
-
-# Keycloak (Identity Provider)
-docker build -t genie-ai-keycloak:latest configs/keycloak/
-
-# Keycloak Config CLI (one-shot — applies realm configuration)
-docker build -f configs/keycloak/Dockerfile.config-cli -t genie-ai-keycloak-config:latest configs/keycloak/
-
-# DB Migrations (one-shot — runs ArangoDB schema migrations before backend starts)
-docker build -f components/gov-chat-backend/Dockerfile.migrations -t genie-ai-db-migrations:latest .
-
-# OPEA services (if DEPLOY_OPEA=1) — context is project root for all
-docker build -f genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai -t genie-ai-dataprep-arango:latest .
-docker build -f genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai -t genie-ai-retriever-arango:latest .
-docker build -f genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai -t genie-ai-chatqna-server:latest .
-docker build -f genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai -t genie-ai-reranker:latest .
+# List promoted tags (authenticated)
+docker pull registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-frontend:main
 ```
 
-This builds 13 services (9 base + 4 OPEA). Skip the OPEA builds if `DEPLOY_OPEA=0`.
+Replace `main` with your desired `GENIE_AI_GLOBAL_TAG` tag.
 
-### 5b. Tag images for local registry
+### 5b. Per-service image configuration
+
+Image references use a two-variable pattern per service, defined in `env` Section 17:
+
+```
+GENIE_AI_<NAME>_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-<name>
+GENIE_AI_<NAME>_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+```
+
+Docker Compose resolves: `${GENIE_AI_<NAME>_IMAGE}:${GENIE_AI_<NAME>_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}`.
+
+No changes needed for standard deployments — defaults in `docker-compose.yaml` pull from the GitLab registry with the `main` tag.
+
+### 5c. Override a single image tag
+
+To pin a specific service to a different version, set in `.env`:
 
 ```bash
-# Services with explicit image names in docker-compose.yaml
-docker tag genie-ai-dataprep-arango:latest localhost:5000/genie-ai-dataprep-arango:latest
-docker tag genie-ai-retriever-arango:latest localhost:5000/genie-ai-retriever-arango:latest
-docker tag genie-ai-chatqna-server:latest localhost:5000/genie-ai-chatqna-server:latest
-docker tag genie-ai-reranker:latest localhost:5000/genie-ai-reranker:latest
-docker tag genie-ai-nginx:latest localhost:5000/genie-ai-nginx:latest
-docker tag genie-ai-kong-config:latest localhost:5000/genie-ai-kong-config:latest
-docker tag genie-ai-postgres-init:latest localhost:5000/genie-ai-postgres-init:latest
-docker tag genie-ai-keycloak:latest localhost:5000/genie-ai-keycloak:latest
-docker tag genie-ai-keycloak-config:latest localhost:5000/genie-ai-keycloak-config:latest
-docker tag genie-ai-db-migrations:latest localhost:5000/genie-ai-db-migrations:latest
-
-# Services tagged by Compose project name (genieai_mvp)
-docker tag genieai_mvp_frontend:latest localhost:5000/genie-ai-frontend:latest
-docker tag genieai_mvp_backend:latest localhost:5000/genie-ai-backend:latest
-docker tag genieai_mvp_document-repository:latest localhost:5000/genie-ai-document-repository:latest
+GENIE_AI_FRONTEND_IMAGE_TAG=v1.2.3
 ```
 
-### 5c. Push to local registry
+All other services continue using `GENIE_AI_GLOBAL_TAG`.
+
+### 5d. Custom registries
+
+For deployments using a private or air-gapped registry, override `GENIE_AI_REGISTRY` in `.env`:
 
 ```bash
-docker push localhost:5000/genie-ai-frontend:latest
-docker push localhost:5000/genie-ai-backend:latest
-docker push localhost:5000/genie-ai-document-repository:latest
-docker push localhost:5000/genie-ai-dataprep-arango:latest
-docker push localhost:5000/genie-ai-retriever-arango:latest
-docker push localhost:5000/genie-ai-chatqna-server:latest
-docker push localhost:5000/genie-ai-reranker:latest
-docker push localhost:5000/genie-ai-nginx:latest
-docker push localhost:5000/genie-ai-kong-config:latest
-docker push localhost:5000/genie-ai-postgres-init:latest
-docker push localhost:5000/genie-ai-keycloak:latest
-docker push localhost:5000/genie-ai-keycloak-config:latest
-docker push localhost:5000/genie-ai-db-migrations:latest
+GENIE_AI_REGISTRY=my-registry.example.com/genieai
+GENIE_AI_GLOBAL_TAG=release-el-salvador
 ```
 
-### 5d. (Optional) Pre-pull external images for air-gapped deployments
+Then push the CI-built images to your registry (`docker pull` + `docker tag` + `docker push`), or set per-service `GENIE_AI_*_IMAGE` variables to point to your image locations.
 
-If worker nodes do not have internet access, pull and push all external images to the local registry:
-
-```bash
-# Pull external images
-docker pull postgres:13
-docker pull kong:latest
-docker pull redis:7-alpine
-docker pull clamav/clamav
-docker pull arangodb/arangodb:3.12.4
-docker pull vllm/vllm-openai:latest
-docker pull opea/llm-textgen:latest
-docker pull opea/translation:latest
-docker pull opea/guardrails:latest
-docker pull opea/embedding:latest
-docker pull opea/chatqna-ui:latest
-docker pull opea/nginx:latest
-docker pull ghcr.io/huggingface/text-embeddings-inference:1.9.3
-docker pull otel/opentelemetry-collector-contrib:0.152.0
-docker pull victoriametrics/victoria-metrics:v1.138.0
-docker pull grafana/grafana:12.4
-docker pull nginx:alpine
-docker pull quay.io/keycloak/keycloak:26.6.1
-docker pull adorsys/keycloak-config-cli:6.5.0-26
-
-# Tag and push (example for each)
-docker tag vllm/vllm-openai:latest localhost:5000/vllm/vllm-openai:latest
-docker push localhost:5000/vllm/vllm-openai:latest
-# Repeat for all external images...
-```
-
-Then override image references in `.env` or `docker-compose.yaml` to use the `SWARM_REGISTRY_URL` prefix (e.g., `192.168.1.10:5000/...`).
+External images (PostgreSQL, Kong, Redis, ClamAV, ArangoDB, vLLM, etc.) are not affected — their sources are hardcoded in `docker-compose.yaml`.
 
 ## Step 6: Configure Environment
 
@@ -608,9 +537,6 @@ docker volume rm genieai_doc_repo_uploads
 docker volume rm genieai_arango_data
 docker volume rm genieai_vm-data
 docker volume rm genieai_grafana-data
-
-# Remove local registry (if no longer needed)
-docker stop registry && docker rm registry
 ```
 
 **Rollback from failed deployment:** `docker stack rm genieai` removes services but named volumes persist. Data in ArangoDB, Redis, and document uploads is preserved. Redeploy after fixing the issue.
@@ -630,19 +556,13 @@ docker node update --label-add gateway=true $(hostname)
 docker node update --label-add gpu=true $(hostname)
 docker node update --label-add genieai=true $(hostname)
 
-# Start local registry
-docker run -d -p 5000:5000 --name registry --restart=unless-stopped registry:2
+# Authenticate to GitLab Container Registry (all nodes need pull access)
+docker login registry.opensource.unicc.org/un/itu/genie-ai
 
-# Build and push images (see Step 5a for explicit commands)
-docker build -t genieai_mvp_frontend:latest components/gov-chat-frontend/
-docker build -f components/gov-chat-backend/Dockerfile -t genieai_mvp_backend:latest components/
-# ... tag and push (see Step 5b-5c)
-
-# Configure .env (use localhost defaults)
+# Configure .env
 cp env .env
 # Edit .env with your secrets
-
-# Deploy
+# Deploy (images are pulled automatically during docker stack deploy)
 set -a && source .env && set +a
 docker compose config > docker-compose.resolved.yaml
 docker stack deploy -c docker-compose.resolved.yaml genieai
@@ -653,7 +573,7 @@ docker stack rm genieai
 
 ### 13b. Remote node deployment (e.g., 10.0.0.110)
 
-When deploying to a remote IP or domain instead of localhost, the only difference is the network variables in `.env`. The frontend image is generic — it reads `VUE_APP_API_URL` at runtime, no rebuild needed.
+When deploying to a remote IP or domain instead of localhost, the only difference is the network variables in `.env`. The frontend image is generic — it reads `VUE_APP_API_URL` at runtime, no rebuild needed. Images are pulled from the GitLab Container Registry automatically.
 
 ```bash
 # 1. Initialize Swarm
@@ -661,7 +581,9 @@ docker swarm init
 docker node update --label-add gateway=true $(hostname)
 docker node update --label-add gpu=true $(hostname)
 docker node update --label-add genieai=true $(hostname)
-docker run -d -p 5000:5000 --name registry --restart=unless-stopped registry:2
+
+# 1b. Authenticate to GitLab Container Registry
+docker login registry.opensource.unicc.org/un/itu/genie-ai
 
 # 2. Configure environment
 cp env .env
@@ -673,32 +595,12 @@ sed -i "s|^CSP_CONNECT_SRC=.*|CSP_CONNECT_SRC='self' https://10.0.0.110 wss://10
 sed -i "s|^VUE_APP_CSP_CONNECT_SRC=.*|VUE_APP_CSP_CONNECT_SRC='self' https://10.0.0.110 wss://10.0.0.110|" .env
 sed -i 's|^CORS_ALLOWED_ORIGINS=.*|CORS_ALLOWED_ORIGINS=https://10.0.0.110|' .env
 
-# 3. Build all images (same as localhost — frontend is generic)
-docker build -t genieai_mvp_frontend:latest components/gov-chat-frontend/
-docker build -f components/gov-chat-backend/Dockerfile -t genieai_mvp_backend:latest components/
-docker build -f components/document-repository/Dockerfile -t genieai_mvp_document-repository:latest components/
-docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
-docker build -t genie-ai-kong-config:latest api-gateway-solution/new-config/
-
-# 4. Tag and push to local registry
-docker tag genieai_mvp_frontend:latest localhost:5000/genie-ai-frontend:latest
-docker tag genieai_mvp_backend:latest localhost:5000/genie-ai-backend:latest
-docker tag genieai_mvp_document-repository:latest localhost:5000/genie-ai-document-repository:latest
-docker tag genie-ai-nginx:latest localhost:5000/genie-ai-nginx:latest
-docker tag genie-ai-kong-config:latest localhost:5000/genie-ai-kong-config:latest
-
-docker push localhost:5000/genie-ai-frontend:latest
-docker push localhost:5000/genie-ai-backend:latest
-docker push localhost:5000/genie-ai-document-repository:latest
-docker push localhost:5000/genie-ai-nginx:latest
-docker push localhost:5000/genie-ai-kong-config:latest
-
-# 5. Deploy
+# 3. Deploy (images pulled from registry automatically)
 set -a && source .env && set +a
 docker compose config > docker-compose.resolved.yaml
 docker stack deploy -c docker-compose.resolved.yaml genieai
 
-# 6. Verify
+# 4. Verify
 docker service ls
 # Access https://10.0.0.110/ in your browser (self-signed cert warning is expected)
 ```

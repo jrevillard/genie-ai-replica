@@ -760,7 +760,7 @@ nano /public/config/genie-ai-config.json
 ```bash
 # To deploy the full stack using Docker Swarm from the project root
 # The root docker-compose.yaml (Swarm-compatible) contains all services
-# All images must be pre-built and pushed to a registry before deploying
+# Images are pulled automatically from GitLab Container Registry (pre-built by CI)
 
 cd /path/to/project/root
 cp env .env
@@ -875,7 +875,7 @@ npm run serve
 npm run build
 
 # Full stack deployment with Docker Swarm (from project root)
-# All images must be pre-built and pushed to a registry before deploying
+# Images are pulled automatically from GitLab Container Registry (pre-built by CI)
 set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
 
 # Access the frontend at http://localhost:8090

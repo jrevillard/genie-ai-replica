@@ -25,7 +25,6 @@ nginx_public_domain: "10.0.0.101"
 nginx_http_port: "80"
 nginx_https_port: "443"
 nginx_permissions_policy: "camera=(), microphone=()"
-registry_port: "5000"
 self_signed_certs: true
 
 # =============================================================================

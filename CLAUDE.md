@@ -77,7 +77,7 @@ docker service scale genieai_<service>=<replicas>     # Scale a service
 ```
 
 **Key notes:**
-- Swarm: all images must be pre-built/pushed (`docker stack deploy` cannot build)
+- Swarm: images pulled automatically from GitLab Container Registry (pre-built by CI)
 - Profiles: `opea` (AI orchestrators), `gpu-models` (vLLM, TEI), `observability` (OTel stack)
 - Remote GPU: set `GPU_NODE_HOST` in `.env`, skip `gpu-models` profile — see `env` Section 14
 - Only nginx ports (80, 443) exposed; all other services internal

@@ -25,9 +25,11 @@ thing to know is **which updates force a knowledge-base re-ingestion**.
 ## Updating a model
 
 1. Edit `.env` (e.g. set `VLLM_LLM_MODEL_ID=...`).
-2. Pull/build the image if the model must be downloaded:
-   `docker compose build vllm`.
-3. Update the running service:
+2. Restart the service so it picks up the new model:
+   Swarm: `docker service update --force genieai_vllm`
+   Compose: `docker compose up -d vllm`
+3. The new model will be pulled automatically on startup.
+4. Confirm via the [Observability]({{< relref "/docs/observability" >}})
    `docker service update --force genieai_vllm` (Swarm), or
    `docker compose up -d vllm` (Compose).
 4. Confirm via the [Observability]({{< relref "/docs/observability" >}})
@@ -41,13 +43,18 @@ memory and length limits — see [GPU deployment]({{< relref "/docs/deployment/g
 When a GENIE.AI component image is rebuilt (CI produces a new tag):
 
 ```bash
-# Swarm — re-deploy with the new image
-docker compose build <service>            # if building locally
+# Swarm — update GENIE_AI_GLOBAL_TAG in .env, then re-deploy
+# (images are pulled automatically from GitLab Container Registry)
+sed -i "s|^GENIE_AI_GLOBAL_TAG=.*|GENIE_AI_GLOBAL_TAG=<new-tag>|" .env
 ansible-playbook -i inventory/<env>.ini deploy.yml --tags deploy --vault-id <env>@prompt
+
+# Compose (local dev) — rebuild locally
+docker compose build <service>
+docker compose up -d <service>
 ```
 
-For Ansible-driven deployments, a tagged re-run of `deploy.yml` rebuilds and
-re-deploys. See `deploy/ansible/README.md`.
+For Ansible-driven deployments, a tagged re-run of `deploy.yml` pulls the new
+images and re-deploys. See `deploy/ansible/README.md`.
 
 ## Updating the stack
 

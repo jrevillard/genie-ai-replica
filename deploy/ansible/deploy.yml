@@ -14,9 +14,9 @@
 #   ansible-playbook -i inventory/test.ini deploy.yml --tags deploy --vault-id test@prompt
 #
 # Tags:
-#   install  - Docker, NVIDIA toolkit, Swarm init, registry
+#   install  - Docker, NVIDIA toolkit, Swarm init
 #   prepare  - Git clone, directories, SSL certs
-#   build    - Build and push images to local registry
+#   build    - Docker login to GitLab Container Registry (images pre-built by CI)
 #   deploy   - Generate .env, validate, deploy stack, verify
 
 - name: GENIE.AI - Detect environment
@@ -199,45 +199,6 @@
       when: node_labels.stdout is not search('genieai:')
       changed_when: true
 
-- name: GENIE.AI - Local Docker registry
-  hosts: swarm_managers
-  tags: [install]
-  become: true
-  tasks:
-    - name: Set swarm registry URL from port
-      ansible.builtin.set_fact:
-        swarm_registry_url: "{{ swarm_registry_url | default('localhost:' + (registry_port | default('5000'))) }}"
-
-    - name: Check if registry container exists
-      community.docker.docker_container_info:
-        name: registry
-      register: registry_info
-
-    - name: Start local Docker registry
-      community.docker.docker_container:
-        name: registry
-        image: registry:2
-        ports:
-          - "{{ registry_port }}:5000"
-        restart_policy: unless-stopped
-        state: started
-
-    - name: Wait for registry to be ready
-      ansible.builtin.wait_for:
-        host: localhost
-        port: "{{ registry_port }}"
-        timeout: 60
-
-    - name: Verify registry is responding
-      ansible.builtin.uri:
-        url: "http://localhost:{{ registry_port }}/v2/_catalog"
-        method: GET
-        return_content: true
-      register: registry_check
-      until: registry_check.status == 200
-      retries: 5
-      delay: 3
-
 - name: GENIE.AI - Project sync and directories
   hosts: swarm_managers
   tags: [prepare]
@@ -382,166 +343,35 @@
       loop_control:
         label: "{{ item.item }}"
 
-- name: GENIE.AI - Build and push images
+- name: GENIE.AI - Authenticate to GitLab Container Registry
   hosts: swarm_managers
-  tags: [build]
+  tags: [build, deploy]
   become: true
   tasks:
     - name: Initialize shared facts (registry URL, image tag)
       ansible.builtin.include_tasks: tasks/deploy-shared-facts.yml
 
-    - name: Define image build list
-      ansible.builtin.set_fact:
-        genieai_images:
-          - name: frontend
-            dockerfile: components/gov-chat-frontend/Dockerfile
-            context: components/gov-chat-frontend/
-            source_tag: genieai_mvp_frontend:latest
-            registry_tag: "genie-ai-frontend:{{ image_tag }}"
-            opea: false
-          - name: backend
-            dockerfile: components/gov-chat-backend/Dockerfile
-            context: components
-            source_tag: genieai_mvp_backend:latest
-            registry_tag: "genie-ai-backend:{{ image_tag }}"
-            opea: false
-          - name: document-repository
-            dockerfile: components/document-repository/Dockerfile
-            context: components
-            source_tag: genieai_mvp_document-repository:latest
-            registry_tag: "genie-ai-document-repository:{{ image_tag }}"
-            opea: false
-          - name: nginx
-            dockerfile: api-gateway-solution/nginx/Dockerfile
-            context: api-gateway-solution/nginx/
-            source_tag: genie-ai-nginx:latest
-            registry_tag: "genie-ai-nginx:{{ image_tag }}"
-            opea: false
-          - name: kong-config
-            dockerfile: api-gateway-solution/new-config/Dockerfile
-            context: api-gateway-solution/new-config/
-            source_tag: genie-ai-kong-config:latest
-            registry_tag: "genie-ai-kong-config:{{ image_tag }}"
-            opea: false
-          - name: postgres-init
-            dockerfile: configs/postgres/Dockerfile
-            context: configs/postgres/
-            source_tag: genie-ai-postgres-init:latest
-            registry_tag: "genie-ai-postgres-init:{{ image_tag }}"
-            opea: false
-          - name: keycloak
-            dockerfile: configs/keycloak/Dockerfile
-            context: configs/keycloak/
-            source_tag: genie-ai-keycloak:latest
-            registry_tag: "genie-ai-keycloak:{{ image_tag }}"
-            opea: false
-          - name: keycloak-config
-            dockerfile: configs/keycloak/Dockerfile.config-cli
-            context: configs/keycloak/
-            source_tag: genie-ai-keycloak-config:latest
-            registry_tag: "genie-ai-keycloak-config:{{ image_tag }}"
-            opea: false
-          - name: db-migrations
-            dockerfile: components/gov-chat-backend/Dockerfile.migrations
-            context: .
-            source_tag: genie-ai-db-migrations:latest
-            registry_tag: "genie-ai-db-migrations:{{ image_tag }}"
-            opea: false
-          - name: dataprep-arango
-            dockerfile: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
-            context: .
-            source_tag: genie-ai-dataprep-arango:latest
-            registry_tag: "genie-ai-dataprep-arango:{{ image_tag }}"
-            opea: true
-          - name: retriever-arango
-            dockerfile: genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
-            context: .
-            source_tag: genie-ai-retriever-arango:latest
-            registry_tag: "genie-ai-retriever-arango:{{ image_tag }}"
-            opea: true
-          - name: chatqna-server
-            dockerfile: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
-            context: .
-            source_tag: genie-ai-chatqna-server:latest
-            registry_tag: "genie-ai-chatqna-server:{{ image_tag }}"
-            opea: true
-          - name: reranker
-            dockerfile: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
-            context: .
-            source_tag: genie-ai-reranker:latest
-            registry_tag: "genie-ai-reranker:{{ image_tag }}"
-            opea: true
-          - name: textgen
-            dockerfile: genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
-            context: .
-            source_tag: genie-ai-textgen:latest
-            registry_tag: "genie-ai-textgen:{{ image_tag }}"
-            opea: true
-          - name: embedding
-            dockerfile: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
-            context: .
-            source_tag: genie-ai-embedding:latest
-            registry_tag: "genie-ai-embedding:{{ image_tag }}"
-            opea: true
+    - name: Assert GitLab deploy token is provided (vault)
+      ansible.builtin.assert:
+        that:
+          - gitlab_deploy_token_user is defined
+          - gitlab_deploy_token is defined
+          - gitlab_deploy_token | length > 0
+        fail_msg: >-
+          GitLab deploy token required (gitlab_deploy_token_user + gitlab_deploy_token
+          in vault). Create at Settings → Repository → Deploy tokens (read_registry scope).
 
-    # Observability images (built only when enable_observability != "0")
-    - name: Define observability image list
-      ansible.builtin.set_fact:
-        observability_images:
-          - name: tempo-proxy
-            dockerfile: tools/tempo-proxy/Dockerfile
-            context: tools/tempo-proxy/
-            source_tag: tempo-proxy:latest
-            registry_tag: "genieai/tempo-proxy:{{ image_tag }}"
-            opea: false
-
-    - name: Merge image lists (include observability when enabled)
-      ansible.builtin.set_fact:
-        genieai_images: "{{ genieai_images + (observability_images if enable_observability != '0' else []) }}"
-
-    - name: Check if images need rebuild
-      ansible.builtin.command: >
-        docker image inspect --format '{{ '{{' }}.Config.Labels.git_sha{{ '}}' }}'
-        {{ swarm_registry_url }}/{{ item.registry_tag }}
-      register: image_inspect
+    - name: Docker login to GitLab Container Registry
+      ansible.builtin.shell: |
+        echo "{{ gitlab_deploy_token }}" | docker login -u "{{ gitlab_deploy_token_user }}" --password-stdin {{ swarm_registry_url }}
       changed_when: false
-      failed_when: false
-      loop: "{{ genieai_images }}"
-      when: not item.opea or deploy_opea != "0"
-      loop_control:
-        label: "{{ item.name }}"
+      no_log: true
 
-    - name: Build image (changed only)
-      ansible.builtin.shell: >
-        docker build
-        -f {{ deploy_dir }}/{{ item.item.dockerfile }}
-        -t {{ item.item.source_tag }}
-        --label git_sha={{ git_sha.stdout }}
-        {{ deploy_dir }}/{{ item.item.context }}
-      loop: "{{ image_inspect.results }}"
-      when: >
-        item.skipped is not defined
-        and (item.rc != 0 or item.stdout | trim != git_sha.stdout)
-      loop_control:
-        label: "{{ item.item.name }}"
-      register: build_results
-
-    - name: Tag image for registry
-      ansible.builtin.command: >
-        docker tag {{ item.item.item.source_tag }}
-        {{ swarm_registry_url }}/{{ item.item.item.registry_tag }}
-      loop: "{{ build_results.results }}"
-      when: item.skipped is not defined
-      loop_control:
-        label: "{{ item.item.item.name }}"
-
-    - name: Push image to registry
-      ansible.builtin.command: >
-        docker push {{ swarm_registry_url }}/{{ item.item.item.registry_tag }}
-      loop: "{{ build_results.results }}"
-      when: item.skipped is not defined
-      loop_control:
-        label: "{{ item.item.item.name }}"
+  post_tasks:
+    - name: Docker logout from GitLab registry (clean credentials)
+      ansible.builtin.shell: "docker logout {{ swarm_registry_url }}"
+      changed_when: false
+      when: true
 
 - name: GENIE.AI - Generate .env and deploy stack
   hosts: swarm_managers

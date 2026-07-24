@@ -43,8 +43,6 @@ victoriatraces_retention: "30d"
 otel_traces_sampler_rate: "100.0"
 grafana_alert_webhook_url: ""
 grafana_alert_email: ""
-registry_port: "5000"
-
 # =============================================================================
 # REPOSITORY
 # =============================================================================

@@ -193,7 +193,7 @@ To change styles like navbar gradients, button colors, or other UI elements:
 3. **Deploy**:
    - Run `npm run build` to include updated config.
    - Deploy `/public/config/*` to the server, ensuring accessibility.
-   - For Docker Swarm deployment, rebuild images and push to registry, then redeploy from the project root: `set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai`
+   - For Docker Swarm deployment (images pulled automatically from GitLab Container Registry): `set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai`
 
 ### Configuring Quick Help Buttons
 Quick Help buttons provide quick access to specific knowledge areas and predefined prompts, enhancing user interaction with the chatbot. These buttons are configured in the `features.chat.quickHelp.buttons` array and are displayed in the chat interface (e.g., `ChatScreen.vue`).

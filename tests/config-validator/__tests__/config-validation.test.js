@@ -62,7 +62,10 @@ describe('Configuration Validation Suite', () => {
     'EMBEDDING_SERVICE_URL',
     'RERANKER_SERVICE_URL',
     'DOCLING_ENDPOINT',
-    'DOCLING_ENDPOINT_TIMEOUT'
+    'DOCLING_ENDPOINT_TIMEOUT',
+    // Per-service image vars — infrastructure (not app config), used by compose only
+    'GENIE_AI_REGISTRY',
+    'GENIE_AI_GLOBAL_TAG'
   ]);
 
   // --- AC #2: All docker-compose env vars are documented in env template ---

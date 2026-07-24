@@ -26,7 +26,10 @@ function parseComposeEnvVars(filePath) {
     .split('\n')
     .filter((line) => !line.trim().startsWith('#'))
     .join('\n');
-  const regex = /\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}/g;
+  // Regex: /\$\{([A-Z_][A-Z0-9_]*)(?::-((?:[^{}]|\$\{[^}]*\})*))?\}/g
+  // Default group uses (?:[^{}]|\$\{[^}]*\})* to handle ONE level of nested
+  // ${...} in defaults (e.g. ${VAR:-${OTHER:-fallback}}).
+  const regex = /\$\{([A-Z_][A-Z0-9_]*)(?::-((?:[^{}]|\$\{[^}]*\})*))?\}/g;
   const seen = new Map();
 
   let match;
@@ -86,12 +89,24 @@ function crossReference(composeVars, envParsed) {
 
   const undocumented = [...composeNames].filter((name) => !envNames.has(name));
 
+  // GENIE_AI_REGISTRY is an indirection knob: compose defaults use
+  // ${GENIE_AI_REGISTRY:-<fallback>}/<image> while the env template expands each
+  // per-service GENIE_AI_*_IMAGE to the literal form. Resolve that one variable
+  // (using its env value, or the fallback if unset) before comparing so
+  // equivalent values are not flagged as conflicting.
+  const registryVal = envDefaults.get('GENIE_AI_REGISTRY') || '';
+  const resolveRegistry = (val) =>
+    val
+      .replace(/\$\{GENIE_AI_REGISTRY:-([^}]*)\}/g, (_m, fallback) => registryVal || fallback)
+      .replace(/\$\{GENIE_AI_REGISTRY\}/g, registryVal);
+
   const conflicting = [];
   for (const cv of composeVars) {
     if (cv.hasDefault && envNames.has(cv.name)) {
       const envVal = envDefaults.get(cv.name);
+      const resolvedDefault = resolveRegistry(cv.default);
       // Only flag as conflicting if both have non-empty values and they differ
-      if (envVal !== '' && cv.default !== '' && cv.default !== null && envVal !== cv.default) {
+      if (envVal !== '' && resolvedDefault !== '' && resolvedDefault !== null && envVal !== resolvedDefault) {
         conflicting.push({
           name: cv.name,
           composeDefault: cv.default,

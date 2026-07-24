@@ -198,21 +198,26 @@
 - name: GENIE.AI - Project sync and directories
   hosts: swarm_managers
   tags: [prepare]
-  vars_prompt:
-    - name: git_username
-      prompt: "Git username"
-      private: false
-    - name: git_token
-      prompt: "Git personal access token"
-      private: true
   become: true
   become_user: "{{ ansible_user }}"
   tasks:
-    - name: Set repo URL with credentials
+    - name: Set repo URL (with credentials if provided, public repo otherwise)
       ansible.builtin.set_fact:
         repo_url_with_credentials: >-
+          {% if git_username is defined and git_token is defined and git_token | length > 0 %}
           {{ repo_url | regex_replace('^https://', 'https://' + git_username + ':' + git_token + '@') }}
-      no_log: true
+          {% else %}
+          {{ repo_url }}
+          {% endif %}
+      no_log: "{{ git_token is defined }}"
+
+    - name: Info — cloning public repo (no credentials)
+      ansible.builtin.debug:
+        msg: "Git credentials not provided — cloning public repository"
+      when: >-
+        not (git_username is defined
+        and git_token is defined
+        and git_token | length > 0)
 
     - name: Check if git repository exists
       ansible.builtin.stat:

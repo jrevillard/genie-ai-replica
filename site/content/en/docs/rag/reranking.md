@@ -20,8 +20,8 @@ Choose one with `RERANKING_STRATEGY`:
 
 | Strategy | How it decides the cut | When to use |
 |---|---|---|
-| **`adaptive`** (default) | Picks the strategy automatically based on the score distribution. | General purpose; safe default. |
 | **`slice`** (default) | Top-N by TEI cross-encoder score (`RERANKER_TOP_N` = 3). | Predictable context size. |
+| **`adaptive`** | Utility-cost selection with novelty and token-budget awareness. | Dynamic context; enables `CONTEXT_DECAY_FACTOR` tuning. |
 | **`threshold`** | Keeps every chunk above `RERANKING_THRESHOLD`. | Strict quality gate. |
 | **`slice_threshold`** | Top-N, but only chunks that also clear `RERANKING_THRESHOLD`. | Predictable size + a quality floor. |
 | **`knee_threshold`** | Keeps chunks up to the largest score drop ("knee"). | Adapts to varied query difficulty. |
@@ -62,7 +62,7 @@ signals exist:
 
 | Variable | Default | Effect |
 |---|---|---|
-| `RERANKING_STRATEGY` | `adaptive` | Selection strategy. |
+| `RERANKING_STRATEGY` | `slice` | Selection strategy. |
 | `RERANKER_TOP_N` | 3 | Chunks kept (for `slice`/`slice_threshold`, and as a cap). |
 | `RERANKING_THRESHOLD` | 0.75 | Score gate (for `threshold`/`slice_threshold`/`knee_threshold`). |
 | `RERANKER_SCORE_CALIBRATION` | `none` | Raw-score → `[0,1]` mapping (`sigmoid` is opt-in). |

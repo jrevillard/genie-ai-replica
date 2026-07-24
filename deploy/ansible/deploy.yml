@@ -427,14 +427,14 @@
     - name: Build docker compose profiles list
       ansible.builtin.set_fact:
         _compose_profiles: >-
-          {% if deploy_opea is not defined or deploy_opea != '0' %}--profile opea {%- endif %}
-          {% if certbot_replicas is defined and certbot_replicas != '0' %}--profile letsencrypt {%- endif %}
-          {% if enable_observability is defined and enable_observability == '1' %}--profile observability {%- endif %}
+          {% if deploy_opea is not defined or deploy_opea != '0' %}--profile opea {% endif %}
+          {% if certbot_replicas is defined and certbot_replicas != '0' %}--profile letsencrypt {% endif %}
+          {% if enable_observability is defined and enable_observability == '1' %}--profile observability {% endif %}
 
     - name: Validate compose configuration
       ansible.builtin.shell: >
         docker compose
-        {% if gpu_env_file and gpu_env_file | length > 0 %}--env-file {{ deploy_dir }}/{{ gpu_env_file }}{%- endif %}
+        {% if gpu_env_file and gpu_env_file | length > 0 %}--env-file {{ deploy_dir }}/{{ gpu_env_file }}{% endif %}
         --env-file {{ deploy_dir }}/.env
         {{ _compose_profiles }}
         -f {{ deploy_dir }}/{{ compose_file }} config --quiet
@@ -464,7 +464,7 @@
         # (docker compose config converts port integers to strings, which
         # docker stack deploy rejects — see docker/cli#1073)
         docker compose \
-          {% if gpu_env_file and gpu_env_file | length > 0 %}--env-file {{ deploy_dir }}/{{ gpu_env_file }}{%- endif %}
+          {% if gpu_env_file and gpu_env_file | length > 0 %}--env-file {{ deploy_dir }}/{{ gpu_env_file }}{% endif %}
           --env-file {{ deploy_dir }}/.env \
           {{ _compose_profiles }} \
           -f {{ deploy_dir }}/{{ compose_file }} config > {{ deploy_dir }}/docker-compose.resolved.yaml.tmp

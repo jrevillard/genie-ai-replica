@@ -246,9 +246,16 @@
             accept_hostkey: true
           when: not git_dir.stat.exists
 
+        - name: Fix origin URL (strip leading whitespace from earlier bug)
+          ansible.builtin.command:
+            cmd: "git remote set-url origin {{ repo_url_with_credentials | trim }}"
+            chdir: "{{ deploy_dir }}"
+          when: git_dir.stat.exists
+          changed_when: false
+
         - name: Pull latest changes
           ansible.builtin.git:
-            repo: "{{ repo_url_with_credentials }}"
+            repo: "{{ repo_url_with_credentials | trim }}"
             dest: "{{ deploy_dir }}"
             version: "{{ repo_branch }}"
             force: true

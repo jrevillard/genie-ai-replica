@@ -521,7 +521,7 @@
 
     - name: Deploy Docker stack
       ansible.builtin.shell: |
-        docker stack deploy -c {{ deploy_dir }}/docker-compose.resolved.yaml {{ stack_name }}
+        docker stack deploy --resolve-image always -c {{ deploy_dir }}/docker-compose.resolved.yaml {{ stack_name }}
       args:
         chdir: "{{ deploy_dir }}"
       register: stack_deploy

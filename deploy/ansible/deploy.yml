@@ -205,72 +205,43 @@
   become: true
   become_user: "{{ ansible_user }}"
   tasks:
-    - name: Set repo URL (with credentials if provided, public repo otherwise)
-      ansible.builtin.set_fact:
-        repo_url_with_credentials: >-
-          {%- if git_username is defined and git_token is defined and git_token | length > 0 %}
-          {{ repo_url | regex_replace('^https://', 'https://' + git_username + ':' + git_token + '@') }}
-          {%- else %}
-          {{ repo_url }}
-          {%- endif %}
-      no_log: "{{ git_token is defined }}"
+    # Sync project files from Ansible control node to target (no git clone).
+    # Images come from GitLab registry; only compose + configs needed on target.
+    - name: Sync project files (exclude .git, heavy source dirs)
+      ansible.posix.synchronize:
+        src: "{{ playbook_dir }}/../../"
+        dest: "{{ deploy_dir }}/"
+        rsync_opts:
+          - "--delete"
+          - "--exclude=.git"
+          - "--exclude=node_modules"
+          - "--exclude=__pycache__"
+          - "--exclude=.venv"
+          - "--exclude=components/"
+          - "--exclude=genie-ai-overlay/"
+          - "--exclude=mobile/"
+          - "--exclude=test-results/"
+          - "--exclude=tests/"
+          - "--exclude=_bmad/"
+          - "--exclude=_bmad-output/"
+          - "--exclude=site/"
+          - "--exclude=docs/"
+          - "--exclude=scripts/"
+          - "--exclude=specs/"
+          - "--exclude=data/"
+          - "--exclude=playwright.config.js"
+          - "--exclude=package.json"
+          - "--exclude=package-lock.json"
+      delegate_to: localhost
+      changed_when: false
 
-    - name: Strip whitespace from repo URL
-      ansible.builtin.set_fact:
-        repo_url_with_credentials: "{{ repo_url_with_credentials | trim }}"
-
-    - name: Info — cloning public repo (no credentials)
-      ansible.builtin.debug:
-        msg: "Git credentials not provided — cloning public repository"
-      when: >-
-        not (git_username is defined
-        and git_token is defined
-        and git_token | length > 0)
-
-    - name: Check if git repository exists
-      ansible.builtin.stat:
-        path: "{{ deploy_dir }}/.git"
-      register: git_dir
-
-    - name: Remove stale deploy directory (exists but no .git)
+    - name: Fix ownership to ansible_user
       become_user: root
       ansible.builtin.file:
         path: "{{ deploy_dir }}"
-        state: absent
-      when: git_dir.stat is defined and not git_dir.stat.exists
-
-    - name: Clone or update project repository
-      become_user: root
-      block:
-        - name: Clone project repository
-          ansible.builtin.git:
-            repo: "{{ repo_url_with_credentials }}"
-            dest: "{{ deploy_dir }}"
-            version: "{{ repo_branch }}"
-            accept_hostkey: true
-          when: not git_dir.stat.exists
-
-        - name: Fix origin URL (strip leading whitespace from earlier bug)
-          ansible.builtin.command:
-            cmd: "git remote set-url origin {{ repo_url_with_credentials | trim }}"
-            chdir: "{{ deploy_dir }}"
-          when: git_dir.stat.exists
-          changed_when: false
-
-        - name: Pull latest changes
-          ansible.builtin.git:
-            repo: "{{ repo_url_with_credentials | trim }}"
-            dest: "{{ deploy_dir }}"
-            version: "{{ repo_branch }}"
-            force: true
-          when: git_dir.stat.exists
-
-        - name: Fix ownership to ansible_user
-          ansible.builtin.file:
-            path: "{{ deploy_dir }}"
-            owner: "{{ ansible_user }}"
-            group: "{{ ansible_user }}"
-            recurse: true
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        recurse: true
 
     - name: Ensure deploy directories exist with correct ownership
       become_user: root

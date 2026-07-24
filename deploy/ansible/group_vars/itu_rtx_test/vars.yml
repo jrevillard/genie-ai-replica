@@ -14,7 +14,6 @@ repo_branch: deployment-stabilization
 nginx_public_domain: "10.0.0.110"
 nginx_http_port: "1080"
 nginx_https_port: "1443"
-registry_port: "5001"
 
 # =============================================================================
 # FRONTEND

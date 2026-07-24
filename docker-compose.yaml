@@ -1152,21 +1152,6 @@ services:
       RETRIEVER_SERVICE_PORT: 7000
       # chatqna reads these and forwards them in the retriever request; they must
       # live on chatqna (the orchestrator), not only on the retriever service.
-      # chatqna is the AUTHORITATIVE source — in production it always sends these,
-      # so the retriever service's own RETRIEVER_ARANGO_* env vars are inert
-      # (OPEA-vendored fallback, only reached on direct retriever API calls that
-      # bypass chatqna). Defaults are intentionally kept identical in both blocks
-      # to avoid silent drift; tune here and the retriever block tracks it.
-      RETRIEVER_ARANGO_K: ${RETRIEVER_ARANGO_K:-20}
-      RETRIEVER_ARANGO_FETCH_K: ${RETRIEVER_ARANGO_FETCH_K:-30}
-      RETRIEVER_ARANGO_SCORE_THRESHOLD: ${RETRIEVER_ARANGO_SCORE_THRESHOLD:-0.2}
-      RETRIEVER_ARANGO_DISTANCE_THRESHOLD: ${RETRIEVER_ARANGO_DISTANCE_THRESHOLD:-1}
-      RETRIEVER_ARANGO_LAMBDA_MULT: ${RETRIEVER_ARANGO_LAMBDA_MULT:-0.5}
-      RETRIEVER_ARANGO_SEARCH_START: ${RETRIEVER_ARANGO_SEARCH_START:-chunk}
-      RETRIEVER_ARANGO_TRAVERSAL_ENABLED: ${RETRIEVER_ARANGO_TRAVERSAL_ENABLED:-true}
-      RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH:-2}
-      RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED:-5}
-      RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD: ${RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD:-0.7}
       RERANK_SERVER_HOST_IP: reranker
       RERANK_SERVER_PORT: 8000
       # chatqna reads these and forwards them in the reranker request; they must live

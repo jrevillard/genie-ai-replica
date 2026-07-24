@@ -215,6 +215,10 @@
           {%- endif %}
       no_log: "{{ git_token is defined }}"
 
+    - name: Strip whitespace from repo URL
+      ansible.builtin.set_fact:
+        repo_url_with_credentials: "{{ repo_url_with_credentials | trim }}"
+
     - name: Info — cloning public repo (no credentials)
       ansible.builtin.debug:
         msg: "Git credentials not provided — cloning public repository"

@@ -672,14 +672,20 @@ kics-iac-sast:
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
-    - SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:pending-$CI_COMMIT_SHORT_SHA"
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
+      else
+        SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:pending-${CI_COMMIT_SHORT_SHA}"
+      fi
     - DIGEST="sha256:$(docker buildx imagetools inspect --raw "$SRC" | sha256sum | awk '{print $1}')"
     - echo "Promoting $IMAGE_NAME digest ${DIGEST:0:32}... (tmp/ → real namespace)"
     - |
       if [ -n "$CI_COMMIT_TAG" ]; then
         FINAL_TAGS="$CI_COMMIT_TAG latest"
       else
-        BRANCH_TAG="${CI_COMMIT_BRANCH//\//-}"
+        BRANCH_TAG="${CI_COMMIT_BRANCH:-$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}"
+        BRANCH_TAG="${BRANCH_TAG//\//-}"
         FINAL_TAGS="${BRANCH_TAG}-${CI_COMMIT_SHORT_SHA} ${BRANCH_TAG}"
       fi
     - |
@@ -748,6 +754,9 @@ promote:frontend:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
@@ -814,6 +823,9 @@ promote:backend:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
@@ -880,6 +892,9 @@ promote:db-migrations:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
@@ -946,6 +961,9 @@ promote:document-repository:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
@@ -1012,6 +1030,9 @@ promote:nginx:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
@@ -1078,6 +1099,9 @@ promote:kong-config:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
@@ -1144,6 +1168,9 @@ promote:chatqna-server:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1253,6 +1280,9 @@ promote:dataprep-arango:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1319,6 +1349,9 @@ promote:retriever-arango:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1385,6 +1418,9 @@ promote:reranker:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1451,6 +1487,9 @@ promote:embedding:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1517,6 +1556,9 @@ promote:textgen:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1583,6 +1625,9 @@ promote:postgres-init:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
@@ -1649,6 +1694,9 @@ promote:keycloak:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
@@ -1715,6 +1763,9 @@ promote:keycloak-config:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
@@ -1781,6 +1832,9 @@ promote:tempo-proxy:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]

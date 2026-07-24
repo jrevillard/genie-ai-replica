@@ -14,9 +14,9 @@
 #   ansible-playbook -i inventory/test.ini deploy.yml --tags deploy --vault-id test@prompt
 #
 # Tags:
-#   install  - Docker, NVIDIA toolkit, Swarm init, registry
+#   install  - Docker, NVIDIA toolkit, Swarm init
 #   prepare  - Git clone, directories, SSL certs
-#   build    - Build and push images to local registry
+#   build    - Docker login to GitLab Container Registry (images pre-built by CI)
 #   deploy   - Generate .env, validate, deploy stack, verify
 
 - name: GENIE.AI - Detect environment

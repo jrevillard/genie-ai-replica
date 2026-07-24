@@ -9,6 +9,7 @@ deploy_dir: /opt/genieai-el-salvador
 stack_name: genieai-el-salvador
 gpu_env_file: env.rtx6000
 repo_branch: release/el-salvador
+genie_ai_global_tag: release-el-salvador
 arango_db: el-salvador
 
 # Remote GPU node (vLLM, TEI run on 10.0.0.110)

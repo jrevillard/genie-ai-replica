@@ -135,10 +135,10 @@ keycloak_ssl_skip_verify: ""
 #   contextual_retrieval_enabled: false   # opt-in; flag-off is a true no-op
 #   dataprep_contextual_model: ""         # empty = reuse vllm_llm_model_id; must support
 #                                         #   guided JSON (response_format=json_object)
-#   dataprep_contextual_doc_budget: 6000  # max chars of doc text fed to the context LLM
+#   dataprep_contextual_doc_budget: 100000  # max chars of doc text fed to the context LLM
 #   dataprep_contextual_max_tokens: 512   # max OUTPUT tokens for the context LLM (doc-level + per-chunk).
 #                                         #   200 truncated the JSON under load → raw-chunk fallback; 512 = safe margin (model stops early ~196).
-#   contextual_strategy: per_chunk        # per_chunk (default; one call/chunk) | doc_level
+#   contextual_strategy: doc_level        # doc_level (one call/doc, cheaper) | per_chunk (default — Anthropic recipe)
 #                                         #   (one call/doc, N× cheaper, same context on all chunks)
 #   contextual_label_raw: false           # decoupled: label RAW chunk, context for embedding only (recommended)
 
@@ -153,3 +153,6 @@ vllm_llm_model_id: ibm-granite/granite-4.1-8b
 vllm_translation_model_id: google/gemma-3-4b-it
 embedding_model_id: BAAI/bge-base-en-v1.5
 reranker_model_id: BAAI/bge-reranker-v2-m3
+# --- Reranker strategy defaults ---
+#   reranking_strategy: slice           # slice (default; top-N by TEI score) | threshold | adaptive | knee_threshold | slice_threshold
+#   reranker_top_n: 3                   # chunks kept for slice/slice_threshold strategies

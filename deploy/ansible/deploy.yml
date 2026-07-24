@@ -526,19 +526,17 @@
         chdir: "{{ deploy_dir }}"
       register: stack_deploy
       changed_when: "'Creating' in stack_deploy.stderr or 'Updating' in stack_deploy.stderr"
-      when: "'COMPOSE_CHANGED' in resolved_compose.stdout"
 
     - name: Stack deploy output
       ansible.builtin.debug:
         var: stack_deploy.stdout_lines
-      when: "'COMPOSE_CHANGED' in resolved_compose.stdout"
 
 - name: GENIE.AI - Post-deploy verification
   hosts: swarm_managers
   tags: [deploy]
   become: true
   vars:
-    _compose_changed: "{{ resolved_compose is skipped or 'COMPOSE_CHANGED' in resolved_compose.stdout }}"
+    _compose_changed: "true"
   tasks:
     - name: Wait for services to stabilize
       ansible.builtin.command: docker service ls --filter label=com.docker.stack.namespace={{ stack_name }} --format "{{ '{{' }}.Name{{ '}}' }}"

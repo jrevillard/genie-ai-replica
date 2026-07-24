@@ -204,11 +204,11 @@
     - name: Set repo URL (with credentials if provided, public repo otherwise)
       ansible.builtin.set_fact:
         repo_url_with_credentials: >-
-          {% if git_username is defined and git_token is defined and git_token | length > 0 %}
+          {%- if git_username is defined and git_token is defined and git_token | length > 0 %}
           {{ repo_url | regex_replace('^https://', 'https://' + git_username + ':' + git_token + '@') }}
-          {% else %}
+          {%- else %}
           {{ repo_url }}
-          {% endif %}
+          {%- endif %}
       no_log: "{{ git_token is defined }}"
 
     - name: Info — cloning public repo (no credentials)

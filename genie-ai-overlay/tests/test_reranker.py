@@ -712,9 +712,8 @@ class TestEnvDefaults:
     def test_reranking_strategy_default(self):
         import reranker.genieai_tei_reranker as mod
 
-        # Default is "adaptive" (dynamic top-N) — aligned with chatqna's default
-        # and the env template recommendation; "slice" (fixed top-N) is opt-in.
-        assert mod.RERANKING_STRATEGY == "adaptive"
+        # Default is "slice" (fixed top-N by TEI score).
+        assert mod.RERANKING_STRATEGY == "slice"
 
     def test_reranking_threshold_default(self):
         import reranker.genieai_tei_reranker as mod
@@ -724,7 +723,7 @@ class TestEnvDefaults:
     def test_reranker_top_n_default(self):
         import reranker.genieai_tei_reranker as mod
 
-        assert mod.RERANKER_TOP_N == 1
+        assert mod.RERANKER_TOP_N == 3
 
     @pytest.mark.asyncio
     async def test_input_overrides_take_precedence(self):

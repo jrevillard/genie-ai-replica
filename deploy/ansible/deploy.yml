@@ -205,35 +205,54 @@
   become: true
   become_user: "{{ ansible_user }}"
   tasks:
-    # Sync project files from Ansible control node to target (no git clone).
+    # Download project archive for the target branch (no full git clone).
     # Images come from GitLab registry; only compose + configs needed on target.
-    - name: Sync project files (exclude .git, heavy source dirs)
-      ansible.posix.synchronize:
-        src: "{{ playbook_dir }}/../../"
-        dest: "{{ deploy_dir }}/"
-        rsync_opts:
-          - "--delete"
-          - "--exclude=.git"
-          - "--exclude=node_modules"
-          - "--exclude=__pycache__"
-          - "--exclude=.venv"
-          - "--exclude=components/"
-          - "--exclude=genie-ai-overlay/"
-          - "--exclude=mobile/"
-          - "--exclude=test-results/"
-          - "--exclude=tests/"
-          - "--exclude=_bmad/"
-          - "--exclude=_bmad-output/"
-          - "--exclude=site/"
-          - "--exclude=docs/"
-          - "--exclude=scripts/"
-          - "--exclude=specs/"
-          - "--exclude=data/"
-          - "--exclude=playwright.config.js"
-          - "--exclude=package.json"
-          - "--exclude=package-lock.json"
+    # Reproducible: archive URL is deterministic from repo_url + repo_branch.
+    - name: Set archive URL and tarball path
+      ansible.builtin.set_fact:
+        _archive_url: "{{ repo_url | regex_replace('\\.git$', '') }}/-/archive/{{ repo_branch }}/{{ repo_branch | replace('/', '-') }}.tar.gz"
+        _tarball: "/tmp/{{ repo_branch | replace('/', '-') }}.tar.gz"
+
+    - name: Download project archive
+      ansible.builtin.get_url:
+        url: "{{ _archive_url }}"
+        dest: "{{ _tarball }}"
+        force: true
+        mode: '0644'
       delegate_to: localhost
       changed_when: false
+
+    - name: Ensure deploy directory is clean
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}"
+        state: "{{ 'absent' if clean_deploy | default(false) | bool else 'directory' }}"
+        mode: '0755'
+
+    - name: Create deploy directory
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Extract compose + configs from archive
+      become_user: root
+      ansible.builtin.unarchive:
+        src: "{{ _tarball }}"
+        dest: "{{ deploy_dir }}"
+        remote_src: false
+        extra_opts:
+          - "--strip-components=1"
+        include:
+          - "*/docker-compose.yaml"
+          - "*/docker-compose.gpu.yaml"
+          - "*/env"
+          - "*/env.rtx6000"
+          - "*/env.t4"
+          - "*/configs/*"
+          - "*/api-gateway-solution/*"
+          - "*/tools/tempo-proxy/*"
 
     - name: Fix ownership to ansible_user
       become_user: root

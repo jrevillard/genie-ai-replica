@@ -163,6 +163,8 @@ vllm_translation_max_model_len: "8192"
 vllm_translation_dtype: bfloat16
 vllm_translation_gpu_utilization: "0.35"
 vllm_translation_kv_cache_dtype: auto
+vllm_max_num_seqs: "1024"
+vllm_translation_max_num_seqs: "32"
 embedding_model_id: BAAI/bge-base-en-v1.5
 reranker_model_id: BAAI/bge-reranker-v2-m3
 chatqna_enforce_abstention: "false"

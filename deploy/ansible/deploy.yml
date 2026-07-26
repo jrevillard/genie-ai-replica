@@ -205,54 +205,80 @@
   become: true
   become_user: "{{ ansible_user }}"
   tasks:
-    # Download project archive for the target branch (no full git clone).
     # Images come from GitLab registry; only compose + configs needed on target.
-    # Reproducible: archive URL is deterministic from repo_url + repo_branch.
-    - name: Set archive URL and tarball path
+    # Download individual files via GitLab raw API (reproducible, idempotent).
+    - name: Set raw base URL
       ansible.builtin.set_fact:
-        _archive_url: "{{ repo_url | regex_replace('\\.git$', '') }}/-/archive/{{ repo_branch }}/{{ repo_branch | replace('/', '-') }}.tar.gz"
-        _tarball: "/tmp/{{ repo_branch | replace('/', '-') }}.tar.gz"
+        _raw_base: "{{ repo_url | regex_replace('\\.git$', '') }}/-/raw/{{ repo_branch }}"
 
-    - name: Download project archive
-      ansible.builtin.get_url:
-        url: "{{ _archive_url }}"
-        dest: "{{ _tarball }}"
-        force: true
-        mode: '0644'
-      delegate_to: localhost
-      changed_when: false
+    - name: Define deploy files
+      ansible.builtin.set_fact:
+        _deploy_files: "{{ _deploy_files_default | union(_deploy_files_obs | default([])) | union(_deploy_files_certbot | default([])) }}"
+      vars:
+        _deploy_files_default:
+          - src: docker-compose.yaml
+            dest: "{{ deploy_dir }}/docker-compose.yaml"
+        _deploy_files_obs: "{{ [{'src': 'configs/otel/otel-collector-config.yaml', 'dest': deploy_dir + '/configs/otel/otel-collector-config.yaml'}] if enable_observability | default('0') == '1' else [] }}"
+        _deploy_files_certbot: "{{ [{'src': 'api-gateway-solution/certbot/entrypoint.sh', 'dest': deploy_dir + '/api-gateway-solution/certbot/entrypoint.sh'}] if certbot_replicas | default('0') != '0' else [] }}"
 
-    - name: Ensure deploy directory is clean
-      become_user: root
-      ansible.builtin.file:
-        path: "{{ deploy_dir }}"
-        state: "{{ 'absent' if clean_deploy | default(false) | bool else 'directory' }}"
-        mode: '0755'
-
-    - name: Create deploy directory
+    - name: Ensure deploy directory exists
       become_user: root
       ansible.builtin.file:
         path: "{{ deploy_dir }}"
         state: directory
         mode: '0755'
 
-    - name: Extract compose + configs from archive
+    - name: Ensure subdirectories exist
       become_user: root
-      ansible.builtin.unarchive:
-        src: "{{ _tarball }}"
-        dest: "{{ deploy_dir }}"
-        remote_src: false
-        extra_opts:
-          - "--strip-components=1"
-        include:
-          - "*/docker-compose.yaml"
-          - "*/docker-compose.gpu.yaml"
-          - "*/env"
-          - "*/env.rtx6000"
-          - "*/env.t4"
-          - "*/configs/*"
-          - "*/api-gateway-solution/*"
-          - "*/tools/tempo-proxy/*"
+      ansible.builtin.file:
+        path: "{{ item.dest | dirname }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ _deploy_files }}"
+
+    - name: Download deploy files from GitLab
+      ansible.builtin.get_url:
+        url: "{{ _raw_base }}/{{ item.src }}"
+        dest: "{{ item.dest }}"
+        force: true
+        mode: '0644'
+        timeout: 30
+      loop: "{{ _deploy_files }}"
+      loop_control:
+        label: "{{ item.src }}"
+
+    - name: Download Grafana dashboards (observability)
+      when: enable_observability | default('0') == '1'
+      block:
+        - name: Ensure grafana provisioning dir exists
+          become_user: root
+          ansible.builtin.file:
+            path: "{{ deploy_dir }}/configs/grafana/provisioning"
+            state: "{{ 'absent' if clean_deploy | default(false) | bool else 'directory' }}"
+            mode: '0755'
+
+        - name: Create grafana provisioning dir
+          become_user: root
+          ansible.builtin.file:
+            path: "{{ deploy_dir }}/configs/grafana/provisioning"
+            state: directory
+            mode: '0755'
+
+        - name: Download Grafana dashboards archive
+          ansible.builtin.get_url:
+            url: "{{ repo_url | regex_replace('\\.git$', '') }}/-/archive/{{ repo_branch }}/grafana.tar.gz?path=configs/grafana/provisioning"
+            dest: "/tmp/grafana-dashboards-{{ repo_branch | replace('/', '-') }}.tar.gz"
+            force: true
+            mode: '0644'
+
+        - name: Extract Grafana dashboards
+          become_user: root
+          ansible.builtin.unarchive:
+            src: "/tmp/grafana-dashboards-{{ repo_branch | replace('/', '-') }}.tar.gz"
+            dest: "{{ deploy_dir }}"
+            remote_src: true
+            extra_opts:
+              - "--strip-components=1"
 
     - name: Fix ownership to ansible_user
       become_user: root

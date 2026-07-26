@@ -222,17 +222,27 @@
         _deploy_files_certbot: "{{ [{'src': 'api-gateway-solution/certbot/entrypoint.sh', 'dest': deploy_dir + '/api-gateway-solution/certbot/entrypoint.sh'}] if certbot_replicas | default('0') != '0' else [] }}"
 
     - name: Ensure deploy directory exists
+      become_user: root
       ansible.builtin.file:
         path: "{{ deploy_dir }}"
         state: directory
         mode: '0755'
 
     - name: Ensure subdirectories exist
+      become_user: root
       ansible.builtin.file:
         path: "{{ item.dest | dirname }}"
         state: directory
         mode: '0755'
       loop: "{{ _deploy_files }}"
+
+    - name: Fix ownership before download
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        recurse: true
 
     - name: Download deploy files from GitLab
       ansible.builtin.get_url:

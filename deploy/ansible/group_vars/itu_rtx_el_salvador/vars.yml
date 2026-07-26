@@ -80,7 +80,7 @@ email_from: "noreply@genie-ai.itu.int"
 # LET'S ENCRYPT (automatic SSL certificates)
 # =============================================================================
 certbot_email: "admin@assembly.govstack.global"
-certbot_replicas: "1"
+certbot_replicas: "0"  # self-signed certs — Let's Encrypt disabled on IP-based deployment
 # certbot_staging: "false"  # Set to "true" to use Let's Encrypt staging (avoids rate limits)
 
 # =============================================================================

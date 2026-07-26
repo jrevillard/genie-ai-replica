@@ -92,6 +92,7 @@
             selection: install
           loop: "{{ nvidia_hold_packages }}"
           when: nvidia_upgrade_check.stdout == "upgrade"
+          failed_when: false
 
         - name: Install NVIDIA Container Toolkit (pinned version)
           ansible.builtin.apt:
@@ -106,6 +107,7 @@
             selection: hold
           loop: "{{ nvidia_hold_packages }}"
           when: nvidia_upgrade_check.stdout == "upgrade"
+          failed_when: false
 
         - name: Configure Docker daemon for NVIDIA runtime
           block:
@@ -118,8 +120,8 @@
             - name: Set daemon.json content (merge NVIDIA config)
               ansible.builtin.set_fact:
                 daemon_json_final: >-
-                  {{ (daemon_json_existing.content | b64decode | from_json
-                      if daemon_json_existing is succeeded else {})
+                  {{ ((daemon_json_existing.content | default('') | b64decode | from_json)
+                      if daemon_json_existing.content is defined else {})
                     | combine({'runtimes': {'nvidia': {
                       'path': 'nvidia-container-runtime',
                       'runtimeArgs': []
@@ -180,9 +182,11 @@
       register: node_labels
       changed_when: false
 
-    - name: Add gpu=true label
+    - name: Add gpu=true label (only on nodes with physical GPU)
       ansible.builtin.command: docker node update --label-add gpu=true {{ node_hostname.stdout }}
-      when: node_labels.stdout is not search('gpu:')
+      when:
+        - node_labels.stdout is not search('gpu:')
+        - inventory_hostname in groups.get('gpu_nodes', [])
       changed_when: true
 
     - name: Add gateway=true label
@@ -201,61 +205,93 @@
   become: true
   become_user: "{{ ansible_user }}"
   tasks:
-    - name: Set repo URL (with credentials if provided, public repo otherwise)
+    # Images come from GitLab registry; only compose + configs needed on target.
+    # Download individual files via GitLab raw API (reproducible, idempotent).
+    - name: Set raw base URL
       ansible.builtin.set_fact:
-        repo_url_with_credentials: >-
-          {%- if git_username is defined and git_token is defined and git_token | length > 0 %}
-          {{ repo_url | regex_replace('^https://', 'https://' + git_username + ':' + git_token + '@') }}
-          {%- else %}
-          {{ repo_url }}
-          {%- endif %}
-      no_log: "{{ git_token is defined }}"
+        _raw_base: "{{ repo_url | regex_replace('\\.git$', '') }}/-/raw/{{ repo_branch }}"
 
-    - name: Info — cloning public repo (no credentials)
-      ansible.builtin.debug:
-        msg: "Git credentials not provided — cloning public repository"
-      when: >-
-        not (git_username is defined
-        and git_token is defined
-        and git_token | length > 0)
+    - name: Define deploy files
+      ansible.builtin.set_fact:
+        _deploy_files: "{{ _deploy_files_default | union(_deploy_files_obs | default([])) | union(_deploy_files_certbot | default([])) }}"
+      vars:
+        _deploy_files_default:
+          - src: "{{ compose_file }}"
+            dest: "{{ deploy_dir }}/{{ compose_file }}"
+        _deploy_files_obs: "{{ [{'src': 'configs/otel/otel-collector-config.yaml', 'dest': deploy_dir + '/configs/otel/otel-collector-config.yaml'}] if enable_observability | default('0') == '1' else [] }}"
+        _deploy_files_certbot: "{{ [{'src': 'api-gateway-solution/certbot/entrypoint.sh', 'dest': deploy_dir + '/api-gateway-solution/certbot/entrypoint.sh', 'mode': '0755'}] if certbot_replicas | default('0') != '0' else [] }}"
 
-    - name: Check if git repository exists
-      ansible.builtin.stat:
-        path: "{{ deploy_dir }}/.git"
-      register: git_dir
-
-    - name: Remove stale deploy directory (exists but no .git)
+    - name: Ensure deploy directory exists
       become_user: root
       ansible.builtin.file:
         path: "{{ deploy_dir }}"
-        state: absent
-      when: git_dir.stat is defined and not git_dir.stat.exists
+        state: directory
+        mode: '0755'
 
-    - name: Clone or update project repository
+    - name: Ensure subdirectories exist
       become_user: root
+      ansible.builtin.file:
+        path: "{{ item.dest | dirname }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ _deploy_files }}"
+
+    - name: Fix ownership before download
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        recurse: true
+
+    - name: Download deploy files from GitLab
+      ansible.builtin.get_url:
+        url: "{{ _raw_base }}/{{ item.src }}"
+        dest: "{{ item.dest }}"
+        force: true
+        mode: "{{ item.mode | default('0644') }}"
+        timeout: 30
+      loop: "{{ _deploy_files }}"
+      loop_control:
+        label: "{{ item.src }}"
+
+    - name: Download Grafana dashboards (observability)
+      when: enable_observability | default('0') == '1'
       block:
-        - name: Clone project repository
-          ansible.builtin.git:
-            repo: "{{ repo_url_with_credentials }}"
-            dest: "{{ deploy_dir }}"
-            version: "{{ repo_branch }}"
-            accept_hostkey: true
-          when: not git_dir.stat.exists
-
-        - name: Pull latest changes
-          ansible.builtin.git:
-            repo: "{{ repo_url_with_credentials }}"
-            dest: "{{ deploy_dir }}"
-            version: "{{ repo_branch }}"
-            force: true
-          when: git_dir.stat.exists
-
-        - name: Fix ownership to ansible_user
+        - name: Ensure grafana provisioning dir exists
           ansible.builtin.file:
-            path: "{{ deploy_dir }}"
-            owner: "{{ ansible_user }}"
-            group: "{{ ansible_user }}"
-            recurse: true
+            path: "{{ deploy_dir }}/configs/grafana/provisioning"
+            state: "{{ 'absent' if clean_deploy | default(false) | bool else 'directory' }}"
+            mode: '0755'
+
+        - name: Create grafana provisioning dir
+          ansible.builtin.file:
+            path: "{{ deploy_dir }}/configs/grafana/provisioning"
+            state: directory
+            mode: '0755'
+
+        - name: Download Grafana dashboards archive
+          ansible.builtin.get_url:
+            url: "{{ repo_url | regex_replace('\\.git$', '') }}/-/archive/{{ repo_branch }}/grafana.tar.gz?path=configs/grafana/provisioning"
+            dest: "/tmp/grafana-dashboards-{{ repo_branch | replace('/', '-') }}.tar.gz"
+            force: true
+            mode: '0644'
+
+        - name: Extract Grafana dashboards
+          ansible.builtin.unarchive:
+            src: "/tmp/grafana-dashboards-{{ repo_branch | replace('/', '-') }}.tar.gz"
+            dest: "{{ deploy_dir }}"
+            remote_src: true
+            extra_opts:
+              - "--strip-components=1"
+
+    - name: Fix ownership to ansible_user
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        recurse: true
 
     - name: Ensure deploy directories exist with correct ownership
       become_user: root
@@ -284,7 +320,7 @@
         -keyout {{ deploy_dir }}/secrets/ssl/server.key
         -out {{ deploy_dir }}/secrets/ssl/server.crt
         -subj "/CN={{ nginx_public_domain | default('localhost') }}"
-        -addext "subjectAltName={{ nginx_public_domain | default('localhost') | ipaddr | ternary('IP', 'DNS') }}:{{ nginx_public_domain | default('localhost') }}"
+        -addext "subjectAltName={{ 'IP' if (nginx_public_domain | default('localhost') | regex_search('^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$')) else 'DNS' }}:{{ nginx_public_domain | default('localhost') }}"
       when:
         - self_signed_certs | default(false) | bool
         - not ssl_files.results[0].stat.exists or not ssl_files.results[1].stat.exists
@@ -430,7 +466,6 @@
     - name: Validate compose configuration
       ansible.builtin.shell: >
         docker compose
-        {% if gpu_env_file and gpu_env_file | length > 0 %}--env-file {{ deploy_dir }}/{{ gpu_env_file }}{% endif %}
         --env-file {{ deploy_dir }}/.env
         {{ _compose_profiles }}
         -f {{ deploy_dir }}/{{ compose_file }} config --quiet
@@ -460,7 +495,6 @@
         # (docker compose config converts port integers to strings, which
         # docker stack deploy rejects — see docker/cli#1073)
         docker compose \
-          {% if gpu_env_file and gpu_env_file | length > 0 %}--env-file {{ deploy_dir }}/{{ gpu_env_file }}{% endif %}
           --env-file {{ deploy_dir }}/.env \
           {{ _compose_profiles }} \
           -f {{ deploy_dir }}/{{ compose_file }} config > {{ deploy_dir }}/docker-compose.resolved.yaml.tmp

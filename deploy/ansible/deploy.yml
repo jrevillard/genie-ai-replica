@@ -213,11 +213,12 @@
 
     - name: Define deploy files
       ansible.builtin.set_fact:
-        _deploy_files: "{{ _deploy_files_default | union(_deploy_files_obs | default([])) | union(_deploy_files_certbot | default([])) }}"
+        _deploy_files: "{{ _deploy_files_default | union(_deploy_files_gpu | default([])) | union(_deploy_files_obs | default([])) | union(_deploy_files_certbot | default([])) }}"
       vars:
         _deploy_files_default:
           - src: docker-compose.yaml
             dest: "{{ deploy_dir }}/docker-compose.yaml"
+        _deploy_files_gpu: "{{ [{'src': gpu_env_file, 'dest': deploy_dir + '/' + gpu_env_file}] if gpu_env_file is defined and gpu_env_file | length > 0 else [] }}"
         _deploy_files_obs: "{{ [{'src': 'configs/otel/otel-collector-config.yaml', 'dest': deploy_dir + '/configs/otel/otel-collector-config.yaml'}] if enable_observability | default('0') == '1' else [] }}"
         _deploy_files_certbot: "{{ [{'src': 'api-gateway-solution/certbot/entrypoint.sh', 'dest': deploy_dir + '/api-gateway-solution/certbot/entrypoint.sh'}] if certbot_replicas | default('0') != '0' else [] }}"
 

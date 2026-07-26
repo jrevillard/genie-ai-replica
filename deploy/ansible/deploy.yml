@@ -284,7 +284,7 @@
         -keyout {{ deploy_dir }}/secrets/ssl/server.key
         -out {{ deploy_dir }}/secrets/ssl/server.crt
         -subj "/CN={{ nginx_public_domain | default('localhost') }}"
-        -addext "subjectAltName={{ nginx_public_domain | default('localhost') | ipaddr | ternary('IP', 'DNS') }}:{{ nginx_public_domain | default('localhost') }}"
+        -addext "subjectAltName={{ 'IP' if (nginx_public_domain | default('localhost') | regex_search('^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$')) else 'DNS' }}:{{ nginx_public_domain | default('localhost') }}"
       when:
         - self_signed_certs | default(false) | bool
         - not ssl_files.results[0].stat.exists or not ssl_files.results[1].stat.exists

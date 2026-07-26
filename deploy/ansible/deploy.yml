@@ -222,14 +222,12 @@
         _deploy_files_certbot: "{{ [{'src': 'api-gateway-solution/certbot/entrypoint.sh', 'dest': deploy_dir + '/api-gateway-solution/certbot/entrypoint.sh'}] if certbot_replicas | default('0') != '0' else [] }}"
 
     - name: Ensure deploy directory exists
-      become_user: root
       ansible.builtin.file:
         path: "{{ deploy_dir }}"
         state: directory
         mode: '0755'
 
     - name: Ensure subdirectories exist
-      become_user: root
       ansible.builtin.file:
         path: "{{ item.dest | dirname }}"
         state: directory
@@ -251,14 +249,12 @@
       when: enable_observability | default('0') == '1'
       block:
         - name: Ensure grafana provisioning dir exists
-          become_user: root
           ansible.builtin.file:
             path: "{{ deploy_dir }}/configs/grafana/provisioning"
             state: "{{ 'absent' if clean_deploy | default(false) | bool else 'directory' }}"
             mode: '0755'
 
         - name: Create grafana provisioning dir
-          become_user: root
           ansible.builtin.file:
             path: "{{ deploy_dir }}/configs/grafana/provisioning"
             state: directory
@@ -272,7 +268,6 @@
             mode: '0644'
 
         - name: Extract Grafana dashboards
-          become_user: root
           ansible.builtin.unarchive:
             src: "/tmp/grafana-dashboards-{{ repo_branch | replace('/', '-') }}.tar.gz"
             dest: "{{ deploy_dir }}"

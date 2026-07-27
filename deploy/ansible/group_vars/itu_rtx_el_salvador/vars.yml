@@ -75,7 +75,7 @@ email_from: "noreply@genie-ai.itu.int"
 # =============================================================================
 certbot_email: "admin@assembly.govstack.global"
 certbot_replicas: "1"
-certbot_staging: "true"  # staging first; switch to "false" for production after verification
+certbot_staging: "false"  # production Let's Encrypt
 
 # =============================================================================
 # OPEA / AI SERVICES

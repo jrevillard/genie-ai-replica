@@ -2269,8 +2269,7 @@ verify:dataprep-lock:
     # uv pip sync --dry-run checks every package+hash exists on PyPI;
     # it does NOT re-resolve, so upstream version bumps don't cause
     # spurious failures (only removed packages do).
-    - python -m venv /tmp/venv
-    - /tmp/venv/bin/pip install "uv==${UV_VERSION}" -q
+    - uv venv /tmp/venv -q
     - /tmp/venv/bin/uv pip sync requirements.lock --dry-run
     # Cross-check: verify requirements.in is covered by the lock.
     # greps top-level non-comment lines from requirements.in and

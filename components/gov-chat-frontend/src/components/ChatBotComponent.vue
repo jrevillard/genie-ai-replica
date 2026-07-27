@@ -701,9 +701,9 @@ export default {
         return; // already selected — no-op (preserves prior dedup behavior)
       }
       if (rawOption.id === 'just-chat') {
-        // "Just Chat" clears all label filters but keeps conversation mode
-        // (needed for multi-turn blend, MR !232). Empty serviceLabels = no
-        // retriever label filter; null categoryId = no category restriction.
+        // "Just Chat" clears all label filters so the retriever searches
+        // across all documents without restriction. Keeps the Quick Help item
+        // in context so conversation history is preserved for follow-up queries.
         this.selectedContextItems = this.selectedContextItems.filter((item) => item.source !== 'quickHelp');
         this.selectedContextItems.push({
           service: rawOption.service,

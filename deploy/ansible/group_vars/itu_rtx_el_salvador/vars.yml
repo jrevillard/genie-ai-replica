@@ -22,12 +22,12 @@ enable_observability: "1"
 gpu_https_port: "444"
 
 # Self-signed certificates (IP-based access, no domain/Let's Encrypt)
-self_signed_certs: true
+# self_signed_certs: true  # disabled — Let's Encrypt via certbot
 
 # SSL verification — self-signed certs on both app node and remote GPU node
 node_tls_reject_unauthorized: "0"
 opea_ssl_skip_verify: "1"
-keycloak_ssl_skip_verify: "1"
+keycloak_ssl_skip_verify: "0"  # Keycloak has valid Let's Encrypt cert via nginx
 
 # KEYCLOAK THEME
 keycloak_theme: genie-el-salvador
@@ -41,21 +41,21 @@ kc_mobile_redirect_scheme: sv.gov.agrogenio
 # =============================================================================
 # API GATEWAY
 # =============================================================================
-nginx_public_domain: "10.0.0.102"
+nginx_public_domain: "mvp.ai.assembly.govstack.global"
 
 # =============================================================================
 # FRONTEND
 # =============================================================================
-vue_app_api_url: "https://10.0.0.102/api"
-vue_app_csp_connect_src: "'self' https://10.0.0.102 https://10.0.0.110 https://api.worldbank.org http://localhost:8010 https://localhost:8010 http://localhost:8090 https://localhost:8090 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
+vue_app_api_url: "https://mvp.ai.assembly.govstack.global/api"
+vue_app_csp_connect_src: "'self' https://mvp.ai.assembly.govstack.global https://10.0.0.110 https://api.worldbank.org http://localhost:8010 https://localhost:8010 http://localhost:8090 https://localhost:8090 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
 # Available UI locales — El Salvador serves English + Spanish only (all 14 source locale files stay in the repo)
 vue_app_available_locales: "en,es"
 
 # =============================================================================
 # BACKEND
 # =============================================================================
-cors_allowed_origins: 'https://10.0.0.102,http://localhost,https://localhost,http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/'
-csp_connect_src: "'self' https://10.0.0.102 https://10.0.0.110 https://api.worldbank.org http://localhost https://localhost http://localhost:8010 https://localhost:8010 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
+cors_allowed_origins: 'https://mvp.ai.assembly.govstack.global,http://localhost,https://localhost,http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/'
+csp_connect_src: "'self' https://mvp.ai.assembly.govstack.global https://10.0.0.110 https://api.worldbank.org http://localhost https://localhost http://localhost:8010 https://localhost:8010 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
 nginx_permissions_policy: "camera=(), microphone=()"
 # Stream the target-language translation during chat (#829): stream Spanish
 # during generation instead of English-then-flip. Set "0" to revert.
@@ -74,8 +74,8 @@ email_from: "noreply@genie-ai.itu.int"
 # LET'S ENCRYPT (automatic SSL certificates)
 # =============================================================================
 certbot_email: "admin@assembly.govstack.global"
-certbot_replicas: "0"  # self-signed certs — Let's Encrypt disabled
-# certbot_staging: "false"  # Set to "true" to use Let's Encrypt staging (avoids rate limits)
+certbot_replicas: "1"
+certbot_staging: "true"  # staging first; switch to "false" for production after verification
 
 # =============================================================================
 # OPEA / AI SERVICES

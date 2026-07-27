@@ -972,7 +972,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
         tokenizer = get_tokenizer()
         max_model_tokens = MAX_MODEL_LEN_TEXTGEN
-        max_answer_tokens = llm_parameters_dict["max_tokens"]  # Typically 1024
+        max_answer_tokens = llm_parameters_dict.get("max_tokens") or (MAX_MODEL_LEN_TEXTGEN - 200)
         # Count tokens in full prompt (system + user combined for token limit check)
         full_prompt_tokens = len(tokenizer.encode(system_instructions + user_content))
         # Check if the total token count exceeds the model's limit
@@ -2481,7 +2481,7 @@ class ChatQnAService:
             logger.debug(f"Retrieval Context: {ctx_desc}")
 
         parameters = LLMParams(
-            max_tokens=chat_request.max_tokens if chat_request.max_tokens else 1024,
+            max_tokens=chat_request.max_tokens or None,
             top_k=chat_request.top_k if chat_request.top_k else 10,
             top_p=chat_request.top_p if chat_request.top_p else 0.95,
             temperature=chat_request.temperature if chat_request.temperature else 0.01,

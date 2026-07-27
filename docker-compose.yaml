@@ -268,8 +268,7 @@ services:
       retries: 3
       start_period: 40s
     volumes:
-      - ./secrets/ssl/server.crt:/etc/nginx/ssl/server.crt:ro
-      - ./secrets/ssl/server.key:/etc/nginx/ssl/server.key:ro
+      - ./secrets/ssl:/etc/nginx/ssl:ro  # directory mount — tracks inode changes from certbot renewals
       - certbot-webroot:/var/www/certbot:ro
     networks:
       - genieai_network

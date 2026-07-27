@@ -2269,9 +2269,7 @@ verify:dataprep-lock:
     # uv pip sync --dry-run checks every package+hash exists on PyPI;
     # it does NOT re-resolve, so upstream version bumps don't cause
     # spurious failures (only removed packages do).
-    - python -m venv /tmp/venv
-    - /tmp/venv/bin/pip install "uv==${UV_VERSION}" -q
-    - /tmp/venv/bin/uv pip sync requirements.lock --dry-run
+    - uv pip sync requirements.lock --dry-run --system
     # Cross-check: verify requirements.in is covered by the lock.
     # greps top-level non-comment lines from requirements.in and
     # checks each package name appears in the lock. Missing = user
@@ -2280,7 +2278,11 @@ verify:dataprep-lock:
       while IFS= read -r line; do
         pkg=$(echo "$line" | sed 's/[<>=!~].*//;s/\[.*//;s/#.*//' | xargs)
         [ -z "$pkg" ] && continue
-        grep -q "^${pkg}==" requirements.lock || { echo "MISSING from lock: $pkg — run 'make lock-dataprep'"; exit 1; }
+        norm=$(echo "$pkg" | tr '[:upper:]_' '[:lower:]-')
+        if ! grep -q "^${norm}==" requirements.lock; then
+          echo "MISSING from lock: $pkg — run 'make lock-dataprep'"
+          exit 1
+        fi
       done < requirements.in
       echo "requirements.lock in sync"
   rules:

@@ -739,12 +739,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final String visibleTextKey = action['visibleText']?.toString() ?? '';
     final String hiddenPromptKey = action['hiddenPrompt']?.toString() ?? '';
 
-    // If both are empty, just enter Chat Mode (close overlay, focus is on input)
+    // If both are empty, just enter Chat Mode: close overlay, clear all
+    // label filters so the retriever sees all documents, focus input.
     if (visibleTextKey.isEmpty && hiddenPromptKey.isEmpty) {
       setState(() {
         _showQuickHelpOverlay = false;
+        _activeServiceLabels = [];
+        _selectedCategoryId = null;
+        _selectedCategoryName = '';
       });
-      // Ensure the keyboard/input is ready
       _inputFocusNode.requestFocus();
       return;
     }

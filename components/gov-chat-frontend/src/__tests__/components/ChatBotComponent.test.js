@@ -767,20 +767,39 @@ describe('ChatBotComponent', () => {
       expect(vm.showQuickHelp).toBe(false);
     });
 
-    it('handles "Just Chat" option without category', () => {
+    it('handles "Just Chat" option — keeps conversation mode, clears labels', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
+      // Setup: select a categorized option first, then switch to Just Chat
+      const categorizedOption = {
+        service: 'Categorized Service',
+        textKey: 'quickhelp.categorized',
+        category: 'test-category-123',
+        id: 'cat-test',
+        serviceLabels: ['TestLabel'],
+        serviceKey: 'test-service',
+        source: 'quickHelp'
+      };
+      vm.selectQuickHelpOption(categorizedOption);
+      expect(vm.selectedContextItems.length).toBe(1);
+
+      // Switch to Just Chat — replaces Quick Help item, keeps conversation mode
       const justChatOption = {
         service: 'Just Chat',
         category: null,
-        id: 'just-chat'
+        id: 'just-chat',
+        serviceLabels: ['just-chat']
       };
 
       vm.selectQuickHelpOption(justChatOption);
 
-      // When id is 'just-chat', categoryId remains null
+      // Still has 1 context item (Just Chat), but with empty labels
+      expect(vm.selectedContextItems.length).toBe(1);
       expect(vm.currentCategoryId).toBeNull();
+      const justChatItem = vm.selectedContextItems[0];
+      expect(justChatItem.serviceLabels).toEqual([]);
+      expect(justChatItem.category).toBeNull();
     });
 
     it('sets currentCategoryId for categorized options', () => {

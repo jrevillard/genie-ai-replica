@@ -700,22 +700,33 @@ export default {
       if (existingIdx >= 0) {
         return; // already selected — no-op (preserves prior dedup behavior)
       }
-      this.selectedContextItems = this.selectedContextItems.filter((item) => item.source !== 'quickHelp');
-
-      this.selectedContextItems.push({
-        service: rawOption.service,
-        serviceLabels: rawOption.serviceLabels || null,
-        serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
-        source: 'quickHelp',
-        id: rawOption.id,
-        category: categoryId,
-        selected: true
-      });
-
-      if (rawOption.id !== 'just-chat') {
-        this.currentCategoryId = categoryId;
+      if (rawOption.id === 'just-chat') {
+        // "Just Chat" clears all label filters but keeps conversation mode
+        // (needed for multi-turn blend, MR !232). Empty serviceLabels = no
+        // retriever label filter; null categoryId = no category restriction.
+        this.selectedContextItems = this.selectedContextItems.filter((item) => item.source !== 'quickHelp');
+        this.selectedContextItems.push({
+          service: rawOption.service,
+          serviceLabels: [],  // empty — no label filter
+          serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
+          source: 'quickHelp',
+          id: rawOption.id,
+          category: null,
+          selected: true
+        });
+        this.currentCategoryId = null;
       } else {
-        this.currentCategoryId = this.currentCategoryId || null;
+        this.selectedContextItems = this.selectedContextItems.filter((item) => item.source !== 'quickHelp');
+        this.selectedContextItems.push({
+          service: rawOption.service,
+          serviceLabels: rawOption.serviceLabels || null,
+          serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
+          source: 'quickHelp',
+          id: rawOption.id,
+          category: categoryId,
+          selected: true
+        });
+        this.currentCategoryId = categoryId;
       }
 
       this.showQuickHelp = false;

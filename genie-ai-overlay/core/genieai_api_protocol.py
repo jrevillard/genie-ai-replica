@@ -61,7 +61,7 @@ class ChatCompletionRequest(BaseModel):
     logit_bias: dict[str, float] | None = None
     logprobs: bool | None = False
     top_logprobs: int | None = 0
-    max_tokens: int | None = 1024  # use https://platform.openai.com/docs/api-reference/completions/create
+    max_tokens: int | None = None  # None = let vLLM decide based on max_model_len
     n: int | None = 1
     presence_penalty: float | None = 0.0
     response_format: ResponseFormat | None = None

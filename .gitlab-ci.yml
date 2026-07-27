@@ -1,13 +1,12 @@
 stages:
   - lint
   - test
-  - config      # env-var coverage + dependency-lock freshness (fail-fast before build)
+  - config      # env-var coverage + changelog validation + dependency-lock freshness (fail-fast before build)
   - build       # publish candidate images to GitLab Container Registry (tmp/ namespace)
   - scan        # GitLab official Container Scanning template (advisory + dashboard)
   - e2e
   - promote     # retag tested digests to deployable tags (main/tags only)
-  - changelog   # validate CHANGELOG.md has entry for the tag
-  - release     # create GitLab Release from changelog
+  - release     # create GitLab Release from changelog (tag pipelines only)
   - scheduled
   - manual
   - deploy
@@ -2386,7 +2385,7 @@ config:validate:
 
 # Validate CHANGELOG.md has an entry for the version being released
 config:changelog:
-  stage: changelog
+  stage: config
   image: alpine:3.21
   script:
     - |

@@ -718,6 +718,8 @@ Dataprep uses a dedicated Keycloak client with the `client_credentials` grant ty
 
 > **Contextual Retrieval (optional).** `CONTEXTUAL_RETRIEVAL_ENABLED=true` (default); the dataprep generates an LLM document-context prefix per chunk (after chunking, before embedding) so chunks carry the document's subject. `CONTEXTUAL_STRATEGY` selects `per_chunk` (one call/chunk, tailored; default) or `doc_level` (one call/chunk, tailored). `CONTEXTUAL_LABEL_RAW=true` (default) decouples: label the **raw** chunk, use the context only for the **embedding** — keeps label precision while propagating the subject via the vector. Default on (`true`); set `false` to disable. See the [Data Labelling Strategy]({{< relref "/docs/rag/data-labeling" >}}) doc (§7).
 
+> **Multi-Turn Retrieval (optional, off by default).** `MULTI_TURN_BLEND_ENABLED=false` (default). A **query-time** companion to Contextual Retrieval: blends the embedded current query with an embedding of the previous N turns (`V = α·EQ + (1-α)·EH`, default `α=0.7`, `N=1`) at the retriever's dense leg, so pronoun-heavy follow-ups ("can you elaborate on this?") retrieve the prior turn's subject. Implemented as a single batched TEI call through the existing embedding node (no side-channel embedding). Under the default dense-only config the blended vector controls all retrieval; when hybrid retrieval is explicitly enabled (opt-in), only the dense leg is blended. See [Multi-Turn Retrieval]({{< relref "/docs/rag/multi-turn-retrieval" >}}).
+
 ### 10.3 Document Retraction
 
 ```mermaid

@@ -204,11 +204,11 @@ Pushing the tag triggers the full CI pipeline:
 
 ```
 git tag push
-  → lint + test + config
+  → lint + test + config (includes changelog validation)
   → build (16 images, tmp/ namespace)
   → scan (Trivy + Syft SBOM)
+  → e2e (skipped for tag pipelines)
   → promote (tmp/ → stable namespace, tags: v2.0.0 + latest)
-  → changelog validation
   → GitLab Release created
 ```
 
@@ -279,6 +279,10 @@ The CI promote job detects the `-alpha`, `-beta`, or `-rc` suffix and:
 
 This ensures `latest` always points to the most recent **stable** release.
 
+Add a `## [X.Y.Z-alpha.N]` entry in `CHANGELOG.md` before tagging. The CI pipeline
+(`config:changelog` job) validates its presence for every version tag including
+pre-releases.
+
 ### Deploying a Pre-release
 
 Never use `latest` for pre-releases. Pin the exact tag:
@@ -313,7 +317,7 @@ developed on `main`, then cherry-picked to the active release branch.
 ```
 1. Fix on main
 2. Cherry-pick to release/X.Y (if a release branch exists)
-3. Tag PATCH from main
+3. Tag PATCH from the release branch (or from main if no release branch)
 ```
 
 ### Step-by-Step
@@ -338,6 +342,10 @@ developed on `main`, then cherry-picked to the active release branch.
    git cherry-pick <commit-sha-from-main>
    git push origin release/2.0
    ```
+
+   If the cherry-pick conflicts on `CHANGELOG.md` (e.g., `main` has new `[Unreleased]`
+   entries not present on the release branch), resolve manually: keep the release
+   branch's `[Unreleased]` section intact and re-apply only the fix's changelog line.
 
 5. **Move the changelog entry** from `[Unreleased]` to a new PATCH version section
    on the release branch.

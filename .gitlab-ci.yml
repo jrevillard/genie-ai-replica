@@ -1858,8 +1858,9 @@ release:create:
   script:
     - |
       VERSION="${CI_COMMIT_TAG#v}"
+      VERSION_ESC=$(echo "${VERSION}" | sed 's/\./\\./g')
       echo "Extracting changelog for version ${VERSION}..."
-      DESCRIPTION=$(awk "/^## \[${VERSION}\]/,/^## \[/" CHANGELOG.md | head -n -1 | tail -n +2)
+      DESCRIPTION=$(awk "/^## \[${VERSION_ESC}\]/,/^## \[/" CHANGELOG.md | tail -n +2 | sed '$d')
       if [ -z "$DESCRIPTION" ]; then
         echo "WARNING: No changelog content found for ${VERSION}, creating release with tag only."
         DESCRIPTION="Release ${CI_COMMIT_TAG}"
@@ -1871,7 +1872,7 @@ release:create:
         -d "$(jq -n --arg tag "${CI_COMMIT_TAG}" --arg name "${CI_COMMIT_TAG}" --arg desc "${DESCRIPTION}" '{tag_name: $tag, name: $name, description: $desc}')"
     - echo "GitLab Release created for ${CI_COMMIT_TAG}."
   rules:
-    - if: $CI_COMMIT_TAG
+    - if: '$CI_COMMIT_TAG =~ /^v/'
 
 # --- Lint jobs ---
 

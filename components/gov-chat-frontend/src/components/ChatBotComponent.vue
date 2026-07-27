@@ -708,7 +708,7 @@ export default {
         this.selectedContextItems = this.selectedContextItems.filter((item) => item.source !== 'quickHelp');
         this.selectedContextItems.push({
           service: rawOption.service,
-          serviceLabels: [],  // empty — no label filter
+          serviceLabels: [], // empty — no label filter
           serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
           source: 'quickHelp',
           id: rawOption.id,
@@ -848,12 +848,13 @@ export default {
           // Build the retriever filter from English KB labels:
           //  - Quick Help items: explicit serviceLabels array (English, may be multi-label)
           //  - Sidebar items: serviceKey (stable English key; `service` is localized — never use as filter)
-          const serviceLabels = this.selectedContextItems.flatMap((item) =>
-            Array.isArray(item.serviceLabels)
-              ? item.serviceLabels.length > 0
-                ? item.serviceLabels
-                : []  // explicitly empty (Just Chat) — no filter contribution
-              : [item.serviceKey || item.service]  // null/undefined — sidebar fallback
+          const serviceLabels = this.selectedContextItems.flatMap(
+            (item) =>
+              Array.isArray(item.serviceLabels)
+                ? item.serviceLabels.length > 0
+                  ? item.serviceLabels
+                  : [] // explicitly empty (Just Chat) — no filter contribution
+                : [item.serviceKey || item.service] // null/undefined — sidebar fallback
           );
           const messagesForQuery = this.chatMessages.map((msg) => ({
             role: msg.sender === 'user' ? 'user' : 'assistant',

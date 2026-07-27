@@ -767,20 +767,65 @@ describe('ChatBotComponent', () => {
       expect(vm.showQuickHelp).toBe(false);
     });
 
-    it('handles "Just Chat" option without category', () => {
+    it('handles "Just Chat" option — keeps conversation mode, clears labels', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Setup: select a categorized option first, then switch to Just Chat
+      const categorizedOption = {
+        service: 'Categorized Service',
+        textKey: 'quickhelp.categorized',
+        category: 'test-category-123',
+        id: 'cat-test',
+        serviceLabels: ['TestLabel'],
+        serviceKey: 'test-service',
+        source: 'quickHelp'
+      };
+      vm.selectQuickHelpOption(categorizedOption);
+      expect(vm.selectedContextItems.length).toBe(1);
+
+      // Switch to Just Chat — replaces Quick Help item, keeps conversation mode
+      const justChatOption = {
+        service: 'Just Chat',
+        category: null,
+        id: 'just-chat',
+        serviceLabels: ['just-chat']
+      };
+
+      vm.selectQuickHelpOption(justChatOption);
+
+      // Still has 1 context item (Just Chat), but with empty labels
+      expect(vm.selectedContextItems.length).toBe(1);
+      expect(vm.currentCategoryId).toBeNull();
+      const justChatItem = vm.selectedContextItems[0];
+      expect(justChatItem.serviceLabels).toEqual([]);
+      expect(justChatItem.category).toBeNull();
+    });
+
+    it('Just Chat sends no label filter in the API request', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
       const justChatOption = {
         service: 'Just Chat',
         category: null,
-        id: 'just-chat'
+        id: 'just-chat',
+        serviceLabels: ['just-chat'],
+        hiddenPromptKey: 'quickhelp.justChat',
+        visibleTextKey: 'quickhelp.justChatVisible'
       };
 
       vm.selectQuickHelpOption(justChatOption);
+      vm.newMessage = 'test query';
+      await vm.sendMessage();
 
-      // When id is 'just-chat', categoryId remains null
-      expect(vm.currentCategoryId).toBeNull();
+      const payload = mockSubmitQueryStream.mock.calls[mockSubmitQueryStream.mock.calls.length - 1][0];
+      const labels = payload.context?.serviceLabels || [];
+      expect(labels).not.toContain('just-chat');
+      // With the flatMap fix, an explicitly empty serviceLabels array
+      // should produce an empty filter, not fall back to serviceKey.
+      expect(labels.length).toBe(0);
+      expect(payload.context.categoryLabel).toBeNull();
     });
 
     it('sets currentCategoryId for categorized options', () => {

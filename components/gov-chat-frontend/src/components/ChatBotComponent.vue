@@ -552,7 +552,8 @@ export default {
         warnings.push(this.translate('chatbot.categoryNotFound', '').replace('{label}', context.categoryLabel));
       }
       const hasServiceFilter = Array.isArray(context.serviceLabels) && context.serviceLabels.length > 0;
-      if (this.selectedContextItems.length > 0 && !hasServiceFilter && !context.categoryLabel) {
+      const isJustChat = this.selectedContextItems.some((item) => item.id === 'just-chat');
+      if (this.selectedContextItems.length > 0 && !hasServiceFilter && !context.categoryLabel && !isJustChat) {
         blocked = true;
         warnings.push(this.translate('chatbot.noFilterWarning', 'No context filter active.'));
       }
@@ -700,22 +701,33 @@ export default {
       if (existingIdx >= 0) {
         return; // already selected — no-op (preserves prior dedup behavior)
       }
-      this.selectedContextItems = this.selectedContextItems.filter((item) => item.source !== 'quickHelp');
-
-      this.selectedContextItems.push({
-        service: rawOption.service,
-        serviceLabels: rawOption.serviceLabels || null,
-        serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
-        source: 'quickHelp',
-        id: rawOption.id,
-        category: categoryId,
-        selected: true
-      });
-
-      if (rawOption.id !== 'just-chat') {
-        this.currentCategoryId = categoryId;
+      if (rawOption.id === 'just-chat') {
+        // "Just Chat" clears all label filters so the retriever searches
+        // across all documents without restriction. Keeps the Quick Help item
+        // in context so conversation history is preserved for follow-up queries.
+        this.selectedContextItems = this.selectedContextItems.filter((item) => item.source !== 'quickHelp');
+        this.selectedContextItems.push({
+          service: rawOption.service,
+          serviceLabels: [], // empty — no label filter
+          serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
+          source: 'quickHelp',
+          id: rawOption.id,
+          category: null,
+          selected: true
+        });
+        this.currentCategoryId = null;
       } else {
-        this.currentCategoryId = this.currentCategoryId || null;
+        this.selectedContextItems = this.selectedContextItems.filter((item) => item.source !== 'quickHelp');
+        this.selectedContextItems.push({
+          service: rawOption.service,
+          serviceLabels: rawOption.serviceLabels || null,
+          serviceKey: rawOption.serviceKey || rawOption.id || rawOption.service,
+          source: 'quickHelp',
+          id: rawOption.id,
+          category: categoryId,
+          selected: true
+        });
+        this.currentCategoryId = categoryId;
       }
 
       this.showQuickHelp = false;
@@ -836,10 +848,13 @@ export default {
           // Build the retriever filter from English KB labels:
           //  - Quick Help items: explicit serviceLabels array (English, may be multi-label)
           //  - Sidebar items: serviceKey (stable English key; `service` is localized — never use as filter)
-          const serviceLabels = this.selectedContextItems.flatMap((item) =>
-            Array.isArray(item.serviceLabels) && item.serviceLabels.length > 0
-              ? item.serviceLabels
-              : [item.serviceKey || item.service]
+          const serviceLabels = this.selectedContextItems.flatMap(
+            (item) =>
+              Array.isArray(item.serviceLabels)
+                ? item.serviceLabels.length > 0
+                  ? item.serviceLabels
+                  : [] // explicitly empty (Just Chat) — no filter contribution
+                : [item.serviceKey || item.service] // null/undefined — sidebar fallback
           );
           const messagesForQuery = this.chatMessages.map((msg) => ({
             role: msg.sender === 'user' ? 'user' : 'assistant',

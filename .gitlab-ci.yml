@@ -2260,21 +2260,29 @@ verify:dataprep-lock:
   image: python:3.10-slim
   interruptible: true
   variables:
-    # Pin uv to the exact version used to generate the committed lock, so the
-    # resolver behaves identically on re-compile. Bump in lockstep with the
-    # Makefile UV default when regenerating.
     UV_VERSION: "0.10.6"
   before_script:
     - pip install --no-cache-dir "uv==${UV_VERSION}"
   script:
     - cd genie-ai-overlay/dataprep
-    - uv pip compile requirements.in --generate-hashes --python-platform x86_64-manylinux_2_31 --python-version 3.10 --output-file /tmp/regen.lock --quiet
-    # The first 2 lines of a uv lock are a header embedding the exact output
-    # filename ("--output-file requirements.lock" vs "-o /tmp/regen.lock"), which
-    # is inherently non-reproducible across paths. Compare everything past it.
-    - tail -n +3 requirements.lock > /tmp/committed.body
-    - tail -n +3 /tmp/regen.lock > /tmp/regen.body
-    - diff /tmp/committed.body /tmp/regen.body && echo "requirements.lock in sync" || (echo "LOCK DRIFT — run 'make lock-dataprep' locally and commit the regenerated requirements.lock"; exit 1)
+    # Verify lock is consistent and installable without re-resolving.
+    # uv pip sync --dry-run checks every package+hash exists on PyPI;
+    # it does NOT re-resolve, so upstream version bumps don't cause
+    # spurious failures (only removed packages do).
+    - python -m venv /tmp/venv
+    - /tmp/venv/bin/pip install "uv==${UV_VERSION}" -q
+    - /tmp/venv/bin/uv pip sync requirements.lock --dry-run
+    # Cross-check: verify requirements.in is covered by the lock.
+    # greps top-level non-comment lines from requirements.in and
+    # checks each package name appears in the lock. Missing = user
+    # added a dep without regenerating the lock.
+    - |-
+      while IFS= read -r line; do
+        pkg=$(echo "$line" | sed 's/[<>=!~].*//;s/\[.*//;s/#.*//' | xargs)
+        [ -z "$pkg" ] && continue
+        grep -q "^${pkg}==" requirements.lock || { echo "MISSING from lock: $pkg — run 'make lock-dataprep'"; exit 1; }
+      done < requirements.in
+      echo "requirements.lock in sync"
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never

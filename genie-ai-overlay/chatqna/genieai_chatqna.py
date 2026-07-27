@@ -112,6 +112,19 @@ else:
 EMBEDDING_SERVER_HOST_IP = os.getenv("EMBEDDING_SERVER_HOST_IP", "0.0.0.0")
 EMBEDDING_SERVER_PORT = int(os.getenv("EMBEDDING_SERVER_PORT", 80))
 EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "/v1/embeddings")
+# Multi-turn vector-space blending (issue #833). When enabled, the query
+# embedding is blended with the previous N turns' embedding
+# (V = α·EQ + (1-α)·EH) at the retriever's dense leg, so pronoun-heavy
+# follow-ups ("can you elaborate on this?") retrieve the prior turn's subject.
+# Default OFF (true no-op: history_embedding stays None → no blending).
+# Query-time feature; UNRELATED to ingest-time CONTEXTUAL_RETRIEVAL_ENABLED.
+# Under the default production config (HYBRID_RETRIEVAL_ENABLED=false), the
+# retriever is dense-only so the blended vector controls all retrieval. When
+# hybrid is explicitly enabled (opt-in), only the dense leg is blended — the
+# BM25 lexical leg still uses the isolated query text.
+MULTI_TURN_BLEND_ENABLED = os.getenv("MULTI_TURN_BLEND_ENABLED", "false").lower() == "true"
+MULTI_TURN_BLEND_ALPHA = float(os.getenv("MULTI_TURN_BLEND_ALPHA", "0.7"))
+MULTI_TURN_HISTORY_TURNS = int(os.getenv("MULTI_TURN_HISTORY_TURNS", "1"))
 RETRIEVER_SERVICE_HOST_IP = os.getenv("RETRIEVER_SERVICE_HOST_IP", "0.0.0.0")
 RETRIEVER_SERVICE_PORT = int(os.getenv("RETRIEVER_SERVICE_PORT", 7025))
 RERANK_SERVER_HOST_IP = os.getenv("RERANK_SERVER_HOST_IP", "0.0.0.0")
@@ -199,6 +212,40 @@ MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max tok
 
 MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max characters for translation models
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
+
+
+def _extract_history_text(translated_history_string, n_turns):
+    """Return the previous N turns from the pipe-delimited history blob.
+
+    The blob format is "ROLE: content |<-MSG->| ROLE: content |<-MSG->| ...",
+    the same string handle_request builds (English-normalized for non-EN
+    conversations so it matches the bge-base-en-v1.5 embedding space). The last
+    segment is the current user turn (already extracted as the query via
+    USER_MSG_PATTERN); everything before it is history. We return the last
+    `n_turns` prior segments joined into one string for a single embedding call.
+
+    Returns "" on empty input, first turn (no prior history), or n_turns<=0.
+    """
+    if not translated_history_string or n_turns <= 0:
+        return ""
+    segments = [s.strip() for s in translated_history_string.split("|<-MSG->|") if s.strip()]
+    if len(segments) < 2:
+        return ""
+    prior = segments[:-1]
+    return " ".join(prior[-n_turns:])
+
+
+def _blend_embeddings(query_emb, history_emb, alpha):
+    """V = α·EQ + (1-α)·EH, elementwise.
+
+    Alpha is clamped to [0,1]. Returns query_emb unchanged when history_emb is
+    empty or dimensions mismatch (defensive — never raises).
+    """
+    if not history_emb or len(query_emb) != len(history_emb):
+        return query_emb
+    a = max(0.0, min(1.0, float(alpha)))
+    return [a * q + (1.0 - a) * h for q, h in zip(query_emb, history_emb, strict=False)]
+
 
 # ---------------------------------------------------------------------------
 # Stripping of leaked conversation markers (shared by streaming + non-streaming).
@@ -806,7 +853,24 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         return next_inputs
 
     elif self.services[cur_node].service_type == ServiceType.EMBEDDING:
-        inputs["input"] = inputs["text"]
+        # Multi-turn vector-space blending (issue #833, E2 design): when a
+        # history text is present, embed [query, history] as a SINGLE batched
+        # TEI call instead of a side-channel httpx request. align_outputs
+        # EMBEDDING then blends the two returned vectors. Empty/absent history
+        # = single-input path (unchanged baseline behavior).
+        _blend_history_text = inputs.pop("_blend_history_text", "")
+        _blend_alpha = inputs.pop("_blend_alpha", None)
+        if _blend_history_text:
+            inputs["input"] = [inputs["text"], _blend_history_text]
+            # Stash alpha for align_outputs to use when blending the batch
+            # response. `_blend_alpha` does leak into the embedding service HTTP
+            # body (harmless — TEI ignores unknown JSON keys) but never reaches
+            # the retriever: align_outputs(EMBEDDING) builds a fresh next_data
+            # containing only {"text", "embedding"}, so the key is dropped at
+            # that boundary, not by any underscore-prefix convention.
+            inputs["_blend_alpha"] = _blend_alpha
+        else:
+            inputs["input"] = inputs["text"]
         del inputs["text"]
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
@@ -987,7 +1051,27 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             data = data["data"]
         if not isinstance(data, list):
             raise ValueError(f"Embedding service returned unexpected type: {type(data).__name__}, expected list")
-        next_data = {"text": inputs["input"], "embedding": data[0]["embedding"]}
+        # Multi-turn vector-space blending (issue #833, E2 design): when the
+        # embedding node was called with a batch [query, history] (see
+        # align_inputs EMBEDDING), `data` holds 2 vectors. Blend them via
+        # V = α·EQ + (1-α)·EH so the retriever's dense leg sees conversational
+        # context. Single-input path (no history) = unchanged baseline.
+        query_embedding = data[0]["embedding"]
+        if len(data) > 1 and "_blend_alpha" in inputs:
+            history_embedding = data[1]["embedding"]
+            alpha = float(inputs.get("_blend_alpha", MULTI_TURN_BLEND_ALPHA))
+            blended = _blend_embeddings(query_embedding, history_embedding, alpha)
+            if logflag:
+                logger.debug(f"Multi-turn blend applied at embedding: alpha={alpha}")
+            # Batch path: inputs["input"] is [query, history]. The retriever's
+            # BM25/hybrid leg needs the isolated QUERY string (it cannot use a
+            # list — would 422 on pydantic text:str or feed garbage to BM25).
+            # Only the dense leg consumes the blended embedding above.
+            input_val = inputs["input"]
+            query_text = input_val[0] if isinstance(input_val, list) else input_val
+            next_data = {"text": query_text, "embedding": blended}
+        else:
+            next_data = {"text": inputs["input"], "embedding": query_embedding}
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         if logflag:
@@ -2362,6 +2446,22 @@ class ChatQnAService:
         if logflag:
             logger.debug(f"Last_translated_message_content: {last_translated_message_content}")
 
+        # Multi-turn vector-space blending (issue #833): extract the previous N
+        # turns and pass them alongside the query. The EXISTING embedding node
+        # embeds both in ONE batched TEI call (E2 design — no separate embed
+        # helper, no duplicated embedding logic); align_outputs EMBEDDING blends
+        # the two vectors (V = α·EQ + (1-α)·EH). history_text="" disables the
+        # blend transparently (flag off / first turn / empty history).
+        history_text = ""
+        if MULTI_TURN_BLEND_ENABLED and MULTI_TURN_HISTORY_TURNS > 0:
+            history_text = _extract_history_text(translated_history_string, MULTI_TURN_HISTORY_TURNS)
+            if history_text and logflag:
+                logger.debug(
+                    f"Multi-turn blend enabled: alpha={MULTI_TURN_BLEND_ALPHA}, "
+                    f"history_turns={MULTI_TURN_HISTORY_TURNS}, "
+                    f"history_chars={len(history_text)}"
+                )
+
         # Extract the retrieval context if it is provided in the request.
         # Set to empty dict as a default if it is missing.
         retrieval_context = {}
@@ -2440,7 +2540,15 @@ class ChatQnAService:
             _rag_start = time.time()
             try:
                 result_dict, runtime_graph = await self.megaservice.schedule(
-                    initial_inputs={"text": last_translated_message_content},
+                    initial_inputs={
+                        "text": last_translated_message_content,
+                        # Carried through to the embedding node so it can batch
+                        # [query, history] in ONE TEI call. Empty when blending
+                        # is disabled (flag off / first turn). Non-EmbedDoc field
+                        # is stripped before the retriever HTTP call by OPEA.
+                        "_blend_history_text": history_text,
+                        "_blend_alpha": MULTI_TURN_BLEND_ALPHA,
+                    },
                     llm_parameters=parameters,
                     retriever_parameters=retriever_parameters,
                     reranker_parameters=reranker_parameters,

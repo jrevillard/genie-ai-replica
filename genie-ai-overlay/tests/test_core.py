@@ -229,7 +229,7 @@ class TestChatCompletionRequest:
     def test_openai_defaults(self):
         req = ChatCompletionRequest(messages="hi")
         assert req.temperature == 0.01
-        assert req.max_tokens == 1024
+        assert req.max_tokens is None
         assert req.stream is False
         assert req.n == 1
         assert req.frequency_penalty == 0.0

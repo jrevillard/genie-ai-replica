@@ -63,7 +63,6 @@ def create_mock_chat_request_data(**overrides):
         "messages": [{"role": "user", "content": "Hello"}],
         "context": None,
         "language": None,
-        "max_tokens": 1024,
         "top_k": 4,
         "top_p": 0.9,
         "temperature": 0.7,

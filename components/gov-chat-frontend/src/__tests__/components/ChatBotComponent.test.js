@@ -802,6 +802,32 @@ describe('ChatBotComponent', () => {
       expect(justChatItem.category).toBeNull();
     });
 
+    it('Just Chat sends no label filter in the API request', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      const justChatOption = {
+        service: 'Just Chat',
+        category: null,
+        id: 'just-chat',
+        serviceLabels: ['just-chat'],
+        hiddenPromptKey: 'quickhelp.justChat',
+        visibleTextKey: 'quickhelp.justChatVisible'
+      };
+
+      vm.selectQuickHelpOption(justChatOption);
+      vm.newMessage = 'test query';
+      await vm.sendMessage();
+
+      const payload = mockSubmitQueryStream.mock.calls[mockSubmitQueryStream.mock.calls.length - 1][0];
+      const labels = payload.context?.serviceLabels || [];
+      expect(labels).not.toContain('just-chat');
+      // With the flatMap fix, an explicitly empty serviceLabels array
+      // should produce an empty filter, not fall back to serviceKey.
+      expect(labels.length).toBe(0);
+      expect(payload.context.categoryLabel).toBeNull();
+    });
+
     it('sets currentCategoryId for categorized options', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;

@@ -2280,7 +2280,11 @@ verify:dataprep-lock:
       while IFS= read -r line; do
         pkg=$(echo "$line" | sed 's/[<>=!~].*//;s/\[.*//;s/#.*//' | xargs)
         [ -z "$pkg" ] && continue
-        grep -q "^${pkg}==" requirements.lock || { echo "MISSING from lock: $pkg — run 'make lock-dataprep'"; exit 1; }
+        norm=$(echo "$pkg" | tr '[:upper:]_' '[:lower:]-')
+        if ! grep -q "^${norm}==" requirements.lock; then
+          echo "MISSING from lock: $pkg — run 'make lock-dataprep'"
+          exit 1
+        fi
       done < requirements.in
       echo "requirements.lock in sync"
   rules:

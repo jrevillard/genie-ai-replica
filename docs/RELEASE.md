@@ -7,7 +7,7 @@ This document describes how to release a new version of GENIE.AI.
 - [3. Changelog](#3-changelog)
 - [4. Release Workflow](#4-release-workflow)
 - [5. Pre-releases](#5-pre-releases)
-- [6. Hotfix](#6-hotfix)
+- [6. PATCH Releases](#6-patch-releases)
 - [7. Checklist](#7-checklist)
 - [8. References](#8-references)
 
@@ -65,30 +65,32 @@ Component-level versions in `package.json`, `pyproject.toml`, and `pubspec.yaml`
 GENIE.AI uses [Trunk-Based Development](https://trunkbaseddevelopment.com/).
 
 ```
-main (trunk)         ← always deployable
+main (trunk)         ← all development, always deployable
   │
   ├── feature/foo    ← short-lived, merged via MR
   ├── fix/bar        ← short-lived, merged via MR
   │
-  └── release/X.Y    ← stabilization branch (created when needed)
+  └── release/2.1    ← one branch per MAJOR/MINOR series
+       │
+       ├── v2.1.0    ← initial tag
+       ├── v2.1.1    ← PATCH via cherry-pick from main
+       └── v2.1.2    ← next PATCH, same branch
 ```
 
 ### `main` — The Trunk
 
-- Single source of truth. Always in a deployable state.
-- All development merges here through Merge Requests.
-- CI runs on every commit: lint → test → config → build → scan → promote.
+- Single source of truth. All development merges here through Merge Requests.
+- Always in a deployable state — CI runs on every commit: lint → test → config → build → scan → promote.
+- Tags are **never** created on `main` once a `release/X.Y` branch exists for that series.
 
-### `release/*` — Stabilization Branches
+### `release/*` — Release Branches
 
-- Created **only when stabilization is needed** before a release — most releases
-  are tagged directly from `main`.
-- When used: for major releases (`v2.0.0`) with pre-release cycles, or when
-  multiple teams need to coordinate testing.
-- Example: `release/2.0` for the 2.0.x release series.
+- **One branch per MAJOR/MINOR version.** Example: `release/2.1` for the entire 2.1.x series.
+- Created from `main` at the start of the release process. The initial tag (`v2.1.0`) is the first commit on the branch.
+- **Never commit directly to a release branch.** All fixes land on `main` first, then are cherry-picked to the release branch.
+- Tags for every release in the series live on this branch: `v2.1.0`, `v2.1.1`, `v2.1.2`... all on `release/2.1`.
 - CI runs on release branches: builds and promotes images as `release-X.Y-{sha}` and `release-X.Y`.
-- Bug fixes for a release are made on `main`, then **cherry-picked** to the release branch.
-- Tags are created from the release branch when it is ready.
+- Abandoned when the next MINOR release replaces it (no merge back to `main`).
 
 ### Feature Branches
 
@@ -163,7 +165,7 @@ At the bottom of the file, resolve each version heading as a reference link:
 
 ## 4. Release Workflow
 
-### 4.1 Prepare the Release
+### 4.1 Create the Release Branch
 
 **Prerequisite (one-time setup):** The `release:create` CI job uses `CI_JOB_TOKEN`
 to call the GitLab Releases API. If your project has
@@ -172,51 +174,43 @@ to call the GitLab Releases API. If your project has
 **Settings → CI/CD → Token Access → Allow access to this project with a job token**,
 or the job will fail with 403.
 
-1. **Ensure CI is green on the source branch.** Check the
-   [latest pipeline](https://opensource.unicc.org/un/itu/genie-ai/-/pipelines?ref=main)
-   for the branch you are releasing from (`main` or `release/X.Y`).
+1. **Ensure CI is green on `main`.** Check the
+   [latest pipeline](https://opensource.unicc.org/un/itu/genie-ai/-/pipelines?ref=main).
 
 2. **Decide the version number.** Use the rules in [Section 1](#1-versioning).
    If unsure, review the `[Unreleased]` changelog section: breaking changes → MAJOR,
    new features → MINOR, only fixes → PATCH.
 
-3. **Update the changelog.** Rename `[Unreleased]` to the new version, add the date,
-   and update the reference links at the bottom:
+3. **Update the changelog on `main`.** Rename `[Unreleased]` to the new version,
+   add the date, and update the reference links at the bottom:
 
    ```markdown
-   ## [2.0.0] - 2026-07-27
+   ## [2.1.0] - 2026-07-28
    ```
 
-   Then add a fresh `[Unreleased]` section at the top.
+   Then add a fresh `[Unreleased]` section at the top. Merge this via MR.
 
-4. **Create a stabilization branch if needed** (optional, rare):
-
-   Most releases are tagged directly from `main`. Only create a `release/X.Y`
-   branch when you need a stabilization period — typically for major releases
-   (`v2.0.0`) with pre-release cycles (alpha → beta → rc) or when multiple
-   teams need to coordinate testing before the stable tag.
+4. **Create the release branch from `main`:**
 
    ```bash
    git checkout main
    git pull origin main
-   git checkout -b release/2.0
-   git push origin release/2.0
+   git checkout -b release/2.1
+   git push origin release/2.1
    ```
 
-   With a release branch, the stable tag (`v2.0.0`) is created from the branch
-   once stabilization is complete. Without one, tag directly from `main`.
-   For critical PATCH releases with an active `release/X.Y` branch, follow the
-   [hotfix workflow](#6-hotfix) instead (fix on `main`, cherry-pick to release branch).
+   This branch will hold the entire 2.1.x series. All PATCH releases
+   (`v2.1.1`, `v2.1.2`, ...) will be tagged from this branch.
 
 ### 4.2 Tag and Push
 
-From the branch you are releasing (usually `main` or `release/X.Y`):
+From the release branch:
 
 ```bash
-git checkout release/2.0          # or main
-git pull origin release/2.0       # or main
-git tag v2.0.0
-git push origin v2.0.0
+git checkout release/2.1
+git pull origin release/2.1
+git tag v2.1.0
+git push origin v2.1.0
 ```
 
 Pushing the tag triggers the full CI pipeline:
@@ -227,7 +221,7 @@ git tag push
   → build (16 images, tmp/ namespace)
   → scan (Trivy + Syft SBOM)
   → e2e (skipped for tag pipelines)
-  → promote (tmp/ → stable namespace, tags: v2.0.0 + latest)
+  → promote (tmp/ → stable namespace, tags: v2.1.0 + latest)
   → release (GitLab Release created from changelog)
 ```
 
@@ -325,20 +319,25 @@ git push origin v2.0.0
 
 The stable tag triggers a new promote that updates `latest`.
 
-## 6. Hotfix
+## 6. PATCH Releases
 
-A hotfix is a critical bug fix that must be deployed to production immediately,
-bypassing the normal release cycle.
+A PATCH release (`v2.1.0` → `v2.1.1`) ships bug fixes to the current release
+without pulling in new features from `main`.
 
-### Trunk-Based Hotfix Flow
+### Cherry-Pick Flow
 
-In Trunk-Based Development, `main` is always the source of truth. A hotfix is
-developed on `main`, then cherry-picked to the active release branch.
+Development always happens on `main`. The release branch only receives cherry-picks.
 
 ```
-1. Fix on main
-2. Cherry-pick to release/X.Y (if a release branch exists)
-3. Tag PATCH from the release branch (or from main if no release branch)
+main (trunk)                     release/2.1
+    │                                 │
+    ├── feature/new-stuff             ├── v2.1.0 (initial tag)
+    ├── fix/bug-123 (MR)              │
+    │   └── cherry-pick ──────────→   ├── v2.1.1 (PATCH)
+    ├── feature/other                 │
+    ├── fix/bug-456 (MR)              │
+    │   └── cherry-pick ──────────→   ├── v2.1.2 (PATCH)
+    └── ...                           └── ...
 ```
 
 ### Step-by-Step
@@ -348,45 +347,60 @@ developed on `main`, then cherry-picked to the active release branch.
    ```bash
    git checkout main
    git pull origin main
-   git checkout -b fix/critical-bug
+   git checkout -b fix/<description>
    ```
 
-2. **Implement the fix.** Write code + tests. Update `CHANGELOG.md` under `[Unreleased]`.
+2. **Implement the fix.** Write code + tests. Add a changelog entry under `[Unreleased]`
+   on `main` (the permanent record).
 
 3. **Merge to `main`** via Merge Request. Wait for CI to pass.
 
-4. **Cherry-pick to the release branch** (if one exists):
+4. **Cherry-pick to the release branch:**
 
    ```bash
-   git checkout release/2.0
-   git pull origin release/2.0
+   git checkout release/2.1
+   git pull origin release/2.1
    git cherry-pick <commit-sha-from-main>
-   git push origin release/2.0
    ```
 
    If the cherry-pick conflicts on `CHANGELOG.md` (e.g., `main` has new `[Unreleased]`
    entries not present on the release branch), resolve manually: keep the release
-   branch's `[Unreleased]` section intact and re-apply only the fix's changelog line.
+   branch's changelog intact and re-apply only the fix's changelog line.
 
-5. **Move the changelog entry** from `[Unreleased]` to a new PATCH version section
-   on the release branch.
+5. **Update the changelog on the release branch.** Add a new PATCH version section
+   for this fix:
 
-6. **Tag from the release branch** (or from `main` if no release branch):
+   ```markdown
+   ## [2.1.1] - 2026-07-28
+
+   ### Fixed
+
+   - Fix description cherry-picked from main.
+   ```
+
+   Update the reference links at the bottom of the release branch's changelog.
+
+6. **Tag from the release branch:**
 
    ```bash
-   git checkout release/2.0          # or main
-   git tag v2.0.1
-   git push origin v2.0.1
+   git tag v2.1.1
+   git push origin release/2.1 v2.1.1
    ```
 
 7. **Deploy** with the new PATCH tag.
 
-### Why Not Branch From the Tag?
+### Urgent Hotfixes
 
-Branching from a tag creates a dead-end branch that must be merged back to `main`,
-causing merge conflicts and divergence. Trunk-Based Development keeps `main` as the
-single source of truth: fix it there first, propagate to release branches with
-cherry-pick.
+Follow the same flow. The only difference is speed: skip non-essential CI steps
+if the pipeline allows it, and coordinate with deployers to fast-track the rollout.
+
+### Why Cherry-Pick From Main?
+
+Cherry-picking from `main` (instead of branching from the tag) keeps `main` as
+the single source of truth. The fix lives on `main` forever — the cherry-pick
+on the release branch is a deployment artifact, not the canonical change.
+This avoids merge conflicts and divergence when the release branch is eventually
+abandoned.
 
 ## 7. Checklist
 
@@ -394,7 +408,7 @@ Copy this checklist into the release MR or issue.
 
 ### Preparation
 
-- [ ] CI pipeline green on the source branch
+- [ ] CI pipeline green on `main` before creating the release branch
 - [ ] `CHANGELOG.md` updated: `[Unreleased]` renamed to `[X.Y.Z]` with date
 - [ ] Breaking changes marked with `**Breaking:**` in changelog
 - [ ] Fresh `[Unreleased]` section added

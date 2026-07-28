@@ -171,6 +171,11 @@ At the bottom of the file, resolve each version heading as a reference link:
 - Write for non-native English speakers: clear, short sentences.
 - Do **not** include branch names, issue tracker IDs in section headers, or
   internal implementation details in the changelog text.
+- **MR references:** include MR/issue numbers only in `Security` and `Fixed`
+  sections, where each entry maps to a specific, traceable fix. Do not add
+  MR numbers to `Added` or `Changed` — features span multiple MRs and linking
+  just one is misleading. Example: `(#422)` is correct for a security fix;
+  no reference for "Keycloak OIDC authentication" (20+ MRs).
 
 ## 4. Release Workflow
 

@@ -43,7 +43,13 @@ the step-by-step commands an AI agent needs to execute a release.
 
    Group under `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
    Mark breaking changes with `**Breaking:**` prefix. Write for non-native
-   English speakers. Confirm with user before committing.
+   English speakers.
+
+   **MR numbers:** only in `Security` and `Fixed` sections — each entry maps to
+   a specific fix. No MR numbers in `Added` or `Changed` (features span many MRs).
+   Format: `(#422)`.
+
+   Confirm with user before committing.
 
 3. **Decide version.** Breaking → MAJOR, new features → MINOR, only fixes → PATCH.
    Confirm with user.

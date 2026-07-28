@@ -165,6 +165,12 @@ At the bottom of the file, resolve each version heading as a reference link:
 
 ## 4. Release Workflow
 
+A release requires three manual actions — everything else is automated by CI:
+
+1. **Update the changelog** (MR or direct push)
+2. **Create the release branch** (`release/X.Y`)
+3. **Tag and push** (`git tag vX.Y.Z && git push`) ← triggers full CI pipeline
+
 ### 4.1 Create the Release Branch
 
 **Prerequisite (one-time setup):** The `release:create` CI job uses `CI_JOB_TOKEN`
@@ -203,6 +209,11 @@ or the job will fail with 403.
    (`v2.1.1`, `v2.1.2`, ...) will be tagged from this branch.
 
 ### 4.2 Tag and Push
+
+**This is the only manual step.** Creating and pushing the Git tag triggers
+everything else — CI builds, scans, promotes Docker images, and creates the
+GitLab Release. You do not need to touch Docker, the Container Registry, or
+the GitLab Releases UI.
 
 From the release branch:
 

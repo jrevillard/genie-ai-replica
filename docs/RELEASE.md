@@ -81,7 +81,10 @@ main (trunk)         ← always deployable
 
 ### `release/*` — Stabilization Branches
 
-- Created **only when stabilization is needed** before a release.
+- Created **only when stabilization is needed** before a release — most releases
+  are tagged directly from `main`.
+- When used: for major releases (`v2.0.0`) with pre-release cycles, or when
+  multiple teams need to coordinate testing.
 - Example: `release/2.0` for the 2.0.x release series.
 - CI runs on release branches: builds and promotes images as `release-X.Y-{sha}` and `release-X.Y`.
 - Bug fixes for a release are made on `main`, then **cherry-picked** to the release branch.
@@ -186,7 +189,12 @@ or the job will fail with 403.
 
    Then add a fresh `[Unreleased]` section at the top.
 
-4. **Create a stabilization branch if needed** (optional):
+4. **Create a stabilization branch if needed** (optional, rare):
+
+   Most releases are tagged directly from `main`. Only create a `release/X.Y`
+   branch when you need a stabilization period — typically for major releases
+   (`v2.0.0`) with pre-release cycles (alpha → beta → rc) or when multiple
+   teams need to coordinate testing before the stable tag.
 
    ```bash
    git checkout main
@@ -195,7 +203,8 @@ or the job will fail with 403.
    git push origin release/2.0
    ```
 
-   Skip this step for PATCH releases — tag directly from `main`.
+   With a release branch, the stable tag (`v2.0.0`) is created from the branch
+   once stabilization is complete. Without one, tag directly from `main`.
    For critical PATCH releases with an active `release/X.Y` branch, follow the
    [hotfix workflow](#6-hotfix) instead (fix on `main`, cherry-pick to release branch).
 

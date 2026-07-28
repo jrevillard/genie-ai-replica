@@ -160,8 +160,22 @@ At the bottom of the file, resolve each version heading as a reference link:
 - Changelogs are for **humans**, not machines.
 - Every version gets an entry. No exceptions.
 - List the latest version first.
-- Record **notable** changes — not every commit.
+- Describe changes from the **user's or deployer's perspective** — what do they
+  need to know or do? Omit internal refactoring, CI pipeline changes, linting,
+  test additions, and tooling tweaks. "Added Mailpit for CI testing" is noise;
+  "File size limit reduced to 50 MB" matters.
+- **Curate aggressively.** 684 commits since the last release ≠ 684 changelog
+  entries. Merge related changes, drop internal-only items.
+- Group changes under `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`,
+  or `Security`.
 - Write for non-native English speakers: clear, short sentences.
+- Do **not** include branch names, issue tracker IDs in section headers, or
+  internal implementation details in the changelog text.
+- **MR references:** include MR/issue numbers only in `Security` and `Fixed`
+  sections, where each entry maps to a specific, traceable fix. Do not add
+  MR numbers to `Added` or `Changed` — features span multiple MRs and linking
+  just one is misleading. Example: `(#422)` is correct for a security fix;
+  no reference for "Keycloak OIDC authentication" (20+ MRs).
 
 ## 4. Release Workflow
 

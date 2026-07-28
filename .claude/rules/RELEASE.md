@@ -8,22 +8,28 @@ the step-by-step commands an AI agent needs to execute a release.
 1. **Gather changes since last release.** Do NOT rely on `[Unreleased]` alone —
    it may be empty or incomplete. The source of changes depends on the release type.
 
-   **MAJOR/MINOR (from `main`):** all changes since the last tag on `main`.
+   **MAJOR/MINOR (from `main`):** all changes on `main` since the last release
+   branch was created. Tags live on `release/*` branches, not on `main`, so use
+   the merge-base between `main` and the most recent release branch.
    ```bash
-   LAST_TAG=$(git describe --tags --abbrev=0 main 2>/dev/null || echo "v0.0.0")
-   echo "Last release on main: $LAST_TAG"
-   git log ${LAST_TAG}..main --oneline --no-merges
-   # MRs merged since last tag
-   GITLAB_HOST=opensource.unicc.org glab api "projects/:id/merge_requests?state=merged&updated_after=$(git log -1 --format=%aI $LAST_TAG)&per_page=50"
+   # Find the most recent release branch
+   LAST_REL=$(git for-each-ref --sort=-creatordate --format='%(refname:short)' refs/remotes/origin/release/ | head -1)
+   if [ -z "$LAST_REL" ]; then
+     # First release ever — include all commits
+     BASE=""
+   else
+     BASE=$(git merge-base main "$LAST_REL")
+     echo "Changes on main since branching from $LAST_REL at $BASE"
+   fi
+   git log ${BASE:+${BASE}..}main --oneline --no-merges
    ```
 
-   **PATCH (from `release/X.Y`):** only cherry-picks since the last tag on that branch.
+   **PATCH (from `release/X.Y`):** only changes on that branch since its last tag.
+   Tags DO exist on release branches, so `git describe` works here.
    ```bash
    LAST_TAG=$(git describe --tags --abbrev=0 release/X.Y 2>/dev/null)
-   echo "Last release on release/X.Y: $LAST_TAG"
-   git log $(git merge-base main release/X.Y)..release/X.Y --oneline --no-merges
-   # Or: list cherry-picks specifically
-   git log release/X.Y --oneline --no-merges --grep="cherry-pick"
+   echo "Last tag on release/X.Y: $LAST_TAG"
+   git log ${LAST_TAG}..release/X.Y --oneline --no-merges
    ```
 
 2. **Write changelog entries.** Keep a Changelog format: for humans, not machines.

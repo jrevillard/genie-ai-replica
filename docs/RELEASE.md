@@ -189,22 +189,24 @@ or the job will fail with 403.
 
    The source depends on the release type:
 
-   **MAJOR/MINOR (from `main`):** all changes since the last tag on `main`.
+   **MAJOR/MINOR (from `main`):** all changes on `main` since the last release
+   branch was created. Tags live on `release/*` branches, not on `main`, so use
+   the merge-base between `main` and the most recent release branch:
    ```bash
-   LAST_TAG=$(git describe --tags --abbrev=0 main 2>/dev/null || echo "v0.0.0")
-   git log ${LAST_TAG}..main --oneline --no-merges
+   LAST_REL=$(git for-each-ref --sort=-creatordate --format='%(refname:short)' refs/remotes/origin/release/ | head -1)
+   BASE=$(git merge-base main "${LAST_REL:-main}")
+   git log ${BASE}..main --oneline --no-merges
    ```
 
-   **PATCH (from `release/X.Y`):** only cherry-picks since the last tag on
-   that branch.
+   **PATCH (from `release/X.Y`):** only changes on that branch since its last tag:
    ```bash
    LAST_TAG=$(git describe --tags --abbrev=0 release/X.Y 2>/dev/null)
-   git log $(git merge-base main release/X.Y)..release/X.Y --oneline --no-merges
+   git log ${LAST_TAG}..release/X.Y --oneline --no-merges
    ```
 
    For MR-level context on GitLab:
    ```bash
-   glab api "projects/:id/merge_requests?state=merged&updated_after=$(git log -1 --format=%aI $LAST_TAG)&per_page=50"
+   glab api "projects/:id/merge_requests?state=merged&updated_after=$(git log -1 --format=%aI $BASE)&per_page=50"
    ```
 
 3. **Write the changelog entries.** Keep a Changelog format: describe what

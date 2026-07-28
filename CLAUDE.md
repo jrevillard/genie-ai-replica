@@ -147,6 +147,7 @@ User-facing and dev-internal docs live in **separate** places — no duplication
 
 - **User-facing docs → `site/content/en/docs/`** — canonical, published to the GitLab Pages docs site, editable in the GitLab Web IDE. Grouped by section (`core/`, `rag/`, `observability/`, `knowledge-base/`, `operations/`, `deployment/`, `configuration/`, `architecture/`, `frontend/`, `backend/`, `mobile/`). Hugo + Docsy; see `.claude/rules/SITE-LOCAL-DEV.md` to run locally.
 - **Dev-internal docs → `docs/`** — repo-resident, referenced by code/developers (e.g. `docs/e2e-tests/`, `docs/database-migrations.md`, `docs/RELEASE.md`). NOT published.
+- **Agent instructions → `.claude/rules/`** — step-by-step commands for AI agents (e.g. `RELEASE.md`, `TESTING.md`, `SERVER-TESTING.md`). Referenced by CLAUDE.md.
 
 When adding a doc, pick one home based on audience. Do not duplicate across both.
 

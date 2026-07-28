@@ -241,7 +241,7 @@ Docker tag summary:
 
 2. **Verify Docker images** in the
    [Container Registry](https://opensource.unicc.org/un/itu/genie-ai/container_registry).
-   All 16 images should have the `v2.0.0` tag.
+   All 16 images should have the `v2.1.0` tag.
 
 3. **Verify the GitLab Release** at
    [Deploy → Releases](https://opensource.unicc.org/un/itu/genie-ai/-/releases).
@@ -251,7 +251,7 @@ Docker tag summary:
    docker pull registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-frontend:latest
    docker inspect registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-frontend:latest | jq '.[0].RepoDigests'
    ```
-   The `latest` digest should match the `v2.0.0` digest.
+   The `latest` digest should match the `v2.1.0` digest.
 
 ### 4.4 Deploy
 
@@ -376,8 +376,9 @@ main (trunk)                     release/2.1
    entries not present on the release branch), resolve manually: keep the release
    branch's changelog intact and re-apply only the fix's changelog line.
 
-5. **Update the changelog on the release branch.** Add a new PATCH version section
-   for this fix:
+5. **Move the changelog entry on the release branch.** The cherry-pick added
+   the fix under `[Unreleased]` on the release branch. Move it to a new PATCH
+   version section:
 
    ```markdown
    ## [2.1.1] - 2026-07-28
@@ -387,7 +388,8 @@ main (trunk)                     release/2.1
    - Fix description cherry-picked from main.
    ```
 
-   Update the reference links at the bottom of the release branch's changelog.
+   Remove the same entry from the `[Unreleased]` section on the release branch
+   to avoid duplication. Update the reference links at the bottom.
 
 6. **Tag from the release branch:**
 
@@ -395,6 +397,10 @@ main (trunk)                     release/2.1
    git tag v2.1.1
    git push origin release/2.1 v2.1.1
    ```
+
+   Note: `git push origin <branch> <tag>` pushes both the cherry-pick commit and
+   the tag. Section 4.2 only pushes the tag because the branch commit already existed
+   on the remote from step 4.1.
 
 7. **Deploy** with the new PATCH tag.
 

@@ -89,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wrong i18n key causing SatisfactionHeatmap to display incorrectly (#580)
 - Streaming SSE `|<-MSG->|` boundary markers no longer visible in chat output
 - Label filters now correctly cleared when switching to Just Chat mode (#249)
+- Just Chat no longer auto-submits a hidden prompt — enters free-form mode without sending any message
 - Cross-document label contamination fixed — chunk labels scoped to their document (#216)
 
 ## [R_1_0_0] - 2026-03-16

@@ -810,12 +810,13 @@ describe('ChatBotComponent', () => {
         service: 'Just Chat',
         category: null,
         id: 'just-chat',
-        serviceLabels: ['just-chat'],
-        hiddenPromptKey: 'quickhelp.justChat',
-        visibleTextKey: 'quickhelp.justChatVisible'
+        serviceLabels: ['just-chat']
       };
 
       vm.selectQuickHelpOption(justChatOption);
+      // Just Chat should NOT auto-submit a message
+      expect(mockSubmitQueryStream).not.toHaveBeenCalled();
+
       vm.newMessage = 'test query';
       await vm.sendMessage();
 
@@ -826,6 +827,35 @@ describe('ChatBotComponent', () => {
       // should produce an empty filter, not fall back to serviceKey.
       expect(labels.length).toBe(0);
       expect(payload.context.categoryLabel).toBeNull();
+    });
+
+    it('Just Chat enters free chat mode without auto-submitting', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      const sendMessageSpy = jest.spyOn(vm, 'sendMessage');
+      const justChatOption = {
+        service: 'Just Chat',
+        category: null,
+        id: 'just-chat',
+        serviceLabels: ['just-chat']
+      };
+
+      vm.selectQuickHelpOption(justChatOption);
+
+      // Should set up context with empty labels
+      expect(vm.selectedContextItems.length).toBe(1);
+      expect(vm.selectedContextItems[0].serviceLabels).toEqual([]);
+      expect(vm.selectedContextItems[0].category).toBeNull();
+      expect(vm.currentCategoryId).toBeNull();
+      // Should hide the quick help overlay
+      expect(vm.showQuickHelp).toBe(false);
+      // Should NOT auto-submit a message
+      expect(sendMessageSpy).not.toHaveBeenCalled();
+      expect(vm.newMessage).toBe('');
+      expect(vm.hiddenPromptForNextMessage).toBeNull();
+
+      sendMessageSpy.mockRestore();
     });
 
     it('sets currentCategoryId for categorized options', () => {

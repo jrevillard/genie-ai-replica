@@ -187,13 +187,6 @@ A release requires a few manual actions — everything else is automated by CI:
 
 ### 4.1 Create the Release Branch
 
-**Prerequisite (one-time setup):** The `release:create` CI job uses `CI_JOB_TOKEN`
-to call the GitLab Releases API. If your project has
-**"Limit access to this project"** enabled (default on GitLab ≥16.1), ensure the
-`api` scope is granted to `CI_JOB_TOKEN` in
-**Settings → CI/CD → Token Access → Allow access to this project with a job token**,
-or the job will fail with 403.
-
 1. **Ensure CI is green on `main`.** Check the
    [latest pipeline](https://opensource.unicc.org/un/itu/genie-ai/-/pipelines?ref=main).
 

@@ -14,15 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Quick Help:** configurable dual-prompt system with customizable welcome message, knowledge hierarchy categories, and service labels for precise RAG retrieval filtering
 - **Non-English document ingestion:** upload and translate Spanish PDFs into the RAG knowledge base
 - **Account management:** administrators can deactivate and reactivate user accounts
-- **RAG abstention:** the assistant now says "I don't know" instead of hallucinating when no relevant information is found
-- **Contextual Retrieval (Anthropic-style):** LLM-generated document context is prepended to each chunk before embedding, improving retrieval relevance for domain-specific documents
+- **RAG abstention:** the assistant now says "I don't know" instead of hallucinating when no relevant information is found — toggle via `CHATQNA_ENFORCE_ABSTENTION`
+- **Contextual Retrieval (Anthropic-style):** LLM-generated document context is prepended to each chunk before embedding, improving retrieval relevance for domain-specific documents — toggle via `CONTEXTUAL_RETRIEVAL_ENABLED`
 - **Reranking strategies:** configurable via `RERANKING_STRATEGY` (slice, threshold, knee, adaptive) — each deployment can select the method best suited to its data
-- **Streaming translation:** chat output now streams in the target language during generation instead of waiting for the full English response first (#829)
-- **Multi-turn vector-space blending:** previous conversation turns influence retrieval, improving relevance in multi-turn chats (#833)
+- **Streaming translation:** chat output now streams in the target language during generation instead of waiting for the full English response first — enable via `STREAMING_TRANSLATION_ENABLED` (#829)
+- **Multi-turn vector-space blending:** previous conversation turns influence retrieval, improving relevance in multi-turn chats — enable via `MULTI_TURN_BLEND_ENABLED` (#833)
 - **Multi-crop query support:** users can query across multiple crop categories simultaneously
 - **Faster document ingestion:** batched LLM labeling (4 chunks per call) with increased concurrency — processing time reduced by an order of magnitude
 - **Remote GPU node:** deploy model services (vLLM, TEI) on a dedicated machine with TLS and API key authentication
-- **Config-driven locale whitelist:** restrict active UI locales per deployment without deleting translation files — applies to web, mobile, and Keycloak login pages
+- **Config-driven locale whitelist:** restrict active UI locales per deployment via `VUE_APP_AVAILABLE_LOCALES` — applies to web, mobile, and Keycloak login pages
 - **Documentation site:** public Hugo/Docsy site with redesigned landing page, dark mode, and curated reference docs
 - **Model selection guide:** comprehensive documentation on choosing and configuring LLM, embedding, and reranker models
 - **Docker Swarm deployment:** fully automated via Ansible — one command to deploy the entire stack
@@ -41,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **UI theme system:** replaced hardcoded colors with CSS custom properties — custom themes can now be applied by overriding variables
-- **Document repository file upload limit:** reduced from 500 MB to 50 MB
+- **Document repository file upload limit:** default reduced from 500 MB to 50 MB — adjustable via `MAX_FILE_SIZE`
 - **Translation pipeline:** automatically detects model type from `VLLM_TRANSLATION_MODEL_ID` — no manual config needed
 - **Translation backend:** default mode changed from `cpu` to `auto` — the system picks the best available translation method
 - **Guardrails:** content guardrail service is now disabled by default; enable explicitly if needed

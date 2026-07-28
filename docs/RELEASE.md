@@ -162,8 +162,16 @@ At the bottom of the file, resolve each version heading as a reference link:
 
 ### 4.1 Prepare the Release
 
-1. **Ensure CI is green on `main`.** Check the
-   [latest pipeline](https://opensource.unicc.org/un/itu/genie-ai/-/pipelines?ref=main).
+**Prerequisite (one-time setup):** The `release:create` CI job uses `CI_JOB_TOKEN`
+to call the GitLab Releases API. If your project has
+**"Limit access to this project"** enabled (default on GitLab ≥16.1), ensure the
+`api` scope is granted to `CI_JOB_TOKEN` in
+**Settings → CI/CD → Token Access → Allow access to this project with a job token**,
+or the job will fail with 403.
+
+1. **Ensure CI is green on the source branch.** Check the
+   [latest pipeline](https://opensource.unicc.org/un/itu/genie-ai/-/pipelines?ref=main)
+   for the branch you are releasing from (`main` or `release/X.Y`).
 
 2. **Decide the version number.** Use the rules in [Section 1](#1-versioning).
    If unsure, review the `[Unreleased]` changelog section: breaking changes → MAJOR,
@@ -188,6 +196,8 @@ At the bottom of the file, resolve each version heading as a reference link:
    ```
 
    Skip this step for PATCH releases — tag directly from `main`.
+   For critical PATCH releases with an active `release/X.Y` branch, follow the
+   [hotfix workflow](#6-hotfix) instead (fix on `main`, cherry-pick to release branch).
 
 ### 4.2 Tag and Push
 
@@ -209,7 +219,7 @@ git tag push
   → scan (Trivy + Syft SBOM)
   → e2e (skipped for tag pipelines)
   → promote (tmp/ → stable namespace, tags: v2.0.0 + latest)
-  → GitLab Release created
+  → release (GitLab Release created from changelog)
 ```
 
 ### 4.3 Verify the Release
@@ -296,8 +306,10 @@ genie_ai_global_tag: "v2.0.0-rc.1"
 When the pre-release cycle is complete and the version is ready:
 
 ```bash
-# Tag the same commit as stable
-git checkout <the-same-commit>
+# Tag the same commit as the last pre-release
+git checkout v2.0.0-rc.1
+# Verify you are on the right commit:
+git log -1 --format="%H %s" v2.0.0-rc.1
 git tag v2.0.0
 git push origin v2.0.0
 ```
@@ -388,7 +400,7 @@ Copy this checklist into the release MR or issue.
 
 ### Verification
 
-- [ ] CI pipeline passed (lint → test → config → build → scan → promote)
+- [ ] CI pipeline passed (lint → test → config → build → scan → promote → release)
 - [ ] All 16 Docker images tagged with the new version in Container Registry
 - [ ] GitLab Release created with changelog content
 - [ ] `latest` Docker tag updated (stable releases only — skip for pre-releases)

@@ -1860,7 +1860,7 @@ release:create:
       VERSION="${CI_COMMIT_TAG#v}"
       VERSION_ESC=$(echo "${VERSION}" | sed 's/\./\\./g')
       echo "Extracting changelog for version ${VERSION}..."
-      DESCRIPTION=$(awk "/^## \[${VERSION_ESC}\]/,/^## \[/" CHANGELOG.md | tail -n +2 | sed '$d')
+      DESCRIPTION=$(awk "/^## \[${VERSION_ESC}\]/,/^## \[/" CHANGELOG.md | tail -n +2 | sed '$d' | sed '/^\[/,$d')
       if [ -z "$DESCRIPTION" ]; then
         echo "WARNING: No changelog content found for ${VERSION}, creating release with tag only."
         DESCRIPTION="Release ${CI_COMMIT_TAG}"
@@ -2399,7 +2399,7 @@ config:changelog:
       fi
       echo "CHANGELOG.md entry found for ${VERSION}."
   rules:
-    - if: $CI_COMMIT_TAG
+    - if: '$CI_COMMIT_TAG =~ /^v/'
 
 # --- Scheduled jobs (nightly via pipeline schedule) ---
 

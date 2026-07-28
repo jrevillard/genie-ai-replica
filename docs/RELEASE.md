@@ -89,7 +89,7 @@ main (trunk)         ← all development, always deployable
 - Created from `main` at the start of the release process. The initial tag (`v2.1.0`) is the first commit on the branch.
 - **Never commit directly to a release branch.** All fixes land on `main` first, then are cherry-picked to the release branch.
 - Tags for every release in the series live on this branch: `v2.1.0`, `v2.1.1`, `v2.1.2`... all on `release/2.1`.
-- CI runs on release branches: builds and promotes images as `release-X.Y-{sha}` and `release-X.Y`.
+- CI runs on release branches: builds and promotes images as `vX.Y-{sha}` and `vX.Y` (moving tags for the branch).
 - Abandoned when the next MINOR release replaces it (no merge back to `main`).
 
 ### Feature Branches
@@ -232,7 +232,7 @@ Docker tag summary:
 | `v2.1.0` | `v2.1.0`, `latest` |
 | `v2.1.1` | `v2.1.1`, `latest` (updated) |
 | `v2.1.0-rc.1` | `v2.1.0-rc.1` only (pre-release, no `latest` update) |
-| Branch push (`release/2.1`) | `release-2.1-{sha}`, `release-2.1` (moving) |
+| Branch push (`release/2.1`) | `v2.1-{sha}`, `v2.1` (moving) |
 
 ### 4.3 Verify the Release
 

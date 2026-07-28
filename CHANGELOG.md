@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
 ## [2.0.0] - 2026-07-28
 
 ### Added
@@ -142,8 +144,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed 404 handler — replaced console.log route dump with structured logger (#473)
 - Fixed Spanish responses in single-message mode when English is selected — include language in payload and handle string-type messages in ChatQnA (#579)
 - Fixed wrong i18n key in SatisfactionHeatmap and removed restrictive locale enum (#580)
-
-## [Unreleased]
 
 ## [R_1_0_0] - 2026-03-16
 

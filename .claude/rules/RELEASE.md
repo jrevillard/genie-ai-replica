@@ -5,28 +5,49 @@ the step-by-step commands an AI agent needs to execute a release.
 
 ## Standard Release (MAJOR/MINOR)
 
-1. **Determine version** from `[Unreleased]` in `CHANGELOG.md`.
-   Breaking → MAJOR, features → MINOR, fixes → PATCH. Confirm with user.
+1. **Gather changes since last release.** Do NOT rely on `[Unreleased]` alone —
+   it may be empty or incomplete. Synthesize from:
 
-2. **Update changelog on `main`:**
+   ```bash
+   LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+   echo "Last release: $LAST_TAG"
+   # List MRs merged since last tag
+   GITLAB_HOST=opensource.unicc.org glab api "projects/:id/merge_requests?state=merged&updated_after=$(git log -1 --format=%aI $LAST_TAG)&per_page=50" 2>/dev/null | python3 -c "
+   import sys,json; mrs=json.load(sys.stdin)
+   for m in mrs:
+       print(f'- {m[\"title\"]} (!{m[\"iid\"]})')"
+   # List commits (as fallback)
+   git log $LAST_TAG..HEAD --oneline --no-merges
+   ```
+
+2. **Write changelog entries.** Keep a Changelog format: for humans, not machines.
+   Group under `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
+   Describe what changed and why — NOT a git log dump. Mark breaking changes with
+   `**Breaking:**` prefix. Confirm with user.
+
+3. **Decide version.** Breaking → MAJOR, new features → MINOR, only fixes → PATCH.
+   Confirm with user.
+
+4. **Update `CHANGELOG.md` on `main`:**
    - Rename `[Unreleased]` → `[X.Y.Z]` with today's date
-   - Add fresh `[Unreleased]` section
+   - Ensure all entries from step 2 are included
+   - Add fresh empty `[Unreleased]` section
    - Update reference links at bottom
    - Commit + push (via MR if required)
 
-3. **Create release branch:**
+5. **Create release branch:**
    ```bash
    git checkout main && git pull origin main
    git checkout -b release/X.Y && git push origin release/X.Y
    ```
 
-4. **Tag and push** (triggers CI):
+6. **Tag and push** (triggers CI):
    ```bash
    git checkout release/X.Y && git pull origin release/X.Y
    git tag vX.Y.Z && git push origin vX.Y.Z
    ```
 
-5. **Verify:** pipeline green, 16 Docker images tagged `vX.Y.Z`, GitLab Release
+7. **Verify:** pipeline green, 16 Docker images tagged `vX.Y.Z`, GitLab Release
    created, `latest` Docker tag updated.
 
 ## PATCH Release

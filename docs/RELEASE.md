@@ -165,9 +165,9 @@ At the bottom of the file, resolve each version heading as a reference link:
 
 ## 4. Release Workflow
 
-A release requires three manual actions — everything else is automated by CI:
+A release requires a few manual actions — everything else is automated by CI:
 
-1. **Update the changelog** (MR or direct push)
+1. **Gather and write changelog** (review MRs/commits, write Keep a Changelog entries)
 2. **Create the release branch** (`release/X.Y`)
 3. **Tag and push** (`git tag vX.Y.Z && git push`) ← triggers full CI pipeline
 
@@ -183,11 +183,30 @@ or the job will fail with 403.
 1. **Ensure CI is green on `main`.** Check the
    [latest pipeline](https://opensource.unicc.org/un/itu/genie-ai/-/pipelines?ref=main).
 
-2. **Decide the version number.** Use the rules in [Section 1](#1-versioning).
-   If unsure, review the `[Unreleased]` changelog section: breaking changes → MAJOR,
-   new features → MINOR, only fixes → PATCH.
+2. **Gather changes since the last release.** Do not rely on `[Unreleased]`
+   alone — it may be empty or incomplete. Review merged MRs and commits since
+   the last tag:
 
-3. **Update the changelog on `main`.** Rename `[Unreleased]` to the new version,
+   ```bash
+   LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+   git log $LAST_TAG..HEAD --oneline --no-merges
+   ```
+
+   For MR-level context on GitLab:
+   ```bash
+   glab api "projects/:id/merge_requests?state=merged&updated_after=$(git log -1 --format=%aI $LAST_TAG)&per_page=50"
+   ```
+
+3. **Write the changelog entries.** Keep a Changelog format: describe what
+   changed, for whom, and why — not a list of commit messages. Group under
+   `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`. Mark
+   breaking changes with `**Breaking:**`.
+   See `CHANGELOG.md` for the current format and recent examples.
+
+4. **Decide the version number.** Use the rules in [Section 1](#1-versioning).
+   Breaking changes → MAJOR, new features → MINOR, only fixes → PATCH.
+
+5. **Update the changelog on `main`.** Rename `[Unreleased]` to the new version,
    add the date, and update the reference links at the bottom:
 
    ```markdown
@@ -196,7 +215,7 @@ or the job will fail with 403.
 
    Then add a fresh `[Unreleased]` section at the top. Merge this via MR.
 
-4. **Create the release branch from `main`:**
+6. **Create the release branch from `main`:**
 
    ```bash
    git checkout main

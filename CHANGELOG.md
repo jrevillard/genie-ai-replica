@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Account management:** administrators can deactivate and reactivate user accounts
 - **RAG abstention:** the assistant now says "I don't know" instead of hallucinating when no relevant information is found
 - **Contextual Retrieval (Anthropic-style):** LLM-generated document context is prepended to each chunk before embedding, improving retrieval relevance for domain-specific documents
-- **Adaptive reranking:** new strategies (slice, threshold, knee, adaptive) — the deployed default is adaptive, which selects the best method per query
+- **Reranking strategies:** configurable via `RERANKING_STRATEGY` (slice, threshold, knee, adaptive) — each deployment can select the method best suited to its data
 - **Streaming translation:** chat output now streams in the target language during generation instead of waiting for the full English response first (#829)
 - **Multi-turn vector-space blending:** previous conversation turns influence retrieval, improving relevance in multi-turn chats (#833)
 - **Multi-crop query support:** users can query across multiple crop categories simultaneously

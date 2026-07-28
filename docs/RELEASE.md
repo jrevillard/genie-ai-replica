@@ -187,9 +187,19 @@ or the job will fail with 403.
    alone — it may be empty or incomplete. Review merged MRs and commits since
    the last tag:
 
+   The source depends on the release type:
+
+   **MAJOR/MINOR (from `main`):** all changes since the last tag on `main`.
    ```bash
-   LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-   git log $LAST_TAG..HEAD --oneline --no-merges
+   LAST_TAG=$(git describe --tags --abbrev=0 main 2>/dev/null || echo "v0.0.0")
+   git log ${LAST_TAG}..main --oneline --no-merges
+   ```
+
+   **PATCH (from `release/X.Y`):** only cherry-picks since the last tag on
+   that branch.
+   ```bash
+   LAST_TAG=$(git describe --tags --abbrev=0 release/X.Y 2>/dev/null)
+   git log $(git merge-base main release/X.Y)..release/X.Y --oneline --no-merges
    ```
 
    For MR-level context on GitLab:

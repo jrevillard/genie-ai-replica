@@ -6,18 +6,24 @@ the step-by-step commands an AI agent needs to execute a release.
 ## Standard Release (MAJOR/MINOR)
 
 1. **Gather changes since last release.** Do NOT rely on `[Unreleased]` alone —
-   it may be empty or incomplete. Synthesize from:
+   it may be empty or incomplete. The source of changes depends on the release type.
 
+   **MAJOR/MINOR (from `main`):** all changes since the last tag on `main`.
    ```bash
-   LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-   echo "Last release: $LAST_TAG"
-   # List MRs merged since last tag
-   GITLAB_HOST=opensource.unicc.org glab api "projects/:id/merge_requests?state=merged&updated_after=$(git log -1 --format=%aI $LAST_TAG)&per_page=50" 2>/dev/null | python3 -c "
-   import sys,json; mrs=json.load(sys.stdin)
-   for m in mrs:
-       print(f'- {m[\"title\"]} (!{m[\"iid\"]})')"
-   # List commits (as fallback)
-   git log $LAST_TAG..HEAD --oneline --no-merges
+   LAST_TAG=$(git describe --tags --abbrev=0 main 2>/dev/null || echo "v0.0.0")
+   echo "Last release on main: $LAST_TAG"
+   git log ${LAST_TAG}..main --oneline --no-merges
+   # MRs merged since last tag
+   GITLAB_HOST=opensource.unicc.org glab api "projects/:id/merge_requests?state=merged&updated_after=$(git log -1 --format=%aI $LAST_TAG)&per_page=50"
+   ```
+
+   **PATCH (from `release/X.Y`):** only cherry-picks since the last tag on that branch.
+   ```bash
+   LAST_TAG=$(git describe --tags --abbrev=0 release/X.Y 2>/dev/null)
+   echo "Last release on release/X.Y: $LAST_TAG"
+   git log $(git merge-base main release/X.Y)..release/X.Y --oneline --no-merges
+   # Or: list cherry-picks specifically
+   git log release/X.Y --oneline --no-merges --grep="cherry-pick"
    ```
 
 2. **Write changelog entries.** Keep a Changelog format: for humans, not machines.

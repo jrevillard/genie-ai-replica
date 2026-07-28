@@ -32,10 +32,18 @@ the step-by-step commands an AI agent needs to execute a release.
    git log ${LAST_TAG}..release/X.Y --oneline --no-merges
    ```
 
-2. **Write changelog entries.** Keep a Changelog format: for humans, not machines.
+2. **Write changelog entries.** User/deployer perspective only. Ask yourself:
+   "Does a user or deployer need to know this?" If no, drop it.
+
+   **Drop:** CI changes, linting, tests, dead code removal, healthcheck fixes,
+   port/internal config fixes, refactoring, tooling, internal docs.
+
+   **Keep:** new features, UI changes, API changes, config changes the deployer
+   must act on, bug fixes users experienced, security fixes, breaking changes.
+
    Group under `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
-   Describe what changed and why — NOT a git log dump. Mark breaking changes with
-   `**Breaking:**` prefix. Confirm with user.
+   Mark breaking changes with `**Breaking:**` prefix. Write for non-native
+   English speakers. Confirm with user before committing.
 
 3. **Decide version.** Breaking → MAJOR, new features → MINOR, only fixes → PATCH.
    Confirm with user.

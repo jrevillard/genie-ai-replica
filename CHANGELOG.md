@@ -7,150 +7,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Changes across `main`, `vue-app-cleanup`, `backend-node-cleanup`, `document-repository-cleanup`, and `deployment-stabilization` branches since R_1_0_0.
+## [2.0.0] - 2026-07-28
 
 ### Added
 
-- Quick Help dual-prompt system with UI configuration and knowledge hierarchy category mapping (`main`)
-- Document translation pipeline for ingesting non-English (Spanish) PDFs into the RAG system (`main`)
-- User account deactivation and reactivation routes and service methods (`main`)
-- RAG abstention control via `CHATQNA_ENFORCE_ABSTENTION` and `CHATQNA_ABSTENTION_INSTRUCTIONS` parameters (`main`)
-- Improved LLM prompt construction in `align_outputs` to avoid redundancy between system prompt and Chat/PromptTemplate (`main`)
-- HuggingFace `hf_xet` for model downloads, label validation with fallback in dataprep, and ArangoDB schema additions (conversationFiles, crawl_job, crawl_log, crawl_metrics) (`main`)
-- Mailpit service, `VUE_API_PROXY`, and `FRONTEND_URL` trailing slash fix (`main`)
-- Async automated testing logic to avoid threading congestion (`main`)
-- Comprehensive model selection and configuration guide (`main`)
-- Conversation marker stripping in ChatQnA responses (`main`)
-- Ansible deployment automation for Docker Swarm (`deployment-stabilization`)
-- Kong API gateway with automatic configuration init service (`deployment-stabilization`)
-- Let's Encrypt certificate management with certbot service (`deployment-stabilization`)
-- NVIDIA GPU support for Swarm containers with configurable VLLM utilization and dtype (`deployment-stabilization`)
-- Auto-create ArangoDB collections on fresh database (`deployment-stabilization`)
-- Configurable `ARANGO_PORT`, `EMBEDDING_SERVER_ENDPOINT`, and `RETRIEVER_ARANGO_GRAPH_NAME` environment variables (`deployment-stabilization`)
-- OPEA model ID variables in Ansible env template (`deployment-stabilization`)
-- 5-second timeout on all external API calls in WeatherService (`deployment-stabilization`)
-- Unit tests for the document-repository module (#492) (`document-repository-cleanup`)
-- ESLint, Prettier, and `.editorconfig` for document-repository (`document-repository-cleanup`)
-- labelRoutes in Swagger API docs generation (#494) (`document-repository-cleanup`)
+- **Quick Help:** configurable dual-prompt system with customizable welcome message, knowledge hierarchy categories, and service labels for precise RAG retrieval filtering
+- **Non-English document ingestion:** upload and translate Spanish PDFs into the RAG knowledge base
+- **Account management:** administrators can deactivate and reactivate user accounts
+- **RAG abstention:** the assistant now says "I don't know" instead of hallucinating when no relevant information is found — toggle via `CHATQNA_ENFORCE_ABSTENTION`
+- **Contextual Retrieval (Anthropic-style):** LLM-generated document context is prepended to each chunk before embedding, improving retrieval relevance for domain-specific documents — toggle via `CONTEXTUAL_RETRIEVAL_ENABLED`
+- **Reranking strategies:** configurable via `RERANKING_STRATEGY` (slice, threshold, knee, adaptive) — each deployment can select the method best suited to its data
+- **Streaming translation:** chat output now streams in the target language during generation instead of waiting for the full English response first — enable via `STREAMING_TRANSLATION_ENABLED`
+- **Multi-turn vector-space blending:** previous conversation turns influence retrieval, improving relevance in multi-turn chats — enable via `MULTI_TURN_BLEND_ENABLED`
+- **Multi-crop query support:** users can query across multiple crop categories simultaneously
+- **Faster document ingestion:** batched LLM labeling (4 chunks per call) with increased concurrency — processing time reduced by an order of magnitude
+- **Remote GPU node:** deploy model services (vLLM, TEI) on a dedicated machine with TLS and API key authentication
+- **Config-driven locale whitelist:** restrict active UI locales per deployment via `VUE_APP_AVAILABLE_LOCALES` — applies to web, mobile, and Keycloak login pages
+- **Documentation site:** public Hugo/Docsy site with redesigned landing page, dark mode, and curated reference docs
+- **Model selection guide:** comprehensive documentation on choosing and configuring LLM, embedding, and reranker models
+- **Docker Swarm deployment:** fully automated via Ansible — one command to deploy the entire stack
+- **Kong API gateway:** production-grade API gateway with automatic route configuration
+- **SSL certificates:** automatic Let's Encrypt certificate provisioning and renewal
+- **GPU support:** configurable NVIDIA GPU utilization and data type for vLLM inference in Swarm mode
+- **Configurable RAG pipeline:** new variables (`ARANGO_PORT`, `EMBEDDING_SERVER_ENDPOINT`, `RETRIEVER_ARANGO_GRAPH_NAME`)
+- **Keycloak OIDC authentication:** replaced the legacy authentication system with Keycloak as the central identity provider — single sign-on, password reset, and token lifecycle management
+- **Mobile app OIDC migration:** Flutter app now uses Keycloak OIDC with build flavors, custom URL schemes, TLS enforcement, and network error recovery — no more legacy auth
+- **SSE streaming:** LLM responses now stream in real-time via Server-Sent Events instead of waiting for the full response
+- **Query Inspector:** admin tool for inspecting and debugging RAG pipeline results (what was retrieved, reranked, and sent to the LLM)
+- **Dynamic favicon:** the browser favicon is set from the deployment configuration
+- **Weather API hardening:** 5-second timeout on all external weather service calls to prevent hangs
+- **Observability stack:** OpenTelemetry tracing across the entire RAG pipeline, with Grafana dashboards, VictoriaMetrics, and alerting (enable via `ENABLE_OBSERVABILITY=1`)
 
 ### Changed
 
-- Replaced theme utility hardcoded colors with CSS variable-based global theme system (#524, #525) (`main`)
-- Merged `authService` into `userService`, eliminating ~90% code duplication (#396) (`main`)
-- Replaced `exec()` calls with Node.js built-in APIs to eliminate shell injection surface (#426) (`main`)
-- Converted all AQL queries to `aql` tagged template literals to prevent injection (#425) (`main`)
-- Standardized authentication patterns in user-routes.js — removed manual header checks (#439) (`main`)
-- Replaced fragile `error.message` string matching with typed error classes (#435) (`main`)
-- Replaced `console.log` calls with structured logger throughout backend (`main`)
-- Replaced `http-server` with nginx for SPA routing (`deployment-stabilization`)
-- Consolidated to single Swarm-compatible `docker-compose.yaml` with dual-mode support (`deployment-stabilization`)
-- Simplified LLM prompt architecture to 2-tier system (`deployment-stabilization`)
-- Centralized bind mounts under `./data/` and renamed `DATA_PATH` to `DATA_DIR` (`deployment-stabilization`)
-- Unified `config/` and `configs/` into single `configs/` directory (`deployment-stabilization`)
-- Parameterized api-gateway-solution for cloud-native deployment (`deployment-stabilization`)
-- Made nginx `Permissions-Policy` configurable per environment (`deployment-stabilization`)
-- Changed translation backend default from `cpu` to `auto` (`deployment-stabilization`)
-- Disabled guardrail service by default (replicas: 0) (`deployment-stabilization`)
-- Reduced `MAX_FILE_SIZE` from 500 MB to 50 MB in Dockerfiles (#478) (`document-repository-cleanup`)
-- Standardized on `uploaded_date` field, replaced `console.log` with logger (#484) (`document-repository-cleanup`)
-- Updated E2E A40 Install Guide with corrections, new reranker parameters, and expanded instructions (`main`)
+- **UI theme system:** replaced hardcoded colors with CSS custom properties — custom themes can now be applied by overriding variables
+- **Document repository file upload limit:** default reduced from 500 MB to 50 MB — adjustable via `MAX_FILE_SIZE`
+- **Translation pipeline:** automatically detects model type from `VLLM_TRANSLATION_MODEL_ID` — no manual config needed
+- **Translation backend:** default mode changed from `cpu` to `auto` — the system picks the best available translation method
+- **Guardrails:** content guardrail service is now disabled by default; enable explicitly if needed
+- **Deployment:** consolidated to a single `docker-compose.yaml` supporting both local dev (`docker compose`) and production Swarm (`docker stack deploy`)
+- **Deployment:** all persistent data centralized under `./data/` directory
+- **Deployment:** configuration files consolidated into single `configs/` directory
+- **Nginx security headers:** `Permissions-Policy` now configurable per environment
+- **LLM token limit:** removed the arbitrary 1024 max_tokens default — the LLM can now generate full responses
+- **Locale parity:** all 14 locales brought to strict key parity — 81 unused keys removed, 9 missing translations added
 
-### Deprecated
+### Security
 
-- Console-based logging in production code paths — use structured logger instead (`main`)
-
-### Removed
-
-- Hardcoded fallback and sample data generators from backend analytics, chart components, services, and dashboard (#410) (`main`)
-- 11 dead service methods from `userService.js` and `userProfileService.js` (#400) (`main`)
-- Duplicate `api.js` HTTP client module (#393) (`main`)
-- Dead conversation export endpoint (#428) (`main`)
-- Legacy `_key <= 10` admin bypass — now role-based only (#429) (`main`)
-- Hardcoded `JWT_SECRET` fallback in auth-service — fail fast at startup (#430) (`main`)
-- Hardcoded default password in shared-lib DB connection service (#432) (`main`)
-- `userService.js.backup` file (#418) (`main`)
-- Debug `console.log` statements and broken `terser` `drop_console` config (#395, #399) (`main`)
-- Dead test files, deferred Vitest setup (#402) (`main`)
-- Unused `node-fetch` dependency from shared-lib (#445) (`main`)
-- Dead `swagger.yaml` — JSDoc-driven Swagger is now the single source of truth (#483) (`document-repository-cleanup`)
-- 7 unused npm packages and associated dead code (#489) (`document-repository-cleanup`)
-- Unused `console` import from fileController.js (#490) (`document-repository-cleanup`)
-- `application/octet-stream` MIME bypass in file uploads (#470) (`document-repository-cleanup`)
-- Debug RUN commands from Dockerfile-single-node (#497) (`document-repository-cleanup`)
-- Dead code from frontend nginx and `PROXY_TARGET` wiring (`deployment-stabilization`)
+- Fixed authentication bypass on `/email` route — no-token access to email operations (#422)
+- Added admin authorization checks to database operations routes (#423)
+- Prevented AQL injection by converting all database queries to tagged template literals (#425)
+- Replaced all shell `exec()` calls with Node.js built-in APIs (#426)
+- Prevented path traversal in file upload and log file operations (#431)
+- Removed hardcoded `JWT_SECRET` fallback — the server now fails fast at startup if the secret is missing (#430)
+- Removed hardcoded database password fallback in connection service (#432)
+- Stopped leaking internal error messages in API responses (#434)
+- Replaced real credentials with placeholders in environment templates (#424)
+- Added admin authorization to file deletion routes (#467)
+- Added magic-byte validation for file uploads — rejects files disguised by MIME type (#470)
+- Sanitized Content-Disposition headers against CRLF injection attacks (#471)
+- Added array size validation on batch file endpoints (#472)
+- Added path traversal guard in file storage operations (#477)
+- Removed legacy `_key <= 10` admin bypass — all admin access now role-based (#429)
 
 ### Fixed
 
-- **Security:** Removed auth bypass on `/email` route — no-token authentication vulnerability (#422) (`main`)
-- **Security:** Added admin authorization check to database operations routes (#423) (`main`)
-- **Security:** Converted all AQL queries to `aql` tagged templates to prevent injection (#425) (`main`)
-- **Security:** Replaced all `exec()` calls with Node.js built-in APIs (#426) (`main`)
-- **Security:** Prevented path traversal in file upload and log operations (#431) (`main`)
-- **Security:** Removed hardcoded `JWT_SECRET` fallback — fail fast at startup (#430) (`main`)
-- **Security:** Removed hardcoded default password in DB connection service (#432) (`main`)
-- **Security:** Stopped leaking internal `error.message` details in API responses (#434) (`main`)
-- **Security:** Replaced credentials with placeholders in env templates (#424) (`main`)
-- **Security:** Added Admin authorization to file DELETE routes (#467) (`document-repository-cleanup`)
-- **Security:** Added magic-byte validation for file uploads, removed MIME type bypass (#470) (`document-repository-cleanup`)
-- **Security:** Sanitized Content-Disposition headers against CRLF injection (#471) (`document-repository-cleanup`)
-- **Security:** Added fileIds array size validation on batch endpoints (#472) (`document-repository-cleanup`)
-- **Security:** Added path traversal guard in `_getFileAndPath` (#477) (`document-repository-cleanup`)
-- Fixed mobile timestamps sent as local time — use UTC for analytics heatmap (`main`)
-- Fixed `nameEN` on category/service documents when creating or updating translations (#531, #532) (`main`)
-- Fixed JWT token not passed from Authorization header to `authService.logout()` (#530) (`main`)
-- Fixed duplicate logout call from NavBarComponent (#527) (`main`)
-- Fixed database stats API URL to `/admin/database/stats` (#528) (`main`)
-- Fixed admin toast when Quick Help labels don't match knowledge hierarchy (#529) (`main`)
-- Fixed conversation double-save bug (`main`)
-- Fixed PDF export of markdown conversations (`main`)
-- Fixed missing routes and mobile registration screen (`main`)
-- Fixed `ARANGO_DB_NAME` not passed to document-repository and backend services (`main`)
-- Fixed ESLint, Prettier, husky, and lint-staged tooling for Vue app and backend (#412, #449) (`main`)
-- Fixed `uploaded_date` field standardization across file operations (#484) (`document-repository-cleanup`)
-- Fixed `searchFiles` AQL query and wired it to `/search/files` route (#476) (`document-repository-cleanup`)
-- Fixed invalid AQL in `getFileStats` method (#498) (`document-repository-cleanup`)
-- Fixed ClamAV init conditional — added braces, skip scan when disabled (#474) (`document-repository-cleanup`)
-- Fixed unhandled rejection and uncaught exception handling (#479) (`document-repository-cleanup`)
-- Fixed `throw err.message` to `throw err` in `labelService.createLabel` (#475) (`document-repository-cleanup`)
-- Fixed healthcheck log pollution — replaced TCP probes with HTTP `/health` checks (`deployment-stabilization`)
-- Fixed ArangoDB port external access — use mode host (`deployment-stabilization`)
-- Fixed healthcheck IP Blocked warning — skip `/api/health` in security middleware (`deployment-stabilization`)
-- Fixed nginx key validation (pkey vs rsa) and cert reload flow (`deployment-stabilization`)
-- Fixed certbot entrypoint — use POSIX sh (bash not in certbot image) (`deployment-stabilization`)
-- Fixed `depends_on` format and stripped blocks for Swarm compatibility (`deployment-stabilization`)
-- Fixed Kong restore script — process all services and fix curl stdin bug (`deployment-stabilization`)
-- Fixed Kong files-route and labels-route — add prefix path matching (`deployment-stabilization`)
-- Fixed `RETRIVER` typo in docker-compose retriever env var references (`deployment-stabilization`)
-- Fixed retriever port — 7000 (code default) not 7025 (`deployment-stabilization`)
-- Fixed embedding response format — handle OpenAI-compatible JSON (`deployment-stabilization`)
-- Fixed embedding endpoint mismatch — make `EMBEDDING_SERVER_ENDPOINT` configurable (`deployment-stabilization`)
-- Fixed `ARANGO_DB` not passed to dataprep and retriever services (`deployment-stabilization`)
-- Fixed CSP values quoting in Ansible `.env` to survive docker compose config (`deployment-stabilization`)
-- Fixed resolved docker-compose generation for Swarm variable substitution (`deployment-stabilization`)
-- Fixed healthcheck ports and env file load order (`deployment-stabilization`)
-- Fixed translation service healthcheck port from 9030 to 8888 (`deployment-stabilization`)
-- Fixed ARANGO credentials not passed to OPEA retriever and dataprep services (`deployment-stabilization`)
-- Fixed Docker DNS resolver for lazy upstream hostname resolution in nginx (`deployment-stabilization`)
-- Fixed Ansible deployment playbook and prompt env rendering (`deployment-stabilization`)
-- Fixed service health verification with retry logic (`deployment-stabilization`)
-- Fixed `uploaded_date` field standardization across file operations (#484) (`document-repository-cleanup`)
-- Fixed stale comment in `mimeTypeValidator.js` (#485) (`document-repository-cleanup`)
-- Fixed 404 handler — replaced console.log route dump with structured logger (#473) (`document-repository-cleanup`)
-- Fixed Spanish responses in single-message mode when English is selected — include language in payload and handle string-type messages in ChatQnA (#579) (`sprint-21-bug-fixes`)
-- Fixed wrong i18n key in SatisfactionHeatmap and removed restrictive locale enum (#580) (`sprint-21-bug-fixes`)
-
-### Changed
-
-- Translation pipeline now supports both `google/gemma-3-*` (generic LLM translation) and `google/translategemma-4b-it` (purpose-built translation with Sesotho support) — model auto-detected from `VLLM_TRANSLATION_MODEL_ID` env var, no code changes needed to switch (#581) (`sprint-21-bug-fixes`)
-- ChatQnA translation now calls vLLM directly (bypassing OPEA translation proxy) when `VLLM_TRANSLATION_ENDPOINT` is set (#581) (`sprint-21-bug-fixes`)
-- Pinned `vllm-translation-guardrail` to v0.10.0 — the only version that loads TranslateGemma-4b-it correctly (#581) (`sprint-21-bug-fixes`)
-- TranslateGemma uses `/v1/completions` API with manually applied chat template to bypass vLLM v0.10.0 bug that normalizes structured content before Jinja2 rendering (#581) (`sprint-21-bug-fixes`)
-
----
+- Mobile app now sends timestamps in UTC instead of device local time
+- Translations created without `nameEN` on category and service documents (#531, #532)
+- JWT token not forwarded from Authorization header to logout endpoint (#530)
+- Duplicate logout call when navigating away from the app (#527)
+- Database statistics API returning 404 on `/admin/database/stats` (#528)
+- Admin toast notification when Quick Help labels don't match the knowledge hierarchy (#529)
+- Admin role checks now use JWT claims instead of stale cached roles — changes take effect immediately
+- Admin document search bar no longer collapses; pagination button labels no longer overflow (#830)
+- Admin document status filter now case-insensitive (#832)
+- Document re-ingestion/retraction status guard now case-insensitive (#831)
+- Conversation saved twice on certain actions
+- Markdown conversation export producing broken PDFs
+- Missing routes causing mobile registration screen to fail
+- Spanish responses appearing when English is selected — the UI language is now correctly included in all LLM requests (#579)
+- Wrong i18n key causing SatisfactionHeatmap to display incorrectly (#580)
+- Streaming SSE `|<-MSG->|` boundary markers no longer visible in chat output
+- Label filters now correctly cleared when switching to Just Chat mode (#249)
+- Just Chat no longer auto-submits a hidden prompt — enters free-form mode without sending any message
+- Cross-document label contamination fixed — chunk labels scoped to their document (#216)
 
 ## [R_1_0_0] - 2026-03-16
 
 Initial release for El Salvador agricultural AI assistant deployment.
 
 [R_1_0_0]: https://opensource.unicc.org/un/itu/genie-ai/-/tags/R_1_0_0
-[Unreleased]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/R_1_0_0...main
+[2.0.0]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/R_1_0_0...v2.0.0
+[Unreleased]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v2.0.0...main

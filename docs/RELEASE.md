@@ -225,6 +225,15 @@ git tag push
   → release (GitLab Release created from changelog)
 ```
 
+Docker tag summary:
+
+| Git tag | Docker tags |
+|---------|-------------|
+| `v2.1.0` | `v2.1.0`, `latest` |
+| `v2.1.1` | `v2.1.1`, `latest` (updated) |
+| `v2.1.0-rc.1` | `v2.1.0-rc.1` only (pre-release, no `latest` update) |
+| Branch push (`release/2.1`) | `release-2.1-{sha}`, `release-2.1` (moving) |
+
 ### 4.3 Verify the Release
 
 1. **Check the pipeline** at
@@ -388,6 +397,10 @@ main (trunk)                     release/2.1
    ```
 
 7. **Deploy** with the new PATCH tag.
+
+   The tag triggers the same CI pipeline as the initial release: build → scan → promote.
+   The promote job tags Docker images as `v2.1.1` and updates the `latest` Docker tag
+   to point to this release (it's a stable tag, not a pre-release).
 
 ### Urgent Hotfixes
 

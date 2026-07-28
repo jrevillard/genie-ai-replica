@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **~37x faster document ingestion:** batched LLM labeling reduces processing time from hours to minutes
 - **Remote GPU node:** deploy model services (vLLM, TEI) on a dedicated machine with TLS and API key authentication
 - **Config-driven locale whitelist:** restrict active UI locales per deployment without deleting translation files — applies to web, mobile, and Keycloak login pages
-- **Documentation site:** public Hugo/Docsy site at docs.genie-ai.org with redesigned landing page, dark mode, and curated reference docs
+- **Documentation site:** public Hugo/Docsy site with redesigned landing page, dark mode, and curated reference docs
 - **Model selection guide:** comprehensive documentation on choosing and configuring LLM, embedding, and reranker models
 - **Docker Swarm deployment:** fully automated via Ansible — one command to deploy the entire stack
 - **Kong API gateway:** production-grade API gateway with automatic route configuration

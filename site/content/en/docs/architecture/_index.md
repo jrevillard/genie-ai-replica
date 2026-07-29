@@ -5,11 +5,6 @@ weight: 6
 section: "architecture"
 ---
 
-# Architecture
-
-System-wide architecture: C4 container diagrams, authentication and token flows,
-and the service-to-service authentication matrix.
-
 ## Documents in this section
 
 1. [Architecture Overview](/docs/architecture/architecture/) — C4 context/container

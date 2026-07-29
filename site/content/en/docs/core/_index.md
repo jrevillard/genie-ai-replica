@@ -5,10 +5,6 @@ weight: 1
 section: "core"
 ---
 
-# Core & Project Overview
-
-Top-level project context for GENIE.AI: scope, source-tree map, integration architecture, and contributor onboarding.
-
 ## Documents in this section
 
 1. [Project Overview](/docs/core/project-overview/)

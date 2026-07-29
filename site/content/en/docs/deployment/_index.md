@@ -5,11 +5,6 @@ weight: 7
 section: "deployment"
 ---
 
-# Deployment
-
-End-to-end installation, container orchestration (Docker Compose / Swarm), and
-GPU setup guides for GENIE.AI.
-
 ## Documents in this section
 
 1. [Installation & Configuration Guide](/docs/deployment/install-guide/) — the

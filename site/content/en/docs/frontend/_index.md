@@ -5,10 +5,6 @@ weight: 3
 section: "frontend"
 ---
 
-# Frontend (Gov-Chat Web)
-
-Vue 3 + Vuex single-page app: UI component inventory, state-management patterns, and the theme system.
-
 ## Documents in this section
 
 1. [UI Component Inventory (gov-chat-frontend)](/docs/frontend/ui-component-inventory-frontend/)

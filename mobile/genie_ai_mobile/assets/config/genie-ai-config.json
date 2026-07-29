@@ -472,17 +472,7 @@
               "type": "file",
               "value": "/config/quickhelp/just-chat.svg"
             },
-            "category": null,
-            "action": {
-              "visibleText": {
-                "en": "I'd like to chat about agricultural topics in El Salvador.",
-                "es": "Me gustaría chatear sobre temas agrícolas en El Salvador."
-              },
-              "hiddenPrompt": {
-                "en": "Act as a friendly agricultural companion for CENTA El Salvador. Be polite, helpful, and knowledgeable about Salvadoran agriculture, rural life, and CENTA programs. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them with agricultural guidance — planting, pest management, livestock care, soil health, and market information. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Actúa como un compañero agrícola amigable de CENTA El Salvador. Sé educado, útil y conocedor sobre la agricultura salvadoreña, la vida rural y los programas de CENTA. IMPORTANTE: Recuerda al usuario que aunque puede charlar sobre cualquier tema, tu fortaleza principal es ayudarle con orientación agrícola — siembra, manejo de plagas, cuidado de ganado, salud del suelo e información de mercado. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
-              }
-            }
+            "category": null
           }
         ]
       }

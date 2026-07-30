@@ -617,6 +617,7 @@ kics-iac-sast:
       CACHE_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:cache"
       echo "Building $IMAGE_NAME → ${REGISTRY_REF}"
       docker buildx build \
+        --pull \
         --push \
         -t "$REGISTRY_REF" \
         -f "$DOCKERFILE" \

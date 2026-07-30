@@ -1,4 +1,4 @@
-FROM node:22.14.0 AS builder
+FROM node:22 AS builder
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -21,7 +21,7 @@ RUN rm -rf /app/node_modules/shared-lib
 COPY gov-chat-backend/ ./
 RUN mkdir -p /app/Uploads
 
-FROM node:22.14.0
+FROM node:22
 
 WORKDIR /app
 

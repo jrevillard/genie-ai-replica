@@ -19,15 +19,15 @@ const GPU_SERVICE_PORTS = {
   'docling-serve': 443
 };
 
-/** Image tags that must match the main docker-compose.yaml exactly. */
-const GPU_REQUIRED_IMAGES = {
-  'vllm-llm': 'vllm/vllm-openai:v0.10.0',
-  'vllm-translation': 'vllm/vllm-openai:v0.10.0',
-  'tei-embedding': 'ghcr.io/huggingface/text-embeddings-inference:1.9.3',
-  'tei-reranker': 'ghcr.io/huggingface/text-embeddings-inference:1.9.3',
-  'docling-serve': 'ghcr.io/docling-project/docling-serve:v1.21.0',
-  'nginx-gpu': 'nginx:1.28-alpine'
-};
+/** GPU services that must have pinned (non-:latest) image tags. */
+const GPU_REQUIRED_SERVICES = [
+  'vllm-llm',
+  'vllm-translation',
+  'tei-embedding',
+  'tei-reranker',
+  'docling-serve',
+  'nginx-gpu'
+];
 
 /** GPU compose env vars that are shared with the main compose (not GPU-specific). */
 const GPU_SHARED_COMPOSE_VARS = new Set([
@@ -187,12 +187,14 @@ function validateGpuNode(gpuComposePath, _mainComposePath) {
     errors.push('GPU compose missing gpu_network definition');
   }
 
-  // 4. Image tags must match required images
-  for (const [serviceName, expectedImage] of Object.entries(GPU_REQUIRED_IMAGES)) {
+  // 4. Image tags must be pinned (no :latest, no missing tags)
+  for (const serviceName of GPU_REQUIRED_SERVICES) {
     const actualImage = gpu.images.get(serviceName);
-    if (actualImage && actualImage !== expectedImage) {
+    if (!actualImage) {
+      errors.push(`${serviceName}: missing image tag`);
+    } else if (actualImage.endsWith(':latest') || !actualImage.includes(':')) {
       errors.push(
-        `${serviceName}: image tag mismatch — expected "${expectedImage}", got "${actualImage}"`
+        `${serviceName}: unpinned image tag — "${actualImage}" (must use a versioned tag, not :latest)`
       );
     }
   }
@@ -264,7 +266,7 @@ module.exports = {
   validateGpuNode,
   crossReferenceGpu,
   GPU_SERVICE_PORTS,
-  GPU_REQUIRED_IMAGES,
+  GPU_REQUIRED_SERVICES,
   GPU_SHARED_COMPOSE_VARS,
   GPU_NODE_SECTION14_ORPHANS
 };

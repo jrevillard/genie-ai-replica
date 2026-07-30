@@ -52,5 +52,9 @@
     "jest-junit": "^17.0.0",
     "prettier": "^3.8.1",
     "vue-eslint-parser": "^10.4.0"
+  },
+  "overrides": {
+    "execa": "9.5.0",
+    "uuid": "11.1.0"
   }
 }

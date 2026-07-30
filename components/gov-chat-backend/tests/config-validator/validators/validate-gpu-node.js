@@ -21,7 +21,7 @@ const GPU_SERVICE_PORTS = {
 
 /** Image tags that must match the main docker-compose.yaml exactly. */
 const GPU_REQUIRED_IMAGES = {
-  'vllm-llm': 'vllm/vllm-openai:latest',
+  'vllm-llm': 'vllm/vllm-openai:v0.10.0',
   'vllm-translation': 'vllm/vllm-openai:v0.10.0',
   'tei-embedding': 'ghcr.io/huggingface/text-embeddings-inference:1.9.3',
   'tei-reranker': 'ghcr.io/huggingface/text-embeddings-inference:1.9.3',

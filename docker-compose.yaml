@@ -87,7 +87,7 @@ services:
 
   postgres:
     logging: *fluent-logging
-    image: postgres:13
+    image: postgres:16
     networks:
       - genieai_network
     environment:

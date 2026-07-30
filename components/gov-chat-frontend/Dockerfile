@@ -10,9 +10,6 @@ RUN npm run build
 
 FROM nginx:alpine
 
-# nginx image runs as nginx user by default; make it explicit
-USER nginx
-
 WORKDIR /app
 
 COPY --from=build /app/dist /app/dist

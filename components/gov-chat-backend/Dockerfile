@@ -44,3 +44,5 @@ RUN chmod +x /docker-entrypoint.sh
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["node", "index.js"]
+
+USER node

@@ -44,12 +44,12 @@ describe('Alerting Provisioning', () => {
   let envTemplate;
 
   beforeAll(() => {
-    alertRules = yaml.load(fs.readFileSync(ALERT_RULES_PATH, 'utf8'));
-    contactPoints = yaml.load(fs.readFileSync(CONTACT_POINTS_PATH, 'utf8'));
-    notificationPolicies = yaml.load(
+    alertRules = yaml.safeLoad(fs.readFileSync(ALERT_RULES_PATH, 'utf8'));
+    contactPoints = yaml.safeLoad(fs.readFileSync(CONTACT_POINTS_PATH, 'utf8'));
+    notificationPolicies = yaml.safeLoad(
       fs.readFileSync(NOTIFICATION_POLICIES_PATH, 'utf8')
     );
-    vmDatasource = yaml.load(fs.readFileSync(VM_DATASOURCE_PATH, 'utf8'));
+    vmDatasource = yaml.safeLoad(fs.readFileSync(VM_DATASOURCE_PATH, 'utf8'));
     dashboard = JSON.parse(fs.readFileSync(DASHBOARD_PATH, 'utf8'));
     envTemplate = fs.readFileSync(ENV_TEMPLATE_PATH, 'utf8');
   });

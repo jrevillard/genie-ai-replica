@@ -67,7 +67,7 @@ import {
   Cloud,
   CloudSun,
   Sun
-} from 'lucide-vue-next';
+} from '@lucide/vue';
 
 import DsButton from '@/components/ds/Button.vue';
 

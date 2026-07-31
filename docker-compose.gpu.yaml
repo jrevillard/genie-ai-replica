@@ -37,7 +37,7 @@ services:
 
   vllm-llm:
     restart: unless-stopped
-    image: vllm/vllm-openai:latest
+    image: vllm/vllm-openai:v0.10.0
     command: >
       --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-3.3-2b-instruct}
       --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
@@ -182,7 +182,7 @@ services:
   certbot-gpu:
     profiles: [letsencrypt]
     restart: "no"
-    image: certbot/certbot:latest
+    image: certbot/certbot:v5.7.0
     entrypoint: ["/certbot-entrypoint.sh"]
     environment:
       - CERTBOT_EMAIL=${CERTBOT_EMAIL:-}

@@ -656,14 +656,14 @@ kics-iac-sast:
       IMAGE="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
       echo "Scanning $IMAGE"
       syft --scope squashed -o spdx-json "$IMAGE" > sbom.spdx.json || echo "WARN: syft SBOM failed for $IMAGE - continuing with trivy scan"
-      trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --format json --output gl-container-scanning-report.json --exit-code 0 "$IMAGE"
+      trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --format json --output gl-scan-tmp.json --exit-code 0 "$IMAGE"
       trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format table --exit-code 1 "$IMAGE"
   artifacts:
     when: always
     expire_in: 1 year
     paths:
       - sbom.spdx.json
-      - gl-container-scanning-report.json
+      - gl-scan-tmp.json
   allow_failure: true
 
 
@@ -708,9 +708,9 @@ kics-iac-sast:
     # Rewrite tmp/ image names → promoted names in the container scanning report.
     # Same digest, correct name → GitLab vulnerability report tracks real images.
     - |
-      if [ -f gl-container-scanning-report.json ]; then
+      if [ -f gl-scan-tmp.json ]; then
         PROMOTED_TAG="${CI_COMMIT_BRANCH:-main}"
-        sed -i "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${PROMOTED_TAG}|g" gl-container-scanning-report.json
+        sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${PROMOTED_TAG}|g" gl-scan-tmp.json > gl-container-scanning-report.json
         echo "Rewrote scan report: tmp/${IMAGE_NAME}:* → ${IMAGE_NAME}:${PROMOTED_TAG}"
       fi
   artifacts:

@@ -1,9 +1,8 @@
 # ADR 0001: GitLab Container Registry build + scan + promote pipeline
 
-- **Status**: Accepted (amended 2026-07-31)
+- **Status**: Accepted
 - **Date**: 2026-06-22
 - **Decision owners**: Jerome Revillard (architect), BMAD party-mode review (Winston / Amelia / Murat)
-- **Last amended**: 2026-07-31 — promote job rewrites scan report image names (§6.1)
 
 ## Context
 
@@ -70,14 +69,11 @@ BuildKit, on by default in Docker 23+; runner pinned to 28.x).
 build:image  → tmp/<image>:pending-<sha> (main/tag) | tmp/<image>:mr-<iid>-<sha> (MR)
      ↓
 scan:image   → Syft SBOM + Trivy gate on tmp/<image>:<candidat>
-              → report saved as gl-scan-tmp.json (NOT ingested — see §6.1)
      ↓
 [e2e:integration on merge trains — pulls tmp/ candidate, runs --no-build]
      ↓
 promote:image → cross-repo copy tmp/<image>@DIGEST → <image>:main / :main-<sha> / :vX.Y.Z / :latest
               → delete tmp/<image>:<candidat>
-              → sed rewrite tmp/<image>:* → <image>:<tag> in gl-scan-tmp.json
-              → publish gl-container-scanning-report.json (ingested — see §6.1)
 ```
 
 - Candidates live in a **separate `tmp/` namespace** (`registry.../genie-ai/tmp/<image>`).
@@ -119,52 +115,19 @@ When phase 2 lands, the choice is **cosign key-based** (not keyless):
   key is committed at `configs/cosign/cosign.pub` for deploy-time verification.
 - Transparency log upload disabled (`--tlog-upload=false`) for sovereignty.
 
-### 6. Scanning: Custom Trivy template + promote-stage report rewrite
+### 6. Scanning: GitLab official template + MR approval rule (blocking)
 
-Scanning uses a **custom `.scan_template`** (Trivy 0.57.0, no GitLab official
-Container Scanning template). The scan stage does two passes per image:
+Scanning uses GitLab's **official Container Scanning template**
+(`Jobs/Container-Scanning.gitlab-ci.yml`, analyzer `gtcs scan`) over each
+candidate. The template produces the correct-schema report (GitLab security
+dashboard + MR widget) + CycloneDX SBOM, and is **advisory** by default
+(`allow_failure: true`).
 
-1. **Trivy JSON** (`--exit-code 0`): advisory, outputs `gl-scan-tmp.json`
-   (saved as a CI artifact, NOT ingested into the vulnerability report).
-2. **Trivy table** (`--exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL`):
-   gating — fails the pipeline if fixable HIGH/CRITICAL CVEs exist.
-
-**Blocking** on HIGH/CRITICAL is at the scan stage (pre-promote gate). Findings
-are NOT sent to the GitLab vulnerability report from this stage (see §6.1).
-
-The GitLab official Container Scanning template is intentionally NOT used because:
-
-- It auto-publishes the report under tmp/ image names → orphaned findings when
-  images are deleted (3,339 findings documented in CVE remediation 2026-07-30).
-- We need to control WHEN and under WHAT NAME the report enters the
-  vulnerability database — only after promote, with persistent image names.
-
-#### 6.1 Promote-stage report rewrite (added 2026-07-31)
-
-The promote job downloads `gl-scan-tmp.json` from the scan stage, rewrites image
-names with `sed`, and publishes the result as `gl-container-scanning-report.json`
-with `artifacts:reports:container_scanning`. This is the ONLY point where
-container scanning findings enter the GitLab vulnerability report.
-
-```
-Scan:   trivy --output gl-scan-tmp.json   → artifacts:paths (no reports:)
-Promote: sed tmp/NAME:tag → NAME:main      → artifacts:reports:container_scanning
-         > gl-container-scanning-report.json
-```
-
-**Why rewrite instead of re-scan**: promote copies by digest — the bytes are
-identical. The same scan result is valid; only the name changes. Rewriting in
-the promote job costs zero scan time and zero registry pulls.
-
-**Why `:main` (mutable tag)**: findings tracked against mutable tags (`:main`,
-`:latest`) auto-resolve across rebuilds — re-scanning the same tag after a fix
-shows the CVE gone, and GitLab flips the finding state. Digest-keyed tracking
-would re-orphan on every promote (same disease, new shape).
-
-**Regex** (tested on real Trivy JSON artifact from pipeline #5590):
-```
-sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${CI_COMMIT_BRANCH:-main}|g"
-```
+**Blocking** on HIGH/CRITICAL is enforced by a **Merge Request approval rule**
+(project setting) tied to the security report — the GitLab-native gate. Accepted
+risks go into `vulnerability-allowlist.yml` (GitLab format), each entry governed
+by a ticket + review date. This replaces the earlier custom `trivy --exit-code`
+gate, which produced raw JSON that GitLab could not ingest (wrong schema).
 
 ## Alternatives considered
 
@@ -183,8 +146,7 @@ sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${CI_COMMIT_BRANCH:-main}|g"
 
 - **Positive**: 16 images published per pipeline; vulnerable images quarantined;
   SBOM artifacts for audit; deployable tags always point at scanned digests;
-  vulnerability report tracks persistent image names (no orphaned findings);
-  auto-resolution works across rebuilds; local Swarm registry can be retired in phase 3.
+  local Swarm registry can be retired in phase 3.
 - **Negative**: pipeline adds 3 stages of wall-clock time (build + scan +
   promote) per MR; BuildKit rootless adds a learning curve vs classic docker
   build; `needs:matrix` requires GitLab ≥15.9 (verified: 17.5.2-ee).
@@ -244,38 +206,24 @@ tags exist — without it the policy would purge release rolling tags.
 
 ---
 
-## Addendum 2026-07-31 — Promote-stage scan report rewrite
+## Addendum 2026-07-31 — Promote-stage scan report rewrite (MR !259)
 
-**Context**: CVE remediation (MR !258) revealed that the scan stage publishes
-`gl-container-scanning-report.json` under `tmp/` image names
-(`tmp/genie-ai-backend:mr-258-abc123`). These tmp/ digests are deleted after
-promote, leaving **3,339 orphaned container scanning findings** in the
-vulnerability report that can never auto-resolve.
+**Context**: CVE remediation (MR !258) revealed 3,339 orphaned container
+scanning findings from deleted tmp/ image digests.
 
-**Change** (MR !259, `worktree-fix-promote-scan-report`):
+**Change**: Scan outputs `gl-scan-tmp.json` (not ingested). Promote downloads
+this file, rewrites image names from `tmp/<image>:<candidate>` →
+`<image>:<primary-tag>`, and publishes `gl-container-scanning-report.json` with
+`artifacts:reports:container_scanning`. Primary tag derived from `FINAL_TAGS`
+(e.g. `main-<sha>`, `v2.1.0`, `vX.Y-<sha>`).
 
-The scan report is now produced in two steps:
+**Gate mechanism**: the blocking gate is the security approval policy
+(`.gitlab/security-policies/policy.yml`, `scan_finding` / `container_scanning`),
+not `trivy --exit-code 1`. Scan jobs are `allow_failure: true`.
 
-| Stage | Output | Published as |
-|-------|--------|-------------|
-| `scan` | `gl-scan-tmp.json` | `artifacts:paths` only (NOT `reports:container_scanning`) |
-| `promote` | rewrite + `gl-container-scanning-report.json` | `artifacts:reports:container_scanning` |
-
-The promote job downloads `gl-scan-tmp.json`, rewrites image names from
-`tmp/<image>:<candidate>` → `<image>:main`, and publishes the corrected report.
-Since promote copies by digest, the scan result is identical — only the name changes.
-
-**Regex** (in `.promote_template`):
+**Regex**:
 ```bash
-sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${CI_COMMIT_BRANCH:-main}|g" \
+PRIMARY_TAG="${FINAL_TAGS%% *}"
+sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${PRIMARY_TAG}|g" \
   gl-scan-tmp.json > gl-container-scanning-report.json
 ```
-
-**Consequences**:
-- Vulnerability report tracks persistent names → auto-resolution works across rebuilds
-- Scan gate (pre-promote) unchanged — still blocks on fixable HIGH/CRITICAL
-- No re-scan needed — same digest, zero cost
-
-This does NOT supersede ADR 0001's core decisions (tmp/ quarantine, promote-by-digest,
-registry cleanup policy). It corrects the report ingestion pipeline so the
-vulnerability dashboard reflects the current state of promoted images.

@@ -656,7 +656,7 @@ kics-iac-sast:
       IMAGE="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
       echo "Scanning $IMAGE"
       syft --scope squashed -o spdx-json "$IMAGE" > sbom.spdx.json || echo "WARN: syft SBOM failed for $IMAGE - continuing with trivy scan"
-      trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --format json --output gl-scan-tmp.json --exit-code 0 "$IMAGE"
+      trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format json --output gl-scan-tmp.json --exit-code 0 "$IMAGE"
       trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format table --exit-code 1 "$IMAGE"
   artifacts:
     when: always
@@ -707,12 +707,16 @@ kics-iac-sast:
     - skopeo delete "docker://$SRC" 2>/dev/null || true
     # Rewrite tmp/ image names → promoted names in the container scanning report.
     # Same digest, correct name → GitLab vulnerability report tracks real images.
+    # Uses the first (primary) tag from the promote step (e.g. main-<sha>, v2.1.0, vX.Y-<sha>).
     - |
-      if [ -f gl-scan-tmp.json ]; then
-        PROMOTED_TAG="${CI_COMMIT_BRANCH:-main}"
-        sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${PROMOTED_TAG}|g" gl-scan-tmp.json > gl-container-scanning-report.json
-        echo "Rewrote scan report: tmp/${IMAGE_NAME}:* → ${IMAGE_NAME}:${PROMOTED_TAG}"
+      if [ ! -f gl-scan-tmp.json ]; then
+        echo "ERROR: gl-scan-tmp.json not found — scan stage may have failed to produce the report"
+        exit 1
       fi
+      # Extract primary promoted tag (first word of FINAL_TAGS, set above)
+      PRIMARY_TAG="${FINAL_TAGS%% *}"
+      sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${PRIMARY_TAG}|g" gl-scan-tmp.json > gl-container-scanning-report.json
+      echo "Rewrote scan report: tmp/${IMAGE_NAME}:* → ${IMAGE_NAME}:${PRIMARY_TAG}"
   artifacts:
     reports:
       container_scanning: gl-container-scanning-report.json

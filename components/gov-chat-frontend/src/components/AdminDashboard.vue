@@ -1563,7 +1563,7 @@ import DsSpinner from './ds/Spinner.vue';
 import DsStateDisplay from './ds/StateDisplay.vue';
 import DsTabs from './ds/Tabs.vue';
 import DsSelect from './ds/Select.vue';
-import { Loader2 } from 'lucide-vue-next';
+import { Loader2 } from '@lucide/vue';
 import { eventBus } from '../eventBus.js';
 import { getAvailableLanguages } from '../config/languageConfig.js';
 import oidcConfig from '../config/oidcConfig.js';

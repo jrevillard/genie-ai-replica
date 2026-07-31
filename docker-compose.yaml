@@ -87,7 +87,7 @@ services:
 
   postgres:
     logging: *fluent-logging
-    image: postgres:13
+    image: postgres:16
     networks:
       - genieai_network
     environment:
@@ -118,7 +118,7 @@ services:
   # Kong database migrations (one-shot init, runs automatically on first start)
   kong-migrations:
     logging: *fluent-logging
-    image: kong:latest
+    image: kong:3.9.3
     restart: "no"
     depends_on:
       postgres:
@@ -184,7 +184,7 @@ services:
       kong-migrations:
         condition: service_completed_successfully
     restart: unless-stopped
-    image: kong:latest
+    image: kong:3.9.3
     environment:
       - KONG_DATABASE=${KONG_DATABASE:-postgres}
       - KONG_PG_HOST=${KONG_PG_HOST:-postgres}
@@ -292,7 +292,7 @@ services:
     logging: *fluent-logging
     profiles: [letsencrypt]
     restart: unless-stopped
-    image: certbot/certbot:latest
+    image: certbot/certbot:v5.7.0
     entrypoint: ["/certbot-entrypoint.sh"]
     environment:
       - CERTBOT_EMAIL=${CERTBOT_EMAIL:-}
@@ -563,7 +563,7 @@ services:
   clamav:
     logging: *fluent-logging
     restart: unless-stopped
-    image: clamav/clamav
+    image: clamav/clamav:stable-debian
     # Internal only
     # ports:
     #   - "3310:3310"
@@ -627,7 +627,7 @@ services:
     logging: *fluent-logging
     profiles: [gpu-models]
     restart: unless-stopped
-    image: vllm/vllm-openai:latest
+    image: vllm/vllm-openai:v0.10.0
     # Swarm: internal only - access via Kong or docker exec
     # ports:
     #   - "${LLM_SERVER_PORT:-8000}:8000"
@@ -746,7 +746,7 @@ services:
     logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
-    image: opea/translation:latest
+    image: opea/translation:1.3
     environment:
       - LLM_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}
       - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
@@ -775,7 +775,7 @@ services:
     logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
-    image: opea/guardrails:latest
+    image: opea/guardrails:1.5
     environment:
       - LLM_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}
       - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
@@ -1228,7 +1228,7 @@ services:
     logging: *fluent-logging
     profiles: [opea]
     restart: "no"
-    image: opea/chatqna-ui:latest
+    image: opea/chatqna-ui:1.5
     # Internal OPEA service - no host port needed
     # ports:
     #   - "${FRONTEND_SERVICE_PORT}:${FRONTEND_SERVICE_PORT}"
@@ -1256,7 +1256,7 @@ services:
     logging: *fluent-logging
     profiles: [opea]
     restart: "no"
-    image: opea/nginx:latest
+    image: opea/nginx:1.5
     # Internal OPEA service - no host port needed
     # ports:
     #   - "${NGINX_PORT}:${NGINX_PORT}"
@@ -1446,7 +1446,7 @@ services:
   # restart policy handles the race condition until init completes.
   otel-collector-init:
     profiles: [observability]
-    image: busybox:latest
+    image: busybox:1.38.0
     command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && chown -R 10001:10001 /var/lib/otelcol"]
     volumes:
       - otel-queue:/var/lib/otelcol

@@ -1,7 +1,8 @@
 # Upgrade Guide
 
-This document covers breaking changes and migration steps when upgrading between
-major versions of GENIE.AI.
+This document covers breaking changes and migration steps between GENIE.AI
+versions. Applies to all releases — major, minor, and patch — whenever a
+change requires manual action from deployers.
 
 ---
 

@@ -22,50 +22,78 @@ incompatible with 16 — the server will refuse to start with old data.
 
 ##### Option A — pg_dump / pg_restore (recommended, ~5–10 min downtime)
 
+**Docker Swarm** (stack name: `genieai`, volume: `genieai_postgres_data`):
+
 ```bash
-# 1. Stop services using PostgreSQL
+# 1. Stop apps that depend on PostgreSQL
 docker service scale genieai_kong=0 genieai_keycloak=0
+docker service scale genieai_kong-migrations=0 genieai_postgres-init=0
 
 # 2. Dump all databases from the old PG 13 container
-PG=$(docker ps --filter name=postgres --format '{{.Names}}')
+PG=$(docker ps --filter name=genieai_postgres --format '{{.Names}}')
 docker exec "$PG" pg_dumpall -U genieai > /tmp/pg_dump.sql
 
 # 3. Stop PostgreSQL, backup the volume
 docker service scale genieai_postgres=0
 docker volume rename genieai_postgres_data genieai_postgres_data_pg13
 
-# 4. Deploy the new stack (postgres:16, creates fresh volume)
+# 4. Deploy with the new image (postgres:16)
 docker stack deploy -c docker-compose.yaml genieai
 
-# 5. Wait for PostgreSQL to be healthy
-until docker exec $(docker ps --filter name=postgres --format '{{.Names}}') \
+# 5. Wait for healthy
+until docker exec $(docker ps --filter name=genieai_postgres --format '{{.Names}}') \
   pg_isready -U genieai; do sleep 2; done
 
-# 6. Restore the dump
-docker exec -i $(docker ps --filter name=postgres --format '{{.Names}}') \
+# 6. Restore
+docker exec -i $(docker ps --filter name=genieai_postgres --format '{{.Names}}') \
   psql -U genieai -f - < /tmp/pg_dump.sql
 
-# 7. Restart services
+# 7. Restart apps
 docker service scale genieai_kong=1 genieai_keycloak=1
 
 # 8. Verify
-docker exec $(docker ps --filter name=postgres --format '{{.Names}}') \
+docker exec $(docker ps --filter name=genieai_postgres --format '{{.Names}}') \
   psql -U genieai -c "SELECT version();"
-# Expected: PostgreSQL 16.x
+```
+
+**Docker Compose** (project name: `<dirname>`, volume: `<dirname>_postgres_data`):
+
+```bash
+# 1. Stop dependent services
+docker compose stop kong keycloak kong-migrations postgres-init
+
+# 2. Dump from the old PG 13 container
+docker compose exec -T postgres pg_dumpall -U genieai > /tmp/pg_dump.sql
+
+# 3. Stop PostgreSQL
+docker compose stop postgres
+
+# 4. Backup volume, then remove it
+PROJECT=$(docker compose config --format json | python3 -c "import sys,json; print(json.load(sys.stdin).get('name',''))")
+docker volume rename ${PROJECT}_postgres_data ${PROJECT}_postgres_data_pg13
+
+# 5. Update docker-compose.yaml: postgres:13 → postgres:16
+# 6. Start fresh PostgreSQL
+docker compose up -d postgres
+
+# 7. Wait for healthy, then restore
+docker compose exec -T postgres psql -U genieai -f - < /tmp/pg_dump.sql
+
+# 8. Restart apps
+docker compose up -d
 ```
 
 ##### Option B — pg_upgrade container (faster, ~2–3 min downtime)
 
+**Docker Swarm**:
 ```bash
 docker service scale genieai_kong=0 genieai_keycloak=0 genieai_postgres=0
 
-# Run the upgrade container
 docker run --rm \
   -v genieai_postgres_data:/var/lib/postgresql/13/data \
   -v genieai_postgres_data_new:/var/lib/postgresql/16/data \
-  tianon/postgres-upgrade:13-to-16
+  tianon/postgres-upgrade:13-to-16 --link
 
-# Replace old volume with upgraded one
 docker volume rm genieai_postgres_data
 docker volume create genieai_postgres_data
 docker run --rm \
@@ -73,22 +101,58 @@ docker run --rm \
   -v genieai_postgres_data:/dst \
   alpine cp -a /src/. /dst/
 
-# Redeploy
 docker stack deploy -c docker-compose.yaml genieai
 docker service scale genieai_kong=1 genieai_keycloak=1
 ```
 
+**Docker Compose**:
+```bash
+PROJECT=$(docker compose config --format json | python3 -c "import sys,json; print(json.load(sys.stdin).get('name',''))")
+docker compose stop
+
+docker run --rm \
+  -v ${PROJECT}_postgres_data:/var/lib/postgresql/13/data \
+  -v ${PROJECT}_postgres_data_new:/var/lib/postgresql/16/data \
+  tianon/postgres-upgrade:13-to-16 --link
+
+docker volume rm ${PROJECT}_postgres_data
+docker volume create ${PROJECT}_postgres_data
+docker run --rm \
+  -v ${PROJECT}_postgres_data_new:/src \
+  -v ${PROJECT}_postgres_data:/dst \
+  alpine cp -a /src/. /dst/
+
+# Update docker-compose.yaml: postgres:13 → postgres:16
+docker compose up -d
+```
+
 ##### Rollback
 
+**Docker Swarm**:
 ```bash
-# Restore PG 13 volume, revert docker-compose.yaml to postgres:13
+docker service scale genieai_kong=0 genieai_keycloak=0 genieai_postgres=0
 docker volume rm genieai_postgres_data
 docker volume create genieai_postgres_data
 docker run --rm \
   -v genieai_postgres_data_pg13:/src \
   -v genieai_postgres_data:/dst \
   alpine cp -a /src/. /dst/
+# Revert docker-compose.yaml: postgres:16 → postgres:13
 docker stack deploy -c docker-compose.yaml genieai
+```
+
+**Docker Compose**:
+```bash
+PROJECT=$(docker compose config --format json | python3 -c "import sys,json; print(json.load(sys.stdin).get('name',''))")
+docker compose stop
+docker volume rm ${PROJECT}_postgres_data
+docker volume create ${PROJECT}_postgres_data
+docker run --rm \
+  -v ${PROJECT}_postgres_data_pg13:/src \
+  -v ${PROJECT}_postgres_data:/dst \
+  alpine cp -a /src/. /dst/
+# Revert docker-compose.yaml: postgres:16 → postgres:13
+docker compose up -d
 ```
 
 ##### Verification Checklist

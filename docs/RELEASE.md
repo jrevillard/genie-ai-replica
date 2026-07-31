@@ -137,6 +137,9 @@ Mark breaking changes with a `**Breaking:**` prefix inside the entry:
 - **Breaking:** The `/api/chat` endpoint now requires an `Accept-Language` header.
 ```
 
+For each release containing breaking changes, update `docs/UPGRADE.md`
+with migration steps between versions (see [UPGRADE.md](UPGRADE.md)).
+
 Do not collect breaking changes in a separate section — keep them with their type.
 
 ### The `[Unreleased]` Section
@@ -479,6 +482,7 @@ Copy this checklist into the release MR or issue.
 - [ ] CI pipeline green on `main` before creating the release branch
 - [ ] `CHANGELOG.md` updated: `[Unreleased]` renamed to `[X.Y.Z]` with date
 - [ ] Breaking changes marked with `**Breaking:**` in changelog
+- [ ] `docs/UPGRADE.md` updated with migration steps for each breaking change
 - [ ] Fresh `[Unreleased]` section added
 - [ ] Reference links at bottom of changelog updated
 - [ ] Version number follows SemVer rules

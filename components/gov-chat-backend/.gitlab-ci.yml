@@ -1,5 +1,6 @@
 stages:
   - lint
+# CVE remediation: force full rebuild (2026-07-30)
   - test
   - config      # env-var coverage + changelog validation + dependency-lock freshness (fail-fast before build)
   - build       # publish candidate images to GitLab Container Registry (tmp/ namespace)

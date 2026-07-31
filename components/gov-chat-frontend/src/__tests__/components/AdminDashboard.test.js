@@ -151,7 +151,7 @@ jest.mock('../../utils/ThemeManager', () => ({
   }
 }));
 
-jest.mock('lucide-vue-next', () => ({
+jest.mock('@lucide/vue', () => ({
   Loader2: { template: '<svg />' }
 }));
 

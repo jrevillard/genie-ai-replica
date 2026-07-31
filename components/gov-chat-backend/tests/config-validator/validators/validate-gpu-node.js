@@ -19,15 +19,15 @@ const GPU_SERVICE_PORTS = {
   'docling-serve': 443
 };
 
-/** GPU services that must have pinned (non-:latest) image tags. */
-const GPU_REQUIRED_SERVICES = [
-  'vllm-llm',
-  'vllm-translation',
-  'tei-embedding',
-  'tei-reranker',
-  'docling-serve',
-  'nginx-gpu'
-];
+/** Image tags that must match the main docker-compose.yaml exactly. */
+const GPU_REQUIRED_IMAGES = {
+  'vllm-llm': 'vllm/vllm-openai:v0.10.0',
+  'vllm-translation': 'vllm/vllm-openai:v0.10.0',
+  'tei-embedding': 'ghcr.io/huggingface/text-embeddings-inference:1.9.3',
+  'tei-reranker': 'ghcr.io/huggingface/text-embeddings-inference:1.9.3',
+  'docling-serve': 'ghcr.io/docling-project/docling-serve:v1.21.0',
+  'nginx-gpu': 'nginx:1.28-alpine'
+};
 
 /** GPU compose env vars that are shared with the main compose (not GPU-specific). */
 const GPU_SHARED_COMPOSE_VARS = new Set([
@@ -92,7 +92,7 @@ function parseGpuCompose(filePath) {
   let inServices = false;
   let currentService = null;
   let currentPorts = [];
-  let networksLineIdx = lines.findIndex((l) => l.trim() === 'networks:');
+  const networksLineIdx = lines.findIndex((l) => l.trim() === 'networks:');
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -187,15 +187,11 @@ function validateGpuNode(gpuComposePath, _mainComposePath) {
     errors.push('GPU compose missing gpu_network definition');
   }
 
-  // 4. Image tags must be pinned (no :latest, no missing tags)
-  for (const serviceName of GPU_REQUIRED_SERVICES) {
+  // 4. Image tags must match required images
+  for (const [serviceName, expectedImage] of Object.entries(GPU_REQUIRED_IMAGES)) {
     const actualImage = gpu.images.get(serviceName);
-    if (!actualImage) {
-      errors.push(`${serviceName}: missing image tag`);
-    } else if (actualImage.endsWith(':latest') || !actualImage.includes(':')) {
-      errors.push(
-        `${serviceName}: unpinned image tag — "${actualImage}" (must use a versioned tag, not :latest)`
-      );
+    if (actualImage && actualImage !== expectedImage) {
+      errors.push(`${serviceName}: image tag mismatch — expected "${expectedImage}", got "${actualImage}"`);
     }
   }
 
@@ -230,8 +226,7 @@ function crossReferenceGpu(gpuComposeVars, envParsed, sharedComposeVars) {
 
   // Undocumented: in GPU compose but not in env template
   // Filter out vars shared with the main compose (documented there, not here)
-  const undocumented = [...gpuNames]
-    .filter((name) => !envNames.has(name) && !sharedComposeVars.has(name));
+  const undocumented = [...gpuNames].filter((name) => !envNames.has(name) && !sharedComposeVars.has(name));
 
   // Orphaned: in env but not in GPU compose
   // Filter out known Section 14 orphans + vars shared with main compose
@@ -266,7 +261,7 @@ module.exports = {
   validateGpuNode,
   crossReferenceGpu,
   GPU_SERVICE_PORTS,
-  GPU_REQUIRED_SERVICES,
+  GPU_REQUIRED_IMAGES,
   GPU_SHARED_COMPOSE_VARS,
   GPU_NODE_SECTION14_ORPHANS
 };

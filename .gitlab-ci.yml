@@ -656,14 +656,14 @@ kics-iac-sast:
       IMAGE="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
       echo "Scanning $IMAGE"
       syft --scope squashed -o spdx-json "$IMAGE" > sbom.spdx.json || echo "WARN: syft SBOM failed for $IMAGE - continuing with trivy scan"
-      trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --format json --output gl-container-scanning-report.json --exit-code 0 "$IMAGE"
+      trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format json --output gl-scan-tmp.json --exit-code 0 "$IMAGE"
       trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format table --exit-code 1 "$IMAGE"
   artifacts:
     when: always
     expire_in: 1 year
     paths:
       - sbom.spdx.json
-      - gl-container-scanning-report.json
+      - gl-scan-tmp.json
   allow_failure: true
 
 
@@ -705,7 +705,21 @@ kics-iac-sast:
         docker buildx imagetools create -t "$CI_REGISTRY_IMAGE/$IMAGE_NAME:$t" "$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME@${DIGEST}"
       done
     - skopeo delete "docker://$SRC" 2>/dev/null || true
-
+    # Rewrite tmp/ image names → promoted names in the container scanning report.
+    # Same digest, correct name → GitLab vulnerability report tracks real images.
+    # Uses the first (primary) tag from the promote step (e.g. main-<sha>, v2.1.0, vX.Y-<sha>).
+    - |
+      if [ ! -f gl-scan-tmp.json ]; then
+        echo "ERROR: gl-scan-tmp.json not found — scan stage may have failed to produce the report"
+        exit 1
+      fi
+      # Extract primary promoted tag (first word of FINAL_TAGS, set above)
+      PRIMARY_TAG="${FINAL_TAGS%% *}"
+      sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${PRIMARY_TAG}|g" gl-scan-tmp.json > gl-container-scanning-report.json
+      echo "Rewrote scan report: tmp/${IMAGE_NAME}:* → ${IMAGE_NAME}:${PRIMARY_TAG}"
+  artifacts:
+    reports:
+      container_scanning: gl-container-scanning-report.json
 
 # genie-ai-frontend
 build:frontend:
@@ -734,7 +748,7 @@ scan:frontend:
   <<: *scan_template
   needs:
     - job: build:frontend
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-frontend"
   rules:
@@ -757,7 +771,7 @@ promote:frontend:
   <<: *promote_template
   needs:
     - job: scan:frontend
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-frontend"
   rules:
@@ -803,7 +817,7 @@ scan:backend:
   <<: *scan_template
   needs:
     - job: build:backend
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-backend"
   rules:
@@ -826,7 +840,7 @@ promote:backend:
   <<: *promote_template
   needs:
     - job: scan:backend
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-backend"
   rules:
@@ -872,7 +886,7 @@ scan:db-migrations:
   <<: *scan_template
   needs:
     - job: build:db-migrations
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-db-migrations"
   rules:
@@ -895,7 +909,7 @@ promote:db-migrations:
   <<: *promote_template
   needs:
     - job: scan:db-migrations
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-db-migrations"
   rules:
@@ -941,7 +955,7 @@ scan:document-repository:
   <<: *scan_template
   needs:
     - job: build:document-repository
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-document-repository"
   rules:
@@ -964,7 +978,7 @@ promote:document-repository:
   <<: *promote_template
   needs:
     - job: scan:document-repository
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-document-repository"
   rules:
@@ -1010,7 +1024,7 @@ scan:nginx:
   <<: *scan_template
   needs:
     - job: build:nginx
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-nginx"
   rules:
@@ -1033,7 +1047,7 @@ promote:nginx:
   <<: *promote_template
   needs:
     - job: scan:nginx
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-nginx"
   rules:
@@ -1079,7 +1093,7 @@ scan:kong-config:
   <<: *scan_template
   needs:
     - job: build:kong-config
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-kong-config"
   rules:
@@ -1102,7 +1116,7 @@ promote:kong-config:
   <<: *promote_template
   needs:
     - job: scan:kong-config
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-kong-config"
   rules:
@@ -1148,7 +1162,7 @@ scan:chatqna-server:
   <<: *scan_template
   needs:
     - job: build:chatqna-server
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-chatqna-server"
   rules:
@@ -1171,7 +1185,7 @@ promote:chatqna-server:
   <<: *promote_template
   needs:
     - job: scan:chatqna-server
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-chatqna-server"
   rules:
@@ -1224,7 +1238,7 @@ smoke:dataprep-arango:
   interruptible: true
   needs:
     - job: build:dataprep-arango
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-dataprep-arango"
   before_script:
@@ -1260,7 +1274,7 @@ scan:dataprep-arango:
   <<: *scan_template
   needs:
     - job: build:dataprep-arango
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-dataprep-arango"
   rules:
@@ -1283,7 +1297,7 @@ promote:dataprep-arango:
   <<: *promote_template
   needs:
     - job: scan:dataprep-arango
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-dataprep-arango"
   rules:
@@ -1329,7 +1343,7 @@ scan:retriever-arango:
   <<: *scan_template
   needs:
     - job: build:retriever-arango
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-retriever-arango"
   rules:
@@ -1352,7 +1366,7 @@ promote:retriever-arango:
   <<: *promote_template
   needs:
     - job: scan:retriever-arango
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-retriever-arango"
   rules:
@@ -1398,7 +1412,7 @@ scan:reranker:
   <<: *scan_template
   needs:
     - job: build:reranker
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-reranker"
   rules:
@@ -1421,7 +1435,7 @@ promote:reranker:
   <<: *promote_template
   needs:
     - job: scan:reranker
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-reranker"
   rules:
@@ -1467,7 +1481,7 @@ scan:embedding:
   <<: *scan_template
   needs:
     - job: build:embedding
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-embedding"
   rules:
@@ -1490,7 +1504,7 @@ promote:embedding:
   <<: *promote_template
   needs:
     - job: scan:embedding
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-embedding"
   rules:
@@ -1536,7 +1550,7 @@ scan:textgen:
   <<: *scan_template
   needs:
     - job: build:textgen
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-textgen"
   rules:
@@ -1559,7 +1573,7 @@ promote:textgen:
   <<: *promote_template
   needs:
     - job: scan:textgen
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-textgen"
   rules:
@@ -1605,7 +1619,7 @@ scan:postgres-init:
   <<: *scan_template
   needs:
     - job: build:postgres-init
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-postgres-init"
   rules:
@@ -1628,7 +1642,7 @@ promote:postgres-init:
   <<: *promote_template
   needs:
     - job: scan:postgres-init
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-postgres-init"
   rules:
@@ -1674,7 +1688,7 @@ scan:keycloak:
   <<: *scan_template
   needs:
     - job: build:keycloak
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-keycloak"
   rules:
@@ -1697,7 +1711,7 @@ promote:keycloak:
   <<: *promote_template
   needs:
     - job: scan:keycloak
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-keycloak"
   rules:
@@ -1743,7 +1757,7 @@ scan:keycloak-config:
   <<: *scan_template
   needs:
     - job: build:keycloak-config
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-keycloak-config"
   rules:
@@ -1766,7 +1780,7 @@ promote:keycloak-config:
   <<: *promote_template
   needs:
     - job: scan:keycloak-config
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-keycloak-config"
   rules:
@@ -1812,7 +1826,7 @@ scan:tempo-proxy:
   <<: *scan_template
   needs:
     - job: build:tempo-proxy
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-tempo-proxy"
   rules:
@@ -1835,7 +1849,7 @@ promote:tempo-proxy:
   <<: *promote_template
   needs:
     - job: scan:tempo-proxy
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-tempo-proxy"
   rules:

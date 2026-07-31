@@ -95,7 +95,7 @@ import {
   Globe,
   FileSpreadsheet,
   FileImage
-} from 'lucide-vue-next';
+} from '@lucide/vue';
 import DsCard from './ds/Card.vue';
 import DsButton from './ds/Button.vue';
 import DsStateDisplay from './ds/StateDisplay.vue';

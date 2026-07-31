@@ -399,7 +399,7 @@ import {
   Archive,
   MessagesSquare,
   ArrowLeftRight
-} from 'lucide-vue-next';
+} from '@lucide/vue';
 
 export default {
   name: 'ChatFolders',

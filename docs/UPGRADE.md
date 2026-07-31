@@ -56,6 +56,9 @@ docker service scale genieai_kong=1 genieai_keycloak=1
 # 9. Verify
 docker exec $(docker ps --filter name=genieai_postgres --format '{{.Names}}') \
   psql -U genieai -d postgres -c "SELECT version();"
+
+# 10. Cleanup — remove the backup volume (only after confirming everything works)
+docker volume rm genieai_postgres_data_pg13
 ```
 
 **Docker Compose** (project name: `<dirname>`, volume: `<dirname>_postgres_data`):
@@ -83,6 +86,9 @@ docker compose exec -T postgres psql -U genieai -d postgres -f - < /tmp/pg_dump.
 
 # 8. Restart apps
 docker compose up -d
+
+# 9. Cleanup — remove backup volume (only after confirming everything works)
+docker volume rm ${PROJECT}_postgres_data_pg13
 ```
 
 ##### Rollback
@@ -132,7 +138,7 @@ on the next `docker stack deploy`.
 | Image | Old | New |
 |-------|-----|-----|
 | Node.js | `node:22.14.0` | `node:22` |
-| Node.js Alpine | `node:22.14.0-alpine` | `node:22-alpine` |
+| Node.js Alpine | `node:22.14.0-alpine` | `node:22-alpine` (except `Dockerfile.migrations`, fixed in MR !259) |
 | Alpine | `3.21` | `3.22` |
 | Keycloak | `26.6.1` | `26.7` |
 

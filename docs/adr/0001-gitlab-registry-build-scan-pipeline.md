@@ -1,8 +1,9 @@
 # ADR 0001: GitLab Container Registry build + scan + promote pipeline
 
-- **Status**: Accepted
+- **Status**: Accepted (amended 2026-07-31)
 - **Date**: 2026-06-22
 - **Decision owners**: Jerome Revillard (architect), BMAD party-mode review (Winston / Amelia / Murat)
+- **Last amended**: 2026-07-31 — promote job rewrites scan report image names (§6.1)
 
 ## Context
 
@@ -69,11 +70,14 @@ BuildKit, on by default in Docker 23+; runner pinned to 28.x).
 build:image  → tmp/<image>:pending-<sha> (main/tag) | tmp/<image>:mr-<iid>-<sha> (MR)
      ↓
 scan:image   → Syft SBOM + Trivy gate on tmp/<image>:<candidat>
+              → report saved as gl-scan-tmp.json (NOT ingested — see §6.1)
      ↓
 [e2e:integration on merge trains — pulls tmp/ candidate, runs --no-build]
      ↓
 promote:image → cross-repo copy tmp/<image>@DIGEST → <image>:main / :main-<sha> / :vX.Y.Z / :latest
               → delete tmp/<image>:<candidat>
+              → sed rewrite tmp/<image>:* → <image>:<tag> in gl-scan-tmp.json
+              → publish gl-container-scanning-report.json (ingested — see §6.1)
 ```
 
 - Candidates live in a **separate `tmp/` namespace** (`registry.../genie-ai/tmp/<image>`).
@@ -115,19 +119,52 @@ When phase 2 lands, the choice is **cosign key-based** (not keyless):
   key is committed at `configs/cosign/cosign.pub` for deploy-time verification.
 - Transparency log upload disabled (`--tlog-upload=false`) for sovereignty.
 
-### 6. Scanning: GitLab official template + MR approval rule (blocking)
+### 6. Scanning: Custom Trivy template + promote-stage report rewrite
 
-Scanning uses GitLab's **official Container Scanning template**
-(`Jobs/Container-Scanning.gitlab-ci.yml`, analyzer `gtcs scan`) over each
-candidate. The template produces the correct-schema report (GitLab security
-dashboard + MR widget) + CycloneDX SBOM, and is **advisory** by default
-(`allow_failure: true`).
+Scanning uses a **custom `.scan_template`** (Trivy 0.57.0, no GitLab official
+Container Scanning template). The scan stage does two passes per image:
 
-**Blocking** on HIGH/CRITICAL is enforced by a **Merge Request approval rule**
-(project setting) tied to the security report — the GitLab-native gate. Accepted
-risks go into `vulnerability-allowlist.yml` (GitLab format), each entry governed
-by a ticket + review date. This replaces the earlier custom `trivy --exit-code`
-gate, which produced raw JSON that GitLab could not ingest (wrong schema).
+1. **Trivy JSON** (`--exit-code 0`): advisory, outputs `gl-scan-tmp.json`
+   (saved as a CI artifact, NOT ingested into the vulnerability report).
+2. **Trivy table** (`--exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL`):
+   gating — fails the pipeline if fixable HIGH/CRITICAL CVEs exist.
+
+**Blocking** on HIGH/CRITICAL is at the scan stage (pre-promote gate). Findings
+are NOT sent to the GitLab vulnerability report from this stage (see §6.1).
+
+The GitLab official Container Scanning template is intentionally NOT used because:
+
+- It auto-publishes the report under tmp/ image names → orphaned findings when
+  images are deleted (3,339 findings documented in CVE remediation 2026-07-30).
+- We need to control WHEN and under WHAT NAME the report enters the
+  vulnerability database — only after promote, with persistent image names.
+
+#### 6.1 Promote-stage report rewrite (added 2026-07-31)
+
+The promote job downloads `gl-scan-tmp.json` from the scan stage, rewrites image
+names with `sed`, and publishes the result as `gl-container-scanning-report.json`
+with `artifacts:reports:container_scanning`. This is the ONLY point where
+container scanning findings enter the GitLab vulnerability report.
+
+```
+Scan:   trivy --output gl-scan-tmp.json   → artifacts:paths (no reports:)
+Promote: sed tmp/NAME:tag → NAME:main      → artifacts:reports:container_scanning
+         > gl-container-scanning-report.json
+```
+
+**Why rewrite instead of re-scan**: promote copies by digest — the bytes are
+identical. The same scan result is valid; only the name changes. Rewriting in
+the promote job costs zero scan time and zero registry pulls.
+
+**Why `:main` (mutable tag)**: findings tracked against mutable tags (`:main`,
+`:latest`) auto-resolve across rebuilds — re-scanning the same tag after a fix
+shows the CVE gone, and GitLab flips the finding state. Digest-keyed tracking
+would re-orphan on every promote (same disease, new shape).
+
+**Regex** (tested on real Trivy JSON artifact from pipeline #5590):
+```
+sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${CI_COMMIT_BRANCH:-main}|g"
+```
 
 ## Alternatives considered
 
@@ -146,7 +183,8 @@ gate, which produced raw JSON that GitLab could not ingest (wrong schema).
 
 - **Positive**: 16 images published per pipeline; vulnerable images quarantined;
   SBOM artifacts for audit; deployable tags always point at scanned digests;
-  local Swarm registry can be retired in phase 3.
+  vulnerability report tracks persistent image names (no orphaned findings);
+  auto-resolution works across rebuilds; local Swarm registry can be retired in phase 3.
 - **Negative**: pipeline adds 3 stages of wall-clock time (build + scan +
   promote) per MR; BuildKit rootless adds a learning curve vs classic docker
   build; `needs:matrix` requires GitLab ≥15.9 (verified: 17.5.2-ee).

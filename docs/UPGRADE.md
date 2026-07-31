@@ -20,7 +20,7 @@ PostgreSQL 16. No application-level SQL changes required.
 **Migration required for existing deployments.** PostgreSQL 13 data format is
 incompatible with 16 — the server will refuse to start with old data.
 
-##### Option A — pg_dump / pg_restore (recommended, ~5–10 min downtime)
+##### Migration procedure (verified, ~5–10 min downtime)
 
 **Docker Swarm** (stack name: `genieai`, volume: `genieai_postgres_data`):
 
@@ -83,48 +83,10 @@ docker compose exec -T postgres psql -U genieai -d postgres -f - < /tmp/pg_dump.
 docker compose up -d
 ```
 
-##### Option B — pg_upgrade container (faster, ~2–3 min downtime)
+##### Option B — pg_upgrade (NOT RECOMMENDED)
 
-**Docker Swarm**:
-```bash
-docker service scale genieai_kong=0 genieai_keycloak=0 genieai_postgres=0
-
-docker run --rm \
-  -v genieai_postgres_data:/var/lib/postgresql/13/data \
-  -v genieai_postgres_data_new:/var/lib/postgresql/16/data \
-  tianon/postgres-upgrade:13-to-16 --link
-
-docker volume rm genieai_postgres_data
-docker volume create genieai_postgres_data
-docker run --rm \
-  -v genieai_postgres_data_new:/src \
-  -v genieai_postgres_data:/dst \
-  alpine cp -a /src/. /dst/
-
-docker stack deploy -c docker-compose.yaml genieai
-docker service scale genieai_kong=1 genieai_keycloak=1
-```
-
-**Docker Compose**:
-```bash
-PROJECT=$(docker compose config --format json | python3 -c "import sys,json; print(json.load(sys.stdin).get('name',''))")
-docker compose stop
-
-docker run --rm \
-  -v ${PROJECT}_postgres_data:/var/lib/postgresql/13/data \
-  -v ${PROJECT}_postgres_data_new:/var/lib/postgresql/16/data \
-  tianon/postgres-upgrade:13-to-16 --link
-
-docker volume rm ${PROJECT}_postgres_data
-docker volume create ${PROJECT}_postgres_data
-docker run --rm \
-  -v ${PROJECT}_postgres_data_new:/src \
-  -v ${PROJECT}_postgres_data:/dst \
-  alpine cp -a /src/. /dst/
-
-# Update docker-compose.yaml: postgres:13 → postgres:16
-docker compose up -d
-```
+The `tianon/postgres-upgrade:13-to-16` container failed to connect to the
+source postmaster in local testing. Use Option A instead.
 
 ##### Rollback
 
@@ -161,7 +123,8 @@ docker compose up -d
 - [ ] `SELECT version()` shows PostgreSQL 16.x
 - [ ] Kong proxy routes respond (`curl -k https://localhost/api/me`)
 - [ ] Keycloak login page loads
-- [ ] All databases present (`\l` in psql shows `kong` and `keycloak`)
+- [ ] All databases present: `psql -U genieai -d postgres -c "\l"` shows `kong` and `keycloak`
+- [ ] `-d postgres` used for connection — `POSTGRES_DB` default is deployment-specific
 
 #### Docker Base Image Changes
 

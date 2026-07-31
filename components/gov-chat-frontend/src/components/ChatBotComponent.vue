@@ -316,7 +316,7 @@
 </template>
 
 <script>
-import { Brain, Loader2, Plus, Save, FileText, Sparkles } from 'lucide-vue-next';
+import { Brain, Loader2, Plus, Save, FileText, Sparkles } from '@lucide/vue';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';

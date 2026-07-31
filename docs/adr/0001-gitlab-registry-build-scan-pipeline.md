@@ -203,3 +203,27 @@ Effect: any tag not matching the keep-regex and older than 7d is deleted, in
 stale `:cache` → reaped after 7d. The real namespace only ever holds deployable
 tags. `release.*` in the keep-regex is **critical** once release-branch image
 tags exist — without it the policy would purge release rolling tags.
+
+---
+
+## Addendum 2026-07-31 — Promote-stage scan report rewrite (MR !259)
+
+**Context**: CVE remediation (MR !258) revealed 3,339 orphaned container
+scanning findings from deleted tmp/ image digests.
+
+**Change**: Scan outputs `gl-scan-tmp.json` (not ingested). Promote downloads
+this file, rewrites image names from `tmp/<image>:<candidate>` →
+`<image>:<primary-tag>`, and publishes `gl-container-scanning-report.json` with
+`artifacts:reports:container_scanning`. Primary tag derived from `FINAL_TAGS`
+(e.g. `main-<sha>`, `v2.1.0`, `vX.Y-<sha>`).
+
+**Gate mechanism**: the blocking gate is the security approval policy
+(`.gitlab/security-policies/policy.yml`, `scan_finding` / `container_scanning`),
+not `trivy --exit-code 1`. Scan jobs are `allow_failure: true`.
+
+**Regex**:
+```bash
+PRIMARY_TAG="${FINAL_TAGS%% *}"
+sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${PRIMARY_TAG}|g" \
+  gl-scan-tmp.json > gl-container-scanning-report.json
+```

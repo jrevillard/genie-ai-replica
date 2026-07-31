@@ -96,7 +96,7 @@ jest.mock('jspdf', () => {
     setDrawColor: jest.fn()
   }));
 });
-jest.mock('lucide-vue-next', () => ({
+jest.mock('@lucide/vue', () => ({
   Brain: { template: '<svg />' },
   Loader2: { template: '<svg />' },
   Plus: { template: '<svg />' },

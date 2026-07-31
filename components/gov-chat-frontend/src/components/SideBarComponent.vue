@@ -92,7 +92,7 @@
 import ServiceTreePanelComponent from './ServiceTreePanelComponent.vue';
 import ChatFolders from './ChatFolders.vue';
 import WeatherPanel from './WeatherPanel.vue';
-import { List, History } from 'lucide-vue-next';
+import { List, History } from '@lucide/vue';
 import DsButton from './ds/Button.vue';
 import DsTabs from './ds/Tabs.vue';
 

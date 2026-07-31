@@ -5,15 +5,6 @@ weight: 2
 slug: rag
 ---
 
-GENIE.AI answers user questions strictly from an indexed knowledge base rather
-than from model memory. The Retrieval-Augmented Generation (RAG) pipeline turns
-each query into a grounded, cite-able answer through five stages: **embedding,
-hybrid retrieval, reranking, generation, and optional translation**.
-
-This section documents the pipeline that runs in the OPEA overlay
-(`genie-ai-overlay/`), its configuration knobs, and the model-selection
-trade-offs for each stage.
-
 ## How a query flows
 
 ```

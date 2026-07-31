@@ -46,14 +46,14 @@ until docker exec $(docker ps --filter name=genieai_postgres --format '{{.Names}
 
 # 6. Restore
 docker exec -i $(docker ps --filter name=genieai_postgres --format '{{.Names}}') \
-  psql -U genieai -f - < /tmp/pg_dump.sql
+  psql -U genieai -d postgres -f - < /tmp/pg_dump.sql
 
 # 7. Restart apps
 docker service scale genieai_kong=1 genieai_keycloak=1
 
 # 8. Verify
 docker exec $(docker ps --filter name=genieai_postgres --format '{{.Names}}') \
-  psql -U genieai -c "SELECT version();"
+  psql -U genieai -d postgres -c "SELECT version();"
 ```
 
 **Docker Compose** (project name: `<dirname>`, volume: `<dirname>_postgres_data`):
@@ -77,7 +77,7 @@ docker volume rename ${PROJECT}_postgres_data ${PROJECT}_postgres_data_pg13
 docker compose up -d postgres
 
 # 7. Wait for healthy, then restore
-docker compose exec -T postgres psql -U genieai -f - < /tmp/pg_dump.sql
+docker compose exec -T postgres psql -U genieai -d postgres -f - < /tmp/pg_dump.sql
 
 # 8. Restart apps
 docker compose up -d

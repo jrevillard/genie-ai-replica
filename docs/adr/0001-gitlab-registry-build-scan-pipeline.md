@@ -241,3 +241,41 @@ Effect: any tag not matching the keep-regex and older than 7d is deleted, in
 stale `:cache` → reaped after 7d. The real namespace only ever holds deployable
 tags. `release.*` in the keep-regex is **critical** once release-branch image
 tags exist — without it the policy would purge release rolling tags.
+
+---
+
+## Addendum 2026-07-31 — Promote-stage scan report rewrite
+
+**Context**: CVE remediation (MR !258) revealed that the scan stage publishes
+`gl-container-scanning-report.json` under `tmp/` image names
+(`tmp/genie-ai-backend:mr-258-abc123`). These tmp/ digests are deleted after
+promote, leaving **3,339 orphaned container scanning findings** in the
+vulnerability report that can never auto-resolve.
+
+**Change** (MR !259, `worktree-fix-promote-scan-report`):
+
+The scan report is now produced in two steps:
+
+| Stage | Output | Published as |
+|-------|--------|-------------|
+| `scan` | `gl-scan-tmp.json` | `artifacts:paths` only (NOT `reports:container_scanning`) |
+| `promote` | rewrite + `gl-container-scanning-report.json` | `artifacts:reports:container_scanning` |
+
+The promote job downloads `gl-scan-tmp.json`, rewrites image names from
+`tmp/<image>:<candidate>` → `<image>:main`, and publishes the corrected report.
+Since promote copies by digest, the scan result is identical — only the name changes.
+
+**Regex** (in `.promote_template`):
+```bash
+sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${CI_COMMIT_BRANCH:-main}|g" \
+  gl-scan-tmp.json > gl-container-scanning-report.json
+```
+
+**Consequences**:
+- Vulnerability report tracks persistent names → auto-resolution works across rebuilds
+- Scan gate (pre-promote) unchanged — still blocks on fixable HIGH/CRITICAL
+- No re-scan needed — same digest, zero cost
+
+This does NOT supersede ADR 0001's core decisions (tmp/ quarantine, promote-by-digest,
+registry cleanup policy). It corrects the report ingestion pipeline so the
+vulnerability dashboard reflects the current state of promoted images.

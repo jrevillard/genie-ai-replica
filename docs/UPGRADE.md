@@ -11,7 +11,7 @@ major versions of GENIE.AI.
 
 #### PostgreSQL 13 → 16
 
-PostgreSQL 13 reached end-of-life in November 2024 and no longer receives
+PostgreSQL 13 reached end-of-life in November 2025 and no longer receives
 security patches. The default image is now `postgres:16`.
 
 **Compatibility**: Keycloak 26 supports PostgreSQL 14–18. Kong 3.x supports
@@ -37,21 +37,22 @@ docker exec "$PG" pg_dumpall -U genieai > /tmp/pg_dump.sql
 docker service scale genieai_postgres=0
 docker volume rename genieai_postgres_data genieai_postgres_data_pg13
 
-# 4. Deploy with the new image (postgres:16)
+# 4. Ensure docker-compose.yaml uses postgres:16 (update from the new release)
+# 5. Deploy with the new image
 docker stack deploy -c docker-compose.yaml genieai
 
-# 5. Wait for healthy
+# 6. Wait for healthy
 until docker exec $(docker ps --filter name=genieai_postgres --format '{{.Names}}') \
   pg_isready -U genieai; do sleep 2; done
 
-# 6. Restore
+# 7. Restore
 docker exec -i $(docker ps --filter name=genieai_postgres --format '{{.Names}}') \
   psql -U genieai -d postgres -f - < /tmp/pg_dump.sql
 
-# 7. Restart apps
+# 8. Restart apps
 docker service scale genieai_kong=1 genieai_keycloak=1
 
-# 8. Verify
+# 9. Verify
 docker exec $(docker ps --filter name=genieai_postgres --format '{{.Names}}') \
   psql -U genieai -d postgres -c "SELECT version();"
 ```
@@ -148,6 +149,10 @@ your workflow to explicitly bump pinned tags.
 | BusyBox | `busybox:latest` | `busybox:1.38.0` |
 | Certbot | `certbot/certbot:latest` | `certbot/certbot:v5.7.0` |
 | vLLM | `vllm/vllm-openai:latest` | `vllm/vllm-openai:v0.10.0` |
+| OPEA Translation | `opea/translation:latest` | `opea/translation:1.3` |
+| OPEA Guardrails | `opea/guardrails:latest` | `opea/guardrails:1.5` |
+| OPEA ChatQnA UI | `opea/chatqna-ui:latest` | `opea/chatqna-ui:1.5` |
+| OPEA Nginx | `opea/nginx:latest` | `opea/nginx:1.5` |
 
 #### Container Scanning Report Names
 

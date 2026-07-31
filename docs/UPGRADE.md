@@ -83,11 +83,6 @@ docker compose exec -T postgres psql -U genieai -d postgres -f - < /tmp/pg_dump.
 docker compose up -d
 ```
 
-##### Option B — pg_upgrade (NOT RECOMMENDED)
-
-The `tianon/postgres-upgrade:13-to-16` container failed to connect to the
-source postmaster in local testing. Use Option A instead.
-
 ##### Rollback
 
 **Docker Swarm**:

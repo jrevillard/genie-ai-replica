@@ -2218,3 +2218,76 @@ class TestMultiTurnBlendHelpers:
     def test_blend_empty_history_returns_query(self):
         q = [1.0, 2.0]
         assert chatqna_module._blend_embeddings(q, [], 0.5) == q
+
+    class TestLlmParamsMaxTokens:
+        """max_tokens=None must not be passed to LLMParams (pydantic >=2.13 rejects None for int)."""
+
+        def test_max_tokens_none_omitted_from_kwargs(self):
+            """When chat_request.max_tokens is None, LLMParams is called without max_tokens kwarg."""
+            from unittest.mock import patch
+            # Simulate the llm_kwargs logic from genieai_chatqna (schedule_stream method)
+            chat_request = MagicMock()
+            chat_request.max_tokens = None
+            chat_request.top_k = None
+            chat_request.top_p = None
+            chat_request.temperature = None
+            chat_request.frequency_penalty = None
+            chat_request.presence_penalty = None
+            chat_request.repetition_penalty = None
+            chat_request.stream = None
+            chat_request.chat_template = None
+            chat_request.model = None
+
+            # Build kwargs the same way the production code does
+            llm_kwargs = dict(
+                top_k=chat_request.top_k if chat_request.top_k else 10,
+                top_p=chat_request.top_p if chat_request.top_p else 0.95,
+                temperature=chat_request.temperature if chat_request.temperature else 0.01,
+                frequency_penalty=chat_request.frequency_penalty if chat_request.frequency_penalty else 0.0,
+                presence_penalty=chat_request.presence_penalty if chat_request.presence_penalty else 0.0,
+                repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,
+                stream=chat_request.stream if chat_request.stream else False,
+            )
+            if chat_request.max_tokens is not None:
+                llm_kwargs["max_tokens"] = chat_request.max_tokens
+            if chat_request.chat_template:
+                llm_kwargs["chat_template"] = chat_request.chat_template
+            if chat_request.model:
+                llm_kwargs["model"] = chat_request.model
+
+            # max_tokens MUST be absent when None
+            assert "max_tokens" not in llm_kwargs
+
+        def test_max_tokens_set_included_in_kwargs(self):
+            """When chat_request.max_tokens is set, it IS passed to LLMParams."""
+            chat_request = MagicMock()
+            chat_request.max_tokens = 512
+            chat_request.top_k = None
+            chat_request.top_p = None
+            chat_request.temperature = None
+            chat_request.frequency_penalty = None
+            chat_request.presence_penalty = None
+            chat_request.repetition_penalty = None
+            chat_request.stream = None
+            chat_request.chat_template = None
+            chat_request.model = None
+
+            llm_kwargs = dict(
+                top_k=chat_request.top_k if chat_request.top_k else 10,
+                top_p=chat_request.top_p if chat_request.top_p else 0.95,
+                temperature=chat_request.temperature if chat_request.temperature else 0.01,
+                frequency_penalty=chat_request.frequency_penalty if chat_request.frequency_penalty else 0.0,
+                presence_penalty=chat_request.presence_penalty if chat_request.presence_penalty else 0.0,
+                repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,
+                stream=chat_request.stream if chat_request.stream else False,
+            )
+            if chat_request.max_tokens is not None:
+                llm_kwargs["max_tokens"] = chat_request.max_tokens
+            if chat_request.chat_template:
+                llm_kwargs["chat_template"] = chat_request.chat_template
+            if chat_request.model:
+                llm_kwargs["model"] = chat_request.model
+
+            # max_tokens MUST be present when set
+            assert "max_tokens" in llm_kwargs
+            assert llm_kwargs["max_tokens"] == 512

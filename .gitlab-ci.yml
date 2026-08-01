@@ -615,6 +615,7 @@ kics-iac-sast:
       fi
       REGISTRY_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
       CACHE_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:cache-${CI_COMMIT_REF_SLUG}"
+      CACHE_REF_MAIN="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:cache-main"
       echo "Building $IMAGE_NAME → ${REGISTRY_REF}"
       docker buildx build \
         --pull \
@@ -622,6 +623,7 @@ kics-iac-sast:
         -t "$REGISTRY_REF" \
         -f "$DOCKERFILE" \
         --cache-from "type=registry,ref=$CACHE_REF" \
+        --cache-from "type=registry,ref=$CACHE_REF_MAIN" \
         --cache-to "type=registry,ref=$CACHE_REF,mode=max" \
         "$CONTEXT"
 

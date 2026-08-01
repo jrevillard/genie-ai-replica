@@ -2495,9 +2495,9 @@ class ChatQnAService:
             llm_kwargs["max_tokens"] = chat_request.max_tokens
         if chat_request.chat_template:
             llm_kwargs["chat_template"] = chat_request.chat_template
+        if chat_request.model:
+            llm_kwargs["model"] = chat_request.model
         parameters = LLMParams(**llm_kwargs)
-            model=chat_request.model if chat_request.model else None,
-        )
         retriever_parameters = GenieaiRetrieverParms(
             # in the current implementation, search_type should always be set to similarity_score_threshold,
             # otherwise not possible to calculate confidence scores

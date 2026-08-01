@@ -111,4 +111,3 @@ RUN rm -f /usr/lib/python3.10/sitecustomize.py
 # Step G: Run our new GENIE-AI entry point
 USER user
 ENTRYPOINT ["bash", "/app/ChatQnA/entrypoint.sh"]
-# force rebuild 1785591621

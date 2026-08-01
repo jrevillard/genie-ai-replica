@@ -2224,9 +2224,8 @@ class TestMultiTurnBlendHelpers:
 
         def test_max_tokens_none_omitted_from_kwargs(self):
             """When chat_request.max_tokens is None, LLMParams is called without max_tokens kwarg."""
-            from unittest.mock import patch
-            # Simulate the llm_kwargs logic from genieai_chatqna (schedule_stream method)
             chat_request = MagicMock()
+            # Simulate the llm_kwargs logic from genieai_chatqna (schedule_stream method)
             chat_request.max_tokens = None
             chat_request.top_k = None
             chat_request.top_p = None

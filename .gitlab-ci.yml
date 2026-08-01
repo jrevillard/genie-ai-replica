@@ -614,7 +614,7 @@ kics-iac-sast:
         CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
       fi
       REGISTRY_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
-      CACHE_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:cache"
+      CACHE_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:cache-${CI_COMMIT_REF_SLUG}"
       echo "Building $IMAGE_NAME → ${REGISTRY_REF}"
       docker buildx build \
         --pull \

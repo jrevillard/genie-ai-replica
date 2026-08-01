@@ -2480,8 +2480,7 @@ class ChatQnAService:
                 ctx_desc = type(retrieval_context).__name__
             logger.debug(f"Retrieval Context: {ctx_desc}")
 
-        parameters = LLMParams(
-            max_tokens=chat_request.max_tokens or None,
+        llm_kwargs = dict(
             top_k=chat_request.top_k if chat_request.top_k else 10,
             top_p=chat_request.top_p if chat_request.top_p else 0.95,
             temperature=chat_request.temperature if chat_request.temperature else 0.01,
@@ -2489,9 +2488,16 @@ class ChatQnAService:
             presence_penalty=chat_request.presence_penalty if chat_request.presence_penalty else 0.0,
             repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,
             stream=chat_request.stream if chat_request.stream else False,
-            chat_template=chat_request.chat_template if chat_request.chat_template else None,
-            model=chat_request.model if chat_request.model else None,
         )
+        # Only set max_tokens when explicitly provided — let the LLM use its own default.
+        # Pydantic >=2.13 rejects None for int fields (regression from rebuild with newer deps).
+        if chat_request.max_tokens is not None:
+            llm_kwargs["max_tokens"] = chat_request.max_tokens
+        if chat_request.chat_template:
+            llm_kwargs["chat_template"] = chat_request.chat_template
+        if chat_request.model:
+            llm_kwargs["model"] = chat_request.model
+        parameters = LLMParams(**llm_kwargs)
         retriever_parameters = GenieaiRetrieverParms(
             # in the current implementation, search_type should always be set to similarity_score_threshold,
             # otherwise not possible to calculate confidence scores

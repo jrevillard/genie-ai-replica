@@ -698,7 +698,7 @@ kics-iac-sast:
         # Deployment branches (release/el-salvador) keep their full name.
         # See docs/RELEASE.md §2 for branch naming rules.
         case "$BRANCH_TAG" in
-          release-[0-9][0-9]*.[0-9]*) BRANCH_TAG="v${BRANCH_TAG#release-}" ;;
+          release-[0-9]*) BRANCH_TAG="v${BRANCH_TAG#release-}" ;;
         esac
         FINAL_TAGS="${BRANCH_TAG}-${CI_COMMIT_SHORT_SHA} ${BRANCH_TAG}"
       fi

@@ -1085,7 +1085,7 @@ services:
       RETRIEVER_ARANGO_FILTER_STRATEGY: ${RETRIEVER_ARANGO_FILTER_STRATEGY:-OR}
       # Reranker strategy — "adaptive" makes the retriever fetch chunk embeddings
       # for the adaptive reranker (keep aligned with chatqna's RERANKING_STRATEGY).
-      RERANKING_STRATEGY: ${RERANKING_STRATEGY:-adaptive}
+      RERANKING_STRATEGY: ${RERANKING_STRATEGY:-slice}
       RETRIEVER_SUMMARIZER_ENABLED: ${RETRIEVER_SUMMARIZER_ENABLED:-false}
       # Graph traversal
       RETRIEVER_ARANGO_TRAVERSAL_ENABLED: ${RETRIEVER_ARANGO_TRAVERSAL_ENABLED:-true}
@@ -1153,9 +1153,9 @@ services:
       RERANK_SERVER_PORT: 8000
       # chatqna reads these and forwards them in the reranker request; they must live
       # on chatqna (the orchestrator), not only on the reranker service.
-      RERANKING_STRATEGY: ${RERANKING_STRATEGY:-adaptive}
-      RERANKING_THRESHOLD: ${RERANKING_THRESHOLD:-0.5}
-      RERANKER_TOP_N: ${RERANKER_TOP_N:-2}
+      RERANKING_STRATEGY: ${RERANKING_STRATEGY:-slice}
+      RERANKING_THRESHOLD: ${RERANKING_THRESHOLD:-0.75}
+      RERANKER_TOP_N: ${RERANKER_TOP_N:-3}
       # Retriever query params (forwarded to retriever via the HTTP request body).
       # chatqna is the AUTHORITATIVE source — in production it always sends these,
       # so the retriever service's own RETRIEVER_ARANGO_* env vars are inert

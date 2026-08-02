@@ -591,15 +591,15 @@ All spans include:
 
 ### 9.3 Reranker Strategies
 
-The reranker (`genie-ai-overlay/reranker/genieai_tei_reranker.py`) re-scores retrieved chunks with the TEI cross-encoder model and selects the subset forwarded to the LLM. The selection strategy is controlled by `RERANKING_STRATEGY` (default `adaptive`; set on the ChatQnA orchestrator and forwarded in the rerank request):
+The reranker (`genie-ai-overlay/reranker/genieai_tei_reranker.py`) re-scores retrieved chunks with the TEI cross-encoder model and selects the subset forwarded to the LLM. The selection strategy is controlled by `RERANKING_STRATEGY` (default `slice`; set on the ChatQnA orchestrator and forwarded in the rerank request):
 
 | Strategy | Behaviour |
 |----------|-----------|
-| `slice` | Top-N by reranker score (N = `RERANKER_TOP_N`). |
+| `slice` | Top-N by reranker score (N = `RERANKER_TOP_N`). **Default.** |
 | `threshold` | All chunks scoring ≥ `RERANKING_THRESHOLD`. |
 | `slice_threshold` | Top-N, but only chunks scoring ≥ `RERANKING_THRESHOLD` (early-exit on TEI's descending sort). |
 | `knee_threshold` | Keep chunks up to the "knee" of the score curve ([kneed](https://kneed.readthedocs.io/) algorithm), else all. |
-| `adaptive` | **Utility-cost selection** (see below). **Default.** |
+| `adaptive` | **Utility-cost selection** (see below). |
 
 #### Adaptive utility-cost selection
 

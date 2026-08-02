@@ -696,7 +696,7 @@ kics-iac-sast:
         BRANCH_TAG="${BRANCH_TAG//\//-}"
         # Use vX.Y instead of release-X.Y for consistency with version tags
         case "$BRANCH_TAG" in
-          release-*) BRANCH_TAG="v${BRANCH_TAG#release-}" ;;
+          release-[0-9]*) BRANCH_TAG="v${BRANCH_TAG#release-}" ;;
         esac
         FINAL_TAGS="${BRANCH_TAG}-${CI_COMMIT_SHORT_SHA} ${BRANCH_TAG}"
       fi

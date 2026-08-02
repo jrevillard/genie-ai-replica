@@ -51,7 +51,10 @@ docker exec -i $(docker ps --filter name=genieai_postgres --format '{{.Names}}')
   psql -U genieai -d postgres -f - < /tmp/pg_dump.sql
 
 # 7b. Reset passwords — pg_dumpall ALTER ROLE may fail for already-existing roles.
-# Replace with actual passwords from your .env (KONG_PG_PASSWORD, KEYCLOAK_DB_PASSWORD).
+# Reset ALL roles: genieai (superuser), kong, keycloak.
+# Replace with actual passwords from your .env (POSTGRES_PASSWORD, KONG_PG_PASSWORD, KEYCLOAK_DB_PASSWORD).
+docker exec $(docker ps --filter name=genieai_postgres --format '{{.Names}}') \
+  psql -U genieai -d postgres -c "ALTER ROLE genieai WITH PASSWORD '<POSTGRES_PASSWORD>';"
 docker exec $(docker ps --filter name=genieai_postgres --format '{{.Names}}') \
   psql -U genieai -d postgres -c "ALTER ROLE kong WITH PASSWORD '<KONG_PG_PASSWORD>';"
 docker exec $(docker ps --filter name=genieai_postgres --format '{{.Names}}') \

@@ -96,7 +96,8 @@ retriever_arango_traversal_concurrent_batches: "10"
 retriever_arango_k: "20"
 retriever_arango_fetch_k: "30"
 retriever_arango_score_threshold: "0.2"
-reranking_threshold: "0.6"
+# RERANKING_STRATEGY/TOP_N inherit the docker-compose defaults (slice / 3).
+# The legacy threshold override was removed — slice ignores thresholds.
 
 # Dataprep LLM labeling: granite-4.1-8b handles 8-chunk batches reliably
 # (validated), cutting label-call round-trips to the remote vLLM ~8x.

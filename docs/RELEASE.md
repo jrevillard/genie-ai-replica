@@ -83,14 +83,28 @@ main (trunk)         ← all development, always deployable
 - Always in a deployable state — CI runs on every commit: lint → test → config → build → scan → promote.
 - Tags are **never** created on `main` once a `release/X.Y` branch exists for that series.
 
-### `release/*` — Release Branches
+### `release/X.Y` — Version Release Branches (STRICT naming)
 
-- **One branch per MAJOR/MINOR version.** Example: `release/2.1` for the entire 2.1.x series.
-- Created from `main` at the start of the release process. The initial tag (`v2.1.0`) is the first commit on the branch.
-- **Never commit directly to a release branch.** All fixes land on `main` first, then are cherry-picked to the release branch.
-- Tags for every release in the series live on this branch: `v2.1.0`, `v2.1.1`, `v2.1.2`... all on `release/2.1`.
-- CI runs on release branches: builds and promotes images as `vX.Y-{sha}` and `vX.Y` (moving tags for the branch).
+- **Naming is strict: `release/<MAJOR>.<MINOR>` with digits only.** Example: `release/2.1`.
+  Any `release/` branch that does NOT match `release/[0-9]+.[0-9]+` is a deployment
+  branch (e.g. `release/el-salvador`), not a version release branch, and follows
+  different rules (see §2.1).
+- **One branch per MAJOR/MINOR version.** Created from `main` at the start of the
+  release process.
+- **Never commit directly to a release branch.** Fixes land on `main` first,
+  then are cherry-picked.
+- Tags: `v2.1.0`, `v2.1.1`, `v2.1.2`... all on `release/2.1`.
+- CI promotes images as `vX.Y-<sha>` and `vX.Y` (moving tags), plus `latest` for stable releases.
 - Abandoned when the next MINOR release replaces it (no merge back to `main`).
+
+### `release/<name>` — Deployment Branches
+
+- Branches matching `release/*` but NOT `release/[0-9]+.[0-9]+` (e.g. `release/el-salvador`,
+  `release/staging`).
+- **Not version branches** — no `v` prefix in Docker tags, no `latest` tag update.
+- CI promotes images as `release-<name>-<sha>` and `release-<name>` (the branch name
+  with `/` replaced by `-`).
+- Follow the same rebase-on-main workflow as version branches.
 
 ### Feature Branches
 
@@ -136,6 +150,9 @@ Mark breaking changes with a `**Breaking:**` prefix inside the entry:
 
 - **Breaking:** The `/api/chat` endpoint now requires an `Accept-Language` header.
 ```
+
+For each release containing breaking changes, update `docs/UPGRADE.md`
+with migration steps between versions (see [UPGRADE.md](UPGRADE.md)).
 
 Do not collect breaking changes in a separate section — keep them with their type.
 
@@ -186,13 +203,6 @@ A release requires a few manual actions — everything else is automated by CI:
 3. **Tag and push** (`git tag vX.Y.Z && git push`) ← triggers full CI pipeline
 
 ### 4.1 Create the Release Branch
-
-**Prerequisite (one-time setup):** The `release:create` CI job uses `CI_JOB_TOKEN`
-to call the GitLab Releases API. If your project has
-**"Limit access to this project"** enabled (default on GitLab ≥16.1), ensure the
-`api` scope is granted to `CI_JOB_TOKEN` in
-**Settings → CI/CD → Token Access → Allow access to this project with a job token**,
-or the job will fail with 403.
 
 1. **Ensure CI is green on `main`.** Check the
    [latest pipeline](https://opensource.unicc.org/un/itu/genie-ai/-/pipelines?ref=main).
@@ -486,6 +496,7 @@ Copy this checklist into the release MR or issue.
 - [ ] CI pipeline green on `main` before creating the release branch
 - [ ] `CHANGELOG.md` updated: `[Unreleased]` renamed to `[X.Y.Z]` with date
 - [ ] Breaking changes marked with `**Breaking:**` in changelog
+- [ ] `docs/UPGRADE.md` updated with migration steps for each breaking change
 - [ ] Fresh `[Unreleased]` section added
 - [ ] Reference links at bottom of changelog updated
 - [ ] Version number follows SemVer rules

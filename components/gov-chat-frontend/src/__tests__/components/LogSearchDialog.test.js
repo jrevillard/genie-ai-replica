@@ -18,7 +18,7 @@ jest.mock('../../services/adminDashboardService', () => ({
   searchLogs: mockSearchLogs
 }));
 
-jest.mock('lucide-vue-next', () => ({
+jest.mock('@lucide/vue', () => ({
   Loader2: { template: '<svg />' }
 }));
 

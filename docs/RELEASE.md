@@ -417,34 +417,51 @@ main (trunk)                     release/2.1
 
 ### Step-by-Step
 
-1. **Create a fix branch from `main`:**
+> Fixes are developed and merged on `main` through the normal MR workflow.
+> This runbook starts when the fixes are already on `main` and a PATCH release
+> needs to be cut from them.
+
+1. **Identify the commits on `main` since the last tag.** Decide at each release
+   which commits to cherry-pick — it is not a fixed rule. Review the commits and
+   pick what belongs in the PATCH (bug fixes, security, deployer-visible changes).
+   Drop internal-only changes (CI tooling, linting, refactoring) and unrelated
+   features.
 
    ```bash
-   git checkout main
-   git pull origin main
-   git checkout -b fix/<description>
+   LAST_TAG=$(git describe --tags --abbrev=0 release/2.1 2>/dev/null)
+   git log ${LAST_TAG}..main --oneline --no-merges
    ```
 
-2. **Implement the fix.** Write code + tests. Add a changelog entry under `[Unreleased]`
-   on `main` (the permanent record).
+2. **Prepare the changelog in a dedicated MR on `main` (first).** As for any
+   release, the changelog is written in a dedicated MR on `main`, before any
+   cherry-pick. This is the same mechanism as §4.1 step 5: rename `[Unreleased]`
+   to the new PATCH version, add the entries, add a fresh `[Unreleased]`, merge
+   via MR.
 
-3. **Merge to `main`** via Merge Request. Wait for CI to pass.
+   ```markdown
+   ## [2.1.1] - 2026-07-28
 
-4. **Cherry-pick to the release branch:**
+   ### Fixed
+
+   - Fix description cherry-picked from main.
+   ```
+
+3. **Cherry-pick to the release branch.** Work on a dedicated branch (e.g.
+   `prepare-2.1.1`) for easy revert, then cherry-pick the selected commits:
 
    ```bash
-   git checkout release/2.1
-   git pull origin release/2.1
-   git cherry-pick <commit-sha-from-main>
+   git worktree add /tmp/release-prep -b prepare-2.1.1 release/2.1
+   git cherry-pick <commit-sha-from-main>...
    ```
 
-   If the cherry-pick conflicts on `CHANGELOG.md` (e.g., `main` has new `[Unreleased]`
-   entries not present on the release branch), resolve manually: keep the release
-   branch's changelog intact and re-apply only the fix's changelog line.
+   Cherry-pick commits in chronological order so they apply cleanly. Resolve
+   conflicts by analyzing. If a cherry-pick touches `CHANGELOG.md` (e.g., `main`
+   has entries not present on the release branch), resolve manually: keep the
+   release branch's changelog intact and re-apply only the fix's changelog line.
 
-5. **Move the changelog entry on the release branch.** The cherry-pick added
-   the fix under `[Unreleased]` on the release branch. Move it to a new PATCH
-   version section:
+4. **Finalize the changelog on the release branch.** The changelog cherry-pick
+   brings the `[2.1.1]` section already renamed (copy of `main`). Verify it is
+   coherent on the release branch:
 
    ```markdown
    ## [2.1.1] - 2026-07-28
@@ -457,9 +474,12 @@ main (trunk)                     release/2.1
    Remove the same entry from the `[Unreleased]` section on the release branch
    to avoid duplication. Update the reference links at the bottom.
 
-6. **Tag from the release branch:**
+5. **Merge and tag from the release branch.** First merge the preparation branch
+   into `release/2.1` (via MR), then tag:
 
    ```bash
+   git checkout release/2.1 && git pull origin release/2.1
+   git merge prepare-2.1.1        # or merge via MR
    git tag v2.1.1
    git push origin release/2.1 v2.1.1
    ```
@@ -468,7 +488,7 @@ main (trunk)                     release/2.1
    the tag. Section 4.2 only pushes the tag because the branch commit already existed
    on the remote from step 4.1.
 
-7. **Deploy** with the new PATCH tag.
+6. **Deploy** with the new PATCH tag.
 
    The tag triggers the same CI pipeline as the initial release: build → scan → promote.
    The promote job tags Docker images as `v2.1.1` and updates the `latest` Docker tag

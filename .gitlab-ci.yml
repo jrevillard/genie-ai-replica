@@ -1872,9 +1872,11 @@ promote:tempo-proxy:
 
 # Create GitLab Release with changelog content for the tagged version
 # Uses GitLab's native `release` keyword — no token/scope setup needed.
+# Pin the official release-cli image: the runner does not inject the
+# release-cli binary into job containers (observed "release-cli: not found").
 release:create:
   stage: release
-  image: alpine:3.21
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
   script:
     - |
       VERSION="${CI_COMMIT_TAG#v}"

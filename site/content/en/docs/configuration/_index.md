@@ -5,10 +5,6 @@ weight: 8
 section: "configuration"
 ---
 
-# Configuration
-
-Operator-facing configuration guides for Keycloak and external identity providers.
-
 ## Documents in this section
 
 1. [Keycloak Admin Guide](/docs/configuration/keycloak-admin-guide/)

@@ -92,9 +92,9 @@ NGINX_PID=$!
 trap 'echo "Received shutdown signal, stopping nginx..."; kill $NGINX_PID; wait $NGINX_PID; exit 0' TERM INT QUIT
 
 # Flag-check loop in foreground (PID 1)
-# Checks every 5 minutes for a reload signal from certbot
+# Checks every 60s for a reload signal from certbot
 while true; do
-    sleep 300
+    sleep 60
 
     # If nginx died, exit so Docker can restart the container
     if ! kill -0 $NGINX_PID 2>/dev/null; then

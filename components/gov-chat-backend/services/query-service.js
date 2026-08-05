@@ -294,13 +294,16 @@ class QueryService {
     }
 
     if (!queryData.context) {
-      queryData.context = { categoryLabel: 'General', serviceLabels: [] };
+      queryData.context = { categoryLabel: null, serviceLabels: [] };
     } else {
       if (!Array.isArray(queryData.context.serviceLabels)) {
         queryData.context.serviceLabels = [];
       }
-      if (!queryData.context.categoryLabel) {
-        queryData.context.categoryLabel = 'General';
+      // Preserve null/undefined categoryLabel — null means "no category filter"
+      // (chatqna treats a missing categoryLabel as no category-level filter).
+      // Do NOT default to 'General' — that would inject a non-matching label.
+      if (queryData.context.categoryLabel === undefined) {
+        queryData.context.categoryLabel = null;
       }
     }
 

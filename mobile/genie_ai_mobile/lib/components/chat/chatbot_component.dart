@@ -79,6 +79,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // Context & Related Data
   String? _selectedCategoryId;
   String _selectedCategoryName = "";
+  // English KB labels for the retriever filter, sourced from a Quick Help button's
+  // serviceLabels. Set in _quickHelpPressed, cleared after the stream completes.
+  // Sidebar tree selections use _selectedCategoryId/_selectedCategoryName instead.
+  List<String> _activeServiceLabels = [];
   List<dynamic> _relatedDocuments = [];
 
   // Quick Help Configuration
@@ -197,6 +201,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       final List<Map<String, dynamic>> loadedButtons = [];
 
       for (var btn in buttonsJson) {
+        // Skip hidden buttons (no matching corpus content).
+        if (btn['hidden'] == true) {
+          continue;
+        }
         // Safe parsing: use map access with defaults to prevent null crashes
         final appearance = btn['appearance'] as Map<String, dynamic>?;
         final iconMap = appearance?['icon'] as Map<String, dynamic>?;
@@ -218,9 +226,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _currentLocale,
         );
 
+        // Explicit English KB labels for the retriever filter (may be null).
+        final serviceLabels = btn['serviceLabels'] as List<dynamic>?;
+
         loadedButtons.add({
           'id': btn['id'],
           'category': btn['category'],
+          'serviceLabels': serviceLabels ?? const <dynamic>[],
           'action': action ?? {},
           'appearance': appearance ?? {},
           'iconAsset': localIconAsset,
@@ -426,7 +438,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _streamSubscription = null;
 
     final uri = Uri.parse('$streamBaseUrl/api/queries/stream');
-    final hasContext = _selectedCategoryId != null;
+    // Quick Help sets _activeServiceLabels; sidebar sets _selectedCategoryId.
+    // Either constitutes a context-filtered query.
+    final hasContext =
+        _selectedCategoryId != null || _activeServiceLabels.isNotEmpty;
     final request = http.Request('POST', uri)
       ..headers['Content-Type'] = 'application/json'
       ..headers['Accept'] = 'text/event-stream'
@@ -437,8 +452,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         if (hasContext) ...{
           'messages': messagesForApi,
           'context': {
-            'categoryLabel': _selectedCategoryName,
-            'serviceLabels': <String>[],
+            'categoryLabel': _selectedCategoryName.isNotEmpty
+                ? _selectedCategoryName
+                : null,
+            'serviceLabels': _activeServiceLabels,
             'language': I18nService().currentLocale.languageCode.toUpperCase(),
           },
           'contextOption': 'conversation-with-context-labels',
@@ -575,6 +592,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 _isStreaming = false;
                 _isLoading = false;
               });
+
+              // NOTE: _activeServiceLabels is NOT cleared here. Quick Help is a
+              // persistent mode (parity with web: the selection stays in
+              // selectedContextItems until replaced/removed). Follow-up manual
+              // messages in the same Quick Help session remain filtered by the
+              // labels. Cleared only in _quickHelpPressed (re-set) or on context reset.
 
               if (sources != null && sources!.isNotEmpty) {
                 _relatedDocuments = _mergeUniqueDocs(
@@ -716,12 +739,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final String visibleTextKey = action['visibleText']?.toString() ?? '';
     final String hiddenPromptKey = action['hiddenPrompt']?.toString() ?? '';
 
-    // If both are empty, just enter Chat Mode (close overlay, focus is on input)
+    // If both are empty, just enter Chat Mode: close overlay, clear all
+    // label filters so the retriever sees all documents, focus input.
     if (visibleTextKey.isEmpty && hiddenPromptKey.isEmpty) {
       setState(() {
         _showQuickHelpOverlay = false;
+        _activeServiceLabels = [];
+        _selectedCategoryId = null;
+        _selectedCategoryName = '';
       });
-      // Ensure the keyboard/input is ready
       _inputFocusNode.requestFocus();
       return;
     }
@@ -735,8 +761,21 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         button['resolvedHiddenPrompt'] ??
         (hiddenPromptKey.isNotEmpty ? tr(hiddenPromptKey) : visibleText);
 
+    // Set the retriever filter labels from the button config (English KB labels).
+    // Consumed by _sendStreaming when building the request context.
+    final List<String> labels =
+        (button['serviceLabels'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        const [];
+
     setState(() {
       _showQuickHelpOverlay = false;
+      _activeServiceLabels = labels;
+      // Quick Help is a mode switch: clear any prior sidebar category selection
+      // so the request is filtered by the Quick Help labels ONLY (not both).
+      _selectedCategoryId = null;
+      _selectedCategoryName = '';
     });
 
     // Send using the 2-prompt system

@@ -1,0 +1,2582 @@
+stages:
+  - lint
+# CVE remediation: force full rebuild (2026-07-30)
+  - test
+  - config      # env-var coverage + changelog validation + dependency-lock freshness (fail-fast before build)
+  - build       # publish candidate images to GitLab Container Registry (tmp/ namespace)
+  - scan        # GitLab official Container Scanning template (advisory + dashboard)
+  - e2e
+  - promote     # retag tested digests to deployable tags (main/tags only)
+  - release     # create GitLab Release from changelog (tag pipelines only)
+  - scheduled
+  - manual
+  - deploy
+
+variables:
+  FLUTTER_VERSION: "3.41.7"
+  FLUTTER_ARCHIVE: "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz"
+  # --- Container build/scan/promote pipeline (see docs/adr/0001-gitlab-registry-build-scan-pipeline.md) ---
+  GIT_DEPTH: "0"  # full history needed for CI_COMMIT_SHORT_SHA stability across matrix jobs
+  TRIVY_IMAGE_TAG: "aquasec/trivy:0.57.0"
+  SYFT_VERSION: "v1.26.0"
+
+# Prevent duplicate branch+MR pipelines — first match wins
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+
+# --- Hidden job templates (DRY, reusable by Story 1.3 test stage) ---
+
+.node_base:
+  image: node:20-alpine
+  interruptible: true
+
+.lint_node:
+  extends: .node_base
+  stage: lint
+
+.test_node:
+  extends: .node_base
+  stage: test
+  variables:
+    NODE_ENV: test
+  artifacts:
+    when: always
+    expire_in: 7 days
+
+.flutter_base:
+  image: debian:bookworm-slim
+  interruptible: true
+  variables:
+    PUB_CACHE: $CI_PROJECT_DIR/.pub-cache
+  cache:
+    - key: "flutter-sdk-${FLUTTER_VERSION}"
+      paths:
+        - flutter-sdk/
+    - key:
+        files:
+          - mobile/genie_ai_mobile/pubspec.lock
+      paths:
+        - mobile/genie_ai_mobile/.dart_tool/
+        - .pub-cache/
+      fallback_keys:
+        - "flutter-deps-$CI_DEFAULT_BRANCH"
+        - "flutter-deps-"
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git xz-utils python3 python3-venv python3-pip
+    - |
+      if [ ! -d "flutter-sdk/bin" ]; then
+        echo "Installing Flutter ${FLUTTER_VERSION}..."
+        curl -fsSL "${FLUTTER_ARCHIVE}" | tar -xJ
+        mv flutter flutter-sdk
+      fi
+    - git config --global --add safe.directory "$PWD/flutter-sdk"
+    - export PATH="$PWD/flutter-sdk/bin:$PATH"
+    - flutter --version
+    - cd mobile/genie_ai_mobile
+    - cp patrol_test/e2e_secrets.dart.example patrol_test/e2e_secrets.dart
+    - flutter pub get
+
+# --- E2E integration base (shared by e2e:integration + scheduled:integration) ---
+
+.e2e_integration_base:
+  image: docker:24
+  variables:
+    COMPOSE_PROJECT_NAME: "ci-$CI_PIPELINE_ID"
+    # Pull candidate images from the tmp/ quarantine namespace (where build:image
+    # pushes pre-promote candidates). GENIE_AI_GLOBAL_TAG matches the candidate tag.
+    GENIE_AI_REGISTRY: "$CI_REGISTRY_IMAGE/tmp"  # e2e pulls candidates from tmp/ namespace
+  allow_failure: false
+  tags: [docker]
+  timeout: 30m
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+  before_script:
+    - apk add --no-cache docker-cli-compose curl
+    # Authenticate to the GitLab registry so `docker compose pull` succeeds
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - if [ -n "$DOCKER_HUB_USER" ]; then echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin docker.io; fi  # avoid anonymous Docker Hub rate limits
+    - |
+      for p in $(docker compose ls -q 2>/dev/null | grep '^ci-'); do
+        echo "Cleaning up previous project: $p"
+        docker compose -p "$p" down -v --remove-orphans 2>/dev/null || true
+      done
+    - docker network prune -f 2>/dev/null || true
+  script:
+    - cp env .env
+    - sed -i '/^GENIE_AI_[A-Z0-9_]*_IMAGE=/ s|^|# |' .env
+    - |
+      while IFS='=' read -r var _; do
+        case "$var" in ''|[!A-Z_]*) continue ;; esac
+        eval "val=\${$var:-}"
+        if [ -n "$val" ]; then
+          sed -i "s|^${var}=.*|${var}=${val}|" .env
+        fi
+      done < env
+    - |
+      for var in EMAIL_FROM EMAIL_HOST KEYCLOAK_VERIFY_EMAIL; do
+        if grep -q "^${var}=$" .env; then
+          case "$var" in
+            EMAIL_FROM) sed -i "s|^${var}=.*|${var}=noreply@ci-genie-ai.local|" .env ;;
+            EMAIL_HOST) sed -i "s|^${var}=.*|${var}=localhost|" .env ;;
+            KEYCLOAK_VERIFY_EMAIL) sed -i "s|^${var}=.*|${var}=false|" .env ;;
+          esac
+        fi
+      done
+    - |
+      # CI runs inside the Docker network — use the nginx service name so
+      # Keycloak advertises URLs resolvable from the CI runner container.
+      # Mobile tests bypass OIDC discovery (direct token injection) so this
+      # only matters for Playwright web E2E.
+      echo "NGINX_PUBLIC_DOMAIN=nginx" >> .env
+      # Backend must verify JWTs via JWKS at https://nginx/auth/... which uses
+      # a self-signed certificate.  Safe for CI — never use in production.
+      echo "NODE_TLS_REJECT_UNAUTHORIZED=0" >> .env
+    # Pull pre-built candidate images from the GitLab registry so E2E tests run
+    # against the exact artifact produced by build:image (not a local rebuild).
+    # Candidate tag matches build:image's CANDIDATE_TAG logic.
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        E2E_TAG="mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
+      else
+        E2E_TAG="pending-${CI_COMMIT_SHORT_SHA}"
+      fi
+      sed -i "s|^GENIE_AI_GLOBAL_TAG=.*|GENIE_AI_GLOBAL_TAG=${E2E_TAG}|" .env
+      echo "E2E pulling candidate images tagged :${E2E_TAG}"
+    # Pull all custom services from the registry. `up --no-build` below fails
+    # loudly if a build:image job didn't publish its candidate, surfacing the
+    # breakage here instead of silently rebuilding a different artifact.
+    - docker compose pull frontend backend document-repository nginx kong-config db-migrations keycloak keycloak-config postgres-init || true
+    - docker compose up -d --no-build || (docker compose logs --tail=50 > docker-compose-logs.txt 2>&1; cat docker-compose-logs.txt; exit 1)
+    - |
+      for i in $(seq 1 60); do
+        if docker exec "ci-${CI_PIPELINE_ID}-backend-1" curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+          echo "Backend healthy"
+          break
+        fi
+        echo "Waiting for backend... ($i/60)"
+        sleep 5
+      done
+    - docker exec "ci-${CI_PIPELINE_ID}-backend-1" curl -sf http://localhost:3000/api/health || (docker compose logs --tail=50 > docker-compose-logs.txt 2>&1; cat docker-compose-logs.txt; exit 1)
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - docker-compose-logs.txt
+
+# --- Shared: Docker compose network connection + NGINX IP discovery ---
+# Used by .e2e_mobile_base and .e2e_web_base to mutualize networking logic.
+.connect_compose_network: &connect_compose_network
+  - |
+    COMPOSE_NET=$(docker network ls --filter "label=com.docker.compose.project=ci-${CI_PIPELINE_ID}" --format '{{.Name}}' | head -1)
+    if [ -z "$COMPOSE_NET" ]; then
+      COMPOSE_NET="ci-${CI_PIPELINE_ID}_default"
+    fi
+    echo "Compose network: $COMPOSE_NET"
+    CI_CONTAINER_ID=$(docker ps --filter "label=com.gitlab.gitlab-runner.job.id=$CI_JOB_ID" --format '{{.ID}}' | head -1)
+    if [ -z "$CI_CONTAINER_ID" ]; then
+      CI_CONTAINER_ID=$(docker ps --filter "name=runner" --format '{{.Names}}' | grep "concurrent" | head -1 | sed 's/-predefined$//')
+    fi
+    echo "CI container: $CI_CONTAINER_ID"
+    if docker network inspect "$COMPOSE_NET" >/dev/null 2>&1; then
+      docker network connect "$COMPOSE_NET" "$CI_CONTAINER_ID" 2>/dev/null || true
+      echo "CI container connected to compose network: $COMPOSE_NET"
+    else
+      echo "WARNING: Compose network $COMPOSE_NET not found — tests may fail"
+    fi
+    NGINX_CONTAINER=$(docker ps --filter "name=nginx" --format "{{.Names}}" | grep "ci-" | head -1)
+    if [ -n "$NGINX_CONTAINER" ]; then
+      NGINX_IP=$(docker inspect "$NGINX_CONTAINER" --format "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}" | awk '{print $1}')
+      echo "Nginx container: $NGINX_CONTAINER at $NGINX_IP"
+    else
+      echo "WARNING: No nginx container found in compose stack"
+    fi
+
+# --- E2E mobile base (shared by patrol:e2e + scheduled:e2e-mobile) ---
+
+.e2e_mobile_base:
+  extends: .flutter_base
+  allow_failure: true
+  tags: [kvm]
+  timeout: 30m
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+  variables:
+    EMULATOR_IMAGE: "us-docker.pkg.dev/android-emulator-268719/images/30-google-x64:30.1.2"
+    EMULATOR_EXTRA_ARGS: "-memory 2048 -no-snapshot"
+  cache:
+    - key: "flutter-sdk-${FLUTTER_VERSION}"
+      paths:
+        - flutter-sdk/
+    - key: "android-sdk-36"
+      paths:
+        - android-sdk/
+    - key:
+        files:
+          - mobile/genie_ai_mobile/android/gradle-wrapper.properties
+          - mobile/genie_ai_mobile/pubspec.lock
+        prefix: gradle-build
+      paths:
+        - mobile/genie_ai_mobile/android/.gradle/
+        - mobile/genie_ai_mobile/build/
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git xz-utils adb docker.io python3 default-jdk-headless unzip socat
+    - |
+      if [ ! -d "flutter-sdk/bin" ]; then
+        echo "Installing Flutter ${FLUTTER_VERSION}..."
+        curl -fsSL "${FLUTTER_ARCHIVE}" | tar -xJ
+        mv flutter flutter-sdk
+      fi
+    - git config --global --add safe.directory "$PWD/flutter-sdk"
+    - export PATH="$PWD/flutter-sdk/bin:$PATH"
+    - flutter --version
+    - cd mobile/genie_ai_mobile
+    - flutter pub get
+  script:
+    - |
+      for var in KEYCLOAK_ADMIN_PASSWORD KC_MOBILE_CLIENT_ID KC_MOBILE_REDIRECT_SCHEME; do
+        eval "val=\${$var:-}"
+        if [ -z "$val" ]; then
+          echo "ERROR: Missing CI variable: $var"
+          echo "Set it in Settings > CI/CD > Variables"
+          exit 1
+        fi
+      done
+    - |
+      export JAVA_HOME=$(readlink -f $(which java) | sed 's:/bin/java::')
+      echo "JAVA_HOME=$JAVA_HOME"
+      if [ ! -d "${CI_PROJECT_DIR}/android-sdk/cmdline-tools/latest/bin" ]; then
+        echo "Installing Android SDK command-line tools..."
+        ANDROID_SDK="${CI_PROJECT_DIR}/android-sdk"
+        mkdir -p "$ANDROID_SDK/cmdline-tools"
+        cd /tmp
+        curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o cmdline-tools.zip
+        unzip -q cmdline-tools.zip
+        mv cmdline-tools "$ANDROID_SDK/cmdline-tools/latest"
+        rm -f cmdline-tools.zip
+        cd "${CI_PROJECT_DIR}/mobile/genie_ai_mobile"
+      else
+        echo "Android SDK command-line tools cached"
+      fi
+      export ANDROID_HOME="${CI_PROJECT_DIR}/android-sdk"
+      export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+      echo "sdkmanager at: $(which sdkmanager)"
+      yes | sdkmanager --licenses || true
+      echo "Installing Android SDK components..."
+      sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+      echo "Android SDK ready"
+    - *connect_compose_network
+    - export PATH="$PATH:$PUB_CACHE/bin:${CI_PROJECT_DIR}/android-sdk/cmdline-tools/latest/bin:${CI_PROJECT_DIR}/android-sdk/platform-tools"
+    - export ANDROID_HOME="${CI_PROJECT_DIR}/android-sdk"
+    - export GRADLE_OPTS="-Xmx1024m -XX:+HeapDumpOnOutOfMemoryError"
+    - |
+      cat > "${CI_PROJECT_DIR}/mobile/genie_ai_mobile/android/gradle.properties" << 'GRADLE_PROPS'
+      org.gradle.jvmargs=-Xmx1024m -XX:MaxMetaspaceSize=384m -XX:+HeapDumpOnOutOfMemoryError
+      org.gradle.workers.max=2
+      android.useAndroidX=true
+      android.enableJetifier=false
+      org.gradle.daemon=false
+      kotlin.incremental=true
+      kotlin.daemon.jvmargs=-Xmx512m -XX:MaxMetaspaceSize=128m
+      GRADLE_PROPS
+    - |
+      echo "🔑 Generating e2e_secrets.dart from CI variables..."
+      KC_PWD="${KEYCLOAK_ADMIN_PASSWORD}"
+      cat > patrol_test/e2e_secrets.dart << SECRETS
+      // E2E test secrets — generated from CI variables. DO NOT COMMIT.
+      class E2eSecrets {
+        const E2eSecrets({required this.keycloakAdminPassword});
+        final String keycloakAdminPassword;
+      }
+      const e2eSecrets = E2eSecrets(
+        keycloakAdminPassword: r'$KC_PWD',
+      );
+      SECRETS
+    - |
+      dart pub global activate patrol_cli 4.3.1
+      export PATH="$PATH:$HOME/.pub-cache/bin"
+    - |
+      EMULATOR_NAME="emulator-${CI_PIPELINE_ID}"
+      echo "Starting Android emulator on compose network..."
+      docker run -d --name "$EMULATOR_NAME" \
+        --device /dev/kvm \
+        --network "$COMPOSE_NET" \
+        --tmpfs /root:mode=1777 \
+        -e EMULATOR_ARGS="$EMULATOR_EXTRA_ARGS" \
+        "$EMULATOR_IMAGE"
+      EMULATOR_IP=$(docker inspect "$EMULATOR_NAME" --format "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}" | awk '{print $1}')
+      EMULATOR_ADDR="${EMULATOR_IP}:5555"
+      echo "Emulator at $EMULATOR_ADDR"
+      for i in $(seq 1 60); do
+        EMU_STATUS=$(docker inspect "$EMULATOR_NAME" --format '{{.State.Status}}' 2>/dev/null || echo "gone")
+        if [ "$EMU_STATUS" = "exited" ] || [ "$EMU_STATUS" = "dead" ] || [ "$EMU_STATUS" = "gone" ]; then
+          echo "Emulator container crashed (status: $EMU_STATUS)"
+          docker logs "$EMULATOR_NAME" --tail 50 2>&1 || true
+          exit 1
+        fi
+        if adb connect "$EMULATOR_ADDR" 2>/dev/null && adb -s "$EMULATOR_ADDR" shell getprop sys.boot_completed 2>/dev/null | grep -q 1; then
+          echo "Emulator ready"
+          break
+        fi
+        echo "Waiting for emulator... ($i/60)"
+        sleep 5
+      done
+      adb -s "$EMULATOR_ADDR" shell getprop sys.boot_completed | grep -q 1 || {
+        echo "Emulator failed to boot"
+        docker inspect "$EMULATOR_NAME" --format '{{.State.Status}} (exit code: {{.State.ExitCode}})' 2>/dev/null || true
+        docker logs "$EMULATOR_NAME" --tail 50 2>&1 || true
+        exit 1
+      }
+    - |
+      if [ -z "$NGINX_IP" ]; then
+        echo "❌ Cannot set up port forwarding — NGINX_IP not discovered"
+        exit 1
+      fi
+      echo "🔗 Setting up port forwarding: emulator:8443 → CI runner:18443 → nginx (${NGINX_IP}):443"
+      socat TCP-LISTEN:18443,fork,reuseaddr TCP:${NGINX_IP}:443 &
+      SOCAT_PID=$!
+      sleep 1
+      if ! kill -0 "$SOCAT_PID" 2>/dev/null; then
+        echo "❌ socat failed to start — cannot forward traffic to nginx"
+        exit 1
+      fi
+      echo "✅ socat forwarding 0.0.0.0:18443 → ${NGINX_IP}:443"
+      SOCAT_TEST=$(curl -sk -o /dev/null -w "%{http_code}" https://localhost:18443/auth/realms/genie 2>/dev/null || echo "000")
+      echo "socat → nginx test: HTTP ${SOCAT_TEST}"
+      adb disconnect "${EMULATOR_ADDR}" 2>/dev/null || true
+      sleep 1
+      adb connect "${EMULATOR_ADDR}"
+      adb -s "${EMULATOR_ADDR}" reverse tcp:8443 tcp:18443
+      echo "✅ adb reverse: emulator 127.0.0.1:8443 → host:18443"
+      adb -s "${EMULATOR_ADDR}" reverse --list
+    - |
+      export ADB_DEVICE="$EMULATOR_ADDR"
+      echo "ADB_DEVICE=$ADB_DEVICE"
+
+      adb -s "$ADB_DEVICE" shell getprop sys.boot_completed 2>/dev/null | grep -q 1 || {
+        echo "❌ Device $ADB_DEVICE not online"
+        exit 1
+      }
+      echo "✅ Device $ADB_DEVICE online and verified"
+
+      adb -s "$ADB_DEVICE" reverse tcp:8443 tcp:18443 2>/dev/null || {
+        echo "⚠️  adb reverse failed — reconnecting..."
+        adb disconnect "$ADB_DEVICE" 2>/dev/null || true
+        sleep 1
+        adb connect "$ADB_DEVICE"
+        adb -s "$ADB_DEVICE" reverse tcp:8443 tcp:18443
+      }
+      echo "✅ adb reverse re-confirmed before tests"
+      adb -s "$ADB_DEVICE" reverse --list
+
+      export CI_NGINX_URL="https://${NGINX_IP}"
+      export ADB_DEVICE="$ADB_DEVICE"
+      export EXTRA_DART_DEFINES=$'E2E_KEYCLOAK_URL=https://127.0.0.1:8443/auth\nE2E_REALM=genie\nE2E_CLIENT_ID=genie-mobile-e2e\nE2E_REDIRECT_SCHEME=com.itu.genieai.e2e\nE2E_BACKEND_URL=https://127.0.0.1:8443'
+      cd "$CI_PROJECT_DIR"
+
+      # Delegate test execution to patrol-wrapper.sh
+      # (keepalive is managed internally — auto-stops after 5 min, during Gradle build only)
+      ./mobile/genie_ai_mobile/patrol-wrapper.sh --flavor e2e -d "$ADB_DEVICE"
+      exit $?
+  after_script:
+    - mkdir -p e2e-logs
+    - docker inspect "emulator-${CI_PIPELINE_ID}" > e2e-logs/emulator-status.json 2>&1 || true
+    - docker logs "emulator-${CI_PIPELINE_ID}" > e2e-logs/emulator.log 2>&1 || true
+    - docker rm -f "emulator-${CI_PIPELINE_ID}" 2>/dev/null || true
+  artifacts:
+    when: always
+    expire_in: 2 days
+    paths:
+      - e2e-logs/
+
+# --- E2E web base (shared by e2e:playwright + scheduled:e2e-web) ---
+
+.e2e_web_base:
+  extends: .node_base
+  image: node:20-bookworm-slim
+  allow_failure: false
+  tags: [docker]
+  timeout: 30m
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+  variables:
+    PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.cache/ms-playwright"
+  cache:
+    - key:
+        files:
+          - package-lock.json
+        prefix: e2e-playwright
+      paths:
+        - node_modules/
+      fallback_keys:
+        - "e2e-playwright-$CI_DEFAULT_BRANCH"
+        - "e2e-playwright-"
+    - key:
+        files:
+          - package-lock.json
+        prefix: e2e-playwright-browsers
+      paths:
+        - .cache/ms-playwright/
+  before_script:
+    - apt-get update && apt-get install -y docker.io curl python3
+    - mkdir -p reports
+    - npm ci
+    - npx playwright install --with-deps chromium
+  script:
+    - *connect_compose_network
+    - |
+      # Use Docker service name for Keycloak OIDC compatibility.
+      if curl -sk -o /dev/null -w "%{http_code}" https://nginx/api/health 2>/dev/null | grep -qE "^[23]"; then
+        echo "Nginx reachable via service name"
+        E2E_BASE_URL="https://nginx"
+      elif [ -n "$NGINX_IP" ]; then
+        echo "Falling back to NGINX_IP: ${NGINX_IP}"
+        E2E_BASE_URL="https://${NGINX_IP}"
+      else
+        echo "ERROR: Cannot reach nginx - neither service name nor IP"
+        exit 1
+      fi
+      for var in KEYCLOAK_ADMIN_PASSWORD; do
+        eval "val=\${$var:-}"
+        if [ -z "$val" ]; then
+          echo "ERROR: Missing CI variable: $var"
+          exit 1
+        fi
+      done
+    - |
+      # ROPC setup (required by conversation-history tests via getUserToken)
+      # All requests go through nginx/Kong — same path as production traffic.
+      KC_URL="${E2E_BASE_URL}/auth"
+      KC_PWD="${KEYCLOAK_ADMIN_PASSWORD}"
+      ADMIN_TOKEN=""
+      CLIENT_UUID=""
+      for i in $(seq 1 90); do
+        if [ -z "$ADMIN_TOKEN" ]; then
+          ADMIN_TOKEN=$(curl -sk -X POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
+            -d "client_id=admin-cli" -d "username=admin" -d "password=${KC_PWD}" -d "grant_type=password" \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('access_token',''))" 2>/dev/null)
+        fi
+        if [ -n "$ADMIN_TOKEN" ]; then
+          CLIENT_UUID=$(curl -sk "${KC_URL}/admin/realms/genie/clients?clientId=genie-app" \
+            -H "Authorization: Bearer $ADMIN_TOKEN" \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id']) if d else ''" 2>/dev/null || true)
+        fi
+        if [ -n "$CLIENT_UUID" ]; then
+          echo "Keycloak ready after ${i}s — client UUID: ${CLIENT_UUID}"
+          break
+        fi
+        echo "Waiting for Keycloak via nginx/Kong... ($i/90)"
+        sleep 2
+      done
+      if [ -z "$CLIENT_UUID" ]; then
+        echo "ERROR: genie-app client not found via nginx/Kong after 180s"
+        exit 1
+      fi
+      curl -sk -X PUT "${KC_URL}/admin/realms/genie/clients/${CLIENT_UUID}" \
+        -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+        -d '{"directAccessGrantsEnabled": true}'
+      echo "ROPC enabled for genie-app client"
+      # Create test user for E2E tests (required by loginViaUI and getUserToken)
+      EXISTING=$(curl -sk "${KC_URL}/admin/realms/genie/users?username=testuser" \
+        -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null)
+      if [ "${EXISTING:-0}" -eq 0 ]; then
+        CREATE_STATUS=$(curl -sk -o /dev/null -w "%{http_code}" -X POST "${KC_URL}/admin/realms/genie/users" \
+          -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+          -d '{"username":"testuser","email":"testuser@e2e.test","emailVerified":true,"firstName":"Test","lastName":"User","enabled":true,"credentials":[{"type":"password","value":"TestPass123!","temporary":false}]}')
+        if [ "$CREATE_STATUS" -ne 201 ]; then
+          echo "ERROR: testuser creation failed (HTTP $CREATE_STATUS)"
+          exit 1
+        fi
+        echo "testuser created (HTTP $CREATE_STATUS)"
+      else
+        echo "testuser already exists"
+      fi
+      # Assign admin realm role to test user (required for document upload/delete)
+      USER_ID=$(curl -sk "${KC_URL}/admin/realms/genie/users?username=testuser" \
+        -H "Authorization: Bearer $ADMIN_TOKEN" \
+        | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])" || true)
+      ADMIN_ROLE=$(curl -sk "${KC_URL}/admin/realms/genie/roles" \
+        -H "Authorization: Bearer $ADMIN_TOKEN" \
+        | python3 -c "import sys,json; roles=[r for r in json.load(sys.stdin) if r['name']=='admin']; print(roles[0]['id'] if roles else '')" || true)
+      if [ -n "$ADMIN_ROLE" ] && [ -n "$USER_ID" ]; then
+        curl -sk -X POST "${KC_URL}/admin/realms/genie/users/${USER_ID}/role-mappings/realm" \
+          -H "Authorization: Bearer $ADMIN_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "[{\"id\":\"${ADMIN_ROLE}\",\"name\":\"admin\"}]" && echo "Assigned admin role to testuser" || echo "WARNING: admin role assignment failed"
+      else
+        echo "WARNING: Could not assign admin role (role or user not found). Document tests may fail."
+      fi
+      # Save vars for cleanup in after_script
+      echo "E2E_BASE_URL=${E2E_BASE_URL}" > .e2e-ropc-env
+      echo "ADMIN_TOKEN=${ADMIN_TOKEN}" >> .e2e-ropc-env
+      echo "CLIENT_UUID=${CLIENT_UUID}" >> .e2e-ropc-env
+    - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ tests/e2e/documents/ --project=chromium
+  after_script:
+    - |
+      # ROPC cleanup - CRITICAL: always revert, even on test failure
+      if [ -f .e2e-ropc-env ]; then
+        . ./.e2e-ropc-env
+        KC_URL="${E2E_BASE_URL}/auth"
+        curl -sk -X PUT "${KC_URL}/admin/realms/genie/clients/${CLIENT_UUID}" \
+          -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+          -d '{"directAccessGrantsEnabled": false}' 2>/dev/null && echo "ROPC disabled" || echo "WARNING: ROPC cleanup failed"
+        rm -f .e2e-ropc-env
+      fi
+
+    - mkdir -p e2e-logs
+    - docker compose -p "ci-${CI_PIPELINE_ID}" logs > e2e-logs/docker-compose.log 2>&1 || true
+  artifacts:
+    when: always
+    expire_in: 2 days
+    paths:
+      - e2e-logs/
+      - reports/
+    reports:
+      junit: reports/playwright-report.xml
+
+# GitLab official Container Scanning template — produces the correct-schema report
+# (GitLab security dashboard + MR widget) + CycloneDX SBOM. Overridden below to
+# scan each of the 16 candidate images in tmp/. Blocking on HIGH/CRITICAL is via
+# MR approval rules (see docs/adr/0001).
+include:
+  # --- Security testing suite (GitLab Ultimate) ---
+  # All run in the `test` stage, advisory (allow_failure), findings land in the
+  # security dashboard + MR widget. Blocking via MR approval rules, same model
+  # as container scanning.
+  - template: Jobs/Secret-Detection.gitlab-ci.yml   # leaked tokens/passwords in source + history
+  - template: Jobs/SAST.gitlab-ci.yml               # source-code vulns (JS/Vue, Python, Dart)
+  - template: Jobs/Dependency-Scanning.gitlab-ci.yml # known vulns in npm/pip/pub deps
+  - template: Jobs/SAST-IaC.gitlab-ci.yml           # misconfigs in docker-compose / ansible / k8s
+
+# Override the security templates' default rules (which run on branch pipelines
+# only via `if: $CI_COMMIT_BRANCH`) so they ALSO run on MR + release branches —
+# pre-merge coverage. Applied to the jobs active for the GENIE.AI stack
+# (JS/Vue + Python + npm/pip deps + IaC + secrets). Other language-specific
+# SAST jobs keep template defaults (won't activate for absent languages).
+.security_run_rules: &security_run_rules
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    when: never
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  - if: $CI_COMMIT_BRANCH =~ /^release\//   # release branches build candidates too
+  - if: $CI_COMMIT_BRANCH =~ /^release\//
+
+secret_detection:
+  rules: *security_run_rules
+semgrep-sast:
+  rules: *security_run_rules
+# nodejs-scan-sast is DEPRECATED (GitLab 16.8, removed 17.0) — the template
+# ships it as an exit-1 stub. semgrep-sast covers JS. Disable it explicitly.
+nodejs-scan-sast:
+  rules:
+    - when: never
+# spotbugs-sast is the Java analyzer — GENIE.AI has no Java, so it tries to
+# build a non-existent Gradle project and fails (advisory noise). semgrep-sast
+# covers our stack. Disable it.
+spotbugs-sast:
+  rules:
+    - when: never
+gemnasium-dependency_scanning:
+  rules: *security_run_rules
+gemnasium-python-dependency_scanning:
+  rules: *security_run_rules
+kics-iac-sast:
+  rules: *security_run_rules
+
+.build_template: &build_template
+  stage: build
+  image: docker:28
+  tags: [docker]
+  interruptible: true
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - if [ -n "$DOCKER_HUB_USER" ]; then echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin docker.io; fi
+  script:
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        CANDIDATE_TAG="mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
+      else
+        CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
+      fi
+      REGISTRY_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
+      CACHE_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:cache"
+      echo "Building $IMAGE_NAME → ${REGISTRY_REF}"
+      docker buildx build \
+        --pull \
+        --push \
+        -t "$REGISTRY_REF" \
+        -f "$DOCKERFILE" \
+        --cache-from "type=registry,ref=$CACHE_REF" \
+        --cache-to "type=registry,ref=$CACHE_REF,mode=max" \
+        "$CONTEXT"
+
+
+.scan_template: &scan_template
+  stage: scan
+  image:
+    name: $TRIVY_IMAGE_TAG
+    entrypoint: [""]
+  tags: [docker]
+  interruptible: true
+  variables:
+    TRIVY_NO_PROGRESS: "true"
+    TRIVY_TIMEOUT: "30m"
+    TRIVY_CACHE_DIR: "/cache/.trivycache/"
+    TRIVY_SEVERITY: "HIGH,CRITICAL"
+    TMPDIR: "/cache"
+  before_script:
+    - mkdir -p ~/.docker
+    - |
+      AUTH=$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')
+      echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$AUTH\"}}}" > ~/.docker/config.json
+    - wget -qO- https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin "$SYFT_VERSION"
+    - trivy image --download-db-only
+  script:
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        CANDIDATE_TAG="mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
+      else
+        CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
+      fi
+      IMAGE="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
+      echo "Scanning $IMAGE"
+      syft --scope squashed -o spdx-json "$IMAGE" > sbom.spdx.json || echo "WARN: syft SBOM failed for $IMAGE - continuing with trivy scan"
+      trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --format json --output gl-container-scanning-report.json --exit-code 0 "$IMAGE"
+      trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format table --exit-code 1 "$IMAGE"
+  artifacts:
+    when: always
+    expire_in: 1 year
+    paths:
+      - sbom.spdx.json
+      - gl-container-scanning-report.json
+  allow_failure: true
+
+
+.promote_template: &promote_template
+  stage: promote
+  image: docker:28
+  tags: [docker]
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
+      else
+        SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:pending-${CI_COMMIT_SHORT_SHA}"
+      fi
+    - DIGEST="sha256:$(docker buildx imagetools inspect --raw "$SRC" | sha256sum | awk '{print $1}')"
+    - echo "Promoting $IMAGE_NAME digest ${DIGEST:0:32}... (tmp/ → real namespace)"
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        # Pre-release tags (alpha, beta, rc) must NOT update "latest"
+        if echo "$CI_COMMIT_TAG" | grep -qE -- '-(alpha|beta|rc)'; then
+          echo "Pre-release tag detected — skipping 'latest' Docker tag"
+          FINAL_TAGS="$CI_COMMIT_TAG"
+        else
+          FINAL_TAGS="$CI_COMMIT_TAG latest"
+        fi
+      else
+        BRANCH_TAG="${CI_COMMIT_BRANCH:-$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}"
+        BRANCH_TAG="${BRANCH_TAG//\//-}"
+        # Use vX.Y instead of release-X.Y for consistency with version tags
+        case "$BRANCH_TAG" in
+          release-*) BRANCH_TAG="v${BRANCH_TAG#release-}" ;;
+        esac
+        FINAL_TAGS="${BRANCH_TAG}-${CI_COMMIT_SHORT_SHA} ${BRANCH_TAG}"
+      fi
+    - |
+      for t in $FINAL_TAGS; do
+        docker buildx imagetools create -t "$CI_REGISTRY_IMAGE/$IMAGE_NAME:$t" "$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME@${DIGEST}"
+      done
+    - skopeo delete "docker://$SRC" 2>/dev/null || true
+
+
+# genie-ai-frontend
+build:frontend:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-frontend"
+    CONTEXT: "components/gov-chat-frontend/"
+    DOCKERFILE: "components/gov-chat-frontend/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
+
+scan:frontend:
+  <<: *scan_template
+  needs:
+    - job: build:frontend
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-frontend"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
+
+promote:frontend:
+  <<: *promote_template
+  needs:
+    - job: scan:frontend
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-frontend"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-backend
+build:backend:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-backend"
+    CONTEXT: "components/"
+    DOCKERFILE: "components/gov-chat-backend/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+scan:backend:
+  <<: *scan_template
+  needs:
+    - job: build:backend
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-backend"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+promote:backend:
+  <<: *promote_template
+  needs:
+    - job: scan:backend
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-backend"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-db-migrations
+build:db-migrations:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-db-migrations"
+    CONTEXT: "."
+    DOCKERFILE: "components/gov-chat-backend/Dockerfile.migrations"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
+
+scan:db-migrations:
+  <<: *scan_template
+  needs:
+    - job: build:db-migrations
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-db-migrations"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
+
+promote:db-migrations:
+  <<: *promote_template
+  needs:
+    - job: scan:db-migrations
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-db-migrations"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-document-repository
+build:document-repository:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-document-repository"
+    CONTEXT: "components/"
+    DOCKERFILE: "components/document-repository/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+scan:document-repository:
+  <<: *scan_template
+  needs:
+    - job: build:document-repository
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-document-repository"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+promote:document-repository:
+  <<: *promote_template
+  needs:
+    - job: scan:document-repository
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-document-repository"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-nginx
+build:nginx:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-nginx"
+    CONTEXT: "api-gateway-solution/nginx/"
+    DOCKERFILE: "api-gateway-solution/nginx/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
+
+scan:nginx:
+  <<: *scan_template
+  needs:
+    - job: build:nginx
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-nginx"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
+
+promote:nginx:
+  <<: *promote_template
+  needs:
+    - job: scan:nginx
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-nginx"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-kong-config
+build:kong-config:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-kong-config"
+    CONTEXT: "api-gateway-solution/new-config/"
+    DOCKERFILE: "api-gateway-solution/new-config/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
+
+scan:kong-config:
+  <<: *scan_template
+  needs:
+    - job: build:kong-config
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-kong-config"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
+
+promote:kong-config:
+  <<: *promote_template
+  needs:
+    - job: scan:kong-config
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-kong-config"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-chatqna-server
+build:chatqna-server:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-chatqna-server"
+    CONTEXT: "."
+    DOCKERFILE: "genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+scan:chatqna-server:
+  <<: *scan_template
+  needs:
+    - job: build:chatqna-server
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-chatqna-server"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+promote:chatqna-server:
+  <<: *promote_template
+  needs:
+    - job: scan:chatqna-server
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-chatqna-server"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-dataprep-arango
+build:dataprep-arango:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-dataprep-arango"
+    CONTEXT: "."
+    DOCKERFILE: "genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+# Smoke-test the dataprep candidate image: import the docling stack + the
+# GENIE overlay module. Catches runtime ImportErrors that a green build does
+# NOT surface (issue #834: docling-core>=2.83.0 removed legacy_doc.BaseText,
+# imported by docling==2.30.0 at startup). Build green != service alive.
+smoke:dataprep-arango:
+  stage: scan
+  image: docker:28
+  tags: [docker]
+  interruptible: true
+  needs:
+    - job: build:dataprep-arango
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-dataprep-arango"
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        CANDIDATE_TAG="mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
+      else
+        CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
+      fi
+      REGISTRY_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
+      echo "Smoke-testing imports in $REGISTRY_REF"
+      docker run --rm --entrypoint python "$REGISTRY_REF" -c "import docling; from docling_core.types.legacy_doc.base import BaseText; print('docling legacy_doc OK'); import comps.dataprep.src.integrations.genieai_dataprep_arangodb; print('genieai_dataprep_arangodb import OK')"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+
+scan:dataprep-arango:
+  <<: *scan_template
+  needs:
+    - job: build:dataprep-arango
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-dataprep-arango"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+promote:dataprep-arango:
+  <<: *promote_template
+  needs:
+    - job: scan:dataprep-arango
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-dataprep-arango"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-retriever-arango
+build:retriever-arango:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-retriever-arango"
+    CONTEXT: "."
+    DOCKERFILE: "genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+scan:retriever-arango:
+  <<: *scan_template
+  needs:
+    - job: build:retriever-arango
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-retriever-arango"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+promote:retriever-arango:
+  <<: *promote_template
+  needs:
+    - job: scan:retriever-arango
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-retriever-arango"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-reranker
+build:reranker:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-reranker"
+    CONTEXT: "."
+    DOCKERFILE: "genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+scan:reranker:
+  <<: *scan_template
+  needs:
+    - job: build:reranker
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-reranker"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+promote:reranker:
+  <<: *promote_template
+  needs:
+    - job: scan:reranker
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-reranker"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-embedding
+build:embedding:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-embedding"
+    CONTEXT: "."
+    DOCKERFILE: "genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+scan:embedding:
+  <<: *scan_template
+  needs:
+    - job: build:embedding
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-embedding"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+promote:embedding:
+  <<: *promote_template
+  needs:
+    - job: scan:embedding
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-embedding"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-textgen
+build:textgen:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-textgen"
+    CONTEXT: "."
+    DOCKERFILE: "genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+scan:textgen:
+  <<: *scan_template
+  needs:
+    - job: build:textgen
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-textgen"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+promote:textgen:
+  <<: *promote_template
+  needs:
+    - job: scan:textgen
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-textgen"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-postgres-init
+build:postgres-init:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-postgres-init"
+    CONTEXT: "configs/postgres/"
+    DOCKERFILE: "configs/postgres/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
+
+scan:postgres-init:
+  <<: *scan_template
+  needs:
+    - job: build:postgres-init
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-postgres-init"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
+
+promote:postgres-init:
+  <<: *promote_template
+  needs:
+    - job: scan:postgres-init
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-postgres-init"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-keycloak
+build:keycloak:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-keycloak"
+    CONTEXT: "configs/keycloak/"
+    DOCKERFILE: "configs/keycloak/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+
+scan:keycloak:
+  <<: *scan_template
+  needs:
+    - job: build:keycloak
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-keycloak"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+
+promote:keycloak:
+  <<: *promote_template
+  needs:
+    - job: scan:keycloak
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-keycloak"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-keycloak-config
+build:keycloak-config:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-keycloak-config"
+    CONTEXT: "configs/keycloak/"
+    DOCKERFILE: "configs/keycloak/Dockerfile.config-cli"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+
+scan:keycloak-config:
+  <<: *scan_template
+  needs:
+    - job: build:keycloak-config
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-keycloak-config"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+
+promote:keycloak-config:
+  <<: *promote_template
+  needs:
+    - job: scan:keycloak-config
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-keycloak-config"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-tempo-proxy
+build:tempo-proxy:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-tempo-proxy"
+    CONTEXT: "tools/tempo-proxy/"
+    DOCKERFILE: "tools/tempo-proxy/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
+
+scan:tempo-proxy:
+  <<: *scan_template
+  needs:
+    - job: build:tempo-proxy
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-tempo-proxy"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
+
+promote:tempo-proxy:
+  <<: *promote_template
+  needs:
+    - job: scan:tempo-proxy
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-tempo-proxy"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
+
+# Create GitLab Release with changelog content for the tagged version
+# Uses GitLab's native `release` keyword — no token/scope setup needed.
+release:create:
+  stage: release
+  image: alpine:3.21
+  script:
+    - |
+      VERSION="${CI_COMMIT_TAG#v}"
+      VERSION_ESC=$(echo "${VERSION}" | sed 's/\./\\./g')
+      echo "Extracting changelog for version ${VERSION}..."
+      awk "/^## \[${VERSION_ESC}\]/{p=1; next} /^## \[/{p=0} p" CHANGELOG.md | sed '/^\[/,$d' > release-notes.md
+      if [ ! -s release-notes.md ]; then
+        echo "WARNING: No changelog content found for ${VERSION}, creating release with tag only."
+        echo "Release ${CI_COMMIT_TAG}" > release-notes.md
+      fi
+    - echo "GitLab Release created for ${CI_COMMIT_TAG}."
+  release:
+    tag_name: $CI_COMMIT_TAG
+    description: release-notes.md
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v/'
+
+# --- Lint jobs ---
+
+lint:backend:
+  extends: .lint_node
+  before_script:
+    - cd components/gov-chat-backend && npm ci
+  script:
+    - npm run lint
+    - npm run format:check
+  cache:
+    - key:
+        files:
+          - components/gov-chat-backend/package-lock.json
+        prefix: lint-backend
+      paths:
+        - components/gov-chat-backend/node_modules/
+      fallback_keys:
+        - "lint-backend-$CI_DEFAULT_BRANCH"
+        - "lint-backend-"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "components/gov-chat-backend/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+lint:frontend:
+  extends: .lint_node
+  before_script:
+    - cd components/gov-chat-frontend && npm ci
+  script:
+    - npm run lint
+    - npm run format:check
+  cache:
+    - key:
+        files:
+          - components/gov-chat-frontend/package-lock.json
+        prefix: lint-frontend
+      paths:
+        - components/gov-chat-frontend/node_modules/
+      fallback_keys:
+        - "lint-frontend-$CI_DEFAULT_BRANCH"
+        - "lint-frontend-"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "components/gov-chat-frontend/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+lint:doc-repo:
+  extends: .lint_node
+  before_script:
+    - cd components/document-repository && npm ci
+  script:
+    - npm run lint
+    - npm run format:check
+  cache:
+    - key:
+        files:
+          - components/document-repository/package-lock.json
+        prefix: lint-doc-repo
+      paths:
+        - components/document-repository/node_modules/
+      fallback_keys:
+        - "lint-doc-repo-$CI_DEFAULT_BRANCH"
+        - "lint-doc-repo-"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "components/document-repository/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+lint:python:
+  image: python:3.10-slim
+  stage: lint
+  interruptible: true
+  before_script:
+    - pip install --cache-dir .cache/pip ruff
+  cache:
+    - key: lint-python-ruff
+      paths:
+        - .cache/pip/
+      fallback_keys:
+        - lint-python-
+  script:
+    - ruff check genie-ai-overlay/
+    - ruff format --check genie-ai-overlay/ --extend-exclude '*.md'
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "genie-ai-overlay/**/*.py"
+        - "genie-ai-overlay/pyproject.toml"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+lint:dart:
+  extends: .flutter_base
+  stage: lint
+  script:
+    - export PATH="$PWD/../../flutter-sdk/bin:$PATH"
+    - flutter analyze
+    - dart format --output=none --set-exit-if-changed lib/ test/ patrol_test/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "mobile/genie_ai_mobile/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+# --- Docs/Deploy validation ---
+
+# Validates Ansible playbooks (syntax) and YAML linting for deployment docs.
+# Covers MRs that only modify deploy/ansible/, docs/, or root-level files
+# where no component lint/test job would otherwise trigger.
+docs:validate:
+  image: python:3.10-slim
+  stage: lint
+  before_script:
+    - pip install ansible-core yamllint
+    - ansible-galaxy collection install -r deploy/ansible/requirements.yml
+  script:
+    - ansible-playbook --syntax-check deploy/ansible/deploy.yml
+    - ansible-playbook --syntax-check deploy/ansible/deploy-gpu.yml
+    - yamllint -c deploy/ansible/.yamllint deploy/ansible/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "deploy/**/*"
+        - "docs/**/*"
+        - "CLAUDE.md"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+# --- Test jobs ---
+
+test:backend:
+  extends: .test_node
+  before_script:
+    - cd components/gov-chat-backend && npm ci
+  script:
+    - npm test -- --coverage --coverageReporters=text-summary --coverageReporters=cobertura --runInBand
+  coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
+  cache:
+    - key:
+        files:
+          - components/gov-chat-backend/package-lock.json
+        prefix: test-backend
+      paths:
+        - components/gov-chat-backend/node_modules/
+      fallback_keys:
+        - "test-backend-$CI_DEFAULT_BRANCH"
+        - "test-backend-"
+  artifacts:
+    reports:
+      junit: components/gov-chat-backend/reports/jest-backend.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: components/gov-chat-backend/coverage/cobertura-coverage.xml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "components/gov-chat-backend/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+test:frontend:
+  extends: .test_node
+  before_script:
+    - cd components/gov-chat-frontend && npm ci
+  script:
+    - npm test -- --coverage --coverageReporters=text-summary --coverageReporters=cobertura
+  coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
+  cache:
+    - key:
+        files:
+          - components/gov-chat-frontend/package-lock.json
+        prefix: test-frontend
+      paths:
+        - components/gov-chat-frontend/node_modules/
+      fallback_keys:
+        - "test-frontend-$CI_DEFAULT_BRANCH"
+        - "test-frontend-"
+  artifacts:
+    reports:
+      junit: components/gov-chat-frontend/reports/jest-frontend.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: components/gov-chat-frontend/coverage/cobertura-coverage.xml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "components/gov-chat-frontend/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+test:doc-repo:
+  extends: .test_node
+  before_script:
+    - cd components/document-repository && npm ci
+  script:
+    - npm test -- --coverage --coverageReporters=text-summary --coverageReporters=cobertura
+  coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
+  cache:
+    - key:
+        files:
+          - components/document-repository/package-lock.json
+        prefix: test-doc-repo
+      paths:
+        - components/document-repository/node_modules/
+      fallback_keys:
+        - "test-doc-repo-$CI_DEFAULT_BRANCH"
+        - "test-doc-repo-"
+  artifacts:
+    reports:
+      junit: components/document-repository/reports/jest-docrepo.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: components/document-repository/coverage/cobertura-coverage.xml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "components/document-repository/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+# --- Contract jobs ---
+# NOTE: Contract stage removed — route handler tests already run in the test stage
+# (test:backend, test:doc-repo). The `test:contract` npm script remains as a
+# convenience alias for local use (filters to route tests only).
+
+test:python:
+  image: python:3.10-slim
+  stage: test
+  interruptible: true
+  before_script:
+    - cd genie-ai-overlay
+    - if [ ! -d .venv ]; then python -m venv .venv; fi
+    - . .venv/bin/activate
+    - pip install -e ".[test]"
+  script:
+    - . .venv/bin/activate
+    - mkdir -p reports
+    - pytest --junitxml=reports/pytest-report.xml --cov --cov-report=term --cov-report=xml:reports/coverage.xml
+  coverage: '/^TOTAL\s+\S+\s+\S+\s+(\d+)%/'
+  cache:
+    - key:
+        files:
+          - genie-ai-overlay/pyproject.toml
+        prefix: test-python
+      paths:
+        - genie-ai-overlay/.venv/
+      fallback_keys:
+        - "test-python-$CI_DEFAULT_BRANCH"
+        - "test-python-"
+  artifacts:
+    when: always
+    expire_in: 7 days
+    reports:
+      junit: genie-ai-overlay/reports/pytest-report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: genie-ai-overlay/reports/coverage.xml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "genie-ai-overlay/**/*.py"
+        - "genie-ai-overlay/pyproject.toml"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+# genie_ssl_patch.py tests — SSL bypass + API key injection
+test:sitecustomize:
+  image: python:3.10-slim
+  stage: test
+  interruptible: true
+  before_script:
+    - pip install --cache-dir .cache/pip httpx aiohttp requests pytest pytest-cov
+  cache:
+    - key: test-sitecustomize
+      paths:
+        - .cache/pip/
+      fallback_keys:
+        - "test-sitecustomize-$CI_DEFAULT_BRANCH"
+        - "test-sitecustomize-"
+  script:
+    - mkdir -p reports
+    - OPEA_SSL_SKIP_VERIFY=1 pytest tests/config/ssl/test_genie_ssl_patch.py -v --junitxml=reports/pytest-sitecustomize.xml --cov=configs.ssl.genie_ssl_patch --cov-report=term --cov-report=xml:reports/coverage.xml
+  coverage: '/^TOTAL\s+\S+\s+\S+\s+(\d+)%/'
+  artifacts:
+    when: always
+    expire_in: 7 days
+    reports:
+      junit: reports/pytest-sitecustomize.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: reports/coverage.xml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "configs/ssl/**/*"
+        - "tests/config/ssl/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+# --- Existing jobs (unchanged) ---
+
+# Unit tests — runs on every PR touching mobile/
+# Downloads Flutter SDK from official archive with caching
+test:flutter:
+  extends: .flutter_base
+  stage: test
+  script:
+    - export PATH="$PWD/../../flutter-sdk/bin:$PATH"
+    - dart pub global activate junitreport_maintained
+    - export PATH="$PATH:$PUB_CACHE/bin"
+    - mkdir -p reports
+    - flutter test --machine --coverage > reports/flutter-machine.json 2>&1
+    - cat reports/flutter-machine.json | tojunit --output reports/flutter-report.xml
+    - perl -pi -e 's/&#x1[bB];\[[0-9;]*m//g; s/&#27;\[[0-9;]*m//g; s/\x1b\[[0-9;]*m//g; s/&#x1[bB];//g; s/&#27;//g; s/[\x00-\x08\x0b\x0c\x0e-\x1f]//g' reports/flutter-report.xml
+    - 'sed -i ''/lib\/i18n\//d'' coverage/lcov.info'
+    - 'COV=$(awk ''/^LF:/{lf+=$2} /^LH:/{lh+=$2} END{if(lf>0) printf "%.1f",lh/lf*100}'' FS=: coverage/lcov.info) && echo "Lines: ${COV}%" || echo "No coverage data"'
+    - python3 -m venv /tmp/lcov-cov && . /tmp/lcov-cov/bin/activate && pip install lcov-cobertura && lcov_cobertura coverage/lcov.info --output reports/coverage-cobertura.xml
+  coverage: '/^Lines:\s+(\d+\.?\d*)%/'
+  artifacts:
+    reports:
+      junit: mobile/genie_ai_mobile/reports/flutter-report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: mobile/genie_ai_mobile/reports/coverage-cobertura.xml
+    paths:
+      - mobile/genie_ai_mobile/coverage/
+    when: always
+    expire_in: 7 days
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "mobile/genie_ai_mobile/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+# Patrol E2E tests — DinD emulator (shared with scheduled:e2e-mobile)
+e2e:integration:
+  extends: .e2e_integration_base
+  stage: e2e
+  resource_group: e2e-runner
+  allow_failure: true  # per-image skip: not all images build on a given MR;
+                        # e2e needs ALL → can fail if unchanged images not in tmp/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
+      changes:
+        - mobile/genie_ai_mobile/**/*
+        - tests/e2e/chatbot/**/*
+        - components/gov-chat-frontend/**/*
+        - components/gov-chat-backend/**/*
+        - .gitlab-ci.yml
+
+patrol:e2e:
+  extends: .e2e_mobile_base
+  stage: e2e
+  resource_group: e2e-runner
+  needs: [e2e:integration, lint:dart, test:flutter]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
+      changes:
+        - mobile/genie_ai_mobile/**/*
+
+# Playwright E2E — runs on merge trains (same pattern as patrol:e2e)
+e2e:playwright:
+  extends: .e2e_web_base
+  stage: e2e
+  resource_group: e2e-runner
+  needs: [e2e:integration]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
+      changes:
+        - tests/e2e/chatbot/**/*
+        - tests/e2e/documents/**/*
+        - components/gov-chat-frontend/**/*
+        - components/gov-chat-backend/**/*
+        - components/document-repository/**/*
+        - .gitlab-ci.yml
+
+# --- Configuration validation ---
+
+# Verify the dataprep requirements.lock is in sync with requirements.in.
+# Fails if someone edited requirements.in (or bumped OPEA) without running
+# `make lock-dataprep`. Catches silent lock drift before it reaches a build.
+verify:dataprep-lock:
+  stage: config
+  image: python:3.10-slim
+  interruptible: true
+  variables:
+    UV_VERSION: "0.10.6"
+  before_script:
+    - pip install --no-cache-dir "uv==${UV_VERSION}"
+  script:
+    - cd genie-ai-overlay/dataprep
+    # Verify lock is consistent and installable without re-resolving.
+    # uv pip sync --dry-run checks every package+hash exists on PyPI;
+    # it does NOT re-resolve, so upstream version bumps don't cause
+    # spurious failures (only removed packages do).
+    - uv pip sync requirements.lock --dry-run --system
+    # Cross-check: verify requirements.in is covered by the lock.
+    # greps top-level non-comment lines from requirements.in and
+    # checks each package name appears in the lock. Missing = user
+    # added a dep without regenerating the lock.
+    - |-
+      while IFS= read -r line; do
+        pkg=$(echo "$line" | sed 's/[<>=!~].*//;s/\[.*//;s/#.*//' | xargs)
+        [ -z "$pkg" ] && continue
+        norm=$(echo "$pkg" | tr '[:upper:]_' '[:lower:]-')
+        if ! grep -q "^${norm}==" requirements.lock; then
+          echo "MISSING from lock: $pkg — run 'make lock-dataprep'"
+          exit 1
+        fi
+      done < requirements.in
+      echo "requirements.lock in sync"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
+
+
+config:validate:
+  extends: .node_base
+  stage: config
+  before_script:
+    - cd tests/config-validator && npm ci
+    - cd ${CI_PROJECT_DIR}/api-gateway-solution/new-config && npm ci
+  script:
+    - cd ${CI_PROJECT_DIR}/tests/config-validator && npm test
+    - cd ${CI_PROJECT_DIR}/api-gateway-solution/new-config && npm run test:ci
+  cache:
+    - key:
+        files:
+          - tests/config-validator/package-lock.json
+        prefix: config-validate
+      paths:
+        - tests/config-validator/node_modules/
+      fallback_keys:
+        - "config-validate-$CI_DEFAULT_BRANCH"
+        - "config-validate-"
+    - key:
+        files:
+          - api-gateway-solution/new-config/package-lock.json
+        prefix: config-kong
+      paths:
+        - api-gateway-solution/new-config/node_modules/
+      fallback_keys:
+        - "config-kong-$CI_DEFAULT_BRANCH"
+        - "config-kong-"
+  artifacts:
+    when: always
+    expire_in: 7 days
+    reports:
+      junit:
+        - tests/config-validator/reports/jest-config.xml
+        - api-gateway-solution/new-config/reports/jest-kong-config.xml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "env"
+        - "env.*"
+        - "docker-compose.yaml"
+        - "docker-compose.gpu.yaml"
+        - "tests/config-validator/**/*"
+        - "tests/fixtures/config/**/*"
+        - "api-gateway-solution/new-config/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+# Validate CHANGELOG.md has an entry for the version being released
+config:changelog:
+  stage: config
+  image: alpine:3.21
+  script:
+    - |
+      VERSION="${CI_COMMIT_TAG#v}"
+      echo "Checking CHANGELOG.md for version: ${VERSION}"
+      if ! grep -qF "## [${VERSION}]" CHANGELOG.md; then
+        echo "ERROR: CHANGELOG.md has no entry for version ${VERSION}."
+        echo "Add a ## [${VERSION}] section before tagging."
+        exit 1
+      fi
+      echo "CHANGELOG.md entry found for ${VERSION}."
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v/'
+
+# --- Scheduled jobs (nightly via pipeline schedule) ---
+
+# Integration smoke test — runs full core stack via Docker Compose
+# Enhanced by stories 1-8, 1-9 (Playwright E2E)
+#
+# REQUIRED CI Variables (Settings → CI/CD → Variables):
+#   ARANGO_PASSWORD, POSTGRES_PASSWORD, KONG_DB_PASSWORD,
+#   KEYCLOAK_DB_PASSWORD, KEYCLOAK_ADMIN_PASSWORD,
+#   KEYCLOAK_CLIENT_SECRET, GENIE_ADMIN_PASSWORD,
+#   GENIE_ADMIN_EMAIL, KEYCLOAK_PROXY_CLIENT_SECRET,
+#   KC_DATAPREP_CLIENT_SECRET, TRANSLATION_CACHE_PASSWORD
+#
+# CI variables override empty values from the env template (shell env > .env file).
+# The env template provides non-secret config (KEYCLOAK_URL, KEYCLOAK_REALM, etc.).
+scheduled:integration:
+  extends: .e2e_integration_base
+  stage: scheduled
+  resource_group: e2e-runner
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: on_success
+
+# Mobile E2E tests (Patrol) — shared logic with patrol:e2e via .e2e_mobile_base
+# Depends on scheduled:integration (running Docker stack)
+# Uses Google's official Android emulator via Docker (requires KVM)
+# Networking: socat + adb reverse routes emulator's 127.0.0.1:8443 → nginx:443
+scheduled:e2e-mobile:
+  extends: .e2e_mobile_base
+  stage: scheduled
+  needs: [scheduled:integration]
+  resource_group: e2e-runner
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: on_success
+
+# Web frontend E2E tests (Playwright)
+# Runs against the Docker stack started by scheduled:integration
+scheduled:e2e-web:
+  extends: .e2e_web_base
+  stage: scheduled
+  needs: [scheduled:integration]
+  resource_group: e2e-runner
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: on_success
+
+# MELT correlation tests (Story 7-10)
+# Validates observability pipeline: traces, metrics, logs correlation across Victoria* backends.
+# Scheduled tier — runs only when ENABLE_OBSERVABILITY=1 (requires observability stack).
+# Depends on scheduled:integration for Docker stack + observability profile.
+scheduled:melt-correlation:
+  image: node:20-alpine
+  stage: scheduled
+  needs: [scheduled:integration]
+  resource_group: e2e-runner
+  variables:
+    PROPAGATION_DELAY: "20"
+  script:
+    - apk add --no-cache bash curl
+    - cd tests/melt-correlation
+    - bash run-melt-test.sh --skip-chaos --skip-playwright
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - reports/melt-*.xml
+    reports:
+      junit:
+        - reports/melt-correlation-report.xml
+        - reports/melt-grafana-report.xml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $ENABLE_OBSERVABILITY == "1"
+      when: on_success
+
+# MELT chaos resilience tests (Story 7-10, AC#4/#5)
+# Separate job — stops/restarts Victoria* backends, requires isolation.
+# Runs after melt-correlation (needs baseline data).
+scheduled:melt-chaos:
+  image: docker:24
+  stage: scheduled
+  needs: [scheduled:integration]
+  resource_group: e2e-runner
+  variables:
+    PROPAGATION_DELAY: "20"
+    RESTART_TIMEOUT: "90"
+  script:
+    - apk add --no-cache bash curl nodejs npm
+    - npm ci --no-audit --no-fund 2>/dev/null || npm install
+    - cd tests/melt-correlation
+    - bash run-melt-test.sh --skip-playwright --correlation-only || true
+    - node chaos-resilience.test.js
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - reports/melt-chaos-report.xml
+    reports:
+      junit:
+        - reports/melt-chaos-report.xml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $ENABLE_OBSERVABILITY == "1"
+      when: on_success
+
+# Teardown: clean up compose stack after E2E jobs finish (success or failure).
+# Uses .post — GitLab's built-in final stage (always runs, even on failure).
+.cleanup_base:
+  image: docker:24
+  stage: .post
+  tags: [docker]
+  script:
+    - docker compose -p "ci-${CI_PIPELINE_ID}" down -v --remove-orphans 2>/dev/null || true
+
+e2e:cleanup:
+  extends: .cleanup_base
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"
+      when: always
+
+scheduled:cleanup:
+  extends: .cleanup_base
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+# --- Manual jobs (on-demand via Run Pipeline → click play) ---
+
+# RAG quality regression — requires GPU runner
+# Enhanced by Epic 8 (RAG Quality)
+manual:rag-quality:
+  image: python:3.10-slim
+  stage: manual
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+  allow_failure: true
+  tags: [gpu]
+  timeout: 60m
+  before_script:
+    - cd genie-ai-overlay
+    - if [ ! -d .venv ]; then python -m venv .venv; fi
+    - . .venv/bin/activate
+    - pip install -e ".[test]"
+  script:
+    - . .venv/bin/activate
+    - |
+      if [ -z "$GPU_AVAILABLE" ]; then
+        echo "No GPU detected — skipping RAG quality tests"
+        exit 0
+      fi
+    - |
+      pytest -m rag-quality --junitxml=reports/rag-quality.xml || echo "WARNING: No rag-quality tests found (Epic 8 placeholder)"
+  artifacts:
+    when: always
+    expire_in: 30 days
+    reports:
+      junit: genie-ai-overlay/reports/rag-quality.xml
+
+
+# --- Documentation site -> GitLab Pages ---
+# Builds the Hugo + Docsy site in site/ and publishes to GitLab Pages.
+# Docsy is a Hugo Module (needs Go); assets need Node. hugomods/hugo:exts
+# provides all three (latest stable).
+pages:
+  stage: deploy
+  image: docker.io/hugomods/hugo:exts
+  variables:
+    GIT_SUBMODULE_STRATEGY: none
+  script:
+    - cd site
+    - hugo mod tidy
+    - hugo --gc --minify --baseURL "$CI_PAGES_URL/" --destination "$CI_PROJECT_DIR/public"
+  artifacts:
+    paths:
+      - public
+  rules:
+    # Publish to GitLab Pages on the default branch only.
+    - if: $CI_COMMIT_BRANCH == "main"

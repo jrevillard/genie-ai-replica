@@ -61,12 +61,12 @@ docker stack rm genieai
 
 ### **Rebuilding After Code Changes**
 
-Images must be built and pushed to a registry before deploying (`docker stack deploy` cannot build):
+For Swarm, images are pre-built by CI and pulled from the GitLab Container Registry. For local dev (`docker compose up`), rebuild with:
 
 ```bash
 docker compose build [service_name]
-# Push to your registry, then redeploy:
-set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
+# For local dev: docker compose up -d
+# For Swarm: CI publishes images → redeploy with: docker stack deploy -c docker-compose.yaml genieai
 ```
 
 ### **Viewing Logs**

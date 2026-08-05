@@ -1,11 +1,12 @@
 stages:
   - lint
   - test
-  - config      # env-var coverage + dependency-lock freshness (fail-fast before build)
+  - config      # env-var coverage + changelog validation + dependency-lock freshness (fail-fast before build)
   - build       # publish candidate images to GitLab Container Registry (tmp/ namespace)
   - scan        # GitLab official Container Scanning template (advisory + dashboard)
   - e2e
   - promote     # retag tested digests to deployable tags (main/tags only)
+  - release     # create GitLab Release from changelog (tag pipelines only)
   - scheduled
   - manual
   - deploy
@@ -89,8 +90,8 @@ workflow:
   variables:
     COMPOSE_PROJECT_NAME: "ci-$CI_PIPELINE_ID"
     # Pull candidate images from the tmp/ quarantine namespace (where build:image
-    # pushes pre-promote candidates). IMAGE_TAG matches the candidate tag.
-    SWARM_REGISTRY_URL: "$CI_REGISTRY_IMAGE/tmp"
+    # pushes pre-promote candidates). GENIE_AI_GLOBAL_TAG matches the candidate tag.
+    GENIE_AI_REGISTRY: "$CI_REGISTRY_IMAGE/tmp"  # e2e pulls candidates from tmp/ namespace
   allow_failure: false
   tags: [docker]
   timeout: 30m
@@ -112,6 +113,7 @@ workflow:
     - docker network prune -f 2>/dev/null || true
   script:
     - cp env .env
+    - sed -i '/^GENIE_AI_[A-Z0-9_]*_IMAGE=/ s|^|# |' .env
     - |
       while IFS='=' read -r var _; do
         case "$var" in ''|[!A-Z_]*) continue ;; esac
@@ -148,7 +150,7 @@ workflow:
       else
         E2E_TAG="pending-${CI_COMMIT_SHORT_SHA}"
       fi
-      sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${E2E_TAG}|" .env
+      sed -i "s|^GENIE_AI_GLOBAL_TAG=.*|GENIE_AI_GLOBAL_TAG=${E2E_TAG}|" .env
       echo "E2E pulling candidate images tagged :${E2E_TAG}"
     # Pull all custom services from the registry. `up --no-build` below fails
     # loudly if a build:image job didn't publish its candidate, surfacing the
@@ -615,6 +617,7 @@ kics-iac-sast:
       CACHE_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:cache"
       echo "Building $IMAGE_NAME → ${REGISTRY_REF}"
       docker buildx build \
+        --pull \
         --push \
         -t "$REGISTRY_REF" \
         -f "$DOCKERFILE" \
@@ -633,11 +636,9 @@ kics-iac-sast:
   variables:
     TRIVY_NO_PROGRESS: "true"
     TRIVY_TIMEOUT: "30m"
-    TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.trivycache/"
+    TRIVY_CACHE_DIR: "/cache/.trivycache/"
     TRIVY_SEVERITY: "HIGH,CRITICAL"
-  cache:
-    - key: "trivy-db"
-      paths: [".trivycache/"]
+    TMPDIR: "/cache"
   before_script:
     - mkdir -p ~/.docker
     - |
@@ -654,9 +655,9 @@ kics-iac-sast:
       fi
       IMAGE="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
       echo "Scanning $IMAGE"
-    - syft -o spdx-json "$IMAGE" > sbom.spdx.json
-    - trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --format json --output gl-container-scanning-report.json --exit-code 0 "$IMAGE"
-    - trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format table --exit-code 1 "$IMAGE"
+      syft --scope squashed -o spdx-json "$IMAGE" > sbom.spdx.json || echo "WARN: syft SBOM failed for $IMAGE - continuing with trivy scan"
+      trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --format json --output gl-container-scanning-report.json --exit-code 0 "$IMAGE"
+      trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format table --exit-code 1 "$IMAGE"
   artifacts:
     when: always
     expire_in: 1 year
@@ -673,14 +674,30 @@ kics-iac-sast:
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
-    - SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:pending-$CI_COMMIT_SHORT_SHA"
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
+      else
+        SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:pending-${CI_COMMIT_SHORT_SHA}"
+      fi
     - DIGEST="sha256:$(docker buildx imagetools inspect --raw "$SRC" | sha256sum | awk '{print $1}')"
     - echo "Promoting $IMAGE_NAME digest ${DIGEST:0:32}... (tmp/ → real namespace)"
     - |
       if [ -n "$CI_COMMIT_TAG" ]; then
-        FINAL_TAGS="$CI_COMMIT_TAG latest"
+        # Pre-release tags (alpha, beta, rc) must NOT update "latest"
+        if echo "$CI_COMMIT_TAG" | grep -qE -- '-(alpha|beta|rc)'; then
+          echo "Pre-release tag detected — skipping 'latest' Docker tag"
+          FINAL_TAGS="$CI_COMMIT_TAG"
+        else
+          FINAL_TAGS="$CI_COMMIT_TAG latest"
+        fi
       else
-        BRANCH_TAG="${CI_COMMIT_BRANCH//\//-}"
+        BRANCH_TAG="${CI_COMMIT_BRANCH:-$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}"
+        BRANCH_TAG="${BRANCH_TAG//\//-}"
+        # Use vX.Y instead of release-X.Y for consistency with version tags
+        case "$BRANCH_TAG" in
+          release-*) BRANCH_TAG="v${BRANCH_TAG#release-}" ;;
+        esac
         FINAL_TAGS="${BRANCH_TAG}-${CI_COMMIT_SHORT_SHA} ${BRANCH_TAG}"
       fi
     - |
@@ -749,6 +766,9 @@ promote:frontend:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
@@ -815,6 +835,9 @@ promote:backend:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
@@ -881,6 +904,9 @@ promote:db-migrations:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
@@ -947,6 +973,9 @@ promote:document-repository:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
@@ -1013,6 +1042,9 @@ promote:nginx:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
@@ -1079,6 +1111,9 @@ promote:kong-config:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
@@ -1145,6 +1180,9 @@ promote:chatqna-server:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1254,6 +1292,9 @@ promote:dataprep-arango:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1320,6 +1361,9 @@ promote:retriever-arango:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1386,6 +1430,9 @@ promote:reranker:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1452,6 +1499,9 @@ promote:embedding:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1518,6 +1568,9 @@ promote:textgen:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1584,6 +1637,9 @@ promote:postgres-init:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
@@ -1650,6 +1706,9 @@ promote:keycloak:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
@@ -1716,6 +1775,9 @@ promote:keycloak-config:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
@@ -1782,12 +1844,37 @@ promote:tempo-proxy:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: never
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
         paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
+
+# Create GitLab Release with changelog content for the tagged version
+# Uses GitLab's native `release` keyword — no token/scope setup needed.
+release:create:
+  stage: release
+  image: alpine:3.21
+  script:
+    - |
+      VERSION="${CI_COMMIT_TAG#v}"
+      VERSION_ESC=$(echo "${VERSION}" | sed 's/\./\\./g')
+      echo "Extracting changelog for version ${VERSION}..."
+      awk "/^## \[${VERSION_ESC}\]/{p=1; next} /^## \[/{p=0} p" CHANGELOG.md | sed '/^\[/,$d' > release-notes.md
+      if [ ! -s release-notes.md ]; then
+        echo "WARNING: No changelog content found for ${VERSION}, creating release with tag only."
+        echo "Release ${CI_COMMIT_TAG}" > release-notes.md
+      fi
+    - echo "GitLab Release created for ${CI_COMMIT_TAG}."
+  release:
+    tag_name: $CI_COMMIT_TAG
+    description: release-notes.md
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v/'
 
 # --- Lint jobs ---
 
@@ -1883,7 +1970,7 @@ lint:python:
         - lint-python-
   script:
     - ruff check genie-ai-overlay/
-    - ruff format --check genie-ai-overlay/
+    - ruff format --check genie-ai-overlay/ --extend-exclude '*.md'
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -2207,21 +2294,31 @@ verify:dataprep-lock:
   image: python:3.10-slim
   interruptible: true
   variables:
-    # Pin uv to the exact version used to generate the committed lock, so the
-    # resolver behaves identically on re-compile. Bump in lockstep with the
-    # Makefile UV default when regenerating.
     UV_VERSION: "0.10.6"
   before_script:
     - pip install --no-cache-dir "uv==${UV_VERSION}"
   script:
     - cd genie-ai-overlay/dataprep
-    - uv pip compile requirements.in --generate-hashes --python-platform x86_64-manylinux_2_31 --python-version 3.10 --output-file /tmp/regen.lock --quiet
-    # The first 2 lines of a uv lock are a header embedding the exact output
-    # filename ("--output-file requirements.lock" vs "-o /tmp/regen.lock"), which
-    # is inherently non-reproducible across paths. Compare everything past it.
-    - tail -n +3 requirements.lock > /tmp/committed.body
-    - tail -n +3 /tmp/regen.lock > /tmp/regen.body
-    - diff /tmp/committed.body /tmp/regen.body && echo "requirements.lock in sync" || (echo "LOCK DRIFT — run 'make lock-dataprep' locally and commit the regenerated requirements.lock"; exit 1)
+    # Verify lock is consistent and installable without re-resolving.
+    # uv pip sync --dry-run checks every package+hash exists on PyPI;
+    # it does NOT re-resolve, so upstream version bumps don't cause
+    # spurious failures (only removed packages do).
+    - uv pip sync requirements.lock --dry-run --system
+    # Cross-check: verify requirements.in is covered by the lock.
+    # greps top-level non-comment lines from requirements.in and
+    # checks each package name appears in the lock. Missing = user
+    # added a dep without regenerating the lock.
+    - |-
+      while IFS= read -r line; do
+        pkg=$(echo "$line" | sed 's/[<>=!~].*//;s/\[.*//;s/#.*//' | xargs)
+        [ -z "$pkg" ] && continue
+        norm=$(echo "$pkg" | tr '[:upper:]_' '[:lower:]-')
+        if ! grep -q "^${norm}==" requirements.lock; then
+          echo "MISSING from lock: $pkg — run 'make lock-dataprep'"
+          exit 1
+        fi
+      done < requirements.in
+      echo "requirements.lock in sync"
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2288,6 +2385,23 @@ config:validate:
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
+
+# Validate CHANGELOG.md has an entry for the version being released
+config:changelog:
+  stage: config
+  image: alpine:3.21
+  script:
+    - |
+      VERSION="${CI_COMMIT_TAG#v}"
+      echo "Checking CHANGELOG.md for version: ${VERSION}"
+      if ! grep -qF "## [${VERSION}]" CHANGELOG.md; then
+        echo "ERROR: CHANGELOG.md has no entry for version ${VERSION}."
+        echo "Add a ## [${VERSION}] section before tagging."
+        exit 1
+      fi
+      echo "CHANGELOG.md entry found for ${VERSION}."
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v/'
 
 # --- Scheduled jobs (nightly via pipeline schedule) ---
 

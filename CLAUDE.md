@@ -77,7 +77,7 @@ docker service scale genieai_<service>=<replicas>     # Scale a service
 ```
 
 **Key notes:**
-- Swarm: all images must be pre-built/pushed (`docker stack deploy` cannot build)
+- Swarm: images pulled automatically from GitLab Container Registry (pre-built by CI)
 - Profiles: `opea` (AI orchestrators), `gpu-models` (vLLM, TEI), `observability` (OTel stack)
 - Remote GPU: set `GPU_NODE_HOST` in `.env`, skip `gpu-models` profile — see `env` Section 14
 - Only nginx ports (80, 443) exposed; all other services internal
@@ -146,7 +146,8 @@ Each RAG pipeline stage emits OTel spans (when observability enabled), propagate
 User-facing and dev-internal docs live in **separate** places — no duplication, no build-time copy:
 
 - **User-facing docs → `site/content/en/docs/`** — canonical, published to the GitLab Pages docs site, editable in the GitLab Web IDE. Grouped by section (`core/`, `rag/`, `observability/`, `knowledge-base/`, `operations/`, `deployment/`, `configuration/`, `architecture/`, `frontend/`, `backend/`, `mobile/`). Hugo + Docsy; see `.claude/rules/SITE-LOCAL-DEV.md` to run locally.
-- **Dev-internal docs → `docs/`** — repo-resident, referenced by code/developers (e.g. `docs/e2e-tests/`, `docs/database-migrations.md`). NOT published.
+- **Dev-internal docs → `docs/`** — repo-resident, referenced by code/developers (e.g. `docs/e2e-tests/`, `docs/database-migrations.md`, `docs/RELEASE.md`). NOT published.
+- **Agent instructions → `.claude/rules/`** — step-by-step commands for AI agents (e.g. `RELEASE.md`, `TESTING.md`, `SERVER-TESTING.md`). Referenced by CLAUDE.md.
 
 When adding a doc, pick one home based on audience. Do not duplicate across both.
 
@@ -249,11 +250,13 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `VLLM_TRANSLATION_MODEL_ID` - GPU translation model ID
 - `EMBEDDING_MODEL_ID` / `RERANKER_MODEL_ID` - AI model IDs
 - `VLLM_LLM_MODEL_ID` - Labeling/chat LLM. **Must support OpenAI-compatible `response_format={"type":"json_object"}`** (vLLM guided JSON); dataprep requests strict JSON label output per chunk. Models without guided JSON produce malformed output → per-chunk fallback (slower, lower label quality). Validated on `ibm-granite/granite-4.1-8b`.
+- `RERANKING_STRATEGY` - Strategy for selecting the final reranked set: `slice` (default; top-N), `threshold`, `slice_threshold`, `knee_threshold`, or `adaptive`.
+- `RERANKER_TOP_N` - Number of top chunks kept by `slice`/`slice_threshold` strategies (default 3).
 - `CONTEXTUAL_RETRIEVAL_ENABLED` - Contextual Retrieval (Anthropic-style), **on by default**: prepend an LLM doc-context prefix to each chunk before embedding + labeling (default `true`; set `false` to disable — a no-op beyond skipping context generation). Adds one vLLM call/chunk at ingest; never blocks ingestion (raw-chunk fallback). See the [Data Labelling Strategy](site/content/en/docs/rag/data-labeling.md) doc (§7 — Contextual Retrieval).
 - `DATAPREP_CONTEXTUAL_MODEL` - Model for context generation (empty = reuse `VLLM_LLM_MODEL_ID`); must support guided JSON.
-- `DATAPREP_CONTEXTUAL_DOC_BUDGET` - Max chars of doc text fed to the context LLM (~1500 tokens); <=0 disables truncation (default 6000).
+- `DATAPREP_CONTEXTUAL_DOC_BUDGET` - Max chars of doc text fed to the context LLM (~1500 tokens); <=0 disables truncation (default 100000).
 - `DATAPREP_CONTEXTUAL_MAX_TOKENS` - Max output tokens for the context-generation LLM call (doc-level + per-chunk). The model writes ~196 tokens; the legacy hard cap of 200 left no headroom, so the JSON `{"context":"..."}` was truncated mid-string under concurrent vLLM load → JSONDecodeError → raw-chunk fallback. 512 gives comfortable margin at no extra cost (default 512).
-- `CONTEXTUAL_STRATEGY` - `doc_level` (default; ONE call/doc, same context on every chunk — N× cheaper, still propagates the doc subject) or `per_chunk` (one call/chunk, section-tailored context — the Anthropic recipe).
+- `CONTEXTUAL_STRATEGY` - `per_chunk` (default; one call/chunk, section-tailored context — the Anthropic recipe) or `doc_level` (one call/doc, same context on every chunk — N× cheaper, still propagates the doc subject).
 - `CONTEXTUAL_LABEL_RAW` - Decoupled mode (default `true`): label the RAW chunk, use the generated context ONLY for the embedding (keeps label precision while propagating the subject via vectors).
 - `CORS_ALLOWED_ORIGINS` - CORS allowed origins
 - `CSP_CONNECT_SRC` - Content Security Policy connect sources

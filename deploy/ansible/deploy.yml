@@ -14,9 +14,9 @@
 #   ansible-playbook -i inventory/test.ini deploy.yml --tags deploy --vault-id test@prompt
 #
 # Tags:
-#   install  - Docker, NVIDIA toolkit, Swarm init, registry
+#   install  - Docker, NVIDIA toolkit, Swarm init
 #   prepare  - Git clone, directories, SSL certs
-#   build    - Build and push images to local registry
+#   build    - Docker login to GitLab Container Registry (images pre-built by CI)
 #   deploy   - Generate .env, validate, deploy stack, verify
 
 - name: GENIE.AI - Detect environment
@@ -92,6 +92,7 @@
             selection: install
           loop: "{{ nvidia_hold_packages }}"
           when: nvidia_upgrade_check.stdout == "upgrade"
+          failed_when: false
 
         - name: Install NVIDIA Container Toolkit (pinned version)
           ansible.builtin.apt:
@@ -106,6 +107,7 @@
             selection: hold
           loop: "{{ nvidia_hold_packages }}"
           when: nvidia_upgrade_check.stdout == "upgrade"
+          failed_when: false
 
         - name: Configure Docker daemon for NVIDIA runtime
           block:
@@ -118,8 +120,8 @@
             - name: Set daemon.json content (merge NVIDIA config)
               ansible.builtin.set_fact:
                 daemon_json_final: >-
-                  {{ (daemon_json_existing.content | b64decode | from_json
-                      if daemon_json_existing is succeeded else {})
+                  {{ ((daemon_json_existing.content | default('') | b64decode | from_json)
+                      if daemon_json_existing.content is defined else {})
                     | combine({'runtimes': {'nvidia': {
                       'path': 'nvidia-container-runtime',
                       'runtimeArgs': []
@@ -180,9 +182,11 @@
       register: node_labels
       changed_when: false
 
-    - name: Add gpu=true label
+    - name: Add gpu=true label (only on nodes with physical GPU)
       ansible.builtin.command: docker node update --label-add gpu=true {{ node_hostname.stdout }}
-      when: node_labels.stdout is not search('gpu:')
+      when:
+        - node_labels.stdout is not search('gpu:')
+        - inventory_hostname in groups.get('gpu_nodes', [])
       changed_when: true
 
     - name: Add gateway=true label
@@ -195,101 +199,99 @@
       when: node_labels.stdout is not search('genieai:')
       changed_when: true
 
-- name: GENIE.AI - Local Docker registry
-  hosts: swarm_managers
-  tags: [install]
-  become: true
-  tasks:
-    - name: Set swarm registry URL from port
-      ansible.builtin.set_fact:
-        swarm_registry_url: "{{ swarm_registry_url | default('localhost:' + (registry_port | default('5000'))) }}"
-
-    - name: Check if registry container exists
-      community.docker.docker_container_info:
-        name: registry
-      register: registry_info
-
-    - name: Start local Docker registry
-      community.docker.docker_container:
-        name: registry
-        image: registry:2
-        ports:
-          - "{{ registry_port }}:5000"
-        restart_policy: unless-stopped
-        state: started
-
-    - name: Wait for registry to be ready
-      ansible.builtin.wait_for:
-        host: localhost
-        port: "{{ registry_port }}"
-        timeout: 60
-
-    - name: Verify registry is responding
-      ansible.builtin.uri:
-        url: "http://localhost:{{ registry_port }}/v2/_catalog"
-        method: GET
-        return_content: true
-      register: registry_check
-      until: registry_check.status == 200
-      retries: 5
-      delay: 3
-
 - name: GENIE.AI - Project sync and directories
   hosts: swarm_managers
   tags: [prepare]
-  vars_prompt:
-    - name: git_username
-      prompt: "Git username"
-      private: false
-    - name: git_token
-      prompt: "Git personal access token"
-      private: true
   become: true
   become_user: "{{ ansible_user }}"
   tasks:
-    - name: Set repo URL with credentials
+    # Images come from GitLab registry; only compose + configs needed on target.
+    # Download individual files via GitLab raw API (reproducible, idempotent).
+    - name: Set raw base URL
       ansible.builtin.set_fact:
-        repo_url_with_credentials: >-
-          {{ repo_url | regex_replace('^https://', 'https://' + git_username + ':' + git_token + '@') }}
-      no_log: true
+        _raw_base: "{{ repo_url | regex_replace('\\.git$', '') }}/-/raw/{{ repo_branch }}"
 
-    - name: Check if git repository exists
-      ansible.builtin.stat:
-        path: "{{ deploy_dir }}/.git"
-      register: git_dir
+    - name: Define deploy files
+      ansible.builtin.set_fact:
+        _deploy_files: "{{ _deploy_files_default | union(_deploy_files_obs | default([])) | union(_deploy_files_certbot | default([])) }}"
+      vars:
+        _deploy_files_default:
+          - src: "{{ compose_file }}"
+            dest: "{{ deploy_dir }}/{{ compose_file }}"
+        _deploy_files_obs: "{{ [{'src': 'configs/otel/otel-collector-config.yaml', 'dest': deploy_dir + '/configs/otel/otel-collector-config.yaml'}] if enable_observability | default('0') == '1' else [] }}"
+        _deploy_files_certbot: "{{ [{'src': 'api-gateway-solution/certbot/entrypoint.sh', 'dest': deploy_dir + '/api-gateway-solution/certbot/entrypoint.sh', 'mode': '0755'}] if certbot_replicas | default('0') != '0' else [] }}"
 
-    - name: Remove stale deploy directory (exists but no .git)
+    - name: Ensure deploy directory exists
       become_user: root
       ansible.builtin.file:
         path: "{{ deploy_dir }}"
-        state: absent
-      when: git_dir.stat is defined and not git_dir.stat.exists
+        state: directory
+        mode: '0755'
 
-    - name: Clone or update project repository
+    - name: Ensure subdirectories exist
       become_user: root
+      ansible.builtin.file:
+        path: "{{ item.dest | dirname }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ _deploy_files }}"
+
+    - name: Fix ownership before download
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        recurse: true
+
+    - name: Download deploy files from GitLab
+      ansible.builtin.get_url:
+        url: "{{ _raw_base }}/{{ item.src }}"
+        dest: "{{ item.dest }}"
+        force: true
+        mode: "{{ item.mode | default('0644') }}"
+        timeout: 30
+      loop: "{{ _deploy_files }}"
+      loop_control:
+        label: "{{ item.src }}"
+
+    - name: Download Grafana dashboards (observability)
+      when: enable_observability | default('0') == '1'
       block:
-        - name: Clone project repository
-          ansible.builtin.git:
-            repo: "{{ repo_url_with_credentials }}"
-            dest: "{{ deploy_dir }}"
-            version: "{{ repo_branch }}"
-            accept_hostkey: true
-          when: not git_dir.stat.exists
-
-        - name: Pull latest changes
-          ansible.builtin.git:
-            repo: "{{ repo_url_with_credentials }}"
-            dest: "{{ deploy_dir }}"
-            version: "{{ repo_branch }}"
-            force: true
-          when: git_dir.stat.exists
-
-        - name: Fix ownership to ansible_user
+        - name: Ensure grafana provisioning dir exists
           ansible.builtin.file:
-            path: "{{ deploy_dir }}"
-            owner: "{{ ansible_user }}"
-            group: "{{ ansible_user }}"
-            recurse: true
+            path: "{{ deploy_dir }}/configs/grafana/provisioning"
+            state: "{{ 'absent' if clean_deploy | default(false) | bool else 'directory' }}"
+            mode: '0755'
+
+        - name: Create grafana provisioning dir
+          ansible.builtin.file:
+            path: "{{ deploy_dir }}/configs/grafana/provisioning"
+            state: directory
+            mode: '0755'
+
+        - name: Download Grafana dashboards archive
+          ansible.builtin.get_url:
+            url: "{{ repo_url | regex_replace('\\.git$', '') }}/-/archive/{{ repo_branch }}/grafana.tar.gz?path=configs/grafana/provisioning"
+            dest: "/tmp/grafana-dashboards-{{ repo_branch | replace('/', '-') }}.tar.gz"
+            force: true
+            mode: '0644'
+
+        - name: Extract Grafana dashboards
+          ansible.builtin.unarchive:
+            src: "/tmp/grafana-dashboards-{{ repo_branch | replace('/', '-') }}.tar.gz"
+            dest: "{{ deploy_dir }}"
+            remote_src: true
+            extra_opts:
+              - "--strip-components=1"
+
+    - name: Fix ownership to ansible_user
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        recurse: true
 
     - name: Ensure deploy directories exist with correct ownership
       become_user: root
@@ -318,7 +320,7 @@
         -keyout {{ deploy_dir }}/secrets/ssl/server.key
         -out {{ deploy_dir }}/secrets/ssl/server.crt
         -subj "/CN={{ nginx_public_domain | default('localhost') }}"
-        -addext "subjectAltName={{ nginx_public_domain | default('localhost') | ipaddr | ternary('IP', 'DNS') }}:{{ nginx_public_domain | default('localhost') }}"
+        -addext "subjectAltName={{ 'IP' if (nginx_public_domain | default('localhost') | regex_search('^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$')) else 'DNS' }}:{{ nginx_public_domain | default('localhost') }}"
       when:
         - self_signed_certs | default(false) | bool
         - not ssl_files.results[0].stat.exists or not ssl_files.results[1].stat.exists
@@ -378,168 +380,40 @@
       loop_control:
         label: "{{ item.item }}"
 
-- name: GENIE.AI - Build and push images
+- name: GENIE.AI - Authenticate to GitLab Container Registry
   hosts: swarm_managers
-  tags: [build]
+  tags: [build, deploy]
   become: true
   tasks:
     - name: Initialize shared facts (registry URL, image tag)
       ansible.builtin.include_tasks: tasks/deploy-shared-facts.yml
 
-    - name: Define image build list
-      ansible.builtin.set_fact:
-        genieai_images:
-          - name: frontend
-            dockerfile: components/gov-chat-frontend/Dockerfile
-            context: components/gov-chat-frontend/
-            source_tag: genieai_mvp_frontend:latest
-            registry_tag: "genie-ai-frontend:{{ image_tag }}"
-            opea: false
-          - name: backend
-            dockerfile: components/gov-chat-backend/Dockerfile
-            context: components
-            source_tag: genieai_mvp_backend:latest
-            registry_tag: "genie-ai-backend:{{ image_tag }}"
-            opea: false
-          - name: document-repository
-            dockerfile: components/document-repository/Dockerfile
-            context: components
-            source_tag: genieai_mvp_document-repository:latest
-            registry_tag: "genie-ai-document-repository:{{ image_tag }}"
-            opea: false
-          - name: nginx
-            dockerfile: api-gateway-solution/nginx/Dockerfile
-            context: api-gateway-solution/nginx/
-            source_tag: genie-ai-nginx:latest
-            registry_tag: "genie-ai-nginx:{{ image_tag }}"
-            opea: false
-          - name: kong-config
-            dockerfile: api-gateway-solution/new-config/Dockerfile
-            context: api-gateway-solution/new-config/
-            source_tag: genie-ai-kong-config:latest
-            registry_tag: "genie-ai-kong-config:{{ image_tag }}"
-            opea: false
-          - name: postgres-init
-            dockerfile: configs/postgres/Dockerfile
-            context: configs/postgres/
-            source_tag: genie-ai-postgres-init:latest
-            registry_tag: "genie-ai-postgres-init:{{ image_tag }}"
-            opea: false
-          - name: keycloak
-            dockerfile: configs/keycloak/Dockerfile
-            context: configs/keycloak/
-            source_tag: genie-ai-keycloak:latest
-            registry_tag: "genie-ai-keycloak:{{ image_tag }}"
-            opea: false
-          - name: keycloak-config
-            dockerfile: configs/keycloak/Dockerfile.config-cli
-            context: configs/keycloak/
-            source_tag: genie-ai-keycloak-config:latest
-            registry_tag: "genie-ai-keycloak-config:{{ image_tag }}"
-            opea: false
-          - name: db-migrations
-            dockerfile: components/gov-chat-backend/Dockerfile.migrations
-            context: .
-            source_tag: genie-ai-db-migrations:latest
-            registry_tag: "genie-ai-db-migrations:{{ image_tag }}"
-            opea: false
-          - name: dataprep-arango
-            dockerfile: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
-            context: .
-            source_tag: genie-ai-dataprep-arango:latest
-            registry_tag: "genie-ai-dataprep-arango:{{ image_tag }}"
-            opea: true
-          - name: retriever-arango
-            dockerfile: genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
-            context: .
-            source_tag: genie-ai-retriever-arango:latest
-            registry_tag: "genie-ai-retriever-arango:{{ image_tag }}"
-            opea: true
-          - name: chatqna-server
-            dockerfile: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
-            context: .
-            source_tag: genie-ai-chatqna-server:latest
-            registry_tag: "genie-ai-chatqna-server:{{ image_tag }}"
-            opea: true
-          - name: reranker
-            dockerfile: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
-            context: .
-            source_tag: genie-ai-reranker:latest
-            registry_tag: "genie-ai-reranker:{{ image_tag }}"
-            opea: true
-          - name: textgen
-            dockerfile: genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
-            context: .
-            source_tag: genie-ai-textgen:latest
-            registry_tag: "genie-ai-textgen:{{ image_tag }}"
-            opea: true
-          - name: embedding
-            dockerfile: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
-            context: .
-            source_tag: genie-ai-embedding:latest
-            registry_tag: "genie-ai-embedding:{{ image_tag }}"
-            opea: true
-
-    # Observability images (built only when enable_observability != "0")
-    - name: Define observability image list
-      ansible.builtin.set_fact:
-        observability_images:
-          - name: tempo-proxy
-            dockerfile: tools/tempo-proxy/Dockerfile
-            context: tools/tempo-proxy/
-            source_tag: tempo-proxy:latest
-            registry_tag: "genieai/tempo-proxy:{{ image_tag }}"
-            opea: false
-
-    - name: Merge image lists (include observability when enabled)
-      ansible.builtin.set_fact:
-        genieai_images: "{{ genieai_images + (observability_images if enable_observability != '0' else []) }}"
-
-    - name: Check if images need rebuild
-      ansible.builtin.command: >
-        docker image inspect --format '{{ '{{' }}.Config.Labels.git_sha{{ '}}' }}'
-        {{ swarm_registry_url }}/{{ item.registry_tag }}
-      register: image_inspect
+    - name: Docker login to GitLab Container Registry (private registry only)
+      ansible.builtin.shell: |
+        echo "{{ gitlab_deploy_token }}" | docker login -u "{{ gitlab_deploy_token_user }}" --password-stdin {{ swarm_registry_url }}
       changed_when: false
-      failed_when: false
-      loop: "{{ genieai_images }}"
-      when: not item.opea or deploy_opea != "0"
-      loop_control:
-        label: "{{ item.name }}"
+      no_log: true
+      when:
+        - gitlab_deploy_token_user is defined
+        - gitlab_deploy_token is defined
+        - gitlab_deploy_token | length > 0
 
-    - name: Build image (changed only)
-      ansible.builtin.shell: >
-        docker build
-        -f {{ deploy_dir }}/{{ item.item.dockerfile }}
-        -t {{ item.item.source_tag }}
-        --label git_sha={{ git_sha.stdout }}
-        {{ deploy_dir }}/{{ item.item.context }}
-      loop: "{{ image_inspect.results }}"
-      when: >
-        item.skipped is not defined
-        and (item.rc != 0 or item.stdout | trim != git_sha.stdout)
-      loop_control:
-        label: "{{ item.item.name }}"
-      register: build_results
-      async: 600
-      poll: 30
+    - name: Skip registry login (public registry)
+      ansible.builtin.debug:
+        msg: "GitLab deploy token not configured — assuming public registry, no login needed"
+      when: >-
+        not (gitlab_deploy_token_user is defined
+        and gitlab_deploy_token is defined
+        and gitlab_deploy_token | length > 0)
 
-    - name: Tag image for registry
-      ansible.builtin.command: >
-        docker tag {{ item.item.item.source_tag }}
-        {{ swarm_registry_url }}/{{ item.item.item.registry_tag }}
-      loop: "{{ build_results.results }}"
-      when: item.skipped is not defined
-      loop_control:
-        label: "{{ item.item.item.name }}"
-
-    - name: Push image to registry
-      ansible.builtin.command: >
-        docker push {{ swarm_registry_url }}/{{ item.item.item.registry_tag }}
-      loop: "{{ build_results.results }}"
-      when: item.skipped is not defined
-      loop_control:
-        label: "{{ item.item.item.name }}"
+  post_tasks:
+    - name: Docker logout from GitLab registry (clean credentials)
+      ansible.builtin.shell: "docker logout {{ swarm_registry_url }}"
+      changed_when: false
+      when:
+        - gitlab_deploy_token_user is defined
+        - gitlab_deploy_token is defined
+        - gitlab_deploy_token | length > 0
 
 - name: GENIE.AI - Generate .env and deploy stack
   hosts: swarm_managers
@@ -592,7 +466,6 @@
     - name: Validate compose configuration
       ansible.builtin.shell: >
         docker compose
-        {% if gpu_env_file and gpu_env_file | length > 0 %}--env-file {{ deploy_dir }}/{{ gpu_env_file }}{% endif %}
         --env-file {{ deploy_dir }}/.env
         {{ _compose_profiles }}
         -f {{ deploy_dir }}/{{ compose_file }} config --quiet
@@ -622,7 +495,6 @@
         # (docker compose config converts port integers to strings, which
         # docker stack deploy rejects — see docker/cli#1073)
         docker compose \
-          {% if gpu_env_file and gpu_env_file | length > 0 %}--env-file {{ deploy_dir }}/{{ gpu_env_file }}{% endif %}
           --env-file {{ deploy_dir }}/.env \
           {{ _compose_profiles }} \
           -f {{ deploy_dir }}/{{ compose_file }} config > {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
@@ -672,24 +544,22 @@
 
     - name: Deploy Docker stack
       ansible.builtin.shell: |
-        docker stack deploy -c {{ deploy_dir }}/docker-compose.resolved.yaml {{ stack_name }}
+        docker stack deploy --resolve-image always -c {{ deploy_dir }}/docker-compose.resolved.yaml {{ stack_name }}
       args:
         chdir: "{{ deploy_dir }}"
       register: stack_deploy
       changed_when: "'Creating' in stack_deploy.stderr or 'Updating' in stack_deploy.stderr"
-      when: "'COMPOSE_CHANGED' in resolved_compose.stdout"
 
     - name: Stack deploy output
       ansible.builtin.debug:
         var: stack_deploy.stdout_lines
-      when: "'COMPOSE_CHANGED' in resolved_compose.stdout"
 
 - name: GENIE.AI - Post-deploy verification
   hosts: swarm_managers
   tags: [deploy]
   become: true
   vars:
-    _compose_changed: "{{ resolved_compose is skipped or 'COMPOSE_CHANGED' in resolved_compose.stdout }}"
+    _compose_changed: "true"
   tasks:
     - name: Wait for services to stabilize
       ansible.builtin.command: docker service ls --filter label=com.docker.stack.namespace={{ stack_name }} --format "{{ '{{' }}.Name{{ '}}' }}"

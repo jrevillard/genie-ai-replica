@@ -96,7 +96,7 @@ jest.mock('jspdf', () => {
     setDrawColor: jest.fn()
   }));
 });
-jest.mock('lucide-vue-next', () => ({
+jest.mock('@lucide/vue', () => ({
   Brain: { template: '<svg />' },
   Loader2: { template: '<svg />' },
   Plus: { template: '<svg />' },
@@ -767,20 +767,95 @@ describe('ChatBotComponent', () => {
       expect(vm.showQuickHelp).toBe(false);
     });
 
-    it('handles "Just Chat" option without category', () => {
+    it('handles "Just Chat" option — keeps conversation mode, clears labels', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Setup: select a categorized option first, then switch to Just Chat
+      const categorizedOption = {
+        service: 'Categorized Service',
+        textKey: 'quickhelp.categorized',
+        category: 'test-category-123',
+        id: 'cat-test',
+        serviceLabels: ['TestLabel'],
+        serviceKey: 'test-service',
+        source: 'quickHelp'
+      };
+      vm.selectQuickHelpOption(categorizedOption);
+      expect(vm.selectedContextItems.length).toBe(1);
+
+      // Switch to Just Chat — replaces Quick Help item, keeps conversation mode
+      const justChatOption = {
+        service: 'Just Chat',
+        category: null,
+        id: 'just-chat',
+        serviceLabels: ['just-chat']
+      };
+
+      vm.selectQuickHelpOption(justChatOption);
+
+      // Still has 1 context item (Just Chat), but with empty labels
+      expect(vm.selectedContextItems.length).toBe(1);
+      expect(vm.currentCategoryId).toBeNull();
+      const justChatItem = vm.selectedContextItems[0];
+      expect(justChatItem.serviceLabels).toEqual([]);
+      expect(justChatItem.category).toBeNull();
+    });
+
+    it('Just Chat sends no label filter in the API request', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
       const justChatOption = {
         service: 'Just Chat',
         category: null,
-        id: 'just-chat'
+        id: 'just-chat',
+        serviceLabels: ['just-chat']
+      };
+
+      vm.selectQuickHelpOption(justChatOption);
+      // Just Chat should NOT auto-submit a message
+      expect(mockSubmitQueryStream).not.toHaveBeenCalled();
+
+      vm.newMessage = 'test query';
+      await vm.sendMessage();
+
+      const payload = mockSubmitQueryStream.mock.calls[mockSubmitQueryStream.mock.calls.length - 1][0];
+      const labels = payload.context?.serviceLabels || [];
+      expect(labels).not.toContain('just-chat');
+      // With the flatMap fix, an explicitly empty serviceLabels array
+      // should produce an empty filter, not fall back to serviceKey.
+      expect(labels.length).toBe(0);
+      expect(payload.context.categoryLabel).toBeNull();
+    });
+
+    it('Just Chat enters free chat mode without auto-submitting', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      const sendMessageSpy = jest.spyOn(vm, 'sendMessage');
+      const justChatOption = {
+        service: 'Just Chat',
+        category: null,
+        id: 'just-chat',
+        serviceLabels: ['just-chat']
       };
 
       vm.selectQuickHelpOption(justChatOption);
 
-      // When id is 'just-chat', categoryId remains null
+      // Should set up context with empty labels
+      expect(vm.selectedContextItems.length).toBe(1);
+      expect(vm.selectedContextItems[0].serviceLabels).toEqual([]);
+      expect(vm.selectedContextItems[0].category).toBeNull();
       expect(vm.currentCategoryId).toBeNull();
+      // Should hide the quick help overlay
+      expect(vm.showQuickHelp).toBe(false);
+      // Should NOT auto-submit a message
+      expect(sendMessageSpy).not.toHaveBeenCalled();
+      expect(vm.newMessage).toBe('');
+      expect(vm.hiddenPromptForNextMessage).toBeNull();
+
+      sendMessageSpy.mockRestore();
     });
 
     it('sets currentCategoryId for categorized options', () => {
@@ -843,6 +918,243 @@ describe('ChatBotComponent', () => {
 
       vm.selectQuickHelpOption({});
       expect(vm.selectedContextItems.length).toBe(beforeLength);
+    });
+
+    // -----------------------------------------------------------------------
+    // serviceLabels feature (explicit English KB labels for retriever filter)
+    // -----------------------------------------------------------------------
+
+    it('loadQuickHelpButtons filters hidden buttons', async () => {
+      const { loadConfig } = require('../../main.js');
+      loadConfig.mockResolvedValue({
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [
+                { id: 'a', title: 'A', hidden: true, category: '1' },
+                { id: 'b', title: 'B', category: '2' }
+              ]
+            }
+          }
+        }
+      });
+
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      await vm.loadQuickHelpButtons();
+      await wrapper.vm.$nextTick();
+
+      expect(vm.quickHelpButtons.length).toBe(1);
+      expect(vm.quickHelpButtons[0].id).toBe('b');
+    });
+
+    it('loadQuickHelpButtons reads serviceLabels and sets serviceKey to first English label', async () => {
+      const { loadConfig } = require('../../main.js');
+      loadConfig.mockResolvedValue({
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [
+                {
+                  id: 'grow',
+                  title: 'Grow',
+                  category: '1',
+                  serviceLabels: ['Tomato', 'Onion']
+                }
+              ]
+            }
+          }
+        }
+      });
+
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      await vm.loadQuickHelpButtons();
+      await wrapper.vm.$nextTick();
+
+      const btn = vm.quickHelpButtons[0];
+      expect(btn.serviceLabels).toEqual(['Tomato', 'Onion']);
+      expect(btn.serviceKey).toBe('Tomato');
+      expect(btn.service).toBe('Grow'); // display = localized title, NOT the English label
+    });
+
+    it('loadQuickHelpButtons falls back to id when no serviceLabels', async () => {
+      const { loadConfig } = require('../../main.js');
+      loadConfig.mockResolvedValue({
+        features: {
+          chat: {
+            quickHelp: {
+              buttons: [{ id: 'legacy', title: 'Legacy', category: '1' }]
+            }
+          }
+        }
+      });
+
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      await vm.loadQuickHelpButtons();
+      await wrapper.vm.$nextTick();
+
+      const btn = vm.quickHelpButtons[0];
+      expect(btn.serviceLabels).toBeNull();
+      expect(btn.serviceKey).toBe('legacy');
+    });
+
+    it('selectQuickHelpOption carries serviceLabels and replaces previous Quick Help', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      const optA = {
+        service: 'Tomato',
+        serviceLabels: ['Tomato'],
+        serviceKey: 'Tomato',
+        id: 'a',
+        category: '1'
+      };
+      const optB = {
+        service: 'Onion',
+        serviceLabels: ['Onion'],
+        serviceKey: 'Onion',
+        id: 'b',
+        category: '2'
+      };
+
+      vm.selectQuickHelpOption(optA);
+      expect(vm.selectedContextItems.length).toBe(1);
+      expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Tomato']);
+
+      vm.selectQuickHelpOption(optB);
+      expect(vm.selectedContextItems.length).toBe(1); // replaced, not accumulated
+      expect(vm.selectedContextItems[0].serviceLabels).toEqual(['Onion']);
+    });
+
+    it('selectQuickHelpOption preserves sidebar items (additive)', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Simulate a sidebar item (source !== 'quickHelp')
+      vm.selectedContextItems.push({
+        service: 'Crops',
+        serviceKey: 'Crops',
+        source: 'sidebar',
+        category: '9',
+        selected: true
+      });
+
+      vm.selectQuickHelpOption({
+        service: 'Tomato',
+        serviceLabels: ['Tomato'],
+        serviceKey: 'Tomato',
+        id: 'qh',
+        category: '1'
+      });
+
+      expect(vm.selectedContextItems.length).toBe(2);
+      expect(vm.selectedContextItems.some((i) => i.source === 'sidebar')).toBe(true);
+      expect(vm.selectedContextItems.some((i) => i.source === 'quickHelp')).toBe(true);
+    });
+
+    it('getCategoryLabelById returns null for unknown id', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      expect(vm.getCategoryLabelById('999999')).toBeNull();
+    });
+
+    it('checkContextConfig blocks non-admin user on Category NN label', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Non-admin user
+      wrapper.vm.$store.commit = wrapper.vm.$store.commit || jest.fn();
+
+      const result = vm.checkContextConfig({
+        categoryLabel: 'Category 123',
+        serviceLabels: []
+      });
+
+      expect(result).toBe(false);
+    });
+
+    it('checkContextConfig blocks when context items present but no filter active', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Misconfig symptom: a context item exists but resolved to no labels
+      vm.selectedContextItems = [
+        { service: 'Broken', serviceKey: 'Broken', serviceLabels: null, source: 'quickHelp', selected: true }
+      ];
+
+      const result = vm.checkContextConfig({
+        categoryLabel: null,
+        serviceLabels: []
+      });
+
+      expect(result).toBe(false);
+    });
+
+    it('checkContextConfig allows genuinely empty context (Just Chat)', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // No context items selected — unfiltered query is legitimate
+      vm.selectedContextItems = [];
+      const result = vm.checkContextConfig({
+        categoryLabel: null,
+        serviceLabels: []
+      });
+
+      expect(result).toBe(true);
+    });
+
+    it('checkContextConfig passes for admin with valid labels', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Make the user an admin (default user has roles: ['user'])
+      wrapper.vm.$store.commit('SET_USER', { ...vm.$store.getters.currentUser, roles: ['admin'] });
+
+      vm.selectedContextItems = [
+        { service: 'Tomato', serviceKey: 'Tomato', serviceLabels: ['Tomato'], source: 'quickHelp' }
+      ];
+
+      const result = vm.checkContextConfig({
+        categoryLabel: null,
+        serviceLabels: ['Tomato']
+      });
+
+      expect(result).toBe(true);
+    });
+
+    it('query-build uses serviceLabels array then serviceKey fallback', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Quick Help item (has serviceLabels) + sidebar item (no serviceLabels, uses serviceKey)
+      vm.selectedContextItems = [
+        {
+          service: 'Grow',
+          serviceKey: 'Tomato',
+          serviceLabels: ['Tomato', 'Onion'],
+          source: 'quickHelp',
+          selected: true
+        },
+        { service: 'Tomate', serviceKey: 'Tomato', serviceLabels: null, source: 'sidebar', selected: true }
+      ];
+
+      // Build the query payload via the public sendMessage path would require mocking
+      // the service; instead, exercise the flatMap logic directly by inspecting the
+      // constructed serviceLabels from selectedContextItems (mirrors the query-build code).
+      const built = vm.selectedContextItems.flatMap((item) =>
+        Array.isArray(item.serviceLabels) && item.serviceLabels.length > 0
+          ? item.serviceLabels
+          : [item.serviceKey || item.service]
+      );
+
+      expect(built).toEqual(['Tomato', 'Onion', 'Tomato']);
     });
   });
 

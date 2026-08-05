@@ -1368,6 +1368,7 @@ export default {
     categoryNotFound: 'Categoría "{label}" no encontrada en la jerarquía de conocimiento',
     serviceLabelMismatch:
       'Servicio "{label}" utiliza una etiqueta de UI que puede no coincidir con la jerarquía de conocimiento',
+    noFilterWarning: 'Sin filtro de contexto activo — la consulta no será filtrada.',
     placeholder: 'Escriba su consulta aquí...',
     sendButton: 'Enviar',
     fileReceived: 'Archivo recibido con éxito.',

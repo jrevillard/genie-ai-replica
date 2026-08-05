@@ -36,11 +36,6 @@ This service extends the standard OPEA ChatQnA implementation with ITU-specific 
 
 ### Advanced Features
 
-- **Translation Modes**:
-  - With translation service (CHATQNA_DAVID)
-  - Without translation (CHATQNA_MACDAVID)
-  - Full GENIE.AI mode (CHATQNA_GENIE_AI)
-
 - **Service Integrations**:
   - Guardrail service for content filtering
   - Translation service for multi-language support
@@ -128,7 +123,6 @@ The service supports three deployment modes configured via environment variables
 
 **Features**:
 - Full translation service integration
-- Guardrail service enabled
 - All RAG pipeline components active
 - Complete multilingual support
 
@@ -139,36 +133,19 @@ export TRANSLATION_SERVICE_ENABLED=true
 export GUARDRAIL_SERVICE_ENABLED=true
 ```
 
-### CHATQNA_DAVID (With Translation)
+### CUSTOM (define as part of the ChatQnAService class)
 
-**Description**: GENIE.AI with translation services
+**Description**: GENIE.AI custom pipeline
 
-**Features**:
-- Translation service enabled
-- Guardrail service enabled
-- RAG pipeline active
-- Optimized for multilingual deployments
+**Custom Features (EXAMPLE)**:
+- Full translation service integration
+- Reranker component disabled  
 
-**Environment Variables**:
+**Environment Variables (EXAMPLE)**:
 ```bash
-export CHATQNA_MODE="CHATQNA_DAVID"
+export CHATQNA_MODE="CUSTOM_MODE_NAME"
 export TRANSLATION_SERVICE_ENABLED=true
-```
-
-### CHATQNA_MACDAVID (Without Translation)
-
-**Description**: GENIE.AI without translation (English-only)
-
-**Features**:
-- Translation service disabled
-- Guardrail service enabled
-- RAG pipeline active
-- Optimized for single-language deployments
-
-**Environment Variables**:
-```bash
-export CHATQNA_MODE="CHATQNA_MACDAVID"
-export TRANSLATION_SERVICE_ENABLED=false
+export RERANKER_SERVICE_ENABLED=false
 ```
 
 ---
@@ -294,6 +271,9 @@ The following services must be running (depending on deployment mode):
 | `RERANK_SERVER_PORT` | int | 80 | Reranker server port |
 | `LLM_SERVER_IP` | string | localhost | LLM server host |
 | `LLM_SERVER_PORT` | int | 9000 | LLM server port |
+| `MULTI_TURN_BLEND_ENABLED` | bool | false | Multi-turn vector-space blending (issue #833). When true, the query embedding is blended with the previous N turns' embedding (V = α·EQ + (1-α)·EH) at the retriever's dense leg, so pronoun-heavy follow-ups ("can you elaborate on this?") retrieve the prior turn's subject. Adds one embedding call per multi-turn query. Query-time feature; unrelated to ingest-time `CONTEXTUAL_RETRIEVAL_ENABLED`. |
+| `MULTI_TURN_BLEND_ALPHA` | float | 0.7 | Query weight α in the blend. `1.0` = query-only (equivalent to disabled), `0.0` = history-only. |
+| `MULTI_TURN_HISTORY_TURNS` | int | 1 | Number of prior conversation turns blended into the history vector. `1` = previous turn only. `0` disables blending even if the flag is on. |
 
 ### Language Configuration
 

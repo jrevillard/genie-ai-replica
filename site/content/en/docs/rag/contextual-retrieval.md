@@ -22,9 +22,9 @@ generation fails for a chunk, the raw chunk is embedded as a fallback.
 | Variable | Default | Effect |
 |---|---|---|
 | `CONTEXTUAL_RETRIEVAL_ENABLED` | `true` | Master switch. On by default; set `false` to disable (a no-op beyond skipping context generation). |
-| `CONTEXTUAL_STRATEGY` | `doc_level` | `doc_level` (one context call per document) or `per_chunk` (one per chunk). |
+| `CONTEXTUAL_STRATEGY` | `per_chunk` | `doc_level` (one context call per document) or `per_chunk` (one per chunk). |
 | `DATAPREP_CONTEXTUAL_MODEL` | _(reuses LLM)_ | Model for context generation. Empty = reuse `VLLM_LLM_MODEL_ID`. Must support guided JSON. |
-| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | 6000 | Max chars of doc text fed to the context LLM (~1500 tokens). |
+| `DATAPREP_CONTEXTUAL_DOC_BUDGET` | 100000 | Max chars of doc text fed to the context LLM (~1500 tokens). |
 | `DATAPREP_CONTEXTUAL_MAX_TOKENS` | 512 | Max tokens of generated context (avoids truncation under load). |
 | `CONTEXTUAL_LABEL_RAW` | `true` | Decoupled mode: label the **raw** chunk but embed the **contextualised** chunk. |
 

@@ -63,7 +63,6 @@ def create_mock_chat_request_data(**overrides):
         "messages": [{"role": "user", "content": "Hello"}],
         "context": None,
         "language": None,
-        "max_tokens": 1024,
         "top_k": 4,
         "top_p": 0.9,
         "temperature": 0.7,
@@ -423,6 +422,41 @@ class TestAlignInputs:
                 )
             assert result["search_type"] == "hybrid"
 
+        def test_embedding_batch_when_history_present(self):
+            """issue #833 E2: embedding node receives [query, history] batch when history set."""
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            llm_params = {}
+            inputs = {"text": "elaborate on this", "_blend_history_text": "prior turn", "_blend_alpha": 0.5}
+            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
+            # Batched input: [query, history]
+            assert result["input"] == ["elaborate on this", "prior turn"]
+            assert "text" not in result
+            assert result["_blend_alpha"] == 0.5
+
+        def test_embedding_single_when_history_absent(self):
+            """Regression guard: no history → single-string input (baseline path)."""
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            llm_params = {}
+            inputs = {"text": "standalone query"}
+            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
+            assert result["input"] == "standalone query"
+            assert "_blend_alpha" not in result
+
+        def test_embedding_empty_history_string_treated_as_absent(self):
+            """Empty history_text (first turn / flag off) → single-string, no blend artifacts."""
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            llm_params = {}
+            inputs = {"text": "query", "_blend_history_text": "", "_blend_alpha": 0.5}
+            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+                result = align_inputs(self_mock, inputs, "embedding_node", MagicMock(), llm_params)
+            assert result["input"] == "query"
+            assert "_blend_alpha" not in result
+
     # --- RERANK ---
     class TestRerankInput:
         def test_merges_reranker_parameters(self):
@@ -517,6 +551,37 @@ class TestAlignOutputs:
             with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
                 result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
             assert result["text"] == "Hello"
+            assert result["embedding"] == [0.1, 0.2, 0.3]
+
+        def test_blends_query_and_history_when_batch_returned(self):
+            """issue #833 E2: align_outputs EMBEDDING blends batch [query, history] response."""
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            data = {
+                "data": [
+                    {"index": 0, "embedding": [1.0, 0.0]},
+                    {"index": 1, "embedding": [0.0, 1.0]},
+                ]
+            }
+            inputs = {"input": ["query", "history"], "_blend_alpha": 0.5}
+            llm_params = {}
+            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+                result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
+            # alpha=0.5 → midpoint
+            assert result["embedding"] == [0.5, 0.5]
+            # BM25/hybrid leg must receive the isolated QUERY string, not the
+            # batch list (would 422 on retriever pydantic text:str otherwise).
+            assert result["text"] == "query"
+
+        def test_no_blend_when_single_embedding_returned(self):
+            """Regression guard: single-input path unchanged (no _blend_alpha)."""
+            self_mock = MagicMock()
+            self_mock.services = {"embedding_node": create_mock_service_node(FakeServiceType.EMBEDDING)}
+            data = {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]}
+            inputs = {"input": "standalone query"}
+            llm_params = {}
+            with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+                result = align_outputs(self_mock, data, "embedding_node", inputs, MagicMock(), llm_params)
             assert result["embedding"] == [0.1, 0.2, 0.3]
 
     # --- RETRIEVER ---
@@ -2072,3 +2137,84 @@ class TestCountFinalChunks:
 
     def test_none_safe(self):
         assert _count_final_chunks(None) == 0
+
+
+# ===========================================================================
+# Task: Multi-turn blend pure helpers (issue #833)
+# ===========================================================================
+class TestMultiTurnBlendHelpers:
+    """Direct unit tests for the pure helpers (no I/O, no mocks)."""
+
+    # --- _extract_history_text ---
+
+    def test_extract_history_text_empty_string(self):
+        assert chatqna_module._extract_history_text("", 1) == ""
+
+    def test_extract_history_text_first_turn_no_history(self):
+        """Single segment (current turn only) → no prior history."""
+        assert chatqna_module._extract_history_text("USER: hello", 1) == ""
+
+    def test_extract_history_text_n_zero_or_negative(self):
+        blob = "USER: q1 |<-MSG->| ASSISTANT: a1 |<-MSG->| USER: q2"
+        assert chatqna_module._extract_history_text(blob, 0) == ""
+        assert chatqna_module._extract_history_text(blob, -1) == ""
+
+    def test_extract_history_text_previous_turn_only(self):
+        blob = "USER: q1 |<-MSG->| ASSISTANT: a1 |<-MSG->| USER: q2"
+        # last segment is current query (q2); n_turns=1 → previous segment only
+        assert chatqna_module._extract_history_text(blob, 1) == "ASSISTANT: a1"
+
+    def test_extract_history_text_multiple_turns(self):
+        blob = "USER: q1 |<-MSG->| ASSISTANT: a1 |<-MSG->| USER: q2 |<-MSG->| ASSISTANT: a2 |<-MSG->| USER: q3"
+        # n_turns=2 → last 2 prior segments joined
+        result = chatqna_module._extract_history_text(blob, 2)
+        assert "USER: q2" in result and "ASSISTANT: a2" in result
+        assert "q1" not in result and "q3" not in result
+
+    def test_extract_history_text_n_exceeds_available(self):
+        """Requesting more turns than available → returns all prior segments."""
+        blob = "USER: q1 |<-MSG->| ASSISTANT: a1 |<-MSG->| USER: q2"
+        result = chatqna_module._extract_history_text(blob, 10)
+        assert "q1" in result and "a1" in result
+
+    def test_extract_history_text_filters_empty_segments(self):
+        """Pipe-delimited blob with stray separators → empty segments filtered."""
+        blob = "|<-MSG->| USER: q1 |<-MSG->|  |<-MSG->| USER: q2"
+        result = chatqna_module._extract_history_text(blob, 1)
+        assert result == "USER: q1"
+
+    # --- _blend_embeddings ---
+
+    def test_blend_alpha_one_returns_query(self):
+        q = [1.0, 2.0, 3.0]
+        h = [9.0, 9.0, 9.0]
+        assert chatqna_module._blend_embeddings(q, h, 1.0) == q
+
+    def test_blend_alpha_zero_returns_history(self):
+        q = [1.0, 2.0, 3.0]
+        h = [9.0, 9.0, 9.0]
+        assert chatqna_module._blend_embeddings(q, h, 0.0) == h
+
+    def test_blend_alpha_half_is_midpoint(self):
+        q = [0.0, 2.0]
+        h = [4.0, 6.0]
+        assert chatqna_module._blend_embeddings(q, h, 0.5) == [2.0, 4.0]
+
+    def test_blend_alpha_above_one_clamps_to_query(self):
+        q = [1.0]
+        h = [5.0]
+        assert chatqna_module._blend_embeddings(q, h, 5.0) == q
+
+    def test_blend_alpha_below_zero_clamps_to_history(self):
+        q = [1.0]
+        h = [5.0]
+        assert chatqna_module._blend_embeddings(q, h, -3.0) == h
+
+    def test_blend_dimension_mismatch_returns_query(self):
+        q = [1.0, 2.0]
+        h = [1.0, 2.0, 3.0]
+        assert chatqna_module._blend_embeddings(q, h, 0.5) == q
+
+    def test_blend_empty_history_returns_query(self):
+        q = [1.0, 2.0]
+        assert chatqna_module._blend_embeddings(q, [], 0.5) == q

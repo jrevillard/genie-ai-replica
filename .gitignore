@@ -122,3 +122,4 @@ docker-compose.override.yml
 
 # Python editable install artifacts
 genie-ai-overlay/*.egg-info/
+.tokensave/

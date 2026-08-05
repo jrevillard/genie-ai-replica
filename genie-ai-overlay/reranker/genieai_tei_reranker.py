@@ -43,9 +43,9 @@ setup_trace_logging("genie_tei_reranking")
 logflag = os.getenv("LOGFLAG", False)
 
 # Strategies: slice, threshold, slice_threshold, knee_threshold, adaptive
-RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "adaptive")
+RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice")
 RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.75))
-RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 1))
+RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 3))
 
 # Adaptive utility-cost selection parameters
 NOVELTY_SIGMOID_A = float(os.getenv("NOVELTY_SIGMOID_A", 20.0))

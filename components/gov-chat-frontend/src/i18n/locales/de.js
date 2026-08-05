@@ -1368,6 +1368,7 @@ export default {
     categoryNotFound: 'Kategorie "{label}" nicht in der Wissenshierarchie gefunden',
     serviceLabelMismatch:
       'Dienst "{label}" verwendet ein UI-Label, das möglicherweise nicht zur Wissenshierarchie passt',
+    noFilterWarning: 'Kein Kontextfilter aktiv — Abfrage wird ungefiltert sein.',
     placeholder: 'Geben Sie Ihre Anfrage hier ein...',
     sendButton: 'Senden',
     fileReceived: 'Datei erfolgreich empfangen.',

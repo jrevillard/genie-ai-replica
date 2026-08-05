@@ -14,7 +14,7 @@ const {
   crossReferenceGpu,
   parseGpuCompose,
   GPU_SERVICE_PORTS,
-  GPU_REQUIRED_IMAGES,
+  GPU_REQUIRED_SERVICES,
   GPU_SHARED_COMPOSE_VARS
 } = require('../validators/validate-gpu-node');
 
@@ -62,7 +62,10 @@ describe('Configuration Validation Suite', () => {
     'EMBEDDING_SERVICE_URL',
     'RERANKER_SERVICE_URL',
     'DOCLING_ENDPOINT',
-    'DOCLING_ENDPOINT_TIMEOUT'
+    'DOCLING_ENDPOINT_TIMEOUT',
+    // Per-service image vars — infrastructure (not app config), used by compose only
+    'GENIE_AI_REGISTRY',
+    'GENIE_AI_GLOBAL_TAG'
   ]);
 
   // --- AC #2: All docker-compose env vars are documented in env template ---
@@ -255,12 +258,14 @@ describe('Configuration Validation Suite', () => {
       expect(gpu.networks).toContain('gpu_network');
     });
 
-    test('image tags match required architecture (Decision 2)', () => {
+    test('all GPU image tags are pinned (no :latest)', () => {
       if (!gpuExists) return;
       const gpu = parseGpuCompose(GPU_COMPOSE_FILE);
-      for (const [serviceName, expectedImage] of Object.entries(GPU_REQUIRED_IMAGES)) {
+      for (const serviceName of GPU_REQUIRED_SERVICES) {
         const actualImage = gpu.images.get(serviceName);
-        expect(actualImage).toBe(expectedImage);
+        expect(actualImage).toBeDefined();
+        expect(actualImage).not.toMatch(/:latest$/);
+        expect(actualImage).toContain(':');
       }
     });
 

@@ -98,7 +98,7 @@ CONTEXTUAL_RETRIEVAL_ENABLED = os.getenv("CONTEXTUAL_RETRIEVAL_ENABLED", "true")
 DATAPREP_CONTEXTUAL_MODEL = os.getenv("DATAPREP_CONTEXTUAL_MODEL", "")
 # Max chars of the joined document chunks fed to the context-generation LLM
 # (bounds the prompt; ~1500 tokens). Filename + file_labels are always included.
-DATAPREP_CONTEXTUAL_DOC_BUDGET = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET", "6000"))
+DATAPREP_CONTEXTUAL_DOC_BUDGET = int(os.getenv("DATAPREP_CONTEXTUAL_DOC_BUDGET", "100000"))
 # Doc-context budget for the doc_level strategy (ONE call, so it can afford a
 # much larger window than per_chunk). ~4 chars/token; keep below the model's
 # VLLM_MAX_MODEL_LEN minus prompt/output overhead. Docs larger than this (or the
@@ -111,7 +111,7 @@ DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL = int(os.getenv("DATAPREP_CONTEXTUAL_DO
 #   "doc_level"           — ONE LLM call for the whole document; the same
 #      document-level context is prepended to every chunk (N× cheaper; still
 #      propagates the document subject — enough to fix label/embedding loss).
-CONTEXTUAL_STRATEGY = os.getenv("CONTEXTUAL_STRATEGY", "doc_level").strip().lower() or "doc_level"
+CONTEXTUAL_STRATEGY = os.getenv("CONTEXTUAL_STRATEGY", "per_chunk").strip().lower() or "per_chunk"
 # Decoupled mode: when true, label the RAW chunk and use the generated context
 # ONLY for the embedding. Recommended — keeps label precision (the labeler sees
 # the raw chunk) while propagating the document subject via the vector. Default

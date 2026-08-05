@@ -180,6 +180,24 @@ class Crawler {
     }
   }
 
+  _validateUrl(url) {
+    // Block non-HTTP schemes, internal IPs, and DNS rebinding to private networks
+    const parsed = new UrlParser(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      throw new Error(`Blocked URL scheme: ${parsed.protocol || '(none)'}`);
+    }
+    const hostname = parsed.hostname || '';
+    // Block raw IPv4 private / loopback / link-local
+    if (/^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.)/.test(hostname)) {
+      throw new Error(`Blocked internal IP: ${hostname}`);
+    }
+    // Block IPv6 loopback and link-local
+    if (hostname === '::1' || hostname === '[::1]' || hostname.startsWith('fe80:')) {
+      throw new Error(`Blocked internal IPv6: ${hostname}`);
+    }
+    return parsed;
+  }
+
   async fetch(url, headers = null, maxTimes = 5) {
     logger.debug(`Attempting to fetch URL: ${url} (max retries: ${maxTimes})`);
     headers = headers || this.headers;
@@ -192,6 +210,8 @@ class Crawler {
         if (!/^https?:\/\//i.test(url)) {
           url = 'http://' + url;
         }
+        // Validate URL before making the request — prevents SSRF
+        this._validateUrl(url);
 
         const response = await axios.get(url, {
           headers,

@@ -1,7 +1,7 @@
 # GENIE.AI — OPEA Strategy & Implementation Plan
 
 **Date:** 2026-08-06 (final — supersedes all prior A1/A2/A3/F2 drafts)
-**Decision:** **(A)** Retain the overlay build and bump it to **OPEA 1.5**; **(B)** build the agentic layer as **custom LangGraph workflows on the OPEA microservice harness** (not OPEA `comps/agent`, not a bespoke standalone service).
+**Decision:** **(A)** Retain the overlay build and bump it to **OPEA 1.5**; **(B)** build the agentic layer as **custom LangChain Deep Agents (on LangGraph) workflows on the OPEA microservice harness** (not OPEA `comps/agent`, not a bespoke standalone service).
 
 ---
 
@@ -10,7 +10,7 @@
 Two independent choices, both now settled by grounded evidence (the v1.3↔v1.5 `comps` source diff + the OPEA-trajectory research):
 
 - **RAG base — bump the overlay to OPEA 1.5 (retain clone-at-build + overrides).** The diff proved GENIE's RAG logic needs **~zero code changes**: every `comps` API GENIE depends on (`ServiceOrchestrator.schedule/align_*`, `add/flow_to`, the `runtime_graph` DAG, `MicroService.__init__`, `OpeaComponent`/`OpeaComponentRegistry`/`OpeaComponentLoader`, `register_microservice`/`opea_microservices`, `opea_telemetry`, `api_protocol` models) is **byte-identical or purely additive** v1.3→v1.5. The chatqna monkeypatch survives unchanged. Realistic effort **~3–5 engineer-days**, not the 11-day padded estimate. Flatten-to-fork (F2) is **dropped** — not worth ~14–20 days for a decoupling the cheap bump makes unnecessary.
-- **Agentic layer — custom LangGraph-direct, hosted on the OPEA `MicroService` harness.** OPEA's `comps/agent` is a wrapper over LangChain/LangGraph on a declining, Intel-concentrated project and may not fit GENIE's gov-workflow patterns. GENIE authors its own multi-step/HITL/cross-BB workflow graphs on LangGraph + the MCP SDK, but **reuses the comps `MicroService` shell** (lifecycle, `/health`, statistics, OTel, FastAPI, Kong integration, the Docker/build/CI pattern GENIE already uses) — **no separate microservice bootstrap harness.**
+- **Agentic layer — custom, hosted on the OPEA `MicroService` harness, built on LangChain Deep Agents (on LangGraph).** OPEA's `comps/agent` is **rejected** (see §7 for the point-by-point evaluation of the team's considerations doc): it's a wrapper over LangChain/LangGraph on a declining, Intel-concentrated project; it lags current vLLM tool-calling (vLLM 0.8.3+ made tool/function calling stable — OPEA's strategies predate that); its memory/multi-turn support is `react_llama`-only (GENIE is inherently multi-turn); AgentQnA is validated only on Intel/AMD HW (GENIE is NVIDIA); and it doesn't use LangChain Deep Agents. GENIE instead authors its own multi-step/HITL/cross-BB workflows on **LangChain Deep Agents on LangGraph** (SOTA context-engineering middleware — history compression, tool-result offloading, subagent isolation, planning — exactly what long gov workflows need) + the MCP SDK, using **vLLM's native tool-calling** (`--enable-auto-tool-choice --tool-call-parser`), with **LangGraph's first-class multi-turn memory** (checkpointer + state, for all agent types). It **reuses the comps `MicroService` shell** (lifecycle, `/health`, statistics, OTel, FastAPI, Kong, Docker/build/CI) — **no separate microservice bootstrap harness.**
 
 **Net architecture:** OPEA 1.5 = the RAG + microservice **plumbing** GENIE keeps; LangGraph + MCP = the agentic **logic** GENIE owns.
 
@@ -158,6 +158,21 @@ Greenfield (no LangGraph code exists). New `genie-ai-overlay/workflows/` microse
 - **Clone-at-build persists** (air-gap *build* still needs GitHub/mirror) — acceptable for now; vendor/mirror later only if it becomes a real constraint.
 - **Align with jrevillard** — Part A touches his dataprep/retriever/reranker surface; Part B adds a new service he should be aware of.
 - **LangGraph 1.x tracking** — GENIE owns the LangGraph upgrade cadence directly (normal library dependency, industry standard; not the unsustainable "novel runtime" case).
+
+---
+
+## 7. Team evaluation — considerations addressed
+
+The team's `considerations_for_discussion_opea_1_5_for_agentic_enablement.md` raised 4 concerns about adopting OPEA's `comps/agent`. **All 4 are valid and well-cited — and all 4 are moot under this decision, because we are NOT adopting OPEA's agent.** They further validate the "own the agentic logic" call, and surface one refinement (build on LangChain Deep Agents).
+
+| # | Consideration (from the file) | How this decision addresses it |
+|---|---|---|
+| 1 | OPEA agent **lags vLLM** — works around tool-calling limits that vLLM 0.8.3+ (Apr 2025) resolved; strategy files dated Jun 2025 | **Moot** — we don't use OPEA's agent. Our agent uses **vLLM's native tool-calling** (`--enable-auto-tool-choice --tool-call-parser`), leveraging the capability OPEA's workarounds predate. GENIE's vLLM is already 0.10.x. |
+| 2 | **AgentQnA validated only on Intel/AMD HW + Intel/Meta models** (GENIE is NVIDIA) | **Moot** — we don't use OPEA's agent. Our agent runs on GENIE's existing **NVIDIA** vLLM (T4/RTX 6000), already production-proven for RAG. |
+| 3 | **Only `react_llama` supports memory + multi-turn** (GENIE/ChatQnA is inherently multi-turn) | **Solved by LangGraph** — first-class multi-turn memory (checkpointer + state) for *all* agent types, not one. A core reason we rejected OPEA's agent. |
+| 4 | OPEA agent **doesn't use LangChain Deep Agents** (SOTA context-managed ReAct) | **Refinement adopted** — build on **LangChain Deep Agents (on LangGraph)**: context-engineering middleware (history compression, tool-result offloading, subagent isolation, planning) — exactly what long, tool-heavy gov workflows need, and the gap in OPEA's agent. |
+
+**Net:** the considerations are a strong case *against* OPEA's `comps/agent` — which is the decision already made. The one update: standardize the custom layer on **LangChain Deep Agents** (not raw LangGraph), and explicitly configure **vLLM native tool-calling** + rely on **LangGraph multi-turn memory**.
 
 ---
 

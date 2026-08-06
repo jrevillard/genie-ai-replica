@@ -2,7 +2,7 @@
 
 **(OPEA 1.5 overlay bump · SST-as-tools · OKF)**
 **Date:** August 2026 · **Audience:** Engineering team · **Branch:** `feat/agentic-enablement` (was `feat/okf-server`)
-**Decision:** **(A)** retain the overlay build and bump it to **OPEA 1.5** (cheap); **(B)** build the agentic layer as **custom LangGraph on the OPEA `MicroService` harness** (not OPEA `comps/agent`, not `mcpo`); **(C)** SST survives as **the agent's tools + governance**; **(D)** OKF as the knowledge layer.
+**Decision:** **(A)** retain the overlay build and bump it to **OPEA 1.5** (cheap); **(B)** build the agentic layer as **custom LangChain Deep Agents (on LangGraph) on the OPEA `MicroService` harness** (not OPEA `comps/agent`, not `mcpo`); **(C)** SST survives as **the agent's tools + governance**; **(D)** OKF as the knowledge layer.
 **File-by-file implementation plan:** `C:\Users\David Forden\Documents\OPEA-1.5-upgrade-analysis.md` (the decision doc — Part A bump + Part B agentic layer).
 
 ---
@@ -91,6 +91,21 @@ Unchanged in intent and scope:
 |---|---|---|
 | **#603 Agentic Phase 1** | Build LangGraph orchestrator + `mcpo` + 3 mock MCP servers + frontend viz + pause/resume | **Custom LangGraph on the OPEA `MicroService` harness** + **MCP SDK client** (drop `mcpo`) + **SST tools** (web search, governance) + mock GovStack BB MCP servers + Vue workflow viz + **ArangoDB checkpointer** for pause/resume. Materially reduced (no `mcpo`, no custom runtime, no OPEA-agent ramp-up). |
 | **#604 ChatQnA refactor** | Break the ~2,560-line monolith (5 near-duplicate `flow_to` variants) into modular files | **Less urgent** — the diff proved the `ServiceOrchestrator.align_*` monkeypatch survives 1.5, so the coupling pressure eased. Still worthwhile (consolidate the 5 duplicate `flow_to` variants) — do **after** the bump, when the megaservice is settled. |
+
+---
+
+## Team considerations — how the recommended path addresses them
+
+The team's `considerations_for_discussion_opea_1_5_for_agentic_enablement.md` raised 4 concerns about OPEA's `comps/agent`. **All 4 are valid and well-cited — and all 4 are moot under the recommended path, because we do NOT adopt OPEA's agent.** They validate the "own the agentic logic" call and surface one refinement (build on LangChain Deep Agents).
+
+| Consideration (from the file) | Addressed by the recommended path |
+|---|---|
+| **OPEA agent lags vLLM** — works around tool-calling limits that vLLM 0.8.3+ (Apr 2025) resolved | We use **vLLM's native tool-calling** (`--enable-auto-tool-choice --tool-call-parser`) directly — no OPEA workarounds. GENIE's vLLM is already 0.10.x. |
+| **AgentQnA validated only on Intel/AMD HW** + Intel/Meta models (GENIE is NVIDIA) | Our agent runs on GENIE's existing **NVIDIA** vLLM (T4/RTX 6000) — already production-proven for RAG. No OPEA agent = no HW-validation gap. |
+| **Only `react_llama` supports memory + multi-turn** (GENIE/ChatQnA is inherently multi-turn) | **LangGraph multi-turn memory** (checkpointer + state) for *all* agent types — a core reason we chose LangGraph over OPEA's agent. |
+| **OPEA agent doesn't use LangChain Deep Agents** (SOTA context-managed ReAct) | We **build on LangChain Deep Agents on LangGraph** — context-engineering middleware (history compression, tool-result offloading, subagent isolation, planning) for long gov workflows. This is the gap in OPEA's agent the file correctly flags. |
+
+**Net:** the considerations are a strong case *against* OPEA's `comps/agent` — which is exactly the decision made. The recommended path (cheap 1.5 bump + custom Deep-Agents-on-LangGraph on the OPEA microservice harness) turns each concern into a non-issue, and adopts Deep Agents as the one refinement the file surfaces. Point-by-point detail: decision doc §7.
 
 ---
 
@@ -196,6 +211,7 @@ OKF's surface is exercised by realistic **OKF concept bundles** (Markdown + YAML
 - **Clone-at-build persists** — air-gap *build* still needs GitHub/mirror; acceptable now, vendor/mirror later if it becomes a constraint.
 - **K8s (#600) still lagging** — not a build blocker (all deploy on Swarm); a Sprint 25 GovStack/SCS deploy-target question.
 - **OKF GitLab issues** — none yet; cut them before OKF enters a sprint.
+- **Team considerations doc** (`considerations_for_discussion_opea_1_5_for_agentic_enablement.md`) — all 4 points are **addressed by rejecting OPEA's `comps/agent`**: vLLM-workaround staleness, Intel/AMD-only validation, and `react_llama`-only memory are all moot; and we **build on LangChain Deep Agents** (the SOTA context-managed harness OPEA lacks) + **vLLM native tool-calling** + LangGraph multi-turn memory. Point-by-point in the decision doc §7.
 
 ---
 

@@ -100,7 +100,7 @@ All overlay images run Python 3.11 (matching v1.5's `python:3.11-slim` bases). T
 - Compiled/C-extension pins are rebuilt for 3.11.
 
 #### FR-4: Adopt v1.5 dependency pins and compiled requirements
-The overlay consumes v1.5's pinned versions: langchain 0.3.27, langgraph 1.0.1, mcp 1.24.0, docling-core 2.44.2, and the v1.4+ `requirements-cpu.txt`/`requirements-gpu.txt` layout (no more v1.3-style unpinned `requirements.txt`). The dataprep local lock machinery (`requirements.in`, `requirements.lock`, `generate-requirements-in.sh`, the `docling-core==2.82.0` pin, the `--no-deps --require-hashes` block) is retired in favor of OPEA's compiled lock, keeping `--require-hashes` semantics. Realizes UJ-1, UJ-2. (Source: `deferred-work.md` L395-411, the v1.3→v1.4+ retirement checklist.)
+The overlay consumes v1.5's pinned versions: langchain 0.3.27, langgraph 1.0.1, mcp 1.24.0, docling-core 2.44.2, and the v1.4+ `requirements-cpu.txt`/`requirements-gpu.txt` layout (no more v1.3-style unpinned `requirements.txt`). The dataprep local lock machinery (`requirements.in`, `requirements.lock`, `generate-requirements-in.sh`, the `docling-core==2.82.0` pin, the `--no-deps --require-hashes` block) is retired in favor of OPEA's compiled lock, keeping `--require-hashes` semantics. **Per architecture decision D7, the compiled-lock pattern extends to retriever and reranker** (they adopt OPEA's compiled requirements too — deterministic, SBOM-able builds fleet-wide; a half-migrated fleet would contradict NFR-M1). Realizes UJ-1, UJ-2. (Source: `deferred-work.md` L395-411, the v1.3→v1.4+ retirement checklist.)
 **Consequences:**
 - Dataprep builds deterministically from a compiled lock (`--require-hashes` retained; `[ASSUMPTION: v1.5's compiled lock carries hashes or is compiled with them — verified during FR-4; if not, hashes are generated before adoption]`).
 - No dead divergence carried (`verify:dataprep-lock` job **re-pointed** to OPEA's lock, with the re-pointing decision recorded in `.decision-log.md` — closing the earlier "re-pointed or removed" ambiguity).
@@ -133,6 +133,7 @@ The coupling surfaces are diffed v1.3→v1.5 and verified. The **`schedule()` kw
 - **dataprep `_parent_mod.ARANGO_DB_NAME` monkeypatch target** — if v1.5 moved where the constant lives, the patch **silently no-ops**.
 - **`MegaServiceOrchestrator` constructor/healthcheck/abstract-method surface** — beyond `align_*`.
 - **Integration auto-discovery** — the injected `genieai_*` subclasses in `comps/integrations/` only register if v1.5 loads integrations the same way.
+- **Override-audit manifest (`OVERRIDES.yaml`)** — every override carries a machine-checkable disposition (`still-needed` / `re-graft-to-new-API` / `obsolete-remove`) enforced by a CI lint (architecture pattern 1).
 
 Realizes UJ-1.
 **Consequences:**
@@ -166,11 +167,13 @@ Each overlay image is checked for modules that reach langgraph 1.0.1 or new `com
 **Functional Requirements:**
 
 #### FR-10: Contract tests against real `comps` (not just imports)
-Import smoke tests exist for retriever, reranker, and chatqna (dataprep already has `smoke:dataprep-arango`), **and** — because import tests cannot catch runtime contract breaks — the following run against **real `comps@v1.5` with model/DB endpoints HTTP-mocked (no GPU)**, in a context where `comps` is **not** mocked (the existing `conftest.py` stubs `comps` at `sys.modules`; the new tests run as an isolated target, ideally inside the built image, which also exercises the FR-9 docarray rename hack):
+Import smoke tests exist for retriever, reranker, and chatqna (dataprep already has `smoke:dataprep-arango`), **and** — because import tests cannot catch runtime contract breaks — the following run against **real `comps@v1.5` with model/DB endpoints HTTP-mocked (no GPU)**, in a context where `comps` is **not** mocked (the existing `conftest.py` stubs `comps` at `sys.modules`; the new tests run as an isolated target **inside the built image** — required, per architecture decision D3 — which also exercises the FR-9 docarray rename hack, the compiled lock, and the Python 3.11 `sitecustomize` path):
 - **Orchestrator wire test (highest ROI):** build the ServiceOrchestrator graph on v1.5, feed one canned input through `align_inputs → schedule → align_generator`, and assert all six custom kwargs land on the retriever/reranker handlers and that each service registered. This is the single cheapest test for the single highest-severity risk (silent kwargs-drop → ungrounded chat).
 - **One-doc ingest smoke:** one representative document through the real v1.5 chunker (docling 2.44.2) + labeler; assert structured chunks + a round-trip retrieve.
 - **Focused label-filter test:** wrong-category documents are excluded on the bumped `ArangoVector` path.
-- **Telemetry assertion:** one traced request; expected span names/attributes present (NFR-T1 enforced by a test, not just a statement).
+- **Telemetry assertion:** one traced request; expected span names/attributes present, **derived from the Grafana dashboard provisioning** (`configs/grafana/provisioning/`) so a v1.5 telemetry rename cannot silently empty a dashboard (NFR-T1 enforced by a test, not just a statement).
+- **End-to-end cross-service pipeline contract test:** one full RAG query through retriever→reranker→chatqna asserting the observable surface (response schema, streaming, confidence distribution, abstention) — proves "behavior-neutral" across service handoffs (architecture pattern 3).
+- **NFR-P coarse budgets:** wire-test latency + one-doc ingest wall-clock budgets (architecture decision D6) — so a latency/throughput regression fails a gate instead of sailing through.
 The smoke tests are **red-green validated**: written green against v1.3, then re-run against a bare v1.5 bump *before* re-grafting to prove they go red on the real break. Realizes UJ-1.
 **Consequences:**
 - A 1.5 runtime contract break (kwargs-drop, non-registration, filter leak, telemetry drift) is caught in CI, not at deploy time.
@@ -215,7 +218,7 @@ The chat `vllm` service in `docker-compose.yaml` moves from `vllm/vllm-openai:la
 - This work is independent of the OPEA bump and lands as its **own commit** so a deployment issue is not confounded with the upgrade.
 
 #### FR-16: Canary on `release/el-salvador` before `main`
-The upgrade is validated on the deployed El Salvador stack (or the equivalent canary target) with **explicit exit criteria** — observation window, error-rate/latency thresholds, a RAG-quality spot-check, and no ingest anomalies — before promotion to `main`. Where infra allows, a **side-by-side shadow comparison** (v1.3 images vs v1.5 images) is preferred over a sequential cutover so real traffic is never the first test of the new stack. Realizes UJ-1, UJ-2.
+The upgrade is validated on the deployed El Salvador stack (or the equivalent canary target) with **explicit exit criteria** — observation window, error-rate/latency thresholds, a RAG-quality spot-check, and no ingest anomalies — before promotion to `main`. A **side-by-side shadow comparison** (v1.3 images vs v1.5 images) is **required** (architecture decision D5): comps@1.5 against the already-ahead runtime (vLLM v0.10.x, TEI 1.9.3) is an upstream-unverified pairing, so real traffic is never the first test of the new stack. Realizes UJ-1, UJ-2.
 **Consequences:**
 - The upgrade never reaches `main` without a deployed-environment validation on defined criteria, not vibes.
 - Matches the project's validate-before-promote rule.
@@ -231,6 +234,7 @@ Rollback = redeploying the v1.3 image tags. The v1.3 digests are **retained by a
 CLAUDE.md/env references affected by the bump are updated (e.g. `RERANKER_TOP_N` default drift noted, dependency pins, Python version), and the docs upgrade matrix gains the v1.3→v1.5 entry. Realizes UJ-1, UJ-2.
 **Consequences:**
 - Deployers and agents read correct version/dependency facts after the upgrade.
+- The upgrade matrix / `CHANGELOG` are bound to the **same MR** that moves `OPEA_VERSION` (architecture pattern 9); CI asserts no `NEXT` placeholder remains.
 
 #### FR-19: Confirm the targeted upstream improvements land
 From the v1.4/v1.5 upstream changelogs, the concrete improvements and bug fixes this deployment benefits from are **enumerated** (docling/langchain/chunking fixes, dataprep/retriever upstream fixes, the CVE closures) and the named ones are **verified present in the deployed images** — so the "improvements + bug fixes" goal has a positive check, not just negative-space metrics (no regression, no break, fewer CVEs). Realizes UJ-1; closes the goal→metric gap.
@@ -281,7 +285,7 @@ From the v1.4/v1.5 upstream changelogs, the concrete improvements and bug fixes 
 
 **Secondary**
 - **SM-5**: El Salvador canary green on defined exit criteria (FR-16) before `main`; rollback **rehearsed in staging** against the same ArangoDB (FR-17). Validates FR-16, FR-17.
-- **SM-6**: Dead divergence removed (dataprep `.in`/`.lock`/generator/docling pin retired; `verify:dataprep-lock` re-pointed). Validates FR-4.
+- **SM-6**: Dead divergence removed — dataprep `.in`/`.lock`/generator/docling pin retired, and the compiled-lock pattern extended to retriever/reranker (D7); `verify:dataprep-lock` re-pointed. Validates FR-4.
 - **SM-7**: The enumerated upstream improvements (FR-19) are confirmed present in the deployed images — the positive "what did we actually get" check. Validates FR-19.
 
 **Counter-metrics (do not optimize)**
@@ -339,8 +343,8 @@ From the v1.4/v1.5 upstream changelogs, the concrete improvements and bug fixes 
 6. **`RERANKER_TOP_N` default drift** — docs say 3; code says 2 (chatqna) / 1 (reranker). It doubles as a parity-baseline ambiguity (deployed vs documented v1.3 behavior) and is resolved as part of FR-11/FR-18; not a behavior change of this PRD.
 7. **Compiled-lock hashes** — whether v1.5's `requirements-cpu.txt`/`-gpu.txt` carry hashes; if not, they are generated before adoption (FR-4).
 8. **Concrete upstream improvements list** — the FR-19 enumeration is drawn from the v1.4/v1.5 changelogs during discovery of this PRD's execution; the named fixes to verify are finalized there.
-9. **`openai-whisper` restore vs drop** — v1.4/v1.5 keep whisper; decide whether to restore it in the dataprep requirements or keep the current drop (deferred-work L403). Decided during FR-4.
-10. **Retriever/reranker compiled-lock adoption** — deferred-work's "pick up when those images next change" fires within this bump; decide whether to extend the compiled-lock pattern to retriever/reranker now or explicitly defer (they use modern pip and do not hit issue #834). Decided during FR-4/§6.
+9. **`openai-whisper` restore vs drop** — **resolved (architecture D8): follow upstream's compiled lock** — restore whisper if v1.5 pins it and it builds on the displayless image; any divergence carries a documented reason.
+10. **Retriever/reranker compiled-lock adoption** — **resolved (architecture D7): extend now** — FR-4 covers all three modules.
 
 ## 11. Assumptions Index
 

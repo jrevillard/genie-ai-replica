@@ -12,9 +12,10 @@ builds_on:
   - ../../briefs/brief-okf-server-2026-07-15/addendum.md
 architecture: ./architecture.md
 depends_on:
-  - server-side-tools (SST) initiative — consumes Registry / ToolExecutor / Stream-Ingestor / mcpo (gates the MCP transport only)
-  - Sprint 24 #603 (LangGraph + MCP) — gates the MCP transport only
-  - dataprep / retriever (exist on main — reused, extended additively for multi-graph grounding)
+  - OPEA 1.3 → 1.5 overlay bump (cheap; ~3–5 engineer-days) — the Genie-owned RAG components OKF extends are rebased onto `comps` 1.5; the verified v1.3↔v1.5 diff proved the APIs are byte-identical/additive, so RAG logic is untouched and stays Genie-owned/forked. OKF Phase 1 lands AFTER the bump.
+  - dataprep / retriever (exist on main — Genie-owned/forked; reused, extended additively for multi-graph grounding — which is GREENFIELD: multi-graph fan-out + `graph_name` threading do not exist today)
+  - GENIE workflows service (Sprint 24 #603 — custom LangChain Deep Agents on the OPEA `MicroService` harness) — its MCP client (`mcp` SDK) consumes OKF's MCP surface; gates the MCP transport only
+  - SST (reduced to tools: web search via SearXNG + stream ingestor + governance) — the original Registry/Executor/mcpo are SUBSUMED by the workflows service; no longer a dependency for MCP transport
 authors: Genie.ai Dev
 ---
 
@@ -30,7 +31,7 @@ This PRD defines the **OKF Server** initiative for product management, Genie pla
 
 Google's Open Knowledge Format (OKF v0.1, June 2026) made organizational knowledge portable for AI agents — but deliberately stopped at the *format*, leaving storage, serving, security, curation, and query to the ecosystem. Every existing OKF consumer is either a local stdio tool or locked to Google Cloud, and every open-source GraphRAG/agent-memory engine ships without multi-tenancy, RBAC, audit, privacy controls, or data residency. Government and public-service deployments — Genie's core mission — have no sovereign way to host curated knowledge and serve it to agents with the trust model they require.
 
-The **GENIE.AI OKF Server** is the open-source, enterprise- and government-grade service that fills this gap. It is a **flexible production framework for any RAG use case** — organizations break large corpora **by domain into multiple OKF repositories**; each repository is hosted, curated, versioned, and access-controlled; and **RAG responses are grounded in all available data** — the existing free-form corpus *and* every authorized OKF repository — through a unified multi-graph retrieval layer. It is **complementary** to Genie's dataprep/RAG pipeline and the planned Server-Side Tools (SST) foundation — it consumes and extends them, never competes — and is engineered from the first commit for **sovereignty, privacy, security, data curation, and accountability**. It becomes the canonical open-source reference implementation of a governed OKF consumer/serving layer.
+The **GENIE.AI OKF Server** is the open-source, enterprise- and government-grade service that fills this gap. It is a **flexible production framework for any RAG use case** — organizations break large corpora **by domain into multiple OKF repositories**; each repository is hosted, curated, versioned, and access-controlled; and **RAG responses are grounded in all available data** — the existing free-form corpus *and* every authorized OKF repository — through a unified multi-graph retrieval layer. It is **complementary** to Genie's dataprep/RAG pipeline and the planned agentic layer (custom LangChain Deep Agents + SST-as-tools) — it consumes and extends them, never competes — and is engineered from the first commit for **sovereignty, privacy, security, data curation, and accountability**. It becomes the canonical open-source reference implementation of a governed OKF consumer/serving layer.
 
 ## 2. Target User
 
@@ -51,7 +52,7 @@ The **GENIE.AI OKF Server** is the open-source, enterprise- and government-grade
   - **Resolution:** repository registered, versioned, access-controlled; Amara sees ingest health + conformance metrics.
 
 - **UJ-2. A Genie agent grounds an answer across all domains with citable, access-checked concepts.**
-  - **Persona + context:** a Genie LangGraph agent (Sprint 24) or external MCP client answering a user question.
+  - **Persona + context:** a Genie **LangChain Deep Agents (on LangGraph)** agent (Sprint 24) or external MCP client answering a user question.
   - **Path:** (1) ChatQnA forwards the caller's **authorized graph set** (free-form `GRAPH` + all `OKF_{repo_id}` the token grants) to the retriever; (2) the retriever fans out across those graphs, fuses results (RRF), applies per-repo/per-domain ACL, and returns ranked concept hits; (3) the agent fetches the top concept and its structural neighbors.
   - **Climax:** the agent cites the concept with repository, version, and concept ID — grounded in *all* available data, not one corpus.
   - **Resolution:** answer grounded, citable, access-respecting; the call is traced end-to-end (OTel) and audited.
@@ -76,7 +77,7 @@ The **GENIE.AI OKF Server** is the open-source, enterprise- and government-grade
 - **Structural link graph** — concept-to-concept edges derived from Markdown cross-links (distinct from dataprep's LLM-extracted entity graph), stored in `OKF_{repo_id}_LINKS_TO` with the link's anchor text as `label`.
 - **dataprep / retriever** — existing Genie OPEA services; reused and **extended additively** (graph_name wiring, multi-graph fan-out, repo-level retract).
 - **Tenant** — an isolated administrative/agency scope on a shared deployment.
-- **SST** — the Server-Side Tools initiative (planned); the foundation OKF Server consumes for the MCP transport (Registry, ToolExecutor, Stream-Ingestor, mcpo).
+- **SST** — the Server-Side Tools initiative (planned, **reduced**): web search (SearXNG) + stream ingestor + governance (PII/circuit-breaker/rate-limit/audit), delivered as LangGraph tools in the GENIE workflows service. The original Registry/Executor/mcpo are subsumed by the workflows service (LangChain Deep Agents + the `mcp` SDK); OKF does NOT depend on them.
 - **Source origin** — the **external, user-owned** Git repository or S3-compatible bucket a repository is synced from (any host/provider; distinct from the Genie framework code repo). Not under Genie's control; consulted **only at sync time**.
 - **Source of truth (content)** — after upload + ingestion, the **document-repository** is the single source of truth for all internal Genie components; the external origin is a sync source, not a runtime dependency.
 - **Document reference** — a stable identifier/URL into the document-repository that lets the UI, chat citations, and agents link a user to view the original source document in the browser.
@@ -237,7 +238,7 @@ An agent can list its accessible repositories and fetch a repository's outline/`
 The serving handlers are implemented so the same search/get/list/outline + a parameterized `neighbors` traversal are exposed as MCP Resources (index/manifest) + Tools over Streamable HTTP when the MCP transport is available. Realizes UJ-2.
 **Consequences:**
 - Adding the MCP transport does not require re-implementing search/get logic.
-- The MCP surface is sequenced after REST, gated on SST + Sprint 24 #603 (transport only — the handlers ship with REST).
+- The MCP surface is sequenced after REST, gated on the GENIE workflows service's MCP client (Sprint 24 #603, custom LangChain Deep Agents — transport only; the handlers ship with REST).
 
 **Feature-specific NFRs:** performance budgets (NFR-PR1/PR2); result capping/pagination.
 
@@ -325,7 +326,7 @@ The document-repository exposes **stable document references** (IDs/URLs) for ev
 - Source of truth & document references: document-repository as single source of truth post-ingest; stable doc-repo references + "view source" links; external-origin health checks + deletion detection + graceful fallback (FR-27, 28; FR-2).
 - Open-source packaging (permissive license, ITU copyright headers, CI build/scan/promote per ADR-0001).
 
-**MCP transport** is the only capability sequenced after the REST surface (gated on SST + Sprint 24 #603 — transport only; the handlers ship with REST).
+**MCP transport** is the only capability sequenced after the REST surface (gated on the GENIE workflows service's MCP client — Sprint 24 #603, custom LangChain Deep Agents — transport only; the handlers ship with REST). OKF's own MCP surface is **custom** (Node MCP SDK / Kong AI MCP proxy), consumed by the workflows service — NOT OPEA's `OpeaMCPToolsManager`/`mcpo`.
 
 ## 7. Success Metrics
 
@@ -383,12 +384,13 @@ The document-repository exposes **stable document references** (IDs/URLs) for ev
 
 ## 10. Integration and Dependencies
 
-- **dataprep + retriever (exist — reused, extended additively)** — per-repo indexing via `graph_name = OKF_{repo_id}`; retriever multi-graph fan-out + RRF (FR-24); repo-level retract; graph_name wiring (doc-repo → dataprep; ChatQnA → retriever). ([ADR-okf-013](../../../../docs/adr/okf-013-graph-name-wiring.md))
+- **dataprep + retriever (exist — reused, extended additively)** — per-repo indexing via `graph_name = OKF_{repo_id}`; retriever multi-graph fan-out + RRF (FR-24); repo-level retract; graph_name wiring (doc-repo → dataprep; ChatQnA → retriever). ([ADR-okf-013](../../../../docs/adr/okf-013-graph-name-wiring.md)) These extensions are **greenfield** (multi-graph fan-out and `graph_name` threading do not exist today) and land on the bumped (1.5) base — see the OPEA 1.5 bullet below.
 - **document-repository (extended)** — new bundle-aware ingest route (storage + ClamAV + dataprep handoff, carrying `graph_name`). (FR-5, [ADR-okf-008](../../../../docs/adr/okf-008-bundle-content-store.md))
 - **gov-chat-frontend (extended)** — new OKF admin tab + dialogs + service + Vuex module + i18n. (FR-26)
 - **api-gateway (Kong + NGINX)** — register `okf-server` service + `/api/okf` route; Kong AI MCP plugins for the MCP surface.
 - **Keycloak** — OIDC AS; per-tenant/repo/domain scopes; audience mapper; token-exchange for service-to-service.
-- **SST (planned)** — gates the **MCP transport only**; REST + handlers proceed independently.
+- **SST (planned, reduced)** — web search + stream ingestor + governance only (registry/executor/mcpo subsumed by the workflows service); gates the **MCP transport** indirectly; REST + handlers proceed independently.
+- **OPEA 1.3 → 1.5 overlay bump (cheap, ~3–5 engineer-days; foundational)** — the Genie-owned `dataprep`/`retriever`/`reranker`/`chatqna` that OKF extends are rebased onto `comps` 1.5. The verified v1.3↔v1.5 `comps` source diff showed every API OKF's base depends on (`OpeaComponent`, `register_microservice`, `opea_telemetry`, `api_protocol`) is byte-identical or additive, so the RAG logic is **untouched** and remains Genie-owned/forked — we do **not** adopt OPEA's components wholesale, and we do **not** use OPEA's `comps/agent` (the agentic layer is custom LangChain Deep Agents on the OPEA `MicroService` harness). OKF Phase 1 (multi-graph fan-out + `graph_name` threading — both **greenfield**) lands on the bumped base. File-by-file detail: the OPEA Strategy & Implementation Plan (`_bmad-output/planning-artifacts/OPEA-1.5-upgrade-analysis.md`).
 
 ## 11. Data Governance
 
@@ -402,7 +404,7 @@ The document-repository exposes **stable document references** (IDs/URLs) for ev
 
 - OKF v0.1 published June 2026; Google explicitly invited the ecosystem to build consumers/serving layers — the white space is open and uncontested by any OSS project.
 - Genie's dataprep/RAG + ArangoDB + Keycloak/Kong/OTel stack already provides ~80% of the foundation; multi-repo + multi-graph grounding are additive extensions.
-- Sprint 24's LangGraph+MCP agentic workflows need a governed knowledge-serving surface that grounds in all data.
+- Sprint 24's **custom LangChain Deep Agents (on LangGraph)** agentic workflows — built on the OPEA `MicroService` harness, not OPEA's `comps/agent` — need a governed knowledge-serving surface that grounds in all data.
 - Sovereign/public-sector demand for governed, multi-domain agent knowledge is immediate and unmet.
 
 ## 13. Open Questions

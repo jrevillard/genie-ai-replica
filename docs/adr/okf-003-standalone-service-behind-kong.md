@@ -18,6 +18,8 @@ The agent-facing surface (REST now, MCP later) needs authentication and authoriz
 
 The OKF Server **exposes its own REST (future MCP) surface**, deployed as the `okf-server` service **behind Kong**. **Kong terminates Keycloak OIDC** (validates bearer tokens via JWKS, binds audience to the OKF server per RFC 8707, no token passthrough). The OKF Server performs **defense-in-depth** `jose` validation + claim extraction and enforces per-bundle/per-tenant authz. For the future MCP surface, Kong AI MCP Proxy + AI MCP OAuth2 plugins enforce the MCP OAuth 2.1 profile at the gateway.
 
+**Note (2026-08 course-correction):** OKF's MCP surface is **custom** — exposed via the **Node MCP SDK / Kong AI MCP Proxy** at the gateway, and **consumed by the GENIE workflows service's own MCP client** (`mcp` SDK, in the LangChain-Deep-Agents-on-LangGraph agentic layer). It is **not** OPEA's `OpeaMCPToolsManager` and does not depend on `mcpo`.
+
 ## Alternatives considered
 
 | Alternative | Status |

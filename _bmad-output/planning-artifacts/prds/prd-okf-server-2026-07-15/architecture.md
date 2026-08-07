@@ -230,7 +230,8 @@ Tooling layer = in-app editor + steward REST API + admin UI + optional local val
 
 ## 13. Sequencing (production order — not deferral)
 
-1. graph_name wiring + bug fixes (dataprep/doc-repo) + retriever multi-graph + ChatQnA forwarding → **unified grounding** usable by all RAG.
+0. **OPEA 1.3 → 1.5 overlay bump** (cheap; ~3–5 engineer-days) — rebase the Genie-owned RAG components onto `comps` 1.5. APIs are byte-identical/additive (verified); RAG logic untouched. **Prerequisite for step 1**, which extends these components.
+1. graph_name wiring + bug fixes (dataprep/doc-repo) + retriever multi-graph + ChatQnA forwarding → **unified grounding** usable by all RAG. (**Greenfield** — multi-graph fan-out + `graph_name` threading don't exist today; the per-graph BM25-view cache does, so isolation infra is present.)
 2. OKF Server skeleton + repository CRUD + document-repository bundle route → **ingest a repository** into its own graph.
 3. Vue admin OKF tab + repository dialogs + source sync → **operator ingestion**.
 4. Concept editor + curation lifecycle + ACL/audit → **authoring/curation**.

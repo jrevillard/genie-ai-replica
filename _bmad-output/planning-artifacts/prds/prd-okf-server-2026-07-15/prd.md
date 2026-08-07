@@ -2,10 +2,11 @@
 title: PRD — GENIE.AI OKF Server
 status: draft
 created: 2026-07-15
-updated: 2026-07-16
+updated: 2026-08-07
 prd_key: okf-server
-initiative: okf-server
-branch: feat/okf-server
+initiative: agentic-enablement
+branch: feat/agentic-enablement
+parent_prd: ../prd-agentic-enablement.md
 decision_log: ../../briefs/brief-okf-server-2026-07-15/.decision-log.md
 builds_on:
   - ../../briefs/brief-okf-server-2026-07-15/brief.md
@@ -20,6 +21,8 @@ authors: Genie.ai Dev
 ---
 
 # PRD: GENIE.AI OKF Server
+
+> **Pillar spec of the [agentic-enablement initiative](../prd-agentic-enablement.md)** — this is the OKF Server component PRD, ONE of four pillars (OPEA 1.5 bump · agentic layer · SST · OKF). See the umbrella PRD for initiative-level framing; this document specifies OKF only.
 
 > **Authoritative production PRD.** This is a **production framework**, not an MVP — a flexible platform for delivering *any* RAG use case, *any* domain, and *across* domains. There is no "post-MVP / deferred" tier here: every capability below is in production scope, phased only by build *sequencing* (see [Architecture](./architecture.md) §12). This PRD supersedes any earlier "MVP"-framed draft of the OKF Server.
 

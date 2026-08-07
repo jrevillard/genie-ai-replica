@@ -92,7 +92,7 @@ Greenfield (no LangGraph code exists). New `genie-ai-overlay/workflows/` microse
 |---|---|
 | `rag_tool.py` | Wraps GENIE's existing **ChatQnA/retriever HTTP endpoint** as a LangGraph tool (`@tool`) — the agent grounds in GENIE's RAG moat over HTTP. No in-process coupling to chatqna. |
 | `mcp_tools.py` | **MCP client** via the `mcp` Python SDK + `langchain-mcp-adapters` → registers GovStack Building-Block MCP servers as LangGraph tools. **Not** `mcpo`, **not** OPEA's `OpeaMCPToolsManager` — GENIE owns the MCP client. |
-| `governance.py` | **The SST survivor:** PII redaction (Presidio), circuit breaker, per-tool rate limiting, audit logging — wrapped around every tool invocation. This is the real remaining value of SST (registry/executor/MCP are subsumed by LangGraph tools + the MCP client). |
+| `governance.py` | **The [SST survivor](prds/prd-server-side-tools.md):** PII redaction (Presidio), circuit breaker, per-tool rate limiting, audit logging — wrapped around every tool invocation. This is the real remaining value of SST (registry/executor/MCP are subsumed by LangGraph tools + the MCP client). |
 | `govstack_bb/` | Per-BB tool definitions (Auth, Payments, Scheduler, Registration) — Sprint 25 real wiring; stub the interface in Sprint 24. |
 
 ### B3. Workflow definitions — `genie-ai-overlay/workflows/graphs/`

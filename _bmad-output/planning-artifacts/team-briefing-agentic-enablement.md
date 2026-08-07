@@ -62,6 +62,8 @@ File-by-file structure (full detail in the decision doc §3): `workflows/genieai
 
 ## Pillar 2 — SST-as-tools (the agent's tools + governance)
 
+→ Draft spec: [`prd-server-side-tools.md`](prds/prd-server-side-tools.md) (reduced scope: web search + stream ingestor + governance + admin). *Note: the umbrella [`prd-agentic-enablement.md`](prds/prd-agentic-enablement.md) uses an authoritative four-pillar framing (OPEA 1.5 · agentic · SST · OKF); this briefing's "three-pillar" grouping merges agentic+SST for narrative compactness.*
+
 SST's original scope (GitLab #696–#725) overlaps LangGraph tooling + the MCP SDK. After the reframe, the **registry/executor/MCP-plumbing are subsumed**; SST's real surviving value is delivered as **LangGraph tools inside the workflows service**:
 
 | SST survivor | Delivered as | What it does |

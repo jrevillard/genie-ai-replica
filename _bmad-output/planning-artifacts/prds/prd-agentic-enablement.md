@@ -11,7 +11,7 @@ builds_on:
   - ../OPEA-1.5-upgrade-analysis.md
 child_prs:
   - OKF Server → ./prd-okf-server-2026-07-15/prd.md
-  - SST (planned, reduced) → ./prd-server-side-tools.md
+  - SST (draft, reduced) → ./prd-server-side-tools.md
 authors: Genie.ai Dev
 ---
 
@@ -35,7 +35,7 @@ The initiative delivers this through **four pillars** — the RAG base, the agen
 |---|---|---|
 | **1. OPEA 1.5 overlay bump** | Foundation — refresh the `comps` base cheaply (~3–5 engineer-days); the RAG components stay **Genie-owned/forked** | decision doc [Part A](../OPEA-1.5-upgrade-analysis.md) |
 | **2. Agentic layer** | **Custom LangChain Deep Agents (on LangGraph)** on the OPEA `MicroService` harness — the orchestrator (not OPEA `comps/agent`) | decision doc [Part B](../OPEA-1.5-upgrade-analysis.md) |
-| **3. SST (tools)** | Web search (SearXNG) + stream ingestor + governance — the agent's tools (registry/executor/mcpo subsumed) | SST PRD (planned, reduced) |
+| **3. SST (tools)** | Web search (SearXNG) + stream ingestor + governance — the agent's tools (registry/executor/mcpo subsumed) | [SST PRD](./prd-server-side-tools.md) |
 | **4. OKF (knowledge)** | Governed, versioned, multi-graph knowledge for agents to ground in and cite | [OKF PRD](./prd-okf-server-2026-07-15/prd.md) |
 
 ## 3. Why this shape (strategic context)
@@ -75,7 +75,7 @@ Critical-path note: the OPEA 1.5 bump, OKF Phase 1, and #604 all touch `genieai_
 ## 6. Pillar artifacts
 
 - **OKF** → [`./prd-okf-server-2026-07-15/prd.md`](./prd-okf-server-2026-07-15/prd.md) + architecture + ADRs `okf-001..016` ([`../../../docs/adr/`](../../../docs/adr/))
-- **SST** → `./prd-server-side-tools.md` *(planned — reduced scope; consolidate from `feat/server-side-tools/prd`, GitLab #696–#725)*
+- **SST** → [`./prd-server-side-tools.md`](./prd-server-side-tools.md) *(reduced scope; references the original on `feat/server-side-tools/prd`, GitLab #696–#725)*
 - **Agentic layer (Deep Agents on the OPEA harness)** → decision doc [Part B](../OPEA-1.5-upgrade-analysis.md)
 - **OPEA 1.5 bump (file-by-file)** → decision doc [Part A](../OPEA-1.5-upgrade-analysis.md)
 - **Strategy / team briefing** → [`../team-briefing-agentic-enablement.md`](../team-briefing-agentic-enablement.md)
@@ -83,7 +83,7 @@ Critical-path note: the OPEA 1.5 bump, OKF Phase 1, and #604 all touch `genieai_
 
 ## 7. Open decisions
 
-- **SST PRD:** fresh reduced-scope spec vs consolidate the existing one on `feat/server-side-tools/prd`.
+- **~~SST PRD~~** ✅ RESOLVED → [`prd-server-side-tools.md`](./prd-server-side-tools.md) (fresh reduced-scope; original retained on `feat/server-side-tools/prd`).
 - **OPEA 1.5 bump ownership:** coordinate with jrevillard (his dataprep/retriever/reranker/chatqna surface).
 - **Agent-framework spike:** validate LangChain Deep Agents maturity against one real gov workflow (HITL + cross-BB) before committing.
 - **GitLab issues:** cut/refresh issues per pillar (OKF has none; SST #696–#725 to re-baseline to reduced scope).

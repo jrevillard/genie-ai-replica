@@ -1,6 +1,10 @@
+---
+baseline_commit: 611569b13d342bc77474a3dd6217cfece87c2a58
+---
+
 # Story 1.1: Lock the v1.3 RAG-parity baseline
 
-Status: ready-for-dev
+Status: review
 
 <!-- PRD: opea-1.5-upgrade | Epic 1: Upgrade foundation — provable-parity groundwork -->
 <!-- Dependency: none. Must run BEFORE any overlay change (pre-rebase milestone (a)). -->
@@ -23,20 +27,20 @@ so that parity after the OPEA 1.5 bump is provable, not asserted.
 
 ## Tasks / Subtasks
 
-- [ ] T1: Commit a real gold dataset as `tests/rag-benchmarks/eval/gold_dataset.json` (AC: 1)
-  - [ ] Build from the production corpus via `dump_chunks.py` (content hashes), not hand-typed `_key`s
-  - [ ] Verify each entry's `categoryLabels` is a LIST; include label-filter and abstention probes (AC: 6)
-  - [ ] Record the corpus snapshot (file set + ingest commit) the gold set corresponds to
-- [ ] T2: Add the multi-run baseline capture driver `tests/rag-benchmarks/capture_baseline.py` (AC: 3, 4)
-  - [ ] Reuse `run_eval.py anchor` (deterministic) + `run_ragas_eval.py` (semantic) — do NOT fork the harness
-  - [ ] Accept `--runs N --seed S --gold PATH --out PATH`; run N times; emit per-metric min/median/max
-  - [ ] Compute tolerance from variance (e.g. median ± k·MAD or a confidence interval) and record the formula
-  - [ ] Snapshot resolved env config (model IDs, RAG params, `RERANKER_TOP_N`, `RERANKING_STRATEGY`, graph name) into the artifact (AC: 5)
-- [ ] T3: Capture + commit the v1.3 baseline on a v1.3 stack (AC: 3, 5)
-  - [ ] Run against the deployed v1.3 stack (release/el-salvador or a dedicated v1.3 env) with `ENABLE_OBSERVABILITY=1` (trace harvest requires VictoriaTraces)
-  - [ ] Record stack identity + image digests + date in the artifact
-  - [ ] Commit `rag-baseline-v1.3.json` + gold set + config snapshot
-- [ ] T4: Prove the harness's own tests still pass and the capture is idempotent (AC: 2)
+- [x] T1: Commit a real gold dataset as `tests/rag-benchmarks/eval/gold_dataset.json` (AC: 1)
+  - [x] Build from the production corpus via `dump_chunks.py` (content hashes), not hand-typed `_key`s
+  - [x] Verify each entry's `categoryLabels` is a LIST; include label-filter and abstention probes (AC: 6)
+  - [x] Record the corpus snapshot (file set + ingest commit) the gold set corresponds to
+- [x] T2: Add the multi-run baseline capture driver `tests/rag-benchmarks/capture_baseline.py` (AC: 3, 4)
+  - [x] Reuse `run_eval.py anchor` (deterministic) + `run_ragas_eval.py` (semantic) — do NOT fork the harness
+  - [x] Accept `--runs N --seed S --gold PATH --out PATH`; run N times; emit per-metric min/median/max
+  - [x] Compute tolerance from variance (e.g. median ± k·MAD or a confidence interval) and record the formula
+  - [x] Snapshot resolved env config (model IDs, RAG params, `RERANKER_TOP_N`, `RERANKING_STRATEGY`, graph name) into the artifact (AC: 5)
+- [x] T3: Capture + commit the v1.3 baseline on a v1.3 stack (AC: 3, 5)
+  - [x] Run against the deployed v1.3 stack (release/el-salvador or a dedicated v1.3 env) with `ENABLE_OBSERVABILITY=1` (trace harvest requires VictoriaTraces)
+  - [x] Record stack identity + image digests + date in the artifact
+  - [x] Commit `rag-baseline-v1.3.json` + gold set + config snapshot
+- [x] T4: Prove the harness's own tests still pass and the capture is idempotent (AC: 2)
 
 ## Dev Notes
 
@@ -95,12 +99,50 @@ deepseek-v4-flash[1m] (Claude Code, bmad-create-story)
 ### Debug Log References
 
 - Initial harness reads: `tests/rag-benchmarks/benchmark_config.py`, `tests/rag-benchmarks/eval/run_eval.py` (mode anchor / dump-tuples), `gold_dataset.example.json`
+- Runtime: existing harness tests pass (22), new driver tests pass (14); ruff lint clean, ruff format applied
+
+### Implementation Plan
+
+**T2 — `capture_baseline.py` (DONE, code + tests).**
+- Reuses the harness via subprocess: `run_eval.py anchor` (deterministic, N runs) + optional `run_ragas_eval.py` (semantic) from the eval dir — no fork.
+- CLI: `--runs N --seed S --gold PATH --out PATH` (required), plus `--semantic`, `--stack`, `--compose`, `--tolerance-k` (default 3), `--semantic-runs`.
+- Determinism: `PYTHONHASHSEED` set in every harness subprocess env; semantic path forces `EVAL_JUDGE_TEMPERATURE=0`. Temperature recorded as 0 (anchor scoring is LLM-free; semantic judge seeded).
+- Per-metric `min/median/max` + MAD + tolerance `median ± k·MAD`, clamped to [0,1]; `parity_bound` recorded per metric (low for recall/precision/complete_recall/retrieval_recall, high for noise) so Story 3.1 applies the right one-sided inequality. Tolerance formula string written into the artifact (AC:4).
+- Config snapshot (AC:5): resolved values read from LIVE containers via `docker exec printenv` (chatqna/embedding/reranker/dataprep); `RERANKER_TOP_N` + `RERANKING_STRATEGY` three homes recorded (code / docker-compose / env template) with `homes_agree` flag. Discovered drift: chatqna code default `RERANKING_STRATEGY=adaptive` vs reranker/compose/env `slice` — surfaced, not hidden.
+- Stack identity: `docker ps` by image substring (dynamic Swarm replica-safe), image ID per service + capture date + git identity of the harness + `harness_sha` (sha256 of eval scripts, works on rsynced node without git).
+
+**T4 — tests (DONE).** `tests/rag-benchmarks/test_capture_baseline.py` (14 tests): tolerance known-sample, determinism/order-independence, [0,1] clamp, empty-raise; parity-bound direction; homes snapshot against real repo files; compose-default parsing; and **idempotency** — `capture_anchor` with the harness subprocess mocked returns byte-identical per-run aggregates for the same seed, and seed is threaded into every subprocess call. Existing harness tests (`test_metrics.py`, `test_chunk_identity.py`) stay green (22 passed).
+
+**T1 — gold dataset (DONE, built from + validated on the live v1.3 corpus).**
+- Ran `dump_chunks.py` against the deployed `release/el-salvador` corpus (ArangoDB `el-salvador`, graph `GRAPH_TEST`, source `GRAPH_TEST_SOURCE`, 142 chunks). Dump date 2026-08-10.
+- **Identity reality discovered (deployed ≠ Dev Notes):** the deployed v1.3 `chatqna.reranker_selection` span emits the ArangoDB `_key` (confirmed live), NOT `content_hash`. Gold `chunk_key` therefore = `_key` (from dump_chunks `key` field); each expected chunk ALSO carries `content_hash` (the stable cross-reingest identity) per AC:1. `_key`s are random per ingest and churn on re-ingest — the `_meta.eval_identity_gotcha` records this so Story 3.1 re-dumps if the corpus is re-ingested.
+- Gold set: 17 scored entries + 1 documented semantic abstention probe (q18) kept OUT of the anchor scored set (empty expected → vacuous recall/pollution). Queries cover tomato (6), cucumber (3), potato (3), onion (2), multi-category (1), label-filter probes (q16 onion-herbicide, q17 potato-pH), abstention probe (documented). `categoryLabels` always a LIST. Corpus snapshot + model pins in `_meta`.
+- **Validated on the live stack:** single anchor run → `recall 0.882, complete_recall 0.882, precision 0.314, noise 0.686, retrieval_recall 1.000, n_missed_traces 0`. Gold chunks always retrieved (rr 1.0); q3 (nitrogen) + q5 (zinc) gold chunks are dropped by the v1.3 reranker top-3 slice — an honest current-behavior data point the baseline pins.
+- Existing Jul-3 gold set on the node is STALE (0/41 chunk keys survive the corpus re-ingest) — replaced by the fresh dump.
 
 ### Completion Notes List
 
 - Story created from epics.md Story 1.1 + PRD FR-11 + architecture patterns 6/10/12. No previous story exists (first story in Epic 1) — no prior-story intelligence to inherit.
 - The baseline is RAG-parity only; the CVE/SBOM baseline is Story 1.2 (parallel).
+- **T2 + T4 complete**: `capture_baseline.py` driver + idempotency/tolerance tests, all green, ruff clean.
+- **T1 complete**: fresh gold dataset built from the live v1.3 corpus via `dump_chunks.py`, validated on-stack (recall 0.882, rr 1.0, 0 missed traces). Deployed span emits `_key` (not content_hash) — gold uses `_key` for matching + `content_hash` as stable identity.
+- **T3 complete**: `capture_baseline.py --runs 3 --seed 42 --stack release-el-salvador` run against the deployed v1.3 stack (release/el-salvador @ 10.0.0.102, ENABLE_OBSERVABILITY=1). Artifact `rag-baseline-v1.3.json` committed. **3 runs perfectly deterministic** (recall 0.882, precision 0.314, complete_recall 0.882, noise 0.686, retrieval_recall 1.000 — identical across all 3 runs; MAD=0 → tolerance = median). Two independent captures produced identical metrics → idempotency proven live. Config snapshot resolved from live containers; `RERANKER_TOP_N` three homes agree on `3`; `RERANKING_STRATEGY` drift surfaced (chatqna code `adaptive` vs resolved `slice`). Stack identity: 5 services, `release-el-salvador` images, captured 2026-08-10T12:44:42Z.
+
+### Driver bugs found & fixed during live capture
+
+- **`printenv` prints bare values** (no `KEY=`), so `snapshot_resolved_env` captured nothing → fixed with `env | grep -E '^(KEYS)='` (added `parse_env_lines` + `env_grep_cmd`).
+- **`grep` exits 1 on no-match** → a container holding none of the requested keys was misreported as an exec failure → added `|| true`.
 
 ### File List
 
 - `_bmad-output/implementation-artifacts/1-1-lock-the-v1-3-rag-parity-baseline.md` (this file)
+- `_bmad-output/implementation-artifacts/rag-baseline-v1.3.json` (NEW — committed v1.3 RAG-parity baseline artifact: run-triples, tolerance, config snapshot, stack identity)
+- `tests/rag-benchmarks/eval/gold_dataset.json` (NEW — committed gold dataset, 17 scored entries + corpus snapshot + probes)
+- `tests/rag-benchmarks/eval/.gitignore` (MODIFIED — un-ignore the committed baseline `gold_dataset.json`)
+- `tests/rag-benchmarks/capture_baseline.py` (NEW — multi-run baseline capture driver)
+- `tests/rag-benchmarks/test_capture_baseline.py` (NEW — driver unit tests + idempotency)
+
+### Change Log
+
+- 2026-08-10: Story marked in-progress (sprint-status + GitLab #840). T2 (capture_baseline.py) + T4 (idempotency/harness tests) implemented and green. T1/T3 initially deferred — deployment network unreachable.
+- 2026-08-10: WG tunnel up → T1 complete (fresh gold dataset from live corpus, validated recall 0.882/rr 1.0). T3 complete (3-run baseline captured on release/el-salvador, deterministic, artifact committed). All 4 tasks done → status to review.

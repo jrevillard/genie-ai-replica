@@ -1,9 +1,9 @@
 {
   "_meta": {
     "schema_version": "1.0",
-    "baseline_stack": "v1.3 (release/el-salvador @ 10.0.0.102)",
+    "baseline_stack": "v1.3 (release/el-salvador)",
     "capture_date": "2026-08-10",
-    "identity": "chunk_key = ArangoDB _key (what the deployed chatqna reranker_selection span emits); content_hash = sha256(normalized text) from chunk_identity.py, the stable cross-reingest identity.",
+    "identity": "Matching is CONTENT-HASH based: gold expected_chunks[].content_hash = sha256(normalized stored text) from chunk_identity.py. The stored chunk text INCLUDES the deterministic contextual-retrieval prefix (dataprep prepends ctx\\n\\ntext; ctx gen is temperature 0, so the hash is re-ingest-stable under the same pipeline). The span emits the ArangoDB _key; run_eval.py converts each _key to its content hash at eval time. chunk_key (the _key) is retained for traceability only.",
     "corpus_snapshot": {
       "db": "el-salvador",
       "graph": "GRAPH_TEST",
@@ -39,8 +39,11 @@
     "model_pins": {
       "embedding_model_id": "BAAI/bge-base-en-v1.5",
       "reranker_model_id": "BAAI/bge-reranker-v2-m3",
-      "llm_model_id": "ibm-granite/granite-3.3-2b-instruct"
+      "llm_model_id": "ibm-granite/granite-3.3-2b-instruct",
+      "embedding_dim": 768,
+      "translation_model_id": null
     },
+    "model_pins_note": "embedding_dim = bge-base-en-v1.5 output dim (768). translation_model_id is null because the release/el-salvador stack runs no translation service (absent from the resolved stack) — recorded explicitly so Story 3.1 knows it was checked, not omitted.",
     "probes": {
       "label_filter": [
         "q16",
@@ -57,7 +60,7 @@
         "q15"
       ]
     },
-    "eval_identity_gotcha": "The deployed v1.3 reranker_selection span emits the ArangoDB _key, NOT content_hash. Gold chunk_key must be the _key. _keys are random per ingest and churn on re-ingest — re-dump the corpus (dump_chunks.py) and re-author expected chunks if the corpus is re-ingested."
+    "eval_identity_gotcha": "The deployed v1.3 reranker_selection span emits the ArangoDB _key, NOT content_hash. Matching is content-based: run_eval.py maps each span _key to content_hash (sha256 of normalized STORED text, contextual-retrieval prefix included) and scores against the gold's expected content_hash values. content_hash is stable across re-ingests as long as the pipeline (chunking + contextual-retrieval model/prompt, both temperature 0) is unchanged. A pipeline change that alters chunk text changes the hashes: a signal to re-baseline."
   },
   "entries": [
     {
@@ -72,7 +75,7 @@
       "expected_chunks": [
         {
           "chunk_key": "13162942345429574478",
-          "content_hash": "f59ae2909d9f0691",
+          "content_hash": "b3e57ed4858a0c0e",
           "preview": "## PHOSPHORUS (P)\n\nIn tomato cultivation, it is necessary to apply this element before transplanting or at sowing, as it has assimilation problems for the plants. Good phosphorus availability accelera"
         }
       ]
@@ -89,7 +92,7 @@
       "expected_chunks": [
         {
           "chunk_key": "12679218023139063870",
-          "content_hash": "a2eb82c7eaccb806",
+          "content_hash": "56e09828d9ff5765",
           "preview": "## CHEMICAL CONTROL\n\nAgri-mycin 16.5 WP (0.35 kg/ha). Gives good results when the level of damage is not severe.\n\n## BACTERIAL SPOT\n\n## ( Xanthomonas campestris PV Vesicatoria)\n\n## BIOLOGY AND TYPE OF"
         }
       ]
@@ -106,7 +109,7 @@
       "expected_chunks": [
         {
           "chunk_key": "6096711014907663730",
-          "content_hash": "e50556c09158e46c",
+          "content_hash": "fe325807a5c1f0b1",
           "preview": "## NITROGEN (N)\n\nIt is the main nutrient element in the formation of vegetative organs of the plant. The tomato is sensitive to nitrogen deficiency in the vegetative phase and during ripening. The lac"
         }
       ]
@@ -123,7 +126,7 @@
       "expected_chunks": [
         {
           "chunk_key": "10177184621347415954",
-          "content_hash": "e612ea4cb9dbbc1c",
+          "content_hash": "be9b4517f60e47f7",
           "preview": "## INDETERMINATE GROWTH\n\nThese are plants whose vegetative growth is continuous. Their main stem can reach up to about 10 m in length if managed as a single growth axis. Inflorescences appear laterall"
         }
       ]
@@ -140,7 +143,7 @@
       "expected_chunks": [
         {
           "chunk_key": "4186361143612585809",
-          "content_hash": "5fc72c0caf14614f",
+          "content_hash": "cae42e2c4e41ab54",
           "preview": "## ZINC (Zn)\n\nIt is an element of great importance in growth and production; it can act as a limiting factor in the performance of these functions if availability is scarce. Deficiency is observed mor"
         }
       ]
@@ -157,7 +160,7 @@
       "expected_chunks": [
         {
           "chunk_key": "2540987285383726713",
-          "content_hash": "f0675381f0a93fae",
+          "content_hash": "2199ad55de78ed80",
           "preview": "At the seedbed level, if the soil is heavily contaminated, the seedling fails to emerge, and when the attack occurs at emergence, a thinning of the seedling is observed at the collar level, leading to"
         }
       ]
@@ -174,7 +177,7 @@
       "expected_chunks": [
         {
           "chunk_key": "18258292531086653551",
-          "content_hash": "612799720e1da534",
+          "content_hash": "136a2c7731b49b97",
           "preview": "MAGNESIUM: The most common nutritional imbalance problem in the cucumber crop is the lack of magnesium. The deficiency of this element may be due to blocking by high levels of potassium. The lack of t"
         }
       ]
@@ -191,7 +194,7 @@
       "expected_chunks": [
         {
           "chunk_key": "10011612978328241578",
-          "content_hash": "9451b39b14dbcd7b",
+          "content_hash": "372b08ee9eb4b372",
           "preview": "## VERTICAL TRELLIS:\n\nStakes are placed every 4.0 m apart along the crop rows, AND 3 or 4 rows of nylon twine are placed horizontally to form a net by placing thread in a zig-zag pattern between the r"
         }
       ]
@@ -208,7 +211,7 @@
       "expected_chunks": [
         {
           "chunk_key": "15024891980350355660",
-          "content_hash": "3853b014501c58e3",
+          "content_hash": "2574355274ee0e36",
           "preview": "Preferably, the cucumber harvest (cuts) should be carried out during the coolest hours of the morning or in the late hours of the afternoon. The average number of cuts is 7-8, at 46, 49, 52, 55, 58, 6"
         }
       ]
@@ -225,7 +228,7 @@
       "expected_chunks": [
         {
           "chunk_key": "1512023200018790854",
-          "content_hash": "93c60e3bf6cd2318",
+          "content_hash": "2ca60c14c5fd4c60",
           "preview": "## Origin\n\nThe center of origin of the potato is located between Peru and Bolivia, near Lake Titicaca for the *andigenum* subspecies, although many wild species exist in Mexico, Guatemala, Ecuador, an"
         }
       ]
@@ -242,7 +245,7 @@
       "expected_chunks": [
         {
           "chunk_key": "12253572337437142885",
-          "content_hash": "6333a3e457da9c3b",
+          "content_hash": "354ceafbb26b7d11",
           "preview": "## VIRAL DISEASES\n\nPotato leafroll virus (PLRV) and mild mosaics are caused by the PVY and PVX viruses. These are common in the country, in the majority of plantations cultivated with solanaceous plan"
         }
       ]
@@ -259,7 +262,7 @@
       "expected_chunks": [
         {
           "chunk_key": "5747537881599803492",
-          "content_hash": "c67ba4c8e8ed2b79",
+          "content_hash": "f5ac166d598c73e3",
           "preview": "The optimal conditions for prolonged storage (5 months) should be with temperatures fluctuating between 4.4 and 7.2°C, and a relative humidity near 90%. It is necessary to maintain sufficient air move"
         }
       ]
@@ -276,7 +279,7 @@
       "expected_chunks": [
         {
           "chunk_key": "1400864571439220544",
-          "content_hash": "d01e163800d56b59",
+          "content_hash": "395b620aad69340b",
           "preview": "## Onion\n\n## Importance\n\nAfter the tomato, the onion occupies the second place on the scale of importance of vegetables in the world; its importance lies in its various forms of consumption, such as: "
         }
       ]
@@ -293,7 +296,7 @@
       "expected_chunks": [
         {
           "chunk_key": "8482181294714661120",
-          "content_hash": "295944f3751a5d4b",
+          "content_hash": "0939a9ae411acdfb",
           "preview": "Table 4. Most recommended amounts of N, P2O5, and K2O in onion cultivation per hectare. This table specifies the nutrient requirements measured in kilograms per hectare (kg/ha). The data is organized "
         }
       ]
@@ -311,12 +314,12 @@
       "expected_chunks": [
         {
           "chunk_key": "6096711014907663730",
-          "content_hash": "e50556c09158e46c",
+          "content_hash": "fe325807a5c1f0b1",
           "preview": "## NITROGEN (N)\n\nIt is the main nutrient element in the formation of vegetative organs of the plant. The tomato is sensitive to nitrogen deficiency in the vegetative phase and during ripening. The lac"
         },
         {
           "chunk_key": "18258292531086653551",
-          "content_hash": "612799720e1da534",
+          "content_hash": "136a2c7731b49b97",
           "preview": "MAGNESIUM: The most common nutritional imbalance problem in the cucumber crop is the lack of magnesium. The deficiency of this element may be due to blocking by high levels of potassium. The lack of t"
         }
       ]
@@ -333,7 +336,7 @@
       "expected_chunks": [
         {
           "chunk_key": "18288973375651775709",
-          "content_hash": "d8fcac2eac824cb7",
+          "content_hash": "dfe94f2fdcb6c8ef",
           "preview": "Chemical: It is the elimination of weeds using chemical products (herbicides). It is recommended before transplanting to control weeds initially, and afterwards, 2 additional applications at 30 and 90"
         }
       ]
@@ -350,7 +353,7 @@
       "expected_chunks": [
         {
           "chunk_key": "1596003131559649684",
-          "content_hash": "d6c8bf13978899c8",
+          "content_hash": "ee8594cc689e103d",
           "preview": "The chemical properties define an optimal pH range between 5.5 and 6. Nitrogen (N) levels are variable. Phosphorus (P) is greater than 28 mg kg- 1, and Potassium (K) is greater than 5%. Calcium (Ca++)"
         }
       ]

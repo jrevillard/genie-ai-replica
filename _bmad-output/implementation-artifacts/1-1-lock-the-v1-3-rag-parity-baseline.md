@@ -4,7 +4,7 @@ baseline_commit: 611569b13d342bc77474a3dd6217cfece87c2a58
 
 # Story 1.1: Lock the v1.3 RAG-parity baseline
 
-Status: review
+Status: done
 
 <!-- PRD: opea-1.5-upgrade | Epic 1: Upgrade foundation — provable-parity groundwork -->
 <!-- Dependency: none. Must run BEFORE any overlay change (pre-rebase milestone (a)). -->
@@ -41,6 +41,34 @@ so that parity after the OPEA 1.5 bump is provable, not asserted.
   - [x] Record stack identity + image digests + date in the artifact
   - [x] Commit `rag-baseline-v1.3.json` + gold set + config snapshot
 - [x] T4: Prove the harness's own tests still pass and the capture is idempotent (AC: 2)
+
+### Review Findings
+
+- [x] [Review][Patch] **Map gold matching from ArangoDB `_key` to `content_hash` at eval time (AC:1 + content-based identity)** [tests/rag-benchmarks/eval/run_eval.py] — resolved (decision): keep the `_key`-emitting span but match gold on `content_hash` via a `_key`→`content_hash` map built from the SOURCE collection; gold already carries both fields; no overlay change; then re-capture the baseline.
+- [x] [Review][Defer] **No RAG-confidence regression probe (AC:6)** — deferred, pre-existing: RAG confidence is uncalibrated (mean of reranker scores, project research), so pinning a confidence probe now would encode an uncalibrated signal. Deferred explicitly to Story 3.1, which consumes the calibrated-confidence work.
+- [x] [Review][Patch] **`mad()` computes raw MAD but docstring/formula/artifact claim 1.4826-scaled** [tests/rag-benchmarks/capture_baseline.py:124-128] — re-captured tolerance ~1.48× narrower than the recorded formula implies.
+- [x] [Review][Patch] **`PYTHONHASHSEED` via `setdefault` lets ambient env override `--seed`; artifact records the wrong seed** [tests/rag-benchmarks/capture_baseline.py:426,470]
+- [x] [Review][Patch] **Semantic judge `temperature:0` is `setdefault`-ed but hardcoded in the artifact — judge may run at ambient temperature** [tests/rag-benchmarks/capture_baseline.py:471,504]
+- [x] [Review][Patch] **`metric_triples` derives the metric set from run 1's aggregate — a degenerate run-1 drops metrics and 0.0-poisoned MAD collapses to a false "fully deterministic" lock** [tests/rag-benchmarks/capture_baseline.py:154-178]
+- [x] [Review][Patch] **`git_identity` raises `FileNotFoundError` on a git-less node (no try/except in `_run`); also ignores `repo_root` as cwd** [tests/rag-benchmarks/capture_baseline.py:190-192,519-530] — contradicts the documented "returns null when git absent" fix.
+- [x] [Review][Patch] **`homes_agree` excludes the resolved live value — claims "agree" while the deployed config drifts** [tests/rag-benchmarks/capture_baseline.py:369-387]
+- [x] [Review][Patch] **`snapshot_resolved_env` last-writer-wins on multi-service keys (`RERANKER_TOP_N`/`RERANKING_STRATEGY` declared under chatqna+reranker)** [tests/rag-benchmarks/capture_baseline.py:274-310]
+- [x] [Review][Patch] **No guard on empty container resolution — a typo'd `--stack-prefix` commits an artifact with an empty stack section** [tests/rag-benchmarks/capture_baseline.py:190,209-231]
+- [x] [Review][Patch] **`_image_digest` returns `""` (not `None`) on inspect failure — `image_id:""` recorded in the artifact** [tests/rag-benchmarks/capture_baseline.py:234-248]
+- [x] [Review][Patch] **Determinism tests are seed-invariant (`* 0.0` canned reports); "different seed" test asserts equality — suite passes even if seed threading is dropped** [tests/rag-benchmarks/test_capture_baseline.py:210-263]
+- [x] [Review][Patch] **Translation model + `EMBEDDING_DIM` not pinned (AC:1/Dev Notes)** — `_meta.model_pins` lacks `VLLM_TRANSLATION_MODEL_ID` and `EMBEDDING_DIM`.
+- [x] [Review][Patch] **AC:4 wording — `tolerance_semantics` endorses a "point comparison" instead of explicitly rejecting one-run-vs-one-run as the parity method** [tests/rag-benchmarks/capture_baseline.py:559-572]
+- [x] [Review][Patch] **`--runs 1` accepted → fake exact-equality tolerance (AC:3 wants ≥3)** [tests/rag-benchmarks/capture_baseline.py:677-679]
+- [x] [Review][Patch] **`runs.gold_dataset` records the transient node path, not the committed repo path** [tests/rag-benchmarks/capture_baseline.py:589-590]
+- [x] [Review][Patch] **`harness_sha` globs all `*.py` in the eval dir — stray/uncommitted files change the recorded harness identity** [tests/rag-benchmarks/capture_baseline.py:408-418]
+- [x] [Review][Patch] **Missed-traces abort fires only after all N anchor runs complete — up to 3h of wasted runs on a zero baseline** [tests/rag-benchmarks/capture_baseline.py:704-717]
+- [x] [Review][Patch] **`capture_semantic` `float(None)` TypeError when a later ragas run omits a metric; `--semantic-runs` negative → empty `per_run`** [tests/rag-benchmarks/capture_baseline.py:500-509]
+- [x] [Review][Patch] **No guard against `--out` == `--gold` — the pinned gold dataset is overwritten** [tests/rag-benchmarks/capture_baseline.py:686-691]
+- [x] [Review][Patch] **`env_template_value` reads commented-out hints / first-hit `VAR=` — can fabricate or hide drift** [tests/rag-benchmarks/capture_baseline.py:354-367]
+- [x] [Review][Patch] **Per-run temp files (`anchor_run_*.json`) written into the committed artifact dir, not gitignored** [tests/rag-benchmarks/capture_baseline.py:442-452]
+- [x] [Review][Patch] **Container resolution first-match on `embedding`/`reranker` image markers — TEI-vs-wrapper ambiguity, nondeterministic `docker ps` order** [tests/rag-benchmarks/capture_baseline.py:226-230]
+- [x] [Review][Patch] **Private IP `10.0.0.102` embedded in `_meta.baseline_stack`** [tests/rag-benchmarks/eval/gold_dataset.json] — infra detail, not PII; redact if the repo may become public.
+- [x] [Review][Defer] **`graph`/`model_pins` hand-authored in gold `_meta`, no cross-check vs the live stack** [tests/rag-benchmarks/capture_baseline.py:726-736] — deferred, by-design + documented risk; revisit when pins go stale.
 
 ## Dev Notes
 
@@ -159,3 +187,5 @@ A read-only code review of `611569b13..70946dfe6` flagged one Critical + four Im
 - 2026-08-10: Story marked in-progress (sprint-status + GitLab #840). T2 (capture_baseline.py) + T4 (idempotency/harness tests) implemented and green. T1/T3 initially deferred — deployment network unreachable.
 - 2026-08-10: WG tunnel up → T1 complete (fresh gold dataset from live corpus, validated recall 0.882/rr 1.0). T3 complete (3-run baseline captured on release/el-salvador, deterministic, artifact committed). All 4 tasks done → status to review.
 - 2026-08-10: Code review (superpowers) — addressed Critical artifact-integrity (gold_sha256, driver-produced graph/model_pins, harness_sha repro match) + Important docs/semantics/guards + minors. Driver re-captured for a fully regenerable baseline. Committed to MR #281.
+- 2026-08-10: BMAD code review (bmad-code-review) — 2 decision-needed resolved (D1: content-hash matching; D2: confidence probe deferred to Story 3.1), 22 patches applied, 2 deferred. Driver hardened: MAD 1.4826 scaling, seed/judge-temp forcing, per-run metric union, git_identity crash-safe+cwd, homes_agree includes resolved, env conflict detection, empty-container guard, fail-fast missed-traces, semantic guards, --runs>=3, --gold-repo-path, harness_sha pinned set, temp-dir per-run reports, container-marker disambiguation. Gold now content-hash-keyed (D1): identity survives re-ingest. Discovery: gold content_hash values were stale (raw-chunk hashes) vs stored text which includes the deterministic contextual-retrieval prefix (ctx gen temp 0) — regenerated all 18 from live stored text. Baseline re-captured on release/el-salvador: metrics identical to prior _key capture (recall 0.882, precision 0.314, complete_recall 0.882, noise 0.686, retrieval_recall 1.000, MAD=0). Artifact regenerable from committed code + gold.
+- 2026-08-10: Superpowers code review (requesting-code-review) — 2 Important fixed: (1) `score_anchor` report `gold` kept as raw `_keys` (calibrator + CLAUDE.md schema compat) with hashes only in `*_hashes` — the prior shape zeroed calibrate.py's replay; (2) `_key`→`content_hash` projection now distinguishes `None` (legacy direct matching) from `{}` (empty map → every key unmapped) + `n_unmapped_chunk_keys` reported and the capture driver aborts on any unmapped key (closes the false-zero-baseline gap). Minor fixes: `_extract_selection` docstring, `_repo_relative` docstring, temp-capture-dir cleanup (`shutil.rmtree` in `finally`). New `eval/test_run_eval.py` (3 tests) locks the content-hash projection incl. the empty-map hazard. 49 pytest pass, ruff clean. Artifact `harness_sha` recomputed to match the committed eval code (gold_sha + metrics unchanged).

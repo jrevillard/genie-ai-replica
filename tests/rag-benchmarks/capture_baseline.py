@@ -57,9 +57,11 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import statistics
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -85,6 +87,7 @@ SERVICE_ENV_VARS = {
     "embedding": ("EMBEDDING_MODEL_ID", "EMBEDDING_DIM"),
     "reranker": ("RERANKER_MODEL_ID", "RERANKING_STRATEGY", "RERANKER_TOP_N"),
     "dataprep": ("VLLM_LLM_MODEL_ID",),
+    "translation": ("VLLM_TRANSLATION_MODEL_ID",),
 }
 
 # Image-name substrings used to resolve each service container on the swarm node.
@@ -125,7 +128,7 @@ def median(values: list[float]) -> float:
 def mad(values: list[float]) -> float:
     """Median absolute deviation (scaled by 1.4826 for a MAD·sigma estimate)."""
     med = statistics.median(values)
-    return float(statistics.median(abs(v - med) for v in values))
+    return float(statistics.median(abs(v - med) for v in values)) * 1.4826
 
 
 def compute_triples(values: list[float], k: float = 3.0) -> dict:
@@ -157,7 +160,7 @@ def metric_triples(per_run: list[dict], k: float = 3.0) -> dict:
     The parity-relevant bound is recorded explicitly (``parity_bound``) so the
     downstream parity eval applies the correct one-sided inequality.
     """
-    keys = list(per_run[0].keys()) if per_run else []
+    keys = sorted({k for r in per_run for k in r.keys()}) if per_run else []
     result = {}
     for key in keys:
         if key == "n":
@@ -187,8 +190,21 @@ def tolerance_formula(k: float) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _run(cmd: list[str], timeout: float = 60) -> str:
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+def _run(cmd: list[str], timeout: float = 60, cwd: str | None = None) -> str:
+    """Run a command and return stdout; RAISES on non-zero exit.
+
+    A non-zero exit is a real failure (docker down, inspect failed, git absent)
+    — silently returning partial stdout (e.g. ``""``) made ``image_id`` record
+    ``""`` and let empty stack resolution look successful.
+    """
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"command failed ({result.returncode}): {' '.join(cmd)}: "
+            f"{result.stderr.strip()[:300]}"
+        )
     return result.stdout
 
 
@@ -223,11 +239,27 @@ def resolve_containers(stack_prefix: str = "") -> dict[str, dict]:
     if stack_prefix:
         rows = [r for r in rows if r[0].startswith(stack_prefix)]
     services: dict[str, dict] = {}
+
+    def specificity(name: str, image: str, service: str) -> int:
+        # The image marker (e.g. "embedding") matches BOTH the GENIE.AI wrapper
+        # (genie-ai-embedding) and the TEI backend (text-embeddings-inference).
+        # Prefer the wrapper: genie-ai-<service> image, and penalize TEI images /
+        # container names so the resolved env is read from the right container.
+        score = 0
+        if f"genie-ai-{service}" in image:
+            score += 2
+        if "text-embeddings" not in image and "tei" not in name.lower():
+            score += 1
+        return score
+
     for service, markers in SERVICE_IMAGE_MARKERS.items():
-        for name, image in rows:
-            if any(m in image for m in markers):
-                services.setdefault(service, {"container": name, "image": image})
-                break
+        matched = [
+            (name, image) for name, image in rows if any(m in image for m in markers)
+        ]
+        if not matched:
+            continue
+        name, image = max(matched, key=lambda r: specificity(r[0], r[1], service))
+        services[service] = {"container": name, "image": image}
     return services
 
 
@@ -286,6 +318,7 @@ def snapshot_resolved_env(containers: dict[str, dict]) -> dict:
     """
     resolved: dict[str, str] = {}
     missing: list[str] = []
+    conflicts: dict[str, list[str]] = {}
     for service, keys in SERVICE_ENV_VARS.items():
         info = containers.get(service)
         if not info:
@@ -300,13 +333,22 @@ def snapshot_resolved_env(containers: dict[str, dict]) -> dict:
         except (subprocess.SubprocessError, RuntimeError):
             missing.extend(keys)
             continue
-        resolved.update(parse_env_lines(body))
+        # A key declared under several services (e.g. RERANKER_TOP_N under both
+        # chatqna and reranker) may differ per container. Record the conflict
+        # instead of silently letting the last writer win.
+        for key, value in parse_env_lines(body).items():
+            if key in resolved and resolved[key] != value:
+                conflicts.setdefault(key, []).append(
+                    f"{resolved[key]} (earlier service) vs {value}"
+                )
+            resolved[key] = value
     declared = {k for keys in SERVICE_ENV_VARS.values() for k in keys}
     unresolved = sorted(declared - set(resolved) - set(missing))
     return {
         "values": resolved,
         "missing": sorted(set(missing)),
         "unresolved": unresolved,
+        "conflicts": conflicts,
     }
 
 
@@ -353,18 +395,23 @@ def snapshot_homes(repo_root: Path, compose_path: Path | None, resolved: dict) -
 
     def env_template_value(var):
         try:
-            for line in env_tpl.read_text(encoding="utf-8").splitlines():
-                stripped = line.strip()
-                if stripped.startswith("#"):
-                    stripped = stripped[1:].strip()
-                if stripped.startswith(var + "="):
-                    value = stripped.partition("=")[2].strip()
-                    # Drop any trailing inline comment ("3  # chunks kept ...").
-                    value = value.split("#", 1)[0].strip()
-                    return value or None
+            lines = env_tpl.read_text(encoding="utf-8").splitlines()
         except OSError:
             return None
-        return None
+        active = None  # real (non-commented) assignment — wins
+        commented = None  # commented hint — fallback only
+        for line in lines:
+            stripped = line.strip()
+            is_comment = stripped.startswith("#")
+            candidate = stripped[1:].strip() if is_comment else stripped
+            if candidate.startswith(var + "="):
+                value = candidate.partition("=")[2].strip().split("#", 1)[0].strip()
+                value = value or None
+                if is_comment:
+                    commented = value
+                else:
+                    active = value
+        return active if active is not None else commented
 
     def summarize(var, code_files, resolved):
         homes = {
@@ -374,10 +421,13 @@ def snapshot_homes(repo_root: Path, compose_path: Path | None, resolved: dict) -
             else None,
             "env_template": env_template_value(var),
         }
+        # The RESOLVED live value is the single most important datum — include
+        # it in the uniqueness set so `homes_agree` is false exactly when the
+        # deployed config drifts from the declared homes.
         unique = {
             v
             for v in list(homes["code"].values())
-            + [homes["compose"], homes["env_template"]]
+            + [homes["compose"], homes["env_template"], resolved.get(var)]
             if v is not None
         }
         return {
@@ -405,16 +455,35 @@ def eval_dir() -> Path:
     return Path(__file__).resolve().parent / "eval"
 
 
+# Committed eval scripts that determine the harness identity (pinned set). A
+# stray/uncommitted ``*.py`` on the node must NOT change the recorded sha.
+EVAL_IDENTITY_FILES = (
+    "arango.py",
+    "calibrate.py",
+    "chunk_identity.py",
+    "dump_chunks.py",
+    "metrics.py",
+    "run_eval.py",
+    "run_ragas_eval.py",
+)
+
+
 def harness_sha() -> str:
-    """sha256 over the eval scripts — stable harness identity for the artifact.
+    """sha256 over the pinned eval scripts — stable harness identity for the artifact.
 
     Used instead of git commit because the eval dir is rsynced to the swarm node
-    and may not carry a git checkout there.
+    and may not carry a git checkout there. Only the committed, behavior-affecting
+    scripts are hashed (test/data files are excluded; the gold is pinned separately).
     """
     h = hashlib.sha256()
-    for path in sorted(eval_dir().glob("*.py")):
-        h.update(path.name.encode())
-        h.update(path.read_bytes())
+    edir = eval_dir()
+    for name in sorted(EVAL_IDENTITY_FILES):
+        path = edir / name
+        h.update(name.encode())
+        if path.is_file():
+            h.update(path.read_bytes())
+        else:
+            h.update(b"<missing>")
     return h.hexdigest()
 
 
@@ -423,7 +492,9 @@ def _run_anchor_eval(
 ) -> dict:
     """Run ``run_eval.py anchor`` once; return the parsed report dict."""
     env = dict(os.environ)
-    env.setdefault("PYTHONHASHSEED", str(seed))
+    # FORCE the seed: an ambient PYTHONHASHSEED must not silently override the
+    # requested --seed while the artifact records `seed: <requested>`.
+    env["PYTHONHASHSEED"] = str(seed)
     env.update(env_extra or {})
     result = subprocess.run(
         [sys.executable, "run_eval.py", "anchor", str(gold), str(out)],
@@ -439,8 +510,19 @@ def _run_anchor_eval(
         return json.load(fh)
 
 
-def capture_anchor(runs: int, gold: Path, out_dir: Path, seed: int) -> dict:
-    """Run the anchor eval ``runs`` times; return per-run aggregates + trace misses."""
+def capture_anchor(
+    runs: int,
+    gold: Path,
+    out_dir: Path,
+    seed: int,
+    allow_missed_traces: bool = False,
+) -> dict:
+    """Run the anchor eval ``runs`` times; return per-run aggregates + trace misses.
+
+    Fails FAST: if any run misses a trace (observability off / VT down), raises
+    instead of wasting the remaining runs on a doomed zero baseline. Use
+    ``allow_missed_traces`` to commit anyway (not recommended).
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     per_run = []
     n_missed_total = 0
@@ -448,7 +530,16 @@ def capture_anchor(runs: int, gold: Path, out_dir: Path, seed: int) -> dict:
         tmp = out_dir / f"anchor_run_{i}.json"
         report = _run_anchor_eval(gold, tmp, seed)
         per_run.append({"run": i, "aggregate": report.get("aggregate", {})})
-        n_missed_total += int(report.get("n_missed_traces", 0))
+        n_missed = int(report.get("n_missed_traces", 0))
+        n_unmapped = int(report.get("n_unmapped_chunk_keys", 0))
+        n_missed_total += n_missed
+        if (n_missed > 0 or n_unmapped > 0) and not allow_missed_traces:
+            raise RuntimeError(
+                f"run {i}: {n_missed} trace(s) missed, {n_unmapped} span chunk "
+                "key(s) unmapped (no content-hash map entry — wrong GRAPH_SOURCE? "
+                "stale trace?). Refusing to commit a partial/zero baseline. Use "
+                "--allow-missed-traces to override."
+            )
     return {"per_run": per_run, "n_missed_traces_total": n_missed_total}
 
 
@@ -466,9 +557,12 @@ def capture_semantic(gold: Path, out_dir: Path, seed: int, runs: int) -> dict:
             "reason": "EVAL_JUDGE_BASE_URL / EVAL_JUDGE_MODEL not set",
         }
 
+    runs = max(1, runs)
     env = dict(os.environ)
-    env.setdefault("PYTHONHASHSEED", str(seed))
-    env.setdefault("EVAL_JUDGE_TEMPERATURE", "0")
+    # FORCE the seed + judge temperature: ambient values must not override the
+    # recorded reproducibility contract (seed, temperature 0).
+    env["PYTHONHASHSEED"] = str(seed)
+    env["EVAL_JUDGE_TEMPERATURE"] = "0"
 
     # dump-tuples on the node, then judge locally (run_ragas_eval.py runs anywhere).
     tuples_path = out_dir / "eval_tuples.json"
@@ -497,16 +591,20 @@ def capture_semantic(gold: Path, out_dir: Path, seed: int, runs: int) -> dict:
             report = json.load(fh)
         per_run.append({"run": i, "aggregate": report.get("aggregate", {})})
 
-    agg = per_run[0]["aggregate"] if per_run else {}
-    keys = [k for k in agg.keys() if k not in ("n", "model")]
+    # Union of metric keys across runs, skipping any key a later run omits
+    # (a per-run aggregate may legitimately lack a metric — never float(None)).
+    keys = sorted({k for r in per_run for k in r.get("aggregate", {})} - {"n", "model"})
+    metrics = {}
+    for k in keys:
+        values = [r["aggregate"][k] for r in per_run if k in r["aggregate"]]
+        if values:
+            metrics[k] = compute_triples(values)
     return {
         "mode": "ragas",
         "judge_model": os.getenv("EVAL_JUDGE_MODEL"),
-        "temperature": 0,
+        "temperature": int(env["EVAL_JUDGE_TEMPERATURE"]),
         "per_run": per_run,
-        "metrics": {
-            k: compute_triples([r["aggregate"].get(k) for r in per_run]) for k in keys
-        },
+        "metrics": metrics,
         "note": "Semantic variance is recorded separately and NOT used for the parity tolerance.",
     }
 
@@ -517,9 +615,24 @@ def capture_semantic(gold: Path, out_dir: Path, seed: int, runs: int) -> dict:
 
 
 def git_identity(repo_root: Path) -> dict:
-    branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=10).strip()
-    commit = _run(["git", "rev-parse", "HEAD"], timeout=10).strip()
-    status = _run(["git", "status", "--porcelain"], timeout=10).strip()
+    try:
+        # Always inspect the REPO's git, not the driver's process cwd (the
+        # driver may be rsynced onto a swarm node and run from /tmp).
+        branch = _run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            timeout=10,
+            cwd=str(repo_root),
+        ).strip()
+        commit = _run(
+            ["git", "rev-parse", "HEAD"], timeout=10, cwd=str(repo_root)
+        ).strip()
+        status = _run(
+            ["git", "status", "--porcelain"], timeout=10, cwd=str(repo_root)
+        ).strip()
+    except (OSError, subprocess.SubprocessError, RuntimeError):
+        # git binary absent, or not a git checkout — record null rather than crash
+        # AFTER all N anchor runs (the rsynced eval dir on a swarm node case).
+        return {"branch": None, "commit": None, "tree_clean": None}
     if not branch or not commit:
         # Not a git checkout (e.g. the rsynced eval dir on a swarm node).
         return {"branch": None, "commit": None, "tree_clean": None}
@@ -533,6 +646,15 @@ def git_identity(repo_root: Path) -> dict:
 def file_sha256(path: Path) -> str:
     """sha256 of a file — pins the gold dataset (the anchor is code + queries)."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _repo_relative(repo_root: Path, path: Path) -> str:
+    """Fallback for ``runs.gold_dataset`` when ``--gold-repo-path`` is not given.
+
+    The node's transient ``--gold`` path is NOT the committed location, so record
+    the bare filename (readers locate the exact gold via ``gold_sha256``);
+    ``--gold-repo-path`` should be passed to record the committed path."""
+    return path.name
 
 
 def build_artifact(
@@ -565,10 +687,12 @@ def build_artifact(
         tolerance_semantics = (
             "MAD == 0 across all metrics: the anchor is fully deterministic "
             "(temperature 0, fixed seed), so the variance-derived tolerance "
-            "collapses to exact equality with the median. Parity for these "
-            "metrics therefore means byte-identical metric values. Story 3.1 "
-            "must re-verify the upgraded stack is itself deterministic before "
-            "trusting a point comparison."
+            "collapses to exact equality with the median. Parity therefore "
+            "means byte-identical metric values. Story 3.1 MUST re-verify the "
+            "upgraded stack is itself deterministic (N runs) and MUST NOT use "
+            "a one-run-vs-one-run comparison as the parity method — parity is "
+            "established by comparing N-run distributions (median +/- tolerance) "
+            "captured on each stack."
         )
     return {
         "artifact": "rag-baseline",
@@ -623,6 +747,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument("--gold", required=True, help="Path to gold_dataset.json")
     p.add_argument(
+        "--gold-repo-path",
+        default=None,
+        help="Repo-relative path of the gold dataset (e.g. "
+        "tests/rag-benchmarks/eval/gold_dataset.json). Recorded in the artifact's "
+        "runs.gold_dataset so readers can find the COMMITTED gold — the transient "
+        "--gold path on the swarm node is not the committed location.",
+    )
+    p.add_argument(
         "--out",
         required=True,
         help="Output baseline artifact path (rag-baseline-v1.3.json)",
@@ -674,8 +806,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    if args.runs < 1:
-        print("--runs must be >= 1", file=sys.stderr)
+    if args.runs < 3:
+        print("--runs must be >= 3 (AC:3 run-triple)", file=sys.stderr)
         return 2
 
     repo_root = (
@@ -688,9 +820,28 @@ def main(argv: list[str] | None = None) -> int:
         print(f"gold dataset not found: {gold}", file=sys.stderr)
         return 2
     out = Path(args.out).resolve()
+    if out == gold:
+        print(
+            "--out and --gold must differ (writing the artifact would clobber "
+            "the pinned gold dataset)",
+            file=sys.stderr,
+        )
+        return 2
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    containers = resolve_containers(args.stack_prefix)
+    try:
+        containers = resolve_containers(args.stack_prefix)
+    except (subprocess.SubprocessError, RuntimeError, OSError) as exc:
+        print(f"container resolution failed: {exc}", file=sys.stderr)
+        return 2
+    if not containers:
+        print(
+            "no GENIE.AI containers resolved (wrong --stack-prefix? stack down? "
+            "docker ps not reachable?) — refusing to write an artifact with an "
+            "empty stack identity",
+            file=sys.stderr,
+        )
+        return 2
     stack = snapshot_stack(containers)
     resolved_env = snapshot_resolved_env(containers)
     homes = snapshot_homes(
@@ -701,27 +852,29 @@ def main(argv: list[str] | None = None) -> int:
         resolved_env["values"],
     )
 
-    anchor = capture_anchor(args.runs, gold, out.parent, args.seed)
+    # Per-run reports go to a temp dir — never into the committed artifact dir.
+    tmp_capture = Path(tempfile.mkdtemp(prefix="rag-baseline-capture-"))
+    try:
+        try:
+            anchor = capture_anchor(
+                args.runs,
+                gold,
+                tmp_capture,
+                args.seed,
+                allow_missed_traces=args.allow_missed_traces,
+            )
+        except RuntimeError as exc:
+            print(f"ABORT: {exc}", file=sys.stderr)
+            return 2
 
-    # Fail-fast on a zero baseline: if observability is off / VictoriaTraces is
-    # down, every query reports "trace missed" and run_eval returns an n:0
-    # aggregate — committing that as the REFERENCE artifact is the worst failure
-    # mode. Require an explicit override to proceed.
-    if anchor["n_missed_traces_total"] > 0 and not args.allow_missed_traces:
-        print(
-            f"ABORT: {anchor['n_missed_traces_total']} trace(s) missed — no "
-            "reranker_selection span (observability off? VT down?). Refusing to "
-            "commit a partial/zero baseline. Use --allow-missed-traces to override.",
-            file=sys.stderr,
+        semantic_runs = args.semantic_runs or args.runs
+        semantic = (
+            capture_semantic(gold, tmp_capture, args.seed, semantic_runs)
+            if args.semantic
+            else {"skipped": True, "reason": "--semantic not requested"}
         )
-        return 2
-
-    semantic_runs = args.semantic_runs or args.runs
-    semantic = (
-        capture_semantic(gold, out.parent, args.seed, semantic_runs)
-        if args.semantic
-        else {"skipped": True, "reason": "--semantic not requested"}
-    )
+    finally:
+        shutil.rmtree(tmp_capture, ignore_errors=True)
 
     # Graph + model pins come from the gold dataset's _meta (driver-produced,
     # so the artifact is regenerable from the committed code + gold alone).
@@ -739,7 +892,7 @@ def main(argv: list[str] | None = None) -> int:
         stack_name=args.stack,
         seed=args.seed,
         runs=args.runs,
-        gold_path=args.gold,
+        gold_path=args.gold_repo_path or _repo_relative(repo_root, gold),
         gold_sha256=file_sha256(gold),
         anchor=anchor,
         semantic=semantic,

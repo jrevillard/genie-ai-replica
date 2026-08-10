@@ -152,6 +152,41 @@ def test_env_grep_cmd_emits_key_value_lines():
     assert "RERANKER_TOP_N" in cmd and "RERANKING_STRATEGY" in cmd
 
 
+def test_snapshot_resolved_env_distinguishes_missing_vs_unresolved(monkeypatch):
+    """Container-exec failure → missing; key absent from a live container → unresolved."""
+    containers = {"chatqna": {"container": "cq"}, "reranker": {"container": "rr"}}
+
+    def fake_exec(container, cmd, timeout=60):
+        if container == "cq":
+            return "RERANKER_TOP_N=3\nRERANKING_STRATEGY=slice\n"
+        raise RuntimeError("exec failed")
+
+    monkeypatch.setattr(cb, "_docker_exec", fake_exec)
+    r = cb.snapshot_resolved_env(containers)
+    assert r["values"] == {"RERANKER_TOP_N": "3", "RERANKING_STRATEGY": "slice"}
+    assert "RERANKER_MODEL_ID" in r["missing"]  # reranker exec failed
+    # chatqna reachable but RERANKING_THRESHOLD absent from its env → unresolved,
+    # NOT missing (misleading infrastructure signal).
+    assert "RERANKING_THRESHOLD" in r["unresolved"]
+    assert "RERANKING_THRESHOLD" not in r["missing"]
+
+
+def test_resolve_containers_stack_prefix_disambiguates(monkeypatch):
+    monkeypatch.setattr(
+        cb,
+        "_run",
+        lambda *a, **k: (
+            "genieai-el-salvador_chatqna.1.x\tregistry/.../genie-ai-chatqna-server\n"
+            "genieai-other_chatqna.1.y\tregistry/.../genie-ai-chatqna-server\n"
+            "genieai-el-salvador_reranker.1.z\tregistry/.../genie-ai-reranker\n"
+        ),
+    )
+    # With the prefix, only the target stack's containers are considered.
+    target = cb.resolve_containers("genieai-el-salvador_")
+    assert target["chatqna"]["container"].startswith("genieai-el-salvador_")
+    assert "genieai-other" not in target["chatqna"]["container"]
+
+
 def test_parse_compose_default():
     import tempfile
 
@@ -228,30 +263,73 @@ def test_capture_anchor_different_seed_changes_result(monkeypatch):
     )  # seed doesn't change canned output
 
 
-def test_build_artifact_anchor_section_deterministic(monkeypatch):
-    """Two artifact builds from identical inputs produce identical anchor JSON."""
-    per_run = [
+def _artifact_kw(anchor=None):
+    per_run = anchor or [
         {"run": i, "aggregate": _canned_anchor_report(42, i)["aggregate"]}
         for i in (1, 2, 3)
     ]
-    anchor = {"per_run": per_run, "n_missed_traces_total": 0}
-    kw = dict(
+    return dict(
         stack_name="release-el-salvador",
         seed=42,
         runs=3,
         gold_path="gold_dataset.json",
-        anchor=anchor,
+        gold_sha256="abc123",
+        anchor={"per_run": per_run, "n_missed_traces_total": 0},
         semantic={"skipped": True, "reason": "--semantic not requested"},
-        config_snapshot={"resolved": {"values": {}}, "homes": {}},
+        config_snapshot={
+            "resolved": {"values": {}, "missing": [], "unresolved": []},
+            "homes": {},
+        },
+        graph={
+            "arango_graph_name": "GRAPH_TEST",
+            "source_collection": "GRAPH_TEST_SOURCE",
+        },
+        model_pins={"embedding_model_id": "BAAI/bge-base-en-v1.5"},
         stack={"name": "release-el-salvador", "services": {}},
         repo_root=_repo_root(),
         k=3.0,
         semantic_enabled=False,
     )
-    a = cb.build_artifact(**kw)
-    b = cb.build_artifact(**kw)
+
+
+def test_build_artifact_anchor_section_deterministic(monkeypatch):
+    """Two artifact builds from identical inputs produce identical anchor JSON."""
+    a = cb.build_artifact(**_artifact_kw())
+    b = cb.build_artifact(**_artifact_kw())
     assert a["anchor"] == b["anchor"]  # capture_date may differ; anchor must not
     assert a["anchor"]["metrics"]["recall"]["median"] == 0.90
+
+
+def test_build_artifact_pins_gold_hash_and_driver_produced_meta():
+    a = cb.build_artifact(**_artifact_kw())
+    assert a["runs"]["gold_sha256"] == "abc123"
+    assert a["config_snapshot"]["graph"]["arango_graph_name"] == "GRAPH_TEST"
+    assert (
+        a["config_snapshot"]["model_pins"]["embedding_model_id"]
+        == "BAAI/bge-base-en-v1.5"
+    )
+
+
+def test_build_artifact_documents_exact_equality_when_mad_zero():
+    a = cb.build_artifact(**_artifact_kw())
+    assert a["anchor"]["tolerance_semantics"] is not None
+    assert "MAD == 0" in a["anchor"]["tolerance_semantics"]
+
+
+def test_build_artifact_no_tolerance_semantics_when_mad_nonzero():
+    kw = _artifact_kw()
+    kw["anchor"] = {
+        "per_run": [
+            {
+                "run": i,
+                "aggregate": {"n": 2, "recall": 0.9 + i * 0.01, "precision": 0.5},
+            }
+            for i in (1, 2, 3)
+        ],
+        "n_missed_traces_total": 0,
+    }
+    a = cb.build_artifact(**kw)
+    assert a["anchor"]["tolerance_semantics"] is None
 
 
 def test_semantic_skipped_when_judge_unconfigured(monkeypatch):

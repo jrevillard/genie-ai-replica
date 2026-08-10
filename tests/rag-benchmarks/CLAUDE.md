@@ -51,8 +51,8 @@ gold_dataset.json ── run_eval.py ──┬── docker exec <chatqna> curl 
                                    │       for offline calibration
                                    │
                                    └── score recall/precision/complete_recall/noise/retrieval_recall
-                                       (gold is _key-keyed — matches the span; content_hash is the
-                                        stable cross-reingest identity)
+                                       (gold is content-hash-keyed; span _keys are mapped to
+                                        content_hash at eval time — survives re-ingest)
 ```
 
 ### Metrics
@@ -67,20 +67,20 @@ gold_dataset.json ── run_eval.py ──┬── docker exec <chatqna> curl 
   Diagnoses retriever vs reranker: low retrieval_recall = retriever miss;
   retrieval_recall high but recall low = reranker dropping gold.
 
-### Identity: the span emits `_key`, gold matches `_key` (content_hash is the stable cross-reingest identity)
+### Identity: matching is content-hash based (span emits `_key`; eval maps it to `content_hash`)
 
 The chatqna `reranker_selection` span emits **`chunk_key` = the ArangoDB `_key`**
 (recovered by the retriever via `metadata["chunk_key"]`, which survives the
-langchain retriever->chatqna handoff; see `run_eval.py` docstring). Gold
-`expected_chunks[].chunk_key` MUST therefore be the `_key` (dump_chunks.py's
-`key` field) — NOT `content_hash`. Each expected chunk should also carry
-`content_hash` (sha256 of normalized text, `chunk_identity.py`) as the stable
-cross-reingest identity for drift analysis.
+langchain retriever->chatqna handoff; see `run_eval.py` docstring). Matching is
+CONTENT-BASED: `run_eval.py` builds a `_key -> content_hash` map from the SOURCE
+collection and scores gold `expected_chunks[].content_hash` (sha256 of normalized
+text, `chunk_identity.py`) against the converted selection. `chunk_key` (the
+`_key`) is retained in the gold for traceability only.
 
-**Consequence:** `_key`s are random per ingest and CHURN on re-ingest. The
-baseline is corpus-state-coupled — if the corpus is re-ingested (or a chunking
-param changes), re-dump via `dump_chunks.py` and re-author the gold's expected
-chunk keys (a signal to re-baseline, not a bug).
+**Consequence:** `content_hash` is stable across re-ingests as long as chunking
+params are unchanged — a corpus re-ingest does NOT invalidate the gold. Only a
+chunking-param change (which alters chunk text) changes the hashes: a signal to
+re-baseline, not a bug.
 
 ## CLI — positional args, NOT flags
 
@@ -151,9 +151,10 @@ default is 120s, raise if needed.
 }
 ```
 
-`chunk_key` is the ArangoDB `_key` (dump_chunks.py's `key` field) — it is what
-the deployed `reranker_selection` span emits. `content_hash` is the stable
-cross-reingest identity, carried for drift analysis (NOT matched by the eval).
+`content_hash` (sha256 of normalized text) is the **matched** identity — the eval
+compares it against the span's `_key`s converted via the SOURCE `_key->content_hash`
+map. `chunk_key` is the ArangoDB `_key` (dump_chunks.py's `key` field), retained
+for traceability (what the deployed `reranker_selection` span emits).
 
 `categoryLabels` is a LIST (supports multi-crop queries like ["Tomato","Cucumber"]).
 Older datasets used `categoryLabel` (string) — incompatible with the current

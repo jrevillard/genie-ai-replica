@@ -25,19 +25,22 @@ Artifact schema (committed as ``rag-baseline-v1.3.json``)::
       "capture_date": "...",
       "git": {...},                       # repo identity of the eval harness
       "stack": {...},                     # container/image/digest per service
-      "runs": {"mode": "anchor", "n": N, "seed": S, "temperature": 0, ...},
+      "runs": {"mode": "anchor", "n": N, "seed": S, "temperature": 0,
+               "gold_sha256": "...", ...},
       "anchor": {
         "per_run": [...],                 # one aggregate per run
         "metrics": { "<metric>": {min, median, max, mad, tol_low, tol_high,
                                   parity_bound}, ... },
-        "tolerance_formula": "..."
+        "tolerance_formula": "...",
+        "tolerance_semantics": "...",     # set when MAD == 0 (exact-equality)
       },
       "semantic": {...},                  # optional, variance recorded separately
       "config_snapshot": {
         "resolved": {...},                # values read from the LIVE containers
-        "reranker_top_n": { "resolved": 3, "code_chatqna": 3, ... , "homes_agree": true },
-        "reranking_strategy": {...},
-        "graph": {...}
+        "unresolved": [...],              # declared keys absent from every container
+        "homes": {...},                   # code/compose/env-template three homes
+        "graph": {...},                   # from gold _meta (driver-produced)
+        "model_pins": {...}               # from gold _meta (driver-produced)
       }
     }
 
@@ -159,7 +162,11 @@ def metric_triples(per_run: list[dict], k: float = 3.0) -> dict:
     for key in keys:
         if key == "n":
             continue
-        values = [r[key] for r in per_run]
+        # metrics.aggregate drops retrieval_recall unless EVERY row carries it,
+        # so a run may legitimately omit a key — skip it rather than KeyError.
+        values = [r[key] for r in per_run if key in r]
+        if not values:
+            continue
         t = compute_triples(values, k=k)
         if key in LOWER_IS_BETTER:
             t["parity_bound"] = "low"
@@ -199,17 +206,22 @@ def _docker_exec(container: str, cmd: str, timeout: float = 60) -> str:
     return result.stdout
 
 
-def resolve_containers() -> dict[str, dict]:
+def resolve_containers(stack_prefix: str = "") -> dict[str, dict]:
     """Map service → {container, image} for every GENIE.AI OPEA service.
 
     Resolves the dynamic Swarm replica suffix live via ``docker ps`` and matches
-    by image-name substring (never hardcoded container names).
+    by image-name substring (never hardcoded container names). ``stack_prefix``
+    (e.g. ``genieai-el-salvador_``) disambiguates when a node hosts several
+    stacks — docker ps row order is not deterministic, so without it the wrong
+    stack's env could be read (AC:5 "the stack under test").
     """
     out = _run(
         ["docker", "ps", "--format", "{{.Names}}\t{{.Image}}"],
         timeout=30,
     )
     rows = [line.split("\t") for line in out.splitlines() if "\t" in line]
+    if stack_prefix:
+        rows = [r for r in rows if r[0].startswith(stack_prefix)]
     services: dict[str, dict] = {}
     for service, markers in SERVICE_IMAGE_MARKERS.items():
         for name, image in rows:
@@ -264,7 +276,13 @@ def snapshot_resolved_env(containers: dict[str, dict]) -> dict:
 
     This is the "exact env under test, resolved values, not placeholders"
     requirement (AC:5). A var is recorded only when the container actually holds
-    it; missing vars are reported so the operator can investigate drift.
+    it. Two distinct non-resolution cases are reported so readers don't conflate
+    them:
+      - ``missing``: a container was NOT found / its docker exec FAILED
+        (infrastructure problem — the stack may be down).
+      - ``unresolved``: a declared key was queried but is absent from every
+        reachable container's env (e.g. RERANKER_MODEL_ID is baked into the TEI
+        entrypoint, not an env var — expected, but recorded for drift checks).
     """
     resolved: dict[str, str] = {}
     missing: list[str] = []
@@ -283,7 +301,13 @@ def snapshot_resolved_env(containers: dict[str, dict]) -> dict:
             missing.extend(keys)
             continue
         resolved.update(parse_env_lines(body))
-    return {"values": resolved, "missing": sorted(set(missing))}
+    declared = {k for keys in SERVICE_ENV_VARS.values() for k in keys}
+    unresolved = sorted(declared - set(resolved) - set(missing))
+    return {
+        "values": resolved,
+        "missing": sorted(set(missing)),
+        "unresolved": unresolved,
+    }
 
 
 def _parse_code_default(path: Path, env_var: str) -> str | None:
@@ -496,11 +520,19 @@ def git_identity(repo_root: Path) -> dict:
     branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=10).strip()
     commit = _run(["git", "rev-parse", "HEAD"], timeout=10).strip()
     status = _run(["git", "status", "--porcelain"], timeout=10).strip()
+    if not branch or not commit:
+        # Not a git checkout (e.g. the rsynced eval dir on a swarm node).
+        return {"branch": None, "commit": None, "tree_clean": None}
     return {
-        "branch": branch or "unknown",
-        "commit": commit or "unknown",
+        "branch": branch,
+        "commit": commit,
         "tree_clean": not bool(status),
     }
+
+
+def file_sha256(path: Path) -> str:
+    """sha256 of a file — pins the gold dataset (the anchor is code + queries)."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def build_artifact(
@@ -509,9 +541,12 @@ def build_artifact(
     seed: int,
     runs: int,
     gold_path: str,
+    gold_sha256: str,
     anchor: dict,
     semantic: dict,
     config_snapshot: dict,
+    graph: dict,
+    model_pins: dict,
     stack: dict,
     repo_root: Path,
     k: float,
@@ -520,6 +555,21 @@ def build_artifact(
     per_run = anchor["per_run"]
     aggregates = [r["aggregate"] for r in per_run]
     metrics = metric_triples(aggregates, k=k) if aggregates else {}
+    tolerance_semantics = None
+    if metrics and all(t["mad"] == 0 for t in metrics.values()):
+        # Document the exact-equality decision explicitly: a deterministic anchor
+        # collapses tolerance to the median (MAD=0). Any post-upgrade deviation
+        # then FAILS — that is the intended lock, not an accident. Story 3.1 must
+        # first re-verify the upgraded stack is itself deterministic (N runs)
+        # before trusting a point comparison.
+        tolerance_semantics = (
+            "MAD == 0 across all metrics: the anchor is fully deterministic "
+            "(temperature 0, fixed seed), so the variance-derived tolerance "
+            "collapses to exact equality with the median. Parity for these "
+            "metrics therefore means byte-identical metric values. Story 3.1 "
+            "must re-verify the upgraded stack is itself deterministic before "
+            "trusting a point comparison."
+        )
     return {
         "artifact": "rag-baseline",
         "version": "1.0.0",
@@ -534,16 +584,22 @@ def build_artifact(
             "seed": seed,
             "temperature": 0,
             "gold_dataset": gold_path,
+            "gold_sha256": gold_sha256,
             "semantic_enabled": semantic_enabled,
         },
         "anchor": {
             "per_run": per_run,
             "metrics": metrics,
             "tolerance_formula": tolerance_formula(k),
+            "tolerance_semantics": tolerance_semantics,
             "n_missed_traces_total": anchor.get("n_missed_traces_total", 0),
         },
         "semantic": semantic,
-        "config_snapshot": config_snapshot,
+        "config_snapshot": {
+            **config_snapshot,
+            "graph": graph,
+            "model_pins": model_pins,
+        },
     }
 
 
@@ -583,6 +639,25 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Path to docker-compose.yaml (for compose-default homes)",
     )
     p.add_argument(
+        "--repo-root",
+        default=None,
+        help="Path to the GENIE.AI repo checkout holding genie-ai-overlay/, env, "
+        "docker-compose.yaml (for the code/compose/env homes). Defaults to "
+        "auto-detection from this file's location.",
+    )
+    p.add_argument(
+        "--stack-prefix",
+        default="",
+        help="Container-name prefix to disambiguate the target stack on a "
+        "multi-stack node (e.g. genieai-el-salvador_)",
+    )
+    p.add_argument(
+        "--allow-missed-traces",
+        action="store_true",
+        help="Commit a baseline even when some traces are missed (not recommended "
+        "— a zero baseline is the worst failure mode for the reference artifact)",
+    )
+    p.add_argument(
         "--tolerance-k",
         type=float,
         default=3.0,
@@ -603,7 +678,11 @@ def main(argv: list[str] | None = None) -> int:
         print("--runs must be >= 1", file=sys.stderr)
         return 2
 
-    repo_root = Path(__file__).resolve().parent.parent.parent
+    repo_root = (
+        Path(args.repo_root).resolve()
+        if args.repo_root
+        else Path(__file__).resolve().parent.parent.parent
+    )
     gold = Path(args.gold).resolve()
     if not gold.is_file():
         print(f"gold dataset not found: {gold}", file=sys.stderr)
@@ -611,16 +690,32 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(args.out).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    containers = resolve_containers()
+    containers = resolve_containers(args.stack_prefix)
     stack = snapshot_stack(containers)
     resolved_env = snapshot_resolved_env(containers)
     homes = snapshot_homes(
         repo_root,
-        Path(args.compose).resolve() if args.compose else None,
+        Path(args.compose).resolve()
+        if args.compose
+        else repo_root / "docker-compose.yaml",
         resolved_env["values"],
     )
 
     anchor = capture_anchor(args.runs, gold, out.parent, args.seed)
+
+    # Fail-fast on a zero baseline: if observability is off / VictoriaTraces is
+    # down, every query reports "trace missed" and run_eval returns an n:0
+    # aggregate — committing that as the REFERENCE artifact is the worst failure
+    # mode. Require an explicit override to proceed.
+    if anchor["n_missed_traces_total"] > 0 and not args.allow_missed_traces:
+        print(
+            f"ABORT: {anchor['n_missed_traces_total']} trace(s) missed — no "
+            "reranker_selection span (observability off? VT down?). Refusing to "
+            "commit a partial/zero baseline. Use --allow-missed-traces to override.",
+            file=sys.stderr,
+        )
+        return 2
+
     semantic_runs = args.semantic_runs or args.runs
     semantic = (
         capture_semantic(gold, out.parent, args.seed, semantic_runs)
@@ -628,14 +723,29 @@ def main(argv: list[str] | None = None) -> int:
         else {"skipped": True, "reason": "--semantic not requested"}
     )
 
+    # Graph + model pins come from the gold dataset's _meta (driver-produced,
+    # so the artifact is regenerable from the committed code + gold alone).
+    with open(gold) as fh:
+        gold_data = json.load(fh)
+    meta = gold_data.get("_meta", {})
+    graph = {
+        "arango_graph_name": meta.get("corpus_snapshot", {}).get("graph", "GRAPH"),
+        "source_collection": meta.get("corpus_snapshot", {}).get(
+            "source_collection", ""
+        ),
+    }
+
     artifact = build_artifact(
         stack_name=args.stack,
         seed=args.seed,
         runs=args.runs,
         gold_path=args.gold,
+        gold_sha256=file_sha256(gold),
         anchor=anchor,
         semantic=semantic,
         config_snapshot={"resolved": resolved_env, "homes": homes},
+        graph=graph,
+        model_pins=meta.get("model_pins", {}),
         stack=stack,
         repo_root=repo_root,
         k=args.tolerance_k,

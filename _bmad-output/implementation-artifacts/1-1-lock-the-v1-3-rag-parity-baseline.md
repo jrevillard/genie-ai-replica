@@ -133,6 +133,18 @@ deepseek-v4-flash[1m] (Claude Code, bmad-create-story)
 - **`printenv` prints bare values** (no `KEY=`), so `snapshot_resolved_env` captured nothing → fixed with `env | grep -E '^(KEYS)='` (added `parse_env_lines` + `env_grep_cmd`).
 - **`grep` exits 1 on no-match** → a container holding none of the requested keys was misreported as an exec failure → added `|| true`.
 
+### Code review (superpowers) — findings addressed
+
+A read-only code review of `611569b13..70946dfe6` flagged one Critical + four Important + minors. Addressed:
+
+- **C1 (artifact integrity — MUST FIX):** the committed baseline was not regenerable from the committed driver. Root causes: (a) `harness_sha` was computed over the node's staged 5-file eval dir, not the committed 13-file set → sha mismatch; (b) `config_snapshot.graph` + `model_pins` were hand-injected post-capture, not driver-produced; (c) gold pinned by path, not hash. **Fixed in the driver:** `gold_sha256` added to `runs`; driver now reads gold `_meta` for `graph` + `model_pins`; `harness_sha` verified to match repo↔node staging; artifact re-captured with the improved driver → fully regenerable.
+- **I1 (docs contradicted identity):** `run_eval.py` docstring + `CLAUDE.md` claimed "content hashes", but the deployed span emits `_key`. Updated both to the `_key` reality + re-ingest caveat.
+- **I2 (`missing` semantics):** `snapshot_resolved_env` conflated container-exec failures with key-absence. Split into `missing` (infrastructure failure) vs `unresolved` (declared key absent from every reachable container).
+- **I3 (zero-baseline guard):** driver now ABORTS (exit 2) when `n_missed_traces_total > 0`, unless `--allow-missed-traces` — a silent all-zero baseline (observability off / VT down) can no longer be committed as the reference artifact.
+- **I4 (multi-stack hazard):** `resolve_containers` now takes `--stack-prefix` (e.g. `genieai-el-salvador_`) to disambiguate on nodes hosting several stacks.
+- **Minors:** `metric_triples` no longer KeyErrors on runs that omit a metric; `git_identity` returns `null` (not falsely `tree_clean`) when git is absent; MAD=0 exact-equality semantics documented in the artifact (`anchor.tolerance_semantics`); misleading test name fixed.
+- New/updated unit tests: gold_sha + graph/model_pins presence, tolerance_semantics on/off, missing-vs-unresolved, stack-prefix disambiguation. 22 driver + 22 harness tests green, ruff clean.
+
 ### File List
 
 - `_bmad-output/implementation-artifacts/1-1-lock-the-v1-3-rag-parity-baseline.md` (this file)
@@ -146,3 +158,4 @@ deepseek-v4-flash[1m] (Claude Code, bmad-create-story)
 
 - 2026-08-10: Story marked in-progress (sprint-status + GitLab #840). T2 (capture_baseline.py) + T4 (idempotency/harness tests) implemented and green. T1/T3 initially deferred — deployment network unreachable.
 - 2026-08-10: WG tunnel up → T1 complete (fresh gold dataset from live corpus, validated recall 0.882/rr 1.0). T3 complete (3-run baseline captured on release/el-salvador, deterministic, artifact committed). All 4 tasks done → status to review.
+- 2026-08-10: Code review (superpowers) — addressed Critical artifact-integrity (gold_sha256, driver-produced graph/model_pins, harness_sha repro match) + Important docs/semantics/guards + minors. Driver re-captured for a fully regenerable baseline. Committed to MR #281.

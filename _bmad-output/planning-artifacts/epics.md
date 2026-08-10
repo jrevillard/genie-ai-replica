@@ -240,7 +240,7 @@ So that chat retrieval stays grounded and translation keeps streaming.
 
 **Acceptance Criteria:**
 
-**Given** the chatqna's surface diff (align_* monkeypatch, `schedule()` 8-kwargs, TRANSLATOR branch, entrypoint),
+**Given** the chatqna's surface diff (align_* monkeypatch, `schedule(initial_inputs, llm_parameters, **kwargs)` forwarding the 6 custom kwargs — `retriever_parameters`, `reranker_parameters`, `full_chat_history_string`, `retrieval_context`, `original_language`, `user_details` — TRANSLATOR branch, entrypoint),
 **When** the orchestrator is re-grafted per the spike outcome (D1 if kwargs drop), both Dockerfile clones bumped to v1.5, and the wire test + E2E cross-service pipeline test run in-image,
 **Then** the chatqna image builds and the wire test asserts all 6 custom kwargs land on the handlers,
 **And** streaming translation (#829) is exercised by the E2E contract test.

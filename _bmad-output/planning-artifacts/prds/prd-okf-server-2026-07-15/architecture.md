@@ -2,7 +2,7 @@
 title: Architecture — GENIE.AI OKF Server
 status: draft
 created: 2026-07-15
-updated: 2026-07-16
+updated: 2026-08-10
 initiative: okf-server
 branch: feat/okf-server
 prd: ./prd.md
@@ -26,6 +26,7 @@ adrs:
   - ../../../../docs/adr/okf-014-repository-model.md
   - ../../../../docs/adr/okf-015-in-app-authoring-curation.md
   - ../../../../docs/adr/okf-016-external-source-management.md
+  - ../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md
 authors: Genie.ai Dev
 ---
 
@@ -74,7 +75,7 @@ authors: Genie.ai Dev
 
 ## 2. Repository → graph model ([ADR-okf-002](../../../../docs/adr/okf-002-shared-graph-multi-tenancy.md), [ADR-okf-014](../../../../docs/adr/okf-014-repository-model.md))
 
-- A **repository** (`okf_repositories` doc): `repo_id`, `name`, `domain` (service-category key), `source` (Git/S3 ref), `graph_name = OKF_{repo_id}`, `okf_version`, lifecycle state, `version`, `curator`, ACL (`required_scopes`, `sensitivity`), retention, timestamps.
+- A **repository** (`okf_repositories` doc): `repo_id`, `name`, `domain` (service-category key), `source` (Git/S3 ref), `graph_name = OKF_{repo_id}`, `okf_version` (defaults to `"0.2"`; v0.1 bundles consumed via fallback — [ADR-okf-017](../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md)), lifecycle state, `version`, `curator`, ACL (`required_scopes`, `sensitivity`), retention, timestamps.
 - On first ingest, `langchain-arangodb ArangoGraph.add_graph_documents(graph_name=OKF_{repo_id})` auto-creates the graph + four collections; the retriever lazily creates `OKF_{repo_id}_BM25_VIEW` on first query (existing behavior).
 - ACL is encoded as **chunk labels** on every chunk/edge: `t:<tenant>`, `r:<repo_id>`, `d:<domain>` — reusing the retriever's existing `chunk_labels` filter (zero retriever change for the filter itself).
 
@@ -84,7 +85,7 @@ Today `graph_name` is a single global (`GRAPH`); ChatQnA never forwards one and 
 
 - **Retriever extension**: `invoke()` accepts a list `graph_names` (in addition to single). For each authorized graph it runs the existing hybrid path (dense COSINE + BM25 view + optional traversal), then **RRF-fuses** the per-graph ranked lists (reuse the existing `rrf_fuse`). ACL labels applied per-graph. Additive change to one method family.
 - **ChatQnA wiring**: `ChatCompletionRequest`/`GenieaiRetrieverParms` carry the **authorized graph set** (`GRAPH` + all `OKF_{repo_id}` the caller's token grants). ChatQnA forwards it to the retriever so one chat query grounds across all graphs.
-- **OKF serving surface** (`/api/okf/search|get|neighbors`): the OKF Server calls the same multi-graph retriever scoped to the caller's OKF repos — one retrieval engine, two entry points (chat + agent).
+- **OKF serving surface** (`/api/okf/search|get|neighbors`): the OKF Server calls the same multi-graph retriever scoped to the caller's OKF repos — one retrieval engine, two entry points (chat + agent). Responses include v0.2 **trust tier + staleness + source provenance** per concept (PRD FR-29, [ADR-okf-017](../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md)).
 
 ## 4. Data model (ArangoDB)
 
@@ -103,7 +104,7 @@ Today `graph_name` is a single global (`GRAPH`); ChatQnA never forwards one and 
 | Collection | Type | Key fields |
 |---|---|---|
 | `okf_repositories` | doc | `repo_id`, `name`, `domain`, `source`, `graph_name`, `okf_version`, `lifecycle_state`, `version`, `curator`, ACL, retention, timestamps |
-| `okf_concepts_meta` | doc | `concept_id`, `repo_id`, `frontmatter`, `path`, `conformance_issues`, `pii_state`, `bundle_version` |
+| `okf_concepts_meta` | doc | `concept_id`, `repo_id`, `frontmatter` (full, v0.2 families preserved), `path`, `conformance_issues`, `pii_state`, `bundle_version`, **`generated`, `verified`, `trust_tier` (derived), `status`, `stale_after`, `sources`** ([ADR-okf-017](../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md)) |
 | `okf_audit` | doc (append-only) | `actor`, `action`, `repo_id`, `concept_id`, `version`, `ts`, `source_ip`, `trace_id` |
 | `okf_sources` | doc | source state per repo (last commit SHA / S3 version, last sync, health) |
 
@@ -115,7 +116,7 @@ All via the OKF Server REST API (`/api/okf/*`, Kong-terminated OIDC, role `tools
 
 - **Repository CRUD** (`/api/okf/repos`): create `{name, domain, source, ACL, retention}` → mints `repo_id`, `graph_name=OKF_{repo_id}`, registers in `okf_repositories`, optionally triggers first sync; list (filtered by authorized domains/repos); read one (status/health/version/concept counts/conformance/PII summary); update (metadata/ACL/retention/source; not `graph_name`); delete (retract entire graph by `repo_id` + remove metadata; cascade audited; irreversible after grace).
 - **Concept CRUD** (`/api/okf/repos/{repo}/concepts`): create/read/update/delete concept `.md`; on save → re-parse → incremental re-index → update `okf_concepts_meta` + structural `OKF_{repo}_LINKS_TO` edges (+ `label`).
-- **Bundle operations**: validate (§9), publish (immutable version), version list/diff, deprecate, retire (retract). Reserved files `index.md`/`log.md` editable, validated.
+- **Bundle operations**: validate (§11), publish (immutable version), version list/diff, deprecate, retire (retract). Reserved files `index.md`/`log.md` editable, validated.
 - **Source management** (`/api/okf/repos/{repo}/source`): register/update Git or S3; sync now; webhooks + scheduled poll; change detection; health in `okf_sources`.
 
 ## 6. Ingestion pipeline (floor to ceiling — PRD FR-4..8, FR-22)
@@ -123,8 +124,8 @@ All via the OKF Server REST API (`/api/okf/*`, Kong-terminated OIDC, role `tools
 > **Source-of-truth boundaries ([ADR-okf-016](../../../../docs/adr/okf-016-external-source-management.md)):** the external Git/S3 origin is a **sync source only** (consulted at sync, never at query/serve time); the **document-repository** retains the versioned copy and is the **single source of truth** for all internal components after upload; ArangoDB is the derived indexed view. Origins are **checked periodically**; deletion/inaccessibility is **detected and handled gracefully** (continue serving from the retained copy + alert the steward). "View source" links resolve to document-repository references, never the external origin URL.
 
 1. **Trigger** — operator action (admin UI "Sync"/"Ingest"), webhook, or schedule → OKF Server `source-sync` enqueues changed concepts (Redis Streams + DLQ).
-2. **Fetch + parse** — OKF Server pulls from Git/S3; `okf-parser` (gray-matter + markdown-it AST) extracts frontmatter, body, structural links (anchor text → `label`).
-3. **Validate** — OKF §9 conformance (non-blocking quality gate) → `okf_concepts_meta`.
+2. **Fetch + parse** — OKF Server pulls from Git/S3; `okf-parser` (gray-matter + markdown-it AST) extracts frontmatter (incl. v0.2 `generated.at` / `sources`, with legacy `timestamp` / `# Citations` fallback), body, structural links (anchor text → `label`).
+3. **Validate** — OKF §11 conformance (non-blocking quality gate) → `okf_concepts_meta`.
 4. **Store + scan** — bundle bytes routed through the **document-repository new bundle route** (`POST /api/files/ingest-bundle`): storage + ClamAV (`securityService.scanBuffer`) + the `graph_name` (`OKF_{repo_id}`). Malware → reject + audit.
 5. **PII redact** — OKF Server `governance` runs Presidio (document-level default) on concept bodies; failure → withhold from `published` + flag (blocking) ([ADR-okf-004](../../../../docs/adr/okf-004-pii-redaction-strategy.md)).
 6. **Index** — document-repository hands concepts to **dataprep** with `graph_name=OKF_{repo_id}` (NEW wiring) → TEI embed → store in `OKF_{repo}_SOURCE` (+concept_id/version/source_type + chunk_labels ACL). Structural edges written to `OKF_{repo}_LINKS_TO`.
@@ -137,7 +138,7 @@ All via the OKF Server REST API (`/api/okf/*`, Kong-terminated OIDC, role `tools
 Web-only (Flutter has no ingestion/admin UI — confirmed). Extends `AdminDashboard.vue` (Options API, Vuex, vue-i18n, `httpService` → `/api` → Kong). Uses DS primitives per the frontend design system.
 
 - **New tab** "OKF Repositories" on `AdminDashboard.vue` (table: name, domain, source, lifecycle, version, health, last sync, concept count; filters by domain, search, pagination).
-- **New components** (`src/components/`): `OkfRepositoryDialog.vue` (create/edit; domain picker via `serviceTreeService.getAdminCategories()`), `OkfConceptEditor.vue` (frontmatter form + Markdown body + link picker + live §9 validation + PII pre-check — the FR-25 authoring surface), `OkfRepositoryDetails.vue` (tabs: Concepts tree, Conformance/PII, Versions, Source/Sync, Audit; actions Sync/Validate/Publish/Retire/Delete), `OkfIngestionProgress.vue` (live ingest/sync polling, `{ silent: true }` pattern).
+- **New components** (`src/components/`): `OkfRepositoryDialog.vue` (create/edit; domain picker via `serviceTreeService.getAdminCategories()`), `OkfConceptEditor.vue` (frontmatter form + Markdown body + link picker + live §11 validation + PII pre-check — the FR-25 authoring surface), `OkfRepositoryDetails.vue` (tabs: Concepts tree, Conformance/PII, Versions, Source/Sync, Audit; actions Sync/Validate/Publish/Retire/Delete), `OkfIngestionProgress.vue` (live ingest/sync polling, `{ silent: true }` pattern).
 - **New service + store**: `src/services/okfRepositoryService.js` (httpService-based: listRepos, getRepo, createRepo, updateRepo, deleteRepo, syncRepo, listConcepts, getConcept, saveConcept, deleteConcept, validateBundle, publishBundle, retireRepo, getRepoAudit, getIngestStatus → `/api/okf/*`); Vuex module `okf` (state + actions, `mapGetters`/`mapActions`).
 - **i18n** (`src/i18n/locales/*.js`): new `okf.*` tree across all locales (English source of truth); fix opportunistically the undefined `link.*`/`common.close` fallbacks.
 - **Auth**: Keycloak bearer via the existing `httpService` request interceptor (401 silent refresh); admin/mutating actions require `tools-admin`/admin role, enforced at Kong + OKF Server.

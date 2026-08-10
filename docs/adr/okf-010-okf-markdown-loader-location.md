@@ -17,7 +17,7 @@ OKF concepts need frontmatter → metadata, Markdown-header-aware chunking, and 
 
 **OKF parsing (frontmatter, Markdown structure, link extraction) lives in the Node OKF Server** (`okf-parser/`: `gray-matter` + `markdown-it`). 
 
-- **MVP**: OKF Server extracts frontmatter + link edges and sends each concept's body to dataprep's **existing ingest path** (`graph_name=OKF`) for chunk+embed+store; OKF Server writes the structural `OKF_LINKS_TO` edges + `okf_concepts`/`okf_bundles` metadata. dataprep change: minimal/none (concept bodies flow through the existing path).
+- **MVP**: OKF Server extracts frontmatter (incl. v0.2 `generated.at` / `sources`, with legacy `timestamp` / `# Citations` fallback — [ADR-okf-017](okf-017-okf-v02-trust-lifecycle-provenance.md)) + link edges and sends each concept's body to dataprep's **existing ingest path** (`graph_name=OKF`) for chunk+embed+store; OKF Server writes the structural `OKF_LINKS_TO` edges + `okf_concepts`/`okf_bundles` metadata. dataprep change: minimal/none (concept bodies flow through the existing path).
 - **Fast-follow**: adopt **header-aware chunking** either (a) Node-side pre-split (`langchain/textsplitters` JS) sending pre-chunked text, or (b) a small additive OKF/markdown loader in dataprep `_load_and_chunk` (`MarkdownHeaderTextSplitter`, already a dependency). Choose based on which yields cleaner embeddings with least coupling.
 
 ## Alternatives considered
@@ -39,4 +39,4 @@ OKF tenant/bundle ACL is realized by encoding `t:<tenant>` / `b:<bundle>` as `ch
 
 ## References
 
-- PRD FR-6, FR-7; Architecture §4, §6, §9.
+- PRD FR-6, FR-7; Architecture §4, §6, §9; [ADR-okf-017](okf-017-okf-v02-trust-lifecycle-provenance.md).

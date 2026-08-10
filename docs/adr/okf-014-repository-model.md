@@ -17,7 +17,7 @@ Large corpuses must be broken down by domain into multiple OKF repositories. The
 | New dedicated domain taxonomy | Rejected — duplicates the existing knowledge hierarchy. |
 
 ## Consequences
-- **Positive**: simple 1:1:1 model; reuses the hierarchy; clean per-repo graph isolation.
+- **Positive**: simple 1:1:1 model; reuses the hierarchy; clean per-repo graph isolation; **unaffected by OKF v0.2** (the bundle/repository model is unchanged — only optional frontmatter families and two renamed fields changed, see [ADR-okf-017](okf-017-okf-v02-trust-lifecycle-provenance.md)).
 - **Negative**: one bundle per repository (a very large domain = one large bundle unless split).
 - **Mitigations**: split a large domain into multiple repositories under the same domain category.
 

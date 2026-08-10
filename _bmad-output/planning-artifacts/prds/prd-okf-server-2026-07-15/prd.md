@@ -2,7 +2,7 @@
 title: PRD — GENIE.AI OKF Server
 status: draft
 created: 2026-07-15
-updated: 2026-08-07
+updated: 2026-08-10
 prd_key: okf-server
 initiative: agentic-enablement
 branch: feat/agentic-enablement
@@ -28,11 +28,11 @@ authors: Genie.ai Dev
 
 ## 0. Document Purpose
 
-This PRD defines the **OKF Server** initiative for product management, Genie platform stakeholders, and downstream BMAD workflow owners ([Architecture](./architecture.md), epics/stories, QA). It is built on — and does not duplicate — the [Product Brief](../../briefs/brief-okf-server-2026-07-15/brief.md) (vision/scope) and the [Research Addendum](../../briefs/brief-okf-server-2026-07-15/addendum.md) (verified integration map, reuse matrix, competitive/MCP/Keycloak/NFR research). All locked decisions live in the [decision log](../../briefs/brief-okf-server-2026-07-15/.decision-log.md) and the ADRs [`okf-001..015`](../../../../docs/adr/). The PRD is capability-level; implementation detail lives in [Architecture](./architecture.md). Features are grouped with globally-numbered stable FR IDs; assumptions are tagged inline (`[ASSUMPTION: …]`) and indexed in §14.
+This PRD defines the **OKF Server** initiative for product management, Genie platform stakeholders, and downstream BMAD workflow owners ([Architecture](./architecture.md), epics/stories, QA). It is built on — and does not duplicate — the [Product Brief](../../briefs/brief-okf-server-2026-07-15/brief.md) (vision/scope) and the [Research Addendum](../../briefs/brief-okf-server-2026-07-15/addendum.md) (verified integration map, reuse matrix, competitive/MCP/Keycloak/NFR research). All locked decisions live in the [decision log](../../briefs/brief-okf-server-2026-07-15/.decision-log.md) and the ADRs [`okf-001..017`](../../../../docs/adr/). The PRD is capability-level; implementation detail lives in [Architecture](./architecture.md). Features are grouped with globally-numbered stable FR IDs; assumptions are tagged inline (`[ASSUMPTION: …]`) and indexed in §14.
 
 ## 1. Vision
 
-Google's Open Knowledge Format (OKF v0.1, June 2026) made organizational knowledge portable for AI agents — but deliberately stopped at the *format*, leaving storage, serving, security, curation, and query to the ecosystem. Every existing OKF consumer is either a local stdio tool or locked to Google Cloud, and every open-source GraphRAG/agent-memory engine ships without multi-tenancy, RBAC, audit, privacy controls, or data residency. Government and public-service deployments — Genie's core mission — have no sovereign way to host curated knowledge and serve it to agents with the trust model they require.
+Google's Open Knowledge Format (OKF v0.2, August 2026) made organizational knowledge portable for AI agents — and, as of v0.2, made **provenance, trust, lifecycle, and attestation** first-class — but deliberately stopped at the *format*, leaving storage, serving, security, curation, and query to the ecosystem. Every existing OKF consumer is either a local stdio tool or locked to Google Cloud, and every open-source GraphRAG/agent-memory engine ships without multi-tenancy, RBAC, audit, privacy controls, or data residency. Government and public-service deployments — Genie's core mission — have no sovereign way to host curated knowledge and serve it to agents with the trust model they require.
 
 The **GENIE.AI OKF Server** is the open-source, enterprise- and government-grade service that fills this gap. It is a **flexible production framework for any RAG use case** — organizations break large corpora **by domain into multiple OKF repositories**; each repository is hosted, curated, versioned, and access-controlled; and **RAG responses are grounded in all available data** — the existing free-form corpus *and* every authorized OKF repository — through a unified multi-graph retrieval layer. It is **complementary** to Genie's dataprep/RAG pipeline and the planned agentic layer (custom LangChain Deep Agents + SST-as-tools) — it consumes and extends them, never competes — and is engineered from the first commit for **sovereignty, privacy, security, data curation, and accountability**. It becomes the canonical open-source reference implementation of a governed OKF consumer/serving layer.
 
@@ -50,7 +50,7 @@ The **GENIE.AI OKF Server** is the open-source, enterprise- and government-grade
 
 - **UJ-1. Amara creates a domain repository, curates concepts in-app, and it's live for agents.**
   - **Persona + context:** Amara, platform engineer at a national digital-services agency, curates policy/concept knowledge.
-  - **Path:** (1) creates an OKF **repository** for a domain (e.g. "Social Policy") in the Vue admin dashboard — the system mints `graph_name = OKF_{repo_id}`; (2) either registers a Git/S3 source **or** authors concepts in the in-app Markdown editor (frontmatter form + body + link picker + live §9 validation); (3) on save, concepts are validated, ClamAV-scanned and PII-redacted via the document-repository, then handed to dataprep which indexes them into the repository's own graph; (4) the repository moves through review → publish.
+  - **Path:** (1) creates an OKF **repository** for a domain (e.g. "Social Policy") in the Vue admin dashboard — the system mints `graph_name = OKF_{repo_id}`; (2) either registers a Git/S3 source **or** authors concepts in the in-app Markdown editor (frontmatter form + body + link picker + live §11 validation); (3) on save, concepts are validated, ClamAV-scanned and PII-redacted via the document-repository, then handed to dataprep which indexes them into the repository's own graph; (4) the repository moves through review → publish.
   - **Climax:** an agent search returns a result from the new repository, with a citation and version pin — no pipeline code written.
   - **Resolution:** repository registered, versioned, access-controlled; Amara sees ingest health + conformance metrics.
 
@@ -68,11 +68,14 @@ The **GENIE.AI OKF Server** is the open-source, enterprise- and government-grade
 
 ## 3. Glossary
 
-- **OKF** — Open Knowledge Format v0.1 (Google, June 2026); a directory of Markdown files with YAML frontmatter.
+- **OKF** — Open Knowledge Format v0.2 (Google, August 2026); a directory of Markdown files with YAML frontmatter. v0.2 makes provenance (`sources`), trust (`generated`/`verified` → trust tier), and lifecycle (`status`/`stale_after`) first-class. ([ADR-okf-017](../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md))
 - **Repository** — the top-level managed unit in OKF Server: one OKF bundle scoped to **one domain**, mapped to its own ArangoDB graph `OKF_{repo_id}`. A deployment hosts **multiple repositories** (one per domain). ([ADR-okf-014](../../../../docs/adr/okf-014-repository-model.md))
 - **Domain** — an organizational knowledge scope (e.g. a ministry policy area); reuses Genie's existing **service-category hierarchy** (`/api/service-categories`). One repository = one domain. ([ADR-okf-014](../../../../docs/adr/okf-014-repository-model.md))
 - **Concept** — one `.md` document in a repository. **Concept ID** = file path with `.md` removed.
 - **Frontmatter** — YAML metadata block at the top of a concept; only `type` is required by OKF.
+- **Trust tier** — a level derived from a concept's `verified` field (OKF v0.2 §5.3): unverified / machine-confirmed / human-reviewed. Surfaced to agents as an advisory signal, **not** access control. ([ADR-okf-017](../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md))
+- **`stale_after`** — OKF v0.2 absolute date (`YYYY-MM-DD`); a concept is stale when `today ≥ stale_after`. Drives automatic staleness detection for time-bound government knowledge.
+- **`sources` (provenance)** — OKF v0.2 frontmatter field recording a concept's source materials with per-source credibility signals (`author`, `usage_count`, `last_modified`).
 - **Index file / Log file** — OKF reserved files (`index.md`, `log.md`) for progressive disclosure and change history.
 - **OKF Server** — the new Genie service this PRD specifies: an independent component at `components/okf-server/` (Node.js/Express, CommonJS, imports `components/shared/lib/`), behind Kong, that calls the Python dataprep/retriever for indexing/retrieval and manages repositories, curation, governance, and serving. ([ADR-okf-001](../../../../docs/adr/okf-001-okf-server-component-and-stack.md))
 - **OKF graph** — the per-repository ArangoDB graph/collections `OKF_{repo_id}_SOURCE/_ENTITY/_HAS_SOURCE/_LINKS_TO` + `OKF_{repo_id}_BM25_VIEW`. ([ADR-okf-002](../../../../docs/adr/okf-002-shared-graph-multi-tenancy.md))
@@ -125,12 +128,12 @@ An authenticated steward (`tools-admin`) can **create, read/list, update, and de
 
 ### 4.2 Ingestion & Indexing
 
-**Description:** Ingested repositories are validated against OKF §9, virus-scanned (ClamAV), PII-redacted, parsed into concepts (frontmatter → metadata; Markdown-header chunking; structural link edges with anchor text), and routed through the **document-repository** into **dataprep**, which embeds (TEI) and stores them in the repository's own ArangoDB graph `OKF_{repo_id}` — reusing the existing pipeline additively. Retraction cascades on removal. Realizes UJ-1, UJ-2.
+**Description:** Ingested repositories are validated against OKF §11, virus-scanned (ClamAV), PII-redacted, parsed into concepts (frontmatter → metadata; Markdown-header chunking; structural link edges with anchor text), and routed through the **document-repository** into **dataprep**, which embeds (TEI) and stores them in the repository's own ArangoDB graph `OKF_{repo_id}` — reusing the existing pipeline additively. Retraction cascades on removal. Realizes UJ-1, UJ-2.
 
 **Functional Requirements:**
 
-#### FR-4: Conformance validation (OKF §9)
-On ingest, every repository is checked for OKF §9 conformance (parseable frontmatter; non-empty `type`; reserved-file structure). Non-conformance is a **quality gate**, not a hard rejection — issues are surfaced to stewards. Realizes UJ-1.
+#### FR-4: Conformance validation (OKF §11)
+On ingest, every repository is checked for OKF §11 conformance (parseable frontmatter; non-empty `type`; reserved-file structure). Non-conformance is a **quality gate**, not a hard rejection — issues are surfaced to stewards. Realizes UJ-1.
 **Consequences:**
 - A concept missing `type` is still ingested; it is flagged in the conformance report.
 - Conformance results are queryable per repository/version (FR-13).
@@ -203,10 +206,10 @@ The server surfaces per-repository metrics: conformance issues, PII hits, concep
 - A steward dashboard/API shows repository health at a glance; stale/low-quality repositories are flagged.
 
 #### FR-25: In-app concept authoring & curation
-Users can **create and curate OKF repositories and their Markdown concept files in-app**: a Markdown concept editor (frontmatter form with `type` required + `title`/`description`/`resource`/`tags`/`timestamp`; Markdown body editor; a **link picker** that inserts `[…](/path/to/concept.md)` from the repository's concept tree; and **live OKF §9 validation** + PII pre-check). Concept CRUD (create/read/update/delete) within a repository; on save → re-parse → incremental re-index → update metadata + structural edges. Reserved files (`index.md`, `log.md`) are generated/synced and editable. Realizes UJ-1. ([ADR-okf-015](../../../../docs/adr/okf-015-in-app-authoring-curation.md))
+Users can **create and curate OKF repositories and their Markdown concept files in-app**: a Markdown concept editor (frontmatter form with `type` required + `title`/`description`/`resource`/`tags` plus the optional **v0.2 families** (`generated`, `verified`, `status`, `stale_after`, `sources` — see [ADR-okf-017](../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md)); Markdown body editor; a **link picker** that inserts `[…](/path/to/concept.md)` from the repository's concept tree; and **live OKF §11 validation** + PII pre-check). Concept CRUD (create/read/update/delete) within a repository; on save → re-parse → incremental re-index → update metadata + structural edges. Reserved files (`index.md`, `log.md`) are generated/synced and editable. Realizes UJ-1. ([ADR-okf-015](../../../../docs/adr/okf-015-in-app-authoring-curation.md))
 **Consequences:**
 - An author can build a domain repository entirely in-app without external Git tooling (external Git/S3 ingest remains a parallel path via FR-1).
-- A non-conformant save is blocked at the editor with a specific §9 error; no invalid concept reaches `published`.
+- A non-conformant save is blocked at the editor with a specific §11 error; no invalid concept reaches `published`.
 
 ### 4.4 Unified Grounding & Agent Serving
 
@@ -242,6 +245,13 @@ The serving handlers are implemented so the same search/get/list/outline + a par
 **Consequences:**
 - Adding the MCP transport does not require re-implementing search/get logic.
 - The MCP surface is sequenced after REST, gated on the GENIE workflows service's MCP client (Sprint 24 #603, custom LangChain Deep Agents — transport only; the handlers ship with REST).
+
+#### FR-29: Trust, lifecycle & provenance surfacing (OKF v0.2)
+The OKF Server consumes the v0.2 frontmatter families and surfaces them to agents alongside concept content: a derived **trust tier** (unverified / machine-confirmed / human-reviewed, from `verified`), a **staleness signal** (from `stale_after` — stale when `today ≥ stale_after`), and **source provenance** (from `sources`, with per-source credibility signals). Agents can therefore weight and disclose *how much to trust* a concept, *whether it is still current*, and *where it came from*. The families are optional; a concept without them is served as a plain concept (never rejected). Realizes UJ-2. ([ADR-okf-017](../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md))
+**Consequences:**
+- A served concept carries a trust tier, staleness flag, and source list — enabling agents to cite provenance and gate/refuse stale content.
+- A steward's publish sign-off is written as a portable `verified: { by: human:<steward>, at: … }` trust signal.
+- Concepts authored without the families are still served — the families are advisory signals, not access control.
 
 **Feature-specific NFRs:** performance budgets (NFR-PR1/PR2); result capping/pagination.
 
@@ -321,9 +331,9 @@ The document-repository exposes **stable document references** (IDs/URLs) for ev
 
 **In Scope (production — sequenced in [Architecture](./architecture.md) §12):**
 - Multiple OKF repositories (one per domain), repository CRUD, each in its own graph `OKF_{repo_id}` (FR-1, 2, 3, 23).
-- OKF-aware ingestion via the document-repository: §9 conformance, ClamAV, PII redaction, parsing, structural link graph, per-repo indexing, repo-level retract (FR-4, 5, 6, 7, 8).
-- Curation & in-app authoring: lifecycle, review/approve, versioning, retention, metrics, in-app Markdown concept editor with live §9 validation (FR-9, 10, 11, 12, 13, 25).
-- Unified multi-graph grounding + agent serving: retriever fan-out+RRF across `GRAPH` + authorized `OKF_*`; search/get/list/outline; MCP-ready handlers (FR-24, 14, 15, 16, 17).
+- OKF-aware ingestion via the document-repository: §11 conformance, ClamAV, PII redaction, parsing, structural link graph, per-repo indexing, repo-level retract (FR-4, 5, 6, 7, 8).
+- Curation & in-app authoring: lifecycle, review/approve, versioning, retention, metrics, in-app Markdown concept editor with live §11 validation (FR-9, 10, 11, 12, 13, 25).
+- Unified multi-graph grounding + agent serving: retriever fan-out+RRF across `GRAPH` + authorized `OKF_*`; search/get/list/outline; MCP-ready handlers; **trust/lifecycle/provenance surfacing** (FR-24, 14, 15, 16, 17, 29).
 - Vue 3 admin ingestion & curation UI (FR-26).
 - Access control, governance, traceability; observability & operations (FR-18, 19, 20, 21).
 - Source of truth & document references: document-repository as single source of truth post-ingest; stable doc-repo references + "view source" links; external-origin health checks + deletion detection + graceful fallback (FR-27, 28; FR-2).
@@ -405,7 +415,7 @@ The document-repository exposes **stable document references** (IDs/URLs) for ev
 
 ## 12. Why Now
 
-- OKF v0.1 published June 2026; Google explicitly invited the ecosystem to build consumers/serving layers — the white space is open and uncontested by any OSS project.
+- OKF v0.2 published August 2026 (v0.1 June 2026); v0.2's first-class provenance/trust/lifecycle families are a strong fit for sovereign government knowledge. Google explicitly invited the ecosystem to build consumers/serving layers — the white space is open and uncontested by any OSS project.
 - Genie's dataprep/RAG + ArangoDB + Keycloak/Kong/OTel stack already provides ~80% of the foundation; multi-repo + multi-graph grounding are additive extensions.
 - Sprint 24's **custom LangChain Deep Agents (on LangGraph)** agentic workflows — built on the OPEA `MicroService` harness, not OPEA's `comps/agent` — need a governed knowledge-serving surface that grounds in all data.
 - Sovereign/public-sector demand for governed, multi-domain agent knowledge is immediate and unmet.
@@ -421,6 +431,7 @@ The document-repository exposes **stable document references** (IDs/URLs) for ev
 7. **RRF weights** for cross-graph fusion (tune empirically).
 8. **Performance targets** (NFR-PR1 p95 latency, freshness target SM-1) — confirm values.
 9. Whether the free-form `GRAPH` corpus should also become domain-partitioned later (not required now; stays single).
+10. **Attested Computation** (OKF v0.2 §10) — deferred to a future phase; its runtime protocol is itself spec-deferred. Decide whether/when government metrics/reporting justify building it. (→ [ADR-okf-017](../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md))
 
 > Resolved questions (service shape → [okf-001](../../../../docs/adr/okf-001-okf-server-component-and-stack.md); multi-tenancy/graph model → [okf-002](../../../../docs/adr/okf-002-shared-graph-multi-tenancy.md); auth placement → [okf-003](../../../../docs/adr/okf-003-standalone-service-behind-kong.md); admin UI → [okf-007](../../../../docs/adr/okf-007-admin-steward-ui.md)/[okf-015](../../../../docs/adr/okf-015-in-app-authoring-curation.md); bundle store → [okf-008](../../../../docs/adr/okf-008-bundle-content-store.md)) are decided — see the ADRs.
 

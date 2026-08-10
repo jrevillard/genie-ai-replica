@@ -6,7 +6,7 @@
 
 ## Context
 
-OKF bundles are authored externally (Git/S3) and may contain PII. Genie mandates PII redaction on every external data path, with BLOCK on failure (NFR-P1). OKF §9 conformance must remain permissive (best-effort). The question is *where* and *how* to redact.
+OKF bundles are authored externally (Git/S3) and may contain PII. Genie mandates PII redaction on every external data path, with BLOCK on failure (NFR-P1). OKF §11 conformance must remain permissive (best-effort). The question is *where* and *how* to redact.
 
 ### Constraints
 
@@ -16,7 +16,7 @@ OKF bundles are authored externally (Git/S3) and may contain PII. Genie mandates
 
 ## Decision
 
-Run **Microsoft Presidio (library mode)** at **ingest**, in the OKF Server `governance/` module, on each concept's body (and tagged sensitive frontmatter fields). Default to **document-level redaction** (mask/tokenize detected PII entities in the stored text). **PII policy failure is blocking**: affected concepts are withheld from `published` and flagged for steward review. Conformance (§9) remains a non-blocking quality gate, independent of PII.
+Run **Microsoft Presidio (library mode)** at **ingest**, in the OKF Server `governance/` module, on each concept's body (and tagged sensitive frontmatter fields). Default to **document-level redaction** (mask/tokenize detected PII entities in the stored text). **PII policy failure is blocking**: affected concepts are withheld from `published` and flagged for steward review. Conformance (§11) remains a non-blocking quality gate, independent of PII.
 
 ## Alternatives considered
 

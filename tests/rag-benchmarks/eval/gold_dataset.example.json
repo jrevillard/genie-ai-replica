@@ -1,5 +1,5 @@
 {
-  "_doc": "Gold standard for retrieval eval. Copy to gold_dataset.json and fill one entry per query. expected_chunks[].chunk_key is the PRIMARY identity (ArangoDB _key from dump_chunks.py). categoryLabels is a LIST of crop labels (supports multi-crop queries). serviceLabels narrows by topic. reference_answer is ground truth for the LLM-judge path.",
+  "_doc": "Gold standard for retrieval eval. Copy to gold_dataset.json and fill one entry per query. expected_chunks[].content_hash (sha256 of normalized text) is the MATCHED identity — the eval converts each span _key to its content hash and compares. chunk_key is the ArangoDB _key (dump_chunks.py's key field), retained for traceability only. categoryLabels is a LIST of crop labels (supports multi-crop queries). serviceLabels narrows by topic. reference_answer is ground truth for the LLM-judge path.",
   "entries": [
     {
       "id": "q1",
@@ -9,7 +9,7 @@
       "language": "en",
       "reference_answer": "Submit form X to the ministry with proof of land ownership.",
       "expected_chunks": [
-        {"chunk_key": "1234567890123456789", "preview": "To apply..."}
+        {"chunk_key": "1234567890123456789", "content_hash": "a1b2c3d4e5f60718", "preview": "To apply..."}
       ]
     },
     {
@@ -20,7 +20,7 @@
       "language": "en",
       "reference_answer": "Interveinal chlorosis on older leaves...",
       "expected_chunks": [
-        {"chunk_key": "9876543210987654321", "preview": "Magnesium deficiency..."}
+        {"chunk_key": "9876543210987654321", "content_hash": "f60718a1b2c3d4e5", "preview": "Magnesium deficiency..."}
       ]
     }
   ]

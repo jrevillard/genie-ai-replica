@@ -7,14 +7,19 @@ Both modes drive gold queries through chatqna via docker exec (internal service,
 NO OIDC — faithful label-filtered retrieval) and pull the selection from the
 chatqna.reranker_selection span in VictoriaTraces.
 
-The span emits CONTENT HASHES (not ``_key`` — langchain mangles ``_key`` during
-the retriever->chatqna handoff, so content is the only stable identity). These
-match gold_dataset.json expected content_hashes directly.
+The span emits ``chunk_key`` (the ArangoDB ``_key``), recovered by the retriever
+via per-chunk metadata that survives the langchain retriever->chatqna handoff
+(langchain mangles ``Document.id`` to a UUID; ``_key`` is carried in
+``metadata["chunk_key"]`` and re-read by chatqna's ``text_to_chunk_key`` map).
+Gold_dataset.json ``expected_chunks[].chunk_key`` must therefore be the ``_key``
+(what dump_chunks.py reports as ``key``), NOT ``content_hash``.
 
-  --mode anchor       Deterministic: match selected/candidate hashes against
+  --mode anchor       Deterministic: match selected/candidate ``_key``s against
                       gold. Reproducible, no LLM. recall/precision/
-                      complete_recall/noise/retrieval_recall. Survives
-                      re-ingestion (content-based).
+                      complete_recall/noise/retrieval_recall. NOTE: ``_key``s
+                      are random per ingest and CHURN on re-ingest — if the
+                      corpus is re-ingested, re-dump it (dump_chunks.py) and
+                      re-author expected chunk keys.
 
   --mode dump-tuples  Collect (question, contexts, answer, reference_answer)
                       per query → eval_tuples.json. Feed to run_ragas_eval.py
@@ -33,7 +38,6 @@ import time
 
 import metrics
 from arango import cursor
-from chunk_identity import content_hash
 
 # --- stack config (env-overridable) -----------------------------------------
 # Defaults are placeholders — set these for your deployment. CHATQNA_CONTAINER
@@ -182,10 +186,16 @@ def fetch_selection(start_s: float) -> tuple[list[str], list[str], list[dict]]:
 
 
 def build_hash_to_text() -> dict[str, str]:
-    """Return {content_hash: full_text} from ArangoDB (dump-tuples mode only)."""
-    # content_hash is Python-side (AQL has no such UDF), so fetch text + hash here.
-    texts = cursor(f"FOR doc IN {GRAPH_SOURCE} RETURN doc.{TEXT_FIELD}")
-    return {content_hash(t): t for t in texts if t}
+    """Return {_key: full_text} from ArangoDB (dump-tuples mode only).
+
+    The reranker_selection span emits ``_key`` (NOT content_hash), so the
+    semantic-path context lookup must key on ``_key``. The older content_hash
+    keying produced empty contexts once the span switched to ``_key``.
+    """
+    rows = cursor(
+        f"FOR doc IN {GRAPH_SOURCE} RETURN {{key: doc._key, text: doc.{TEXT_FIELD}}}"
+    )
+    return {r["key"]: r["text"] for r in rows if r.get("text")}
 
 
 def score_anchor(entry, cand_hashes, sel_hashes, trace_found: bool, adaptive_breakdown=None) -> dict:

@@ -11,15 +11,18 @@ The span emits ``chunk_key`` (the ArangoDB ``_key``), recovered by the retriever
 via per-chunk metadata that survives the langchain retriever->chatqna handoff
 (langchain mangles ``Document.id`` to a UUID; ``_key`` is carried in
 ``metadata["chunk_key"]`` and re-read by chatqna's ``text_to_chunk_key`` map).
-Gold_dataset.json ``expected_chunks[].chunk_key`` must therefore be the ``_key``
-(what dump_chunks.py reports as ``key``), NOT ``content_hash``.
+Matching stays CONTENT-BASED: gold ``expected_chunks[].content_hash`` (sha256 of
+normalized text) is the identity, and each span ``_key`` is converted to its
+content fingerprint via a ``_key -> content_hash`` map built from the SOURCE
+collection — so the gold SURVIVES a corpus re-ingest (same chunk text -> same
+hash). Only a chunking-param change (which alters chunk text) invalidates it:
+a signal to re-baseline, not a bug.
 
-  --mode anchor       Deterministic: match selected/candidate ``_key``s against
-                      gold. Reproducible, no LLM. recall/precision/
-                      complete_recall/noise/retrieval_recall. NOTE: ``_key``s
-                      are random per ingest and CHURN on re-ingest — if the
-                      corpus is re-ingested, re-dump it (dump_chunks.py) and
-                      re-author expected chunk keys.
+  --mode anchor       Deterministic: match selected/candidate content hashes
+                      against gold. Reproducible, no LLM. recall/precision/
+                      complete_recall/noise/retrieval_recall. The report keeps
+                      the raw span ``_key``s in ``selected``/``candidates`` and
+                      adds the content-hash projections in ``*_hashes``.
 
   --mode dump-tuples  Collect (question, contexts, answer, reference_answer)
                       per query → eval_tuples.json. Feed to run_ragas_eval.py
@@ -38,6 +41,7 @@ import time
 
 import metrics
 from arango import cursor
+from chunk_identity import content_hash
 
 # --- stack config (env-overridable) -----------------------------------------
 # Defaults are placeholders — set these for your deployment. CHATQNA_CONTAINER
@@ -116,8 +120,13 @@ def _extract_answer(body: str) -> str:
     return str(data)
 
 
-def _extract_selection(raw: str, start_s: float) -> tuple[list[str], list[str], list[dict]]:
-    """Return (candidate_hashes, selected_hashes, adaptive_breakdown) for THIS query's trace.
+def _extract_selection(
+    raw: str, start_s: float
+) -> tuple[list[str], list[str], list[dict]]:
+    """Return (candidate_keys, selected_keys, adaptive_breakdown) for THIS query's trace.
+
+    The keys are ArangoDB ``_key``s (what the reranker_selection span emits);
+    they are projected to content hashes later in score_anchor.
 
     Picks the newest reranker_selection span at/after the query start. Coerces
     JSON-stringified array attrs (VictoriaTraces does this) via _as_list.
@@ -150,7 +159,9 @@ def _extract_selection(raw: str, start_s: float) -> tuple[list[str], list[str], 
                     breakdown_best_st = st
                     raw_b = tags.get("rag.adaptive_breakdown")
                     try:
-                        breakdown = json.loads(raw_b) if isinstance(raw_b, str) else raw_b or []
+                        breakdown = (
+                            json.loads(raw_b) if isinstance(raw_b, str) else raw_b or []
+                        )
                     except json.JSONDecodeError:
                         breakdown = []
     if best is None:
@@ -198,26 +209,72 @@ def build_hash_to_text() -> dict[str, str]:
     return {r["key"]: r["text"] for r in rows if r.get("text")}
 
 
-def score_anchor(entry, cand_hashes, sel_hashes, trace_found: bool, adaptive_breakdown=None) -> dict:
-    gold = [c["chunk_key"] for c in entry.get("expected_chunks", [])]
+def build_key_to_content_hash() -> dict[str, str]:
+    """Return {_key: content_hash} from ArangoDB (anchor mode).
+
+    The reranker_selection span emits the ArangoDB ``_key``, but the gold is
+    content-hash-keyed (content-based identity survives re-ingest). Map each
+    span ``_key`` to its content fingerprint so matching stays content-based.
+    ``content_hash`` is computed Python-side (sha256 of normalized text) — it is
+    NOT stored in ArangoDB — so fetch the text and hash it here.
+    """
+    rows = cursor(
+        f"FOR doc IN {GRAPH_SOURCE} RETURN {{key: doc._key, text: doc.{TEXT_FIELD}}}"
+    )
+    return {r["key"]: content_hash(r["text"]) for r in rows if r.get("text")}
+
+
+def score_anchor(
+    entry,
+    cand_keys,
+    sel_keys,
+    trace_found: bool,
+    adaptive_breakdown=None,
+    key_to_hash: dict[str, str] | None = None,
+) -> dict:
+    gold = [c.get("content_hash") for c in entry.get("expected_chunks", [])]
+    gold = [g for g in gold if g] or [
+        c.get("chunk_key") for c in entry.get("expected_chunks", [])
+    ]
+    # Project the span's _keys to content hashes for scoring; keep the raw _keys
+    # in "gold"/"selected"/"candidates" (the calibrator + CLAUDE.md schema read
+    # those as _keys); the content-hash projections live in the *_hashes fields.
+    sel = (
+        [key_to_hash[h] for h in sel_keys if h in key_to_hash]
+        if key_to_hash is not None
+        else sel_keys
+    )
+    cand = (
+        [key_to_hash[h] for h in cand_keys if h in key_to_hash]
+        if key_to_hash is not None
+        else cand_keys
+    )
+    gold_keys = [
+        c.get("chunk_key")
+        for c in entry.get("expected_chunks", [])
+        if c.get("chunk_key")
+    ]
     row = {
         "id": entry["id"],
         "query": entry["query"],
         "trace_found": trace_found,
-        "gold": gold,
-        "selected": sel_hashes,
-        "candidates": cand_hashes,
+        "gold": gold_keys,  # raw _keys — calibrator-compatible, matches CLAUDE.md schema
+        "selected": sel_keys,  # raw _keys as emitted by the span
+        "candidates": cand_keys,
+        "gold_hashes": gold,  # content hashes used for scoring
+        "selected_hashes": sel,
+        "candidate_hashes": cand,
         "adaptive_breakdown": adaptive_breakdown or [],
     }
     if trace_found:
         row.update(
-            recall=metrics.recall(gold, sel_hashes),
-            precision=metrics.precision(gold, sel_hashes),
-            complete_recall=metrics.complete_recall(gold, sel_hashes),
-            noise=metrics.noise(gold, sel_hashes),
+            recall=metrics.recall(gold, sel),
+            precision=metrics.precision(gold, sel),
+            complete_recall=metrics.complete_recall(gold, sel),
+            noise=metrics.noise(gold, sel),
         )
-        if cand_hashes:
-            row["retrieval_recall"] = metrics.retrieval_recall(gold, cand_hashes)
+        if cand:
+            row["retrieval_recall"] = metrics.retrieval_recall(gold, cand)
     return row
 
 
@@ -237,13 +294,20 @@ def main(mode: str, gold_path: str, out_path: str) -> None:
         gold = json.load(fh)
     entries = gold["entries"]
     hash_to_text = build_hash_to_text() if mode == "dump-tuples" else {}
+    key_to_hash = build_key_to_content_hash() if mode == "anchor" else {}
 
-    tuples, rows, missed = [], [], 0
+    tuples, rows, missed, unmapped = [], [], 0, 0
     for entry in entries:
         start, body = drive_query(entry)
         answer = _extract_answer(body)
-        cand_hashes, sel_hashes, adaptive_breakdown = fetch_selection(start)
-        trace_found = bool(cand_hashes or sel_hashes)
+        cand_keys, sel_keys, adaptive_breakdown = fetch_selection(start)
+        trace_found = bool(cand_keys or sel_keys)
+        if mode == "anchor":
+            # A span _key with no content-hash mapping (wrong/empty GRAPH_SOURCE,
+            # stale trace) would silently score as a miss — surface the count so
+            # the capture driver can refuse a false zero baseline. An EMPTY map
+            # (falsy) makes every key unmapped — exactly the failure to catch.
+            unmapped += sum(1 for k in sel_keys + cand_keys if k not in key_to_hash)
         if not trace_found:
             missed += 1
             print(
@@ -252,11 +316,23 @@ def main(mode: str, gold_path: str, out_path: str) -> None:
                 file=sys.stderr,
             )
         else:
-            print(f"[{entry['id']}] selected={len(sel_hashes)} candidates={len(cand_hashes)}", file=sys.stderr)
+            print(
+                f"[{entry['id']}] selected={len(sel_keys)} candidates={len(cand_keys)}",
+                file=sys.stderr,
+            )
         if mode == "dump-tuples":
-            tuples.append(make_tuple(entry, sel_hashes, hash_to_text, answer))
+            tuples.append(make_tuple(entry, sel_keys, hash_to_text, answer))
         else:
-            rows.append(score_anchor(entry, cand_hashes, sel_hashes, trace_found, adaptive_breakdown))
+            rows.append(
+                score_anchor(
+                    entry,
+                    cand_keys,
+                    sel_keys,
+                    trace_found,
+                    adaptive_breakdown,
+                    key_to_hash,
+                )
+            )
 
     if mode == "dump-tuples":
         with open(out_path, "w") as fh:
@@ -266,20 +342,38 @@ def main(mode: str, gold_path: str, out_path: str) -> None:
     else:
         scored = [r for r in rows if r.get("trace_found")]
         agg = metrics.aggregate(scored)
-        report = {"per_query": rows, "aggregate": agg, "n_missed_traces": missed}
+        report = {
+            "per_query": rows,
+            "aggregate": agg,
+            "n_missed_traces": missed,
+            "n_unmapped_chunk_keys": unmapped,
+        }
         with open(out_path, "w") as fh:
             json.dump(report, fh, indent=2)
         print(f"\n=== AGGREGATE (n={agg['n']}, missed={missed}) ===", file=sys.stderr)
-        for k in ("recall", "precision", "complete_recall", "noise", "retrieval_recall"):
+        for k in (
+            "recall",
+            "precision",
+            "complete_recall",
+            "noise",
+            "retrieval_recall",
+        ):
             if k in agg:
                 print(f"  {k:20s} {agg[k]:.3f}", file=sys.stderr)
         if missed:
-            print(f"  {missed} trace(s) missed and excluded — see per_query[].trace_found", file=sys.stderr)
+            print(
+                f"  {missed} trace(s) missed and excluded — see per_query[].trace_found",
+                file=sys.stderr,
+            )
         print(f"\nReport → {out_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":
-    mode = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] in ("anchor", "dump-tuples") else "anchor"
+    mode = (
+        sys.argv[1]
+        if len(sys.argv) > 1 and sys.argv[1] in ("anchor", "dump-tuples")
+        else "anchor"
+    )
     gold = sys.argv[2] if len(sys.argv) > 2 else "gold_dataset.json"
     default_out = "eval_tuples.json" if mode == "dump-tuples" else "eval_report.json"
     out = sys.argv[3] if len(sys.argv) > 3 else default_out

@@ -28,10 +28,11 @@ def test_compute_triples_known_sample():
     assert _approx(t["min"], 0.79)
     assert _approx(t["median"], 0.81)
     assert _approx(t["max"], 0.82)
-    # deviations from median 0.81: [0.01, 0.01, 0.00, 0.02, 0.01] → MAD = 0.01
-    assert _approx(t["mad"], 0.01)
-    assert _approx(t["tol_low"], 0.81 - 3 * 0.01)
-    assert _approx(t["tol_high"], 0.81 + 3 * 0.01)
+    # deviations from median 0.81: [0.01, 0.01, 0.00, 0.02, 0.01] → raw MAD = 0.01,
+    # scaled by 1.4826 for the MAD·sigma estimate the formula documents.
+    assert _approx(t["mad"], 0.01 * 1.4826)
+    assert _approx(t["tol_low"], 0.81 - 3 * 0.01 * 1.4826)
+    assert _approx(t["tol_high"], 0.81 + 3 * 0.01 * 1.4826)
 
 
 def test_compute_triples_is_deterministic_and_order_independent():
@@ -171,6 +172,29 @@ def test_snapshot_resolved_env_distinguishes_missing_vs_unresolved(monkeypatch):
     assert "RERANKING_THRESHOLD" not in r["missing"]
 
 
+def test_snapshot_resolved_env_records_multi_service_conflicts(monkeypatch):
+    """Same key declared under two services with different values → conflict recorded."""
+    containers = {"chatqna": {"container": "cq"}, "reranker": {"container": "rr"}}
+
+    def fake_exec(container, cmd, timeout=60):
+        if container == "cq":
+            return "RERANKER_TOP_N=3\nRERANKING_STRATEGY=slice\n"
+        return "RERANKER_TOP_N=5\nRERANKER_MODEL_ID=bge-reranker-v2-m3\n"
+
+    monkeypatch.setattr(cb, "_docker_exec", fake_exec)
+    r = cb.snapshot_resolved_env(containers)
+    assert r["values"]["RERANKER_TOP_N"] == "5"  # last service wins, but...
+    assert "RERANKER_TOP_N" in r["conflicts"]  # ...the conflict is recorded, not hidden
+
+
+def test_snapshot_homes_resolved_drift_breaks_homes_agree():
+    # code/compose/env all say 3, but the DEPLOYED value is 5 → the flag must
+    # surface the drift (a flag that ignores the resolved value is worthless).
+    homes = cb.snapshot_homes(_repo_root(), None, {"RERANKER_TOP_N": "5"})
+    assert homes["reranker_top_n"]["homes_agree"] is False
+    assert homes["reranker_top_n"]["resolved"] == "5"
+
+
 def test_resolve_containers_stack_prefix_disambiguates(monkeypatch):
     monkeypatch.setattr(
         cb,
@@ -208,11 +232,13 @@ def test_parse_compose_default():
 
 def _canned_anchor_report(seed, run_index):
     # Deterministic pseudo-aggregate derived from seed + run index: a given
-    # (seed, run) always yields the same report → same-seed reruns are identical.
+    # (seed, run) always yields the same report → same-seed reruns are identical,
+    # and DIFFERENT seeds yield different reports (recall depends on the seed).
     return {
         "aggregate": {
             "n": 2,
-            "recall": 0.90 + (run_index % 3) * 0.0,  # fully stable for a fixed seed
+            "recall": 0.90
+            + (seed % 5) * 0.01,  # seed-dependent — guards seed threading
             "precision": 0.80,
             "complete_recall": 0.50,
             "noise": 0.20,
@@ -258,9 +284,9 @@ def test_capture_anchor_different_seed_changes_result(monkeypatch):
 
     a = cb.capture_anchor(runs=1, gold=gold, out_dir=cb.Path("/tmp/y1"), seed=1)
     b = cb.capture_anchor(runs=1, gold=gold, out_dir=cb.Path("/tmp/y2"), seed=2)
-    assert (
-        a["per_run"][0]["aggregate"] == b["per_run"][0]["aggregate"]
-    )  # seed doesn't change canned output
+    # Different seeds MUST produce different results — a seed that is never
+    # threaded to the harness would make the whole "determinism" suite vacuous.
+    assert a["per_run"][0]["aggregate"] != b["per_run"][0]["aggregate"]
 
 
 def _artifact_kw(anchor=None):
@@ -297,7 +323,7 @@ def test_build_artifact_anchor_section_deterministic(monkeypatch):
     a = cb.build_artifact(**_artifact_kw())
     b = cb.build_artifact(**_artifact_kw())
     assert a["anchor"] == b["anchor"]  # capture_date may differ; anchor must not
-    assert a["anchor"]["metrics"]["recall"]["median"] == 0.90
+    assert a["anchor"]["metrics"]["recall"]["median"] == 0.92  # seed 42 → 42 % 5 == 2
 
 
 def test_build_artifact_pins_gold_hash_and_driver_produced_meta():

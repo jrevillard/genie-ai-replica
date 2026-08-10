@@ -51,7 +51,8 @@ gold_dataset.json ── run_eval.py ──┬── docker exec <chatqna> curl 
                                    │       for offline calibration
                                    │
                                    └── score recall/precision/complete_recall/noise/retrieval_recall
-                                       (gold is content_hash-keyed; identity survives re-ingestion)
+                                       (gold is _key-keyed — matches the span; content_hash is the
+                                        stable cross-reingest identity)
 ```
 
 ### Metrics
@@ -66,12 +67,20 @@ gold_dataset.json ── run_eval.py ──┬── docker exec <chatqna> curl 
   Diagnoses retriever vs reranker: low retrieval_recall = retriever miss;
   retrieval_recall high but recall low = reranker dropping gold.
 
-### Identity is content-based (`chunk_identity.content_hash`), NOT `_key`
+### Identity: the span emits `_key`, gold matches `_key` (content_hash is the stable cross-reingest identity)
 
-Chunk `_key`s are auto-generated UUIDs (langchain-arangodb) and churn on every
-re-ingestion. The gold set keys on `content_hash` (sha256 of normalized text) —
-stable across re-ingests as long as chunking params are unchanged. A chunking-
-param change correctly invalidates the gold set → re-baseline (signal, not bug).
+The chatqna `reranker_selection` span emits **`chunk_key` = the ArangoDB `_key`**
+(recovered by the retriever via `metadata["chunk_key"]`, which survives the
+langchain retriever->chatqna handoff; see `run_eval.py` docstring). Gold
+`expected_chunks[].chunk_key` MUST therefore be the `_key` (dump_chunks.py's
+`key` field) — NOT `content_hash`. Each expected chunk should also carry
+`content_hash` (sha256 of normalized text, `chunk_identity.py`) as the stable
+cross-reingest identity for drift analysis.
+
+**Consequence:** `_key`s are random per ingest and CHURN on re-ingest. The
+baseline is corpus-state-coupled — if the corpus is re-ingested (or a chunking
+param changes), re-dump via `dump_chunks.py` and re-author the gold's expected
+chunk keys (a signal to re-baseline, not a bug).
 
 ## CLI — positional args, NOT flags
 
@@ -135,12 +144,16 @@ default is 120s, raise if needed.
       "language": "en",
       "reference_answer": "...",          // for semantic eval
       "expected_chunks": [
-        {"chunk_key": "<content_hash>", "text": "..."}
+        {"chunk_key": "<ArangoDB _key>", "content_hash": "<sha256[:16]>", "preview": "..."}
       ]
     }
   ]
 }
 ```
+
+`chunk_key` is the ArangoDB `_key` (dump_chunks.py's `key` field) — it is what
+the deployed `reranker_selection` span emits. `content_hash` is the stable
+cross-reingest identity, carried for drift analysis (NOT matched by the eval).
 
 `categoryLabels` is a LIST (supports multi-crop queries like ["Tomato","Cucumber"]).
 Older datasets used `categoryLabel` (string) — incompatible with the current
@@ -267,9 +280,9 @@ top 1-2 cells, THEN do live A/B validation. Don't redeploy per candidate.
   "per_query": [
     {
       "id": "q1", "query": "...", "trace_found": true,
-      "gold": ["<content_hash>", ...],
-      "selected": ["<content_hash>", ...],
-      "candidates": ["<content_hash>", ...],
+      "gold": ["<_key>", ...],
+      "selected": ["<_key>", ...],
+      "candidates": ["<_key>", ...],
       "adaptive_breakdown": [
         {
           "idx": 0, "original_index": 3,
@@ -287,6 +300,42 @@ top 1-2 cells, THEN do live A/B validation. Don't redeploy per candidate.
   "n_missed_traces": 0
 }
 ```
+
+## Baseline capture (`capture_baseline.py`) — the RAG-parity reference artifact
+
+`capture_baseline.py` (one level up, at `tests/rag-benchmarks/`) is the multi-run
+driver that produces the committed RAG-parity baseline — the reference Story 3.1
+compares post-upgrade metrics against. It REUSES `run_eval.py anchor` N times via
+subprocess (never forks it), and adds the baseline layer `run_eval.py` doesn't
+have: per-metric `min/median/max` triples, a parity tolerance derived from the
+baseline's OWN run-to-run variance (`median ± k·MAD`), a resolved-env config
+snapshot (AC:5), the three homes of `RERANKER_TOP_N` / `RERANKING_STRATEGY`
+(code / docker-compose / env template), stack identity, and `gold_sha256`.
+
+```bash
+# Run ON the swarm node where the stack is deployed, with the eval env set:
+#   CHATQNA_CONTAINER, CHATQNA_SERVICE_NAME, VICTORIATRACES_SVC
+python3 capture_baseline.py --runs 3 --seed 42 \
+  --gold tests/rag-benchmarks/eval/gold_dataset.json \
+  --out _bmad-output/implementation-artifacts/rag-baseline-v1.3.json \
+  --stack release-el-salvador \
+  --stack-prefix genieai-el-salvador_        # disambiguate on multi-stack nodes \
+  --repo-root <repo checkout>                # for code/compose/env homes
+```
+
+Key behaviors:
+- **Reproducible artifact:** the driver emits `harness_sha` (sha256 of the eval
+  `*.py` files) + `gold_sha256`, so the baseline is regenerable from the
+  committed code + gold. If you modify any eval script or gold query, RE-CAPTURE
+  — a mismatched `harness_sha` means the baseline no longer matches its code.
+- **Fail-fast:** if any trace is missed (observability off / VT down), the driver
+  ABORTS rather than committing a zero baseline (use `--allow-missed-traces` to
+  override).
+- **Deterministic runs:** `PYTHONHASHSEED` is set per run; a deterministic anchor
+  collapses tolerance to exact equality (MAD=0) — documented in the artifact as
+  `anchor.tolerance_semantics`.
+- **Unit tests:** `tests/rag-benchmarks/test_capture_baseline.py` (tolerance
+  math, idempotency with a mocked harness subprocess, env parsing, homes drift).
 
 ## Pitfalls log (what bit us — methodology, not deployment-specific)
 

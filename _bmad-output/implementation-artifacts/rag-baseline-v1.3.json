@@ -2,13 +2,13 @@
   "artifact": "rag-baseline",
   "version": "1.0.0",
   "baseline_stack": "v1.3",
-  "capture_date": "2026-08-10T12:44:42+00:00",
+  "capture_date": "2026-08-10T16:03:26+00:00",
   "git": {
-    "branch": "feat/opea-1.5-upgrade/1-1-lock-the-v1-3-rag-parity-baseline",
-    "commit": "611569b13d342bc77474a3dd6217cfece87c2a58",
-    "tree_clean": false
+    "branch": null,
+    "commit": null,
+    "tree_clean": null
   },
-  "harness_sha": "44405b5a982c3ef060eaa32e539370d61d0ccd3625ec185c5da89a0c6ad0702c",
+  "harness_sha": "c8912c457ebd0185b72ccf77eb0f3554579faca180e7ab43cf6ed8bc8c0b0d5f",
   "stack": {
     "name": "release-el-salvador",
     "services": {
@@ -45,6 +45,7 @@
     "seed": 42,
     "temperature": 0,
     "gold_dataset": "/tmp/rag-eval/gold_dataset_v13.json",
+    "gold_sha256": "d58daeb226cf3bc2acb2f004d060ca22a491f5d6e7dcd1d913c42c7d2bd6e065",
     "semantic_enabled": false
   },
   "anchor": {
@@ -131,6 +132,7 @@
       }
     },
     "tolerance_formula": "median \u00b1 3\u00b7MAD (1.4826-scaled median absolute deviation); parity-relevant bound is tol_low for recall, precision, complete_recall, retrieval_recall (lower is worse) and tol_high for noise (higher is worse).",
+    "tolerance_semantics": "MAD == 0 across all metrics: the anchor is fully deterministic (temperature 0, fixed seed), so the variance-derived tolerance collapses to exact equality with the median. Parity for these metrics therefore means byte-identical metric values. Story 3.1 must re-verify the upgraded stack is itself deterministic before trusting a point comparison.",
     "n_missed_traces_total": 0
   },
   "semantic": {
@@ -150,7 +152,13 @@
         "RERANKING_THRESHOLD": "0.75",
         "EMBEDDING_MODEL_ID": "BAAI/bge-base-en-v1.5"
       },
-      "missing": []
+      "missing": [],
+      "unresolved": [
+        "ARANGO_GRAPH_NAME",
+        "EMBEDDING_DIM",
+        "RERANKER_MODEL_ID",
+        "VLLM_LLM_MODEL_ID"
+      ]
     },
     "homes": {
       "reranker_top_n": {

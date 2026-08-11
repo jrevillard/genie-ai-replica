@@ -1088,10 +1088,7 @@ class TestChatQnAServiceInit:
             getattr(svc, method_name)()
 
             nodes = [svc.name for svc in built]
-            edges = [
-                (call[0][0].name, call[0][1].name)
-                for call in mock_orch_instance.flow_to.call_args_list
-            ]
+            edges = [(call[0][0].name, call[0][1].name) for call in mock_orch_instance.flow_to.call_args_list]
             return nodes, edges
 
     def test_faqgen_graph_equivalent_to_full(self):

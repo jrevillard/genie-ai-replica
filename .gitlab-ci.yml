@@ -776,8 +776,11 @@ contract:retriever-arango:
       artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-retriever-arango"
-    # Retriever-capable suite: wire, label-filter, telemetry, e2e, budgets (wire part).
-    CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_label_filter.py test_contract_telemetry.py test_contract_e2e_pipeline.py test_contract_nfrp_budgets.py"
+    # Retriever in-image suite — ONLY tests that run against the retriever
+    # image's real comps (no repo-side tests, no dataprep-side tests → no skips).
+    # telemetry + streaming moved to `contract:pure` (repo-side); the ingest
+    # budget lives in `contract:dataprep-arango`.
+    CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_label_filter.py test_contract_e2e_pipeline.py::test_label_filter_contract_roundtrip test_contract_e2e_pipeline.py::test_label_filter_contract_empty_is_noop test_contract_e2e_pipeline.py::test_e2e_graph_schedules_real_orchestrator test_contract_nfrp_budgets.py::test_wire_latency_within_budget test_contract_nfrp_budgets.py::test_budget_table_present"
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -818,6 +821,45 @@ contract:dataprep-arango:
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+
+# Pure contract tests — repo-side, no built image needed (run in a plain venv).
+# These validate the harness logic + telemetry assertions against the repo's
+# dashboards (which live in the checkout, not in the module images). They never
+# skip: the harness dev-env tests pass here (real comps absent), and the
+# telemetry tests scan the repo dashboards available in the CI checkout.
+contract:pure:
+  stage: contract-in-image
+  image: python:3.11-slim
+  tags: [docker]
+  interruptible: true
+  before_script:
+    - pip install --no-cache-dir pytest pytest-asyncio
+  script:
+    - cd genie-ai-overlay/contracts
+    - mkdir -p reports
+    - python -m pytest test_contract_harness.py test_contract_telemetry.py test_contract_e2e_pipeline.py::test_streaming_metadata_event_shape -p no:cacheprovider --junitxml=reports/contract-report.xml
+  artifacts:
+    when: always
+    expire_in: 30 days
+    reports:
+      junit: reports/contract-report.xml
+    paths:
+      - reports/contract-report.xml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
 
 # Red-run evidence: re-run the contract suite against a BARE v1.5 bump (the
 # module image built with OPEA_VERSION=v1.5, NO overlay re-graft). Expect RED;

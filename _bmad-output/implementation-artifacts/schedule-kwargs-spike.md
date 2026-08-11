@@ -18,21 +18,30 @@ Method: bare clone (no overlay, no Dockerfile change), the REAL
 external heavy deps the forwarding path does not need (fastapi, prometheus,
 aiohttp, requests, telemetry, docarray) are stubbed in `sys.modules`. A
 `SpikeOrchestrator` subclass captures kwargs at the `execute()` hop
-(proves `schedule() → execute()`) and the real `super().execute()` calls the
-real `align_inputs(..., **kwargs)` (proves `execute() → handler`). Network
-avoided with a fake aiohttp response.
+(proves `schedule() → execute()`); the real `super().execute()` body runs the
+real forwarding call sites — `self.align_inputs(..., **kwargs)` (input path,
+orchestrator.py:255) and `self.align_outputs(..., **kwargs)` (non-streaming
+completion path, orchestrator.py:384) — where recording overrides capture the
+received kwargs (proves `execute() → handler`, exact values). Network avoided
+with a fake aiohttp response.
 
 Raw outcome: `/tmp/spike-outcome.json` (not committed — transient; regenerate
 with the harness below).
 
 | Tag | Resolved commit | kwargs forwarded | Outcome |
 |-----|-----------------|------------------|---------|
-| v1.3 | `73668076cf95c499b8def1370fb9a90e29c17e5b` | 6/6 (align_inputs + execute) | FORWARDS |
-| v1.5 | `9f59daa891a4030ffdb8370fa06a9a490acb89d7` | 6/6 (align_inputs + execute) | FORWARDS |
+| v1.3 | `73668076cf95c499b8def1370fb9a90e29c17e5b` | 6/6 (align_inputs + align_outputs + execute) | FORWARDS |
+| v1.5 | `9f59daa891a4030ffdb8370fa06a9a490acb89d7` | 6/6 (align_inputs + align_outputs + execute) | FORWARDS |
 
-The 6 kwargs proven forwarded (exact values sent → received, per hook):
+The 6 kwargs proven forwarded with EXACT values sent → received, per hook:
 `retriever_parameters`, `reranker_parameters`, `full_chat_history_string`,
 `retrieval_context`, `original_language`, `user_details`.
+
+`align_generator` (streaming-only, orchestrator.py:353) is NOT exercised by this
+LLM-node spike — recorded, not skipped: its forwarding body is byte-identical
+v1.3→v1.5 (diffed below) and behavioral verification is deferred to Story 2.6
+(which exercises real streaming flows). It is emitted in the harness output when
+touched; absence is not a FAIL by design.
 
 Idempotency: re-running the harness against `v1.5` produces byte-identical
 received kwargs and the same outcome (proven live, 2026-08-11).

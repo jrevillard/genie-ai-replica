@@ -4,7 +4,7 @@ baseline_commit: 2972f0420
 
 # Story 1.3: Run the `schedule()` kwargs-forwarding spike (blocking gate)
 
-Status: review
+Status: done
 
 <!-- PRD: opea-1.5-upgrade | Epic 1: Upgrade foundation — provable-parity groundwork -->
 <!-- Dependency: none (runs on a BARE v1.5 clone — zero overlay, zero Dockerfile change). Blocking gate for Story 2.6 (chatqna rebase). -->
@@ -19,7 +19,7 @@ so that the chatqna rebase approach is decided with evidence, not guesswork.
 ## Acceptance Criteria
 
 1. **Bare v1.5 spike harness.** A throwaway test proves, on a bare GenAIComps `v1.5` clone (no overlay, no Dockerfile change), that `schedule(initial_inputs, llm_parameters, **custom_kwargs)` forwards the 6 GENIE custom kwargs — `retriever_parameters`, `reranker_parameters`, `full_chat_history_string`, `retrieval_context`, `original_language`, `user_details` — to the registered service handlers. `v1.3` is cloned alongside as the control (PRD FR-6).
-2. **Behavioral assertion, not signature check.** The spike asserts the kwargs actually ARRIVE on `align_inputs` (and `align_outputs`/`align_generator`) — a real registered service receives them — not just that the `**kwargs` parameter exists in the signature (FR-6 "behaviorally verified, not just imported").
+2. **Behavioral assertion, not signature check.** The spike asserts the kwargs actually ARRIVE — with the exact values sent — on `align_inputs` (input path) and `align_outputs` (non-streaming completion path, orchestrator.py:384), via a real registered service handler. `align_generator` (streaming-only, orchestrator.py:353) is not exercised by this LLM-node spike — recorded, not skipped, behavioral verification deferred to Story 2.6 (FR-6 "behaviorally verified, not just imported").
 3. **Outcome recorded in the decision log.** The spike writes a committed outcome (FORWARDS / DROPS) + the evidence (which kwarg, which handler) to `_bmad-output/implementation-artifacts/schedule-kwargs-spike.md`, dated. This is the decision log Story 2.6 consumes.
 4. **D1 contingency gated on the outcome.** If any of the 6 kwargs is dropped, the decision log records the D1 contingency (subclass `ServiceOrchestrator` to inject the kwargs — architecture decision D1) as the chosen path BEFORE any rebase work. No shim/compat wrapper outside the spike gate.
 5. **Spike artifact committed + reproducible.** The harness (`tests/spike-schedule-kwargs/`) is committed, and re-running it against the pinned `v1.5` tag reproduces the outcome (idempotent, pinned tag, recorded commit).
@@ -43,7 +43,32 @@ so that the chatqna rebase approach is decided with evidence, not guesswork.
 
 ### Review Findings
 
-_(No prior review — first implementation. Add findings here as code review surfaces them.)_
+_Code review (2026-08-11) — 3 parallel layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor). 1 decision-needed, 11 patch, 6 defer, 2 dismissed._
+
+**Decision resolved (2026-08-11) — Option 1 (corrected):**
+- [x] [Review][Decision] AC2 vs T1: `align_outputs`/`align_generator` never behaviorally asserted. **RESOLVED: Option 1 (corrected).** Verified against a live `v1.5` clone (`orchestrator.py`): `align_outputs` accepts `**kwargs` (line 392) and receives all 6 kwargs on the non-streaming completion path (`line 384: self.align_outputs(data, ..., **kwargs)`). The live spike ALREADY exercised `align_outputs` with all 6 kwargs — the evidence was captured and then discarded by `run_spike` (only reads `align_inputs` + `execute`). Only `align_generator` (line 353, streaming-only) is genuinely not exercised. → Concrete actions: emit `align_outputs`/`align_generator` captures in `run_spike`; reword AC2 per-hook (align_inputs + align_outputs proven, align_generator recorded-not-skipped deferred to Story 2.6); correct decision-log evidence table + name the deferral. [tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:61, 310-316, 350-352; spec AC2/T1]
+
+**Patch:**
+- [x] [Review][Patch] `outcome_table` checks presence only, not the "EXACT value" its docstring + decision log claim — a mutated/zeroed kwarg value still records FORWARDS. [tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:84-85]
+- [x] [Review][Patch] Cross-tag sys.modules contamination — 2nd tag's orchestrator reuses 1st tag's sibling modules (dag/constants/utils); passes only because tags are byte-identical (the very claim under test). [tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:398-399]
+- [x] [Review][Patch] `clone_tag` silently substitutes the tag string when `rev-parse` fails — decision log records a tag name, not a SHA. [tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:124]
+- [x] [Review][Patch] Unit tests are tautological — no end-to-end drop test (run_spike → outcome → exit 1 with a dropped kwarg); single-hook-drop case untested. [tests/spike-schedule-kwargs/test_prove_kwargs_forwarding.py]
+- [x] [Review][Patch] `main()` catches only SubprocessError/RuntimeError/OSError — an ImportError/AttributeError/TypeError from a stub gap surfaces as a raw traceback, not a controlled `SPIKE FAILED` exit 2. [tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:400]
+- [x] [Review][Patch] `_FakeResponse.text` is a plain string, not awaitable; no `.status` — luck-dependent stub that breaks on a plausible tag-to-tag response-handling change. [tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:178-188]
+- [x] [Review][Patch] Docstring/decision log overstate: "the orchestrator's own `align_*` run unmodified" is false (all overridden); "real `align_inputs`" is the subclass override. [tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:17-24, schedule-kwargs-spike.md:16-22]
+- [x] [Review][Patch] `--clone-dir` reuse breaks the documented re-run flow — `git clone` fails into a non-empty dir. [tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:110-117]
+- [x] [Review][Patch] `outcome_table` silently drops hooks not in the hardcoded EXPECTED_HOOKS — no assertion the two lists stay consistent. [tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:72-89]
+- [x] [Review][Patch] `--out` write unguarded — missing dir/permission raises an uncaught OSError traceback. [tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:405-406]
+- [x] [Review][Patch] Stale File List note: "sprint-status.yaml (MODIFIED — 1-3 in-progress)" but status is `review`. [this file:143]
+- [x] [Review][Patch] Emit `align_outputs`/`align_generator` captures in `run_spike`; reword AC2 per-hook; correct decision-log evidence table + deferral note (from resolved decision). [prove_kwargs_forwarding.py:350-352, spec AC2, schedule-kwargs-spike.md:28-35]
+
+**Deferred:**
+- [x] [Review][Defer] pydantic/docarray stub narrows the `dict()` vs `model_dump()` detection surface the spec named as a spike risk [tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:212-244] — deferred, documented in impl plan
+- [x] [Review][Defer] Idempotency pinned to tag, not the recorded commit — recorded SHA never compared across runs [tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:356-367] — deferred
+- [x] [Review][Defer] Per-kwarg raw evidence not committed — decision log has aggregate only; raw /tmp/spike-outcome.json is transient (spec-sanctioned) [schedule-kwargs-spike.md:25] — deferred, reproducibility caveat
+- [x] [Review][Defer] Stub/package leak into global sys.modules with no cleanup [tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:132-265] — deferred, CLI is single-process
+- [x] [Review][Defer] Spike `execute()` override signature-coupled to real `execute()` — upstream rename/reorder silently breaks the capture [tests/spike-schedule-kwargs/prove_kwargs_forwarding.py:280-302] — deferred, inherent to subclass approach
+- [x] [Review][Defer] Spike unit tests not wired into CI (no pytest config/job) — AC5 reproducibility unenforced in CI [tests/spike-schedule-kwargs/] — deferred
 
 ## Dev Notes
 
@@ -140,7 +165,7 @@ deepseek-v4-flash[1m] (Claude Code, bmad-create-story → bmad-dev-story)
 - `tests/spike-schedule-kwargs/prove_kwargs_forwarding.py` (NEW — bare-clone kwargs-forwarding spike harness)
 - `tests/spike-schedule-kwargs/test_prove_kwargs_forwarding.py` (NEW — 9 unit tests: outcome table, idempotency, per-kwarg, clone-fail guard)
 - `_bmad-output/implementation-artifacts/schedule-kwargs-spike.md` (NEW — committed decision log: FORWARDS outcome, evidence, D1 not triggered)
-- `_bmad-output/implementation-artifacts/sprint-status.yaml` (MODIFIED — 1-3 in-progress)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (MODIFIED — 1-3 review)
 
 ### Change Log
 

@@ -747,11 +747,20 @@ kics-iac-sast:
         CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
       fi
       REGISTRY_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
+      CID="contract-${CI_JOB_ID}"
       echo "Running contract tests for $IMAGE_NAME (${REGISTRY_REF}) against real vendored comps"
-      docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro --entrypoint sh \
-        "$REGISTRY_REF" -c "cd /contracts && python -m pytest ${CONTRACT_TEST_PATTERN} -p no:cacheprovider --junitxml=reports/contract-report.xml"
-  after_script:
-    - mkdir -p reports || true
+      # docker create + docker cp (NOT -v): under DinD the daemon cannot see the
+      # runner's filesystem, so a -v mount of $PWD yields an EMPTY /contracts.
+      # docker cp transfers the suite into the container via the daemon instead.
+      docker create --name "$CID" --entrypoint sh "$REGISTRY_REF" \
+        -c "cd /contracts && python -m pytest ${CONTRACT_TEST_PATTERN} -p no:cacheprovider --junitxml=/tmp/contract-report.xml"
+      docker cp genie-ai-overlay/contracts/. "$CID":/contracts/
+      docker start -a "$CID"
+      EXIT=$?
+      mkdir -p reports
+      docker cp "$CID":/tmp/contract-report.xml reports/contract-report.xml 2>/dev/null || true
+      docker rm -f "$CID" >/dev/null 2>&1 || true
+      exit $EXIT
   artifacts:
     when: always
     expire_in: 30 days
@@ -828,18 +837,28 @@ contract-red-run:retriever-v1.5:
     - |
       RED_TAG="red-run-${CI_COMMIT_SHORT_SHA}"
       echo "Building BARE v1.5 bump (no overlay re-graft) → $RED_TAG"
+      mkdir -p reports
+      # The bare v1.5 build itself is EXPECTED to fail (REQ_PATH gone, Python
+      # 3.11, missing system libs) — that IS the red evidence. Capture it.
+      set +e
       docker build --build-arg OPEA_VERSION=v1.5 \
         -f genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai \
-        -t "$RED_TAG" .
-      # Expected RED — record the failure reason as the artifact.
-      set +e
-      docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro --entrypoint sh \
-        "$RED_TAG" -c "cd /contracts && python -m pytest test_contract_orchestrator_wire.py test_contract_label_filter.py -p no:cacheprovider" \
-        > red-run-${CI_COMMIT_SHORT_SHA}.log 2>&1
-      EXIT=$?
+        -t "$RED_TAG" . > reports/red-run-${CI_COMMIT_SHORT_SHA}.log 2>&1
+      BUILD_EXIT=$?
+      if [ "$BUILD_EXIT" -eq 0 ]; then
+        # Build succeeded — run the contract suite against it, expect RED at runtime.
+        CID="redrun-${CI_JOB_ID}"
+        docker create --name "$CID" --entrypoint sh "$RED_TAG" \
+          -c "cd /contracts && python -m pytest test_contract_orchestrator_wire.py test_contract_label_filter.py -p no:cacheprovider"
+        docker cp genie-ai-overlay/contracts/. "$CID":/contracts/
+        docker start -a "$CID" >> reports/red-run-${CI_COMMIT_SHORT_SHA}.log 2>&1
+        SUITE_EXIT=$?
+        docker rm -f "$CID" >/dev/null 2>&1 || true
+        echo "Contract suite exit code on bare v1.5 bump: $SUITE_EXIT (expected non-zero = RED)"
+      else
+        echo "Bare v1.5 BUILD failed (exit $BUILD_EXIT) — red evidence captured in red-run log"
+      fi
       set -e
-      echo "Contract suite exit code on bare v1.5 bump: $EXIT (expected non-zero = RED)"
-      cp red-run-${CI_COMMIT_SHORT_SHA}.log reports/red-run-${CI_COMMIT_SHORT_SHA}.log 2>/dev/null || true
   artifacts:
     when: always
     expire_in: 90 days

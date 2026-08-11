@@ -113,19 +113,6 @@ So that parity after the bump is provable, not asserted.
 **Then** a run-triple artifact (min/median/max per metric) is committed with a variance-derived tolerance,
 **And** the artifact records the exact env/config it was tested under (config-parity).
 
-### Story 1.2: Capture the pre-upgrade v1.3 CVE/SBOM baseline
-
-As a security engineer,
-I want the v1.3 image CVE/SBOM baseline recorded before any bump,
-So that remediation is demonstrable after the upgrade.
-
-**Acceptance Criteria:**
-
-**Given** the CI scan stage runs on the current v1.3 images,
-**When** the advisory (same scanner version + severity taxonomy) and CycloneDX SBOM are captured and committed,
-**Then** the baseline exists for the FR-12 baseline-diff,
-**And** it is dated/locked as the reference point.
-
 ### Story 1.3: Run the `schedule()` kwargs-forwarding spike (blocking gate)
 
 As a platform engineer,

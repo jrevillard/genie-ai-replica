@@ -243,18 +243,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         target the SAME database for RAG retrieval. This replaces the former
         import-time ``_parent_mod.ARANGO_DB_NAME = ...`` monkeypatch (Story 1.4
         pre-rebase cleanup) with a subclass override — no module mutation.
+
+        The parent's own defaults are preserved for the connection params it
+        reads: ``ARANGO_URL`` (``http://localhost:8529``), ``ARANGO_USERNAME``
+        (``root``), ``ARANGO_PASSWORD`` (``test``). Only the DB name follows the
+        GENIE convention (``ARANGO_DB`` → ``ARANGO_DB_NAME`` → ``genie-ai``),
+        matching the retriever's default so both target the same database.
         """
         # GENIE convention: ARANGO_DB wins, falls back to ARANGO_DB_NAME,
-        # then the same default the parent used for module parity.
-        db_name = os.getenv("ARANGO_DB", os.getenv("ARANGO_DB_NAME", "_system"))
+        # then genie-ai (same default as the retriever).
+        db_name = os.getenv("ARANGO_DB", os.getenv("ARANGO_DB_NAME", "genie-ai"))
 
         import arango
 
-        self.client = arango.ArangoClient(hosts=os.getenv("ARANGO_URL"))
+        self.client = arango.ArangoClient(hosts=os.getenv("ARANGO_URL", "http://localhost:8529"))
         sys_db = self.client.db(
             name="_system",
-            username=os.getenv("ARANGO_USER", "root"),
-            password=os.getenv("ARANGO_PASSWORD", ""),
+            username=os.getenv("ARANGO_USERNAME", os.getenv("ARANGO_USER", "root")),
+            password=os.getenv("ARANGO_PASSWORD", "test"),
             verify=True,
         )
 
@@ -263,8 +269,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
         self.db = self.client.db(
             name=db_name,
-            username=os.getenv("ARANGO_USER", "root"),
-            password=os.getenv("ARANGO_PASSWORD", ""),
+            username=os.getenv("ARANGO_USERNAME", os.getenv("ARANGO_USER", "root")),
+            password=os.getenv("ARANGO_PASSWORD", "test"),
             verify=True,
         )
 

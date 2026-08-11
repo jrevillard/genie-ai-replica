@@ -2049,3 +2049,132 @@ class TestContextualRetrieval:
         assert result == {0: "single-ctx"}
         single.assert_awaited_once()
         mock_client.chat.completions.create.assert_not_called()  # no batch call for single
+
+
+class TestInitializeClient:
+    """Tests for GenieArangoDataprep._initialize_client().
+
+    Exercises the subclass override that replaced the import-time
+    ``_parent_mod.ARANGO_DB_NAME`` monkeypatch (Story 1.4). The vendored parent
+    reads module-level constants; this override must resolve the GENIE DB
+    convention (``ARANGO_DB`` → ``ARANGO_DB_NAME`` → ``genie-ai``) with the
+    parent's connection defaults (``ARANGO_USERNAME``/``ARANGO_URL``/
+    ``ARANGO_PASSWORD``).
+    """
+
+    def _mock_arango(self):
+        """Patch the ``arango`` package with a fake ArangoClient.
+
+        Returns a 4-tuple: (patcher, fake_client, fake_db, client_kwargs_capture).
+        The fake ArangoClient records the kwargs it was constructed with (hosts)
+        so tests can assert the resolved ARANGO_URL default.
+        """
+        client_kwargs_capture = {}
+        fake_client = MagicMock()
+        fake_db = MagicMock()
+        fake_db.has_database.return_value = False
+        fake_client.db.return_value = fake_db
+
+        def _fake_client_factory(**kw):
+            client_kwargs_capture.update(kw)
+            return fake_client
+
+        fake_arango = MagicMock()
+        fake_arango.ArangoClient = _fake_client_factory
+        return (
+            patch.dict("sys.modules", {"arango": fake_arango}),
+            fake_client,
+            fake_db,
+            client_kwargs_capture,
+        )
+
+    def test_resolves_genie_db_default(self, monkeypatch):
+        """Unset ARANGO_DB/ARANGO_DB_NAME → genie-ai (retriever's default)."""
+        monkeypatch.delenv("ARANGO_DB", raising=False)
+        monkeypatch.delenv("ARANGO_DB_NAME", raising=False)
+        dp = create_dataprep()
+        with self._mock_arango()[0]:
+            dp._initialize_client()
+        # First client.db() call is the _system handle; second is the target.
+        calls = dp.client.db.call_args_list
+        assert calls[0].kwargs["name"] == "_system"
+        assert calls[1].kwargs["name"] == "genie-ai"
+
+    def test_arango_db_wins_over_db_name(self, monkeypatch):
+        """ARANGO_DB takes precedence over ARANGO_DB_NAME."""
+        monkeypatch.setenv("ARANGO_DB", "genie-ai")
+        monkeypatch.setenv("ARANGO_DB_NAME", "_system")
+        dp = create_dataprep()
+        with self._mock_arango()[0]:
+            dp._initialize_client()
+        calls = dp.client.db.call_args_list
+        assert calls[1].kwargs["name"] == "genie-ai"
+
+    def test_db_name_fallback_when_arango_db_unset(self, monkeypatch):
+        """ARANGO_DB unset but ARANGO_DB_NAME set → uses ARANGO_DB_NAME."""
+        monkeypatch.delenv("ARANGO_DB", raising=False)
+        monkeypatch.setenv("ARANGO_DB_NAME", "legacy-db")
+        dp = create_dataprep()
+        with self._mock_arango()[0]:
+            dp._initialize_client()
+        calls = dp.client.db.call_args_list
+        assert calls[1].kwargs["name"] == "legacy-db"
+
+    def test_uses_arango_username_contract(self, monkeypatch):
+        """The override reads ARANGO_USERNAME (parent/compose/retriever contract),
+        not the misspelled ARANGO_USER — the env-var bug found in review."""
+        monkeypatch.setenv("ARANGO_USERNAME", "dataprep-user")
+        monkeypatch.delenv("ARANGO_USER", raising=False)
+        dp = create_dataprep()
+        with self._mock_arango()[0]:
+            dp._initialize_client()
+        sys_db_call = dp.client.db.call_args_list[0]
+        assert sys_db_call.kwargs["username"] == "dataprep-user"
+
+    def test_arango_user_fallback_for_backwards_compat(self, monkeypatch):
+        """ARANGO_USERNAME unset → falls back to ARANGO_USER (legacy)."""
+        monkeypatch.delenv("ARANGO_USERNAME", raising=False)
+        monkeypatch.setenv("ARANGO_USER", "legacy-user")
+        dp = create_dataprep()
+        with self._mock_arango()[0]:
+            dp._initialize_client()
+        sys_db_call = dp.client.db.call_args_list[0]
+        assert sys_db_call.kwargs["username"] == "legacy-user"
+
+    def test_arango_url_default(self, monkeypatch):
+        """ARANGO_URL unset → http://localhost:8529 (parent default)."""
+        monkeypatch.delenv("ARANGO_URL", raising=False)
+        dp = create_dataprep()
+        patcher, _, _, client_kwargs = self._mock_arango()
+        with patcher:
+            dp._initialize_client()
+        assert client_kwargs["hosts"] == "http://localhost:8529"
+
+    def test_arango_url_from_env(self, monkeypatch):
+        """ARANGO_URL set → used verbatim."""
+        monkeypatch.setenv("ARANGO_URL", "http://arango-vector-db:8529")
+        dp = create_dataprep()
+        patcher, _, _, client_kwargs = self._mock_arango()
+        with patcher:
+            dp._initialize_client()
+        assert client_kwargs["hosts"] == "http://arango-vector-db:8529"
+
+    def test_creates_database_when_missing(self, monkeypatch):
+        """Target DB missing → create_database called on the _system handle."""
+        monkeypatch.setenv("ARANGO_DB", "genie-ai")
+        dp = create_dataprep()
+        patcher, _, fake_db, _ = self._mock_arango()
+        with patcher:
+            fake_db.has_database.return_value = False
+            dp._initialize_client()
+            fake_db.create_database.assert_called_once_with("genie-ai")
+
+    def test_skips_create_database_when_present(self, monkeypatch):
+        """Target DB exists → no create_database."""
+        monkeypatch.setenv("ARANGO_DB", "genie-ai")
+        dp = create_dataprep()
+        patcher, _, fake_db, _ = self._mock_arango()
+        with patcher:
+            fake_db.has_database.return_value = True
+            dp._initialize_client()
+            fake_db.create_database.assert_not_called()

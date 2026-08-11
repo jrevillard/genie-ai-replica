@@ -47,7 +47,6 @@ development_status:
   # Epic 1: Upgrade foundation — provable-parity groundwork
   epic-1: in-progress
   1-1-lock-the-v1-3-rag-parity-baseline: done
-  1-2-capture-the-pre-upgrade-v1-3-cve-sbom-baseline: backlog
   1-3-run-the-schedule-kwargs-forwarding-spike-blocking-gate: backlog
   1-4-land-the-pre-rebase-cleanup-as-its-own-v1-3-commit: backlog
   1-5-write-contract-tests-green-on-v1-3-prove-red-on-a-bare-v1-5-bump: backlog

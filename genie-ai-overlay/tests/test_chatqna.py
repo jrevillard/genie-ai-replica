@@ -1054,6 +1054,84 @@ class TestChatQnAServiceInit:
             assert add_kwargs[2]["service_type"] == FakeServiceType.LLM
             assert add_kwargs[2]["endpoint"] == "/v1/chat/completions"
 
+    def _run_graph_builder(self, method_name):
+        """Run one add_remote_service* variant and return (services, flow_edges).
+
+        Captures the graph the consolidated ``_build_rag_graph`` produces for a
+        given public wrapper, asserting the same node set + ``flow_to`` edges
+        the pre-cleanup variants built (AC4 — graph equivalence, asserted).
+
+        MicroService is patched with a side_effect so each construction returns
+        a DISTINCT instance carrying the real ``name`` (``MagicMock(name=...)``
+        would instead set the mock's own name and share one return_value).
+        """
+        with (
+            patch("chatqna.genieai_chatqna.ServiceOrchestrator") as mock_orch,
+            patch("chatqna.genieai_chatqna.MicroService") as mock_ms,
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+        ):
+            built = []
+
+            def _microservice(**kwargs):
+                svc = MagicMock()
+                svc.name = kwargs.get("name")
+                built.append(svc)
+                return svc
+
+            mock_ms.side_effect = _microservice
+
+            mock_orch_instance = MagicMock()
+            mock_orch_instance.add.return_value = mock_orch_instance  # chainable
+            mock_orch.return_value = mock_orch_instance
+
+            svc = ChatQnAService()
+            getattr(svc, method_name)()
+
+            nodes = [svc.name for svc in built]
+            edges = [(call[0][0].name, call[0][1].name) for call in mock_orch_instance.flow_to.call_args_list]
+            return nodes, edges
+
+    def test_faqgen_graph_equivalent_to_full(self):
+        """AC4: faqgen mode builds the SAME graph shape as the full graph, only
+        the LLM endpoint differs (/v1/faqgen vs /v1/chat/completions)."""
+        full_nodes, full_edges = self._run_graph_builder("add_remote_service")
+        faqgen_nodes, faqgen_edges = self._run_graph_builder("add_remote_service_faqgen")
+
+        assert faqgen_nodes == full_nodes  # embedding, retriever, rerank, llm
+        assert faqgen_edges == full_edges  # emb→ret→rerank→llm
+
+        # Endpoint differs — the one sanctioned axis of variation.
+        self._assert_faqgen_endpoint()
+
+    def _assert_faqgen_endpoint(self):
+        with (
+            patch("chatqna.genieai_chatqna.ServiceOrchestrator") as mock_orch,
+            patch("chatqna.genieai_chatqna.MicroService") as mock_ms,
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+        ):
+            mock_orch_instance = MagicMock()
+            mock_orch.return_value = mock_orch_instance
+            svc = ChatQnAService()
+            svc.add_remote_service_faqgen()
+            add_kwargs = [call[1] for call in mock_ms.call_args_list if call[1]]
+            llm = next(k for k in add_kwargs if k["name"] == "llm")
+            assert llm["endpoint"].endswith("/v1/faqgen")
+
+    def test_without_translation_alias_builds_full_graph(self):
+        """AC4: the without_translation alias produces the same graph as
+        add_remote_service (translation is not a graph node)."""
+        full_nodes, full_edges = self._run_graph_builder("add_remote_service")
+        alias_nodes, alias_edges = self._run_graph_builder("add_remote_service_without_translation")
+        assert alias_nodes == full_nodes
+        assert alias_edges == full_edges
+
+    def test_genieai_alias_builds_full_graph(self):
+        """AC4: the genieai alias produces the same graph as add_remote_service."""
+        full_nodes, full_edges = self._run_graph_builder("add_remote_service")
+        alias_nodes, alias_edges = self._run_graph_builder("add_remote_service_genieai")
+        assert alias_nodes == full_nodes
+        assert alias_edges == full_edges
+
     def test_find_node_key_finds_match(self):
         svc = create_chatqna_service()
         result_dict = {"embedding_service": "data1", "retriever_service": "data2"}

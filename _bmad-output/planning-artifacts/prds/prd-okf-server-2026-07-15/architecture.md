@@ -2,7 +2,7 @@
 title: Architecture — GENIE.AI OKF Server
 status: draft
 created: 2026-07-15
-updated: 2026-08-10
+updated: 2026-08-11
 initiative: okf-server
 branch: feat/okf-server
 prd: ./prd.md
@@ -27,6 +27,7 @@ adrs:
   - ../../../../docs/adr/okf-015-in-app-authoring-curation.md
   - ../../../../docs/adr/okf-016-external-source-management.md
   - ../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md
+  - ../../../../docs/adr/okf-018-okf-control-plane-storage.md
 authors: Genie.ai Dev
 ---
 
@@ -107,6 +108,8 @@ Today `graph_name` is a single global (`GRAPH`); ChatQnA never forwards one and 
 | `okf_concepts_meta` | doc | `concept_id`, `repo_id`, `frontmatter` (full, v0.2 families preserved), `path`, `conformance_issues`, `pii_state`, `bundle_version`, **`generated`, `verified`, `trust_tier` (derived), `status`, `stale_after`, `sources`** ([ADR-okf-017](../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md)) |
 | `okf_audit` | doc (append-only) | `actor`, `action`, `repo_id`, `concept_id`, `version`, `ts`, `source_ip`, `trace_id` |
 | `okf_sources` | doc | source state per repo (last commit SHA / S3 version, last sync, health) |
+
+> **Control-plane storage** — all OKF collections live in the **same ArangoDB database** as the graphs (single-engine multi-graph retrieval requires it); see [ADR-okf-018](../../../../docs/adr/okf-018-okf-control-plane-storage.md).
 
 Free-form corpus stays in `GRAPH_*` (unchanged).
 

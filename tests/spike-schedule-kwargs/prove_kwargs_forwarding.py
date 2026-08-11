@@ -17,11 +17,16 @@ Method
 The real ``comps/cores/mega/orchestrator.py`` is loaded from the clone via
 importlib. Only the external heavy deps the forwarding path does not need
 (fastapi, prometheus_client, aiohttp, requests, telemetry, docarray) are
-stubbed in ``sys.modules`` — the orchestrator's OWN ``schedule()``/``execute()``
-code runs unmodified. A ``SpikeOrchestrator`` subclass overrides ``execute()``
-to capture the kwargs it received from ``schedule()``, then delegates to the
-real ``super().execute()`` which calls the real ``align_inputs(..., **kwargs)``.
-Network is avoided with a fake aiohttp session response.
+stubbed in ``sys.modules`` — the orchestrator's OWN ``schedule()`` (inherited)
+and the ``super().execute()`` BODY run unmodified. A ``SpikeOrchestrator``
+subclass overrides ``execute()`` to capture the kwargs it received from
+``schedule()``, then delegates to the real ``super().execute()``, which runs
+the real forwarding call sites — ``self.align_inputs(..., **kwargs)`` (line 255)
+and ``self.align_outputs(..., **kwargs)`` (line 384, non-streaming completion).
+The ``align_inputs``/``align_outputs``/``align_generator`` OVERRIDES are the
+recording handlers — they capture what arrived at each hook and return the
+input unchanged, so the real forwarding path is exercised end-to-end. Network
+is avoided with a fake aiohttp session response.
 
 Outcome is emitted as a per-kwarg/per-hook table so the decision log is
 data-driven. Re-running against the same pinned tag is idempotent.
@@ -38,6 +43,7 @@ import argparse
 import asyncio
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -54,11 +60,29 @@ GENIE_KWARGS = (
     "user_details",
 )
 
+# The exact values sent by the spike. ``outcome_table`` compares what each hook
+# received against these — presence alone is NOT enough ("exact values sent →
+# received", per AC2 and the decision log). A mutated/zeroed value must FAIL.
+SPIKE_KWARGS = {
+    "retriever_parameters": {"k": 3, "fetch_k": 5},
+    "reranker_parameters": {"top_n": 3},
+    "full_chat_history_string": "previous turn",
+    "retrieval_context": {"categoryLabels": ["Tomato"]},
+    "original_language": "es",
+    "user_details": {"role": "citizen", "locale": "es"},
+}
+
 # The forwarding hops the spike proves. ``execute`` proves schedule() → execute()
 # (the kwargs arrive at the per-node executor); ``align_inputs`` proves
-# execute() → handler (the registered service really receives them). A hook
-# absent from the capture is a FAIL — a hook that never ran forwards nothing.
-EXPECTED_HOOKS = ("align_inputs", "execute")
+# execute() → handler on the LLM-node input path; ``align_outputs`` proves
+# execute() → handler on the non-streaming completion path (orchestrator.py:384
+# calls ``self.align_outputs(data, ..., **kwargs)`` on every non-streaming node).
+# A hook absent from the capture is a FAIL — a hook that never ran forwards
+# nothing. ``align_generator`` is deliberately NOT here: it fires only on the
+# streaming branch (orchestrator.py:353) which the LLM-node spike does not
+# exercise — it is emitted when touched but absent does not fail (recorded, not
+# skipped; behavioral verification deferred to Story 2.6).
+EXPECTED_HOOKS = ("align_inputs", "align_outputs", "execute")
 
 GENAI_COMPS_REPO = "https://github.com/opea-project/GenAIComps.git"
 ORCHESTRATOR_REL = "comps/cores/mega/orchestrator.py"
@@ -74,15 +98,21 @@ def outcome_table(kwargs_by_hook: dict[str, dict]) -> dict:
 
     ``kwargs_by_hook`` maps hook name → the kwargs that hook actually received.
     A kwarg counts as forwarded to a hook only when it is present in that hook's
-    received set with the EXACT value sent.
+    received set with the EXACT value sent (compared against ``SPIKE_KWARGS``) —
+    presence alone is not a pass. Any hook not in ``EXPECTED_HOOKS`` raises: a
+    captured hook must never be silently dropped from the table.
     """
+    unknown = set(kwargs_by_hook) - set(EXPECTED_HOOKS)
+    if unknown:
+        raise ValueError(f"unexpected hook(s) in capture: {sorted(unknown)}")
     rows = {}
     all_forwarded = True
     for kwarg in GENIE_KWARGS:
         rows[kwarg] = {}
+        expected = SPIKE_KWARGS.get(kwarg)
         for hook in EXPECTED_HOOKS:
             received = kwargs_by_hook.get(hook, {})
-            ok = kwarg in received
+            ok = kwarg in received and received[kwarg] == expected
             if not ok:
                 all_forwarded = False
             rows[kwarg][hook] = ok
@@ -104,9 +134,14 @@ def summarize(kwargs_by_hook: dict[str, dict]) -> dict:
 def clone_tag(dest: Path, tag: str, url: str = GENAI_COMPS_REPO) -> str:
     """Shallow-clone ``<tag>`` of GenAIComps into ``dest``; return the resolved commit.
 
-    Raises RuntimeError on clone failure (network down, tag absent) so a failed
-    clone is never silently recorded as a "drop".
+    Raises RuntimeError on clone failure (network down, tag absent) or on
+    rev-parse failure (commit resolution) — a failed step is never silently
+    recorded as a "drop" or as a fake commit SHA.
     """
+    # git clone refuses a non-empty destination — a re-run with the same
+    # --clone-dir (the documented idempotent flow) must not crash.
+    if dest.exists():
+        shutil.rmtree(dest)
     result = subprocess.run(
         ["git", "clone", "--depth", "1", "--branch", tag, url, str(dest)],
         capture_output=True,
@@ -121,7 +156,11 @@ def clone_tag(dest: Path, tag: str, url: str = GENAI_COMPS_REPO) -> str:
         text=True,
         timeout=30,
     )
-    return resolved.stdout.strip() if resolved.returncode == 0 else tag
+    if resolved.returncode != 0:
+        raise RuntimeError(
+            f"rev-parse of {tag} failed: {resolved.stderr.strip()[:300]}"
+        )
+    return resolved.stdout.strip()
 
 
 # ---------------------------------------------------------------------------
@@ -176,13 +215,22 @@ def install_stubs() -> None:
             pass
 
     class _FakeResponse:
+        # aiohttp-shaped: `.status`/`.content_type` attrs, awaitable
+        # `.json()`/`.text()`/`.read()` — matches what the orchestrator's
+        # forwarding path actually touches (orchestrator.py:377, 378, 382).
+        status = 200
         status_code = 200
-        text = "{}"
         content = b"{}"
         content_type = "application/json"
 
         async def json(self):
             return {}
+
+        async def text(self):
+            return "{}"
+
+        async def read(self):
+            return self.content
 
         def raise_for_status(self):
             pass
@@ -242,6 +290,33 @@ def install_stubs() -> None:
     docarray.LLMParams = LLMParams
     docarray.TextDoc = object
     sys.modules["comps.cores.proto.docarray"] = docarray
+
+
+def purge_imported_modules() -> None:
+    """Drop stubs + previously-loaded clone packages from sys.modules.
+
+    Each prove() call must load tag N's orchestrator in isolation. Without this,
+    sibling modules imported from tag 1 (``comps.cores.mega.dag``,
+    ``.constants``, ``.utils``, and the stub packages) persist in ``sys.modules``
+    and tag 2's orchestrator silently runs against tag 1's code — a real
+    sibling change between tags would be masked by the very byte-identity the
+    spike exists to verify.
+    """
+    for name in list(sys.modules):
+        if (
+            name == "comps"
+            or name.startswith("comps.")
+            or name
+            in (
+                "fastapi",
+                "fastapi.responses",
+                "prometheus_client",
+                "aiohttp",
+                "requests",
+                "pydantic",
+            )
+        ):
+            sys.modules.pop(name, None)
 
 
 def load_orchestrator(clone_dir: Path):
@@ -330,31 +405,29 @@ def build_spike(orchestrator_mod):
 async def run_spike(orchestrator_mod) -> dict[str, dict]:
     """Call the real schedule() with the 6 GENIE kwargs; return received-by-hook."""
     orch, captured = build_spike(orchestrator_mod)
-    kwargs = {
-        "retriever_parameters": {"k": 3, "fetch_k": 5},
-        "reranker_parameters": {"top_n": 3},
-        "full_chat_history_string": "previous turn",
-        "retrieval_context": {"categoryLabels": ["Tomato"]},
-        "original_language": "es",
-        "user_details": {"role": "citizen", "locale": "es"},
-    }
     LLMParams = orchestrator_mod.LLMParams
     await orch.schedule(
         initial_inputs={"text": "hello", "model": "m"},
         llm_parameters=LLMParams(),
-        **kwargs,
+        **SPIKE_KWARGS,
     )
-    # The forwarding-relevant hooks are execute (proves schedule→execute) and
-    # align_inputs (proves execute→handler). align_outputs/align_generator are
-    # only reached on different branches — record them when touched.
-    by_hook = {"align_inputs": captured.get("align_inputs", {}).get("received", {})}
-    if "execute" in captured:
-        by_hook["execute"] = captured["execute"]["received"]
+    # Forwarding-relevant hooks: execute (schedule→execute), align_inputs
+    # (execute→handler, input path), align_outputs (execute→handler, non-streaming
+    # completion path — orchestrator.py:384 fires on every non-streaming node).
+    # align_generator is streaming-only (line 353) — emitted when touched, but its
+    # absence is recorded-not-skipped (not an EXPECTED_HOOKS FAIL).
+    by_hook = {}
+    for hook in EXPECTED_HOOKS:
+        if hook in captured:
+            by_hook[hook] = captured[hook]["received"]
+    if "align_generator" in captured:
+        by_hook["align_generator"] = captured["align_generator"]["received"]
     return by_hook
 
 
 def prove(tag: str, clone_dir: Path) -> dict:
     """Clone tag, load its REAL orchestrator, run the spike, return the outcome."""
+    purge_imported_modules()  # isolate each tag's clone (no cross-tag reuse)
     resolved_commit = clone_tag(clone_dir, tag)
     install_stubs()
     orchestrator_mod = load_orchestrator(clone_dir)
@@ -397,13 +470,28 @@ def main(argv: list[str] | None = None) -> int:
     try:
         for i, tag in enumerate(args.tag):
             outcomes.append(prove(tag, clone_dir / f"comps-{i}"))
-    except (subprocess.SubprocessError, RuntimeError, OSError) as exc:
-        print(f"SPIKE FAILED: {exc}", file=sys.stderr)
+    except (
+        subprocess.SubprocessError,
+        RuntimeError,
+        OSError,
+        ImportError,
+        AttributeError,
+        TypeError,
+        KeyError,
+    ) as exc:
+        # A stub/import gap surfaces as one of these — report it as a controlled
+        # SPIKE FAILED (exit 2), never a raw traceback that is indistinguishable
+        # from a drop.
+        print(f"SPIKE FAILED: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     result = {"outcomes": outcomes}
     payload = json.dumps(result, indent=2)
     if args.out:
-        Path(args.out).write_text(payload + "\n", encoding="utf-8")
+        try:
+            Path(args.out).write_text(payload + "\n", encoding="utf-8")
+        except OSError as exc:
+            print(f"WRITE FAILED: {exc}", file=sys.stderr)
+            return 2
     else:
         print(payload)
     # Non-zero when ANY tag drops a kwarg — the gate is blocking.

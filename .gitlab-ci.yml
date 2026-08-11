@@ -778,7 +778,7 @@ contract:retriever-arango:
     IMAGE_NAME: "genie-ai-retriever-arango"
     # Retriever in-image suite — ONLY tests that run against the retriever
     # image's real comps (no repo-side tests, no dataprep-side tests → no skips).
-    # telemetry + streaming moved to `contract:pure` (repo-side); the ingest
+    # telemetry + streaming moved to `contract:unit` (repo-side); the ingest
     # budget lives in `contract:dataprep-arango`.
     CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_label_filter.py test_contract_e2e_pipeline.py::test_label_filter_contract_roundtrip test_contract_e2e_pipeline.py::test_label_filter_contract_empty_is_noop test_contract_e2e_pipeline.py::test_e2e_graph_schedules_real_orchestrator test_contract_nfrp_budgets.py::test_wire_latency_within_budget test_contract_nfrp_budgets.py::test_budget_table_present"
   rules:
@@ -827,7 +827,7 @@ contract:dataprep-arango:
 # dashboards (which live in the checkout, not in the module images). They never
 # skip: the harness dev-env tests pass here (real comps absent), and the
 # telemetry tests scan the repo dashboards available in the CI checkout.
-contract:pure:
+contract:unit:
   stage: contract-in-image
   image: python:3.11-slim
   tags: [docker]
@@ -865,7 +865,7 @@ contract:pure:
 # module image built with OPEA_VERSION=v1.5, NO overlay re-graft). Expect RED;
 # the failure reason is captured as the CI artifact that proves the safety net
 # catches a real 1.5 break. Manual-only — the v1.5 image is not promoted.
-contract-red-run:retriever-v1.5:
+contract:red-run-v1.5:
   stage: contract-in-image
   image: docker:28
   tags: [docker]

@@ -861,61 +861,6 @@ contract:unit:
       changes:
         paths: ["genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
 
-# Red-run evidence: re-run the contract suite against a BARE v1.5 bump (the
-# module image built with OPEA_VERSION=v1.5, NO overlay re-graft). Expect RED;
-# the failure reason is captured as the CI artifact that proves the safety net
-# catches a real 1.5 break. Manual-only — the v1.5 image is not promoted.
-contract:red-run-v1.5:
-  stage: contract-in-image
-  image: docker:28
-  tags: [docker]
-  when: manual
-  allow_failure: true
-  variables:
-    IMAGE_NAME: "genie-ai-retriever-arango"
-  before_script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-  script:
-    - |
-      RED_TAG="red-run-${CI_COMMIT_SHORT_SHA}"
-      echo "Building BARE v1.5 bump (no overlay re-graft) → $RED_TAG"
-      mkdir -p reports
-      # The bare v1.5 build itself is EXPECTED to fail (REQ_PATH gone, Python
-      # 3.11, missing system libs) — that IS the red evidence. Capture it.
-      set +e
-      docker build --build-arg OPEA_VERSION=v1.5 \
-        -f genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai \
-        -t "$RED_TAG" . > reports/red-run-${CI_COMMIT_SHORT_SHA}.log 2>&1
-      BUILD_EXIT=$?
-      if [ "$BUILD_EXIT" -eq 0 ]; then
-        # Build succeeded — run the contract suite against it, expect RED at runtime.
-        CID="redrun-${CI_JOB_ID}"
-        docker create --name "$CID" --entrypoint sh "$RED_TAG" \
-          -c "cd /contracts && python -m pytest test_contract_orchestrator_wire.py test_contract_label_filter.py -p no:cacheprovider"
-        docker cp genie-ai-overlay/contracts/. "$CID":/contracts/
-        docker start -a "$CID" >> reports/red-run-${CI_COMMIT_SHORT_SHA}.log 2>&1
-        SUITE_EXIT=$?
-        docker rm -f "$CID" >/dev/null 2>&1 || true
-        echo "Contract suite exit code on bare v1.5 bump: $SUITE_EXIT (expected non-zero = RED)"
-      else
-        echo "Bare v1.5 BUILD failed (exit $BUILD_EXIT) — red evidence captured in red-run log"
-      fi
-      set -e
-  artifacts:
-    when: always
-    expire_in: 90 days
-    paths:
-      - "reports/red-run-*.log"
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "web"
-      when: never
-    - if: $CI_COMMIT_TAG
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: manual
-
 # genie-ai-frontend
 build:frontend:
   <<: *build_template

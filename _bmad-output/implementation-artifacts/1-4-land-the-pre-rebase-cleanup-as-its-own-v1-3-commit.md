@@ -4,7 +4,7 @@ baseline_commit: 2972f0420
 
 # Story 1.4: Land the pre-rebase cleanup as its own v1.3 commit
 
-Status: review
+Status: done
 
 <!-- PRD: opea-1.5-upgrade | Epic 1: Upgrade foundation — provable-parity groundwork -->
 <!-- Dependency: none. Runs on the v1.3 tree in its own commit. Runs AFTER 1.3 spike (decision log) and in parallel to 1.5. -->
@@ -20,7 +20,7 @@ so that a post-rebase regression has one variable, not two.
 
 1. **One commit, own land.** The cleanup lands on the v1.3 tree as its own commit, independently reviewable and testable — NOT bundled with the OPEA 1.5 bump (architecture §6 sequence: cleanup-as-separate-commit).
 2. **5 `add_remote_service*` variants consolidated to one site.** The 5 near-duplicate graph builders in `genieai_chatqna.py` (and their mirrored stubs in `tests/testing_genieai_chatqna.py`) collapse to one parameterized method, with the per-mode differences (rerank present/absent, LLM endpoint `chat/completions` vs `faqgen`) expressed as parameters. The CLI dispatch (line ~2707-2726) maps the existing flags to the parameterized builder.
-3. **`_parent_mod` monkeypatches replaced with subclass overrides.** In `genieai_dataprep_arangodb.py`, the module-level `_parent_mod.ARANGO_DB_NAME` (line 39) and the `_parent_mod.VLLM_MODEL_ID` reassignment (line 279) are replaced by overrides inside the existing `GenieArangoDataprep(OpeaArangoDataprep)` subclass — the proper OO mechanism, no import-time module mutation.
+3. **`_parent_mod` monkeypatches replaced with subclass overrides.** In `genieai_dataprep_arangodb.py`, the module-level `_parent_mod.ARANGO_DB_NAME` (line 39) import-time mutation is replaced by a `_initialize_client()` override inside the existing `GenieArangoDataprep(OpeaArangoDataprep)` subclass — the proper OO mechanism, no import-time module mutation. The `_parent_mod.VLLM_MODEL_ID` reassignment is **retained as a sanctioned exception** (see non-negotiable below): the vendored parent captures `VLLM_MODEL_ID` as a module constant at import (line 51) and reads it at line 166 — it does not re-read `os.environ` at call time — so the runtime write inside the `_initialize_llm` override is the only channel that reaches the parent's LLM construction. `os.environ` alone provably does not. This is sanctioned by the T3 task bullet ("keep a subclass-safe mechanism") and re-examined at the 1.5 rebase.
 4. **Behavior unchanged — same flow_to graph.** The consolidated builder produces the IDENTICAL graph (same services, same `flow_to` edges) for each mode. A test asserts graph equivalence (same node set + same edges) before/after.
 5. **Full suites stay green on v1.3.** All OPEA pytest + affected tests pass post-cleanup; ruff lint/format clean.
 
@@ -46,7 +46,17 @@ so that a post-rebase regression has one variable, not two.
 
 ### Review Findings
 
-_(No prior review — first implementation. Add findings here as code review surfaces them.)_
+- [x] [Review][Decision] AC3 VLLM_MODEL_ID mutation retained — RESOLVED 2026-08-11: AC3 amended to sanction the runtime write (parent reads module constant, not os.environ; single-channel; re-examine at 1.5 rebase) [genieai_dataprep_arangodb.py:307]
+- [x] [Review][Patch] `_initialize_client` reads `ARANGO_USERNAME` (parent/compose/retriever contract) with `ARANGO_USER` legacy fallback; pinned by `test_uses_arango_username_contract`/`test_arango_user_fallback_for_backwards_compat` [genieai_dataprep_arangodb.py:256,266]
+- [x] [Review][Patch] `ArangoClient` hosts defaults to `http://localhost:8529` (parent default); pinned by `test_arango_url_default` [genieai_dataprep_arangodb.py:253]
+- [x] [Review][Patch] AC4 graph-equivalence tests added for faqgen + both alias modes (node set + flow_to edges equal to full graph) — 3 tests [genie-ai-overlay/tests/test_chatqna.py]
+- [x] [Review][Patch] `_initialize_client` override now tested (9 tests: db resolution, precedence, fallback, username contract, URL default/env, create/skip create_database) [genieai_dataprep_arangodb.py:238-269]
+- [x] [Review][Patch] Docstring fixed + default aligned to `genie-ai` (matches retriever) — behavior-neutral in compose (ARANGO_DB always set); pinned by `test_resolves_genie_db_default` [genieai_dataprep_arangodb.py:241-249]
+- [x] [Review][Defer] Test-stub faqgen LLM gains `api_key=OPENAI_API_KEY` (absent pre-cleanup) — stub not collected by pytest, mirror-only [tests/testing_genieai_chatqna.py:790,811-813]
+- [x] [Review][Defer] Test-stub faqgen endpoint bare `/v1/faqgen` vs prod prefixed — stub not collected, drift unnoticed [tests/testing_genieai_chatqna.py:813]
+- [x] [Review][Defer] `_build_rag_graph` llm_endpoint prefix contract inconsistent (default auto-prefixed, explicit verbatim) — latent, no current caller triggers [genieai_chatqna.py:1806]
+
+Dismissed: Blind Hunter "hook may not exist" (parent `__init__:96` calls `self._initialize_client()` — refuted); "create_database permission/race" (parent does the same); Auditor AC2 minor "kept 5 wrappers" (AC2 letter met).
 
 ## Dev Notes
 
@@ -54,7 +64,7 @@ _(No prior review — first implementation. Add findings here as code review sur
 
 - **Own commit, v1.3 tree, behavior-neutral.** This is architecture §6 "cleanup-as-separate-commit" (pre-rebase milestone (c)). It must NOT contain any OPEA 1.5 code. A post-rebase regression must have ONE variable — the bump — which requires the cleanup to be proven green on v1.3 first. Do NOT bundle with Story 2.x.
 - **Same flow_to graph — asserted, not assumed.** The consolidation's whole risk is a subtly different graph (a dropped edge, a wrong endpoint). The graph-equivalence test is the guard: same node set + same edges per mode.
-- **Delete the monkeypatch, don't soften it.** The `_parent_mod.X = ...` import-time mutations are the debt. Replace with subclass override. Do NOT leave the mutation AND add an override — that's two sources of truth.
+- **Delete the monkeypatch, don't soften it — for import-time mutations.** The `_parent_mod.X = ...` import-time module mutations are the debt. Replace with subclass override. Do NOT leave the mutation AND add an override — that's two sources of truth. **Sanctioned exception (AC3, verified 2026-08-11):** the runtime `_parent_mod.VLLM_MODEL_ID = detected` write inside the `_initialize_llm` override is NOT an import-time mutation — it is the delivery channel for a dynamically-detected value. The vendored parent captures `VLLM_MODEL_ID` at import (module constant, line 51) and reads it at line 166; it does not re-read `os.environ` at call time, so the write-before-`super()` is the ONLY mechanism that reaches the parent. It is single-channel (one read-point, one write-path), scoped to the subclass override, and required for remote-GPU model auto-detection. Keep the comment at the mutation site explaining why; **re-examine at the 1.5 rebase** — if the 1.5 parent reads `os.environ` at call time or accepts a model parameter, delete the write then.
 - **The test file mirrors the prod code.** `tests/testing_genieai_chatqna.py` duplicates the 5 builders as stubs. A prod-only consolidation leaves the tests diverged — both must collapse.
 - **`--with-translation` (CLI line 2711) is a documented no-op** (accepted for compat, never dispatched). Preserve its acceptance; it does not select a graph.
 
@@ -145,3 +155,4 @@ deepseek-v4-flash[1m] (Claude Code, bmad-create-story → bmad-dev-story)
 
 - 2026-08-11: Story created (ready-for-dev) by bmad-create-story. Scope: consolidate 5 `add_remote_service*` variants (chatqna + mirrored test stubs) into one parameterized builder with asserted graph equivalence; replace `_parent_mod.ARANGO_DB_NAME`/`VLLM_MODEL_ID` dataprep monkeypatches with subclass overrides; land as its own v1.3 commit, suites green.
 - 2026-08-11: Implemented (dev-story). T1 chatqna consolidation (`_build_rag_graph` + wrappers), T2 mirrored test stubs, T3 dataprep subclass overrides (`_initialize_client` override, `_parent_mod` re-import removed), T4 648/648 OPEA tests green + ruff/format clean. Story status → review.
+- 2026-08-11: Code review (bmad-code-review) + roundtable. **D1 resolved:** AC3 amended to sanction the runtime `_parent_mod.VLLM_MODEL_ID` write (parent reads module constant, not os.environ; single-channel; re-examine at 1.5 rebase). **5 patches applied:** `_initialize_client` now reads `ARANGO_USERNAME` (with `ARANGO_USER` legacy fallback) + `ARANGO_URL` default `http://localhost:8529`; DB default aligned to `genie-ai` (matches retriever); added 9 `_initialize_client` unit tests + 3 graph-equivalence tests (faqgen + aliases). Full suite **660/660 green**, ruff + format clean. Story status → done.

@@ -51,14 +51,17 @@ CI runs the per-module jobs in the `contract-in-image` stage (`contract:retrieve
 | `test_contract_e2e_pipeline.py` | Label-filter `search_start` roundtrip, streaming metadata shape, one full graph schedule |
 | `test_contract_nfrp_budgets.py` | Wire latency + one-doc ingest wall-clock budgets |
 
-## Red-green validation (pre-rebase)
+## Red-green validation
 
 1. **Green on v1.3** — the suite passes against the current `OPEA_VERSION="v1.3"`
-   images (verified in this story).
+   images.
 2. **Red on a bare v1.5 bump** — rebuild the module image with
-   `--build-arg OPEA_VERSION=v1.5` and NO overlay re-graft, re-run the suite. It
-   goes red with the failure reason committed as a CI artifact
-   (`contract-red-run:retriever-v1.5`, manual job).
+   `--build-arg OPEA_VERSION=v1.5` and NO overlay re-graft. The red is proven at
+   the BUILD surface — the v1.5 image cannot build with the v1.3 overlay (see
+   `_bmad-output/implementation-artifacts/red-run-v1.5-bare.md`). The
+   assertion-level suite red (a deliberate contract break making the pipeline go
+   red via a mutation probe) is delivered by the CI enforcement work, and the
+   evidence stage re-checks the red-run logs for freshness.
 
    The bare bump fails on real surfaces: `REQ_PATH` points at
    `retrievers/src/requirements.txt` which does not exist in v1.5 (compiled

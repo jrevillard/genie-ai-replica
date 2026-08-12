@@ -70,14 +70,11 @@ def _build_graph(comps):
 
 
 def _llm_params():
-    try:
-        from comps.cores.proto.opea_docarray import LLMParams
-    except ImportError:
-        from comps.cores.proto.docarray import LLMParams  # noqa: PLC0415
-    return LLMParams()
+    """Build the orchestrator's LLMParams from the post-rename docarray module."""
+    return _harness.import_docarray("LLMParams")()
 
 
-def _dataprep_instance():
+def _dataprep_instance(monkeypatch):
     import pytest
 
     try:
@@ -86,33 +83,35 @@ def _dataprep_instance():
             GenieArangoDataprep,
         )
     except ImportError:
+        if _harness.in_image_comps_importable():
+            raise
         pytest.skip("dataprep module not present in this image")
 
-    m.CONTENT_EXTRACTION_METHOD = "docling"
-    obj = GenieArangoDataprep.__new__(GenieArangoDataprep)
-    obj.tracer = m.tracer
-    return obj
+    # Production extraction method; monkeypatch auto-restores it after the test.
+    monkeypatch.setattr(m, "CONTENT_EXTRACTION_METHOD", "docling")
+    return GenieArangoDataprep.__new__(GenieArangoDataprep)
 
 
-def test_wire_latency_within_budget(comps):
+def test_wire_latency_within_budget(comps, fake_http):
     """One orchestrator wire-through completes within the coarse latency budget."""
     graph = _build_graph(comps)
-    _harness.install_fake_aiohttp()
+    budget = _harness.budget("wire_latency_seconds")
     start = time.monotonic()
     asyncio.run(
-        graph.schedule(
-            initial_inputs={"text": "hello", "model": "m"},
-            llm_parameters=_llm_params(),
-            **_harness.WIRE_KWARGS,
+        asyncio.wait_for(
+            graph.schedule(
+                initial_inputs={"text": "hello", "model": "m"},
+                llm_parameters=_llm_params(),
+                **_harness.WIRE_KWARGS,
+            ),
+            timeout=budget,
         )
     )
     elapsed = time.monotonic() - start
-    assert elapsed <= _harness.budget("wire_latency_seconds"), (
-        f"wire-through took {elapsed:.2f}s, budget {_harness.budget('wire_latency_seconds')}s"
-    )
+    assert elapsed <= budget, f"wire-through took {elapsed:.2f}s, budget {budget}s"
 
 
-def test_ingest_wall_clock_within_budget(comps, tmp_path):
+def test_ingest_wall_clock_within_budget(comps, tmp_path, monkeypatch):
     """One-doc chunking (real docling) completes within the coarse ingest budget."""
     doc_file = tmp_path / "tomato.md"
     doc_file.write_text(
@@ -120,25 +119,20 @@ def test_ingest_wall_clock_within_budget(comps, tmp_path):
         "Dark lesions appear.\n\n## Prevention\nCrop rotation helps.\n",
         encoding="utf-8",
     )
-    try:
-        from comps.cores.proto.opea_docarray import DocPath
-    except ImportError:
-        from comps.cores.proto.docarray import DocPath  # noqa: PLC0415
-    doc_path = DocPath(
+    doc_path = _harness.import_docarray("DocPath")(
         path=str(doc_file),
         chunk_size=1500,
         chunk_overlap=100,
         process_table=False,
         table_strategy="fast",
     )
-    dataprep = _dataprep_instance()
+    dataprep = _dataprep_instance(monkeypatch)
+    budget = _harness.budget("ingest_wall_clock_seconds")
     start = time.monotonic()
-    chunks = asyncio.run(dataprep._load_and_chunk(doc_path))
+    chunks = asyncio.run(asyncio.wait_for(dataprep._load_and_chunk(doc_path), timeout=budget))
     elapsed = time.monotonic() - start
     assert chunks, "chunker returned no chunks"
-    assert elapsed <= _harness.budget("ingest_wall_clock_seconds"), (
-        f"one-doc ingest took {elapsed:.2f}s, budget {_harness.budget('ingest_wall_clock_seconds')}s"
-    )
+    assert elapsed <= budget, f"one-doc ingest took {elapsed:.2f}s, budget {budget}s"
 
 
 def test_budget_table_present():

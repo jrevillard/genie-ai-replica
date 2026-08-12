@@ -67,8 +67,12 @@ def in_image_comps_importable() -> bool:
         return False
     pkg_file = getattr(sys.modules.get("comps"), "__file__", "") or ""
     # The real vendored comps lives in the image; the mocked one has no real
-    # file path pointing into the image tree.
-    return any(marker in pkg_file for marker in ("/app/comps", "/home/user/comps"))
+    # file path pointing into the image tree. Accept the known image mounts AND
+    # any path whose final package is `comps` (a future vendor move must not
+    # silently turn the whole in-image suite into skips).
+    return any(marker in pkg_file for marker in ("/app/comps", "/home/user/comps")) or pkg_file.endswith(
+        "/comps/__init__.py"
+    )
 
 
 def require_real_comps():
@@ -143,6 +147,31 @@ class _FakeResponse:
         pass
 
 
+class _SyncFakeResponse:
+    """Sync-shaped response for the orchestrator's ``requests`` path.
+
+    The orchestrator calls ``requests.post`` synchronously for the LLM node
+    (``.json()``/``.text()`` are plain calls, not awaited), so the fake it gets
+    must be sync — returning the async ``_FakeResponse`` here would hand a
+    coroutine to a sync caller.
+    """
+
+    def __init__(self, payload):
+        self.payload = payload
+        self.status = 200
+        self.status_code = 200
+        self.content_type = "application/json"
+
+    def json(self):
+        return self.payload
+
+    def text(self):
+        return json.dumps(self.payload)
+
+    def raise_for_status(self):
+        pass
+
+
 def install_fake_aiohttp() -> FakeAiohttpSession:
     """Replace ``aiohttp.ClientSession`` with the fake; return a shared session.
 
@@ -171,12 +200,30 @@ def install_fake_aiohttp() -> FakeAiohttpSession:
     def _post(url, *args, **kwargs):
         for pattern, payload in session.responses.items():
             if pattern in str(url):
-                return _FakeResponse(payload)
-        return _FakeResponse({})
+                return _SyncFakeResponse(payload)
+        return _SyncFakeResponse({})
 
     requests.post = _post
     requests.get = _post
     return session
+
+
+def import_docarray(attr: str):
+    """Import ``attr`` from the post-rename ``comps.cores.proto.opea_docarray``.
+
+    The docarray→opea_docarray rename hack is applied in the module Dockerfiles
+    on BOTH v1.3 and v1.5. A contract test must resolve the RENAMED module —
+    falling back to the old ``docarray`` name would pass green on both versions
+    and prove nothing about the surface it guards. Fails loudly when the rename
+    did not hold.
+    """
+    import pytest
+
+    try:
+        from comps.cores.proto import opea_docarray as mod
+    except ImportError:
+        pytest.fail("docarray rename hack not in effect: comps.cores.proto.opea_docarray is not importable")
+    return getattr(mod, attr)
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +283,10 @@ def extract_dashboard_services(dashboards_dir: str | os.PathLike) -> set[str]:
                 services.update(s.strip() for s in raw.split("|") if s.strip())
             else:
                 services.add(raw.strip())
-    return {s for s in services if s}
+    # Drop template variables (e.g. `service_name=~"$service"`) and regex
+    # alternatives (e.g. `genieai-(chatqna|retriever)`) — only plain service
+    # names are contract values.
+    return {s for s in services if s and re.fullmatch(r"[A-Za-z0-9_.-]+", s)}
 
 
 # ---------------------------------------------------------------------------

@@ -487,6 +487,10 @@ genie-ai-overlay/
 │   ├── constants.py              # Global constants
 │   ├── genieai_api_protocol.py   # API protocol definitions
 │   └── README.md                 # Core documentation
+├── contracts/                    # Contract tests vs REAL vendored comps (in-image)
+│   ├── _harness.py               # In-image comps guard, fake HTTP, telemetry extraction
+│   ├── conftest.py               # Real-comps fixture (opposite of tests/ mocking)
+│   └── test_contract_*.py        # Wire, ingest, label-filter, telemetry, e2e, NFR-P budgets
 ├── chatqna/                      # Main chat microservice
 │   ├── genieai_chatqna.py        # ChatQnA FastAPI app (main)
 │   ├── keycloak_token_validator.py # Keycloak token validation
@@ -515,6 +519,7 @@ genie-ai-overlay/
 │   ├── genieai_tei_reranker.py   # TEI reranker backend
 │   ├── Dockerfile-reranker_genie-ai # Container image
 │   └── README.md                 # Reranker documentation
+├── tests/                        # Unit tests (comps MOCKED via conftest)
 ├── pyproject.toml                # Ruff configuration
 └── README.md                     # OPEA overlay documentation
 ```

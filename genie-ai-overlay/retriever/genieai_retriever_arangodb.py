@@ -100,6 +100,25 @@ def _chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
     return any(label in chunk_labels for label in labels_to_filter)
 
 
+def _build_aql_filter_clause(labels_to_filter, filter_strategy):
+    """Build the AQL ``FILTER`` clause for the given labels + strategy.
+
+    Extracted from ``invoke`` (the consolidated ``labels_to_filter`` construction
+    stays there) so the contract suite can assert the REAL clause-construction
+    path — the langchain-arangodb 0.0.4 failure class was a silently-ignored
+    ``filter_clause``, and this is the surface that must keep producing a real
+    ``FILTER``. Returns ``""`` when no labels are requested.
+    """
+    if not labels_to_filter:
+        return ""
+    labels_array = "[" + ", ".join(f'"{label}"' for label in labels_to_filter) + "]"
+    if filter_strategy == "AND":
+        return f"FILTER (doc.chunk_labels != null) AND ({labels_array} ALL IN doc.chunk_labels)"
+    if filter_strategy == "OR":
+        return f"FILTER (doc.chunk_labels != null) AND ({labels_array} ANY IN doc.chunk_labels)"
+    raise HTTPException(status_code=400, detail=f"Invalid filter_strategy: {filter_strategy}. Expected 'AND' or 'OR'.")
+
+
 def _normalize_chunk_id(doc) -> str | None:
     """Normalize a chunk's identity to its bare ArangoDB ``_key``.
 
@@ -793,28 +812,10 @@ class GenieaiArangoRetriever(OpeaComponent):
             labels_to_filter.extend(input_dict.pop("_encoded_filter_labels", []))
 
             # CONSTRUCT THE AQL FILTER CLAUSE
-            aql_filter_clause = ""
+            aql_filter_clause = _build_aql_filter_clause(labels_to_filter, filter_strategy)
 
-            if labels_to_filter:
-                labels_array = "[" + ", ".join(f'"{label}"' for label in labels_to_filter) + "]"
-
-                if filter_strategy == "AND":
-                    # ALL operator: chunk_labels must contain all labels from our list
-                    aql_filter_clause = (
-                        f"FILTER (doc.chunk_labels != null) AND ({labels_array} ALL IN doc.chunk_labels)"
-                    )
-                elif filter_strategy == "OR":
-                    # ANY operator: chunk_labels must contain at least one label from our list
-                    aql_filter_clause = (
-                        f"FILTER (doc.chunk_labels != null) AND ({labels_array} ANY IN doc.chunk_labels)"
-                    )
-                else:
-                    raise HTTPException(
-                        status_code=400, detail=f"Invalid filter_strategy: {filter_strategy}. Expected 'AND' or 'OR'."
-                    )
-
-                if logflag:
-                    logger.debug(f"Applying filter strategy '{filter_strategy}' with labels: {labels_to_filter}")
+            if labels_to_filter and logflag:
+                logger.debug(f"Applying filter strategy '{filter_strategy}' with labels: {labels_to_filter}")
 
             if not graph_name:
                 raise HTTPException(

@@ -25,18 +25,24 @@ from __future__ import annotations
 
 import inspect
 
+import _harness
+
 
 def _retriever_module():
     """Import the real retriever module from the image.
 
     Skips when the retriever module is absent (this test runs in the retriever
     image; a dataprep/chatqna image does not carry the retriever integration).
+    A genuine import BREAK inside the image must fail red, not skip — only the
+    "module not in this image" case is a legitimate skip.
     """
     import pytest
 
     try:
         import comps.retrievers.src.integrations.genieai_retriever_arangodb as m
     except ImportError:
+        if _harness.in_image_comps_importable():
+            raise
         pytest.skip("retriever module not present in this image")
     return m
 
@@ -81,16 +87,16 @@ def test_pure_filter_unlabeled_chunk_excluded_when_filter_active(comps):
 def test_aql_filter_clause_constructed_for_labels(comps):
     """The retriever builds a real FILTER clause when labels are requested.
 
-    This is the surface the silently-ignoring integration dropped. We read the
-    live module's code path that constructs ``aql_filter_clause`` (AND/OR
-    branches) and assert the built AQL string contains the FILTER + the labels.
+    This is the surface the silently-ignoring integration dropped. We call the
+    REAL module's ``_build_aql_filter_clause`` (the same helper ``invoke`` uses)
+    and assert the produced AQL contains the FILTER + the labels — a regression
+    in the clause construction fails here instead of asserting a re-implementation.
     """
-    _retriever_module()  # ensure the module is present (skip otherwise)
+    mod = _retriever_module()  # ensure the module is present (skip otherwise)
     labels = ["Fruit Tree Cultivation", "Beekeeping and Honey"]
-    labels_array = "[" + ", ".join(f'"{label}"' for label in labels) + "]"
 
-    and_clause = f"FILTER (doc.chunk_labels != null) AND ({labels_array} ALL IN doc.chunk_labels)"
-    or_clause = f"FILTER (doc.chunk_labels != null) AND ({labels_array} ANY IN doc.chunk_labels)"
+    and_clause = mod._build_aql_filter_clause(labels, "AND")
+    or_clause = mod._build_aql_filter_clause(labels, "OR")
 
     assert "FILTER" in and_clause
     assert "ALL IN doc.chunk_labels" in and_clause
@@ -101,14 +107,9 @@ def test_aql_filter_clause_constructed_for_labels(comps):
 
 
 def test_aql_filter_clause_absent_when_no_labels(comps):
-    """No labels requested → the clause must be EMPTY (no spurious FILTER)."""
-    # Mirrors the retriever's labels_to_filter consolidation: empty → no clause.
-    labels_to_filter: list = []
-    aql_filter_clause = ""
-    if labels_to_filter:
-        labels_array = "[" + ", ".join(f'"{label}"' for label in labels_to_filter) + "]"
-        aql_filter_clause = f"FILTER (doc.chunk_labels != null) AND ({labels_array} ALL IN doc.chunk_labels)"
-    assert aql_filter_clause == ""
+    """No labels requested → the real builder returns an empty clause."""
+    mod = _retriever_module()
+    assert mod._build_aql_filter_clause([], "OR") == ""
 
 
 def test_retriever_code_passes_filter_clause_to_vector_db(comps):

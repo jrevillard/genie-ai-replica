@@ -41,9 +41,12 @@ def test_span_names_emitted_by_overlay_code():
     assert overlay.is_dir(), f"overlay root not found: {overlay}"
     found: set[str] = set()
     for path in overlay.rglob("*.py"):
-        # Skip the vendored comps clone + the mocked test suite (not overlay).
+        # Skip non-overlay dirs: the mocked test suite, this contracts/ dir
+        # (whose _harness.py DEFINES EXPECTED_SPAN_NAMES — scanning it would
+        # make the test self-validating and impossible to fail), and local
+        # tooling dirs.
         rel = path.relative_to(overlay)
-        if rel.parts and rel.parts[0] in ("tests",):
+        if rel.parts and rel.parts[0] in ("tests", "contracts", ".venv", ".ruff_cache", "reports"):
             continue
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
@@ -59,11 +62,12 @@ def test_span_names_emitted_by_overlay_code():
     )
 
 
-def test_dashboard_referenced_spans_are_emitted():
-    """Every span the RAG waterfall dashboard relies on is emitted.
+def test_dashboard_referenced_services_are_emitted():
+    """Every dashboard service the RAG waterfall relies on is referenced.
 
     Derive the dashboard service_name set (the contract source) and cross-check
-    the overlay emits spans for every expected dashboard service.
+    every expected overlay service is referenced by the dashboards — a rename
+    that silently empties a dashboard fails here.
     """
     repo_root = _overlay_root().parent
     dashboards = repo_root / "configs/grafana/provisioning/dashboards"

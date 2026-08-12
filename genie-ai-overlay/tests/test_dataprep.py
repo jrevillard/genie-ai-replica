@@ -2197,10 +2197,7 @@ class TestResolveDoclingDevice:
             _resolve_docling_device,
         )
 
-        assert (
-            _resolve_docling_device("cuda", cuda_available=True)
-            is AcceleratorDevice.CUDA
-        )
+        assert _resolve_docling_device("cuda", cuda_available=True) is AcceleratorDevice.CUDA
 
     def test_cuda_falls_back_to_cpu_without_gpu(self):
         from dataprep.genieai_dataprep_utils import (
@@ -2208,10 +2205,7 @@ class TestResolveDoclingDevice:
             _resolve_docling_device,
         )
 
-        assert (
-            _resolve_docling_device("cuda", cuda_available=False)
-            is AcceleratorDevice.CPU
-        )
+        assert _resolve_docling_device("cuda", cuda_available=False) is AcceleratorDevice.CPU
 
     def test_non_cpu_value_treated_as_cuda(self):
         from dataprep.genieai_dataprep_utils import (
@@ -2219,7 +2213,4 @@ class TestResolveDoclingDevice:
             _resolve_docling_device,
         )
 
-        assert (
-            _resolve_docling_device("auto", cuda_available=True)
-            is AcceleratorDevice.CUDA
-        )
+        assert _resolve_docling_device("auto", cuda_available=True) is AcceleratorDevice.CUDA

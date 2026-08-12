@@ -780,7 +780,7 @@ contract:retriever-arango:
     # image's real comps (no repo-side tests, no dataprep-side tests → no skips).
     # telemetry + streaming moved to `contract:unit` (repo-side); the ingest
     # budget lives in `contract:dataprep-arango`.
-    CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_label_filter.py test_contract_e2e_pipeline.py::test_label_filter_contract_roundtrip test_contract_e2e_pipeline.py::test_label_filter_contract_empty_is_noop test_contract_e2e_pipeline.py::test_e2e_graph_schedules_real_orchestrator test_contract_nfrp_budgets.py::test_wire_latency_within_budget test_contract_nfrp_budgets.py::test_budget_table_present"
+    CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_label_filter.py test_contract_retriever_fusion.py test_contract_e2e_pipeline.py::test_label_filter_contract_roundtrip test_contract_e2e_pipeline.py::test_label_filter_contract_empty_is_noop test_contract_e2e_pipeline.py::test_e2e_graph_schedules_real_orchestrator test_contract_nfrp_budgets.py::test_wire_latency_within_budget test_contract_nfrp_budgets.py::test_budget_table_present"
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never

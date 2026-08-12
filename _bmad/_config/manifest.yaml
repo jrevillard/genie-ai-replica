@@ -1,26 +1,35 @@
 installation:
   version: 6.11.0
   installDate: 2026-04-26T21:02:35.766Z
-  lastUpdated: 2026-08-11T13:29:37.622Z
+  lastUpdated: 2026-08-12T09:20:30.169Z
 modules:
   - name: core
     version: 6.11.0
     installDate: 2026-04-26T21:02:35.007Z
-    lastUpdated: 2026-08-11T13:29:37.613Z
+    lastUpdated: 2026-08-12T09:20:30.155Z
     source: built-in
     npmPackage: null
     repoUrl: null
   - name: bmm
     version: 6.11.0
     installDate: 2026-08-11T13:29:37.337Z
-    lastUpdated: 2026-08-11T13:29:37.614Z
+    lastUpdated: 2026-08-12T09:20:30.155Z
     source: built-in
     npmPackage: null
     repoUrl: null
+  - name: bmb
+    version: v2.1.0
+    installDate: 2026-08-11T13:29:37.534Z
+    lastUpdated: 2026-08-12T09:20:30.157Z
+    source: external
+    npmPackage: bmad-builder
+    repoUrl: https://github.com/bmad-code-org/bmad-builder
+    channel: stable
+    sha: d54981a8ba3b990148256455ccf4e6c1cb4918f0
   - name: cis
     version: v0.2.1
     installDate: 2026-08-11T13:29:37.351Z
-    lastUpdated: 2026-08-11T13:29:37.616Z
+    lastUpdated: 2026-08-12T09:20:30.159Z
     source: external
     npmPackage: bmad-creative-intelligence-suite
     repoUrl: https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite
@@ -29,7 +38,7 @@ modules:
   - name: tea
     version: v1.22.0
     installDate: 2026-08-11T13:29:37.489Z
-    lastUpdated: 2026-08-11T13:29:37.617Z
+    lastUpdated: 2026-08-12T09:20:30.163Z
     source: external
     npmPackage: bmad-method-test-architecture-enterprise
     repoUrl: https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise
@@ -38,25 +47,16 @@ modules:
   - name: bmad-loop
     version: v0.9.1
     installDate: 2026-08-11T13:29:37.503Z
-    lastUpdated: 2026-08-11T13:29:37.619Z
+    lastUpdated: 2026-08-12T09:20:30.166Z
     source: external
     npmPackage: null
     repoUrl: https://github.com/bmad-code-org/bmad-loop
     channel: stable
     sha: 67aa8028a22eb96962c7579a917b2fbea7f9475a
-  - name: bmb
-    version: v2.1.0
-    installDate: 2026-08-11T13:29:37.534Z
-    lastUpdated: 2026-08-11T13:29:37.620Z
-    source: external
-    npmPackage: bmad-builder
-    repoUrl: https://github.com/bmad-code-org/bmad-builder
-    channel: stable
-    sha: d54981a8ba3b990148256455ccf4e6c1cb4918f0
   - name: bmad-issue-tracking
     version: main
     installDate: 2026-05-13T06:37:29.616Z
-    lastUpdated: 2026-08-11T13:29:37.622Z
+    lastUpdated: 2026-08-12T09:20:30.169Z
     source: custom
     npmPackage: null
     repoUrl: https://github.com/jrevillard/bmad-issue-tracking

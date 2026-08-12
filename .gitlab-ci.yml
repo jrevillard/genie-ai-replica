@@ -753,7 +753,7 @@ kics-iac-sast:
       # runner's filesystem, so a -v mount of $PWD yields an EMPTY /contracts.
       # docker cp transfers the suite into the container via the daemon instead.
       docker create --name "$CID" --entrypoint sh "$REGISTRY_REF" \
-        -c "cd /contracts && python -m pytest ${CONTRACT_TEST_PATTERN} -p no:cacheprovider --junitxml=/tmp/contract-report.xml"
+        -c "pip install -q pytest pytest-asyncio && cd /contracts && python -m pytest ${CONTRACT_TEST_PATTERN} -p no:cacheprovider --junitxml=/tmp/contract-report.xml"
       docker cp genie-ai-overlay/contracts/. "$CID":/contracts/
       docker start -a "$CID"
       EXIT=$?
@@ -836,8 +836,8 @@ contract:unit:
     - pip install --no-cache-dir pytest pytest-asyncio
   script:
     - cd genie-ai-overlay/contracts
-    - mkdir -p reports
-    - python -m pytest test_contract_harness.py test_contract_telemetry.py test_contract_e2e_pipeline.py::test_streaming_metadata_event_shape -p no:cacheprovider --junitxml=reports/contract-report.xml
+    - mkdir -p ../../reports
+    - python -m pytest test_contract_harness.py test_contract_telemetry.py test_contract_e2e_pipeline.py::test_streaming_metadata_event_shape test_contract_e2e_pipeline.py::test_label_filter_contract_roundtrip test_contract_e2e_pipeline.py::test_label_filter_contract_empty_is_noop -p no:cacheprovider --junitxml=../../reports/contract-report.xml
   artifacts:
     when: always
     expire_in: 30 days

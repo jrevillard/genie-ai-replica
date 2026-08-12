@@ -105,6 +105,22 @@ deferred: []
   - `[low]` `[patch]` test_reranker_entrypoint_importable docstring — already correct, no change needed
   - `[low]` `[patch]` smoke:chatqna-server artifacts:true — changed to artifacts:false
 
+### 2026-08-13 — Follow-up review pass
+- intent_gap: 0
+- bad_spec: 0
+- patch: 8 (1 high, 4 medium, 3 low)
+- defer: 2
+- reject: 9
+- addressed_findings:
+  - `[high]` `[patch]` chatqna site-startup .pth not wired into CI — added test_contract_site_startup.py to smoke:chatqna-server CONTRACT_TEST_PATTERN
+  - `[medium]` `[patch]` smoke:embedding/textgen re-implement inline instead of reusing contract template — converted to contract template pattern, run test_contract_site_startup.py inside images
+  - `[medium]` `[patch]` smoke:embedding/textgen artifacts:true wastes CI time — changed to artifacts:false
+  - `[medium]` `[patch]` smoke:image-sizes trigger paths omit build-patches/**/* — added to all three changes: path lists
+  - `[medium]` `[patch]` _parse_pth_imports does not filter comment lines — added blank/comment line filtering
+  - `[low]` `[patch]` site.getsitepackages() empty list causes IndexError — changed pytest.skip to hard assertion
+  - `[low]` `[patch]` README chatqna example missing site-startup test — updated to include test_contract_site_startup.py
+  - `[low]` `[patch]` smoke:embedding/textgen docstring mentions inline script but now uses contract template — updated docstrings
+
 ## Design Notes
 
 **Two-layer gating:** smoke jobs (import-only, fast, in `scan` stage) for thin wrappers and entry-point verification; contract jobs (behavioral assertions, in `contract-in-image` stage) for modules with GENIE overlay code that exercises real `comps`. Embedding/textgen are thin wrappers — smoke only. Reranker has GENIE overlay code — contract. Chatqna has v1.3-on-3.11 risk — smoke (full contract deferred to story 2.6's re-graft).
@@ -129,30 +145,25 @@ deferred: []
 
 ## Auto Run Result
 
-**Summary:** Implemented in-image contract gates for all 7 deferred-work entries (DW-8, DW-12, DW-13, DW-20, DW-22, DW-24, DW-28). Added 3 new contract test files and 5 new CI jobs covering reranker shim+entry-point, chatqna v1.3-on-3.11, site-startup .pth auto-load for all six images, dataprep heavy-deps post-import, and image-size ceilings for torch-bearing modules.
+**Summary:** Follow-up review pass applied 8 patches to harden in-image contract gates. ChatQnA site-startup .pth now wired into CI (was missing). Embedding/textgen smoke jobs converted from inline scripts to contract template pattern (reuses test_contract_site_startup.py). Parser hardened against comment/blank lines. Trigger paths extended to include build-patches/.
 
 **Files changed:**
-- `genie-ai-overlay/contracts/test_contract_reranker_smoke.py` -- New. 3 tests: docarray shim pin, entry-point importable, microservice module import (DW-8, DW-13).
-- `genie-ai-overlay/contracts/test_contract_site_startup.py` -- New. 4 tests: .pth file exists, .pth imports loaded in sys.modules, genie_ssl_patch loaded, docarray_alias_shim loaded when present (DW-12).
-- `genie-ai-overlay/contracts/test_contract_chatqna_smoke.py` -- New. 3 tests: chatqna module importable, v1.3 comps symbols present, docarray symbols under shim (DW-28).
-- `.gitlab-ci.yml` -- Added `contract:reranker`, `smoke:chatqna-server` (converted to contract template), `smoke:embedding`, `smoke:textgen`, `smoke:image-sizes`. Extended `smoke:dataprep-arango` with heavy deps imports. Extended `contract:retriever-arango` and `contract:dataprep-arango` patterns with `test_contract_site_startup.py`.
-- `genie-ai-overlay/contracts/README.md` -- Updated suite layout table with 3 new test files, added invocation examples for reranker/chatqna/site-startup.
+- `.gitlab-ci.yml` — chatqna site-startup wired, embedding/textgen converted to contract template, build-patches trigger added
+- `genie-ai-overlay/contracts/test_contract_site_startup.py` — getsitepackages guard, comment/blank filtering
+- `genie-ai-overlay/contracts/README.md` — chatqna example updated
 
 **Review findings breakdown:**
-- Patches applied: 11 (1 high, 7 medium, 3 low)
-- Items deferred: 0
-- Items rejected: 9 (redundant coverage, intentional design choices, spec-consistent narrowing)
+- Patches applied: 8 (1 high, 4 medium, 3 low)
+- Items deferred: 2 (reranker torch import smoke, require_real_comps skip-all behavior)
+- Items rejected: 9 (docs mismatch, line numbers drift, CHANGELOG, semicolon parsing, shell quoting, boundary ambiguity, allowlist design, deletion check, from-X-import-Y already handled)
 
-**Follow-up review recommendation:** true (score = 24: 1 high + 3×7 medium + 1×3 low ≥ 5)
+**Follow-up review recommendation:** true (score = 8: 1 high + 4 medium + 3 low ≥ 5)
 
 **Verification performed:**
-- `ruff check contracts/` — All checks passed
-- `ruff format --check contracts/` — 14 files already formatted
-- `pytest` on new test files — 10 collected, 10 skipped (expected: in-image tests need Docker)
-- CI job count — 5 new jobs confirmed
-- YAML syntax — valid
+- `ruff check` + `ruff format --check` on test_contract_site_startup.py — clean
+- `grep -c "test_contract_site_startup.py" .gitlab-ci.yml` → 8 (all modules wired)
 
 **Residual risks:**
-- Image-size ceiling is 5 GB (generous initial). First green run should record actual sizes for tightening.
-- Contract tests skip in dev venv (no real comps). CI runs them inside built images where they execute. If a test unexpectedly skips in CI (wrong image path, missing comps), the job passes green — monitor first CI run.
-- `smoke:embedding` and `smoke:textgen` now assert .pth file existence + module load. If a future base-image change moves site-packages, the assertion may need updating (currently uses `site.getsitepackages()[0]`, consistent with `install_site_startup.sh`).
+- Reranker torch import not verified (DW-20 partially covered by image-size only)
+- `require_real_comps()` skip-all behavior masks full-image failures (design choice, out of scope)
+

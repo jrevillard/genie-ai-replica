@@ -71,7 +71,8 @@ source_spec: `2-1-re-graft-the-core-overlay-layer.md`
 location: genie-ai-overlay/reranker/genieai_reranking_microservice.py:38
 severity: medium
 reason: genieai_reranking_microservice.py now imports comps.cores.proto.docarray (under the shim pin), but the reranker image has no contract/smoke job that imports the module — conftest stubs the module as a MagicMock, docker build never imports it, and the contract harness import_docarray runs only against the retriever/dataprep images. A shim failure in the reranker image would crash the container at start, green. Covered by story 2.2's in-image contract runs.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-in-image-contract-gates
 
 ### DW-9: build-patches/*.py are excluded from ruff, so the two new scripts are never linted in CI.
 origin: spec-deferred 9029450207bc
@@ -103,7 +104,8 @@ location: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:11
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: medium
 reason: no in-image `import sitecustomize` check exists; 2-1's .pth installer + the 2.3-2.6 in-image contract runs supersede the hardcoded COPY; the opea/*:1.5 site-packages path was manually verified via image pull.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-in-image-contract-gates
 
 ### DW-13: no CI job runs the reranker image entry point on the v1.5 bump; local import verified clean, the in-image behavioral gate is story 2.4's contract test.
 origin: spec-deferred 331a5ad49137
@@ -111,7 +113,8 @@ location: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai:4
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: reranker module imports all v1.5 comps symbols (telemetry, api_protocol, opea_docarray rename, integrations.tei) — only a host port-8000 collision blocked a full clean pass locally; build/scan jobs never run the image.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-in-image-contract-gates
 
 ### DW-14: verify:dataprep-lock keeps its dataprep-scoped name while looping three modules and checks package NAMES only, not versions — cross-module version drift (e.g. docling) is invisible to it.
 origin: spec-deferred 819d55acdf09
@@ -167,7 +170,8 @@ location: genie-ai-overlay/reranker/requirements-cpu.txt
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: no Docker build in 2.2; reranker's heavy dep install + resulting size are story 2.4/2.5 build-surface territory.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-in-image-contract-gates
 
 ### DW-21: .bmad-loop/ci-wait.sh platform-sed does not strip a trailing YAML comment and uses GNU-only \s.
 origin: spec-deferred 7464cb7d139a
@@ -183,7 +187,8 @@ location: genie-ai-overlay/dataprep/requirements.in
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: medium
 reason: old generate-requirements-in.sh dropped these (no-space-on-device pyspark; openai-whisper sdist needs pkg_resources); they compile + uv-sync fine locally. CI build jobs DO run docker buildx + pip install --no-deps --require-hashes from the lock, so install/wheel/source-build failures would block the MR — genuinely ungated is image SIZE and post-import runtime behavior (2.5 re-audits).
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-in-image-contract-gates
 
 ### DW-23: Cross-module OTel/haystack/openai version drift: reranker's bare `.in` pins resolve newer (otel 1.44.0, haystack-ai 3.0.0, openai 3.0.0) than dataprep/retriever (otel 1.27.0, haystack-ai 2.3.1), plus
 origin: spec-deferred 4d6ac3a03e6d
@@ -199,7 +204,8 @@ location: genie-ai-overlay/reranker/requirements-cpu.txt
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: torch==2.13.0 at dataprep/requirements-cpu.txt:5660, retriever:5503, reranker:3116 (CUDA-bundled PyPI wheel). CI build jobs DO run docker buildx + pip install --no-deps --require-hashes from the lock, so install/wheel/source-build failures would block the MR; genuinely ungated is image SIZE + post-import runtime (2.4/2.5 build-surface territory).
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-in-image-contract-gates
 
 ### DW-25: components/gov-chat-backend/.gitlab-ci.yml still carries the retired verify:dataprep-lock job against the deleted requirements.lock (root .gitlab-ci.yml is the active config; the backend copy is never
 origin: spec-deferred f908048420c5
@@ -232,7 +238,8 @@ location: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai:17
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: medium
 reason: build:chatqna-server only pip-installs `-e .` (setuptools backend; never imports app code); genie-ai-overlay/tests/test_chatqna.py runs on the CI host against conftest's mocked comps, not in the 3.11 image. A v1.3-comp or transitive-dep break on 3.11 surfaces only at container start post-promote. The intent mandates the base flip (chatqna OPEA_VERSION stays v1.3 until story 2.6); the in-image gate belongs to 2.6's re-graft surface.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-in-image-contract-gates
 
 ### DW-29: verify:dataprep-lock now loops three modules, so its tag-pipeline run (`if: $CI_COMMIT_TAG`) triples the blast radius of a transient PyPI/yank failure on an unrelated tag.
 origin: spec-deferred b7114d0dc77e

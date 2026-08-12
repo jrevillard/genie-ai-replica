@@ -34,10 +34,10 @@ docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
   --entrypoint sh genie-ai-reranker:latest \
   -c "cd /contracts && python -m pytest test_contract_reranker_smoke.py test_contract_site_startup.py -p no:cacheprovider"
 
-# ChatQnA-capable suite (v1.3-on-3.11 import + symbol shape):
+# ChatQnA-capable suite (v1.3-on-3.11 import + symbol shape + site-startup):
 docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
   --entrypoint sh genie-ai-chatqna-server:latest \
-  -c "cd /contracts && python -m pytest test_contract_chatqna_smoke.py -p no:cacheprovider"
+  -c "cd /contracts && python -m pytest test_contract_chatqna_smoke.py test_contract_site_startup.py -p no:cacheprovider"
 
 # Site-startup only (works in thin wrappers — embedding, textgen):
 docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \

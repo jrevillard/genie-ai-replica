@@ -43,8 +43,7 @@ def _find_pth() -> Path:
     does not use the site-startup mechanism).
     """
     site_pkgs = site.getsitepackages()
-    if not site_pkgs:
-        pytest.skip("site.getsitepackages() returned empty list — cannot locate .pth")
+    assert site_pkgs, "site.getsitepackages() returned empty list — cannot locate .pth"
     base = Path(site_pkgs[0])
     pth = base / "zz_genie_startup.pth"
     if not pth.is_file():
@@ -62,10 +61,15 @@ def _parse_pth_imports(pth: Path) -> list[str]:
     ``from `` as a Python statement at site-init. Other lines (e.g. path
     additions) are added to sys.path. We only care about the import lines —
     those are the hooks that must have auto-loaded.
+
+    Filters out comment lines (starting with ``#``) and blank lines.
     """
     modules: list[str] = []
     for raw in pth.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
+        # Skip blank lines and comments
+        if not line or line.startswith("#"):
+            continue
         if line.startswith("import "):
             # `import foo` → "foo"; `import foo, bar` → ["foo", "bar"]
             parts = line[len("import ") :].split(",")

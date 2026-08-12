@@ -1480,7 +1480,8 @@ smoke:chatqna-server:
       artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-chatqna-server"
-    CONTRACT_TEST_PATTERN: "test_contract_chatqna_smoke.py"
+    # ChatQnA suite: v1.3-on-3.11 symbol shape + site-startup .pth (DW-12, DW-28).
+    CONTRACT_TEST_PATTERN: "test_contract_chatqna_smoke.py test_contract_site_startup.py"
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1499,32 +1500,18 @@ smoke:chatqna-server:
 
 # Smoke-test the embedding candidate image: verify site-startup .pth hooks
 # auto-loaded (DW-12). Embedding is a thin wrapper over opea/embedding:1.5 —
-# the only GENIE overlay code is the SSL patch via .pth.
+# the only GENIE overlay code is the SSL patch via .pth. Uses contract template
+# pattern (docker create + docker cp) to run test_contract_site_startup.py
+# inside the image — catches .pth parsing regressions, not just module presence.
 smoke:embedding:
-  stage: scan
-  image: docker:28
-  tags: [docker]
-  interruptible: true
+  <<: *contract_template
   needs:
     - job: build:embedding
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-embedding"
-  before_script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-  script:
-    - |
-      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
-        CANDIDATE_TAG="mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
-      else
-        CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
-      fi
-      REGISTRY_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
-      echo "Smoke-testing site-startup .pth in $REGISTRY_REF"
-      # The .pth auto-loads genie_ssl_patch at site-init. First assert the .pth
-      # file exists and is non-empty (the install step was not skipped), then
-      # assert the module is in sys.modules — proving the .pth mechanism worked.
-      docker run --rm --entrypoint python "$REGISTRY_REF" -c "from pathlib import Path; import site; p = Path(site.getsitepackages()[0]) / 'zz_genie_startup.pth'; assert p.is_file() and p.stat().st_size > 0, f'missing/empty .pth at {p}'; import sys; assert 'genie_ssl_patch' in sys.modules, 'genie_ssl_patch not auto-loaded by .pth'; print('embedding site-startup .pth OK')"
+    # Site-startup only (no real comps dependency — works in thin wrappers).
+    CONTRACT_TEST_PATTERN: "test_contract_site_startup.py"
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1543,32 +1530,18 @@ smoke:embedding:
 
 # Smoke-test the textgen candidate image: verify site-startup .pth hooks
 # auto-loaded (DW-12). Textgen is a thin wrapper over opea/llm-textgen:1.5 —
-# the only GENIE overlay code is the SSL patch via .pth.
+# the only GENIE overlay code is the SSL patch via .pth. Uses contract template
+# pattern (docker create + docker cp) to run test_contract_site_startup.py
+# inside the image — catches .pth parsing regressions, not just module presence.
 smoke:textgen:
-  stage: scan
-  image: docker:28
-  tags: [docker]
-  interruptible: true
+  <<: *contract_template
   needs:
     - job: build:textgen
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-textgen"
-  before_script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-  script:
-    - |
-      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
-        CANDIDATE_TAG="mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
-      else
-        CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
-      fi
-      REGISTRY_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
-      echo "Smoke-testing site-startup .pth in $REGISTRY_REF"
-      # The .pth auto-loads genie_ssl_patch at site-init. First assert the .pth
-      # file exists and is non-empty (the install step was not skipped), then
-      # assert the module is in sys.modules — proving the .pth mechanism worked.
-      docker run --rm --entrypoint python "$REGISTRY_REF" -c "from pathlib import Path; import site; p = Path(site.getsitepackages()[0]) / 'zz_genie_startup.pth'; assert p.is_file() and p.stat().st_size > 0, f'missing/empty .pth at {p}'; import sys; assert 'genie_ssl_patch' in sys.modules, 'genie_ssl_patch not auto-loaded by .pth'; print('textgen site-startup .pth OK')"
+    # Site-startup only (no real comps dependency — works in thin wrappers).
+    CONTRACT_TEST_PATTERN: "test_contract_site_startup.py"
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -1637,13 +1610,13 @@ smoke:image-sizes:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/retriever/**/*", "genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/retriever/**/*", "genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/retriever/**/*", "genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/retriever/**/*", "genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/retriever/**/*", "genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/retriever/**/*", "genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/build-patches/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
 
 
 scan:dataprep-arango:

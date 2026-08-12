@@ -471,3 +471,35 @@ source_spec: `2-1-re-graft-the-core-overlay-layer.md`
 severity: medium
 reason: lint_overrides.py runs only via the local pytest test_overrides_lint.py; no CI job wires it, the marker-to-manifest direction is unenforced, and .pth runtime-load failures are silent; CI enforcement belongs to story 2.7 (verify:evidence + coherence lint).
 status: open
+
+### DW-4: override-audit lint has no dedicated CI job, is one-directional, and .pth runtime-load failures are silent.
+origin: spec-deferred f4736edd7e98
+source_spec: `2-1-re-graft-the-core-overlay-layer.md`
+location: genie-ai-overlay/build-patches/lint_overrides.py
+severity: medium
+reason: lint_overrides.py is exercised only via tests/test_overrides_lint.py (which the CI pytest stage runs), so it is indirectly wired but has no dedicated job; the marker-to-manifest direction is unenforced; .pth runtime-load failures are silent. Explicit enforcement belongs to story 2.7 (verify:evidence + coherence lint).
+status: open
+
+### DW-5: 10 of v1.5's constrained ChatCompletionRequest fields are not mirrored in the overlay protocol.
+origin: spec-deferred 29bafba7a211
+source_spec: `2-1-re-graft-the-core-overlay-layer.md`
+location: genie-ai-overlay/core/genieai_api_protocol.py:162
+severity: medium
+reason: v1.5 constrains max_tokens, n, seed, temperature, top_p, best_of, repetition_penalty, top_k, timeout, top_n with PositiveInt/NonNegativeFloat; the overlay keeps them plain int/float (only k, fetch_k, lambda_mult, score_threshold are re-grafted per the AC). Re-express during the chatqna/retriever re-graft (stories 2.3/2.6) when those fields are actually exercised.
+status: open
+
+### DW-6: module-layer overrides are not recorded in OVERRIDES.yaml and the lint scan scope cannot see them.
+origin: spec-deferred 26792e0ebdb9
+source_spec: `2-1-re-graft-the-core-overlay-layer.md`
+location: genie-ai-overlay/build-patches/lint_overrides.py
+severity: medium
+reason: The reranker import re-point (genieai_reranking_microservice.py opea_docarray→docarray) and contract-harness re-graft are intentional deviations outside the core layer, but lint_overrides.py scans only core/*.py and build-patches/*. Extend the manifest + scan scope during module re-grafts (2.3-2.6) or the 2.7 coherence lint.
+status: open
+
+### DW-7: embedding/textgen ENV PYTHONPATH removal is not runtime-verified.
+origin: spec-deferred b367dfb4ab8d
+source_spec: `2-1-re-graft-the-core-overlay-layer.md`
+location: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:8
+severity: medium
+reason: The old wrapper Dockerfiles forced /usr/local/lib/python3.11/dist-packages onto PYTHONPATH; the re-graft removed that line. Nothing yet verifies the opea/embedding:1.3 / opea/llm-textgen:1.3 runtime interpreter loads the .pth hook (site-packages vs dist-packages layout). Covered by story 2.2's in-image contract runs + base-image migration.
+status: open

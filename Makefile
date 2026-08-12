@@ -5,7 +5,9 @@
 # the hash-pinned requirements-cpu.txt that the module Dockerfiles install
 # with `pip install --require-hashes`. See genie-ai-overlay/<module>/requirements.in.
 
-UV ?= uv
+# uv pinned to CI's version (verify:dataprep-lock uses uv==0.10.6) so a local
+# regen produces a lock CI's pinned uv accepts. Override with `make UV=uv ...`.
+UV ?= uvx --from uv==0.10.6 uv
 
 .PHONY: lock-dataprep lock-retriever lock-reranker
 

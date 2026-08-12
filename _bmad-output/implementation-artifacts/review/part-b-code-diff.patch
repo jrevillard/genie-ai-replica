@@ -1,413 +1,1914 @@
-env                                                |  18 ++
- genie-ai-overlay/retriever/config.py               |  11 +
- .../retriever/genieai_retriever_arangodb.py        | 203 +++++++++++++
- genie-ai-overlay/tests/test_retriever.py           | 313 ++++++++++++++++++++-
- 4 files changed, 544 insertions(+), 1 deletion(-)
+=== DIFF STAT f7402eecf..HEAD ===
+.bmad-loop/ci-wait.sh                              |   10 +
+ .gitlab-ci.yml                                     |   60 +-
+ Makefile                                           |   46 +-
+ .../2-2-migrate-dependencies-python-3-11.md        |  375 ++
+ ...encies-python-3-11-story-track.story-track-1.md |   10 +
+ ...encies-python-3-11-story-track.story-track-2.md |   11 +
+ .../implementation-artifacts/deferred-work.md      |  159 +
+ .../review/part-a-code-diff.patch                  |  531 ++
+ .../implementation-artifacts/sprint-status.yaml    |    2 +-
+ .../prds/prd-genie-ai-2026-08-07/.decision-log.md  |    2 +
+ _bmad/config.user.toml                             |    2 -
+ .../chatqna/Dockerfile-chatqna_genie-ai            |    2 +-
+ .../dataprep/Dockerfile-dataprep_genie-ai          |   58 +-
+ genie-ai-overlay/dataprep/requirements-cpu.txt     | 6773 ++++++++++++++++++++
+ genie-ai-overlay/dataprep/requirements.in          |  159 +-
+ .../embedding/Dockerfile-embedding_genie-ai        |    2 +-
+ .../reranker/Dockerfile-reranker_genie-ai          |   31 +-
+ genie-ai-overlay/reranker/requirements-cpu.txt     | 3999 ++++++++++++
+ genie-ai-overlay/reranker/requirements.in          |   42 +
+ .../retriever/Dockerfile-retriever_genie-ai        |   59 +-
+ genie-ai-overlay/retriever/requirements-cpu.txt    | 6602 +++++++++++++++++++
+ genie-ai-overlay/retriever/requirements.in         |   77 +
+ .../textgen/Dockerfile-textgen_genie-ai            |    2 +-
+ 23 files changed, 18803 insertions(+), 211 deletions(-)
 
---- Changes ---
-
-env
-  @@ -223,6 +223,24 @@ HUGGING_FACE_HUB_TOKEN=
-  +# CONTEXTUAL_LABEL_RAW=false           # decoupled mode: label the RAW chunk and use the context
-  +#                                      #   ONLY for the embedding (recommended — keeps label
-  +#                                      #   precision while propagating the subject via vectors).
-  +
-  +# Hybrid Retrieval — BM25 + Reciprocal Rank Fusion (Contextual Retrieval Part B) — OPTIONAL, default OFF.
-  +# When enabled, the retriever runs a lexical (BM25) channel over <GRAPH>_SOURCE.text
-  +# alongside the dense vector search and fuses the two result sets with weighted
-  +# Reciprocal Rank Fusion. Recovers exact-match / rare-term / keyword-heavy queries
-  +# that dense embeddings rank poorly. Both channels read the same `text` field
-  +# (contextualized by Part A). Opt-in; OFF = true no-op (dense-only, byte-for-byte).
-  +# The BM25 ArangoSearch view is created idempotently + lazily per graph_name.
-  +# See _bmad-output/implementation-artifacts/spec-hybrid-retrieval-bm25-rrf.md
-  +# RETRIEVER_HYBRID_RETRIEVAL_ENABLED=false  # opt-in (default false; OFF = true no-op)
-  +# RETRIEVER_HYBRID_RRF_K=60                 # RRF ranking constant (literature standard)
-  +# RETRIEVER_HYBRID_BM25_CANDIDATES=50       # BM25 candidate fetch depth; fused then cut to top_k
-  +# RETRIEVER_HYBRID_DENSE_WEIGHT=1.0         # weight on the dense channel's rank contribution
-  +# RETRIEVER_HYBRID_LEXICAL_WEIGHT=1.0       # weight on the BM25 channel's rank contribution
-  +# RETRIEVER_HYBRID_BM25_ANALYZER=text_en    # ArangoSearch analyzer on the text field
-   
-   # Confidence scoring (chatqna) — rank-weighted aggregate of calibrated reranker
-   # scores. The flat mean was count-dependent and tail-sensitive (a long tail of
-  +18 -0
-
-genie-ai-overlay/retriever/config.py
-  @@ -220,6 +220,17 @@ ARANGO_TRAVERSAL_QUERY = os.getenv("ARANGO_TRAVERSAL_QUERY")
-  +# Hybrid BM25 + RRF Retrieval (Contextual Retrieval Part B)
-  +# Opt-in lexical (BM25) channel over <GRAPH>_SOURCE.text, fused with the dense
-  +# results via weighted Reciprocal Rank Fusion. OFF = true no-op (dense-only).
-  +# See _bmad-output/implementation-artifacts/spec-hybrid-retrieval-bm25-rrf.md
-  +HYBRID_RETRIEVAL_ENABLED = os.getenv("RETRIEVER_HYBRID_RETRIEVAL_ENABLED", "false").lower() == "true"
-  +HYBRID_RRF_K = int(os.getenv("RETRIEVER_HYBRID_RRF_K", "60"))
-  +HYBRID_BM25_CANDIDATES = int(os.getenv("RETRIEVER_HYBRID_BM25_CANDIDATES", "50"))
-  +HYBRID_DENSE_WEIGHT = float(os.getenv("RETRIEVER_HYBRID_DENSE_WEIGHT", "1.0"))
-  +HYBRID_LEXICAL_WEIGHT = float(os.getenv("RETRIEVER_HYBRID_LEXICAL_WEIGHT", "1.0"))
-  +HYBRID_BM25_ANALYZER = os.getenv("RETRIEVER_HYBRID_BM25_ANALYZER", "text_en")
-  +
-   # Summarizer Configuration
-   SUMMARIZER_ENABLED = os.getenv("RETRIEVER_SUMMARIZER_ENABLED", "false").lower() == "true"
-   
-  +11 -0
-
-genie-ai-overlay/retriever/genieai_retriever_arangodb.py
-  @@ -14,6 +14,7 @@ from comps.cores.proto.genieai_api_protocol import ChatCompletionRequest, Retrie
-  +from langchain_core.documents import Document
-   from langchain_huggingface import HuggingFaceEndpointEmbeddings
-   from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-   
-  @@ -39,6 +40,12 @@ from .config import (
-  +    HYBRID_BM25_ANALYZER,
-  +    HYBRID_BM25_CANDIDATES,
-  +    HYBRID_DENSE_WEIGHT,
-  +    HYBRID_LEXICAL_WEIGHT,
-  +    HYBRID_RETRIEVAL_ENABLED,
-  +    HYBRID_RRF_K,
-       OPENAI_API_KEY,
-       OPENAI_CHAT_ENABLED,
-       OPENAI_CHAT_MAX_TOKENS,
-  @@ -77,6 +84,80 @@ ARANGO_EMBEDDING_FIELD = "embedding"
-  +def _chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
-  +    """Replicate the dense-path AQL label filter in Python (Contextual Retrieval Part B).
-  +
-  +    A chunk passes when its ``chunk_labels`` satisfies the requested labels under
-  +    the given strategy: ``AND`` = all required labels present, ``OR`` = any one.
-  +    No requested labels (or empty) means "no filter" → always passes.
-  +    """
-  +    if not labels_to_filter:
-  +        return True
-  +    if not chunk_labels:
-  +        return False
-  +    if str(filter_strategy).upper() == "AND":
-  +        return all(label in chunk_labels for label in labels_to_filter)
-  +    return any(label in chunk_labels for label in labels_to_filter)
-  +
-  +
-  +def _normalize_chunk_id(doc) -> str | None:
-  +    """Normalize a chunk's identity to its bare ArangoDB ``_key``.
-  +
-  +    Both the dense channel (langchain-arangodb sets ``Document.id = _key``) and
-  +    the BM25 channel (``Document(id=_key)``) use the bare key, but this defends
-  +    against the ``COLLECTION/_key`` form and a missing id so cross-channel fusion
-  +    never mis-merges or silently drops a document.
-  +    """
-  +    cid = getattr(doc, "id", None)
-  +    if cid is None:
-  +        return None
-  +    cid = str(cid)
-  +    return cid.rsplit("/", 1)[-1]  # COLLECTION/_key -> _key
-  +
-  +
-  +def rrf_fuse(dense, bm25, k=HYBRID_RRF_K, dense_weight=HYBRID_DENSE_WEIGHT, lexical_weight=HYBRID_LEXICAL_WEIGHT):
-  +    """Fuse dense + BM25 result lists via weighted Reciprocal Rank Fusion.
-  +
-  +    Pure function — no I/O, no side effects. Each input element is
-  +    ``{"doc": Document, "score": float}``; the chunk identity is the normalized
-  +    ``doc.id`` (ArangoDB ``_key``). A document present in both channels receives
-  +    both rank contributions; a document in only one receives that single
-  +    contribution. Within a channel, duplicate identities are de-duplicated
-  +    (best rank kept). A document whose id cannot be normalized is kept as a
-  +    standalone entry (never dropped, never mis-merged).
-  +
-  +    Args:
-  +        dense: dense retrieval results (best-first).
-  +        bm25: BM25 retrieval results (best-first).
-  +        k: RRF ranking constant (default 60, literature standard).
-  +        dense_weight: weight applied to the dense channel contribution.
-  +        lexical_weight: weight applied to the BM25 channel contribution.
-  +
-  +    Returns:
-  +        A NEW list of ``{"doc": Document, "score": float}`` sorted by fused
-  +        score descending.
-  +    """
-  +    scores: dict[str, dict] = {}
-  +    none_counter = 0
-  +    for channel, weight in ((dense, dense_weight), (bm25, lexical_weight)):
-  +        seen: set[str] = set()
-  +        rank = 0
-  +        for item in channel:
-  +            chunk_id = _normalize_chunk_id(item["doc"])
-  +            if chunk_id is None:
-  +                # Unkeyable doc: keep it standalone so it is neither dropped nor
-  +                # mis-merged with other unkeyed docs.
-  +                chunk_id = f"__unkeyed_{none_counter}"
-  +                none_counter += 1
-  +            if chunk_id in seen:
-  +                continue  # de-dup within a channel (keep best rank)
-  +            seen.add(chunk_id)
-  +            rank += 1
-  +            entry = scores.setdefault(chunk_id, {"doc": item["doc"], "score": 0.0})
-  +            entry["score"] += weight / (k + rank)
-  +    return sorted(scores.values(), key=lambda x: x["score"], reverse=True)
-  +
-  +
-   @OpeaComponentRegistry.register("GENIE_RETRIEVER_ARANGODB")
-   class GenieaiArangoRetriever(OpeaComponent):
-       """A specialized retriever component derived from OpeaComponent for ArangoDB retriever services.
-  @@ -88,6 +169,11 @@ class GenieaiArangoRetriever(OpeaComponent):
-  +        # Cache of graph_names for which the BM25 ArangoSearch view has been
-  +        # ensured (Contextual Retrieval Part B). graph_name is per-request, so
-  +        # view creation is lazy; this set avoids repeated ArangoDB round-trips.
-  +        self._bm25_views_ensured: set[str] = set()
-  +
-           self._initialize_client()
-   
-           if SUMMARIZER_ENABLED:
-  @@ -179,6 +265,100 @@ class GenieaiArangoRetriever(OpeaComponent):
-  +        # Ensure the BM25 ArangoSearch view for the default graph (Contextual
-  +        # Retrieval Part B). Mirrors the has_database/create_database idiom;
-  +        # other graph_names are ensured lazily in _bm25_search on first use.
-  +        if HYBRID_RETRIEVAL_ENABLED:
-  +            try:
-  +                self._ensure_bm25_view(ARANGO_GRAPH_NAME)
-  +            except Exception as e:
-  +                logger.error(f"Could not ensure default BM25 view for graph '{ARANGO_GRAPH_NAME}': {e}")
-  +
-  +    def _ensure_bm25_view(self, graph_name: str) -> None:
-  +        """Idempotently create the ArangoSearch BM25 view over <graph_name>_SOURCE.text.
-  +
-  +        Best-effort: never raises. Cached in ``self._bm25_views_ensured`` on
-  +        **success only**, so a transient failure (e.g. ArangoDB unreachable,
-  +        view API mismatch) is retried on the next request rather than silently
-  +        disabling the BM25 channel forever. The view indexes the chunk ``text``
-  +        field (the same field Part A populates with contextual prefixes) plus
-  +        ``chunk_labels`` so BM25 candidates can be label-filtered; the file id is
-  +        resolved downstream by the existing per-chunk enrichment AQL.
-  +        """
-  +        if graph_name in self._bm25_views_ensured:
-  +            return
-  +
-  +        view_name = f"{graph_name}_BM25_VIEW"
-  +        collection = f"{graph_name}_SOURCE"
-  +        try:
-  +            if not self.db.has_view(view_name):
-  +                properties = {
-  +                    "links": {
-  +                        collection: {
-  +                            "analyzers": [HYBRID_BM25_ANALYZER],
-  +                            "fields": {
-  +                                ARANGO_TEXT_FIELD: {},
-  +                                "chunk_labels": {},
-  +                            },
-  +                            "includeAllFields": False,
-  +                            "storeValues": "none",
-  +                        }
-  +                    }
-  +                }
-  +                self.db.create_arangosearch_view(view_name, properties)
-  +                logger.info(f"Created ArangoSearch BM25 view '{view_name}' on collection '{collection}'.")
-  +            # Cache on success only (exists or created). A failure leaves the
-  +            # graph uncached so the next request retries instead of dying silently.
-  +            self._bm25_views_ensured.add(graph_name)
-  +        except Exception as e:
-  +            logger.error(f"Failed to ensure BM25 view '{view_name}': {e}")
-  +
-  +    def _bm25_search(self, query: str, graph_name: str, n: int, labels_to_filter: list, filter_strategy: str) -> list:
-  +        """Run a BM25 lexical search over the chunk view (Contextual Retrieval Part B).
-  +
-  +        Returns the same shape as the dense search: ``[{"doc": Document, "score": float}]``.
-  +        Candidates are filtered by the same ``chunk_labels`` semantics as the dense
-  +        path (OR/AND) before fusion. ``doc.id`` is the chunk ``_key`` so RRF can
-  +        match identities across channels. Never raises — logs and returns [].
-  +        """
-  +        self._ensure_bm25_view(graph_name)
-  +        view_name = f"{graph_name}_BM25_VIEW"
-  +
-  +        aql = f"""
-  +            FOR doc IN {view_name}
-  +                SEARCH ANALYZER(doc.{ARANGO_TEXT_FIELD} IN TOKENS(@query, @analyzer), @analyzer)
-  +                LET _bm25_score = BM25(doc)
-  +                SORT _bm25_score DESC
-  +                LIMIT @n
-  +                RETURN {{
-  +                    "key": doc._key,
-  +                    "text": doc.{ARANGO_TEXT_FIELD},
-  +                    "chunk_labels": doc.chunk_labels,
-  +                    "score": _bm25_score
-  +                }}
-  +        """
-  +        bind_vars = {"query": query, "analyzer": HYBRID_BM25_ANALYZER, "n": n}
-  +
-  +        results = []
-  +        try:
-  +            cursor = self.db.aql.execute(aql, bind_vars=bind_vars)
-  +            for row in cursor:
-  +                chunk_labels = row.get("chunk_labels")
-  +                if not _chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
-  +                    continue
-  +                doc = Document(
-  +                    id=row.get("key"),
-  +                    page_content=row.get("text") or "",
-  +                    # file_ids is resolved uniformly (dense + BM25) by the
-  +                    # existing per-chunk enrichment AQL downstream; keep only
-  +                    # chunk_labels here so the metadata shape stays consistent.
-  +                    metadata={"chunk_labels": chunk_labels or []},
-  +                )
-  +                results.append({"doc": doc, "score": float(row.get("score") or 0.0)})
-  +        except Exception as e:
-  +            logger.error(f"BM25 search failed on view '{view_name}': {e}")
-  +        return results
-  +
-       def check_health(self) -> bool:
-           """Checks the health of the retriever service."""
-           if logflag:
-  @@ -788,6 +968,29 @@ class GenieaiArangoRetriever(OpeaComponent):
-  +            # Hybrid BM25 + RRF fusion (Contextual Retrieval Part B)
-  +            # Opt-in lexical (BM25) channel over <GRAPH>_SOURCE.text fused with
-  +            # the dense results via weighted Reciprocal Rank Fusion. Runs BEFORE
-  +            # the empty-check so a BM25 hit can rescue a dense-empty result (the
-  +            # exact case lexical search excels at). OFF is a true no-op (the
-  +            # whole block is skipped). Only applies to a chunk search start.
-  +            if HYBRID_RETRIEVAL_ENABLED and search_start == "chunk":
-  +                try:
-  +                    bm25_n = max(int(input.k), HYBRID_BM25_CANDIDATES)
-  +                    bm25_res = self._bm25_search(
-  +                        query=query,
-  +                        graph_name=graph_name,
-  +                        n=bm25_n,
-  +                        labels_to_filter=labels_to_filter,
-  +                        filter_strategy=filter_strategy,
-  +                    )
-  +                    if bm25_res:
-  +                        search_res = rrf_fuse(search_res, bm25_res)[: int(input.k)]
-  +                        logger.info(f"Hybrid RRF fusion: {len(search_res)} documents after fusing dense + BM25.")
-  +                except Exception as e:
-  +                    # Graceful degradation: never let the hybrid channel break the request.
-  +                    logger.error(f"Hybrid BM25+RRF fusion failed, falling back to dense-only: {e}")
-  +
-               if not search_res:
-                   logger.info("No documents found.")
-                   return []
-  +203 -0
-
-genie-ai-overlay/tests/test_retriever.py
-  @@ -12,7 +12,28 @@ from unittest.mock import AsyncMock, MagicMock, patch
-  -from retriever.genieai_retriever_arangodb import GenieaiArangoRetriever
-  +from retriever.genieai_retriever_arangodb import (
-  +    ARANGO_GRAPH_NAME,
-  +    GenieaiArangoRetriever,
-  +    _chunk_passes_label_filter,
-  +    _normalize_chunk_id,
-  +    rrf_fuse,
-  +)
-  +
-  +# NOTE: conftest.py mocks the langchain stack (langchain_core/community/...) via
-  +# sys.modules.setdefault, so langchain_core.documents.Document is a MagicMock at
-  +# test time. The pure RRF logic and BM25 wiring only need objects exposing
-  +# ``.id``/``.page_content``/``.metadata``, so we use a lightweight real stand-in
-  +# instead of the real Document (and patch the module's Document with it where the
-  +# production code constructs one).
-  +
-  +
-  +class _FakeDoc:
-  +    def __init__(self, id=None, page_content="", metadata=None):
-  +        self.id = id
-  +        self.page_content = page_content
-  +        self.metadata = metadata if metadata is not None else {}
-  +
-   
-   # ---------------------------------------------------------------------------
-   # Helper functions
-  @@ -625,3 +646,293 @@ class TestGenerateSummarizationPrompt:
-  +
-  +
-  +# ---------------------------------------------------------------------------
-  +# Test: rrf_fuse — Reciprocal Rank Fusion (Contextual Retrieval Part B, AC3)
-  +# ---------------------------------------------------------------------------
-  +
-  +
-  +def _mk_result(key, score=0.0):
-  +    """Build a {"doc", "score"} result element for fusion tests."""
-  +    return {"doc": _FakeDoc(id=key), "score": score}
-  +
-  +
-  +class TestRrfFuse:
-  +    """Unit tests for the pure rrf_fuse fusion function."""
-  +
-  +    def test_doc_in_both_channels_gets_both_contributions(self):
-  +        fused = rrf_fuse([_mk_result("a")], [_mk_result("a")], k=60, dense_weight=1.0, lexical_weight=1.0)
-  +        a_score = next(r["score"] for r in fused if r["doc"].id == "a")
-  +        assert a_score == pytest.approx(1 / 61 + 1 / 61)
-  +
-  +    def test_doc_in_one_channel_gets_single_contribution(self):
-  +        fused = rrf_fuse([_mk_result("a")], [], k=60, dense_weight=1.0, lexical_weight=1.0)
-  +        assert fused[0]["score"] == pytest.approx(1 / 61)
-  +
-  +    def test_doc_in_both_ranks_above_doc_in_one(self):
-  +        # "a" is rank-1 in BOTH channels; "b" is rank-1 in dense only.
-  +        fused = rrf_fuse([_mk_result("a"), _mk_result("b")], [_mk_result("a")], k=60)
-  +        scores = {r["doc"].id: r["score"] for r in fused}
-  +        assert scores["a"] > scores["b"]
-  +
-  +    def test_lexical_only_doc_surfaces(self):
-  +        fused = rrf_fuse([_mk_result("a")], [_mk_result("b")], k=60)
-  +        assert {r["doc"].id for r in fused} == {"a", "b"}
-  +
-  +    def test_returns_sorted_descending(self):
-  +        fused = rrf_fuse([_mk_result("a"), _mk_result("b")], [_mk_result("a"), _mk_result("b")], k=60)
-  +        scores = [r["score"] for r in fused]
-  +        assert scores == sorted(scores, reverse=True)
-  +
-  +    def test_weights_applied(self):
-  +        fused = rrf_fuse([_mk_result("a")], [_mk_result("a")], k=60, dense_weight=2.0, lexical_weight=0.5)
-  +        assert fused[0]["score"] == pytest.approx(2.0 / 61 + 0.5 / 61)
-  +
-  +    def test_does_not_mutate_inputs(self):
-  +        dense = [_mk_result("a")]
-  +        bm25 = [_mk_result("a")]
-  +        dense_copy = list(dense)
-  +        rrf_fuse(dense, bm25, k=60)
-  +        assert dense == dense_copy
-  +
-  +    def test_dense_empty_bm25_rescues(self):
-  +        # The signature case for a lexical channel: dense finds nothing, BM25 does.
-  +        fused = rrf_fuse([], [_mk_result("a"), _mk_result("b")], k=60)
-  +        assert {r["doc"].id for r in fused} == {"a", "b"}
-  +        assert fused[0]["score"] == pytest.approx(1 / 61)  # "a" rank-1 BM25
-  +
-  +    def test_both_empty_returns_empty(self):
-  +        assert rrf_fuse([], [], k=60) == []
-  +
-  +    def test_dedup_within_channel_keeps_best_rank(self):
-  +        # A duplicate id in one channel must not double-count (best rank wins).
-  +        fused = rrf_fuse([_mk_result("a"), _mk_result("a")], [], k=60)
-  +        assert len(fused) == 1
-  +        assert fused[0]["score"] == pytest.approx(1 / 61)  # rank-1 only
-  +
-  +    def test_unkeyed_doc_not_dropped_or_mismerged(self):
-  +        none_doc = _FakeDoc(id=None)
-  +        fused = rrf_fuse([{"doc": none_doc, "score": 0.0}], [_mk_result("a")], k=60)
-  +        assert len(fused) == 2  # the unkeyed doc is kept standalone, "a" separate
-  +
-  +
-  +class TestNormalizeChunkId:
-  +    """Tests for the chunk-id normalization used by RRF cross-channel matching."""
-  +
-  +    def test_bare_key_passthrough(self):
-  +        assert _normalize_chunk_id(_FakeDoc(id="chunk_42")) == "chunk_42"
-  +
-  +    def test_collection_slash_key_stripped(self):
-  +        assert _normalize_chunk_id(_FakeDoc(id="GRAPH_SOURCE/chunk_42")) == "chunk_42"
-  +
-  +    def test_none_returns_none(self):
-  +        assert _normalize_chunk_id(_FakeDoc(id=None)) is None
-  +
-  +    def test_missing_id_attr_returns_none(self):
-  +        assert _normalize_chunk_id(_FakeDoc()) is None
-  +
-  +
-  +class TestChunkPassesLabelFilter:
-  +    """Unit tests for the Python label-filter helper (mirrors dense AQL)."""
-  +
-  +    def test_no_labels_passes(self):
-  +        assert _chunk_passes_label_filter(["Health"], [], "OR") is True
-  +
-  +    def test_or_strategy_any_match(self):
-  +        assert _chunk_passes_label_filter(["Health"], ["Health", "Education"], "OR") is True
-  +
-  +    def test_or_strategy_no_match(self):
-  +        assert _chunk_passes_label_filter(["Agriculture"], ["Health"], "OR") is False
-  +
-  +    def test_and_strategy_all_present(self):
-  ... (190 lines truncated)
-  +312 -1
-[full diff: rtk git diff --no-compact]
+=== CODE DIFF (locks + story-track exclus) ===
+diff --git a/.bmad-loop/ci-wait.sh b/.bmad-loop/ci-wait.sh
+index 3c8cc24b4..09475ce04 100755
+--- a/.bmad-loop/ci-wait.sh
++++ b/.bmad-loop/ci-wait.sh
+@@ -75,6 +75,16 @@ if [ -z "$platform" ] && [ -f "$cfg" ]; then
+   [ -z "$platform" ] && platform="$(sed -n 's/^\s*platform:\s*//p' "$cfg" | head -1 | tr -d '"'"'"'[:space:]')"
+ fi
+ 
++# Resolve platform from the module config first — self-hosted instances
++# (opensource.unicc.org, GHE, ...) don't betray their platform in the hostname,
++# but the module records it as `git_platform` (or `platform`) in
++# `_bmad/custom/issue-tracking.yaml`, which bmad-loop copies into each worktree.
++cfg="$worktree/_bmad/custom/issue-tracking.yaml"
++if [ -z "$platform" ] && [ -f "$cfg" ]; then
++  platform="$(sed -n 's/^\s*git_platform:\s*//p' "$cfg" | head -1 | tr -d '"'"'"'[:space:]')"
++  [ -z "$platform" ] && platform="$(sed -n 's/^\s*platform:\s*//p' "$cfg" | head -1 | tr -d '"'"'"'[:space:]')"
++fi
++
+ # Resolve host/project/platform from the git remote when not configured.
+ if [ -z "$host" ] || [ -z "$project" ] || [ -z "$platform" ]; then
+   remote="$(git -C "$worktree" remote get-url origin 2>/dev/null || true)"
+diff --git a/.gitlab-ci.yml b/.gitlab-ci.yml
+index b95379082..5c83194c7 100644
+--- a/.gitlab-ci.yml
++++ b/.gitlab-ci.yml
+@@ -2442,39 +2442,43 @@ e2e:playwright:
+ 
+ # --- Configuration validation ---
+ 
+-# Verify the dataprep requirements.lock is in sync with requirements.in.
+-# Fails if someone edited requirements.in (or bumped OPEA) without running
+-# `make lock-dataprep`. Catches silent lock drift before it reaches a build.
++# Verify each overlay module's requirements-cpu.txt is in sync with its
++# requirements.in (dataprep/retriever/reranker). Fails if someone edited a
++# requirements.in (or bumped OPEA) without running `make lock-<module>`.
++# Catches silent lock drift before it reaches a build.
+ verify:dataprep-lock:
+   stage: config
+-  image: python:3.10-slim
++  image: python:3.11-slim
+   interruptible: true
+   variables:
+     UV_VERSION: "0.10.6"
+   before_script:
+     - pip install --no-cache-dir "uv==${UV_VERSION}"
+   script:
+-    - cd genie-ai-overlay/dataprep
+-    # Verify lock is consistent and installable without re-resolving.
+-    # uv pip sync --dry-run checks every package+hash exists on PyPI;
+-    # it does NOT re-resolve, so upstream version bumps don't cause
+-    # spurious failures (only removed packages do).
+-    - uv pip sync requirements.lock --dry-run --system
+-    # Cross-check: verify requirements.in is covered by the lock.
+-    # greps top-level non-comment lines from requirements.in and
+-    # checks each package name appears in the lock. Missing = user
+-    # added a dep without regenerating the lock.
+-    - |-
+-      while IFS= read -r line; do
+-        pkg=$(echo "$line" | sed 's/[<>=!~].*//;s/\[.*//;s/#.*//' | xargs)
+-        [ -z "$pkg" ] && continue
+-        norm=$(echo "$pkg" | tr '[:upper:]_' '[:lower:]-')
+-        if ! grep -q "^${norm}==" requirements.lock; then
+-          echo "MISSING from lock: $pkg — run 'make lock-dataprep'"
+-          exit 1
+-        fi
+-      done < requirements.in
+-      echo "requirements.lock in sync"
++    - |
++      set -e
++      for MOD in dataprep retriever reranker; do
++        cd "${CI_PROJECT_DIR}/genie-ai-overlay/${MOD}"
++        # Verify lock is consistent and installable without re-resolving.
++        # uv pip sync --dry-run checks every package+hash exists on PyPI;
++        # it does NOT re-resolve, so upstream version bumps don't cause
++        # spurious failures (only removed packages do).
++        uv pip sync requirements-cpu.txt --dry-run --system
++        # Cross-check: verify requirements.in is covered by the lock.
++        # greps top-level non-comment lines from requirements.in and
++        # checks each package name appears in the lock. Missing = user
++        # added a dep without regenerating the lock.
++        while IFS= read -r line; do
++          pkg=$(echo "$line" | sed 's/[<>=!~].*//;s/\[.*//;s/#.*//' | xargs)
++          [ -z "$pkg" ] && continue
++          norm=$(echo "$pkg" | tr '[:upper:]_' '[:lower:]-')
++          if ! grep -q "^${norm}==" requirements-cpu.txt; then
++            echo "MISSING from ${MOD} lock: $pkg — run 'make lock-${MOD}'"
++            exit 1
++          fi
++        done < requirements.in
++        echo "genie-ai-overlay/${MOD}/requirements-cpu.txt in sync"
++      done
+   rules:
+     - if: $CI_PIPELINE_SOURCE == "schedule"
+       when: never
+@@ -2483,13 +2487,13 @@ verify:dataprep-lock:
+     - if: $CI_COMMIT_TAG
+     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+       changes:
+-        paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
++        paths: ["genie-ai-overlay/dataprep/requirements.*", "genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
+     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+       changes:
+-        paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
++        paths: ["genie-ai-overlay/dataprep/requirements.*", "genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
+     - if: $CI_COMMIT_BRANCH =~ /^release\//
+       changes:
+-        paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
++        paths: ["genie-ai-overlay/dataprep/requirements.*", "genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
+ 
+ 
+ config:validate:
+diff --git a/Makefile b/Makefile
+index a542bc23d..3bfcbd0d3 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,28 +1,40 @@
+ # GENIE.AI — convenience targets for Python dependency management.
+-# See genie-ai-overlay/dataprep/scripts/ and GitLab issue #834.
+ #
+-# NOTE: these targets exist only because OPEA v1.3 ships an unpinned
+-# requirements.txt. OPEA v1.4+ ships its own uv-compiled lock — on bumping
+-# OPEA past v1.3 these targets + requirements.in/.lock should be retired.
+-# See _bmad-output/implementation-artifacts/deferred-work.md (issue-834).
++# The overlay modules adopt OPEA v1.5's compiled-lock layout: each module's
++# requirements.in is a GENIE.AI fork of OPEA's, and `uv pip compile` produces
++# the hash-pinned requirements-cpu.txt that the module Dockerfiles install
++# with `pip install --require-hashes`. See genie-ai-overlay/<module>/requirements.in.
+ 
+ UV ?= uv
+ 
+-.PHONY: requirements-in-dataprep lock-dataprep
++.PHONY: lock-dataprep lock-retriever lock-reranker
+ 
+-# Regenerate requirements.in from the pinned OPEA tag's requirements.txt.
+-# Run when bumping OPEA_VERSION in the Dockerfile. Accepts an optional tag arg:
+-#   make requirements-in-dataprep OPEA_TAG=v1.4
+-requirements-in-dataprep:
+-	bash genie-ai-overlay/dataprep/scripts/generate-requirements-in.sh $(OPEA_TAG)
+-
+-# Compile the hash-pinned lock from requirements.in. Targets the same platform
+-# as the dataprep Docker image (Python 3.10 / manylinux_2_31 ≈ Ubuntu 22.04).
++# Compile the hash-pinned lock from requirements.in, targeting Python 3.11
++# (matches the python:3.11-slim base images). Run after editing requirements.in
++# and commit the regenerated requirements-cpu.txt alongside it.
+ lock-dataprep:
+ 	cd genie-ai-overlay/dataprep && $(UV) pip compile requirements.in \
+ 	  --generate-hashes \
++	  --python-version 3.11 \
++	  --python-platform x86_64-manylinux_2_31 \
++	  --output-file requirements-cpu.txt
++	@echo "Lock written to genie-ai-overlay/dataprep/requirements-cpu.txt"
++	@echo "Commit it alongside any requirements.in change."
++
++lock-retriever:
++	cd genie-ai-overlay/retriever && $(UV) pip compile requirements.in \
++	  --generate-hashes \
++	  --python-version 3.11 \
++	  --python-platform x86_64-manylinux_2_31 \
++	  --output-file requirements-cpu.txt
++	@echo "Lock written to genie-ai-overlay/retriever/requirements-cpu.txt"
++	@echo "Commit it alongside any requirements.in change."
++
++lock-reranker:
++	cd genie-ai-overlay/reranker && $(UV) pip compile requirements.in \
++	  --generate-hashes \
++	  --python-version 3.11 \
+ 	  --python-platform x86_64-manylinux_2_31 \
+-	  --python-version 3.10 \
+-	  --output-file requirements.lock
+-	@echo "Lock written to genie-ai-overlay/dataprep/requirements.lock"
++	  --output-file requirements-cpu.txt
++	@echo "Lock written to genie-ai-overlay/reranker/requirements-cpu.txt"
+ 	@echo "Commit it alongside any requirements.in change."
+diff --git a/_bmad-output/implementation-artifacts/2-2-migrate-dependencies-python-3-11.md b/_bmad-output/implementation-artifacts/2-2-migrate-dependencies-python-3-11.md
+new file mode 100644
+index 000000000..81602aec0
+--- /dev/null
++++ b/_bmad-output/implementation-artifacts/2-2-migrate-dependencies-python-3-11.md
+@@ -0,0 +1,375 @@
++---
++title: 'Migrate dependencies + Python 3.11'
++type: 'chore'
++created: '2026-08-12'
++status: 'done'
++baseline_commit: 'df38f4016'
++baseline_revision: 'f1afc601c7c39bf78adf5bc34ae50c8fa54caa04'
++review_loop_iteration: 0
++followup_review_recommended: false
++context: []
++warnings: [oversized]
++deferred:
++  - summary: >-
++      langchain-arangodb drops back to 0.0.6 in the v1.5 lock; the >=1.2.0 filter_clause fix-pin is gone until story 2.3 bumps it.
++    evidence: |-
++      retriever/requirements.in + lock pin 0.0.6 (verified: 0.0.6 does NOT have 0.0.4's **kwargs filter_clause swallow — filter_clause is a named param; the behavioral label-filter contract test belongs to story 2.3's re-graft).
++    location: >-
++      genie-ai-overlay/retriever/requirements-cpu.txt
++    severity: medium
++  - summary: >-
++      dataprep .in fork reintroduces pyspark, unstructured[all-docs], graspologic, openai-whisper that the retired v1.3 machinery dropped for image-size/build reasons; in-image size + post-import runtime unverified here.
++    evidence: |-
++      old generate-requirements-in.sh dropped these (no-space-on-device pyspark; openai-whisper sdist needs pkg_resources); they compile + uv-sync fine locally. CI build jobs DO run docker buildx + pip install --no-deps --require-hashes from the lock, so install/wheel/source-build failures would block the MR — genuinely ungated is image SIZE and post-import runtime behavior (2.5 re-audits).
++    location: >-
++      genie-ai-overlay/dataprep/requirements.in
++    severity: medium
++  - summary: >-
++      sitecustomize/SSL-patch auto-load in the built embedding/textgen/retriever images is unverified (hardcoded site-packages path asserted manually, not by a CI job).
++    evidence: |-
++      no in-image `import sitecustomize` check exists; 2-1's .pth installer + the 2.3-2.6 in-image contract runs supersede the hardcoded COPY; the opea/*:1.5 site-packages path was manually verified via image pull.
++    location: >-
++      genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:11
++    severity: medium
++  - summary: >-
++      no CI job runs the reranker image entry point on the v1.5 bump; local import verified clean, the in-image behavioral gate is story 2.4's contract test.
++    evidence: |-
++      reranker module imports all v1.5 comps symbols (telemetry, api_protocol, opea_docarray rename, integrations.tei) — only a host port-8000 collision blocked a full clean pass locally; build/scan jobs never run the image.
++    location: >-
++      genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai:4
++    severity: low
++  - summary: >-
++      verify:dataprep-lock keeps its dataprep-scoped name while looping three modules and checks package NAMES only, not versions — cross-module version drift (e.g. docling) is invisible to it.
++    evidence: |-
++      dataprep pins docling==2.45.0/docling-core==2.44.2 while retriever resolves docling==2.55.1/docling-core==2.48.4 (matching v1.5's own per-module locks); a coherence/version lint belongs to story 2.7.
++    location: >-
++      .gitlab-ci.yml
++    severity: low
++  - summary: >-
++      base images use moving tags (python:3.11-slim, opea/*:1.5), so byte-identical digests across time are bounded by base-tag stability; dependency layers are deterministic via the hashed lock.
++    evidence: >-
++      AC4's "identical digest" holds for immediate clean re-runs but not across a base-tag move; digest-pinning the image set is story 4-2.
++    location: >-
++      genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai:19
++    severity: low
++  - summary: >-
++      GPU locks (requirements-gpu.txt) are not compiled in 2.2 — the fleet is CPU-only (compose grants no GPU to these services); they can be compiled from the same .in when a GPU deployment needs them.
++    evidence: >-
++      upstream ships both cpu+gpu locks; our compose consumes CPU only; compiling CUDA-torch locks with no consumer is waste. NB: the compiled CPU locks already pin torch==2.13.0 (CUDA-bundled PyPI wheel) in all three modules (dataprep/retriever/reranker, via sentence-transformers) — the "CPU-only" framing means no GPU device, not no CUDA torch; the GPU-lock delta is the torch index + CUDA-specific pins.
++    location: >-
++      genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai:66
++    severity: low
++  - summary: >-
++      .in pin-policy is a fork-plus-selective-pins hybrid; unpinned entries (e.g. retriever's bare docling) can drift on a later `make lock-<module>` regen.
++    evidence: >-
++      dataprep pins docling==2.45.0 (matches v1.5 dataprep lock) while retriever's bare docling resolved to v1.5's 2.55.1 today; a future regen may resolve newer. Re-fork + re-pin to v1.5's shipped set on the next bump.
++    location: >-
++      genie-ai-overlay/retriever/requirements.in
++    severity: low
++  - summary: >-
++      Cross-module OTel/haystack/openai version drift: reranker's bare `.in` pins resolve newer (otel 1.44.0, haystack-ai 3.0.0, openai 3.0.0) than dataprep/retriever (otel 1.27.0, haystack-ai 2.3.1), plus a fastapi split (0.116.1 vs 0.118.2).
++    evidence: |-
++      verified locked versions: openai dataprep==1.81.0 / retriever==1.109.1 / reranker==3.0.0; fastapi dataprep+reranker==0.116.1 / retriever==0.118.2. reranker `.in` ships bare `opentelemetry-*`/`haystack-ai`/`openai` (faithful v1.5 upstream fork — upstream also bare), so the recompile resolves today's newest; dataprep `.in` pins `openai==1.81.0`, retriever `.in` leaves openai bare (resolved via langchain-openai). All services share `genie-ai-overlay/tracing.py`; a coherence/version lint + re-pin belongs to story 2.7 (and reranker re-graft 2.4).
++    location: >-
++      genie-ai-overlay/reranker/requirements.in
++    severity: medium
++  - summary: >-
++      verify:dataprep-lock trigger paths watch `requirements.*` only, so an OPEA_VERSION bump in a module Dockerfile (the canonical lock-regen trigger) does not run the drift guard.
++    evidence: >-
++      rules:changes lists genie-ai-overlay/{dataprep,retriever,reranker}/requirements.* and .gitlab-ci.yml; a Dockerfile OPEA_VERSION/apt change that should force a lock check won't. Story 2.7's CI coherence work owns the trigger widening.
++    location: >-
++      .gitlab-ci.yml
++    severity: low
++  - summary: >-
++      the compiled CPU locks pin torch 2.13.0 (via sentence-transformers) into plain python:3.11-slim CPU images — all three modules, not just reranker; image-size surface unverified.
++    evidence: >-
++      torch==2.13.0 at dataprep/requirements-cpu.txt:5660, retriever:5503, reranker:3116 (CUDA-bundled PyPI wheel). CI build jobs DO run docker buildx + pip install --no-deps --require-hashes from the lock, so install/wheel/source-build failures would block the MR; genuinely ungated is image SIZE + post-import runtime (2.4/2.5 build-surface territory).
++    location: >-
++      genie-ai-overlay/reranker/requirements-cpu.txt
++    severity: low
++  - summary: >-
++      .bmad-loop/ci-wait.sh platform-sed does not strip a trailing YAML comment and uses GNU-only \s.
++    evidence: >-
++      `git_platform: gitlab # note` would resolve to "gitlab # note"; GNU \s breaks on BSD sed. Carried orchestrator infra (verify gate), not story scope; harmless on this Linux deployment.
++    location: >-
++      .bmad-loop/ci-wait.sh
++    severity: low
++  - summary: >-
++      components/gov-chat-backend/.gitlab-ci.yml still carries the retired verify:dataprep-lock job against the deleted requirements.lock (root .gitlab-ci.yml is the active config; the backend copy is never included).
++    evidence: >-
++      components/gov-chat-backend/.gitlab-ci.yml:2290-2337 references requirements.lock, dataprep/scripts/*, make lock-dataprep — all retired by 2.2 — but GitLab reads only the root .gitlab-ci.yml (no include of the backend copy), so it is dead config. The AC3/Verification grep is scoped to genie-ai-overlay/ and misses it. Pre-existing, surfaced by the retirement; a CI-hygiene pass should delete or sync it.
++    location: >-
++      components/gov-chat-backend/.gitlab-ci.yml:2290
++    severity: low
++  - summary: >-
++      dataprep's default DOCLING_DEVICE=cuda is unsupported by the CUDA-less python:3.11-slim image; a default-config ingest needs DOCLING_DEVICE=cpu set.
++    evidence: >-
++      genieai_dataprep_utils.py:45 defaults DOCLING_DEVICE to cuda and selects AcceleratorDevice.CUDA unless cpu; docker-compose.yaml:991 passes ${DOCLING_DEVICE:-cuda}; env template leaves it unset. The image no longer ships CUDA libs, so docling cannot honor a cuda device. Fix spans compose default + module default (deployment config + module code) — a 2.5 dataprep re-audit item; the spec Design Note now records the capability loss.
++    location: >-
++      docker-compose.yaml:991
++    severity: medium
++  - summary: >-
++      the build-time docarray rename (mv docarray.py -> opea_docarray.py + sed in orchestrator/micro_service) is ungated against OPEA v1.5 source; if v1.5's import patterns drifted, the sed no-ops and the circular-import fix silently stops applying.
++    evidence: >-
++      dataprep Dockerfile L90-96, retriever/reranker equivalents run mv+sed on the v1.5 clone. A grep assertion (e.g. 'opea_docarray' present in the patched files) would make it a build gate; the sed-pattern drift surface is already scoped to the 2.3-2.6 re-graft in the spec code map. In-image contract runs (2.3-2.6) are the real gate.
++    location: >-
++      genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai:93
++    severity: low
++  - summary: >-
++      chatqna's comps_base_builder flips to python:3.11-slim while still installing OPEA v1.3 GenAIComps (`-e .`) with no in-image import gate — the v1.3-on-3.11 runtime is verified by nothing in CI for this MR.
++    evidence: |-
++      build:chatqna-server only pip-installs `-e .` (setuptools backend; never imports app code); genie-ai-overlay/tests/test_chatqna.py runs on the CI host against conftest's mocked comps, not in the 3.11 image. A v1.3-comp or transitive-dep break on 3.11 surfaces only at container start post-promote. The intent mandates the base flip (chatqna OPEA_VERSION stays v1.3 until story 2.6); the in-image gate belongs to 2.6's re-graft surface.
++    location: >-
++      genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai:17
++    severity: medium
++  - summary: >-
++      verify:dataprep-lock now loops three modules, so its tag-pipeline run (`if: $CI_COMMIT_TAG`) triples the blast radius of a transient PyPI/yank failure on an unrelated tag.
++    evidence: |-
++      pre-existing pattern (the job already ran on tags for dataprep); `uv pip sync --dry-run` contacts PyPI, so a transient index issue can fail a tag pipeline. Not caused by 2.2's wiring — a CI-coherence concern for story 2.7's drift-guard work.
++    location: >-
++      .gitlab-ci.yml
++    severity: low
++  - summary: >-
++      retriever/reranker images lack system libraries their own v1.5 locks install (pytesseract->tesseract-ocr, easyocr/pymupdf; reranker pydub->ffmpeg) — a runtime-only gap the build gate cannot see.
++    evidence: |-
++      retriever/requirements-cpu.txt pins pytesseract==0.3.13 / easyocr==1.7.2 / pymupdf==1.28.2, but Dockerfile-retriever apt installs only build-essential libcairo2 libglib2.0-0 libjemalloc-dev libmariadb-dev curl (no tesseract-ocr / poppler-utils / ffmpeg); reranker lock pins pydub==0.25.1 with no ffmpeg in its apt list. pytesseract shells out to the tesseract binary -> FileNotFoundError if an OCR path is exercised. Upstream v1.5's own apt lists are the reference; whether retriever/reranker actually exercise these deps is decided by the 2.3/2.4 re-grafts. Unverified whether upstream ships the binaries — runtime re-audit.
++    location: >-
++      genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai:14
++    severity: low
++  - summary: >-
++      Makefile lock-<module> targets use whatever uv is on PATH while CI pins uv==0.10.6 — a local regen with a newer uv can produce a lock CI's pinned uv rejects.
++    evidence: |-
++      Makefile:8 `UV ?= uv`; .gitlab-ci.yml verify:dataprep-lock before_script pins uv==${UV_VERSION} (0.10.6). A divergent lock reintroduces the silent-drift class the drift guard exists to catch.
++    location: >-
++      Makefile:8
++    severity: low
++  - summary: >-
++      dataprep requirements.in openai==1.81.0 pin carries a bare llama_index issue link with no rationale, unlike the v1.5-lock rationale used for every other pin.
++    evidence: |-
++      genie-ai-overlay/dataprep/requirements.in:65-66 — `# https://github.com/run-llama/llama_index/issues/18823` directly above `openai==1.81.0`; no comment body explains the version choice or the issue's relevance. Doc cleanup; the 2.7 coherence/version lint can re-pin with rationale.
++    location: >-
++      genie-ai-overlay/dataprep/requirements.in:65
++    severity: low
++---
++
++<intent-contract>
++
++## Intent
++
++**Problem:** All six overlay images still build from OPEA v1.3 — retriever/reranker from an unpinned `requirements.txt`, dataprep from a hand-scraped local lock (`requirements.in`/`requirements.lock` + `docling-core==2.82.0` pin), on `python:3.10` bases — so builds are non-deterministic and split across the fleet. v1.5 ships compiled `requirements-cpu/gpu.txt` (docling 2.44.2, langchain 0.3.27) targeting `python:3.11`.
++
++**Approach:** Adopt v1.5's compiled-lock layout fleet-wide: fork each module's `requirements.in` from v1.5, add the GENIE.AI overlay deltas, recompile with `uv pip compile --generate-hashes` for Python 3.11, and consume the hashed locks in the Dockerfiles. Move every image base to Python 3.11, retire the v1.3 lock machinery, retag embedding/textgen wrappers to 1.5-based bases, and keep the build deterministic.
++
++## Boundaries & Constraints
++
++**Always:**
++- Fork each module's `requirements.in` from the verified v1.5 `.in` and recompile with `uv pip compile --generate-hashes --python-version 3.11` (v1.5's upstream locks carry NO hashes — verified: `uv pip compile ... --universal` without `--generate-hashes`; per PRD FR-4's assumption, hashes are generated before adoption).
++- Dockerfiles install from the committed hashed `requirements-cpu.txt` with `pip install --require-hashes -r <lock>`.
++- `OPEA_VERSION` → `v1.5` in the dataprep/retriever/reranker Dockerfiles (the compiled locks pair with v1.5 source); embedding/textgen `ARG UPSTREAM_IMAGE` → `opea/embedding:1.5` / `opea/llm-textgen:1.5` (both tags verified on Docker Hub).
++- Base images → Python 3.11 for all six; no `python3.10` path remains; dataprep's `update-alternatives` python3.10 machinery removed.
++- Retire: dataprep `requirements.lock`, `dataprep/scripts/generate-requirements-in.sh`, the `docling-core==2.82.0` pin, `fix_dependencies.sh` invocations in the three module Dockerfiles, Makefile `requirements-in-dataprep`.
++- Record the `verify:dataprep-lock` re-pointing decision in `prds/prd-genie-ai-2026-08-07/.decision-log.md`.
++
++**Block If:** None — every decision above is determined by verified upstream evidence (locks fetched from `raw.githubusercontent.com/opea-project/GenAIComps/v1.5`, upstream Dockerfiles, Docker Hub tag listings).
++
++**Never:**
++- Do NOT re-graft module code (`genieai_*.py` against v1.5 `comps` — stories 2.3–2.6 own that; the import-time sweep is 2.8). 2.2's green bar is BUILD-level.
++- Do NOT bump chatqna's `OPEA_VERSION` (story 2.6 owns it) — only its base → `python:3.11-slim`.
++- Do NOT re-create 2-1's `.pth` sitecustomize installer or `docarray_alias_shim` — 2-1 owns those mechanisms. If 2-1's files are absent from the tree, update the hardcoded sitecustomize COPY paths to the python:3.11 equivalent; 2-1's merge supersedes them.
++- Do NOT weaken `smoke:dataprep-arango`. If the overlay module import breaks under the v1.5 lock, record the expected red (the 2-5 in-image contract run is the fix surface), do not delete or empty the assertion.
++- Do NOT touch `sprint-status.yaml` (orchestrator-owned).
++
++## I/O & Edge-Case Matrix
++
++_Deleted._ Build/dependency migration with no data-flow surface.
++
++</intent-contract>
++
++## Code Map
++
++- `genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai` -- base `nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04` + apt `python3.10` + `update-alternatives` (L24-49); local lock `COPY requirements.lock` + `pip install --no-deps --require-hashes` (L64-80); sitecustomize COPY `/usr/local/lib/python3.10/dist-packages` + `rm /usr/lib/python3.10/sitecustomize.py` (L136-139); docarray mv+sed (L104-110). Change: base → `python:3.11-slim` + v1.5 apt list, drop update-alternatives, install from committed `requirements-cpu.txt` with `--require-hashes`, OPEA_VERSION → v1.5, sitecustomize path → `/usr/local/lib/python3.11/site-packages`.
++- `genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai` -- base `python:3.10-slim` (L14); `ARG REQ_PATH=/app/comps/retrievers/src/requirements.txt` (L28); `fix_dependencies.sh` (L31-33); `pip install -r ${REQ_PATH}` (L37); upgrade pins langchain-huggingface + langchain-arangodb>=1.2.0 (L48-57); docarray mv+sed (L59-66); sitecustomize `/usr/local/lib/python3.10/site-packages` + `rm` (L91-97). Change: base → `python:3.11-slim`, REQ_PATH → committed `requirements-cpu.txt` + `--require-hashes`, drop fix_dependencies.sh + upgrade pins, OPEA_VERSION → v1.5, sitecustomize → 3.11 path.
++- `genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai` -- base already `python:3.11-slim` (L15); `REQ_PATH=/app/comps/rerankings/src/requirements.txt` (L36); `fix_dependencies.sh` (L39-40); `pip install -r` + `kneed` (L44-46); docarray mv+sed (L48-53); sitecustomize `/usr/local/lib/python3.11/site-packages` (L77-78). Change: REQ_PATH → committed `requirements-cpu.txt` + `--require-hashes`, drop fix_dependencies.sh (kneed moves into the lock), OPEA_VERSION → v1.5, sitecustomize path already correct.
++- `genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai` -- `comps_base_builder FROM python:3.10-slim` (L17); sitecustomize `/usr/local/lib/python3.10/site-packages` + `rm` (L103-109). Change: base → `python:3.11-slim`, sitecustomize → 3.11 path. OPEA_VERSION stays v1.3 (2.6).
++- `genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai` + `textgen/Dockerfile-textgen_genie-ai` -- `ARG UPSTREAM_IMAGE=opea/embedding:1.3` / `opea/llm-textgen:1.3` (DW-1); sitecustomize `/usr/local/lib/python3.11/dist-packages`. Change: retag → `:1.5`, verify the 1.5 base's site-packages path (keep 3.11 or update to match).
++- `genie-ai-overlay/dataprep/requirements.in` -- REPLACE with v1.5 `.in` fork (`raw.githubusercontent.com/opea-project/GenAIComps/v1.5/comps/dataprep/src/requirements.in`) + deltas (see Tasks).
++- `genie-ai-overlay/dataprep/requirements.lock` -- DELETE (superseded by `requirements-cpu.txt`).
++- `genie-ai-overlay/dataprep/scripts/generate-requirements-in.sh` -- DELETE (v1.3 scraping machinery; upstream now ships the `.in`).
++- `genie-ai-overlay/dataprep/requirements-cpu.txt` -- NEW, recompiled with hashes.
++- `genie-ai-overlay/retriever/requirements.in` + `requirements-cpu.txt` -- NEW, fork of v1.5 `comps/retrievers/src/requirements.in` + deltas; hashed lock.
++- `genie-ai-overlay/reranker/requirements.in` + `requirements-cpu.txt` -- NEW, fork of v1.5 `comps/rerankings/src/requirements.in` + deltas (`kneed`); hashed lock.
++- `genie-ai-overlay/build-patches/fix_dependencies.sh` -- invocations removed from dataprep/retriever/reranker Dockerfiles; script deleted (its v1.3-format seds are no-ops on compiled locks — dead divergence).
++- `Makefile` -- re-point `lock-dataprep` to `uv pip compile --generate-hashes --python-version 3.11` writing `requirements-cpu.txt`; add `lock-retriever` / `lock-reranker`; drop `requirements-in-dataprep`.
++- `.gitlab-ci.yml` -- re-point `verify:dataprep-lock` (L2448-2492) to validate dataprep/retriever/reranker `requirements-cpu.txt` vs their `.in`; keep `smoke:dataprep-arango` (L1374+) unchanged.
++- `_bmad-output/planning-artifacts/prds/prd-genie-ai-2026-08-07/.decision-log.md` -- append the `verify:dataprep-lock` re-pointing decision (FR-4).
++- Verified v1.5 upstream: `comps/{dataprep/src,retrievers/src,rerankings/src}/requirements.in` + `requirements-cpu/gpu.txt`; upstream Dockerfiles all `FROM python:3.11-slim`; `comps/cores/proto/docarray.py` + `comps/cores/mega/{orchestrator,micro_service}.py` still exist in v1.5 (the build-time mv+sed still runs; sed-pattern drift is 2.3–2.6 re-graft surface). v1.5 dataprep lock pins: `docling==2.45.0`, `docling-core==2.44.2`, `docarray==0.41.0`, `langchain==0.3.27`, `langchain-arangodb==0.0.6`, `fastapi==0.116.1`.
++
++## Tasks & Acceptance
++
++**Execution:**
++- `genie-ai-overlay/dataprep/requirements.in` -- fork v1.5 `.in`; swap `opencv-python`→`opencv-python-headless`, `psycopg2`→`psycopg2-binary`; keep `openai-whisper` (v1.5 pins it; verify it builds — D8); add overlay extras `rank_bm25`, `hf_xet`, `python-jose[cryptography]`, `aiohttp`, `opentelemetry-instrumentation-fastapi`, `opentelemetry-instrumentation-aiohttp-client`, `opentelemetry-instrumentation-requests`, `opentelemetry-exporter-otlp-proto-http` -- compiled-lock source (FR-4).
++- `genie-ai-overlay/dataprep/requirements-cpu.txt` -- NEW via `uv pip compile --generate-hashes --python-version 3.11` -- hashed lock (AC1).
++- `genie-ai-overlay/retriever/requirements.in` + `requirements-cpu.txt` -- NEW; v1.5 `.in` fork (has `psycopg2-binary`, `pathway` marked) + opentelemetry-instrumentation extras -- D7 (AC1).
++- `genie-ai-overlay/reranker/requirements.in` + `requirements-cpu.txt` -- NEW; v1.5 `.in` fork + `kneed` + opentelemetry-instrumentation extras -- D7 (AC1).
++- `genie-ai-overlay/dataprep/requirements.lock` + `dataprep/scripts/generate-requirements-in.sh` -- DELETE -- retire v1.3 machinery (AC3).
++- `genie-ai-overlay/build-patches/fix_dependencies.sh` -- DELETE + drop its `COPY`/`RUN` from dataprep/retriever/reranker Dockerfiles -- no dead seds on compiled locks (AC3).
++- dataprep/retriever/reranker/chatqna Dockerfiles -- base → `python:3.11-slim`; `REQ_PATH` → `COPY genie-ai-overlay/<module>/requirements-cpu.txt /app/requirements-cpu.txt` + `pip install --no-deps --require-hashes -r /app/requirements-cpu.txt` (`--no-deps` restores the v1.3 deterministic-install pattern — the compiled lock lists the full closure, so pip installs purely from the lock with no re-resolution); `OPEA_VERSION` → `v1.5` (dataprep/retriever/reranker only); sitecustomize COPY paths → `/usr/local/lib/python3.11/site-packages`; drop dataprep update-alternatives + the `rm -f /usr/lib/python3.10/sitecustomize.py` -- Python 3.11 (AC2/AC4).
++- retriever/reranker Dockerfiles -- REMOVE the separate non-hashed `pip install "opentelemetry-*>=..."` blocks (the recompiled locks pin opentelemetry exactly; a post-lock unhashed install would break the fully-hashed build) -- deterministic fleet (AC4).
++- embedding/textgen Dockerfiles -- `UPSTREAM_IMAGE` → `:1.5`; verify site-packages path matches the 1.5 base -- retag (AC6).
++- `Makefile` -- re-point `lock-dataprep` (3.11, `--generate-hashes`, output `requirements-cpu.txt`), add `lock-retriever`/`lock-reranker`, drop `requirements-in-dataprep` -- regeneration tooling (AC5).
++- `.gitlab-ci.yml` -- re-point `verify:dataprep-lock` to the three modules' `.in`→`requirements-cpu.txt` cross-check (`uv pip sync --dry-run` + per-package grep) -- drift guard (AC5).
++- `.decision-log.md` -- append `verify:dataprep-lock` re-pointing decision (FR-4) -- recorded decision (AC5).
++- Verification-only task: in a venv, `import comps.dataprep.src.integrations.genieai_dataprep_arangodb` against the recompiled v1.5 lock; if it breaks, record the expected red (2-5's in-image contract run is the fix surface); do not change `smoke:dataprep-arango` -- documented evidence (AC4).
++
++**Acceptance Criteria:**
++- Given v1.5's compiled-lock layout, when dataprep/retriever/reranker each commit a `requirements.in` (v1.5 fork + overlay deltas) and a `requirements-cpu.txt` recompiled with `uv pip compile --generate-hashes --python-version 3.11`, then every package line in each lock carries `--hash=sha256:...`, dataprep pins `docling-core==2.44.2`, and `uv pip sync requirements-cpu.txt --dry-run` passes for all three.
++- Given all six Dockerfiles, when every base is Python 3.11 (`python:3.11-slim` or `opea/*:1.5`), then `grep -rn "python3.10" genie-ai-overlay/*/Dockerfile*` finds no hardcoded `python3.10` path and no dataprep `update-alternatives` python3.10 machinery remains.
++- Given the migration, when dataprep `requirements.lock`, `generate-requirements-in.sh`, the `docling-core==2.82.0` pin, and `fix_dependencies.sh` are removed, then `grep -rn "requirements.lock\|generate-requirements-in\|docling-core==2.82.0\|fix_dependencies" genie-ai-overlay/` finds nothing, and the three module Dockerfiles install from their committed `requirements-cpu.txt` with `--require-hashes`.
++- Given the deterministic install, when the dataprep/retriever/reranker images build with `OPEA_VERSION=v1.5` (cache-busting ARG) from the hashed locks, then `pip install --require-hashes -r requirements-cpu.txt` installs purely from the lock (no re-resolution), and a clean `docker build --no-cache` re-run yields an identical image digest.
++- Given the new lock layout, when `verify:dataprep-lock` is re-pointed to validate all three modules' `requirements-cpu.txt` vs their `.in` and `Makefile` lock targets are re-pointed to `--generate-hashes --python-version 3.11`, then the CI job fails on lock drift and the re-pointing decision is recorded in `.decision-log.md`.
++- Given DW-1, when embedding/textgen `ARG UPSTREAM_IMAGE` moves to `opea/embedding:1.5` / `opea/llm-textgen:1.5`, then `grep` confirms `:1.5` and each wrapper's sitecustomize path matches its 1.5 base's site-packages location.
++
++## Spec Change Log
++
++_None yet._
++
++## Review Triage Log
++
++### 2026-08-12 — Review pass
++- intent_gap: 0
++- bad_spec: 0
++- patch: 6: (high 3, medium 1, low 2)
++- defer: 8: (medium 3, low 5)
++- reject: 5: (low 5)
++- addressed_findings:
++  - `[high]` `[patch]` Makefile lock targets restored `--python-platform x86_64-manylinux_2_31` — a host-platform lock would break `pip install --require-hashes` in the Debian `python:3.11-slim` image.
++  - `[high]` `[patch]` retriever Dockerfile apt gained the v1.5 retriever libs (`build-essential libcairo2 libglib2.0-0 libjemalloc-dev libmariadb-dev`) — the lock installs `mariadb==1.1.14` (source build, no manylinux wheel).
++  - `[high]` `[patch]` reranker module import verified against v1.5 comps locally — all comps symbol imports resolve (telemetry, api_protocol, opea_docarray rename, integrations.tei); only a host port-8000 collision blocked a full clean pass; in-image behavioral gate stays story 2.4.
++  - `[medium]` `[patch]` `verify:dataprep-lock` gained `set -e` — a failed module lock check now fails the job instead of passing green.
++  - `[low]` `[patch]` reranker `.in` duplicate bare `Pillow` removed; lock recompiled (hash-identical, 3411 hashes).
++  - `[low]` `[patch]` spec Verification grep excludes comment lines (comment text mentions the retired python3.10 machinery).
++
++### 2026-08-12 — Follow-up review pass (salvage + baseline fix)
++- intent_gap: 0
++- bad_spec: 0
++- patch: 6: (high 1, medium 1, low 4)
++- defer: 5: (medium 1, low 4)
++- reject: 4: (low 4)
++- addressed_findings:
++  - `[high]` `[patch]` dataprep/retriever locks were compiled host-platform (no `--python-platform`) — only reranker carried the flag, while the Makefile prescribed it for all three. Host (glibc 2.43) wheels could break `pip install --require-hashes` in Debian bookworm (glibc 2.36). RECOMPILED both locks with `--python-platform x86_64-manylinux_2_31`; header now documents it; no version changed, only wheel-hash selection (149 lines swapped); `uv pip sync --dry-run` green.
++  - `[medium]` `[patch]` dataprep's deterministic install dropped `--no-deps` (`pip install --no-cache-dir --require-hashes`); restored `--no-deps --require-hashes` in dataprep/retriever/reranker — the compiled lock lists the full closure, so pip installs purely from the lock with no re-resolution (AC4 "no re-resolution" now literal).
++  - `[low]` `[patch]` retriever Dockerfile comment implied the 0.0.6 langchain-arangodb drop preserved the `>=1.2.0` filter_clause fix; reworded to state 0.0.6 lacks the fix-pin and story 2.3 restores it.
++  - `[low]` `[patch]` spec Verification command lacked `--python-platform x86_64-manylinux_2_31`; updated to match Makefile + committed locks.
++  - `[low]` `[patch]` spec Design Note claimed "pathway is now correctly marker-pinned"; false — pathway is bare in the fork and lock (`pathway==0.32.1`), matching upstream v1.5's own bare `pathway`. Corrected.
++  - `[low]` `[patch]` dataprep `.in` opencv comment claimed the two cv2 providers "cannot coexist in a lock" while the lock ships both; annotated that the dual install is a 2.5 re-audit item.
++
++### 2026-08-12 — Follow-up review pass (done-spec fresh review, 4 parallel layers)
++- intent_gap: 0
++- bad_spec: 0
++- patch: 3: (high 1, low 2)
++- defer: 15: (medium 4, low 11)
++- reject: 2: (low 2)
++- addressed_findings:
++  - `[high]` `[patch]` dataprep Dockerfile apt gained `libglib2.0-0` — the v1.5 lock installs non-headless `opencv-python` (transitive via unstructured-inference) alongside headless; cv2 links `libgthread-2.0.so.0`/`libglib-2.0.so.0`, which `python:3.11-slim` lacks (the old CUDA base supplied them) and retriever's v1.5 apt list already carries. Without it `import cv2` (genieai_dataprep_utils.py:10) fails → smoke:dataprep-arango (in-image module import) breaks the build gate.
++  - `[low]` `[patch]` dataprep `requirements.in` opencv comment corrected — "cannot coexist in a lock" contradicted the committed lock shipping both providers; reworded (dual install stays a 2.5 re-audit item).
++  - `[low]` `[patch]` spec Design Note "so nothing is lost" corrected — dataprep loses the CUDA *runtime* (not just GPU device access); `DOCLING_DEVICE` defaults to `cuda` and the CUDA-less image cannot honor it; substantive fix deferred to 2.5.
++- Deferred evidence corrections (existing items kept, evidence made accurate): #2/#11 "build unverified" → CI build jobs DO run `docker buildx` + `pip install --no-deps --require-hashes` from the lock, so install/wheel/source-build failures block the MR; genuinely ungated is image SIZE + post-import runtime. #7 → `torch==2.13.0` (CUDA-bundled PyPI wheel) is in ALL THREE CPU locks, not GPU-only. #9 → locked openai spread corrected (dataprep 1.81.0 / retriever 1.109.1 / reranker 3.0.0) + fastapi split 0.116.1/0.118.2.
++- New deferred items: backend stale CI copy (low), dataprep DOCLING_DEVICE=cuda default vs CUDA-less image (medium), docarray mv+sed unguarded on v1.5 (low).
++
++### 2026-08-12 — Follow-up review pass #2 (done-spec fresh review, 4 parallel layers)
++- intent_gap: 0
++- bad_spec: 0
++- patch: 1: (low 1)
++- defer: 15: (medium 6, low 9) — 13 confirmations of existing deferred items + 2 new
++- reject: 5: (low 5)
++- addressed_findings:
++  - `[low]` `[patch]` all three `requirements.in` regen comments now carry `--python-platform x86_64-manylinux_2_31`, byte-matching the Makefile `lock-<module>` target — a developer following the in-file comment would otherwise regenerate a host-platform lock (the defect class the prior follow-up pass fixed in the Makefile/locks).
++
++### 2026-08-12 — Follow-up review pass #3 (done-spec fresh review, resumed run 20260812-135642-0fc1)
++- intent_gap: 0
++- bad_spec: 0
++- patch: 0
++- defer: 15: (medium 6, low 9) — 12 confirmations of existing deferred items + 3 new
++- reject: 4: (low 4)
++- addressed_findings:
++  - none
++
++## Design Notes
++
++- **Hashes are generated before adoption (PRD FR-4 assumption, now verified).** v1.5's upstream `requirements-cpu.txt` files are compiled with `uv pip compile ... --universal` and carry no `--hash` markers (verified from the fetched dataprep/retriever/reranker locks). To satisfy AC1's "hashed requirements", each module's lock is recompiled from a forked `.in` with `--generate-hashes --python-version 3.11`. The `.in` stays a thin fork of upstream's (upstream maintains it; future bumps re-fork + recompile), which is how "adopt OPEA's compiled lock" and "retire the local machinery" coexist: the old `generate-requirements-in.sh` (which scraped v1.3's unpinned `requirements.txt`) is the retired machinery, not the `.in`-fork + compile loop.
++- **Why the clone tag must bump with the lock.** The v1.5 locks pin `docling==2.45.0`/`docling-core==2.44.2`/`langchain==0.3.27` — versions that pair with v1.5 `comps` source, not v1.3. Keeping the v1.3 clone while installing v1.5 deps would be a worse, inconsistent state, so dataprep/retriever/reranker move `OPEA_VERSION` → v1.5 together with the lock. The overlay `genieai_*.py` files may not import against v1.5 `comps` yet — that is the 2.3–2.6 re-graft surface (and 2-1's docarray shim); 2.2's green bar is the build.
++- **Base-image decisions.** dataprep moves from the CUDA/Ubuntu base to `python:3.11-slim`, matching upstream v1.5's dataprep Dockerfile; the compose file grants no GPU to dataprep/retriever/reranker (only `gpu-models` profile services do), so no GPU *hardware access* is lost. What IS lost: the CUDA runtime itself (CUDA/cudnn libs). The module default is `DOCLING_DEVICE=cuda` (compose passes `${DOCLING_DEVICE:-cuda}`, env template unset) — the CUDA-less image cannot honor a cuda device at docling init, so a default-config ingest on the new image needs `DOCLING_DEVICE=cpu` set (deferred; the coherent fix spans compose + module default and is a 2.5 re-audit item). This base move removes the `update-alternatives` python3.10 machinery in one stroke (FR-3). chatqna keeps v1.3 comps but its base moves to `python:3.11-slim` (v1.3 comps already installs on 3.11 — the v1.3 reranker image proves it).
++- **`verify:dataprep-lock` re-pointing.** The old job validated dataprep `requirements.lock` vs `requirements.in` via `uv pip sync --dry-run` + a per-package grep. The re-pointed job keeps the same mechanics against the three modules' `requirements-cpu.txt` (the decision is recorded in `.decision-log.md` per FR-4). The `uv pip sync --dry-run` check catches removed packages; the grep catches a dep added to `.in` without a lock regen.
++- **GPU-lock scoping.** Upstream also ships `requirements-gpu.txt` per module, but 2.2 compiles and commits the CPU locks only: `docker-compose.yaml` grants no GPU to dataprep/retriever/reranker (GPU services live under the `gpu-models` profile), so the fleet consumes the CPU locks. The GPU locks differ only by the torch/`--index-url` install; they can be compiled from the same `.in` (`uv pip compile --generate-hashes`) if a GPU deployment later needs them.
++- **`fix_dependencies.sh` disposition = obsolete-remove.** Its seds target v1.3-format lines (`pathway==0.3.3`, `graspologic==3.4.1`, `psycopg2==2.9.10`) that do not exist in the compiled locks (pathway resolves to `pathway==0.32.1` unpinned-bare from the v1.5 fork, matching upstream v1.5's own bare `pathway` in `comps/retrievers/src/requirements.in`; retriever's `.in` already uses `psycopg2-binary`). Running it against a lock would be a silent no-op — the failure class the architecture forbids — so it is deleted, not kept. Story 2.4's "REQ_PATH re-pointed to the compiled lock" is satisfied by the Dockerfile pointing at `requirements-cpu.txt`.
++- **Merge-compatibility with story 2-1.** 2-2's branch does not carry 2-1's code. The sitecustomize/docarray mechanisms belong to 2-1 (`.pth` installer + shim); 2-2 only updates the hardcoded COPY paths to the 3.11 equivalent so the branch is standalone-correct. When 2-1 merges, its installer replaces those COPY lines (the installer is Python-version-stable, so it is 3.11-correct) and its shim replaces the docarray mv+sed — 2-2 must not reintroduce a competing mechanism.
++
++## Verification
++
++**Commands:**
++- `cd genie-ai-overlay/<module> && uv pip compile requirements.in --generate-hashes --python-version 3.11 --python-platform x86_64-manylinux_2_31 --output-file requirements-cpu.txt` (module = dataprep/retriever/reranker) -- expected: exit 0; lock carries `--hash=sha256:` on every package; header documents the `--python-platform x86_64-manylinux_2_31` flag (bookworm glibc 2.36 compatibility)
++- `cd genie-ai-overlay/dataprep && uv pip sync requirements-cpu.txt --dry-run` (same for retriever/reranker) -- expected: exit 0 (lock consistent)
++- `grep -rEn "python3.10" genie-ai-overlay/*/Dockerfile* | grep -vE ':[0-9]+:#'` -- expected: no non-comment matches (no hardcoded python3.10 COPY/install path; comment text may mention the retired machinery)
++- `grep -rn "requirements.lock\|generate-requirements-in\|docling-core==2.82.0\|fix_dependencies" genie-ai-overlay/` -- expected: no matches
++- `grep -n "OPEA_VERSION\|UPSTREAM_IMAGE\|python:3.11\|require-hashes" genie-ai-overlay/*/Dockerfile*` -- expected: v1.5 / :1.5 / python:3.11 / --require-hashes present
++- `cd genie-ai-overlay && ruff check tests/` + `ruff format --check` -- expected: clean (no Python source changed except new .in files, which ruff ignores; run anyway)
++
++**Manual checks (if no CLI):**
++- Dockerfile review: all six bases Python 3.11; dataprep/retriever/reranker install `COPY genie-ai-overlay/<module>/requirements-cpu.txt` with `pip install --require-hashes`; no `update-alternatives` python3.10; no `fix_dependencies.sh`.
++- CI: `verify:dataprep-lock` covers the three modules; `smoke:dataprep-arango` unchanged.
++- In a venv: `import comps.dataprep.src.integrations.genieai_dataprep_arangodb` against the recompiled lock — record pass or expected-red (2-5 fix surface) in the Auto Run Result.
++
++## Auto Run Result
++
++Status: done
++
++**Summary (this follow-up review pass #2):** Fresh review of the `done` spec with 4 parallel layers (blind-hunter, edge-case-hunter, verification-gap, intent-alignment auditor). All ACs and Never-constraints verified intact against the committed tree; reviewers independently re-checked the lock dry-runs, the CI grep loop, and the drift-guard cross-check against the working tree. One documentation patch applied (`.in` regen comments), two new deferred items appended, no intent_gap / no bad_spec.
++
++**Files changed (this pass):**
++- `genie-ai-overlay/{dataprep,retriever,reranker}/requirements.in` — regen comment in each header now includes `--python-platform x86_64-manylinux_2_31`, byte-matching the Makefile `lock-<module>` target (a developer following the in-file comment would otherwise regenerate a host-platform lock).
++- `_bmad-output/implementation-artifacts/2-2-migrate-dependencies-python-3-11.md` — `followup_review_recommended: false`; 2 new deferred items (chatqna 3.11 runtime gap, tag-pipeline drift-guard blast radius); this triage-log entry + Auto Run Result.
++
++**Review findings breakdown (this pass):** 1 patch applied (low — `.in` header comments). 15 deferred (6 medium, 9 low): 13 confirmations of existing items (drift guard name-only + trigger paths, cross-module docling/otel/haystack/openai drift, reranker bare pins, heavy deps + size, cv2 collision, pin-policy hybrid, embedding/textgen sitecustomize auto-load, langchain-arangodb 0.0.6 fix-pin, docarray mv+sed unguarded, `DOCLING_DEVICE=cuda` vs CUDA-less image, backend stale CI copy, ci-wait platform-sed) + 2 new (chatqna 3.11 + v1.3 comps runtime unverified in-image — medium; `verify:dataprep-lock` tag-pipeline blast radius tripled — low). 5 rejected (low): deferred-work.md DW-16/17/18 duplicates vs DW-14/12 (orchestrator-owned ledger — surfaced, not modified), non-x86_64 runner false-fail (speculative; runners fixed x86_64), locks excluded from review diff (generated artifacts, spot-checked on tree), story-track `git_platform` fallback (orchestrator infra), ci-wait trailing-comment mechanism refinement (DW-15 family).
++
++**Follow-up review recommendation:** false — 1 low-severity patch this pass (score = 3×0 medium + 1×1 low = 1 < 5; no high).
++
++**Verification performed (this pass):**
++- All three `requirements-cpu.txt`: `uv pip sync --dry-run` exit 0 in a temp python:3.11 venv (dataprep/retriever/reranker); hash + version lines unchanged by this pass's comment-only `.in` patch.
++- `grep -rEn "python3.10" genie-ai-overlay/*/Dockerfile* | grep -vE ':[0-9]+:#'` — no non-comment matches (exit 1).
++- `grep -rn "requirements.lock\|generate-requirements-in\|docling-core==2.82.0\|fix_dependencies" genie-ai-overlay/` — no matches (exit 1).
++- `OPEA_VERSION` present in dataprep/retriever/reranker Dockerfiles; embedding/textgen `UPSTREAM_IMAGE=opea/embedding:1.5` / `opea/llm-textgen:1.5`.
++- Spec frontmatter parses as YAML; `deferred` is one list of 17 items, all with `summary` + `evidence`; existing 15 preserved verbatim.
++
++**Residual risks (unchanged; carried on the deferred list):**
++- No `docker build` executed in this environment — Dockerfile wiring verified by grep + uv dry-runs; in-image installs/`.pth`/shim behavior covered by stories 2.3–2.6 in-image contract runs and 2-1's merge. CI build jobs are the live gate for install/wheel/source-build failures; image SIZE + post-import runtime remain unverified.
++- chatqna 3.11 base with v1.3 comps has no in-image import gate until story 2.6 (new deferred item).
++- dataprep/retriever heavy deps (pyspark, `unstructured[all-docs]`, mariadb source build, openai-whisper, torch 2.13.0 CUDA-bundled in all three CPU locks) raise image size/build time — 2.5 re-audits.
++- dataprep default `DOCLING_DEVICE=cuda` unsupported by the CUDA-less image — deployers must set `DOCLING_DEVICE=cpu` until 2.5 reconciles compose/module defaults.
++- 2-1's `.pth` installer + docarray shim are not on this branch; when 2-1 merges, it supersedes the hardcoded sitecustomize COPYs.
++
++---
++
++### 2026-08-12 — Follow-up review pass #3 (resumed run 20260812-135642-0fc1; fresh review of the done spec)
++
++**Summary:** Story implementation was already complete and reviewed on the prior bmad-loop run (`20260812-101604-d1d5`); this run resumed it by cherry-picking that run's squashed story commit (a0d469195 → 1bf4b148d) onto the current branch from the same base (f7402eecf). This pass ran a fresh 4-layer review (blind-hunter, edge-case-hunter, verification-gap, intent-alignment auditor) over the implementation diff (`_bmad-output/implementation-artifacts/review/part-a-code-diff.patch`, 531 lines; generated `requirements-cpu.txt` locks excluded). All ACs and Never-constraints verified intact against the committed tree. Reviewers' findings were almost entirely confirmations of the existing deferred list; 3 new low-severity deferred items appended, 4 rejected. No code changes — spec-only pass.
++
++**Files changed (this pass):** none (code already committed at 1bf4b148d). Spec-only: triage-log entry, 3 new deferred items, this result.
++
++**Review findings breakdown (this pass):** 0 patch. 15 deferred (6 medium, 9 low): 12 confirmations of existing items (langchain-arangodb 0.0.6 filter_clause fix-pin incl. contract-suite blindness, dataprep heavy deps pyspark/unstructured[all-docs]/graspologic/openai-whisper + torch-in-CPU-locks, sitecustomize auto-load, reranker in-image gate, drift-guard name-only + trigger paths, cross-module otel/openai drift, ci-wait platform-sed, backend stale CI copy, DOCLING_DEVICE=cuda vs CUDA-less image, chatqna 3.11 + v1.3 comps) + 3 new (retriever/reranker missing system libs for their locks — pytesseract/tesseract-ocr, pydub/ffmpeg; Makefile lock-* targets unpinned uv vs CI uv==0.10.6; dataprep .in openai pin bare llama_index-issue-link rationale). 4 rejected (low): lock-platform/glibc mismatch speculation (uv dry-runs green, no concrete failing package), pathway/graspologic "reintroduction" (intentional — matches upstream v1.5 fork, documented in spec Design Notes), OPEA-bump procedure "missing" (documented in Makefile targets + .in headers + spec Design Notes), sprint-status.yaml touch (orchestrator story-track auto-stamp, not story action).
++
++**Follow-up review recommendation:** false — 0 patches this pass (score = 0 < 5).
++
++**Verification performed (this pass):**
++- All three `requirements-cpu.txt`: `uv pip sync --dry-run --python <py3.11 venv>` exit 0 (dataprep/retriever/reranker).
++- `grep -rEn "python3.10" genie-ai-overlay/*/Dockerfile* | grep -vE ':[0-9]+:#'` — no non-comment matches.
++- `grep -rn "requirements.lock\|generate-requirements-in\|docling-core==2.82.0\|fix_dependencies" genie-ai-overlay/` — no matches.
++- Base/retag checks: dataprep/retriever/reranker `OPEA_VERSION=v1.5`, chatqna stays `v1.3` (Never constraint), embedding/textgen `UPSTREAM_IMAGE=opea/*:1.5`, all bases `python:3.11-slim`, `--require-hashes` present.
++- Spec frontmatter reparsed as YAML after appends; `deferred` is one list of 20 items, prior 17 preserved verbatim, 3 new appended.
++
++**Residual risks (unchanged; carried on the deferred list):**
++- retriever `langchain-arangodb==0.0.6` filter_clause fix-pin gone until story 2.3 bumps it; in-repo label-filter contract tests cannot observe a library-level regression.
++- chatqna v1.3 comps on the 3.11 builder has no in-image gate until story 2.6; reranker/embedding/textgen v1.5 runtime unverified in-image (2.4/2.5 re-audit).
++- dataprep default `DOCLING_DEVICE=cuda` unsupported by the CUDA-less image — deployers must set `DOCLING_DEVICE=cpu` until 2.5.
++- Heavy deps (pyspark, `unstructured[all-docs]`, openai-whisper, torch 2.13.0 in all three CPU locks) raise image size/build time — 2.5 re-audits.
++- No `docker build` executed in this environment; CI build jobs are the live gate for install/wheel/source-build failures.
++
+diff --git a/_bmad-output/implementation-artifacts/deferred-work.md b/_bmad-output/implementation-artifacts/deferred-work.md
+index 7b63151e6..abbdcc758 100644
+--- a/_bmad-output/implementation-artifacts/deferred-work.md
++++ b/_bmad-output/implementation-artifacts/deferred-work.md
+@@ -519,3 +519,162 @@ location: genie-ai-overlay/pyproject.toml:43
+ severity: low
+ reason: pyproject.toml [tool.ruff] exclude = ["build-patches/"]; lint_overrides.py and docarray_alias_shim.py ship outside ruff coverage and the story's "ruff clean" verification is vacuous for them. Verified clean manually this pass. Extend the ruff scope (or exempt with a documented reason) during the 2.7 coherence-lint work.
+ status: open
++### DW-10: langchain-arangodb drops back to 0.0.6 in the v1.5 lock; the >=1.2.0 filter_clause fix-pin is gone until story 2.3 bumps it.
++origin: spec-deferred f6193de4a9e1
++location: genie-ai-overlay/retriever/requirements-cpu.txt
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: medium
++reason: retriever/requirements.in + lock pin 0.0.6 (verified: 0.0.6 does NOT have 0.0.4's **kwargs filter_clause swallow — filter_clause is a named param; the behavioral label-filter contract test belongs to story 2.3's re-graft).
++status: open
++
++### DW-11: dataprep .in fork reintroduces pyspark, unstructured[all-docs], graspologic, openai-whisper that the retired v1.3 machinery dropped for image-size/build reasons; in-image build + size unverified here.
++origin: spec-deferred 772243b4bdcd
++location: genie-ai-overlay/dataprep/requirements.in
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: medium
++reason: old generate-requirements-in.sh dropped these (no-space-on-device pyspark; openai-whisper sdist needs pkg_resources); they compile + uv-sync fine locally but the Docker build/size surface is untested in this story.
++status: open
++
++### DW-12: sitecustomize/SSL-patch auto-load in the built embedding/textgen/retriever images is unverified (hardcoded site-packages path asserted manually, not by a CI job).
++origin: spec-deferred 21b1f2312170
++location: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:11
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: medium
++reason: no in-image `import sitecustomize` check exists; 2-1's .pth installer + the 2.3-2.6 in-image contract runs supersede the hardcoded COPY; the opea/*:1.5 site-packages path was manually verified via image pull.
++status: open
++
++### DW-13: no CI job runs the reranker image entry point on the v1.5 bump; local import verified clean, the in-image behavioral gate is story 2.4's contract test.
++origin: spec-deferred 331a5ad49137
++location: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai:4
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: low
++reason: reranker module imports all v1.5 comps symbols (telemetry, api_protocol, opea_docarray rename, integrations.tei) — only a host port-8000 collision blocked a full clean pass locally; build/scan jobs never run the image.
++status: open
++
++### DW-14: verify:dataprep-lock keeps its dataprep-scoped name while looping three modules and checks package NAMES only, not versions — cross-module version drift (e.g. docling) is invisible to it.
++origin: spec-deferred 819d55acdf09
++location: .gitlab-ci.yml
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: low
++reason: dataprep pins docling==2.45.0/docling-core==2.44.2 while retriever resolves docling==2.55.1/docling-core==2.48.4 (matching v1.5's own per-module locks); a coherence/version lint belongs to story 2.7.
++status: open
++
++### DW-15: base images use moving tags (python:3.11-slim, opea/*:1.5), so byte-identical digests across time are bounded by base-tag stability; dependency layers are deterministic via the hashed lock.
++origin: spec-deferred 391ff9ae972c
++location: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai:19
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: low
++reason: AC4's "identical digest" holds for immediate clean re-runs but not across a base-tag move; digest-pinning the image set is story 4-2.
++status: open
++
++### DW-16: GPU locks (requirements-gpu.txt) are not compiled in 2.2 — the fleet is CPU-only (compose grants no GPU to these services); they can be compiled from the same .in when a GPU deployment needs them.
++origin: spec-deferred 8c84c7fef10e
++location: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai:66
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: low
++reason: upstream ships both cpu+gpu locks; our compose consumes CPU only; compiling CUDA-torch locks with no consumer is waste.
++status: open
++
++### DW-17: .in pin-policy is a fork-plus-selective-pins hybrid; unpinned entries (e.g. retriever's bare docling) can drift on a later `make lock-<module>` regen.
++origin: spec-deferred 03c5a65ae49f
++location: genie-ai-overlay/retriever/requirements.in
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: low
++reason: dataprep pins docling==2.45.0 (matches v1.5 dataprep lock) while retriever's bare docling resolved to v1.5's 2.55.1 today; a future regen may resolve newer. Re-fork + re-pin to v1.5's shipped set on the next bump.
++status: open
++
++### DW-18: Cross-module OTel/haystack/openai version drift: reranker's bare `.in` pins resolve newer (otel 1.44.0, haystack-ai 3.0.0, openai 3.0.0) than dataprep/retriever (otel 1.27.0, haystack-ai 2.3.1, openai
++origin: spec-deferred 664dd44a6058
++location: genie-ai-overlay/reranker/requirements.in
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: medium
++reason: reranker `.in` ships bare `opentelemetry-*`/`haystack-ai`/`openai` (faithful v1.5 upstream fork — upstream also bare), so the recompile resolves today's newest; dataprep/retriever `.in` pin `==` versions. All services share `genie-ai-overlay/tracing.py`; a coherence/version lint + re-pin belongs to story 2.7 (and reranker re-graft 2.4).
++status: open
++
++### DW-19: verify:dataprep-lock trigger paths watch `requirements.*` only, so an OPEA_VERSION bump in a module Dockerfile (the canonical lock-regen trigger) does not run the drift guard.
++origin: spec-deferred 97651093fcb7
++location: .gitlab-ci.yml
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: low
++reason: rules:changes lists genie-ai-overlay/{dataprep,retriever,reranker}/requirements.* and .gitlab-ci.yml; a Dockerfile OPEA_VERSION/apt change that should force a lock check won't. Story 2.7's CI coherence work owns the trigger widening.
++status: open
++
++### DW-20: reranker lock installs torch 2.13.0 (via sentence-transformers) into a plain python:3.11-slim CPU image; wheel/resolution + image-size surface unverified.
++origin: spec-deferred 67b62e7158ad
++location: genie-ai-overlay/reranker/requirements-cpu.txt
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: low
++reason: no Docker build in 2.2; reranker's heavy dep install + resulting size are story 2.4/2.5 build-surface territory.
++status: open
++
++### DW-21: .bmad-loop/ci-wait.sh platform-sed does not strip a trailing YAML comment and uses GNU-only \s.
++origin: spec-deferred 7464cb7d139a
++location: .bmad-loop/ci-wait.sh
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: low
++reason: `git_platform: gitlab # note` would resolve to "gitlab # note"; GNU \s breaks on BSD sed. Carried orchestrator infra (verify gate), not story scope; harmless on this Linux deployment.
++status: open
++
++### DW-22: dataprep .in fork reintroduces pyspark, unstructured[all-docs], graspologic, openai-whisper that the retired v1.3 machinery dropped for image-size/build reasons; in-image size + post-import runtime un
++origin: spec-deferred 1fe3e0a6a9e9
++location: genie-ai-overlay/dataprep/requirements.in
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: medium
++reason: old generate-requirements-in.sh dropped these (no-space-on-device pyspark; openai-whisper sdist needs pkg_resources); they compile + uv-sync fine locally. CI build jobs DO run docker buildx + pip install --no-deps --require-hashes from the lock, so install/wheel/source-build failures would block the MR — genuinely ungated is image SIZE and post-import runtime behavior (2.5 re-audits).
++status: open
++
++### DW-23: Cross-module OTel/haystack/openai version drift: reranker's bare `.in` pins resolve newer (otel 1.44.0, haystack-ai 3.0.0, openai 3.0.0) than dataprep/retriever (otel 1.27.0, haystack-ai 2.3.1), plus
++origin: spec-deferred 4d6ac3a03e6d
++location: genie-ai-overlay/reranker/requirements.in
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: medium
++reason: verified locked versions: openai dataprep==1.81.0 / retriever==1.109.1 / reranker==3.0.0; fastapi dataprep+reranker==0.116.1 / retriever==0.118.2. reranker `.in` ships bare `opentelemetry-*`/`haystack-ai`/`openai` (faithful v1.5 upstream fork — upstream also bare), so the recompile resolves today's newest; dataprep `.in` pins `openai==1.81.0`, retriever `.in` leaves openai bare (resolved via langchain-openai). All services share `genie-ai-overlay/tracing.py`; a coherence/version lint + re-pin belongs to story 2.7 (and reranker re-graft 2.4).
++status: open
++
++### DW-24: the compiled CPU locks pin torch 2.13.0 (via sentence-transformers) into plain python:3.11-slim CPU images — all three modules, not just reranker; image-size surface unverified.
++origin: spec-deferred 218ac548b377
++location: genie-ai-overlay/reranker/requirements-cpu.txt
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: low
++reason: torch==2.13.0 at dataprep/requirements-cpu.txt:5660, retriever:5503, reranker:3116 (CUDA-bundled PyPI wheel). CI build jobs DO run docker buildx + pip install --no-deps --require-hashes from the lock, so install/wheel/source-build failures would block the MR; genuinely ungated is image SIZE + post-import runtime (2.4/2.5 build-surface territory).
++status: open
++
++### DW-25: components/gov-chat-backend/.gitlab-ci.yml still carries the retired verify:dataprep-lock job against the deleted requirements.lock (root .gitlab-ci.yml is the active config; the backend copy is never
++origin: spec-deferred f908048420c5
++location: components/gov-chat-backend/.gitlab-ci.yml:2290
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: low
++reason: components/gov-chat-backend/.gitlab-ci.yml:2290-2337 references requirements.lock, dataprep/scripts/*, make lock-dataprep — all retired by 2.2 — but GitLab reads only the root .gitlab-ci.yml (no include of the backend copy), so it is dead config. The AC3/Verification grep is scoped to genie-ai-overlay/ and misses it. Pre-existing, surfaced by the retirement; a CI-hygiene pass should delete or sync it.
++status: open
++
++### DW-26: dataprep's default DOCLING_DEVICE=cuda is unsupported by the CUDA-less python:3.11-slim image; a default-config ingest needs DOCLING_DEVICE=cpu set.
++origin: spec-deferred 809b6335b547
++location: docker-compose.yaml:991
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: medium
++reason: genieai_dataprep_utils.py:45 defaults DOCLING_DEVICE to cuda and selects AcceleratorDevice.CUDA unless cpu; docker-compose.yaml:991 passes ${DOCLING_DEVICE:-cuda}; env template leaves it unset. The image no longer ships CUDA libs, so docling cannot honor a cuda device. Fix spans compose default + module default (deployment config + module code) — a 2.5 dataprep re-audit item; the spec Design Note now records the capability loss.
++status: open
++
++### DW-27: the build-time docarray rename (mv docarray.py -> opea_docarray.py + sed in orchestrator/micro_service) is ungated against OPEA v1.5 source; if v1.5's import patterns drifted, the sed no-ops and the c
++origin: spec-deferred 81aaf65512f0
++location: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai:93
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: low
++reason: dataprep Dockerfile L90-96, retriever/reranker equivalents run mv+sed on the v1.5 clone. A grep assertion (e.g. 'opea_docarray' present in the patched files) would make it a build gate; the sed-pattern drift surface is already scoped to the 2.3-2.6 re-graft in the spec code map. In-image contract runs (2.3-2.6) are the real gate.
++status: open
++
++### DW-28: chatqna's comps_base_builder flips to python:3.11-slim while still installing OPEA v1.3 GenAIComps (`-e .`) with no in-image import gate — the v1.3-on-3.11 runtime is verified by nothing in CI for thi
++origin: spec-deferred be49c2c7804b
++location: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai:17
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: medium
++reason: build:chatqna-server only pip-installs `-e .` (setuptools backend; never imports app code); genie-ai-overlay/tests/test_chatqna.py runs on the CI host against conftest's mocked comps, not in the 3.11 image. A v1.3-comp or transitive-dep break on 3.11 surfaces only at container start post-promote. The intent mandates the base flip (chatqna OPEA_VERSION stays v1.3 until story 2.6); the in-image gate belongs to 2.6's re-graft surface.
++status: open
++
++### DW-29: verify:dataprep-lock now loops three modules, so its tag-pipeline run (`if: $CI_COMMIT_TAG`) triples the blast radius of a transient PyPI/yank failure on an unrelated tag.
++origin: spec-deferred b7114d0dc77e
++location: .gitlab-ci.yml
++source_spec: `2-2-migrate-dependencies-python-3-11.md`
++severity: low
++reason: pre-existing pattern (the job already ran on tags for dataprep); `uv pip sync --dry-run` contacts PyPI, so a transient index issue can fail a tag pipeline. Not caused by 2.2's wiring — a CI-coherence concern for story 2.7's drift-guard work.
++status: open
+diff --git a/_bmad-output/implementation-artifacts/review/part-a-code-diff.patch b/_bmad-output/implementation-artifacts/review/part-a-code-diff.patch
+new file mode 100644
+index 000000000..94786f775
+--- /dev/null
++++ b/_bmad-output/implementation-artifacts/review/part-a-code-diff.patch
+@@ -0,0 +1,531 @@
++.bmad-loop/ci-wait.sh                              |   10 +
++ .gitlab-ci.yml                                     |   60 +-
++ Makefile                                           |   46 +-
++ genie-ai-overlay/build-patches/fix_dependencies.sh |   21 -
++ .../chatqna/Dockerfile-chatqna_genie-ai            |    2 +-
++ .../dataprep/Dockerfile-dataprep_genie-ai          |   58 +-
++ genie-ai-overlay/dataprep/requirements.in          |  159 +-
++ genie-ai-overlay/dataprep/requirements.lock        | 5786 --------------------
++ .../dataprep/scripts/generate-requirements-in.sh   |   80 -
++ .../embedding/Dockerfile-embedding_genie-ai        |    2 +-
++ .../reranker/Dockerfile-reranker_genie-ai          |   31 +-
++ genie-ai-overlay/reranker/requirements.in          |   42 +
++ .../retriever/Dockerfile-retriever_genie-ai        |   59 +-
++ genie-ai-overlay/retriever/requirements.in         |   77 +
++ .../textgen/Dockerfile-textgen_genie-ai            |    2 +-
++ 15 files changed, 340 insertions(+), 6095 deletions(-)
++
++--- Changes ---
++
++.bmad-loop/ci-wait.sh
++  @@ -75,6 +75,16 @@ if [ -z "$platform" ] && [ -f "$cfg" ]; then
++  +# Resolve platform from the module config first — self-hosted instances
++  +# (opensource.unicc.org, GHE, ...) don't betray their platform in the hostname,
++  +# but the module records it as `git_platform` (or `platform`) in
++  +# `_bmad/custom/issue-tracking.yaml`, which bmad-loop copies into each worktree.
++  +cfg="$worktree/_bmad/custom/issue-tracking.yaml"
++  +if [ -z "$platform" ] && [ -f "$cfg" ]; then
++  +  platform="$(sed -n 's/^\s*git_platform:\s*//p' "$cfg" | head -1 | tr -d '"'"'"'[:space:]')"
++  +  [ -z "$platform" ] && platform="$(sed -n 's/^\s*platform:\s*//p' "$cfg" | head -1 | tr -d '"'"'"'[:space:]')"
++  +fi
++  +
++   # Resolve host/project/platform from the git remote when not configured.
++   if [ -z "$host" ] || [ -z "$project" ] || [ -z "$platform" ]; then
++     remote="$(git -C "$worktree" remote get-url origin 2>/dev/null || true)"
++  +10 -0
++
++.gitlab-ci.yml
++  @@ -2442,39 +2442,43 @@ e2e:playwright:
++  -# Verify the dataprep requirements.lock is in sync with requirements.in.
++  -# Fails if someone edited requirements.in (or bumped OPEA) without running
++  -# `make lock-dataprep`. Catches silent lock drift before it reaches a build.
++  +# Verify each overlay module's requirements-cpu.txt is in sync with its
++  +# requirements.in (dataprep/retriever/reranker). Fails if someone edited a
++  +# requirements.in (or bumped OPEA) without running `make lock-<module>`.
++  +# Catches silent lock drift before it reaches a build.
++   verify:dataprep-lock:
++     stage: config
++  -  image: python:3.10-slim
++  +  image: python:3.11-slim
++     interruptible: true
++     variables:
++       UV_VERSION: "0.10.6"
++     before_script:
++       - pip install --no-cache-dir "uv==${UV_VERSION}"
++     script:
++  -    - cd genie-ai-overlay/dataprep
++  -    # Verify lock is consistent and installable without re-resolving.
++  -    # uv pip sync --dry-run checks every package+hash exists on PyPI;
++  -    # it does NOT re-resolve, so upstream version bumps don't cause
++  -    # spurious failures (only removed packages do).
++  -    - uv pip sync requirements.lock --dry-run --system
++  -    # Cross-check: verify requirements.in is covered by the lock.
++  -    # greps top-level non-comment lines from requirements.in and
++  -    # checks each package name appears in the lock. Missing = user
++  -    # added a dep without regenerating the lock.
++  -    - |-
++  -      while IFS= read -r line; do
++  -        pkg=$(echo "$line" | sed 's/[<>=!~].*//;s/\[.*//;s/#.*//' | xargs)
++  -        [ -z "$pkg" ] && continue
++  -        norm=$(echo "$pkg" | tr '[:upper:]_' '[:lower:]-')
++  -        if ! grep -q "^${norm}==" requirements.lock; then
++  -          echo "MISSING from lock: $pkg — run 'make lock-dataprep'"
++  -          exit 1
++  -        fi
++  -      done < requirements.in
++  -      echo "requirements.lock in sync"
++  +    - |
++  +      set -e
++  +      for MOD in dataprep retriever reranker; do
++  +        cd "${CI_PROJECT_DIR}/genie-ai-overlay/${MOD}"
++  +        # Verify lock is consistent and installable without re-resolving.
++  +        # uv pip sync --dry-run checks every package+hash exists on PyPI;
++  +        # it does NOT re-resolve, so upstream version bumps don't cause
++  +        # spurious failures (only removed packages do).
++  +        uv pip sync requirements-cpu.txt --dry-run --system
++  +        # Cross-check: verify requirements.in is covered by the lock.
++  +        # greps top-level non-comment lines from requirements.in and
++  +        # checks each package name appears in the lock. Missing = user
++  +        # added a dep without regenerating the lock.
++  +        while IFS= read -r line; do
++  +          pkg=$(echo "$line" | sed 's/[<>=!~].*//;s/\[.*//;s/#.*//' | xargs)
++  +          [ -z "$pkg" ] && continue
++  +          norm=$(echo "$pkg" | tr '[:upper:]_' '[:lower:]-')
++  +          if ! grep -q "^${norm}==" requirements-cpu.txt; then
++  +            echo "MISSING from ${MOD} lock: $pkg — run 'make lock-${MOD}'"
++  +            exit 1
++  +          fi
++  +        done < requirements.in
++  +        echo "genie-ai-overlay/${MOD}/requirements-cpu.txt in sync"
++  +      done
++     rules:
++       - if: $CI_PIPELINE_SOURCE == "schedule"
++         when: never
++  @@ -2483,13 +2487,13 @@ verify:dataprep-lock:
++  -        paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
++  +        paths: ["genie-ai-overlay/dataprep/requirements.*", "genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
++       - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
++         changes:
++  -        paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
++  +        paths: ["genie-ai-overlay/dataprep/requirements.*", "genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
++       - if: $CI_COMMIT_BRANCH =~ /^release\//
++         changes:
++  -        paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
++  +        paths: ["genie-ai-overlay/dataprep/requirements.*", "genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
++   
++   
++   config:validate:
++  +32 -28
++
++Makefile
++  @@ -1,28 +1,40 @@
++  -# See genie-ai-overlay/dataprep/scripts/ and GitLab issue #834.
++   #
++  -# NOTE: these targets exist only because OPEA v1.3 ships an unpinned
++  -# requirements.txt. OPEA v1.4+ ships its own uv-compiled lock — on bumping
++  -# OPEA past v1.3 these targets + requirements.in/.lock should be retired.
++  -# See _bmad-output/implementation-artifacts/deferred-work.md (issue-834).
++  +# The overlay modules adopt OPEA v1.5's compiled-lock layout: each module's
++  +# requirements.in is a GENIE.AI fork of OPEA's, and `uv pip compile` produces
++  +# the hash-pinned requirements-cpu.txt that the module Dockerfiles install
++  +# with `pip install --require-hashes`. See genie-ai-overlay/<module>/requirements.in.
++   
++   UV ?= uv
++   
++  -.PHONY: requirements-in-dataprep lock-dataprep
++  +.PHONY: lock-dataprep lock-retriever lock-reranker
++   
++  -# Regenerate requirements.in from the pinned OPEA tag's requirements.txt.
++  -# Run when bumping OPEA_VERSION in the Dockerfile. Accepts an optional tag arg:
++  -#   make requirements-in-dataprep OPEA_TAG=v1.4
++  -requirements-in-dataprep:
++  -	bash genie-ai-overlay/dataprep/scripts/generate-requirements-in.sh $(OPEA_TAG)
++  -
++  -# Compile the hash-pinned lock from requirements.in. Targets the same platform
++  -# as the dataprep Docker image (Python 3.10 / manylinux_2_31 ≈ Ubuntu 22.04).
++  +# Compile the hash-pinned lock from requirements.in, targeting Python 3.11
++  +# (matches the python:3.11-slim base images). Run after editing requirements.in
++  +# and commit the regenerated requirements-cpu.txt alongside it.
++   lock-dataprep:
++   	cd genie-ai-overlay/dataprep && $(UV) pip compile requirements.in \
++   	  --generate-hashes \
++  +	  --python-version 3.11 \
++  +	  --python-platform x86_64-manylinux_2_31 \
++  +	  --output-file requirements-cpu.txt
++  +	@echo "Lock written to genie-ai-overlay/dataprep/requirements-cpu.txt"
++  +	@echo "Commit it alongside any requirements.in change."
++  +
++  +lock-retriever:
++  +	cd genie-ai-overlay/retriever && $(UV) pip compile requirements.in \
++  +	  --generate-hashes \
++  +	  --python-version 3.11 \
++  +	  --python-platform x86_64-manylinux_2_31 \
++  +	  --output-file requirements-cpu.txt
++  +	@echo "Lock written to genie-ai-overlay/retriever/requirements-cpu.txt"
++  +	@echo "Commit it alongside any requirements.in change."
++  +
++  +lock-reranker:
++  +	cd genie-ai-overlay/reranker && $(UV) pip compile requirements.in \
++  +	  --generate-hashes \
++  +	  --python-version 3.11 \
++   	  --python-platform x86_64-manylinux_2_31 \
++  -	  --python-version 3.10 \
++  -	  --output-file requirements.lock
++  -	@echo "Lock written to genie-ai-overlay/dataprep/requirements.lock"
++  +	  --output-file requirements-cpu.txt
++  +	@echo "Lock written to genie-ai-overlay/reranker/requirements-cpu.txt"
++   	@echo "Commit it alongside any requirements.in change."
++  +29 -17
++
++genie-ai-overlay/build-patches/fix_dependencies.sh
++  @@ -1,21 +0,0 @@
++  -#!/bin/sh
++  -set -e
++  -
++  -REQUIREMENTS_FILE=$1
++  -
++  -if [ -f "$REQUIREMENTS_FILE" ]; then
++  -    echo "Patching $REQUIREMENTS_FILE to fix dependencies..."
++  -
++  -    # 1. Remove the non-existent Pathway dependency
++  -    sed -i '/pathway==0.3.3/d' "$REQUIREMENTS_FILE"
++  -
++  -    # 2. Remove the conflicting graspologic dependency
++  -    sed -i '/graspologic==3.4.1/d' "$REQUIREMENTS_FILE"
++  -
++  -    # 3. (NEW) Swap psycopg2 for psycopg2-binary to avoid compiling from source
++  -    sed -i 's/psycopg2==2.9.10/psycopg2-binary==2.9.10/' "$REQUIREMENTS_FILE"
++  -
++  -    echo "Patching complete. Dependencies fixed."
++  -else
++  -    echo "Warning: requirements file $REQUIREMENTS_FILE not found. Skipping patch."
++  -fi
++  +0 -21
++
++genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
++  @@ -14,7 +14,7 @@ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
++  -FROM python:3.10-slim AS comps_base_builder
++  +FROM python:3.11-slim AS comps_base_builder
++   
++   # Install git so we can clone
++   RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
++  +1 -1
++
++genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
++  @@ -1,7 +1,7 @@
++  -ARG OPEA_VERSION="v1.3" # This tag can be changed to upgrade OPEA
++  +ARG OPEA_VERSION="v1.5" # This tag can be changed to upgrade OPEA
++   FROM alpine/git:v2.52.0 AS opea_base
++   
++   ARG OPEA_REPO_URL
++  @@ -12,26 +12,33 @@ WORKDIR /src
++  -# Use the official NVIDIA CUDA image for Ubuntu 22.04 to enable GPU access.
++  -# This uses the correct 'cudnn8' tag.
++  -FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
++  +# Match OPEA v1.5's dataprep base (python:3.11-slim). No GPU is granted to
++  +# dataprep in docker-compose.yaml (only gpu-models profile services get one),
++  +# so the CUDA base is unnecessary; the slim base also retires the Ubuntu
++  +# update-alternatives python3.10 machinery in one stroke.
++  +FROM python:3.11-slim
++   
++   # ARG for Hugging Face token is NO LONGER NEEDED.
++   WORKDIR /app
++   
++   # Step A: Install System Dependencies
++  -# Install Python 3.10, pip, and all required system libraries for OPEA dataprep.
++  +# All required system libraries for OPEA dataprep (matches OPEA v1.5's apt list,
++  +# plus GENIE.AI additions: libgl1 + libglib2.0-0 for opencv (the lock installs
++  +# non-headless opencv-python transitively via unstructured-inference; its cv2
++  +# extension links libgthread-2.0.so.0/libglib-2.0.so.0, which python:3.11-slim
++  +# does not ship), unzip + ca-certificates for the EasyOCR model pre-download
++  +# below). libmariadb-dev is required because the 'mariadb' python package has
++  +# no manylinux wheel and compiles against it.
++   RUN apt-get update -y && \
++       apt-get install -y --no-install-recommends --fix-missing \
++  -    # Install Python 3.10 (which is on Ubuntu 22.04) and pip
++  -    python3.10 \
++  -    python3-pip \
++  -    # Install OPEA system dependencies
++       build-essential \
++       default-jre \
++  +    ffmpeg \
++       libcairo2 \
++       libgl1 \
++  +    libglib2.0-0 \
++       libjemalloc-dev \
++  +    libmariadb-dev \
++       libpq-dev \
++       libreoffice \
++       poppler-utils \
++  @@ -40,11 +47,6 @@ RUN apt-get update -y && \
++  -    # Create symlinks to make python3.10 the default 'python' and 'python3'
++  -    # and pip3 the default 'pip'
++  -    update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 && \
++  -    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1 && \
++  -    update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1 && \
++       apt-get clean && \
++       rm -rf /var/lib/apt/lists/*
++   
++  @@ -55,29 +57,17 @@ ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/dataprep/src:/app/comps/dataprep/s
++  -# Define the path to the requirements file for easier reference
++   # Step C: Upgrade pip/setuptools/wheel BEFORE any install.
++  -# The Ubuntu 22.04 base ships pip 22.0.2 via apt; its resolver backtracks for
++  -# tens of minutes on valid extras-marker constraints and mis-reports
++  -# ResolutionImpossible (GitLab issue #834). A modern pip is also required to
++  -# honor --require-hashes on the lock below.
++   RUN pip install --no-cache-dir --upgrade pip setuptools wheel
++   
++  -# Step D: Install dependencies from a hash-pinned lock (issue #834).
++  -# The lock is generated by `make lock-dataprep` (uv pip compile) from
++  -# requirements.in, which is produced by scripts/generate-requirements-in.sh
++  -# from the pinned OPEA tag's requirements.txt (patched) plus overlay extras.
++  -# --no-deps --require-hashes makes the build bit-for-bit reproducible and
++  -# supply-chain-pinned: no transitive re-resolution against live PyPI, and
++  -# every wheel's SHA256 is verified at install time.
++  -#
++  -# NOTE: this block (lock + .in + generator + docling-core pin) exists because
++  -# OPEA v1.3 ships an UNPINNED requirements.txt. OPEA v1.4+ ships its own
++  -# uv-compiled lock with correct pins — on bumping OPEA past v1.3, replace
++  -# this with OPEA's requirements-cpu.txt and delete .in/.lock + the generator
++  -# script. See deferred-work.md (Initiative: issue-834) for the full checklist.
++  -COPY genie-ai-overlay/dataprep/requirements.lock /app/requirements.lock
++  -RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements.lock
++  +# Step D: Install dependencies from the committed hash-pinned lock.
++  +# The lock is compiled with `make lock-dataprep` (uv pip compile
++  +# --generate-hashes --python-version 3.11) from the GENIE.AI fork of OPEA
++  +# v1.5's requirements.in. --require-hashes makes the build bit-for-bit
++  +# reproducible and supply-chain-pinned: every wheel's SHA256 is verified at
++  +# install time, with no re-resolution against live PyPI.
++  +COPY genie-ai-overlay/dataprep/requirements-cpu.txt /app/requirements-cpu.txt
++  +RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-cpu.txt
++   
++   # Copy custom utils to its new correct location (matches your structure)
++   COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/comps/dataprep/src/genieai_dataprep_utils.py
++  +24 -34
++
++genie-ai-overlay/dataprep/requirements.in
++  @@ -1,75 +1,101 @@
++  -# AUTO-GENERATED by scripts/generate-requirements-in.sh from OPEA v1.3.
++  -# Do not hand-edit — re-run the generator on OPEA bumps, and add overrides below.
++  -# Source: comps/dataprep/src/requirements.txt @ OPEA v1.3, patched for GENIE.AI.
++  +# GENIE.AI fork of OPEA v1.5 comps/dataprep/src/requirements.in.
++  +# Source: https://raw.githubusercontent.com/opea-project/GenAIComps/v1.5/comps/dataprep/src/requirements.in
++  +# Regenerate the lock with:
++  +#   uv pip compile --generate-hashes --python-version 3.11 --python-platform x86_64-manylinux_2_31 requirements.in -o requirements-cpu.txt
++  +#
++  +# Deltas vs upstream (compiled-lock source, PRD FR-4):
++  +#   - opencv-python -> opencv-python-headless (server image has no display; the
++  +#     two packages conflict — both provide cv2 — so headless is the direct dep).
++  +#     NOTE: the compiled lock still contains BOTH (opencv-python pulled
++  +#     transitively via unstructured-inference; headless listed directly). The
++  +#     dual cv2 install is a 2.5 dataprep re-audit item; the headless pin keeps
++  +#     the direct dependency correct for the display-less server image.
++  +#   - psycopg2 -> psycopg2-binary (avoid source compile).
++  +#   - openai-whisper kept (v1.5 pins it; verify it builds — arch decision D8).
++  +#   - docling/docling-core/langchain/fastapi/docarray pinned to the versions
++  +#     OPEA v1.5's compiled lock ships — recompiling the bare .in today resolves
++  +#     to newer packages (e.g. docling 2.119) that do NOT pair with v1.5 comps
++  +#     source. These pins reproduce the v1.5 known-good set (AC1 requires
++  +#     docling-core==2.44.2).
++  +#   - overlay extras + opentelemetry instrumentation appended below.
++   
++  -accelerate==1.6.0
++  -beautifulsoup4==4.13.4
++  -cairosvg==2.7.1
++  -decord==0.6.0
++  +accelerate
++  +beautifulsoup4
++  +cairosvg
++  +decord
++   docarray[full]==0.41.0
++  -docling==2.30.0
++  -docx2txt==0.9
++  -easyocr==1.7.2
++  -einops==0.8.1
++  -fastapi==0.115.12
++  -future==1.0.0
++  -html2text==2025.4.15
++  -huggingface-hub==0.30.2
++  -ipython==8.35.0
++  -json-repair==0.41.1
++  -langchain==0.3.23
++  -langchain-arangodb==0.0.4
++  -langchain-community==0.3.21
++  -langchain-elasticsearch==0.3.2
++  -langchain-experimental==0.3.4
++  -langchain-huggingface==0.1.2
++  -langchain-milvus==0.1.9
++  -langchain-openai==0.3.14
++  -langchain-pinecone==0.2.5
++  -langchain-redis==0.2.0
++  -langchain-text-splitters==0.3.8
++  -langchain-vdms==0.1.4
++  -llama-index==0.12.19
++  -llama-index-core==0.12.19
++  -llama-index-embeddings-text-embeddings-inference==0.3.2
++  -llama-index-graph-stores-neo4j==0.4.6
++  -llama-index-llms-openai==0.3.37
++  -llama-index-llms-openai-like==0.3.4
++  -markdown==3.8
++  -moviepy==2.1.2
++  -neo4j==5.28.1
++  -numpy==1.26.4
++  -openai==1.75.0
++  -opencv-python-headless==4.11.0.86
++  -opensearch-py==2.8.0
++  +docling==2.45.0
++  +docling-core==2.44.2
++  +docx2txt
++  +easyocr
++  +einops
++  +elasticsearch
++  +fastapi==0.116.1
++  +future
++  +graspologic>=3.4.1
++  +html2text
++  +huggingface_hub
++  +ipython
++  +json-repair
++  +langchain==0.3.27
++  +langchain-arangodb==0.0.6
++  +langchain-community
++  +langchain-elasticsearch
++  +langchain-experimental
++  +langchain-mariadb
++  +langchain-openai
++  +langchain-pinecone
++  +langchain-redis
++  +langchain-text-splitters
++  +langchain-vdms>=0.1.4
++  +langchain_huggingface
++  +langchain_milvus
++  +langchain-opengauss
++  +llama-index
++  +llama-index-core
++  +llama-index-embeddings-text-embeddings-inference
++  +llama-index-graph-stores-neo4j
++  +llama-index-llms-openai
++  ... (54 lines truncated)
++  @@ -82,10 +108,3 @@ opentelemetry-instrumentation-fastapi>=0.43b0
++  -
++  -# === Issue #834: pin docling-core below the legacy_doc removal ===
++  -# docling==2.30.0 imports docling_core.types.legacy_doc.base.BaseText,
++  -# which was deleted in docling-core 2.83.0 (2026-06-18). The declared
++  -# range docling-core>=2.26.0,<3.0.0 lets pip pick the breaking version.
++  -# 2.82.0 is the last release with a functional legacy_doc.BaseText.
++  -docling-core==2.82.0
++  +89 -70
++
++genie-ai-overlay/dataprep/requirements.lock
++  @@ -1,5786 +0,0 @@
++  -# This file was autogenerated by uv via the following command:
++  -#    uv pip compile requirements.in --generate-hashes --python-platform x86_64-manylinux_2_31 --python-version 3.10 --output-file /tmp/regen.lock
++  -accelerate==1.6.0 \
++  -    --hash=sha256:1aee717d3d3735ad6d09710a7c26990ee4652b79b4e93df46551551b5227c2aa \
++  -    --hash=sha256:28c1ef1846e690944f98b68dc7b8bb6c51d032d45e85dcbb3adb0c8b99dffb32
++  -    # via
++  -    #   -r requirements.in
++  -    #   docling-ibm-models
++  -aiofiles==25.1.0 \
++  -    --hash=sha256:a8d728f0a29de45dc521f18f07297428d56992a742f0cd2701ba86e44d23d5b2 \
++  -    --hash=sha256:abe311e527c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695
++  -    # via unstructured-client
++  -aiohappyeyeballs==2.7.1 \
++  -    --hash=sha256:065665c041c42a5938ed220bdcd7230f22527fbec085e1853d2402c8a3615d9d \
++  -    --hash=sha256:9243213661e29250eb41368e5daa826fc017156c3b8a11440826b2e3ed376472
++  -    # via aiohttp
++  -aiohttp==3.10.11 \
++  -    --hash=sha256:0316e624b754dbbf8c872b62fe6dcb395ef20c70e59890dfa0de9eafccd2849d \
++  -    --hash=sha256:099fd126bf960f96d34a760e747a629c27fb3634da5d05c7ef4d35ef4ea519fc \
++  -    --hash=sha256:0acafb350cfb2eba70eb5d271f55e08bd4502ec35e964e18ad3e7d34d71f7261 \
++  -    --hash=sha256:0c5580f3c51eea91559db3facd45d72e7ec970b04528b4709b1f9c2555bd6d0b \
++  -    --hash=sha256:0f449a50cc33f0384f633894d8d3cd020e3ccef81879c6e6245c3c375c448625 \
++  -    --hash=sha256:14cdc8c1810bbd4b4b9f142eeee23cda528ae4e57ea0923551a9af4820980e39 \
++  -    --hash=sha256:1dc0f4ca54842173d03322793ebcf2c8cc2d34ae91cc762478e295d8e361e03f \
++  -    --hash=sha256:1e7b825da878464a252ccff2958838f9caa82f32a8dbc334eb9b34a026e2c636 \
++  -    --hash=sha256:20063c7acf1eec550c8eb098deb5ed9e1bb0521613b03bb93644b810986027ac \
++  -    --hash=sha256:20b3d9e416774d41813bc02fdc0663379c01817b0874b932b81c7f777f67b217 \
++  -    --hash=sha256:22b7c540c55909140f63ab4f54ec2c20d2635c0289cdd8006da46f3327f971b9 \
++  -    --hash=sha256:236b28ceb79532da85d59aa9b9bf873b364e27a0acb2ceaba475dc61cffb6f3f \
++  -    --hash=sha256:249c8ff8d26a8b41a0f12f9df804e7c685ca35a207e2410adbd3e924217b9006 \
++  -    --hash=sha256:25fd5470922091b5a9aeeb7e75be609e16b4fba81cdeaf12981393fb240dd10e \
++  -    --hash=sha256:29103f9099b6068bbdf44d6a3d090e0a0b2be6d3c9f16a070dd9d0d910ec08f9 \
++  -    --hash=sha256:2b943011b45ee6bf74b22245c6faab736363678e910504dd7531a58c76c9015a \
++  -    --hash=sha256:2c8f96e9ee19f04c4914e4e7a42a60861066d3e1abf05c726f38d9d0a466e695 \
++  -    --hash=sha256:2dfb612dcbe70fb7cdcf3499e8d483079b89749c857a8f6e80263b021745c730 \
++  -    --hash=sha256:2e4e18a0a2d03531edbc06c366954e40a3f8d2a88d2b936bbe78a0c75a3aab3e \
++  -    --hash=sha256:2ea224cf7bc2d8856d6971cea73b1d50c9c51d36971faf1abc169a0d5f85a382 \
++  -    --hash=sha256:30283f9d0ce420363c24c5c2421e71a738a2155f10adbb1a11a4d4d6d2715cfc \
++  -    --hash=sha256:38e3c4f80196b4f6c3a85d134a534a56f52da9cb8d8e7af1b79a32eefee73a00 \
++  -    --hash=sha256:3bf6d027d9d1d34e1c2e1645f18a6498c98d634f8e373395221121f1c258ace8 \
++  -    --hash=sha256:459f0f32c8356e8125f45eeff0ecf2b1cb6db1551304972702f34cd9e6c44658 \
++  -    --hash=sha256:473aebc3b871646e1940c05268d451f2543a1d209f47035b594b9d4e91ce8339 \
++  -    --hash=sha256:489cced07a4c11488f47aab1f00d0c572506883f877af100a38f1fedaa884c3a \
++  -    --hash=sha256:48bc1d924490f0d0b3658fe5c4b081a4d56ebb58af80a6729d4bd13ea569797a \
++  -    --hash=sha256:4996ff1345704ffdd6d75fb06ed175938c133425af616142e7187f28dc75f14e \
++  -    --hash=sha256:4e8d8aad9402d3aa02fdc5ca2fe68bcb9fdfe1f77b40b10410a94c7f408b664d \
++  -    --hash=sha256:5077b1a5f40ffa3ba1f40d537d3bec4383988ee51fbba6b74aa8fb1bc466599e \
++  -    --hash=sha256:5a5f7ab8baf13314e6b2485965cbacb94afff1e93466ac4d06a47a81c50f9cca \
++  -    --hash=sha256:5ab2328a61fdc86424ee540d0aeb8b73bbcad7351fb7cf7a6546fc0bcffa0038 \
++  -    --hash=sha256:5f0463bf8b0754bc744e1feb61590706823795041e63edf30118a6f0bf577461 \
++  -    --hash=sha256:686b03196976e327412a1b094f4120778c7c4b9cff9bce8d2fdfeca386b89829 \
++  -    --hash=sha256:6cd3f10b01f0c31481fba8d302b61603a2acb37b9d30e1d14e0f5a58b7b18a31 \
++  -    --hash=sha256:6ce66780fa1a20e45bc753cda2a149daa6dbf1561fc1289fa0c308391c7bc0a4 \
++  -    --hash=sha256:703938e22434d7d14ec22f9f310559331f455018389222eed132808cd8f44127 \
++  -    --hash=sha256:72b191cdf35a518bfc7ca87d770d30941decc5aaf897ec8b484eb5cc8c7706f3 \
++  -    --hash=sha256:7400a93d629a0608dc1d6c55f1e3d6e07f7375745aaa8bd7f085571e4d1cee97 \
++  -    --hash=sha256:7480519f70e32bfb101d71fb9a1f330fbd291655a4c1c922232a48c458c52710 \
++  -    --hash=sha256:74baf1a7d948b3d640badeac333af581a367ab916b37e44cf90a0334157cdfd2 \
++  -    --hash=sha256:778cbd01f18ff78b5dd23c77eb82987ee4ba23408cbed233009fd570dda7e674 \
++  -    --hash=sha256:7b26b1551e481012575dab8e3727b16fe7dd27eb2711d2e63ced7368756268fb \
++  -    --hash=sha256:7ce6a51469bfaacff146e59e7fb61c9c23006495d11cc24c514a455032bcfa03 \
++  -    --hash=sha256:80ff08556c7f59a7972b1e8919f62e9c069c33566a6d28586771711e0eea4f07 \
++  -    --hash=sha256:82052be3e6d9e0c123499127782a01a2b224b8af8c62ab46b3f6197035ad94e9 \
++  -    --hash=sha256:8663f7777ce775f0413324be0d96d9730959b2ca73d9b7e2c2c90539139cbdd6 \
++  -    --hash=sha256:878ca6a931ee8c486a8f7b432b65431d095c522cbeb34892bee5be97b3481d0f \
++  -    --hash=sha256:8d6a14a4d93b5b3c2891fca94fa9d41b2322a68194422bef0dd5ec1e57d7d298 \
++  -    --hash=sha256:9208299251370ee815473270c52cd3f7069ee9ed348d941d574d1457d2c73e8b \
++  -    --hash=sha256:968b8fb2a5eee2770eda9c7b5581587ef9b96fbdf8dcabc6b446d35ccc69df01 \
++  -    --hash=sha256:971aa438a29701d4b34e4943e91b5e984c3ae6ccbf80dd9efaffb01bd0b243a9 \
++  -    --hash=sha256:9a309c5de392dfe0f32ee57fa43ed8fc6ddf9985425e84bd51ed66bb16bce3a7 \
++  -    --hash=sha256:9bc50b63648840854e00084c2b43035a62e033cb9b06d8c22b409d56eb098413 \
++  -    --hash=sha256:9c6e0ffd52c929f985c7258f83185d17c76d4275ad22e90aa29f38e211aacbec \
++  -    --hash=sha256:9dc2b8f3dcab2e39e0fa309c8da50c3b55e6f34ab25f1a71d3288f24924d33a7 \
++  -    --hash=sha256:9ec1628180241d906a0840b38f162a3215114b14541f1a8711c368a8739a9be4 \
++  -    --hash=sha256:a919c8957695ea4c0e7a3e8d16494e3477b86f33067478f43106921c2fef15bb \
++  -    --hash=sha256:aa93063d4af05c49276cf14e419550a3f45258b6b9d1f16403e777f1addf4519 \
++  -    --hash=sha256:aad3cd91d484d065ede16f3cf15408254e2469e3f613b241a1db552c5eb7ab7d \
++  -    --hash=sha256:b3e70f24e7d0405be2348da9d5a7836936bf3a9b4fd210f8c37e8d48bc32eca6 \
++  -    --hash=sha256:b5e29706e6389a2283a91611c91bf24f218962717c8f3b4e528ef529d112ee27 \
++  -    --hash=sha256:bbde2ca67230923a42161b1f408c3992ae6e0be782dca0c44cb3206bf330dee1 \
++  -    --hash=sha256:bc6f1ab987a27b83c5268a17218463c2ec08dbb754195113867a27b166cd6087 \
++  -    --hash=sha256:bcaf2d79104d53d4dcf934f7ce76d3d155302d07dae24dff6c9fffd217568067 \
++  -    --hash=sha256:c13ed0c779911c7998a58e7848954bd4d63df3e3575f591e321b19a2aec8df9f \
++  -    --hash=sha256:c2f746a6968c54ab2186574e15c3f14f3e7f67aef12b761e043b33b89c5b5f95 \
++  -    --hash=sha256:c73c4d3dae0b4644bc21e3de546530531d6cdc88659cdeb6579cd627d3c206aa \
++  -    --hash=sha256:c891011e76041e6508cbfc469dd1a8ea09bc24e87e4c204e05f150c4c455a5fa \
++  -    --hash=sha256:ca117819d8ad113413016cb29774b3f6d99ad23c220069789fc050267b786c16 \
++  -    --hash=sha256:cdc493a2e5d8dc79b2df5bec9558425bcd39aff59fc949810cbd0832e294b106 \
++  -    --hash=sha256:d110cabad8360ffa0dec8f6ec60e43286e9d251e77db4763a87dcfe55b4adb92 \
++  -    --hash=sha256:d97187de3c276263db3564bb9d9fad9e15b51ea10a371ffa5947a5ba93ad6777 \
++  -    --hash=sha256:db9503f79e12d5d80b3efd4d01312853565c05367493379df76d2674af881caa \
++  -    --hash=sha256:deef4362af9493d1382ef86732ee2e4cbc0d7c005947bd54ad1a9a16dd59298e \
++  -    --hash=sha256:e0099c7d5d7afff4202a0c670e5b723f7718810000b4abcbc96b064129e64bc7 \
++  -    --hash=sha256:e12eb3f4b1f72aaaf6acd27d045753b18101524f72ae071ae1c91c1cd44ef115 \
++  -    --hash=sha256:e1ffa713d3ea7cdcd4aea9cddccab41edf6882fa9552940344c44e59652e1120 \
++  -    --hash=sha256:e5358addc8044ee49143c546d2182c15b4ac3a60be01c3209374ace05af5733d \
++  -    --hash=sha256:ea9b3bab329aeaa603ed3bf605f1e2a6f36496ad7e0e1aa42025f368ee2dc07b \
++  -    --hash=sha256:f14ebc419a568c2eff3c1ed35f634435c24ead2fe19c07426af41e7adb68713a \
++  -    --hash=sha256:f34b97e4b11b8d4eb2c3a4f975be626cc8af99ff479da7de49ac2c6d02d35725 \
++  -    --hash=sha256:f4df4b8ca97f658c880fb4b90b1d1ec528315d4030af1ec763247ebfd33d8b9a \
++  ... (5686 lines truncated)
++  +0 -5786
++
++genie-ai-overlay/dataprep/scripts/generate-requirements-in.sh
++  @@ -1,80 +0,0 @@
++  -#!/usr/bin/env bash
++  -# Generates requirements.in for the dataprep image from the pinned OPEA tag's
++
++... (more changes truncated)
++  +0 -2
++[full diff: rtk git diff --no-compact]
+diff --git a/_bmad-output/implementation-artifacts/sprint-status.yaml b/_bmad-output/implementation-artifacts/sprint-status.yaml
+index a9f697de2..d02235c73 100644
+--- a/_bmad-output/implementation-artifacts/sprint-status.yaml
++++ b/_bmad-output/implementation-artifacts/sprint-status.yaml
+@@ -55,7 +55,7 @@ development_status:
+   # Epic 2: OPEA 1.5 overlay rebase (behavior-preserving)
+   epic-2: backlog
+   2-1-re-graft-the-core-overlay-layer: done
+-  2-2-migrate-dependencies-python-3-11: backlog
++  2-2-migrate-dependencies-python-3-11: done
+   2-3-re-graft-the-retriever-bump-langchain-arangodb: backlog
+   2-4-re-graft-the-reranker: backlog
+   2-5-re-graft-the-dataprep: backlog
+diff --git a/_bmad-output/planning-artifacts/prds/prd-genie-ai-2026-08-07/.decision-log.md b/_bmad-output/planning-artifacts/prds/prd-genie-ai-2026-08-07/.decision-log.md
+index b6ecff7dc..b79c7fe2d 100644
+--- a/_bmad-output/planning-artifacts/prds/prd-genie-ai-2026-08-07/.decision-log.md
++++ b/_bmad-output/planning-artifacts/prds/prd-genie-ai-2026-08-07/.decision-log.md
+@@ -17,3 +17,5 @@ Canonical memory + audit trail. Every decision, change, and override is recorded
+ | 11 | 2026-08-07 | **PRD reconciled to architecture:** FR-4 + SM-6 compiled-lock extended to retriever/reranker (D7); FR-10 contract tests in-image required (D3) + E2E cross-service pipeline test + NFR-P budgets (D6); FR-16 shadow comparison required (D5); FR-18 docs-link bound to the OPEA_VERSION MR (pattern 9); FR-6 override-audit manifest; OQ-9 resolved (D8), OQ-10 resolved (D7). | PRD amendment (validation important-gap). | Reconciliation |
+ 
+ | 12 | 2026-08-07 | **Epics + stories complete** (`_bmad-output/planning-artifacts/epics.md`): 4 epics (foundation / overlay rebase / verification & parity / operational readiness & rollout), 23 stories, all 19 FRs covered, final validation passed (single-agent stories, prior-only deps, justified file-churn split). | bmad-create-epics-and-stories workflow (steps 1–4). | Epics |
++
++| 13 | 2026-08-12 | **FR-4 executed (story 2-2): `verify:dataprep-lock` re-pointed to three-module compiled-lock drift guard.** Job renamed in scope only (kept name `verify:dataprep-lock`), now loops `dataprep`/`retriever`/`reranker` running `uv pip sync requirements-cpu.txt --dry-run --system` + per-package grep of each `requirements.in` against its `requirements-cpu.txt` (`make lock-<module>` hint on miss). Image `python:3.10-slim`→`python:3.11-slim`; rules paths widened to `genie-ai-overlay/{dataprep,retriever,reranker}/requirements.*` (retired `requirements.lock`, `dataprep/scripts/*` refs). Matches new compiled-lock layout + AC5. | PRD FR-4 + SM-6; upstream v1.5 lock (no hashes) drove adoption of uv-compiled hashed locks. | Implementation (2-2) |
+diff --git a/_bmad/config.user.toml b/_bmad/config.user.toml
+index b8c093055..aa12dd92b 100644
+--- a/_bmad/config.user.toml
++++ b/_bmad/config.user.toml
+@@ -12,6 +12,4 @@
+ [core]
+ user_name = "Genie.ai Dev"
+ communication_language = "English"
+-
+-[modules.bmm]
+ user_skill_level = "intermediate"
+diff --git a/genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai b/genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
+index 7adc7b556..547c59538 100644
+--- a/genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
++++ b/genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
+@@ -14,7 +14,7 @@ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
+ # This stage builds the missing 'opea/comps-base:v1.3' functionality from source.
+ ARG OPEA_COMPS_REPO_URL="https://github.com/opea-project/GenAIComps.git"
+ ARG OPEA_VERSION="v1.3" # Re-declare ARG for this stage
+-FROM python:3.10-slim AS comps_base_builder
++FROM python:3.11-slim AS comps_base_builder
+ 
+ # Install git so we can clone
+ RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
+diff --git a/genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai b/genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
+index aa12e7188..a72d4da2b 100644
+--- a/genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
++++ b/genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
+@@ -1,7 +1,7 @@
+ # ======== Stage 1: The OPEA Base ========
+ # This stage clones the external OPEA repository at a specific version.
+ ARG OPEA_REPO_URL="https://github.com/opea-project/GenAIComps.git"
+-ARG OPEA_VERSION="v1.3" # This tag can be changed to upgrade OPEA
++ARG OPEA_VERSION="v1.5" # This tag can be changed to upgrade OPEA
+ FROM alpine/git:v2.52.0 AS opea_base
+ 
+ ARG OPEA_REPO_URL
+@@ -12,26 +12,33 @@ WORKDIR /src
+ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
+ 
+ # ======== Final Stage: Assembly ========
+-# Use the official NVIDIA CUDA image for Ubuntu 22.04 to enable GPU access.
+-# This uses the correct 'cudnn8' tag.
+-FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
++# Match OPEA v1.5's dataprep base (python:3.11-slim). No GPU is granted to
++# dataprep in docker-compose.yaml (only gpu-models profile services get one),
++# so the CUDA base is unnecessary; the slim base also retires the Ubuntu
++# update-alternatives python3.10 machinery in one stroke.
++FROM python:3.11-slim
+ 
+ # ARG for Hugging Face token is NO LONGER NEEDED.
+ WORKDIR /app
+ 
+ # Step A: Install System Dependencies
+-# Install Python 3.10, pip, and all required system libraries for OPEA dataprep.
++# All required system libraries for OPEA dataprep (matches OPEA v1.5's apt list,
++# plus GENIE.AI additions: libgl1 + libglib2.0-0 for opencv (the lock installs
++# non-headless opencv-python transitively via unstructured-inference; its cv2
++# extension links libgthread-2.0.so.0/libglib-2.0.so.0, which python:3.11-slim
++# does not ship), unzip + ca-certificates for the EasyOCR model pre-download
++# below). libmariadb-dev is required because the 'mariadb' python package has
++# no manylinux wheel and compiles against it.
+ RUN apt-get update -y && \
+     apt-get install -y --no-install-recommends --fix-missing \
+-    # Install Python 3.10 (which is on Ubuntu 22.04) and pip
+-    python3.10 \
+-    python3-pip \
+-    # Install OPEA system dependencies
+     build-essential \
+     default-jre \
++    ffmpeg \
+     libcairo2 \
+     libgl1 \
++    libglib2.0-0 \
+     libjemalloc-dev \
++    libmariadb-dev \
+     libpq-dev \
+     libreoffice \
+     poppler-utils \
+@@ -40,11 +47,6 @@ RUN apt-get update -y && \
+     curl \
+     unzip \
+     ca-certificates && \
+-    # Create symlinks to make python3.10 the default 'python' and 'python3'
+-    # and pip3 the default 'pip'
+-    update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 && \
+-    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1 && \
+-    update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1 && \
+     apt-get clean && \
+     rm -rf /var/lib/apt/lists/*
+ 
+@@ -55,29 +57,17 @@ ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/dataprep/src:/app/comps/dataprep/s
+ # Step B: Copy the entire OPEA 'comps' directory from the clone
+ COPY --from=opea_base /src/comps/ /app/comps/
+ 
+-# Define the path to the requirements file for easier reference
+ # Step C: Upgrade pip/setuptools/wheel BEFORE any install.
+-# The Ubuntu 22.04 base ships pip 22.0.2 via apt; its resolver backtracks for
+-# tens of minutes on valid extras-marker constraints and mis-reports
+-# ResolutionImpossible (GitLab issue #834). A modern pip is also required to
+-# honor --require-hashes on the lock below.
+ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+ 
+-# Step D: Install dependencies from a hash-pinned lock (issue #834).
+-# The lock is generated by `make lock-dataprep` (uv pip compile) from
+-# requirements.in, which is produced by scripts/generate-requirements-in.sh
+-# from the pinned OPEA tag's requirements.txt (patched) plus overlay extras.
+-# --no-deps --require-hashes makes the build bit-for-bit reproducible and
+-# supply-chain-pinned: no transitive re-resolution against live PyPI, and
+-# every wheel's SHA256 is verified at install time.
+-#
+-# NOTE: this block (lock + .in + generator + docling-core pin) exists because
+-# OPEA v1.3 ships an UNPINNED requirements.txt. OPEA v1.4+ ships its own
+-# uv-compiled lock with correct pins — on bumping OPEA past v1.3, replace
+-# this with OPEA's requirements-cpu.txt and delete .in/.lock + the generator
+-# script. See deferred-work.md (Initiative: issue-834) for the full checklist.
+-COPY genie-ai-overlay/dataprep/requirements.lock /app/requirements.lock
+-RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements.lock
++# Step D: Install dependencies from the committed hash-pinned lock.
++# The lock is compiled with `make lock-dataprep` (uv pip compile
++# --generate-hashes --python-version 3.11) from the GENIE.AI fork of OPEA
++# v1.5's requirements.in. --require-hashes makes the build bit-for-bit
++# reproducible and supply-chain-pinned: every wheel's SHA256 is verified at
++# install time, with no re-resolution against live PyPI.
++COPY genie-ai-overlay/dataprep/requirements-cpu.txt /app/requirements-cpu.txt
++RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-cpu.txt
+ 
+ # Copy custom utils to its new correct location (matches your structure)
+ COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/comps/dataprep/src/genieai_dataprep_utils.py
+diff --git a/genie-ai-overlay/dataprep/requirements.in b/genie-ai-overlay/dataprep/requirements.in
+index 4b306ecf6..d213a6796 100644
+--- a/genie-ai-overlay/dataprep/requirements.in
++++ b/genie-ai-overlay/dataprep/requirements.in
+@@ -1,75 +1,101 @@
+-# AUTO-GENERATED by scripts/generate-requirements-in.sh from OPEA v1.3.
+-# Do not hand-edit — re-run the generator on OPEA bumps, and add overrides below.
+-# Source: comps/dataprep/src/requirements.txt @ OPEA v1.3, patched for GENIE.AI.
++# GENIE.AI fork of OPEA v1.5 comps/dataprep/src/requirements.in.
++# Source: https://raw.githubusercontent.com/opea-project/GenAIComps/v1.5/comps/dataprep/src/requirements.in
++# Regenerate the lock with:
++#   uv pip compile --generate-hashes --python-version 3.11 --python-platform x86_64-manylinux_2_31 requirements.in -o requirements-cpu.txt
++#
++# Deltas vs upstream (compiled-lock source, PRD FR-4):
++#   - opencv-python -> opencv-python-headless (server image has no display; the
++#     two packages conflict — both provide cv2 — so headless is the direct dep).
++#     NOTE: the compiled lock still contains BOTH (opencv-python pulled
++#     transitively via unstructured-inference; headless listed directly). The
++#     dual cv2 install is a 2.5 dataprep re-audit item; the headless pin keeps
++#     the direct dependency correct for the display-less server image.
++#   - psycopg2 -> psycopg2-binary (avoid source compile).
++#   - openai-whisper kept (v1.5 pins it; verify it builds — arch decision D8).
++#   - docling/docling-core/langchain/fastapi/docarray pinned to the versions
++#     OPEA v1.5's compiled lock ships — recompiling the bare .in today resolves
++#     to newer packages (e.g. docling 2.119) that do NOT pair with v1.5 comps
++#     source. These pins reproduce the v1.5 known-good set (AC1 requires
++#     docling-core==2.44.2).
++#   - overlay extras + opentelemetry instrumentation appended below.
+ 
+-accelerate==1.6.0
+-beautifulsoup4==4.13.4
+-cairosvg==2.7.1
+-decord==0.6.0
++accelerate
++beautifulsoup4
++cairosvg
++decord
+ docarray[full]==0.41.0
+-docling==2.30.0
+-docx2txt==0.9
+-easyocr==1.7.2
+-einops==0.8.1
+-fastapi==0.115.12
+-future==1.0.0
+-html2text==2025.4.15
+-huggingface-hub==0.30.2
+-ipython==8.35.0
+-json-repair==0.41.1
+-langchain==0.3.23
+-langchain-arangodb==0.0.4
+-langchain-community==0.3.21
+-langchain-elasticsearch==0.3.2
+-langchain-experimental==0.3.4
+-langchain-huggingface==0.1.2
+-langchain-milvus==0.1.9
+-langchain-openai==0.3.14
+-langchain-pinecone==0.2.5
+-langchain-redis==0.2.0
+-langchain-text-splitters==0.3.8
+-langchain-vdms==0.1.4
+-llama-index==0.12.19
+-llama-index-core==0.12.19
+-llama-index-embeddings-text-embeddings-inference==0.3.2
+-llama-index-graph-stores-neo4j==0.4.6
+-llama-index-llms-openai==0.3.37
+-llama-index-llms-openai-like==0.3.4
+-markdown==3.8
+-moviepy==2.1.2
+-neo4j==5.28.1
+-numpy==1.26.4
+-openai==1.75.0
+-opencv-python-headless==4.11.0.86
+-opensearch-py==2.8.0
++docling==2.45.0
++docling-core==2.44.2
++docx2txt
++easyocr
++einops
++elasticsearch
++fastapi==0.116.1
++future
++graspologic>=3.4.1
++html2text
++huggingface_hub
++ipython
++json-repair
++langchain==0.3.27
++langchain-arangodb==0.0.6
++langchain-community
++langchain-elasticsearch
++langchain-experimental
++langchain-mariadb
++langchain-openai
++langchain-pinecone
++langchain-redis
++langchain-text-splitters
++langchain-vdms>=0.1.4
++langchain_huggingface
++langchain_milvus
++langchain-opengauss
++llama-index
++llama-index-core
++llama-index-embeddings-text-embeddings-inference
++llama-index-graph-stores-neo4j
++llama-index-llms-openai
++llama-index-llms-openai-like
++mariadb
++markdown
++moviepy
++neo4j
++numpy
++# https://github.com/run-llama/llama_index/issues/18823
++openai==1.81.0
++openai-whisper
++opencv-python-headless
++opensearch-py
+ opentelemetry-api==1.27.0
+ opentelemetry-exporter-otlp==1.27.0
+ opentelemetry-sdk==1.27.0
+-pandas==2.2.3
++pandas
+ pgvector==0.2.5
+-pillow==10.4.0
+-pinecone-client==6.0.0
+-prometheus-fastapi-instrumentator==7.1.0
++Pillow==11.3.0
++pinecone
++prometheus-fastapi-instrumentator
+ protobuf==4.24.2
+-psycopg2-binary==2.9.10
++psycopg2-binary
+ pymilvus==2.5.6
+-pymupdf==1.25.5
+-pytesseract==0.3.13
+-python-bidi==0.6.6
+-python-docx==1.1.2
+-python-pptx==1.0.2
+-qdrant-client==1.13.3
++pymupdf
++pyspark
++pytesseract
++python-bidi
++python-docx
++python-pptx
++qdrant-client
+ redis==5.2.1
+-scipy==1.12.0
+-sentence-transformers==4.1.0
+-shortuuid==1.0.13
+-tiktoken==0.9.0
+-tqdm==4.67.1
+-typing==3.7.4.3
+-tzlocal==5.3.1
+-unstructured==0.17.2
+-uvicorn==0.34.2
+-webvtt-py==0.5.1
++scipy
++sentence_transformers
++shortuuid
++tiktoken
++tqdm
++typing
++tzlocal
++unstructured[all-docs]
++uvicorn
++webvtt-py
+ 
+ # === Overlay-specific dependencies (genie-ai-overlay/dataprep) ===
+ rank_bm25
+@@ -82,10 +108,3 @@ opentelemetry-instrumentation-fastapi>=0.43b0
+ opentelemetry-instrumentation-aiohttp-client>=0.43b0
+ opentelemetry-instrumentation-requests>=0.43b0
+ opentelemetry-exporter-otlp-proto-http>=1.22
+-
+-# === Issue #834: pin docling-core below the legacy_doc removal ===
+-# docling==2.30.0 imports docling_core.types.legacy_doc.base.BaseText,
+-# which was deleted in docling-core 2.83.0 (2026-06-18). The declared
+-# range docling-core>=2.26.0,<3.0.0 lets pip pick the breaking version.
+-# 2.82.0 is the last release with a functional legacy_doc.BaseText.
+-docling-core==2.82.0
+diff --git a/genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai b/genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
+index 9616ef10f..bfc00b360 100644
+--- a/genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
++++ b/genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
+@@ -4,7 +4,7 @@
+ # The patch is installed via a .pth site-init hook at a build-derived
+ # site-packages path (install_site_startup.sh) — no hardcoded python3.x path.
+ 
+-ARG UPSTREAM_IMAGE=opea/embedding:1.3
++ARG UPSTREAM_IMAGE=opea/embedding:1.5
+ FROM ${UPSTREAM_IMAGE}
+ 
+ COPY --chmod=0755 genie-ai-overlay/build-patches/install_site_startup.sh /app/install_site_startup.sh
+diff --git a/genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai b/genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
+index c06792df8..55a52b63f 100644
+--- a/genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
++++ b/genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
+@@ -1,7 +1,7 @@
+ # ======== Stage 1: The OPEA Base ========
+ # Will be cached by Docker
+ ARG OPEA_REPO_URL="https://github.com/opea-project/GenAIComps.git"
+-ARG OPEA_VERSION="v1.3"
++ARG OPEA_VERSION="v1.5"
+ FROM alpine/git:v2.52.0 AS opea_base
+ 
+ ARG OPEA_REPO_URL
+@@ -32,18 +32,15 @@ ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/rerankings/src:/app/comps/cores/pr
+ # Step A: Copy the entire OPEA 'comps' directory from the clone
+ COPY --from=opea_base /src/comps/ /app/comps/
+ 
+-# Define the path to the requirements file
+-ARG REQ_PATH=/app/comps/rerankings/src/requirements.txt
+-
+-# Step B: Copy and Run the Dependency Patch
+-COPY --chmod=0755 genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
+-RUN ./fix_dependencies.sh ${REQ_PATH}
+-
+-# Step C: Install fixed dependencies AND custom requirements
+-# We add `kneed` here so the GenieTEIReranking class can use it <<< (ROMAN)
+-RUN pip install --no-cache-dir -r ${REQ_PATH}
+-
+-RUN pip install --no-cache-dir kneed
++# Step B: Install dependencies from the committed hash-pinned lock.
++# The lock is compiled with `make lock-reranker` (uv pip compile
++# --generate-hashes --python-version 3.11) from the GENIE.AI fork of OPEA
++# v1.5's requirements.in. --require-hashes makes the build bit-for-bit
++# reproducible and supply-chain-pinned, with no re-resolution against live PyPI.
++# `kneed` (used by the GenieTEIReranking class) is compiled into the lock, so
++# the separate pip install is gone.
++COPY genie-ai-overlay/reranker/requirements-cpu.txt /app/requirements-cpu.txt
++RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-cpu.txt
+ 
+ # Step D: Fix docarray circular import
+ # The vendored comps/cores/proto/docarray.py shadows the real 'docarray' PyPI
+@@ -55,14 +52,6 @@ COPY genie-ai-overlay/build-patches/docarray_alias_shim.py /app/docarray_alias_s
+ # Step D.5: Copy shared OTel tracing module (importable from PYTHONPATH=/app)
+ COPY genie-ai-overlay/tracing.py /app/tracing.py
+ 
+-# Step D.6: Install OpenTelemetry dependencies for distributed tracing
+-RUN pip install --no-cache-dir \
+-    "opentelemetry-api>=1.22" "opentelemetry-sdk>=1.22" \
+-    "opentelemetry-instrumentation-fastapi>=0.43b0" \
+-    "opentelemetry-instrumentation-aiohttp-client>=0.43b0" \
+-    "opentelemetry-instrumentation-requests>=0.43b0" \
+-    "opentelemetry-exporter-otlp-proto-http>=1.22"
+-
+ # Step E: "Overlay" custom GENIE-AI files
+ # 1. Place the custom reranker class into the integrations folder
+ COPY genie-ai-overlay/reranker/genieai_tei_reranker.py /app/comps/rerankings/src/integrations/genieai_tei_reranker.py
+diff --git a/genie-ai-overlay/reranker/requirements.in b/genie-ai-overlay/reranker/requirements.in
+new file mode 100644
+index 000000000..e85576612
+--- /dev/null
++++ b/genie-ai-overlay/reranker/requirements.in
+@@ -0,0 +1,42 @@
++# GENIE.AI fork of OPEA v1.5 comps/rerankings/src/requirements.in.
++# Source: https://raw.githubusercontent.com/opea-project/GenAIComps/v1.5/comps/rerankings/src/requirements.in
++# Regenerate the lock with:
++#   uv pip compile --generate-hashes --python-version 3.11 --python-platform x86_64-manylinux_2_31 requirements.in -o requirements-cpu.txt
++#
++# Deltas vs upstream (compiled-lock source, PRD FR-4 / arch decision D7):
++#   - kneed (GenieTEIReranking class dependency, previously pip-installed at
++#     build time in the Dockerfile; now compiled into the lock).
++#   - docarray/langchain/fastapi pinned to the versions OPEA v1.5's compiled
++#     lock ships — recompiling the bare .in today resolves to newer packages
++#     that do NOT pair with v1.5 comps source.
++#   - opentelemetry-instrumentation extras appended below so the Dockerfile's
++#     separate unhashed otel install block can be retired.
++
++aiohttp
++docarray[full]==0.41.0
++fastapi==0.116.1
++httpx
++huggingface-hub==0.30.2
++opentelemetry-api
++opentelemetry-exporter-otlp
++opentelemetry-sdk
++Pillow==11.3.0
++prometheus-fastapi-instrumentator
++sentence_transformers
++shortuuid
++uvicorn
++datasets
++haystack-ai
++langchain==0.3.27
++langchain-community
++openai
++pydub
++
++# === Overlay-specific dependencies (genie-ai-overlay/reranker) ===
++kneed
++
++# === OpenTelemetry instrumentation (distributed tracing) ===
++opentelemetry-instrumentation-fastapi>=0.43b0
++opentelemetry-instrumentation-aiohttp-client>=0.43b0
++opentelemetry-instrumentation-requests>=0.43b0
++opentelemetry-exporter-otlp-proto-http>=1.22
+diff --git a/genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai b/genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
+index 8abb20ea0..b6aa42848 100644
+--- a/genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
++++ b/genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
+@@ -1,7 +1,7 @@
+ # ======== Stage 1: The OPEA Base ========
+ # This stage is identical and will be cached by Docker
+ ARG OPEA_REPO_URL="https://github.com/opea-project/GenAIComps.git"
+-ARG OPEA_VERSION="v1.3"
++ARG OPEA_VERSION="v1.5"
+ FROM alpine/git:v2.52.0 AS opea_base
+ 
+ ARG OPEA_REPO_URL
+@@ -11,9 +11,17 @@ WORKDIR /src
+ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
+ 
+ # ======== Final Stage: Assembly ========
+-FROM python:3.10-slim
+-
+-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
++# Match OPEA v1.5's base image (python:3.11-slim).
++FROM python:3.11-slim
++
++RUN apt-get update && apt-get install -y --no-install-recommends \
++    build-essential \
++    libcairo2 \
++    libglib2.0-0 \
++    libjemalloc-dev \
++    libmariadb-dev \
++    curl \
++    && rm -rf /var/lib/apt/lists/*
+ 
+ WORKDIR /app
+ 
+@@ -24,37 +32,18 @@ ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/retrievers/src:/app/comps/cores/pr
+ # Step A: Copy the entire OPEA 'comps' directory from the clone
+ COPY --from=opea_base /src/comps/ /app/comps/
+ 
+-# Define the path to the requirements file for easier reference
+-ARG REQ_PATH=/app/comps/retrievers/src/requirements.txt
+-
+-# Step B: Copy and Run the Dependency Patch
+-COPY --chmod=0755 genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
+-# Run the patch script on the requirements file at its new location
+-RUN ./fix_dependencies.sh ${REQ_PATH}
+-
+-# Step C: Install *fixed* dependencies
+-# This installs the *real* 'docarray' package
+-RUN pip install --no-cache-dir -r ${REQ_PATH}
+-
+-# Install OpenTelemetry dependencies for distributed tracing
+-RUN pip install --no-cache-dir \
+-    "opentelemetry-api>=1.22" "opentelemetry-sdk>=1.22" \
+-    "opentelemetry-instrumentation-fastapi>=0.43b0" \
+-    "opentelemetry-instrumentation-httpx>=0.43b0" \
+-    "opentelemetry-instrumentation-aiohttp-client>=0.43b0" \
+-    "opentelemetry-instrumentation-requests>=0.43b0" \
+-    "opentelemetry-exporter-otlp-proto-http>=1.22"
+-
+-# Upgrade langchain-huggingface to fix InferenceClient.post() removal in huggingface_hub>=0.24
+-# OPEA v1.3 pins langchain-huggingface==0.1.2 which is incompatible with newer huggingface_hub
+-# Pin to 0.3.x series to stay compatible with langchain-core<1.0 (required by langchain-community, langchain-arangodb, etc.)
+-RUN pip install --no-cache-dir --upgrade "langchain-huggingface>=0.3.1,<1.0.0"
+-
+-# Upgrade langchain-arangodb: OPEA v1.3 pins 0.0.4, whose similarity search ignores any
+-# `filter_clause` kwarg (silently swallowed by **kwargs, no FILTER in the AQL). This makes
+-# category/label filtering a no-op, so every query scans the whole collection. 1.2.0 supports
+-# `filter_clause` natively and is compatible with the pinned langchain-core 0.3.x / python-arango 8.x.
+-RUN pip install --no-cache-dir --upgrade "langchain-arangodb>=1.2.0,<2.0.0"
++# Step B: Install dependencies from the committed hash-pinned lock.
++# The lock is compiled with `make lock-retriever` (uv pip compile
++# --generate-hashes --python-version 3.11) from the GENIE.AI fork of OPEA
++# v1.5's requirements.in. --require-hashes makes the build bit-for-bit
++# reproducible and supply-chain-pinned, with no re-resolution against live PyPI.
++# The v1.5 lock pins langchain-huggingface and langchain-arangodb at the
++# v1.5 lock versions (langchain-arangodb 0.0.6), so the old v1.3 post-install
++# upgrade blocks are gone; the >=1.2.0 filter_clause fix-pin is NOT present in
++# the v1.5 lock and is restored by story 2.3's langchain-arangodb bump.
++# The OpenTelemetry deps are likewise pinned in the lock (no unhashed install).
++COPY genie-ai-overlay/retriever/requirements-cpu.txt /app/requirements-cpu.txt
++RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-cpu.txt
+ 
+ # Step D: Fix docarray circular import
+ # The vendored comps/cores/proto/docarray.py shadows the real 'docarray' PyPI
+diff --git a/genie-ai-overlay/retriever/requirements.in b/genie-ai-overlay/retriever/requirements.in
+new file mode 100644
+index 000000000..80063030c
+--- /dev/null
++++ b/genie-ai-overlay/retriever/requirements.in
+@@ -0,0 +1,77 @@
++# GENIE.AI fork of OPEA v1.5 comps/retrievers/src/requirements.in.
++# Source: https://raw.githubusercontent.com/opea-project/GenAIComps/v1.5/comps/retrievers/src/requirements.in
++# Regenerate the lock with:
++#   uv pip compile --generate-hashes --python-version 3.11 --python-platform x86_64-manylinux_2_31 requirements.in -o requirements-cpu.txt
++#
++# Deltas vs upstream (compiled-lock source, PRD FR-4 / arch decision D7):
++#   - docling/docling-core/langchain/fastapi/docarray pinned to the versions
++#     OPEA v1.5's compiled lock ships — recompiling the bare .in today resolves
++#     to newer packages that do NOT pair with v1.5 comps source.
++#   - opentelemetry-instrumentation extras appended below so the Dockerfile's
++#     separate unhashed otel install block can be retired.
++
++aiofiles
++bs4
++cairosvg
++decord
++docarray[full]==0.41.0
++docling==2.55.1
++docling-core==2.48.4
++docx2txt
++easyocr
++einops
++fastapi==0.118.2
++future
++graspologic
++haystack-ai==2.3.1
++langchain==0.3.27
++langchain-arangodb==0.0.6
++langchain-elasticsearch
++langchain-mariadb
++langchain-openai
++langchain-pinecone
++langchain-opengauss
++langchain-vdms>=0.1.4
++langchain_community
++langchain_huggingface
++langchain_milvus
++llama-index-core
++llama-index-embeddings-openai
++llama-index-embeddings-text-embeddings-inference
++llama-index-llms-openai
++llama-index-llms-openai-like
++llama-index-llms-text-generation-inference
++llama_index_graph_stores_neo4j
++mariadb
++neo4j
++numpy
++opensearch-py
++opentelemetry-api==1.27.0
++opentelemetry-exporter-otlp==1.27.0
++opentelemetry-sdk==1.27.0
++pathway
++Pillow==11.3.0
++pgvector
++prometheus-fastapi-instrumentator
++protobuf>=4.24.2
++psycopg2-binary
++pydantic
++pymilvus==2.5.6
++pymupdf
++pytesseract
++python-docx
++python-multipart
++python-pptx
++qdrant-haystack
++redis
++sentence_transformers
++shortuuid
++tiktoken
++uvicorn
++
++# === OpenTelemetry instrumentation (distributed tracing) ===
++opentelemetry-instrumentation-fastapi>=0.43b0
++opentelemetry-instrumentation-httpx>=0.43b0
++opentelemetry-instrumentation-aiohttp-client>=0.43b0
++opentelemetry-instrumentation-requests>=0.43b0
++opentelemetry-exporter-otlp-proto-http>=1.22
+diff --git a/genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai b/genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
+index b6b3e31db..f738adc6a 100644
+--- a/genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
++++ b/genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
+@@ -4,7 +4,7 @@
+ # The patch is installed via a .pth site-init hook at a build-derived
+ # site-packages path (install_site_startup.sh) — no hardcoded python3.x path.
+ 
+-ARG UPSTREAM_IMAGE=opea/llm-textgen:1.3
++ARG UPSTREAM_IMAGE=opea/llm-textgen:1.5
+ FROM ${UPSTREAM_IMAGE}
+ 
+ COPY --chmod=0755 genie-ai-overlay/build-patches/install_site_startup.sh /app/install_site_startup.sh

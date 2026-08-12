@@ -634,6 +634,7 @@ kics-iac-sast:
   tags: [docker]
   interruptible: true
   variables:
+    SYFT_VERSION: "v1.26.0"
     TRIVY_NO_PROGRESS: "true"
     TRIVY_TIMEOUT: "30m"
     TRIVY_CACHE_DIR: "/cache/.trivycache/"

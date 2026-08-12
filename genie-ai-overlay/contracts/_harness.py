@@ -209,20 +209,31 @@ def install_fake_aiohttp() -> FakeAiohttpSession:
 
 
 def import_docarray(attr: str):
-    """Import ``attr`` from the post-rename ``comps.cores.proto.opea_docarray``.
+    """Import ``attr`` from the vendored ``comps.cores.proto.docarray``.
 
-    The docarray→opea_docarray rename hack is applied in the module Dockerfiles
-    on BOTH v1.3 and v1.5. A contract test must resolve the RENAMED module —
-    falling back to the old ``docarray`` name would pass green on both versions
-    and prove nothing about the surface it guards. Fails loudly when the rename
-    did not hold.
+    The overlay used to RENAME the vendored ``docarray.py`` to ``opea_docarray.py``
+    (a hack applied in the module Dockerfiles on both v1.3 and v1.5). Story 2.1
+    replaced that with the ``docarray_alias_shim`` (wired via ``zz_genie_startup.pth``)
+    which pins the real ``docarray`` package in ``sys.modules`` so the vendored
+    module no longer self-shadows.
+
+    This helper resolves the VENDORED module and asserts the shim's pin is in
+    effect: ``import docarray`` must yield a DIFFERENT object than the vendored
+    module. On a bare image without the shim the vendored module self-shadows
+    (``real is mod``) or the import raises, so the red-without-shim /
+    green-with-shim sensitivity of this surface is preserved. Fails loudly when
+    the shim did not hold.
     """
+    import docarray as real
     import pytest
 
     try:
-        from comps.cores.proto import opea_docarray as mod
+        from comps.cores.proto import docarray as mod
     except ImportError:
-        pytest.fail("docarray rename hack not in effect: comps.cores.proto.opea_docarray is not importable")
+        pytest.fail("docarray shim not in effect: comps.cores.proto.docarray is not importable")
+    assert real is not mod, (
+        "docarray shim not in effect: comps.cores.proto.docarray self-shadows the real docarray package (real is mod)"
+    )
     return getattr(mod, attr)
 
 

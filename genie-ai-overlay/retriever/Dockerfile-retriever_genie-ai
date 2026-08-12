@@ -57,13 +57,11 @@ RUN pip install --no-cache-dir --upgrade "langchain-huggingface>=0.3.1,<1.0.0"
 RUN pip install --no-cache-dir --upgrade "langchain-arangodb>=1.2.0,<2.0.0"
 
 # Step D: Fix docarray circular import
-# Reverting to the original, correct "rename hack".
-# 1. Rename the conflicting local file to avoid name collision.
-# 2. Update imports to point to the new, non-conflicting filename.
-RUN mv /app/comps/cores/proto/docarray.py /app/comps/cores/proto/opea_docarray.py && \
-    sed -i 's/from comps.cores.proto.docarray import/from comps.cores.proto.opea_docarray import/' /app/comps/__init__.py && \
-    sed -i 's/from \.\.proto.docarray import/from \.\.proto.opea_docarray import/' /app/comps/cores/mega/orchestrator.py && \
-    sed -i 's/from \.\.proto.docarray import/from \.\.proto.opea_docarray import/' /app/comps/cores/mega/micro_service.py
+# The vendored comps/cores/proto/docarray.py shadows the real 'docarray' PyPI
+# package on PYTHONPATH. docarray_alias_shim.py (wired via zz_genie_startup.pth at
+# site-init by install_site_startup.sh, Step G) pins the real package in
+# sys.modules — no vendored file is renamed or edited.
+COPY genie-ai-overlay/build-patches/docarray_alias_shim.py /app/docarray_alias_shim.py
 
 # Step E: "Overlay" our custom GENIE-AI files
 # Copy the shared OTel tracing module (importable from PYTHONPATH=/app)
@@ -88,13 +86,13 @@ COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/geniea
 RUN useradd -ms /bin/bash user && \
     chown -R user:user /app /home/user
 
-# Step G: Copy SSL bypass runtime patch as sitecustomize (no-op unless OPEA_SSL_SKIP_VERIFY=1)
-# NOTE: Copy to site-packages, NOT dist-packages. Pip installs packages to
-# site-packages in this image, and Python's site module only loads sitecustomize
-# from getsitepackages() dirs.
-COPY configs/ssl/genie_ssl_patch.py /usr/local/lib/python3.10/site-packages/sitecustomize.py
-# Remove system sitecustomize (Ubuntu apport handler) so our patch runs first
-RUN rm -f /usr/lib/python3.10/sitecustomize.py
+# Step G: Install the SSL bypass runtime patch via a .pth site-init hook
+# (no-op unless OPEA_SSL_SKIP_VERIFY=1). The installer derives the site-packages
+# path from the running interpreter, so no hardcoded python3.x path is needed.
+# docarray_alias_shim.py (Step D) is picked up automatically when present.
+COPY --chmod=0755 genie-ai-overlay/build-patches/install_site_startup.sh /app/install_site_startup.sh
+COPY configs/ssl/genie_ssl_patch.py /app/genie_ssl_patch.py
+RUN /app/install_site_startup.sh
 
 # Step H: Run the new GENIE-AI entry point from its new location
 USER user

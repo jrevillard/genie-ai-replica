@@ -40,9 +40,10 @@ try:
     # configuring Docling to use easyocr (more lightweight than OPEA default library)
     ocr_options = EasyOcrOptions(lang=["en"])
 
-    # FIX: Configurable Accelerator Device (Default: CUDA)
-    # Reads 'DOCLING_DEVICE' env var: 'cpu' forces CPU, otherwise defaults to CUDA
-    env_device = os.getenv("DOCLING_DEVICE", "cuda").lower()
+    # FIX: Configurable Accelerator Device (Default: CPU)
+    # Reads 'DOCLING_DEVICE' env var: 'cpu' forces CPU, otherwise defaults to CPU.
+    # The python:3.11-slim base ships no CUDA runtime, so the default must be CPU.
+    env_device = os.getenv("DOCLING_DEVICE", "cpu").lower()
 
     if env_device == "cpu":
         logger.info("Docling configured to use CPU.")

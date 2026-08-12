@@ -208,6 +208,7 @@ def install_fake_aiohttp() -> FakeAiohttpSession:
     return session
 
 
+# OVERRIDE contracts._harness.import_docarray | disposition: re-graft-to-new-API | reason: resolves vendored docarray via real-package pin (shim wired by build-patches.docarray_alias_shim); must be re-expressed when OPEA removes the vendored shim | test: contracts/test_contract_dataprep_wire.py (import_docarray asserts shim holds)  # noqa: E501
 def import_docarray(attr: str):
     """Import ``attr`` from the vendored ``comps.cores.proto.docarray``.
 

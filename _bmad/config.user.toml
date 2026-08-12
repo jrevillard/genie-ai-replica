@@ -12,3 +12,6 @@
 [core]
 user_name = "Genie.ai Dev"
 communication_language = "English"
+
+[modules.bmm]
+user_skill_level = "intermediate"

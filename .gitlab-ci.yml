@@ -645,7 +645,18 @@ kics-iac-sast:
     - |
       AUTH=$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')
       echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$AUTH\"}}}" > ~/.docker/config.json
-    - wget -qO- https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin "$SYFT_VERSION"
+    # syft only powers the optional SBOM artifact. Its installer pulls the
+    # binary from GitHub releases, which is flaky from the CI runner container
+    # ("socket hang up" / "Resource temporarily unavailable" on the release CDN)
+    # — never let that hard-fail the scan. The script step already WARN-falls-back
+    # when syft is absent, and trivy image scanning does not need syft. Retry a
+    # few times, then continue regardless of outcome.
+    - |
+      for i in 1 2 3; do
+        wget -qO- -t 2 -T 30 https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin "$SYFT_VERSION" && break
+        echo "WARN: syft install attempt $i/3 failed (GitHub flaky) — retrying"
+        sleep 5
+      done || true
     - trivy image --download-db-only
   script:
     - |

@@ -36,21 +36,47 @@ DOCLING_ENDPOINT_TIMEOUT = int(os.getenv("DOCLING_ENDPOINT_TIMEOUT", 120))
 
 reader = easyocr.Reader(["en"])  # Can add more languages later
 
+
+def _resolve_docling_device(env_device, cuda_available=None):
+    """Map the DOCLING_DEVICE env value to a docling AcceleratorDevice.
+
+    Default is CUDA — GPU OCR is the production configuration. When CUDA is
+    requested but no GPU is available (a non-GPU local run, a CPU-only
+    deployment), fall back to CPU with a visible warning instead of crashing
+    at docling init.
+    """
+    if env_device == "cpu":
+        return AcceleratorDevice.CPU
+    if cuda_available is None:
+        try:
+            import torch
+
+            cuda_available = torch.cuda.is_available()
+        except ImportError:
+            cuda_available = False
+    if cuda_available:
+        return AcceleratorDevice.CUDA
+    logger.warning(
+        "DOCLING_DEVICE=%s requested but no CUDA GPU available — falling back to CPU.",
+        env_device,
+    )
+    return AcceleratorDevice.CPU
+
+
 try:
     # configuring Docling to use easyocr (more lightweight than OPEA default library)
     ocr_options = EasyOcrOptions(lang=["en"])
 
-    # FIX: Configurable Accelerator Device (Default: CPU)
-    # Reads 'DOCLING_DEVICE' env var: 'cpu' forces CPU, otherwise defaults to CPU.
-    # The python:3.11-slim base ships no CUDA runtime, so the default must be CPU.
-    env_device = os.getenv("DOCLING_DEVICE", "cpu").lower()
-
-    if env_device == "cpu":
-        logger.info("Docling configured to use CPU.")
-        device_selection = AcceleratorDevice.CPU
-    else:
-        logger.info("Docling configured to use CUDA (GPU).")
-        device_selection = AcceleratorDevice.CUDA
+    # FIX: Configurable Accelerator Device (Default: CUDA)
+    # Reads 'DOCLING_DEVICE' env var: 'cpu' forces CPU, otherwise defaults to CUDA.
+    # CUDA is only selected when a GPU is actually available (see
+    # _resolve_docling_device); otherwise the code falls back to CPU.
+    env_device = os.getenv("DOCLING_DEVICE", "cuda").lower()
+    device_selection = _resolve_docling_device(env_device)
+    logger.info(
+        "Docling configured to use %s.",
+        "CUDA (GPU)" if device_selection == AcceleratorDevice.CUDA else "CPU",
+    )
 
     accelerator_options = AcceleratorOptions(num_threads=4, device=device_selection)
 

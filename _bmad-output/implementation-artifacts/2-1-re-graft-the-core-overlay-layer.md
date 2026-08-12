@@ -2,7 +2,7 @@
 title: 'Re-graft the core overlay layer'
 type: 'feature'
 created: '2026-08-12'
-status: 'ready-for-dev'
+status: 'in-progress'
 review_loop_iteration: 0
 followup_review_recommended: false
 context: []

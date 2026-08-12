@@ -127,3 +127,43 @@ def test_retriever_code_passes_filter_clause_to_vector_db(comps):
     assert hasattr(cls, "invoke"), "retriever invoke missing from the real module"
     src = inspect.getsource(cls.invoke)
     assert "filter_clause=" in src, "filter_clause kwarg missing from the retriever vector-search calls"
+
+
+def test_installed_arangovector_exposes_filter_clause_named_param(comps):
+    """The REAL installed langchain-arangodb promotes filter_clause to a named param.
+
+    Guards the story's central claim durably instead of comment-only: 0.0.6
+    exposes ``filter_clause`` as a NAMED parameter on the sync similarity-search
+    surface the retriever's calls funnel into — including the
+    ``similarity_search_by_vector`` methods langchain-core's
+    ``max_marginal_relevance_search`` MMR path delegates to — the 0.0.4 release
+    swallowed it via ``**kwargs``, so the category ``FILTER`` never reached the
+    AQL. If a future bump reintroduces the swallow (named param gone) or changes
+    the pinned version, this fails in-image.
+    """
+    import importlib.metadata
+    import inspect
+
+    import pytest
+    from langchain_arangodb import ArangoVector
+
+    assert importlib.metadata.version("langchain-arangodb") == "0.0.6", (
+        "langchain-arangodb must stay pinned at 0.0.6 (compiled-lock disposition)"
+    )
+
+    for method_name in (
+        "similarity_search",
+        "similarity_search_with_score",
+        "similarity_search_by_vector",
+        "similarity_search_by_vector_with_score",
+    ):
+        method = getattr(ArangoVector, method_name, None)
+        assert method is not None, f"installed ArangoVector has no {method_name!r}"
+        try:
+            params = inspect.signature(method).parameters
+        except (TypeError, ValueError):
+            pytest.fail("non-introspectable method: " + method_name)
+        assert "filter_clause" in params, (
+            f"installed ArangoVector.{method_name} has no named filter_clause "
+            "param — the 0.0.4-style silent-drop bug is back"
+        )

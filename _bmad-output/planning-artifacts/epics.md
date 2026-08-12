@@ -165,7 +165,9 @@ So that the shared layer is current before modules rebase.
 **Given** the v1.5 diff for `comps/cores/mega/constants.py` and `genieai_api_protocol.py`,
 **When** `constants.py` is regenerated from v1.5's enum with `TRANSLATOR` re-appended (name→int mapping asserted), `genieai_api_protocol.py` re-grafted to v1.5 Pydantic, and `OVERRIDES.yaml` created,
 **Then** the core files import on v1.5 and the override manifest lints clean,
-**And** no module rebase assumes an uncommitted core version.
+**And** no module rebase assumes an uncommitted core version,
+**And** the `sitecustomize` SSL-bypass hook (verification disabled — the internal CA is not known to the deployment, so CA-trust env vars are not an option) is installed at a Python-version-stable path — a `.pth` entry or a build-time-derived `site-packages` path instead of the hardcoded `python3.10` path — keeping the bypass semantics,
+**And** the docarray `mv`+`sed` source rename is replaced with a `sys.modules` alias shim (no vendored-source mutation, survives any vendor layout).
 
 ### Story 2.2: Migrate dependencies + Python 3.11
 
@@ -228,8 +230,8 @@ So that chat retrieval stays grounded and translation keeps streaming.
 **Acceptance Criteria:**
 
 **Given** the chatqna's surface diff (align_* monkeypatch, `schedule(initial_inputs, llm_parameters, **kwargs)` forwarding the 6 custom kwargs — `retriever_parameters`, `reranker_parameters`, `full_chat_history_string`, `retrieval_context`, `original_language`, `user_details` — TRANSLATOR branch, entrypoint),
-**When** the orchestrator is re-grafted per the spike outcome (D1 if kwargs drop), both Dockerfile clones bumped to v1.5, and the wire test + E2E cross-service pipeline test run in-image,
-**Then** the chatqna image builds and the wire test asserts all 6 custom kwargs land on the handlers,
+**When** the orchestrator is re-grafted per the spike outcome (D1 if kwargs drop), the 6 custom kwargs are bundled into a single `genie_params` dict forwarded through `schedule()` (one forwarding argument instead of six — the kwargs-drop failure class becomes trivial to guard), both Dockerfile clones bumped to v1.5, and the wire test + E2E cross-service pipeline test run in-image,
+**Then** the chatqna image builds and the wire test asserts the full `genie_params` dict lands on the handlers,
 **And** streaming translation (#829) is exercised by the E2E contract test.
 
 ### Story 2.7: Re-audit build patches + add enforcement

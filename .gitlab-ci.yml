@@ -861,6 +861,75 @@ promote:backend:
       changes:
         paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
 
+# genie-ai-okf-server
+build:okf-server:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-okf-server"
+    CONTEXT: "components/"
+    DOCKERFILE: "components/okf-server/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+scan:okf-server:
+  <<: *scan_template
+  needs:
+    - job: build:okf-server
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-okf-server"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+promote:okf-server:
+  <<: *promote_template
+  needs:
+    - job: scan:okf-server
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-okf-server"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
 # genie-ai-db-migrations
 build:db-migrations:
   <<: *build_template

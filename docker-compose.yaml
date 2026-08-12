@@ -508,6 +508,41 @@ services:
         delay: 5s
         max_attempts: 10
 
+  okf-server:
+    logging: *fluent-logging
+    depends_on:
+      keycloak-config:
+        condition: service_healthy
+    restart: unless-stopped
+    build:
+      context: components/
+      dockerfile: okf-server/Dockerfile
+    image: ${GENIE_AI_OKF_SERVER_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-okf-server}:${GENIE_AI_OKF_SERVER_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    environment:
+      - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
+      - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      - SERVICE_NAME=genie-okf-server
+      - NODE_ENV=production
+    networks:
+      - genieai_network
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+
   document-repository:
     logging: *fluent-logging
     depends_on:

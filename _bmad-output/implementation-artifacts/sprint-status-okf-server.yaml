@@ -22,8 +22,8 @@ development_status:
   1-2-chatqna-forwards-graph-set: backlog           # [BUMP]
   epic-1-retrospective: optional
 
-  epic-2: backlog            # Mostly ungated — build first
-  2-1-okf-server-skeleton-deploy: backlog
+  epic-2: in-progress            # Mostly ungated — build first
+  2-1-okf-server-skeleton-deploy: review
   2-2-arangodb-meta-collections-repo-crud: backlog
   2-3-okf-parser-frontmatter-links: backlog
   2-4-conformance-validation-quality-metrics: backlog

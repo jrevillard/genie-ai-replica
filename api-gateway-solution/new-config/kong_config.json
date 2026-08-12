@@ -72,6 +72,13 @@
       "tls_verify_depth": null,
       "ca_certificates": null,
       "tags": ["new"]
+    },
+    {
+      "name": "okf-server",
+      "host": "okf-server",
+      "port": 3002,
+      "protocol": "http",
+      "tags": ["okf", "genie-ai"]
     }
   ],
   "routes": [
@@ -690,6 +697,15 @@
       "sources": null,
       "destinations": null,
       "tags": ["new"]
+    },
+    {
+      "name": "okf-route",
+      "paths": ["/api/okf"],
+      "strip_path": false,
+      "service": {
+        "name": "okf-server"
+      },
+      "tags": ["okf", "genie-ai"]
     }
   ],
   "plugins": [

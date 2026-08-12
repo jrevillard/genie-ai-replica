@@ -2,9 +2,9 @@
 title: 'Re-graft the core overlay layer'
 type: 'feature'
 created: '2026-08-12'
-status: 'in-progress'
+status: 'done'
 review_loop_iteration: 0
-followup_review_recommended: false
+followup_review_recommended: true
 context: []
 warnings: [oversized]
 deferred:
@@ -23,11 +23,32 @@ deferred:
       genie-ai-overlay/core/genieai_api_protocol.py:13
     severity: low
   - summary: >-
-      override-audit lint is not enforced in CI and is one-directional.
+      override-audit lint has no dedicated CI job, is one-directional, and .pth runtime-load failures are silent.
     evidence: |-
-      lint_overrides.py runs only via the local pytest test_overrides_lint.py; no CI job wires it, the marker-to-manifest direction is unenforced, and .pth runtime-load failures are silent; CI enforcement belongs to story 2.7 (verify:evidence + coherence lint).
+      lint_overrides.py is exercised only via tests/test_overrides_lint.py (which the CI pytest stage runs), so it is indirectly wired but has no dedicated job; the marker-to-manifest direction is unenforced; .pth runtime-load failures are silent. Explicit enforcement belongs to story 2.7 (verify:evidence + coherence lint).
     location: >-
       genie-ai-overlay/build-patches/lint_overrides.py
+    severity: medium
+  - summary: >-
+      10 of v1.5's constrained ChatCompletionRequest fields are not mirrored in the overlay protocol.
+    evidence: |-
+      v1.5 constrains max_tokens, n, seed, temperature, top_p, best_of, repetition_penalty, top_k, timeout, top_n with PositiveInt/NonNegativeFloat; the overlay keeps them plain int/float (only k, fetch_k, lambda_mult, score_threshold are re-grafted per the AC). Re-express during the chatqna/retriever re-graft (stories 2.3/2.6) when those fields are actually exercised.
+    location: >-
+      genie-ai-overlay/core/genieai_api_protocol.py:162
+    severity: medium
+  - summary: >-
+      module-layer overrides are not recorded in OVERRIDES.yaml and the lint scan scope cannot see them.
+    evidence: |-
+      The reranker import re-point (genieai_reranking_microservice.py opea_docarray→docarray) and contract-harness re-graft are intentional deviations outside the core layer, but lint_overrides.py scans only core/*.py and build-patches/*. Extend the manifest + scan scope during module re-grafts (2.3-2.6) or the 2.7 coherence lint.
+    location: >-
+      genie-ai-overlay/build-patches/lint_overrides.py
+    severity: medium
+  - summary: >-
+      embedding/textgen ENV PYTHONPATH removal is not runtime-verified.
+    evidence: |-
+      The old wrapper Dockerfiles forced /usr/local/lib/python3.11/dist-packages onto PYTHONPATH; the re-graft removed that line. Nothing yet verifies the opea/embedding:1.3 / opea/llm-textgen:1.3 runtime interpreter loads the .pth hook (site-packages vs dist-packages layout). Covered by story 2.2's in-image contract runs + base-image migration.
+    location: >-
+      genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:8
     severity: medium
 baseline_commit: 'db65ad95'
 baseline_revision: 'db65ad95abe7a6587cc3b90f99297470abdce173'
@@ -124,6 +145,25 @@ _None yet._
 
 Deferred: image tags stay v1.3 (story 2.2 owns OPEA_VERSION bump); pydantic-v2-in-image runtime (story 2.2 base migration); lint directionality / .pth runtime-load detection (story 2.7 verify:evidence).
 
+### 2026-08-12 — Review pass (re-drive run 20260812-120919-8a07, 4 parallel reviewers)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 9 (medium 2, low 7)
+- defer: 7 (high 1, medium 3, low 3)
+- reject: 3 (low 3)
+- addressed_findings:
+  - `[medium]` `[patch]` TRANSLATOR OVERRIDE marker in core/constants.py (and the manifest's test claim) pointed at `test_new_v15_member_values` (asserts 24–28); re-pointed to `test_translator_is_last` (the test that guards TRANSLATOR==29).
+  - `[medium]` `[patch]` tests/test_overrides_lint.py silently `pytest.skip`ed when lint_overrides.py was absent, letting the audit drop out; changed to a hard `pytest.fail`.
+  - `[low]` `[patch]` docarray shim could not prove the real package pinned; added a defensive `cores/proto not in docarray.__file__` assertion at site-init.
+  - `[low]` `[patch]` install_site_startup.sh wrote the `.pth` with no verification; added a pth-file-exists guard + a python-vs-python3 interpreter-mismatch guard.
+  - `[low]` `[patch]` lint_overrides.py crashed on non-UTF-8 scanned files and accepted duplicate manifest keys; added UnicodeDecodeError handling + duplicate-key detection.
+  - `[low]` `[patch]` shim had no unit test; added tests/test_docarray_shim.py exercising path-removal/pin/restore in a subprocess.
+  - `[low]` `[patch]` genie-ai-overlay/CLAUDE.md did not document the override-audit convention; added a bullet for OVERRIDES.yaml + marker records + the .pth site-init mechanism.
+  - `[low]` `[patch]` spec Verification grep for hardcoded paths matched dataprep's legit apt/update-alternatives lines; narrowed the guard to sitecustomize/site-packages paths with a note.
+  - `[low]` `[patch]` deferred note misstated CI enforcement ("no CI job wires it"); corrected to "exercised only via test_overrides_lint.py (which the CI pytest stage runs)".
+- Deferred this pass: .pth runtime-load verification (high, confirmed DW-3 → 2.7); 10 un-mirrored v1.5-constrained fields (medium, DW-4 → 2.3/2.6); module-layer overrides unrecorded + lint scan scope (medium, DW-5 → 2.3-2.7); embedding/textgen ENV PYTHONPATH removal unverified at runtime (medium, DW-6 → 2.2); one-shot v1.5 compat not a committed test (low → 2.7); venv-blind `site.getsitepackages()[0]` (low → 2.2); delta-philosophy byte-identical not test-enforced (low → 2.7 evidence gate).
+- Rejected: MCPFuncType test couples to enum internals (deliberate drift guard); build artifacts left in runtime images (cosmetic); `ticket: story 2.1` not an external ticket id (file-system tracking has none).
+
 ## Design Notes
 
 - **TRANSLATOR slot drift.** v1.3 slot 24 (`TRANSLATOR`) became `LANGUAGE_DETECTION` in v1.5. Enum ints serialize into traces/messages, so `test_core.py` (count + tail-value) is the regression guard against silent renumbering. Appending at the tail (29) is stable across future upstream additions.
@@ -139,10 +179,39 @@ Deferred: image tags stay v1.3 (story 2.2 owns OPEA_VERSION bump); pydantic-v2-i
 - `python -m pytest tests/ -v` -- expected: full mocked suite green (no regressions)
 - `python build-patches/lint_overrides.py` -- expected: exit 0
 - One-shot v1.5 import compat: fetch v1.5 `constants.py` + `api_protocol.py` into a temp dir, import `core.constants` + `core.genieai_api_protocol` against them -- expected: imports succeed
-- `grep -rn "python3.10\|python3.11" genie-ai-overlay/*/Dockerfile*` -- expected: no hardcoded sitecustomize paths remain
+- `grep -rn "sitecustomize\|/usr/local/lib/python3\.[0-9]*/\(dist-\)\?site-packages/sitecustomize" genie-ai-overlay/*/Dockerfile*` -- expected: no hardcoded sitecustomize paths remain (NOTE: bare `grep "python3.10\|python3.11"` also matches dataprep's legit apt/update-alternatives lines — scope the guard to sitecustomize/site-packages paths)
 - `grep -rn "opea_docarray\|mv .*docarray.py" genie-ai-overlay/*/Dockerfile*` -- expected: no mv+sed remains
 - `ruff check` + `ruff format --check` on changed files -- expected: clean
 
 **Manual checks (if no CLI):**
 - Dockerfile review: `install_site_startup.sh` wired in all 6; `docarray_alias_shim.py` wired in retriever/reranker/dataprep.
 - `OVERRIDES.yaml` records every core-layer override (constants, protocol, docarray shim, sitecustomize mechanism).
+
+## Auto Run Result
+
+Status: done
+
+**Summary:** Re-grafted the core overlay layer to OPEA v1.5 surfaces, re-applying the previously review-hardened change set (commit `bffdc1def`) onto the current base via cherry-pick, then hardening it with this pass's review patches. Regenerated `core/constants.py` from v1.5's enum (ServiceType 0–28 + `TRANSLATOR=29` re-appended, `MCPFuncType` added); re-grafted `core/genieai_api_protocol.py` field types to v1.5 Pydantic (`PositiveInt`/`NonNegativeFloat`); created `OVERRIDES.yaml` + `lint_overrides.py` + `tests/test_overrides_lint.py` (override-audit manifest); replaced hardcoded `sitecustomize.py` installs with a `.pth`-based, build-derived site-packages hook (`install_site_startup.sh`); replaced the docarray `mv`+`sed` rename with a `sys.modules` pin (`docarray_alias_shim.py`) + a new unit test (`tests/test_docarray_shim.py`); re-grafted the reranker import + contract harness to the shim surface; dropped the dead `opea_docarray` mock; fixed the TRANSLATOR override test reference; added installer/lint hardening guards; documented the override-audit + site-startup convention in `genie-ai-overlay/CLAUDE.md`.
+
+**Files changed:** `core/constants.py` (regenerated + marker fix), `core/genieai_api_protocol.py` (re-grafted types), `core/model_cache.py` (comment), `tests/test_core.py` (30/29 assertions, v1.5 member values, MCPFuncType, protocol boundary tests), `tests/test_docarray_shim.py` (new), `tests/test_overrides_lint.py` (skip→fail), `tests/conftest.py` (dead mock removed), `build-patches/docarray_alias_shim.py` (new + pin assertion), `build-patches/install_site_startup.sh` (new + pth/interpreter guards), `build-patches/lint_overrides.py` (new + UTF-8/dup-key guards), `OVERRIDES.yaml` (new, 7 entries), `reranker/genieai_reranking_microservice.py` (import fix), `contracts/_harness.py` (shim re-graft), `configs/ssl/genie_ssl_patch.py` (docstring), `genie-ai-overlay/CLAUDE.md` (doc), `contracts/README.md` (doc), 6 Dockerfiles (installer + shim wiring). Commits: `5f09001af`, `8710ba236`, `8df9787b1`.
+
+**Review findings breakdown (this pass):** 9 patches applied (2 medium, 7 low); 7 deferred (high 1: .pth runtime verification → 2.7, confirmed DW-3; medium 3: 10 un-mirrored v1.5-constrained fields DW-4, module-layer override audit scope DW-5, embedding/textgen PYTHONPATH runtime verification DW-6; low 3: one-shot compat not committed, venv-blind getsitepackages, delta byte-identical not test-enforced); 3 rejected (MCPFuncType test coupling, build artifacts in images, ticket id convention).
+
+**Follow-up review recommendation:** true — 2 medium + 7 low patches this pass (score: 3×2 + 7 = 13 ≥ threshold 5).
+
+**Verification performed:**
+- `pytest tests/test_core.py` — 68 passed, exit 0
+- `pytest tests/` — 672 passed (670 + 2 new shim tests), exit 0
+- `python build-patches/lint_overrides.py` — exit 0 (7 entries, all matched by source records)
+- One-shot v1.5 import compat — `core.constants` (30 members, TRANSLATOR=29, MCPFuncType) + `core.genieai_api_protocol` subclassed against real v1.5 `api_protocol`; `PositiveInt`/`NonNegativeFloat` enforced (k=0, k=-1, fetch_k=-2, lambda_mult<0, score_threshold<0 rejected; valid accepted)
+- Delta philosophy — `core/constants.py` byte-identical to v1.5 upstream except the single TRANSLATOR override line (formal diff confirmed)
+- Grep guards — no hardcoded sitecustomize paths, no `mv docarray.py`/`opea_docarray` in any Dockerfile
+- `ruff check` + `ruff format --check` — clean
+- Shim — vendored docarray self-shadow reproduced (ImportError); shim pins the real package; `real is not mod` sensitivity preserved; unit test covers path-removal/pin/restore in a subprocess
+
+**Residual risks:**
+- No `docker build` run — Dockerfile wiring verified via grep + a venv-mirrored installer test; in-image `.pth` loading and shim behavior remain the only untested surface (story 2.2's in-image contract runs cover them).
+- `.pth` runtime-load failures are silent in CI today — deferred to story 2.7 (DW-3); the pth-exists + interpreter-mismatch guards in `install_site_startup.sh` mitigate at build time.
+- `k`/`fetch_k` now reject ≤ 0 and `lambda_mult`/`score_threshold` reject negatives (v1.5 mirror); boundary tests added; any client relying on `k=0` semantics must adapt.
+- `TRANSLATOR` enum value changed 24→29 (v1.5 took slot 24); no hardcoded `24` found in overlay code.
+- 10 additional v1.5-constrained `ChatCompletionRequest` fields remain plain-typed in the overlay protocol (DW-4); re-express during the chatqna/retriever re-graft.

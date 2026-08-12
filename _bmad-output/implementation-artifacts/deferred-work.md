@@ -44,7 +44,8 @@ source_spec: `2-1-re-graft-the-core-overlay-layer.md`
 location: genie-ai-overlay/core/genieai_api_protocol.py:162
 severity: medium
 reason: v1.5 constrains max_tokens, n, seed, temperature, top_p, best_of, repetition_penalty, top_k, timeout, top_n with PositiveInt/NonNegativeFloat; the overlay keeps them plain int/float (only k, fetch_k, lambda_mult, score_threshold are re-grafted per the AC). Re-express during the chatqna/retriever re-graft (stories 2.3/2.6) when those fields are actually exercised.
-status: open
+status: done 2026-08-12
+resolution: resolved by sweep bundle dw-pydantic-v2-field-mirroring
 
 ### DW-6: module-layer overrides are not recorded in OVERRIDES.yaml and the lint scan scope cannot see them.
 origin: spec-deferred 26792e0ebdb9

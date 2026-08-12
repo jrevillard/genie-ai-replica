@@ -444,6 +444,83 @@ class TestChatCompletionRequest:
         with pytest.raises(ValidationError):
             ChatCompletionRequest(messages="hi", score_threshold=-0.1)
 
+    def test_max_tokens_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", max_tokens=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", max_tokens=-5)
+
+    def test_n_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", n=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", n=-5)
+
+    def test_seed_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", seed=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", seed=-5)
+
+    def test_temperature_accepts_zero_rejects_negative(self):
+        from pydantic import ValidationError
+
+        assert ChatCompletionRequest(messages="hi", temperature=0).temperature == 0
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", temperature=-0.1)
+
+    def test_top_p_accepts_zero_rejects_negative(self):
+        from pydantic import ValidationError
+
+        assert ChatCompletionRequest(messages="hi", top_p=0).top_p == 0
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", top_p=-0.1)
+
+    def test_best_of_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", best_of=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", best_of=-5)
+
+    def test_repetition_penalty_accepts_zero_rejects_negative(self):
+        from pydantic import ValidationError
+
+        assert ChatCompletionRequest(messages="hi", repetition_penalty=0).repetition_penalty == 0
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", repetition_penalty=-0.1)
+
+    def test_top_k_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", top_k=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", top_k=-5)
+
+    def test_timeout_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", timeout=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", timeout=-5)
+
+    def test_top_n_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", top_n=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", top_n=-5)
+
 
 # ---------------------------------------------------------------------------
 # Protocol: TranslationRequest (Pydantic BaseModel — simple)

@@ -31,6 +31,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import _harness
+
 SAMPLE_DOC = """# Tomato Blight
 
 Tomato blight is a fungal disease affecting tomato plants.
@@ -54,15 +56,16 @@ INGEST_CONFIG = {
 }
 
 
-def _dataprep_instance():
+def _dataprep_instance(monkeypatch):
     """Build an uninitialized GenieArangoDataprep with the real docling loader.
 
     Bypasses the constructor (which opens an ArangoDB connection we do not need
     for the chunker contract). Sets the module's production extraction method to
-    docling so the REAL docling pipeline runs.
+    docling so the REAL docling pipeline runs (monkeypatch restores it after).
 
     Skips when the dataprep module is absent (this test runs in the dataprep
-    image; a retriever/chatqna image does not carry ``comps.dataprep``).
+    image; a retriever/chatqna image does not carry ``comps.dataprep``). A
+    genuine import BREAK inside the image must fail red, not skip.
     """
     import pytest
 
@@ -72,23 +75,19 @@ def _dataprep_instance():
             GenieArangoDataprep,
         )
     except ImportError:
+        if _harness.in_image_comps_importable():
+            raise
         pytest.skip("dataprep module not present in this image")
 
-    m.CONTENT_EXTRACTION_METHOD = "docling"
-    obj = GenieArangoDataprep.__new__(GenieArangoDataprep)
-    obj.tracer = m.tracer
-    return obj
+    monkeypatch.setattr(m, "CONTENT_EXTRACTION_METHOD", "docling")
+    return GenieArangoDataprep.__new__(GenieArangoDataprep)
 
 
 def _make_doc_path(tmp_path: Path, chunk_cfg: dict):
     """Write the sample doc and build the real ``DocPath`` for the chunker."""
     doc_file = tmp_path / "tomato_blight.md"
     doc_file.write_text(SAMPLE_DOC, encoding="utf-8")
-    try:
-        from comps.cores.proto.opea_docarray import DocPath  # renamed (post-patch)
-    except ImportError:
-        from comps.cores.proto.docarray import DocPath  # noqa: PLC0415
-    return DocPath(path=str(doc_file), **chunk_cfg)
+    return _harness.import_docarray("DocPath")(path=str(doc_file), **chunk_cfg)
 
 
 def _load_and_chunk(dataprep, doc_path) -> list[str]:
@@ -96,9 +95,9 @@ def _load_and_chunk(dataprep, doc_path) -> list[str]:
     return asyncio.run(dataprep._load_and_chunk(doc_path))
 
 
-def test_ingest_chunks_non_empty_and_text_bearing(comps, tmp_path):
+def test_ingest_chunks_non_empty_and_text_bearing(comps, tmp_path, monkeypatch):
     """The real docling chunker produces structured, text-bearing chunks."""
-    dataprep = _dataprep_instance()
+    dataprep = _dataprep_instance(monkeypatch)
     doc_path = _make_doc_path(tmp_path, INGEST_CONFIG)
     chunks = _load_and_chunk(dataprep, doc_path)
 
@@ -111,14 +110,14 @@ def test_ingest_chunks_non_empty_and_text_bearing(comps, tmp_path):
     )
 
 
-def test_ingest_chunk_shape_stable(comps, tmp_path):
+def test_ingest_chunk_shape_stable(comps, tmp_path, monkeypatch):
     """Re-running the chunker on the same doc is deterministic (shape-stable).
 
     A v1.5 docling regression (chunk collapse, zero chunks, exception) breaks
     this — the sensitivity assertion is the chunk COUNT + text-bearing property,
     which the bump can change.
     """
-    dataprep = _dataprep_instance()
+    dataprep = _dataprep_instance(monkeypatch)
     doc_path = _make_doc_path(tmp_path, INGEST_CONFIG)
     first = _load_and_chunk(dataprep, doc_path)
     second = _load_and_chunk(dataprep, doc_path)

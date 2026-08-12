@@ -16,6 +16,15 @@ stale `REQ_PATH`, bumping Python, adding a system lib) revealed the NEXT real
 against v1.5 — the gap is structural and the contract/verification layer exists
 precisely to catch it before any re-graft.
 
+**Scope of this red:** the milestone-(d) red is proven at the BUILD surface (the
+bare v1.5 image cannot be built with the v1.3 overlay). The assertion-level red
+— the suite re-run against a v1.5 image, failing on "which contract, which
+assertion, which exception" — is not exercised here: a runnable v1.5 image does
+not exist until the re-graft starts, which this story must not do. That red is
+delivered downstream: story 2.7 (mutation probe — a deliberate contract break
+must make the pipeline go red) and story 3.3 (the `verify:evidence` stage
+requires red-run logs as a fresh artifact).
+
 ## Failure chain (each a real 1.5 delta, recorded)
 
 | # | Build surface | v1.3 (green) | Bare v1.5 bump | Evidence |
@@ -52,8 +61,11 @@ metadata shape.
 
 - Suite: `genie-ai-overlay/contracts/` (README documents invocation + sensitivity).
 - CI: `contract-in-image` stage (`contract:retriever-arango`,
-  `contract:dataprep-arango`) + manual `contract-red-run:retriever-v1.5` job
-  that rebuilds the bare v1.5 image and captures the failure log as an artifact.
+  `contract:dataprep-arango`) + `contract:unit` (repo-side pure/telemetry
+  tests). The one-shot red-run was executed during this story (build-surface
+  failure above); a standing red-run/mutation-probe CI job is added in story
+  2.7, with the `verify:evidence` stage (story 3.3) requiring the red-run logs
+  fresh.
 - This evidence log: `_bmad-output/implementation-artifacts/red-run-v1.5-bare.md`.
 
 ## Handoff to Epic 2

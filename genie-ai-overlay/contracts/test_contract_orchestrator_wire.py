@@ -75,10 +75,10 @@ def _build_graph(comps):
     return graph, (embedding, retriever, rerank, llm)
 
 
-def test_orchestrator_wire_kwargs_reach_handlers(comps):
+def test_orchestrator_wire_kwargs_reach_handlers(comps, fake_http):
     """All 6 GENIE kwargs reach align_inputs/align_outputs with exact values."""
     graph, _ = _build_graph(comps)
-    captured: dict[str, dict] = {}
+    captured: dict[str, list[dict]] = {}
 
     # Wrap the handlers so we record what arrived. We subclass the real
     # orchestrator's align hooks (the same mechanism GENIE uses at runtime:
@@ -87,22 +87,23 @@ def test_orchestrator_wire_kwargs_reach_handlers(comps):
     orig_align_outputs = comps.ServiceOrchestrator.align_outputs
 
     def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **kwargs):
-        captured["align_inputs"] = dict(kwargs)
+        # Accumulate per-hop: align_inputs fires once per graph node, and a
+        # plain overwrite would only keep the LAST hop's kwargs — a drop on an
+        # intermediate hop must be visible too.
+        captured.setdefault("align_inputs", []).append(dict(kwargs))
         return orig_align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **kwargs)
 
     def align_outputs(self, data, *args, **kwargs):
-        captured["align_outputs"] = dict(kwargs)
+        captured.setdefault("align_outputs", []).append(dict(kwargs))
         return orig_align_outputs(self, data, *args, **kwargs)
 
     comps.ServiceOrchestrator.align_inputs = align_inputs
     comps.ServiceOrchestrator.align_outputs = align_outputs
     try:
-        session = _harness.install_fake_aiohttp()
-        _session_ref = session  # keep alive for the duration of the run
         asyncio.run(
             graph.schedule(
                 initial_inputs={"text": "what is tomato blight?", "model": "genie"},
-                llm_parameters=_harness_llm_params(comps),
+                llm_parameters=_harness.import_docarray("LLMParams")(),
                 **_harness.WIRE_KWARGS,
             )
         )
@@ -111,19 +112,21 @@ def test_orchestrator_wire_kwargs_reach_handlers(comps):
         comps.ServiceOrchestrator.align_outputs = orig_align_outputs
 
     # The LLM-node input path (align_inputs) must have received all 6 kwargs
-    # with the exact values sent.
-    assert "align_inputs" in captured, "align_inputs handler never invoked"
-    for kwarg, expected in _harness.WIRE_KWARGS.items():
-        assert kwarg in captured["align_inputs"], f"{kwarg} dropped at align_inputs"
-        assert captured["align_inputs"][kwarg] == expected, (
-            f"{kwarg} value mutated: got {captured['align_inputs'][kwarg]!r}, expected {expected!r}"
-        )
+    # with the exact values sent — on EVERY hop, not just the last one.
+    assert captured.get("align_inputs"), "align_inputs handler never invoked"
+    for hop, kwargs_snapshot in enumerate(captured["align_inputs"]):
+        for kwarg, expected in _harness.WIRE_KWARGS.items():
+            assert kwarg in kwargs_snapshot, f"{kwarg} dropped at align_inputs hop {hop}"
+            assert kwargs_snapshot[kwarg] == expected, (
+                f"{kwarg} value mutated at hop {hop}: got {kwargs_snapshot[kwarg]!r}, expected {expected!r}"
+            )
 
     # The non-streaming completion path (align_outputs, orchestrator.py:384)
     # also receives the kwargs — assert at least the two params dicts ride through.
-    assert "align_outputs" in captured, "align_outputs handler never invoked"
+    assert captured.get("align_outputs"), "align_outputs handler never invoked"
     for kwarg in ("retriever_parameters", "reranker_parameters"):
-        assert kwarg in captured["align_outputs"], f"{kwarg} dropped at align_outputs"
+        for hop, kwargs_snapshot in enumerate(captured["align_outputs"]):
+            assert kwarg in kwargs_snapshot, f"{kwarg} dropped at align_outputs hop {hop}"
 
 
 def test_orchestrator_all_services_registered(comps):
@@ -139,16 +142,3 @@ def test_orchestrator_all_services_registered(comps):
     expected = {svc.name for svc in services}
     actual = set(graph.topological_sort())
     assert expected <= actual, f"expected services {expected - actual} not registered; graph has {actual}"
-
-
-def _harness_llm_params(comps):
-    """Build the orchestrator's LLMParams from the real comps docarray module.
-
-    The docarray rename hack (docarray.py → opea_docarray.py) moves the module;
-    try the renamed path first, fall back to the pre-patch name.
-    """
-    try:
-        from comps.cores.proto.opea_docarray import LLMParams  # renamed (post-patch)
-    except ImportError:
-        from comps.cores.proto.docarray import LLMParams  # noqa: PLC0415
-    return LLMParams()

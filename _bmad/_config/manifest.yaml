@@ -1,26 +1,26 @@
 installation:
   version: 6.11.0
   installDate: 2026-04-26T21:02:35.766Z
-  lastUpdated: 2026-08-12T11:35:22.122Z
+  lastUpdated: 2026-08-12T15:40:13.435Z
 modules:
   - name: core
     version: 6.11.0
     installDate: 2026-04-26T21:02:35.007Z
-    lastUpdated: 2026-08-12T11:35:22.113Z
+    lastUpdated: 2026-08-12T15:40:13.427Z
     source: built-in
     npmPackage: null
     repoUrl: null
   - name: bmm
     version: 6.11.0
     installDate: 2026-08-11T13:29:37.337Z
-    lastUpdated: 2026-08-12T11:35:22.113Z
+    lastUpdated: 2026-08-12T15:40:13.427Z
     source: built-in
     npmPackage: null
     repoUrl: null
   - name: bmb
     version: v2.1.0
     installDate: 2026-08-11T13:29:37.534Z
-    lastUpdated: 2026-08-12T11:35:22.115Z
+    lastUpdated: 2026-08-12T15:40:13.428Z
     source: external
     npmPackage: bmad-builder
     repoUrl: https://github.com/bmad-code-org/bmad-builder
@@ -29,7 +29,7 @@ modules:
   - name: cis
     version: v0.2.1
     installDate: 2026-08-11T13:29:37.351Z
-    lastUpdated: 2026-08-12T11:35:22.116Z
+    lastUpdated: 2026-08-12T15:40:13.430Z
     source: external
     npmPackage: bmad-creative-intelligence-suite
     repoUrl: https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite
@@ -38,7 +38,7 @@ modules:
   - name: tea
     version: v1.22.0
     installDate: 2026-08-11T13:29:37.489Z
-    lastUpdated: 2026-08-12T11:35:22.119Z
+    lastUpdated: 2026-08-12T15:40:13.431Z
     source: external
     npmPackage: bmad-method-test-architecture-enterprise
     repoUrl: https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise
@@ -47,7 +47,7 @@ modules:
   - name: bmad-loop
     version: v0.9.1
     installDate: 2026-08-11T13:29:37.503Z
-    lastUpdated: 2026-08-12T11:35:22.120Z
+    lastUpdated: 2026-08-12T15:40:13.432Z
     source: external
     npmPackage: null
     repoUrl: https://github.com/bmad-code-org/bmad-loop
@@ -56,7 +56,7 @@ modules:
   - name: bmad-issue-tracking
     version: main
     installDate: 2026-05-13T06:37:29.616Z
-    lastUpdated: 2026-08-12T11:35:22.122Z
+    lastUpdated: 2026-08-12T15:40:13.435Z
     source: custom
     npmPackage: null
     repoUrl: https://github.com/jrevillard/bmad-issue-tracking

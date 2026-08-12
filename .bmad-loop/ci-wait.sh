@@ -98,6 +98,10 @@ fi
 [ -n "$project" ] || env_fail "could not resolve project from remote"
 [ -n "$platform" ] || env_fail "platform not resolved (gitlab | github)"
 
+# The GitLab API requires the URL-encoded namespace path for nested groups
+# (`projects/un%2Fitu%2Fgenie-ai`, not `projects/un/itu/genie-ai`).
+project_enc="${project//\//%2F}"
+
 # The CI CLI must exist — a missing glab/gh would silently read "no_pipeline"
 # and pass the gate with no CI run at all.
 if [ "$platform" = "gitlab" ] && ! command -v glab >/dev/null 2>&1; then
@@ -127,7 +131,7 @@ branch_status() {
   local raw rc
   case "$platform" in
     gitlab)
-      raw="$(glab api "projects/${project}/pipelines?ref=${branch}" --hostname "$host" 2>&1)"; rc=$?
+      raw="$(glab api "projects/${project_enc}/pipelines?ref=${branch}" --hostname "$host" 2>&1)"; rc=$?
       [ "$rc" -eq 0 ] || { echo "env_fault:glab API call failed for $host/$project — not authenticated or project not found: $(printf '%s' "$raw" | head -c 120)"; return; }
       printf '%s' "$raw" | uv run --no-project python -c 'import json,sys; d=json.load(sys.stdin); print(d[0]["status"] if d else "no_pipeline")' 2>/dev/null \
         || { echo "env_fault:uv run python failed — is uv installed on PATH?"; return; }
@@ -147,11 +151,11 @@ mr_status() {
   local raw rc
   case "$platform" in
     gitlab)
-      raw="$(glab api "projects/${project}/merge_requests?source_branch=${branch}" --hostname "$host" 2>&1)"; rc=$?
+      raw="$(glab api "projects/${project_enc}/merge_requests?source_branch=${branch}" --hostname "$host" 2>&1)"; rc=$?
       [ "$rc" -eq 0 ] || { echo "env_fault:glab API call failed for $host/$project: $(printf '%s' "$raw" | head -c 120)"; return; }
       iid="$(printf '%s' "$raw" | uv run --no-project python -c 'import json,sys; d=json.load(sys.stdin); print(d[0]["iid"] if d else "")' 2>/dev/null || echo "")"
       [ -n "$iid" ] || { echo no_mr; return; }
-      raw="$(glab api "projects/${project}/merge_requests/${iid}/pipelines" --hostname "$host" 2>&1)"; rc=$?
+      raw="$(glab api "projects/${project_enc}/merge_requests/${iid}/pipelines" --hostname "$host" 2>&1)"; rc=$?
       [ "$rc" -eq 0 ] || { echo "env_fault:glab API call failed for $host/$project: $(printf '%s' "$raw" | head -c 120)"; return; }
       printf '%s' "$raw" | uv run --no-project python -c 'import json,sys; d=json.load(sys.stdin); print(d[0]["status"] if d else "no_pipeline")' 2>/dev/null \
         || { echo "env_fault:uv run python failed — is uv installed on PATH?"; return; }

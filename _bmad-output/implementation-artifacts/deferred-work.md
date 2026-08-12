@@ -447,3 +447,27 @@ Items deferred during code reviews. Revisit when the related component is next m
 - **E2E graph test asserts only `result is not None`** — a silent early-exit/short-circuit also returns non-None; the "pipeline reaches the LLM node" claim is not substantiated. Re-asserted against real module surfaces during the re-graft. Files: `genie-ai-overlay/contracts/test_contract_e2e_pipeline.py`.
 - **E2E omits confidence distribution + abstention + response schema** — the spec lists four observable surfaces; only label roundtrip, streaming shape, and graph-schedule are asserted. The parity-evaluation regression set covers confidence/abstention. Files: `genie-ai-overlay/contracts/test_contract_e2e_pipeline.py`.
 - **Contract-test verification layer missing from the public architecture doc** — `site/content/en/docs/architecture/architecture.md` documents no contract-suite layer or its in-image isolation decision (that doc's "D3" is JWT validation, unrelated). The BMAD planning `architecture.md` holds the contract-test pattern + isolation decision. Enshrine the layer in the public architecture doc once the suite proves itself on the re-graft. Files: `site/content/en/docs/architecture/architecture.md`.
+
+### DW-1: embedding/textgen wrapper images still pin OPEA 1.3 base images.
+origin: spec-deferred 8b6f4b550347
+location: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:4
+source_spec: `2-1-re-graft-the-core-overlay-layer.md`
+severity: low
+reason: ARG UPSTREAM_IMAGE=opea/embedding:1.3 / opea/llm-textgen:1.3 unchanged while core/constants.py now exposes a v1.5-shaped enum; the retag to 1.5-based bases is story 2.2's OPEA_VERSION bump.
+status: open
+
+### DW-2: pydantic v2 in the module images is not verified at build/runtime.
+origin: spec-deferred 74debba4180e
+location: genie-ai-overlay/core/genieai_api_protocol.py:13
+source_spec: `2-1-re-graft-the-core-overlay-layer.md`
+severity: low
+reason: PositiveInt/NonNegativeFloat require pydantic v2; the images build from python:3.10-slim / opea:1.3 bases and no runtime pydantic-major check exists; covered by story 2.2's base-image migration + in-image contract runs.
+status: open
+
+### DW-3: override-audit lint is not enforced in CI and is one-directional.
+origin: spec-deferred d37bd529fdc3
+location: genie-ai-overlay/build-patches/lint_overrides.py
+source_spec: `2-1-re-graft-the-core-overlay-layer.md`
+severity: medium
+reason: lint_overrides.py runs only via the local pytest test_overrides_lint.py; no CI job wires it, the marker-to-manifest direction is unenforced, and .pth runtime-load failures are silent; CI enforcement belongs to story 2.7 (verify:evidence + coherence lint).
+status: open

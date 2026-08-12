@@ -75,3 +75,35 @@ def test_marker_disposition_disagreement(lint, monkeypatch):
         encoding="utf-8",
     )
     assert lint.validate() != 0
+
+
+def test_orphan_marker_fails_lint(lint, monkeypatch):
+    """A source marker with no manifest entry must fail the lint (reverse-direction check)."""
+    # scan_markers returns two markers; manifest only has one → orphan must fail.
+    monkeypatch.setattr(
+        lint,
+        "scan_markers",
+        lambda: {"a.b": {"still-needed"}, "orphan.x": {"still-needed"}},
+    )
+    lint.MANIFEST.write_text(
+        "overrides:\n- override: a.b\n  disposition: still-needed\n  owner: x\n  ticket: t\n",
+        encoding="utf-8",
+    )
+    assert lint.validate() != 0
+
+
+def test_module_layer_marker_is_scanned(lint, tmp_path, monkeypatch):
+    """Markers in reranker/*.py and contracts/*.py must be included in the scan."""
+    # Create a mini overlay tree with a marker in contracts/
+    overlay = tmp_path / "overlay"
+    contracts_dir = overlay / "contracts"
+    contracts_dir.mkdir(parents=True)
+    (contracts_dir / "_harness.py").write_text(
+        "# OVERRIDE contracts._harness.import_docarray | disposition: re-graft-to-new-API\n",
+        encoding="utf-8",
+    )
+    # Point the lint module at the temp overlay
+    monkeypatch.setattr(lint, "OVERLAY_ROOT", overlay)
+    markers = lint.scan_markers()
+    assert "contracts._harness.import_docarray" in markers
+    assert "re-graft-to-new-API" in markers["contracts._harness.import_docarray"]

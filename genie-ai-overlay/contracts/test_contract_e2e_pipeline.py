@@ -29,19 +29,26 @@ def _core_label_contract():
     """Import the shared label-contract module (core/label_contract).
 
     Skips when core is absent (this contract ships in the retriever/chatqna
-    images; a dataprep-only image does not carry it).
+    images; a dataprep-only image does not carry it). A genuine import BREAK
+    inside the image must fail red, not skip.
     """
     import pytest
 
     try:
         from core.label_contract import decode_filter_labels, encode_filter_labels
     except ImportError:
+        if _harness.in_image_comps_importable():
+            raise
         pytest.skip("core.label_contract not present in this image")
     return decode_filter_labels, encode_filter_labels
 
 
-def test_label_filter_contract_roundtrip(comps):
-    """chatqna→retriever label encoding survives the search_start handoff."""
+def test_label_filter_contract_roundtrip():
+    """chatqna→retriever label encoding survives the search_start handoff.
+
+    Pure (repo ``core.label_contract``) — runs in the dev venv and the repo-side
+    CI job, not just in-image.
+    """
     decode, encode = _core_label_contract()
     base_mode = "chunk"
     labels = ["Fruit Tree Cultivation", "Beekeeping and Honey"]
@@ -56,7 +63,7 @@ def test_label_filter_contract_roundtrip(comps):
     )
 
 
-def test_label_filter_contract_empty_is_noop(comps):
+def test_label_filter_contract_empty_is_noop():
     """No labels → decode returns the raw search_start unchanged."""
     decode, _ = _core_label_contract()
     mode, labels = decode("node")
@@ -89,7 +96,7 @@ def test_streaming_metadata_event_shape():
     assert isinstance(payload["is_grounded"], bool)
 
 
-def test_e2e_graph_schedules_real_orchestrator(comps):
+def test_e2e_graph_schedules_real_orchestrator(comps, fake_http):
     """One RAG query through the real orchestrator graph completes end-to-end.
 
     Builds the full embedding→retriever→rerank→llm graph on the real comps and
@@ -139,16 +146,11 @@ def test_e2e_graph_schedules_real_orchestrator(comps):
     graph.flow_to(retriever, rerank)
     graph.flow_to(rerank, llm)
 
-    try:
-        from comps.cores.proto.opea_docarray import LLMParams
-    except ImportError:
-        from comps.cores.proto.docarray import LLMParams  # noqa: PLC0415
-
-    _harness.install_fake_aiohttp()
+    llm_params = _harness.import_docarray("LLMParams")()
     result = asyncio.run(
         graph.schedule(
             initial_inputs={"text": "what is tomato blight?", "model": "genie"},
-            llm_parameters=LLMParams(),
+            llm_parameters=llm_params,
             **_harness.WIRE_KWARGS,
         )
     )

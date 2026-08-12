@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-08-12'
 status: 'done'
 review_loop_iteration: 0
-followup_review_recommended: true
+followup_review_recommended: false
 context: []
 warnings: [oversized]
 deferred:
@@ -192,6 +192,17 @@ Deferred: image tags stay v1.3 (story 2.2 owns OPEA_VERSION bump); pydantic-v2-i
 - Deferred this pass: reranker import re-point has no in-image import verification (medium — conftest MagicMock + no reranker contract/smoke job; covered by story 2.2's in-image contract runs); `build-patches/*.py` excluded from ruff so the two new scripts are never linted in CI (low — verified clean manually this pass; extend lint scope in 2.7).
 - Rejected: story-state inconsistency (`in-review` vs `sprint-status.yaml: done`, `review_loop_iteration: 0`) is transient orchestration state for a `done`-spec re-review; tightened `k`/`fetch_k`/`lambda_mult`/`score_threshold` constraints have no live consumer (verified no backend/frontend caller sends them); `_bmad/config.user.toml` `user_skill_level` removal is a separate bmad fix outside this story; DW-3/DW-4 ledger duplication in deferred-work.md is orchestrator-owned (ledger edits out of scope this run per caller).
 
+### 2026-08-12 — Review pass (follow-up on `done` spec, run 20260812-120919-8a07, 4 parallel reviewers)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 1 (low 1)
+- defer: 8 (medium 3, low 5) — every defer finding maps to an existing ledger entry (DW-3/DW-4/DW-6/DW-7/DW-8 or the 2.7 evidence gate); no new ledger entries added (orchestrator owns deferred-work status/resolution per caller)
+- reject: 12 (low 12)
+- addressed_findings:
+  - `[low]` `[patch]` shim pin-failure guard used `assert`, which `python -O` strips — contradicting the docstring's "fail loudly at site-init" guarantee; replaced with an explicit `raise RuntimeError` so the guard holds under any interpreter flags.
+- Deferred this pass (all already tracked; no ledger change per caller): installer has no committed test + `.pth`-content blind spot — the build-time guards import hooks directly, not via the `.pth`, so a broken `.pth` line ships green (medium → 2.2 in-image contract runs, DW-6/DW-7 class); reranker import re-point verified only against a MagicMock, no `contract:reranker` job (medium → 2.2, DW-8); runtime `.pth` loading unverified in all 6 images, spec defers only embedding/textgen (medium → 2.2, DW-6/DW-7/DW-8); lint never validates `test:` claims in markers + marker→manifest direction unenforced (low → 2.7, DW-4); byte-identity vs v1.5 not test-enforced (low → 2.7 evidence gate); committed suite never imports overlay core against real v1.5 `api_protocol` (mocked) (low → 2.7); build-mechanics assertion surface partially exercised — Dockerfile wiring is grep-only, no committed test (low → 2.2 contract runs); one-directional override audit misses module-layer deviations the diff itself introduces (low → 2.3-2.7, DW-5).
+- Rejected: `COPY --chmod=0755` BuildKit/exec-bit concern (pre-existing pattern — entrypoint.sh/fix_dependencies.sh already use it; `--chmod` sets the exec bit at copy time); `_bmad/config.user.toml` user_skill_level removal in the diff (out-of-scope bmad fix, already rejected last pass); DW-3/DW-4 ledger duplication with contradictory reasons (orchestrator-owned); deferred-entry "PositiveInt/NonNegativeFloat require pydantic v2" evidence wording (both exist in v1 — ledger-owned text); installer build-time import verification interpreter contract (the python==python3 guard ties them — consistent); stricter installer interpreter contract than the mechanism it replaces (deliberate guard — fails the build, never silent; official python images ship the `python` symlink); boundary tests `messages="hi"` not field-isolated (verified: `messages` is `Union[str, …]` and accepts `"hi"`, so the tests validate the correct field today); constant owner/ticket across OVERRIDES.yaml entries (schema choice, not a defect); spec frontmatter `in-review` vs `done`/sprint-status inconsistency (transient orchestration state of this pass); `install_site_startup` marker `test:` prose (accurate for a build-time guard; lint does not validate `test:` format); lint conflicting-disposition guard (already implemented — handled); contract harness `import_docarray` non-ImportError guard (fixed in the prior pass — handled).
+
 ## Design Notes
 
 - **TRANSLATOR slot drift.** v1.3 slot 24 (`TRANSLATOR`) became `LANGUAGE_DETECTION` in v1.5. Enum ints serialize into traces/messages, so `test_core.py` (count + tail-value) is the regression guard against silent renumbering. Appending at the tail (29) is stable across future upstream additions.
@@ -219,25 +230,22 @@ Deferred: image tags stay v1.3 (story 2.2 owns OPEA_VERSION bump); pydantic-v2-i
 
 Status: done
 
-**Summary:** Fresh review pass over the completed story 2.1 change set (commits `5f09001af`, `8710ba236`, `8df9787b1` — the re-grafted core overlay layer: v1.5-verbatim `core/constants.py` + `TRANSLATOR=29`, v1.5-Pydantic `core/genieai_api_protocol.py`, `OVERRIDES.yaml` + `lint_overrides.py` override audit, `.pth`-based `install_site_startup.sh`, `docarray_alias_shim.py` `sys.modules` pin, 6 Dockerfiles rewired, reranker import + contract harness re-grafted, tests updated). This pass applied 5 review patches: negative-path coverage for the override-audit lint (was a happy-path tautology), three installer guard hardenings (missing-binary messages, venv `getsitepackages` IndexError, site-packages existence check), and a guarded real-package import in `contracts/_harness.py::import_docarray` so the red-without-shim state fails with the documented message. 2 new items deferred, 4 rejected.
+**Summary:** Follow-up review pass over the completed story 2.1 re-graft (commits `5f09001af`…`3cf0ac081` — v1.5-verbatim `core/constants.py` + `TRANSLATOR=29` + `MCPFuncType`, v1.5-Pydantic `core/genieai_api_protocol.py`, `OVERRIDES.yaml` + `lint_overrides.py` override audit, `.pth`-based `install_site_startup.sh`, `docarray_alias_shim.py` `sys.modules` pin, 6 Dockerfiles rewired, reranker import + contract harness re-grafted, tests). This pass applied 1 low patch: the shim's pin-failure guard was an `assert` (silently stripped under `python -O`), replaced with an explicit `raise RuntimeError` so the "fail loudly at site-init" guarantee holds regardless of interpreter flags. 8 findings deferred — all already tracked as DW-3/DW-4/DW-6/DW-7/DW-8 or the 2.7 evidence gate; no new ledger entries added (orchestrator owns deferred-work status/resolution per caller). 12 rejected.
 
-**Files changed (this pass):** `genie-ai-overlay/tests/test_overrides_lint.py` (7 negative-path cases + disposition-disagreement test), `genie-ai-overlay/build-patches/install_site_startup.sh` (guard hardening), `genie-ai-overlay/contracts/_harness.py` (guarded `import docarray as real`), plus spec bookkeeping (triage log, deferred list, status `done`).
+**Files changed (this pass):** `genie-ai-overlay/build-patches/docarray_alias_shim.py` (assert → explicit raise), plus spec bookkeeping (triage log entry, `followup_review_recommended: false`, status `done`).
 
-**Review findings breakdown (this pass):** 5 patches applied (medium 1, low 4); 2 deferred (medium 1: reranker import re-point has no in-image import verification → 2.2 in-image contract runs; low 1: build-patches/*.py excluded from ruff → 2.7 lint scope); 4 rejected (story-state inconsistency = transient orchestration state; tightened constraints have no live consumer — verified; `_bmad/config.user.toml` change is a separate bmad fix; DW-3/DW-4 ledger duplication is orchestrator-owned).
+**Review findings breakdown (this pass):** 1 patch applied (low 1); 8 deferred (medium 3, low 5) — all already in the deferred-work ledger, no ledger edits per caller; 12 rejected (low 12).
 
-**Follow-up review recommendation:** true — 1 medium + 4 low patches this pass (score: 3×1 + 4 = 7 ≥ 5).
+**Follow-up review recommendation:** false — 1 low patch this pass (score: 3×0 + 1×1 = 1 < 5; no high).
 
 **Verification performed (all green):**
-- `pytest tests/test_core.py` — 68 passed, exit 0
-- `pytest tests/` — 680 passed (672 + 8 new negative-path lint tests), exit 0
+- `pytest tests/test_docarray_shim.py tests/test_core.py` — 70 passed, exit 0
+- `pytest tests/` — 680 passed, exit 0
 - `python build-patches/lint_overrides.py` — exit 0 (7 entries, all matched by source records)
-- One-shot v1.5 import compat — `core.constants` byte-prefix-identical to v1.5 + `TRANSLATOR=29` + `MCPFuncType`; `core.genieai_api_protocol` star-import aliases and subclasses resolve against real v1.5 `api_protocol`; `PositiveInt`/`NonNegativeFloat` enforce (k=0, k=-1, fetch_k=-2, lambda_mult<0, score_threshold<0 rejected; valid accepted)
-- Grep guards — no hardcoded sitecustomize paths, no `mv docarray.py`/`opea_docarray` in any Dockerfile
-- `ruff check` + `ruff format --check` — clean on all changed files (incl. build-patches/*.py verified explicitly, despite `[tool.ruff] exclude`)
-- `sh -n` — installer syntax clean; functional shim test: installer happy path exit 0, `zz_genie_startup.pth` written, `.pth` import executed at site-init by a real interpreter, and the build-time hook-import guard fails loudly when a hook cannot import
+- `ruff check` + `ruff format --check` on the patched shim — clean
 
-**Residual risks:**
-- No `docker build` run — Dockerfile wiring verified via grep + functional installer/.pth test; in-image `.pth` loading and shim behavior in the actual images remain the only untested surface (story 2.2's in-image contract runs cover them; the reranker specifically has no contract job yet — deferred this pass).
+**Residual risks (carried forward, unchanged by this pass):**
+- No `docker build` run — Dockerfile wiring verified via grep + functional installer/.pth test; in-image `.pth` loading and shim behavior in the actual images remain the only untested surface (story 2.2's in-image contract runs cover them; the reranker specifically has no contract job yet — DW-8).
 - `.pth` runtime-load failures are silent in CI — deferred to 2.7 (DW-3); the pth-exists + interpreter-mismatch + missing-binary guards in `install_site_startup.sh` mitigate at build time.
 - `build-patches/*.py` fall outside ruff CI coverage (pre-existing exclude) — verified clean manually this pass; extend scope in 2.7.
 - `k`/`fetch_k` now reject ≤ 0 and `lambda_mult`/`score_threshold` reject negatives (v1.5 mirror); no caller sends these fields today (verified), but any future client must respect the tightened contract.

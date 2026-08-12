@@ -34,9 +34,10 @@ try:
 
     # Defensive guard: if the pin failed and the vendored ``cores/proto`` shim is
     # still shadowing the real package, fail loudly at site-init instead of
-    # silently persisting the collision for the whole process.
-    assert "cores/proto" not in (getattr(docarray, "__file__", "") or ""), (
-        "docarray shim: imported module still resolves under comps/cores/proto — pin failed"
-    )
+    # silently persisting the collision for the whole process. Explicit check,
+    # not an ``assert``: ``assert`` is stripped under ``python -O``, and the
+    # fail-loudly guarantee must hold regardless of interpreter flags.
+    if "cores/proto" in (getattr(docarray, "__file__", "") or ""):
+        raise RuntimeError("docarray shim: imported module still resolves under comps/cores/proto — pin failed")
 finally:
     sys.path[:] = _original_path

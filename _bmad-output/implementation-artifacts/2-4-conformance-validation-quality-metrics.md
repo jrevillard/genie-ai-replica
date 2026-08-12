@@ -21,7 +21,7 @@ Builds on Story 2.2 (okf_concepts_meta collection + repository read API) + Story
 1. **Conformance service** — `services/conformance-service.js` validates a parsed concept (from `parseConcept()` output) against OKF §11 + v0.2 family rules (see Dev Notes for the exact 6 checks). Returns an array of issue objects + writes them to `okf_concepts_meta.conformance_issues` (per-concept field, upserted via the shared db-connection-service).
 2. **Non-blocking** — ALL issues are WARNING severity at ingest. A concept missing `type`, with a bad `status` enum, etc. is still ingested (flagged, never rejected). The only ERROR condition (unparseable frontmatter) is already handled by the parser (2.3) before validation runs.
 3. **Quality metrics** — extends `GET /api/okf/repos/:repo_id` (the existing repository read API) with a `metrics` block: `{ concept_count, conformance_issue_count, broken_link_count, stale_concept_count, pii_hit_count }`. Computed at READ TIME (aggregation queries over `okf_concepts_meta` for the repo).
-4. **Broken-link detection** — queries `okf_concepts_meta` for each link target's `concept_id` existence in the repo. Counts unresolved targets (broken links). This is 2.4's responsibility (it has DB access; the parser 2.3 is DB-free).
+4. **Broken-link detection** — **placeholder: 0** until Story 2.5/2.6 persist links to the DB (links are not yet stored in `okf_concepts_meta` or the edge collection). Same dependency pattern as `pii_hit_count` → 2.8.
 5. **Standards** — shared db-connection-service (NOT reinvented; `let _db = null; async getDb()` pattern), direct AQL (no ORM), MELT (`withSpan('okf.conformance.*')` + shared logger + `okf_conformance_operations_total` counter), all exceptions handled + logged, joi validation, snake_case responses, ITU copyright headers, ESLint/Prettier clean.
 6. **Tests** — Jest: mock db-connection-service (the arango-mock pattern); cover each conformance rule (missing type, invalid status, bad actor prefix, unparseable stale_after, source missing resource); cover metrics computation (concept count, issue count, broken links, staleness); cover non-blocking behavior (issues written but concept not rejected).
 
@@ -29,12 +29,14 @@ Builds on Story 2.2 (okf_concepts_meta collection + repository read API) + Story
 
 - [ ] **T1 — Conformance rules** (AC: 1,2)
   - [ ] `services/conformance-service.js` — `validateConcept(parsedConcept)` returns `{ issues: [{code, severity, message, field_path}], valid: boolean }`. Pure validation (no DB) — the rules only inspect the parsed object.
-  - [ ] 6 checks: `MISSING_TYPE` (type absent/empty → warning); `INVALID_STATUS_ENUM` (status not in {draft,stable,deprecated}); `BAD_ACTOR_PREFIX` (generated.by / verified[].by doesn't start with agent/|tool:|human:|process:); `UNPARSEABLE_STALE_AFTER` (stale_after not YYYY-MM-DD); `SOURCE_MISSING_RESOURCE` (sources[] entry missing resource); `MISSING_RESERVED_FILE` (deferred — see Dev Notes).
+  - [ ] 6 checks: `MISSING_TYPE` (type absent/empty → warning); `INVALID_STATUS_ENUM` (status not in {draft,stable,deprecated}); `BAD_ACTOR_PREFIX` (by doesn't start with agent/|agent:|human:|process:); `UNPARSEABLE_STALE_AFTER` (stale_after not YYYY-MM-DD); `SOURCE_MISSING_RESOURCE` (sources[] entry missing resource); `MISSING_RESERVED_FILE` (repo-level check in getRepoMetrics — query for concept_id == 'index').
 - [ ] **T2 — Persist conformance_issues** (AC: 1)
-  - [ ] `services/conformance-service.js` — `persistConformanceIssues(repo_id, concept_id, issues)` writes the issues array to `okf_concepts_meta.conformance_issues` via the shared db-connection-service (`db.collection('okf_concepts_meta').update(conceptKey, { conformance_issues: issues, ... })`). MELT-wrapped.
+  - [ ] `services/conformance-service.js` — `persistConformanceIssues(repo_id, concept_id, issues)` writes the issues array to `okf_concepts_meta.conformance_issues` via the shared db-connection-service (`AQL filter-and-update (key-agnostic — no conceptKey needed; filters by the unique [repo_id, concept_id] index): ```js
+const query = aql`FOR d IN okf_concepts_meta FILTER d.repo_id == ${repo_id} AND d.concept_id == ${concept_id} UPDATE d WITH { conformance_issues: ${issues} } IN okf_concepts_meta`;
+````). MELT-wrapped.
 - [ ] **T3 — Quality metrics** (AC: 3,4)
   - [ ] `services/conformance-service.js` — `getRepoMetrics(repo_id)` aggregates via AQL over `okf_concepts_meta`: concept_count, conformance_issue_count (sum of issues across concepts), broken_link_count (links whose to_concept_id doesn't exist as a concept_id in the repo), stale_concept_count (today ≥ stale_after), pii_hit_count (placeholder: 0 until Story 2.8). MELT-wrapped.
-  - [ ] Modify `services/repository-service.js` `getById()` — after fetching the repo doc, also call `conformanceService.getRepoMetrics(repo_id)` and include in the response as a `metrics` field.
+  - [ ] Modify `services/repository-service.js` `getById()` — after fetching the repo doc, call `conformanceService.getRepoMetrics(repo_id)` **wrapped in try/catch** (graceful degradation: on failure, log the error and return the repo doc with `metrics: null`; NEVER let a metrics failure break a repo read). Include in the response as a `metrics` field.
 - [ ] **T4 — MELT + error handling** (AC: 5)
   - [ ] `withSpan('okf.conformance.validate')` / `'okf.conformance.metrics'` + shared logger + `okf_conformance_operations_total` counter.
   - [ ] All exceptions handled (DB errors → logger.error + throw; validation never throws — returns issues).
@@ -51,10 +53,10 @@ Builds on Story 2.2 (okf_concepts_meta collection + repository read API) + Story
 |---|---|---|---|---|
 | B2 | `MISSING_TYPE` | `type` field present + non-empty string | `!parsed.frontmatter.type \|\| !String(parsed.frontmatter.type).trim()` | WARNING |
 | V2 | `INVALID_STATUS_ENUM` | `status` is a valid enum | `status !== undefined && !['draft','stable','deprecated'].includes(status)` | WARNING |
-| V1 | `BAD_ACTOR_PREFIX` | `generated.by` / each `verified[].by` has a valid prefix | `by` present but doesn't start with `agent/`, `tool:`, `human:`, or `process:` | WARNING |
+| V1 | `BAD_ACTOR_PREFIX` | `generated.by` / each `verified[].by` has a valid prefix | `by` present but doesn't start with `agent/`, `agent:`, `human:`, or `process:` (both slash + colon for agents — the producer emits `agent:okf-producer`; `tool:` removed, not in spec) | WARNING |
 | V3 | `UNPARSEABLE_STALE_AFTER` | `stale_after` is a valid `YYYY-MM-DD` | present but doesn't match `/^\d{4}-\d{2}-\d{2}$/` | WARNING |
 | V4 | `SOURCE_MISSING_RESOURCE` | each `sources[]` entry has `resource` | `sources[i].resource` is missing/empty | WARNING |
-| B3 | `MISSING_RESERVED_FILE` | Repo has `index.md` | **DEFERRED** — repo-level check; storage home ambiguous (okf_repositories vs okf_concepts_meta). Out of scope for 2.4; flag for a follow-up. | WARNING |
+| B3 | `MISSING_RESERVED_FILE` | Repo has `index.md` (reserved file) | Repo-level check in `getRepoMetrics`: query `okf_concepts_meta` for `concept_id == 'index'` for the repo. If missing → flag on the metrics block. | WARNING |
 
 **B1 (parseable frontmatter)** is already enforced by the parser (2.3 throws `ParseError` before validation runs). The validator does NOT re-check it.
 

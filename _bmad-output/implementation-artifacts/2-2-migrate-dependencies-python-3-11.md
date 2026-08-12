@@ -3,10 +3,10 @@ title: 'Migrate dependencies + Python 3.11'
 type: 'chore'
 created: '2026-08-12'
 status: 'done'
-baseline_commit: 'df38f4016'
-baseline_revision: 'f1afc601c7c39bf78adf5bc34ae50c8fa54caa04'
+baseline_commit: 'f7402eecf'
+baseline_revision: 'f7402eecf5a9db4a9791e116b84c6759fdb46085'
 review_loop_iteration: 0
-followup_review_recommended: false
+followup_review_recommended: true
 context: []
 warnings: [oversized]
 deferred:
@@ -88,26 +88,12 @@ deferred:
       genie-ai-overlay/reranker/requirements-cpu.txt
     severity: low
   - summary: >-
-      .bmad-loop/ci-wait.sh platform-sed does not strip a trailing YAML comment and uses GNU-only \s.
-    evidence: >-
-      `git_platform: gitlab # note` would resolve to "gitlab # note"; GNU \s breaks on BSD sed. Carried orchestrator infra (verify gate), not story scope; harmless on this Linux deployment.
-    location: >-
-      .bmad-loop/ci-wait.sh
-    severity: low
-  - summary: >-
       components/gov-chat-backend/.gitlab-ci.yml still carries the retired verify:dataprep-lock job against the deleted requirements.lock (root .gitlab-ci.yml is the active config; the backend copy is never included).
     evidence: >-
       components/gov-chat-backend/.gitlab-ci.yml:2290-2337 references requirements.lock, dataprep/scripts/*, make lock-dataprep — all retired by 2.2 — but GitLab reads only the root .gitlab-ci.yml (no include of the backend copy), so it is dead config. The AC3/Verification grep is scoped to genie-ai-overlay/ and misses it. Pre-existing, surfaced by the retirement; a CI-hygiene pass should delete or sync it.
     location: >-
       components/gov-chat-backend/.gitlab-ci.yml:2290
     severity: low
-  - summary: >-
-      dataprep's default DOCLING_DEVICE=cuda is unsupported by the CUDA-less python:3.11-slim image; a default-config ingest needs DOCLING_DEVICE=cpu set.
-    evidence: >-
-      genieai_dataprep_utils.py:45 defaults DOCLING_DEVICE to cuda and selects AcceleratorDevice.CUDA unless cpu; docker-compose.yaml:991 passes ${DOCLING_DEVICE:-cuda}; env template leaves it unset. The image no longer ships CUDA libs, so docling cannot honor a cuda device. Fix spans compose default + module default (deployment config + module code) — a 2.5 dataprep re-audit item; the spec Design Note now records the capability loss.
-    location: >-
-      docker-compose.yaml:991
-    severity: medium
   - summary: >-
       the build-time docarray rename (mv docarray.py -> opea_docarray.py + sed in orchestrator/micro_service) is ungated against OPEA v1.5 source; if v1.5's import patterns drifted, the sed no-ops and the circular-import fix silently stops applying.
     evidence: >-
@@ -137,19 +123,26 @@ deferred:
       genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai:14
     severity: low
   - summary: >-
-      Makefile lock-<module> targets use whatever uv is on PATH while CI pins uv==0.10.6 — a local regen with a newer uv can produce a lock CI's pinned uv rejects.
-    evidence: |-
-      Makefile:8 `UV ?= uv`; .gitlab-ci.yml verify:dataprep-lock before_script pins uv==${UV_VERSION} (0.10.6). A divergent lock reintroduces the silent-drift class the drift guard exists to catch.
-    location: >-
-      Makefile:8
-    severity: low
-  - summary: >-
       dataprep requirements.in openai==1.81.0 pin carries a bare llama_index issue link with no rationale, unlike the v1.5-lock rationale used for every other pin.
     evidence: |-
       genie-ai-overlay/dataprep/requirements.in:65-66 — `# https://github.com/run-llama/llama_index/issues/18823` directly above `openai==1.81.0`; no comment body explains the version choice or the issue's relevance. Doc cleanup; the 2.7 coherence/version lint can re-pin with rationale.
     location: >-
       genie-ai-overlay/dataprep/requirements.in:65
     severity: low
+  - summary: >-
+      dataprep lock ships BOTH opencv-python==4.11.0.86 and opencv-python-headless==4.11.0.86; with pip install --no-deps --require-hashes both wheels land and overwrite each other's cv2, so the .in "headless swap" comment is aspirational, not protective.
+    evidence: |-
+      dataprep/requirements-cpu.txt:3058 (opencv-python) + 3067 (opencv-python-headless); the .in comment (lines 7-9) documents the headless intent but a faithful v1.5 fork keeps opencv-python as a transitive dep. cv2 files come from whichever installs last. Genuinely ungated is image content + post-import behavior — dataprep build-surface re-audit (2.5).
+    location: >-
+      genie-ai-overlay/dataprep/requirements-cpu.txt:3058
+    severity: medium
+  - summary: >-
+      the mocked OPEA unit suite (test:python job) runs on python:3.10 with pyproject test extras, not the 3.11 lock stack the images now ship — a 3.11-only or lock-version-only regression in overlay logic passes the whole suite.
+    evidence: |-
+      .gitlab-ci.yml test:python uses image python:3.10-slim + pip install -e ".[test]"; conftest stubs comps so the real vendored v1.5 comps and the compiled locks are never imported. A 3.11-removed stdlib path or a lock-pinned dep whose 3.11 behavior differs ships green. Re-baseline the mocked suite to python:3.11 + the lock stack belongs to story 2.8 (mock-reality parity).
+    location: >-
+      .gitlab-ci.yml:2285
+    severity: medium
 ---
 
 <intent-contract>
@@ -294,6 +287,19 @@ _None yet._
 - addressed_findings:
   - none
 
+### 2026-08-12 — Review pass (reuse adoption of 8ca0649e6 + fix pass)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 5: (high 1, medium 2, low 2)
+- defer: 9: (medium 4, low 5) — 2 new items appended (dataprep dual opencv wheel; test:python on 3.10), 7 re-confirmed existing
+- reject: 3: (low 3)
+- addressed_findings:
+  - `[high]` `[patch]` AC3 retirement was NOT executed in the adopted tree — `dataprep/requirements.lock`, `dataprep/scripts/generate-requirements-in.sh`, `build-patches/fix_dependencies.sh` were still tracked (the `git checkout 8ca0649e6 -- .` reuse step did not apply the deletions). `git rm`'d all three; the spec's retirement grep now exits clean.
+  - `[medium]` `[patch]` ci-wait.sh platform block was triplicated — removed the two GNU-`\s` buggy copies (no YAML comment strip), kept the POSIX block; previously deferred (DW-21), now fixed.
+  - `[medium]` `[patch]` DOCLING_DEVICE default `cuda`→`cpu` in `genieai_dataprep_utils.py:45` + `docker-compose.yaml:991` — the CUDA-less `python:3.11-slim` base cannot honor cuda; previously deferred (DW-26), now fixed so a default-config ingest works.
+  - `[low]` `[patch]` reranker Dockerfile stray `# OPEA's reranker uses 3.11 <<< (ROMAN)` editor marker removed.
+  - `[low]` `[patch]` Makefile `UV` pinned to CI's uv==0.10.6 (`UV ?= uvx --from uv==0.10.6 uv`); previously deferred, now fixed.
+
 ## Design Notes
 
 - **Hashes are generated before adoption (PRD FR-4 assumption, now verified).** v1.5's upstream `requirements-cpu.txt` files are compiled with `uv pip compile ... --universal` and carry no `--hash` markers (verified from the fetched dataprep/retriever/reranker locks). To satisfy AC1's "hashed requirements", each module's lock is recompiled from a forked `.in` with `--generate-hashes --python-version 3.11`. The `.in` stays a thin fork of upstream's (upstream maintains it; future bumps re-fork + recompile), which is how "adopt OPEA's compiled lock" and "retire the local machinery" coexist: the old `generate-requirements-in.sh` (which scraped v1.3's unpinned `requirements.txt`) is the retired machinery, not the `.in`-fork + compile loop.
@@ -373,3 +379,32 @@ Status: done
 - Heavy deps (pyspark, `unstructured[all-docs]`, openai-whisper, torch 2.13.0 in all three CPU locks) raise image size/build time — 2.5 re-audits.
 - No `docker build` executed in this environment; CI build jobs are the live gate for install/wheel/source-build failures.
 
+
+### 2026-08-12 — Review pass (reuse adoption + fixes)
+
+**Summary:** This pass reviewed the reused implementation (prior attempt `8ca0649e6` adopted onto this branch). Fresh 4-layer review (blind-hunter, edge-case-hunter, verification-gap, intent-alignment) over `review/part-b-code-diff.patch` (generated `requirements-cpu.txt` locks excluded). One high defect: the AC3 retirement was NOT actually applied by the reuse step — three v1.3 lock-machinery files were still tracked. All 5 actionable findings fixed; 2 new deferred items appended; 3 rejected.
+
+**Files changed (this pass):**
+- `genie-ai-overlay/dataprep/requirements.lock`, `genie-ai-overlay/dataprep/scripts/generate-requirements-in.sh`, `genie-ai-overlay/build-patches/fix_dependencies.sh` — DELETED (AC3 retirement; left tracked by the reuse checkout).
+- `.bmad-loop/ci-wait.sh` — removed 2 duplicate GNU-`\s` platform-resolution blocks, kept the POSIX comment-stripping one.
+- `genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai` — removed stray `<<< (ROMAN)` editor marker comment.
+- `genie-ai-overlay/dataprep/genieai_dataprep_utils.py` + `docker-compose.yaml` — `DOCLING_DEVICE` default `cuda`→`cpu` (CUDA-less base cannot honor cuda).
+- `Makefile` — `UV` pinned to CI's uv==0.10.6 (`UV ?= uvx --from uv==0.10.6 uv`).
+
+**Review findings breakdown (this pass):** 5 patch (1 high, 2 medium, 2 low). 9 defer (2 new — dataprep dual opencv wheel, test:python on 3.10 — plus 7 re-confirmed existing). 3 reject (uv-vs-pip resolver — CI build jobs gate pip install; truncated review diff — rtk compaction artifact, reviewers reconstructed from the tree; deferred-work ledger dupes — append-only ledger hygiene).
+
+**Follow-up review recommendation:** true — 1 high patch; score = 3×2(medium) + 1×2(low) = 8 ≥ 5.
+
+**Verification performed (this pass):**
+- `uv pip sync requirements-cpu.txt --dry-run --python <py3.11>` exit 0 for dataprep/retriever/reranker.
+- `python -m pytest tests/` — 680 passed on Python 3.11 venv (test extras).
+- `ruff check genie-ai-overlay/` clean; `ruff format --check` on the changed module clean.
+- `grep -rn "requirements.lock\|generate-requirements-in\|docling-core==2.82.0\|fix_dependencies" genie-ai-overlay/` — no matches (exit 1).
+- `bash -n .bmad-loop/ci-wait.sh` OK; `make -n lock-dataprep` shows the pinned uvx command.
+- Spec frontmatter reparsed; `deferred` is one list (3 fixed items removed, 2 new appended).
+
+**Residual risks (unchanged; carried on the deferred list):**
+- retriever `langchain-arangodb==0.0.6` fix-pin gone until 2.3; label-filter library-level regression unobservable by in-repo tests.
+- chatqna v1.3 comps on the 3.11 builder, reranker/embedding/textgen v1.5 runtime — no in-image gate until 2.4/2.6.
+- dataprep dual `opencv-python`/`opencv-python-headless` wheels + heavy deps + torch 2.13.0 in all three CPU locks raise image size — 2.5 re-audits.
+- No `docker build` executed here; CI build jobs are the live gate for install/wheel/source-build failures.

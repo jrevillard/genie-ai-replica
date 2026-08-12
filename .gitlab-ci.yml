@@ -2217,6 +2217,22 @@ lint:python:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+lint:overrides:
+  image: python:3.10-slim
+  stage: lint
+  interruptible: true
+  script:
+    - python genie-ai-overlay/build-patches/lint_overrides.py
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "genie-ai-overlay/**/*.py"
+        - "genie-ai-overlay/OVERRIDES.yaml"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
 lint:dart:
   extends: .flutter_base
   stage: lint

@@ -2178,3 +2178,39 @@ class TestInitializeClient:
             fake_db.has_database.return_value = True
             dp._initialize_client()
             fake_db.create_database.assert_not_called()
+
+
+class TestResolveDoclingDevice:
+    """DOCLING_DEVICE → docling AcceleratorDevice mapping (CUDA default, safe fallback)."""
+
+    def test_cpu_forced(self):
+        from dataprep.genieai_dataprep_utils import (
+            AcceleratorDevice,
+            _resolve_docling_device,
+        )
+
+        assert _resolve_docling_device("cpu") is AcceleratorDevice.CPU
+
+    def test_cuda_used_when_gpu_available(self):
+        from dataprep.genieai_dataprep_utils import (
+            AcceleratorDevice,
+            _resolve_docling_device,
+        )
+
+        assert _resolve_docling_device("cuda", cuda_available=True) is AcceleratorDevice.CUDA
+
+    def test_cuda_falls_back_to_cpu_without_gpu(self):
+        from dataprep.genieai_dataprep_utils import (
+            AcceleratorDevice,
+            _resolve_docling_device,
+        )
+
+        assert _resolve_docling_device("cuda", cuda_available=False) is AcceleratorDevice.CPU
+
+    def test_non_cpu_value_treated_as_cuda(self):
+        from dataprep.genieai_dataprep_utils import (
+            AcceleratorDevice,
+            _resolve_docling_device,
+        )
+
+        assert _resolve_docling_device("auto", cuda_available=True) is AcceleratorDevice.CUDA

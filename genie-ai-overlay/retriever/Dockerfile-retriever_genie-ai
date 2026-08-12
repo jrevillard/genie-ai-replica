@@ -1,7 +1,7 @@
 # ======== Stage 1: The OPEA Base ========
 # This stage is identical and will be cached by Docker
 ARG OPEA_REPO_URL="https://github.com/opea-project/GenAIComps.git"
-ARG OPEA_VERSION="v1.3"
+ARG OPEA_VERSION="v1.5"
 FROM alpine/git:v2.52.0 AS opea_base
 
 ARG OPEA_REPO_URL
@@ -11,9 +11,17 @@ WORKDIR /src
 RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 
 # ======== Final Stage: Assembly ========
-FROM python:3.10-slim
+# Match OPEA v1.5's base image (python:3.11-slim).
+FROM python:3.11-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libcairo2 \
+    libglib2.0-0 \
+    libjemalloc-dev \
+    libmariadb-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -24,37 +32,18 @@ ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/retrievers/src:/app/comps/cores/pr
 # Step A: Copy the entire OPEA 'comps' directory from the clone
 COPY --from=opea_base /src/comps/ /app/comps/
 
-# Define the path to the requirements file for easier reference
-ARG REQ_PATH=/app/comps/retrievers/src/requirements.txt
-
-# Step B: Copy and Run the Dependency Patch
-COPY --chmod=0755 genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
-# Run the patch script on the requirements file at its new location
-RUN ./fix_dependencies.sh ${REQ_PATH}
-
-# Step C: Install *fixed* dependencies
-# This installs the *real* 'docarray' package
-RUN pip install --no-cache-dir -r ${REQ_PATH}
-
-# Install OpenTelemetry dependencies for distributed tracing
-RUN pip install --no-cache-dir \
-    "opentelemetry-api>=1.22" "opentelemetry-sdk>=1.22" \
-    "opentelemetry-instrumentation-fastapi>=0.43b0" \
-    "opentelemetry-instrumentation-httpx>=0.43b0" \
-    "opentelemetry-instrumentation-aiohttp-client>=0.43b0" \
-    "opentelemetry-instrumentation-requests>=0.43b0" \
-    "opentelemetry-exporter-otlp-proto-http>=1.22"
-
-# Upgrade langchain-huggingface to fix InferenceClient.post() removal in huggingface_hub>=0.24
-# OPEA v1.3 pins langchain-huggingface==0.1.2 which is incompatible with newer huggingface_hub
-# Pin to 0.3.x series to stay compatible with langchain-core<1.0 (required by langchain-community, langchain-arangodb, etc.)
-RUN pip install --no-cache-dir --upgrade "langchain-huggingface>=0.3.1,<1.0.0"
-
-# Upgrade langchain-arangodb: OPEA v1.3 pins 0.0.4, whose similarity search ignores any
-# `filter_clause` kwarg (silently swallowed by **kwargs, no FILTER in the AQL). This makes
-# category/label filtering a no-op, so every query scans the whole collection. 1.2.0 supports
-# `filter_clause` natively and is compatible with the pinned langchain-core 0.3.x / python-arango 8.x.
-RUN pip install --no-cache-dir --upgrade "langchain-arangodb>=1.2.0,<2.0.0"
+# Step B: Install dependencies from the committed hash-pinned lock.
+# The lock is compiled with `make lock-retriever` (uv pip compile
+# --generate-hashes --python-version 3.11) from the GENIE.AI fork of OPEA
+# v1.5's requirements.in. --require-hashes makes the build bit-for-bit
+# reproducible and supply-chain-pinned, with no re-resolution against live PyPI.
+# The v1.5 lock pins langchain-huggingface and langchain-arangodb at the
+# v1.5 lock versions (langchain-arangodb 0.0.6), so the old v1.3 post-install
+# upgrade blocks are gone; the >=1.2.0 filter_clause fix-pin is NOT present in
+# the v1.5 lock and is restored by story 2.3's langchain-arangodb bump.
+# The OpenTelemetry deps are likewise pinned in the lock (no unhashed install).
+COPY genie-ai-overlay/retriever/requirements-cpu.txt /app/requirements-cpu.txt
+RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-cpu.txt
 
 # Step D: Fix docarray circular import
 # The vendored comps/cores/proto/docarray.py shadows the real 'docarray' PyPI

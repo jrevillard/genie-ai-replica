@@ -43,7 +43,7 @@ class ServiceType(Enum):
     PROMPT_REGISTRY = 26
     TEXT2QUERY = 27
     ARB_POST_HEARING_ASSISTANT = 28
-    TRANSLATOR = 29  # OVERRIDE core.constants.ServiceType | disposition: re-graft-to-new-API | reason: re-append TRANSLATOR at v1.5 tail slot 29 | test: tests/test_core.py::TestServiceType::test_new_v15_member_values  # noqa: E501
+    TRANSLATOR = 29  # OVERRIDE core.constants.ServiceType | disposition: re-graft-to-new-API | reason: re-append TRANSLATOR at v1.5 tail slot 29 | test: tests/test_core.py::TestServiceType::test_translator_is_last  # noqa: E501
 
 
 class MegaServiceEndpoint(Enum):

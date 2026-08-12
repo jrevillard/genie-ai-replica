@@ -31,5 +31,12 @@ _original_path = list(sys.path)
 sys.path[:] = [entry for entry in _original_path if not entry.rstrip("/").endswith(_PROTO_SUFFIX)]
 try:
     import docarray  # noqa: F401
+
+    # Defensive guard: if the pin failed and the vendored ``cores/proto`` shim is
+    # still shadowing the real package, fail loudly at site-init instead of
+    # silently persisting the collision for the whole process.
+    assert "cores/proto" not in (getattr(docarray, "__file__", "") or ""), (
+        "docarray shim: imported module still resolves under comps/cores/proto — pin failed"
+    )
 finally:
     sys.path[:] = _original_path

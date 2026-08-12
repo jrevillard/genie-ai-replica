@@ -14,6 +14,14 @@
 # OVERRIDE build-patches.install_site_startup | disposition: re-graft-to-new-API | reason: .pth-based startup install replaces hardcoded sitecustomize.py overwrite | test: build-time import guard (install_site_startup.sh fails the build if a hook import errors)  # noqa: E501
 set -eu
 
+# Guard: the service will run under `python`, so the hooks must be installed for
+# the same interpreter. If `python` and `python3` resolve to different
+# interpreters, fail the build rather than silently patching the wrong one.
+[ "$(readlink -f "$(command -v python)")" = "$(readlink -f "$(command -v python3)")" ] || {
+    echo "install_site_startup: python/python3 interpreter mismatch" >&2
+    exit 1
+}
+
 # Directory containing this script — the Dockerfiles COPY it (and the patch files)
 # to /app, so this resolves to /app.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -34,6 +42,13 @@ import docarray_alias_shim"
 fi
 
 printf '%s\n' "${PTH_IMPORTS}" > "${SITE_PKGS}/zz_genie_startup.pth"
+
+# Guard: the .pth must exist and be non-empty, or Python's site-init would load
+# nothing and the hooks would silently not run.
+[ -s "${SITE_PKGS}/zz_genie_startup.pth" ] || {
+    echo "install_site_startup: zz_genie_startup.pth write failed" >&2
+    exit 1
+}
 
 # Build-time verification — every hook must import cleanly or the build fails.
 python3 -c 'import genie_ssl_patch'

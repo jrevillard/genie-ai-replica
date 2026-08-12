@@ -60,7 +60,12 @@ def parse_manifest(text: str) -> list[dict]:
         if current is not None:
             match = re.match(r"^\s+(\S+):\s*(.*)$", line)
             if match:
-                current[match.group(1)] = match.group(2).strip()
+                key = match.group(1)
+                if key in current:
+                    _fail(
+                        f"line {lineno}: duplicate key {key!r} in override entry (first set at line {current['_line']})"
+                    )
+                current[key] = match.group(2).strip()
                 continue
         _fail(f"line {lineno}: unparsed manifest line {line!r}")
     if current is not None:
@@ -80,7 +85,7 @@ def scan_markers() -> dict[str, set[str]]:
                 continue
             try:
                 content = path.read_text(encoding="utf-8")
-            except OSError:
+            except (OSError, UnicodeDecodeError):
                 continue
             for match in MARKER_RE.finditer(content):
                 # Skip documentation placeholders (e.g. ``<module>.<name>``).
@@ -93,7 +98,7 @@ def scan_markers() -> dict[str, set[str]]:
 def validate() -> int:
     try:
         manifest_text = MANIFEST.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         _fail(f"cannot read {MANIFEST}: {exc}")
         return 1
 

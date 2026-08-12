@@ -13,7 +13,7 @@ LINT_SCRIPT = OVERLAY_ROOT / "build-patches" / "lint_overrides.py"
 def test_manifest_lints_clean():
     """The OVERRIDES.yaml override-audit manifest must lint clean."""
     if not LINT_SCRIPT.exists():
-        pytest.skip("build-patches/lint_overrides.py not present")
+        pytest.fail("build-patches/lint_overrides.py not present — override-audit lint must be enforced")
     result = subprocess.run(
         [sys.executable, str(LINT_SCRIPT)],
         capture_output=True,

@@ -53,6 +53,11 @@ pytest tests/test_tracing_with_span.py  # OTel span validation
 
 **Tracing**: OTel SDK initialized in `tracing.py`. Use `@tracing.trace_span(name)` decorator. See `.claude/rules/OBSERVABILITY.md`.
 
+## Override Audit & Site-Startup Hooks
+
+- **Override audit**: every deviation from the upstream OPEA vendored code is recorded in `OVERRIDES.yaml` AND mirrored as a `# OVERRIDE <module>.<name> | disposition: <still-needed|re-graft-to-new-API|obsolete-remove> | reason: ... | test: ...` marker in the corresponding source file (`core/*.py` or `build-patches/*`). `build-patches/lint_overrides.py` enforces the sync (manifest keys, valid dispositions, and marker↔manifest agreement) — run it (`python build-patches/lint_overrides.py`, exit 0) after touching any override.
+- **Site-startup hooks**: `build-patches/install_site_startup.sh` copies `genie_ssl_patch.py` (+ `docarray_alias_shim.py` when present) into the interpreter's site-packages and wires them via a `zz_genie_startup.pth` `import` line, executed by Python at site init before the service main script. Both files must stay consistent with the `.pth` mechanism (no hardcoded `sitecustomize.py` overwrites).
+
 ## See Also
 
 - Root `CLAUDE.md` — GENIE.AI architecture, deployment, full tech stack

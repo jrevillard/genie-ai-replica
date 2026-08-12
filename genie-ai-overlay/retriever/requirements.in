@@ -1,0 +1,77 @@
+# GENIE.AI fork of OPEA v1.5 comps/retrievers/src/requirements.in.
+# Source: https://raw.githubusercontent.com/opea-project/GenAIComps/v1.5/comps/retrievers/src/requirements.in
+# Regenerate the lock with:
+#   uv pip compile --generate-hashes --python-version 3.11 --python-platform x86_64-manylinux_2_31 requirements.in -o requirements-cpu.txt
+#
+# Deltas vs upstream (compiled-lock source, PRD FR-4 / arch decision D7):
+#   - docling/docling-core/langchain/fastapi/docarray pinned to the versions
+#     OPEA v1.5's compiled lock ships — recompiling the bare .in today resolves
+#     to newer packages that do NOT pair with v1.5 comps source.
+#   - opentelemetry-instrumentation extras appended below so the Dockerfile's
+#     separate unhashed otel install block can be retired.
+
+aiofiles
+bs4
+cairosvg
+decord
+docarray[full]==0.41.0
+docling==2.55.1
+docling-core==2.48.4
+docx2txt
+easyocr
+einops
+fastapi==0.118.2
+future
+graspologic
+haystack-ai==2.3.1
+langchain==0.3.27
+langchain-arangodb==0.0.6
+langchain-elasticsearch
+langchain-mariadb
+langchain-openai
+langchain-pinecone
+langchain-opengauss
+langchain-vdms>=0.1.4
+langchain_community
+langchain_huggingface
+langchain_milvus
+llama-index-core
+llama-index-embeddings-openai
+llama-index-embeddings-text-embeddings-inference
+llama-index-llms-openai
+llama-index-llms-openai-like
+llama-index-llms-text-generation-inference
+llama_index_graph_stores_neo4j
+mariadb
+neo4j
+numpy
+opensearch-py
+opentelemetry-api==1.27.0
+opentelemetry-exporter-otlp==1.27.0
+opentelemetry-sdk==1.27.0
+pathway
+Pillow==11.3.0
+pgvector
+prometheus-fastapi-instrumentator
+protobuf>=4.24.2
+psycopg2-binary
+pydantic
+pymilvus==2.5.6
+pymupdf
+pytesseract
+python-docx
+python-multipart
+python-pptx
+qdrant-haystack
+redis
+sentence_transformers
+shortuuid
+tiktoken
+uvicorn
+
+# === OpenTelemetry instrumentation (distributed tracing) ===
+opentelemetry-instrumentation-fastapi>=0.43b0
+opentelemetry-instrumentation-httpx>=0.43b0
+opentelemetry-instrumentation-aiohttp-client>=0.43b0
+opentelemetry-instrumentation-requests>=0.43b0
+opentelemetry-exporter-otlp-proto-http>=1.22

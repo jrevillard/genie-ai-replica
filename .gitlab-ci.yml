@@ -2442,39 +2442,43 @@ e2e:playwright:
 
 # --- Configuration validation ---
 
-# Verify the dataprep requirements.lock is in sync with requirements.in.
-# Fails if someone edited requirements.in (or bumped OPEA) without running
-# `make lock-dataprep`. Catches silent lock drift before it reaches a build.
+# Verify each overlay module's requirements-cpu.txt is in sync with its
+# requirements.in (dataprep/retriever/reranker). Fails if someone edited a
+# requirements.in (or bumped OPEA) without running `make lock-<module>`.
+# Catches silent lock drift before it reaches a build.
 verify:dataprep-lock:
   stage: config
-  image: python:3.10-slim
+  image: python:3.11-slim
   interruptible: true
   variables:
     UV_VERSION: "0.10.6"
   before_script:
     - pip install --no-cache-dir "uv==${UV_VERSION}"
   script:
-    - cd genie-ai-overlay/dataprep
-    # Verify lock is consistent and installable without re-resolving.
-    # uv pip sync --dry-run checks every package+hash exists on PyPI;
-    # it does NOT re-resolve, so upstream version bumps don't cause
-    # spurious failures (only removed packages do).
-    - uv pip sync requirements.lock --dry-run --system
-    # Cross-check: verify requirements.in is covered by the lock.
-    # greps top-level non-comment lines from requirements.in and
-    # checks each package name appears in the lock. Missing = user
-    # added a dep without regenerating the lock.
-    - |-
-      while IFS= read -r line; do
-        pkg=$(echo "$line" | sed 's/[<>=!~].*//;s/\[.*//;s/#.*//' | xargs)
-        [ -z "$pkg" ] && continue
-        norm=$(echo "$pkg" | tr '[:upper:]_' '[:lower:]-')
-        if ! grep -q "^${norm}==" requirements.lock; then
-          echo "MISSING from lock: $pkg — run 'make lock-dataprep'"
-          exit 1
-        fi
-      done < requirements.in
-      echo "requirements.lock in sync"
+    - |
+      set -e
+      for MOD in dataprep retriever reranker; do
+        cd "${CI_PROJECT_DIR}/genie-ai-overlay/${MOD}"
+        # Verify lock is consistent and installable without re-resolving.
+        # uv pip sync --dry-run checks every package+hash exists on PyPI;
+        # it does NOT re-resolve, so upstream version bumps don't cause
+        # spurious failures (only removed packages do).
+        uv pip sync requirements-cpu.txt --dry-run --system
+        # Cross-check: verify requirements.in is covered by the lock.
+        # greps top-level non-comment lines from requirements.in and
+        # checks each package name appears in the lock. Missing = user
+        # added a dep without regenerating the lock.
+        while IFS= read -r line; do
+          pkg=$(echo "$line" | sed 's/[<>=!~].*//;s/\[.*//;s/#.*//' | xargs)
+          [ -z "$pkg" ] && continue
+          norm=$(echo "$pkg" | tr '[:upper:]_' '[:lower:]-')
+          if ! grep -q "^${norm}==" requirements-cpu.txt; then
+            echo "MISSING from ${MOD} lock: $pkg — run 'make lock-${MOD}'"
+            exit 1
+          fi
+        done < requirements.in
+        echo "genie-ai-overlay/${MOD}/requirements-cpu.txt in sync"
+      done
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2483,13 +2487,13 @@ verify:dataprep-lock:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
+        paths: ["genie-ai-overlay/dataprep/requirements.*", "genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
+        paths: ["genie-ai-overlay/dataprep/requirements.*", "genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
+        paths: ["genie-ai-overlay/dataprep/requirements.*", "genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
 
 
 config:validate:

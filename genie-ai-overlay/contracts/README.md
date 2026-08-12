@@ -54,8 +54,9 @@ CI runs the per-module jobs in the `contract-in-image` stage (`contract:retrieve
 
 ## Red-green validation
 
-1. **Green on v1.3** — the suite passes against the current `OPEA_VERSION="v1.3"`
-   images.
+1. **Green on v1.3** — the suite was proven green against the
+   `OPEA_VERSION="v1.3"` images (story 1-5); after the retriever re-graft the
+   retriever suite now targets the v1.5 images (story 2-3).
 2. **Red on a bare v1.5 bump** — rebuild the module image with
    `--build-arg OPEA_VERSION=v1.5` and NO overlay re-graft. The red is proven at
    the BUILD surface — the v1.5 image cannot build with the v1.3 overlay (see

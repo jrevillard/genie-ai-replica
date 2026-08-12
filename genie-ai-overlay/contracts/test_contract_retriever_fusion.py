@@ -129,6 +129,9 @@ def test_doc_in_both_ranks_above_doc_in_one(comps):
     )
     scores = {r["doc"].id: r["score"] for r in fused}
     assert scores["a"] > scores["b"]
+    # Exact non-trivial rank contribution: "b" is dense rank-2 only → 1/(k+2),
+    # pinning the rank denominator so a k+rank regression fails.
+    assert scores["b"] == pytest.approx(1 / 62)
 
 
 def test_lexical_only_doc_surfaces(comps):
@@ -227,6 +230,26 @@ def test_dedup_within_channel_keeps_best_rank(comps):
     )
     assert len(fused) == 1
     assert fused[0]["score"] == pytest.approx(1 / 61)  # rank-1 only
+
+
+def test_cross_channel_collection_prefixed_key_dedup(comps):
+    """``COLLECTION/_key`` and bare ``_key`` for the same doc dedup across channels.
+
+    ``_normalize_chunk_id`` strips the ``COLLECTION/`` prefix before cross-channel
+    matching. If a re-graft regresses that normalization, the same document
+    would be counted once per channel — its fused score inflated.
+    """
+    mod = _retriever_module()
+    fused = mod.rrf_fuse(
+        [_mk_result("a")],
+        [_mk_result("GRAPH_SOURCE/a")],
+        k=60,
+        dense_weight=1.0,
+        lexical_weight=1.0,
+    )
+    assert len(fused) == 1
+    assert fused[0]["doc"].id == "a"
+    assert fused[0]["score"] == pytest.approx(1 / 61 + 1 / 61)
 
 
 def test_unkeyed_doc_kept_standalone(comps):

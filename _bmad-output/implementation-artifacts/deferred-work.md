@@ -503,3 +503,19 @@ location: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:8
 severity: medium
 reason: The old wrapper Dockerfiles forced /usr/local/lib/python3.11/dist-packages onto PYTHONPATH; the re-graft removed that line. Nothing yet verifies the opea/embedding:1.3 / opea/llm-textgen:1.3 runtime interpreter loads the .pth hook (site-packages vs dist-packages layout). Covered by story 2.2's in-image contract runs + base-image migration.
 status: open
+
+### DW-8: reranker import re-point has no in-image import verification.
+origin: spec-deferred 2b2b6532da1b
+source_spec: `2-1-re-graft-the-core-overlay-layer.md`
+location: genie-ai-overlay/reranker/genieai_reranking_microservice.py:38
+severity: medium
+reason: genieai_reranking_microservice.py now imports comps.cores.proto.docarray (under the shim pin), but the reranker image has no contract/smoke job that imports the module — conftest stubs the module as a MagicMock, docker build never imports it, and the contract harness import_docarray runs only against the retriever/dataprep images. A shim failure in the reranker image would crash the container at start, green. Covered by story 2.2's in-image contract runs.
+status: open
+
+### DW-9: build-patches/*.py are excluded from ruff, so the two new scripts are never linted in CI.
+origin: spec-deferred 9029450207bc
+source_spec: `2-1-re-graft-the-core-overlay-layer.md`
+location: genie-ai-overlay/pyproject.toml:43
+severity: low
+reason: pyproject.toml [tool.ruff] exclude = ["build-patches/"]; lint_overrides.py and docarray_alias_shim.py ship outside ruff coverage and the story's "ruff clean" verification is vacuous for them. Verified clean manually this pass. Extend the ruff scope (or exempt with a documented reason) during the 2.7 coherence-lint work.
+status: open

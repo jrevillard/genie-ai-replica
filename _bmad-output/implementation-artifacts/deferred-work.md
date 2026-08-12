@@ -519,3 +519,162 @@ location: genie-ai-overlay/pyproject.toml:43
 severity: low
 reason: pyproject.toml [tool.ruff] exclude = ["build-patches/"]; lint_overrides.py and docarray_alias_shim.py ship outside ruff coverage and the story's "ruff clean" verification is vacuous for them. Verified clean manually this pass. Extend the ruff scope (or exempt with a documented reason) during the 2.7 coherence-lint work.
 status: open
+### DW-10: langchain-arangodb drops back to 0.0.6 in the v1.5 lock; the >=1.2.0 filter_clause fix-pin is gone until story 2.3 bumps it.
+origin: spec-deferred f6193de4a9e1
+location: genie-ai-overlay/retriever/requirements-cpu.txt
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: medium
+reason: retriever/requirements.in + lock pin 0.0.6 (verified: 0.0.6 does NOT have 0.0.4's **kwargs filter_clause swallow — filter_clause is a named param; the behavioral label-filter contract test belongs to story 2.3's re-graft).
+status: open
+
+### DW-11: dataprep .in fork reintroduces pyspark, unstructured[all-docs], graspologic, openai-whisper that the retired v1.3 machinery dropped for image-size/build reasons; in-image build + size unverified here.
+origin: spec-deferred 772243b4bdcd
+location: genie-ai-overlay/dataprep/requirements.in
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: medium
+reason: old generate-requirements-in.sh dropped these (no-space-on-device pyspark; openai-whisper sdist needs pkg_resources); they compile + uv-sync fine locally but the Docker build/size surface is untested in this story.
+status: open
+
+### DW-12: sitecustomize/SSL-patch auto-load in the built embedding/textgen/retriever images is unverified (hardcoded site-packages path asserted manually, not by a CI job).
+origin: spec-deferred 21b1f2312170
+location: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:11
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: medium
+reason: no in-image `import sitecustomize` check exists; 2-1's .pth installer + the 2.3-2.6 in-image contract runs supersede the hardcoded COPY; the opea/*:1.5 site-packages path was manually verified via image pull.
+status: open
+
+### DW-13: no CI job runs the reranker image entry point on the v1.5 bump; local import verified clean, the in-image behavioral gate is story 2.4's contract test.
+origin: spec-deferred 331a5ad49137
+location: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai:4
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: low
+reason: reranker module imports all v1.5 comps symbols (telemetry, api_protocol, opea_docarray rename, integrations.tei) — only a host port-8000 collision blocked a full clean pass locally; build/scan jobs never run the image.
+status: open
+
+### DW-14: verify:dataprep-lock keeps its dataprep-scoped name while looping three modules and checks package NAMES only, not versions — cross-module version drift (e.g. docling) is invisible to it.
+origin: spec-deferred 819d55acdf09
+location: .gitlab-ci.yml
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: low
+reason: dataprep pins docling==2.45.0/docling-core==2.44.2 while retriever resolves docling==2.55.1/docling-core==2.48.4 (matching v1.5's own per-module locks); a coherence/version lint belongs to story 2.7.
+status: open
+
+### DW-15: base images use moving tags (python:3.11-slim, opea/*:1.5), so byte-identical digests across time are bounded by base-tag stability; dependency layers are deterministic via the hashed lock.
+origin: spec-deferred 391ff9ae972c
+location: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai:19
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: low
+reason: AC4's "identical digest" holds for immediate clean re-runs but not across a base-tag move; digest-pinning the image set is story 4-2.
+status: open
+
+### DW-16: GPU locks (requirements-gpu.txt) are not compiled in 2.2 — the fleet is CPU-only (compose grants no GPU to these services); they can be compiled from the same .in when a GPU deployment needs them.
+origin: spec-deferred 8c84c7fef10e
+location: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai:66
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: low
+reason: upstream ships both cpu+gpu locks; our compose consumes CPU only; compiling CUDA-torch locks with no consumer is waste.
+status: open
+
+### DW-17: .in pin-policy is a fork-plus-selective-pins hybrid; unpinned entries (e.g. retriever's bare docling) can drift on a later `make lock-<module>` regen.
+origin: spec-deferred 03c5a65ae49f
+location: genie-ai-overlay/retriever/requirements.in
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: low
+reason: dataprep pins docling==2.45.0 (matches v1.5 dataprep lock) while retriever's bare docling resolved to v1.5's 2.55.1 today; a future regen may resolve newer. Re-fork + re-pin to v1.5's shipped set on the next bump.
+status: open
+
+### DW-18: Cross-module OTel/haystack/openai version drift: reranker's bare `.in` pins resolve newer (otel 1.44.0, haystack-ai 3.0.0, openai 3.0.0) than dataprep/retriever (otel 1.27.0, haystack-ai 2.3.1, openai
+origin: spec-deferred 664dd44a6058
+location: genie-ai-overlay/reranker/requirements.in
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: medium
+reason: reranker `.in` ships bare `opentelemetry-*`/`haystack-ai`/`openai` (faithful v1.5 upstream fork — upstream also bare), so the recompile resolves today's newest; dataprep/retriever `.in` pin `==` versions. All services share `genie-ai-overlay/tracing.py`; a coherence/version lint + re-pin belongs to story 2.7 (and reranker re-graft 2.4).
+status: open
+
+### DW-19: verify:dataprep-lock trigger paths watch `requirements.*` only, so an OPEA_VERSION bump in a module Dockerfile (the canonical lock-regen trigger) does not run the drift guard.
+origin: spec-deferred 97651093fcb7
+location: .gitlab-ci.yml
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: low
+reason: rules:changes lists genie-ai-overlay/{dataprep,retriever,reranker}/requirements.* and .gitlab-ci.yml; a Dockerfile OPEA_VERSION/apt change that should force a lock check won't. Story 2.7's CI coherence work owns the trigger widening.
+status: open
+
+### DW-20: reranker lock installs torch 2.13.0 (via sentence-transformers) into a plain python:3.11-slim CPU image; wheel/resolution + image-size surface unverified.
+origin: spec-deferred 67b62e7158ad
+location: genie-ai-overlay/reranker/requirements-cpu.txt
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: low
+reason: no Docker build in 2.2; reranker's heavy dep install + resulting size are story 2.4/2.5 build-surface territory.
+status: open
+
+### DW-21: .bmad-loop/ci-wait.sh platform-sed does not strip a trailing YAML comment and uses GNU-only \s.
+origin: spec-deferred 7464cb7d139a
+location: .bmad-loop/ci-wait.sh
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: low
+reason: `git_platform: gitlab # note` would resolve to "gitlab # note"; GNU \s breaks on BSD sed. Carried orchestrator infra (verify gate), not story scope; harmless on this Linux deployment.
+status: open
+
+### DW-22: dataprep .in fork reintroduces pyspark, unstructured[all-docs], graspologic, openai-whisper that the retired v1.3 machinery dropped for image-size/build reasons; in-image size + post-import runtime un
+origin: spec-deferred 1fe3e0a6a9e9
+location: genie-ai-overlay/dataprep/requirements.in
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: medium
+reason: old generate-requirements-in.sh dropped these (no-space-on-device pyspark; openai-whisper sdist needs pkg_resources); they compile + uv-sync fine locally. CI build jobs DO run docker buildx + pip install --no-deps --require-hashes from the lock, so install/wheel/source-build failures would block the MR — genuinely ungated is image SIZE and post-import runtime behavior (2.5 re-audits).
+status: open
+
+### DW-23: Cross-module OTel/haystack/openai version drift: reranker's bare `.in` pins resolve newer (otel 1.44.0, haystack-ai 3.0.0, openai 3.0.0) than dataprep/retriever (otel 1.27.0, haystack-ai 2.3.1), plus
+origin: spec-deferred 4d6ac3a03e6d
+location: genie-ai-overlay/reranker/requirements.in
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: medium
+reason: verified locked versions: openai dataprep==1.81.0 / retriever==1.109.1 / reranker==3.0.0; fastapi dataprep+reranker==0.116.1 / retriever==0.118.2. reranker `.in` ships bare `opentelemetry-*`/`haystack-ai`/`openai` (faithful v1.5 upstream fork — upstream also bare), so the recompile resolves today's newest; dataprep `.in` pins `openai==1.81.0`, retriever `.in` leaves openai bare (resolved via langchain-openai). All services share `genie-ai-overlay/tracing.py`; a coherence/version lint + re-pin belongs to story 2.7 (and reranker re-graft 2.4).
+status: open
+
+### DW-24: the compiled CPU locks pin torch 2.13.0 (via sentence-transformers) into plain python:3.11-slim CPU images — all three modules, not just reranker; image-size surface unverified.
+origin: spec-deferred 218ac548b377
+location: genie-ai-overlay/reranker/requirements-cpu.txt
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: low
+reason: torch==2.13.0 at dataprep/requirements-cpu.txt:5660, retriever:5503, reranker:3116 (CUDA-bundled PyPI wheel). CI build jobs DO run docker buildx + pip install --no-deps --require-hashes from the lock, so install/wheel/source-build failures would block the MR; genuinely ungated is image SIZE + post-import runtime (2.4/2.5 build-surface territory).
+status: open
+
+### DW-25: components/gov-chat-backend/.gitlab-ci.yml still carries the retired verify:dataprep-lock job against the deleted requirements.lock (root .gitlab-ci.yml is the active config; the backend copy is never
+origin: spec-deferred f908048420c5
+location: components/gov-chat-backend/.gitlab-ci.yml:2290
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: low
+reason: components/gov-chat-backend/.gitlab-ci.yml:2290-2337 references requirements.lock, dataprep/scripts/*, make lock-dataprep — all retired by 2.2 — but GitLab reads only the root .gitlab-ci.yml (no include of the backend copy), so it is dead config. The AC3/Verification grep is scoped to genie-ai-overlay/ and misses it. Pre-existing, surfaced by the retirement; a CI-hygiene pass should delete or sync it.
+status: open
+
+### DW-26: dataprep's default DOCLING_DEVICE=cuda is unsupported by the CUDA-less python:3.11-slim image; a default-config ingest needs DOCLING_DEVICE=cpu set.
+origin: spec-deferred 809b6335b547
+location: docker-compose.yaml:991
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: medium
+reason: genieai_dataprep_utils.py:45 defaults DOCLING_DEVICE to cuda and selects AcceleratorDevice.CUDA unless cpu; docker-compose.yaml:991 passes ${DOCLING_DEVICE:-cuda}; env template leaves it unset. The image no longer ships CUDA libs, so docling cannot honor a cuda device. Fix spans compose default + module default (deployment config + module code) — a 2.5 dataprep re-audit item; the spec Design Note now records the capability loss.
+status: open
+
+### DW-27: the build-time docarray rename (mv docarray.py -> opea_docarray.py + sed in orchestrator/micro_service) is ungated against OPEA v1.5 source; if v1.5's import patterns drifted, the sed no-ops and the c
+origin: spec-deferred 81aaf65512f0
+location: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai:93
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: low
+reason: dataprep Dockerfile L90-96, retriever/reranker equivalents run mv+sed on the v1.5 clone. A grep assertion (e.g. 'opea_docarray' present in the patched files) would make it a build gate; the sed-pattern drift surface is already scoped to the 2.3-2.6 re-graft in the spec code map. In-image contract runs (2.3-2.6) are the real gate.
+status: open
+
+### DW-28: chatqna's comps_base_builder flips to python:3.11-slim while still installing OPEA v1.3 GenAIComps (`-e .`) with no in-image import gate — the v1.3-on-3.11 runtime is verified by nothing in CI for thi
+origin: spec-deferred be49c2c7804b
+location: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai:17
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: medium
+reason: build:chatqna-server only pip-installs `-e .` (setuptools backend; never imports app code); genie-ai-overlay/tests/test_chatqna.py runs on the CI host against conftest's mocked comps, not in the 3.11 image. A v1.3-comp or transitive-dep break on 3.11 surfaces only at container start post-promote. The intent mandates the base flip (chatqna OPEA_VERSION stays v1.3 until story 2.6); the in-image gate belongs to 2.6's re-graft surface.
+status: open
+
+### DW-29: verify:dataprep-lock now loops three modules, so its tag-pipeline run (`if: $CI_COMMIT_TAG`) triples the blast radius of a transient PyPI/yank failure on an unrelated tag.
+origin: spec-deferred b7114d0dc77e
+location: .gitlab-ci.yml
+source_spec: `2-2-migrate-dependencies-python-3-11.md`
+severity: low
+reason: pre-existing pattern (the job already ran on tags for dataprep); `uv pip sync --dry-run` contacts PyPI, so a transient index issue can fail a tag pipeline. Not caused by 2.2's wiring — a CI-coherence concern for story 2.7's drift-guard work.
+status: open

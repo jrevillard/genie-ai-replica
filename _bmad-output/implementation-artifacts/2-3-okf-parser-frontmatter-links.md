@@ -1,9 +1,9 @@
 ---
-baseline_commit: pending
+baseline_commit: e55addc16
 ---
 # Story 2.3: OKF parser — frontmatter (v0.2 families) + body + structural links
 
-Status: ready-for-dev
+Status: review
 Story key: `2-3-okf-parser-frontmatter-links` | GitLab: #879 (`prd::okf-server`, `okf-server::epic-2`)
 Epic: 2 (OKF Server — Repository Ingestion & Management) | Branch: `feat/okf-server`
 FRs: **FR-6** (OKF-aware parsing), **FR-7** (structural link graph) | References: Architecture §4, §6 step 2, §8.1, §9; ADR-okf-010; ADR-okf-013; ADR-okf-017; ADR-okf-018
@@ -31,23 +31,23 @@ This is the **pure parsing module** that every ingest path (Story 2.5 bundle ing
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — Dependencies** (AC: 2,6)
-  - [ ] Add `gray-matter` (`^4.0.3`, CommonJS) + `markdown-it` (`^15.0.0`, CommonJS) to `components/okf-server/package.json` dependencies. **Do NOT use remark/unified** (the backend's `remark-parse` is ESM-only + untestable via jest.mock — explicitly avoided).
-  - [ ] Regenerate + commit `components/okf-server/package-lock.json` (the Dockerfile's `npm ci --omit=dev` depends on it).
-- [ ] **T2 — Parser service (pure transform)** (AC: 1,2,3,4,5,8,9)
-  - [ ] `components/okf-server/services/parser-service.js` — export `parseConcept(markdown, ctx)` where `ctx = { repo_id, path, bundle_version }`. Returns `{ concept_id, repo_id, path, bundle_version, frontmatter, body, generated, verified, trust_tier, status, stale_after, sources, links }`.
-  - [ ] Private helpers: `normalizeFrontmatter` (extract v0.2 families; preserve unknowns), `applyLegacyFallback` (`timestamp`→`generated.at`; body `# Citations`→`sources`), `deriveTrustTier(verified)`, `conceptIdFromPath(path)` (strip `.md`, normalize).
-  - [ ] `class ParseError extends Error { code; status }` for malformed input (mirror `repository-service.js` `RepoError`).
-- [ ] **T3 — Link extraction** (AC: 6,7)
-  - [ ] Use `markdown-it` to walk inline links; for each `[text](target)` where target ends in `.md`, emit `{ to_concept_id, label: text }`. Normalize `to_concept_id` (strip leading `/`/`./`, forward slashes). Broken targets are still emitted (no existence check — the parser has no DB).
-- [ ] **T4 — MELT** (AC: 10)
-  - [ ] `withSpan('okf.parse.concept', span => { span.setAttribute('okf.repo_id', ctx.repo_id); span.setAttribute('okf.concept_id', concept_id); ... })` via `require('../shared-lib/tracing')`; `logger` via `'../shared-lib/logger'`; `okf_parse_operations_total` counter via `getMeter()` from `'../shared-lib/metrics'`. `recordOp('parse','success'|'error')` wrapped in try/catch (no-op when observability off).
-- [ ] **T5 — Tests** (AC: 1–10)
-  - [ ] `components/okf-server/__tests__/fixtures/` — `.md` fixtures: `concept-v02.md` (full families), `concept-legacy.md` (`timestamp` + body `# Citations`), `concept-broken-links.md`, `concept-attested.md` (`type: Attested Computation`), `concept-malformed.md` (bad YAML).
-  - [ ] `components/okf-server/__tests__/parser-service.test.js` — **pure unit tests** (NO `db-connection-service` mock, NO `keycloak-auth-service` mock — the parser doesn't import either). Cover: frontmatter preserved (incl. unknowns); v0.2 families extracted; legacy fallback (both forms); `trust_tier` derivation (all 3 tiers); body stripped; links extracted with `label`; broken links tolerated; `concept_id` normalization; Attested-Computation opaque; malformed frontmatter → `ParseError`.
-- [ ] **T6 — Lint/format/verify + deploy** (AC: 10)
-  - [ ] `cd components/okf-server && npm run lint && npm run format:check && npm test` — all clean.
-  - [ ] Deploy: rebuild the okf-server image (deps install via `npm ci`) + redeploy to the local build; smoke-verify by exec'ing `node -e "console.log(require('/app/services/parser-service').parseConcept('---\ntype: x\n---\nbody', {repo_id:'r',path:'p.md'}).trust_tier)"` in the container.
+- [x] **T1 — Dependencies** (AC: 2,6)
+  - [x] Add `gray-matter` (`^4.0.3`, CommonJS) + `markdown-it` (`^15.0.0`, CommonJS) to `components/okf-server/package.json` dependencies. **Do NOT use remark/unified** (the backend's `remark-parse` is ESM-only + untestable via jest.mock — explicitly avoided).
+  - [x] Regenerate + commit `components/okf-server/package-lock.json` (the Dockerfile's `npm ci --omit=dev` depends on it).
+- [x] **T2 — Parser service (pure transform)** (AC: 1,2,3,4,5,8,9)
+  - [x] `components/okf-server/services/parser-service.js` — export `parseConcept(markdown, ctx)` where `ctx = { repo_id, path, bundle_version }`. Returns `{ concept_id, repo_id, path, bundle_version, frontmatter, body, generated, verified, trust_tier, status, stale_after, sources, links }`.
+  - [x] Private helpers: `normalizeFrontmatter` (extract v0.2 families; preserve unknowns), `applyLegacyFallback` (`timestamp`→`generated.at`; body `# Citations`→`sources`), `deriveTrustTier(verified)`, `conceptIdFromPath(path)` (strip `.md`, normalize).
+  - [x] `class ParseError extends Error { code; status }` for malformed input (mirror `repository-service.js` `RepoError`).
+- [x] **T3 — Link extraction** (AC: 6,7)
+  - [x] Use `markdown-it` to walk inline links; for each `[text](target)` where target ends in `.md`, emit `{ to_concept_id, label: text }`. Normalize `to_concept_id` (strip leading `/`/`./`, forward slashes). Broken targets are still emitted (no existence check — the parser has no DB).
+- [x] **T4 — MELT** (AC: 10)
+  - [x] `withSpan('okf.parse.concept', span => { span.setAttribute('okf.repo_id', ctx.repo_id); span.setAttribute('okf.concept_id', concept_id); ... })` via `require('../shared-lib/tracing')`; `logger` via `'../shared-lib/logger'`; `okf_parse_operations_total` counter via `getMeter()` from `'../shared-lib/metrics'`. `recordOp('parse','success'|'error')` wrapped in try/catch (no-op when observability off).
+- [x] **T5 — Tests** (AC: 1–10)
+  - [x] `components/okf-server/__tests__/fixtures/` — `.md` fixtures: `concept-v02.md` (full families), `concept-legacy.md` (`timestamp` + body `# Citations`), `concept-broken-links.md`, `concept-attested.md` (`type: Attested Computation`), `concept-malformed.md` (bad YAML).
+  - [x] `components/okf-server/__tests__/parser-service.test.js` — **pure unit tests** (NO `db-connection-service` mock, NO `keycloak-auth-service` mock — the parser doesn't import either). Cover: frontmatter preserved (incl. unknowns); v0.2 families extracted; legacy fallback (both forms); `trust_tier` derivation (all 3 tiers); body stripped; links extracted with `label`; broken links tolerated; `concept_id` normalization; Attested-Computation opaque; malformed frontmatter → `ParseError`.
+- [x] **T6 — Lint/format/verify + deploy** (AC: 10)
+  - [x] `cd components/okf-server && npm run lint && npm run format:check && npm test` — all clean.
+  - [x] Deploy: rebuild the okf-server image (deps install via `npm ci`) + redeploy to the local build; smoke-verify by exec'ing `node -e "console.log(require('/app/services/parser-service').parseConcept('---\ntype: x\n---\nbody', {repo_id:'r',path:'p.md'}).trust_tier)"` in the container.
 
 ## Dev Notes
 
@@ -121,10 +121,32 @@ MELT on every method (withSpan + logger + counter) · shared libs IMPORTED not c
 ## Dev Agent Record
 
 ### Agent Model Used
-_(filled during dev-story)_
+Claude (glm-5.2[1m]) — dev-story execution
 
 ### Debug Log References
+- Tests: **22 parser tests pass** (full suite 68/68 across 5 suites). ESLint 0, Prettier clean.
+- Deployed + smoke-verified in the local build: `parseConcept` runs in the container — `concept_id: concepts/smoke`, `trust_tier: human-reviewed`, `stale_after: 2026-12-31` (Date-normalized), link extracted with **image excluded**, frontmatter preserved, MELT logs flowing, `/health` 200 (no regression from new deps).
+- Bug found + fixed during dev: js-yaml auto-coerces ISO timestamps to `Date` objects → normalized back to ISO strings (`generated.at`/`verified[].at` full ISO; `stale_after` → `YYYY-MM-DD`) in `normalizeFrontmatter`.
 
 ### Completion Notes List
+- **Pure, stateless parser module** (`services/parser-service.js`) — NO database I/O (no `db-connection-service` import), NO HTTP route. Returns the parsed object; the caller (2.4/2.5/4.1) persists to `okf_concepts_meta`.
+- `parseConcept(markdown, ctx)` → `{concept_id, frontmatter, body, generated, verified, trust_tier, status, stale_after, sources, links}`.
+- v0.2 families extracted + preserved full frontmatter (unknown keys kept — forward-compat ADR-okf-017 §6/§7).
+- **Legacy fallback**: `timestamp`→`generated.at`; body `# Citations`→`sources` (ADR-okf-017 §2).
+- **trust_tier** derived (unverified/machine-confirmed/human-reviewed from `verified[]`); defensive normalize of bare-object `verified` + malformed entries.
+- **Link extraction** via `markdown-it` `link_open` tokens ONLY (images excluded); `[anchor](/path.md)` → `{to_concept_id, label}`; broken links tolerated (emitted as-is); no dedup (per-occurrence); `concept_id` normalized (strip leading `/`/`./`, POSIX, `.md`).
+- Attested-Computation fields preserved opaquely.
+- **MELT**: `withSpan('okf.parse.concept')` + shared logger + `okf_parse_operations_total` counter. All exceptions handled (malformed→`ParseError`; broken links tolerated + logged).
+- Deps added: `gray-matter ^4.0.3` + `markdown-it ^15.0.0` (CommonJS — avoids the remark/ESM testing trap). `package-lock.json` regenerated + committed.
 
 ### File List
+**Created:**
+- `components/okf-server/services/parser-service.js` — parseConcept + helpers (normalizeFrontmatter, deriveTrustTier, conceptIdFromPath, extractLinks, extractCitationsFromBody) + ParseError
+- `components/okf-server/__tests__/parser-service.test.js` — pure unit tests (22)
+- `components/okf-server/__tests__/fixtures/concept-v02.md`, `concept-legacy.md`, `concept-broken-links.md`, `concept-attested.md`, `concept-malformed.md`
+
+**Modified:**
+- `components/okf-server/package.json` + `package-lock.json` — added gray-matter + markdown-it
+
+### Change Log
+- 2026-08-12: Story 2.3 implemented — pure OKF parser (frontmatter v0.2 families + body + structural links). 22 parser tests + 68 total green; deployed + smoke-verified in local build.

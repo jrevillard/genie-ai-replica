@@ -7,6 +7,11 @@
 ARG UPSTREAM_IMAGE=opea/llm-textgen:1.5
 FROM ${UPSTREAM_IMAGE}
 
+# The opea/llm-textgen:1.5 base runs as a non-root USER; the .pth site-init hook
+# must write into the interpreter's site-packages, so run the install as root
+# then restore the base image's runtime user.
+USER root
 COPY --chmod=0755 genie-ai-overlay/build-patches/install_site_startup.sh /app/install_site_startup.sh
 COPY configs/ssl/genie_ssl_patch.py /app/genie_ssl_patch.py
 RUN /app/install_site_startup.sh
+USER user

@@ -224,8 +224,17 @@ def import_docarray(attr: str):
     green-with-shim sensitivity of this surface is preserved. Fails loudly when
     the shim did not hold.
     """
-    import docarray as real
     import pytest
+
+    # On a bare image without the shim, the vendored stub self-shadows: the
+    # top-level `import docarray` raises during the stub's partial init (its own
+    # `from docarray import BaseDoc` re-enters the not-yet-initialized module).
+    # Guard it so the red state fails with the documented message, not a raw
+    # ImportError traceback.
+    try:
+        import docarray as real
+    except ImportError as exc:
+        pytest.fail(f"docarray shim not in effect: cannot import the real docarray package ({exc})")
 
     try:
         from comps.cores.proto import docarray as mod

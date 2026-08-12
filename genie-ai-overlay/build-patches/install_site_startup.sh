@@ -15,9 +15,14 @@
 set -eu
 
 # Guard: the service will run under `python`, so the hooks must be installed for
-# the same interpreter. If `python` and `python3` resolve to different
-# interpreters, fail the build rather than silently patching the wrong one.
-[ "$(readlink -f "$(command -v python)")" = "$(readlink -f "$(command -v python3)")" ] || {
+# the same interpreter. If `python` or `python3` is missing, or they resolve to
+# different interpreters, fail the build rather than silently patching the wrong
+# one. Each missing-binary case gets its own message so the failure is actionable.
+PY_BIN="$(command -v python || true)"
+PY3_BIN="$(command -v python3 || true)"
+[ -n "${PY_BIN}" ] || { echo "install_site_startup: python not found on PATH" >&2; exit 1; }
+[ -n "${PY3_BIN}" ] || { echo "install_site_startup: python3 not found on PATH" >&2; exit 1; }
+[ "$(readlink -f "${PY_BIN}")" = "$(readlink -f "${PY3_BIN}")" ] || {
     echo "install_site_startup: python/python3 interpreter mismatch" >&2
     exit 1
 }
@@ -26,9 +31,14 @@ set -eu
 # to /app, so this resolves to /app.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Build-derived site-packages path for the running interpreter.
-SITE_PKGS="$(python3 -c 'import site; print(site.getsitepackages()[0])')"
-[ -n "${SITE_PKGS}" ] || { echo "install_site_startup: no site-packages dir found" >&2; exit 1; }
+# Build-derived site-packages path for the running interpreter. The venv case
+# (empty list) yields an empty string so the guard below can report it instead
+# of an IndexError traceback.
+SITE_PKGS="$(python3 -c 'import site; sp = site.getsitepackages(); print(sp[0] if sp else "")')"
+[ -n "${SITE_PKGS}" ] && [ -d "${SITE_PKGS}" ] || {
+    echo "install_site_startup: no site-packages dir found (${SITE_PKGS:-<empty>})" >&2
+    exit 1
+}
 
 cp "${SCRIPT_DIR}/genie_ssl_patch.py" "${SITE_PKGS}/genie_ssl_patch.py"
 

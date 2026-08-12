@@ -1,7 +1,8 @@
 """
 genie_ssl_patch.py — GPU node communication patch for OPEA services.
 
-Installed as sitecustomize.py to run before any library imports.
+Installed via the zz_genie_startup.pth site-init hook (by build-patches/install_site_startup.sh)
+to run before any library imports.
 
 Handles two concerns for remote GPU node communication:
   1. SSL bypass (self-signed certs): OPEA_SSL_SKIP_VERIFY=1

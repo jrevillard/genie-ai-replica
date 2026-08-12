@@ -10,7 +10,7 @@
 # importing all existing models from the original OPEA api protocol
 
 from api_protocol import *  # noqa: F403
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, NonNegativeFloat, PositiveInt
 
 
 class RetrievalRequestArangoDB(RetrievalRequest):
@@ -162,16 +162,20 @@ class ChatCompletionRequest(BaseModel):
 
     # retrieval
     search_type: str = "similarity_score_threshold"  # "similarity"
-    k: int | None = None
-    fetch_k: int | None = None
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.k | disposition: re-graft-to-new-API | reason: mirror v1.5 PositiveInt type | test: tests/test_core.py::TestChatCompletionRequest::test_k_rejects_zero_and_negative  # noqa: E501
+    k: PositiveInt | None = None
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.fetch_k | disposition: re-graft-to-new-API | reason: mirror v1.5 PositiveInt type | test: tests/test_core.py::TestChatCompletionRequest::test_fetch_k_rejects_zero_and_negative  # noqa: E501
+    fetch_k: PositiveInt | None = None
     search_start: str | None = None
     enable_traversal: str | None = None
     traversal_max_depth: int | None = None
     traversal_max_returned: int | None = None
     traversal_score_threshold: float | None = None
     distance_threshold: float | None = None
-    lambda_mult: float | None = None
-    score_threshold: float | None = None
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.lambda_mult | disposition: re-graft-to-new-API | reason: mirror v1.5 NonNegativeFloat type | test: tests/test_core.py::TestChatCompletionRequest::test_lambda_mult_accepts_zero_rejects_negative  # noqa: E501
+    lambda_mult: NonNegativeFloat | None = None
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.score_threshold | disposition: re-graft-to-new-API | reason: mirror v1.5 NonNegativeFloat type | test: tests/test_core.py::TestChatCompletionRequest::test_score_threshold_accepts_zero_rejects_negative  # noqa: E501
+    score_threshold: NonNegativeFloat | None = None
     retrieved_docs: Union[list[RetrievalResponseData], list[dict[str, Any]]] = Field(default_factory=list)
     index_name: str | None = None
 

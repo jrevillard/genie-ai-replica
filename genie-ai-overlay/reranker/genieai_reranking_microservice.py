@@ -35,7 +35,7 @@ from comps import (
     statistics_dict,
 )
 from comps.cores.proto.api_protocol import ChatCompletionRequest, RerankingRequest, RerankingResponse
-from comps.cores.proto.opea_docarray import LLMParamsDoc, LVMVideoDoc, RerankedDoc, SearchedDoc, SearchedMultimodalDoc
+from comps.cores.proto.docarray import LLMParamsDoc, LVMVideoDoc, RerankedDoc, SearchedDoc, SearchedMultimodalDoc
 from comps.cores.telemetry.opea_telemetry import opea_telemetry
 from comps.rerankings.src.integrations.genieai_tei_reranker import GenieTEIReranking  # noqa: F401
 from pydantic import Field

@@ -25,7 +25,7 @@ development_status:
   epic-2: in-progress            # Mostly ungated — build first
   2-1-okf-server-skeleton-deploy: done
   2-2-arangodb-meta-collections-repo-crud: done
-  2-3-okf-parser-frontmatter-links: backlog
+  2-3-okf-parser-frontmatter-links: ready-for-dev
   2-4-conformance-validation-quality-metrics: backlog
   2-5-docrepo-bundle-ingest-route: backlog
   2-6-dataprep-graphname-metadata-retract: backlog  # [BUMP]

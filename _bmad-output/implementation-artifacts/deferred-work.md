@@ -26,7 +26,8 @@ location: genie-ai-overlay/build-patches/lint_overrides.py
 source_spec: `2-1-re-graft-the-core-overlay-layer.md`
 severity: medium
 reason: lint_overrides.py runs only via the local pytest test_overrides_lint.py; no CI job wires it, the marker-to-manifest direction is unenforced, and .pth runtime-load failures are silent; CI enforcement belongs to story 2.7 (verify:evidence + coherence lint).
-status: open
+status: done 2026-08-12
+resolution: resolved by sweep bundle dw-override-audit-ci-enforcement
 
 ### DW-4: override-audit lint has no dedicated CI job, is one-directional, and .pth runtime-load failures are silent.
 origin: spec-deferred f4736edd7e98
@@ -34,7 +35,8 @@ source_spec: `2-1-re-graft-the-core-overlay-layer.md`
 location: genie-ai-overlay/build-patches/lint_overrides.py
 severity: medium
 reason: lint_overrides.py is exercised only via tests/test_overrides_lint.py (which the CI pytest stage runs), so it is indirectly wired but has no dedicated job; the marker-to-manifest direction is unenforced; .pth runtime-load failures are silent. Explicit enforcement belongs to story 2.7 (verify:evidence + coherence lint).
-status: open
+status: done 2026-08-12
+resolution: resolved by sweep bundle dw-override-audit-ci-enforcement
 
 ### DW-5: 10 of v1.5's constrained ChatCompletionRequest fields are not mirrored in the overlay protocol.
 origin: spec-deferred 29bafba7a211
@@ -50,7 +52,8 @@ source_spec: `2-1-re-graft-the-core-overlay-layer.md`
 location: genie-ai-overlay/build-patches/lint_overrides.py
 severity: medium
 reason: The reranker import re-point (genieai_reranking_microservice.py opea_docarray→docarray) and contract-harness re-graft are intentional deviations outside the core layer, but lint_overrides.py scans only core/*.py and build-patches/*. Extend the manifest + scan scope during module re-grafts (2.3-2.6) or the 2.7 coherence lint.
-status: open
+status: done 2026-08-12
+resolution: resolved by sweep bundle dw-override-audit-ci-enforcement
 
 ### DW-7: embedding/textgen ENV PYTHONPATH removal is not runtime-verified.
 origin: spec-deferred b367dfb4ab8d
@@ -75,7 +78,8 @@ source_spec: `2-1-re-graft-the-core-overlay-layer.md`
 location: genie-ai-overlay/pyproject.toml:43
 severity: low
 reason: pyproject.toml [tool.ruff] exclude = ["build-patches/"]; lint_overrides.py and docarray_alias_shim.py ship outside ruff coverage and the story's "ruff clean" verification is vacuous for them. Verified clean manually this pass. Extend the ruff scope (or exempt with a documented reason) during the 2.7 coherence-lint work.
-status: open
+status: done 2026-08-12
+resolution: resolved by sweep bundle dw-override-audit-ci-enforcement
 ### DW-10: langchain-arangodb drops back to 0.0.6 in the v1.5 lock; the >=1.2.0 filter_clause fix-pin is gone until story 2.3 bumps it.
 origin: spec-deferred f6193de4a9e1
 location: genie-ai-overlay/retriever/requirements-cpu.txt

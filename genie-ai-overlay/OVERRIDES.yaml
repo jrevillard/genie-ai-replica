@@ -38,3 +38,7 @@ overrides:
     disposition: re-graft-to-new-API
     owner: genie-ai
     ticket: story 2.1
+  - override: contracts._harness.import_docarray
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: story 2.1

@@ -49,7 +49,7 @@ pytest tests/test_chatqna.py  # Specific service
 pytest tests/test_tracing_with_span.py  # OTel span validation
 ```
 
-**Shared fixtures**: `tests/conftest.py` — mocks for `comps` library (vendored at build time as `opea_docarray`), ArangoDB, model endpoints.
+**Shared fixtures**: `tests/conftest.py` — mocks for `comps` library (vendored at build time; the `docarray` collision is handled by the `docarray_alias_shim`), ArangoDB, model endpoints.
 
 **Tracing**: OTel SDK initialized in `tracing.py`. Use `@tracing.trace_span(name)` decorator. See `.claude/rules/OBSERVABILITY.md`.
 

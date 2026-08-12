@@ -3,7 +3,7 @@ baseline_commit: 7c380646f
 ---
 # Story 2.4: Conformance validation (OKF §11) + quality metrics
 
-Status: review
+Status: done
 Story key: `2-4-conformance-validation-quality-metrics` | GitLab: #880 (`prd::okf-server`, `okf-server::epic-2`)
 Epic: 2 (OKF Server — Repository Ingestion & Management) | Branch: `feat/okf-server`
 FRs: **FR-4** (conformance validation), **FR-13** (quality metrics) | References: Architecture §6 step 3, §4, §5; ADR-okf-017 §5

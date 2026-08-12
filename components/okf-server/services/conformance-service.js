@@ -45,7 +45,8 @@ async function getDb() {
  * @returns {{ issues: Array<{code:string,severity:string,message:string,field_path:string|null}>, valid: boolean }}
  */
 function validateConcept(parsed) {
-  const fm = (parsed && parsed.frontmatter) || {};
+  const p = parsed || {}; // guard against null/undefined input
+  const fm = p.frontmatter || {};
   const issues = [];
 
   // B2: MISSING_TYPE
@@ -59,11 +60,11 @@ function validateConcept(parsed) {
   }
 
   // V2: INVALID_STATUS_ENUM
-  if (parsed.status !== undefined && !VALID_STATUS_ENUMS.includes(parsed.status)) {
+  if (p.status !== undefined && !VALID_STATUS_ENUMS.includes(p.status)) {
     issues.push({
       code: 'INVALID_STATUS_ENUM',
       severity: 'warning',
-      message: `Status "${parsed.status}" is not one of: ${VALID_STATUS_ENUMS.join(', ')}`,
+      message: `Status "${p.status}" is not one of: ${VALID_STATUS_ENUMS.join(', ')}`,
       field_path: 'frontmatter.status'
     });
   }
@@ -79,26 +80,26 @@ function validateConcept(parsed) {
       });
     }
   };
-  if (parsed.generated && parsed.generated.by) checkActor(parsed.generated.by, 'frontmatter.generated.by');
-  if (Array.isArray(parsed.verified)) {
-    parsed.verified.forEach((v, i) => {
+  if (p.generated && p.generated.by) checkActor(p.generated.by, 'frontmatter.generated.by');
+  if (Array.isArray(p.verified)) {
+    p.verified.forEach((v, i) => {
       if (v && v.by) checkActor(v.by, `frontmatter.verified[${i}].by`);
     });
   }
 
   // V3: UNPARSEABLE_STALE_AFTER
-  if (parsed.stale_after !== undefined && !DATE_RE.test(String(parsed.stale_after))) {
+  if (p.stale_after !== undefined && !DATE_RE.test(String(p.stale_after))) {
     issues.push({
       code: 'UNPARSEABLE_STALE_AFTER',
       severity: 'warning',
-      message: `stale_after "${parsed.stale_after}" is not a valid YYYY-MM-DD date`,
+      message: `stale_after "${p.stale_after}" is not a valid YYYY-MM-DD date`,
       field_path: 'frontmatter.stale_after'
     });
   }
 
   // V4: SOURCE_MISSING_RESOURCE
-  if (Array.isArray(parsed.sources)) {
-    parsed.sources.forEach((s, i) => {
+  if (Array.isArray(p.sources)) {
+    p.sources.forEach((s, i) => {
       if (!s || !s.resource || !String(s.resource).trim()) {
         issues.push({
           code: 'SOURCE_MISSING_RESOURCE',

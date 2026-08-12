@@ -4,8 +4,8 @@ type: 'feature'
 created: '2026-08-12'
 status: 'done'
 baseline_commit: 'fb1f53243358953c84116b918849d1938fca09db'
-review_loop_iteration: 1
-followup_review_recommended: true
+review_loop_iteration: 0
+followup_review_recommended: false
 context: []
 warnings: [oversized]
 deferred:
@@ -26,6 +26,13 @@ deferred:
     evidence: |-
       invoke fuses then slices (genieai_retriever_arangodb.py:1025-1041, [: int(input.k)]). Mocked tests assert fused membership/order but not the slice; a source-guard for the slice would be brittle. Behavior change would surface only via retrieval-quality regressions.
     location: genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1025
+    severity: low
+  - summary: >-
+      DW-30/DW-31 headers in the deferred-work ledger are truncated mid-word ("...surfaced wh", "...the mocked suite co") — a sync-tooling artifact; the ledger is orchestrator-owned and was not modified by this run.
+    evidence: |-
+      deferred-work.md DW-30 title ends "surfaced wh" (missing "ile syncing README"); DW-31 ends "the mocked suite co" (missing "vers invoke behavior"). The `reason:` field carries the full text. Surfaced for the orchestrator to repair the headers.
+    location: >-
+      _bmad-output/implementation-artifacts/deferred-work.md (DW-30, DW-31)
     severity: low
 ---
 
@@ -137,6 +144,35 @@ Triggering finding: the spec's "Why not bump to 1.2.0+" rationale (also repeated
   - `[low]` `[patch]` no fusion test asserted doc/metadata identity survives `rrf_fuse` — added `test_fused_doc_keeps_input_identity` (same doc object + `chunk_embedding` metadata preserved through fusion).
 - Rejected (noise / by-design / pre-existing): "no dependency bump" (intent-contract forbids); the built image not provably installing 0.0.6 (lock pins it at requirements-cpu.txt:1913); dedup "best rank" not distinguishable (keep-first vs keep-best are identical for the same id; the test asserts the first-occurrence 1/61); narrative duplicated across 4 comment sites (each context-appropriate); `comps` fixture decorative on pure tests (matches the label-filter convention); function-local vs module-top imports (matches the label-filter file's own convention); `_FakeDoc(id=None)` AttributeError assumption (verified: the shim contract run passes `test_unkeyed_doc_kept_standalone` against real `rrf_fuse`); `HYBRID_RETRIEVAL_ENABLED is True` identity on an env-derived flag (CI image has no deployment env, so the default true holds; the pin is the point); config-defaults not pinned (deliberate — tests pass explicit weights); source-guard fragility (deferred D2; mocked `TestHybridInvoke` covers the behavior); intent divergence #3 — the intent-contract's "1.2.0+ requires langchain-core >=0.4" is verified false and the diff correctly omits it.
 
+### 2026-08-12 — Review pass (follow-up on `done` story)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 3: (low 3)
+- defer: 1: (low 1)
+- reject: 20: (low 20)
+- addressed_findings:
+  - `[low]` `[patch]` README "Red-green validation" step 1 claimed the suite passes against the "current" `OPEA_VERSION="v1.3"` images — stale after the retriever re-graft; reworded to a historical record noting the retriever suite now targets v1.5.
+  - `[low]` `[patch]` fusion contract lacked a cross-channel `COLLECTION/_key` vs bare `_key` dedup test (file docstring claims "dedup by normalized `_key`" but only bare keys were exercised) — added `test_cross_channel_collection_prefixed_key_dedup`.
+  - `[low]` `[patch]` `test_doc_in_both_ranks_above_doc_in_one` asserted ordering only, so a rank-denominator regression (k+rank) would pass — added exact rank-2 (`1/62`) assertion.
+- Rejected (noise / by-design / already-handled / refuted):
+  - Async-vs-sync surface (blind+edge): refuted by introspecting installed 0.0.6 — `asimilarity_search_with_relevance_scores` funnels via langchain-core defaults to `similarity_search_with_score` and `amax_marginal_relevance_search` → `max_marginal_relevance_search(**kwargs)` → `similarity_search_by_vector`; both tested sync methods expose `filter_clause` as a named param (verified by signature introspection).
+  - `==0.0.6` version-pin churn: by-design — intent pins 0.0.6 and forbids any bump; the pin is the point.
+  - `HYBRID_RETRIEVAL_ENABLED is True` env-derived: already rejected pass-2 (CI image has no deployment env; default true holds).
+  - spec `in-review` vs sprint-status `done`: transient workflow state, reconciled to `done` at finalize.
+  - re-open reset deletes evidence: workflow-prescribed (fresh review pass rewrites Auto Run Result); prior evidence preserved in git history + triage log.
+  - README telemetry drift at edit site: already deferred DW-30.
+  - two-unkeyed-docs isolation: would require a len-only assert the spec deliberately avoided (id-set over length); synthetic-id logic exercised elsewhere.
+  - config-defaults not pinned / pure tests gated behind comps fixture / `_retriever_module` re-raise semantics / ArangoVector import unguarded: already rejected pass-1/pass-2 (deliberate sibling-suite design, label-filter convention).
+  - "12 vs 13 tests" count: moot — text was in the old Auto Run Result being replaced.
+  - copyright `2024-2026`: sibling OPEA-adaptation convention.
+  - CI comment "no skips": describes pattern composition, not test-body skips; holds.
+  - POSITIONAL_ONLY filter_clause: negligible — pure-Python lib; a future positional-only param is not plausible.
+  - slice regression (verif-gap mutation): already deferred DW-32 (admission confirmed accurate by mutation).
+  - comps-fixture single heuristic: pre-existing harness design, not caused by this change.
+  - behavioral reading (intent-alignment): spec deliberately scoped to contract coverage + verification; behavioral in-image fusion already deferred DW-31.
+  - sprint-status.yaml touched: orchestrator bookkeeping, not the story's deliverable.
+  - shim vs real CI gate: acknowledged residual risk in the prior Auto Run Result.
+
 ## Design Notes
 
 - **The "bump" is already in the v1.5 lock.** 2-2 adopted `langchain-arangodb==0.0.6` (v1.5's own pin) with `langchain-core==0.3.86`. Verified: 0.0.6 requires `langchain-core>=0.3.8,<0.4.0` (0.3.86 in-range); the `ArangoVector` constructor and every search signature the adapter uses are identical to the 1.2.0 era (1.2.0 adds only a trailing `metadata_clause`). The adapter (written against `>=1.2.0` on v1.3) therefore needs no vector-path code change. The `filter_clause` fix the old `>=1.2.0` pin provided is present at 0.0.6 — 0.0.4 silently swallowed it via `**kwargs`; 0.0.6 promotes it to a named param on every search method and injects it into the AQL. The 2-2 deferred item ("fix-pin gone until story 2.3 bumps it") is resolved by verification, not a version bump.
@@ -162,32 +198,26 @@ Triggering finding: the spec's "Why not bump to 1.2.0+" rationale (also repeated
 
 Status: done
 
-**Summary:** Story 2.3 re-grafted the retriever onto OPEA v1.5 and validated the `langchain-arangodb` bump by evidence, not a version change: the already-adopted `0.0.6` pin (v1.5's own compiled-lock version) was verified API-compatible with the v1.3-era `>=1.2.0` code and carrying the `filter_clause` named-param fix (0.0.4's `**kwargs` silent-drop is gone). Investigation proved every langchain-arangodb release (0.0.6 → 2.1.0) requires `langchain-core>=0.3.8` — none `>=0.4` — so the "bump" is lock-fidelity, not a version move. Deliverables: stale Dockerfile comment corrected, `requirements.in` disposition recorded, in-image RRF-fusion contract coverage added and wired into the `contract:retriever-arango` CI gate, an in-image test that the installed `ArangoVector` exposes `filter_clause` as a named param across the full sync search family (incl. the MMR `by_vector` funnel) pinned at version 0.0.6, and the adapter verified to import cleanly against the real lock. One bad_spec loopback (the spec's false "1.2.0+ needs langchain-core >=0.4" rationale) + one patch pass closed the review findings.
+**Summary:** Follow-up review pass on the completed story 2.3 (retriever re-graft + `langchain-arangodb` 0.0.6 disposition). The prior run's implementation is unchanged and verified. This pass re-verified the diff against the real installed 0.0.6, refuted the reviewers' async-surface concern (the tested sync `similarity_search_with_score` / `similarity_search_by_vector` ARE the funnel targets of the retriever's async calls — confirmed by signature introspection), and applied 3 low-severity patches: (1) fixed a stale "Green on v1.3 / current v1.3 images" claim in `contracts/README.md` made false by the re-graft; (2) added an in-image cross-channel `COLLECTION/_key` dedup test (`test_cross_channel_collection_prefixed_key_dedup`) closing the "dedup by normalized `_key`" gap the file's docstring claimed; (3) pinned the exact rank-2 fused score (`1/62`) in the ordering test so a `k+rank` denominator regression fails.
 
 **Files changed:**
-- `genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai` — corrected stale comment: 0.0.6 carries the `filter_clause` named-param fix; no `>=1.2.0` bump needed.
-- `genie-ai-overlay/retriever/requirements.in` — disposition comment above `langchain-arangodb==0.0.6`: v1.5 lock pin, fix present, reason is lock fidelity not `langchain-core` incompatibility (verified: `>=0.3.8,<0.4`).
-- `genie-ai-overlay/contracts/test_contract_retriever_fusion.py` — NEW: 12 in-image `rrf_fuse` contract tests (weighted fusion, dedup, unkeyed-doc isolation with id-set assert, mutation identity, doc/metadata identity survival, hybrid-source guard + `HYBRID_RETRIEVAL_ENABLED is True` pin).
-- `genie-ai-overlay/contracts/test_contract_label_filter.py` — added `test_installed_arangovector_exposes_filter_clause_named_param`: named `filter_clause` on `similarity_search`/`similarity_search_with_score`/`similarity_search_by_vector`/`similarity_search_by_vector_with_score` + `importlib.metadata.version == "0.0.6"` pin.
-- `.gitlab-ci.yml` — added `test_contract_retriever_fusion.py` to the `contract:retriever-arango` `CONTRACT_TEST_PATTERN`.
-- `genie-ai-overlay/contracts/README.md` — suite-layout + invocation synced for the fusion test.
-- `_bmad-output/implementation-artifacts/2-3-re-graft-the-retriever-bump-langchain-arangodb.md` — this spec.
+- `genie-ai-overlay/contracts/test_contract_retriever_fusion.py` — added `test_cross_channel_collection_prefixed_key_dedup`; added exact rank-2 assertion to `test_doc_in_both_ranks_above_doc_in_one`.
+- `genie-ai-overlay/contracts/README.md` — reworded "Red-green validation" step 1: green-on-v1.3 is a historical record; the retriever suite now targets v1.5.
+- `_bmad-output/implementation-artifacts/2-3-re-graft-the-retriever-bump-langchain-arangodb.md` — this spec: Review Triage Log entry, one new `deferred` item (DW-30/31 truncated ledger headers, orchestrator-owned), fresh Auto Run Result.
 
-**Review findings breakdown:** Pass 1: 1 bad_spec (false `langchain-core>=0.4` rationale), 6 patch (folded into the spec amendment + re-derivation), 3 defer, 7 reject. Pass 2 (re-derivation): 3 patch applied (1 medium — filter_clause by_vector family + version pin; 2 low — requirements.in wording, doc-identity survival), 0 defer new, 8 reject. No code change to the adapter itself — the re-graft is verification + coverage + comments.
+**Review findings breakdown:** 0 intent_gap, 0 bad_spec, 3 patch (all low, applied), 1 defer (low — DW-30/31 header truncation, ledger untouched per orchestrator constraint), 20 reject (refuted / by-design / already-handled). Async-surface finding refuted by introspecting the installed 0.0.6 call paths.
 
-**Follow-up review recommendation:** true — 3 patched findings this pass (1 medium ×3 + 2 low ×1 = score 5 ≥ 5).
+**Follow-up review recommendation:** false — 3 patched findings this pass, all low (score = 3×0 + 1×3 = 3 < 5).
 
 **Verification performed:**
-- `uv run ruff check contracts/ retriever/` + `ruff format --check` — clean.
-- `python3 build-patches/lint_overrides.py` — exit 0 (7 override entries matched).
-- Mocked suite `pytest tests/test_retriever.py tests/test_build_filter_labels.py tests/test_label_contract.py` — 119 passed (full `tests/` run: 684 passed per implementation pass).
-- Shim in-image contract run (real vendored-comps-shaped tree + real `langchain-arangodb` 0.0.6 in a py3.11 venv): `pytest contracts/test_contract_retriever_fusion.py contracts/test_contract_label_filter.py` — 21 passed, 0 failed, 0 skipped (includes the filter_clause family + version pin and the fusion identity test).
-- `git diff --check` + `.gitlab-ci.yml` YAML parse — clean.
-- Verified against PyPI: `langchain-arangodb` 0.0.6/1.2.0/2.0.0/2.1.0 all require `langchain-core>=0.3.8` (upper bound <0.4 or wider); none `>=0.4`.
+- Pure-logic check against the REAL `rrf_fuse` (imported from the overlay adapter with a comps stub): P2 (cross-channel `GRAPH_SOURCE/a` + `a` → 1 entry, id `a`, score `2/61`) and P3 (`b` rank-2 → `1/62`) both pass; `_normalize_chunk_id` strips `COLLECTION/` prefix.
+- `uv run ruff check contracts/` — clean; `ruff format --check contracts/` — 10 files formatted.
+- Mocked suite `pytest tests/test_retriever.py tests/test_build_filter_labels.py tests/test_label_contract.py` — 119 passed.
+- `py_compile` on the modified contract files — clean.
+- Signature introspection of installed `langchain-arangodb==0.0.6`: `filter_clause` named param present on `similarity_search`, `similarity_search_with_score`, `similarity_search_by_vector`, `similarity_search_by_vector_with_score`; async MMR + relevance-scores funnels route to these sync methods.
 
 **Residual risks:**
-- The real in-image contract run (`contract:retriever-arango` CI job) is the final gate — no Docker locally; the shim run + the existing `test_contract_label_filter.py`/`test_contract_orchestrator_wire.py` in-image precedent make a red run unlikely but not provable here.
-- Behavioral in-image fusion through `invoke` (real ArangoDB) is not covered — deferred D2 (needs ArangoDB mock infra; mocked `TestHybridInvoke` covers the behavior).
-- `contracts/README.md` telemetry-line drift vs CI pattern — deferred D1 (pre-existing).
-- Post-fusion top-k slice `[:input.k]` unguarded — deferred D3.
-- The intent-contract's "1.2.0+ requires langchain-core >=0.4" remains factually wrong inside the read-only intent-contract; the spec Design Notes and the code comments carry the corrected rationale.
+- The real in-image `contract:retriever-arango` CI run remains the final gate (no Docker locally); the shim + pure-logic checks make a red run unlikely but not provable here. Same as prior run.
+- Behavioral in-image fusion through `invoke` with a real/stubbed ArangoDB and the post-fusion `[:input.k]` slice remain uncovered in-image — already deferred DW-31/DW-32.
+- The intent-contract's read-only "1.2.0+ requires `langchain-core` >=0.4" claim remains factually wrong; the corrected rationale lives in Design Notes and the code comments (unchanged from prior run).
+

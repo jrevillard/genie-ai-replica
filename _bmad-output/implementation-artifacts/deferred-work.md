@@ -678,3 +678,27 @@ source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: pre-existing pattern (the job already ran on tags for dataprep); `uv pip sync --dry-run` contacts PyPI, so a transient index issue can fail a tag pipeline. Not caused by 2.2's wiring — a CI-coherence concern for story 2.7's drift-guard work.
 status: open
+
+### DW-30: contracts/README.md retriever-suite command still lists test_contract_telemetry.py while the CI CONTRACT_TEST_PATTERN runs no telemetry tests (moved to contract:unit) — pre-existing drift, surfaced wh
+origin: spec-deferred 9e96d5109121
+source_spec: `2-3-re-graft-the-retriever-bump-langchain-arangodb.md`
+location: genie-ai-overlay/contracts/README.md
+severity: low
+reason: README "Full retriever-capable suite" (contracts/README.md) includes test_contract_telemetry.py; .gitlab-ci.yml contract:retriever-arango pattern does not, with a comment stating telemetry moved to contract:unit. Both pre-date story 2.3; not caused by it.
+status: open
+
+### DW-31: No in-image behavioral fusion test drives invoke through the hybrid path with a stubbed BM25/vector channel; the contract covers rrf_fuse purely + a source-introspection guard, and the mocked suite co
+origin: spec-deferred ff70472aa1d7
+source_spec: `2-3-re-graft-the-retriever-bump-langchain-arangodb.md`
+location: genie-ai-overlay/contracts
+severity: low
+reason: contracts/_harness.py fakes HTTP only — no ArangoDB mock, so invoke's vector/BM25 channels cannot run in-image. Mocked tests/test_retriever.py TestHybridInvoke.test_on_fuses_bm25_doc_into_results (with deps mocked) covers the fused-output behavior. A behavioral in-image fusion test needs ArangoDB-mock infrastructure the harness lacks.
+status: open
+
+### DW-32: No test asserts invoke returns rrf_fuse(...)[:input.k]; a regression dropping the post-fusion top-k slice passes the suite.
+origin: spec-deferred fb3db436f951
+source_spec: `2-3-re-graft-the-retriever-bump-langchain-arangodb.md`
+location: genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1025
+severity: low
+reason: invoke fuses then slices (genieai_retriever_arangodb.py:1025-1041, [: int(input.k)]). Mocked tests assert fused membership/order but not the slice; a source-guard for the slice would be brittle. Behavior change would surface only via retrieval-quality regressions.
+status: open

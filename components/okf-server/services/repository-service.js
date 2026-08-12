@@ -6,9 +6,10 @@
 // (pooling, self-healing, recovery) and exposes the arangojs Database interface.
 // Every method is MELT-instrumented: OTel span (withSpan) + structured log +
 // okf_repo_operations_total business counter. Audit rows written on mutations.
-// Per ADR-okf-018: same ArangoDB database as the graphs, app-layer integrity.
-// Per ADR-okf-014: repository = one bundle = one domain = one graph OKF_{repo_id}.
-// repo_id is used AS the document _key (natural uniqueness; DOCUMENT lookups).
+// Per ADR-okf-018: same ArangoDB database as the graphs. Repository uniqueness
+// on (name, domain) is DB-ENFORCED via a unique index on [name, domain, deleted_at]
+// (live docs share deleted_at=null → collide; soft-deleted tombstones have a unique
+// timestamp → re-create allowed). repo_id is used AS the document _key.
 
 const { v4: uuidv4 } = require('uuid');
 const { DateTime } = require('luxon');
@@ -29,6 +30,11 @@ const DELETE_STATE = 'retire';
 const IMMUTABLE_FIELDS = ['graph_name', 'repo_id', 'domain'];
 const UPDATABLE_FIELDS = ['name', 'source', 'acl', 'retention'];
 
+// ArangoDB error codes used for control flow.
+const ARANGO_NOT_FOUND = (err) => err && (err.code === 404 || err.errorNum === 1204 || err.statusCode === 404);
+const ARANGO_UNIQUE_VIOLATION = (err) =>
+  err && (err.errorNum === 1210 || err.errorNum === 1185 || err.code === 409 || err.statusCode === 409);
+
 // MELT — OKF business operations counter (no-op when observability is off).
 const meter = getMeter();
 const opsCounter = meter.createCounter('okf_repo_operations_total', {
@@ -47,12 +53,15 @@ function nowIso() {
   return DateTime.now().toUTC().toISO();
 }
 
-// Shared DB connection (lazy; cached). The shared service returns a self-healing
-// proxy that mimics the arangojs Database interface (collection/query/etc.).
-let _dbPromise = null;
-function getDb() {
-  if (!_dbPromise) _dbPromise = dbService.getConnection('default');
-  return _dbPromise;
+// Shared DB connection — cache the RESOLVED proxy (not the promise), mirroring
+// gov-chat-backend's chat-history-service. On failure _db stays null, so the next
+// call retries (resilient: a transient boot-time outage does NOT permanently wedge
+// the service, unlike caching a rejected promise).
+let _db = null;
+async function getDb() {
+  if (_db) return _db;
+  _db = await dbService.getConnection('default');
+  return _db;
 }
 
 class RepoError extends Error {
@@ -78,15 +87,23 @@ function encodeCursor(created_at, repo_id) {
 }
 
 function decodeCursor(cursor) {
+  let decoded;
   try {
-    return JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
   } catch {
     throw new RepoError('VALIDATION_ERROR', 'Invalid cursor', 400);
   }
+  if (!decoded || typeof decoded.ts !== 'string' || typeof decoded.id !== 'string') {
+    throw new RepoError('VALIDATION_ERROR', 'Invalid cursor payload', 400);
+  }
+  return decoded;
 }
 
 /**
  * Create a repository: mint repo_id, reserve graph_name=OKF_{repo_id}, bind domain.
+ * Uniqueness on (name, domain) is DB-ENFORCED (unique index on [name,domain,deleted_at]);
+ * the app-layer check is a clean-error fast path, and save() catches the unique-violation
+ * so concurrent creates cannot produce duplicates.
  * @param {object} input {name, domain, source?, acl, retention?}
  * @param {object} actor {sub, name?, source_ip?}
  */
@@ -97,7 +114,9 @@ async function create(input, actor) {
     logger.info('Creating OKF repository', { name: input.name, domain: input.domain });
     const db = await getDb();
 
-    // App-layer uniqueness (ADR-okf-018): duplicate (name, domain) that isn't deleted
+    // App-layer dup-check (clean 409 fast path). firstExample may return a soft-deleted
+    // tombstone (deleted_at set) — that does NOT block re-create; the DB index is the
+    // authoritative guard for the live-uniqueness invariant.
     const dup = await db.collection(COLLECTION).firstExample({ name: input.name, domain: input.domain });
     if (dup && !dup.deleted_at) {
       recordOp('create', 'duplicate');
@@ -129,7 +148,21 @@ async function create(input, actor) {
       deleted_at: null,
       delete_after: null
     };
-    await db.collection(COLLECTION).save(doc);
+    try {
+      await db.collection(COLLECTION).save(doc);
+    } catch (err) {
+      // Race-proof backstop: a concurrent create that raced past the app-layer check
+      // hits the DB unique index → unique-violation → clean 409.
+      if (ARANGO_UNIQUE_VIOLATION(err)) {
+        recordOp('create', 'duplicate');
+        throw new RepoError(
+          'DUPLICATE_REPO',
+          `Repository "${input.name}" already exists in domain "${input.domain}"`,
+          409
+        );
+      }
+      throw err;
+    }
     span.setAttribute('okf.repo_id', repo_id);
 
     await auditService.writeAudit({
@@ -154,7 +187,7 @@ async function list({ domain, cursor, limit } = {}) {
     if (domain) span.setAttribute('okf.domain', domain);
     const db = await getDb();
 
-    const safeLimit = Math.min(parseInt(limit, 10) || 50, 100);
+    const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 50, 100));
     let cursorTs = null;
     let cursorId = null;
     if (cursor) {
@@ -164,8 +197,10 @@ async function list({ domain, cursor, limit } = {}) {
     }
 
     const domainFilter = domain ? aql`FILTER d.domain == ${domain}` : aql``;
+    // Sort is created_at DESC, repo_id ASC — so "after the cursor" within the same
+    // created_at means repo_id STRICTLY GREATER than the cursor's repo_id.
     const cursorFilter = cursor
-      ? aql`FILTER d.created_at < ${cursorTs} OR (d.created_at == ${cursorTs} AND d.repo_id < ${cursorId})`
+      ? aql`FILTER d.created_at < ${cursorTs} OR (d.created_at == ${cursorTs} AND d.repo_id > ${cursorId})`
       : aql``;
 
     const query = aql`
@@ -193,7 +228,7 @@ async function list({ domain, cursor, limit } = {}) {
 
 /**
  * Read one repository by repo_id. Domain-scoped callers get 404 for foreign repos
- * (avoid leakage; ADR-okf-006 philosophy).
+ * (avoid leakage; ADR-okf-006 philosophy). Transient DB errors are NOT masked as 404.
  * @param {string} repo_id
  * @param {object} opts {domain?}
  */
@@ -205,8 +240,8 @@ async function getById(repo_id, { domain } = {}) {
     let doc;
     try {
       doc = await db.collection(COLLECTION).document(repo_id);
-    } catch {
-      /* not found — doc stays undefined */
+    } catch (err) {
+      if (!ARANGO_NOT_FOUND(err)) throw err; // transient — surface, don't mask as 404
     }
     if (!doc || doc.deleted_at || (domain && doc.domain !== domain)) {
       recordOp('get', 'not_found');
@@ -219,6 +254,7 @@ async function getById(repo_id, { domain } = {}) {
 
 /**
  * Partial update of updatable fields only. graph_name/repo_id/domain are immutable.
+ * Renaming to a name that already exists (live) in the same domain is rejected 409.
  * @param {string} repo_id
  * @param {object} patch subset of {name, source, acl, retention}
  * @param {object} actor
@@ -238,12 +274,25 @@ async function update(repo_id, patch, actor) {
     let existing;
     try {
       existing = await db.collection(COLLECTION).document(repo_id);
-    } catch {
-      /* not found */
+    } catch (err) {
+      if (!ARANGO_NOT_FOUND(err)) throw err;
     }
     if (!existing || existing.deleted_at) {
       recordOp('update', 'not_found');
       throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
+    }
+
+    // If renaming, reject collision with another LIVE repo in the same domain.
+    if (Object.prototype.hasOwnProperty.call(patch, 'name') && patch.name !== existing.name) {
+      const clash = await db.collection(COLLECTION).firstExample({ name: patch.name, domain: existing.domain });
+      if (clash && !clash.deleted_at && clash.repo_id !== repo_id) {
+        recordOp('update', 'duplicate');
+        throw new RepoError(
+          'DUPLICATE_REPO',
+          `Repository "${patch.name}" already exists in domain "${existing.domain}"`,
+          409
+        );
+      }
     }
 
     const setFields = {};
@@ -251,7 +300,16 @@ async function update(repo_id, patch, actor) {
       if (Object.prototype.hasOwnProperty.call(patch, f)) setFields[f] = patch[f];
     }
     setFields.updated_at = nowIso();
-    await db.collection(COLLECTION).update(repo_id, setFields);
+    try {
+      await db.collection(COLLECTION).update(repo_id, setFields);
+    } catch (err) {
+      // Race-proof backstop for the rename dup-check (DB unique index on [name,domain,deleted_at]).
+      if (ARANGO_UNIQUE_VIOLATION(err)) {
+        recordOp('update', 'duplicate');
+        throw new RepoError('DUPLICATE_REPO', `Repository name already exists in this domain`, 409);
+      }
+      throw err;
+    }
 
     await auditService.writeAudit({
       actor: (actor && actor.sub) || 'system',
@@ -281,8 +339,8 @@ async function remove(repo_id, actor) {
     let existing;
     try {
       existing = await db.collection(COLLECTION).document(repo_id);
-    } catch {
-      /* not found */
+    } catch (err) {
+      if (!ARANGO_NOT_FOUND(err)) throw err;
     }
     if (!existing || existing.deleted_at) {
       recordOp('delete', 'not_found');

@@ -2,18 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 // In-memory ArangoDB mock for the repository-service unit tests. Implements the
 // subset of arangojs the OKF services use (collection().save/firstExample/document/
-///update + db.query cursor). Used via:
-//   jest.mock('../db/arango-connection', () => require('../mocks/arango-mock').createMockDb());
-
-let counter = 0;
+// update + db.query cursor). Collection handles are cached per name (like real
+// arangojs), so a test can program a handle's method before triggering the service:
+//   jest.mock('../shared-lib/db-connection-service', () => {
+//     const mockDb = require('../mocks/arango-mock').createMockDb();
+//     return { getConnection: jest.fn(() => Promise.resolve(mockDb)), __mockDb: mockDb };
+//   });
 
 function createMockDb() {
   const stores = {}; // collectionName -> { key: doc }
+  const handles = {}; // collectionName -> cached handle (stable across calls)
 
-  const collection = jest.fn((name) => {
+  function handleFor(name) {
     stores[name] = stores[name] || {};
     const s = stores[name];
-    return {
+    if (handles[name]) return handles[name];
+    const handle = {
       exists: jest.fn(async () => true),
       create: jest.fn(async () => {}),
       ensureIndex: jest.fn(async () => {}),
@@ -30,6 +34,7 @@ function createMockDb() {
         if (!s[k]) {
           const e = new Error('not found');
           e.code = 404;
+          e.errorNum = 1204;
           throw e;
         }
         return { ...s[k] };
@@ -38,21 +43,27 @@ function createMockDb() {
         if (!s[k]) {
           const e = new Error('not found');
           e.code = 404;
+          e.errorNum = 1204;
           throw e;
         }
         s[k] = { ...s[k], ...patch };
         return { ...s[k] };
       })
     };
-  });
+    handles[name] = handle;
+    return handle;
+  }
+
+  const collection = jest.fn((name) => handleFor(name));
 
   return {
     collection,
     query: jest.fn(async () => ({ all: async () => [] })),
     exists: jest.fn(async () => true),
-    /** Clear all stored docs + reset call history (call in beforeEach). */
+    /** Clear all stored docs + reset call history + drop cached handles (call in beforeEach). */
     _reset() {
       for (const k of Object.keys(stores)) delete stores[k];
+      for (const k of Object.keys(handles)) delete handles[k];
       collection.mockClear();
       this.query.mockReset();
       this.query.mockResolvedValue({ all: async () => [] });
@@ -60,5 +71,7 @@ function createMockDb() {
     _stores: stores
   };
 }
+
+let counter = 0;
 
 module.exports = { createMockDb };

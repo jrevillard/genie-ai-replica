@@ -11,7 +11,7 @@ const Joi = require('joi');
 const aclSchema = Joi.object({
   required_scopes: Joi.array().items(Joi.string()).optional(),
   sensitivity: Joi.string().optional()
-}).default({});
+});
 
 const sourceSchema = Joi.object({
   type: Joi.string().valid('git', 's3').required(),

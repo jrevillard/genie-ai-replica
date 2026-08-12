@@ -3,7 +3,7 @@ baseline_commit: 5ee575577
 ---
 # Story 2.2: ArangoDB OKF meta collections + repository CRUD API
 
-Status: review
+Status: done
 Story key: `2-2-arangodb-meta-collections-repo-crud` | GitLab: OKF epic-2 story (`prd::okf-server`, `okf-server::epic-2`)
 Epic: 2 (OKF Server — Repository Ingestion & Management) | Branch: `feat/okf-server`
 FRs: **FR-23** (primary), **FR-3** | References: Architecture §2, §4, §5, §8.1; ADR-okf-014; ADR-okf-018; ADR-okf-017
@@ -181,3 +181,36 @@ Claude (glm-5.2[1m]) — dev-story execution
 
 ### Change Log
 - 2026-08-12: Story 2.2 implemented — repository CRUD + control-plane collections + MELT + audit + role authz (42 tests green, deployed + verified in local build).
+- 2026-08-12: Code-review follow-ups — DB-enforced uniqueness, resilient connection, error discrimination, pagination/validator fixes (46 tests green, redeployed + unique index verified in Arango).
+
+## Senior Developer Review (AI)
+
+**Outcome: Changes Requested → Approved (follow-ups applied + verified 2026-08-12)** | 3 layers (Blind Hunter + Edge Case Hunter + Acceptance Auditor). Shared-library conformance: **PASS** (no reinvented DB connection — uses shared `db-connection-service`; all infra imported from `shared/lib`; direct AQL, no ORM). All ACs MET.
+
+### Review Findings — resolved
+
+**Patches applied (verified, with tests):**
+- [x] [Review][Patch] **(Critical)** `getDb()` cached a rejected connection promise → service never recovered after a transient boot Arango blip. Fixed: cache the RESOLVED proxy (`let _db`); on failure `_db` stays null → next call retries. (repository-service, audit-service, collections)
+- [x] [Review][Patch] **(High)** `.document()` errors swallowed by bare `catch {}` → transient DB errors reported as `REPO_NOT_FOUND` (404). Fixed: discriminate Arango not-found (`code 404`/`errorNum 1204`) from transient; rethrow transient. (getById/update/remove) — test: transient rethrown.
+- [x] [Review][Patch] **(High)** Duplicate `(name, domain)` possible (non-atomic check-then-save + `firstExample` returning soft-deleted). Fixed: **DB-ENFORCED unique index on `[name, domain, deleted_at]`** (live docs share `deleted_at=null` → collide; soft-deleted tombstones have a unique timestamp → re-create allowed) + catch unique-violation on save → 409. Verified `unique:true` in Arango. — test: concurrent-create unique-violation → 409.
+- [x] [Review][Patch] **(High)** Cursor pagination secondary-sort comparator reversed (`repo_id <` should be `>`). Fixed.
+- [x] [Review][Patch] **(Medium)** `?limit=-5` → `LIMIT -5`. Fixed: `Math.max(1, Math.min(...))`.
+- [x] [Review][Patch] **(Medium)** Malformed cursor (decodes to JSON without `ts`/`id`) silently empty page. Fixed: validate payload shape → 400. — test added.
+- [x] [Review][Patch] **(Medium)** `update` could rename to an existing live `(name,domain)`. Fixed: rename dup-check (+ DB unique index backstop). — test added.
+- [x] [Review][Patch] **(Low)** `aclSchema.default({})` undermined `acl.required()`. Fixed: removed default.
+- [x] [Review][Patch] **(Low)** Mock header had a typo + referenced the removed `db/arango-connection`. Fixed.
+- [x] [Review][Patch] **(Low)** Boot race: `ensureCollections` fire-and-forget before `listen`. Fixed: await (non-fatal) before `listen`.
+
+**Deferred (by-design / out-of-scope — not 2.2 regressions):**
+- [x] [Review][Defer] TOCTOU create race beyond the DB index — N/A: uniqueness is now DB-enforced (the index is the authoritative guard).
+- [x] [Review][Defer] `callerDomain` defaults to all-repos / mutations lack domain scope — the documented Story 6.1 deferral (full per-tenant/repo/domain RBAC + `chunk_labels`).
+- [x] [Review][Defer] PATCH replaces nested `acl`/`retention` (not deep-merge) — standard PATCH (RFC 7386) semantics; client sends the full object.
+- [x] [Review][Defer] `_rev` optimistic concurrency on update — low-concurrency registry; future enhancement.
+- [x] [Review][Defer] Audit `await`ed on the hot path — intentional (audit integrity > latency for a registry).
+- [x] [Review][Defer] `source.endpoint` URI not validated — reachability validated by Story 2.7 at sync; 2.2 stores the ref.
+- [x] [Review][Defer] Audit `trace_id` null when observability off — by design (observability is optional/gated).
+
+**Dismissed:**
+- `okf.user=sub` span attribute — pre-existing (2.1), not introduced by 2.2.
+- `requireRole` case-sensitive — matches Keycloak realm-role convention (role defined by Epic 6).
+- `trust proxy` spoofing — correct for the Kong→okf-server (1-hop) topology.

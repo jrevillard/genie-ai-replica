@@ -211,4 +211,36 @@ describe('repository-service', () => {
     expect(e.status).toBe(418);
     expect(e).toBeInstanceOf(Error);
   });
+
+  describe('reliability (code-review fixes)', () => {
+    test('create → 409 DUPLICATE_REPO when the DB rejects a concurrent create (unique-violation backstop)', async () => {
+      db.collection('okf_repositories').save.mockRejectedValueOnce({ errorNum: 1210, code: 409 });
+      await expect(repoService.create(validCreateInput(), ACTOR)).rejects.toMatchObject({
+        code: 'DUPLICATE_REPO',
+        status: 409
+      });
+    });
+
+    test('getById rethrows transient DB errors (not masked as REPO_NOT_FOUND)', async () => {
+      db.collection('okf_repositories').document.mockRejectedValueOnce({ code: 503, message: 'unavailable' });
+      await expect(repoService.getById('any-id')).rejects.toMatchObject({ code: 503 });
+    });
+
+    test('update → 409 when renaming to a name already live in the same domain', async () => {
+      const a = await repoService.create(validCreateInput({ name: 'Alpha' }), ACTOR);
+      await repoService.create(validCreateInput({ name: 'Beta' }), ACTOR);
+      await expect(repoService.update(a.repo_id, { name: 'Beta' }, ACTOR)).rejects.toMatchObject({
+        code: 'DUPLICATE_REPO',
+        status: 409
+      });
+    });
+
+    test('list → 400 on a cursor that decodes to JSON without ts/id', async () => {
+      const badCursor = Buffer.from(JSON.stringify({ foo: 'bar' })).toString('base64url');
+      await expect(repoService.list({ cursor: badCursor })).rejects.toMatchObject({
+        code: 'VALIDATION_ERROR',
+        status: 400
+      });
+    });
+  });
 });

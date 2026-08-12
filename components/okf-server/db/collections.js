@@ -15,7 +15,11 @@ const COLLECTIONS = ['okf_repositories', 'okf_concepts_meta', 'okf_audit', 'okf_
 const INDEXES = {
   okf_repositories: [
     { type: 'persistent', fields: ['graph_name'], unique: true },
-    { type: 'persistent', fields: ['domain'] }
+    { type: 'persistent', fields: ['domain'] },
+    // DB-ENFORCED uniqueness on (name, domain) for LIVE repos. Live docs share
+    // deleted_at=null → collide; a soft-deleted tombstone has a unique deleted_at
+    // timestamp → re-create of the same (name, domain) is allowed.
+    { type: 'persistent', fields: ['name', 'domain', 'deleted_at'], unique: true }
   ],
   okf_concepts_meta: [
     { type: 'persistent', fields: ['repo_id'] },
@@ -28,10 +32,14 @@ const INDEXES = {
   okf_sources: [{ type: 'persistent', fields: ['repo_id'], unique: true }]
 };
 
-let _dbPromise = null;
-function getDb() {
-  if (!_dbPromise) _dbPromise = dbService.getConnection('default');
-  return _dbPromise;
+// Shared DB connection — cache the RESOLVED proxy (not the promise). On failure
+// _db stays null, so the next call retries (a transient boot-time outage does NOT
+// permanently wedge the service).
+let _db = null;
+async function getDb() {
+  if (_db) return _db;
+  _db = await dbService.getConnection('default');
+  return _db;
 }
 
 /**

@@ -14,10 +14,12 @@ const { withSpan } = require('../shared-lib/tracing');
 
 const COLLECTION = 'okf_audit';
 
-let _dbPromise = null;
-function getDb() {
-  if (!_dbPromise) _dbPromise = dbService.getConnection('default');
-  return _dbPromise;
+// Shared DB connection — cache the RESOLVED proxy (not the promise); retries on failure.
+let _db = null;
+async function getDb() {
+  if (_db) return _db;
+  _db = await dbService.getConnection('default');
+  return _db;
 }
 
 /**

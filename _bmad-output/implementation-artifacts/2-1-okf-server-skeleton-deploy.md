@@ -132,8 +132,8 @@ Claude (glm-5.2[1m]) — dev-story execution
 - **Observability integration**: OTel SDK gated on `ENABLE_OBSERVABILITY==='1'`; compose service uses `logging: *fluent-logging`; every `/api/okf/*` handler wraps in a span via the shared `tracing` helper.
 - **Verified deployable via docker compose** (local). Swarm + CI wiring present (compose dual-mode; `.gitlab-ci.yml` build→Trivy scan (blocking)→promote).
 
-### ⚠️ Outstanding (AC #5 / T6 — Ansible NOT wired)
-- `deploy/ansible/` contains **zero `okf` references** — the okf-server image var + service entry have NOT been added to the Ansible deploy (vars + `deploy.yml` task list, `--tags` build/deploy). AC #5 is only partially met (compose + Kong + CI done; Ansible outstanding). To be addressed before this story closes.
+### AC #5 / T6 — Ansible deploy wired
+- `deploy/ansible/tasks/deploy-shared-facts.yml`: added `genie-ai-okf-server` to the `genieai_images` list (now 17 images). The `env.j2` template auto-generates `GENIE_AI_OKF_SERVER_IMAGE` + `_IMAGE_TAG` from this list; the resolved `docker-compose.yaml` (with the okf-server service) is deployed by `docker stack deploy` under the `[deploy]` tag. No separate image var or logs dir needed — okf-server is #356 stdout-only, and the Kong route ships via the kong-config image. Cloud-deploy validation is a planned later step.
 
 ### File List
 **Created:**
@@ -155,4 +155,5 @@ Claude (glm-5.2[1m]) — dev-story execution
 - `docker-compose.yaml` — `okf-server` service (genieai_network, `*fluent-logging`, healthcheck, placement `genieai==true`, parameterized env)
 - `api-gateway-solution/new-config/kong_config.json` — `okf-server` service + `okf-route` (`/api/okf`, `strip_path:false`) ONLY (local jwks workaround excluded)
 - `.gitlab-ci.yml` — `build:okf-server` / `scan:okf-server` / `promote:okf-server` (ADR-0001 Trivy blocking gate)
+- `deploy/ansible/tasks/deploy-shared-facts.yml` — `genie-ai-okf-server` added to `genieai_images` (17 images); drives `env.j2` per-service image vars for the Swarm deploy
 - `_bmad-output/implementation-artifacts/sprint-status-okf-server.yaml` — `2-1` → review

@@ -13,13 +13,14 @@
     #    one image to a specific version; others use genie_ai_global_tag.
     image_tag_overrides: "{{ image_tag_overrides | default({}) }}"
 
-- name: Set genieai_images list (16 custom images — used by env.j2 per-service vars)
+- name: Set genieai_images list (17 custom images — used by env.j2 per-service vars)
   ansible.builtin.set_fact:
     genieai_images:
       - { name: "genie-ai-frontend" }
       - { name: "genie-ai-backend" }
       - { name: "genie-ai-db-migrations" }
       - { name: "genie-ai-document-repository" }
+      - { name: "genie-ai-okf-server" }
       - { name: "genie-ai-nginx" }
       - { name: "genie-ai-kong-config" }
       - { name: "genie-ai-chatqna-server" }

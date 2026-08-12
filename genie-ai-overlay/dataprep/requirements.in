@@ -91,7 +91,6 @@ sentence_transformers
 shortuuid
 tiktoken
 tqdm
-typing
 tzlocal
 unstructured[all-docs]
 uvicorn

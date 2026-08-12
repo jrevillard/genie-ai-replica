@@ -39,8 +39,11 @@ COPY --from=opea_base /src/comps/ /app/comps/
 # reproducible and supply-chain-pinned, with no re-resolution against live PyPI.
 # The v1.5 lock pins langchain-huggingface and langchain-arangodb at the
 # v1.5 lock versions (langchain-arangodb 0.0.6), so the old v1.3 post-install
-# upgrade blocks are gone; the >=1.2.0 filter_clause fix-pin is NOT present in
-# the v1.5 lock and is restored by story 2.3's langchain-arangodb bump.
+# upgrade blocks are gone. langchain-arangodb 0.0.6 already carries the
+# `filter_clause` named-param fix (the 0.0.4 release swallowed it via **kwargs,
+# so a category FILTER never reached the AQL — that silent-drop bug is absent at
+# 0.0.6), so the label filter is real with this pin and needs no version bump.
+# See requirements.in for the full 0.0.6 disposition.
 # The OpenTelemetry deps are likewise pinned in the lock (no unhashed install).
 COPY genie-ai-overlay/retriever/requirements-cpu.txt /app/requirements-cpu.txt
 RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-cpu.txt

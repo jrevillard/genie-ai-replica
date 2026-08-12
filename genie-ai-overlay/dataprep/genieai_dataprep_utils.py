@@ -56,10 +56,7 @@ def _resolve_docling_device(env_device, cuda_available=None):
             cuda_available = False
     if cuda_available:
         return AcceleratorDevice.CUDA
-    logger.warning(
-        "DOCLING_DEVICE=%s requested but no CUDA GPU available — falling back to CPU.",
-        env_device,
-    )
+    logger.warning(f"DOCLING_DEVICE={env_device} requested but no CUDA GPU available — falling back to CPU.")
     return AcceleratorDevice.CPU
 
 
@@ -73,10 +70,7 @@ try:
     # _resolve_docling_device); otherwise the code falls back to CPU.
     env_device = os.getenv("DOCLING_DEVICE", "cuda").lower()
     device_selection = _resolve_docling_device(env_device)
-    logger.info(
-        "Docling configured to use %s.",
-        "CUDA (GPU)" if device_selection == AcceleratorDevice.CUDA else "CPU",
-    )
+    logger.info(f"Docling configured to use {'CUDA (GPU)' if device_selection == AcceleratorDevice.CUDA else 'CPU'}.")
 
     accelerator_options = AcceleratorOptions(num_threads=4, device=device_selection)
 

@@ -25,7 +25,7 @@ VALID_DISPOSITIONS = {"still-needed", "re-graft-to-new-API", "obsolete-remove"}
 REQUIRED_KEYS = ("override", "disposition", "owner", "ticket")
 
 # Files scanned for ``# OVERRIDE`` marker records.
-SCAN_PATTERNS = ("core/*.py", "build-patches/*")
+SCAN_PATTERNS = ("core/*.py", "build-patches/*", "reranker/*.py", "contracts/*.py")
 
 # Matches ``# OVERRIDE <identifier> | disposition: <value>``
 MARKER_RE = re.compile(r"#\s*OVERRIDE\s+(\S+?)\s*\|\s*disposition:\s*(\S+)")
@@ -127,6 +127,7 @@ def validate() -> int:
         seen_ids[override_id] = line
 
     markers = scan_markers()
+    manifest_ids = {entry.get("override") for entry in entries if entry.get("override") is not None}
     for entry in entries:
         override_id = entry.get("override")
         if override_id is None:
@@ -142,6 +143,11 @@ def validate() -> int:
                 f"disposition(s) {sorted(marker_dispositions)} but the manifest declares "
                 f"{entry.get('disposition')!r}"
             )
+
+    # Reverse direction: every source marker must have a manifest entry.
+    for marker_id in sorted(markers):
+        if marker_id not in manifest_ids:
+            _fail(f"orphan marker '# OVERRIDE {marker_id}' found in source tree with no manifest entry")
 
     if _errors:
         for message in _errors:

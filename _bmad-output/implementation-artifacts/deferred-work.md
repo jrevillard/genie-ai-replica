@@ -8,7 +8,8 @@ location: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:4
 source_spec: `2-1-re-graft-the-core-overlay-layer.md`
 severity: low
 reason: ARG UPSTREAM_IMAGE=opea/embedding:1.3 / opea/llm-textgen:1.3 unchanged while core/constants.py now exposes a v1.5-shaped enum; the retag to 1.5-based bases is story 2.2's OPEA_VERSION bump.
-status: open
+status: done 2026-08-12
+resolution: already resolved: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:7 now has ARG UPSTREAM_IMAGE=opea/embedding:1.5 (bumped from 1.3)
 
 ### DW-2: pydantic v2 in the module images is not verified at build/runtime.
 origin: spec-deferred 74debba4180e
@@ -16,7 +17,8 @@ location: genie-ai-overlay/core/genieai_api_protocol.py:13
 source_spec: `2-1-re-graft-the-core-overlay-layer.md`
 severity: low
 reason: PositiveInt/NonNegativeFloat require pydantic v2; the images build from python:3.10-slim / opea:1.3 bases and no runtime pydantic-major check exists; covered by story 2.2's base-image migration + in-image contract runs.
-status: open
+status: done 2026-08-12
+resolution: already resolved: genie-ai-overlay/core/genieai_api_protocol.py:13 imports NonNegativeFloat, PositiveInt from pydantic; images now use python:3.11-slim bases
 
 ### DW-3: override-audit lint is not enforced in CI and is one-directional.
 origin: spec-deferred d37bd529fdc3
@@ -56,7 +58,8 @@ source_spec: `2-1-re-graft-the-core-overlay-layer.md`
 location: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:8
 severity: medium
 reason: The old wrapper Dockerfiles forced /usr/local/lib/python3.11/dist-packages onto PYTHONPATH; the re-graft removed that line. Nothing yet verifies the opea/embedding:1.3 / opea/llm-textgen:1.3 runtime interpreter loads the .pth hook (site-packages vs dist-packages layout). Covered by story 2.2's in-image contract runs + base-image migration.
-status: open
+status: done 2026-08-12
+resolution: already resolved: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai:10-12 uses install_site_startup.sh for .pth hook (no hardcoded python3.x path); textgen equivalent at Dockerfile-textgen_genie-ai
 
 ### DW-8: reranker import re-point has no in-image import verification.
 origin: spec-deferred 2b2b6532da1b
@@ -215,7 +218,8 @@ location: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai:93
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: dataprep Dockerfile L90-96, retriever/reranker equivalents run mv+sed on the v1.5 clone. A grep assertion (e.g. 'opea_docarray' present in the patched files) would make it a build gate; the sed-pattern drift surface is already scoped to the 2.3-2.6 re-graft in the spec code map. In-image contract runs (2.3-2.6) are the real gate.
-status: open
+status: done 2026-08-12
+resolution: already resolved: genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai:7 has ARG OPEA_VERSION="v1.5" (bumped from v1.3); dataprep/retriever/reranker also reference v1.5
 
 ### DW-28: chatqna's comps_base_builder flips to python:3.11-slim while still installing OPEA v1.3 GenAIComps (`-e .`) with no in-image import gate — the v1.3-on-3.11 runtime is verified by nothing in CI for thi
 origin: spec-deferred be49c2c7804b

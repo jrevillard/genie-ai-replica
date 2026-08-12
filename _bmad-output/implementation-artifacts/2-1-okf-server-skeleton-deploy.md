@@ -1,6 +1,6 @@
 # Story 2.1: OKF Server skeleton + deploy wiring
 
-Status: review
+Status: done
 Story key: `2-1-okf-server-skeleton-deploy` | GitLab: #877 (`prd::okf-server`, `okf-server::epic-2`)
 Epic: 2 (OKF Server — Repository Ingestion & Management) | Branch: `feat/okf-server`
 

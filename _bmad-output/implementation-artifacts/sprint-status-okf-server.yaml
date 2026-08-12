@@ -5,7 +5,7 @@
 # GitLab sync is driven directly via glab against the OKF epics.md.
 
 generated: 2026-08-11
-last_updated: 2026-08-11
+last_updated: 2026-08-12
 project: GENIE.AI OKF Server
 project_key: okf-server
 tracking_system: gitlab
@@ -23,7 +23,7 @@ development_status:
   epic-1-retrospective: optional
 
   epic-2: in-progress            # Mostly ungated — build first
-  2-1-okf-server-skeleton-deploy: review
+  2-1-okf-server-skeleton-deploy: done
   2-2-arangodb-meta-collections-repo-crud: backlog
   2-3-okf-parser-frontmatter-links: backlog
   2-4-conformance-validation-quality-metrics: backlog

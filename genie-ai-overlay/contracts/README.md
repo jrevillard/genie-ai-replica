@@ -11,7 +11,7 @@ changes.
   `comps` and **skips** when it is absent (dev venv / wrong module image). A
   test running against the mocked library would prove nothing about the bump.
 - **Sensitivity:** every test asserts a shape the upgrade actually changes
-  (kwargs forwarding, docarray rename, chunk shape, label-filter AQL, telemetry
+  (kwargs forwarding, docarray shim pin, chunk shape, label-filter AQL, telemetry
   span names, response schema). A green-on-green test is a quality failure.
 
 ## Invocation

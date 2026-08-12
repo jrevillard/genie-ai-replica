@@ -22,12 +22,27 @@ Run against a built module image (the overlay + real `comps` are baked in):
 # Full retriever-capable suite:
 docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
   --entrypoint sh genie-ai-retriever-arango:latest \
-  -c "cd /contracts && python -m pytest test_contract_orchestrator_wire.py test_contract_label_filter.py test_contract_retriever_fusion.py test_contract_telemetry.py test_contract_e2e_pipeline.py test_contract_nfrp_budgets.py -p no:cacheprovider"
+  -c "cd /contracts && python -m pytest test_contract_orchestrator_wire.py test_contract_label_filter.py test_contract_retriever_fusion.py test_contract_telemetry.py test_contract_e2e_pipeline.py test_contract_nfrp_budgets.py test_contract_site_startup.py -p no:cacheprovider"
 
 # Dataprep-capable suite (chunker-dependent):
 docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
   --entrypoint sh genie-ai-dataprep-arango:latest \
-  -c "cd /contracts && python -m pytest test_contract_ingest.py test_contract_nfrp_budgets.py::test_ingest_wall_clock_within_budget -p no:cacheprovider"
+  -c "cd /contracts && python -m pytest test_contract_ingest.py test_contract_nfrp_budgets.py::test_ingest_wall_clock_within_budget test_contract_site_startup.py -p no:cacheprovider"
+
+# Reranker-capable suite (shim pin + entry-point + site-startup):
+docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
+  --entrypoint sh genie-ai-reranker:latest \
+  -c "cd /contracts && python -m pytest test_contract_reranker_smoke.py test_contract_site_startup.py -p no:cacheprovider"
+
+# ChatQnA-capable suite (v1.3-on-3.11 import + symbol shape):
+docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
+  --entrypoint sh genie-ai-chatqna-server:latest \
+  -c "cd /contracts && python -m pytest test_contract_chatqna_smoke.py -p no:cacheprovider"
+
+# Site-startup only (works in thin wrappers — embedding, textgen):
+docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
+  --entrypoint sh genie-ai-embedding:latest \
+  -c "cd /contracts && python -m pytest test_contract_site_startup.py -p no:cacheprovider"
 
 # Pure logic (dev venv — no image needed):
 cd genie-ai-overlay && python -m venv .venv && .venv/bin/pip install pytest pytest-asyncio
@@ -35,7 +50,9 @@ cd genie-ai-overlay && python -m venv .venv && .venv/bin/pip install pytest pyte
 ```
 
 CI runs the per-module jobs in the `contract-in-image` stage (`contract:retriever-arango`,
-`contract:dataprep-arango`) with `--junitxml` artifacts.
+`contract:dataprep-arango`, `contract:reranker`) with `--junitxml` artifacts.
+Smoke jobs (`smoke:chatqna-server`, `smoke:embedding`, `smoke:textgen`,
+`smoke:image-sizes`) run import-only gates in the `scan` stage.
 
 ## Suite layout
 
@@ -51,6 +68,9 @@ CI runs the per-module jobs in the `contract-in-image` stage (`contract:retrieve
 | `test_contract_telemetry.py` | Span operation names the dashboards rely on are emitted; dashboard service set stays populated |
 | `test_contract_e2e_pipeline.py` | Label-filter `search_start` roundtrip, streaming metadata shape, one full graph schedule |
 | `test_contract_nfrp_budgets.py` | Wire latency + one-doc ingest wall-clock budgets |
+| `test_contract_reranker_smoke.py` | Reranker shim pin (docarray), entry-point importability, microservice module import (DW-8, DW-13) |
+| `test_contract_site_startup.py` | `.pth` auto-load: `zz_genie_startup.pth` parsed, each `import` line verified in `sys.modules` (DW-12) |
+| `test_contract_chatqna_smoke.py` | ChatQnA v1.3-on-3.11 import, v1.3 comps symbols shape, docarray symbols under shim (DW-28) |
 
 ## Red-green validation
 

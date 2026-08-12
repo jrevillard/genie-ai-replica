@@ -3,7 +3,7 @@ baseline_commit: e55addc16
 ---
 # Story 2.3: OKF parser — frontmatter (v0.2 families) + body + structural links
 
-Status: review
+Status: done
 Story key: `2-3-okf-parser-frontmatter-links` | GitLab: #879 (`prd::okf-server`, `okf-server::epic-2`)
 Epic: 2 (OKF Server — Repository Ingestion & Management) | Branch: `feat/okf-server`
 FRs: **FR-6** (OKF-aware parsing), **FR-7** (structural link graph) | References: Architecture §4, §6 step 2, §8.1, §9; ADR-okf-010; ADR-okf-013; ADR-okf-017; ADR-okf-018
@@ -150,3 +150,21 @@ Claude (glm-5.2[1m]) — dev-story execution
 
 ### Change Log
 - 2026-08-12: Story 2.3 implemented — pure OKF parser (frontmatter v0.2 families + body + structural links). 22 parser tests + 68 total green; deployed + smoke-verified in local build.
+- 2026-08-12: Code-review follow-ups — verified:null→unverified fix, conceptIdFromPath .// loop fix, luxon instead of native Date, logger.error on malformed path. 70 tests green, redeployed.
+
+## Senior Developer Review (AI)
+
+**Outcome: Approve (follow-ups applied + verified 2026-08-12)** | 2 layers completed (Blind Hunter + Acceptance Auditor); Edge Case Hunter failed (API rate limit — noted). Shared-library conformance: **PASS** (pure module, no db-connection-service). All 10 ACs **MET**.
+
+### Review Findings — resolved
+- [x] [Review][Patch] **(Medium)** `verified: null` promoted to `machine-confirmed` instead of `unverified` — fixed: null → undefined in normalizeFrontmatter. Test added.
+- [x] [Review][Patch] **(Medium)** `conceptIdFromPath` leaked a leading slash for `.//foo.md` — fixed: loop the leading-slash + ./ strip. Test added.
+- [x] [Review][Patch] **(Low)** Native `Date.toISOString()` instead of luxon (standard) — fixed: luxon `DateTime.fromJSDate(v).toUTC().toISO()/toISODate()`.
+- [x] [Review][Patch] **(Low)** No `logger.error` on the malformed-frontmatter path — fixed (consistency with link-error path).
+
+### Dismissed
+- entities@8 requires Node ≥20.19 — N/A (okf-server runtime is Node 22; smoke-verified on Node 22).
+- Module-load `createCounter` no guard — consistent with repository-service.js (2.2); OTel API always returns a NoopMeter.
+- stale_after timezone off-by-one — stale_after is spec'd as YYYY-MM-DD (no timezone); non-spec input.
+- Date objects in preserved `frontmatter` — benign (JSON serialization converts to ISO on persist).
+- HTML `<a>` links, code-block `# Citations`, reference-style links — LOW coverage gaps (defer to conformance 2.4).

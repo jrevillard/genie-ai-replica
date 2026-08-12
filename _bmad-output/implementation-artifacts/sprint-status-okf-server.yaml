@@ -25,10 +25,10 @@ development_status:
   epic-2: in-progress            # Mostly ungated — build first
   2-1-okf-server-skeleton-deploy: done
   2-2-arangodb-meta-collections-repo-crud: done
-  2-3-okf-parser-frontmatter-links: review
+  2-3-okf-parser-frontmatter-links: done
   2-4-conformance-validation-quality-metrics: backlog
   2-5-docrepo-bundle-ingest-route: backlog
-  2-6-dataprep-graphname-metadata-retract: backlog  # [BUMP]
+  2-6-dataprep-graphname-metadata-retract: backlog  # [BUMP] (+ Epic 7 scope add: preserve ACL file_labels t:/r:/d: into chunk_labels — HIGH-severity correctness fix)
   2-7-source-sync-git-s3-change-detection: backlog
   2-8-pii-redaction-version-provenance-docrefs: backlog
   epic-2-retrospective: optional
@@ -65,3 +65,12 @@ development_status:
   6-4-health-readiness-metrics: backlog
   6-5-supply-chain-airgap: backlog
   epic-6-retrospective: optional
+
+  epic-7: backlog            # AI-Driven OKF Producer (Crawl→Draft) — builds AFTER epic-3
+  7-1-model-client-provider-tier-sovereignty-gate: backlog
+  7-2-crawl-to-concept-draft-producer-pipeline: backlog   # depends 2-5; assemble→AI-adjust→cross-link
+  7-3-automated-hierarchy-label-assignment: backlog       # ALL hierarchy/label edits steward-vetted
+  7-4-crawl-integrated-producer-ui: backlog               # depends epic-3; crawl→OKF repo in AddFromLinkDialog + FileDetailsDialog
+  7-5-producer-hardening-injection-eval-cost: backlog
+  7-6-multi-source-crawl-seeding: backlog
+  epic-7-retrospective: optional

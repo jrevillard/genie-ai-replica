@@ -138,6 +138,9 @@ describe('parser-service — deriveTrustTier', () => {
   test('malformed entry (no by) treated as non-human', () => {
     expect(deriveTrustTier([{ notBy: 'x' }])).toBe('machine-confirmed');
   });
+  test('null verified → unverified', () => {
+    expect(deriveTrustTier(null)).toBe('unverified');
+  });
 });
 
 describe('parser-service — conceptIdFromPath', () => {
@@ -152,5 +155,8 @@ describe('parser-service — conceptIdFromPath', () => {
   });
   test('no .md suffix left as-is', () => {
     expect(conceptIdFromPath('a/b')).toBe('a/b');
+  });
+  test('handles .// (leading slash after ./ strip)', () => {
+    expect(conceptIdFromPath('.//foo.md')).toBe('foo');
   });
 });

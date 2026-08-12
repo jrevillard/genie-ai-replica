@@ -12,6 +12,7 @@
 
 const matter = require('gray-matter');
 const MarkdownIt = require('markdown-it');
+const { DateTime } = require('luxon');
 
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
@@ -62,8 +63,19 @@ function deriveTrustTier(verified) {
 function conceptIdFromPath(p) {
   if (!p) return undefined;
   let s = String(p).replace(/\\/g, '/'); // force POSIX
-  s = s.replace(/^\/+/, ''); // strip leading slashes
-  while (s.startsWith('./')) s = s.slice(2); // strip leading ./
+  // strip leading slashes and ./ segments (loop to handle combinations like .//foo)
+  let changed = true;
+  while (changed) {
+    changed = false;
+    if (s.startsWith('/')) {
+      s = s.replace(/^\/+/, '');
+      changed = true;
+    }
+    if (s.startsWith('./')) {
+      s = s.slice(2);
+      changed = true;
+    }
+  }
   if (s.toLowerCase().endsWith('.md')) s = s.slice(0, -3);
   return s || undefined;
 }
@@ -132,8 +144,8 @@ function extractLinks(body) {
 
 // js-yaml coerces ISO timestamps to Date objects; normalize them back to the
 // spec'd string forms (ISO-8601 for generated/verified, YYYY-MM-DD for stale_after).
-const toIso = (v) => (v instanceof Date ? v.toISOString() : v);
-const toDateOnly = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v);
+const toIso = (v) => (v instanceof Date ? DateTime.fromJSDate(v).toUTC().toISO() : v);
+const toDateOnly = (v) => (v instanceof Date ? DateTime.fromJSDate(v).toUTC().toISODate() : v);
 
 /**
  * Normalize frontmatter into the v0.2 families with legacy fallbacks.
@@ -153,6 +165,7 @@ function normalizeFrontmatter(frontmatter, body) {
 
   // verified — normalize to array; normalize .at dates
   let verified = fm.verified;
+  if (verified === null) verified = undefined; // null = explicit "no verifications" → unverified
   if (verified !== undefined && !Array.isArray(verified)) verified = [verified];
   if (Array.isArray(verified)) {
     verified = verified.map((e) => (e && e.at !== undefined ? { ...e, at: toIso(e.at) } : e));
@@ -195,6 +208,7 @@ async function parseConcept(markdown, ctx = {}) {
       parsed = matter(String(markdown || ''));
     } catch (err) {
       recordOp('error');
+      logger.error('OKF parse failed (malformed frontmatter)', { path: ctx.path, error: err.message });
       throw new ParseError('PARSE_ERROR', `Malformed frontmatter: ${err.message}`, 400);
     }
 

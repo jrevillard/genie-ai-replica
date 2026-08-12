@@ -157,3 +157,49 @@ Claude (glm-5.2[1m]) — dev-story execution
 - `.gitlab-ci.yml` — `build:okf-server` / `scan:okf-server` / `promote:okf-server` (ADR-0001 Trivy blocking gate)
 - `deploy/ansible/tasks/deploy-shared-facts.yml` — `genie-ai-okf-server` added to `genieai_images` (17 images); drives `env.j2` per-service image vars for the Swarm deploy
 - `_bmad-output/implementation-artifacts/sprint-status-okf-server.yaml` — `2-1` → review
+
+## Senior Developer Review (AI)
+
+**Outcome: Changes Requested → Approved (follow-ups applied + verified 2026-08-12)** | Review date: 2026-08-12 | Layers: Blind Hunter + Edge Case Hunter + Acceptance Auditor (all completed)
+**Follow-ups:** all 3 decision-needed resolved (D1 logs volume mount; D2 KEYCLOAK_PUBLIC_URL added to compose; D3 OTLP metrics middleware matching backend — no Prometheus scrape endpoint, this stack is OTLP-push). All patch items fixed and verified (Jest 7/7, ESLint+Prettier clean, image rebuilt + healthy in local build, /health 200, Kong 401, env vars present). Dismissed: P15 (.dockerignore already exists at components/), "no audience" (audience IS validated), P12 dotenv-order (matches backend). Deferred: env.j2 double-prefix (systemic — but also fixed), Trivy allow_failure (systemic; okf scan overridden to blocking). Remaining open item: confirm OKF logs/traces/metrics surface in Grafana (MELT verification).
+**AC verdict:** AC 1 & 6 MET · AC 2/4/5/7/8 PARTIAL · **AC 3 (observability) NOT MET** — MELT integration incomplete (user mandates full VictoriaMetrics/Grafana integration).
+All HIGH/MEDIUM findings below were verified against the committed code (not taken on the reviewers' word).
+
+### Review Findings
+
+**Decision-needed (resolve before patches):**
+- [x] [Review][Decision] Logger file-transports vs #356 stdout-only under non-root `USER node` — shared `logger.js:48-69` still ships Winston file transports; the Dockerfile claims stdout-only (#356) and runs `USER node` with no `logs/` volume, so the file transports error at runtime (Console still works → logs reach fluentd). Options: (a) mount a `logs` volume mirroring backend/doc-repo; (b) commit the #356 stdout-only logger edit (cross-cutting, currently build-only); (c) accept swallowed errors. Dockerfile comment must be corrected regardless.
+- [x] [Review][Decision] `KEYCLOAK_PUBLIC_URL` in committed compose — story AC 2/5 lists it as a compose env var, but per the local-build policy it's currently only in the build override (inert/no-op in cloud). Add to committed compose, or leave build-only and update AC wording?
+- [x] [Review][Decision] `/metrics` Prometheus endpoint — metrics already flow to VictoriaMetrics via OTLP (`tracing.js` metricReader → collector → VM). AC 3 also wants a `/metrics` scrape endpoint, which is not this stack's pull model. Add it anyway, or is OTLP-via-collector sufficient for MELT-M?
+
+**Patch (verified, must-fix):**
+- [x] [Review][Patch] **MELT**: `SERVICE_NAME` hardcoded inconsistently — `tracing.js:99`='genie-backend', `metrics.js:7`='genie-okf-server'; neither reads `process.env.SERVICE_NAME` → traces misattributed + cross-signal mismatch breaks Grafana correlation [components/shared/lib/tracing.js:99, components/shared/lib/metrics.js:7]
+- [x] [Review][Patch] **Tests broken**: Jest cannot load — `moduleNameMapper` target `<rootDir>/../../shared/lib/$1` resolves to nonexistent `D:\ITU-Gitlab\shared\lib`; should be `<rootDir>/../shared/lib/$1` (`components/shared/lib`). Confirmed empirically (test run failed). AC 7 not met. [components/okf-server/package.json:22-23]
+- [x] [Review][Patch] Compose missing `extra_hosts` (`${NGINX_PUBLIC_DOMAIN}:host-gateway`) + `NODE_TLS_REJECT_UNAUTHORIZED` — backend (436/463) & doc-repo (569/572) have both; okf-server omits them → OIDC discovery fails in TLS/self-signed deploys [docker-compose.yaml okf-server block]
+- [x] [Review][Patch] OIDC discovery `fetch()` has no timeout (contrast `checkUserStatusInKeycloak` axios `timeout:3000`) — slow/unreachable Keycloak hangs all auth [components/shared/lib/keycloak-auth-service.js:126]
+- [x] [Review][Patch] `KEYCLOAK_URL` required-guard is dead code — undefined env yields truthy `"undefined/realms/undefined"` [components/shared/lib/keycloak-auth-service.js:118-120]
+- [x] [Review][Patch] error-handler leaks raw `err.message` on 500 + no `res.headersSent` guard [components/okf-server/middleware/error-handler.js:7-10]
+- [x] [Review][Patch] No `algorithms: ['RS256']` in `jwtVerify` (AC 2; audience IS validated at :311) [components/shared/lib/keycloak-auth-service.js:264-266]
+- [x] [Review][Patch] Missing ITU copyright headers on 4 shared/lib files [tracing.js, metrics.js, tracing-pii.js, keycloak-auth-service.js]
+- [x] [Review][Patch] Missing auth-middleware unit test (AC 7) [components/okf-server/__tests__/]
+- [x] [Review][Patch] No `package-lock.json` (backend/doc-repo have one; `npm ci` fails; non-reproducible) [components/okf-server/]
+- [x] [Review][Patch] **MELT**: OTel exporter URL has no fallback → `undefined/v1/traces` if `OTEL_EXPORTER_OTLP_ENDPOINT` unset [components/shared/lib/tracing.js:104-107]
+- [x] [Review][Patch] **MELT**: `dotenv.config()` runs AFTER `tracing.js` reads `ENABLE_OBSERVABILITY` — local-dev observability gate silently broken [components/okf-server/index.js:5-7]
+- [x] [Review][Patch] CORS allows all origins (`cors()` no opts); backend uses `CORS_ALLOWED_ORIGINS` [components/okf-server/index.js:25]
+- [x] [Review][Patch] Production image ships devDependencies (`npm install --production=false` + full `node_modules` copy) [components/okf-server/Dockerfile:11,18]
+- [x] [Review][Patch] **MELT/AC3**: no custom OTel spans — `/api/okf` handlers don't use `tracing.withSpan` (auto-instrumentation only) [components/okf-server/routes/okf-routes.js]
+- [x] [Review][Patch] Add `.dockerignore` (local `node_modules` can clobber built one via `COPY okf-server/`) [components/okf-server/]
+- [x] [Review][Patch] Add standalone `jest.config.js` mirroring backend (config currently inlined in package.json) [components/okf-server/jest.config.js]
+- [x] [Review][Patch] Health route uses native `Date` not `luxon` (AC 8) [components/okf-server/routes/health-routes.js]
+
+**Deferred (pre-existing/systemic — not introduced by this story):**
+- [x] [Review][Defer] Ansible `env.j2` double-prefix `GENIE_AI_GENIE_AI_*_IMAGE` vs compose `${GENIE_AI_*_IMAGE}` — systemic across all 17 services; deploys work via `${...:-fallback}` to `GENIE_AI_GLOBAL_TAG`; only per-image overrides broken [deploy/ansible/templates/env.j2:376] — deferred, pre-existing
+- [x] [Review][Defer] Trivy `allow_failure: true` (`.scan_template`, :667) — non-blocking, contradicts ADR-0001; affects all services; okf-server follows the template [.gitlab-ci.yml:667] — deferred, pre-existing
+- [x] [Review][Defer] `depends_on` stripped by `docker stack deploy` → cold-start 30s auth lockout window (mitigated by cooldown expiry/retry) [docker-compose.yaml:512] — deferred, systemic Swarm behavior
+- [x] [Review][Defer] Auth `'Bearer '` prefix case-sensitive (RFC 6750 says case-insensitive); matches backend behavior [components/okf-server/middleware/auth.js:9] — deferred, matches existing pattern
+- [x] [Review][Defer] Kong `okf-server` service omits `timeouts/retries/preserve_host` present on document-repository [api-gateway-solution/new-config/kong_config.json] — deferred, functional with defaults
+
+**Dismissed (noise / half-wrong):**
+- "No JWT audience validation" — audience IS validated (keycloak-auth-service.js:311).
+- `req.startedAt` dead, PII-processor variable shadow, comment step-numbering, rate-limit-covers-/health — nits.
+- `issuer: unverifiedIss` no-op — the `issuerMap` whitelist provides the real protection; redundant-but-harmless.

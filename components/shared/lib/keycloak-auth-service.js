@@ -1,3 +1,7 @@
+// Copyright (C) 2026 International Telecommunication Union (ITU)
+// SPDX-License-Identifier: Apache-2.0
+// keycloak-auth-service.js — Shared OIDC token verifier (jose/JWKS) for all Node services.
+// Supports split internal/public OIDC URLs via KEYCLOAK_PUBLIC_URL issuer alias.
 'use strict';
 
 const { jwtVerify, createRemoteJWKSet } = require('jose');
@@ -115,15 +119,25 @@ let initialized = false;
  * @throws {Error} If discovery fetch fails
  */
 async function init(idpUrl) {
-  const baseUrl = idpUrl || `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}`;
-  if (!baseUrl) {
+  if (!idpUrl && !KEYCLOAK_URL) {
     throw new Error('KEYCLOAK_URL environment variable is required for OIDC discovery');
   }
+  const baseUrl = idpUrl || `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}`;
   const discoveryUrl = `${baseUrl}/.well-known/openid-configuration`;
 
   logger.info(`[KeycloakAuth] Fetching OIDC discovery from ${discoveryUrl}`);
 
-  const res = await fetch(discoveryUrl);
+  const controller = new AbortController();
+  const discoveryTimeoutMs = parseInt(process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS || '5000', 10);
+  const discoveryTimer = setTimeout(() => controller.abort(), discoveryTimeoutMs);
+  let res;
+  try {
+    res = await fetch(discoveryUrl, { signal: controller.signal });
+  } catch (err) {
+    throw new Error(`OIDC discovery fetch failed (timeout/unreachable after ${discoveryTimeoutMs}ms): ${err.message}`);
+  } finally {
+    clearTimeout(discoveryTimer);
+  }
   if (!res.ok) {
     throw new Error(`OIDC discovery failed: ${res.status} ${res.statusText}`);
   }
@@ -263,6 +277,7 @@ const keycloakAuthService = {
     const verifyWithJwt = async () => {
       const { payload: verifiedPayload } = await jwtVerify(token, jwks, {
         issuer: unverifiedIss,
+        algorithms: ['RS256'],
         requiredClaims: ['iss', 'exp']
       });
 

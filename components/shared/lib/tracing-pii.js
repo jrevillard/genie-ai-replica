@@ -1,3 +1,5 @@
+// Copyright (C) 2026 International Telecommunication Union (ITU)
+// SPDX-License-Identifier: Apache-2.0
 // PII redaction utilities for OTel span processors
 // Extracted from tracing.js for testability
 

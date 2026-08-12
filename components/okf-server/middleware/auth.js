@@ -11,10 +11,15 @@ const { logger } = require('../shared-lib/logger');
  */
 async function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Missing or malformed Authorization header' });
+  if (!authHeader) {
+    return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Missing Authorization header' });
   }
-  const token = authHeader.split(' ')[1];
+  // RFC 6750 §2.1: the Bearer scheme is case-insensitive (accept bearer/Bearer/BEARER).
+  const match = authHeader.match(/^\s*bearer\s+(.+)$/i);
+  if (!match) {
+    return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Malformed Authorization header' });
+  }
+  const token = match[1].trim();
   try {
     const payload = await keycloakAuthService.verifyToken(token);
     if (!payload) {

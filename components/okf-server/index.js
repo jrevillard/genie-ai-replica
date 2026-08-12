@@ -11,6 +11,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { logger } = require('./shared-lib/logger'); // shared logger — imported directly, not the full index
+const metricsMiddleware = require('./shared-lib/metrics-middleware'); // shared OTel HTTP metrics → OTLP (MELT)
 const healthRoutes = require('./routes/health-routes');
 const okfRoutes = require('./routes/okf-routes');
 const errorHandler = require('./middleware/error-handler');
@@ -22,10 +23,19 @@ const errorHandler = require('./middleware/error-handler');
 function createApp() {
   const app = express();
   app.use(helmet());
-  app.use(cors());
+  const corsAllowlist = process.env.CORS_ALLOWED_ORIGINS
+    ? process.env.CORS_ALLOWED_ORIGINS.split(',')
+        .map((o) => o.trim())
+        .filter(Boolean)
+    : true;
+  app.use(cors({ origin: corsAllowlist }));
   app.use(express.json({ limit: '10mb' }));
   app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 }));
-  app.use((req, res, next) => { req.startedAt = Date.now(); next(); });
+  app.use(metricsMiddleware()); // OTel HTTP metrics → OTLP → VictoriaMetrics (MELT)
+  app.use((req, res, next) => {
+    req.startedAt = Date.now();
+    next();
+  });
 
   // Public health endpoints (no auth)
   app.use('/health', healthRoutes);

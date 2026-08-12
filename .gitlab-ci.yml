@@ -886,6 +886,9 @@ build:okf-server:
 
 scan:okf-server:
   <<: *scan_template
+  # ADR-0001 / NFR-S5: container scan is a BLOCKING gate for the OKF Server image
+  # (overrides .scan_template's advisory allow_failure: true).
+  allow_failure: false
   needs:
     - job: build:okf-server
       artifacts: true

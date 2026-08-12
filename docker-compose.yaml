@@ -524,6 +524,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    volumes:
+      - "${DATA_DIR:-./data}/logs/okf-server:/app/logs"
+    # Allow okf-server to resolve NGINX_PUBLIC_DOMAIN to the Docker host so OIDC
+    # discovery/JWKS fetches (KEYCLOAK_URL → public NGINX) reach the host-published 80/443.
+    extra_hosts:
+      - "${NGINX_PUBLIC_DOMAIN:-localhost}:host-gateway"
     environment:
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
@@ -531,6 +537,13 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       - SERVICE_NAME=genie-okf-server
       - NODE_ENV=production
+      # Split-URL OIDC: KEYCLOAK_PUBLIC_URL aliases the browser-facing issuer to the same JWKS.
+      # No-op in cloud (equals KEYCLOAK_URL); active where internal/public issuers differ (local build).
+      - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
+      # TLS verification for okf-server → NGINX OIDC discovery/JWKS fetches.
+      # Default 1 (strict, production); set 0 in .env for dev with self-signed certs.
+      - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-1}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
     networks:
       - genieai_network
     deploy:

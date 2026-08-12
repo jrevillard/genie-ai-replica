@@ -4,9 +4,15 @@ const { logger } = require('../shared-lib/logger');
 
 function errorHandler(err, req, res, next) {
   logger.error('Unhandled OKF error', { error: err.message, path: req.path, method: req.method });
-  res.status(err.status || 500).json({
+  if (res.headersSent) {
+    return next(err);
+  }
+  const status = err.status || 500;
+  // Don't leak internal error detail on 500-class errors; only echo messages for client errors.
+  const isClientError = status < 500;
+  res.status(status).json({
     error: err.code || 'INTERNAL_ERROR',
-    message: err.message || 'Internal server error'
+    message: isClientError ? err.message || 'Error' : 'Internal server error'
   });
 }
 

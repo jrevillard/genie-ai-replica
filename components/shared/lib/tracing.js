@@ -1,6 +1,9 @@
-// tracing.js — OpenTelemetry SDK initialization
+// Copyright (C) 2026 International Telecommunication Union (ITU)
+// SPDX-License-Identifier: Apache-2.0
+// tracing.js — OpenTelemetry SDK initialization (shared by all Node services)
 // MUST be imported as the first line in index.js (before Express and all other modules)
 // to ensure auto-instrumentation hooks activate before module loading.
+// SERVICE_NAME is read from env so each consumer (backend, okf-server, …) is attributed correctly.
 
 // Test environment guard OR observability disabled — no-op (must be before any OTel requires)
 // ENABLE_OBSERVABILITY is the single gate: when disabled the Collector is not deployed,
@@ -96,12 +99,12 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   }
 
   // Resource attributes
-  const serviceName = 'genie-backend';
+  const serviceName = process.env.SERVICE_NAME || 'genie-backend';
   const serviceVersion = process.env.npm_package_version || '1.0.0';
   const deploymentEnvironment = process.env.NODE_ENV || 'development';
 
   // Create exporter — base URL from env var, append signal-specific path (aligned with OPEA tracing.py)
-  const endpointBase = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+  const endpointBase = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector:4318';
 
   const exporter = new OTLPTraceExporter({
     url: `${endpointBase}/v1/traces`

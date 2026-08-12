@@ -19,6 +19,7 @@ const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
 const auditService = require('./audit-service');
+const conformanceService = require('./conformance-service');
 const { retractRepoGraph } = require('./graph-retract-service');
 
 const COLLECTION = 'okf_repositories';
@@ -248,7 +249,14 @@ async function getById(repo_id, { domain } = {}) {
       throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
     }
     recordOp('get', 'success');
-    return toResponse(doc);
+    const repo = toResponse(doc);
+    try {
+      repo.metrics = await conformanceService.getRepoMetrics(repo_id);
+    } catch (err) {
+      logger.warn('Failed to compute repo metrics (non-fatal)', { repo_id, error: err.message });
+      repo.metrics = null;
+    }
+    return repo;
   });
 }
 

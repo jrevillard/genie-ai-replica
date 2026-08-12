@@ -127,6 +127,7 @@ All via the OKF Server REST API (`/api/okf/*`, Kong-terminated OIDC, role `tools
 > **Source-of-truth boundaries ([ADR-okf-016](../../../../docs/adr/okf-016-external-source-management.md)):** the external Git/S3 origin is a **sync source only** (consulted at sync, never at query/serve time); the **document-repository** retains the versioned copy and is the **single source of truth** for all internal components after upload; ArangoDB is the derived indexed view. Origins are **checked periodically**; deletion/inaccessibility is **detected and handled gracefully** (continue serving from the retained copy + alert the steward). "View source" links resolve to document-repository references, never the external origin URL.
 
 1. **Trigger** — operator action (admin UI "Sync"/"Ingest"), webhook, or schedule → OKF Server `source-sync` enqueues changed concepts (Redis Streams + DLQ).
+   - **AI producer trigger (Epic 7, [ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md))** — a completed web crawl (or an OKF-intent crawl declared in the crawl UI) triggers `producer/` to segment the crawl's flat dump into concept drafts via the configurable `model-client/` ([ADR-okf-020](../../../../docs/adr/okf-020-configurable-inference-model-tier.md)); drafts are parsed by the dual `okf-parser`, redacted, scanned, indexed, and staged at `review` — **never auto-published**, `generated.by=agent:okf-producer`, trust tier `unverified`. Hierarchy/label proposals it emits are steward-approved (no direct taxonomy mutation).
 2. **Fetch + parse** — OKF Server pulls from Git/S3; `okf-parser` (gray-matter + markdown-it AST) extracts frontmatter (incl. v0.2 `generated.at` / `sources`, with legacy `timestamp` / `# Citations` fallback), body, structural links (anchor text → `label`).
 3. **Validate** — OKF §11 conformance (non-blocking quality gate) → `okf_concepts_meta`.
 4. **Store + scan** — bundle bytes routed through the **document-repository new bundle route** (`POST /api/files/ingest-bundle`): storage + ClamAV (`securityService.scanBuffer`) + the `graph_name` (`OKF_{repo_id}`). Malware → reject + audit.
@@ -149,11 +150,13 @@ Web-only (Flutter has no ingestion/admin UI — confirmed). Extends `AdminDashbo
 ## 8. Backend changes (floor to ceiling)
 
 ### 8.1 New OKF Server — `components/okf-server/` (Node/Express, CommonJS, `createApp()`, imports `components/shared/lib/`) ([ADR-okf-001](../../../../docs/adr/okf-001-okf-server-component-and-stack.md))
-Modules: `source-sync/` (git/s3), `okf-parser/` (frontmatter+markdown-it+links), `repository-manager/` (repo/bundle/concept CRUD + lifecycle + versioning + retention), `curation/` (review/approve, conformance, quality), `governance/` (RBAC, PII/Presidio, audit), `serving/` (REST + MCP-ready handlers), `auth/` (jose, mirror gov-chat-backend), `observability/` (OTel). Routes mount at `/api/okf/*`.
+Modules: `source-sync/` (git/s3), `okf-parser/` (frontmatter+markdown-it+links), `repository-manager/` (repo/bundle/concept CRUD + lifecycle + versioning + retention), `curation/` (review/approve, conformance, quality), `governance/` (RBAC, PII/Presidio, audit), `serving/` (REST + MCP-ready handlers), `auth/` (jose, mirror gov-chat-backend), `observability/` (OTel), **`producer/` (AI crawl→draft concept generator — Epic 7, [ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md))**, **`model-client/` (configurable multi-provider inference tier — [ADR-okf-020](../../../../docs/adr/okf-020-configurable-inference-model-tier.md))**. Routes mount at `/api/okf/*`.
 
 ### 8.2 document-repository (extend — [ADR-okf-008](../../../../docs/adr/okf-008-bundle-content-store.md))
 - **New route** `POST /api/files/ingest-bundle` (`fileRoutes.js` + `fileController.js`): accepts bundle/concept content, reuses `securityService.scanBuffer` (ClamAV), **bypasses** the upload allowlist/magic-byte/langdetect, writes bytes, hands to dataprep **with `graph_name`** (NEW: thread `graph_name` from request → `_ingestFileById` payload → dataprep `/v1/dataprep/ingest_file`). `authorizeRole(['Admin'])`.
 - Extend `_ingestFileById`/`_retractFileById` to pass `graph_name` (+ `repo_id`) to dataprep; retract by `repo_id`/`bundle_version`.
+
+> The AI producer (Epic 7) submits redacted concept bundles through this route (`graph_name=OKF_{repo_id}`, `lifecycle=draft`); it is a thin new terminal path after a completed crawl, not a new storage vendor.
 
 ### 8.3 dataprep (extend — additive — [ADR-okf-010](../../../../docs/adr/okf-010-okf-markdown-loader-location.md))
 - `genieai_dataprep_microservice.py`: read `graph_name` from the **request** (not just env) on ingest + retract; **fix the retract default mismatch** (`genie_graph`→`GRAPH`/request).
@@ -172,6 +175,7 @@ Modules: `source-sync/` (git/s3), `okf-parser/` (frontmatter+markdown-it+links),
 ### 8.6 Kong + compose + Ansible + CI
 - `api-gateway-solution/new-config/kong_config.json`: `okf-server` service + `/api/okf` route (mirror document-repository); Kong AI MCP plugins for the MCP endpoint.
 - `docker-compose.yaml`: `okf-server` service (`genieai_network`, `genieai=true`, CPU-only, non-root, `/health`+`/ready`, fluentd).
+- **Model tier + secrets (Epic 7, [ADR-okf-020](../../../../docs/adr/okf-020-configurable-inference-model-tier.md))**: `OKF_PRODUCER_MODEL_PROVIDER` (default `internal`), per-provider model id, `LLM_EXTERNAL_EGRESS_ENABLED` (fail-closed sovereignty gate), and frontier API keys in `.env`/Ansible vault only (referenced by name, never in code). New provider npm deps pass the blocking `scan:okf-server` gate + CycloneDX SBOM.
 - `deploy/ansible`: image + vars for `okf-server`; `--tags` support.
 - `.gitlab-ci.yml`: build/scan/promote `okf-server` image (ADR-0001).
 
@@ -199,7 +203,7 @@ Modules: `source-sync/` (git/s3), `okf-parser/` (frontmatter+markdown-it+links),
 
 | Lane | Role | Tooling |
 |---|---|---|
-| **Author** (create) | Write/curate concepts | In-app Markdown concept editor (FR-25) **or** hand-author in Git / generate via a producer (Google enrichment agent, OKFy, catalog exporter). Local conformance validator/linter (reuse `okf-conformance`/`okflint`, MIT) before committing. |
+| **Author** (create) | Write/curate concepts | In-app Markdown concept editor (FR-25) **or** hand-author in Git / generate via a producer: an **external** producer (Google enrichment agent, OKFy, catalog exporter) **or** the **built-in Genie-native AI producer** (Epic 7, [ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md)) — which lifts a web crawl into steward-gated drafts (never auto-publish). Local conformance validator/linter (reuse `okf-conformance`/`okflint`, MIT) before committing. |
 | **Operator** (ingest) | Register + sync sources | Declare Git/S3 sources in the admin UI; the server syncs → validates → ClamAV (document-repository) → PII redact → index → stage `review`. |
 | **Steward** (curate) | Review/approve/publish/version/govern | Steward REST admin API (`/api/okf/admin/*`, `tools-admin`) + admin UI — review conformance/PII/quality, approve/reject, publish, set ACL/retention, export FOI audit. |
 | **Agent** (consume) | Search/get/traverse | REST (now); MCP (post-SST). |
@@ -238,6 +242,7 @@ Tooling layer = in-app editor + steward REST API + admin UI + optional local val
 1. graph_name wiring + bug fixes (dataprep/doc-repo) + retriever multi-graph + ChatQnA forwarding → **unified grounding** usable by all RAG. (**Greenfield** — multi-graph fan-out + `graph_name` threading don't exist today; the per-graph BM25-view cache does, so isolation infra is present.)
 2. OKF Server skeleton + repository CRUD + document-repository bundle route → **ingest a repository** into its own graph.
 3. Vue admin OKF tab + repository dialogs + source sync → **operator ingestion**.
+3.5. **AI-driven producer (Epic 7)** — crawl→draft concept generation + configurable model tier + automated (steward-vetted) hierarchy/labels → **rapid repository creation / bootstrapping**, unblocking test data for steps 4–5. Depends on steps 2–3; co-develops with step 4. (Producer-assigned labels fully steer retrieval only after step 1 + Story 2.6 land.)
 4. Concept editor + curation lifecycle + ACL/audit → **authoring/curation**.
 5. Search/get/neighbors serving + MCP-ready handlers → **agent surface**.
 6. Hardening: PII, supply chain, observability, air-gap validation → **production ready**.

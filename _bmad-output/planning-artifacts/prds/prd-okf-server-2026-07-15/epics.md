@@ -120,6 +120,10 @@ This document decomposes the OKF Server PRD (FR-1..FR-29), Architecture (§13 si
 | FR-27 | Epic 2 | Doc-repo source of truth |
 | FR-28 | Epic 2 | Document references |
 | FR-29 | Epic 5 | Trust/provenance surfacing |
+| FR-30 | Epic 7 | AI-driven production (crawl→draft) |
+| FR-31 | Epic 7 | Configurable model tier |
+| FR-32 | Epic 7 | Automated knowledge-hierarchy + labels (steward-vetted) |
+| FR-33 | Epic 7 | Multi-source crawl seeding |
 
 ## Epic List
 
@@ -131,7 +135,7 @@ This document decomposes the OKF Server PRD (FR-1..FR-29), Architecture (§13 si
 > | **Agentic workflows** (!280, `feat/agentic-workflows`) | Agentic **grounds in OKF via REST now** (depends on OKF Epic 5 serving for grounding data). OKF's **MCP transport** (Story 5.6) is gated on the agentic service's MCP client landing. | REST: none (agentic consumes when ready). MCP (5.6): gated on agentic MCP client. |
 > | **SST** (!279, `feat/sst`) | **Pattern only — no code dependency.** OKF follows the SST Redis Streams + DLQ pattern for ingest resilience (NFR-R2); it imports no SST code and owns its own PII (Presidio) + audit. | **None.** |
 >
-> **Build order:** Epic 2's **Node-side** stories (2.1–2.5, 2.7, 2.8) + Epic 3 (UI) + Node-side Epic 4 stories are **ungated and start first**. The **Python** stories (Epic 1, Epic 2.6) wait for the bump. Epic 5 REST builds once Epic 2 indexing is unblocked (post-bump); Epic 5.6 (MCP) waits for the agentic MCP client. Epics are numbered by Architecture §13 phase order, **not** by build order.
+> **Build order:** Epic 2's **Node-side** stories (2.1–2.5, 2.7, 2.8) + Epic 3 (UI) + Node-side Epic 4 stories are **ungated and start first**. The **Python** stories (Epic 1, Epic 2.6) wait for the bump. Epic 5 REST builds once Epic 2 indexing is unblocked (post-bump); Epic 5.6 (MCP) waits for the agentic MCP client. Epics are numbered by Architecture §13 phase order, **not** by build order. **Epic 7 (AI-driven producer) builds AFTER Epic 3** — it is the rapid repo-creation enabler for testing/bootstrapping; ungated, except that producer-assigned labels fully steer retrieval only after Story 2.6 (ACL-preserve) + Epic 1 (multi-graph fan-out) land (both gated by the bump).
 
 ### Epic 1: Unified Multi-Graph Grounding  *(GATED by OPEA 1.5 bump !277)*
 One retrieval grounds answers across the free-form corpus **and** all authorized OKF repositories (fan-out + RRF), so a chat response can cite concepts from any source.
@@ -156,6 +160,10 @@ Agents search, get, list, outline, and traverse OKF concepts with progressive di
 ### Epic 6: Hardening — Security, Observability, Sovereignty
 Production-ready: hardened authz, FOI audit, end-to-end tracing, metrics, supply chain, air-gap.
 **FRs covered:** FR-18, FR-19, FR-20, FR-21 (+ cross-cutting NFRs).
+
+### Epic 7: AI-Driven OKF Producer (Crawl → Draft)  *(UNGATED; builds AFTER Epic 3)*
+A steward uses a web crawl to rapidly create an OKF repository: the AI producer **assembles** concept drafts from crawled content, **AI-adjusts** and **cross-links** them into the most structured bundle, and **suggests** knowledge-hierarchy labels (steward-vetted). Configurable model tier; drafts stage in `review` — never auto-publish.
+**FRs covered:** FR-30, FR-31, FR-32, FR-33 (+ FR-5, FR-7, FR-9, FR-10, FR-29 reuse). **ADRs:** okf-019, okf-020.
 
 ---
 
@@ -254,6 +262,8 @@ So that **each repository is isolated and cleanly removable**.
 **When** an OKF ingest request arrives,
 **Then** dataprep reads `graph_name` from the **request** (not just env) on ingest + retract; `ArangoDBDataprepRequestFromDocRepo` carries additive `concept_id`/`bundle_version`/`source_type`/`repo_id` propagated to chunk-doc metadata; TEI embedding is reused; `retract_file` gains a repo/bundle-level retract path (by `repo_id`+`bundle_version`),
 **And** the latent retract-default mismatch (`genie_graph`→`GRAPH`/request) is fixed (Architecture §8.7), with additive-only schema changes (NFR-S7). *(FR-6, FR-8; Architecture §8.3, §9; ADR-okf-010, ADR-okf-013)*
+
+> **Epic 7 scope add (2026-08-12, [ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md)):** additionally **preserve ACL-prefixed `file_labels` (`t:`/`r:`/`d:`) into `chunk_labels`** in `_finalize_chunk_labels` (today silently dropped — HIGH-severity correctness fix for OKF isolation), and short-circuit the LLM label call when concept frontmatter already carries labels. *(genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py:1051-1104.)*
 
 ### Story 2.7: Source sync (Git/S3) + change detection + origin health
 As a **platform engineer**,
@@ -519,3 +529,71 @@ So that **the deployment is sovereign and supply-chain-safe**.
 **Given** the CI pipeline (ADR-0001) and deployment,
 **When** the image is built/deployed,
 **Then** a CycloneDX SBOM is produced (retained 1 yr), images are signed, container scanning is a **blocking** MR gate; an air-gapped deployment passes validation with zero outbound calls except declared source endpoints. *(NFR-S1, NFR-S5; ADR-okf-009)*
+
+---
+
+## Epic 7: AI-Driven OKF Producer (Crawl → Draft)
+*(UNGATED. Builds AFTER Epic 3. Depends on Story 2.2 (done), **2.3 (parser — defines the frontmatter contract the producer emits)**, 2.5 (bundle ingest route), Epic 3 (admin UI drives it). Co-develops with 4.2/4.3/4.4 (editor + lifecycle + review gate). Producer-assigned labels fully steer retrieval after Story 2.6 (ACL-preserve) + Epic 1 (multi-graph fan-out) — both gated by the OPEA 1.5 bump.)*
+
+### Story 7.1: Multi-provider model client + sovereignty gate
+As a **platform engineer**,
+I want **a configurable inference client (internal granite OR a frontier model by API key) for the OKF Server**,
+So that **producer draft quality can be tuned per deployment without breaking sovereignty**.
+
+**Acceptance Criteria:**
+**Given** the OKF Server (Node, CPU-only) and `OKF_PRODUCER_MODEL_PROVIDER` env,
+**When** the server starts,
+**Then** `services/model-client/` resolves the provider — `internal` reuses the OpenAI-compatible vLLM client (`VLLM_ENDPOINT`/`VLLM_API_KEY`); `openai`/`xai` point the same client at their `base_url`; `anthropic`/`gemini` use provider SDKs with response normalization + guided-JSON-via-tool-envelope adapters (no native `response_format`),
+**And** if a non-`internal` provider is selected while `LLM_EXTERNAL_EGRESS_ENABLED != 1` the service **refuses to start** (fail-closed), all API keys come from `.env`/vault by name (never in code or the browser), new npm deps pass the **blocking** `scan:okf-server` gate + CycloneDX SBOM, and a Jest `createApp()` test covers provider resolution + the gate. *(FR-31; ADR-okf-020; NFR-S1, NFR-S5.)*
+
+### Story 7.2: Crawl→concept draft producer pipeline (assemble → AI-adjust → cross-link)
+As a **steward**,
+I want **a completed crawl lifted into a structured OKF repository draft — concepts assembled, AI-adjusted, and cross-linked**,
+So that **I review a well-structured bundle instead of hand-authoring from a flat dump**.
+
+**Acceptance Criteria:**
+**Given** a completed crawl (`{fileId}.md`, `## Source:` blocks) and a target repo,
+**When** `POST /api/okf/repos/:repo_id/produce-from-crawl {file_id, model_tier}` is called (tools-admin) **or** the fire-and-forget post-crawl trigger fires (crawlWorker success block reads `crawl_job.config.okf`; a producer failure never breaks crawl success),
+**Then** `producer-service.js` segments the dump, drafts concept `.md` files (frontmatter matching `parser-service` input — `generated.by=agent:okf-producer`, `sources` from the `## Source:` URLs), **AI-adjusts** titles/summaries/bodies, and **cross-links** concepts into the structural graph (FR-7) with targets constrained to a **closed concept-ID namespace** (no fabricated links),
+**And** drafts pass Presidio PII redaction (blocking) + ClamAV, write to `okf_concepts_meta` at `status=review` with audit rows, a producer-job lifecycle mirrors `crawl_job` (progress/logs/kill), and **publish remains a separate steward action** (server-enforced `unverified` trust tier, never auto-publish). *(FR-30; FR-5, FR-7, FR-9, FR-10; ADR-okf-019.)*
+
+### Story 7.3: Automated knowledge-hierarchy + label assignment (steward-vetted)
+As a **steward**,
+I want **the producer to suggest knowledge-hierarchy additions and per-concept labels that I approve before anything changes**,
+So that **labels flow into ingest and query without unvetted taxonomy drift**.
+
+**Acceptance Criteria:**
+**Given** the producer's drafts and the existing service-category taxonomy,
+**When** the producer proposes hierarchy/labels,
+**Then** it reuses the `LABEL_SELECTOR` prompt semantics + `_finalize_chunk_labels` canonicalization, stamps `t:`/`r:`/`d:` ACL labels into frontmatter/`file_labels`, and stages **all** proposed categories/services/labels as `pending` via the **existing** service-category CRUD + `labelService`,
+**And** **every hierarchy/label edit requires explicit human (steward) approval before any taxonomy write** — the producer never mutates the service-category hierarchy directly; assigned labels steer retrieval after Story 2.6 (ACL-preserve) + Epic 1 land. *(FR-32; ADR-okf-019; FR-18.)*
+
+### Story 7.4: Crawl-integrated producer UI (crawl → OKF repository)
+As an **operator**,
+I want **to create an OKF repository directly from the crawl features I already use**,
+So that **a crawl becomes an OKF repository draft without leaving the crawl UI**.
+
+**Acceptance Criteria:**
+**Given** `AddFromLinkDialog.vue` (crawl creation) and `FileDetailsDialog.vue` (post-crawl),
+**When** the operator chooses an OKF target,
+**Then** `AddFromLinkDialog` gains an **OKF-repository target** tightly integrated into the existing crawl flow (domain picker via `serviceTreeService.getAdminCategories` + model-tier selector — **keys server-side only**; reuses SITE_PRESETS + crawl config), `FileDetailsDialog` shows a **"Create OKF repository from this crawl"** action next to Ingest when a crawl succeeds, `okfProducerService.js` + Vuex `okf` module back them, live draft/ingest progress polls with `{silent:true}` (clone FileDetailsDialog's timer pattern), and all strings use `translate('okf.…','default')` across locales (English source of truth). *(FR-30; FR-26; UX-DRs; project-context: Options API, `translate()` not `$t()`, httpService.)*
+
+### Story 7.5: Producer hardening — injection resistance, eval harness, cost controls
+As a **security officer / steward**,
+I want **the producer hardened against injection, measurable for quality, and bounded in cost**,
+So that **AI-produced drafts cannot poison the KB, flood review, or egress uncontrolled**.
+
+**Acceptance Criteria:**
+**Given** the producer risk register,
+**When** hardening lands,
+**Then** producer-emitted frontmatter/link fields are treated as **untrusted** (server-side override of trust; closed concept-ID link namespace) to resist **indirect prompt injection via crawled content**, a concept-quality **eval harness** (reference set + `steward rejection rate` guardrail, policing SM-C1/SM-7) exists, per-tenant/per-crawl quotas + trigger RBAC bound GPU/provider cost (including the future agent-trigger scenario), and robots.txt/ToS honoring + output-bundle `license` provenance are addressed. *(NFR-S1/S5; FR-19; ADR-okf-019.)*
+
+### Story 7.6: Multi-source crawl seeding
+As an **operator**,
+I want **to seed a crawl with multiple URLs**,
+So that **a repository draft can be assembled from several authoritative sources about a domain**.
+
+**Acceptance Criteria:**
+**Given** the crawler (`Crawler.crawl(pool,…)` already array-capable) and the single-URL job-creation layer (`scheduleSiteCrawl`, `AddFromLinkDialog`),
+**When** the operator creates an OKF-target crawl,
+**Then** `scheduleSiteCrawl` + `crawl_job` carry a seed-URL **list** (threaded to `crawler.crawl([...])`), `AddFromLinkDialog` collects multiple seeds for an OKF-target crawl, and per-source provenance is preserved into each draft's `sources`. *(FR-33.)*

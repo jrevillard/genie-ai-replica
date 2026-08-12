@@ -87,6 +87,9 @@ The **GENIE.AI OKF Server** is the open-source, enterprise- and government-grade
 - **Source origin** — the **external, user-owned** Git repository or S3-compatible bucket a repository is synced from (any host/provider; distinct from the Genie framework code repo). Not under Genie's control; consulted **only at sync time**.
 - **Source of truth (content)** — after upload + ingestion, the **document-repository** is the single source of truth for all internal Genie components; the external origin is a sync source, not a runtime dependency.
 - **Document reference** — a stable identifier/URL into the document-repository that lets the UI, chat citations, and agents link a user to view the original source document in the browser.
+- **Producer** — the Genie-native AI component (Epic 7, [ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md)) that lifts a crawled flat-Markdown dump into governed OKF concept drafts (lifecycle `review`, never auto-published). The generator dual of the OKF parser.
+- **Model tier (configurable inference)** — the deployment-configurable LLM backend ([ADR-okf-020](../../../../docs/adr/okf-020-configurable-inference-model-tier.md)): internal granite-4.1-8b via vLLM (default, sovereign) **or** a frontier model via API key (Anthropic, xA­I/Grok, Gemini, OpenAI); external providers are an explicit sovereignty opt-in.
+- **Producer job** — the async lifecycle (mirroring `crawl_job`) that tracks crawl→draft progress, logs, and kill.
 
 ## 4. Features
 
@@ -318,9 +321,45 @@ The document-repository exposes **stable document references** (IDs/URLs) for ev
 - A served concept/chunk carries a resolvable link to its source document in the document-repository.
 - Links remain stable across re-indexes (tied to the document-repo document ID, not a transient path or the external origin).
 
+### 4.9 AI-Driven OKF Production (Crawl → Draft)
+
+**Description:** A Genie-native AI producer lifts the web crawler's flat Markdown output into governed OKF concept drafts, as the **rapid means of creating OKF repositories** (testing/bootstrapping) and of automating knowledge-hierarchy + label assignment. Drafts enter lifecycle `review`; a steward approves before publish. The model tier is configurable (internal granite or frontier API). Crawls are **tightly integrated** with OKF repository creation in the Vue admin UI — a crawl can directly create/seed an OKF repository. Realizes UJ-1.
+
+**Functional Requirements:**
+
+#### FR-30: AI-driven production from crawl results
+An authenticated steward (`tools-admin`) can trigger production of OKF concept drafts from a completed crawl (or declare OKF intent at crawl creation), and the producer segments the flat dump, derives concept title/summary/frontmatter, and writes drafts to `okf_concepts_meta` at `review` — **never auto-published**, with `generated.by=agent:okf-producer` and a server-enforced `unverified` trust tier. Realizes UJ-1. ([ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md))
+**Consequences:**
+- A crawl can be used directly to create/seed an OKF repository (a first-class target in the existing crawl UI — `AddFromLinkDialog` and `FileDetailsDialog`).
+- Drafts are **assembled from the crawl, then AI-adjusted and cross-linked** (structural link graph, FR-7) to form the most structured repository/bundle; cross-link targets are constrained to a closed concept-ID namespace to resist fabrication.
+- No AI-produced concept reaches `published` without steward sign-off (FR-10); drafts route through Presidio PII redaction (blocking) and ClamAV before staging.
+
+#### FR-31: Configurable inference model tier
+The producer's model is deployment-configurable: internal granite-4.1-8b (vLLM, OpenAI-compatible, default) **or** a frontier model via API key — Anthropic, xA­I/Grok, Gemini, OpenAI. External providers require an explicit sovereignty opt-in (`LLM_EXTERNAL_EGRESS_ENABLED`, fail-closed); the default remains sovereign/air-gap-safe. Realizes UJ-1. ([ADR-okf-020](../../../../docs/adr/okf-020-configurable-inference-model-tier.md))
+**Consequences:**
+- A sovereign/air-gapped deployment runs internal-only; an opt-in deployment may use a frontier model for higher draft quality.
+- Provider API keys live only in `.env`/vault (never in code or the committed `env` template); new provider deps pass the blocking container scan + CycloneDX SBOM (ADR-0001).
+
+#### FR-32: Automated knowledge-hierarchy + label assignment
+The producer proposes knowledge-hierarchy additions (categories/services) and assigns per-concept labels that flow into both **ingest** (embeddings via `chunk_labels`) and **query** (the retriever label filter), reusing the existing service-category CRUD + label mechanism; proposals are steward-approved (staged `pending`). Realizes UJ-1.
+**Consequences:**
+- Producer-assigned labels steer retrieval (full effect after Story 2.6 ACL-preserve + Epic 1 multi-graph fan-out land — both gated).
+- **All producer-proposed knowledge-hierarchy/label edits are staged `pending` and require explicit human (steward) approval before any write** — the producer never mutates the service-category taxonomy directly (no auto-create).
+
+#### FR-33: Multi-source crawl seeding
+The web crawler accepts **multiple seed URLs** per crawl job (not only one), so a repository draft can be assembled from several authoritative sources/sites about a domain. Realizes UJ-1.
+**Consequences:**
+- `crawl_job` carries a seed-URL list; the existing `Crawler.crawl(pool,…)` (already array-capable) is fed the list.
+- The crawl UI (`AddFromLinkDialog`) collects multiple seeds for an OKF-target crawl.
+
+**Feature-specific NFRs:** steward-gated, never auto-publish (FR-9/10); sovereignty opt-in for external models (NFR-S1); supply-chain scan for new deps (NFR-S5); CPU-only OKF Server — inference is a remote call (NFR-S6).
+
+---
+
 ## 5. Non-Goals (Explicit — product boundaries, not temporal deferrals)
 
 - **Not a producer-replacement for external catalogs.** Exporting from Dataplex/Collibra/Unity is done by external producers; OKF Server *hosts and serves*, and offers in-app authoring for human curators.
+  - **Amendment (2026-08-12, [ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md)):** a **bounded Genie-native, steward-gated AI producer** (Epic 7) is permitted — it lifts the web crawler's output into OKF concept *drafts* (lifecycle `review`, never auto-published, trust-capped `unverified`) to rapidly create repositories and automate hierarchy/labels. This is distinct from the excluded catalog-export replacement; it is the in-boundary sovereign path for internal web content and for bootstrapping/testing.
 - **Not a formal ontology / OWL / SHACL reasoning engine.** OKF is spec-pure; relationships are conveyed by links + prose. (Optional taxonomy via frontmatter/tags only.)
 - **Not a replacement for dataprep/RAG or the retriever.** OKF Server extends them; it does not duplicate storage/retrieval.
 - **Not introducing new infrastructure vendors.** No Neo4j (any edition), no separate vector DB, no Elasticsearch/Solr, no external SaaS.
@@ -333,6 +372,7 @@ The document-repository exposes **stable document references** (IDs/URLs) for ev
 - Multiple OKF repositories (one per domain), repository CRUD, each in its own graph `OKF_{repo_id}` (FR-1, 2, 3, 23).
 - OKF-aware ingestion via the document-repository: §11 conformance, ClamAV, PII redaction, parsing, structural link graph, per-repo indexing, repo-level retract (FR-4, 5, 6, 7, 8).
 - Curation & in-app authoring: lifecycle, review/approve, versioning, retention, metrics, in-app Markdown concept editor with live §11 validation (FR-9, 10, 11, 12, 13, 25).
+- **AI-driven production (Crawl → Draft)** — Epic 7: steward-gated producer from crawled content; configurable model tier; automated hierarchy/labels (FR-30, 31, 32).
 - Unified multi-graph grounding + agent serving: retriever fan-out+RRF across `GRAPH` + authorized `OKF_*`; search/get/list/outline; MCP-ready handlers; **trust/lifecycle/provenance surfacing** (FR-24, 14, 15, 16, 17, 29).
 - Vue 3 admin ingestion & curation UI (FR-26).
 - Access control, governance, traceability; observability & operations (FR-18, 19, 20, 21).
@@ -352,6 +392,7 @@ The document-repository exposes **stable document references** (IDs/URLs) for ev
 - **SM-4**: Governance completeness — 100% of served responses pass per-repo RBAC and produce an audit record; FOI export succeeds for any date range. Validates FR-18, 19.
 - **SM-5**: Sovereignty — zero outbound calls to non-declared endpoints; air-gapped deployment passes validation. Validates NFR-S1.
 - **SM-6**: Curation velocity — median repository review→publish time; conformance/PII issue detection rate; in-app authoring adoption. Validates FR-10, 13, 25.
+- **SM-7**: Bootstrap velocity — a crawled source becomes a review-ready OKF repository (drafts staged) within a target time; **guardrail: steward rejection rate** (too low ⇒ rubber-stamping; too high ⇒ poor drafts). Validates FR-30, 31, 32. Reaffirms SM-C1 (quality over volume).
 
 **Counter-metrics (do not optimize)**
 - **SM-C1**: Raw concept-count ingested — optimizing volume can degrade precision; do not game SM-3 by indexing low-quality content.
@@ -405,6 +446,8 @@ The document-repository exposes **stable document references** (IDs/URLs) for ev
 - **[SST](../prd-server-side-tools.md) (draft, reduced)** — web search + stream ingestor + governance only (registry/executor/mcpo subsumed by the workflows service); gates the **MCP transport** indirectly; REST + handlers proceed independently.
 - **OPEA 1.3 → 1.5 overlay bump (cheap, ~3–5 engineer-days; foundational)** — the Genie-owned `dataprep`/`retriever`/`reranker`/`chatqna` that OKF extends are rebased onto `comps` 1.5. The verified v1.3↔v1.5 `comps` source diff showed every API OKF's base depends on (`OpeaComponent`, `register_microservice`, `opea_telemetry`, `api_protocol`) is byte-identical or additive, so the RAG logic is **untouched** and remains Genie-owned/forked — we do **not** adopt OPEA's components wholesale, and we do **not** use OPEA's `comps/agent` (the agentic layer is custom LangChain Deep Agents on the OPEA `MicroService` harness). OKF Phase 1 (multi-graph fan-out + `graph_name` threading — both **greenfield**) lands on the bumped base. File-by-file detail: the OPEA Strategy & Implementation Plan (`_bmad-output/planning-artifacts/OPEA-1.5-upgrade-analysis.md`).
 
+- **AI-driven producer (Epic 7, [ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md))** — depends on Story 2.2 (repo CRUD, done), **2.3 (parser — defines the frontmatter contract the producer emits)**, 2.5 (bundle ingest route), Epic 3 (admin UI drives it); co-develops with 4.2/4.3/4.4 (editor + lifecycle + review gate). Producer-assigned labels fully steer retrieval after Story 2.6 (ACL-preserve) + Epic 1 (multi-graph fan-out) — both gated by the OPEA 1.5 bump.
+
 ## 11. Data Governance
 
 - **Residency/Sovereignty**: all content, metadata, audit, and traces stay inside the deployment boundary; air-gap deployable; no third-party egress.
@@ -419,6 +462,7 @@ The document-repository exposes **stable document references** (IDs/URLs) for ev
 - Genie's dataprep/RAG + ArangoDB + Keycloak/Kong/OTel stack already provides ~80% of the foundation; multi-repo + multi-graph grounding are additive extensions.
 - Sprint 24's **custom LangChain Deep Agents (on LangGraph)** agentic workflows — built on the OPEA `MicroService` harness, not OPEA's `comps/agent` — need a governed knowledge-serving surface that grounds in all data.
 - Sovereign/public-sector demand for governed, multi-domain agent knowledge is immediate and unmet.
+- The producer is the **rapid repo-creation enabler** that unblocks testing of curation (Epic 4) and serving (Epic 5), and fills the sovereign internal-content gap external cloud producers cannot reach (they require egress, NFR-S1).
 
 ## 13. Open Questions
 
@@ -432,6 +476,11 @@ The document-repository exposes **stable document references** (IDs/URLs) for ev
 8. **Performance targets** (NFR-PR1 p95 latency, freshness target SM-1) — confirm values.
 9. Whether the free-form `GRAPH` corpus should also become domain-partitioned later (not required now; stays single).
 10. **Attested Computation** (OKF v0.2 §10) — deferred to a future phase; its runtime protocol is itself spec-deferred. Decide whether/when government metrics/reporting justify building it. (→ [ADR-okf-017](../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md))
+11. **Producer default model tier** for the bootstrap landing — internal granite (sovereignty-safe) vs frontier (egress)? (→ [ADR-okf-020](../../../../docs/adr/okf-020-configurable-inference-model-tier.md))
+12. **Concept segmentation policy** — one concept per crawled page (default, cheap) vs cluster-into-concepts (better, more LLM cost)?
+13. **Producer-trigger authorization** — who can trigger crawl→OKF (`tools-admin` vs operator vs agent), and what per-tenant/per-crawl quotas bound GPU/provider cost? (→ [ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md))
+14. **Concept-quality evaluation harness** — ownership + the SM-3 reference set that makes the steward-rejection-rate guardrail (SM-7) measurable.
+15. **Output-bundle licensing** — a `license`/provenance discipline for AI-produced concepts (derivative-work/ND/Crown-copyright) for cross-pilot reuse and FOI cleanliness.
 
 > Resolved questions (service shape → [okf-001](../../../../docs/adr/okf-001-okf-server-component-and-stack.md); multi-tenancy/graph model → [okf-002](../../../../docs/adr/okf-002-shared-graph-multi-tenancy.md); auth placement → [okf-003](../../../../docs/adr/okf-003-standalone-service-behind-kong.md); admin UI → [okf-007](../../../../docs/adr/okf-007-admin-steward-ui.md)/[okf-015](../../../../docs/adr/okf-015-in-app-authoring-curation.md); bundle store → [okf-008](../../../../docs/adr/okf-008-bundle-content-store.md)) are decided — see the ADRs.
 

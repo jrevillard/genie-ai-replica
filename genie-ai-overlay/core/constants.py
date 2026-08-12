@@ -1,7 +1,7 @@
 # Copyright (C) 2024 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-from enum import Enum
+from enum import Enum, auto
 
 
 class ServiceRoleType(Enum):
@@ -38,7 +38,12 @@ class ServiceType(Enum):
     TEXT2CYPHER = 21
     TEXT2KG = 22
     STRUCT2GRAPH = 23
-    TRANSLATOR = 24  # Add Translator service type for MegaService
+    LANGUAGE_DETECTION = 24
+    PROMPT_TEMPLATE = 25
+    PROMPT_REGISTRY = 26
+    TEXT2QUERY = 27
+    ARB_POST_HEARING_ASSISTANT = 28
+    TRANSLATOR = 29  # OVERRIDE core.constants.ServiceType | disposition: re-graft-to-new-API | reason: re-append TRANSLATOR at v1.5 tail slot 29 | test: tests/test_core.py::TestServiceType::test_translator_is_last  # noqa: E501
 
 
 class MegaServiceEndpoint(Enum):
@@ -93,3 +98,11 @@ class MicroServiceEndpoint(Enum):
 
     def __str__(self):
         return self.value
+
+
+class MCPFuncType(Enum):
+    """The enum of a MCP function type."""
+
+    TOOL = auto()
+    RESOURCE = auto()
+    PROMPT = auto()

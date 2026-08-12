@@ -22,6 +22,7 @@ const errorHandler = require('./middleware/error-handler');
  */
 function createApp() {
   const app = express();
+  app.set('trust proxy', 1); // trust Kong proxy → correct req.ip for audit source_ip
   app.use(helmet());
   const corsAllowlist = process.env.CORS_ALLOWED_ORIGINS
     ? process.env.CORS_ALLOWED_ORIGINS.split(',')
@@ -50,6 +51,9 @@ function createApp() {
 if (require.main === module) {
   const app = createApp();
   const PORT = process.env.PORT || 3002;
+  // Ensure the four OKF control-plane collections exist (fire-and-forget; non-fatal on boot).
+  const { ensureCollections } = require('./db/collections');
+  ensureCollections().catch((err) => logger.error('OKF collection ensure failed (non-fatal)', { error: err.message }));
   app.listen(PORT, () => logger.info(`OKF Server listening on port ${PORT}`));
 }
 

@@ -702,3 +702,11 @@ location: genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1025
 severity: low
 reason: invoke fuses then slices (genieai_retriever_arangodb.py:1025-1041, [: int(input.k)]). Mocked tests assert fused membership/order but not the slice; a source-guard for the slice would be brittle. Behavior change would surface only via retrieval-quality regressions.
 status: open
+
+### DW-33: DW-30/DW-31 headers in the deferred-work ledger are truncated mid-word ("...surfaced wh", "...the mocked suite co") — a sync-tooling artifact; the ledger is orchestrator-owned and was not modified by
+origin: spec-deferred ea6ab5b67329
+source_spec: `2-3-re-graft-the-retriever-bump-langchain-arangodb.md`
+location: _bmad-output/implementation-artifacts/deferred-work.md (DW-30, DW-31)
+severity: low
+reason: deferred-work.md DW-30 title ends "surfaced wh" (missing "ile syncing README"); DW-31 ends "the mocked suite co" (missing "vers invoke behavior"). The `reason:` field carries the full text. Surfaced for the orchestrator to repair the headers.
+status: open

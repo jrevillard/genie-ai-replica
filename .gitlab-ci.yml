@@ -653,7 +653,13 @@ kics-iac-sast:
     # few times, then continue regardless of outcome.
     - |
       for i in 1 2 3; do
-        wget -qO- -t 2 -T 30 https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin "$SYFT_VERSION" && break
+        # Download to a file first so wget's own exit code decides the retry —
+        # piping straight into sh masks a wget failure (sh reads empty stdin and
+        # exits 0), which would otherwise break the loop on the very first flake.
+        if wget -qO /tmp/syft-install.sh -t 2 -T 30 https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+          && sh /tmp/syft-install.sh -b /usr/local/bin "$SYFT_VERSION"; then
+          break
+        fi
         echo "WARN: syft install attempt $i/3 failed (GitHub flaky) — retrying"
         sleep 5
       done || true
@@ -733,8 +739,10 @@ kics-iac-sast:
       else
         echo "WARN: gl-scan-tmp.json not found (scan produced no report) — promoting image without report rewrite"
         # Keep the declared container_scanning artifact present so the reports
-        # upload does not fail the job: an empty vulnerability list.
-        printf '%s\n' '{"version":"15.0.0","vulnerabilities":[]}' > gl-container-scanning-report.json
+        # upload does not fail the job, but mark the scan as FAILED rather than
+        # presenting the image as scanned-clean: an unscanned image must never
+        # look like it has zero findings.
+        printf '%s\n' '{"version":"15.0.0","vulnerabilities":[],"scan":{"type":"container_scanning","status":"failed"}}' > gl-container-scanning-report.json
       fi
   artifacts:
     reports:
@@ -2101,6 +2109,13 @@ release:create:
 
 lint:backend:
   extends: .lint_node
+  # sharp's install downloads libvips + its native binary from GitHub release
+  # assets, which are unreachable from the CI runner container (connection
+  # resets with "socket hang up"). Mirror both to npmmirror (verified reachable
+  # from the runner). CI-only: local devs keep the default hosts.
+  variables:
+    npm_config_sharp_libvips_binary_host: "https://npmmirror.com/mirrors/sharp-libvips"
+    npm_config_sharp_binary_host: "https://npmmirror.com/mirrors/sharp"
   before_script:
     - cd components/gov-chat-backend && npm ci
   script:
@@ -2248,6 +2263,13 @@ docs:validate:
 
 test:backend:
   extends: .test_node
+  # sharp's install downloads libvips + its native binary from GitHub release
+  # assets, which are unreachable from the CI runner container (connection
+  # resets with "socket hang up"). Mirror both to npmmirror (verified reachable
+  # from the runner). CI-only: local devs keep the default hosts.
+  variables:
+    npm_config_sharp_libvips_binary_host: "https://npmmirror.com/mirrors/sharp-libvips"
+    npm_config_sharp_binary_host: "https://npmmirror.com/mirrors/sharp"
   before_script:
     - cd components/gov-chat-backend && npm ci
   script:

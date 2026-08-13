@@ -452,11 +452,25 @@ describe('ChatHistoryService', () => {
     });
 
     describe('findMessagesForQuery', () => {
-      it('should return messages linked to a query', async () => {
-        mockDb.query.mockResolvedValue(createMockCursor([{ _key: 'msg-1', content: 'Hello' }]));
-        const result = await chatHistoryService.findMessagesForQuery('query-1');
+      it('should return messages linked to a query when caller owns the query', async () => {
+        mockDb.query
+          .mockResolvedValueOnce(createMockCursor(['user-1'])) // ownership lookup
+          .mockResolvedValueOnce(createMockCursor([{ _key: 'msg-1', content: 'Hello' }]));
+        const result = await chatHistoryService.findMessagesForQuery('query-1', 'user-1');
         expect(result).toBeDefined();
         expect(Array.isArray(result)).toBe(true);
+      });
+
+      it('should return null when query does not exist', async () => {
+        mockDb.query.mockResolvedValueOnce(createMockCursor([])); // no owner found
+        const result = await chatHistoryService.findMessagesForQuery('missing', 'user-1');
+        expect(result).toBeNull();
+      });
+
+      it('should return forbidden when caller does not own the query', async () => {
+        mockDb.query.mockResolvedValueOnce(createMockCursor(['owner-user'])); // different owner
+        const result = await chatHistoryService.findMessagesForQuery('query-1', 'other-user');
+        expect(result).toEqual({ forbidden: true });
       });
     });
 

@@ -624,12 +624,33 @@ module.exports = (chatHistoryService) => {
    */
   router.get('/query/:queryId/messages', async (req, res, next) => {
     try {
+      const userId = extractUserId(req);
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required'
+        });
+      }
+
       const { queryId } = req.params;
+      logger.info(`Finding messages related to query ${queryId} for user ${userId}`);
 
-      logger.info(`Finding messages related to query ${queryId}`);
+      const result = await chatHistoryService.findMessagesForQuery(queryId, userId);
 
-      const messages = await chatHistoryService.findMessagesForQuery(queryId);
-      res.json(messages);
+      if (result === null) {
+        return res.status(404).json({
+          success: false,
+          message: 'Query not found'
+        });
+      }
+      if (result && result.forbidden) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      res.json(result);
     } catch (error) {
       logger.error(`Error finding messages for query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
       next(error);

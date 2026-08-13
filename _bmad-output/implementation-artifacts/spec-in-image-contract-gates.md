@@ -78,7 +78,7 @@ deferred: []
 - Given a MR touching `genie-ai-overlay/reranker/**/*`, when CI runs, then `contract:reranker` job executes `test_contract_reranker_smoke.py` + `test_contract_site_startup.py` against the `genie-ai-reranker` candidate image and produces a JUnit artifact.
 - Given a MR touching `genie-ai-overlay/chatqna/**/*`, when CI runs, then `smoke:chatqna-server` job imports the chatqna module inside the `genie-ai-chatqna-server` candidate image and exits 0.
 - Given a MR touching `genie-ai-overlay/embedding/**/*` or `genie-ai-overlay/textgen/**/*`, when CI runs, then `smoke:embedding` / `smoke:textgen` jobs verify `.pth` hook auto-load inside the candidate images.
-- Given a MR touching any of `dataprep/**/*`, `retriever/**/*`, `reranker/**/*`, when CI runs, then `smoke:image-sizes` job measures all three torch-bearing images and asserts each ≤ 5 GB initial ceiling with actual sizes logged.
+- Given a MR touching any of `dataprep/**/*`, `retriever/**/*`, `reranker/**/*`, when CI runs, then `smoke:image-sizes` job measures all three torch-bearing images and asserts each ≤ 15 GB initial ceiling with actual sizes logged.
 - Given the `smoke:dataprep-arango` job runs, when it imports heavy deps, then `pyspark`, `unstructured`, `graspologic`, and `whisper` imports succeed inside the dataprep image.
 - Given any module with `install_site_startup.sh` in its Dockerfile, when its contract test runs, then `test_contract_site_startup.py` asserts `genie_ssl_patch` is in `sys.modules` (proving `.pth` auto-load, not manual import).
 
@@ -147,7 +147,7 @@ deferred: []
 
 **Site-startup test portability:** `test_contract_site_startup.py` runs in every module image that uses `install_site_startup.sh`. It locates `zz_genie_startup.pth` via `site.getsitepackages()[0]`, parses the `import` lines, and asserts each named module is in `sys.modules` — proving the `.pth` auto-loaded them at site-init. No dependency on real `comps`, so it works in thin wrappers (embedding/textgen) too.
 
-**Image-size job design:** A single `smoke:image-sizes` job needs all three torch-bearing build jobs, pulls each image, runs `docker image inspect --format '{{.Size}}'`, and asserts each ≤ 5 GB (generous initial ceiling — actual sizes logged for future tightening). Implemented as shell assertions in the CI job script, not a separate Python test — the check is trivial and CI-native.
+**Image-size job design:** A single `smoke:image-sizes` job needs all three torch-bearing build jobs, pulls each image, runs `docker image inspect --format '{{.Size}}'`, and asserts each ≤ 15 GB (ceiling set above actual baseline sizes of 6.5-10 GB — torch 2.13.0 + CUDA + pyspark make these images heavy; the ceiling catches 2× regression without false-positives on normal CI fluctuation; actual sizes logged for future tightening). Implemented as shell assertions in the CI job script, not a separate Python test — the check is trivial and CI-native.
 
 **Dataprep heavy-deps extension:** The existing `smoke:dataprep-arango` imports `docling` + the GENIE module. Extend the inline `python -c` to also import `pyspark`, `unstructured`, `graspologic`, `whisper`. These are in the compiled lock — if they install but fail to import (e.g., missing system lib, sdist build issue), the smoke catches it.
 

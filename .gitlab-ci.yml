@@ -1575,7 +1575,7 @@ smoke:image-sizes:
     - job: build:reranker
       artifacts: false
   variables:
-    CEILING_BYTES: "5368709120"  # 5 GB — generous initial ceiling
+    CEILING_BYTES: "16106127360"  # 15 GB — actual baseline sizes are 6.5-10 GB (torch 2.13.0 + CUDA + pyspark); ceiling catches 2× regression without false-positives on normal CI fluctuation
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:

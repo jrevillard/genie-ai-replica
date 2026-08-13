@@ -216,7 +216,8 @@ location: components/gov-chat-backend/.gitlab-ci.yml:2290
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: components/gov-chat-backend/.gitlab-ci.yml:2290-2337 references requirements.lock, dataprep/scripts/*, make lock-dataprep — all retired by 2.2 — but GitLab reads only the root .gitlab-ci.yml (no include of the backend copy), so it is dead config. The AC3/Verification grep is scoped to genie-ai-overlay/ and misses it. Pre-existing, surfaced by the retirement; a CI-hygiene pass should delete or sync it.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-dead-ci-config-cleanup
 
 ### DW-26: dataprep's default DOCLING_DEVICE=cuda is unsupported by the CUDA-less python:3.11-slim image; a default-config ingest needs DOCLING_DEVICE=cpu set.
 origin: spec-deferred 809b6335b547
@@ -1852,3 +1853,11 @@ severity: low
 reason: The deleted file's header (lines 1-20) documented `uv pip compile --generate-hashes --python-version 3.11 --output-file requirements.lock requirements.in`. Lock pipeline is retired; a future developer re-introducing a custom lock would need to rediscover this invocation.
 status: done 2026-08-13
 resolution: already resolved: genie-ai-overlay/dataprep/requirements.in:4 — uv pip compile invocation documented in header comment
+
+### DW-270: TESTING.md line 52 references verify:dataprep-lock as active config-stage job, but this job never existed in root .gitlab-ci.yml (only in dead backend ci file now deleted)
+origin: spec-deferred c51a58ddd0ea
+source_spec: `spec-dead-ci-config-cleanup.md`
+location: .claude/rules/TESTING.md:52
+severity: low
+reason: .claude/rules/TESTING.md line 52 lists verify:dataprep-lock in CI pipeline stages. Root .gitlab-ci.yml has verify:overlay-locks (not verify:dataprep-lock) in config stage. Backend ci file was never included by root ci (0 grep matches). Pre-existing documentation staleness — deletion of dead job does not introduce this bug, merely leaves it unresolved.
+status: open

@@ -746,7 +746,8 @@ resolution: already resolved: components/gov-chat-backend/__tests__/routes/analy
 origin: migrated from legacy ledger ("Deferred from: code review of 2-4-test-backend-chat-route-handlers (2026-05-15)"), 2026-08-12
 location: n/a
 reason: SECURITY: `GET /query/:queryId/messages` has no userId validation — any authenticated user can access messages for any queryId. Pre-existing security gap, not introduced by this story. Route should validate ownership via `extractUserId(req)`.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-security-userid-ownership
 decision: 2026-08-13 Add ownership check — Extract userId from req via extractUserId(req); pass to findMessagesForQuery; add AQL filter or post-query check to verify userId owns the query; return 403 if not owner
 
 ### DW-104: Graph validation unreachable branch in source code
@@ -1864,4 +1865,28 @@ source_spec: `spec-dead-ci-config-cleanup.md`
 location: .claude/rules/TESTING.md:52
 severity: low
 reason: .claude/rules/TESTING.md line 52 lists verify:dataprep-lock in CI pipeline stages. Root .gitlab-ci.yml has verify:overlay-locks (not verify:dataprep-lock) in config stage. Backend ci file was never included by root ci (0 grep matches). Pre-existing documentation staleness — deletion of dead job does not introduce this bug, merely leaves it unresolved.
+status: open
+
+### DW-271: Query document without userId field returns 403 instead 404
+origin: spec-deferred ca0ea0b3ad2f
+source_spec: `spec-dw-103-query-messages-ownership.md`
+location: components/gov-chat-backend/services/chat-history-service.js:findMessagesForQuery
+severity: medium
+reason: Legacy/orphan queries missing userId field cause ownerIds[0] to be undefined, triggering forbidden response instead of not-found. Pre-existing data quality issue.
+status: open
+
+### DW-272: Route logs userId in plain text (PII concern)
+origin: spec-deferred 5a426caf9ee5
+source_spec: `spec-dw-103-query-messages-ownership.md`
+location: components/gov-chat-backend/routes/chat-history-routes.js:635
+severity: medium
+reason: logger.info includes userId which may contain sensitive identifier data. Pre-existing logging pattern across all routes.
+status: open
+
+### DW-273: No rate limiting on endpoint (enumeration attack surface)
+origin: spec-deferred 26f31b90f199
+source_spec: `spec-dw-103-query-messages-ownership.md`
+location: components/gov-chat-backend/routes/chat-history-routes.js:625-637
+severity: medium
+reason: Attacker can brute-force query IDs to enumerate valid queries (403 vs 404). Pre-existing security concern affecting all endpoints.
 status: open

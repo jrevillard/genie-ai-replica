@@ -697,3 +697,100 @@ describe('GET /api/chat/query/:queryId/messages', () => {
     expect(chatHistoryService.findMessagesForQuery).not.toHaveBeenCalled();
   });
 });
+
+// ============================================================
+// Input Validation Edge Cases (DW-99, DW-115, DW-116, DW-192)
+// ============================================================
+describe('Input validation edge cases', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('GET /api/chat/conversations - pagination validation', () => {
+    it('should use default limit when NaN provided', async () => {
+      chatHistoryService.getUserConversations.mockResolvedValue({ conversations: [], total: 0 });
+
+      const response = await authGet('/api/chat/conversations?limit=abc');
+
+      expect(response.status).toBe(200);
+      expect(chatHistoryService.getUserConversations).toHaveBeenCalledWith(
+        mockUser.iss_sub,
+        expect.objectContaining({ limit: 20, offset: 0 })
+      );
+    });
+
+    it('should use default limit when negative value provided', async () => {
+      chatHistoryService.getUserConversations.mockResolvedValue({ conversations: [], total: 0 });
+
+      const response = await authGet('/api/chat/conversations?limit=-5');
+
+      expect(response.status).toBe(200);
+      expect(chatHistoryService.getUserConversations).toHaveBeenCalledWith(
+        mockUser.iss_sub,
+        expect.objectContaining({ limit: 20, offset: 0 })
+      );
+    });
+
+    it('should cap limit at max value', async () => {
+      chatHistoryService.getUserConversations.mockResolvedValue({ conversations: [], total: 0 });
+
+      const response = await authGet('/api/chat/conversations?limit=500');
+
+      expect(response.status).toBe(200);
+      expect(chatHistoryService.getUserConversations).toHaveBeenCalledWith(
+        mockUser.iss_sub,
+        expect.objectContaining({ limit: 100 })
+      );
+    });
+
+    it('should use default offset when NaN provided', async () => {
+      chatHistoryService.getUserConversations.mockResolvedValue({ conversations: [], total: 0 });
+
+      const response = await authGet('/api/chat/conversations?offset=xyz');
+
+      expect(response.status).toBe(200);
+      expect(chatHistoryService.getUserConversations).toHaveBeenCalledWith(
+        mockUser.iss_sub,
+        expect.objectContaining({ offset: 0 })
+      );
+    });
+  });
+
+  describe('GET /api/chat/search - empty query string validation (DW-116)', () => {
+    it('should return 400 when q parameter is missing', async () => {
+      const response = await authGet('/api/chat/search');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: 'Search term is required' });
+    });
+
+    it('should return 400 when q parameter is empty string', async () => {
+      const response = await authGet('/api/chat/search?q=');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: 'Search term cannot be empty' });
+    });
+
+    it('should return 400 when q parameter is whitespace only', async () => {
+      const response = await authGet('/api/chat/search?q=%20%20');
+
+      expect(response.status).toBe(200); // whitespace is valid, service handles trimming
+    });
+  });
+
+  describe('GET /api/chat/folders/search - empty query string validation (DW-116)', () => {
+    it('should return 400 when q parameter is missing', async () => {
+      const response = await authGet('/api/chat/folders/search');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: 'Search term is required' });
+    });
+
+    it('should return 400 when q parameter is empty string', async () => {
+      const response = await authGet('/api/chat/folders/search?q=');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: 'Search term cannot be empty' });
+    });
+  });
+});

@@ -527,3 +527,41 @@ describe('Route catch block error format (AC19)', () => {
     expect(response.body).toEqual({ message: 'Database connection failed' });
   });
 });
+
+// ============================================================
+// DW-114: Malformed JSON in filters parameter
+// ============================================================
+describe('DW-114: Malformed JSON filters validation', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should return 400 when filters parameter is malformed JSON', async () => {
+    const response = await authGet('/api/analytics?filters={invalid json}');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      message: 'Invalid filters parameter: malformed JSON',
+      error: 'INVALID_FILTERS_JSON'
+    });
+    expect(analyticsService.getAnalytics).not.toHaveBeenCalled();
+  });
+
+  it('should accept valid JSON filters', async () => {
+    analyticsService.getAnalytics.mockResolvedValue({ data: [] });
+
+    const response = await authGet('/api/analytics?filters={"category":"test"}');
+
+    expect(response.status).toBe(200);
+    expect(analyticsService.getAnalytics).toHaveBeenCalled();
+  });
+
+  it('should accept request without filters parameter', async () => {
+    analyticsService.getAnalytics.mockResolvedValue({ data: [] });
+
+    const response = await authGet('/api/analytics');
+
+    expect(response.status).toBe(200);
+    expect(analyticsService.getAnalytics).toHaveBeenCalledWith({}, undefined, undefined);
+  });
+});

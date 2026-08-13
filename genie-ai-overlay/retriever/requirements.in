@@ -25,16 +25,15 @@ future
 graspologic
 haystack-ai==2.3.1
 langchain==0.3.27
-# langchain-arangodb pinned at OPEA v1.5's own compiled-lock version (0.0.6) —
-# the retriever re-graft restores v1.5's pin and bumps nothing beyond it. 0.0.6
-# carries the `filter_clause` named-param fix on ArangoVector's similarity-search
+# langchain-arangodb bumped to >=1.2.0 — restores the filter_clause behavioral
+# fix-pin that was deferred during the v1.5 lock compilation. >=1.2.0 carries
+# the `filter_clause` named-param fix on ArangoVector's similarity-search
 # methods (the 0.0.4 release swallowed it via **kwargs, so the category FILTER
-# never reached the AQL — that silent-drop bug is gone at 0.0.6), so the label
-# filter is real at this pin and needs no version bump. The reason is compiled-
-# lock fidelity with v1.5's shipped set, NOT a langchain-core incompatibility —
-# verified against the installed 0.0.6 metadata: it requires
-# langchain-core>=0.3.8,<0.4 (no release requires >=0.4).
-langchain-arangodb==0.0.6
+# never reached the AQL — that silent-drop bug is gone at >=1.2.0), so the
+# label filter is real at this pin. The bump restores the originally-intended
+# minimum version; compiled-lock fidelity with v1.5's shipped set no longer
+# constrains us since the fix-pin is now the floor.
+langchain-arangodb>=1.2.0
 langchain-elasticsearch
 langchain-mariadb
 langchain-openai

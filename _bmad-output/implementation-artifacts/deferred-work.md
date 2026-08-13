@@ -676,6 +676,7 @@ origin: migrated from legacy ledger ("Deferred from: code review of 2-4-test-bac
 location: n/a
 reason: The route has no rollback. Error propagation edge case not in ACs.
 status: done 2026-08-13
+decision: 2026-08-13 Document as known limitation — Current behavior (no rollback) is acceptable — frontend can retry or show error. Adding rollback complexity not justified for this edge case.
 resolution: closed by human decision: Current behavior (no rollback) is acceptable — frontend can retry or show error. Adding rollback complexity not justified for this edge case.
 decision: 2026-08-13 Document as known limitation — Current behavior (no rollback) is acceptable — frontend can retry or show error. Adding rollback complexity not justified for this edge case.
 
@@ -708,6 +709,7 @@ origin: migrated from legacy ledger ("Deferred from: code review of 4-3-test-dat
 location: n/a
 reason: production code concern in `genieai_dataprep_arangodb.py`
 status: done 2026-08-13
+decision: 2026-08-13 Document as known limitation — Race condition is benign — ArangoGraph init is idempotent, concurrent calls converge to same state. Adding lock not justified.
 resolution: closed by human decision: Race condition is benign — ArangoGraph init is idempotent, concurrent calls converge to same state. Adding lock not justified.
 decision: 2026-08-13 Document as known limitation — Race condition is benign — ArangoGraph init is idempotent, concurrent calls converge to same state. Adding lock not justified.
 

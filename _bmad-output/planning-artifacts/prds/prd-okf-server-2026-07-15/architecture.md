@@ -42,6 +42,8 @@ adrs:
   - ../../../../docs/adr/okf-030-lifecycle-state-machine.md
   - ../../../../docs/adr/okf-031-versioning-strategy.md
   - ../../../../docs/adr/okf-032-retention-ttl.md
+  - ../../../../docs/adr/okf-033-label-onboarding.md
+  - ../../../../docs/adr/okf-034-knowledge-hierarchy-canonical-store.md
 authors: Genie.ai Dev
 ---
 

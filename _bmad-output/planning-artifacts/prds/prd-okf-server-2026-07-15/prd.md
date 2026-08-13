@@ -98,6 +98,7 @@ The **GENIE.AI OKF Server** is the open-source, enterprise- and government-grade
 - **`MAX_FANOUT_GRAPHS`** — the configurable cap (default 5) on how many graphs a single retrieval fans out across; bounded by selection + `Semaphore` concurrency + per-graph timeout. ([ADR-okf-024](../../../../docs/adr/okf-024-graph-selection-router.md))
 - **ACL labels (dual role)** — the `t:`/`r:`/`d:`-prefixed labels serve two distinct purposes, never conflated: (1) **ACL enforcement** — a per-graph `chunk_labels` filter applied inside each selected graph at retrieval (per-graph parameterized, never a global union); (2) **selection signal** — the repo's `domain` + concept `tags`/`type` feed the Graph Router's domain-binding and metadata-BM25 steps. ([ADR-okf-024](../../../../docs/adr/okf-024-graph-selection-router.md), [ADR-okf-025](../../../../docs/adr/okf-025-authz-resolver.md))
 - **`index_status`** — the per-concept field on `okf_concepts_meta` (`parsed|indexed|failed`) that is the source of truth for ingest progress; the sweeper reconciles orphans against it. ([ADR-okf-021](../../../../docs/adr/okf-021-write-side-orchestration.md))
+- **Knowledge Hierarchy** — the curated, bounded, steward-gated service-category taxonomy that the labeler resolves concept labels against (`_fetch_all_labels` → `GET /api/service-categories/categories`). It grows deliberately via **Label Onboarding** (FR-36), never automatically. `service-categories` is the canonical store; the document-repository `labels` collection is one-way-synced from it ([ADR-okf-034](../../../../docs/adr/okf-034-knowledge-hierarchy-canonical-store.md)).
 
 ## 4. Features
 
@@ -229,6 +230,20 @@ Users can **create and curate OKF repositories and their Markdown concept files 
 **Consequences:**
 - An author can build a domain repository entirely in-app without external Git tooling (external Git/S3 ingest remains a parallel path via FR-1).
 - A non-conformant save is blocked at the editor with a specific §11 error; no invalid concept reaches `published`.
+
+#### FR-36: Pre-ingest Label Onboarding (bounded curation)
+Before a repository is indexed, a **pre-ingest dry-run** surfaces the **minimal label gap** — the labels this repo's concepts need that are not yet in the Knowledge Hierarchy — and a **steward wizard** (Analyze → Cluster → Review → Apply) curates them with smart defaults and a live before/after coverage preview. It is **bounded by construction**: gap-only input (only under-labeled concepts), lexical + embedding variant auto-merge (no duplicates / no synonym bloat), frequency + confidence floors, a learned per-domain denylist, a FAIL-not-truncate hard cap, and the FR-32 steward gate (no auto-create). The hierarchy grows deliberately with exactly the labels a repo needs — never "every imaginable word." Realizes the bounded-hierarchy principle; [ADR-okf-033](../../../../docs/adr/okf-033-label-onboarding.md), [ADR-okf-034](../../../../docs/adr/okf-034-knowledge-hierarchy-canonical-store.md).
+**Consequences:**
+- A new domain repository can be indexed with accurate labels the first time (no re-embed), because the hierarchy is enriched before the first embed.
+- The Knowledge Hierarchy stays curated and bounded — additions are steward-approved, deduplicated, and capped per ingest.
+- The producer's hierarchy/label proposals (FR-32) feed into the **same** wizard + proposal store — one steward gate for AI-drafted and pre-ingest-gap labels alike.
+
+#### FR-38: Unified "Create & Curate OKF Repository" wizard (3 workflows + curation + validation + auto-correct)
+A single wizard delivers **three creation workflows**: **(1) crawler** (multi-URL, FR-30/FR-33), **(2) documents** (select+upload docx/pdf/xlsx/txt/md, FR-37), **(3) manual** (blank/template authoring, FR-25). **Every** workflow funnels into a shared curation stage where a steward can **manually curate** concepts (the in-app editor), run **validation** (OKF §11 conformance, FR-4), and apply **auto-correct facilities** — the wizard proposes/applies fixes: conformance issue auto-remediation (e.g. missing `type`, malformed dates), label auto-mapping (to existing taxonomy via the Label Onboarding engine, FR-36), and broken-link auto-resolution/rescope — each shown as a reviewable, steward-approvable diff (never silently mutating). After curation+validation, the repository moves through review → publish (FR-9/10). The wizard composes Epic 7 (producer: crawler + documents), Epic 9 (label onboarding), Story 2.4 (conformance), and the FR-25 editor into one slick flow. Realizes UJ-1.
+**Consequences:**
+- A steward has one entry point to build an OKF repository from any source (crawl, documents, or scratch), with consistent curation + validation regardless of input.
+- Auto-correct reduces manual toil (conformance/label/link fixes) while keeping a human approver on every change (FR-32) — fixes are proposed, not imposed.
+- All three workflows converge on the same steward-gated review/publish lifecycle — no path bypasses curation or validation.
 
 ### 4.4 Unified Grounding & Agent Serving
 
@@ -378,6 +393,15 @@ The web crawler accepts **multiple seed URLs** per crawl job (not only one), so 
 - `crawl_job` carries a seed-URL list; the existing `Crawler.crawl(pool,…)` (already array-capable) is fed the list.
 - The crawl UI (`AddFromLinkDialog`) collects multiple seeds for an OKF-target crawl.
 
+#### FR-37: Produce OKF repository from selected uploaded documents
+A steward can select **multiple documents already uploaded to the document-repository** (in the existing supported formats — docx, pdf, xlsx, txt, md, etc.) and produce an OKF repository draft from them. The producer reads each selected document's extracted text (reusing the document-repository's existing text-extraction), segments it into concepts, drafts/derives frontmatter, AI-adjusts and cross-links (FR-30/FR-7), and stages the drafts at `review` through the **same** steward-gated pipeline + Label Onboarding wizard (FR-36) as the crawl path. This is the third curation input source — the producer's core (segment → draft → adjust → cross-link → label-onboard → steward gate) is **source-agnostic**; only the input adapter differs. Realizes UJ-1. ([ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md), [ADR-okf-033](../../../../docs/adr/okf-033-label-onboarding.md))
+**Consequences:**
+- A steward can assemble an OKF repository from documents the organization already holds (policy PDFs, docx reports, spreadsheets, existing markdown) — no crawl required.
+- Reuses the document-repository's text-extraction + ClamAV (already run at upload); no new ingestion format.
+- Drafts route through Presidio (blocking) + the Label Onboarding wizard + steward approval — never auto-published.
+
+> **Three curation paths (explicit).** An OKF repository can be created/curated via three paths, all converging on the same steward-gated review/publish lifecycle (FR-9/10) + Label Onboarding (FR-36): **(1) Manual** — in-app Markdown authoring (FR-25); **(2) Crawler** — multi-URL web crawl → producer drafts (FR-30/FR-33, Epic 7); **(3) Documents** — selected uploaded documents → producer drafts (FR-37, Epic 7).
+
 **Feature-specific NFRs:** steward-gated, never auto-publish (FR-9/10); sovereignty opt-in for external models (NFR-S1); supply-chain scan for new deps (NFR-S5); CPU-only OKF Server — inference is a remote call (NFR-S6).
 
 ---
@@ -393,6 +417,7 @@ The web crawler accepts **multiple seed URLs** per crawl job (not only one), so 
 - **Not raw-AQL-to-agents.** Agents get parameterized traversal only — never arbitrary AQL. ([ADR-okf-011](../../../../docs/adr/okf-011-no-raw-aql-to-agents.md))
 - **Not a distributed-transaction system.** Cross-service ingest (okf-server → doc-repo → dataprep) is **not atomic**; consistency is achieved by compensation — a sweeper reconciles orphan chunks against per-concept `index_status`. ([ADR-okf-021](../../../../docs/adr/okf-021-write-side-orchestration.md))
 - **No cross-repo structural links in v1.** Concept cross-links are **within-repo only**; a link to a concept in another repository is rejected at parse (with a conformance warning). Cross-domain retrieval happens via search (FR-14), not structural traversal. ([ADR-okf-028](../../../../docs/adr/okf-028-cross-repo-structural-links.md))
+- **Not a replacement for the existing single-document flow.** The existing document upload → ClamAV → text-extract → ingest path (into the free-form corpus) remains unchanged and fully supported. The OKF creation/curation flows (FR-36/FR-37/FR-38) are **additive**; the shared enhancements (the Label Onboarding engine, conformance validation, auto-correct) improve **both** the existing single-document path and the OKF paths where applicable — no regressions.
 
 ## 6. Production Scope
 
@@ -408,6 +433,7 @@ The web crawler accepts **multiple seed URLs** per crawl job (not only one), so 
 - Access control, governance, traceability; observability & operations (FR-18, 19, 20, 21).
 - Source of truth & document references: document-repository as single source of truth post-ingest; stable doc-repo references + "view source" links; external-origin health checks + deletion detection + graceful fallback (FR-27, 28; FR-2).
 - **Test infrastructure & evaluation** — a deterministic fixture suite (static crawl site + seed repos + golden queries) + multi-graph integration tests + retrieval-quality + RRF-sweep eval harnesses; **Epic 8** (the highest-leverage testing investment — makes "verify the strategy is solid" measurable).
+- **Pre-ingest Label Onboarding** — a bounded, curator-driven wizard that adds exactly the new labels a repo needs (gap-only + variant merge + denylist + a FAIL-not-truncate cap + the FR-32 steward gate); **Epic 9**. Keeps the Knowledge Hierarchy curated, never "every word".
 - Open-source packaging (permissive license, ITU copyright headers, CI build/scan/promote per ADR-0001).
 
 **MCP transport** is the only capability sequenced after the REST surface (gated on the GENIE workflows service's MCP client — Sprint 24 #603, custom LangChain Deep Agents — transport only; the handlers ship with REST). OKF's own MCP surface is **custom** (Node MCP SDK / Kong AI MCP proxy), consumed by the workflows service — NOT OPEA's `OpeaMCPToolsManager`/`mcpo`.

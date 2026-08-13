@@ -126,6 +126,8 @@ This document decomposes the OKF Server PRD (FR-1..FR-29), Architecture (§13 si
 | FR-33 | Epic 7 | Multi-source crawl seeding |
 | FR-34 | Epic 2.9 | Async ingestion pipeline (write-side orchestration) — *added 2026-08-13* |
 | FR-35 | Epic 1 (Story 1.3) | Query-aware graph selection (Graph Router) — *added 2026-08-13; gated by bump* |
+| FR-36 | Epic 9 | Pre-ingest Label Onboarding (bounded curation wizard) — *added 2026-08-13* |
+| FR-37 | Epic 7 | Produce OKF from selected/uploaded documents (3rd curation path) — *added 2026-08-13* |
 
 ## Epic List
 
@@ -174,6 +176,10 @@ A steward uses a web crawl to rapidly create an OKF repository: the AI producer 
 ### Epic 8: Test Infrastructure & Evaluation  *(NEW 2026-08-13; cross-cutting; unblocks the "verify the strategy is solid" goal)*
 The deterministic fixture trinity (static crawl site + seed repos + golden queries), multi-graph retrieval integration tests, retrieval-quality + RRF-sweep eval harnesses, and the OPEA-1.5 fallback-shim contingency. The highest-leverage testing investment — makes the multi-repo scaling claim and the launch gates measurable.
 **Closes gaps:** G19, G20, G30, G31, G35.
+
+### Epic 9: Label Onboarding (Pre-Ingest Curation)  *(NEW 2026-08-13; ungated analyze/apply; gated ingest leg)*
+A slick, curator-driven way to add **exactly** the new labels a repo needs — bounded, never exhaustive. A pre-ingest dry-run surfaces the minimal label gap (only under-labeled concepts); a wizard walks the steward through Analyze → Cluster → Review → Apply with smart defaults + a live before/after preview. Bounded by construction (gap-only + variant merge + denylist + a FAIL-not-truncate cap + the FR-32 steward gate). Unifies the producer's label proposals (Story 7.3) into one steward gate. **ADRs:** okf-033, okf-034.
+**FRs covered:** FR-36 (+ FR-32 steward gate, FR-34/FR-35 reuse). **Depends on:** Story 2.9.1 (orchestrator), Epic 3 (UI), Story 8.1 (fixtures, for 9.5).
 
 ---
 
@@ -721,6 +727,14 @@ So that **a repository draft can be assembled from several authoritative sources
 **When** the operator creates an OKF-target crawl,
 **Then** `scheduleSiteCrawl` + `crawl_job` carry a seed-URL **list** (threaded to `crawler.crawl([...])`), `AddFromLinkDialog` collects multiple seeds for an OKF-target crawl, and per-source provenance is preserved into each draft's `sources`. *(FR-33.)*
 
+### Story 7.7: Produce OKF repository from selected/uploaded documents — document entry points *(NEW 2026-08-13; ungated)*
+As a **steward**,
+I want **to create an OKF repository from documents we already hold or upload (docx/pdf/xlsx/txt/md) — from the document-management UI or the creation wizard — without a crawl**,
+So that **existing policy PDFs, reports, and spreadsheets become a governed, retrievable knowledge base**.
+**Acceptance Criteria:** **Given** documents in the document-repository, **When** a steward triggers production from documents via EITHER entry point — (a) the **existing document-management UI**: multi-select documents **not yet ingested** into the free-form corpus + a "Create OKF repository from selected" action; OR (b) the **"Create OKF Repository" wizard** documents step: multi-select existing documents AND/OR upload new ones (docx/pdf/xlsx/txt/md — new uploads run the existing ClamAV scan + text-extraction) — **Then** `POST /api/okf/repos/:repo_id/produce-from-documents {file_ids:[…], model_tier}` (tools-admin) triggers `producer-service.js`, which reads each document's extracted text (reusing the document-repository text-extraction — NO new ingestion format), segments per-document into concepts, drafts frontmatter (`generated.by=agent:okf-producer`, `sources` from each document's file_id/name), AI-adjusts + cross-links (FR-7, closed concept-ID namespace), and routes through the **same** downstream as the crawl path — Presidio (blocking) + the Label Onboarding wizard (FR-36) + `status=review` (never auto-publish, server-enforced `unverified`); per-source provenance is preserved into each draft's `sources`. The producer core is **source-agnostic** (crawl dump and uploaded documents differ only in the input adapter). *(FR-37; FR-5, FR-7, FR-9, FR-10, FR-30, FR-36; ADR-okf-019, ADR-okf-033.)*
+
+> **Entry points into OKF creation/curation (2026-08-13):** the unified wizard (FR-38) composes three workflows, each reachable from its native entry point — **(1) Crawler**: the existing crawl UI (`AddFromLinkDialog`/`FileDetailsDialog`) is extended to declare OKF intent → produce-from-crawl (Story 7.4); **(2) Documents**: the existing document-management UI (multi-select un-ingested docs) + the wizard documents step → produce-from-documents (Story 7.7); **(3) Manual**: the in-app editor (FR-25). All converge on produce → label-onboard (FR-36) → curate + validate + auto-correct (FR-38) → review → publish.
+
 ---
 
 ## Epic 8: Test Infrastructure & Evaluation
@@ -755,3 +769,38 @@ As a **platform engineer**,
 I want **a serial fan-out shim behind the plural `graph_names` interface on the current (pre-bump) base**,
 So that **Epic 1 can be tested before the OPEA 1.5 bump merges IF the team decides to ungate it**.
 **Acceptance Criteria:** **Given** the standing decision to **wait for the bump merge (D24, no slip date)**, **When** this story is *not* activated, **Then** nothing is built — the shim design is documented in ADR-okf-023 only; **if** the team later ungates Epic 1, this story implements serial fan-out behind `graph_names` on the current base as a temporary bridge until !277 merges. *(ADR-okf-023; G19; D25 reconciliation — contingency, not a commitment.)*
+
+---
+
+## Epic 9: Label Onboarding (Pre-Ingest Curation)
+*(NEW 2026-08-13. A slick, curator-driven way to add EXACTLY the new labels a repo needs — bounded, never exhaustive. Design: [label-onboarding-design-2026-08-13](../../label-onboarding-design-2026-08-13.md); ADRs okf-033, okf-034. Analyze/apply legs ungated; the ingest leg is bump-gated where per-repo graphs are involved.)*
+
+### Story 9.1: Gap-mode labeler + shared canonicalize_label + embedding variant merge *(dataprep)*
+As a **platform engineer**,
+I want **a read-only dataprep gap-mode that surfaces the minimal label gap for a repo's under-labeled concepts**,
+So that **a steward can curate the right new labels before the repo is indexed**.
+**Acceptance Criteria:** **Given** the dataprep labeler, **When** `POST /v1/dataprep/label_gap` is called with a repo's parsed concepts, **Then** it runs the same taxonomy-only pass as `_label_with_llm` (:467), captures the previously-discarded `new_labels` (:1067/:1083) **with per-chunk provenance** for chunks resolving <2 taxonomy labels (the under-labeled trigger), runs a layer-2 embedding-cosine near-dup merge (cos ≥ 0.92, reusing `_label_with_embedding.embed_documents` :1111), and **short-circuits before `_process_batch`** (:1156) — no embed/index/SOURCE writes; **and** the lexical canonicalization at :1074-1080 is extracted into ONE shared `canonicalize_label()` used by BOTH `_finalize_chunk_labels` and the gap-mode, with a **contract test** asserting gap-resolved == ingest-resolved on the same fixture. *(FR-36; ADR-okf-033.)*
+
+### Story 9.2: Label-onboarding service + proposal API + okf_label_proposals *(okf-server)*
+As a **steward**,
+I want **an API that analyzes a repo's label gap and persists an immutable, reviewable proposal**,
+So that **curation is auditable and resumable**.
+**Acceptance Criteria:** **Given** the okf-server, **When** `POST /api/okf/repos/:repo_id/label-gap/analyze` (`requireRole('tools-admin')`) runs, **Then** `label-onboarding-service` fetches the concept corpus + taxonomy via the **labeler's** `/categories` path (genieai_dataprep_arangodb.py:363, NOT `/categories/detailed`), calls the gap-mode, post-processes (dedup + shared canonicalize + per-domain denylist + FAIL-not-truncate hard cap + `suggested_parent` via embedding similarity), and persists an **immutable proposal** (`status=open`) in new `okf_label_proposals` (the diff + per-line decisions + actor + timestamp IS the audit record); endpoints `/analyze`, `/proposals/:id`, `/preview`, `/apply` under `/api/okf/repos/:repo_id/label-gap`; a per-domain learned `okf_label_denylist` store; MELT counter; Jest `createApp()` tests. *(FR-36; ADR-okf-033, ADR-okf-034.)*
+
+### Story 9.3: OkfLabelOnboardingWizard UI (Analyze → Cluster → Review → Apply) *(Epic 3 frontend)*
+As a **steward**,
+I want **a slick wizard to curate a repo's label gap with smart defaults and a live preview**,
+So that **adding the right labels is fast and trustworthy, not a rubber-stamp**.
+**Acceptance Criteria:** **Given** `OkfLabelOnboardingWizard.vue` (Options API, `translate()`, `httpService`, DS primitives), launched from `OkfRepositoryDetails`, **When** the steward curates, **Then** ANALYZE shows a coverage donut (ECharts); CLUSTER shows smart-default traffic lights (auto-accept/auto-reject/needs-review) + per-candidate provenance cards + "Never suggest again" → denylist; REVIEW shows a placement picker (`getAdminCategories`) + ghost-node rendering on the live tree + an amber-only "Ask why" popover (function-call-grounded) + a **live before/after preview** (sample chunks + coverage delta, pinned to the shared canonicalize); APPLY shows a diff summary + growth-budget meter + shareable `?proposal=<id>`; all strings i18n; Jest-tested. *(FR-36, FR-26; UX-DRs; depends on Epic 3 OKF dialogs.)*
+
+### Story 9.4: Apply → ingest wiring + two-store one-way-sync + producer unification
+As a **steward**,
+I want **Apply to write the canonical hierarchy, sync the legacy store, and fire the real ingest**,
+So that **labels exist before the first embed and both stores agree**.
+**Acceptance Criteria:** **Given** an approved proposal, **When** Apply runs, **Then** each ADD writes via the existing service-category CRUD (`createCategory`/`createService`) and **one-way-syncs** to the document-repository `labels` collection (ADR-okf-034); the **orchestrator** stamps `file_labels` with `t:/r:/d:` ACL prefixes (FR-34/ADR-okf-021 — the wizard never injects ACLs); the proposal flips `status=applied`; the real ingest fires via `POST /api/okf/repos/:repo_id/ingest` so `_fetch_all_labels` sees the enriched taxonomy and `_finalize_chunk_labels` resolves cleanly (empty `new_labels` WARN); **and** producer proposals (Story 7.3) feed the same `okf_label_proposals` collection + wizard (`source='producer'` badge). Idempotent (re-Analyze supersedes; Apply checks live taxonomy). *(FR-36, FR-32, FR-34; ADR-okf-033, ADR-okf-034.)*
+
+### Story 9.5: Boundedness config + denylist management + golden-fixture tuning + launch guardrail *(gated by Story 8.1)*
+As a **security officer / steward**,
+I want **the boundedness knobs tunable, the denylist manageable, and rubber-stamping guarded**,
+So that **the hierarchy cannot grow unbounded and curation quality is measurable**.
+**Acceptance Criteria:** **Given** the config + fixtures, **When** the story lands, **Then** env knobs exist (`OKF_LABEL_GAP_MIN_FREQUENCY` default 2, `OKF_LABEL_GAP_MIN_CONFIDENCE` ~0.7, `OKF_LABEL_GAP_MAX_ADDITIONS` 25 FAIL-not-truncate, `OKF_LABEL_DUP_THRESHOLD` 0.92, `OKF_LABEL_GAP_TOP_K` 5); a per-domain denylist-management view (edit/scope/re-allow); an SM-7 steward-rejection-rate launch guardrail ("Accept all auto" never auto-applies producer-sourced/sub-threshold candidates without per-line confirm); defaults calibrated against the Story 8.1 seed repos; an embedding-model-id-match CI assertion (gap merge uses the same TEI model as ingest). *(FR-36; NFR-S5; gated by Story 8.1.)*

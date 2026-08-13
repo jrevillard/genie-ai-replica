@@ -94,6 +94,7 @@ development_status:
   7-4-crawl-integrated-producer-ui: backlog               # depends epic-3; crawl→OKF repo in AddFromLinkDialog + FileDetailsDialog
   7-5-producer-hardening-injection-eval-cost: backlog
   7-6-multi-source-crawl-seeding: backlog
+  7-7-produce-okf-from-selected-documents: backlog   # NEW 2026-08-13 — 3rd curation path (FR-37); doc-mgmt + wizard entry points
   epic-7-retrospective: optional
 
   epic-8: backlog            # NEW 2026-08-13 — Test Infrastructure & Evaluation (cross-cutting; unblocks launch gates)
@@ -103,3 +104,11 @@ development_status:
   8-4-rrf-parameter-sweep-harness: backlog                     # G21 — tune k + per-graph weights (resolves PRD Q7)
   8-5-opea-1.5-fallback-shim: backlog                          # CONTINGENCY ONLY — not built unless Epic 1 ungated pre-merge (G19, D25)
   epic-8-retrospective: optional
+
+  epic-9: backlog            # NEW 2026-08-13 — Label Onboarding (Pre-Ingest Curation). Analyze/apply ungated; ingest leg gated.
+  9-1-gap-mode-labeler-shared-canonicalize-embedding-merge: backlog  # dataprep (FR-36)
+  9-2-label-onboarding-service-proposal-api-collection: backlog       # okf-server (FR-36)
+  9-3-label-onboarding-wizard-ui: backlog                             # Epic 3 frontend (FR-36)
+  9-4-apply-ingest-wiring-two-store-sync-producer-unify: backlog      # cross-cutting (FR-36, ADR-okf-034)
+  9-5-boundedness-config-denylist-mgmt-fixture-tuning-guardrail: backlog  # gated by Story 8.1
+  epic-9-retrospective: optional

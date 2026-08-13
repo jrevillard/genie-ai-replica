@@ -3,6 +3,7 @@ const router = express.Router();
 const AnalyticsController = require('../controllers/analyticsController');
 const { logger } = require('../shared-lib');
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
+const { parsePositiveInt } = require('../shared-lib/validation-utils');
 
 module.exports = (analyticsService) => {
   try {
@@ -278,7 +279,17 @@ module.exports = (analyticsService) => {
       try {
         const startDate = req.query.startDate;
         const endDate = req.query.endDate;
-        const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+        let filters = {};
+        if (req.query.filters) {
+          try {
+            filters = JSON.parse(req.query.filters);
+          } catch {
+            return res.status(400).json({
+              message: 'Invalid filters parameter: malformed JSON',
+              error: 'INVALID_FILTERS_JSON'
+            });
+          }
+        }
         const locale = req.query.locale || 'en';
 
         logger.info(
@@ -451,8 +462,8 @@ module.exports = (analyticsService) => {
      */
     router.get('/records', async (req, res) => {
       try {
-        const limit = parseInt(req.query.limit) || 20;
-        const offset = parseInt(req.query.offset) || 0;
+        const limit = parsePositiveInt(req.query.limit, 20, { min: 1, max: 100 });
+        const offset = parsePositiveInt(req.query.offset, 0, { min: 0 });
 
         logger.info(`Getting analytics records with limit ${limit} and offset ${offset}`);
 
@@ -507,8 +518,8 @@ module.exports = (analyticsService) => {
      */
     router.get('/events', async (req, res) => {
       try {
-        const limit = parseInt(req.query.limit) || 20;
-        const offset = parseInt(req.query.offset) || 0;
+        const limit = parsePositiveInt(req.query.limit, 20, { min: 1, max: 100 });
+        const offset = parsePositiveInt(req.query.offset, 0, { min: 0 });
 
         logger.info(`Getting event records with limit ${limit} and offset ${offset}`);
 

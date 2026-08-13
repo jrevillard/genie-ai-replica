@@ -71,7 +71,8 @@ source_spec: `2-1-re-graft-the-core-overlay-layer.md`
 location: genie-ai-overlay/reranker/genieai_reranking_microservice.py:38
 severity: medium
 reason: genieai_reranking_microservice.py now imports comps.cores.proto.docarray (under the shim pin), but the reranker image has no contract/smoke job that imports the module — conftest stubs the module as a MagicMock, docker build never imports it, and the contract harness import_docarray runs only against the retriever/dataprep images. A shim failure in the reranker image would crash the container at start, green. Covered by story 2.2's in-image contract runs.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-reranker-verification
 
 ### DW-9: build-patches/*.py are excluded from ruff, so the two new scripts are never linted in CI.
 origin: spec-deferred 9029450207bc
@@ -113,7 +114,8 @@ location: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai:4
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: reranker module imports all v1.5 comps symbols (telemetry, api_protocol, opea_docarray rename, integrations.tei) — only a host port-8000 collision blocked a full clean pass locally; build/scan jobs never run the image.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-reranker-verification
 
 ### DW-14: verify:dataprep-lock keeps its dataprep-scoped name while looping three modules and checks package NAMES only, not versions — cross-module version drift (e.g. docling) is invisible to it.
 origin: spec-deferred 819d55acdf09
@@ -932,14 +934,16 @@ resolution: genie-ai-overlay/tests/test_chatqna.py:973,1018,1097-1131 — all 5 
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
 location: n/a
 reason: `input.retrieved_docs[best_response["index"]]` (genieai_tei_reranker.py:80, 89, 105, 111) has no bounds check. A buggy TEI response with index >= len(retrieved_docs) will crash with IndexError. Pre-existing production code vulnerability.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-reranker-verification
 decision: 2026-08-13 Add bounds check — Add check: if index >= len(retrieved_docs), log error and either skip the result or raise a clear exception. Prevents IndexError crash.
 
 ### DW-132: KneeLocator single-doc / flat-score edge cases not tested
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
 location: n/a
 reason: When there's only 1 document or all scores are identical, KneeLocator behavior is untested. Nice-to-have, not required by AC.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-reranker-verification
 
 ### DW-133: Worker thread mock does not simulate async flow
 origin: migrated from legacy ledger ("Deferred from: code review of 2-7-test-backend-service-layer (2026-05-18)"), 2026-08-12
@@ -1797,4 +1801,12 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-5-write-contract-tests-green-on-v1-3-prove-red-on-a-bare-v1-5-bump (2026-08-12)"), 2026-08-12
 location: n/a
 reason: `site/content/en/docs/architecture/architecture.md` documents no contract-suite layer or its in-image isolation decision (that doc's "D3" is JWT validation, unrelated). The BMAD planning `architecture.md` holds the contract-test pattern + isolation decision. Enshrine the layer in the public architecture doc once the suite proves itself on the re-graft. Files: `site/content/en/docs/architecture/architecture.md`.
+status: open
+
+### DW-265: DW-8/DW-13 (CI import smoke for reranker) deferred to story 2.4 re-graft-the-reranker
+origin: spec-deferred 73d1381642d1
+source_spec: `spec-reranker-verification.md`
+location: .gitlab-ci.yml
+severity: low
+reason: Story 2.4 backlog, spec not yet written. CI job belongs to that story scope.
 status: open

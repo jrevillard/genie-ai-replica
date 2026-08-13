@@ -989,6 +989,22 @@ describe('GET /:queryId/conversations', () => {
     expect(response.body).toEqual({ success: false, message: 'Access denied' });
   });
 
+  it('should return 400 when userId is missing', async () => {
+    keycloakAuthMiddleware.authenticate.mockImplementation((req, res, next) => {
+      req.user = { iss_sub: undefined, _key: 'user-123' };
+      next();
+    });
+
+    const response = await authGet('/api/queries/q1/conversations');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      success: false,
+      message: 'User ID is required'
+    });
+    expect(queryService.getConversationsForQuery).not.toHaveBeenCalled();
+  });
+
   it('should return 500 via next(error) on service failure', async () => {
     queryService.getConversationsForQuery.mockRejectedValue(new Error('DB error'));
 

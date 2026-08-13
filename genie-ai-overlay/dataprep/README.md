@@ -254,6 +254,12 @@ Tuning knobs: `DATAPREP_MAX_CONCURRENT_BATCHES` (concurrency), `DATAPREP_LLM_LAB
    pip install -r requirements.txt
    ```
 
+   **Regenerating the lock file** (if needed): The dataprep service uses OPEA v1.5's `requirements-cpu.txt` compiled lock (consumed via `fix_dependencies.sh` REQ_PATH). If you need to regenerate the lock file from source dependencies, use:
+   ```bash
+   uv pip compile --generate-hashes --python-version 3.11 --output-file requirements.lock requirements.in
+   ```
+   Note: This command was previously used with the custom `requirements.in` pipeline (retired in story 2-5). The current approach uses OPEA's upstream `requirements-cpu.txt` directly.
+
 2. **Set Environment Variables**:
    ```bash
    export ARANGO_URL=http://localhost:8529

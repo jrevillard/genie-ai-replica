@@ -103,36 +103,17 @@ def test_genie_tei_reranking_registered_in_component_registry(comps):
     """The component is registered in OpeaComponentRegistry under GENIE_TEI_RERANKING.
 
     The adapter uses ``@OpeaComponentRegistry.register("GENIE_TEI_RERANKING")`` to
-    register itself. This test verifies the registration happened by checking the
-    registry contains the expected component name.
+    register itself. This test verifies the registration happened by querying the
+    registry's get_component() API directly.
     """
     from comps import OpeaComponentRegistry
 
-    # The registry is a dict-like object; check the key exists
-    # OpeaComponentRegistry may expose .components or .registry or similar
-    # Try the most common patterns
-    registry = None
-    for attr in ("components", "registry", "_registry", "_components"):
-        if hasattr(OpeaComponentRegistry, attr):
-            registry = getattr(OpeaComponentRegistry, attr)
-            break
-
-    if registry is None:
-        # If no dict-like attribute, try calling a method
-        if hasattr(OpeaComponentRegistry, "get_component"):
-            # Try to get the component; if it exists, the test passes
-            component = OpeaComponentRegistry.get_component("GENIE_TEI_RERANKING")
-            assert component is not None, "GENIE_TEI_RERANKING not found in OpeaComponentRegistry"
-            return
-        # If neither works, fail with a clear message
-        raise AssertionError(
-            "Cannot introspect OpeaComponentRegistry structure — unable to verify GENIE_TEI_RERANKING registration"
-        )
-
-    # registry is a dict-like object
-    assert "GENIE_TEI_RERANKING" in registry, (
-        f"GENIE_TEI_RERANKING not found in OpeaComponentRegistry. "
-        f"Available keys: {list(registry.keys()) if hasattr(registry, 'keys') else 'N/A'}"
+    # Use the registry's public API to verify registration
+    # The registry exposes get_component(name) to retrieve registered components
+    component = OpeaComponentRegistry.get_component("GENIE_TEI_RERANKING")
+    assert component is not None, (
+        "GENIE_TEI_RERANKING not found in OpeaComponentRegistry — "
+        "the @OpeaComponentRegistry.register decorator may not have been applied"
     )
 
 
@@ -155,26 +136,20 @@ def test_service_type_rerank_resolves(comps):
 def test_opea_telemetry_decorator_present(comps):
     """The microservice's @opea_telemetry decorator is present.
 
-    The microservice function is decorated with ``@opea_telemetry``. This test
-    verifies the decorator is applied by checking for the telemetry marker
-    attribute or the ``__wrapped__`` attribute (functools.wraps).
+    The microservice function is decorated with ``@opea_telemetry``. The decorator
+    uses functools.wraps, which adds the ``__wrapped__`` attribute pointing to the
+    original function. This is the standard Python decorator pattern.
     """
     mod = _microservice_module()
     reranking_fn = getattr(mod, "reranking", None)
     assert reranking_fn is not None, "reranking function missing from the microservice module"
     assert callable(reranking_fn), "reranking is not callable"
 
-    # Check for telemetry marker or __wrapped__ (functools.wraps)
-    # The opea_telemetry decorator may add a marker attribute or wrap the function
-    has_telemetry_marker = (
-        hasattr(reranking_fn, "__wrapped__")  # functools.wraps
-        or hasattr(reranking_fn, "_opea_telemetry_applied")  # common marker pattern
-        or hasattr(reranking_fn, "__telemetry__")  # alternative marker
-        or "telemetry" in str(getattr(reranking_fn, "__decorators__", "")).lower()
-    )
-    assert has_telemetry_marker, (
-        "reranking function does not appear to have @opea_telemetry decorator applied — "
-        "no __wrapped__, _opea_telemetry_applied, or __telemetry__ attribute found"
+    # The opea_telemetry decorator uses functools.wraps, which adds __wrapped__
+    # This is the standard Python decorator pattern — no need to guess marker names
+    assert hasattr(reranking_fn, "__wrapped__"), (
+        "reranking function does not have __wrapped__ attribute — "
+        "the @opea_telemetry decorator may not be applied or may not use functools.wraps"
     )
 
 

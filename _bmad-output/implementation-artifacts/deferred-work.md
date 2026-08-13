@@ -1812,7 +1812,7 @@ source_spec: `spec-reranker-verification.md`
 location: .gitlab-ci.yml
 severity: low
 reason: Story 2.4 backlog, spec not yet written. CI job belongs to that story scope.
-status: open
+status: resolved (story 2-4 added contract:reranker CI job)
 
 ### DW-266: Dataprep GPU support must be restored (PRD requirement, story 2-2 regression)
 origin: escalation-resolution 2-4-re-graft-the-reranker, 2026-08-13
@@ -1825,8 +1825,10 @@ origin: spec-deferred 1d0c5afb057a
 source_spec: `2-5-re-graft-the-dataprep.md`
 location: genie-ai-overlay/dataprep/requirements.in (deleted)
 severity: low
-reason: The deleted file's header (lines 1-20) documented: `uv pip compile --generate-hashes --python-version 3.11 --output-file requirements.lock requirements.in`. This is now dead knowledge (the lock pipeline is retired), but a future developer re-introducing a custom lock would need to rediscover this invocation. (story 2-5-re-graft-the-dataprep: implemented and reviewed via bmad-loop)
-status: open
+reason: The deleted file's header (lines 1-20) documented: `uv pip compile --generate-hashes --python-version 3.11 --output-file requirements.lock requirements.in`. This is now dead knowledge (the lock pipeline is retired), but a future developer re-introducing a custom lock would need to rediscover this invocation.
+status: resolved (documented in dataprep/README.md)
+status: resolved (documented in dataprep/README.md)
+>>>>>>> 208de648d (fix: resolve DW-265, DW-266a, DW-267, DW-268)
 
 ### DW-267: OpeaComponentRegistry introspection tries multiple attribute names (components, registry, _registry, _components) — fragile but functional.
 origin: spec-deferred 04a0a93249d3
@@ -1834,7 +1836,7 @@ source_spec: `2-4-re-graft-the-reranker.md`
 location: genie-ai-overlay/contracts/test_contract_reranker.py:286
 severity: low
 reason: test_contract_reranker.py:286-308 uses a loop to find the registry attribute; should verify v1.5 API directly instead of guessing.
-status: open
+status: resolved (contract test uses OpeaComponentRegistry.get_component() API directly)
 
 ### DW-268: Telemetry marker check tries multiple marker patterns (__wrapped__, _opea_telemetry_applied, __telemetry__) — fragile but functional.
 origin: spec-deferred 3058f403feec
@@ -1842,4 +1844,4 @@ source_spec: `2-4-re-graft-the-reranker.md`
 location: genie-ai-overlay/contracts/test_contract_reranker.py:341
 severity: low
 reason: test_contract_reranker.py:341-350 uses multiple hasattr checks; should verify the actual opea_telemetry decorator implementation.
-status: open
+status: resolved (contract test checks __wrapped__ attribute — standard functools.wraps pattern)

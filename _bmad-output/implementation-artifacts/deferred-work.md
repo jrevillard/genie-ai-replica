@@ -616,7 +616,8 @@ resolution: components/gov-chat-frontend/src/__tests__/services/serviceTreeServi
 origin: migrated from legacy ledger ("Deferred from: code review of 3-5-test-http-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: nice-to-have hardening.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-backend-test-coverage-gaps
 
 ### DW-85: getComparisonData partial failure (first succeeds, second fails)
 origin: migrated from legacy ledger ("Deferred from: code review of 3-5-test-http-services (2026-05-20)"), 2026-08-12
@@ -820,7 +821,8 @@ resolution: components/gov-chat-backend/controllers/analyticsController.js:116-1
 origin: migrated from legacy ledger ("Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)"), 2026-08-12
 location: n/a
 reason: controller accepts a locale param on gauge/heatmap but tests don't verify its propagation. Nice-to-have beyond AC.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-backend-test-coverage-gaps
 
 ### DW-114: Malformed JSON in filters param
 origin: migrated from legacy ledger ("Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)"), 2026-08-12
@@ -861,7 +863,8 @@ resolution: components/gov-chat-backend/routes/service-category-routes.js:455-47
 origin: migrated from legacy ledger ("Deferred from: code review of 2-6-test-backend-admin-and-files-route-handlers (2026-05-18)"), 2026-08-12
 location: n/a
 reason: AC1 says "all" but only system-health (GET) and security-scan (POST) tested. Representative sampling sufficient since middleware applied at router level via `router.use()`. Pre-existing test design pattern.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-backend-test-coverage-gaps
 
 ### DW-120: Security endpoint error response shapes inconsistent
 origin: migrated from legacy ledger ("Deferred from: code review of 2-6-test-backend-admin-and-files-route-handlers (2026-05-18)"), 2026-08-12
@@ -970,7 +973,8 @@ resolution: cpu-translate-backend.test.js:147,261-268,271 — worker message han
 origin: migrated from legacy ledger ("Deferred from: code review of 2-7-test-backend-service-layer (2026-05-18)"), 2026-08-12
 location: n/a
 reason: `searchQueries` tested with total=25 and pageSize=10. Boundary scenarios (exact boundary, zero results) would be a plus.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-backend-test-coverage-gaps
 
 ### DW-135: User profile `process`: indirect coverage
 origin: migrated from legacy ledger ("Deferred from: code review of 2-7-test-backend-service-layer (2026-05-18)"), 2026-08-12
@@ -1495,7 +1499,8 @@ resolution: weather-routes.test.js — no 2026 dates found; mock service returns
 origin: migrated from legacy ledger ("Deferred from: code review of 2-11-test-backend-chat-history-completion-and-database-operations (2026-05-27)"), 2026-08-12
 location: n/a
 reason: test verifies no-throw but not specific side effects
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-backend-test-coverage-gaps
 
 ### DW-216: Service category test relies on implementation-specific default name 'Category 1'
 origin: migrated from legacy ledger ("Deferred from: code review of 2-11-test-backend-chat-history-completion-and-database-operations (2026-05-27)"), 2026-08-12
@@ -1895,4 +1900,180 @@ source_spec: `spec-dw-103-query-messages-ownership.md`
 location: components/gov-chat-backend/routes/chat-history-routes.js:625-637
 severity: medium
 reason: Attacker can brute-force query IDs to enumerate valid queries (403 vs 404). Pre-existing security concern affecting all endpoints.
+status: open
+
+### DW-274: Missing test for undefined/missing locale parameter in analytics satisfaction endpoints
+origin: spec-deferred e8aa7812a66b
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/__tests__/controllers/analyticsController.test.js:236-244
+severity: low
+reason: Controller destructures locale from req.query but no test verifies behavior when locale not provided. Service defaults to 'en' but untested.
+status: open
+
+### DW-275: Missing test for invalid locale format (special characters, excessively long strings)
+origin: spec-deferred 531b0f3e28ac
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/controllers/analyticsController.js:202,231
+severity: low
+reason: No validation exists or is tested for locale parameter format. Invalid values pass through to service.
+status: open
+
+### DW-276: Auth guard coverage incomplete beyond 5 representative endpoints
+origin: spec-deferred 4ba1e95b71b3
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/__tests__/routes/chat-history-routes.test.js:148-183
+severity: low
+reason: DW-119 rationale states "representative sampling sufficient" but 21 additional endpoints lack explicit 401 tests. Middleware applied at router level via router.use() makes exhaustive testing redundant.
+status: open
+
+### DW-277: Missing ForbiddenError specificity check in reorderFolders non-existent folderId test
+origin: spec-deferred 37594ffb9f2e
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/__tests__/services/chat-history-service.test.js:784
+severity: low
+reason: Test uses generic .rejects.toThrow() instead of verifying ForbiddenError specifically. Source code throws ForbiddenError at line 2312.
+status: open
+
+### DW-278: Missing test for parent folder mismatch in reorderFolders
+origin: spec-deferred f6e30782d316
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/services/chat-history-service.js:2329-2332
+severity: low
+reason: Source code validates folder's parentFolderId matches target parent (lines 2329-2332) and throws error, but no test covers this path.
+status: open
+
+### DW-279: Missing test for transaction abort during reorderFolders update phase
+origin: spec-deferred 84a57487de19
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/services/chat-history-service.js:2336-2350
+severity: low
+reason: Only permission-check error path tested. Errors during trx.step() update phase not tested for transaction abort behavior.
+status: open
+
+### DW-280: Missing test for duplicate order values in reorderFolders
+origin: spec-deferred 8fb7e7f8bb5b
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/services/chat-history-service.js:2343
+severity: low
+reason: No test verifies behavior when two folders assigned same order number. No uniqueness check exists in source.
+status: open
+
+### DW-281: Missing test for recursive child folder deletion in deleteFolder with deleteContents=true
+origin: spec-deferred b5984642e227
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/services/chat-history-service.js:1846-1852
+severity: low
+reason: Source code shows recursive deletion at lines 1846-1852, but DW-215 test only covers folders without children.
+status: open
+
+### DW-282: Missing test for conversation ownership validation in cascade delete
+origin: spec-deferred b387aca2574d
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/services/chat-history-service.js:1817
+severity: low
+reason: deleteConversation called at line 1817 but test doesn't verify conversations belong to requesting user before deletion.
+status: open
+
+### DW-283: Missing test for limit=0 causing division by zero in searchQueries pagination
+origin: spec-deferred bab8a06f47b8
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/services/query-service.js:1046
+severity: low
+reason: Math.ceil(totalCount / limit) at line 1046 would produce Infinity when limit=0. No test covers this edge case.
+status: open
+
+### DW-284: Missing test for negative offset values in searchQueries
+origin: spec-deferred 2f1e8f036b07
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/__tests__/services/query-service.test.js:291-328
+severity: low
+reason: Pagination tests only cover positive offsets. Negative offset behavior untested.
+status: open
+
+### DW-285: Missing test documenting getTimeSeriesData doesn't propagate locale parameter
+origin: spec-deferred 0229f309642d
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/controllers/analyticsController.js
+severity: low
+reason: Inconsistency: gauge/heatmap propagate locale but getTimeSeriesData doesn't. Not captured in tests.
+status: open
+
+### DW-286: Missing test for empty string locale vs undefined locale behavior difference
+origin: spec-deferred 27e84fe5c88f
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/controllers/analyticsController.js:202,231
+severity: low
+reason: locale="" and locale=undefined may behave differently but no test verifies.
+status: open
+
+### DW-287: Missing verification of mockFolderConversations.remove called with correct _key values
+origin: spec-deferred 8261630bfc95
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/__tests__/services/chat-history-service.test.js:846-850
+severity: low
+reason: DW-215 test checks call count but not actual link keys being deleted.
+status: open
+
+### DW-288: Missing test for non-numeric or negative order values in reorderFolders
+origin: spec-deferred 19c04e948c1f
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/services/chat-history-service.js:2343
+severity: low
+reason: Input validation gap: no test for order values that are non-numeric or negative.
+status: open
+
+### DW-289: Missing test for expired/malformed/unauthorized token scenarios in auth guard
+origin: spec-deferred 1128782dbdf9
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/__tests__/routes/chat-history-routes.test.js:148-183
+severity: low
+reason: Auth guard tests only verify missing token → 401. Expired JWT, invalid signature, valid token without permissions not tested.
+status: open
+
+### DW-290: Missing test for PUT/PATCH HTTP methods without authentication
+origin: spec-deferred a1afd8d651dc
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/__tests__/routes/chat-history-routes.test.js:148-183
+severity: low
+reason: Auth guard coverage incomplete for all HTTP methods. PUT and PATCH endpoints not tested for 401 response.
+status: open
+
+### DW-291: Missing test for empty/null folderIds array in reorderFolders
+origin: spec-deferred 9dbd78df6e4f
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/services/chat-history-service.js:2295-2300
+severity: low
+reason: No test verifies behavior with empty array or null/undefined folderIds parameter.
+status: open
+
+### DW-292: Missing test for folder ownership check (folder owned by different user)
+origin: spec-deferred 95fc77f709f7
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/services/chat-history-service.js:2300-2313
+severity: low
+reason: No test verifies folder owned by user-2 accessed by user-1 throws ForbiddenError.
+status: open
+
+### DW-293: Missing test for deleteContents=false path with folder containing conversations
+origin: spec-deferred 3ac23cc586e1
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/services/chat-history-service.js:1811
+severity: low
+reason: deleteContents=false not tested for folder with conversations. May leave orphaned conversation links.
+status: open
+
+### DW-294: Missing test for decimal offset/limit values (type coercion)
+origin: spec-deferred 50c56c5daa4f
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/services/query-service.js:1019-1047
+severity: low
+reason: No test verifies integer coercion or rejection for decimal pagination parameters.
+status: open
+
+### DW-295: Analytics records/events routes lack route-level verification for parsePositiveInt max cap
+origin: spec-deferred 950e9f505a96
+source_spec: `spec-backend-test-coverage-gaps.md`
+location: components/gov-chat-backend/routes/analytics-routes.js:465-466,521-522
+severity: low
+reason: GET /api/analytics/records and /events use parsePositiveInt with max:100 but no test sends limit=500 to verify cap. Unit tested in validation-utils.test.js but not at route integration level.
 status: open

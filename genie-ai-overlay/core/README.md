@@ -125,17 +125,10 @@ service_role = ServiceRole.MICROSERVICE
 
 **Example Usage**:
 ```python
-from core.genieai_api_protocol import (
-    ChatCompletionRequest,
-    ChatCompletionResponse,
-    GenieAIRequest
-)
+from core.genieai_api_protocol import ChatCompletionRequest, ChatCompletionResponse, GenieAIRequest
 
 # Create a request
-request = ChatCompletionRequest(
-    messages=[{"role": "user", "content": "Hello"}],
-    stream=False
-)
+request = ChatCompletionRequest(messages=[{"role": "user", "content": "Hello"}], stream=False)
 ```
 
 ---
@@ -199,9 +192,9 @@ The Core Library maintains full compatibility with OpenAI APIs:
 
 **Standard Endpoints**:
 ```python
-POST /v1/chat/completions
-GET  /v1/models
-POST /v1/embeddings
+POST / v1 / chat / completions
+GET / v1 / models
+POST / v1 / embeddings
 ```
 
 **Request Models**:
@@ -220,9 +213,9 @@ Extends OPEA protocol with GENIE.AI features:
 
 **OPEA Endpoints**:
 ```python
-POST /v1/chatqna
-POST /v1/dataprep
-POST /v1/retrieve
+POST / v1 / chatqna
+POST / v1 / dataprep
+POST / v1 / retrieve
 ```
 
 ### GENIE.AI Custom APIs
@@ -231,11 +224,11 @@ ITU-specific endpoints and models:
 
 **Custom Endpoints**:
 ```python
-POST /v1/translation
-POST /v1/graphrag
-GET  /v1/analytics
-POST /v1/documents/ingest
-DELETE /v1/documents/retract
+POST / v1 / translation
+POST / v1 / graphrag
+GET / v1 / analytics
+POST / v1 / documents / ingest
+DELETE / v1 / documents / retract
 ```
 
 **Custom Request Models**:
@@ -244,6 +237,7 @@ class TranslationRequest(BaseModel):
     text: str
     target_language: str
     source_language: Optional[str] = None
+
 
 class GraphRAGRequest(BaseModel):
     query: str
@@ -280,6 +274,7 @@ class GenieAIRequest(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     context: Optional[Dict[str, Any]] = None
 
+
 class GenieAIResponse(BaseModel):
     """Base response model for GENIE.AI services"""
 
@@ -313,19 +308,14 @@ class ServiceConfig(BaseModel):
 
 ```python
 # Import constants
-from genie_ai_overlay.core.constants import (
-    ServiceRole,
-    ServiceType,
-    DEFAULT_TIMEOUT,
-    MAX_RETRIES
-)
+from genie_ai_overlay.core.constants import ServiceRole, ServiceType, DEFAULT_TIMEOUT, MAX_RETRIES
 
 # Import protocol models
 from genie_ai_overlay.core.genieai_api_protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
     GenieAIRequest,
-    ServiceDefinition
+    ServiceDefinition,
 )
 ```
 
@@ -343,7 +333,7 @@ my_service = ServiceDefinition(
     endpoint="/v1/custom",
     port=8050,
     dependencies=["embedding", "llm"],
-    health_check_url="/health"
+    health_check_url="/health",
 )
 
 # Use in service initialization
@@ -358,6 +348,7 @@ print(f"Endpoint: {my_service.endpoint}")
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
+
 class CustomGenieAIRequest(GenieAIRequest):
     """Extended request model"""
 
@@ -365,12 +356,9 @@ class CustomGenieAIRequest(GenieAIRequest):
     options: Optional[List[str]] = None
     priority: int = Field(default=5, ge=1, le=10)
 
+
 # Use in service
-request = CustomGenieAIRequest(
-    custom_field="value",
-    options=["opt1", "opt2"],
-    priority=7
-)
+request = CustomGenieAIRequest(custom_field="value", options=["opt1", "opt2"], priority=7)
 ```
 
 ### Service Discovery
@@ -385,10 +373,7 @@ embedding_services = get_services_by_type(ServiceType.EMBEDDING)
 dependencies = get_service_dependencies("chatqna")
 
 # Check service compatibility
-is_compatible = check_service_compatibility(
-    service_a=ServiceType.CHATQNA,
-    service_b=ServiceType.RETRIEVER
-)
+is_compatible = check_service_compatibility(service_a=ServiceType.CHATQNA, service_b=ServiceType.RETRIEVER)
 ```
 
 ---
@@ -420,7 +405,7 @@ is_compatible = check_service_compatibility(
    SERVICE_REGISTRY[ServiceType.CUSTOM_SERVICE] = {
        "default_port": 8050,
        "health_endpoint": "/health",
-       "protocol_version": "1.0"
+       "protocol_version": "1.0",
    }
    ```
 
@@ -429,9 +414,7 @@ is_compatible = check_service_compatibility(
 1. **Define Endpoint in Protocol**:
    ```python
    # genieai_api_protocol.py
-   CUSTOM_ENDPOINTS = {
-       "custom_action": "/v1/custom/action"
-   }
+   CUSTOM_ENDPOINTS = {"custom_action": "/v1/custom/action"}
    ```
 
 2. **Create Request/Response Models**:
@@ -440,6 +423,7 @@ is_compatible = check_service_compatibility(
        parameter: str
        options: List[str]
 
+
    class CustomActionResponse(BaseModel):
        result: str
        metadata: Dict[str, Any]
@@ -447,10 +431,8 @@ is_compatible = check_service_compatibility(
 
 3. **Implement in Service**:
    ```python
-   from genie_ai_overlay.core.genieai_api_protocol import (
-       CustomActionRequest,
-       CustomActionResponse
-   )
+   from genie_ai_overlay.core.genieai_api_protocol import CustomActionRequest, CustomActionResponse
+
 
    @app.post("/v1/custom/action")
    async def custom_action(request: CustomActionRequest):
@@ -471,8 +453,8 @@ class ServiceRole(str, Enum):
     """Defines the architectural role of a service"""
 
     MICROSERVICE = "microservice"  # Lightweight, focused service
-    MEGASERVICE = "megaservice"    # Comprehensive, multi-capability
-    WRAPPER = "wrapper"            # Unified interface wrapper
+    MEGASERVICE = "megaservice"  # Comprehensive, multi-capability
+    WRAPPER = "wrapper"  # Unified interface wrapper
 ```
 
 #### ServiceType Enum (Selected)
@@ -536,10 +518,7 @@ class ServiceType(str, Enum):
 
 2. **Use type hints**:
    ```python
-   def process_request(
-       request: ChatCompletionRequest,
-       service_type: ServiceType
-   ) -> ChatCompletionResponse:
+   def process_request(request: ChatCompletionRequest, service_type: ServiceType) -> ChatCompletionResponse:
        pass
    ```
 
@@ -555,10 +534,7 @@ class ServiceType(str, Enum):
 
 4. **Handle compatibility**:
    ```python
-   def check_version_compatibility(
-       client_version: str,
-       server_version: str
-   ) -> bool:
+   def check_version_compatibility(client_version: str, server_version: str) -> bool:
        # Check if versions are compatible
        return parse(client_version) >= parse(server_version)
    ```

@@ -176,3 +176,4 @@ def test_reranker_component_loader_uses_expected_name(comps):
         assert component_name == "GENIE_TEI_RERANKING" or "GENIE_TEI_RERANKING" in str(component_name), (
             f"OpeaComponentLoader component name is {component_name!r}, expected GENIE_TEI_RERANKING"
         )
+# Trigger contract jobs

@@ -675,7 +675,9 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of 2-4-test-backend-chat-route-handlers (2026-05-15)"), 2026-08-12
 location: n/a
 reason: The route has no rollback. Error propagation edge case not in ACs.
-status: open
+status: done 2026-08-13
+resolution: closed by human decision: Current behavior (no rollback) is acceptable — frontend can retry or show error. Adding rollback complexity not justified for this edge case.
+decision: 2026-08-13 Document as known limitation — Current behavior (no rollback) is acceptable — frontend can retry or show error. Adding rollback complexity not justified for this edge case.
 
 ### DW-101: missing userId not tested on all routes
 origin: migrated from legacy ledger ("Deferred from: code review of 2-4-test-backend-chat-route-handlers (2026-05-15)"), 2026-08-12
@@ -705,13 +707,17 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-test-dataprep-extraction-pipeline (2026-05-17)"), 2026-08-12
 location: n/a
 reason: production code concern in `genieai_dataprep_arangodb.py`
-status: open
+status: done 2026-08-13
+resolution: closed by human decision: Race condition is benign — ArangoGraph init is idempotent, concurrent calls converge to same state. Adding lock not justified.
+decision: 2026-08-13 Document as known limitation — Race condition is benign — ArangoGraph init is idempotent, concurrent calls converge to same state. Adding lock not justified.
 
 ### DW-106: File lock `fileno()` edge case when lock_file lacks file descriptor
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-test-dataprep-extraction-pipeline (2026-05-17)"), 2026-08-12
 location: n/a
 reason: production code concern
-status: open
+status: done 2026-08-13
+resolution: closed by human decision: Edge case extremely rare in practice — lock_file always has fd in normal operation. Adding check not justified.
+decision: 2026-08-13 Document as known limitation — Edge case extremely rare in practice — lock_file always has fd in normal operation. Adding check not justified.
 
 ### DW-107: Concurrent batch failure scenarios
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-test-dataprep-extraction-pipeline (2026-05-17)"), 2026-08-12
@@ -819,31 +825,41 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
 location: n/a
 reason: crashes service on metadata count mismatch rather than graceful degradation
-status: open
+status: done 2026-08-13
+resolution: closed by human decision: Assert is intentional fail-fast for programming errors — metadata count mismatch indicates a bug, not a runtime condition. Crashing is correct behavior.
+decision: 2026-08-13 Keep assert (fail-fast) — Assert is intentional fail-fast for programming errors — metadata count mismatch indicates a bug, not a runtime condition. Crashing is correct behavior.
 
 ### DW-125: `file_metadata["labels"]` unguarded dict access (genieai_chatqna.py:1684)
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
 location: n/a
 reason: KeyError if document repository returns unexpected metadata format
-status: open
+status: done 2026-08-13
+resolution: closed by human decision: Strict access is intentional — missing 'labels' indicates a bug in document repository. Crashing surfaces the bug immediately.
+decision: 2026-08-13 Keep strict access (fail-fast) — Strict access is intentional — missing 'labels' indicates a bug in document repository. Crashing surfaces the bug immediately.
 
 ### DW-126: `runtime_graph.downstream(cur_node)[0]` IndexError (genieai_chatqna.py:604)
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
 location: n/a
 reason: crashes when downstream list is empty
-status: open
+status: done 2026-08-13
+resolution: closed by human decision: Empty downstream indicates a graph configuration bug. Crashing surfaces the bug immediately. Adding check masks the root cause.
+decision: 2026-08-13 Keep strict access (fail-fast) — Empty downstream indicates a graph configuration bug. Crashing surfaces the bug immediately. Adding check masks the root cause.
 
 ### DW-127: `assert isinstance(data, list)` in EMBEDDING output (genieai_chatqna.py:550)
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
 location: n/a
 reason: production crash on unexpected embedding service response format
-status: open
+status: done 2026-08-13
+resolution: closed by human decision: Assert is intentional — non-list embedding response indicates a broken embedding service. Crashing is correct behavior.
+decision: 2026-08-13 Keep assert (fail-fast) — Assert is intentional — non-list embedding response indicates a broken embedding service. Crashing is correct behavior.
 
 ### DW-128: Bare `dict[key]` access in `align_inputs`/`align_outputs` at multiple locations (lines 367, 395, 420, 515, 516, 537, 551, 760)
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
 location: n/a
 reason: KeyError/IndexError on unexpected service data
-status: open
+status: done 2026-08-13
+resolution: closed by human decision: Strict access is intentional — missing keys indicate bugs in service data shapes. Crashing surfaces bugs immediately. Adding defaults masks root causes.
+decision: 2026-08-13 Keep strict access (fail-fast) — Strict access is intentional — missing keys indicate bugs in service data shapes. Crashing surfaces bugs immediately. Adding defaults masks root causes.
 
 ### DW-129: MagicMock truthiness hides parameter fallback logic in `handle_request`
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12
@@ -862,6 +878,7 @@ origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-cha
 location: n/a
 reason: `input.retrieved_docs[best_response["index"]]` (genieai_tei_reranker.py:80, 89, 105, 111) has no bounds check. A buggy TEI response with index >= len(retrieved_docs) will crash with IndexError. Pre-existing production code vulnerability.
 status: open
+decision: 2026-08-13 Add bounds check — Add check: if index >= len(retrieved_docs), log error and either skip the result or raise a clear exception. Prevents IndexError crash.
 
 ### DW-132: KneeLocator single-doc / flat-score edge cases not tested
 origin: migrated from legacy ledger ("Deferred from: code review of 4-6-test-chatqna-orchestrator-interface (2026-05-18)"), 2026-08-12

@@ -1,0 +1,11 @@
+{
+  "DW-131": {
+    "answered_at": "2026-08-13",
+    "bundle_name": "",
+    "effect": "build",
+    "intent": "Add check: if index >= len(retrieved_docs), log error and either skip the result or raise a clear exception. Prevents IndexError crash.",
+    "key": "1",
+    "label": "Add bounds check",
+    "resolution": ""
+  }
+}

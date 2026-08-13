@@ -974,7 +974,10 @@ describe('GET /:queryId/conversations', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(conversations);
-    expect(queryService.getConversationsForQuery).toHaveBeenCalledWith('q1', 'http://localhost:8080/realms/genie#user-123');
+    expect(queryService.getConversationsForQuery).toHaveBeenCalledWith(
+      'q1',
+      'http://localhost:8080/realms/genie#user-123'
+    );
   });
 
   it('should return 403 when caller does not own the query', async () => {

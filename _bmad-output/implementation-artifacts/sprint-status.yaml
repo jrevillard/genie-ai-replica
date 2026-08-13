@@ -57,8 +57,10 @@ development_status:
   2-1-re-graft-the-core-overlay-layer: done
   2-2-migrate-dependencies-python-3-11: done
   2-3-re-graft-the-retriever-bump-langchain-arangodb: done
-  2-4-re-graft-the-reranker: backlog
+  2-4-re-graft-the-reranker: done
   2-5-re-graft-the-dataprep: done
+  2-5-re-graft-the-dataprep: backlog
+>>>>>>> 2543be42c (story 2-4-re-graft-the-reranker: implemented and reviewed via bmad-loop)
   2-6-re-graft-the-chatqna-highest-coupling-last: backlog
   2-7-re-audit-build-patches-add-enforcement: backlog
   2-8-sweep-import-time-breaks-re-baseline-the-mocked-suite: backlog

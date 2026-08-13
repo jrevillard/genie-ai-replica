@@ -1447,7 +1447,7 @@ class QueryService {
    * @param {String} queryId - Query ID
    * @returns {Promise<Array>} Conversations associated with the query
    */
-  async getConversationsForQuery(queryId) {
+  async getConversationsForQuery(queryId, userId) {
     const startTime = Date.now();
     try {
       logger.info('QueryService.get_conversations_for_query_start', { queryId });
@@ -1457,7 +1457,15 @@ class QueryService {
         throw new Error('Chat history service is not set');
       }
 
-      const relatedMessages = await this.chatHistoryService.findMessagesForQuery(queryId);
+      const relatedMessages = await this.chatHistoryService.findMessagesForQuery(queryId, userId);
+
+      // Handle ownership check returns
+      if (relatedMessages === null) {
+        return []; // Query not found
+      }
+      if (relatedMessages && relatedMessages.forbidden) {
+        throw new Error('Access denied');
+      }
 
       const conversationMap = new Map();
       for (const item of relatedMessages) {

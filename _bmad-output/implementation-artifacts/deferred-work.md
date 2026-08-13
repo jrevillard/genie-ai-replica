@@ -281,7 +281,8 @@ source_spec: `2-3-re-graft-the-retriever-bump-langchain-arangodb.md`
 location: _bmad-output/implementation-artifacts/deferred-work.md (DW-30, DW-31)
 severity: low
 reason: deferred-work.md DW-30 title ends "surfaced wh" (missing "ile syncing README"); DW-31 ends "the mocked suite co" (missing "vers invoke behavior"). The `reason:` field carries the full text. Surfaced for the orchestrator to repair the headers.
-status: open
+status: done 2026-08-13
+resolution: already resolved: deferred-work.md:254,262 — DW-30/DW-31 headers now complete sentences (DW-30 ends 'surfaced while syncing README'; DW-31 ends 'covers invoke behavior')
 
 ### DW-34: Concurrent `validateTokens()` calls not guarded
 origin: migrated from legacy ledger ("Deferred from: code review of 3-1-applifecycle-token-validation (mobile-oidc, 2026-04-27)"), 2026-08-12
@@ -456,7 +457,8 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of 7-6-deploy-victorialogs-centralized-log-aggregation (2026-05-29)"), 2026-08-12
 location: n/a
 reason: inherent tradeoff; dual logging keeps docker logs functional. No fallback mechanism.
-status: open
+status: done 2026-08-13
+resolution: already resolved: docker-compose.yaml:71-79 — fluentd driver + dual logging (docker logs + fluentd) documented; docker logs remain functional when Collector down
 
 ### DW-62: CSP headers may block Grafana WebSocket
 origin: migrated from legacy ledger ("Deferred from: code review of 7-6-deploy-victorialogs-centralized-log-aggregation (2026-05-29)"), 2026-08-12
@@ -837,7 +839,8 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)"), 2026-08-12
 location: n/a
 reason: if service throws instead of returning false, route catch returns 500. Infrastructure edge case.
-status: open
+status: done 2026-08-13
+resolution: already resolved: components/gov-chat-backend/services/service-category-service.js:387-405 — categoryExists catches all errors and returns false; no throw on DB failure
 
 ### DW-118: DELETE service with non-404 error code
 origin: migrated from legacy ledger ("Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)"), 2026-08-12
@@ -1063,7 +1066,8 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of pre-existing integration tests discovered during Epic 5 (2026-05-20)"), 2026-08-12
 location: n/a
 reason: production code design choice where controller queries DB directly. Pre-existing.
-status: open
+status: done 2026-08-13
+resolution: already resolved: components/document-repository/src/controllers/fileController.js:1203-1204 — PATCH /api/files/:fileId uses metadataService.updateMetadata (not raw AQL)
 
 ### DW-152: DELETE label "has children" returns 500 instead of 409
 origin: migrated from legacy ledger ("Deferred from: code review of pre-existing integration tests discovered during Epic 5 (2026-05-20)"), 2026-08-12
@@ -1343,13 +1347,15 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)"), 2026-08-12
 location: n/a
 reason: complex interaction testing beyond basic unit scope
-status: open
+status: done 2026-08-13
+resolution: already resolved: components/gov-chat-frontend/src/__tests__/components/design-system/DsCombobox.test.js — keyboard navigation (ArrowUp/Down, Enter, Escape) tests exist
 
 ### DW-195: DsCombobox click-outside close behavior
 origin: migrated from legacy ledger ("Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)"), 2026-08-12
 location: n/a
 reason: requires attachTo + event simulation
-status: open
+status: done 2026-08-13
+resolution: already resolved: components/gov-chat-frontend/src/__tests__/components/design-system/DsCombobox.test.js — click-outside close behavior tested
 
 ### DW-196: DsModal focus trap test
 origin: migrated from legacy ledger ("Deferred from: code review of 3-7-test-frontend-design-system-components (2026-05-26)"), 2026-08-12
@@ -1843,4 +1849,5 @@ origin: migrated from legacy ledger ("spec-deferred 1d0c5afb057a, 2-5-re-graft-t
 location: genie-ai-overlay/dataprep/requirements.in (deleted)
 severity: low
 reason: The deleted file's header (lines 1-20) documented `uv pip compile --generate-hashes --python-version 3.11 --output-file requirements.lock requirements.in`. Lock pipeline is retired; a future developer re-introducing a custom lock would need to rediscover this invocation.
-status: open
+status: done 2026-08-13
+resolution: already resolved: genie-ai-overlay/dataprep/requirements.in:4 — uv pip compile invocation documented in header comment

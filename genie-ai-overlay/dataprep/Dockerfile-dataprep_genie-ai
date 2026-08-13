@@ -124,8 +124,11 @@ COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/geniea
 # Step J: Lighten library load & Fix Duplicate Registration
 # 1. Comment out unused integrations in the *base* OPEA microservice.
 # 2. Fix the duplicate import path for 'arangodb.py' to resolve the ValueError.
+# Assert-on-patch guard: the absolute-import rewrite MUST land or the build
+# fails (upstream restructuring would otherwise ship a silently-broken image).
 RUN sed -i '/from integrations\./ { /arangodb/! s/^/#/ }' /app/comps/dataprep/src/opea_dataprep_microservice.py && \
-    sed -i 's|from integrations.arangodb import OpeaArangoDataprep|from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep|' /app/comps/dataprep/src/opea_dataprep_microservice.py
+    sed -i 's|from integrations.arangodb import OpeaArangoDataprep|from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep|' /app/comps/dataprep/src/opea_dataprep_microservice.py && \
+    grep -q 'from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep' /app/comps/dataprep/src/opea_dataprep_microservice.py || { echo "ASSERT-ON-PATCH GUARD FAILED: Step J sed rewrite did not land — upstream restructured the arangodb import path"; exit 1; }
 
 # Step K: Create non-root user and set permissions
 RUN useradd -ms /bin/bash user && \

@@ -146,13 +146,11 @@ def test_installed_arangovector_exposes_filter_clause_named_param(comps):
 
     import pytest
     from langchain_arangodb import ArangoVector
-
     from packaging.version import Version
 
     installed = Version(importlib.metadata.version("langchain-arangodb"))
     assert installed >= Version("1.2.0"), (
-        f"langchain-arangodb must be >=1.2.0 (filter_clause named-param fix-pin); "
-        f"installed: {installed}"
+        f"langchain-arangodb must be >=1.2.0 (filter_clause named-param fix-pin); installed: {installed}"
     )
 
     for method_name in (

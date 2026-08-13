@@ -69,6 +69,15 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 COPY genie-ai-overlay/dataprep/requirements-cpu.txt /app/requirements-cpu.txt
 RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-cpu.txt
 
+# Step D.5: Post-import smoke test for heavy dependencies.
+# Catches import failures (missing shared libs, ABI mismatches, bad wheels) at
+# BUILD time rather than at first runtime request. These four packages are the
+# heaviest / most failure-prone in the lock (pyspark requires JVM at runtime,
+# unstructured links opencv + tesseract, graspologic pulls networkx + scipy stacks,
+# openai-whisper pulls torch). If any import fails the build stops here —
+# runtime ingest would fail the same way with a far more opaque traceback.
+RUN python -c "import pyspark; import unstructured; import graspologic; import whisper; print('heavy-deps ok')"
+
 # Copy custom utils to its new correct location (matches your structure)
 COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/comps/dataprep/src/genieai_dataprep_utils.py
 

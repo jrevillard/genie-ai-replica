@@ -486,6 +486,18 @@ describe('GET /api/analytics/satisfaction/gauge (AC8)', () => {
     expect(response.body).toEqual(gaugeData);
   });
 
+  // DW-113: verify locale query param propagates end-to-end to service
+  it('should propagate locale query parameter to service', async () => {
+    analyticsService.getSatisfactionGaugeData.mockResolvedValue(gaugeData);
+
+    const response = await authGet(
+      '/api/analytics/satisfaction/gauge?startDate=2025-01-01&endDate=2025-01-31&locale=fr'
+    );
+
+    expect(response.status).toBe(200);
+    expect(analyticsService.getSatisfactionGaugeData).toHaveBeenCalledWith('2025-01-01', '2025-01-31', 'fr');
+  });
+
   it('should return 400 when startDate/endDate missing', async () => {
     const response = await authGet('/api/analytics/satisfaction/gauge');
 
@@ -504,6 +516,18 @@ describe('GET /api/analytics/satisfaction/heatmap (AC8)', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(heatmapData);
+  });
+
+  // DW-113: verify locale query param propagates end-to-end to service
+  it('should propagate locale query parameter to service', async () => {
+    analyticsService.getSatisfactionHeatmapData.mockResolvedValue(heatmapData);
+
+    const response = await authGet(
+      '/api/analytics/satisfaction/heatmap?startDate=2025-01-01&endDate=2025-01-31&locale=es'
+    );
+
+    expect(response.status).toBe(200);
+    expect(analyticsService.getSatisfactionHeatmapData).toHaveBeenCalledWith('2025-01-01', '2025-01-31', 'es');
   });
 
   it('should return 400 when startDate/endDate missing', async () => {

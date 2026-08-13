@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
+const { parsePositiveInt } = require('../shared-lib/validation-utils');
 
 module.exports = (chatHistoryService) => {
   // Helper function to extract user ID from the JWT-authenticated request
@@ -75,8 +76,8 @@ module.exports = (chatHistoryService) => {
 
       const userKey = req.user._key;
 
-      const limit = parseInt(req.query.limit) || 20;
-      const offset = parseInt(req.query.offset) || 0;
+      const limit = parsePositiveInt(req.query.limit, 20, { min: 1, max: 100 });
+      const offset = parsePositiveInt(req.query.offset, 0, { min: 0 });
       const includeArchived = req.query.includeArchived === 'true';
       const filterStarred = req.query.filterStarred === 'true';
       const searchTerm = req.query.searchTerm || '';
@@ -407,8 +408,8 @@ module.exports = (chatHistoryService) => {
   router.get('/conversations/:conversationId/messages', async (req, res, next) => {
     try {
       const { conversationId } = req.params;
-      const limit = parseInt(req.query.limit) || 50;
-      const offset = parseInt(req.query.offset) || 0;
+      const limit = parsePositiveInt(req.query.limit, 50, { min: 1, max: 100 });
+      const offset = parsePositiveInt(req.query.offset, 0, { min: 0 });
       const newestFirst = req.query.newestFirst === 'true';
 
       logger.info(
@@ -833,13 +834,16 @@ module.exports = (chatHistoryService) => {
 
       const userKey = req.user._key;
 
-      const searchTerm = req.query.q || '';
-      const limit = parseInt(req.query.limit) || 20;
-      const offset = parseInt(req.query.offset) || 0;
+      const searchTerm = req.query.q;
+      const limit = parsePositiveInt(req.query.limit, 20, { min: 1, max: 100 });
+      const offset = parsePositiveInt(req.query.offset, 0, { min: 0 });
       const includeArchived = req.query.includeArchived === 'true';
 
-      if (!searchTerm) {
+      if (searchTerm === undefined || searchTerm === null) {
         return res.status(400).json({ message: 'Search term is required' });
+      }
+      if (searchTerm === '') {
+        return res.status(400).json({ message: 'Search term cannot be empty' });
       }
 
       logger.info(`Searching conversations for user ${userId} with term "${searchTerm}"`);
@@ -890,7 +894,7 @@ module.exports = (chatHistoryService) => {
 
       const userKey = req.user._key;
 
-      const limit = parseInt(req.query.limit) || 5;
+      const limit = parsePositiveInt(req.query.limit, 5, { min: 1, max: 50 });
 
       logger.info(`Getting ${limit} recent conversations for user ${userId}`);
 
@@ -1151,11 +1155,14 @@ module.exports = (chatHistoryService) => {
 
       const userKey = req.user._key;
 
-      const searchTerm = req.query.q || '';
+      const searchTerm = req.query.q;
       const includeArchived = req.query.includeArchived === 'true';
 
-      if (!searchTerm) {
+      if (searchTerm === undefined || searchTerm === null) {
         return res.status(400).json({ message: 'Search term is required' });
+      }
+      if (searchTerm === '') {
+        return res.status(400).json({ message: 'Search term cannot be empty' });
       }
 
       logger.info(`Searching folders for user ${userId} with term "${searchTerm}"`);

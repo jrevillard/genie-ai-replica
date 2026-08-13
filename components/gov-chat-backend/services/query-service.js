@@ -5,6 +5,7 @@ const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
 const api = require('@opentelemetry/api');
+const { parsePositiveInt } = require('../shared-lib/validation-utils');
 
 class QueryService {
   constructor() {
@@ -1612,8 +1613,8 @@ class QueryService {
   async getQueriesForInspector(options = {}) {
     const startTime = Date.now();
     try {
-      const limit = parseInt(options.limit) || 50;
-      const offset = parseInt(options.offset) || 0;
+      const limit = parsePositiveInt(options.limit, 50, { min: 1, max: 100 });
+      const offset = parsePositiveInt(options.offset, 0, { min: 0 });
 
       logger.info('QueryService.get_queries_for_inspector_start', { options });
 

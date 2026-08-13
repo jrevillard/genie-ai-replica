@@ -548,7 +548,8 @@ resolution: components/gov-chat-frontend/src/__tests__/components/AdminDashboard
 origin: migrated from legacy ledger ("Deferred from: code review of 3-4-test-vuex-store-modules (2026-05-20)"), 2026-08-12
 location: n/a
 reason: source code uses `title || state.chats[chatIndex].title` which treats `''` as falsy. Source code behavior, not a test issue. Pre-existing.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-backend-input-validation
 
 ### DW-76: Persistence plugin duplicated instead of imported
 origin: migrated from legacy ledger ("Deferred from: code review of 3-4-test-vuex-store-modules (2026-05-20)"), 2026-08-12
@@ -712,7 +713,8 @@ resolution: already resolved: components/gov-chat-backend/__tests__/routes/chat.
 origin: migrated from legacy ledger ("Deferred from: code review of 2-4-test-backend-chat-route-handlers (2026-05-15)"), 2026-08-12
 location: n/a
 reason: `parseInt() || default` handles these correctly. Defensive tests not critical.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-backend-input-validation
 
 ### DW-100: Test failure addMessage after createConversation
 origin: migrated from legacy ledger ("Deferred from: code review of 2-4-test-backend-chat-route-handlers (2026-05-15)"), 2026-08-12
@@ -809,19 +811,22 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)"), 2026-08-12
 location: n/a
 reason: `JSON.parse(req.query.filters)` can throw if JSON is invalid. Edge case not covered by AC4.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-backend-input-validation
 
 ### DW-115: Pagination with non-numeric limit/offset
 origin: migrated from legacy ledger ("Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)"), 2026-08-12
 location: n/a
 reason: `parseInt() || default` handles non-numeric cases. Edge case beyond AC7 scope.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-backend-input-validation
 
 ### DW-116: Search with empty query string
 origin: migrated from legacy ledger ("Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)"), 2026-08-12
 location: n/a
 reason: `?query=` vs query absent. AC14 covers the case without query param.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-backend-input-validation
 
 ### DW-117: categoryExists throws error (DB failure)
 origin: migrated from legacy ledger ("Deferred from: code review of 2-5-test-backend-analytics-and-categories-route-handlers (2026-05-17)"), 2026-08-12
@@ -1312,7 +1317,8 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of story 2-10 (2026-05-26)"), 2026-08-12
 location: n/a
 reason: GET / uses parseInt() for limit/offset without NaN/negative validation. Pre-existing route design.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-backend-input-validation
 
 ### DW-193: Multipart file upload edge cases
 origin: migrated from legacy ledger ("Deferred from: code review of story 2-10 (2026-05-26)"), 2026-08-12

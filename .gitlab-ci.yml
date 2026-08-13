@@ -821,6 +821,33 @@ contract:retriever-arango:
       changes:
         paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
 
+
+contract:reranker:
+  <<: *contract_template
+  needs:
+    - job: build:reranker
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-reranker"
+    # Reranker in-image suite — verifies the v1.5 coupling surface:
+    # GenieTEIReranking adapter imports, OpeaComponent registration,
+    # ServiceType.RERANK enum, opea_telemetry decorator.
+    CONTRACT_TEST_PATTERN: "test_contract_reranker.py"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
 contract:dataprep-arango:
   <<: *contract_template
   needs:

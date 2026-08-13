@@ -24,6 +24,11 @@ docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
   --entrypoint sh genie-ai-retriever-arango:latest \
   -c "cd /contracts && python -m pytest test_contract_orchestrator_wire.py test_contract_label_filter.py test_contract_retriever_fusion.py test_contract_telemetry.py test_contract_e2e_pipeline.py test_contract_nfrp_budgets.py -p no:cacheprovider"
 
+# Reranker v1.5 coupling surface:
+docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
+  --entrypoint sh genie-ai-reranker:latest \
+  -c "cd /contracts && python -m pytest test_contract_reranker.py -p no:cacheprovider"
+
 # Dataprep-capable suite (chunker-dependent):
 docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
   --entrypoint sh genie-ai-dataprep-arango:latest \
@@ -35,7 +40,7 @@ cd genie-ai-overlay && python -m venv .venv && .venv/bin/pip install pytest pyte
 ```
 
 CI runs the per-module jobs in the `contract-in-image` stage (`contract:retriever-arango`,
-`contract:dataprep-arango`) with `--junitxml` artifacts.
+`contract:reranker`, `contract:dataprep-arango`) with `--junitxml` artifacts.
 
 ## Suite layout
 
@@ -48,6 +53,7 @@ CI runs the per-module jobs in the `contract-in-image` stage (`contract:retrieve
 | `test_contract_ingest.py` | Real docling chunker: structured, text-bearing, deterministic chunks |
 | `test_contract_label_filter.py` | Wrong-category excluded; the AQL `FILTER` clause is built AND passed to the vector search; the installed `ArangoVector` exposes `filter_clause` as a named param |
 | `test_contract_retriever_fusion.py` | `rrf_fuse` dense+BM25 fusion behavior (dedup, weights, unkeyed-doc isolation); hybrid `invoke` still calls `rrf_fuse` with the default ON |
+| `test_contract_reranker.py` | Reranker v1.5 coupling surface: `GenieTEIReranking` adapter imports, `OpeaComponentRegistry` registration, `ServiceType.RERANK` enum, `@opea_telemetry` decorator, invoke signature compatibility |
 | `test_contract_telemetry.py` | Span operation names the dashboards rely on are emitted; dashboard service set stays populated |
 | `test_contract_e2e_pipeline.py` | Label-filter `search_start` roundtrip, streaming metadata shape, one full graph schedule |
 | `test_contract_nfrp_budgets.py` | Wire latency + one-doc ingest wall-clock budgets |

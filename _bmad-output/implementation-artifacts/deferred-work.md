@@ -1821,3 +1821,19 @@ location: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai, genie-ai-overl
 severity: high
 reason: PRD epic-2-context explicitly requires "v1.4+ `requirements-cpu.txt`/`requirements-gpu.txt` compiled layout" but story 2-2 only compiled CPU locks and forced `DOCLING_DEVICE=cpu`. OPEA v1.5 upstream ships both locks and supports dual CPU/GPU builds via `ARCH` build arg. Dataprep runs docling OCR locally (unlike reranker/retriever which are HTTP clients to GPU services), so GPU support is architecturally required when CUDA is available. Story 2-5 must: (1) compile `requirements-gpu.txt` from `requirements.in`, (2) add `ARCH` build arg to Dockerfile, (3) use CUDA base image when `ARCH=gpu`, (4) revert `DOCLING_DEVICE` default from `cpu` back to `cuda`.
 status: open
+
+### DW-267: OpeaComponentRegistry introspection tries multiple attribute names (components, registry, _registry, _components) — fragile but functional.
+origin: spec-deferred 04a0a93249d3
+source_spec: `2-4-re-graft-the-reranker.md`
+location: genie-ai-overlay/contracts/test_contract_reranker.py:286
+severity: low
+reason: test_contract_reranker.py:286-308 uses a loop to find the registry attribute; should verify v1.5 API directly instead of guessing.
+status: open
+
+### DW-268: Telemetry marker check tries multiple marker patterns (__wrapped__, _opea_telemetry_applied, __telemetry__) — fragile but functional.
+origin: spec-deferred 3058f403feec
+source_spec: `2-4-re-graft-the-reranker.md`
+location: genie-ai-overlay/contracts/test_contract_reranker.py:341
+severity: low
+reason: test_contract_reranker.py:341-350 uses multiple hasattr checks; should verify the actual opea_telemetry decorator implementation.
+status: open

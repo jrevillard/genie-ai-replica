@@ -145,6 +145,40 @@ function authDelete(path) {
 }
 
 // ============================================================
+// DW-119: Auth guard — representative endpoints require authentication
+// ============================================================
+describe('Auth guard (DW-119)', () => {
+  it('should return 401 on GET /api/chat/conversations without token', async () => {
+    const response = await request(app).get('/api/chat/conversations');
+    expect(response.status).toBe(401);
+  });
+
+  it('should return 401 on POST /api/chat/conversations without token', async () => {
+    const response = await request(app)
+      .post('/api/chat/conversations')
+      .send({ title: 'Test' });
+    expect(response.status).toBe(401);
+  });
+
+  it('should return 401 on GET /api/chat/folders without token', async () => {
+    const response = await request(app).get('/api/chat/folders');
+    expect(response.status).toBe(401);
+  });
+
+  it('should return 401 on POST /api/chat/folders/reorder without token', async () => {
+    const response = await request(app)
+      .post('/api/chat/folders/reorder')
+      .send({ folderOrders: [{ folderId: 'f-1', order: 1 }] });
+    expect(response.status).toBe(401);
+  });
+
+  it('should return 401 on DELETE /api/chat/folders/:folderId without token', async () => {
+    const response = await request(app).delete('/api/chat/folders/folder-1');
+    expect(response.status).toBe(401);
+  });
+});
+
+// ============================================================
 // PATCH /api/chat/conversations/:conversationId
 // ============================================================
 describe('PATCH /api/chat/conversations/:conversationId', () => {

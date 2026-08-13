@@ -122,8 +122,12 @@ docker-compose.override.yml
 
 # Python editable install artifacts
 genie-ai-overlay/*.egg-info/
-.tokensave/
+
+# Bmad
 .bmad-loop/runs/
 .bmad-loop/cache/
 .bmad-loop/policy.toml
 _bmad/render/
+
+# Other
+.claude/.headroom_wrap_marker.json

@@ -37,13 +37,13 @@ COPY --from=opea_base /src/comps/ /app/comps/
 # --generate-hashes --python-version 3.11) from the GENIE.AI fork of OPEA
 # v1.5's requirements.in. --require-hashes makes the build bit-for-bit
 # reproducible and supply-chain-pinned, with no re-resolution against live PyPI.
-# The v1.5 lock pins langchain-huggingface and langchain-arangodb at the
-# v1.5 lock versions (langchain-arangodb 0.0.6), so the old v1.3 post-install
-# upgrade blocks are gone. langchain-arangodb 0.0.6 already carries the
+# The v1.5 lock pins langchain-huggingface at the v1.5 lock version, and
+# langchain-arangodb at >=1.2.0 (the filter_clause behavioral fix-pin that was
+# deferred during v1.5 lock compilation). langchain-arangodb >=1.2.0 carries the
 # `filter_clause` named-param fix (the 0.0.4 release swallowed it via **kwargs,
 # so a category FILTER never reached the AQL — that silent-drop bug is absent at
-# 0.0.6), so the label filter is real with this pin and needs no version bump.
-# See requirements.in for the full 0.0.6 disposition.
+# >=1.2.0), so the label filter is real with this pin. See requirements.in for
+# the full >=1.2.0 disposition.
 # The OpenTelemetry deps are likewise pinned in the lock (no unhashed install).
 COPY genie-ai-overlay/retriever/requirements-cpu.txt /app/requirements-cpu.txt
 RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-cpu.txt

@@ -87,7 +87,8 @@ location: genie-ai-overlay/retriever/requirements-cpu.txt
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: medium
 reason: retriever/requirements.in + lock pin 0.0.6 (verified: 0.0.6 does NOT have 0.0.4's **kwargs filter_clause swallow — filter_clause is a named param; the behavioral label-filter contract test belongs to story 2.3's re-graft).
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-langchain-arangodb-bump
 
 ### DW-11: dataprep .in fork reintroduces pyspark, unstructured[all-docs], graspologic, openai-whisper that the retired v1.3 machinery dropped for image-size/build reasons; in-image build + size unverified here.
 origin: spec-deferred 772243b4bdcd

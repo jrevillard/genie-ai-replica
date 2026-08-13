@@ -132,14 +132,14 @@ def test_retriever_code_passes_filter_clause_to_vector_db(comps):
 def test_installed_arangovector_exposes_filter_clause_named_param(comps):
     """The REAL installed langchain-arangodb promotes filter_clause to a named param.
 
-    Guards the story's central claim durably instead of comment-only: 0.0.6
+    Guards the story's central claim durably instead of comment-only: >=1.2.0
     exposes ``filter_clause`` as a NAMED parameter on the sync similarity-search
     surface the retriever's calls funnel into — including the
     ``similarity_search_by_vector`` methods langchain-core's
     ``max_marginal_relevance_search`` MMR path delegates to — the 0.0.4 release
     swallowed it via ``**kwargs``, so the category ``FILTER`` never reached the
-    AQL. If a future bump reintroduces the swallow (named param gone) or changes
-    the pinned version, this fails in-image.
+    AQL. If a future bump reintroduces the swallow (named param gone) or drops
+    below the minimum version, this fails in-image.
     """
     import importlib.metadata
     import inspect
@@ -147,8 +147,12 @@ def test_installed_arangovector_exposes_filter_clause_named_param(comps):
     import pytest
     from langchain_arangodb import ArangoVector
 
-    assert importlib.metadata.version("langchain-arangodb") == "0.0.6", (
-        "langchain-arangodb must stay pinned at 0.0.6 (compiled-lock disposition)"
+    from packaging.version import Version
+
+    installed = Version(importlib.metadata.version("langchain-arangodb"))
+    assert installed >= Version("1.2.0"), (
+        f"langchain-arangodb must be >=1.2.0 (filter_clause named-param fix-pin); "
+        f"installed: {installed}"
     )
 
     for method_name in (

@@ -933,6 +933,12 @@ module.exports = (queryService) => {
     try {
       logger.info(`Getting conversations for query ${req.params.queryId}`);
       const userId = req.user?.iss_sub;
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required'
+        });
+      }
       const conversations = await queryService.getConversationsForQuery(req.params.queryId, userId);
       res.json(conversations);
     } catch (error) {

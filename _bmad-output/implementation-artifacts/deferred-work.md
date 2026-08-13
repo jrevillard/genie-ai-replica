@@ -1217,7 +1217,9 @@ decision: 2026-08-13 Keep BUILD API enabled — Accept current security posture,
 origin: migrated from legacy ledger ("Deferred from: code review of 1-7-configure-ci-caching-and-path-based-triggers (2026-05-21)"), 2026-08-12
 location: n/a
 reason: `.flutter_base` template uses `flutter-sdk-${FLUTTER_VERSION}` without `${CI_RUNNER_EXECUTABLE_ARCH}`. Cross-architecture runners could corrupt each other's SDK cache. Pre-existing issue in template not changed in this diff.
-status: open
+status: done 2026-08-13
+resolution: closed by human decision: Accept risk — all current runners are same architecture, cross-arch corruption unlikely
+decision: 2026-08-13 Keep current cache key — Accept risk — all current runners are same architecture, cross-arch corruption unlikely
 
 ### DW-174: Patrol E2E cache fallback_keys inheritance
 origin: migrated from legacy ledger ("Deferred from: code review of 1-7-configure-ci-caching-and-path-based-triggers (2026-05-21)"), 2026-08-12

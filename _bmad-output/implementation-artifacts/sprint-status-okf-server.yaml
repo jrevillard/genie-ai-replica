@@ -112,3 +112,12 @@ development_status:
   9-4-apply-ingest-wiring-two-store-sync-producer-unify: backlog      # cross-cutting (FR-36, ADR-okf-034)
   9-5-boundedness-config-denylist-mgmt-fixture-tuning-guardrail: backlog  # gated by Story 8.1
   epic-9-retrospective: optional
+
+  epic-10: backlog           # NEW 2026-08-13 — OKF Studio (creation & curation capstone). Ungated frontend; gated legs flagged.
+  10-1-okf-diff-review-panel-unified-autocorrect: backlog   # the FR-32 reviewable-diff surface (3 lanes)
+  10-2-auto-correct-service-conformance-broken-link: backlog  # conformance remediation (works today) + link (gated 2.3b)
+  10-3-domain-templates-conformance-clean-save-as-template: backlog
+  10-4-cross-repo-auto-correct-inbox: backlog                # gated by Story 6.1b (authz)
+  10-5-studio-service-okf-studio-dashboard: backlog          # multi-repo dashboard + drafts + bulk publish
+  10-6-review-publish-lifecycle-ui: backlog                  # Step 8/9 (gated 2.8 PII, 2.9.7 mintVersion)
+  epic-10-retrospective: optional

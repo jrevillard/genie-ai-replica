@@ -128,6 +128,7 @@ This document decomposes the OKF Server PRD (FR-1..FR-29), Architecture (§13 si
 | FR-35 | Epic 1 (Story 1.3) | Query-aware graph selection (Graph Router) — *added 2026-08-13; gated by bump* |
 | FR-36 | Epic 9 | Pre-ingest Label Onboarding (bounded curation wizard) — *added 2026-08-13* |
 | FR-37 | Epic 7 | Produce OKF from selected/uploaded documents (3rd curation path) — *added 2026-08-13* |
+| FR-38 | Epic 10 | Unified creation & curation wizard (3 workflows + curation + validation + auto-correct) — *added 2026-08-13* |
 
 ## Epic List
 
@@ -180,6 +181,10 @@ The deterministic fixture trinity (static crawl site + seed repos + golden queri
 ### Epic 9: Label Onboarding (Pre-Ingest Curation)  *(NEW 2026-08-13; ungated analyze/apply; gated ingest leg)*
 A slick, curator-driven way to add **exactly** the new labels a repo needs — bounded, never exhaustive. A pre-ingest dry-run surfaces the minimal label gap (only under-labeled concepts); a wizard walks the steward through Analyze → Cluster → Review → Apply with smart defaults + a live before/after preview. Bounded by construction (gap-only + variant merge + denylist + a FAIL-not-truncate cap + the FR-32 steward gate). Unifies the producer's label proposals (Story 7.3) into one steward gate. **ADRs:** okf-033, okf-034.
 **FRs covered:** FR-36 (+ FR-32 steward gate, FR-34/FR-35 reuse). **Depends on:** Story 2.9.1 (orchestrator), Epic 3 (UI), Story 8.1 (fixtures, for 9.5).
+
+### Epic 10: OKF Studio — Creation & Curation Capstone  *(NEW 2026-08-13; ungated frontend capstone; gated legs flagged)*
+The unified "Create & Curate OKF Repository" wizard — one resumable linear spine where Crawler / Documents / Manual are workflow variants, every path funneling through curation → validation → auto-correct → review → publish. The slick core is ONE `OkfDiffReviewPanel` rendering all 3 auto-correct facilities (conformance remediation, label auto-mapping, broken-link resolution) as reviewable, steward-approvable diffs (Apply = the FR-32 gate; never silent). A new "OKF Studio" admin tab hosts the multi-repo dashboard + resumable drafts + Domain Templates + a cross-repo auto-correct inbox + bulk publish. All 3 native entry points (document-management multi-select, crawler UI, manual editor) converge on the wizard. **Composes** Epic 7 (producer) + Epic 9 (label onboarding) + Story 2.4 (conformance) + FR-25 editor — it only imports/mounts them (logic stays owned by its epic). Uses only existing UI paradigms (tabs/dialogs/stepper/httpService/DS primitives) — zero inconsistencies. Design: [okf-studio-ux-design-2026-08-13](../../okf-studio-ux-design-2026-08-13.md).
+**FRs covered:** FR-38 (+ FR-25/FR-30/FR-33/FR-36/FR-37 reuse). **Depends on:** Epic 3 (UI), Epic 7 (producer), Epic 9 (label onboarding), Story 2.9.1; gated legs on 2.3b (broken-link), 2.8 (PII), 6.1b (authz, for cross-repo inbox).
 
 ---
 
@@ -804,3 +809,46 @@ As a **security officer / steward**,
 I want **the boundedness knobs tunable, the denylist manageable, and rubber-stamping guarded**,
 So that **the hierarchy cannot grow unbounded and curation quality is measurable**.
 **Acceptance Criteria:** **Given** the config + fixtures, **When** the story lands, **Then** env knobs exist (`OKF_LABEL_GAP_MIN_FREQUENCY` default 2, `OKF_LABEL_GAP_MIN_CONFIDENCE` ~0.7, `OKF_LABEL_GAP_MAX_ADDITIONS` 25 FAIL-not-truncate, `OKF_LABEL_DUP_THRESHOLD` 0.92, `OKF_LABEL_GAP_TOP_K` 5); a per-domain denylist-management view (edit/scope/re-allow); an SM-7 steward-rejection-rate launch guardrail ("Accept all auto" never auto-applies producer-sourced/sub-threshold candidates without per-line confirm); defaults calibrated against the Story 8.1 seed repos; an embedding-model-id-match CI assertion (gap merge uses the same TEI model as ingest). *(FR-36; NFR-S5; gated by Story 8.1.)*
+
+---
+
+## Epic 10: OKF Studio — Creation & Curation Capstone
+*(NEW 2026-08-13. The unified creation & curation UX. Design: [okf-studio-ux-design-2026-08-13](../../okf-studio-ux-design-2026-08-13.md). A resumable linear wizard (Crawler/Documents/Manual = variants of one spine) → label-onboard → curate → validate → auto-correct → review → publish, with all 3 native entry points converging on it. Uses only existing UI paradigms — zero inconsistencies.)*
+
+### Story 10.1: OkfDiffReviewPanel — the unified reviewable-diff surface *(FR-32 load-bearing component)*
+As a **steward**,
+I want **one reviewable-diff panel for every auto-correct — conformance fixes, label maps, broken-link resolutions — as per-line Accept/Reject diffs**,
+So that **no change is ever silent and I approve everything before it lands**.
+**Acceptance Criteria:** **Given** proposed changes from any auto-correct engine, **When** rendered in `OkfDiffReviewPanel.vue` (3 lanes), **Then** each is a card {kind, severity, confidence, before→after red/green diff, rationale, source-provenance} with per-line Accept/Reject + lane-level "Auto-correct all" (traffic-light defaults: green auto-accept / grey auto-reject / amber needs-review); a sticky "Apply N approved" disabled while amber items are unreviewed; a growth-budget meter (label cap); shareable `?proposal=<id>` URL; **the Apply click writes audit rows (actor + timestamp) — it IS the FR-32 steward gate, never silent**. Reused by the Cross-repo Inbox (10.4) + a future free-form "Validate & auto-correct". *(FR-38, FR-32; Options API, httpService, DS primitives.)*
+
+### Story 10.2: auto-correct-service — conformance remediation + broken-link resolution
+As a **steward**,
+I want **the wizard to propose fixes for conformance issues and broken links (which I approve)**,
+So that **curation toil is reduced without losing human control**.
+**Acceptance Criteria:** **Given** `auto-correct-service.js` (mirrors `repository-service.js` withSpan+audit+MELT), **When** auto-correct runs, **Then** (1) conformance remediation proposes a fix per the 5 `validateConcept` codes (MISSING_TYPE→infer from H1; INVALID_STATUS_ENUM→clamp `draft`; BAD_ACTOR_PREFIX→prefix `agent:`/`human:`; UNPARSEABLE_STALE_AFTER→Luxon normalize; SOURCE_MISSING_RESOURCE→fill from source) — **works today** (conformance-service exists); (2) broken-link resolution proposes nearest-match (embedding) or drop — **blocked until Story 2.3b** (link-existence signal; today parser emits links with no existence check + `getRepoMetrics` hardcodes `broken_link_count:0`). All proposals route through `OkfDiffReviewPanel` as reviewable diffs. *(FR-38; depends 2.3b for the link lane.)*
+
+### Story 10.3: Domain Templates (conformance-clean-by-construction) + Save-as-template
+As a **steward**,
+I want **to start a new repo from a known-good domain template (or save a curated repo as a template)**,
+So that **creating multiple, well-structured repos is fast and low-noise**.
+**Acceptance Criteria:** **Given** an `okf-template` manifest (domain binding + seed label-subtree + concept skeleton, frontmatter pre-filled so `validateConcept` returns near-zero structural issues), **When** a steward picks "New from template" (Manual workflow Step 2 / Studio dashboard), **Then** the repo is scaffolded from it; "Save as template" captures any curated repo's skeleton + label subtree + domain binding; reconcile-on-apply re-runs the label-gap check at scaffold time (handles taxonomy drift). *(FR-38; ADR-okf-033.)*
+
+### Story 10.4: Cross-repo Auto-Correct Inbox *(gated by Story 6.1b)*
+As a **steward**,
+I want **one triage list of reviewable fix-diffs across all my repos**,
+So that **I can curate many repos efficiently without missing anything**.
+**Acceptance Criteria:** **Given** the Studio dashboard, **When** a steward opens the opt-in "scope: all my repos" inbox, **Then** it aggregates reviewable fix-diffs across the steward's repos (filter by fix-type/severity/source/domain); "Accept all safe" applies GREEN items only under the SM-7 guardrail (never producer-sourced/sub-threshold without per-line confirm); **ACL-filtered by the Authz Resolver authorized-graph set (Story 6.1b) — default-deny on unknown scopes — so a steward never sees another tenant's suggestions**. Reuses the `OkfDiffReviewPanel` card shape. *(FR-38; gated by 6.1b.)*
+
+### Story 10.5: Studio orchestration backend + OkfStudioDashboard
+As a **steward**,
+I want **a multi-repo Studio dashboard with resumable drafts, shared label decisions, and bulk publish**,
+So that **managing multiple OKF repositories is easy**.
+**Acceptance Criteria:** **Given** `studio-service.js` (mounted under `/api/okf/studio/...`, `requireRole('tools-admin')`) + `OkfStudioDashboard.vue` (a new "OKF Studio" tab in `AdminDashboard.vue:172` via `DsTabs`), **When** the steward opens it, **Then** a pipeline/kanban view shows all OKF repos by stage (Draft/In-review/Published) with health rings (conformance slice live via `getRepoMetrics`); click → resume a draft at its saved step (`okf_studio_drafts` + `studio_step`/`studio_state`); per-domain shared label decisions (one approval applies domain-wide, ACL-filtered); bulk publish (each repo still passes its own PII+conformance+steward gate). *(FR-38; ADR-okf-030/034.)*
+
+### Story 10.6: Step 8 Review + Step 9 Publish lifecycle UI
+As a **steward**,
+I want **the wizard's review + publish steps to drive the governed lifecycle**,
+So that **publishing is a deliberate, gated sign-off**.
+**Acceptance Criteria:** **Given** `OkfReviewSummary.vue` (Step 8) + `OkfPublishConfirm.vue` (Step 9), **When** the steward acts, **Then** review shows a staged summary (N concepts, M labels, K auto-fixed, trust=unverified, version preview) + tools-admin sign-off (reject→Curate with reason, Story 4.4); publish transitions `review → approve → publish` (repository-service `LIFECYCLE_STATES`, ADR-okf-030), PII-gated (Story 2.8), `mintVersion()` (Story 2.9.7) snapshots the immutable manifest. *(FR-38, FR-9/10; ADR-okf-030/031.)*
+
+> **Epic 3 frontend stories the Studio mounts:** 3.1 wizard shell + stepper + Studio tab (`OkfStudioWizard`/`OkfStudioStepper`/`OkfWorkflowChooser`); 3.2 `OkfStudioDashboard`; 3.3 document-management "Create OKF repository" entry point (sibling to "Ingest Selected", `AdminDashboard.vue:1844/2957`); 3.4 crawler entry point (`AddFromLinkDialog` + `FileDetailsDialog`); 3.5 `OkfConceptCurator` + `OkfValidationPanel` (Step 5/6, compose the implemented conformance-service).

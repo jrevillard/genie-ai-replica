@@ -608,7 +608,7 @@ describe('GET /api/chat/query/:queryId/messages', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(queryMessages);
-    expect(chatHistoryService.findMessagesForQuery).toHaveBeenCalledWith('q-1');
+    expect(chatHistoryService.findMessagesForQuery).toHaveBeenCalledWith('q-1', mockUser.iss_sub);
   });
 });
 

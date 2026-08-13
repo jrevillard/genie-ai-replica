@@ -644,3 +644,56 @@ describe('POST /api/chat/conversations/:conversationId/move', () => {
     expect(response.body.message).toContain('User ID is required');
   });
 });
+
+// ============================================================
+// GET /api/chat/query/:queryId/messages
+// ============================================================
+describe('GET /api/chat/query/:queryId/messages', () => {
+  it('should return 200 with messages when caller owns the query', async () => {
+    const expected = [{ message: { _key: 'm1' }, conversation: {}, relationship: {} }];
+    chatHistoryService.findMessagesForQuery.mockResolvedValue(expected);
+
+    const response = await authGet('/api/chat/query/q-1/messages');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(expected);
+    expect(chatHistoryService.findMessagesForQuery).toHaveBeenCalledWith('q-1', mockUser.iss_sub);
+  });
+
+  it('should return 403 when caller does not own the query', async () => {
+    chatHistoryService.findMessagesForQuery.mockResolvedValue({ forbidden: true });
+
+    const response = await authGet('/api/chat/query/q-other/messages');
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({
+      success: false,
+      message: 'Access denied'
+    });
+  });
+
+  it('should return 404 when query does not exist', async () => {
+    chatHistoryService.findMessagesForQuery.mockResolvedValue(null);
+
+    const response = await authGet('/api/chat/query/missing/messages');
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      success: false,
+      message: 'Query not found'
+    });
+  });
+
+  it('should return 400 when userId is missing', async () => {
+    userProvisioningService.provisionUser.mockResolvedValue({ ...mockUser, iss_sub: undefined });
+
+    const response = await authGet('/api/chat/query/q-1/messages');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      success: false,
+      message: 'User ID is required'
+    });
+    expect(chatHistoryService.findMessagesForQuery).not.toHaveBeenCalled();
+  });
+});

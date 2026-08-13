@@ -2497,10 +2497,12 @@ e2e:playwright:
 # --- Configuration validation ---
 
 # Verify each overlay module's requirements-cpu.txt is in sync with its
-# requirements.in (dataprep/retriever/reranker). Fails if someone edited a
+# requirements.in (retriever/reranker). Fails if someone edited a
 # requirements.in (or bumped OPEA) without running `make lock-<module>`.
 # Catches silent lock drift before it reaches a build.
-verify:dataprep-lock:
+# Note: dataprep retired from this check (issue-834 lock pipeline retired
+# on the v1.5 bump — dataprep no longer ships a requirements.in).
+verify:overlay-locks:
   stage: config
   image: python:3.11-slim
   interruptible: true
@@ -2511,7 +2513,7 @@ verify:dataprep-lock:
   script:
     - |
       set -e
-      for MOD in dataprep retriever reranker; do
+      for MOD in retriever reranker; do
         cd "${CI_PROJECT_DIR}/genie-ai-overlay/${MOD}"
         # Verify lock is consistent and installable without re-resolving.
         # uv pip sync --dry-run checks every package+hash exists on PyPI;
@@ -2541,13 +2543,13 @@ verify:dataprep-lock:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/dataprep/requirements.*", "genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
+        paths: ["genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/dataprep/requirements.*", "genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
+        paths: ["genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/dataprep/requirements.*", "genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
+        paths: ["genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
 
 
 config:validate:

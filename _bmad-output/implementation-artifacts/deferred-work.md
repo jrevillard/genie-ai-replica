@@ -1813,3 +1813,11 @@ location: .gitlab-ci.yml
 severity: low
 reason: Story 2.4 backlog, spec not yet written. CI job belongs to that story scope.
 status: open
+
+### DW-266: Deleted requirements.in header documented the `uv pip compile` invocation used to regenerate the lock — that operational knowledge is lost with the file.
+origin: spec-deferred 1d0c5afb057a
+source_spec: `2-5-re-graft-the-dataprep.md`
+location: genie-ai-overlay/dataprep/requirements.in (deleted)
+severity: low
+reason: The deleted file's header (lines 1-20) documented: `uv pip compile --generate-hashes --python-version 3.11 --output-file requirements.lock requirements.in`. This is now dead knowledge (the lock pipeline is retired), but a future developer re-introducing a custom lock would need to rediscover this invocation.
+status: open

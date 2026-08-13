@@ -1813,3 +1813,11 @@ location: .gitlab-ci.yml
 severity: low
 reason: Story 2.4 backlog, spec not yet written. CI job belongs to that story scope.
 status: open
+
+### DW-266: Dataprep GPU support must be restored (PRD requirement, story 2-2 regression)
+origin: escalation-resolution 2-4-re-graft-the-reranker, 2026-08-13
+source_spec: `epic-2-context.md`, `epics.md` story 2-5
+location: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai, genie-ai-overlay/dataprep/requirements-gpu.txt (missing), genie-ai-overlay/dataprep/genieai_dataprep_utils.py
+severity: high
+reason: PRD epic-2-context explicitly requires "v1.4+ `requirements-cpu.txt`/`requirements-gpu.txt` compiled layout" but story 2-2 only compiled CPU locks and forced `DOCLING_DEVICE=cpu`. OPEA v1.5 upstream ships both locks and supports dual CPU/GPU builds via `ARCH` build arg. Dataprep runs docling OCR locally (unlike reranker/retriever which are HTTP clients to GPU services), so GPU support is architecturally required when CUDA is available. Story 2-5 must: (1) compile `requirements-gpu.txt` from `requirements.in`, (2) add `ARCH` build arg to Dockerfile, (3) use CUDA base image when `ARCH=gpu`, (4) revert `DOCLING_DEVICE` default from `cpu` back to `cuda`.
+status: open

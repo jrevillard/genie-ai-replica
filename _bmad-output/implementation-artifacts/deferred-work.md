@@ -738,6 +738,7 @@ origin: migrated from legacy ledger ("Deferred from: code review of 2-4-test-bac
 location: n/a
 reason: SECURITY: `GET /query/:queryId/messages` has no userId validation — any authenticated user can access messages for any queryId. Pre-existing security gap, not introduced by this story. Route should validate ownership via `extractUserId(req)`.
 status: open
+decision: 2026-08-13 Add ownership check — Extract userId from req via extractUserId(req); pass to findMessagesForQuery; add AQL filter or post-query check to verify userId owns the query; return 403 if not owner
 
 ### DW-104: Graph validation unreachable branch in source code
 origin: migrated from legacy ledger ("Deferred from: code review of 4-2-test-retriever-hybrid-search-logic (2026-05-16)"), 2026-08-12

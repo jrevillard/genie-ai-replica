@@ -1,6 +1,6 @@
 # Sprint Change Proposal — OKF End-to-End Architecture Course Correction
 
-**Date:** 2026-08-13 · **Branch:** `feat/okf-server` · **Scope:** Major · **Status:** For approval (this gate)
+**Date:** 2026-08-13 · **Branch:** `feat/okf-server` · **Scope:** Major · **Status:** Applied (2026-08-13) — see §6
 **Workflow:** BMAD `correct-course` (Batch mode — all 25 decision points pre-confirmed by the user)
 **Basis:** [okf-course-correction-2026-08-13.md](./okf-course-correction-2026-08-13.md) — four parallel verified deep-dives (write/read/control/test), 36 deduplicated gaps, the complete end-to-end architecture (§2), and the 25-point decision matrix (§3).
 
@@ -244,3 +244,22 @@ Add Epic 2.9 block (2.9.1–2.9.9 + 2.6a), Epic 1 additions (1.0, 1.0b, 1.3, 1.4
 2. **Epic 2.9 sub-numbering** (2.9.1–2.9.9) acceptable, or keep the course-correction doc's literal numbering?
 3. **Epic 8 (test infra)** as a new epic (vs folding into Epic 1) — agree?
 4. Apply all 12 ADRs + PRD/arch/epics/sprint-status edits + GitLab sync in one batch after approval — agree?
+
+---
+
+## 6. Applied (2026-08-13)
+
+**Approved** ("Approve — apply everything (Recommended)") + D24/D25 confirmed ("wait, shim as contingency only"). Applied to `feat/okf-server` + GitLab.
+
+**BMAD artifacts updated (commit `0780ad779`):**
+- **12 new ADRs** (`docs/adr/okf-021..032.md`) + revisions to `okf-012`/`okf-013` (all 25 decisions D1–D25 recorded).
+- **PRD** — new FR-34 (async ingestion pipeline) + FR-35 (query-aware graph selection); glossary (8 terms); non-goals (no dist. transaction; no cross-repo links v1); launch gates LG-1..LG-5; resolved open Qs (versioning D20/ADR-031, RRF D15/ADR-027); D24 clarified in §10.
+- **Architecture** — consolidated end-to-end section (component map, collection model, 7-step async write path, Graph Router read path); §3 read-path reference; §6 write-path reference; §8.1 new modules; §14 open items closed.
+- **epics.md** — new Epic 2.9 (stories 2.9.1–2.9.9 + extracted ungated 2.6a), new Epic 8 (8.1–8.5), new stories 1.0/1.0b/1.3/1.4/1.5/1.6/4.1b/6.1b; updated ACs across all 7 epics; FR coverage map (FR-34/35).
+- **sprint-status-okf-server.yaml** — Epic 1 additions, Epic 2.9 block, 4.1b, 6.1b, Epic 8 block + annotations.
+
+**GitLab updated:** labels `okf-server::epic-2.9` (id 379) + `okf-server::epic-8` (id 380) created; **23 story issues created — #916–#938** (Epic 2.9: #916–#925; Epic 1: #926–#931; 4.1b #932, 6.1b #933; Epic 8: #934–#938) — labeled `type::story`/`status::backlog`/`prd::okf-server`/`okf-server::epic-X`; MR !278 note posted (id 36923).
+
+**Pipeline:** MR !278 head pipeline **#6070 GREEN** — 71/71 jobs success, 0 failures (commit `0780ad779`).
+
+**Next (dev resumes):** ungated P0 remediation in order — **Story 2.6a** (ACL-preserve, #916) → **Story 6.1 authz fix** (default-deny, #885) → **2.9.1 + 2.9.2** (orchestrator + meta writer). Gated work (Epic 1, 2.9.6) waits for the OPEA 1.5 bump (!277) to merge. Each story is created via `bmad-create-story` then dev'd through the BMAD forward workflow.

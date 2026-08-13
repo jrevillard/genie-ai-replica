@@ -104,13 +104,13 @@ def test_genie_tei_reranking_registered_in_component_registry(comps):
 
     The adapter uses ``@OpeaComponentRegistry.register("GENIE_TEI_RERANKING")`` to
     register itself. This test verifies the registration happened by querying the
-    registry's get_component() API directly.
+    registry's get() API directly.
     """
     from comps import OpeaComponentRegistry
 
     # Use the registry's public API to verify registration
-    # The registry exposes get_component(name) to retrieve registered components
-    component = OpeaComponentRegistry.get_component("GENIE_TEI_RERANKING")
+    # The registry exposes get(name) to retrieve registered components
+    component = OpeaComponentRegistry.get("GENIE_TEI_RERANKING")
     assert component is not None, (
         "GENIE_TEI_RERANKING not found in OpeaComponentRegistry — "
         "the @OpeaComponentRegistry.register decorator may not have been applied"

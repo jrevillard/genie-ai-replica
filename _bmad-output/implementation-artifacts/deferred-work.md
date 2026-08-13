@@ -1286,6 +1286,7 @@ origin: migrated from legacy ledger ("Deferred from: story 2-10 checklist review
 location: n/a
 reason: 2 of 12 route files use the Controller → Service pattern (`auth-routes.js` → `authController.js`, `analytics-routes.js` → `analyticsController.js`), while the other 10 routes call services directly. Additionally, `adminController.js` (314 lines) is dead code — never imported anywhere, superseded by `admin-routes.js` calling services directly after the singleton refactor (commit `cd1e94802`, April 2026).
 status: open
+decision: 2026-08-13 Standardize to Controller→Service — Refactor all 10 direct-call routes to use Controller→Service pattern for consistency; large refactor touching 10 route files + creating 10 new controllers
 
 ### DW-187: SSE streaming complex error paths untested
 origin: migrated from legacy ledger ("Deferred from: code review of story 2-10 (2026-05-26)"), 2026-08-12

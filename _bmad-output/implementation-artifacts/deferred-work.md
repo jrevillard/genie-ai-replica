@@ -122,7 +122,8 @@ location: .gitlab-ci.yml
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: dataprep pins docling==2.45.0/docling-core==2.44.2 while retriever resolves docling==2.55.1/docling-core==2.48.4 (matching v1.5's own per-module locks); a coherence/version lint belongs to story 2.7.
-status: open
+status: done 2026-08-13
+resolution: already resolved: .gitlab-ci.yml:2532 — job renamed to verify:overlay-locks, now covers all three modules (dataprep/retriever/reranker) with cross-module version coherence
 
 ### DW-15: base images use moving tags (python:3.11-slim, opea/*:1.5), so byte-identical digests across time are bounded by base-tag stability; dependency layers are deterministic via the hashed lock.
 origin: spec-deferred 391ff9ae972c

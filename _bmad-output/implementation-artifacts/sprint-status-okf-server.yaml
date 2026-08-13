@@ -26,7 +26,7 @@ development_status:
   2-1-okf-server-skeleton-deploy: done
   2-2-arangodb-meta-collections-repo-crud: done
   2-3-okf-parser-frontmatter-links: done
-  2-4-conformance-validation-quality-metrics: review
+  2-4-conformance-validation-quality-metrics: done
   2-5-docrepo-bundle-ingest-route: backlog
   2-6-dataprep-graphname-metadata-retract: backlog  # [BUMP] (+ Epic 7 scope add: preserve ACL file_labels t:/r:/d: into chunk_labels — HIGH-severity correctness fix)
   2-7-source-sync-git-s3-change-detection: backlog

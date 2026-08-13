@@ -204,9 +204,11 @@ So that it consumes the compiled lock and registers correctly.
 **Acceptance Criteria:**
 
 **Given** the reranker's surface diff,
-**When** `fix_dependencies.sh` REQ_PATH is re-pointed to the compiled lock, the `opea_telemetry`/registration surface verified, and the reranker contract test run in-image,
+**When** the Dockerfile uses the compiled CPU lock (`requirements-cpu.txt`, already re-pointed by story 2-2), the `OpeaComponent`/`opea_telemetry` registration surface verified against v1.5 `comps`, and the reranker contract test (`test_contract_reranker.py`) run in-image via `contract:reranker` CI job,
 **Then** the reranker image builds and its contract test passes in-image,
-**And** the assert-on-patch guard fails the build if a patch goes stale.
+**And** the assert-on-patch guard fails the build if a patch goes stale (if any `build-patches/*.py` exist for reranker).
+
+**Note:** Reranker is a pure HTTP client to `tei_reranker` (GPU service). No local GPU inference. CPU lock is architecturally correct.
 
 ### Story 2.5: Re-graft the dataprep
 
@@ -217,9 +219,12 @@ So that ingest is deterministic and chunking is re-validated.
 **Acceptance Criteria:**
 
 **Given** the dataprep's surface diff,
-**When** the Dockerfile `REQ_PATH` is rewritten to `requirements-cpu.txt` (sed re-audit + assert-guards), docling 2.44.2 adopted, and the dataprep contract test (one-doc ingest, production config) run in-image,
-**Then** the dataprep image builds and its contract test passes in-image,
-**And** chunking behavior is exercised by the ingest smoke (docling downgrade surface).
+**When** the Dockerfile `REQ_PATH` is rewritten to `requirements-cpu.txt` (sed re-audit + assert-guards), docling 2.44.2 adopted, the dataprep contract test (one-doc ingest, production config) run in-image, **and** GPU support restored per OPEA v1.5 dual-lock pattern (`requirements-gpu.txt` compiled, `ARCH` build arg added to Dockerfile, CUDA base image used when `ARCH=gpu`, `DOCLING_DEVICE` default reverted from `cpu` back to `cuda`),
+**Then** the dataprep image builds (both CPU and GPU variants) and its contract test passes in-image,
+**And** chunking behavior is exercised by the ingest smoke (docling downgrade surface),
+**And** GPU-accelerated docling OCR works when CUDA is available.
+
+**Note:** Dataprep runs docling OCR locally (unlike reranker/retriever which are HTTP clients to GPU services). GPU support is a PRD requirement (epic-2-context: "v1.4+ requirements-cpu.txt/requirements-gpu.txt compiled layout"). Story 2-2 incorrectly dropped GPU support; this story restores it.
 
 ### Story 2.6: Re-graft the chatqna (highest coupling, last)
 

@@ -55,6 +55,11 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
 
   bool _isAuthorizing = false;
   bool _isRefreshing = false;
+  /// Coordination flag to prevent race conditions between logout and concurrent auth operations.
+  /// Set true at logout start, checked before token saves in authorize/refreshToken, checked before
+  /// refreshToken call in validateTokens. Reset false on successful authorize (re-login).
+  /// This is a soft guard (not a mutex) - prevents token save after logout but doesn't cancel in-flight operations.
+  bool _isLoggedOut = false;
   _FailedOperation _lastFailedOperation = _FailedOperation.none;
   StreamSubscription<bool>? _connectivitySubscription;
   Timer? _debounceTimer;
@@ -152,6 +157,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
   Future<void> authorize() async {
     if (_isAuthorizing) return;
     _isAuthorizing = true;
+    _isLoggedOut = false; // Re-auth after logout: reset so this flow can proceed
     _lastFailedOperation = _FailedOperation.authorize;
 
     _authLogger.logAuthEvent(
@@ -226,6 +232,10 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
         return;
       }
 
+      if (_isLoggedOut) {
+        state = const AuthState.unauthenticated();
+        return;
+      }
       await _tokenStorage.saveTokens(
         accessToken: accessToken,
         idToken: tokenResponse.idToken ?? '',
@@ -242,6 +252,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
       state = AuthState.authenticated(
         userId: _extractSub(tokenResponse.idToken),
       );
+      _isLoggedOut = false;
     } on FlutterAppAuthUserCancelledException {
       if (!ref.mounted) return;
       _lastFailedOperation = _FailedOperation.none;
@@ -328,6 +339,11 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
 
   Future<void> refreshToken() async {
     if (_isRefreshing) return;
+    // Check logout flag early to avoid wasted network calls
+    if (_isLoggedOut) {
+      state = const AuthState.unauthenticated();
+      return;
+    }
     _isRefreshing = true;
     _lastFailedOperation = _FailedOperation.refreshToken;
     try {
@@ -424,6 +440,10 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
           return;
         }
 
+        if (_isLoggedOut) {
+          state = const AuthState.unauthenticated();
+          return;
+        }
         await _tokenStorage.saveTokens(
           accessToken: accessToken,
           idToken: tokenResponse.idToken ?? '',
@@ -502,6 +522,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
   }
 
   Future<void> logout() async {
+    _isLoggedOut = true;
     _authLogger.logAuthEvent(
       message: 'Logout initiated',
       source: 'AuthNotifier.logout',
@@ -531,6 +552,13 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
   }
 
   Future<void> validateTokens() async {
+    if (_isLoggedOut) {
+      _authLogger.logAuthEvent(
+        message: 'Token validation skipped — user logged out',
+        source: 'AuthNotifier.validateTokens',
+      );
+      return;
+    }
     _lastFailedOperation = _FailedOperation.validateTokens;
     _authLogger.logAuthEvent(
       message: 'Token validation on lifecycle resume',

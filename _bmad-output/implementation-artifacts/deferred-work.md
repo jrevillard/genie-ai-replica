@@ -1209,7 +1209,9 @@ resolution: components/document-repository/src/__tests__/middleware/security.tes
 origin: migrated from legacy ledger ("Deferred from: code review of 1-6-configure-mr-blocking-and-scheduled-jobs round 2 (2026-05-21)"), 2026-08-12
 location: n/a
 reason: security/infrastructure decision enabling docker build through the proxy. Pre-existing configuration choice.
-status: open
+status: done 2026-08-13
+resolution: closed by human decision: Accept current security posture, document risk in deployment guide
+decision: 2026-08-13 Keep BUILD API enabled — Accept current security posture, document risk in deployment guide
 
 ### DW-173: Flutter SDK cache key lacks OS/architecture component
 origin: migrated from legacy ledger ("Deferred from: code review of 1-7-configure-ci-caching-and-path-based-triggers (2026-05-21)"), 2026-08-12

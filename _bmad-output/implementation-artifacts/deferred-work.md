@@ -1827,3 +1827,19 @@ location: genie-ai-overlay/dataprep/requirements.in (deleted)
 severity: low
 reason: The deleted file's header (lines 1-20) documented: `uv pip compile --generate-hashes --python-version 3.11 --output-file requirements.lock requirements.in`. This is now dead knowledge (the lock pipeline is retired), but a future developer re-introducing a custom lock would need to rediscover this invocation. (story 2-5-re-graft-the-dataprep: implemented and reviewed via bmad-loop)
 status: open
+
+### DW-267: OpeaComponentRegistry introspection tries multiple attribute names (components, registry, _registry, _components) — fragile but functional.
+origin: spec-deferred 04a0a93249d3
+source_spec: `2-4-re-graft-the-reranker.md`
+location: genie-ai-overlay/contracts/test_contract_reranker.py:286
+severity: low
+reason: test_contract_reranker.py:286-308 uses a loop to find the registry attribute; should verify v1.5 API directly instead of guessing.
+status: open
+
+### DW-268: Telemetry marker check tries multiple marker patterns (__wrapped__, _opea_telemetry_applied, __telemetry__) — fragile but functional.
+origin: spec-deferred 3058f403feec
+source_spec: `2-4-re-graft-the-reranker.md`
+location: genie-ai-overlay/contracts/test_contract_reranker.py:341
+severity: low
+reason: test_contract_reranker.py:341-350 uses multiple hasattr checks; should verify the actual opea_telemetry decorator implementation.
+status: open

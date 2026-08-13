@@ -72,11 +72,18 @@ def _parse_pth_imports(pth: Path) -> list[str]:
             continue
         if line.startswith("import "):
             # `import foo` → "foo"; `import foo, bar` → ["foo", "bar"]
+            # `import foo as alias` → "foo" (strip the alias)
             parts = line[len("import ") :].split(",")
-            modules.extend(p.strip() for p in parts if p.strip())
+            for p in parts:
+                mod = p.strip()
+                if " as " in mod:
+                    mod = mod.split(" as ", 1)[0].strip()
+                if mod:
+                    modules.append(mod)
         elif line.startswith("from "):
             # `from foo import bar` → "foo" (the module name is what lands in sys.modules)
-            rest = line[len("from ") :]
+            # Handle multiple spaces: `from  foo import bar` → "foo"
+            rest = line[len("from ") :].lstrip()
             mod_name = rest.split(" ", 1)[0].strip()
             if mod_name:
                 modules.append(mod_name)

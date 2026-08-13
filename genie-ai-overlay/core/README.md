@@ -191,10 +191,10 @@ ITU-specific services beyond standard OPEA:
 The Core Library maintains full compatibility with OpenAI APIs:
 
 **Standard Endpoints**:
-```python
-POST / v1 / chat / completions
-GET / v1 / models
-POST / v1 / embeddings
+```text
+POST /v1/chat/completions
+GET  /v1/models
+POST /v1/embeddings
 ```
 
 **Request Models**:
@@ -212,10 +212,10 @@ class ChatCompletionRequest(BaseModel):
 Extends OPEA protocol with GENIE.AI features:
 
 **OPEA Endpoints**:
-```python
-POST / v1 / chatqna
-POST / v1 / dataprep
-POST / v1 / retrieve
+```text
+POST /v1/chatqna
+POST /v1/dataprep
+POST /v1/retrieve
 ```
 
 ### GENIE.AI Custom APIs
@@ -223,12 +223,12 @@ POST / v1 / retrieve
 ITU-specific endpoints and models:
 
 **Custom Endpoints**:
-```python
-POST / v1 / translation
-POST / v1 / graphrag
-GET / v1 / analytics
-POST / v1 / documents / ingest
-DELETE / v1 / documents / retract
+```text
+POST /v1/translation
+POST /v1/graphrag
+GET  /v1/analytics
+POST /v1/documents/ingest
+DELETE /v1/documents/retract
 ```
 
 **Custom Request Models**:

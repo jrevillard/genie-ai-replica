@@ -2,7 +2,7 @@
 title: 'In-image contract gates for ungated overlay surfaces'
 type: 'chore'
 created: '2026-08-12'
-status: 'in-progress'
+status: 'in-review'
 baseline_revision: 'e3696035b5bea781d8550c7b7857d67c8f5b9181'
 review_loop_iteration: 0
 followup_review_recommended: false

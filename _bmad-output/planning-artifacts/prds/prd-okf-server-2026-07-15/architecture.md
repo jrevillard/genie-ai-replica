@@ -2,7 +2,7 @@
 title: Architecture — GENIE.AI OKF Server
 status: draft
 created: 2026-07-15
-updated: 2026-08-11
+updated: 2026-08-13
 initiative: okf-server
 branch: feat/okf-server
 prd: ./prd.md
@@ -28,6 +28,20 @@ adrs:
   - ../../../../docs/adr/okf-016-external-source-management.md
   - ../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md
   - ../../../../docs/adr/okf-018-okf-control-plane-storage.md
+  - ../../../../docs/adr/okf-019-ai-driven-okf-producer.md
+  - ../../../../docs/adr/okf-020-configurable-inference-model-tier.md
+  - ../../../../docs/adr/okf-021-write-side-orchestration.md
+  - ../../../../docs/adr/okf-022-node-python-dataprep-handoff.md
+  - ../../../../docs/adr/okf-023-graph-names-transport.md
+  - ../../../../docs/adr/okf-024-graph-selection-router.md
+  - ../../../../docs/adr/okf-025-authz-resolver.md
+  - ../../../../docs/adr/okf-026-trust-locality-staleness.md
+  - ../../../../docs/adr/okf-027-cross-graph-rrf.md
+  - ../../../../docs/adr/okf-028-cross-repo-structural-links.md
+  - ../../../../docs/adr/okf-029-audit-integrity.md
+  - ../../../../docs/adr/okf-030-lifecycle-state-machine.md
+  - ../../../../docs/adr/okf-031-versioning-strategy.md
+  - ../../../../docs/adr/okf-032-retention-ttl.md
 authors: Genie.ai Dev
 ---
 
@@ -74,13 +88,108 @@ authors: Genie.ai Dev
                                                   │     └────────────┘
 ```
 
+## End-to-end OKF architecture (2026-08-13 course correction)
+
+> Consolidated component map, collection model, write path, and read path. This section makes the **connective tissue** explicit that §2–§9 previously assumed. It supersedes nothing earlier; the 2026-08-13 architecture review ([okf-course-correction-2026-08-13](../../okf-course-correction-2026-08-13.md), [Sprint Change Proposal 2026-08-13](../../sprint-change-proposal-2026-08-13.md)) found the OKF initiative was specified at the capability level but not at the mechanism level — this closes that gap. Decisions D1–D25 are recorded in [ADR-okf-021..032](../../../../docs/adr/).
+
+### Component map (who owns what)
+
+| Component | Lives in | Owns | Status |
+|-----------|----------|------|--------|
+| **Crawler** | `document-repository` (crawler.js, crawlWorker.js) | Fetching external sites → versioned crawl dump | Exists (needs schema-versioning — Story 7.2) |
+| **Producer** | `okf-server` (Epic 7) | Segments dump → drafts concept `.md` into repo staging | Epic 7 |
+| **Write-side Orchestrator** (`ingestService`) | `okf-server` (**NEW**) | The ingest sequence: fetch bundle → unzip → parse → UPSERT meta → conformance → PII → dedup → enqueue to doc-repo → write edges → lifecycle transition | **NEW — Epic 2.9** ([ADR-okf-021](../../../../docs/adr/okf-021-write-side-orchestration.md)) |
+| **Ingestion Worker** (`ingestionWorker`) | `okf-server` (**NEW**) | Drains `Pending` concept-index jobs (Redis Streams), calls doc-repo→dataprep, reconciles orphans | **NEW — Story 2.9.4** |
+| **Blob store / Dataprep caller** | `document-repository` | Stores bytes, ClamAV, calls dataprep — stays a dumb blob store (no OKF business logic) | Exists (needs `graph_name` threading — Story 2.5/2.9.6) |
+| **Chunker / Embedder** | `genie-ai-overlay/dataprep` | Per-concept chunking (frontmatter stripped), ACL label preservation, writes `_SOURCE`/`_HAS_SOURCE` | Exists (ACL-preserve fix — Story 2.6a, ungated P0) |
+| **Parser** | `okf-server` (parser-service.js) | Frontmatter v0.2 + body + links — pure function | Exists (within-repo validation — Story 2.3 AC) |
+| **Conformance** | `okf-server` | Validates structure, records issues on `okf_concepts_meta` | Exists (needs UPSERT writer — Story 2.9.2) |
+| **PII** | `okf-server` (**NEW**) | Presidio scan, `pii_state`, redaction (publish prerequisite) | **NEW — Story 2.8** |
+| **Authz Resolver** (`authz-resolver.js`) | `okf-server` governance (**NEW**) | Token → `{graph_names, per_graph_labels, domains}`; per-session cache; default-deny | **NEW — Story 6.1b** ([ADR-okf-025](../../../../docs/adr/okf-025-authz-resolver.md)) |
+| **Graph Router** | `genie-ai-overlay/chatqna` (**NEW**) | Selects relevant graphs from the authorized set (domain binding + repo-metadata BM25), capped at `MAX_FANOUT_GRAPHS`, ≤20ms | **NEW — Story 1.3** ([ADR-okf-024](../../../../docs/adr/okf-024-graph-selection-router.md)) |
+| **Retriever** | `genie-ai-overlay/retriever` | Per-graph dense+BM25, ACL filter (all `search_start`), parallel fan-out, 2-level RRF, provenance materialization | Exists (6 changes — Stories 1.0/1.1/1.4/1.5) |
+| **Serving API** | `okf-server` (Epic 5) | search / get-concept / neighbors — two read paths | Epic 5 |
+| **Control Plane** | `okf-server` (Epics 3,4,6) | Repos CRUD, lifecycle state machine, version minting, audit, retention | Exists (6 fixes) |
+
+### Collection model (final)
+
+**Per-repo graph (created on first ingest, dropped on retire — `OKF_{repo_id}`):**
+- `OKF_{repo_id}_SOURCE` — chunks. Fields: `text`, `embedding`, `file_id`, `chunk_labels` (incl. `t:`/`r:`/`d:` ACL), `concept_id`, `repo_id`, `bundle_version`, `trust_tier` (**denormalized** — [ADR-okf-026](../../../../docs/adr/okf-026-trust-locality-staleness.md)), `stale_after`, `source_type`.
+- `OKF_{repo_id}_HAS_SOURCE` — edge: chunk → source doc.
+- `OKF_{repo_id}_LINKS_TO` — edge: concept → concept (**within-repo only in v1** — [ADR-okf-028](../../../../docs/adr/okf-028-cross-repo-structural-links.md)).
+- `OKF_{repo_id}_ENTITY` — (optional) concept entities; carries `chunk_labels`; ACL enforced on all paths.
+- `OKF_{repo_id}_BM25_VIEW` — ArangoSearch, lazy on first query (existing behavior).
+
+**Shared control-plane collections:**
+- `okf_repositories` — repo record. Fields: `repo_id`, `name`, `domain`, `source`, `graph_name`, `okf_version`, `lifecycle_state`, `version` (= `bundle_version`, minted on publish), `curator`, ACL (`required_scopes`, `sensitivity`), `retention` (schema'd), `delete_after`, timestamps.
+- `okf_concepts_meta` — **first-class indexed fields** ([ADR-okf-021](../../../../docs/adr/okf-021-write-side-orchestration.md) G9 fix): `repo_id`, `concept_id`, `title`, `type`, `tags[]`, `labels[]`, `summary`, `frontmatter`, `content_hash`, `lifecycle_status` (`draft|stable|deprecated`), `index_status` (`parsed|indexed|failed`), `trust_tier`, `stale_after`, `verified`, `pii_state`, `bundle_version`, `last_good_index_at`, `conformance_issues`. **Unique persistent index `(repo_id, concept_id)`**.
+- `okf_versions` (**NEW** — [ADR-okf-031](../../../../docs/adr/okf-031-versioning-strategy.md)) — keyed `[repo_id, bundle_version]`, immutable manifest (concept list + hashes + source ref + curator + ts). INSERT-only.
+- `okf_sources` (**NEW writer** — Story 2.9.8) — `repo_id`, `last_commit_sha`, `last_sync_at`, `origin_reachable`, `last_error`.
+- `okf_audit` (**schema fix** — [ADR-okf-029](../../../../docs/adr/okf-029-audit-integrity.md)) — add `tenant`, `actor_roles[]`, `deletion_reason`, `prev_hash`; index `tenant` + compound `(repo_id, ts)`; INSERT-only DB user.
+
+### Write path — ingestion (async, per-concept, idempotent)
+
+The answer to the store→pending→worker→graph model. The HTTP ingest call **never blocks** on dataprep.
+
+```
+[1] Steward triggers publish  →  POST /api/okf/repos/:repo_id/ingest  (okf-server Orchestrator)
+[2] Orchestrator resolves repo → derives graph_name="OKF_"+repo_id, ACL labels=[t:,r:,d:], bundle_version=mintVersion() (publish only)
+[3] Orchestrator fetches + unzips bundle (zip of *.md — D2)
+[4] FOR EACH concept (sequential, cheap Node work):
+      a. parser-service.parseConcept() → {frontmatter, body, links[], concept_id}
+      b. UPSERT okf_concepts_meta (first-class fields, content_hash, lifecycle_status, trust_tier, stale_after, bundle_version, index_status='parsed', pii_state='unknown')
+      c. conformance-service.validateConcept() → UPSERT issues onto meta
+      d. pii-service.scan(body) → set pii_state, redact if hit
+      e. content-hash dedup: hash unchanged AND index_status='indexed' → skip
+      f. ELSE enqueue per-concept index job → Redis Streams; create/update files doc: dataprep.status='Pending'
+    ── HTTP returns 202 Accepted here ──
+[5] ingestionWorker (concurrency 1, configurable): polls files FILTER dataprep.status=='Pending'
+      i.  doc-repo._ingestFileById({ base64, graph_name, file_labels:[t:,r:,d:], concept_id, repo_id, bundle_version })
+     ii.  dataprep reads graph_name from BODY → chunks per-concept body (frontmatter stripped) → _finalize_chunk_labels PRESERVES t:/r:/d: → writes OKF_{repo_id}_SOURCE + _HAS_SOURCE
+    iii. Orchestrator writes OKF_{repo_id}_LINKS_TO edges (within-repo validated)
+     iv. UPSERT okf_concepts_meta: index_status='indexed', last_good_index_at=now(), trust_tier denormalized onto chunks
+      v.  on failure: status='Failed' + DLQ + audit row
+[6] Orchestrator sweeper (scheduled): reconcile orphan chunks (concept_id with no okf_concepts_meta → retract)
+[7] All concepts indexed → lifecycle transition (state machine — ADR-okf-030): validate → review; repo.lifecycle_state updated, audit row written (write-before-respond)
+```
+
+Key properties: HTTP ingest never blocks on dataprep; idempotent re-ingest via content-hash; **no distributed transaction — compensation via sweeper + per-concept `index_status`**; ACL labels injected by the orchestrator (sole owner of repo→tenant/domain) and preserved end-to-end.
+
+### Read path — the Graph Router (intelligent selection, not dumb fan-out)
+
+Authorization is **not** selection. The current design fanned out to *all* authorized graphs (unbounded at 50 repos). The fix inserts an explicit Graph Router between authz and retrieval.
+
+```
+[1] Chat request arrives at ChatQnA with caller's OIDC token
+[2] AUTHZ RESOLVER (okf-server governance) → token → { graph_names:[authorized], per_graph_labels:{...}, domains:[...] }  (per-session cached)
+[3] GRAPH ROUTER (ChatQnA — NEW):
+      (a) Domain binding — detect query domain (service-category classifier OR match okf_repositories.domain) → near-free exact cut
+      (b) Repo-metadata BM25 — one AQL over okf_concepts_meta (query vs title/type/tags/summary) → rank candidate repos
+      (c) Selection — top-K candidates ∩ authorized set, cap at MAX_FANOUT_GRAPHS (default 5)
+      (d) Emit selection rationale as span attributes
+      Latency budget: ≤20ms (CI-gated, not aspirational)
+[4] RETRIEVER invoke() (rewired):
+      - graph_names via boundary-proven transport (ADR-okf-023)
+      - parallel fan-out: asyncio.gather + Semaphore(MAX_FANOUT_GRAPHS); per-graph timeout + skip
+      - per-graph error policy: errored repo → zero hits, NOT a 500
+      - ACL: chunk_labels filter on ALL search_start modes, using per_graph_labels (per-graph, not global union)
+      - each hit MATERIALIZES graph_name/repo_id/concept_id
+[5] FUSION — 2-level RRF (ADR-okf-027): within-graph (dense⊕BM25) → cross-graph (size-normalized)
+[6] Trust annotation — trust_tier denormalized on _SOURCE; staleness computed at query (today >= stale_after); advisory (v1)
+[7] Serve → agent (each hit carries provenance for grounding + audit)
+```
+
+**Multi-repo scale to 50+ repos** is bounded by three independent mechanisms: (1) selection cap (50 candidate → ≤5 selected), (2) `Semaphore` concurrency, (3) per-graph timeout+skip — plus 2-level size-normalized RRF. A p95 latency benchmark vs graph-count is a **launch gate** (LG-1).
+
 ## 2. Repository → graph model ([ADR-okf-002](../../../../docs/adr/okf-002-shared-graph-multi-tenancy.md), [ADR-okf-014](../../../../docs/adr/okf-014-repository-model.md))
 
 - A **repository** (`okf_repositories` doc): `repo_id`, `name`, `domain` (service-category key), `source` (Git/S3 ref), `graph_name = OKF_{repo_id}`, `okf_version` (defaults to `"0.2"`; v0.1 bundles consumed via fallback — [ADR-okf-017](../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md)), lifecycle state, `version`, `curator`, ACL (`required_scopes`, `sensitivity`), retention, timestamps.
 - On first ingest, `langchain-arangodb ArangoGraph.add_graph_documents(graph_name=OKF_{repo_id})` auto-creates the graph + four collections; the retriever lazily creates `OKF_{repo_id}_BM25_VIEW` on first query (existing behavior).
 - ACL is encoded as **chunk labels** on every chunk/edge: `t:<tenant>`, `r:<repo_id>`, `d:<domain>` — reusing the retriever's existing `chunk_labels` filter (zero retriever change for the filter itself).
 
-## 3. Multi-graph grounding (CORE — [ADR-okf-012](../../../../docs/adr/okf-012-multi-graph-grounding.md), [ADR-okf-013](../../../../docs/adr/okf-013-graph-name-wiring.md))
+## 3. Multi-graph grounding (CORE — [ADR-okf-012](../../../../docs/adr/okf-012-multi-graph-grounding.md) *revised 2026-08-13*, [ADR-okf-013](../../../../docs/adr/okf-013-graph-name-wiring.md) *revised 2026-08-13*)
+
+> **2026-08-13 course correction:** authorization is **not** selection. Before fan-out, a **Graph Router** ([ADR-okf-024](../../../../docs/adr/okf-024-graph-selection-router.md)) selects the relevant subset of authorized graphs (domain binding + repo-metadata BM25), capped at `MAX_FANOUT_GRAPHS` (default 5) with a ≤20ms CI-gated latency budget — see the **Read path** above. Fan-out is parallel, bounded (`Semaphore`), per-graph-timeout+skip, partial-failure-tolerant (errored repo = zero hits, not 500); ACL applies on all `search_start` modes. This section describes the retriever mechanics; the Graph Router governs *which* graphs.
 
 Today `graph_name` is a single global (`GRAPH`); ChatQnA never forwards one and doc-repo never sends one. To ground in **all** data (PRD FR-24):
 
@@ -126,6 +235,8 @@ All via the OKF Server REST API (`/api/okf/*`, Kong-terminated OIDC, role `tools
 
 > **Source-of-truth boundaries ([ADR-okf-016](../../../../docs/adr/okf-016-external-source-management.md)):** the external Git/S3 origin is a **sync source only** (consulted at sync, never at query/serve time); the **document-repository** retains the versioned copy and is the **single source of truth** for all internal components after upload; ArangoDB is the derived indexed view. Origins are **checked periodically**; deletion/inaccessibility is **detected and handled gracefully** (continue serving from the retained copy + alert the steward). "View source" links resolve to document-repository references, never the external origin URL.
 
+> **2026-08-13 course correction:** the steps below are sequenced by the **write-side orchestrator** (`ingestService`, [ADR-okf-021](../../../../docs/adr/okf-021-write-side-orchestration.md)) — see the **Write path** above for the full async, per-concept, idempotent sequence (202 + Redis-Streams `ingestionWorker` + content-hash dedup + orphan sweeper). Steps 4 (store+scan) and 6 (index) cross the doc-repo→dataprep boundary **asynchronously**: the orchestrator enqueues `Pending` jobs; the worker drains them. There is no distributed transaction — the sweeper reconciles.
+
 1. **Trigger** — operator action (admin UI "Sync"/"Ingest"), webhook, or schedule → OKF Server `source-sync` enqueues changed concepts (Redis Streams + DLQ).
    - **AI producer trigger (Epic 7, [ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md))** — a completed web crawl (or an OKF-intent crawl declared in the crawl UI) triggers `producer/` to segment the crawl's flat dump into concept drafts via the configurable `model-client/` ([ADR-okf-020](../../../../docs/adr/okf-020-configurable-inference-model-tier.md)); drafts are parsed by the dual `okf-parser`, redacted, scanned, indexed, and staged at `review` — **never auto-published**, `generated.by=agent:okf-producer`, trust tier `unverified`. Hierarchy/label proposals it emits are steward-approved (no direct taxonomy mutation).
 2. **Fetch + parse** — OKF Server pulls from Git/S3; `okf-parser` (gray-matter + markdown-it AST) extracts frontmatter (incl. v0.2 `generated.at` / `sources`, with legacy `timestamp` / `# Citations` fallback), body, structural links (anchor text → `label`).
@@ -150,7 +261,7 @@ Web-only (Flutter has no ingestion/admin UI — confirmed). Extends `AdminDashbo
 ## 8. Backend changes (floor to ceiling)
 
 ### 8.1 New OKF Server — `components/okf-server/` (Node/Express, CommonJS, `createApp()`, imports `components/shared/lib/`) ([ADR-okf-001](../../../../docs/adr/okf-001-okf-server-component-and-stack.md))
-Modules: `source-sync/` (git/s3), `okf-parser/` (frontmatter+markdown-it+links), `repository-manager/` (repo/bundle/concept CRUD + lifecycle + versioning + retention), `curation/` (review/approve, conformance, quality), `governance/` (RBAC, PII/Presidio, audit), `serving/` (REST + MCP-ready handlers), `auth/` (jose, mirror gov-chat-backend), `observability/` (OTel), **`producer/` (AI crawl→draft concept generator — Epic 7, [ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md))**, **`model-client/` (configurable multi-provider inference tier — [ADR-okf-020](../../../../docs/adr/okf-020-configurable-inference-model-tier.md))**. Routes mount at `/api/okf/*`.
+Modules: `source-sync/` (git/s3), `okf-parser/` (frontmatter+markdown-it+links), `repository-manager/` (repo/bundle/concept CRUD + lifecycle + versioning + retention), `curation/` (review/approve, conformance, quality), `governance/` (RBAC, PII/Presidio, audit), `serving/` (REST + MCP-ready handlers), `auth/` (jose, mirror gov-chat-backend), `observability/` (OTel), **`producer/` (AI crawl→draft concept generator — Epic 7, [ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md))**, **`model-client/` (configurable multi-provider inference tier — [ADR-okf-020](../../../../docs/adr/okf-020-configurable-inference-model-tier.md))**, and the **2026-08-13 course-correction additions (Epic 2.9)**: **`services/ingest-service.js`** (write-side orchestrator — [ADR-okf-021](../../../../docs/adr/okf-021-write-side-orchestration.md)), **`workers/ingestion-worker.js`** (Redis-Streams drain of `Pending` jobs + orphan sweeper), **`services/authz-resolver.js`** (token→graph-set — [ADR-okf-025](../../../../docs/adr/okf-025-authz-resolver.md)), **`services/version-service.js`** (`mintVersion` + `okf_versions` — [ADR-okf-031](../../../../docs/adr/okf-031-versioning-strategy.md)), **`services/retention-service.js`** (TTL sweep + `deletion_reason` — [ADR-okf-032](../../../../docs/adr/okf-032-retention-ttl.md)). All import `components/shared/lib/` (db-connection-service, logger, tracing, metrics) — **no reinvented connection management**. Routes mount at `/api/okf/*`.
 
 ### 8.2 document-repository (extend — [ADR-okf-008](../../../../docs/adr/okf-008-bundle-content-store.md))
 - **New route** `POST /api/files/ingest-bundle` (`fileRoutes.js` + `fileController.js`): accepts bundle/concept content, reuses `securityService.scanBuffer` (ClamAV), **bypasses** the upload allowlist/magic-byte/langdetect, writes bytes, hands to dataprep **with `graph_name`** (NEW: thread `graph_name` from request → `_ingestFileById` payload → dataprep `/v1/dataprep/ingest_file`). `authorizeRole(['Admin'])`.
@@ -251,6 +362,8 @@ Tooling layer = in-app editor + steward REST API + admin UI + optional local val
 
 - `repo_id` format + max repositories per deployment (ops sizing).
 - domain = service-category top-level category vs any node in the hierarchy.
-- retention defaults per domain (regulatory variation).
-- RRF weights for cross-graph fusion (tune empirically).
+- retention defaults per domain (regulatory variation) — *mechanism resolved ([ADR-okf-032](../../../../docs/adr/okf-032-retention-ttl.md)); the per-domain default values remain a deployment decision.*
+- ~~RRF weights for cross-graph fusion (tune empirically).~~ **RESOLVED (2026-08-13):** 2-level cross-graph RRF with per-graph size/confidence weight ([ADR-okf-027](../../../../docs/adr/okf-027-cross-graph-rrf.md)); weights tuned via the parameter-sweep harness (Story 8.4).
+- ~~versioning granularity (PRD §13.2).~~ **RESOLVED (2026-08-13):** repo-level `bundle_version` ([ADR-okf-031](../../../../docs/adr/okf-031-versioning-strategy.md)).
 - whether the free-form `GRAPH` corpus should also become domain-partitioned later (not required now).
+- *2026-08-13 additions:* `MAX_FANOUT_GRAPHS` tuning vs the latency benchmark (LG-1); the Authz Resolver scope-mapper shape in Keycloak ([ADR-okf-025](../../../../docs/adr/okf-025-authz-resolver.md)).

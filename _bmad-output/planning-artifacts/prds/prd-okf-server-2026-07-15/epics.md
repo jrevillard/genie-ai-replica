@@ -124,6 +124,8 @@ This document decomposes the OKF Server PRD (FR-1..FR-29), Architecture (§13 si
 | FR-31 | Epic 7 | Configurable model tier |
 | FR-32 | Epic 7 | Automated knowledge-hierarchy + labels (steward-vetted) |
 | FR-33 | Epic 7 | Multi-source crawl seeding |
+| FR-34 | Epic 2.9 | Async ingestion pipeline (write-side orchestration) — *added 2026-08-13* |
+| FR-35 | Epic 1 (Story 1.3) | Query-aware graph selection (Graph Router) — *added 2026-08-13; gated by bump* |
 
 ## Epic List
 
@@ -145,6 +147,10 @@ One retrieval grounds answers across the free-form corpus **and** all authorized
 An operator can register/create an OKF repository, sync it from Git/S3, have it validated, virus-scanned, PII-redacted, parsed, and indexed into its own graph — and manage it via CRUD. The foundational greenfield service.
 **FRs covered:** FR-1, FR-2, FR-3, FR-4, FR-5, FR-6, FR-7, FR-8, FR-13, FR-21, FR-22, FR-23, FR-27, FR-28 (+ ingest-side NFRs).
 
+### Epic 2.9: Write-side Orchestration  *(NEW 2026-08-13; mostly ungated Node trunk; Story 2.9.6 graph-wiring leg gated by bump)*
+The connective tissue that sequences ingest end-to-end: the write-side orchestrator (`ingestService`), the async ingestion worker (Redis Streams), the `okf_concepts_meta` UPSERT writer, the bundle zip contract, the `_LINKS_TO` edge writer, version minting, the source-sync backing store, and the retention sweep. Plus the extracted **ungated** ACL-preserve fix (Story 2.6a — highest P0 priority). The trunk every OKF consumer hangs on.
+**FRs covered:** FR-34 (+ FR-4, FR-5, FR-6, FR-7, FR-8, FR-11, FR-12 mechanisms). **ADRs:** okf-021, okf-022, okf-028, okf-030, okf-031, okf-032.
+
 ### Epic 3: Vue 3 Admin — Repository Management UI
 Operators manage OKF repositories from the existing admin dashboard (the established ingestion surface).
 **FRs covered:** FR-26 (repository management portion). **UX-DRs:** 1, 2, 4, 5, 6, 7.
@@ -165,6 +171,10 @@ Production-ready: hardened authz, FOI audit, end-to-end tracing, metrics, supply
 A steward uses a web crawl to rapidly create an OKF repository: the AI producer **assembles** concept drafts from crawled content, **AI-adjusts** and **cross-links** them into the most structured bundle, and **suggests** knowledge-hierarchy labels (steward-vetted). Configurable model tier; drafts stage in `review` — never auto-publish.
 **FRs covered:** FR-30, FR-31, FR-32, FR-33 (+ FR-5, FR-7, FR-9, FR-10, FR-29 reuse). **ADRs:** okf-019, okf-020.
 
+### Epic 8: Test Infrastructure & Evaluation  *(NEW 2026-08-13; cross-cutting; unblocks the "verify the strategy is solid" goal)*
+The deterministic fixture trinity (static crawl site + seed repos + golden queries), multi-graph retrieval integration tests, retrieval-quality + RRF-sweep eval harnesses, and the OPEA-1.5 fallback-shim contingency. The highest-leverage testing investment — makes the multi-repo scaling claim and the launch gates measurable.
+**Closes gaps:** G19, G20, G30, G31, G35.
+
 ---
 
 ## Epic 1: Unified Multi-Graph Grounding
@@ -179,7 +189,7 @@ So that **my answer is grounded in every available knowledge source, not one cor
 **Given** the retriever receives an authorized `graph_names` list (`GRAPH` + caller's `OKF_{repo_id}` set),
 **When** it runs a query,
 **Then** it executes the existing hybrid path (dense COSINE + BM25 view + optional traversal) per graph and **RRF-fuses** the per-graph ranked lists (reusing `rrf_fuse`),
-**And** each result hit carries `graph_name`/`repo_id`/`concept_id` for citation, `chunk_labels` ACL is applied per graph (unauthorized repos contribute nothing), and a single-graph call still works unchanged. *(FR-24; NFR-S7 additive; Architecture §8.4, §9)*
+**And** each result hit carries `graph_name`/`repo_id`/`concept_id` for citation, `chunk_labels` ACL is applied per graph (unauthorized repos contribute **zero hits** in the fused result), and a single-graph call still works unchanged. *(FR-24; NFR-S7 additive; Architecture §8.4, §9; **2026-08-13**: deps on Story 2.6a (ACL preserve) + Story 1.0 (provenance materialization); ACL filter must apply on `search_start ∈ {chunk, node, edge}` — bug fix G12; per-graph contribution counts emitted; boundary probe (Story 1.0b) asserts `graph_names` arrives at `invoke()` deployed.)*
 
 ### Story 1.2: ChatQnA forwards the authorized graph set
 As a **chat user**,
@@ -190,7 +200,43 @@ So that **the answer cites concepts from the free-form corpus and OKF repositori
 **Given** a caller's token grants a set of OKF repositories,
 **When** ChatQnA handles a `ChatCompletionRequest`,
 **Then** it carries the authorized graph set (`GRAPH` + `OKF_*`) through `GenieaiRetrieverParms` → `align_inputs` → retriever `invoke(graph_names=…)`,
-**And** an unauthorized repository never appears in the forwarded set, and the end-to-end path is covered by an OTel trace. *(FR-24; Architecture §8.5; also fix stale `RETRIEVER_ARANGO_GRAPH_NAME`→`ARANGO_GRAPH_NAME` env hint, §8.7)*
+**And** an unauthorized repository never appears in the forwarded set, and the end-to-end path is covered by an OTel trace. *(FR-24; Architecture §8.5; also fix stale `RETRIEVER_ARANGO_GRAPH_NAME`→`ARANGO_GRAPH_NAME` env hint, §8.7; **2026-08-13**: the authorized set is resolved by the Authz Resolver (Story 6.1b) as a **per-graph label map** (`graph_name → labels`), not a flat list — G8; isolation test: a caller scoped to repo A cannot read repo-B chunks.)*
+
+### Story 1.0: Retriever provenance materialization *(NEW 2026-08-13; gated; pins as 1.1 dependency — G18)*
+As an **agent**,
+I want **every retrieval hit to carry its `graph_name`/`repo_id`/`concept_id`**,
+So that **I can cite and audit which repository a grounded fact came from**.
+**Acceptance Criteria:** **Given** a multi-graph retrieval, **When** the retriever returns hits, **Then** each hit materializes `graph_name`, `repo_id`, and `concept_id` (read from the `_SOURCE` chunk doc), **and** these survive fusion (RRF) into the served result. *(FR-24; ADR-okf-013 revision; G18.)*
+
+### Story 1.0b: Boundary probe — `graph_names` across the mega-service *(NEW 2026-08-13; gated; determines the read-side transport shape — G2, LG-5)*
+As a **platform engineer**,
+I want **to prove `graph_names` survives the ChatQnA→retriever boundary in the deployed stack**,
+So that **fan-out code is not built on an unverified assumption**.
+**Acceptance Criteria:** **Given** the deployed ChatQnA mega-service, **When** `POST /v1/retrieval` is sent with `graph_names=[G1,G2]`, **Then** `invoke()` receives both (asserted in logs/span, not just in-process); **and** if the boundary drops them, the chosen durable carrier (`label_contract` extension) is documented (ADR-okf-023). *(ADR-okf-023; G2; LG-5 launch gate.)*
+
+### Story 1.3: Graph Router — query-aware graph-set selection *(NEW 2026-08-13; gated; G6, D8–D10/D14)*
+As a **chat user**,
+I want **my query to ground in the *relevant* authorized graphs, not all of them**,
+So that **grounding stays fast and precise as the deployment grows to many repositories**.
+**Acceptance Criteria:** **Given** the authorized graph set (from Story 6.1b) + the query, **When** the Graph Router (in ChatQnA) runs, **Then** it (a) binds the query to a domain (service-category classifier or `okf_repositories.domain` exact match), (b) ranks candidate repos by repo-metadata BM25 over `okf_concepts_meta` (`title/type/tags/summary`), (c) intersects with the authorized set and caps at `MAX_FANOUT_GRAPHS` (default 5, configurable), **and** selection latency ≤20ms is **CI-gated** against seed fixtures (Story 8.1); AC: seed 4 repos across 3 domains, assert only the relevant graphs are traversed. *(FR-35; ADR-okf-024; G6.)*
+
+### Story 1.4: Parallel fan-out — bounded concurrency + per-graph timeout + partial-failure *(NEW 2026-08-13; gated; G14)*
+As an **SRE**,
+I want **fan-out to be parallel, bounded, and resilient to one slow/sick repo**,
+So that **one repo cannot stall or fail a query**.
+**Acceptance Criteria:** **Given** the selected graph set, **When** the retriever fans out, **Then** it uses `asyncio.gather` + `Semaphore(MAX_FANOUT_GRAPHS)`, each graph has a per-graph timeout (skip-on-timeout: log + continue + fuse survivors), **and** an errored repo contributes **zero hits, NOT a 500**. *(ADR-okf-013 revision; ADR-okf-024; G14.)*
+
+### Story 1.5: 2-level cross-graph RRF + size normalization *(NEW 2026-08-13; gated; G21)*
+As a **platform engineer**,
+I want **cross-graph fusion to be fair across repos of unequal size**,
+So that **small repos are not drowned out or over-weighted**.
+**Acceptance Criteria:** **Given** per-graph ranked lists, **When** fusion runs, **Then** Level-1 fuses dense⊕BM25 per graph (reuse `rrf_fuse`) → per-graph top-K, Level-2 cross-graph RRF weights by per-graph size/confidence; `k` + weights tuned via Story 8.4. *(FR-24; ADR-okf-027; G21.)*
+
+### Story 1.6: Fan-out observability spans *(NEW 2026-08-13; gated; G24, G35)*
+As an **SRE**,
+I want **graph-selection and fan-out to be observable**,
+So that **I can diagnose precision/latency degradation**.
+**Acceptance Criteria:** **Given** a multi-graph query, **When** it executes, **Then** spans emit `graphs_authorized`, `graphs_selected`, `graphs_traversed`, `per_graph_latency_ms`, `per_graph_hit_count`, `selection_latency_ms`, `selection_reason`; empty/undersized repos emit a structured "0 (undersized)" signal. *(FR-20; ADR-okf-024; G24, G35.)*
 
 ---
 
@@ -228,7 +274,7 @@ So that **concepts are indexable and traversable**.
 **Given** a concept `.md` file,
 **When** the Node `okf-parser` (`gray-matter` + `markdown-it`) processes it,
 **Then** it extracts frontmatter (incl. v0.2 `generated.at`/`sources`, with legacy `timestamp`/`# Citations` fallback per ADR-okf-017), the body, and structural links resolved to concept IDs with anchor text as `label`,
-**And** broken links are tolerated (not a failure), and parsed concepts are handed to dataprep's ingest path. *(FR-6, FR-7; Architecture §6 step 2; ADR-okf-010, ADR-okf-017)*
+**And** broken links are tolerated (not a failure), and parsed concepts are handed to dataprep's ingest path. *(FR-6, FR-7; Architecture §6 step 2; ADR-okf-010, ADR-okf-017; **2026-08-13**: reject cross-repo link targets at parse — validate each target resolves to a `concept_id` within the **same** `repo_id`; emit a `CROSS_REPO_LINK` conformance issue on violation (ADR-okf-028, G22).)*
 
 ### Story 2.4: Conformance validation (OKF §11) + quality metrics
 As a **steward**,
@@ -250,7 +296,7 @@ So that **no new storage vendor or scanning infrastructure is introduced**.
 **Given** the new `POST /api/files/ingest-bundle` route in the document-repository (`authorizeRole(['Admin'])`),
 **When** bundle/concept content arrives,
 **Then** it reuses `securityService.scanBuffer` (ClamAV), **bypasses** the upload allowlist/magic-byte/langdetect, writes bytes, and hands to dataprep **carrying `graph_name`** (threaded request → `_ingestFileById` → dataprep `/v1/dataprep/ingest_file`),
-**And** malware is rejected + logged with nothing indexed. *(FR-5, FR-22; Architecture §8.2; ADR-okf-008, ADR-okf-016)*
+**And** malware is rejected + logged with nothing indexed. *(FR-5, FR-22; Architecture §8.2; ADR-okf-008, ADR-okf-016; **2026-08-13**: the route is the orchestrator's storage+scan leg — it stores the bundle + ClamAV-scans + creates the `files` doc at `dataprep.status='Pending'` (carrying `graph_name` + `repo_id`, persisted via the `extractMetadata` fix) and returns; the **ingestionWorker** (Story 2.9.4) drains `Pending` asynchronously; the route asserts `graph_name === 'OKF_'+repo_id` server-side (4xx on ownership mismatch, not format-only) — G5/G10.)*
 
 ### Story 2.6: dataprep graph_name wiring + additive metadata + repo-level retract  *(GATED by OPEA 1.5 bump !277)*
 As a **platform engineer**,
@@ -263,7 +309,7 @@ So that **each repository is isolated and cleanly removable**.
 **Then** dataprep reads `graph_name` from the **request** (not just env) on ingest + retract; `ArangoDBDataprepRequestFromDocRepo` carries additive `concept_id`/`bundle_version`/`source_type`/`repo_id` propagated to chunk-doc metadata; TEI embedding is reused; `retract_file` gains a repo/bundle-level retract path (by `repo_id`+`bundle_version`),
 **And** the latent retract-default mismatch (`genie_graph`→`GRAPH`/request) is fixed (Architecture §8.7), with additive-only schema changes (NFR-S7). *(FR-6, FR-8; Architecture §8.3, §9; ADR-okf-010, ADR-okf-013)*
 
-> **Epic 7 scope add (2026-08-12, [ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md)):** additionally **preserve ACL-prefixed `file_labels` (`t:`/`r:`/`d:`) into `chunk_labels`** in `_finalize_chunk_labels` (today silently dropped — HIGH-severity correctness fix for OKF isolation), and short-circuit the LLM label call when concept frontmatter already carries labels. *(genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py:1051-1104.)*
+> **2026-08-13 course correction:** the ACL-preserve fix (`_finalize_chunk_labels` preserving `t:`/`r:`/`d:` prefixes — today silently dropped, G4 P0) is **extracted into ungated Story 2.6a** so it can land immediately, ahead of the bump. Story 2.6 (this story, gated) keeps: dataprep reads `graph_name` from the request body (ingest + retract), additive metadata, repo/bundle-level retract, the retract-default mismatch fix, **and** `retractRepoGraph` dropping the 4 `OKF_{repo_id}_*` collections (retract must target the correct graph — G5, never the free-form `GRAPH`). Unify the fallback constant. *(ADR-okf-013 revision, ADR-okf-021; genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py:1051-1104.)*
 
 ### Story 2.7: Source sync (Git/S3) + change detection + origin health
 As a **platform engineer**,
@@ -285,7 +331,72 @@ So that **no PII reaches `published` and answers can link to verifiable sources*
 **Given** concept bodies (and tagged sensitive frontmatter) at ingest,
 **When** the OKF Server `governance/` module runs Presidio (library mode, document-level default),
 **Then** a PII-policy failure withholds the concept from `published` and flags it for review (blocking); each indexed repository version records source ref + fetch timestamp + curator + stable version id on the document-repository;
-**And** every concept carries a stable document-repository reference so the UI, chat citations, and agents can link to view the original source (never the external origin URL). *(FR-3, FR-5, FR-28; NFR-P1, NFR-P2; Architecture §6 steps 4–5; ADR-okf-004)*
+**And** every concept carries a stable document-repository reference so the UI, chat citations, and agents can link to view the original source (never the external origin URL). *(FR-3, FR-5, FR-28; NFR-P1, NFR-P2; Architecture §6 steps 4–5; ADR-okf-004; **2026-08-13**: PII redaction is a **publish prerequisite** (lifecycle gate — D22/ADR-okf-030), not a parallel track; the `pii_state` writer on `okf_concepts_meta` is owned here — G28.)*
+
+---
+
+## Epic 2.9: Write-side Orchestration
+*(NEW 2026-08-13. Mostly ungated Node trunk; Story 2.9.6 graph-wiring dataprep leg gated by the bump. This is the trunk every OKF consumer hangs on — it makes ingest work end-to-end.)*
+
+### Story 2.6a: ACL-label preserve fix (extracted, UNGATED — highest P0 priority) *(G4)*
+As a **platform engineer**,
+I want **ACL-prefixed `file_labels` (`t:`/`r:`/`d:`) preserved into `chunk_labels` at ingest**,
+So that **per-tenant/repo/domain isolation actually holds at retrieval**.
+**Acceptance Criteria:** **Given** dataprep `_finalize_chunk_labels` (today silently drops ACL prefixes — `genieai_dataprep_arangodb.py:1051-1104`), **When** an OKF ingest carries `file_labels:[t:,r:,d:]`, **Then** those prefixes survive into `chunk_labels` on the `_SOURCE` chunk doc (regression test asserts the exact labels post-ingest), **and** the LLM label call is short-circuited when concept frontmatter already carries labels. *(ADR-okf-013 revision; G4; this is the load-bearing wall for OKF isolation — LG-3 launch gate.)*
+
+### Story 2.9.1: `ingestService` + `POST /api/okf/repos/:repo_id/ingest` *(G1)*
+As a **steward**,
+I want **to trigger an end-to-end ingest that returns immediately and indexes asynchronously**,
+So that **the HTTP call never blocks on dataprep and large repos don't time out**.
+**Acceptance Criteria:** **Given** the orchestrator (`services/ingest-service.js`), **When** `POST /api/okf/repos/:repo_id/ingest` is called (tools-admin), **Then** it resolves the repo → derives `graph_name="OKF_"+repo_id` + ACL labels `[t:,r:,d:]` + `bundle_version` (publish only) → unzips the bundle (zip of `.md`) → per concept: `parseConcept` → UPSERT `okf_concepts_meta` → `validateConcept` → PII scan → content-hash dedup → enqueue index job (Redis Streams) + `files` doc `dataprep.status='Pending'` → returns **202**; the orchestrator is the **sole** ACL-label injector (owns repo→tenant/domain). *(FR-34; ADR-okf-021, ADR-okf-022.)*
+
+### Story 2.9.2: `okf_concepts_meta` UPSERT writer + first-class fields *(G9)*
+As a **platform engineer**,
+I want **`okf_concepts_meta` written with first-class, indexable fields**,
+So that **conformance/metrics/graph-router queries work and provenance is not lost**.
+**Acceptance Criteria:** **Given** the meta collection, **When** a concept is parsed, **Then** the writer UPSERTs on `(repo_id, concept_id)` (unique persistent index) the first-class fields `title/type/tags/summary/content_hash/lifecycle_status/index_status/trust_tier/stale_after/pii_state/bundle_version`; replaces the filter-and-UPDATE that wrote zero rows; **and** a no-prior-doc assertion confirms the UPSERT created the doc. *(ADR-okf-021; G9; closes the silent-no-op that masked the gap.)*
+
+### Story 2.9.3: `_LINKS_TO` edge writer (within-repo validated) *(G7, G22)*
+As a **platform engineer**,
+I want **structural concept→concept edges written post-index, validated to stay within the repo**,
+So that **traversal works and cross-repo links are rejected**.
+**Acceptance Criteria:** **Given** the parsed `links[]`, **When** the orchestrator writes `OKF_{repo_id}_LINKS_TO` (post-index), **Then** it only emits edges whose endpoints are concepts in the **same** `repo_id` (cross-repo targets dropped, consistent with the parse-time `CROSS_REPO_LINK` warning), carrying `label` (anchor text) + `file_id` + `repo_id`. *(ADR-okf-022 (D4), ADR-okf-028; G7, G22.)*
+
+### Story 2.9.4: `ingestionWorker` — Redis Streams + DLQ + orphan sweeper *(G10)*
+As an **SRE**,
+I want **an async worker that drains `Pending` ingest jobs resiliently**,
+So that **ingest never blocks the API and failures are recoverable**.
+**Acceptance Criteria:** **Given** Redis Streams + a per-purpose DLQ, **When** the worker runs (concurrency 1 default, configurable via `OKF_INGEST_CONCURRENCY`), **Then** it polls `files FILTER dataprep.status=='Pending'`, calls doc-repo `_ingestFileById` (carrying `graph_name`/`file_labels`/`concept_id`/`repo_id`/`bundle_version`) → dataprep → graph creation, transitions `index_status` (`parsed→indexed`, `failed`+DLQ on error), writes audit rows; **and** a scheduled sweeper retracts orphan chunks (concept_id with no `okf_concepts_meta`). *(FR-34; ADR-okf-021 (D5/D6); NFR-R2; G10.)*
+
+### Story 2.9.5: Bundle format (zip) + server unzip + content-hash dedup *(G11)*
+As a **platform engineer**,
+I want **a defined, atomic bundle contract with idempotent re-ingest**,
+So that **re-ingesting an unchanged concept does not duplicate chunks**.
+**Acceptance Criteria:** **Given** a bundle, **When** it arrives, **Then** it is a **zip of `.md` concept files** (server unzips, iterates); a content-hash dedup check skips any concept whose hash is unchanged AND `index_status='indexed'`; **and** there is no distributed transaction — compensation via the sweeper + `index_status`. *(FR-34; ADR-okf-021 (D2/D6); NFR-S4; G11.)*
+
+### Story 2.9.6: `graph_name` wiring end-to-end + retract fix  *(GATED by OPEA 1.5 bump — G5)*
+As a **platform engineer**,
+I want **`graph_name` threaded doc-repo→dataprep and retract targeting the correct graph**,
+So that **each repo is isolated and cleanly removable without destroying the wrong graph**.
+**Acceptance Criteria:** **Given** the doc-repo payload + dataprep microservice, **When** an OKF ingest/retract runs, **Then** `graph_name` is read from the **request body** at the dataprep boundary (ingest + retract), `retractRepoGraph(repo_id)` drops the 4 `OKF_{repo_id}_*` collections (never the free-form `GRAPH`), **and** the fallback constant is unified. *(ADR-okf-013 revision, ADR-okf-021; G5.)*
+
+### Story 2.9.7: `okf_versions` + `mintVersion()` on publish *(G26)*
+As a **steward**,
+I want **each publish to mint an immutable, diffable version**,
+So that **agent citations can pin a version and changes are auditable**.
+**Acceptance Criteria:** **Given** a publish transition, **When** it completes, **Then** `mintVersion(repo_id)` increments the repo's version counter (repo-level `bundle_version`, threaded onto chunks/edges/meta) and snapshots an immutable `okf_versions` manifest (concept list + hashes + source ref + curator + ts; INSERT-only). *(FR-11; ADR-okf-031; G26; resolves PRD §13.2.)*
+
+### Story 2.9.8: `okf_sources` writer (source-sync backing store) *(G32)*
+As a **platform engineer**,
+I want **the `okf_sources` collection written by source-sync**,
+So that **the admin UI's "last sync / health" column has real data**.
+**Acceptance Criteria:** **Given** source-sync (Story 2.7), **When** a sync runs, **Then** `okf_sources` is written (`last_commit_sha`, `last_sync_at`, `origin_reachable`, `last_error`); the collection is no longer ensure-on-boot-and-unused. *(FR-2; ADR-okf-018; G32.)*
+
+### Story 2.9.9: Retention/TTL sweep worker + `deletion_reason` *(G27)*
+As a **data-protection officer**,
+I want **expired content retracted on schedule with a recorded reason**,
+So that **retention is enforced and every deletion is explainable for FOI/GDPR**.
+**Acceptance Criteria:** **Given** a schema'd `retention`/`delete_after` policy (per-tenant/domain, deployment defaults), **When** the scheduled sweep runs, **Then** it retracts repos/concepts past `delete_after` via the cascade (FR-8/2.9.6), records `deletion_reason` (`ttl_expired|retired|origin_deleted|gdpr_erasure`), **and** writes a write-before-respond audit row. *(FR-12; ADR-okf-029, ADR-okf-032; G27.)*
 
 ---
 
@@ -312,7 +423,7 @@ So that **I can administer a repository end-to-end from the UI**.
 **Given** the new components,
 **When** the operator creates/edits a repository,
 **Then** `OkfRepositoryDialog.vue` offers a domain picker via `serviceTreeService.getAdminCategories()`; `OkfRepositoryDetails.vue` shows tabs (Concepts tree, Conformance/PII, Versions, Source/Sync, Audit) with actions Sync/Validate/Publish/Retire/Delete,
-**And** mutating actions enforce `tools-admin`/admin role (Kong + OKF Server), DS primitives are used, and components are Jest-tested. *(FR-26; UX-DR2, UX-DR4, UX-DR7)*
+**And** mutating actions enforce `tools-admin`/admin role (Kong + OKF Server), DS primitives are used, and components are Jest-tested. *(FR-26; UX-DR2, UX-DR4, UX-DR7; **2026-08-13**: the "last sync / health" column reads from `okf_sources` (Story 2.9.8 must land first, or the column is explicitly blank-stubbed) — G32.)*
 
 ### Story 3.3: Ingestion progress + i18n completeness
 As an **operator**,
@@ -339,7 +450,13 @@ So that **my edits flow through to the index and structural edges**.
 **Given** the `/api/okf/repos/{repo}/concepts` endpoints,
 **When** an author saves a concept,
 **Then** on save → re-parse → incremental re-index (content-hash keyed) → update `okf_concepts_meta` + structural `OKF_{repo}_LINKS_TO` edges (+ `label`); delete cascades the concept's chunks/edges with orphan cleanup,
-**And** a concurrent query during re-index sees the last-good index. *(FR-8, FR-25 CRUD; NFR-S4; Architecture §5)*
+**And** a concurrent query during re-index sees the last-good index. *(FR-8, FR-25 CRUD; NFR-S4; Architecture §5; **2026-08-13**: optimistic concurrency — expose `_rev`, accept `If-Match`, return **409** on mismatch (G25); first-class `title/type/tags/summary` fields on `okf_concepts_meta` (Story 2.9.2).)*
+
+### Story 4.1b: Concept-label re-materialization on edit *(NEW 2026-08-13; ungated; G29)*
+As an **author**,
+I want **editing a concept's labels/trust to re-materialize on its chunks**,
+So that **stale `chunk_labels`/`trust_tier` do not persist after a label change or cross-repo move**.
+**Acceptance Criteria:** **Given** a concept edit that changes labels or `trust_tier`, **When** it saves, **Then** the concept's chunks are re-indexed so `chunk_labels` + denormalized `trust_tier` are fresh (ACL-freshness test asserts old labels are gone), **and** a cross-repo move orphans no chunks (sweeper reconciles). *(ADR-okf-026; G29.)*
 
 ### Story 4.2: In-app Markdown concept editor (with v0.2 families)
 As a **knowledge author**,
@@ -360,7 +477,7 @@ So that **only reviewed, published content reaches agents**.
 **Acceptance Criteria:**
 **Given** the lifecycle `register→validate→review→approve→publish→version→deprecate→retire`,
 **When** a state transition occurs,
-**Then** only `published` content is served to agents (`review`/`draft` invisible to non-steward queries); transitions are role-restricted and auditable (who/when). *(FR-9)*
+**Then** only `published` content is served to agents (`review`/`draft` invisible to non-steward queries); transitions are role-restricted and auditable (who/when). *(FR-9; **2026-08-13**: rewrite against the lifecycle **state machine** (ADR-okf-030) — explicit `TRANSITIONS` map, auto vs human gates, transition endpoints returning 409 + allowed-next-states on invalid transitions, `version` demoted to a publish side-effect (not a state); served-status rule: served iff `repo.lifecycle_state='published'` AND `concept.lifecycle_status ∈ {stable, deprecated}` — G17.)*
 
 ### Story 4.4: Review & approval gate
 As a **steward**,
@@ -371,7 +488,7 @@ So that **a human sign-off gates what agents see**.
 **Given** a repository/concept in `review`,
 **When** a steward acts,
 **Then** approval requires a `tools-admin`/steward role and records approver + timestamp; rejection records the reason and returns content to `review`,
-**And** approval can write a portable `verified: { by: human:<steward>, at: … }` trust signal (FR-29/ADR-okf-017). *(FR-10)*
+**And** approval can write a portable `verified: { by: human:<steward>, at: … }` trust signal (FR-29/ADR-okf-017). *(FR-10; **2026-08-13**: publish is gated on PII redaction (Story 2.8, publish prerequisite — D22) and conformance; the transition writes a write-before-respond audit row — ADR-okf-029/030.)*
 
 ### Story 4.5: Versioning & provenance
 As a **steward**,
@@ -382,7 +499,7 @@ So that **agent citations can pin a version and changes are auditable**.
 **Given** a steward publish action,
 **When** it completes,
 **Then** an immutable version is created (monotonic, tied to source ref); stewards can list/diff versions; lineage (source ref → concept → served answer) is capturable for citation and audit,
-**And** superseded versions are retained until retention/TTL then retracted. *(FR-11; ADR-okf-005)*
+**And** superseded versions are retained until retention/TTL then retracted. *(FR-11; ADR-okf-005; **2026-08-13**: versioning is **repo-level** `bundle_version` minted on publish (ADR-okf-031 / Story 2.9.7), demoted to a publish side-effect; immutable `okf_versions` manifest backs list/diff — G26.)*
 
 ### Story 4.6: Retention / TTL
 As a **data-protection officer**,
@@ -417,7 +534,7 @@ So that **I can find the right knowledge without dumping the whole corpus into c
 **Acceptance Criteria:**
 **Given** an authenticated agent,
 **When** it calls `/api/okf/search`,
-**Then** it receives ranked concept hits (ID + snippet) across its authorized graphs (FR-24 fan-out when available), scoped by per-tenant/repo/domain RBAC (unauthorized repos excluded silently), token/byte-capped with a `nextCursor`. *(FR-14; NFR-PR1, NFR-PR2)*
+**Then** it receives ranked concept hits (ID + snippet) across its authorized graphs (FR-24 fan-out when available), scoped by per-tenant/repo/domain RBAC (unauthorized repos excluded silently), token/byte-capped with a `nextCursor`. *(FR-14; NFR-PR1, NFR-PR2; **2026-08-13**: pre-Epic-1 fallback = single-graph (the legacy free-form corpus only) — documented; multi-graph fan-out activates when Epic 1 lands; cursor = **deterministic re-rank + stable sort key** (not stateful cursors — preserves NFR-R1 stateless), with a documented re-index caveat — G23/D23.)*
 
 ### Story 5.2: Get concept document
 As an **agent**,
@@ -428,7 +545,7 @@ So that **I can read exactly what I need with a version I can pin**.
 **Given** a concept request (repo + concept ID, optional version/lang),
 **When** the agent calls `/api/okf/get`,
 **Then** it returns the concept (full or sliced) with token caps and a "fetch more" handle, version-pinned when a version is requested,
-**And** an unauthorized request returns **403** (not 404 leakage). *(FR-15; ADR-okf-006)*
+**And** an unauthorized request returns **403** (not 404 leakage). *(FR-15; ADR-okf-006; **2026-08-13**: this is a **direct fetch** from `okf_concepts_meta` + the document-repository (the `.md` source), **NOT** retrieval — a concept is N chunks; `get` returns the concept, not a chunk. Two read paths (search=retrieval, get=direct-fetch), explicitly documented — G23.)*
 
 ### Story 5.3: List repositories & outline
 As an **agent**,
@@ -460,7 +577,7 @@ So that **I can follow relationships without arbitrary AQL access**.
 **Given** a concept in a repo graph,
 **When** the agent calls `/api/okf/neighbors?depth=`,
 **Then** it returns neighbors/backlinks via parameterized traversal over `OKF_{repo}_LINKS_TO` (retaining anchor-text `label`),
-**And** no raw AQL is ever exposed to agents. *(FR-7 traversal, FR-17; ADR-okf-011)*
+**And** no raw AQL is ever exposed to agents. *(FR-7 traversal, FR-17; ADR-okf-011; **2026-08-13**: traversal is **single-repo-scoped** (`OKF_{repo}_LINKS_TO`) — agents select a repo first (via search or explicit `repo_id`), then traverse; multi-graph traversal fusion is out of scope for v1 (ADR-okf-028) — G22/G23.)*
 
 ### Story 5.6: MCP-ready handlers
 As a **platform engineer**,
@@ -487,7 +604,13 @@ So that **access is least-privilege and verifiable**.
 **Given** Keycloak OIDC terminated at Kong,
 **When** a request arrives,
 **Then** the bearer token is validated (`jose`/JWKS via OIDC discovery) with audience bound to the OKF server (RFC 8707, no passthrough); authorization enforces `okf:{tenant}:{repo}:{read|admin}` encoded as `chunk_labels` (`t:`/`r:`/`d:`) so the retriever's existing label filter enforces isolation,
-**And** a token lacking a repo's scope cannot read that repo's concepts. *(FR-18; NFR-S2; ADR-okf-003, ADR-okf-002)*
+**And** a token lacking a repo's scope cannot read that repo's concepts. *(FR-18; NFR-S2; ADR-okf-003, ADR-okf-002; **2026-08-13 (G3/G15 P0 fix)**: **default-deny** — undefined/foreign domain → empty authorized set + **404** on foreign repos (not the full catalog); per-repo mutation requires `requireRepoScope(repo_id, 'admin')` **replacing** the global `tools-admin` role; `requireScope('okf:read')` middleware on every call; scope claims resolved from the token in `auth.js`. ADR-okf-025.)*
+
+### Story 6.1b: Authz Resolver — token → authorized graph set + per-graph labels *(NEW 2026-08-13; ungated Node; G8)*
+As a **platform engineer**,
+I want **a component that translates a token into the graphs it may read and the per-graph ACL labels**,
+So that **the Graph Router and retriever get a correct, per-graph-parameterized authorized set**.
+**Acceptance Criteria:** **Given** a verified OIDC token with `okf:{tenant}:{repo}:{read|admin}` scopes, **When** `authz-resolver.js` resolves it, **Then** it returns `{ graph_names:[OKF_repoA,…], per_graph_labels:{ OKF_repoA:[t:t1,r:repoA,d:domA],… }, domains:[domA,…] }` (per-graph map, **not** a flat/global union), cached **per-session** (invalidate on token refresh), **and** default-deny on unknown scopes. *(FR-18; ADR-okf-025; G8; consumed by Story 1.2/1.3.)*
 
 ### Story 6.2: Audit (FOI-exportable, append-only)
 As a **data-protection officer**,
@@ -497,7 +620,7 @@ So that **compliance is demonstrable on demand**.
 **Acceptance Criteria:**
 **Given** the `okf_audit` append-only collection,
 **When** any serving/ingestion/admin action occurs,
-**Then** it records actor, action, repo, concept, version, timestamp, source IP, trace ID; a date-ranged FOI/GDPR export succeeds for any repository/tenant; records are retained per policy. *(FR-19; NFR-T2)*
+**Then** it records actor, action, repo, concept, version, timestamp, source IP, trace ID; a date-ranged FOI/GDPR export succeeds for any repository/tenant; records are retained per policy. *(FR-19; NFR-T2; **2026-08-13 (G16, ADR-okf-029)**: two-tier failure mode — **write-before-respond** for governance actions (publish/deprecate/retire/delete/ACL — SM-4 holds; the launch-gate test verifies this under ArangoDB failure, LG-4), best-effort for serving; schema adds `tenant`, `actor_roles[]`, `deletion_reason`, `prev_hash` (hash chain + root publication); indexes on `tenant` + compound `(repo_id, ts)`; INSERT-only DB user (no UPDATE/DELETE) — tamper-evidence; an explicit volume policy enumerates audit-worthy actions.)*
 
 ### Story 6.3: End-to-end tracing
 As an **SRE**,
@@ -555,7 +678,7 @@ So that **I review a well-structured bundle instead of hand-authoring from a fla
 **Given** a completed crawl (`{fileId}.md`, `## Source:` blocks) and a target repo,
 **When** `POST /api/okf/repos/:repo_id/produce-from-crawl {file_id, model_tier}` is called (tools-admin) **or** the fire-and-forget post-crawl trigger fires (crawlWorker success block reads `crawl_job.config.okf`; a producer failure never breaks crawl success),
 **Then** `producer-service.js` segments the dump, drafts concept `.md` files (frontmatter matching `parser-service` input — `generated.by=agent:okf-producer`, `sources` from the `## Source:` URLs), **AI-adjusts** titles/summaries/bodies, and **cross-links** concepts into the structural graph (FR-7) with targets constrained to a **closed concept-ID namespace** (no fabricated links),
-**And** drafts pass Presidio PII redaction (blocking) + ClamAV, write to `okf_concepts_meta` at `status=review` with audit rows, a producer-job lifecycle mirrors `crawl_job` (progress/logs/kill), and **publish remains a separate steward action** (server-enforced `unverified` trust tier, never auto-publish). *(FR-30; FR-5, FR-7, FR-9, FR-10; ADR-okf-019.)*
+**And** drafts pass Presidio PII redaction (blocking) + ClamAV, write to `okf_concepts_meta` at `status=review` with audit rows, a producer-job lifecycle mirrors `crawl_job` (progress/logs/kill), and **publish remains a separate steward action** (server-enforced `unverified` trust tier, never auto-publish). *(FR-30; FR-5, FR-7, FR-9, FR-10; ADR-okf-019; **2026-08-13**: define a versioned dump schema `OKF_CRAWL_DUMP_v1` (header + `## Source:` blocks — documented contract) with a version check, and a round-trip segmentation test — G33/G34.)*
 
 ### Story 7.3: Automated knowledge-hierarchy + label assignment (steward-vetted)
 As a **steward**,
@@ -586,7 +709,7 @@ So that **AI-produced drafts cannot poison the KB, flood review, or egress uncon
 **Acceptance Criteria:**
 **Given** the producer risk register,
 **When** hardening lands,
-**Then** producer-emitted frontmatter/link fields are treated as **untrusted** (server-side override of trust; closed concept-ID link namespace) to resist **indirect prompt injection via crawled content**, a concept-quality **eval harness** (reference set + `steward rejection rate` guardrail, policing SM-C1/SM-7) exists, per-tenant/per-crawl quotas + trigger RBAC bound GPU/provider cost (including the future agent-trigger scenario), and robots.txt/ToS honoring + output-bundle `license` provenance are addressed. *(NFR-S1/S5; FR-19; ADR-okf-019.)*
+**Then** producer-emitted frontmatter/link fields are treated as **untrusted** (server-side override of trust; closed concept-ID link namespace) to resist **indirect prompt injection via crawled content**, a concept-quality **eval harness** (reference set + `steward rejection rate` guardrail, policing SM-C1/SM-7) exists, per-tenant/per-crawl quotas + trigger RBAC bound GPU/provider cost (including the future agent-trigger scenario), and robots.txt/ToS honoring + output-bundle `license` provenance are addressed. *(NFR-S1/S5; FR-19; ADR-okf-019; **2026-08-13**: this story polices **draft quality only** — retrieval-quality eval (recall@k/precision@k/MRR/cross-graph citation) is split into Story 8.3 (distinct failure mode — G30); add per-repo cost-tagging so quotas (this story's guardrail) are enforceable — G36.)*
 
 ### Story 7.6: Multi-source crawl seeding
 As an **operator**,
@@ -597,3 +720,38 @@ So that **a repository draft can be assembled from several authoritative sources
 **Given** the crawler (`Crawler.crawl(pool,…)` already array-capable) and the single-URL job-creation layer (`scheduleSiteCrawl`, `AddFromLinkDialog`),
 **When** the operator creates an OKF-target crawl,
 **Then** `scheduleSiteCrawl` + `crawl_job` carry a seed-URL **list** (threaded to `crawler.crawl([...])`), `AddFromLinkDialog` collects multiple seeds for an OKF-target crawl, and per-source provenance is preserved into each draft's `sources`. *(FR-33.)*
+
+---
+
+## Epic 8: Test Infrastructure & Evaluation
+*(NEW 2026-08-13. Cross-cutting. The highest-leverage testing investment — makes the multi-repo scaling claim, the launch gates, and the "verify the strategy is solid" goal measurable. Most stories are ungated; 8.5 is a documented contingency.)*
+
+### Story 8.1: Static fixture site + seed repos + golden queries *(G20)*
+As a **platform engineer**,
+I want **deterministic test fixtures (a static crawl site, seed OKF repos, and golden queries with known answers)**,
+So that **CI can verify selection, retrieval, and ACL without depending on a live site**.
+**Acceptance Criteria:** **Given** a committed static HTML fixture site (3–5 pages, served via a fixture container in CI), **When** the seed script runs, **Then** it creates 3 known OKF repos (`OKF_REPO_HEALTH`, `OKF_REPO_AGRI`, `OKF_REPO_LEGAL`) with 5–10 known concepts each, known labels, known ACL prefixes, **and** a golden-query file maps queries → expected concept IDs per repo (ground truth for selection + retrieval eval); a dump-format round-trip test asserts correct producer segmentation. *(G20; unblocks G30/G31.)*
+
+### Story 8.2: Multi-graph retrieval integration test *(G31)*
+As an **SRE**,
+I want **an integration test that exercises a real cross-graph query end-to-end**,
+So that **fan-out, provenance, ACL exclusion, and size-ratio behavior are verified, not just unit-fused**.
+**Acceptance Criteria:** **Given** the seed fixtures, **When** a cross-graph query runs, **Then** the test asserts: provenance (`graph_name`/`repo_id`/`concept_id`) on every hit; ACL exclusion (repo-A caller gets zero repo-B chunks); a size-ratio sweep (1 small + 1 large repo) does not drown the small repo; **and** this runs in CI (not only `rrf_fuse` unit tests). *(G31; LG-2.)*
+
+### Story 8.3: Retrieval-quality eval harness *(G30)*
+As a **platform engineer**,
+I want **a retrieval-quality eval harness distinct from the producer draft-quality eval**,
+So that **grounding precision is measured against ground truth, not conflated with draft quality**.
+**Acceptance Criteria:** **Given** the golden-query file + seed fixtures, **When** the harness runs, **Then** it reports recall@k, precision@k, MRR, and cross-graph citation correctness; it is distinct from Story 7.5 (draft quality). *(G30; SM-3.)*
+
+### Story 8.4: RRF parameter-sweep harness *(G21)*
+As a **platform engineer**,
+I want **a harness that sweeps RRF `k` and per-graph weights against the seed fixtures**,
+So that **cross-graph fusion weights are tuned with evidence, not intuition**.
+**Acceptance Criteria:** **Given** the seed fixtures + the retrieval eval (8.3), **When** the sweep runs, **Then** it varies `k` + per-graph size/confidence weights and reports the best config for recall@k/precision@k/MRR; the chosen weights are checked in as defaults. *(ADR-okf-027; G21; resolves PRD Q7.)*
+
+### Story 8.5: OPEA-1.5 fallback shim *(CONTINGENCY ONLY — not built unless Epic 1 is ungated before the bump merges — G19)*
+As a **platform engineer**,
+I want **a serial fan-out shim behind the plural `graph_names` interface on the current (pre-bump) base**,
+So that **Epic 1 can be tested before the OPEA 1.5 bump merges IF the team decides to ungate it**.
+**Acceptance Criteria:** **Given** the standing decision to **wait for the bump merge (D24, no slip date)**, **When** this story is *not* activated, **Then** nothing is built — the shim design is documented in ADR-okf-023 only; **if** the team later ungates Epic 1, this story implements serial fan-out behind `graph_names` on the current base as a temporary bridge until !277 merges. *(ADR-okf-023; G19; D25 reconciliation — contingency, not a commitment.)*

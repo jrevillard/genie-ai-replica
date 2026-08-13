@@ -2,7 +2,7 @@
 title: PRD — GENIE.AI OKF Server
 status: draft
 created: 2026-07-15
-updated: 2026-08-10
+updated: 2026-08-13
 prd_key: okf-server
 initiative: agentic-enablement
 branch: feat/agentic-enablement
@@ -90,6 +90,14 @@ The **GENIE.AI OKF Server** is the open-source, enterprise- and government-grade
 - **Producer** — the Genie-native AI component (Epic 7, [ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md)) that lifts a crawled flat-Markdown dump into governed OKF concept drafts (lifecycle `review`, never auto-published). The generator dual of the OKF parser.
 - **Model tier (configurable inference)** — the deployment-configurable LLM backend ([ADR-okf-020](../../../../docs/adr/okf-020-configurable-inference-model-tier.md)): internal granite-4.1-8b via vLLM (default, sovereign) **or** a frontier model via API key (Anthropic, xA­I/Grok, Gemini, OpenAI); external providers are an explicit sovereignty opt-in.
 - **Producer job** — the async lifecycle (mirroring `crawl_job`) that tracks crawl→draft progress, logs, and kill.
+- **Write-side Orchestrator** (`ingestService`) — the okf-server component that owns the ingest sequence: fetch bundle → unzip → per-concept parse → UPSERT meta → conformance → PII → content-hash dedup → enqueue; returns 202 (never blocks on dataprep). The **only** component that injects ACL labels (it owns repo→tenant/domain). ([ADR-okf-021](../../../../docs/adr/okf-021-write-side-orchestration.md))
+- **Ingestion Worker** (`ingestionWorker`) — the okf-server worker that drains `Pending` concept-index jobs (Redis Streams, concurrency 1 / configurable), calls doc-repo → dataprep → graph creation, reconciles orphan chunks via a sweeper. ([ADR-okf-021](../../../../docs/adr/okf-021-write-side-orchestration.md))
+- **Graph Router** — the ChatQnA component that selects the **relevant** subset of authorized graphs (domain binding + repo-metadata BM25), capped at `MAX_FANOUT_GRAPHS`, before the retriever fans out. Intelligent selection, not dumb fan-out. ([ADR-okf-024](../../../../docs/adr/okf-024-graph-selection-router.md))
+- **Authz Resolver** (`authz-resolver.js`) — the okf-server governance component that resolves a token to `{ graph_names, per_graph_labels, domains }`; per-session cached; default-deny. ([ADR-okf-025](../../../../docs/adr/okf-025-authz-resolver.md))
+- **`bundle_version`** — a repo-level monotonic integer minted on each publish transition, threaded onto every chunk/edge/meta doc, and recorded in an immutable `okf_versions` manifest. The unit of citation pinning and version diff. ([ADR-okf-031](../../../../docs/adr/okf-031-versioning-strategy.md))
+- **`MAX_FANOUT_GRAPHS`** — the configurable cap (default 5) on how many graphs a single retrieval fans out across; bounded by selection + `Semaphore` concurrency + per-graph timeout. ([ADR-okf-024](../../../../docs/adr/okf-024-graph-selection-router.md))
+- **ACL labels (dual role)** — the `t:`/`r:`/`d:`-prefixed labels serve two distinct purposes, never conflated: (1) **ACL enforcement** — a per-graph `chunk_labels` filter applied inside each selected graph at retrieval (per-graph parameterized, never a global union); (2) **selection signal** — the repo's `domain` + concept `tags`/`type` feed the Graph Router's domain-binding and metadata-BM25 steps. ([ADR-okf-024](../../../../docs/adr/okf-024-graph-selection-router.md), [ADR-okf-025](../../../../docs/adr/okf-025-authz-resolver.md))
+- **`index_status`** — the per-concept field on `okf_concepts_meta` (`parsed|indexed|failed`) that is the source of truth for ingest progress; the sweeper reconciles orphans against it. ([ADR-okf-021](../../../../docs/adr/okf-021-write-side-orchestration.md))
 
 ## 4. Features
 
@@ -173,6 +181,14 @@ Bundle/repository content is stored, scanned, and handed to dataprep **through t
 - Archives/bundle directories are accepted on the new route (the standard upload path's extension allowlist / magic-byte validator / langdetect are bypassed for bundles).
 - No new object store or scanning infrastructure is introduced; the document-repository remains the single document/knowledge store.
 
+#### FR-34: Async ingestion pipeline (write-side orchestration)
+The OKF Server owns an **async, per-concept, idempotent** ingest pipeline: `POST /api/okf/repos/:repo_id/ingest` → the write-side orchestrator resolves the repo, derives `graph_name`/ACL labels/`bundle_version`, unzips the bundle (zip of `.md`), and per concept parses → UPSERTs `okf_concepts_meta` → runs conformance → PII → content-hash dedup → enqueues an index job → returns **202** (the HTTP call never blocks on dataprep). An ingestion worker (Redis Streams, concurrency 1 / configurable, DLQ) drains `Pending` jobs through doc-repo → dataprep → per-repo graph creation, writes `_LINKS_TO` edges, and transitions `index_status`; a sweeper reconciles orphan chunks. There is **no distributed transaction** — compensation is via the sweeper + per-concept `index_status`. Realizes the store→pending→worker→graph model; [ADR-okf-021](../../../../docs/adr/okf-021-write-side-orchestration.md), [ADR-okf-022](../../../../docs/adr/okf-022-node-python-dataprep-handoff.md).
+**Consequences:**
+- A steward trigger returns immediately (202); indexing completes asynchronously within the freshness target (SM-1).
+- Re-ingesting an unchanged concept performs no re-embedding (content-hash match + `index_status='indexed'`).
+- A failed concept is isolated (status `Failed`, DLQ) — it never blocks the rest of the repo, and the sweeper reconciles orphans.
+- The orchestrator is the sole ACL-label injector (it owns repo→tenant/domain), so labels are preserved end-to-end (FR-18).
+
 ### 4.3 Curation & In-App Authoring
 
 **Description:** The OKF Server owns the repository **lifecycle, curation, and authoring**. Repositories move through governed states; **users can create repositories and curate Markdown concept files in-app** with live validation. Realizes UJ-1, UJ-3.
@@ -225,7 +241,14 @@ The existing retriever is **extended** so a single retrieval can target a **set 
 **Consequences:**
 - A chat answer can cite concepts from the free-form corpus *and* multiple OKF repositories in one response.
 - Adding a new repository immediately participates in grounding for authorized callers — no per-repo wiring per query.
-- ACL is enforced per graph; an unauthorized repository never contributes results.
+- ACL is enforced per graph (per-graph parameterized labels, never a global union); an unauthorized repository contributes **zero hits** in the fused result.
+
+#### FR-35: Query-aware graph selection (Graph Router)
+A **Graph Router** selects the **relevant** subset of the caller's authorized graphs before retrieval: it detects the query domain (domain binding) and ranks candidate repos by metadata relevance (repo-metadata BM25 over `okf_concepts_meta` `title`/`type`/`tags`/`summary`), intersects the result with the authorized set, and caps it at `MAX_FANOUT_GRAPHS` (default 5, configurable). Selection is **distinct from authorization** (the Authz Resolver, FR-18, produces the authorized set; the router selects within it). The selection-latency budget (≤20ms) is a **gate, enforced in CI** against seed fixtures, not an aspiration. The retriever then fans out across the selected set in a single query where the schema allows, with 2-level RRF fusion (FR-24). Realizes the multi-repo scaling requirement; [ADR-okf-024](../../../../docs/adr/okf-024-graph-selection-router.md).
+**Consequences:**
+- A deployment with 50 repos grounds a query in ≤5 relevant+authorized graphs — bounded fan-out, predictable latency.
+- A query tagged "health" binds to health-domain repos before any chunk is read.
+- Selection is observable (`graphs_authorized`, `graphs_selected`, `selection_latency_ms`) so precision/latency degradation is diagnosable.
 
 #### FR-14: Search concepts (unified)
 An authenticated agent can search across its authorized graphs (FR-24), returning ranked concept hits (ID + snippet), token-capped, cursor-paginated. Realizes UJ-2.
@@ -281,6 +304,9 @@ Requests authenticate via Keycloak-issued bearer tokens (validated with `jose`/J
 **Consequences:**
 - A token lacking a repository's scope cannot read that repository's concepts.
 - Token audience is bound to the OKF server (RFC 8707); token passthrough is forbidden.
+- **Default-deny**: a token with an undefined/foreign domain receives an **empty** authorized set and a **404** on foreign repos (not the full catalog) — closing the cross-tenant list/read leak.
+- Per-repo mutation requires `requireRepoScope(repo_id, 'admin')`, **replacing** the global `tools-admin` role for repository mutations — a steward in tenant A cannot mutate tenant B's repo. ([ADR-okf-025](../../../../docs/adr/okf-025-authz-resolver.md))
+- An **Authz Resolver** (`authz-resolver.js`) owns the token→`{graph_names, per_graph_labels, domains}` translation (per-session cached); the Graph Router (FR-35) consumes its output. ([ADR-okf-025](../../../../docs/adr/okf-025-authz-resolver.md))
 
 #### FR-19: Audit (FOI-exportable)
 Every serving/ingestion/admin action is recorded in an audit log exportable for FOI/GDPR (actor, action, repository, concept, version, timestamp, source). Realizes UJ-3.
@@ -365,18 +391,23 @@ The web crawler accepts **multiple seed URLs** per crawl job (not only one), so 
 - **Not introducing new infrastructure vendors.** No Neo4j (any edition), no separate vector DB, no Elasticsearch/Solr, no external SaaS.
 - **Not multimodal (images/audio).** Text/Markdown OKF concepts only.
 - **Not raw-AQL-to-agents.** Agents get parameterized traversal only — never arbitrary AQL. ([ADR-okf-011](../../../../docs/adr/okf-011-no-raw-aql-to-agents.md))
+- **Not a distributed-transaction system.** Cross-service ingest (okf-server → doc-repo → dataprep) is **not atomic**; consistency is achieved by compensation — a sweeper reconciles orphan chunks against per-concept `index_status`. ([ADR-okf-021](../../../../docs/adr/okf-021-write-side-orchestration.md))
+- **No cross-repo structural links in v1.** Concept cross-links are **within-repo only**; a link to a concept in another repository is rejected at parse (with a conformance warning). Cross-domain retrieval happens via search (FR-14), not structural traversal. ([ADR-okf-028](../../../../docs/adr/okf-028-cross-repo-structural-links.md))
 
 ## 6. Production Scope
 
 **In Scope (production — sequenced in [Architecture](./architecture.md) §12):**
 - Multiple OKF repositories (one per domain), repository CRUD, each in its own graph `OKF_{repo_id}` (FR-1, 2, 3, 23).
 - OKF-aware ingestion via the document-repository: §11 conformance, ClamAV, PII redaction, parsing, structural link graph, per-repo indexing, repo-level retract (FR-4, 5, 6, 7, 8).
+- **Async write-side orchestration** — the ingest pipeline that sequences the above end-to-end: orchestrator + Redis-Streams worker + idempotent content-hash re-ingest + orphan sweeper (FR-34); **Epic 2.9**.
+- **Query-aware graph selection** — the Graph Router that bounds multi-graph fan-out to relevant+authorized graphs (FR-35); **Epic 1 Story 1.3** (gated by the OPEA bump).
 - Curation & in-app authoring: lifecycle, review/approve, versioning, retention, metrics, in-app Markdown concept editor with live §11 validation (FR-9, 10, 11, 12, 13, 25).
 - **AI-driven production (Crawl → Draft)** — Epic 7: steward-gated producer from crawled content; configurable model tier; automated hierarchy/labels (FR-30, 31, 32).
 - Unified multi-graph grounding + agent serving: retriever fan-out+RRF across `GRAPH` + authorized `OKF_*`; search/get/list/outline; MCP-ready handlers; **trust/lifecycle/provenance surfacing** (FR-24, 14, 15, 16, 17, 29).
 - Vue 3 admin ingestion & curation UI (FR-26).
 - Access control, governance, traceability; observability & operations (FR-18, 19, 20, 21).
 - Source of truth & document references: document-repository as single source of truth post-ingest; stable doc-repo references + "view source" links; external-origin health checks + deletion detection + graceful fallback (FR-27, 28; FR-2).
+- **Test infrastructure & evaluation** — a deterministic fixture suite (static crawl site + seed repos + golden queries) + multi-graph integration tests + retrieval-quality + RRF-sweep eval harnesses; **Epic 8** (the highest-leverage testing investment — makes "verify the strategy is solid" measurable).
 - Open-source packaging (permissive license, ITU copyright headers, CI build/scan/promote per ADR-0001).
 
 **MCP transport** is the only capability sequenced after the REST surface (gated on the GENIE workflows service's MCP client — Sprint 24 #603, custom LangChain Deep Agents — transport only; the handlers ship with REST). OKF's own MCP surface is **custom** (Node MCP SDK / Kong AI MCP proxy), consumed by the workflows service — NOT OPEA's `OpeaMCPToolsManager`/`mcpo`.
@@ -397,6 +428,13 @@ The web crawler accepts **multiple seed URLs** per crawl job (not only one), so 
 **Counter-metrics (do not optimize)**
 - **SM-C1**: Raw concept-count ingested — optimizing volume can degrade precision; do not game SM-3 by indexing low-quality content.
 - **SM-C2**: Tokens returned per query — do not inflate responses; token caps protect agent context (optimizing against SM-C2 defeats progressive disclosure).
+
+**Launch gates (must pass before any pilot — from the 2026-08-13 course correction)**
+- **LG-1**: p95 search latency vs graph-count benchmark inside NFR-PR1 at `MAX_FANOUT_GRAPHS` — proves the multi-repo scaling claim (G6).
+- **LG-2**: Isolation test — a caller scoped to repo A cannot retrieve repo-B chunks in a fused result (G3/G8/G15).
+- **LG-3**: ACL-preserve regression green — `t:`/`r:`/`d:` labels survive ingest into `chunk_labels` (G4).
+- **LG-4**: Audit write-before-respond verified for a governance action under ArangoDB failure — SM-4 holds when it matters (G16).
+- **LG-5**: Boundary probe — `graph_names` survives the ChatQnA→retriever mega-service boundary **deployed**, not just in-process (G2).
 
 ## 8. Cross-Cutting Non-Functional Requirements
 
@@ -444,7 +482,7 @@ The web crawler accepts **multiple seed URLs** per crawl job (not only one), so 
 - **api-gateway (Kong + NGINX)** — register `okf-server` service + `/api/okf` route; Kong AI MCP plugins for the MCP surface.
 - **Keycloak** — OIDC AS; per-tenant/repo/domain scopes; audience mapper; token-exchange for service-to-service.
 - **[SST](../prd-server-side-tools.md) (draft, reduced)** — web search + stream ingestor + governance only (registry/executor/mcpo subsumed by the workflows service); gates the **MCP transport** indirectly; REST + handlers proceed independently.
-- **OPEA 1.3 → 1.5 overlay bump (cheap, ~3–5 engineer-days; foundational)** — the Genie-owned `dataprep`/`retriever`/`reranker`/`chatqna` that OKF extends are rebased onto `comps` 1.5. The verified v1.3↔v1.5 `comps` source diff showed every API OKF's base depends on (`OpeaComponent`, `register_microservice`, `opea_telemetry`, `api_protocol`) is byte-identical or additive, so the RAG logic is **untouched** and remains Genie-owned/forked — we do **not** adopt OPEA's components wholesale, and we do **not** use OPEA's `comps/agent` (the agentic layer is custom LangChain Deep Agents on the OPEA `MicroService` harness). OKF Phase 1 (multi-graph fan-out + `graph_name` threading — both **greenfield**) lands on the bumped base. File-by-file detail: the OPEA Strategy & Implementation Plan (`_bmad-output/planning-artifacts/OPEA-1.5-upgrade-analysis.md`).
+- **OPEA 1.3 → 1.5 overlay bump (cheap, ~3–5 engineer-days; foundational)** — the Genie-owned `dataprep`/`retriever`/`reranker`/`chatqna` that OKF extends are rebased onto `comps` 1.5. The verified v1.3↔v1.5 `comps` source diff showed every API OKF's base depends on (`OpeaComponent`, `register_microservice`, `opea_telemetry`, `api_protocol`) is byte-identical or additive, so the RAG logic is **untouched** and remains Genie-owned/forked — we do **not** adopt OPEA's components wholesale, and we do **not** use OPEA's `comps/agent` (the agentic layer is custom LangChain Deep Agents on the OPEA `MicroService` harness). OKF Phase 1 (multi-graph fan-out + `graph_name` threading — both **greenfield**) lands on the bumped base. File-by-file detail: the OPEA Strategy & Implementation Plan (`_bmad-output/planning-artifacts/OPEA-1.5-upgrade-analysis.md`). **Timing decision (D24, 2026-08-13):** the team **waits for !277 to merge to `main` — no slip date, and no fallback shim is built now.** All bump-gated work (Epic 1 multi-graph grounding; Epic 2 Story 2.6 / 2.9.6 graph-wiring + retract) stays frozen until the merge. A serial-fan-out fallback shim *design* is documented as a **contingency only** ([ADR-okf-023](../../../../docs/adr/okf-023-graph-names-transport.md), Story 8.5) — it is built **only if** the team later decides to ungate Epic 1 before the bump merges.
 
 - **AI-driven producer (Epic 7, [ADR-okf-019](../../../../docs/adr/okf-019-ai-driven-okf-producer.md))** — depends on Story 2.2 (repo CRUD, done), **2.3 (parser — defines the frontmatter contract the producer emits)**, 2.5 (bundle ingest route), Epic 3 (admin UI drives it); co-develops with 4.2/4.3/4.4 (editor + lifecycle + review gate). Producer-assigned labels fully steer retrieval after Story 2.6 (ACL-preserve) + Epic 1 (multi-graph fan-out) — both gated by the OPEA 1.5 bump.
 
@@ -467,12 +505,12 @@ The web crawler accepts **multiple seed URLs** per crawl job (not only one), so 
 ## 13. Open Questions
 
 1. **PII strategy** granularity (document-level vs field-level redaction) — confirm default. (→ [ADR-okf-004](../../../../docs/adr/okf-004-pii-redaction-strategy.md))
-2. **Versioning semantics** — repository-level `okf_version` vs per-concept versioning for citation pinning. (→ [ADR-okf-005](../../../../docs/adr/okf-005-versioning-semantics.md))
+2. ~~**Versioning semantics** — repository-level `okf_version` vs per-concept versioning for citation pinning.~~ **RESOLVED (2026-08-13):** repo-level `bundle_version` integer minted on publish, threaded onto chunks/edges/meta, with an immutable `okf_versions` manifest. (→ [ADR-okf-031](../../../../docs/adr/okf-031-versioning-strategy.md))
 3. **403-vs-404** on unauthorized concept access (security trade-off). (→ [ADR-okf-006](../../../../docs/adr/okf-006-403-vs-404-unauthorized.md))
 4. **`repo_id` format** + maximum repositories per deployment (ops sizing).
 5. **Domain mapping** — domain = service-category *top-level* category vs any node in the hierarchy.
 6. **Retention defaults** per domain (regulatory variation).
-7. **RRF weights** for cross-graph fusion (tune empirically).
+7. ~~**RRF weights** for cross-graph fusion (tune empirically).~~ **RESOLVED (2026-08-13):** 2-level cross-graph RRF (within-graph dense⊕BM25 → cross-graph, weighted by per-graph size/confidence). Weights tuned against seed fixtures via the parameter-sweep harness (Story 8.4), not intuition. (→ [ADR-okf-027](../../../../docs/adr/okf-027-cross-graph-rrf.md))
 8. **Performance targets** (NFR-PR1 p95 latency, freshness target SM-1) — confirm values.
 9. Whether the free-form `GRAPH` corpus should also become domain-partitioned later (not required now; stays single).
 10. **Attested Computation** (OKF v0.2 §10) — deferred to a future phase; its runtime protocol is itself spec-deferred. Decide whether/when government metrics/reporting justify building it. (→ [ADR-okf-017](../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md))

@@ -96,7 +96,8 @@ location: genie-ai-overlay/dataprep/requirements.in
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: medium
 reason: old generate-requirements-in.sh dropped these (no-space-on-device pyspark; openai-whisper sdist needs pkg_resources); they compile + uv-sync fine locally but the Docker build/size surface is untested in this story.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-dataprep-deps-and-device
 
 ### DW-12: sitecustomize/SSL-patch auto-load in the built embedding/textgen/retriever images is unverified (hardcoded site-packages path asserted manually, not by a CI job).
 origin: spec-deferred 21b1f2312170
@@ -186,7 +187,8 @@ location: genie-ai-overlay/dataprep/requirements.in
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: medium
 reason: old generate-requirements-in.sh dropped these (no-space-on-device pyspark; openai-whisper sdist needs pkg_resources); they compile + uv-sync fine locally. CI build jobs DO run docker buildx + pip install --no-deps --require-hashes from the lock, so install/wheel/source-build failures would block the MR — genuinely ungated is image SIZE and post-import runtime behavior (2.5 re-audits).
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-dataprep-deps-and-device
 
 ### DW-23: Cross-module OTel/haystack/openai version drift: reranker's bare `.in` pins resolve newer (otel 1.44.0, haystack-ai 3.0.0, openai 3.0.0) than dataprep/retriever (otel 1.27.0, haystack-ai 2.3.1), plus
 origin: spec-deferred 4d6ac3a03e6d
@@ -219,7 +221,8 @@ location: docker-compose.yaml:991
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: medium
 reason: genieai_dataprep_utils.py:45 defaults DOCLING_DEVICE to cuda and selects AcceleratorDevice.CUDA unless cpu; docker-compose.yaml:991 passes ${DOCLING_DEVICE:-cuda}; env template leaves it unset. The image no longer ships CUDA libs, so docling cannot honor a cuda device. Fix spans compose default + module default (deployment config + module code) — a 2.5 dataprep re-audit item; the spec Design Note now records the capability loss.
-status: open
+status: done 2026-08-13
+resolution: resolved by sweep bundle dw-dataprep-deps-and-device
 
 ### DW-27: the build-time docarray rename (mv docarray.py -> opea_docarray.py + sed in orchestrator/micro_service) is ungated against OPEA v1.5 source; if v1.5's import patterns drifted, the sed no-ops and the c
 origin: spec-deferred 81aaf65512f0

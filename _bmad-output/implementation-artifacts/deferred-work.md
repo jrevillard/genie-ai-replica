@@ -1820,4 +1820,10 @@ source_spec: `epic-2-context.md`, `epics.md` story 2-5
 location: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai, genie-ai-overlay/dataprep/requirements-gpu.txt (missing), genie-ai-overlay/dataprep/genieai_dataprep_utils.py
 severity: high
 reason: PRD epic-2-context explicitly requires "v1.4+ `requirements-cpu.txt`/`requirements-gpu.txt` compiled layout" but story 2-2 only compiled CPU locks and forced `DOCLING_DEVICE=cpu`. OPEA v1.5 upstream ships both locks and supports dual CPU/GPU builds via `ARCH` build arg. Dataprep runs docling OCR locally (unlike reranker/retriever which are HTTP clients to GPU services), so GPU support is architecturally required when CUDA is available. Story 2-5 must: (1) compile `requirements-gpu.txt` from `requirements.in`, (2) add `ARCH` build arg to Dockerfile, (3) use CUDA base image when `ARCH=gpu`, (4) revert `DOCLING_DEVICE` default from `cpu` back to `cuda`.
+### DW-267: Deleted requirements.in header documented the `uv pip compile` invocation used to regenerate the lock — that operational knowledge is lost with the file.
+origin: spec-deferred 1d0c5afb057a
+source_spec: `2-5-re-graft-the-dataprep.md`
+location: genie-ai-overlay/dataprep/requirements.in (deleted)
+severity: low
+reason: The deleted file's header (lines 1-20) documented: `uv pip compile --generate-hashes --python-version 3.11 --output-file requirements.lock requirements.in`. This is now dead knowledge (the lock pipeline is retired), but a future developer re-introducing a custom lock would need to rediscover this invocation. (story 2-5-re-graft-the-dataprep: implemented and reviewed via bmad-loop)
 status: open

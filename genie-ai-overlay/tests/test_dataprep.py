@@ -2049,3 +2049,236 @@ class TestContextualRetrieval:
         assert result == {0: "single-ctx"}
         single.assert_awaited_once()
         mock_client.chat.completions.create.assert_not_called()  # no batch call for single
+
+
+# ---------------------------------------------------------------------------
+# Story 2.6a — ACL-label preserve (OKF gap G4)
+# _finalize_chunk_labels previously used file_labels ONLY as a scope filter and
+# never unioned ACL-prefixed (t:/r:/d:) file_labels into the output, so they
+# never reached chunk_labels. _apply_labels now short-circuits the LLM call when
+# file_labels carries ACL prefixes. These tests pin the fix + the no-regression
+# contract for the free-form GRAPH corpus.
+# ---------------------------------------------------------------------------
+
+
+class TestAclPredicate:
+    """The _is_acl_label predicate (module-level, single-sourced)."""
+
+    def test_acl_predicate_membership(self):
+        assert dp_module._is_acl_label("t:x") is True
+        assert dp_module._is_acl_label("r:y") is True
+        assert dp_module._is_acl_label("d:z") is True
+        assert dp_module._is_acl_label("Healthcare") is False
+        # Case-sensitive by design (pins the L4 canonicalization boundary).
+        assert dp_module._is_acl_label("T:x") is False
+        assert dp_module._is_acl_label("R:y") is False
+        assert dp_module._is_acl_label("D:z") is False
+        # Empty-value degenerate token still detected (value sanitization is
+        # owned by the orchestrator 2.9.1 / L3, not 2.6a).
+        assert dp_module._is_acl_label("t:") is True
+        # Non-str guard (None / int must not raise AttributeError).
+        assert dp_module._is_acl_label(None) is False
+        assert dp_module._is_acl_label(123) is False
+
+
+class TestFinalizeChunkLabelsAcl:
+    """Direct unit tests for _finalize_chunk_labels — the G4 bug site."""
+
+    @pytest.mark.asyncio
+    async def test_acl_prefixed_file_labels_preserved(self):
+        dp = create_dataprep()
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            result = await dp._finalize_chunk_labels(
+                0,
+                ["Cucumber"],
+                ["Cucumber"],
+                "file1",
+                ["Cucumber", "t:t1", "r:r1", "d:dom"],
+            )
+        # Cucumber survives scope (in file_labels); ACL labels unioned verbatim.
+        assert "Cucumber" in result
+        assert "t:t1" in result
+        assert "r:r1" in result
+        assert "d:dom" in result
+
+    @pytest.mark.asyncio
+    async def test_acl_only_file_labels_preserved_when_no_taxonomy_match(self):
+        dp = create_dataprep()
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            result = await dp._finalize_chunk_labels(0, [], ["Healthcare"], "file1", ["t:t1"])
+        assert result == ["t:t1"]
+
+    @pytest.mark.asyncio
+    async def test_no_acl_no_behavior_change(self):
+        """Free-form GRAPH corpus docs (no ACL prefixes) are a true no-op."""
+        dp = create_dataprep()
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            result = await dp._finalize_chunk_labels(0, ["Healthcare"], ["Healthcare"], "file1", ["Healthcare"])
+        assert result == ["Healthcare"]
+
+    @pytest.mark.asyncio
+    async def test_finalize_excludes_acl_from_new_labels(self):
+        """ACL labels must never trigger the 'add to Knowledge Hierarchy' WARN."""
+        dp = create_dataprep()
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as log:
+            result = await dp._finalize_chunk_labels(0, ["t:t1"], [], "file1", ["t:t1"])
+        # No WARN emitted (new_labels excludes the ACL label) + label preserved.
+        levels = [call.args[1] for call in log.await_args_list]
+        assert "WARN" not in levels
+        assert "t:t1" in result
+
+
+class TestApplyLabelsAclShortCircuit:
+    """_apply_labels short-circuits the LLM/embedding/bm25 call when file_labels
+    carries ACL prefixes (AC #3). Part 2 is the ONLY ACL-preserve mechanism for
+    the embedding/bm25 strategies."""
+
+    @pytest.mark.asyncio
+    async def test_short_circuits_llm_when_acl_present(self):
+        dp = create_dataprep()
+        with (
+            patch.object(dp, "_label_with_llm", new_callable=AsyncMock) as llm,
+            patch.object(dp, "_label_with_embedding", new_callable=AsyncMock) as emb,
+            patch.object(dp, "_label_with_bm25", new_callable=AsyncMock) as bm25,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "r:r1", "d:dom", "Healthcare"], "file1")
+        llm.assert_not_called()
+        emb.assert_not_called()
+        bm25.assert_not_called()
+        labels = result[0]["labels"]
+        for acl in ("t:t1", "r:r1", "d:dom", "Healthcare"):
+            assert acl in labels
+
+    @pytest.mark.asyncio
+    async def test_llm_still_called_when_no_acl(self):
+        """Pins the predicate: file_labels WITHOUT ACL prefixes must still run
+        the LLM (else every legacy Gov-Chat doc skips labeling)."""
+        dp = create_dataprep()
+        with (
+            patch.object(dp, "_label_with_llm", new_callable=AsyncMock) as llm,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            llm.return_value = [{"text": "chunk", "labels": ["Healthcare"]}]
+            await dp._apply_labels(["chunk"], ["Healthcare"], ["Healthcare"], "file1")
+        llm.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_short_circuit_dedups_duplicate_acl_labels(self):
+        dp = create_dataprep()
+        with (
+            patch.object(dp, "_label_with_llm", new_callable=AsyncMock) as llm,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "t:t1", "Healthcare"], "file1")
+        llm.assert_not_called()
+        labels = result[0]["labels"]
+        assert labels.count("t:t1") == 1  # order-preserving dedup
+        assert "Healthcare" in labels
+
+    @pytest.mark.asyncio
+    async def test_short_circuits_embedding_strategy_when_acl_present(self):
+        dp = create_dataprep()
+        with (
+            patch.object(dp_module, "LABELING_STRATEGY", "embedding"),
+            patch.object(dp, "_label_with_embedding", new_callable=AsyncMock) as emb,
+            patch.object(dp, "_label_with_llm", new_callable=AsyncMock) as llm,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "Healthcare"], "file1")
+        emb.assert_not_called()  # short-circuit fires before strategy dispatch
+        llm.assert_not_called()
+        assert "t:t1" in result[0]["labels"]
+
+    @pytest.mark.asyncio
+    async def test_short_circuits_bm25_strategy_when_acl_present(self):
+        dp = create_dataprep()
+        with (
+            patch.object(dp_module, "LABELING_STRATEGY", "bm25"),
+            patch.object(dp, "_label_with_bm25", new_callable=AsyncMock) as bm25,
+            patch.object(dp, "_label_with_llm", new_callable=AsyncMock) as llm,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "Healthcare"], "file1")
+        bm25.assert_not_called()
+        llm.assert_not_called()
+        assert "t:t1" in result[0]["labels"]
+
+
+class TestPerChunkFallbackAclPreserve:
+    """The per-chunk fallback (_llm_call_single returns file_labels as suggested
+    after exhausting retries) also preserves ACL labels via the
+    _finalize_chunk_labels union (critic gap #1). Tested by calling
+    _label_with_llm directly (Part 2 makes the fallback unreachable for ACL
+    docs via _apply_labels in production)."""
+
+    @pytest.mark.asyncio
+    async def test_acl_survives_per_chunk_fallback(self, monkeypatch):
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        # Force the real _llm_call_single to exhaust its 3 retries and return
+        # file_labels as suggested (the line-976 fallback).
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=Exception("LLM error"))
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._label_with_llm(
+                ["chunk"],
+                ["Healthcare"],
+                ["t:t1", "r:r1", "d:dom", "Healthcare"],
+                "file1",
+            )
+        labels = result[0]["labels"]
+        for acl in ("t:t1", "r:r1", "d:dom"):
+            assert acl in labels
+        assert "Healthcare" in labels
+        assert mock_client.chat.completions.create.call_count == 3  # exhausted retries
+
+
+class TestAclLabelPreserveE2E:
+    """End-to-end: ACL labels survive ingest_file_with_guardrail into the
+    persisted chunk's metadata.chunk_labels via the REAL _apply_labels
+    short-circuit (AC #1, #7 — the LG-3 launch gate). _apply_labels is NOT
+    mocked (the existing test_document_metadata_correct mocks it, which would
+    pass pre-fix); only the surrounding ingest surface is mocked."""
+
+    @pytest.mark.asyncio
+    async def test_acl_file_labels_reach_chunk_labels_metadata(self):
+        dp = create_dataprep()
+        inp = create_mock_ingest_input(file_labels=["t:tenant1", "r:repoA", "d:health", "Healthcare"])
+
+        captured_docs = []
+
+        async def capture_batch(batch, *args, **kwargs):
+            captured_docs.extend(batch)
+
+        with (
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["Healthcare"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["chunk1"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            # Pass-through: contextualization returns chunks unchanged so the
+            # labeling input is the raw chunk (CONTEXTUAL_LABEL_RAW default).
+            patch.object(dp, "_apply_contextualization", new_callable=AsyncMock, return_value=["chunk1"]),
+            # NOTE: _apply_labels is intentionally NOT mocked -> the real Part 2
+            # short-circuit fires for the ACL-bearing file_labels.
+            patch.object(dp, "_process_batch", new_callable=AsyncMock, side_effect=capture_batch),
+            patch.object(dp_module, "ArangoGraph"),
+            patch.object(dp_module, "Document", side_effect=lambda **kw: type("Doc", (), kw)),
+        ):
+            await dp.ingest_file_with_guardrail(inp, lock_file=None)
+
+        assert len(captured_docs) == 1
+        chunk_labels = captured_docs[0].metadata["chunk_labels"]
+        # The 3 ACL prefixes + the taxonomy label all reach chunk_labels.
+        assert "t:tenant1" in chunk_labels
+        assert "r:repoA" in chunk_labels
+        assert "d:health" in chunk_labels
+        assert "Healthcare" in chunk_labels

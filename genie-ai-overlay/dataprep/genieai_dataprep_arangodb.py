@@ -86,6 +86,26 @@ LABEL_LLM_BATCH_SIZE = max(1, int(os.getenv("DATAPREP_LLM_LABEL_BATCH_SIZE", "4"
 # every instruction model. Tunable per model if ever needed.
 LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
 
+# OKF ACL label prefixes — access-control tokens (t:<tenant>, r:<repo_id>,
+# d:<domain>) that ride on file_labels and must be preserved verbatim into
+# chunk_labels so the retriever can enforce per-tenant/repo/domain isolation
+# (OKF gap G4, Story 2.6a). A tuple (not frozenset) so str.startswith accepts
+# it. Case-sensitive by design — pins the canonicalization boundary: the
+# orchestrator (Story 2.9.1) must emit lowercase prefixes, and the retriever
+# matches by exact membership (no normalization on either side).
+_ACL_LABEL_PREFIXES = ("t:", "r:", "d:")
+
+
+def _is_acl_label(label: Any) -> bool:
+    """True iff ``label`` is an ACL-prefixed access-control token (t:/r:/d:).
+
+    ACL tokens are enforcement labels, NOT taxonomy entries: they are never
+    taxonomy-resolved, scoped, or proposed for the Knowledge Hierarchy — only
+    propagated verbatim into chunk_labels.
+    """
+    return isinstance(label, str) and label.startswith(_ACL_LABEL_PREFIXES)
+
+
 # Contextual Retrieval (Anthropic-style): per-chunk LLM-generated document
 # context prepended to each chunk before embedding + labeling, so chunks carry
 # document-level subject (fixes label/embedding context loss; see
@@ -1079,7 +1099,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 match = next((x for x in all_labels if x.lower() == label.lower() + "s"), None)
             if match:
                 final_labels.add(match)
-            else:
+            elif not _is_acl_label(label):
+                # ACL tokens (t:/r:/d:) are enforcement labels, not taxonomy
+                # candidates — never WARN "consider adding to the Knowledge
+                # Hierarchy" for them (OKF gap G4, Story 2.6a critic gap #2).
+                # They are unioned verbatim from file_labels below.
                 new_labels.append(label)
 
         labels_list = list(final_labels)
@@ -1093,8 +1117,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             dropped = [l for l in labels_list if l not in scope]
             labels_list = [l for l in labels_list if l in scope]
 
+        # Preserve ACL labels (t:<tenant>, r:<repo_id>, d:<domain>) carried in
+        # file_labels. These are access-control tokens, NOT taxonomy entries:
+        # never taxonomy-resolved or scoped — propagated verbatim so the
+        # retriever can enforce per-tenant/repo/domain isolation (OKF gap G4,
+        # Story 2.6a). Unioned AFTER the scope filter (ACL labels are
+        # authoritative, not subject to taxonomy scoping) and de-duplicated.
+        _acl_preserved: list[str] = []
+        if file_labels:
+            _existing = set(labels_list)
+            for _l in file_labels:
+                if _is_acl_label(_l) and _l not in _existing:
+                    labels_list.append(_l)
+                    _existing.add(_l)
+                    _acl_preserved.append(_l)
+
         level = "INFO"
         msg = f"Chunk {index}: Final labels ({len(labels_list)}): {labels_list}."
+        if _acl_preserved:
+            msg += f" (incl. {len(_acl_preserved)} ACL)"
         if dropped:
             msg += f" Dropped (out of document scope): {dropped}."
         if new_labels:
@@ -1133,6 +1174,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         return results
 
     async def _apply_labels(self, plain_chunks: list[str], all_labels: list[str], file_labels: list[str], file_id: str):
+        # Short-circuit (OKF gap G4, Story 2.6a): when file_labels carries ACL
+        # prefixes (t:/r:/d:), it is the authoritative, orchestrator/author-
+        # declared label set (OKF concept frontmatter). The LLM/embedding/bm25
+        # call is redundant cost and would only re-derive a subset. Preserve
+        # file_labels verbatim (ACL + concept labels), de-duplicated. No-op for
+        # free-form docs (no ACL prefixes -> predicate False -> falls through to
+        # the normal strategy dispatch). This is also the ONLY ACL-preserve
+        # mechanism for the embedding/bm25 strategies.
+        if any(_is_acl_label(_l) for _l in (file_labels or [])) and file_labels:
+            _labels = list(dict.fromkeys(file_labels))  # order-preserving dedup (AC #6)
+            await self._write_ingestion_log(
+                file_id,
+                "INFO",
+                "Labeling",
+                f"Skipping LLM labeling: file_labels carries ACL prefixes; "
+                f"preserving {len(_labels)} label(s) verbatim.",
+            )
+            return [{"text": c, "labels": list(_labels)} for c in plain_chunks]
+
         if not all_labels:
             await self._write_ingestion_log(
                 file_id, "WARN", "Labeling", "No labels found in Taxonomy. Using only file labels."

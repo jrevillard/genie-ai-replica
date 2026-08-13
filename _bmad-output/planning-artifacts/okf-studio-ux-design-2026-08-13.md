@@ -60,14 +60,14 @@ The existing upload → ClamAV → text-extract → ingest-into-free-form-corpus
 - **Bulk-partition ("50 PDFs → N repos") deferred to v1.1** — single-repo-per-run + Domain Templates covers "multiple repos easily" in v1.
 - **Studio only IMPORTS/mounts** Epic 3/4/9 components; their logic stays owned by their epics (anti-scope-creep rule, enforced at review).
 
-## 5. Open questions (to confirm at sign-off / story creation)
-1. **Persona** (the decisive assumption): Wizard-first bets on non-expert stewards. If real stewards are technical, promote the Cross-repo Inbox + diff-everywhere ("power mode") sooner. Validate before Step 7 ships.
-2. **"Document not yet in an OKF repo" signal** for the `showCreateOkfButton` gate — no existing OKF-membership field; needs a new lookup (e.g. `okf_concepts_meta.sources` join or `okf_repositories.source` ref).
-3. **Taxonomy endpoint:** confirm gap-analysis uses the labeler's `/api/service-categories/categories` path (not `/categories/detailed`, which is placement-only) — don't conflate.
-4. **Drafts store:** separate `okf_studio_drafts` collection vs `studio_step`/`studio_state` fields on `okf_repositories` (affects retention + concurrent-edit semantics).
-5. **Producer-vs-autocorrect label gate semantics** — identical, or producer proposals stricter (always amber)?
-6. **Cross-repo shared-label-decision cost** — per-repo coverage re-run (N model calls) vs cached.
-7. **mintVersion (2.9.7) + review→approve→publish state machine (ADR-okf-030)** — fully specified, or co-designed at Step 8/9?
+## 5. Decisions resolved (2026-08-13 — no deferrals)
+1. **Persona → Wizard-first (non-expert curator)**, locked. The grafted Cross-repo Inbox + diff-everywhere are the promotable "power mode" for technical stewards — no re-architecture needed if the persona shifts. (If real-steward validation later shows technical dominance, surface power-mode sooner — a config/routing change, not a redesign.)
+2. **"Document not yet in an OKF repo" signal → stamp `okf_repo_id` on the `files` doc.** Story 7.7 (produce-from-documents) writes `okf_repo_id` (the target repo) onto each selected source document's `files` metadata at produce time. The `showCreateOkfButton` gate = "selection non-empty AND none have `okf_repo_id` AND none are `dataprep.status=='ingested'`." Add as a Story 7.7 AC. (Additive field on `files`; no new collection.)
+3. **Taxonomy endpoint → locked invariant.** Gap-analysis reads taxonomy via the labeler's own path (`_fetch_all_labels` → `GET /api/service-categories/categories`, the `{name,children}` shape); `serviceTreeService.getAdminCategories()` (`/categories/detailed`) is **placement-only**. The two are never conflated. (Already an ADR-okf-033 correctness invariant; restated here as decided.)
+4. **Drafts store → separate `okf_studio_drafts` collection**, keyed by `repo_id`, holding `studio_step`/`studio_state` + the per-step curation view-state. Cleaner retention (pairs with the Story 2.9.9 sweep) + supports concurrent-steward editing semantics than bloating `okf_repositories`. `okf_repositories` keeps a denormalized `studio_step` pointer for dashboard rendering.
+5. **Producer-vs-autocorrect label gate → producer proposals default AMBER (stricter); auto-correct maps follow the confidence traffic-light.** Both feed the same `okf_label_proposals` collection; producer-sourced rows (`source='producer'`) land in the amber/needs-review band by default (untrusted AI per ADR-okf-019), while auto-correct label maps (`source='autocorrect'`) use the green/grey/amber confidence bands. One gate, two default bands.
+6. **Cross-repo shared-label cost → cache + invalidate.** Cache the coverage projection per `(domain, label-set)` in `okf_label_proposals` (or a small cache collection); invalidate on hierarchy change (any Apply that writes service-categories); re-run only the affected repos. Domain-wide shared decisions apply one approved proposal (scope=domain) with the cached projection — not N model calls per repo.
+7. **mintVersion + state machine → already specified; consumed as-is.** ADR-okf-030 defines the `TRANSITIONS` map (review→approve→publish); ADR-okf-031 defines `mintVersion()` + the immutable `okf_versions` manifest. Studio Step 8/9 consume them directly — **no co-design needed**. (If a minor gap surfaces at dev time, it's an AC refinement on Story 2.9.7/10.6, not a blocker.)
 
 ## 6. Risks (top)
 - **Persona mismatch** (highest) — mitigated by the grafted "power mode" (diff panel + inbox) that can be promoted without re-architecture.

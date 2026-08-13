@@ -932,9 +932,13 @@ module.exports = (queryService) => {
   router.get('/:queryId/conversations', async (req, res, next) => {
     try {
       logger.info(`Getting conversations for query ${req.params.queryId}`);
-      const conversations = await queryService.getConversationsForQuery(req.params.queryId);
+      const userId = req.user?.iss_sub;
+      const conversations = await queryService.getConversationsForQuery(req.params.queryId, userId);
       res.json(conversations);
     } catch (error) {
+      if (error.message === 'Access denied') {
+        return res.status(403).json({ success: false, message: 'Access denied' });
+      }
       logger.error(`Error getting conversations for query ${req.params.queryId}: ${error.message}`, {
         stack: error.stack
       });

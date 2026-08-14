@@ -33,9 +33,9 @@ development_status:
   2-2-arangodb-meta-collections-repo-crud: done
   2-3-okf-parser-frontmatter-links: done
   2-4-conformance-validation-quality-metrics: done
-  2-5-docrepo-bundle-ingest-route: review          # (+ 2026-08-13: async via worker 2.9.4, server-side graph_name ownership assertion, extractMetadata fix)
+  2-5-docrepo-bundle-ingest-route: done            # code-review fixes applied 2026-08-14 (fire-and-forget ingest kick). 416 tests green.
   2-6-dataprep-graphname-metadata-retract: backlog  # [BUMP] (ACL-preserve EXTRACTED to ungated 2-6a; this story keeps graph-name body-read, repo-level retract, retractRepoGraph drops 4 OKF_{repo}_* collections — G5)
-  2-7-source-sync-git-s3-change-detection: backlog
+  2-7-source-sync-git-s3-change-detection: ready-for-dev # story created 2026-08-14 (5-agent analysis + critic corrections baked in)
   2-8-pii-redaction-version-provenance-docrefs: backlog  # (+ 2026-08-13: PII is a publish prerequisite / lifecycle gate, not parallel — D22)
   epic-2-retrospective: optional
 

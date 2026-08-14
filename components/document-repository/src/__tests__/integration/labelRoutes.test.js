@@ -84,6 +84,7 @@ jest.mock('../../middlewares/fileUpload', () => ({
 const request = require('supertest');
 const app = require('../../app');
 const labelService = require('../../services/labelService');
+const { NotFoundError, ConflictError } = require('../../middlewares/errorHandler');
 
 describe('Label Routes Integration', () => {
   beforeEach(() => {
@@ -134,11 +135,11 @@ describe('Label Routes Integration', () => {
       expect(res.body._key).toBe('1');
     });
 
-    it('should return 500 when label not found', async () => {
-      labelService.getLabelById = jest.fn().mockRejectedValue(new Error('not found'));
+    it('should return 404 when label not found', async () => {
+      labelService.getLabelById = jest.fn().mockRejectedValue(new NotFoundError('Label not found'));
 
       const res = await request(app).get('/api/labels/nonexistent');
-      expect(res.status).toBe(500);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -191,11 +192,11 @@ describe('Label Routes Integration', () => {
       expect(res.body.message).toBe('Label deleted successfully');
     });
 
-    it('should handle delete errors with 500', async () => {
-      labelService.deleteLabel = jest.fn().mockRejectedValue(new Error('has children'));
+    it('should return 409 when label has children', async () => {
+      labelService.deleteLabel = jest.fn().mockRejectedValue(new ConflictError('Label has children'));
 
       const res = await request(app).delete('/api/labels/1');
-      expect(res.status).toBe(500);
+      expect(res.status).toBe(409);
     });
   });
 

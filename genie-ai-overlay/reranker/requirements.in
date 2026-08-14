@@ -17,19 +17,19 @@ docarray[full]==0.41.0
 fastapi==0.116.1
 httpx
 huggingface-hub==0.30.2
-opentelemetry-api
-opentelemetry-exporter-otlp
-opentelemetry-sdk
+opentelemetry-api==1.27.0
+opentelemetry-exporter-otlp==1.27.0
+opentelemetry-sdk==1.27.0
 Pillow==11.3.0
 prometheus-fastapi-instrumentator
 sentence_transformers
 shortuuid
 uvicorn
 datasets
-haystack-ai
+haystack-ai==2.3.1
 langchain==0.3.27
 langchain-community
-openai
+openai==1.81.0
 pydub
 
 # === Overlay-specific dependencies (genie-ai-overlay/reranker) ===

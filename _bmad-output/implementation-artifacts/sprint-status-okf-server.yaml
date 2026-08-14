@@ -42,7 +42,7 @@ development_status:
   epic-2.9: in-progress        # NEW 2026-08-13 — Write-side Orchestration (the trunk). Mostly ungated Node; 2.9.6 gated.
   2-6a-acl-label-preserve-fix: done                # UNGATED P0 — code-review APPROVED (2026-08-14, 4 low/nit findings non-blocking). 91 tests green, pipeline #6102 green.
   2-9-1-ingest-service-ingest-endpoint: backlog    # G1 — the full async ingest sequence, returns 202
-  2-9-2-concepts-meta-upsert-writer: backlog       # G9 — first-class fields, unique index (repo_id,concept_id)
+  2-9-2-concepts-meta-upsert-writer: ready-for-dev # story created 2026-08-14 (canonical UPSERT writer; fixes the persistConformanceIssues silent no-op)
   2-9-3-links-to-edge-writer-within-repo: backlog  # G7,G22 — post-index, within-repo validated
   2-9-4-ingestion-worker-redis-streams-dlq: backlog # G10 — drains Pending, concurrency 1 configurable, orphan sweeper
   2-9-5-bundle-zip-format-unzip-dedup: backlog     # G11 — zip of .md, content-hash idempotent re-ingest

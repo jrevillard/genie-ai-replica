@@ -194,3 +194,10 @@ glm-5.2[1m] (via BMAD dev-story; Jest run via npm --prefix components/document-r
 
 ### Change Log
 - 2026-08-14: Story 2.5 implemented (T1-T7). 5 tests added, 410 total green, ESLint/Prettier clean. Status → review.
+- 2026-08-14: **Code-review fixes applied** (5-agent adversarial review: 4 layers + triage):
+  - **[CRITICAL] 202 contract was a dead end** — no worker drains Pending bundle files (crawlWorker polls crawl_job only; the UI calls /ingest explicitly). Fixed: the route now kicks off ingestion fire-and-forget via `setImmediate(() => this._ingestFileById(fileId).catch(log))` — the 202 response is not blocked; failures are logged + surface via the files doc status. The Redis-Streams ingestionWorker (Story 2.9.4) will replace this kick.
+  - **[MED] Malware rejection logged nothing** (AC2/AC6 violated) — added `logger.error` in the virus branch.
+  - **[MED] Orphan file on addMetadata failure** — uploadBundle now wraps writeFile→addMetadata in try/catch + `fs.unlink` cleanup (mirrors uploadFile).
+  - **[MED] Missing mandated tests** — added: non-Admin 403 (via a mock-prefixed deny flag — the middleware closure is created at registration), fire-and-forget kick (+failure-does-not-500), and a 3-test unit file asserting `_ingestFileById` threads `graphName` into the axios payload + legacy `null` backward-compat + re-ingestion guard.
+  - **[LOW] repo_id not UUID-validated** — Joi `.uuid()` added. **[LOW] swagger** — repo_id now required.
+  - 19 suites / **416 tests** green; ESLint + Prettier clean.

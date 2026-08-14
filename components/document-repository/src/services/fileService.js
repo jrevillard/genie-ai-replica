@@ -921,19 +921,30 @@ class FileService {
     // Ensure upload directory exists
     await fileUtils.ensureDirectoryExists(this.uploadDir);
 
-    // Write to disk
-    await fs.writeFile(filePath, buffer);
+    // Write to disk + create files doc. On metadata failure, clean up the
+    // orphan file so nothing sits on disk untracked (mirrors uploadFile's
+    // cleanup pattern — code-review fix 2026-08-14).
+    try {
+      await fs.writeFile(filePath, buffer);
 
-    // Create files doc (graph_name + repo_id persisted via T5 extractMetadata fix)
-    await metadataService.addMetadata(filePath, {
-      file_id: fileId,
-      file_name: bundleInfo.originalFileName || fileName,
-      file_type: 'text/markdown',
-      storage_path: filePath,
-      labels: [],
-      graph_name: bundleInfo.graph_name,
-      repo_id: bundleInfo.repo_id
-    });
+      // Create files doc (graph_name + repo_id persisted via T5 extractMetadata fix)
+      await metadataService.addMetadata(filePath, {
+        file_id: fileId,
+        file_name: bundleInfo.originalFileName || fileName,
+        file_type: 'text/markdown',
+        storage_path: filePath,
+        labels: [],
+        graph_name: bundleInfo.graph_name,
+        repo_id: bundleInfo.repo_id
+      });
+    } catch (error) {
+      try {
+        await fs.unlink(filePath);
+      } catch (unlinkErr) {
+        logger.warn(`[FILE-SERVICE] Failed to clean up orphan bundle ${filePath}: ${unlinkErr.message}`);
+      }
+      throw error;
+    }
 
     logger.info(`[FILE-SERVICE] Bundle uploaded: ${fileId} (graph_name=${bundleInfo.graph_name})`);
     return { file_id: fileId, file_name: bundleInfo.originalFileName || fileName, storage_path: filePath };

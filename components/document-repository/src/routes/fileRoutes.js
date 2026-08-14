@@ -741,6 +741,7 @@ router.post('/ingest', authorizeRole(['Admin']), fileController.ingestMultipleFi
  *             required:
  *               - bundle
  *               - graph_name
+ *               - repo_id
  *             properties:
  *               bundle:
  *                 type: string

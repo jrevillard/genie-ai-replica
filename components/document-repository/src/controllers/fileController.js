@@ -1009,8 +1009,12 @@ class FileController {
   // Accepts a base64 bundle, ClamAV scans (reuses fileService.uploadBundle),
   // bypasses the upload allowlist/langdetect/text-extraction pipeline, and
   // creates a files doc carrying graph_name + repo_id (T5 extractMetadata fix).
-  // Returns 202 — the existing async worker picks up the Pending file and
-  // calls _ingestFileById, which reads graph_name from the files doc (T1).
+  // Returns 202 and kicks off ingestion fire-and-forget (code-review fix,
+  // 2026-08-14): there is NO background worker that drains Pending files today
+  // (crawlWorker polls crawl_job only), so the route itself must trigger
+  // _ingestFileById — which reads graph_name from the files doc (T1) — without
+  // blocking the response. The Redis-Streams ingestionWorker (Story 2.9.4)
+  // will replace this kick when it lands.
   async bundleIngest(req, res) {
     try {
       const { bundle, graph_name, repo_id, originalFileName } = req.body;
@@ -1021,7 +1025,7 @@ class FileController {
         graph_name: Joi.string()
           .pattern(/^OKF_[a-f0-9-]+$/)
           .required(),
-        repo_id: Joi.string().required(),
+        repo_id: Joi.string().uuid().required(),
         originalFileName: Joi.string().allow('').optional()
       });
       const { error } = schema.validate({ bundle, graph_name, repo_id, originalFileName });
@@ -1047,7 +1051,15 @@ class FileController {
         repo_id
       });
 
-      // Async: return 202 (existing worker picks up Pending → _ingestFileById)
+      // Fire-and-forget ingestion kick (does not block the 202). dataprep.status
+      // transitions Pending → Ingesting via _ingestFileById; a failure is
+      // logged and surfaces via the files doc status, never a silent drop.
+      setImmediate(() => {
+        this._ingestFileById(result.file_id).catch((ingestErr) => {
+          logger.error(`[FILE-CONTROLLER] Bundle async ingestion failed for ${result.file_id}: ${ingestErr.message}`);
+        });
+      });
+
       return res.status(202).json({
         success: true,
         message: 'Bundle accepted for async ingestion',
@@ -1056,6 +1068,8 @@ class FileController {
       });
     } catch (err) {
       if (err.message && err.message.includes('virus')) {
+        // AC2/AC6: reject + log + audit trail (malware attempt must be visible)
+        logger.error(`[FILE-CONTROLLER] Bundle ingest malware rejected: ${err.message}`);
         return res.status(400).json({ error: 'MALWARE_DETECTED', message: err.message });
       }
       logger.error(`Bundle ingest error: ${err.message}`);

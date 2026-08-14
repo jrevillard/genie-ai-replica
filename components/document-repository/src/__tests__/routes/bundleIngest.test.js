@@ -9,13 +9,23 @@ jest.mock('../../../shared-lib', () => ({
   dbService: { getConnection: jest.fn() }
 }));
 
+// Set true in a test to make authorizeRole reject with 403 (the middleware
+// closure is created at route registration, so a per-test mockImplementation
+// cannot change it — this flag can). "mock"-prefix keeps jest happy.
+let mockDenyAuth = false;
+
 // Mock auth middleware to bypass Keycloak
 jest.mock('../../middlewares/keycloak-auth-middleware', () => ({
   authenticateToken: jest.fn((req, res, next) => {
     req.user = { sub: 'test-user', preferred_username: 'testuser', realm_access: { roles: ['admin'] } };
     next();
   }),
-  authorizeRole: jest.fn(() => (req, res, next) => next()),
+  authorizeRole: jest.fn(() => (req, res, next) => {
+    if (mockDenyAuth) {
+      return res.status(403).json({ error: 'FORBIDDEN' });
+    }
+    return next();
+  }),
   isPublicRoute: jest.fn(() => false),
   mapRole: jest.fn()
 }));
@@ -79,6 +89,7 @@ jest.mock('../../middlewares/fileUpload', () => ({
 const request = require('supertest');
 const app = require('../../app');
 const fileService = require('../../services/fileService');
+const fileController = require('../../controllers/fileController');
 
 describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
   beforeEach(() => {
@@ -150,11 +161,55 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
     const res = await request(app).post('/api/files/ingest-bundle').send({
       bundle: validBody.bundle,
       graph_name: 'GRAPH',
-      repo_id: 'test-repo-123',
+      repo_id: repoId,
       originalFileName: 'concept.md'
     });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('should return 403 for a non-Admin caller', async () => {
+    mockDenyAuth = true;
+    try {
+      const res = await request(app).post('/api/files/ingest-bundle').send(validBody);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('FORBIDDEN');
+      expect(fileService.uploadBundle).not.toHaveBeenCalled();
+    } finally {
+      mockDenyAuth = false;
+    }
+  });
+
+  it('should kick off ingestion fire-and-forget after storing (202 contract)', async () => {
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'kick-file-id',
+      file_name: 'concept.md',
+      storage_path: '/uploads/kick-file-id.md'
+    });
+    const ingestSpy = jest.spyOn(fileController, '_ingestFileById').mockResolvedValue({ success: true });
+
+    await request(app).post('/api/files/ingest-bundle').send(validBody);
+
+    // Wait for the setImmediate fire-and-forget kick to run
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(ingestSpy).toHaveBeenCalledWith('kick-file-id');
+    ingestSpy.mockRestore();
+  });
+
+  it('should log (not crash) when the fire-and-forget ingestion fails', async () => {
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'failing-file-id',
+      file_name: 'concept.md',
+      storage_path: '/uploads/failing-file-id.md'
+    });
+    const ingestSpy = jest.spyOn(fileController, '_ingestFileById').mockRejectedValue(new Error('dataprep down'));
+
+    const res = await request(app).post('/api/files/ingest-bundle').send(validBody);
+
+    // The 202 has already been sent — the ingestion failure must not turn it into a 500
+    expect(res.status).toBe(202);
+    await new Promise((resolve) => setImmediate(resolve));
+    ingestSpy.mockRestore();
   });
 });

@@ -372,43 +372,50 @@ resolution: already resolved: mobile/genie_ai_mobile/lib/config/flavors/template
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-custom-url-scheme-per-deployment (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: Not generic for new institutional deployments.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-mobile-onboarding-docs
 
 ### DW-48: Air-gapped section lacks concrete DNS configuration example
 origin: migrated from legacy ledger ("Deferred from: code review of 4-4-deployment-onboarding-guide (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: Guide mentions local DNS and /etc/hosts but provides no specific commands.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-mobile-onboarding-docs
 
 ### DW-49: No Docker service health check before running verification commands
 origin: migrated from legacy ledger ("Deferred from: code review of 4-4-deployment-onboarding-guide (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: Operators may run verification before keycloak-config finishes processing.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-mobile-onboarding-docs
 
 ### DW-50: Missing key.properties file permissions warning
 origin: migrated from legacy ledger ("Deferred from: code review of 4-4-deployment-onboarding-guide (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: Signing credentials file should be chmod 600 but guide doesn't mention permissions.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-mobile-onboarding-docs
 
 ### DW-51: Missing dependency resolution troubleshooting
 origin: migrated from legacy ledger ("Deferred from: code review of 4-4-deployment-onboarding-guide (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: `flutter pub get` failure is a common first-build error not covered in troubleshooting section.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-mobile-onboarding-docs
 
 ### DW-52: App Store compliance requirements omitted
 origin: migrated from legacy ledger ("Deferred from: code review of 4-4-deployment-onboarding-guide (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: Google Play Data Safety disclosure and Apple privacy manifests are non-optional for store submission but not mentioned.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-mobile-onboarding-docs
 
 ### DW-53: Version code/name management across deployments
 origin: migrated from legacy ledger ("Deferred from: code review of 4-4-deployment-onboarding-guide (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: App stores require unique version codes per submission; no guidance for managing these across multiple institutional deployments.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-mobile-onboarding-docs
 
 ### DW-54: RightSidebarComponent fallback accessToken removed
 origin: migrated from legacy ledger ("Deferred from: code review of 6-1-user-service-migration (mobile-oidc, 2026-04-29)"), 2026-08-12

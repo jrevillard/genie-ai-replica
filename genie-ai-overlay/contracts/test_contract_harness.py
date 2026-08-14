@@ -181,6 +181,9 @@ def test_fake_session_returns_matched_payload():
 
 
 def test_genie_kwargs_invariant():
-    # The 6 GENIE kwargs + exact wire values are the forwarding contract.
-    assert len(_harness.GENIE_KWARGS) == 6
+    # The bundled ``genie_params`` dict is the forwarding contract (v1.5 re-graft).
+    assert len(_harness.GENIE_KWARGS) == 1
+    assert _harness.GENIE_KWARGS == ("genie_params",)
     assert set(_harness.WIRE_KWARGS) == set(_harness.GENIE_KWARGS)
+    # The 6 individual params ride inside the dict.
+    assert len(_harness.WIRE_GENIE_PARAMS) == 6

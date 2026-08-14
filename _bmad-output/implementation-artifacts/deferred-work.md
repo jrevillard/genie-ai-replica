@@ -322,7 +322,8 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of 4-2-dart-flavor-config-keycloak-client-template (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: The 4-layer scheme coherence rule (Dart config, Android build.gradle, iOS XCConfig, .env) is well-documented but not enforced programmatically. A mismatch causes silent OIDC callback failure.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw-mobile-scheme-coherence
 
 ### DW-41: No backchannel logout configuration
 origin: migrated from legacy ledger ("Deferred from: code review of 4-2-dart-flavor-config-keycloak-client-template (mobile-oidc, 2026-04-28)"), 2026-08-12
@@ -334,19 +335,22 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-custom-url-scheme-per-deployment (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: The coherence rule (Dart = Gradle = XCConfig = env) is documented but no lint/CI check prevents future mismatches.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw-mobile-scheme-coherence
 
 ### DW-43: Missing `webOrigins` in Keycloak mobile client config
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-custom-url-scheme-per-deployment (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: `genie-realm.yaml` mobile client has no `webOrigins`, potentially needed for Android App Links verification.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw-mobile-scheme-coherence
 
 ### DW-44: Non-flavored debug build collides with `itu` flavor
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-custom-url-scheme-per-deployment (mobile-oidc, 2026-04-28)"), 2026-08-12
 location: n/a
 reason: `flutter build apk` without `--flavor` uses same `applicationId` as `itu`. Pre-existing.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw-mobile-scheme-coherence
 
 ### DW-45: `e2e_config.dart` missing `allowInsecureConnections: true`
 origin: migrated from legacy ledger ("Deferred from: code review of 4-3-custom-url-scheme-per-deployment (mobile-oidc, 2026-04-28)"), 2026-08-12

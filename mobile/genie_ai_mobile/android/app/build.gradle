@@ -27,7 +27,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.genie_ai_mobile"
+        applicationId = "com.example.genie_ai_mobile.debug"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -44,27 +44,28 @@ android {
     productFlavors {
         dev {
             dimension "environment"
-            applicationIdSuffix ".dev"
+            applicationId = "com.example.genie_ai_mobile.dev"
             manifestPlaceholders = [
                 appAuthRedirectScheme: "com.itu.genieai.dev"
             ]
         }
         staging {
             dimension "environment"
-            applicationIdSuffix ".staging"
+            applicationId = "com.example.genie_ai_mobile.staging"
             manifestPlaceholders = [
                 appAuthRedirectScheme: "com.itu.genieai.staging"
             ]
         }
         e2e {
             dimension "environment"
-            applicationIdSuffix ".e2e"
+            applicationId = "com.example.genie_ai_mobile.e2e"
             manifestPlaceholders = [
                 appAuthRedirectScheme: "com.itu.genieai.e2e"
             ]
         }
         itu {
             dimension "environment"
+            applicationId = "com.example.genie_ai_mobile"
             manifestPlaceholders = [
                 appAuthRedirectScheme: "com.itu.genieai"
             ]

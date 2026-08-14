@@ -9,7 +9,7 @@ const _backendUrl = String.fromEnvironment(
   defaultValue: 'https://10.0.2.2:8443',
 );
 
-const e2eConfig = KeycloakConfig(
+final e2eConfig = KeycloakConfig(
   keycloakUrl: _keycloakUrl,
   realm: 'genie',
   clientId: 'genie-mobile-e2e',

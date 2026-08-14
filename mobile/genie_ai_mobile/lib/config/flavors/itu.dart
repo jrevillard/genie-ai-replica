@@ -1,6 +1,6 @@
 import '../keycloak_config.dart';
 
-const config = KeycloakConfig(
+final config = KeycloakConfig(
   keycloakUrl: 'https://keycloak.itu.int',
   realm: 'genie',
   clientId: 'genie-mobile-itu',

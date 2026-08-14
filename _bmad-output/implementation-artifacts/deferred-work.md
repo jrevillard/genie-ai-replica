@@ -1191,19 +1191,22 @@ resolution: middleware/security.test.js:140-233 — 7 real test cases for valida
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: will throw on mimeType.includes(). Missing application/msword test for isTextExtractable.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw3-doc-repo-test-hardening
 
 ### DW-165: getDb mock pattern fragile in metadataService.test.js and labelService.test.js
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: jest.fn() replacement instead of jest.spyOn prevents automatic restoration. Pre-existing test design pattern.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw3-doc-repo-test-hardening
 
 ### DW-166: || vs ?? in extractMetadata
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: source uses fileInfo.file_size || stats.size treating file_size: 0 as falsy. Same for file_hash: '' and publish: 0. Source code design decision.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw3-doc-repo-test-hardening
 
 ### DW-167: labelService.test.js missing mocks for shared-lib and appConfig
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
@@ -1223,13 +1226,15 @@ resolution: labelService.test.js:355-367 — throw if label has child labels tes
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: 'labels' branch in field filter can never execute since 'labels' is not in allowedFields. Pre-existing source code concern.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw3-doc-repo-test-hardening
 
 ### DW-170: 50MB buffer allocation in oversized buffer test
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
 location: n/a
 reason: slow and memory-intensive. Pre-existing test design.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw3-doc-repo-test-hardening
 
 ### DW-171: AC6 (EICAR fixture from Story 5.1 mocks) NOT SATISFIED
 origin: migrated from legacy ledger ("Deferred from: code review of 5-4-test-security-middleware-and-metadata-services (2026-05-20)"), 2026-08-12
@@ -2143,3 +2148,43 @@ severity: low
 reason: Renames or deletions in genie-ai-overlay/contracts/ will leave the docs stale without warning. Either reference a directory listing, or add a CI step that validates the table against the filesystem.
 status: done 2026-08-14
 resolution: already resolved: All 7 contract files listed in site/content/en/docs/architecture/architecture.md:235-241 exist in genie-ai-overlay/contracts/: test_contract_orchestrator_wire.py, test_contract_label_filter.py, test_contract_retriever_fusion.py, test_contract_reranker.py, test_contract_e2e_pipeline.py, test_contract_ingest.py, test_contract_telemetry.py
+
+### DW-300: Inconsistent || vs ?? for file_hash, uploaded_date, create_date, crawl_date, source_url
+origin: spec-deferred 5d7572c89ff0
+source_spec: `spec-doc-repo-test-hardening.md`
+location: components/document-repository/src/services/metadataService.js:22-31
+severity: low
+reason: file_hash intentionally uses || (empty string should trigger computation). Other fields not reachable from production code paths.
+status: open
+
+### DW-301: No test for labels rejection after dead branch removal
+origin: spec-deferred a54bbf26f5b5
+source_spec: `spec-doc-repo-test-hardening.md`
+location: components/document-repository/src/services/metadataService.js:194
+severity: low
+reason: Removed branch was dead code (labels not in allowedFields). Removal is correct per intent. No behavioral change.
+status: open
+
+### DW-302: labels [] and author '' tests tautological
+origin: spec-deferred 66ac22a3fca6
+source_spec: `spec-doc-repo-test-hardening.md`
+location: components/document-repository/src/__tests__/unit/services/metadataService.test.js:146-171
+severity: low
+reason: Tests document intent even if || vs ?? doesn't matter for these specific inputs ([] is truthy, '' || '' is '').
+status: open
+
+### DW-303: getFileCategory(null) throws TypeError
+origin: spec-deferred 1410c5179214
+source_spec: `spec-doc-repo-test-hardening.md`
+location: components/document-repository/src/utils/mimeTypeValidator.js:91
+severity: low
+reason: Documents existing brittle behavior per intent. No production hardening requested in DW-164.
+status: open
+
+### DW-304: file_size NaN and boolean false not guarded
+origin: spec-deferred 69c3207aa937
+source_spec: `spec-doc-repo-test-hardening.md`
+location: components/document-repository/src/services/metadataService.js:22-27
+severity: low
+reason: Not reachable from production code paths. file_size comes from multer (always number), other fields from mime.lookup() (always string).
+status: open

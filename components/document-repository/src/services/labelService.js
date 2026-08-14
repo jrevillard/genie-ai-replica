@@ -2,6 +2,7 @@ const config = require('../config/appConfig');
 
 const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
+const { NotFoundError, ConflictError } = require('../middlewares/errorHandler');
 
 class LabelService {
   constructor() {
@@ -43,7 +44,7 @@ class LabelService {
       return label;
     } catch (err) {
       if (err.errorNum === 1202) {
-        throw new Error(`Label with key ${labelKey} not found.`, { cause: err });
+        throw new NotFoundError(`Label with key ${labelKey} not found.`, { cause: err });
       }
       throw err;
     }
@@ -192,7 +193,7 @@ class LabelService {
     );
     const childLabels = await cursor.all();
     if (childLabels.length > 0) {
-      throw new Error('Cannot delete label: It has child labels.');
+      throw new ConflictError('Cannot delete label: It has child labels.');
     }
 
     await db.collection(this.collectionName).remove(labelKey);

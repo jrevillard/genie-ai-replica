@@ -30,6 +30,8 @@ async function extractMetadata(filePath, fileInfo = {}) {
     crawl_date: fileInfo.crawl_date || '',
     source_url: fileInfo.source_url || '',
     language: fileInfo.language || 'unknown',
+    graph_name: fileInfo.graph_name || null,
+    repo_id: fileInfo.repo_id || null,
     chunk_count: 0,
     dataprep: {
       status: 'Pending', // Changed to capitalized 'Pending' per spec
@@ -186,7 +188,7 @@ class MetadataService {
       }
 
       // Update metadata with provided updates. Only update allowed fields.
-      const allowedFields = ['dataprep', 'chunk_count'];
+      const allowedFields = ['dataprep', 'chunk_count', 'graph_name', 'repo_id'];
 
       const updateObj = {};
       for (const key of Object.keys(updates)) {

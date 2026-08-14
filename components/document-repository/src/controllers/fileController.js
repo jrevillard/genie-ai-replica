@@ -138,6 +138,7 @@ class FileController {
     this.addIngestionLog = this.addIngestionLog.bind(this);
     this.getIngestionLogs = this.getIngestionLogs.bind(this);
     this.updateFileStatus = this.updateFileStatus.bind(this);
+    this.bundleIngest = this.bundleIngest.bind(this);
     this.killIngestion = this.killIngestion.bind(this);
 
     // --- CRAWLER BINDS ---
@@ -986,7 +987,8 @@ class FileController {
       fileType: file.file_type,
       fileLabels: file.labels,
       storagePath: file.storage_path,
-      fileBase64: base64String
+      fileBase64: base64String,
+      graphName: file.graph_name || null
     });
     if (response.data.success) {
       await metadataService.updateMetadata(fileId, {
@@ -1000,6 +1002,64 @@ class FileController {
       return { success: true };
     } else {
       return { success: false, error: response.data };
+    }
+  }
+
+  // --- OKF Bundle Ingest (Story 2.5) ---
+  // Accepts a base64 bundle, ClamAV scans (reuses fileService.uploadBundle),
+  // bypasses the upload allowlist/langdetect/text-extraction pipeline, and
+  // creates a files doc carrying graph_name + repo_id (T5 extractMetadata fix).
+  // Returns 202 — the existing async worker picks up the Pending file and
+  // calls _ingestFileById, which reads graph_name from the files doc (T1).
+  async bundleIngest(req, res) {
+    try {
+      const { bundle, graph_name, repo_id, originalFileName } = req.body;
+
+      // Joi validation
+      const schema = Joi.object({
+        bundle: Joi.string().base64().required(),
+        graph_name: Joi.string()
+          .pattern(/^OKF_[a-f0-9-]+$/)
+          .required(),
+        repo_id: Joi.string().required(),
+        originalFileName: Joi.string().allow('').optional()
+      });
+      const { error } = schema.validate({ bundle, graph_name, repo_id, originalFileName });
+      if (error) {
+        return res.status(400).json({ error: 'VALIDATION_ERROR', message: error.details[0].message });
+      }
+
+      // Ownership assertion: graph_name must match OKF_{repo_id}
+      if (graph_name !== `OKF_${repo_id}`) {
+        return res.status(400).json({
+          error: 'OWNERSHIP_MISMATCH',
+          message: `graph_name must equal OKF_${repo_id}`
+        });
+      }
+
+      // Decode base64 → buffer
+      const buffer = Buffer.from(bundle, 'base64');
+
+      // Store + ClamAV scan + files doc (graph_name + repo_id persisted via T5)
+      const result = await fileService.uploadBundle(buffer, {
+        originalFileName,
+        graph_name,
+        repo_id
+      });
+
+      // Async: return 202 (existing worker picks up Pending → _ingestFileById)
+      return res.status(202).json({
+        success: true,
+        message: 'Bundle accepted for async ingestion',
+        file_id: result.file_id,
+        graph_name
+      });
+    } catch (err) {
+      if (err.message && err.message.includes('virus')) {
+        return res.status(400).json({ error: 'MALWARE_DETECTED', message: err.message });
+      }
+      logger.error(`Bundle ingest error: ${err.message}`);
+      return res.status(500).json({ error: 'BUNDLE_INGEST_ERROR', message: err.message });
     }
   }
 

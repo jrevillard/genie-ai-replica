@@ -1,5 +1,5 @@
 ---
-baseline_commit: pending
+baseline_commit: 6a5703a0d
 ---
 # Story 2.5: Document-repository bundle ingest route
 
@@ -19,11 +19,11 @@ This is the **ingest orchestrator** — the bridge between the OKF Server (contr
 ## Acceptance Criteria
 
 1. **New route** — `POST /api/files/ingest-bundle` in `components/document-repository/src/routes/fileRoutes.js`, protected by `authorizeRole(['Admin'])`. Accepts JSON body (parsed by the existing global `express.json()`). Does NOT mount multer/`validateFiles` (those are the pipeline to bypass).
-2. **ClamAV scan reused** — explicitly calls `securityService.scanBuffer(buffer)` on the bundle bytes. On malware (`isInfected: true`): reject + log + nothing stored/indexed (403). On clean: proceed to storage.
+2. **ClamAV scan reused** — explicitly calls `securityService.scanBuffer(buffer)` on the bundle bytes. On malware (`isInfected: true`): reject + log + nothing stored/indexed (400, consistent with  virus mapping). On clean: proceed to storage.
 3. **Upload pipeline BYPASSED** — skips: multer memoryStorage, `validateFileType` (magic-byte + extension allowlist), langdetect, text-extraction. KEEPS: ClamAV scan, size check, disk write, `files` collection doc, single-base64 handoff format to dataprep.
 4. **File storage** — writes bytes to disk (`fileUtils.generateUniqueFileId()` + `uploadDir`) + creates a `files` collection doc via `metadataService` (mirrors `fileService.uploadFile` steps 3–10 minus the bypassed stages).
 5. **`graph_name` threaded to dataprep** — extends `_ingestFileById(fileId, graphName)` to add `graphName` to the `axios.post` payload sent to dataprep (`/v1/dataprep/ingest_file`). The route receives `graph_name` in the request body (`graph_name=OKF_{repo_id}`) and passes it through. Existing callers of `_ingestFileById` are unaffected (graphName optional, defaults to null).
-6. **Malware rejection** — malware found → 403 + logged + file NOT written to disk + NOT handed to dataprep + audit trail.
+6. **Malware rejection** — malware found → 400 + logged + file NOT written to disk + NOT handed to dataprep + audit trail.
 7. **Standards** — mirrors document-repository conventions (class-field handlers, constructor binding, `_handleUploadError`, `_formatFileRecord`). MELT where the document-repository supports it (its logger + errorHandler). All exceptions handled + logged. ITU copyright headers. ESLint/Prettier clean. Jest tests.
 8. **Tests** — Jest (mirror `upload.test.js` mock stack): happy path (bundle stored + scanned + handed to dataprep with `graphName` in payload); malware rejected (403, nothing stored); auth (non-Admin → 403); `_ingestFileById` threads `graphName` into the `axios.post` payload.
 
@@ -33,16 +33,17 @@ This is the **ingest orchestrator** — the bridge between the OKF Server (contr
   - [ ] `src/controllers/fileController.js` — change `_ingestFileById(fileId)` → `_ingestFileById(fileId, graphName = null)`; add `graphName` to the `axios.post` payload (7th key alongside fileId/fileName/fileType/fileLabels/storagePath/fileBase64).
 - [ ] **T2 — Bundle storage method** (AC: 2,3,4)
   - [ ] `src/services/fileService.js` — add `async uploadBundle(buffer, bundleInfo)` that mirrors `uploadFile` steps 3–10 (generate fileId → ClamAV `scanBuffer` → disk write → `files` doc) but OMITS langdetect/allowlist/text-extraction. Returns the file record. Add to `module.exports`.
-  - [ ] `bundleInfo` shape: `{ originalFileName, mimeType, labels, graphName, repoId }` (labels from the request body — used for ACL chunk_labels later; graphName/repoId stored on the files doc for retract-by-repo).
+  - [ ] `bundleInfo` shape: `{ originalFileName, mimeType, labels, graph_name, repo_id }` — **snake_case** for the files doc (matches collection convention: `file_id`, `storage_path`, etc.). The dataprep payload uses **camelCase** `graphName` (matches existing keys: `fileId`, `fileName`). Be explicit: files doc stores `graph_name` + `repo_id`; dataprep payload sends `graphName`.
 - [ ] **T3 — Controller handler** (AC: 1,2,6)
-  - [ ] `src/controllers/fileController.js` — add `bundleIngest = async (req, res) => { ... }` class field. Validates body (joi), decodes bundle bytes, calls `fileService.uploadBundle`, then `_ingestFileById(fileId, graphName)`. Bind in constructor.
+  - [ ] `src/controllers/fileController.js` — add `bundleIngest = async (req, res) => { ... }` class field. Validates body via joi schema (see Dev Notes for the exact schema). Decodes the base64 `bundle` field to bytes, calls `fileService.uploadBundle`, then `_ingestFileById(fileId, graphName)`. Bind in constructor.
   - [ ] `_handleUploadError` already maps virus errors → status codes (reuse).
 - [ ] **T4 — Route registration** (AC: 1)
   - [ ] `src/routes/fileRoutes.js` — add `router.post('/ingest-bundle', authorizeRole(['Admin']), fileController.bundleIngest);` (NO multer/validateFiles).
-- [ ] **T5 — metadataService allowlist** (AC: 4)
-  - [ ] `src/services/metadataService.js` — if `graphName`/`repoId` must persist on the `files` doc post-ingest, add them to `allowedFields` (line 189). Otherwise they're silently dropped by `updateMetadata`.
+- [ ] **T5 — Persist graph_name + repo_id on the files doc** (AC: 4) — CRITICAL
+  - [ ] `src/services/metadataService.js` — extend `extractMetadata` (lines 16-42) to include `graph_name` and `repo_id` in the `baseMeta` object: `graph_name: fileInfo.graph_name || null,` and `repo_id: fileInfo.repo_id || null`. This is the INITIAL SAVE path (`addMetadata` calls `extractMetadata` which builds the doc from a hardcoded field list — any field NOT in that list is silently dropped BEFORE the doc is saved). The `updateMetadata` allowlist (line 189) is for POST-ingest updates only.
+  - [ ] Also add `graph_name` and `repo_id` to `updateMetadata` `allowedFields` (line 189) so post-ingest updates (e.g., retract) can modify them.
 - [ ] **T6 — Tests** (AC: 8)
-  - [ ] `src/__tests__/routes/bundleIngest.test.js` — mirror `upload.test.js` mock stack; cover happy path + malware + auth + graphName threading.
+  - [ ] `src/__tests__/routes/bundleIngest.test.js` — mirror `upload.test.js` mock stack; cover happy path + malware + auth + graphName threading into dataprep payload. **Also test**: after successful ingest, assert the saved  doc contains  and  (verify the association persists). **Also test**:  with NO graphName arg (backward compat — existing routes unaffected).
 - [ ] **T7 — Lint/format/verify + deploy** (AC: 7)
   - [ ] `cd components/document-repository && npm run lint && npm run format:check && npm test` — all clean.
   - [ ] Deploy: rebuild the document-repository image + redeploy to local build; smoke-verify.
@@ -112,12 +113,37 @@ The bundle route implements **Architecture §6 Step 4 (Store + scan)**:
 
 **ADR-okf-016**: Document-repository is the single source of truth for content after upload. The route writes bytes to disk + creates the `files` doc — this IS the source-of-truth record.
 
+### graph_name ↔ repo_id association (user's critical requirement)
+- `graph_name` is validated via joi: must match `/^OKF_[a-f0-9-]+$/` (the `OKF_{repo_id}` format minted by repository-service.js Story 2.2). Rejects typos, empty values, or attempts to target the free-form `GRAPH`.
+- **Trust boundary**: the route trusts the OKF Server (caller) to pass the correct `graph_name=OKF_{repo_id}` for the given `repo_id`. It does NOT verify the association (that is the OKF Server's responsibility via `okf_repositories`). The document-repository is not the control plane.
+- **Persistence** (T5): both `graph_name` AND `repo_id` are stored on the `files` collection doc so the association is queryable: `FOR f IN files FILTER f.repo_id == @repo_id` finds all files for a repo. Without the `extractMetadata` fix (T5), these fields are silently dropped.
+
 ### Ownership boundary (what the route does NOT do)
 - **PII redaction** (Presidio) — OKF Server's governance module (Story 2.8), NOT the bundle route.
 - **Lifecycle status** (`review`, `draft`) — OKF Server (okf_repositories), NOT the files doc.
 - **OKF metadata** (`okf_concepts_meta`) — OKF Server, NOT the document-repository.
 - **Graph creation** — dataprep (Story 2.6, gated). The route SENDS `graph_name`; dataprep CREATES the graph.
 - **Parser/conformance** — the route does NOT call `parseConcept` or `validateConcept` directly. Those are called by the OKF Server's ingest orchestrator (or the AI producer, Epic 7) BEFORE submitting to this route. The bundle route receives already-parsed content (or raw bytes that dataprep will chunk). If parsing is needed inline, that's a caller responsibility (the route's job is storage + scan + handoff).
+
+### Bundle size ceiling
+The global `express.json({ limit: '10mb' })` caps the request body at ~10MB. Base64 encoding adds ~33% overhead → effective binary limit ~7.5MB. ClamAV `scanBuffer` accepts up to 50MB. For markdown OKF bundles this is almost certainly fine. If larger bundles are needed later, bump the route-specific limit or switch to streaming.
+
+### Async ingestion pattern (the existing model this story mirrors)
+The existing document-repository uses an **async ingestion lifecycle**:
+1. Upload stores the file + creates a `files` doc with `dataprep: { status: 'Pending' }`.
+2. An ingestion job (triggered on-demand via `POST /api/files/:fileId/ingest`, or by a background worker that picks up Pending files) calls `_ingestFileById(fileId)`.
+3. `_ingestFileById` reads the file doc, base64-encodes the bytes, and POSTs to dataprep.
+4. Status transitions: `Pending → Ingesting → Ingested`.
+
+**The bundle route follows the SAME pattern** — it does NOT call `_ingestFileById` synchronously in the request handler. Instead:
+1. `POST /api/files/ingest-bundle` stores the bundle bytes + ClamAV scans + creates the `files` doc with `graph_name`, `repo_id`, and `dataprep: { status: 'Pending' }`.
+2. The existing ingestion worker/job picks up the Pending file → calls `_ingestFileById(fileId)`.
+3. **`_ingestFileById` reads `graph_name` from the files doc** (not a function parameter) and includes it in the dataprep `axios.post` payload. This is cleaner than threading a parameter — single source of truth (the files doc), no divergence between the stored value and the sent value.
+4. The OKF Server (or the AI producer, Epic 7) can trigger ingestion on-demand via the existing `POST /api/files/:fileId/ingest` endpoint, or let the background worker pick it up.
+
+**This means T1 changes**: `_ingestFileById` reads `graph_name` from `file.graph_name` (already loaded by `_getFileBase64`) rather than receiving it as a parameter. The existing signature `_ingestFileById(fileId)` is UNCHANGED — no backward-compat risk. The only change is adding `graphName: file.graph_name || null` to the `axios.post` payload inside the method.
+
+**Alignment with the user's end-to-end testing plan**: the user will build a crawler + UI that creates OKF repositories from websites (similar to the original document ingestion mechanism). The bundle route is the entry point that stores crawled content for OKF ingestion. The async pattern means the crawler can submit many bundles rapidly (each gets stored + scanned + queued as Pending), and the ingestion worker processes them at its own pace — no blocking, no timeout risk on large bundles.
 
 ### Inherited lessons from 2.1-2.4 reviews
 Shared libs IMPORTED not copied · MELT on every method · all exceptions handled + logged · joi validation at boundary · snake_case responses · ITU copyright headers · package-lock committed · direct AQL (no ORM) · ESLint/Prettier clean.

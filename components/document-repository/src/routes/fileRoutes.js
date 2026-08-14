@@ -726,6 +726,47 @@ router.post('/ingest', authorizeRole(['Admin']), fileController.ingestMultipleFi
 
 /**
  * @swagger
+ * /api/files/ingest-bundle:
+ *   post:
+ *     summary: Ingest an OKF bundle (bypasses upload allowlist; ClamAV scanned; threads graph_name)
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - bundle
+ *               - graph_name
+ *             properties:
+ *               bundle:
+ *                 type: string
+ *                 format: byte
+ *                 description: Base64-encoded bundle content
+ *               graph_name:
+ *                 type: string
+ *                 description: The OKF graph name (OKF_{repo_id})
+ *               repo_id:
+ *                 type: string
+ *                 description: The OKF repository ID
+ *               originalFileName:
+ *                 type: string
+ *                 description: Original file name for the stored file
+ *     responses:
+ *       '202':
+ *         description: Bundle accepted for async ingestion
+ *       '400':
+ *         description: Invalid input or malware detected
+ *       '403':
+ *         description: Forbidden - Admin role required
+ */
+router.post('/ingest-bundle', authorizeRole(['Admin']), fileController.bundleIngest);
+
+/**
+ * @swagger
  * /api/files/retract:
  *   post:
  *     summary: Retract multiple files

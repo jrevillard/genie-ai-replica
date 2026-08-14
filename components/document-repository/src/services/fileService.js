@@ -901,6 +901,43 @@ class FileService {
       throw error;
     }
   }
+
+  // --- OKF Bundle Upload (Story 2.5) ---
+  // Mirrors uploadFile (fileId → ClamAV → disk write → files doc) but OMITS
+  // langdetect/allowlist/text-extraction (the bundle pipeline bypass).
+  // The files doc carries graph_name + repo_id (metadataService.extractMetadata
+  // persists them via the T5 fix).
+  async uploadBundle(buffer, bundleInfo = {}) {
+    const fileId = fileUtils.generateUniqueFileId();
+    const fileName = `${fileId}.md`;
+    const filePath = path.join(this.uploadDir, fileName);
+
+    // ClamAV scan (the one pipeline stage we KEEP)
+    const scanResult = await securityService.scanBuffer(buffer);
+    if (scanResult.isInfected) {
+      throw new Error(`File contains virus: ${scanResult.viruses}`);
+    }
+
+    // Ensure upload directory exists
+    await fileUtils.ensureDirectoryExists(this.uploadDir);
+
+    // Write to disk
+    await fs.writeFile(filePath, buffer);
+
+    // Create files doc (graph_name + repo_id persisted via T5 extractMetadata fix)
+    await metadataService.addMetadata(filePath, {
+      file_id: fileId,
+      file_name: bundleInfo.originalFileName || fileName,
+      file_type: 'text/markdown',
+      storage_path: filePath,
+      labels: [],
+      graph_name: bundleInfo.graph_name,
+      repo_id: bundleInfo.repo_id
+    });
+
+    logger.info(`[FILE-SERVICE] Bundle uploaded: ${fileId} (graph_name=${bundleInfo.graph_name})`);
+    return { file_id: fileId, file_name: bundleInfo.originalFileName || fileName, storage_path: filePath };
+  }
 }
 
 module.exports = new FileService();

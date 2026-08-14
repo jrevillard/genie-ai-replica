@@ -2139,4 +2139,5 @@ source_spec: `spec-overlay-contract-test-strength.md`
 location: site/content/en/docs/architecture/architecture.md:238-241
 severity: low
 reason: Renames or deletions in genie-ai-overlay/contracts/ will leave the docs stale without warning. Either reference a directory listing, or add a CI step that validates the table against the filesystem.
-status: open
+status: done 2026-08-14
+resolution: already resolved: All 7 contract files listed in site/content/en/docs/architecture/architecture.md:235-241 exist in genie-ai-overlay/contracts/: test_contract_orchestrator_wire.py, test_contract_label_filter.py, test_contract_retriever_fusion.py, test_contract_reranker.py, test_contract_e2e_pipeline.py, test_contract_ingest.py, test_contract_telemetry.py

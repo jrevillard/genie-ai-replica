@@ -14,6 +14,9 @@ exports.getLabelById = async (req, res) => {
     res.status(200).json(label); // Return the label as a JSON response
   } catch (error) {
     logger.error(`Error in getLabelById for ID ${req.params.labelId}: ${error.message}`, error);
+    if (error.name === 'NotFoundError') {
+      return res.status(404).json({ error: 'Label not found', message: error.message });
+    }
     res.status(500).json({ error: 'Failed to fetch label', details: error.message });
   }
 };
@@ -96,6 +99,12 @@ exports.deleteLabel = async (req, res) => {
     res.status(200).json({ message: 'Label deleted successfully' });
   } catch (error) {
     logger.error(`Error in deleteLabel for ID ${req.params.labelId}: ${error.message}`, error);
+    if (error.name === 'ConflictError') {
+      return res.status(409).json({ error: 'Label has children', message: error.message });
+    }
+    if (error.name === 'NotFoundError') {
+      return res.status(404).json({ error: 'Label not found', message: error.message });
+    }
     res.status(500).json({ error: 'Failed to delete label', details: error.message });
   }
 };

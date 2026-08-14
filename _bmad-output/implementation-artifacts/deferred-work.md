@@ -1418,31 +1418,36 @@ resolution: mobile/genie_ai_mobile/test/services/auth/app_auth_test.dart:7,22-23
 origin: migrated from legacy ledger ("Deferred from: code review of 1-10-test-flutter-service-layer (2026-05-26)"), 2026-08-12
 location: n/a
 reason: `_isChecking` guard exists but concurrent async testing is complex; better suited for integration tests. [connectivity_service_test.dart]
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-mobile-service-test-gaps
 
 ### DW-207: NotificationService stream controller lifecycle
 origin: migrated from legacy ledger ("Deferred from: code review of 1-10-test-flutter-service-layer (2026-05-26)"), 2026-08-12
 location: n/a
 reason: `_controller` never closed; service design issue beyond test scope. [notification_service_test.dart]
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-mobile-service-test-gaps
 
 ### DW-208: ConnectivityService dispose/timer cleanup untested
 origin: migrated from legacy ledger ("Deferred from: code review of 1-10-test-flutter-service-layer (2026-05-26)"), 2026-08-12
 location: n/a
 reason: Timer cancellation and stream closing after dispose requires platform-dependent testing. [connectivity_service_test.dart]
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-mobile-service-test-gaps
 
 ### DW-209: Connectivity checker periodic testing + DNS timeout
 origin: migrated from legacy ledger ("Deferred from: code review of 1-10-test-flutter-service-layer (2026-05-26)"), 2026-08-12
 location: n/a
 reason: Periodic checks and DNS timeout scenarios require `connectivity_plus` plugin; not achievable in unit tests. [connectivity_checker_test.dart]
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-mobile-service-test-gaps
 
 ### DW-210: AppTokens malformed config edge cases
 origin: migrated from legacy ledger ("Deferred from: code review of 1-11-test-flutter-design-system-and-core-components (2026-05-27)"), 2026-08-12
 location: n/a
 reason: Tests don't verify behavior with null config, wrong-type values (e.g., `theme: "string"` instead of map), or missing nested keys. `fromConfig()` uses `as Map<String, dynamic>?` casts which could throw on malformed input. Beyond current AC8 scope, deferred to hardening pass.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-mobile-service-test-gaps
 
 ### DW-211: I18nService translate fallback not tested
 origin: migrated from legacy ledger ("Deferred from: code review of 1-11-test-flutter-design-system-and-core-components (2026-05-27)"), 2026-08-12

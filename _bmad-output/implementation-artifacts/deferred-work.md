@@ -256,7 +256,8 @@ source_spec: `2-3-re-graft-the-retriever-bump-langchain-arangodb.md`
 location: genie-ai-overlay/contracts/README.md
 severity: low
 reason: README "Full retriever-capable suite" (contracts/README.md) includes test_contract_telemetry.py; .gitlab-ci.yml contract:retriever-arango pattern does not, with a comment stating telemetry moved to contract:unit. Both pre-date story 2.3; not caused by it.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-overlay-contracts-readme-drift
 
 ### DW-31: No in-image behavioral fusion test drives invoke through the hybrid path with a stubbed BM25/vector channel; the contract covers rrf_fuse purely + a source-introspection guard, and the mocked suite co
 origin: spec-deferred ff70472aa1d7

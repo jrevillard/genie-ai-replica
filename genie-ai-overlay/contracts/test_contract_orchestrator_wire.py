@@ -76,7 +76,13 @@ def _build_graph(comps):
 
 
 def test_orchestrator_wire_kwargs_reach_handlers(comps, fake_http):
-    """All 6 GENIE kwargs reach align_inputs/align_outputs with exact values."""
+    """The bundled ``genie_params`` dict reaches align_inputs/align_outputs.
+
+    v1.5 re-graft: the 6 custom kwargs are packed into one ``genie_params``
+    dict at the ``schedule()`` call site. The wire test asserts the full dict
+    lands on the handlers with EXACT values — the kwargs-drop failure class
+    (→ ungrounded chat) is caught by asserting the dict rides through.
+    """
     graph, _ = _build_graph(comps)
     captured: dict[str, list[dict]] = {}
 
@@ -111,22 +117,23 @@ def test_orchestrator_wire_kwargs_reach_handlers(comps, fake_http):
         comps.ServiceOrchestrator.align_inputs = orig_align_inputs
         comps.ServiceOrchestrator.align_outputs = orig_align_outputs
 
-    # The LLM-node input path (align_inputs) must have received all 6 kwargs
-    # with the exact values sent — on EVERY hop, not just the last one.
+    # The bundled genie_params dict must land on align_inputs on EVERY hop.
     assert captured.get("align_inputs"), "align_inputs handler never invoked"
     for hop, kwargs_snapshot in enumerate(captured["align_inputs"]):
-        for kwarg, expected in _harness.WIRE_KWARGS.items():
-            assert kwarg in kwargs_snapshot, f"{kwarg} dropped at align_inputs hop {hop}"
-            assert kwargs_snapshot[kwarg] == expected, (
-                f"{kwarg} value mutated at hop {hop}: got {kwargs_snapshot[kwarg]!r}, expected {expected!r}"
+        assert "genie_params" in kwargs_snapshot, f"genie_params dropped at align_inputs hop {hop}"
+        genie_params = kwargs_snapshot["genie_params"]
+        assert isinstance(genie_params, dict), f"genie_params is not a dict at hop {hop}: {type(genie_params).__name__}"
+        for key, expected in _harness.WIRE_GENIE_PARAMS.items():
+            assert key in genie_params, f"genie_params[{key!r}] missing at hop {hop}"
+            assert genie_params[key] == expected, (
+                f"genie_params[{key!r}] mutated at hop {hop}: got {genie_params[key]!r}, expected {expected!r}"
             )
 
     # The non-streaming completion path (align_outputs, orchestrator.py:384)
-    # also receives the kwargs — assert at least the two params dicts ride through.
+    # also receives the genie_params dict — assert it rides through.
     assert captured.get("align_outputs"), "align_outputs handler never invoked"
-    for kwarg in ("retriever_parameters", "reranker_parameters"):
-        for hop, kwargs_snapshot in enumerate(captured["align_outputs"]):
-            assert kwarg in kwargs_snapshot, f"{kwarg} dropped at align_outputs hop {hop}"
+    for hop, kwargs_snapshot in enumerate(captured["align_outputs"]):
+        assert "genie_params" in kwargs_snapshot, f"genie_params dropped at align_outputs hop {hop}"
 
 
 def test_orchestrator_all_services_registered(comps):

@@ -133,7 +133,8 @@ location: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai:19
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: AC4's "identical digest" holds for immediate clean re-runs but not across a base-tag move; digest-pinning the image set is story 4-2.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-overlay-locks-pins-coherence
 
 ### DW-16: GPU locks (requirements-gpu.txt) are not compiled in 2.2 — the fleet is CPU-only (compose grants no GPU to these services); they can be compiled from the same .in when a GPU deployment needs them.
 origin: spec-deferred 8c84c7fef10e
@@ -141,7 +142,8 @@ location: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai:66
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: upstream ships both cpu+gpu locks; our compose consumes CPU only; compiling CUDA-torch locks with no consumer is waste.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-overlay-locks-pins-coherence
 
 ### DW-17: .in pin-policy is a fork-plus-selective-pins hybrid; unpinned entries (e.g. retriever's bare docling) can drift on a later `make lock-<module>` regen.
 origin: spec-deferred 03c5a65ae49f
@@ -149,7 +151,8 @@ location: genie-ai-overlay/retriever/requirements.in
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: dataprep pins docling==2.45.0 (matches v1.5 dataprep lock) while retriever's bare docling resolved to v1.5's 2.55.1 today; a future regen may resolve newer. Re-fork + re-pin to v1.5's shipped set on the next bump.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-overlay-locks-pins-coherence
 
 ### DW-18: Cross-module OTel/haystack/openai version drift: reranker's bare `.in` pins resolve newer (otel 1.44.0, haystack-ai 3.0.0, openai 3.0.0) than dataprep/retriever (otel 1.27.0, haystack-ai 2.3.1, openai
 origin: spec-deferred 664dd44a6058
@@ -157,7 +160,8 @@ location: genie-ai-overlay/reranker/requirements.in
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: medium
 reason: reranker `.in` ships bare `opentelemetry-*`/`haystack-ai`/`openai` (faithful v1.5 upstream fork — upstream also bare), so the recompile resolves today's newest; dataprep/retriever `.in` pin `==` versions. All services share `genie-ai-overlay/tracing.py`; a coherence/version lint + re-pin belongs to story 2.7 (and reranker re-graft 2.4).
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-overlay-locks-pins-coherence
 
 ### DW-19: verify:dataprep-lock trigger paths watch `requirements.*` only, so an OPEA_VERSION bump in a module Dockerfile (the canonical lock-regen trigger) does not run the drift guard.
 origin: spec-deferred 97651093fcb7
@@ -165,7 +169,8 @@ location: .gitlab-ci.yml
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: rules:changes lists genie-ai-overlay/{dataprep,retriever,reranker}/requirements.* and .gitlab-ci.yml; a Dockerfile OPEA_VERSION/apt change that should force a lock check won't. Story 2.7's CI coherence work owns the trigger widening.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-overlay-locks-pins-coherence
 
 ### DW-20: reranker lock installs torch 2.13.0 (via sentence-transformers) into a plain python:3.11-slim CPU image; wheel/resolution + image-size surface unverified.
 origin: spec-deferred 67b62e7158ad
@@ -173,7 +178,8 @@ location: genie-ai-overlay/reranker/requirements-cpu.txt
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: no Docker build in 2.2; reranker's heavy dep install + resulting size are story 2.4/2.5 build-surface territory.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-overlay-locks-pins-coherence
 
 ### DW-21: .bmad-loop/ci-wait.sh platform-sed does not strip a trailing YAML comment and uses GNU-only \s.
 origin: spec-deferred 7464cb7d139a
@@ -199,7 +205,8 @@ location: genie-ai-overlay/reranker/requirements.in
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: medium
 reason: verified locked versions: openai dataprep==1.81.0 / retriever==1.109.1 / reranker==3.0.0; fastapi dataprep+reranker==0.116.1 / retriever==0.118.2. reranker `.in` ships bare `opentelemetry-*`/`haystack-ai`/`openai` (faithful v1.5 upstream fork — upstream also bare), so the recompile resolves today's newest; dataprep `.in` pins `openai==1.81.0`, retriever `.in` leaves openai bare (resolved via langchain-openai). All services share `genie-ai-overlay/tracing.py`; a coherence/version lint + re-pin belongs to story 2.7 (and reranker re-graft 2.4).
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-overlay-locks-pins-coherence
 
 ### DW-24: the compiled CPU locks pin torch 2.13.0 (via sentence-transformers) into plain python:3.11-slim CPU images — all three modules, not just reranker; image-size surface unverified.
 origin: spec-deferred 218ac548b377
@@ -251,7 +258,8 @@ location: .gitlab-ci.yml
 source_spec: `2-2-migrate-dependencies-python-3-11.md`
 severity: low
 reason: pre-existing pattern (the job already ran on tags for dataprep); `uv pip sync --dry-run` contacts PyPI, so a transient index issue can fail a tag pipeline. Not caused by 2.2's wiring — a CI-coherence concern for story 2.7's drift-guard work.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-overlay-locks-pins-coherence
 
 ### DW-30: contracts/README.md retriever-suite command still lists test_contract_telemetry.py while the CI CONTRACT_TEST_PATTERN runs no telemetry tests (moved to contract:unit) — pre-existing drift, surfaced wh
 origin: spec-deferred 9e96d5109121
@@ -2081,4 +2089,28 @@ source_spec: `spec-backend-test-coverage-gaps.md`
 location: components/gov-chat-backend/routes/analytics-routes.js:465-466,521-522
 severity: low
 reason: GET /api/analytics/records and /events use parsePositiveInt with max:100 but no test sends limit=500 to verify cap. Unit tested in validation-utils.test.js but not at route integration level.
+status: open
+
+### DW-296: No CI job asserts cross-module version coherence for shared deps (opentelemetry-*, haystack-ai, openai). Each module's lock is internally consistent, but coherence across modules can drift silently if
+origin: spec-deferred 61356e067d83
+source_spec: `spec-overlay-locks-pins-coherence.md`
+location: .gitlab-ci.yml:2589-2650
+severity: low
+reason: verify:overlay-locks:retriever and verify:overlay-locks:reranker each run uv pip sync --dry-run on their own lock; no job compares versions across dataprep/retriever/reranker locks. The spec's manual grep (Verification section) is not automated.
+status: open
+
+### DW-297: No aggregate `make lock-overlay` target to regenerate all module locks at once; only per-module targets (lock-retriever, lock-reranker).
+origin: spec-deferred d37d357dd42c
+source_spec: `spec-overlay-locks-pins-coherence.md`
+location: Makefile:16-34
+severity: low
+reason: Makefile:16-34 defines lock-retriever and lock-reranker separately; no umbrella target. A developer updating shared deps must remember to run each target individually.
+status: open
+
+### DW-298: No mutual compatibility check for pinned versions (openai==1.81.0, haystack-ai==2.3.1, opentelemetry-*==1.27.0) — no test or CI job verifies they work together without dependency conflicts.
+origin: spec-deferred ce1c56584f74
+source_spec: `spec-overlay-locks-pins-coherence.md`
+location: genie-ai-overlay/reranker/requirements-cpu.txt
+severity: low
+reason: uv pip sync --dry-run verifies each lock is internally consistent, but does not assert cross-package compatibility. No integration test exercises the reranker with the new pin set.
 status: open

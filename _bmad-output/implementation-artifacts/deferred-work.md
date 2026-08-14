@@ -1093,7 +1093,8 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of pre-existing integration tests discovered during Epic 5 (2026-05-20)"), 2026-08-12
 location: n/a
 reason: production controller wraps all errors in generic 500. Test correctly documents current behavior (`labelRoutes.test.js:133-138`).
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw3-doc-repo-label-error-handling
 
 ### DW-151: PATCH /api/files/:fileId bypasses metadataService for raw AQL
 origin: migrated from legacy ledger ("Deferred from: code review of pre-existing integration tests discovered during Epic 5 (2026-05-20)"), 2026-08-12
@@ -1106,7 +1107,8 @@ resolution: already resolved: components/document-repository/src/controllers/fil
 origin: migrated from legacy ledger ("Deferred from: code review of pre-existing integration tests discovered during Epic 5 (2026-05-20)"), 2026-08-12
 location: n/a
 reason: production controller returns generic 500 for all service errors. Test correctly documents current behavior (`labelRoutes.test.js:193-197`).
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw3-doc-repo-label-error-handling
 
 ### DW-153: GET related labels mock response shape mismatch
 origin: migrated from legacy ledger ("Deferred from: code review of pre-existing integration tests discovered during Epic 5 (2026-05-20)"), 2026-08-12

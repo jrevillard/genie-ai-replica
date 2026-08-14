@@ -1818,31 +1818,36 @@ resolution: genieai_chatqna.py:1806,145 — llm_endpoint prefix derived from LLM
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-5-write-contract-tests-green-on-v1-3-prove-red-on-a-bare-v1-5-bump (2026-08-12)"), 2026-08-12
 location: n/a
 reason: `test_retriever_code_passes_filter_clause_to_vector_db` asserts `"filter_clause=" in inspect.getsource(cls.invoke)`, which cannot detect a runtime silent drop (the langchain-arangodb 0.0.4 failure class). The behavioral excluded-document assertion is re-scoped to the retriever re-graft. Files: `genie-ai-overlay/contracts/test_contract_label_filter.py`.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-overlay-contract-test-strength
 
 ### DW-261: Streaming metadata shape test hardcoded
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-5-write-contract-tests-green-on-v1-3-prove-red-on-a-bare-v1-5-bump (2026-08-12)"), 2026-08-12
 location: n/a
 reason: `test_streaming_metadata_event_shape` parses its own `data: {...}` literal, never the real stream, so a streaming-format rename on the bump passes green. The real stream is exercised by the chatqna re-graft. Files: `genie-ai-overlay/contracts/test_contract_e2e_pipeline.py`.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-overlay-contract-test-strength
 
 ### DW-262: E2E graph test asserts only `result is not None`
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-5-write-contract-tests-green-on-v1-3-prove-red-on-a-bare-v1-5-bump (2026-08-12)"), 2026-08-12
 location: n/a
 reason: a silent early-exit/short-circuit also returns non-None; the "pipeline reaches the LLM node" claim is not substantiated. Re-asserted against real module surfaces during the re-graft. Files: `genie-ai-overlay/contracts/test_contract_e2e_pipeline.py`.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-overlay-contract-test-strength
 
 ### DW-263: E2E omits confidence distribution + abstention + response schema
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-5-write-contract-tests-green-on-v1-3-prove-red-on-a-bare-v1-5-bump (2026-08-12)"), 2026-08-12
 location: n/a
 reason: the spec lists four observable surfaces; only label roundtrip, streaming shape, and graph-schedule are asserted. The parity-evaluation regression set covers confidence/abstention. Files: `genie-ai-overlay/contracts/test_contract_e2e_pipeline.py`.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-overlay-contract-test-strength
 
 ### DW-264: Contract-test verification layer missing from the public architecture doc
 origin: migrated from legacy ledger ("Deferred from: code review of story 1-5-write-contract-tests-green-on-v1-3-prove-red-on-a-bare-v1-5-bump (2026-08-12)"), 2026-08-12
 location: n/a
 reason: `site/content/en/docs/architecture/architecture.md` documents no contract-suite layer or its in-image isolation decision (that doc's "D3" is JWT validation, unrelated). The BMAD planning `architecture.md` holds the contract-test pattern + isolation decision. Enshrine the layer in the public architecture doc once the suite proves itself on the re-graft. Files: `site/content/en/docs/architecture/architecture.md`.
-status: open
+status: done 2026-08-14
+resolution: resolved by sweep bundle dw2-overlay-contract-test-strength
 
 ### DW-265: DW-8/DW-13 (CI import smoke for reranker) deferred to story 2.4 re-graft-the-reranker
 origin: spec-deferred 73d1381642d1
@@ -2114,4 +2119,12 @@ source_spec: `spec-overlay-locks-pins-coherence.md`
 location: genie-ai-overlay/reranker/requirements-cpu.txt
 severity: low
 reason: uv pip sync --dry-run verifies each lock is internally consistent, but does not assert cross-package compatibility. No integration test exercises the reranker with the new pin set.
+status: open
+
+### DW-299: Architecture doc contract-suite table lists files by name but no CI check validates they exist
+origin: spec-deferred 027221048ded
+source_spec: `spec-overlay-contract-test-strength.md`
+location: site/content/en/docs/architecture/architecture.md:238-241
+severity: low
+reason: Renames or deletions in genie-ai-overlay/contracts/ will leave the docs stale without warning. Either reference a directory listing, or add a CI step that validates the table against the filesystem.
 status: open

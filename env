@@ -535,7 +535,7 @@ KC_DATAPREP_CLIENT_SECRET=
 # Change per deployment: each institution needs its own clientId and redirect scheme.
 # Used by: keycloak-config-cli (creates the mobile OIDC client in Keycloak at startup)
 # See: site/content/en/docs/deployment/mobile-deployment-guide.md (deployment onboarding guide)
-KC_MOBILE_CLIENT_ID=genie-mobile-itu
+KC_MOBILE_CLIENT_ID=genie-mobile-<institution>
 
 # Mobile app custom URL scheme for OIDC callback redirect.
 # MUST match the following across all config layers (scheme coherence rule):
@@ -545,7 +545,7 @@ KC_MOBILE_CLIENT_ID=genie-mobile-itu
 #   4. This variable in .env (used by keycloak-config-cli for Keycloak client redirectUris)
 # A mismatch causes silent OIDC callback failure — the browser redirects to the wrong
 # scheme and the app never receives the authorization code.
-KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
+KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 
 # --- Realm properties (optional) ---
 # These control registration, email verification, password policy, and more.

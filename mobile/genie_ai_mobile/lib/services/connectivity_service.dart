@@ -4,12 +4,59 @@ import 'dart:io'; // ADDED: For InternetAddress.lookup fallback
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
+/// Abstract connectivity provider for dependency injection.
+/// Allows unit tests to substitute a fake for the platform-backed [Connectivity].
+abstract class ConnectivityProvider {
+  Future<List<ConnectivityResult>> checkConnectivity();
+}
+
+/// Production provider wrapping the real [Connectivity] plugin.
+class RealConnectivityProvider implements ConnectivityProvider {
+  final Connectivity _connectivity = Connectivity();
+
+  @override
+  Future<List<ConnectivityResult>> checkConnectivity() =>
+      _connectivity.checkConnectivity();
+}
+
+/// Default DNS lookup function used when none is injected.
+Future<List<InternetAddress>> _defaultDnsLookup(String host) =>
+    InternetAddress.lookup(host);
+
 class ConnectivityService {
-  static final ConnectivityService _instance = ConnectivityService._internal();
-  factory ConnectivityService() => _instance;
-  ConnectivityService._internal();
+  static ConnectivityService? _instance;
+  factory ConnectivityService() =>
+      _instance ??= ConnectivityService._internal();
+
+  /// Create an instance with optional test dependencies.
+  /// Production code should use the factory [ConnectivityService()] instead.
+  /// Tests pass a fake [provider] and/or [dnsLookup] for deterministic behavior.
+  /// Accessible from test files via package imports (Dart library privacy).
+  ConnectivityService._internal({
+    ConnectivityProvider? provider,
+    Future<List<InternetAddress>> Function(String)? dnsLookup,
+  })  : _provider = provider ?? RealConnectivityProvider(),
+        _dnsLookupFn = dnsLookup ?? _defaultDnsLookup;
+
+  /// Public test constructor — creates a fresh (non-singleton) instance with
+  /// injectable dependencies for deterministic unit tests.
+  /// Production code should use the factory [ConnectivityService()] instead.
+  @visibleForTesting
+  factory ConnectivityService.test({
+    ConnectivityProvider? provider,
+    Future<List<InternetAddress>> Function(String)? dnsLookup,
+  }) =>
+      ConnectivityService._internal(provider: provider, dnsLookup: dnsLookup);
+
+  /// Reset the singleton for test isolation.
+  @visibleForTesting
+  static void resetForTesting() {
+    _instance = null;
+  }
 
   final Connectivity _connectivity = Connectivity();
+  final ConnectivityProvider _provider;
+  final Future<List<InternetAddress>> Function(String) _dnsLookupFn;
 
   // Internal state
   bool _isNetworkHardwareAvailable = true;
@@ -24,6 +71,10 @@ class ConnectivityService {
 
   // Polling timer for reliability
   Timer? _monitorTimer;
+
+  /// Exposes the monitor timer for test assertions.
+  @visibleForTesting
+  Timer? get monitorTimer => _monitorTimer;
 
   /// Exposes the final "Online" status.
   Stream<bool> get isOnlineStream => _statusController.stream;
@@ -83,8 +134,7 @@ class ConnectivityService {
     _isChecking = true;
 
     try {
-      List<ConnectivityResult> results = await _connectivity
-          .checkConnectivity();
+      List<ConnectivityResult> results = await _provider.checkConnectivity();
       // Use first result or default to none
       ConnectivityResult result = results.isNotEmpty
           ? results.first
@@ -96,23 +146,7 @@ class ConnectivityService {
       // try a real network request (DNS lookup).
       if (result == ConnectivityResult.none) {
         // debugPrint('[Connectivity] Hardware says NONE. Attempting DNS lookup fallback...');
-        try {
-          final stopwatch = Stopwatch()..start();
-          final lookup = await InternetAddress.lookup(
-            'google.com',
-          ).timeout(const Duration(seconds: 2));
-          stopwatch.stop();
-
-          if (lookup.isNotEmpty && lookup[0].rawAddress.isNotEmpty) {
-            debugPrint(
-              '[Connectivity] Hardware said NONE, but DNS lookup succeeded (${stopwatch.elapsedMilliseconds}ms). Forcing Online.',
-            );
-            // Treat as mobile (doesn't matter which, as long as not none)
-            result = ConnectivityResult.mobile;
-          }
-        } catch (e) {
-          // Lookup failed, so we really are offline.
-        }
+        result = await _applyDnsFallback(result);
       }
 
       _updateHardwareStatus(result);
@@ -121,6 +155,32 @@ class ConnectivityService {
     } finally {
       _isChecking = false;
     }
+  }
+
+  /// Attempts DNS lookup as a fallback when hardware reports offline.
+  /// Returns the original result if DNS fails, or [ConnectivityResult.mobile]
+  /// if DNS succeeds (indicating real internet despite hardware reporting none).
+  Future<ConnectivityResult> _applyDnsFallback(
+    ConnectivityResult result,
+  ) async {
+    try {
+      final stopwatch = Stopwatch()..start();
+      final lookup = await _dnsLookupFn('google.com').timeout(
+        const Duration(seconds: 2),
+      );
+      stopwatch.stop();
+
+      if (lookup.isNotEmpty && lookup[0].rawAddress.isNotEmpty) {
+        debugPrint(
+          '[Connectivity] Hardware said NONE, but DNS lookup succeeded '
+          '(${stopwatch.elapsedMilliseconds}ms). Forcing Online.',
+        );
+        return ConnectivityResult.mobile;
+      }
+    } catch (e) {
+      // Lookup failed, so we really are offline.
+    }
+    return result;
   }
 
   void _updateHardwareStatus(ConnectivityResult result) {
@@ -183,6 +243,8 @@ class ConnectivityService {
   void dispose() {
     debugPrint('[Connectivity] Disposing service.');
     _monitorTimer?.cancel();
-    _statusController.close();
+    if (!_statusController.isClosed) {
+      _statusController.close();
+    }
   }
 }

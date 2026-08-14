@@ -1013,7 +1013,7 @@ test:pii-service:
   stage: test
   image: python:3.11-slim
   before_script:
-    - pip install --no-cache-dir -r components/pii-service/requirements.txt ruff
+    - pip install --no-cache-dir -r components/pii-service/requirements.txt ruff pytest
     - python -m spacy download en_core_web_md
   script:
     - cd components/pii-service

@@ -934,6 +934,77 @@ promote:okf-server:
       changes:
         paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
 
+# genie-ai-pii-service (OKF PII sidecar — ADR-okf-004 rev; model baked in)
+build:pii-service:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-pii-service"
+    CONTEXT: "components/pii-service/"
+    DOCKERFILE: "components/pii-service/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+
+# The spaCy model baked into the image trips AS advisories — advisory (default)
+# until the accepted-findings baseline is documented.
+scan:pii-service:
+  <<: *scan_template
+  needs:
+    - job: build:pii-service
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-pii-service"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+
+promote:pii-service:
+  <<: *promote_template
+  needs:
+    - job: scan:pii-service
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-pii-service"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+
 # genie-ai-db-migrations
 build:db-migrations:
   <<: *build_template

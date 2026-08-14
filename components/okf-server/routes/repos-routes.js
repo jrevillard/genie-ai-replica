@@ -18,4 +18,7 @@ router.post('/', requireRole('tools-admin'), ctrl.createRepo);
 router.patch('/:repo_id', requireRole('tools-admin'), ctrl.updateRepo);
 router.delete('/:repo_id', requireRole('tools-admin'), ctrl.deleteRepo);
 
+// PII scan (Story 2.8 — ADR-okf-004 rev): explicit concepts OR file discovery.
+router.post('/:repo_id/pii-scan', requireRole('tools-admin'), ctrl.piiScan);
+
 module.exports = router;

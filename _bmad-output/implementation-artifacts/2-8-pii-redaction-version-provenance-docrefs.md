@@ -1,9 +1,9 @@
 ---
-baseline_commit: pending
+baseline_commit: ff1bf5f39
 ---
 # Story 2.8: PII redaction at ingest + version/provenance + document references
 
-Status: ready-for-dev
+Status: review
 Story key: `2-8-pii-redaction-version-provenance-docrefs` | GitLab: #884 (`prd::okf-server`, `okf-server::epic-2`)
 Epic: 2 (OKF Server — Repository Ingestion & Management) | Branch: `feat/okf-server`
 FRs: **FR-3** (version tracking, doc-repo-consolidated), **FR-5** (PII redaction, blocking), **FR-28** (stable document references) | ADRs: okf-004 (**revised 2026-08-14: Presidio sidecar**), okf-030 (D22 publish gate), okf-021 (write-path step 4d) | Gap: **G28** | NFRs: P1/P2
@@ -39,14 +39,14 @@ so that **no personal data reaches `published` (GDPR), provenance is auditable, 
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — Sidecar skeleton** (AC: 1,4): `components/pii-service/` (app.py, Dockerfile with model-bake, requirements.txt + lock, docker-compose entry, Kong internal route, CI lane, /health + /ready).
-- [ ] **T2 — `/v1/pii/scan`** (AC: 2,3): presidio AnalyzerEngine + AnonymizerEngine; placeholder strategy; registry config (LS/BD/GM national IDs); batch shape; pytest.
-- [ ] **T3 — Node `pii-client.js`** (AC: 6): axios + timeout/retry/circuit; fail-closed mapping; log masking. Jest with a mocked HTTP layer.
-- [ ] **T4 — `pii-precheck.js`** (AC: 7): the regex detector (advisory; reused later by 4.2's editor).
-- [ ] **T5 — `pii-service.js`** (AC: 8,11): scanConcept + upsertPiiState (AQL UPSERT seed) + recordIngestVersion + MELT.
-- [ ] **T6 — `assertPiiClean`** (AC: 10) + gate blocking-matrix tests.
-- [ ] **T7 — Route + discovery** (AC: 9,12): `POST /:repo_id/pii-scan` (tools-admin); files-by-repo_id AQL + doc-repo view fetch; `document_reference` in getById.
-- [ ] **T8 — Tests + verify** (AC: 13): Node Jest suite; `cd components/pii-service && ruff check . && ruff format --check . && pytest`; `cd components/okf-server && npx eslint . && npx prettier --check . && npm test`.
+- [x] **T1 — Sidecar skeleton** (AC: 1,4): `components/pii-service/` (app.py, Dockerfile with model-bake, requirements.txt + lock, docker-compose entry, Kong internal route, CI lane, /health + /ready).
+- [x] **T2 — `/v1/pii/scan`** (AC: 2,3): presidio AnalyzerEngine + AnonymizerEngine; placeholder strategy; registry config (LS/BD/GM national IDs); batch shape; pytest.
+- [x] **T3 — Node `pii-client.js`** (AC: 6): axios + timeout/retry/circuit; fail-closed mapping; log masking. Jest with a mocked HTTP layer.
+- [x] **T4 — `pii-precheck.js`** (AC: 7): the regex detector (advisory; reused later by 4.2's editor).
+- [x] **T5 — `pii-service.js`** (AC: 8,11): scanConcept + upsertPiiState (AQL UPSERT seed) + recordIngestVersion + MELT.
+- [x] **T6 — `assertPiiClean`** (AC: 10) + gate blocking-matrix tests.
+- [x] **T7 — Route + discovery** (AC: 9,12): `POST /:repo_id/pii-scan` (tools-admin); files-by-repo_id AQL + doc-repo view fetch; `document_reference` in getById.
+- [x] **T8 — Tests + verify** (AC: 13): Node Jest suite; `cd components/pii-service && ruff check . && ruff format --check . && pytest`; `cd components/okf-server && npx eslint . && npx prettier --check . && npm test`.
 
 ## Dev Notes
 
@@ -77,10 +77,30 @@ presidio-analyzer/anonymizer MIT · spaCy MIT · fastapi MIT · uvicorn BSD · a
 ## Dev Agent Record
 
 ### Agent Model Used
-_(filled during dev-story)_
+glm-5.2[1m] (via BMAD dev-story; Node tests via npx jest in components/okf-server; sidecar tests via WSL Ubuntu venv + ruff)
 
 ### Debug Log References
+- Node: 18 new pii tests; 3 initially failed on the jest factory-scope rule (arangoMock/axios.create references) — fixed with the established require-in-factory / stable-shared-mock patterns. Full okf-server suite: **7 suites / 105 tests green**; ESLint + Prettier clean.
+- Sidecar: pytest **5 passed, 1 skipped** (the real-model integration test skips locally — CI installs en_core_web_md so it runs there). Two iterations: OperatorConfig API is `(operator_name, params)` in the installed presidio (not `new_value=` kwarg), and a 128-char line E501. ruff check + format clean (pyproject mirrors genie-ai-overlay's config).
 
 ### Completion Notes List
+- **T1/T2 — Sidecar** (`components/pii-service/`): `app.py` (FastAPI; lazy spaCy singleton so /health answers pre-model-load; `/ready` forces the load; `POST /v1/pii/scan` batch; typed-placeholder redaction `[PII:{TYPE}]`; per-jurisdiction NATIONAL_ID_PATTERNS registry (LS/BD/GM conservative placeholders — config, not code); raw text never logged). `Dockerfile` (python:3.11-slim, non-root uid 10001, model baked at build → air-gap runtime, healthcheck; NO second spacy pin — the model wheel resolves its own). compose entry (internal, genieai_network, no published port — the okf-server calls it container-to-container like doc-repo→dataprep; **no Kong route needed** — deviation from AC noted: internal service-to-service does not traverse Kong in this stack). CI lane build/scan/promote (scan advisory until the model-image baseline is documented).
+- **T3 — `pii-client.js`**: axios.create with baseURL/timeout; bounded retry + linear backoff; **fail-closed** — ECONNREFUSED/ETIMEDOUT/HTTP_5xx → `{state:'error'}` (never clean); error-class logging only.
+- **T4 — `pii-precheck.js`**: pure advisory regex (email/phone/IBAN/credit-card+Luhn) for the FR-25 editor surface; documented non-authoritative.
+- **T5 — `pii-service.js`**: `scanConcept` (frontmatter values + body → sidecar → state persist + redacted_text return); `upsertPiiState` (firstExample→update / save→unique-race→retry-update; creates minimal meta docs — the 2.9.2 seed); `recordIngestVersion` (FR-3: file_id/uploaded_at/curator/version_id=`sha256:{hash:16}` onto `okf_repositories.last_ingest`); MELT (`okf.pii.scan/gate` spans + `okf_pii_operations_total`).
+- **T6 — `assertPiiClean`**: AQL COLLECT over pii_state; blocks on hit/error/unknown; open on all-clean OR zero-concepts (nothing to leak). Blocking matrix tested.
+- **T7 — Route + discovery**: `POST /api/okf/repos/:repo_id/pii-scan` (tools-admin; concepts[] | file_ids[] | discover:true); discovery queries `files` by `okf_repo_id` (2.5 stamp) + doc-repo view fetch; `recordIngestVersion` on file input; `getDocumentReference` (FR-28) + `getRepoDocumentReferences` wired into repository-service getById (`document_references`, non-fatal).
+- NFR-P2 held: raw PII never persisted (counts only — test asserts `john@x.org` absent from the stored doc) and never logged.
 
 ### File List
+- NEW `components/pii-service/app.py`, `requirements.txt`, `Dockerfile`, `pyproject.toml`, `tests/test_scan.py`
+- MODIFIED `docker-compose.yaml` (pii-service service)
+- MODIFIED `.gitlab-ci.yml` (build/scan/promote:pii-service lanes)
+- MODIFIED `components/okf-server/config.js` (piiService + documentRepository config)
+- NEW `components/okf-server/services/pii/pii-client.js`, `services/pii/pii-precheck.js`
+- NEW `components/okf-server/services/pii-service.js`
+- MODIFIED `components/okf-server/routes/repos-routes.js` (pii-scan route), `controllers/repository-controller.js` (piiScan handler), `services/repository-service.js` (document_references in getById)
+- NEW `components/okf-server/__tests__/pii-service.test.js` (18 tests)
+
+### Change Log
+- 2026-08-14: Story 2.8 implemented (T1-T8). Sidecar (5 pytest green, ruff clean) + Node (105 tests green, ESLint/Prettier clean). Status → review.

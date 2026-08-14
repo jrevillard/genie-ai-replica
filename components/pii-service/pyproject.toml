@@ -1,0 +1,14 @@
+# pyproject.toml — pii-service
+# Not a pip-installable package; exists for ruff config parity with
+# genie-ai-overlay (target py310, line-length 120, double quotes).
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM"]
+ignore = ["E402"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

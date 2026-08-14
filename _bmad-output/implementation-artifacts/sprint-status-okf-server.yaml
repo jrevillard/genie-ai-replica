@@ -36,7 +36,7 @@ development_status:
   2-5-docrepo-bundle-ingest-route: done            # code-review fixes applied 2026-08-14 (fire-and-forget ingest kick). 416 tests green.
   2-6-dataprep-graphname-metadata-retract: backlog  # [BUMP] (ACL-preserve EXTRACTED to ungated 2-6a; this story keeps graph-name body-read, repo-level retract, retractRepoGraph drops 4 OKF_{repo}_* collections — G5)
   2-7-source-sync-git-s3-change-detection: deferred   # DEFERRED 2026-08-14: v1 inputs = browser file picker (FR-37) + crawler + manual; Git/S3 sync scrapped for v1 (FR-1/FR-2 deferred)
-  2-8-pii-redaction-version-provenance-docrefs: ready-for-dev # REVISED 2026-08-14: Presidio Python SIDECAR (components/pii-service, ADR-004 rev) + Node fail-closed client; regex demoted to editor pre-check
+  2-8-pii-redaction-version-provenance-docrefs: review     # implemented 2026-08-14: sidecar (5 pytest) + Node (105 Jest); fail-closed gate; ADR-004 rev
   epic-2-retrospective: optional
 
   epic-2.9: in-progress        # NEW 2026-08-13 — Write-side Orchestration (the trunk). Mostly ungated Node; 2.9.6 gated.

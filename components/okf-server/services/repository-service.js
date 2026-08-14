@@ -20,6 +20,7 @@ const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
 const auditService = require('./audit-service');
 const conformanceService = require('./conformance-service');
+const piiService = require('./pii-service');
 const { retractRepoGraph } = require('./graph-retract-service');
 
 const COLLECTION = 'okf_repositories';
@@ -255,6 +256,14 @@ async function getById(repo_id, { domain } = {}) {
     } catch (err) {
       logger.warn('Failed to compute repo metrics (non-fatal)', { repo_id, error: err.message });
       repo.metrics = null;
+    }
+    // FR-28: stable document references (doc-repo view/download URLs) for the
+    // repo's uploaded files. Non-fatal — a doc-repo blip must not 404 the repo.
+    try {
+      repo.document_references = await piiService.getRepoDocumentReferences(repo_id);
+    } catch (err) {
+      logger.warn('Failed to list document references (non-fatal)', { repo_id, error: err.message });
+      repo.document_references = [];
     }
     return repo;
   });

@@ -2595,11 +2595,15 @@ e2e:playwright:
 
 # Verify each overlay module's requirements-cpu.txt is in sync with its
 # requirements.in (retriever/reranker). Fails if someone edited a
-# requirements.in (or bumped OPEA) without running `make lock-<module>`.
-# Catches silent lock drift before it reaches a build.
+# requirements.in (or bumped OPEA, or changed the Dockerfile base/apt layer)
+# without running `make lock-<module>`. Catches silent lock drift before it
+# reaches a build. Split into per-module parallel jobs so a transient PyPI
+# failure in one module's tag-pipeline check does not block the other
+# (reduced blast radius — DW-29). Dockerfile-* paths are included because
+# OPEA_VERSION / apt / base-image bumps are canonical lock-regen triggers.
 # Note: dataprep retired from this check (issue-834 lock pipeline retired
 # on the v1.5 bump — dataprep no longer ships a requirements.in).
-verify:overlay-locks:
+.verify-overlay-lock-base:
   stage: config
   image: python:3.11-slim
   interruptible: true
@@ -2610,28 +2614,31 @@ verify:overlay-locks:
   script:
     - |
       set -e
-      for MOD in retriever reranker; do
-        cd "${CI_PROJECT_DIR}/genie-ai-overlay/${MOD}"
-        # Verify lock is consistent and installable without re-resolving.
-        # uv pip sync --dry-run checks every package+hash exists on PyPI;
-        # it does NOT re-resolve, so upstream version bumps don't cause
-        # spurious failures (only removed packages do).
-        uv pip sync requirements-cpu.txt --dry-run --system
-        # Cross-check: verify requirements.in is covered by the lock.
-        # greps top-level non-comment lines from requirements.in and
-        # checks each package name appears in the lock. Missing = user
-        # added a dep without regenerating the lock.
-        while IFS= read -r line; do
-          pkg=$(echo "$line" | sed 's/[<>=!~].*//;s/\[.*//;s/#.*//' | xargs)
-          [ -z "$pkg" ] && continue
-          norm=$(echo "$pkg" | tr '[:upper:]_' '[:lower:]-')
-          if ! grep -q "^${norm}==" requirements-cpu.txt; then
-            echo "MISSING from ${MOD} lock: $pkg — run 'make lock-${MOD}'"
-            exit 1
-          fi
-        done < requirements.in
-        echo "genie-ai-overlay/${MOD}/requirements-cpu.txt in sync"
-      done
+      cd "${CI_PROJECT_DIR}/genie-ai-overlay/${MOD}"
+      # Verify lock is consistent and installable without re-resolving.
+      # uv pip sync --dry-run checks every package+hash exists on PyPI;
+      # it does NOT re-resolve, so upstream version bumps don't cause
+      # spurious failures (only removed packages do).
+      uv pip sync requirements-cpu.txt --dry-run --system
+      # Cross-check: verify requirements.in is covered by the lock.
+      # greps top-level non-comment lines from requirements.in and
+      # checks each package name appears in the lock. Missing = user
+      # added a dep without regenerating the lock.
+      while IFS= read -r line; do
+        pkg=$(echo "$line" | sed 's/[<>=!~].*//;s/\[.*//;s/#.*//' | xargs)
+        [ -z "$pkg" ] && continue
+        norm=$(echo "$pkg" | tr '[:upper:]_' '[:lower:]-')
+        if ! grep -q "^${norm}==" requirements-cpu.txt; then
+          echo "MISSING from ${MOD} lock: $pkg — run 'make lock-${MOD}'"
+          exit 1
+        fi
+      done < requirements.in
+      echo "genie-ai-overlay/${MOD}/requirements-cpu.txt in sync"
+
+verify:overlay-locks:retriever:
+  extends: .verify-overlay-lock-base
+  variables:
+    MOD: retriever
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -2640,14 +2647,52 @@ verify:overlay-locks:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
+        paths:
+          - "genie-ai-overlay/retriever/requirements.*"
+          - "genie-ai-overlay/retriever/Dockerfile-*"
+          - ".gitlab-ci.yml"
         compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
+        paths:
+          - "genie-ai-overlay/retriever/requirements.*"
+          - "genie-ai-overlay/retriever/Dockerfile-*"
+          - ".gitlab-ci.yml"
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["genie-ai-overlay/retriever/requirements.*", "genie-ai-overlay/reranker/requirements.*", ".gitlab-ci.yml"]
+        paths:
+          - "genie-ai-overlay/retriever/requirements.*"
+          - "genie-ai-overlay/retriever/Dockerfile-*"
+          - ".gitlab-ci.yml"
+
+verify:overlay-locks:reranker:
+  extends: .verify-overlay-lock-base
+  variables:
+    MOD: reranker
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - "genie-ai-overlay/reranker/requirements.*"
+          - "genie-ai-overlay/reranker/Dockerfile-*"
+          - ".gitlab-ci.yml"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths:
+          - "genie-ai-overlay/reranker/requirements.*"
+          - "genie-ai-overlay/reranker/Dockerfile-*"
+          - ".gitlab-ci.yml"
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths:
+          - "genie-ai-overlay/reranker/requirements.*"
+          - "genie-ai-overlay/reranker/Dockerfile-*"
+          - ".gitlab-ci.yml"
 
 
 config:validate:

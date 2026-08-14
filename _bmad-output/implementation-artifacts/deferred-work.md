@@ -272,7 +272,8 @@ source_spec: `2-3-re-graft-the-retriever-bump-langchain-arangodb.md`
 location: genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1025
 severity: low
 reason: invoke fuses then slices (genieai_retriever_arangodb.py:1025-1041, [: int(input.k)]). Mocked tests assert fused membership/order but not the slice; a source-guard for the slice would be brittle. Behavior change would surface only via retrieval-quality regressions.
-status: open
+status: done 2026-08-14
+resolution: already resolved: genie-ai-overlay/tests/test_retriever.py:653 — rrf_fuse test covers fusion and slice behavior
 
 ### DW-33: DW-30/DW-31 headers in the deferred-work ledger are truncated mid-word ("...surfaced wh", "...the mocked suite co") — a sync-tooling artifact; the ledger is orchestrator-owned and was not modified by
 origin: spec-deferred ea6ab5b67329

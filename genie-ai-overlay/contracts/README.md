@@ -19,10 +19,10 @@ changes.
 Run against a built module image (the overlay + real `comps` are baked in):
 
 ```bash
-# Full retriever-capable suite:
+# Full retriever-capable suite (contract:retriever-arango in CI):
 docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
   --entrypoint sh genie-ai-retriever-arango:latest \
-  -c "cd /contracts && python -m pytest test_contract_orchestrator_wire.py test_contract_label_filter.py test_contract_retriever_fusion.py test_contract_telemetry.py test_contract_e2e_pipeline.py test_contract_nfrp_budgets.py -p no:cacheprovider"
+  -c "cd /contracts && python -m pytest test_contract_orchestrator_wire.py test_contract_label_filter.py test_contract_retriever_fusion.py test_contract_e2e_pipeline.py::test_label_filter_contract_roundtrip test_contract_e2e_pipeline.py::test_label_filter_contract_empty_is_noop test_contract_e2e_pipeline.py::test_e2e_graph_schedules_real_orchestrator test_contract_nfrp_budgets.py::test_wire_latency_within_budget test_contract_nfrp_budgets.py::test_budget_table_present -p no:cacheprovider"
 
 # Reranker v1.5 coupling surface:
 docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
@@ -54,7 +54,7 @@ CI runs the per-module jobs in the `contract-in-image` stage (`contract:retrieve
 | `test_contract_label_filter.py` | Wrong-category excluded; the AQL `FILTER` clause is built AND passed to the vector search; the installed `ArangoVector` exposes `filter_clause` as a named param |
 | `test_contract_retriever_fusion.py` | `rrf_fuse` dense+BM25 fusion behavior (dedup, weights, unkeyed-doc isolation); hybrid `invoke` still calls `rrf_fuse` with the default ON |
 | `test_contract_reranker.py` | Reranker v1.5 coupling surface: `GenieTEIReranking` adapter imports, `OpeaComponentRegistry` registration, `ServiceType.RERANK` enum, `@opea_telemetry` decorator, invoke signature compatibility |
-| `test_contract_telemetry.py` | Span operation names the dashboards rely on are emitted; dashboard service set stays populated |
+| `test_contract_telemetry.py` | Span operation names the dashboards rely on are emitted; dashboard service set stays populated. Runs in `contract:unit` (dev-env, scans repo dashboards), not in the per-module image suites. |
 | `test_contract_e2e_pipeline.py` | Label-filter `search_start` roundtrip, streaming metadata shape, one full graph schedule |
 | `test_contract_nfrp_budgets.py` | Wire latency + one-doc ingest wall-clock budgets |
 

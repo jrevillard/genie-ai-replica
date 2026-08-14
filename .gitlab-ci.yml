@@ -2227,6 +2227,27 @@ lint:dart:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+# Cross-validates OIDC redirect scheme consistency across all 4 config layers:
+# Dart flavor configs, Android build.gradle, iOS XCConfig, and env template.
+# Pure text parsing — no Flutter/Dart/Gradle/Xcode toolchain required.
+mobile:scheme-coherence:
+  image: debian:bookworm-slim
+  stage: lint
+  interruptible: true
+  script:
+    - bash mobile/genie_ai_mobile/scripts/check_scheme_coherence.sh
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "mobile/genie_ai_mobile/lib/config/**/*"
+        - "mobile/genie_ai_mobile/android/app/build.gradle"
+        - "mobile/genie_ai_mobile/ios/Flutter/*-*.xcconfig"
+        - "env"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
 # --- Docs/Deploy validation ---
 
 # Validates Ansible playbooks (syntax) and YAML linting for deployment docs.

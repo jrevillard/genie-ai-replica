@@ -1,6 +1,6 @@
 import 'keycloak_config.dart';
 
-const stagingConfig = KeycloakConfig(
+final stagingConfig = KeycloakConfig(
   keycloakUrl: 'https://staging-keycloak.example.com',
   realm: 'genie',
   clientId: 'genie-mobile-staging',

@@ -1,13 +1,4 @@
 {
-  "DW-103": {
-    "answered_at": "2026-08-13",
-    "bundle_name": "",
-    "effect": "build",
-    "intent": "Extract userId from req via extractUserId(req); pass to findMessagesForQuery; add AQL filter or post-query check to verify userId owns the query; return 403 if not owner",
-    "key": "1",
-    "label": "Add ownership check",
-    "resolution": ""
-  },
   "DW-186": {
     "answered_at": "2026-08-13",
     "bundle_name": "",

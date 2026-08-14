@@ -572,12 +572,14 @@ services:
     image: ${GENIE_AI_PII_SERVICE_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-pii-service}:${GENIE_AI_PII_SERVICE_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     # Internal only (never publicly routed) — the okf-server calls it
     # container-to-container on genieai_network, same as doc-repo -> dataprep.
+    # Healthcheck hits /ready (not /health) so the spaCy model loads at startup,
+    # not on the first scan request (code-review #9).
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=8)"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 120s
     networks:
       - genieai_network
     deploy:

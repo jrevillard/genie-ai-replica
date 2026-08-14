@@ -958,7 +958,9 @@ build:pii-service:
         paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
 
 # The spaCy model baked into the image trips AS advisories — advisory (default)
-# until the accepted-findings baseline is documented.
+# until the accepted-findings baseline is documented. TODO(code-review #23):
+# record the accepted-findings baseline (model-license/known-CVEs) in
+# docs/security/pii-service-accepted-findings.md before promoting to blocking.
 scan:pii-service:
   <<: *scan_template
   needs:
@@ -989,6 +991,40 @@ promote:pii-service:
       artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-pii-service"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-pii-service — test lane (code-review #5): the real-presidio
+# integration test (test_real_engine_detects_person) must RUN in CI, not skip.
+test:pii-service:
+  stage: test
+  image: python:3.11-slim
+  before_script:
+    - pip install --no-cache-dir -r components/pii-service/requirements.txt ruff
+    - python -m spacy download en_core_web_md
+  script:
+    - cd components/pii-service
+    - ruff check app.py tests/
+    - python -m pytest tests/ -q --junitxml=reports/pytest-report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: components/pii-service/reports/pytest-report.xml
+    paths:
+      - components/pii-service/reports/
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never

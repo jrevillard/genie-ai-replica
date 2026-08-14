@@ -1,13 +1,28 @@
 # pyproject.toml — pii-service
-# Not a pip-installable package; exists for ruff config parity with
-# genie-ai-overlay (target py310, line-length 120, double quotes).
+# Ruff config mirrors genie-ai-overlay (target py310, line-length 120, double
+# quotes; E741 ignored for ML-style single-letter names). Declares a [test]
+# extra so `pip install -e ".[test]"` installs the pytest deps.
+[project]
+name = "genie-ai-pii-service"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "httpx>=0.28",
+]
+
+[tool.setuptools]
+packages = []
+
 [tool.ruff]
 target-version = "py310"
 line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "UP", "B", "SIM"]
-ignore = ["E402"]
+ignore = ["E402", "E741"]
 
 [tool.ruff.format]
 quote-style = "double"

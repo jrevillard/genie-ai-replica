@@ -154,30 +154,33 @@ describe('pii-service', () => {
     expect(docs[0].pii_state).toBe('hit');
   });
 
-  describe('assertPiiClean gate matrix', () => {
-    const programGate = (states) => mockDb.query.mockResolvedValue({ all: async () => states });
-    it('blocks on hit', async () => {
+  describe('assertPiiClean gate matrix (marker + per-concept, code-review #3)', () => {
+    const programGate = (states, marker = 'complete') => {
+      mockDb.query.mockResolvedValue({ all: async () => states });
+      mockDb._stores.okf_repositories = { r: { repo_id: 'r', _key: 'r', pii_scan_status: marker } };
+    };
+    it('blocks on hit even when the repo is marked scanned', async () => {
       programGate([{ state: 'hit', n: 2 }]);
       const g = await piiService.assertPiiClean('r');
       expect(g.blocked).toBe(true);
-      expect(g.reasons[0]).toContain('PII hits');
+      expect(g.reasons.some((x) => x.includes('PII hits'))).toBe(true);
     });
     it('blocks on error', async () => {
       programGate([{ state: 'error', n: 1 }]);
       expect((await piiService.assertPiiClean('r')).blocked).toBe(true);
     });
-    it('blocks on unknown (unsanned)', async () => {
-      programGate([{ state: 'unknown', n: 3 }]);
+    it('blocks when the repo has NOT completed a scan (unscanned content)', async () => {
+      programGate([], 'pending');
       const g = await piiService.assertPiiClean('r');
       expect(g.blocked).toBe(true);
-      expect(g.reasons[0]).toContain('not yet scanned');
+      expect(g.reasons[0]).toContain('has not completed a PII scan');
     });
-    it('open when all clean', async () => {
+    it('open when scanned + all clean', async () => {
       programGate([{ state: 'clean', n: 5 }]);
       expect((await piiService.assertPiiClean('r')).blocked).toBe(false);
     });
-    it('open with ZERO concept docs (nothing to leak)', async () => {
-      programGate([]);
+    it('open when scanned + ZERO concept docs (nothing to leak)', async () => {
+      programGate([], 'complete');
       expect((await piiService.assertPiiClean('r')).blocked).toBe(false);
     });
   });
@@ -198,5 +201,111 @@ describe('pii-service', () => {
     expect(ref.view_url).toBe('/api/files/f1/view');
     expect(ref.download_url).toBe('/api/files/f1/download');
     expect(piiService.getDocumentReference(null)).toBeNull();
+  });
+});
+
+// ─── code-review additions: fetch/discovery (fail-closed), untested paths, retry ─
+
+describe('fetchFileBytes + discovery (code-review #1/#8)', () => {
+  it('reads base64 from res.data.data.base64 (doc-repo viewFile shape) + decodes', async () => {
+    const axios = require('axios');
+    axios.get.mockResolvedValue({
+      data: { success: true, data: { base64: Buffer.from('hello').toString('base64') } }
+    });
+    const bytes = await piiService.fetchFileBytes('f1');
+    expect(bytes.toString('utf-8')).toBe('hello');
+  });
+
+  it('FAIL-CLOSED: a doc-repo fetch failure THROWS (never empty→clean)', async () => {
+    const axios = require('axios');
+    axios.get.mockRejectedValue({ response: { status: 503 } });
+    await expect(piiService.fetchFileBytes('f1')).rejects.toThrow(/doc-repo view fetch failed/);
+  });
+
+  it('FAIL-CLOSED: missing base64 throws (never empty→clean)', async () => {
+    const axios = require('axios');
+    axios.get.mockResolvedValue({ data: { success: true, data: {} } });
+    await expect(piiService.fetchFileBytes('f1')).rejects.toThrow(/no base64/);
+  });
+
+  it('discoverRepoFiles keeps only scannable text files + sorts newest-first', async () => {
+    mockDb._stores.files = {
+      a: { file_id: 'a', okf_repo_id: 'r1', file_type: 'text/markdown', uploaded_date: '2026-08-01T00:00:00Z' },
+      b: { file_id: 'b', okf_repo_id: 'r1', file_type: 'application/zip', uploaded_date: '2026-08-02T00:00:00Z' },
+      c: { file_id: 'c', okf_repo_id: 'r1', file_type: 'text/plain', uploaded_date: '2026-08-03T00:00:00Z' }
+    };
+    // The service uses db.query (aql) for discovery — program the mock.
+    mockDb.query.mockResolvedValue({
+      all: async () => [
+        { file_id: 'c', file_name: 'c', file_type: 'text/plain' },
+        { file_id: 'a', file_name: 'a', file_type: 'text/markdown' }
+      ]
+    });
+    const axios = require('axios');
+    axios.get.mockResolvedValue({ data: { success: true, data: { base64: Buffer.from('x').toString('base64') } } });
+    const out = await piiService.discoverRepoFiles('r1');
+    expect(out.map((c) => c.file_id)).toEqual(['c', 'a']); // zip 'b' skipped, DESC order
+  });
+});
+
+describe('recordIngestVersion + doc refs (code-review #10/#16)', () => {
+  it('handles a file doc with no hash → version_id null (no crash)', async () => {
+    mockDb._stores.files = { f1: { file_id: 'f1', uploaded_date: '2026-08-14T00:00:00Z' } }; // no file_hash
+    mockDb._stores.okf_repositories = { r1: { repo_id: 'r1', _key: 'r1' } };
+    const v = await piiService.recordIngestVersion('r1', {
+      file_id: 'f1',
+      curator: { sub: 'u', source_ip: '1.2.3.4' }
+    });
+    expect(v.version_id).toBeNull();
+    expect(v.curator.source_ip).toBeUndefined(); // source_ip never persisted (#10)
+  });
+
+  it('getRepoDocumentReferences returns view/download URLs for the repo files', async () => {
+    mockDb.query.mockResolvedValue({ all: async () => ['f1', 'f2'] });
+    const refs = await piiService.getRepoDocumentReferences('r1');
+    expect(refs).toEqual([
+      { file_id: 'f1', view_url: '/api/files/f1/view', download_url: '/api/files/f1/download' },
+      { file_id: 'f2', view_url: '/api/files/f2/view', download_url: '/api/files/f2/download' }
+    ]);
+  });
+
+  it('flattenFrontmatter recurses into nested objects/arrays (#4)', () => {
+    const flat = piiService.flattenFrontmatter({
+      title: 'T',
+      meta: { author: { name: 'john.smith@x.org' } },
+      tags: ['a', 'b']
+    });
+    expect(flat).toContain('john.smith@x.org');
+    expect(flat).toContain('T');
+  });
+});
+
+describe('pii-client retry + payload validation (code-review #2/#17)', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('recovers on a transient failure then succeeds', async () => {
+    mockSidecarPost
+      .mockRejectedValueOnce({ code: 'ECONNRESET' })
+      .mockResolvedValueOnce({ data: { results: [{ id: 'c1', hits: [], counts_by_type: {}, redacted_text: 't' }] } });
+    const p = piiClient.scan([{ id: 'c1', text: 't' }]);
+    // Fast-forward past the 250ms backoff
+    await jest.runAllTimersAsync();
+    const out = await p;
+    expect(out.state).toBe('ok');
+    expect(out.results[0].id).toBe('c1');
+  });
+
+  it('treats a 200 with malformed body as FAIL-CLOSED error (never clean)', async () => {
+    mockSidecarPost.mockResolvedValue({ data: { results: null } }); // malformed
+    const p = piiClient.scan([{ id: 'c1', text: 't' }]);
+    await jest.runAllTimersAsync(); // advance the backoff
+    const out = await p;
+    expect(out.state).toBe('error');
+    expect(out.error).toBe('UNKNOWN');
   });
 });

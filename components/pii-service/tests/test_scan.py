@@ -75,7 +75,20 @@ def test_scan_batch(client):
         },
     )
     assert r.status_code == 200
-    assert len(r.json()["results"]) == 2
+    results = r.json()["results"]
+    assert len(results) == 2
+    # Per-item correctness (code-review #18): the clean item stays untouched,
+    # the PII item is redacted + typed-placeholder.
+    by_id = {x["id"]: x for x in results}
+    assert by_id["a"]["hits"] == []
+    assert by_id["a"]["redacted_text"] == "clean"
+    assert by_id["b"]["counts_by_type"] == {"EMAIL_ADDRESS": 1}
+    assert "[PII:EMAIL_ADDRESS]" in by_id["b"]["redacted_text"]
+
+
+def test_scan_rejects_unsupported_language(client):
+    r = client.post("/v1/pii/scan", json={"texts": [{"id": "x", "text": "hola", "language": "es"}]})
+    assert r.status_code == 422  # pydantic validation (code-review #13)
 
 
 def test_national_id_registry_config_shape():
@@ -85,6 +98,18 @@ def test_national_id_registry_config_shape():
         for p in patterns:
             assert set(p.keys()) == {"name", "regex", "score"}
             assert 0.0 < p["score"] < 1.0
+
+
+def test_national_id_scores_above_default_threshold():
+    """Code-review #6: a shipped recognizer below DEFAULT_SCORE_THRESHOLD is a
+    silent no-op on the authoritative gate (presidio filters score >= threshold)
+    -> personal data passes as 'clean'. This invariant can never self-disable."""
+    for entity, patterns in app_module.NATIONAL_ID_PATTERNS.items():
+        for p in patterns:
+            assert p["score"] >= app_module.DEFAULT_SCORE_THRESHOLD, (
+                f"{entity} {p['name']} score {p['score']} < threshold "
+                f"{app_module.DEFAULT_SCORE_THRESHOLD} — silent false-negative"
+            )
 
 
 @pytest.mark.skipif(

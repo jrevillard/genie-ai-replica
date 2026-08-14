@@ -36,7 +36,18 @@ async function scan(texts, opts = {}) {
   for (let attempt = 1; attempt <= config.piiService.retries + 1; attempt++) {
     try {
       const res = await client.post(config.piiService.scanPath, body);
-      return { state: 'ok', results: res.data.results };
+      // FAIL-CLOSED on payloads too (code-review fix): a 200 with a malformed/
+      // empty body must NOT be treated as 'no hits'. Validate the shape.
+      const results = res.data && res.data.results;
+      if (!Array.isArray(results) || results.length !== texts.length) {
+        throw new Error(`malformed sidecar response (${res.status})`);
+      }
+      for (const r of results) {
+        if (!r || typeof r.id !== 'string' || !Array.isArray(r.hits) || typeof r.counts_by_type !== 'object') {
+          throw new Error('malformed sidecar result item');
+        }
+      }
+      return { state: 'ok', results };
     } catch (err) {
       const cls = errorClass(err);
       logger.warn('PII sidecar call failed', { attempt, error_class: cls, items: texts.length });

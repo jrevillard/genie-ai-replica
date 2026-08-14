@@ -105,6 +105,11 @@ async function piiScan(req, res, next) {
   try {
     const { repo_id } = req.params;
     const { concepts, file_ids, discover } = req.body || {};
+
+    // Repo-existence + domain gate (mirrors every other mutating route) —
+    // fail BEFORE writing any meta docs (code-review fix #7).
+    await repoService.getById(repo_id, { domain: callerDomain(req) });
+
     let inputs = [];
     let sourceFileIds = [];
     if (Array.isArray(concepts) && concepts.length > 0) {
@@ -124,14 +129,17 @@ async function piiScan(req, res, next) {
       results.push(await piiService.scanConcept(repo_id, c.concept_id, c.frontmatter, c.body));
     }
 
-    // FR-3: record the ingest version on the first (latest) file of the batch.
+    // FR-3: record the ingest version on the latest file (discovery sorts DESC).
     let version = null;
     if (sourceFileIds.length > 0) {
       version = await piiService.recordIngestVersion(repo_id, {
         file_id: sourceFileIds[0],
-        curator: actorFrom(req)
+        curator: { sub: actorFrom(req).sub, name: actorFrom(req).name } // no source_ip
       });
     }
+
+    // Mark the repo PII-scanned (unscanned content blocks publish — gate #3).
+    await piiService.markRepoPiiScanned(repo_id);
 
     const gate = await piiService.assertPiiClean(repo_id);
     res.status(200).json({

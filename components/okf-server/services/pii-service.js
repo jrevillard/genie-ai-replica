@@ -80,14 +80,29 @@ async function upsertPiiState(repo_id, concept_id, patch) {
  * Scan one concept (frontmatter values + body) via the sidecar; persist state.
  * @returns {Promise<{repo_id, concept_id, pii_state, pii_hits_summary, redacted_text?}>}
  */
+/** Recursively flatten frontmatter values (strings/numbers/arrays/objects)
+ * into scan text, so PII nested inside objects/arrays is NOT silently missed
+ * (code-review fix: previously only top-level scalars were scanned). */
+function flattenFrontmatter(value, depth = 0, out = []) {
+  if (depth > 6) return out; // guard against pathological nesting
+  if (value === null || value === undefined) return out;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    out.push(String(value));
+  } else if (Array.isArray(value)) {
+    value.forEach((v) => flattenFrontmatter(v, depth + 1, out));
+  } else if (typeof value === 'object') {
+    Object.values(value).forEach((v) => flattenFrontmatter(v, depth + 1, out));
+  }
+  return out;
+}
+
 async function scanConcept(repo_id, concept_id, frontmatter = {}, body = '') {
   return withSpan('okf.pii.scan', async (span) => {
     span.setAttribute('okf.repo_id', repo_id);
     span.setAttribute('okf.concept_id', concept_id);
-    // Frontmatter values are scanned as text (ADR-okf-019 scans frontmatter).
-    const fmText = Object.values(frontmatter || {})
-      .filter((v) => typeof v === 'string' || typeof v === 'number')
-      .join('\n');
+    // Frontmatter values (recursively flattened) are scanned as text too —
+    // ADR-okf-019 scans frontmatter, not just bodies.
+    const fmText = flattenFrontmatter(frontmatter).join('\n');
     const out = await piiClient.scanOne(concept_id, `${fmText}\n${body}`);
     let result;
     if (out.state === 'error') {
@@ -131,15 +146,50 @@ async function scanConcept(repo_id, concept_id, frontmatter = {}, body = '') {
 // ─── Publish gate (D22/ADR-okf-030) ─────────────────────────────────────────
 
 /**
- * FR-5/NFR-P1 blocking gate. blocked iff ANY concept has pii_state
- * 'hit'|'error', OR the repo has concepts with NO scan record (unknown).
- * A repo with ZERO concept docs is NOT blocked by PII (nothing to leak).
+ * Mark a repo as fully PII-scanned (sets the publish-gate marker). Called by
+ * the scan endpoint after a successful scan of the expected concept set.
+ */
+async function markRepoPiiScanned(repo_id) {
+  return withSpan('okf.pii.markScanned', async (span) => {
+    span.setAttribute('okf.repo_id', repo_id);
+    const db = await getDb();
+    await db.collection(REPOS).update(repo_id, {
+      pii_scan_status: 'complete',
+      pii_scanned_at: new Date().toISOString()
+    });
+    recordOp('markScanned', 'success');
+    logger.info('Repo marked PII-scanned', { repo_id });
+  });
+}
+
+/**
+ * FR-5/NFR-P1 blocking gate. blocked iff:
+ *  - the repo has NO 'complete' PII scan marker (unscanned content — absent
+ *    meta docs are invisible to a per-doc query, so the repo-level marker is
+ *    the source of truth), OR
+ *  - ANY concept has pii_state 'hit' | 'error'.
+ * A repo with zero concepts AND a completed scan is NOT blocked (nothing to leak).
  * @returns {Promise<{blocked: boolean, reasons: string[]}>}
  */
 async function assertPiiClean(repo_id) {
   return withSpan('okf.pii.gate', async (span) => {
     span.setAttribute('okf.repo_id', repo_id);
     const db = await getDb();
+    const reasons = [];
+
+    // Repo-level scan marker (the unscanned-content guard).
+    let scanStatus = 'pending';
+    try {
+      const repo = await db.collection(REPOS).document(repo_id);
+      scanStatus = (repo && repo.pii_scan_status) || 'pending';
+    } catch {
+      /* repo missing — the caller enforces existence; gate stays conservative */
+    }
+    if (scanStatus !== 'complete') {
+      reasons.push('repository has not completed a PII scan (pii_scan_status != complete)');
+    }
+
+    // Per-concept states.
     const cursor = await db.query(aql`
       FOR d IN ${db.collection(META)}
         FILTER d.repo_id == ${repo_id}
@@ -148,14 +198,13 @@ async function assertPiiClean(repo_id) {
     `);
     const counts = await cursor.all();
     const byState = Object.fromEntries(counts.map((r) => [r.state, r.n]));
-    const reasons = [];
     if ((byState.hit || 0) > 0) reasons.push(`${byState.hit} concept(s) with PII hits (pii_state=hit)`);
     if ((byState.error || 0) > 0) reasons.push(`${byState.error} concept(s) with scan errors (pii_state=error)`);
-    if ((byState.unknown || 0) > 0) reasons.push(`${byState.unknown} concept(s) not yet scanned (pii_state=unknown)`);
+
     const blocked = reasons.length > 0;
     span.setAttribute('okf.pii_gate_blocked', blocked);
     recordOp('gate', blocked ? 'blocked' : 'open');
-    logger.info('PII publish gate evaluated', { repo_id, blocked, byState });
+    logger.info('PII publish gate evaluated', { repo_id, blocked, scanStatus, byState });
     return { blocked, reasons };
   });
 }
@@ -184,10 +233,12 @@ async function recordIngestVersion(repo_id, input) {
     } catch {
       logger.warn('Ingest version: files doc lookup failed', { file_id: input.file_id });
     }
+    // Sanitize curator to {sub, name} — never persist source_ip (code-review fix).
+    const curator = input.curator ? { sub: input.curator.sub || null, name: input.curator.name || null } : null;
     const lastIngest = {
       file_id: input.file_id,
       uploaded_at: uploadedAt,
-      curator: input.curator || null,
+      curator,
       version_id: hash ? `sha256:${String(hash).slice(0, 16)}` : null
     };
     await db.collection(REPOS).update(repo_id, { last_ingest: lastIngest });
@@ -227,50 +278,76 @@ async function getRepoDocumentReferences(repo_id) {
 
 // ─── Discovery: repo files → scan inputs ────────────────────────────────────
 
+/** Plain-text file types that can be scanned directly. Everything else (zip,
+ * pdf, docx, ...) is rejected — scanning binary bytes as UTF-8 would produce
+ * mojibake and a false "clean" (code-review fix: discovery must not silently
+ * scan binaries/zips). */
+const SCANNABLE_FILE_TYPES = ['text/markdown', 'text/plain', 'text/html', 'text/x-markdown'];
+
 /**
- * Discover the repo's uploaded plain-.md files (by okf_repo_id) and return
- * them as scan inputs. Zips are rejected with a clear deferred message.
- * @returns {Promise<Array<{concept_id, frontmatter, body, file_id}>>}
+ * Discover the repo's uploaded plain-text files (by okf_repo_id) and return
+ * them as scan inputs. Binary/zips are skipped with a clear rejection — a
+ * bundle zip is unzipped in Story 2.9.5, not scanned as raw bytes.
+ * @returns {Promise<Array<{concept_id, frontmatter, body, file_id, file_type}>>}
  */
 async function discoverRepoFiles(repo_id) {
   const db = await getDb();
   const cursor = await db.query(aql`
     FOR f IN ${db.collection(FILES)}
       FILTER f.okf_repo_id == ${repo_id}
+      SORT f.uploaded_date DESC
       RETURN KEEP(f, ['file_id', 'file_name', 'file_type'])
   `);
   const files = await cursor.all();
   const out = [];
   for (const f of files) {
-    const bytes = await fetchFileBytes(f.file_id);
+    if (!SCANNABLE_FILE_TYPES.includes(f.file_type)) {
+      logger.warn('PII discovery skipped non-text file', { file_id: f.file_id, file_type: f.file_type });
+      continue; // zip/pdf/docx are not scanned as raw bytes
+    }
+    const bytes = await fetchFileBytes(f.file_id); // FAIL-CLOSED: throws on failure
     const text = bytes ? bytes.toString('utf-8') : '';
-    out.push({ concept_id: f.file_id, frontmatter: {}, body: text, file_id: f.file_id });
+    out.push({ concept_id: f.file_id, frontmatter: {}, body: text, file_id: f.file_id, file_type: f.file_type });
   }
   return out;
 }
 
-/** Fetch file bytes from the doc-repo view endpoint (base64 JSON). */
+/** Fetch file bytes from the doc-repo view endpoint. FAIL-CLOSED: a fetch
+ * failure THROWS (the caller marks pii_state='error'), so a doc-repo blip can
+ * never produce a false "clean". The doc-repo view endpoint returns base64 at
+ * res.data.data.base64 (verified fileController.viewFile). */
 async function fetchFileBytes(fileId) {
   const config = require('../config');
   const axios = require('axios');
+  let res;
   try {
-    const res = await axios.get(`${config.documentRepository.url}/api/files/${fileId}/view`);
-    if (res.data && res.data.file) {
-      return Buffer.from(res.data.file, 'base64');
-    }
-    return null;
+    res = await axios.get(`${config.documentRepository.url}/api/files/${fileId}/view`);
   } catch (err) {
-    logger.warn('Doc-repo view fetch failed', { file_id: fileId, status: err.response && err.response.status });
-    return null;
+    const status = err.response && err.response.status;
+    logger.warn('Doc-repo view fetch FAILED (fail-closed)', { file_id: fileId, status });
+    const e = new Error(`doc-repo view fetch failed (${status || 'network'})`);
+    e.code = 'DOCREPO_FETCH_ERROR';
+    throw e;
   }
+  const b64 = res.data && res.data.data && res.data.data.base64;
+  if (typeof b64 !== 'string' || b64.length === 0) {
+    logger.warn('Doc-repo view returned no base64 (fail-closed)', { file_id: fileId });
+    const e = new Error('doc-repo view returned no base64');
+    e.code = 'DOCREPO_FETCH_ERROR';
+    throw e;
+  }
+  return Buffer.from(b64, 'base64');
 }
 
 module.exports = {
   scanConcept,
   upsertPiiState,
   assertPiiClean,
+  markRepoPiiScanned,
   recordIngestVersion,
   getDocumentReference,
   getRepoDocumentReferences,
-  discoverRepoFiles
+  discoverRepoFiles,
+  fetchFileBytes,
+  flattenFrontmatter
 };

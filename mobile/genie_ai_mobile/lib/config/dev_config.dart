@@ -3,7 +3,7 @@ import 'keycloak_config.dart';
 const _server = String.fromEnvironment('DEV_SERVER', defaultValue: 'localhost');
 const _port = String.fromEnvironment('DEV_PORT', defaultValue: '443');
 
-const devConfig = KeycloakConfig(
+final devConfig = KeycloakConfig(
   keycloakUrl: 'https://$_server:$_port/auth',
   realm: 'genie',
   clientId: 'genie-mobile-dev',

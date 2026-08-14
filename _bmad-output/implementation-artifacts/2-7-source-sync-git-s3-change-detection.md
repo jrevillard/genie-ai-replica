@@ -3,7 +3,7 @@ baseline_commit: pending
 ---
 # Story 2.7: Source sync (Git/S3) + change detection + origin health
 
-Status: ready-for-dev
+Status: deferred (2026-08-14)
 Story key: `2-7-source-sync-git-s3-change-detection` | GitLab: #883 (`prd::okf-server`, `okf-server::epic-2`)
 Epic: 2 (OKF Server — Repository Ingestion & Management) | Branch: `feat/okf-server`
 FRs: **FR-1** (register source, validated reachable, creds from secret store), **FR-2** (sync + change-detect + origin health + graceful fallback), **FR-27** (doc-repo = retained source of truth) | ADRs: okf-016, okf-021 (D2 zip contract), okf-032

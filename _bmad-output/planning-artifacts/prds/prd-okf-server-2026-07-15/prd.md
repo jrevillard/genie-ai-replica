@@ -108,15 +108,15 @@ The **GENIE.AI OKF Server** is the open-source, enterprise- and government-grade
 
 **Functional Requirements:**
 
-#### FR-1: Register a repository source
-An authenticated steward can register a Git or S3 source for a repository (type, endpoint, ref/path, credentials ref, sync schedule, domain, display name) and have it validated as reachable. Credentials are referenced from the secret store, never persisted in plaintext. Realizes UJ-1.
+#### FR-1: Register a repository source **[DEFERRED 2026-08-14]**
+**Deferred (2026-08-14):** v1 input surface is browser-first — file selection from any user-accessible location via the browser file picker (FR-37: local disk, mapped shares, synced cloud folders), the crawler (FR-30/33), and manual authoring (FR-25). Server-side Git/S3 source-sync serves a docs-as-code persona that does not exist in the target deployments; it is deferred and can land additively later via the existing `source` field seam (no schema change). Original scope: register a Git or S3 source, validated reachable; credentials referenced from the secret store.
 **Consequences:**
 - Registering an unreachable/inaccessible source yields a structured error with the failing check; nothing is indexed.
 - Credentials never appear in config or logs.
 - Sources are **external, user-owned** repos/buckets (any Git host/provider or S3-compatible store), distinct from the Genie framework code repo; each source carries its own credentials and ref.
 
-#### FR-2: Sync and change-detect
-The system syncs registered sources on schedule or webhook and detects changes (Git: commit-diff `OLD..NEW --name-only`; S3: ETag/LastModified; content SHA-256 idempotency key) without full re-ingest of unchanged concepts. Realizes UJ-1.
+#### FR-2: Sync and change-detect **[DEFERRED 2026-08-14 — with FR-1]**
+**Deferred with FR-1.** The retained-copy semantics that matter (serving continues from the document-repository copy; no query-time origin dependency) are enforced by FR-27 for every shipped input. Original scope: sync on schedule/webhook; change-detect (commit-diff / ETag; SHA-256 idempotency) without full re-ingest.
 **Consequences:**
 - A source updated with one new concept re-indexes only that concept within the freshness target (NFR-S4).
 - Re-syncing an unchanged source performs no re-embedding (SHA-256 match).

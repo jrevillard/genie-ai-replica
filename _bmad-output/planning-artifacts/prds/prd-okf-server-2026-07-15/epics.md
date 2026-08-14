@@ -30,8 +30,8 @@ This document decomposes the OKF Server PRD (FR-1..FR-29), Architecture (§13 si
 
 ### Functional Requirements
 
-- **FR-1**: Register a repository source (Git/S3; validated reachable; credentials from secret store, never plaintext).
-- **FR-2**: Sync + change-detect (Git commit-diff; S3 ETag/LastModified; SHA-256 idempotency; periodic origin-health check + graceful fallback to retained copy).
+- **FR-1**: Register a repository source (Git/S3) — **[DEFERRED 2026-08-14: browser-first inputs]**.
+- **FR-2**: Sync + change-detect — **[DEFERRED with FR-1]**. (FR-27 retained-copy semantics unchanged.)
 - **FR-3**: Version tracking & provenance (source ref, fetch timestamp, curator, stable version id; consolidated on document-repository).
 - **FR-4**: Conformance validation (OKF §11; non-blocking quality gate).
 - **FR-5**: Safe ingest via document-repository (ClamAV + PII redaction; PII failure blocking).
@@ -91,8 +91,8 @@ This document decomposes the OKF Server PRD (FR-1..FR-29), Architecture (§13 si
 
 | FR | Epic | Notes |
 |---|---|---|
-| FR-1 | Epic 2 | Register source |
-| FR-2 | Epic 2 | Sync + change-detect |
+| FR-1 | Epic 2 | Register source — **DEFERRED 2026-08-14** (browser-first inputs) |
+| FR-2 | Epic 2 | Sync + change-detect — **DEFERRED 2026-08-14** (with FR-1) |
 | FR-3 | Epic 2 | Version tracking at ingest |
 | FR-4 | Epic 2 | Conformance §11 |
 | FR-5 | Epic 2 | Safe ingest (ClamAV + PII) |
@@ -322,7 +322,7 @@ So that **each repository is isolated and cleanly removable**.
 
 > **2026-08-13 course correction:** the ACL-preserve fix (`_finalize_chunk_labels` preserving `t:`/`r:`/`d:` prefixes — today silently dropped, G4 P0) is **extracted into ungated Story 2.6a** so it can land immediately, ahead of the bump. Story 2.6 (this story, gated) keeps: dataprep reads `graph_name` from the request body (ingest + retract), additive metadata, repo/bundle-level retract, the retract-default mismatch fix, **and** `retractRepoGraph` dropping the 4 `OKF_{repo_id}_*` collections (retract must target the correct graph — G5, never the free-form `GRAPH`). Unify the fallback constant. *(ADR-okf-013 revision, ADR-okf-021; genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py:1051-1104.)*
 
-### Story 2.7: Source sync (Git/S3) + change detection + origin health
+### Story 2.7: Source sync (Git/S3) + change detection + origin health **[DEFERRED 2026-08-14 — see FR-1]**
 As a **platform engineer**,
 I want **to register a Git/S3 source and have it synced, change-detected, and health-monitored**,
 So that **repositories stay current and survive origin disappearance**.

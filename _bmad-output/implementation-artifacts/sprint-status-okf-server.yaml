@@ -35,7 +35,7 @@ development_status:
   2-4-conformance-validation-quality-metrics: done
   2-5-docrepo-bundle-ingest-route: done            # code-review fixes applied 2026-08-14 (fire-and-forget ingest kick). 416 tests green.
   2-6-dataprep-graphname-metadata-retract: backlog  # [BUMP] (ACL-preserve EXTRACTED to ungated 2-6a; this story keeps graph-name body-read, repo-level retract, retractRepoGraph drops 4 OKF_{repo}_* collections — G5)
-  2-7-source-sync-git-s3-change-detection: ready-for-dev # story created 2026-08-14 (5-agent analysis + critic corrections baked in)
+  2-7-source-sync-git-s3-change-detection: deferred   # DEFERRED 2026-08-14: v1 inputs = browser file picker (FR-37) + crawler + manual; Git/S3 sync scrapped for v1 (FR-1/FR-2 deferred)
   2-8-pii-redaction-version-provenance-docrefs: backlog  # (+ 2026-08-13: PII is a publish prerequisite / lifecycle gate, not parallel — D22)
   epic-2-retrospective: optional
 
@@ -48,7 +48,7 @@ development_status:
   2-9-5-bundle-zip-format-unzip-dedup: backlog     # G11 — zip of .md, content-hash idempotent re-ingest
   2-9-6-graph-name-wiring-retract-fix: backlog     # [BUMP] G5 — doc-repo payload + dataprep body-read + retractRepoGraph
   2-9-7-okf-versions-mint-version-publish: backlog # G26 — repo-level bundle_version, immutable manifest (resolves PRD §13.2)
-  2-9-8-okf-sources-writer-source-sync: backlog    # G32 — backs the admin UI last-sync/health column
+  2-9-8-okf-sources-writer-source-sync: backlog    # G32 — SHRUNK: source-sync deferred; now ingest-health backing only (fold into admin UI later)
   2-9-9-retention-ttl-sweep-deletion-reason: backlog # G27 — sweep + deletion_reason discriminator
   epic-2.9-retrospective: optional
 

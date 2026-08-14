@@ -138,3 +138,27 @@ describe('concept-meta-service.upsertConceptMeta (G9)', () => {
     expect(m.stale_concept_count).toBe(1);
   });
 });
+
+describe('concept-meta-service — real-arangojs no-match tolerance (smoke-test catch)', () => {
+  beforeEach(() => mockDb._reset());
+
+  it('treats a firstExample THROW ("no match") as absent → creates the doc (real arangojs + shared wrapper throw, the mock returns null)', async () => {
+    const col = mockDb.collection('okf_concepts_meta');
+    // Real arangojs firstExample throws ArangoError 'no match' (errorNum 1204)
+    // when no doc exists; the shared db wrapper surfaces it as a thrown error.
+    const notFound = new Error('no match');
+    notFound.errorNum = 1204;
+    col.firstExample.mockRejectedValueOnce(notFound);
+    const result = await conceptMeta.upsertConceptMeta('r1', parsedInput());
+    expect(result.action).toBe('created');
+    expect(Object.values(mockDb._stores.okf_concepts_meta).length).toBe(1);
+  });
+
+  it('surfaces a TRANSIENT firstExample error (not a no-match) — does not mask', async () => {
+    const col = mockDb.collection('okf_concepts_meta');
+    const transient = new Error('connection reset');
+    transient.code = 'ECONNRESET';
+    col.firstExample.mockRejectedValueOnce(transient);
+    await expect(conceptMeta.upsertConceptMeta('r1', parsedInput())).rejects.toThrow('connection reset');
+  });
+});

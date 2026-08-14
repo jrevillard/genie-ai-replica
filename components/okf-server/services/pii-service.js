@@ -50,10 +50,30 @@ async function getDb() {
  * @param {string} concept_id
  * @param {object} patch {pii_state, pii_hits_summary?, pii_scanned_at}
  */
+/** arangojs "document not found / no match" detector (firstExample throws it). */
+function isNotFound(err) {
+  return (
+    err &&
+    (err.errorNum === 1204 ||
+      err.code === 404 ||
+      err.statusCode === 404 ||
+      (err.message && /no match|not found/i.test(String(err.message))))
+  );
+}
+
+async function findPiiDoc(col, repo_id, concept_id) {
+  try {
+    return await col.firstExample({ repo_id, concept_id });
+  } catch (err) {
+    if (!isNotFound(err)) throw err; // transient — surface
+    return null;
+  }
+}
+
 async function upsertPiiState(repo_id, concept_id, patch) {
   const db = await getDb();
   const col = db.collection(META);
-  const existing = await col.firstExample({ repo_id, concept_id });
+  const existing = await findPiiDoc(col, repo_id, concept_id);
   if (existing) {
     await col.update(existing._key, patch);
     return 'updated';
@@ -64,7 +84,7 @@ async function upsertPiiState(repo_id, concept_id, patch) {
   } catch (err) {
     // Concurrent create lost the race → retry as update (unique index guard).
     if (err && (err.errorNum === 1210 || err.errorNum === 1185 || err.code === 409)) {
-      const again = await col.firstExample({ repo_id, concept_id });
+      const again = await findPiiDoc(col, repo_id, concept_id);
       if (again) {
         await col.update(again._key, patch);
         return 'updated';

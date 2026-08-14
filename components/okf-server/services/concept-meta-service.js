@@ -41,6 +41,29 @@ function nowIso() {
   return DateTime.now().toUTC().toISO();
 }
 
+/** arangojs "document not found / no match" detector (firstExample throws it). */
+function isNotFound(err) {
+  return (
+    err &&
+    (err.errorNum === 1204 ||
+      err.code === 404 ||
+      err.statusCode === 404 ||
+      (err.message && /no match|not found/i.test(String(err.message))))
+  );
+}
+
+/** firstExample that treats a no-match as null (real arangojs + the shared db
+ * wrapper throw "no match"; the unit mock returns null). Smoke-test caught this
+ * divergence. */
+async function findConceptDoc(col, repo_id, concept_id) {
+  try {
+    return await col.firstExample({ repo_id, concept_id });
+  } catch (err) {
+    if (!isNotFound(err)) throw err; // transient — surface, don't mask
+    return null;
+  }
+}
+
 /** sha256 hex of the concept body — the 2.9.1/2.9.5 content-hash dedup key. */
 function contentHash(body) {
   return crypto
@@ -107,7 +130,7 @@ async function upsertConceptMeta(repo_id, parsed, opts = {}) {
     const col = db.collection(COLLECTION);
     const doc = buildMetaDoc(repo_id, parsed, opts);
 
-    const existing = await col.firstExample({ repo_id, concept_id: parsed.concept_id });
+    const existing = await findConceptDoc(col, repo_id, parsed.concept_id);
     if (existing) {
       const patch = { ...doc, ...(opts.patch || {}) };
       delete patch.created_at; // keep the original created_at on update
@@ -129,7 +152,7 @@ async function upsertConceptMeta(repo_id, parsed, opts = {}) {
     } catch (err) {
       // Concurrent create lost the race → retry as update (unique index guard).
       if (err && (err.errorNum === 1210 || err.errorNum === 1185 || err.code === 409)) {
-        const again = await col.firstExample({ repo_id, concept_id: parsed.concept_id });
+        const again = await findConceptDoc(col, repo_id, parsed.concept_id);
         if (again) {
           const patch = { ...doc, ...(opts.patch || {}) };
           delete patch.created_at;

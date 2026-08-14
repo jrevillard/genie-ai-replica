@@ -23,8 +23,6 @@ the mocked dev env the in-image test skips via the ``comps`` fixture; the pure
 
 from __future__ import annotations
 
-import inspect
-
 import _harness
 
 
@@ -112,21 +110,81 @@ def test_aql_filter_clause_absent_when_no_labels(comps):
     assert mod._build_aql_filter_clause([], "OR") == ""
 
 
-def test_retriever_code_passes_filter_clause_to_vector_db(comps):
-    """The real retriever passes filter_clause into the vector search.
+def test_retriever_forwards_filter_clause_to_vector_search(comps):
+    """The retriever forwards the constructed FILTER clause to the vector search.
 
-    Guards the second half of the drop: the clause must reach
-    ``asimilarity_search_with_relevance_scores``/``amax_marginal_relevance_search``
-    as the ``filter_clause`` kwarg (not be built-and-discarded). We introspect
-    the live ``GenieaiArangoRetriever.invoke`` source for the call sites — if
-    the bump drops the kwarg, this fails.
+    Behavioral replacement for the source-grep test: invokes the real
+    ``GenieaiArangoRetriever.invoke`` code path with mocked ArangoDB validation
+    and ``ArangoVector``, capturing the ``filter_clause`` kwarg that reaches
+    the vector search method. If a future change drops the kwarg, this fails —
+    proving the filter reaches the database layer, not just the code.
     """
+    import asyncio
+    import unittest.mock as mock
+
     mod = _retriever_module()
-    cls = getattr(mod, "GenieaiArangoRetriever", None)
-    assert cls is not None, "retriever class missing from the real module"
-    assert hasattr(cls, "invoke"), "retriever invoke missing from the real module"
-    src = inspect.getsource(cls.invoke)
-    assert "filter_clause=" in src, "filter_clause kwarg missing from the retriever vector-search calls"
+    labels = ["Fruit Tree Cultivation", "Beekeeping and Honey"]
+
+    # Encode labels in search_start (the data-contract path chatqna uses).
+    from core.label_contract import encode_filter_labels
+
+    encoded_search_start = encode_filter_labels("chunk", labels)
+
+    # Create a retriever instance WITHOUT __init__ (bypasses the ArangoDB
+    # connection the real __init__ makes — the behavior under test is the
+    # filter_clause forwarding inside invoke, not the client setup).
+    retriever = object.__new__(mod.GenieaiArangoRetriever)
+    retriever._bm25_views_ensured = set()
+
+    # Mock self.db to pass the validation gates invoke() hits before the
+    # vector search (has_graph, has_vertex_collection, count, random).
+    mock_db = mock.MagicMock()
+    mock_db.has_graph.return_value = True
+    mock_db.graph.return_value.has_vertex_collection.return_value = True
+    mock_db.graph.return_value.has_edge_collection.return_value = True
+    mock_db.collection.return_value.count.return_value = 1000
+    mock_db.collection.return_value.random.return_value = {
+        "_id": "test/key",
+        "embedding": [0.1] * 128,
+    }
+    retriever.db = mock_db
+
+    # Capture the filter_clause kwarg passed to the vector search method.
+    captured: dict = {}
+
+    async def _capture_search(*args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    # Patch ArangoVector and the embedding class so invoke() reaches the
+    # vector search call without real ArangoDB / model endpoints.
+    with (
+        mock.patch.object(mod, "ArangoVector") as mock_av_cls,
+        mock.patch.object(mod, "HuggingFaceBgeEmbeddings") as mock_emb_cls,
+    ):
+        mock_av = mock.MagicMock()
+        mock_av.asimilarity_search_with_relevance_scores = _capture_search
+        mock_av.amax_marginal_relevance_search = _capture_search
+        mock_av_cls.return_value = mock_av
+
+        mock_emb_cls.return_value = mock.MagicMock()
+
+        input_doc = mod.GenieEmbedDoc(
+            text="test query",
+            embedding=[0.1] * 128,
+            search_start=encoded_search_start,
+        )
+
+        asyncio.run(retriever.invoke(input_doc))
+
+    # Assert the filter_clause was forwarded to the vector search.
+    assert "filter_clause" in captured, (
+        "filter_clause kwarg missing from the vector search call — the category filter is silently dropped"
+    )
+    clause = captured["filter_clause"]
+    assert "FILTER" in clause, "FILTER keyword missing from the forwarded clause"
+    for label in labels:
+        assert f'"{label}"' in clause, f"label {label!r} missing from FILTER clause"
 
 
 def test_installed_arangovector_exposes_filter_clause_named_param(comps):

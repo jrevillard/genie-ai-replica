@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 enum NotificationType { success, error, info, warning }
 
 class NotificationEvent {
@@ -10,9 +12,17 @@ class NotificationEvent {
 }
 
 class NotificationService {
-  static final StreamController<NotificationEvent> _controller =
+  static StreamController<NotificationEvent> _controller =
       StreamController.broadcast();
   static Stream<NotificationEvent> get events => _controller.stream;
+
+  /// Reset the stream controller for test isolation.
+  /// Closes the existing controller and creates a fresh one.
+  @visibleForTesting
+  static void resetForTesting() {
+    _controller.close();
+    _controller = StreamController.broadcast();
+  }
 
   static void show(
     String msg, {

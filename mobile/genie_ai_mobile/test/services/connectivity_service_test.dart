@@ -1,15 +1,54 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/services/connectivity_service.dart';
+
+/// Fake provider returning a configurable result.
+class FakeAsyncProvider extends ConnectivityProvider {
+  final ConnectivityResult result;
+  int callCount = 0;
+
+  FakeAsyncProvider(this.result);
+
+  @override
+  Future<List<ConnectivityResult>> checkConnectivity() async {
+    callCount++;
+    return [result];
+  }
+}
+
+/// Fake provider that never completes (for testing concurrency guard).
+class HangingProvider extends ConnectivityProvider {
+  final Completer<List<ConnectivityResult>> completer = Completer();
+
+  @override
+  Future<List<ConnectivityResult>> checkConnectivity() => completer.future;
+}
+
+Future<List<InternetAddress>> _fakeDnsSuccess(String host) async =>
+    [InternetAddress('8.8.8.8')];
+
+Future<List<InternetAddress>> _fakeDnsFailure(String host) async =>
+    throw const SocketException('DNS failed');
+
+Future<List<InternetAddress>> _fakeDnsTimeout(String host) async =>
+    Future.delayed(const Duration(seconds: 10), () => <InternetAddress>[]);
 
 void main() {
   late ConnectivityService service;
 
   setUp(() {
+    ConnectivityService.resetForTesting();
     service = ConnectivityService();
     // Reset user override to default state without calling init (which needs platform plugin)
     service.setUserOfflineMode(false);
+  });
+
+  tearDown(() {
+    service.dispose();
+    ConnectivityService.resetForTesting();
   });
 
   group('ConnectivityService', () {
@@ -182,6 +221,173 @@ void main() {
         // Only the first event should be recorded
         expect(events.length, 1);
         expect(events.first, isFalse);
+      });
+    });
+
+    group('concurrent recheck', () {
+      test('overlapping calls are blocked by _isChecking guard', () async {
+        final fakeProvider = FakeAsyncProvider(ConnectivityResult.none);
+        final service = ConnectivityService.test(
+          provider: fakeProvider,
+          dnsLookup: _fakeDnsFailure,
+        );
+        service.setUserOfflineMode(false);
+
+        // Start first call (will be suspended on provider)
+        final future1 = service.recheckConnectivity();
+        // Start second call while first is in-flight
+        service.recheckConnectivity();
+
+        // Complete the first call
+        await future1;
+
+        // Provider was only called once (second call hit the guard)
+        expect(fakeProvider.callCount, 1);
+        service.dispose();
+      });
+
+      test('guard resets after completion', () async {
+        final fakeProvider = FakeAsyncProvider(ConnectivityResult.wifi);
+        final service = ConnectivityService.test(
+          provider: fakeProvider,
+        );
+        service.setUserOfflineMode(false);
+
+        await service.recheckConnectivity();
+        await service.recheckConnectivity();
+
+        // Both calls succeeded (guard was reset between them)
+        expect(fakeProvider.callCount, 2);
+        service.dispose();
+      });
+    });
+
+    group('DNS fallback', () {
+      test('treats as online when DNS succeeds but hardware says none',
+          () async {
+        final fakeProvider = FakeAsyncProvider(ConnectivityResult.none);
+        final service = ConnectivityService.test(
+          provider: fakeProvider,
+          dnsLookup: _fakeDnsSuccess,
+        );
+        service.setUserOfflineMode(false);
+
+        // Initially hardware=true (default), we need to set it to false first
+        // Force hardware to offline by simulating a none result without DNS
+        // Use a separate call to establish offline state
+        final service2 = ConnectivityService.test(
+          provider: FakeAsyncProvider(ConnectivityResult.none),
+          dnsLookup: _fakeDnsFailure,
+        );
+        service2.setUserOfflineMode(false);
+        await service2.recheckConnectivity();
+        expect(service2.isOnline, isFalse);
+        service2.dispose();
+
+        // Now test the DNS success path with fresh instance
+        final service3 = ConnectivityService.test(
+          provider: FakeAsyncProvider(ConnectivityResult.none),
+          dnsLookup: _fakeDnsSuccess,
+        );
+        service3.setUserOfflineMode(false);
+        // Force hardware state to false first
+        service3.setUserOfflineMode(true);
+        service3.setUserOfflineMode(false);
+
+        await service3.recheckConnectivity();
+
+        // DNS succeeded → hardware status changed to online
+        expect(service3.isOnline, isTrue);
+        service3.dispose();
+      });
+
+      test('treats as offline when DNS fails', () async {
+        final fakeProvider = FakeAsyncProvider(ConnectivityResult.none);
+        final service = ConnectivityService.test(
+          provider: fakeProvider,
+          dnsLookup: _fakeDnsFailure,
+        );
+        service.setUserOfflineMode(false);
+
+        await service.recheckConnectivity();
+
+        expect(service.isOnline, isFalse);
+        service.dispose();
+      });
+
+      test('treats as offline when DNS times out', () async {
+        final fakeProvider = FakeAsyncProvider(ConnectivityResult.none);
+        final service = ConnectivityService.test(
+          provider: fakeProvider,
+          dnsLookup: _fakeDnsTimeout,
+        );
+        service.setUserOfflineMode(false);
+
+        await service.recheckConnectivity();
+
+        expect(service.isOnline, isFalse);
+        service.dispose();
+      }, timeout: const Timeout(Duration(seconds: 5)));
+    });
+
+    group('dispose lifecycle', () {
+      test('monitorTimer is null before init', () {
+        expect(service.monitorTimer, isNull);
+      });
+
+      test('dispose cancels timer and closes stream', () async {
+        // Start monitoring manually (normally done by init)
+        final fakeProvider = FakeAsyncProvider(ConnectivityResult.wifi);
+        final service = ConnectivityService.test(
+          provider: fakeProvider,
+        );
+        service.setUserOfflineMode(false);
+
+        // Manually trigger monitoring via recheckConnectivity + timer start
+        // Use _startMonitoring indirectly by simulating what init does
+        await service.recheckConnectivity();
+
+        // Dispose should not throw
+        expect(() => service.dispose(), returnsNormally);
+      });
+
+      test('double dispose does not throw', () {
+        expect(() => service.dispose(), returnsNormally);
+        expect(() => service.dispose(), returnsNormally);
+      });
+
+      test('stream emits done after dispose', () async {
+        final doneCompleter = Completer<void>();
+        service.isOnlineStream.listen(null, onDone: doneCompleter.complete);
+
+        service.dispose();
+
+        await doneCompleter.future;
+      });
+    });
+
+    group('resetForTesting', () {
+      test('creates fresh instance with default state', () {
+        ConnectivityService.resetForTesting();
+        final fresh = ConnectivityService();
+        expect(fresh.isOnline, isTrue);
+        expect(fresh.isUserOfflineOverride, isFalse);
+        expect(fresh.monitorTimer, isNull);
+        fresh.dispose();
+      });
+
+      test('reset isolates instances', () async {
+        ConnectivityService.resetForTesting();
+        final service1 = ConnectivityService();
+        service1.setUserOfflineMode(true);
+        expect(service1.isUserOfflineOverride, isTrue);
+
+        ConnectivityService.resetForTesting();
+        final service2 = ConnectivityService();
+        expect(service2.isUserOfflineOverride, isFalse);
+
+        service1.dispose();
+        service2.dispose();
       });
     });
   });

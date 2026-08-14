@@ -43,6 +43,8 @@ roles:
             - view-identity-providers
     - name: dataprep-service
       description: Service account role for Dataprep ingestion pipeline
+    - name: tools-admin
+      description: OKF steward/admin role required by okf-server for repository and concept mutations (Story 2.2)
 
 # Default admin user
 users:

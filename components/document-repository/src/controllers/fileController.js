@@ -139,6 +139,7 @@ class FileController {
     this.getIngestionLogs = this.getIngestionLogs.bind(this);
     this.updateFileStatus = this.updateFileStatus.bind(this);
     this.bundleIngest = this.bundleIngest.bind(this);
+    this._markIngestFailure = this._markIngestFailure.bind(this);
     this.killIngestion = this.killIngestion.bind(this);
 
     // --- CRAWLER BINDS ---
@@ -981,15 +982,28 @@ class FileController {
     }
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
     logger.debug(`[FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);
-    const response = await axios.post(dataprepUrl, {
-      fileId: file.file_id,
-      fileName: file.file_name,
-      fileType: file.file_type,
-      fileLabels: file.labels,
-      storagePath: file.storage_path,
-      fileBase64: base64String,
-      graphName: file.graph_name || null
-    });
+    let response;
+    try {
+      response = await axios.post(dataprepUrl, {
+        fileId: file.file_id,
+        fileName: file.file_name,
+        fileType: file.file_type,
+        fileLabels: file.labels,
+        storagePath: file.storage_path,
+        fileBase64: base64String,
+        graphName: file.graph_name || null
+      });
+    } catch (err) {
+      // Follow the ingestion state machine: a dataprep failure MUST transition
+      // Pending/Ingesting -> 'Ingestion Error' and record an ingestion-log entry
+      // (the UI surfaces these; a stuck 'Ingesting' with empty logs is a defect —
+      // API smoke test caught it on the bundle path). RETHROW so the caller's
+      // error mapping is preserved (e.g. the regular path maps dataprep 429 busy
+      // -> 429; the bundle fire-and-forget .catch() logs).
+      const detail = (err.response && err.response.data && (err.response.data.detail || err.response.data.message)) || err.message;
+      await this._markIngestFailure(fileId, file, `dataprep call failed: ${detail}`);
+      throw err;
+    }
     if (response.data.success) {
       await metadataService.updateMetadata(fileId, {
         chunk_count: response.data.chunk_count || file.chunk_count || 0, // Update chunk count if provided
@@ -1001,8 +1015,34 @@ class FileController {
       });
       return { success: true };
     } else {
+      await this._markIngestFailure(fileId, file, `dataprep rejected: ${JSON.stringify(response.data).slice(0, 300)}`);
       return { success: false, error: response.data };
     }
+  }
+
+  /** Transition a file to 'Ingestion Error' + write an ingestion-log entry (state machine). */
+  async _markIngestFailure(fileId, file, detail) {
+    try {
+      await metadataService.updateMetadata(fileId, {
+        dataprep: {
+          status: 'Ingestion Error',
+          ingest_date: file.dataprep ? file.dataprep.ingest_date || new Date().toISOString() : new Date().toISOString(),
+          retract_date: (file.dataprep && file.dataprep.retract_date) || null
+        }
+      });
+    } catch (metaErr) {
+      logger.error(`Failed to mark file ${fileId} as Ingestion Error: ${metaErr.message}`);
+    }
+    try {
+      await fileService.addIngestionLog(fileId, {
+        level: 'ERROR',
+        stage: 'dataprep',
+        message: String(detail).slice(0, 500)
+      });
+    } catch (logErr) {
+      logger.error(`Failed to write ingestion log for ${fileId}: ${logErr.message}`);
+    }
+    logger.error(`Ingest failed for ${fileId}: ${detail}`);
   }
 
   // --- OKF Bundle Ingest (Story 2.5) ---

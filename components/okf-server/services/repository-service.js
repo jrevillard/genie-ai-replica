@@ -37,6 +37,24 @@ const ARANGO_NOT_FOUND = (err) => err && (err.code === 404 || err.errorNum === 1
 const ARANGO_UNIQUE_VIOLATION = (err) =>
   err && (err.errorNum === 1210 || err.errorNum === 1185 || err.code === 409 || err.statusCode === 409);
 
+/** firstExample that treats a no-match as null (real arangojs + the shared db
+ * wrapper THROW "no match"; the unit mock returns null). API smoke test caught
+ * this divergence in repo-create's dup-check — a no-match caused a 500. */
+function notFoundAsNull(err) {
+  return (
+    err &&
+    (ARANGO_NOT_FOUND(err) || (err.message && /no match|not found/i.test(String(err.message))))
+  );
+}
+async function findExampleOrNull(col, example) {
+  try {
+    return await col.firstExample(example);
+  } catch (err) {
+    if (!notFoundAsNull(err)) throw err; // transient — surface, don't mask
+    return null;
+  }
+}
+
 // MELT — OKF business operations counter (no-op when observability is off).
 const meter = getMeter();
 const opsCounter = meter.createCounter('okf_repo_operations_total', {
@@ -119,7 +137,7 @@ async function create(input, actor) {
     // App-layer dup-check (clean 409 fast path). firstExample may return a soft-deleted
     // tombstone (deleted_at set) — that does NOT block re-create; the DB index is the
     // authoritative guard for the live-uniqueness invariant.
-    const dup = await db.collection(COLLECTION).firstExample({ name: input.name, domain: input.domain });
+    const dup = await findExampleOrNull(db.collection(COLLECTION), { name: input.name, domain: input.domain });
     if (dup && !dup.deleted_at) {
       recordOp('create', 'duplicate');
       throw new RepoError(
@@ -301,7 +319,7 @@ async function update(repo_id, patch, actor) {
 
     // If renaming, reject collision with another LIVE repo in the same domain.
     if (Object.prototype.hasOwnProperty.call(patch, 'name') && patch.name !== existing.name) {
-      const clash = await db.collection(COLLECTION).firstExample({ name: patch.name, domain: existing.domain });
+      const clash = await findExampleOrNull(db.collection(COLLECTION), { name: patch.name, domain: existing.domain });
       if (clash && !clash.deleted_at && clash.repo_id !== repo_id) {
         recordOp('update', 'duplicate');
         throw new RepoError(

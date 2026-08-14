@@ -1,9 +1,9 @@
 ---
-baseline_commit: pending
+baseline_commit: 6d1d433
 ---
 # Story 2.9.2: `okf_concepts_meta` UPSERT writer + first-class fields
 
-Status: ready-for-dev
+Status: review
 Story key: `2-9-2-concepts-meta-upsert-writer` | GitLab: #918 (`prd::okf-server`, `okf-server::epic-2.9`)
 Epic: 2.9 (Write-side Orchestration) | Branch: `feat/okf-server`
 FRs: **FR-4** (conformance), **FR-13** (quality metrics), **FR-34** (async ingest) | Gap: **G9** (P1) | ADR-okf-021 (write-path step 4b)
@@ -34,12 +34,12 @@ so that **conformance metrics, PII state, trust/provenance, and the Graph Router
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — `concept-meta-service.js`** (AC: 1,2,3,7): the `upsertConceptMeta` function + `content_hash` (crypto sha256 of body) + the race-guarded save/update + MELT. `module.exports`.
-- [ ] **T2 — Rewire `persistConformanceIssues`** (AC: 4): `conformance-service.js` — replace the filter-and-UPDATE AQL with a call to `conceptMetaService.upsertConceptMeta` (set `conformance_issues`); update the module comment. **The bug fix itself.**
-- [ ] **T3 — `getRepoMetrics` non-zero proof** (AC: 5): verify the existing AQL works once rows exist; add the integration test.
-- [ ] **T4 — `pii_state` default + optional 2.8 delegation** (AC: 6): default `'unknown'`; optionally make `pii-service.upsertPiiState` delegate to the canonical writer (additive, guarded — do NOT break 2.8's tests).
-- [ ] **T5 — Tests** (AC: 1,4,5,8): `__tests__/concept-meta-service.test.js` — UPSERT create (no-prior-doc assertion), update (re-ingest), idempotent (no duplicate), race-guard (unique-violation → retry-update), all first-class fields written; `__tests__/conformance-service.test.js` — persistConformanceIssues now CREATES the doc (update the silent-no-op test); metrics non-zero test. **Red-green**: confirm the new tests FAIL against the current filter-and-UPDATE, PASS after T1+T2.
-- [ ] **T6 — Lint/format/verify** (AC: 8): `cd components/okf-server && npx eslint . && npx prettier --check . && npm test` (full suite green).
+- [x] **T1 — `concept-meta-service.js`** (AC: 1,2,3,7): the `upsertConceptMeta` function + `content_hash` (crypto sha256 of body) + the race-guarded save/update + MELT. `module.exports`.
+- [x] **T2 — Rewire `persistConformanceIssues`** (AC: 4): `conformance-service.js` — replace the filter-and-UPDATE AQL with a call to `conceptMetaService.upsertConceptMeta` (set `conformance_issues`); update the module comment. **The bug fix itself.**
+- [x] **T3 — `getRepoMetrics` non-zero proof** (AC: 5): verify the existing AQL works once rows exist; add the integration test.
+- [x] **T4 — `pii_state` default + optional 2.8 delegation** (AC: 6): default `'unknown'`; optionally make `pii-service.upsertPiiState` delegate to the canonical writer (additive, guarded — do NOT break 2.8's tests).
+- [x] **T5 — Tests** (AC: 1,4,5,8): `__tests__/concept-meta-service.test.js` — UPSERT create (no-prior-doc assertion), update (re-ingest), idempotent (no duplicate), race-guard (unique-violation → retry-update), all first-class fields written; `__tests__/conformance-service.test.js` — persistConformanceIssues now CREATES the doc (update the silent-no-op test); metrics non-zero test. **Red-green**: confirm the new tests FAIL against the current filter-and-UPDATE, PASS after T1+T2.
+- [x] **T6 — Lint/format/verify** (AC: 8): `cd components/okf-server && npx eslint . && npx prettier --check . && npm test` (full suite green).
 
 ## Dev Notes
 
@@ -110,7 +110,7 @@ Shared libs IMPORTED not copied · MELT on every method · resilient `let _db = 
 ## Dev Agent Record
 
 ### Agent Model Used
-_(filled during dev-story)_
+glm-5.2[1m] (via BMAD dev-story; Jest in components/okf-server)
 
 ### Debug Log References
 

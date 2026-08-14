@@ -116,13 +116,15 @@ describe('conformance-service — validateConcept (pure)', () => {
 describe('conformance-service — persistConformanceIssues (DB)', () => {
   beforeEach(() => db._reset());
 
-  test('calls db.query to update okf_concepts_meta', async () => {
-    // Seed a concept doc
-    db.collection('okf_concepts_meta').save({ _key: 'r1::c1', repo_id: 'r1', concept_id: 'c1', frontmatter: {} });
+  test('persists issues onto the concept doc via the UPSERT writer (G9 — creates the doc)', async () => {
+    // Story 2.9.2 (G9): the previous filter-and-UPDATE wrote ZERO rows when no
+    // doc existed. The writer now CREATES the doc + merges conformance_issues.
     const issues = [{ code: 'MISSING_TYPE', severity: 'warning', message: 'test', field_path: 'frontmatter.type' }];
     await persistConformanceIssues('r1', 'c1', issues);
-    // The AQL update ran via db.query — verify it was called
-    expect(db.query).toHaveBeenCalled();
+    const docs = Object.values(db._stores.okf_concepts_meta);
+    expect(docs.length).toBe(1); // CREATED — not a silent no-op
+    expect(docs[0].concept_id).toBe('c1');
+    expect(docs[0].conformance_issues).toEqual(issues);
   });
 });
 

@@ -1,8 +1,9 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 // OKF conformance validation + quality metrics. validateConcept is a PURE
-// function (no DB); persistConformanceIssues + getRepoMetrics use the shared
-// db-connection-service. All issues are WARNING (non-blocking) at ingest.
+// function (no DB); persistConformanceIssues delegates to the canonical
+// okf_concepts_meta UPSERT writer (concept-meta-service, Story 2.9.2 G9);
+// getRepoMetrics reads the collection. All issues are WARNING (non-blocking).
 // MELT: withSpan + shared logger + okf_conformance_operations_total counter.
 
 const { DateTime } = require('luxon');
@@ -11,6 +12,7 @@ const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
+const conceptMetaService = require('./concept-meta-service');
 
 const COLLECTION = 'okf_concepts_meta';
 const VALID_ACTOR_PREFIXES = ['agent/', 'agent:', 'human:', 'process:'];
@@ -118,7 +120,10 @@ function validateConcept(parsed) {
 
 /**
  * Persist conformance issues onto a concept's okf_concepts_meta doc.
- * Uses AQL filter-and-update (key-agnostic; filters by [repo_id, concept_id]).
+ * Story 2.9.2 (G9): uses the canonical UPSERT writer (concept-meta-service) —
+ * the previous filter-and-UPDATE wrote ZERO rows when no doc existed (silent
+ * no-op: nothing ever created okf_concepts_meta docs). The writer creates the
+ * doc if absent and merges conformance_issues.
  * @param {string} repo_id
  * @param {string} concept_id
  * @param {Array} issues
@@ -127,12 +132,11 @@ async function persistConformanceIssues(repo_id, concept_id, issues) {
   return withSpan('okf.conformance.persist', async (span) => {
     span.setAttribute('okf.repo_id', repo_id);
     span.setAttribute('okf.concept_id', concept_id);
-    const db = await getDb();
-    await db.query(aql`
-      FOR d IN ${db.collection(COLLECTION)}
-        FILTER d.repo_id == ${repo_id} AND d.concept_id == ${concept_id}
-        UPDATE d WITH { conformance_issues: ${issues} } IN ${db.collection(COLLECTION)}
-    `);
+    await conceptMetaService.upsertConceptMeta(
+      repo_id,
+      { concept_id, repo_id }, // minimal — the writer creates/updates the doc
+      { patch: { conformance_issues: issues } }
+    );
     logger.info('Conformance issues persisted', { repo_id, concept_id, issue_count: issues.length });
     recordOp('persist', 'success');
   });

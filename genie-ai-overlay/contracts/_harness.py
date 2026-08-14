@@ -31,18 +31,14 @@ import os
 import sys
 from pathlib import Path
 
-# The six GENIE custom kwargs the orchestrator must forward to the handlers.
-GENIE_KWARGS = (
-    "retriever_parameters",
-    "reranker_parameters",
-    "full_chat_history_string",
-    "retrieval_context",
-    "original_language",
-    "user_details",
-)
+# The bundled GENIE Params dict the orchestrator must forward to the handlers.
+# v1.5 re-graft: the 6 custom kwargs are packed into one ``genie_params`` dict
+# at the ``schedule()`` call site (one forwarding argument instead of six).
+GENIE_KWARGS = ("genie_params",)
 
-# Reference values the wire test sends — the handler must receive EXACTLY these.
-WIRE_KWARGS = {
+# Reference values the wire test sends — the handler must receive EXACTLY these
+# inside the ``genie_params`` dict.
+WIRE_GENIE_PARAMS = {
     "retriever_parameters": {"k": 3, "fetch_k": 5},
     "reranker_parameters": {"top_n": 3},
     "full_chat_history_string": "previous turn",
@@ -50,6 +46,9 @@ WIRE_KWARGS = {
     "original_language": "es",
     "user_details": {"role": "citizen", "locale": "es"},
 }
+
+# Backward-compat alias — tests that still reference the old per-kwarg dict.
+WIRE_KWARGS = {"genie_params": WIRE_GENIE_PARAMS}
 
 
 def in_image_comps_importable() -> bool:

@@ -2188,3 +2188,43 @@ location: components/document-repository/src/services/metadataService.js:22-27
 severity: low
 reason: Not reachable from production code paths. file_size comes from multer (always number), other fields from mime.lookup() (always string).
 status: open
+
+### DW-305: Type asymmetry on reranker_parameters between align_inputs and align_outputs — treated as Pydantic model in align_inputs but accessed as .top_n attribute in align_outputs TEI raw fallback path.
+origin: spec-deferred ab8b15bb5bd4
+source_spec: `spec-2-6-re-graft-the-chatqna-highest-coupling-last.md`
+location: genie-ai-overlay/chatqna/genieai_chatqna.py:887,1278
+severity: low
+reason: In align_inputs (line 887) reranker_parameters.model_dump() called; in align_outputs (line 1278-1279) reranker_parameters.top_n accessed. If reranker_parameters arrives as plain dict (e.g. through JSON serialization), both fail but through different failure modes.
+status: open
+
+### DW-306: Dead expression at line 1098 — list comprehension builds list that is immediately discarded.
+origin: spec-deferred 6535a1c61b4d
+source_spec: `spec-2-6-re-graft-the-chatqna-highest-coupling-last.md`
+location: genie-ai-overlay/chatqna/genieai_chatqna.py:1098
+severity: low
+reason: [doc["text"] for doc in retrieved_docs] builds a list that is never used. Leftover code from prior refactor.
+status: open
+
+### DW-307: Hardcoded magic number 200 used inconsistently as token buffer at lines 983, 987, 993.
+origin: spec-deferred 28c98acab6da
+source_spec: `spec-2-6-re-graft-the-chatqna-highest-coupling-last.md`
+location: genie-ai-overlay/chatqna/genieai_chatqna.py:983,987,993
+severity: low
+reason: Literal 200 appears at MAX_MODEL_LEN_TEXTGEN - 200 (line 983), max_model_tokens - 200 (line 987), and another site (line 993). Future change requires updating three sites.
+status: open
+
+### DW-308: Excessive DEBUG/INFO logging at lines 961-970, 1029-1033 — full system prompt and messages array logged at INFO level on every LLM call.
+origin: spec-deferred bfb6a17a934d
+source_spec: `spec-2-6-re-graft-the-chatqna-highest-coupling-last.md`
+location: genie-ai-overlay/chatqna/genieai_chatqna.py:961-970,1029-1033
+severity: low
+reason: Development-time diagnostics will flood production logs and may leak prompt content. Should be logger.debug() or behind logflag guard.
+status: open
+
+### DW-309: align_outputs is ~250 lines with deeply nested logic — handles TRANSLATOR, EMBEDDING, RETRIEVER, RERANK, LLM branches in one flat function.
+origin: spec-deferred 44490de3bfed
+source_spec: `spec-2-6-re-graft-the-chatqna-highest-coupling-last.md`
+location: genie-ai-overlay/chatqna/genieai_chatqna.py:1030-1342
+severity: low
+reason: The _gp/_gp_or_kw extraction is duplicated at top of both align_inputs and align_outputs. Extracting per-ServiceType handlers into separate functions would improve testability.
+status: open

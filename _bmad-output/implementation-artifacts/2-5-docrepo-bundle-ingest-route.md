@@ -3,7 +3,7 @@ baseline_commit: 6a5703a0d
 ---
 # Story 2.5: Document-repository bundle ingest route
 
-Status: ready-for-dev
+Status: review
 Story key: `2-5-docrepo-bundle-ingest-route` | GitLab: #881 (`prd::okf-server`, `okf-server::epic-2`)
 Epic: 2 (OKF Server — Repository Ingestion & Management) | Branch: `feat/okf-server`
 FRs: **FR-5** (safe ingest via document-repository), **FR-22** (bundle content via document-repository) | References: Architecture §8.2, §6 step 4; ADR-okf-008, ADR-okf-016
@@ -168,10 +168,29 @@ Shared libs IMPORTED not copied · MELT on every method · all exceptions handle
 ## Dev Agent Record
 
 ### Agent Model Used
-_(filled during dev-story)_
+glm-5.2[1m] (via BMAD dev-story; Jest run via npm --prefix components/document-repository)
 
 ### Debug Log References
+- Red-green: the 5 bundleIngest tests were written against the implemented code — 3 initially failed (Joi pattern rejected non-hex repo_ids in test fixtures); fixed the fixtures to use valid UUID repo_ids; then 5/5 passed.
+- Full suite: **18 suites / 410 tests passed** (no regressions). ESLint + Prettier clean.
+- Jest quirk encountered: `jest.mock()` factory cannot reference out-of-scope variables (`fileServiceMock`) — the mock must be defined inline in the factory, then accessed via `require()`.
 
 ### Completion Notes List
+- **T1** — `_ingestFileById` adds `graphName: file.graph_name || null` to the dataprep `axios.post` payload (7th key).
+- **T2** — `fileService.uploadBundle(buffer, bundleInfo)`: `generateUniqueFileId` → ClamAV `scanBuffer` (reject on infected) → `ensureDirectoryExists` → `fs.writeFile` → `metadataService.addMetadata` (carrying `graph_name` + `repo_id`). Mirrors `uploadFile` minus langdetect/allowlist/text-extraction. Returns `{ file_id, file_name, storage_path }`.
+- **T3** — `fileController.bundleIngest`: Joi validation (bundle base64, `graph_name` pattern `/^OKF_[a-f0-9-]+$/`, repo_id, originalFileName) → **ownership assertion** (`graph_name === OKF_{repo_id}`, 400 OWNERSHIP_MISMATCH) → base64 decode → `fileService.uploadBundle` → **202 Accepted** (async — the existing worker picks up the Pending file). Malware → 400 MALWARE_DETECTED. Constructor-bound.
+- **T4** — `POST /api/files/ingest-bundle` route (`authorizeRole(['Admin'])`, no multer/validateFiles), with swagger doc.
+- **T5** — `metadataService.extractMetadata` now includes `graph_name: fileInfo.graph_name || null` + `repo_id: fileInfo.repo_id || null` in `baseMeta`; `updateMetadata` allowedFields extended to `['dataprep', 'chunk_count', 'graph_name', 'repo_id']`. The association is queryable: `FOR f IN files FILTER f.repo_id == @repo_id`.
+- **T6** — 5 Jest tests (`bundleIngest.test.js`): happy path (202 + file_id + graph_name + repo_id passed through), malware (400 MALWARE_DETECTED), missing graph_name (400 VALIDATION_ERROR), ownership mismatch (400 OWNERSHIP_MISMATCH with valid-format-but-wrong UUID), invalid format (400 VALIDATION_ERROR).
+- **T7** — ESLint + Prettier clean; full doc-repo suite 18 suites / 410 tests green.
+- Fixed a class-scope syntax error introduced during editing (the original class-closing `}` before `module.exports` duplicated) — caught by ESLint parse error.
 
 ### File List
+- MODIFIED `components/document-repository/src/controllers/fileController.js` — `bundleIngest` handler + constructor bind + `graphName` in `_ingestFileById` payload.
+- MODIFIED `components/document-repository/src/services/fileService.js` — `uploadBundle` method.
+- MODIFIED `components/document-repository/src/services/metadataService.js` — `extractMetadata` graph_name/repo_id + `updateMetadata` allowedFields.
+- MODIFIED `components/document-repository/src/routes/fileRoutes.js` — `/ingest-bundle` route + swagger.
+- NEW `components/document-repository/src/__tests__/routes/bundleIngest.test.js` — 5 tests.
+
+### Change Log
+- 2026-08-14: Story 2.5 implemented (T1-T7). 5 tests added, 410 total green, ESLint/Prettier clean. Status → review.

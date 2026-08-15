@@ -147,6 +147,7 @@ async function main() {
   }
   console.log('\nSMOKE TEST PASSED (control-plane: parser+conformance+persist+meta-writer+PII-gate, all asserted)');
   console.log('Note: the dataprep graph leg (bundle -> OKF_{repo_id} graph) is gated by 2.9.6 (OPEA 1.5 bump).');
+  process.exit(0); // the db-connection cleanup timer keeps the loop alive otherwise
 }
 
 main().catch((err) => {

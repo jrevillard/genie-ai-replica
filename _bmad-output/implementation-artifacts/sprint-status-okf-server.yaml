@@ -84,7 +84,7 @@ development_status:
   epic-5-retrospective: optional
 
   epic-6: in-progress        # Hardening — cross-cutting
-  6-1-authn-authz-rbac: review                  # (+ 2026-08-13 P0: default-deny, requireRepoScope(repo,'admin') replaces global tools-admin — G3/G15)
+  6-1-authn-authz-rbac: done                    # (+ 2026-08-13 P0: default-deny, requireRepoScope(repo,'admin') replaces global tools-admin — G3/G15)
   6-1b-authz-resolver-token-to-graph-set: backlog # NEW 2026-08-13 — token→{graph_names,per_graph_labels,domains}, per-session cache (G8)
   6-2-audit-foi-export: backlog                   # (+ 2026-08-13: write-before-respond governance, hash chain, tenant field, INSERT-only — G16/LG-4)
   6-3-end-to-end-tracing: backlog

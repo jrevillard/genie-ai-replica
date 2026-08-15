@@ -3,7 +3,7 @@ baseline_commit: 2fa4d5f5d
 ---
 # Story 6.1: Authentication & per-tenant/repo/domain authorization (default-deny)
 
-Status: review
+Status: done
 
 Story key: `6-1-authn-authz-rbac` | GitLab: #905 (`prd::okf-server`, `okf-server::epic-6`)
 Epic: 6 (Hardening — Security, Observability, Sovereignty) | Branch: `feat/okf-server`
@@ -161,6 +161,8 @@ glm-5.3[1m] (dev-story, 2026-08-15)
 - **AC6 shape deviation (justified):** mappers attached directly to the genie-app and okf-server clients instead of a shared okf client scope — per-client optionalClientScopes REPLACES the standard scope set (would strip standard claims); direct mappers are additive-only.
 
 ### Completion Notes List
+
+- **Code review 2026-08-16 (3-layer adversarial)**: CHANGES-REQUESTED — 1 critical (privilege escalation via ENABLED attribute policy, VERIFIED LIVE: account self-write persisted a wildcard scope; backdoor removed) + 19 more. All 20 fixed in `c11d83278`; decision item resolved as (c) secure auto-migration. **Live re-verification on the fixed build**: (1) escalation CLOSED — under ADMIN_EDIT the account self-write no longer persists (attributes {} readback); (2) the non-breaking migration WORKS — a tools-admin-only user with no scopes was auto-granted the wildcard by the entrypoint on re-run; (3) full smoke exit 0 — complete authz matrix green on audience-bound tokens minted by the now-committed `mint-tokens.mjs`.
 
 - All 8 tasks complete; 9 ACs satisfied (AC6 in substance with the documented deviation).
 - Commits: ba09347af (T1-T7), unmanaged-attr realm attempt (superseded), 7b827625c (provisioning fix + smoke authz phase).

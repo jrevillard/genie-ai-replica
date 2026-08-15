@@ -13,7 +13,7 @@ authors: Genie.ai Dev
 
 ⸻
 
-1. Executive Summary
+# 1. Executive Summary
 
 This draft PRD builds on the PRD — GENIE.AI Agentic Enablement ( ../prd-agentic-enablement.md ) and specifically addresses Pillar 2 (Agentic layer)
 
@@ -27,7 +27,7 @@ A central design objective is composability. GENIEAI should provide sensible def
 
 ⸻
 
-2. Background and Context
+# 2. Background and Context
 
 GENIEAI currently provides capabilities for developing AI applications using an OPEA Microservices architecture.
 
@@ -50,7 +50,7 @@ The introduction of agents should therefore extend the existing GENIEAI platform
 
 ⸻
 
-3. Problem Statement
+# 3. Problem Statement
 
 Current GENIEAI applications are primarily structured around predefined request-processing pipelines. While these pipelines are effective for RAG-oriented use cases, increasingly sophisticated AI applications require the ability to:
 
@@ -72,7 +72,7 @@ Consequently, the architecture should avoid imposing a single comprehensive agen
 
 ⸻
 
-4. Product Vision
+# 4. Product Vision
 
 The long-term vision is for GENIEAI to evolve from primarily a RAG application framework into an open, extensible platform for building production-grade AI agents and agentic applications for the public sector.
 
@@ -90,9 +90,9 @@ GENIEAI Agent Runtime shall support Open Knowledge Format (OKF) as a configurabl
 
 ⸻
 
-5. Goals
+# 5. Goals
 
-5.1 Primary Goals
+## 5.1 Primary Goals
 
 The Agent Runtime shall:
 
@@ -110,7 +110,7 @@ The Agent Runtime shall:
 12. Provide extension mechanisms for advanced/custom use cases.
 13. Avoid unnecessary coupling between GENIEAI and a specific agent framework or storage technology.
 
-5.2 Secondary Goals
+## 5.2 Secondary Goals
 
 The platform should also provide a foundation for:
 
@@ -125,7 +125,7 @@ The platform should also provide a foundation for:
 
 ⸻
 
-6. Non-Goals
+# 6. Non-Goals
 
 The initial Agent Runtime will not attempt to:
 
@@ -141,9 +141,9 @@ The architecture should, however, avoid preventing these capabilities from being
 
 ⸻
 
-7. Design Principles
+# 7. Design Principles
 
-P1. Runtime Compatibility
+### P1. Runtime Compatibility
 
 GENIEAI Agent Runtime shall provide a standardized, extensible execution environment for building and running AI agents while preserving compatibility with the existing GENIEAI/OPEA microservice infrastructure.
 
@@ -159,7 +159,7 @@ The Agent Runtime should use the existing service harness and operational mechan
 
 ⸻
 
-P2. Composability
+### P2. Composability
 
 Agent capabilities shall be composed from independently configurable components.
 
@@ -187,7 +187,7 @@ Complex Agent
 
 ⸻
 
-P3. Pluggability and Extensibility
+### P3. Pluggability and Extensibility
 
 Core Agent Runtime components shall expose stable interfaces that allow standard implementations to be replaced or extended. This shall include support for multiple knowledge and memory representations, including database-backed storage, filesystem-based storage, Open Knowledge Format (OKF), and custom implementations.
 
@@ -207,7 +207,7 @@ Potential extension points include:
 
 ⸻
 
-P4. Configuration-First Customization
+### P4. Configuration-First Customization
 
 Common agent configurations should be achievable through high-level configuration without modifying the Agent Runtime.
 
@@ -224,7 +224,7 @@ Configuration + custom components
 
 ⸻
 
-P5. Technology Independence
+### P5. Technology Independence
 
 GENIEAI’s public interfaces should minimize unnecessary coupling to individual implementation technologies.
 
@@ -232,7 +232,7 @@ LangGraph, LangChain, Deep Agents, ArangoDB, and other technologies should initi
 
 ⸻
 
-P6. Explicit Resource and Context Management
+### P6. Explicit Resource and Context Management
 
 LLM calls, tool calls, memory retrieval, and context construction should be explicit and observable.
 
@@ -240,7 +240,7 @@ The architecture should avoid unnecessary LLM calls and uncontrolled accumulatio
 
 ⸻
 
-P7. Observability by Design
+### P7. Observability by Design
 
 Agent executions should be observable at the workflow, node, tool, model, memory, and error levels.
 
@@ -251,7 +251,7 @@ Observability should support both:
 
 ⸻
 
-P8. Incremental Complexity
+### P8. Incremental Complexity
 
 The platform should make simple agentic applications easy to build without requiring developers to configure advanced capabilities.
 
@@ -259,7 +259,7 @@ Complexity should be introduced only when required by the application.
 
 ⸻
 
-8. Target Users
+# 8. Target Users
 
 The primary users of the Agent Runtime are:
 
@@ -285,11 +285,11 @@ Users interacting with applications powered by GENIEAI agents.
 
 ⸻
 
-9. Expected Capabilities
+# 9. Expected Capabilities
 
 The Agent Runtime should provide the following high-level capabilities.
 
-9.1 Agent Execution
+## 9.1 Agent Execution
 
 The runtime shall support:
 
@@ -306,7 +306,7 @@ The runtime shall support:
 
 ⸻
 
-9.2 Workflow Orchestration
+## 9.2 Workflow Orchestration
 
 The runtime shall support workflows containing:
 
@@ -325,7 +325,7 @@ The initial workflow implementation is expected to use LangGraph.
 
 ⸻
 
-9.3 State Management
+## 9.3 State Management
 
 State shall represent information required to execute and resume a workflow.
 
@@ -342,7 +342,7 @@ State should remain conceptually distinct from long-term memory.
 
 ⸻
 
-9.4 Memory Management
+## 9.4 Memory Management
 
 The Agent Runtime shall provide a modular memory abstraction.
 
@@ -363,7 +363,7 @@ The platform should not require every agent to use every memory layer.
 
 ⸻
 
-9.5 Context Management
+## 9.5 Context Management
 
 A dedicated context-management abstraction should determine what information is provided to the LLM at each execution step.
 
@@ -384,7 +384,7 @@ This separation is intended to prevent the workflow state or memory store from b
 
 ⸻
 
-9.6 Tools
+## 9.6 Tools
 
 The runtime shall provide a standard tool abstraction supporting:
 
@@ -410,7 +410,7 @@ The architecture should support arbitrary custom tools.
 
 ⸻
 
-9.7 MCP Integration
+## 9.7 MCP Integration
 
 The Agent Runtime should provide an MCP integration layer allowing agents to consume external MCP-based tools and services.
 
@@ -418,7 +418,7 @@ MCP should be treated as an integration mechanism rather than the only supported
 
 ⸻
 
-9.8 Filesystem and Artifacts
+## 9.8 Filesystem and Artifacts
 
 The runtime should support agent workspaces for use cases requiring persistent files or intermediate artifacts.
 
@@ -435,7 +435,7 @@ The filesystem abstraction should be replaceable to support different deployment
 
 ⸻
 
-9.9 Model Integration
+## 9.9 Model Integration
 
 Agents shall use the existing GENIEAI model-serving infrastructure.
 
@@ -445,7 +445,7 @@ The architecture should provide a model abstraction allowing additional model pr
 
 ⸻
 
-9.10 RAG Integration
+## 9.10 RAG Integration
 
 Existing GENIEAI RAG capabilities should be exposed to agents as reusable capabilities/tools.
 
@@ -469,7 +469,7 @@ Answer
 
 ⸻
 
-10. High-Level Architecture
+# 10. High-Level Architecture
 
 The proposed architecture is:
 
@@ -504,9 +504,9 @@ The Agent Runtime should remain operationally consistent with existing GENIEAI m
 
 ⸻
 
-11. Key Architectural Components
+# 11. Key Architectural Components
 
-11.1 Agent Runtime
+## 11.1 Agent Runtime
 
 The Agent Runtime is the primary execution service.
 
@@ -526,7 +526,7 @@ The runtime should not contain application-specific agent logic.
 
 ⸻
 
-11.2 Agent Definition
+## 11.2 Agent Definition
 
 An agent definition describes how an agent is configured.
 
@@ -547,7 +547,7 @@ The definition should support high-level configuration as well as custom impleme
 
 ⸻
 
-11.3 Workflow Engine
+## 11.3 Workflow Engine
 
 The workflow engine executes agent workflows.
 
@@ -569,7 +569,7 @@ The GENIEAI architecture should avoid exposing LangGraph-specific concepts unnec
 
 ⸻
 
-11.4 State Manager
+## 11.4 State Manager
 
 The State Manager is responsible for execution state persistence and recovery.
 
@@ -585,7 +585,7 @@ The state schema should be defined by the workflow/agent rather than imposed glo
 
 ⸻
 
-11.5 Memory Manager
+## 11.5 Memory Manager
 
 The Memory Manager provides a common abstraction for persistent agent memory.
 
@@ -609,7 +609,7 @@ Memory Manager
 
 ⸻
 
-11.6 Context Manager
+## 11.6 Context Manager
 
 The Context Manager transforms available state and memory into the context provided to the LLM.
 
@@ -628,7 +628,7 @@ The Context Manager should be independently replaceable.
 
 ⸻
 
-11.7 Tool Manager
+## 11.7 Tool Manager
 
 The Tool Manager provides standardized tool registration and invocation.
 
@@ -644,7 +644,7 @@ It should manage:
 
 ⸻
 
-11.8 MCP Layer
+## 11.8 MCP Layer
 
 The MCP layer provides connectivity to external MCP servers and tools.
 
@@ -652,7 +652,7 @@ It should allow MCP-based capabilities to be presented to agents through the sam
 
 ⸻
 
-11.9 Model Adapter
+## 11.9 Model Adapter
 
 The Model Adapter provides a standardized interface between agents and LLM services.
 
@@ -660,7 +660,7 @@ The initial implementation should integrate with GENIEAI’s vLLM infrastructure
 
 ⸻
 
-11.10 Filesystem / Artifact Manager
+## 11.10 Filesystem / Artifact Manager
 
 The Artifact Manager provides controlled access to agent workspaces and persistent files.
 
@@ -700,7 +700,7 @@ Operational telemetry should integrate with the existing GENIEAI OpenTelemetry i
 
 ⸻
 
-12. Frontend Requirements
+# 12. Frontend Requirements
 
 The GENIEAI frontend should be extended to support agentic execution.
 
@@ -730,7 +730,7 @@ The UI architecture should allow future visualization of more complex workflows 
 
 ⸻
 
-13. Configuration and Customization
+# 13. Configuration and Customization
 
 The Agent Runtime should support high-level configuration for common agents.
 
@@ -767,7 +767,7 @@ The exact configuration format is a technical design decision and is outside the
 
 ⸻
 
-14. Extensibility Requirements
+# 14. Extensibility Requirements
 
 The Agent Runtime shall provide extension points for at least:
 
@@ -788,7 +788,7 @@ Extensions should not require modification of the GENIEAI Agent Runtime core whe
 
 ⸻
 
-15. Initial Use Cases
+# 15. Initial Use Cases
 
 The first implementation should focus on a limited set of representative use cases.
 
@@ -841,7 +841,7 @@ The agent performs a long-running task that can be interrupted and resumed.
 
 ⸻
 
-16. Non-Functional Requirements
+# 16. Non-Functional Requirements
 
 The Agent Runtime should meet the following high-level requirements.
 
@@ -886,7 +886,7 @@ Portability
 
 ⸻
 
-17. Success Criteria
+# 17. Success Criteria
 
 The initial Agent Runtime should be considered successful when:
 
@@ -905,7 +905,7 @@ The initial Agent Runtime should be considered successful when:
 
 ⸻
 
-18. Initial Technology Direction
+# 18. Initial Technology Direction
 
 The initial implementation is expected to use:
 
@@ -926,7 +926,7 @@ These technologies should be considered initial implementation choices rather th
 
 ⸻
 
-19. Proposed Initial Delivery Phases
+# 19. Proposed Initial Delivery Phases
 
 Phase 1 — Agent Runtime Foundation
 
@@ -980,7 +980,7 @@ Potential future capabilities include:
 
 ⸻
 
-20. Open Architectural Questions
+# 20. Open Architectural Questions
 
 The following questions should be resolved during technical design and prototyping rather than prematurely fixed in the PRD:
 
@@ -1005,7 +1005,7 @@ The following questions should be resolved during technical design and prototypi
 
 ⸻
 
-21. Architectural North Star
+# 21. Architectural North Star
 
 The Agent Runtime should ultimately provide the following model:
 

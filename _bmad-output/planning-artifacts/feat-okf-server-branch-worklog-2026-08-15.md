@@ -29,7 +29,7 @@
 
 ## 3. Story specs created
 
-- **6.1 authn/authz default-deny (G3/G15 P0)** — `af3a6907a`, ready-for-dev (#905): scope grammar `okf:{tenant}:{repo}:{read|admin}`, `requireScope`/`requireRepoScope`, default-deny list + 404 foreign repos, opt-in RFC 8707 audience binding (additive shared-service change), genie-realm provisioning, denial audit, red-green isolation matrix. All flagged doc ambiguities resolved as D1–D7 in the story.
+- **6.1 authn/authz default-deny (G3/G15 P0)** — implemented 2026-08-15 (`ba09347af`+`7b827625c`), in review (#905): scope grammar `okf:{tenant}:{repo}:{read|admin}`, `requireScope`/`requireRepoScope`, default-deny list + 404 foreign repos, opt-in RFC 8707 audience binding (additive shared-service change), genie-realm provisioning, denial audit, red-green isolation matrix. All flagged doc ambiguities resolved as D1–D7 in the story.
 - **2.9.1 ingestService** is the next trunk story (not yet specced) — today's smoke learnings feed it directly.
 
 ## 4. Preliminary planning artifacts (NOT part of this branch's work plan — inputs for roadmap decisions)

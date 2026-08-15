@@ -123,3 +123,16 @@ docker-compose.override.yml
 # Python editable install artifacts
 genie-ai-overlay/*.egg-info/
 .tokensave/
+
+# Local Python virtualenvs (genie-ai-overlay dev)
+genie-ai-overlay/.venv/
+genie-ai-overlay/.venv-linux/
+
+# BMAD per-story worktrees (local checkouts)
+_bmad-worktrees/
+
+# Claude session temp state
+.claude/tmp/
+
+# Bash crash dumps
+bash.exe.stackdump

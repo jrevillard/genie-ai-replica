@@ -3,7 +3,7 @@ baseline_commit: 6d1d433
 ---
 # Story 2.9.2: `okf_concepts_meta` UPSERT writer + first-class fields
 
-Status: review
+Status: done
 Story key: `2-9-2-concepts-meta-upsert-writer` | GitLab: #918 (`prd::okf-server`, `okf-server::epic-2.9`)
 Epic: 2.9 (Write-side Orchestration) | Branch: `feat/okf-server`
 FRs: **FR-4** (conformance), **FR-13** (quality metrics), **FR-34** (async ingest) | Gap: **G9** (P1) | ADR-okf-021 (write-path step 4b)
@@ -40,6 +40,46 @@ so that **conformance metrics, PII state, trust/provenance, and the Graph Router
 - [x] **T4 — `pii_state` default + optional 2.8 delegation** (AC: 6): default `'unknown'`; optionally make `pii-service.upsertPiiState` delegate to the canonical writer (additive, guarded — do NOT break 2.8's tests).
 - [x] **T5 — Tests** (AC: 1,4,5,8): `__tests__/concept-meta-service.test.js` — UPSERT create (no-prior-doc assertion), update (re-ingest), idempotent (no duplicate), race-guard (unique-violation → retry-update), all first-class fields written; `__tests__/conformance-service.test.js` — persistConformanceIssues now CREATES the doc (update the silent-no-op test); metrics non-zero test. **Red-green**: confirm the new tests FAIL against the current filter-and-UPDATE, PASS after T1+T2.
 - [x] **T6 — Lint/format/verify** (AC: 8): `cd components/okf-server && npx eslint . && npx prettier --check . && npm test` (full suite green).
+
+### Review Findings (2026-08-15, 3-layer adversarial review)
+
+**Critical**
+
+- [x] [Review][Patch] `persistConformanceIssues` update path clobbers every first-class field — conformance calls the writer with a 2-field stub; the update patch is a full `buildMetaDoc(stub)` doc (title→concept_id, `content_hash`→sha256(''), `pii_state`→'unknown', trust/sources/frontmatter wiped) merged over the existing doc. Under ADR-021's 4b→4c order, 4c destroys what 4b wrote. Fix: patch-only semantics for minimal input (write ONLY `conformance_issues` when the parsed input is minimal) [conformance-service.js:135-139, concept-meta-service.js:134-142]
+- [x] [Review][Patch] All 5 kenya smoke fixtures are paste-escaped (`\---`, `\*`, `\_`, `\[`, CRLF) — zero frontmatter parses (verified with gray-matter: `data keys: []`); every smoke run exercised only the no-frontmatter fallback; actor prefixes (`system:`, `machine:`) also violate the same diff's `VALID_ACTOR_PREFIXES`. Fix: unescape all 5 fixtures + valid actors [data/okf/smoke-test/kenya-bundle/*.md]
+
+**Major**
+
+- [x] [Review][Patch] run-smoke.js never asserts the PII gate, `pii_state`, or conformance outcomes — the gate is structurally always blocked in this harness (no repo scan marker) yet the script prints `SMOKE TEST PASSED`; the rewired `persistConformanceIssues` path is never exercised; `report` array is dead code [data/okf/smoke-test/run-smoke.js]
+- [x] [Review][Patch] ESLint FAILS as committed: `'crypto' is already defined as a built-in global` (no-redeclare) in the new service — T6's "ESLint clean" claim is false [concept-meta-service.js:12]
+- [x] [Review][Patch] Undefined `concept_id` silently degrades `firstExample` to repo-wide on REAL arangojs (undefined keys JSON-dropped; native wrapper confirmed) → arbitrary-doc overwrite; the unit mock's strict-equality can never catch it; docs missing `concept_id` also escape the unique index (race guard dead). Same gap in pii-service `findPiiDoc`. Fix: reject falsy `repo_id`/`concept_id` at entry [concept-meta-service.js:125+, pii-service.js:64-71]
+- [x] [Review][Patch] Update path resets `pii_state` to 'unknown' and `last_good_index_at` to null on EVERY update — a re-ingest (or finding 1's persist) un-blocks a correctly blocked repo without a rescan, defeating the fail-closed gate. Fix: never downgrade `pii_state`/`last_good_index_at` via update patch [concept-meta-service.js:108,135-138]
+- [x] [Review][Patch] AC-5 "metrics non-zero" test is a mock-echo tautology (`mockDb.query.mockResolvedValue` asserted back; seeded store never read; dead first mock line); the required integration proof is absent. Fix: real assertion path + `conformance_issue_count` asserted in run-smoke against live Arango [__tests__/concept-meta-service.test.js:166-189]
+- [x] [Review][Patch] Weak/vacuous test assertions: "idempotent" test uses a CHANGED body and only asserts `content_hash !== ''` (can never fail); hash-change and `created_at` preservation never asserted. Fix: capture first hash, assert change on new body + equality on same body; assert created_at preserved [__tests__/concept-meta-service.test.js:131-138]
+
+**Minor**
+
+- [x] [Review][Patch] `lifecycle_status` not validated against `draft|stable|deprecated` (spec's Dev Notes say "validate against") [concept-meta-service.js buildMetaDoc]
+- [x] [Review][Patch] Exception paths not logged (AC-7 says "handled + logged") — `recordOp('create','error'); throw` with no logger call; transient `findConceptDoc` failures rethrow unlogged [concept-meta-service.js:145-168]
+- [x] [Review][Patch] `isNotFound` message regex (`/no match|not found/i`) classifies transients (collection-not-found, gateway route-not-found) as doc-absent → proceeds to create. Fix: match `errorNum === 1204 || code === 404` only [concept-meta-service.js:51, pii-service.js:60]
+- [x] [Review][Patch] `isNotFound`/`findConceptDoc` cloned verbatim into pii-service — the two-writers drift G9 was meant to kill; extract a shared helper ("shared, not copied" lesson) [concept-meta-service.js, pii-service.js:53-71]
+- [x] [Review][Patch] Three near-identical update blocks (update path, race-retry, and their patch-build) — extract one `applyUpdate` helper; race branch also omits the success log [concept-meta-service.js:134-168]
+- [x] [Review][Patch] Return-shape inconsistency: create discards `col.save()` metadata (`doc` has no `_key`), update returns stale `_rev` [concept-meta-service.js:142,151]
+- [x] [Review][Patch] `recordOp('update','error')` missing — update failures produce no metric [concept-meta-service.js:138]
+- [x] [Review][Patch] `buildMetaDoc` null guard is dead — `parsed.frontmatter` deref runs before the `parsed || {}` guard [concept-meta-service.js:80-81]
+- [x] [Review][Patch] Delete TOCTOU: doc deleted between `firstExample` and `update` → 1204 propagates instead of falling through to create [concept-meta-service.js:133-138]
+- [x] [Review][Patch] `persistConformanceIssues(repo, id, undefined)` silently writes nothing for issues (key JSON-dropped) then crashes at `issues.length` AFTER the write [conformance-service.js:140]
+- [x] [Review][Patch] Red-green evidence not recorded — Dev Agent Record "Debug Log References"/"Completion Notes" empty; record the red-run evidence during the fix pass [story file Dev Agent Record]
+
+**Nit**
+
+- [x] [Review][Patch] Orphaned JSDoc in pii-service (inserted between `@param` block and its function) [pii-service.js]
+- [x] [Review][Patch] Race-test hygiene: `col.save` restore happens after the await (leaks on failure); metrics test replaces the whole `_stores` collection object the race test warns about [__tests__/concept-meta-service.test.js]
+
+**Deferred** (pre-existing / out-of-diff — logged to deferred-work.md)
+
+- [x] [Review][Defer] Prettier fails on 8 files outside this diff (`repository-service.js` from e1d1a3c03, five 2.3-era fixtures, two runtime `logs/*.json`) — deferred, pre-existing
+- [x] [Review][Defer] Content-hash skip-if-unchanged short-circuit + whether the hash should cover frontmatter — dedup semantics owned by Stories 2.9.1/2.9.5 — deferred to owning stories
 
 ## Dev Notes
 
@@ -110,9 +150,13 @@ Shared libs IMPORTED not copied · MELT on every method · resilient `let _db = 
 ## Dev Agent Record
 
 ### Agent Model Used
-glm-5.2[1m] (via BMAD dev-story; Jest in components/okf-server)
+
+glm-5.2[1m] (initial dev-story) · glm-5.3[1m] (2026-08-15 code-review fix pass)
 
 ### Debug Log References
+
+- **Red-green evidence (review-fix pass, 2026-08-15):** the regression suite added for the review findings FAILED **8 tests / 9 passed** against the pre-fix committed code (clobber regression, pii_state downgrade, last_good_index_at wipe, falsy-id TypeError, TOCTOU propagation, lifecycle enum, dead null guard, undefined-issues crash) — then **134/134 passed** after the fixes. ESLint clean (crypto no-redeclare fixed via node:crypto destructure); Prettier clean on all touched files (the only remaining warn, services/repository-service.js, is the logged pre-existing defer).
+- **Live smoke evidence (2026-08-15, local build, okf-server rebuilt at the fix commit):** run-smoke.js → **exit 0**, all criteria asserted: 6/6 concepts parsed WITH frontmatter; 5 conforming files 0 issues; bad_concept.md exactly MISSING_TYPE + BAD_ACTOR_PREFIX; concept_count=6, conformance_issue_count=2 computed from live Arango via the G9 persist path; all 6 pii_state=clean (live Presidio sidecar); repo scan marker set; **publish gate OPEN** ({"blocked":false}) — the first fully-asserted open-gate run.
 
 ### Completion Notes List
 

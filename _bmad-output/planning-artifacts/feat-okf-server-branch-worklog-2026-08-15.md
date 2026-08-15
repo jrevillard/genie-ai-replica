@@ -17,7 +17,7 @@
 | 2.6a ACL-label preserve fix (UNGATED P0) | `t:/r:/d:` labels preserved verbatim into `chunk_labels` at ingest (G4); code-review approved, pipeline #6102 | done (#916) |
 | 2.7 Source sync (Git/S3) | **deferred 2026-08-14** — v1 inputs are file-picker/crawler/manual (FR-1/FR-2 deferred) | deferred |
 | 2.8 PII redaction + versions + doc-refs | **`components/pii-service/`** Presidio sidecar (NER, national-ID registry config, fail-closed) + `assertPiiClean` publish gate + `recordIngestVersion` + doc references; adversarial code-review fixes applied; CI lane fixed (pytest install, unpinned deps) | done (#884) — `6d96b894e`, `49d997e5b`, `329c77036`, `613432e2c` |
-| 2.9.2 `okf_concepts_meta` UPSERT writer (G9) | Canonical `concept-meta-service.upsertConceptMeta` + conformance rewire (fixes silent zero-row UPDATE); smoke-caught fixes; **OKF smoke harness + kenya bundle fixtures** | review (#918) — `230867922`, `1e49da4da` |
+| 2.9.2 `okf_concepts_meta` UPSERT writer (G9) | Canonical `concept-meta-service.upsertConceptMeta` + conformance rewire (fixes silent zero-row UPDATE); smoke-caught fixes; **OKF smoke harness + kenya bundle fixtures**. **Code-review 2026-08-15: 3-layer adversarial review → CHANGES-REQUESTED (2 critical incl. a field-clobbering update path + escaped fixtures that never parsed) → all 21 findings FIXED** (`3783b92a1`; red-green 8→134/134; live smoke exit 0 with the publish gate OPEN) | done (#918) — `230867922`, `1e49da4da`, `3783b92a1` |
 | (smoke-test findings) | Ingestion state machine (`_markIngestFailure`), repo `firstExample`, `tools-admin` realm role provisioning in `genie-realm.yaml` | `e1d1a3c03` |
 
 ## 2. Split-URL OIDC + bundle labels (2026-08-15)
@@ -47,5 +47,5 @@
 ## 6. Open items (tracked elsewhere, listed for completeness)
 
 - Label semantics (file_labels scope vs forced-attach) — **deliberately deferred by David**; captured in pending-decisions.
-- `2-9-2` awaiting formal code-review; story files 2.8/2.9.2 say `review`, sprint is the tracker.
+- ~~`2-9-2` awaiting formal code-review~~ **resolved 2026-08-15**: code-review ran, all 21 findings fixed, story + GitLab #918 closed as done.
 - Next dev order per plan: **6.1 → 2.9.1** (then 2.9.3/2.9.4/2.9.5/2.9.7/2.9.8/2.9.9 ungated; Epic 1 gated on the OPEA bump).

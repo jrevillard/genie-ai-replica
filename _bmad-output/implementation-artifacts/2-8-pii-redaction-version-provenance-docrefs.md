@@ -3,7 +3,7 @@ baseline_commit: ff1bf5f39
 ---
 # Story 2.8: PII redaction at ingest + version/provenance + document references
 
-Status: review
+Status: done
 Story key: `2-8-pii-redaction-version-provenance-docrefs` | GitLab: #884 (`prd::okf-server`, `okf-server::epic-2`)
 Epic: 2 (OKF Server — Repository Ingestion & Management) | Branch: `feat/okf-server`
 FRs: **FR-3** (version tracking, doc-repo-consolidated), **FR-5** (PII redaction, blocking), **FR-28** (stable document references) | ADRs: okf-004 (**revised 2026-08-14: Presidio sidecar**), okf-030 (D22 publish gate), okf-021 (write-path step 4d) | Gap: **G28** | NFRs: P1/P2

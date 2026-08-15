@@ -3,7 +3,7 @@ baseline_commit: 2fa4d5f5d
 ---
 # Story 6.1: Authentication & per-tenant/repo/domain authorization (default-deny)
 
-Status: ready-for-dev
+Status: review
 
 Story key: `6-1-authn-authz-rbac` | GitLab: #905 (`prd::okf-server`, `okf-server::epic-6`)
 Epic: 6 (Hardening — Security, Observability, Sovereignty) | Branch: `feat/okf-server`
@@ -36,14 +36,14 @@ so that **a caller without a repository's scope cannot even see that repository 
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — Shared service: opt-in audience** (AC: 5): `verifyToken(token, opts={})` → `{audience}` into jwtVerify options; aud-failure error mapping; tests (audience-set rejects wrong-aud token; audience-omitted default path unchanged).
-- [ ] **T2 — `auth.js` scope + super-admin resolution** (AC: 1): parse `okf_scopes`/`scope` claims → `req.okfScopes`; `realm_access.roles.includes('tools-admin')` → `req.okfIsSuperAdmin`; pass `{audience: OKF_AUDIENCE}` to verifyToken. Unit tests for parsing (array, string, both, none).
-- [ ] **T3 — `require-scope.js`** (AC: 2,3): `requireScope(level)` + `requireRepoScope(repoParamOrRepoId, level)` factories + denial audit. Unit tests incl. wildcard, super-admin, read-vs-admin, 403 shapes.
-- [ ] **T4 — Controller/service default-deny** (AC: 4): `callerAuthz` replaces `callerDomain` (delete the seam + its debug log); `repository-service.list/getById` gain `authz`; wire `listRepos`/`getRepo`/`piiScan`. Update the domain tests; add `authz` filtering tests.
-- [ ] **T5 — Route wiring** (AC: 3): `okf-routes.js` router-level `requireScope('okf:read')`; `repos-routes.js` — PATCH/DELETE/pii-scan → `requireRepoScope('admin')`; POST `/` keeps `requireRole('tools-admin')`; GET routes unchanged (scoped in controller). Route integration tests (AC 8 matrix).
-- [ ] **T6 — Keycloak provisioning** (AC: 6): `genie-realm.yaml` — `okf` client scope (audience + user-attribute mappers), `okf-server` client, optional scope on genie-app, genie-admin wildcard attribute. Local-build verification: recreate keycloak-config, mint a scoped test user (attribute `okf_scopes`), confirm `okf_scopes` + `aud` claims present.
-- [ ] **T7 — Audit denials + env plumbing** (AC: 7): denial audit calls; `OKF_AUDIENCE` in okf-server compose env (empty default) + `env` template section + `env.j2` conditional.
-- [ ] **T8 — Verify** (AC: 8,9): full okf-server + backend suites; `npx eslint . && npx prettier --check .`; red-green proof recorded in Dev Agent Record.
+- [x] **T1 — Shared service: opt-in audience** (AC: 5): `verifyToken(token, opts={})` → `{audience}` into jwtVerify options; aud-failure error mapping; tests (audience-set rejects wrong-aud token; audience-omitted default path unchanged).
+- [x] **T2 — `auth.js` scope + super-admin resolution** (AC: 1): parse `okf_scopes`/`scope` claims → `req.okfScopes`; `realm_access.roles.includes('tools-admin')` → `req.okfIsSuperAdmin`; pass `{audience: OKF_AUDIENCE}` to verifyToken. Unit tests for parsing (array, string, both, none).
+- [x] **T3 — `require-scope.js`** (AC: 2,3): `requireScope(level)` + `requireRepoScope(repoParamOrRepoId, level)` factories + denial audit. Unit tests incl. wildcard, super-admin, read-vs-admin, 403 shapes.
+- [x] **T4 — Controller/service default-deny** (AC: 4): `callerAuthz` replaces `callerDomain` (delete the seam + its debug log); `repository-service.list/getById` gain `authz`; wire `listRepos`/`getRepo`/`piiScan`. Update the domain tests; add `authz` filtering tests.
+- [x] **T5 — Route wiring** (AC: 3): `okf-routes.js` router-level `requireScope('okf:read')`; `repos-routes.js` — PATCH/DELETE/pii-scan → `requireRepoScope('admin')`; POST `/` keeps `requireRole('tools-admin')`; GET routes unchanged (scoped in controller). Route integration tests (AC 8 matrix).
+- [x] **T6 — Keycloak provisioning** (AC: 6): `genie-realm.yaml` — `okf` client scope (audience + user-attribute mappers), `okf-server` client, optional scope on genie-app, genie-admin wildcard attribute. Local-build verification: recreate keycloak-config, mint a scoped test user (attribute `okf_scopes`), confirm `okf_scopes` + `aud` claims present.
+- [x] **T7 — Audit denials + env plumbing** (AC: 7): denial audit calls; `OKF_AUDIENCE` in okf-server compose env (empty default) + `env` template section + `env.j2` conditional.
+- [x] **T8 — Verify** (AC: 8,9): full okf-server + backend suites; `npx eslint . && npx prettier --check .`; red-green proof recorded in Dev Agent Record.
 
 ## Dev Notes
 
@@ -105,6 +105,38 @@ Shared libs IMPORTED not copied · MELT on every new method (span + counter + lo
 ## Dev Agent Record
 
 ### Agent Model Used
+
+glm-5.3[1m] (dev-story, 2026-08-15)
+
+### Debug Log References
+
+- **Red-green:** require-scope suite failed to LOAD pre-implementation (module absent); auth scope-resolution 8 failures pre-implementation → 13/13; AC-8 route matrix 4 wiring failures pre-wiring → green; repository-service authz 3 failures (empty-set query, foreign 404) → green.
+- **Suites:** okf-server 170/170, ESLint clean, Prettier clean on touched files; backend audience suite 8/8 with full-suite regression gate (pre-existing host-locale failures only); shared-service no-opts default path pinned by tests in the backend suite.
+- **Live smoke (local build, exit 0):** full control-plane (6/6 concepts, metrics 6/2, gate OPEN) + the Story 6.1 HTTP authz matrix — scoped caller: own repo 200 / foreign EXISTING repo 404 (anti-enumeration) / list scoped / PATCH 403 FORBIDDEN_SCOPE; scopeless caller: 403 default-deny; admin (wildcard attribute): full visibility + mutation. All requests rode aud=okf-server tokens with OKF_AUDIENCE=okf-server active (RFC 8707 verified end-to-end). Denial audits confirmed in okf_audit (authz.denied.scope + authz.denied.repo rows).
+- **Keycloak discovery (verified empirically):** KC 26 declarative user profile silently DROPS undeclared attributes — okf_scopes never persisted until the user-profile resource got unmanagedAttributePolicy=ENABLED (PUT /admin/realms/{r}/users/profile); the realm-level attribute knob is NOT honored, and keycloak-config-cli cannot express it → applied post-import in the config-cli entrypoint (best-effort, warn-not-abort). Also: the realm yaml is baked into the config-cli IMAGE — config changes require image rebuild, not just container recreation; and keycloak-config-cli does not update EXISTING users (genie-admin attribute set live once; fresh realms get it from the yaml).
+- **AC6 shape deviation (justified):** mappers attached directly to the genie-app and okf-server clients instead of a shared okf client scope — per-client optionalClientScopes REPLACES the standard scope set (would strip standard claims); direct mappers are additive-only.
+
+### Completion Notes List
+
+- All 8 tasks complete; 9 ACs satisfied (AC6 in substance with the documented deviation).
+- Commits: ba09347af (T1-T7), unmanaged-attr realm attempt (superseded), 7b827625c (provisioning fix + smoke authz phase).
+- Known follow-ups (out of scope): Keycloak OIDC termination at Kong (ADR-003 leg); 6.1b authz resolver (tenant-axis matching, graph set); disabled-user revocation; additional-realms trust tightening.
+
+### File List
+
+- components/shared/lib/keycloak-auth-service.js — opt-in verifyToken(token,{audience})
+- components/gov-chat-backend/services/keycloak-auth-service.js — same change (both copies in lockstep)
+- components/gov-chat-backend/__tests__/services/keycloak-auth-service.audience.test.js — NEW
+- components/okf-server/middleware/auth.js — parseOkfScopes + okfIsSuperAdmin + OKF_AUDIENCE
+- components/okf-server/middleware/require-scope.js — NEW (requireScope/requireRepoScope + denial audit)
+- components/okf-server/controllers/repository-controller.js — callerAuthz/authzForService replace callerDomain
+- components/okf-server/services/repository-service.js — list/getById authz param + empty-set short-circuit
+- components/okf-server/routes/okf-routes.js, routes/repos-routes.js — gates wired
+- components/okf-server/__tests__/{auth,require-scope,repository-service,repos-routes,health,pii-scan-route}.test.js — extended/updated
+- configs/keycloak/genie-realm.yaml — genie-app mappers, okf-server client, genie-admin wildcard + tools-admin role
+- configs/keycloak/config-and-sleep.sh — user-profile policy post-import step
+- docker-compose.yaml, env, deploy/ansible/templates/env.j2 — OKF_AUDIENCE + KC_OKF_SERVER_CLIENT_SECRET
+- data/okf/smoke-test/run-smoke.js — Story 6.1 authz phase
 
 ### Debug Log References
 

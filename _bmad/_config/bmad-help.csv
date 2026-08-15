@@ -47,7 +47,7 @@ Creative Intelligence Suite,bmad-cis-storytelling,Storytelling,ST,Craft compelli
 Issue Tracking,bmad-bmm-issue-sync,Bmm Issue Sync,BIS,"Sync sprint-status.yaml entries to GitLab/GitHub Issues. Use when the user says ""sync issues"" or wants to push sprint status to the issue tracker.",activate,,anytime,,,false,,
 Issue Tracking,bmad-issue-tracking-setup,Issue Tracking Setup,ITS,One-time setup for issue tracking integration. Use after installing the module to deploy TOML overrides and shared tasks.,activate,,anytime,,,false,,
 Test Architecture Enterprise,_meta,,,,,,,,,false,https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/llms.txt,
-Test Architecture Enterprise,bmad-teach-me-testing,Teach Me Testing,TMT,Teach testing fundamentals through 7 sessions (TEA Academy).,,,0-learning,,,false,test_artifacts,progress file|session notes|certificate
+Test Architecture Enterprise,bmad-teach-me-testing,Teach Me Testing,TMT,Teach testing fundamentals through 7 sessions (TEA Academy).,,,0-learning,,,false,test_artifacts,progress file|session notes|completion summary
 Test Architecture Enterprise,bmad-testarch-test-design,Test Design,TD,Risk-based test planning.,,,3-solutioning,,bmad-testarch-framework,false,test_artifacts,test design document
 Test Architecture Enterprise,bmad-testarch-framework,Test Framework,TF,Initialize production-ready test framework.,,,3-solutioning,bmad-testarch-test-design,bmad-testarch-ci,false,test_artifacts,framework scaffold
 Test Architecture Enterprise,bmad-testarch-ci,CI Setup,CI,Configure CI/CD quality pipeline.,,,3-solutioning,bmad-testarch-framework,,false,test_artifacts,ci config

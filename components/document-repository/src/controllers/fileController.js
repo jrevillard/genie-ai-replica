@@ -1000,7 +1000,8 @@ class FileController {
       // API smoke test caught it on the bundle path). RETHROW so the caller's
       // error mapping is preserved (e.g. the regular path maps dataprep 429 busy
       // -> 429; the bundle fire-and-forget .catch() logs).
-      const detail = (err.response && err.response.data && (err.response.data.detail || err.response.data.message)) || err.message;
+      const detail =
+        (err.response && err.response.data && (err.response.data.detail || err.response.data.message)) || err.message;
       await this._markIngestFailure(fileId, file, `dataprep call failed: ${detail}`);
       throw err;
     }
@@ -1057,7 +1058,7 @@ class FileController {
   // will replace this kick when it lands.
   async bundleIngest(req, res) {
     try {
-      const { bundle, graph_name, repo_id, originalFileName } = req.body;
+      const { bundle, graph_name, repo_id, originalFileName, labels } = req.body;
 
       // Joi validation
       const schema = Joi.object({
@@ -1066,9 +1067,13 @@ class FileController {
           .pattern(/^OKF_[a-f0-9-]+$/)
           .required(),
         repo_id: Joi.string().uuid().required(),
-        originalFileName: Joi.string().allow('').optional()
+        originalFileName: Joi.string().allow('').optional(),
+        // Selected knowledge-hierarchy labels ride on the files doc (same as
+        // the single-upload path) and flow to dataprep as file_labels, where
+        // they scope chunk labeling (see dataprep _finalize_chunk_labels).
+        labels: Joi.array().items(Joi.string().max(200)).default([])
       });
-      const { error } = schema.validate({ bundle, graph_name, repo_id, originalFileName });
+      const { error, value } = schema.validate({ bundle, graph_name, repo_id, originalFileName, labels });
       if (error) {
         return res.status(400).json({ error: 'VALIDATION_ERROR', message: error.details[0].message });
       }
@@ -1088,7 +1093,8 @@ class FileController {
       const result = await fileService.uploadBundle(buffer, {
         originalFileName,
         graph_name,
-        repo_id
+        repo_id,
+        labels: value.labels
       });
 
       // Fire-and-forget ingestion kick (does not block the 202). dataprep.status

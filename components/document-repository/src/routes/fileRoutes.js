@@ -756,6 +756,11 @@ router.post('/ingest', authorizeRole(['Admin']), fileController.ingestMultipleFi
  *               originalFileName:
  *                 type: string
  *                 description: Original file name for the stored file
+ *               labels:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Selected knowledge-hierarchy labels (persisted on the files doc; scopes chunk labeling)
  *     responses:
  *       '202':
  *         description: Bundle accepted for async ingestion

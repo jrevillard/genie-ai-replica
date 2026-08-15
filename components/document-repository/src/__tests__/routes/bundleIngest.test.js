@@ -197,6 +197,46 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
     ingestSpy.mockRestore();
   });
 
+  it('should accept selected hierarchy labels and pass them to uploadBundle', async () => {
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'labeled-file-id',
+      file_name: 'concept.md',
+      storage_path: '/uploads/labeled-file-id.md'
+    });
+
+    const res = await request(app)
+      .post('/api/files/ingest-bundle')
+      .send({ ...validBody, labels: ['Digital Government Services', 'Service Directory'] });
+
+    expect(res.status).toBe(202);
+    const callArgs = fileService.uploadBundle.mock.calls[0][1];
+    expect(callArgs.labels).toEqual(['Digital Government Services', 'Service Directory']);
+  });
+
+  it('should default labels to an empty array when not provided', async () => {
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'unlabeled-file-id',
+      file_name: 'concept.md',
+      storage_path: '/uploads/unlabeled-file-id.md'
+    });
+
+    const res = await request(app).post('/api/files/ingest-bundle').send(validBody);
+
+    expect(res.status).toBe(202);
+    const callArgs = fileService.uploadBundle.mock.calls[0][1];
+    expect(callArgs.labels).toEqual([]);
+  });
+
+  it('should reject non-string label entries with 400', async () => {
+    const res = await request(app)
+      .post('/api/files/ingest-bundle')
+      .send({ ...validBody, labels: ['Valid Label', 42] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+    expect(fileService.uploadBundle).not.toHaveBeenCalled();
+  });
+
   it('should log (not crash) when the fire-and-forget ingestion fails', async () => {
     fileService.uploadBundle.mockResolvedValue({
       file_id: 'failing-file-id',

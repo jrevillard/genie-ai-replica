@@ -933,7 +933,7 @@ class FileService {
         file_name: bundleInfo.originalFileName || fileName,
         file_type: 'text/markdown',
         storage_path: filePath,
-        labels: [],
+        labels: bundleInfo.labels || [],
         graph_name: bundleInfo.graph_name,
         repo_id: bundleInfo.repo_id
       });

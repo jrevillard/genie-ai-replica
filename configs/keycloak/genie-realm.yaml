@@ -2,12 +2,6 @@ realm: $(env:KC_REALM)
 enabled: true
 # TLS is handled by NGINX (reverse proxy) — Keycloak receives plain HTTP internally
 sslRequired: none
-# Story 6.1: KC 24+ declarative user profile strips UNDECLARED attributes —
-# the okf_scopes user attribute (→ claim via the user-attribute mapper) needs
-# the unmanaged-attribute policy enabled. Admin-only writes; users cannot
-# self-assign scopes.
-attributes:
-  unmanagedAttributePolicy: ENABLED
 
 # Realm security and behavior properties
 registrationAllowed: $(env:KEYCLOAK_REGISTRATION_ENABLED)

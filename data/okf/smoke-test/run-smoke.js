@@ -141,6 +141,15 @@ async function main() {
     fail(`publish gate must be OPEN after a clean full scan; reasons: ${gate.reasons.join('; ')}`);
   }
 
+  // 7 (Story 6.1): HTTP authz matrix against THIS server (localhost:3002).
+  // Three tokens arrive via env (minted host-side; ROPC enable→mint→revert):
+  //   OKF_SMOKE_TOKEN_SCOPED   — user with okf_scopes=[okf:smoke:{REPO_ID}:read]
+  //   OKF_SMOKE_TOKEN_SCOPELESS — plain user, no okf scopes
+  //   OKF_SMOKE_TOKEN_ADMIN    — genie-admin (wildcard attribute + tools-admin)
+  // The phase is SKIPPED (with a notice) when no tokens are provided so the
+  // control-plane phases stay runnable standalone.
+  await authzPhase(db);
+
   if (failures > 0) {
     console.error(`\nSMOKE TEST FAILED — ${failures} assertion(s) failed`);
     process.exit(1);
@@ -154,3 +163,64 @@ main().catch((err) => {
   console.error('SMOKE TEST FAILED:', err.message);
   process.exit(1);
 });
+
+// ─── Story 6.1: HTTP authorization matrix ─────────────────────────────────────
+
+async function authzPhase(db) {
+  const SCOPED = process.env.OKF_SMOKE_TOKEN_SCOPED;
+  const SCOPELESS = process.env.OKF_SMOKE_TOKEN_SCOPELESS;
+  const ADMIN = process.env.OKF_SMOKE_TOKEN_ADMIN;
+  if (!SCOPED || !SCOPELESS || !ADMIN) {
+    console.log('NOTICE: authz phase skipped (no OKF_SMOKE_TOKEN_* env — run via the host mint script)');
+    return;
+  }
+  const BASE = process.env.OKF_SMOKE_BASE_URL || 'http://localhost:3002';
+  const OTHER_REPO = `${REPO_ID}-other`;
+  const h = (t) => ({ Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' });
+  async function call(method, path, token, body) {
+    const res = await fetch(`${BASE}${path}`, { method, headers: h(token), body: body ? JSON.stringify(body) : undefined });
+    let j = null;
+    try { j = await res.json(); } catch { /* non-json */ }
+    return { status: res.status, body: j };
+  }
+
+  // A second repo must EXIST so "foreign but present" is distinguishable from
+  // "missing" — both must 404 identically for the scoped caller.
+  const repos = db.collection('okf_repositories');
+  try { await repos.document(OTHER_REPO); } catch (err) {
+    if (err && (err.errorNum === 1204 || err.code === 404 || err.statusCode === 404)) {
+      await repos.save({ _key: OTHER_REPO, repo_id: OTHER_REPO, name: 'Smoke Other Repo', domain: 'smoke', graph_name: `OKF_${OTHER_REPO}`, okf_version: '0.2', lifecycle_state: 'register' });
+    } else throw err;
+  }
+
+  console.log('Authz matrix (Story 6.1):');
+  // (a) scoped caller — read on REPO_ID only.
+  const a1 = await call('GET', `/api/okf/repos/${REPO_ID}`, SCOPED);
+  a1.status === 200 ? pass(`scoped GET own repo → 200`) : fail(`scoped GET own repo → ${a1.status} ${JSON.stringify(a1.body).slice(0, 120)}`);
+  const a2 = await call('GET', `/api/okf/repos/${OTHER_REPO}`, SCOPED);
+  a2.status === 404 ? pass('scoped GET foreign (existing) repo → 404 (anti-enumeration)') : fail(`scoped GET foreign repo → ${a2.status}`);
+  const a3 = await call('GET', '/api/okf/repos', SCOPED);
+  const ids = (a3.body && a3.body.items || []).map((i) => i.repo_id);
+  a3.status === 200 && ids.includes(REPO_ID) && !ids.includes(OTHER_REPO)
+    ? pass(`scoped LIST → own repo only (${ids.length} item(s))`)
+    : fail(`scoped LIST → status=${a3.status} ids=${JSON.stringify(ids)}`);
+  const a4 = await call('PATCH', `/api/okf/repos/${REPO_ID}`, SCOPED, { name: 'Should Not Apply' });
+  a4.status === 403 && a4.body && a4.body.error === 'FORBIDDEN_SCOPE'
+    ? pass('scoped PATCH own repo → 403 FORBIDDEN_SCOPE (read ≠ admin)')
+    : fail(`scoped PATCH → ${a4.status} ${JSON.stringify(a4.body).slice(0, 120)}`);
+
+  // (b) scopeless caller — default-deny at the router gate.
+  const b1 = await call('GET', '/api/okf/repos', SCOPELESS);
+  b1.status === 403 && b1.body && b1.body.error === 'FORBIDDEN_SCOPE'
+    ? pass('scopeless LIST → 403 FORBIDDEN_SCOPE (default-deny)')
+    : fail(`scopeless LIST → ${b1.status} ${JSON.stringify(b1.body).slice(0, 120)}`);
+
+  // (e/f) admin — wildcard attribute (+ tools-admin): full visibility + mutation.
+  const e1 = await call('GET', '/api/okf/repos', ADMIN);
+  const adminIds = (e1.body && e1.body.items || []).map((i) => i.repo_id);
+  e1.status === 200 && adminIds.includes(REPO_ID) && adminIds.includes(OTHER_REPO)
+    ? pass('admin LIST → sees both repos (wildcard)')
+    : fail(`admin LIST → ${e1.status} ids=${JSON.stringify(adminIds)}`);
+  const e2 = await call('PATCH', `/api/okf/repos/${OTHER_REPO}`, ADMIN, { name: 'Smoke Other Repo (renamed)' });
+  e2.status === 200 ? pass('admin PATCH foreign repo → 200 (wildcard admin)') : fail(`admin PATCH → ${e2.status} ${JSON.stringify(e2.body).slice(0, 120)}`);
+}

@@ -47,9 +47,40 @@ These must succeed — the subsequent CI check depends on them.
    - If no MR/PR exists, create one on the current branch (step 2 above).
    This is best-effort — if it fails, report and continue.
 
+## Mandatory: CI wait + status file
+
+After creating the trace MR, you **MUST wait for the CI pipeline to complete** and write the result to `ci-status.json` in the worktree root. This file is read by the `ci-status.sh` verify command.
+
+4. **Wait for CI pipeline** — poll the pipeline status until it reaches a terminal state (success/failed). Use the same platform detection as step 2:
+   - GitLab: `glab api "projects/{project_enc}/merge_requests/{iid}/pipelines" --hostname {host}` — check the latest pipeline status
+   - GitHub: `gh pr checks {num} -R "{host}/{project}"` — check the check suite status
+   - Poll every 30 seconds. **No timeout** — wait until CI completes (green or red), no matter how long it takes.
+   - If the pipeline has multiple jobs, aggregate: all success = green, any failure = red. Wait until ALL jobs reach terminal state (success/failed/skipped).
+
+5. **Write ci-status.json** — after CI completes, write the result to `{worktree}/ci-status.json`:
+   ```json
+   // If CI is green:
+   {"status": "green"}
+
+   // If CI is red:
+   {
+     "status": "red",
+     "pipeline_url": "https://...",
+     "failed_jobs": ["job-name-1", "job-name-2"],
+     "diagnostic": "Test failed: test_login\nError: assertion failed at line 42\nLogs: https://..."
+   }
+   ```
+   **IMPORTANT: Validate the JSON before writing!** Use `python3 -c "import json,sys; json.loads(sys.stdin.read())" < ci-status.json` to validate. If invalid, fix and retry. **Never write invalid JSON** — ci-status.sh will fail to parse it.
+
+   For red CI, provide a **rich diagnostic**: pipeline URL, names of failed jobs, error messages, links to logs. This diagnostic will be passed to the repair session.
+
+   **Note on flaky tests:** If you detect a flaky test (e.g., test passes on retry, or known flaky pattern like timeout/connection error), still write `status: "red"` — bmad-loop's repair session will handle the retry. Do not retry flaky tests yourself; let the repair loop manage it.
+
+6. **Complete the workflow** — after writing `ci-status.json`, complete your turn. The `ci-status.sh` verify command will read the file and exit 0 (green) or 1 (red). If red, bmad-loop will trigger a repair session with the diagnostic.
+
 ## Best-effort: mirror the story to its issue
 
-Do this after the push + MR. If any step here fails, **report it and continue —
+Do this after the CI check. If any step here fails, **report it and continue —
 do not fail the session over tracking**. The post-run `/bmad-bmm-issue-sync`
 reconciles the full board.
 
@@ -80,8 +111,12 @@ reconciles the full board.
 
 - **Do NOT modify `sprint-status.yaml`** — the orchestrator owns it and
   reconciles it after you finish.
-- Use the module's deployed workflows under
-  `_bmad/_config/custom/workflows/common/` (`update-issue-status.yaml`,
-  `find-issue.yaml`) as the canonical logic where it helps.
+- **Do NOT rewrite code** — the module provides canonical workflows under
+  `_bmad/_config/custom/workflows/common/` that handle platform differences,
+  pagination, URL encoding, and API specifics. Use them (INCLUDE) instead of
+  writing ad-hoc scripts.
+- For issue/board/label operations, INCLUDE the module's workflows. Use the
+  platform CLI only for operations NOT covered by the workflows (e.g., posting
+  comments, listing MRs/PRs).
 
 Then end your turn following the Completion signal contract below.

@@ -1,34 +1,29 @@
-\---
-
+---
 type: index
-title: "Kenya Government Services Knowledge Base"
-description: "Master index for Kenyan public service delivery frameworks, governing bodies, and service portals. OKF v0.2 compliant bundle for RAG testing."
-okf\_version: "0.2"
-status: "stable"
-generated:
-by: "system:ai\_agent"
-at: "2026-08-14T19:20:00Z"
-verified:
+title: "Government Services Knowledge Base"
+description: "Master index for public service delivery frameworks, governing bodies, and service portals. OKF v0.2 compliant bundle for RAG testing."
+okf_version: "0.2"
+status: stable
+tags: [index, public-services]
+labels: [t:smoke, d:public-administration]
+---
 
-* by: "machine:knowledge\_compiler"
-at: "2026-08-14T19:20:00Z"
+# Government Services Knowledge Base
 
-\---
+This knowledge base covers national public service delivery: digital government
+services, identity and civil registration, and the ministries that administer
+them. It is a synthetic fixture bundle for smoke-testing the OKF write path
+(parser, conformance, concepts-meta writer, and the PII publish gate).
 
-# Kenya Government Services Ecosystem
+## Contents
 
-This repository maps the Integrated Service Delivery (ISD) frameworks established by the Government of Kenya to transition from bureaucratic, siloed operations into centralized "one-stop" citizen service delivery.
+- [Service Directory](./service_directory.md)
+- [eCitizen Digital Payments](./ecitizen_digital_payments.md)
+- [Huduma Service Centres](./huduma_kenya.md)
+- [Ministry of Public Service](./ministry_of_public_service.md)
 
-## Ecosystem Hierarchy
+## Maintenance
 
-1. [**Ministry of Public Service and Human Capital Development**](./ministry_of_public_service.md)**:** The policy and administrative framework governing public service delivery and human capital development.
-2. [**Huduma Kenya**](./huduma_kenya.md)**:** The physical and multi-channel "one-stop-shop" framework for public services (Huduma Centres, contact centre, digital channels).
-3. [**eCitizen Digital Payments**](./ecitizen_digital_payments.md)**:** The centralized online portal and payment gateway for B2G (Business-to-Government) and P2G (Person-to-Government) transactions, operated under the National Treasury.
-4. [**Comprehensive Service Directory**](./service_directory.md)**:** A direct mapping of citizen needs to specific government agencies and platforms.
-
-## Bundle Notes
-
-* All concepts carry provenance via `sources`, trust signals (`generated`/`verified`), and lifecycle (`status`/`stale\_after`).
-* Cross-links use relative markdown paths.
-* Updated from official sources as of 2026-08-14.
-
+Concepts in this bundle are reviewed by the responsible steward team before
+publication. Broken links and stale concepts are flagged by the conformance
+validation stage of the write path.

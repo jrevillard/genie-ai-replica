@@ -41,6 +41,27 @@ async function getDb() {
 
 // ─── pii_state writer (G28 — the seed UPSERT) ───────────────────────────────
 
+// Shared strict ArangoDB error classifiers (2026-08-15 review fix — was a
+// local copy with a message-regex that masked transient failures as doc-absent).
+const { isArangoNotFound } = require('./arango-errors');
+
+/** firstExample that treats a not-found as null (real arangojs throws; the
+ * unit mock returns null). Rejects falsy ids — an undefined bind key is
+ * JSON-dropped by real arangojs, degrading the lookup to repo-wide. */
+async function findPiiDoc(col, repo_id, concept_id) {
+  if (!repo_id || !concept_id) {
+    throw new Error(
+      `findPiiDoc requires repo_id and concept_id (got repo_id=${String(repo_id)}, concept_id=${String(concept_id)})`
+    );
+  }
+  try {
+    return await col.firstExample({ repo_id, concept_id });
+  } catch (err) {
+    if (!isArangoNotFound(err)) throw err; // transient — surface
+    return null;
+  }
+}
+
 /**
  * Idempotent upsert of the PII state onto okf_concepts_meta. Creates a minimal
  * doc when absent (Story 2.9.2 formalizes first-class fields). The unique
@@ -50,25 +71,6 @@ async function getDb() {
  * @param {string} concept_id
  * @param {object} patch {pii_state, pii_hits_summary?, pii_scanned_at}
  */
-/** arangojs "document not found / no match" detector (firstExample throws it). */
-function isNotFound(err) {
-  return (
-    err &&
-    (err.errorNum === 1204 ||
-      err.code === 404 ||
-      err.statusCode === 404 ||
-      (err.message && /no match|not found/i.test(String(err.message))))
-  );
-}
-
-async function findPiiDoc(col, repo_id, concept_id) {
-  try {
-    return await col.firstExample({ repo_id, concept_id });
-  } catch (err) {
-    if (!isNotFound(err)) throw err; // transient — surface
-    return null;
-  }
-}
 
 async function upsertPiiState(repo_id, concept_id, patch) {
   const db = await getDb();

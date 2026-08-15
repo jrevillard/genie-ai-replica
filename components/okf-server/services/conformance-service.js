@@ -132,12 +132,16 @@ async function persistConformanceIssues(repo_id, concept_id, issues) {
   return withSpan('okf.conformance.persist', async (span) => {
     span.setAttribute('okf.repo_id', repo_id);
     span.setAttribute('okf.concept_id', concept_id);
+    // Defensive default: an undefined issues array would be JSON-dropped by
+    // real arangojs (silent no-op — the exact G9 failure class) and then crash
+    // the log line below AFTER the write. (2026-08-15 review fix.)
+    const safeIssues = Array.isArray(issues) ? issues : [];
     await conceptMetaService.upsertConceptMeta(
       repo_id,
-      { concept_id, repo_id }, // minimal — the writer creates/updates the doc
-      { patch: { conformance_issues: issues } }
+      { concept_id, repo_id }, // minimal — the writer creates the doc if absent and patches ONLY these fields
+      { patch: { conformance_issues: safeIssues } }
     );
-    logger.info('Conformance issues persisted', { repo_id, concept_id, issue_count: issues.length });
+    logger.info('Conformance issues persisted', { repo_id, concept_id, issue_count: safeIssues.length });
     recordOp('persist', 'success');
   });
 }

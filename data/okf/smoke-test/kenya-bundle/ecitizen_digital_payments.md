@@ -1,49 +1,34 @@
-\---
+---
+type: service
+title: "eCitizen Digital Payments"
+description: "How citizens pay for government services digitally through the national portal, including supported payment channels and refund routing."
+status: stable
+tags: [payments, digital-services]
+labels: [t:smoke, d:digital-government]
+---
 
-type: concept
-title: "eCitizen Portal (Government Digital Payments)"
-description: "The digital payment gateway and service application portal for Kenyan Government agencies, operated by the Government Digital Payments Unit under the National Treasury."
-resource: "https://www.ecitizen.go.ke/"
-sources:
+# eCitizen Digital Payments
 
-* id: treasury\_ecitizen
-resource: "https://www.treasury.go.ke/government-digital-payments-ecitizen/"
-title: "Government Digital Payments (eCitizen)"
-author: "National Treasury"
-* id: treasury\_ecitizen\_alt
-resource: "https://newsite.treasury.go.ke/e-citizen"
-title: "E-Citizen"
-author: "National Treasury"
-status: "stable"
-generated:
-by: "system:ai\_agent"
-at: "2026-08-14T19:20:00Z"
-verified:
-* by: "machine:knowledge\_compiler"
-at: "2026-08-14T19:20:00Z"
-stale\_after: "2027-08-14T00:00:00Z"
-tags: \[ecitizen, payments, digital-government, treasury, revenue]
+The national portal lets citizens apply and pay for government services
+online. Payment is collected at the point of application submission, and the
+receipt reference is attached to the application record.
 
-\---
+## Payment Channels
 
-# eCitizen (Government Digital Payments)
+1. **Mobile money** — the dominant channel; the citizen approves a push
+   prompt on their handset and the portal confirms settlement.
+2. **Debit and credit cards** — card details are entered on the payment
+   provider's page; the portal never stores card data.
+3. **Bank transfer** — for institutional applicants; settlement is matched to
+   the application by the payment reference.
 
-The **Government Digital Payments (GDP) Unit**, under the Directorate of Accounting Services and Quality Assurance of the National Treasury, operates the `ecitizen.go.ke` platform. It was established following a 2013 directive (and subsequent Gazette Notices including No. 2725 of 2014, No. 9290 of 2014, No. 3299 of 2015, and No. 400 of 2018) to digitize all government revenue streams, reduce cash-based leakage, minimize collection costs, and enhance service delivery.
+## Refunds
 
-## Mandate and Evolution
+When an application is rejected before processing, the fee is refunded to the
+original payment channel. Refund routing follows the payment reference, so
+citizens do not need to provide account details separately.
 
-* Digitize all payments into Government for increased revenue, lower costs, and better service.
-* Citizens, non-citizens, and businesses access services online and pay electronically 24/7 via preferred methods (mobile money, cards, etc.).
-* In 2023 (Executive Order No. 2), functions were split: services coordinated by Directorate of E-citizen Services (State Department of Immigration and Citizen Services, Ministry of Interior); payments/revenues managed by National Treasury via GDP Unit.
-* By early reports, tens of millions of applications processed and tens of billions of KES collected.
+## Integration Notes
 
-## Identity and Access
-
-To use eCitizen, users link national identity. The system interacts with Kenya's identity framework (biometric checks, Maisha Namba / Digital ID, electronic civil registration). Account typically requires National ID number, name, email, and mobile number. Generates non-editable, verifiable invoices and receipts.
-
-## Platform Architecture
-
-eCitizen acts as a hub connecting to specialized MDA domains. Payments are digital and produce fraud-resistant receipts. Convenience fees apply for secure processing. It is a key Digital Finance Flagship Project under the National Treasury Strategic Plan / MTP III.
-
-> For a complete list of services accessible via eCitizen and Huduma Centres, refer to the \[Service Directory](./service\_directory.md).
-
+The service directory entry ([Service Directory](./service_directory.md)) is
+the canonical list of services that accept digital payment through the portal.

@@ -78,31 +78,45 @@ describe('concept-meta-service.upsertConceptMeta (G9)', () => {
     expect(doc.frontmatter.title).toBe('Health Policy');
   });
 
-  it('UPDATES on re-ingest (idempotent — no duplicate)', async () => {
+  it('UPDATES on re-ingest — same body is idempotent (no duplicate, same hash, created_at preserved)', async () => {
     await conceptMeta.upsertConceptMeta('r1', parsedInput());
-    const updated = await conceptMeta.upsertConceptMeta('r1', parsedInput({ body: '# Changed\nNew body' }));
-    expect(updated.action).toBe('updated');
+    const firstDoc = Object.values(mockDb._stores.okf_concepts_meta)[0];
+    const second = await conceptMeta.upsertConceptMeta('r1', parsedInput());
+    expect(second.action).toBe('updated');
     const docs = Object.values(mockDb._stores.okf_concepts_meta);
     expect(docs.length).toBe(1); // no duplicate
-    expect(docs[0].content_hash).not.toBe(''); // body changed
+    expect(docs[0].content_hash).toBe(firstDoc.content_hash); // SAME body → SAME hash (dedup key)
+    expect(docs[0].created_at).toBe(firstDoc.created_at); // created_at never rewritten
+  });
+
+  it('content_hash CHANGES when the body changes (the 2.9.1/2.9.5 dedup key)', async () => {
+    await conceptMeta.upsertConceptMeta('r1', parsedInput());
+    const firstDoc = Object.values(mockDb._stores.okf_concepts_meta)[0];
+    await conceptMeta.upsertConceptMeta('r1', parsedInput({ body: '# Changed\nNew body' }));
+    const doc = Object.values(mockDb._stores.okf_concepts_meta)[0];
+    expect(doc.content_hash).not.toBe(firstDoc.content_hash);
+    expect(doc.content_hash).toBe(conceptMeta.contentHash('# Changed\nNew body'));
   });
 
   it('handles the concurrent-create race (unique violation → retry as update)', async () => {
     // Force save() to throw a unique violation once, then fall through to update.
     const col = mockDb.collection('okf_concepts_meta');
     const realSave = col.save;
-    col.save.mockImplementationOnce(async () => {
-      const e = new Error('unique constraint violated');
-      e.errorNum = 1210;
-      throw e;
-    });
-    // Pre-insert the doc so the retry-update path finds it. Mutate the EXISTING
-    // store object (the handle captured `stores[name]` by reference at first
-    // collection — replacing `mockDb._stores.okf_concepts_meta` would orphan it).
-    mockDb._stores.okf_concepts_meta['c1'] = { repo_id: 'r1', concept_id: 'concepts/health-policy', _key: 'c1' };
-    const result = await conceptMeta.upsertConceptMeta('r1', parsedInput());
-    expect(result.action).toBe('updated');
-    col.save = realSave;
+    try {
+      col.save.mockImplementationOnce(async () => {
+        const e = new Error('unique constraint violated');
+        e.errorNum = 1210;
+        throw e;
+      });
+      // Pre-insert the doc so the retry-update path finds it. Mutate the EXISTING
+      // store object (the handle captured `stores[name]` by reference at first
+      // collection — replacing `mockDb._stores.okf_concepts_meta` would orphan it).
+      mockDb._stores.okf_concepts_meta['c1'] = { repo_id: 'r1', concept_id: 'concepts/health-policy', _key: 'c1' };
+      const result = await conceptMeta.upsertConceptMeta('r1', parsedInput());
+      expect(result.action).toBe('updated');
+    } finally {
+      col.save = realSave; // restore even on assertion failure (no leak into sibling tests)
+    }
   });
 
   it('persistConformanceIssues now CREATES the doc + writes the issues (G9)', async () => {
@@ -113,14 +127,15 @@ describe('concept-meta-service.upsertConceptMeta (G9)', () => {
     expect(docs[0].conformance_issues).toEqual(issues);
   });
 
-  it('getRepoMetrics returns non-zero counts after concepts exist (G9 proof)', async () => {
-    mockDb._stores.okf_concepts_meta = {
-      a: { repo_id: 'r1', concept_id: 'a', conformance_issues: [{ code: 'MISSING_TYPE' }], stale_after: null },
-      b: { repo_id: 'r1', concept_id: 'b', conformance_issues: [], stale_after: '2020-01-01' }
-    };
-    mockDb.query.mockResolvedValue({ all: async () => [{ state: 'x', n: 1 }] }); // unused; metrics uses query
-    // getRepoMetrics uses db.query with an AQL cursor — program it.
-    mockDb.query.mockResolvedValue({
+  it('getRepoMetrics reads okf_concepts_meta via AQL (pass-through contract; the live-Arango non-zero proof is run-smoke.js)', async () => {
+    // The unit mock cannot execute AQL — this test pins the CONTRACT honestly:
+    // the query targets okf_concepts_meta and the cursor result is mapped
+    // through verbatim. The real integration proof (docs written by THIS
+    // writer → non-zero concept_count / conformance_issue_count on live
+    // Arango) lives in data/okf/smoke-test/run-smoke.js, run against the
+    // local build. No mock-echo assertions here.
+    const querySpy = mockDb.query;
+    querySpy.mockResolvedValue({
       all: async () => [
         {
           concept_count: 2,
@@ -133,9 +148,115 @@ describe('concept-meta-service.upsertConceptMeta (G9)', () => {
       ]
     });
     const m = await getRepoMetrics('r1');
-    expect(m.concept_count).toBe(2);
-    expect(m.conformance_issue_count).toBe(1);
-    expect(m.stale_concept_count).toBe(1);
+    expect(querySpy).toHaveBeenCalledTimes(1);
+    const arg = querySpy.mock.calls[0][0];
+    // The collection handle rides as aql bind param @value0 (the mock
+    // stringifies the handle to {}) — assert the query scans it for the repo.
+    expect(arg.query).toContain('FOR d IN @value0');
+    expect(arg.query).toContain('conformance_issue_count');
+    expect(arg.bindVars.value1).toBe('r1');
+    expect(m).toEqual({
+      concept_count: 2,
+      conformance_issue_count: 1,
+      stale_concept_count: 1,
+      has_reserved_index: false,
+      broken_link_count: 0,
+      pii_hit_count: 0
+    });
+  });
+});
+
+describe('concept-meta-service — review findings (2026-08-15 code review)', () => {
+  beforeEach(() => mockDb._reset());
+
+  it('REGRESSION: a minimal persist does NOT clobber first-class fields on an existing doc', async () => {
+    // The G9 write-path order (ADR-021: 4b full upsert → 4c conformance persist)
+    // means persistConformanceIssues runs AFTER the full doc exists. It must
+    // write ONLY conformance_issues — the review found the update path
+    // spreading a full defaults doc over the real one.
+    await conceptMeta.upsertConceptMeta('r1', parsedInput());
+    const before = { ...Object.values(mockDb._stores.okf_concepts_meta)[0] };
+
+    const issues = [
+      { code: 'BAD_ACTOR_PREFIX', severity: 'warning', message: 'bad actor', field_path: 'generated.by' }
+    ];
+    await persistConformanceIssues('r1', 'concepts/health-policy', issues);
+
+    const doc = Object.values(mockDb._stores.okf_concepts_meta)[0];
+    expect(doc.conformance_issues).toEqual(issues); // the point of the persist
+    // Everything the full upsert wrote must SURVIVE:
+    expect(doc.title).toBe(before.title);
+    expect(doc.type).toBe(before.type);
+    expect(doc.tags).toEqual(before.tags);
+    expect(doc.labels).toEqual(before.labels);
+    expect(doc.summary).toBe(before.summary);
+    expect(doc.frontmatter).toEqual(before.frontmatter);
+    expect(doc.content_hash).toBe(before.content_hash); // NOT sha256('')
+    expect(doc.trust_tier).toBe(before.trust_tier);
+    expect(doc.sources).toEqual(before.sources);
+    expect(doc.stale_after).toBe(before.stale_after);
+    expect(doc.verified).toEqual(before.verified);
+    expect(doc.bundle_version).toBe(before.bundle_version);
+    expect(doc.created_at).toBe(before.created_at);
+  });
+
+  it('REGRESSION: full re-ingest does NOT downgrade a scanned pii_state (fail-closed gate)', async () => {
+    await conceptMeta.upsertConceptMeta('r1', parsedInput(), {
+      patch: { pii_state: 'hit', pii_scanned_at: '2026-08-15T00:00:00Z' }
+    });
+    await conceptMeta.upsertConceptMeta('r1', parsedInput({ body: '# v2 body' }));
+    const doc = Object.values(mockDb._stores.okf_concepts_meta)[0];
+    expect(doc.pii_state).toBe('hit'); // stays 'hit' — never reset to 'unknown' without a rescan
+  });
+
+  it('REGRESSION: full re-ingest preserves last_good_index_at', async () => {
+    await conceptMeta.upsertConceptMeta('r1', parsedInput(), { patch: { last_good_index_at: '2026-08-15T01:00:00Z' } });
+    await conceptMeta.upsertConceptMeta('r1', parsedInput({ body: '# v2 body' }));
+    const doc = Object.values(mockDb._stores.okf_concepts_meta)[0];
+    expect(doc.last_good_index_at).toBe('2026-08-15T01:00:00Z');
+  });
+
+  it('REGRESSION: rejects falsy repo_id/concept_id (repo-wide firstExample hazard on real arangojs)', async () => {
+    await expect(conceptMeta.upsertConceptMeta('r1', { concept_id: undefined })).rejects.toThrow(/concept_id/);
+    await expect(conceptMeta.upsertConceptMeta(undefined, parsedInput())).rejects.toThrow(/repo_id/);
+    await expect(conceptMeta.upsertConceptMeta('r1', parsedInput({ concept_id: undefined }))).rejects.toThrow(
+      /concept_id/
+    );
+  });
+
+  it('REGRESSION: TOCTOU — doc deleted between find and update → falls through to create', async () => {
+    await conceptMeta.upsertConceptMeta('r1', parsedInput());
+    const col = mockDb.collection('okf_concepts_meta');
+    const realUpdate = col.update;
+    try {
+      // The doc exists (find succeeds) but the update hits a 1204 — deleted in
+      // between. The writer must retry as a create, not propagate the 404.
+      col.update.mockImplementationOnce(async () => {
+        const e = new Error('document not found');
+        e.errorNum = 1204;
+        throw e;
+      });
+      const result = await conceptMeta.upsertConceptMeta('r1', parsedInput());
+      expect(result.action).toBe('created');
+    } finally {
+      col.update = realUpdate;
+    }
+  });
+
+  it('REGRESSION: invalid lifecycle status falls back to draft (enum validation)', async () => {
+    await conceptMeta.upsertConceptMeta('r1', parsedInput({ status: 'retired' }));
+    const doc = Object.values(mockDb._stores.okf_concepts_meta)[0];
+    expect(doc.lifecycle_status).toBe('draft');
+  });
+
+  it('REGRESSION: null/undefined parsed input does not throw a TypeError (dead guard fixed)', async () => {
+    await expect(conceptMeta.upsertConceptMeta('r1', null)).rejects.toThrow(/concept_id/); // guarded rejection, not TypeError
+  });
+
+  it('REGRESSION: persistConformanceIssues with undefined issues writes [] and does not crash', async () => {
+    await persistConformanceIssues('r1', 'concepts/health-policy', undefined); // must resolve, not crash
+    const doc = Object.values(mockDb._stores.okf_concepts_meta)[0];
+    expect(doc.conformance_issues).toEqual([]);
   });
 });
 

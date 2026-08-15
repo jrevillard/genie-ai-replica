@@ -8,15 +8,27 @@
 // no doc existed. The (repo_id, concept_id) unique index (collections.js) is
 // the race guard; a concurrent-create violation retries as an update (pattern
 // proven in pii-service.upsertPiiState). Direct AQL, shared db-connection.
+//
+// Update semantics (2026-08-15 review fixes):
+//  - MINIMAL input (no frontmatter AND no body — e.g. conformance's
+//    {concept_id, repo_id} persist) writes ONLY the caller's patch fields:
+//    it must never clobber the first-class fields a full upsert wrote
+//    (ADR-021 write-path order: 4b full upsert → 4c conformance persist).
+//  - A FULL re-ingest never downgrades pii_state back to 'unknown' and never
+//    clears last_good_index_at — the fail-closed publish gate (2.8) must not
+//    be silently un-blocked without a rescan.
 
-const crypto = require('crypto');
+const { createHash } = require('node:crypto');
 const { DateTime } = require('luxon');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
+const { isArangoNotFound, isArangoUniqueViolation } = require('./arango-errors');
 
 const COLLECTION = 'okf_concepts_meta';
+
+const LIFECYCLE_STATUSES = ['draft', 'stable', 'deprecated'];
 
 const meter = getMeter();
 const opsCounter = meter.createCounter('okf_concepts_meta_operations_total', {
@@ -41,50 +53,45 @@ function nowIso() {
   return DateTime.now().toUTC().toISO();
 }
 
-/** arangojs "document not found / no match" detector (firstExample throws it). */
-function isNotFound(err) {
-  return (
-    err &&
-    (err.errorNum === 1204 ||
-      err.code === 404 ||
-      err.statusCode === 404 ||
-      (err.message && /no match|not found/i.test(String(err.message))))
-  );
-}
-
-/** firstExample that treats a no-match as null (real arangojs + the shared db
- * wrapper throw "no match"; the unit mock returns null). Smoke-test caught this
- * divergence. */
+/** firstExample that treats a not-found as null (real arangojs throws; the
+ * unit mock returns null). STRICT classifier — see arango-errors.js. */
 async function findConceptDoc(col, repo_id, concept_id) {
   try {
     return await col.firstExample({ repo_id, concept_id });
   } catch (err) {
-    if (!isNotFound(err)) throw err; // transient — surface, don't mask
+    if (!isArangoNotFound(err)) throw err; // transient — surface, don't mask
     return null;
   }
 }
 
 /** sha256 hex of the concept body — the 2.9.1/2.9.5 content-hash dedup key. */
 function contentHash(body) {
-  return crypto
-    .createHash('sha256')
+  return createHash('sha256')
     .update(String(body || ''))
     .digest('hex');
 }
 
+/** True iff the parsed input carries no concept payload (no frontmatter AND
+ * no body) — a partial persist (e.g. conformance issues), not a re-ingest. */
+function isMinimalInput(parsed) {
+  const p = parsed || {};
+  return p.frontmatter == null && p.body == null;
+}
+
 /**
  * Build the first-class okf_concepts_meta doc from a parseConcept output
- * (parser-service.js:182+). Pure mapping — no DB.
+ * (parser-service.js:182+). Pure mapping — no DB. Null-safe (guard BEFORE
+ * deref — review fix for the dead null guard).
  */
 function buildMetaDoc(repo_id, parsed, opts = {}) {
-  const fm = parsed.frontmatter || {};
   const p = parsed || {};
+  const fm = p.frontmatter || {};
   const path = p.path || '';
   const title = (fm.title && String(fm.title).trim()) || path.split('/').pop().replace(/\.md$/, '') || p.concept_id;
   const tags = Array.isArray(fm.tags) ? fm.tags : typeof fm.tags === 'string' ? [fm.tags] : [];
   const labels = Array.isArray(fm.labels) ? fm.labels : typeof fm.labels === 'string' ? [fm.labels] : [];
   const summary = (fm.description && String(fm.description).trim()) || (fm.summary && String(fm.summary).trim()) || '';
-  const lifecycleStatus = p.status || 'draft';
+  const lifecycleStatus = LIFECYCLE_STATUSES.includes(p.status) ? p.status : 'draft'; // enum-validated
   const staleAfter = p.stale_after || null;
   return {
     repo_id,
@@ -105,7 +112,7 @@ function buildMetaDoc(repo_id, parsed, opts = {}) {
     stale_after: staleAfter,
     verified: p.verified ?? null,
     sources: Array.isArray(p.sources) ? p.sources : [],
-    pii_state: 'unknown', // superseded on scan (2.8 pii-service)
+    pii_state: 'unknown', // superseded on scan (2.8 pii-service); never downgraded on update
     last_good_index_at: null,
     created_at: nowIso(),
     updated_at: nowIso()
@@ -113,57 +120,103 @@ function buildMetaDoc(repo_id, parsed, opts = {}) {
 }
 
 /**
+ * Single update path (was three copy-pasted blocks). `minimal` writes ONLY
+ * the caller's patch (no clobber); a full update additionally protects
+ * pii_state/last_good_index_at from downgrades.
+ */
+async function applyUpdate(col, existing, repo_id, conceptId, parsed, opts, minimal, span) {
+  let patch;
+  if (minimal) {
+    patch = { ...(opts.patch || {}) }; // ONLY caller-provided fields — never clobber
+  } else {
+    patch = { ...buildMetaDoc(repo_id, parsed, opts), ...(opts.patch || {}) };
+    delete patch.created_at; // keep the original created_at on update
+    // Fail-closed protection: a re-ingest must not silently un-block the PII
+    // gate or erase indexing provenance.
+    if (existing.pii_state && existing.pii_state !== 'unknown' && patch.pii_state === 'unknown') {
+      delete patch.pii_state;
+    }
+    if (existing.last_good_index_at != null && patch.last_good_index_at == null) {
+      delete patch.last_good_index_at;
+    }
+  }
+  patch.updated_at = nowIso();
+  try {
+    await col.update(existing._key, patch);
+  } catch (err) {
+    recordOp('update', 'error');
+    logger.error('Concepts-meta UPSERT update failed', { repo_id, concept_id: conceptId, error: err.message });
+    throw err;
+  }
+  recordOp('update', 'success');
+  logger.info('Concepts-meta UPSERT (update)', { repo_id, concept_id: conceptId });
+  span.setAttribute('okf.meta.action', 'updated');
+  return { action: 'updated', doc: { ...existing, ...patch, _key: existing._key, _id: existing._id } };
+}
+
+/**
  * Canonical UPSERT of a concept's okf_concepts_meta doc. Creates when absent,
  * updates when present, idempotent. Race-guarded against the unique
  * (repo_id, concept_id) index. Accepts an optional `patch` of extra fields
  * (e.g. { conformance_issues }) merged onto the doc.
- * @param {string} repo_id
- * @param {object} parsed — parseConcept output (or {concept_id} minimal)
+ * @param {string} repo_id — required (falsy rejected: a repo-wide lookup hazard)
+ * @param {object} parsed — parseConcept output (or a minimal {concept_id})
  * @param {object} [opts] { bundle_version?, patch?: object }
  * @returns {Promise<{action: 'created'|'updated', doc: object}>}
  */
 async function upsertConceptMeta(repo_id, parsed, opts = {}) {
+  const p = parsed || {};
+  if (!repo_id || !p.concept_id) {
+    // Guard: on real arangojs an undefined bind key is JSON-dropped, which
+    // degrades firstExample to repo-wide (arbitrary-doc overwrite). The unit
+    // mock's strict equality can never catch this — reject at the boundary.
+    throw new Error(
+      `upsertConceptMeta requires repo_id and concept_id (got repo_id=${String(repo_id)}, concept_id=${String(p.concept_id)})`
+    );
+  }
   return withSpan('okf.meta.upsert', async (span) => {
     span.setAttribute('okf.repo_id', repo_id);
-    span.setAttribute('okf.concept_id', parsed.concept_id);
+    span.setAttribute('okf.concept_id', p.concept_id);
     const db = await getDb();
     const col = db.collection(COLLECTION);
-    const doc = buildMetaDoc(repo_id, parsed, opts);
+    const minimal = isMinimalInput(p);
 
-    const existing = await findConceptDoc(col, repo_id, parsed.concept_id);
+    const existing = await findConceptDoc(col, repo_id, p.concept_id);
     if (existing) {
-      const patch = { ...doc, ...(opts.patch || {}) };
-      delete patch.created_at; // keep the original created_at on update
-      patch.updated_at = nowIso();
-      await col.update(existing._key, patch);
-      recordOp('update', 'success');
-      logger.info('Concepts-meta UPSERT (update)', { repo_id, concept_id: parsed.concept_id });
-      span.setAttribute('okf.meta.action', 'updated');
-      return { action: 'updated', doc: { ...existing, ...patch } };
+      try {
+        return await applyUpdate(col, existing, repo_id, p.concept_id, p, opts, minimal, span);
+      } catch (err) {
+        if (isArangoNotFound(err)) {
+          // TOCTOU: the doc vanished between find and update → create instead.
+          logger.warn('Concepts-meta UPSERT: doc deleted mid-flight — retrying as create', {
+            repo_id,
+            concept_id: p.concept_id
+          });
+        } else {
+          throw err;
+        }
+      }
     }
 
     try {
-      const merged = { ...doc, ...(opts.patch || {}) };
-      await col.save(merged);
+      // Create: a minimal persist seeds the doc with defaults (the G9 fix);
+      // a full upsert writes the complete first-class field set.
+      const merged = { ...buildMetaDoc(repo_id, p, opts), ...(opts.patch || {}) };
+      const saved = await col.save(merged);
       recordOp('create', 'success');
-      logger.info('Concepts-meta UPSERT (create)', { repo_id, concept_id: parsed.concept_id });
+      logger.info('Concepts-meta UPSERT (create)', { repo_id, concept_id: p.concept_id });
       span.setAttribute('okf.meta.action', 'created');
-      return { action: 'created', doc: merged };
+      return { action: 'created', doc: { ...merged, ...(saved || {}) } }; // keep save's _key/_id/_rev
     } catch (err) {
-      // Concurrent create lost the race → retry as update (unique index guard).
-      if (err && (err.errorNum === 1210 || err.errorNum === 1185 || err.code === 409)) {
-        const again = await findConceptDoc(col, repo_id, parsed.concept_id);
+      if (isArangoUniqueViolation(err)) {
+        // Concurrent create lost the race → retry as update (unique index guard).
+        const again = await findConceptDoc(col, repo_id, p.concept_id);
         if (again) {
-          const patch = { ...doc, ...(opts.patch || {}) };
-          delete patch.created_at;
-          patch.updated_at = nowIso();
-          await col.update(again._key, patch);
-          recordOp('update', 'success');
-          span.setAttribute('okf.meta.action', 'updated');
-          return { action: 'updated', doc: { ...again, ...patch } };
+          return applyUpdate(col, again, repo_id, p.concept_id, p, opts, minimal, span);
         }
       }
       recordOp('create', 'error');
+      logger.error('Concepts-meta UPSERT create failed', { repo_id, concept_id: p.concept_id, error: err.message });
       throw err;
     }
   });

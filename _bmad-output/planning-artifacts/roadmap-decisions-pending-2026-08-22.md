@@ -38,8 +38,13 @@
 ## D6 — Admin Logs / Security-scanning migration to VictoriaLogs
 
 - **What:** admin dashboard Logs + Security-scan facilities are 100% Winston-file-based (regex parsers, single-service visibility, already drifted — `/api/admin/logs` likely returns empty); no app code queries VictoriaLogs; **cloud runs with observability OFF**. Includes the producer-side mandate: the shared logger needs a first-class VictoriaLogs transport (one transport covers backend + doc-repo + okf-server).
-- **Status:** assessment **being finalized by a parallel session** (`admin-logs-victorialogs-migration-assessment-2026-08-15.md`) — decide AFTER it lands. Known sub-decisions: deployment prereq (enable observability on cloud), producer transport, consumer rewrite scope.
-- **Impact if deferred:** admin users (non-technical operators) keep a broken/near-empty Logs facility.
+- **Status:** assessment **COMPLETE** (`admin-logs-victorialogs-migration-assessment-2026-08-15.md`) — a preliminary planning artifact (not branch work). It ships the target architecture (§6), a phased migration plan **P0–P4** with measurable exit criteria (§7, est. ~5–6 stories), and **6 sub-decisions with recommendations** (§8) that this roadmap decision should ratify or amend:
+  - **D6.1 VictoriaLogs as hard dependency** — recommendation: split VictoriaLogs + Collector out of the `observability` profile into the core stack (logs browsing + security scanning are core admin features; metrics/traces/Grafana stay optional).
+  - **D6.2 cutover** — env fallback (`ADMIN_LOGS_SOURCE`) for one release, then removed.
+  - **D6.3 admin visibility scope** — all services (not backend-only).
+  - **D6.4 sequencing** — producer-first (logger transport P1a before consumer rewires P2/P3).
+  - **D6.6 producer egress** — via the OTel Collector (default), direct-to-VL as env override.
+- **Impact if deferred:** admin users (non-technical operators) keep a broken/near-empty Logs facility; the producer mandate (logger → VL as first-class destination) stays unmet.
 
 ## D7 — PII detection accuracy harness (supporting D1)
 

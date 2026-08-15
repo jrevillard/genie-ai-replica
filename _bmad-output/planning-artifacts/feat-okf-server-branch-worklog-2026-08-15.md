@@ -32,11 +32,13 @@
 - **6.1 authn/authz default-deny (G3/G15 P0)** — `af3a6907a`, ready-for-dev (#905): scope grammar `okf:{tenant}:{repo}:{read|admin}`, `requireScope`/`requireRepoScope`, default-deny list + 404 foreign repos, opt-in RFC 8707 audience binding (additive shared-service change), genie-realm provisioning, denial audit, red-green isolation matrix. All flagged doc ambiguities resolved as D1–D7 in the story.
 - **2.9.1 ingestService** is the next trunk story (not yet specced) — today's smoke learnings feed it directly.
 
-## 4. Planning artifacts (cross-context)
+## 4. Preliminary planning artifacts (NOT part of this branch's work plan — inputs for roadmap decisions)
 
-- **PII/GDPR gap assessment** (`pii-gdpr-gap-assessment-2026-08-14.md`) — whole-codebase, 51 findings adversarially verified (49 confirmed / 2 corrected / 0 refuted): erasure gaps (file hard-delete never retracts vectors; user-account delete cascades nowhere; IDOR), zero PII detection on the legacy single-document path (Presidio is OKF-write-path only), no license/consent checks, encryption-at-rest absent, chat content logged at INFO into 30-day VictoriaLogs. **5 decisions distilled into the pending-decisions doc.**
-- **Admin-logs / VictoriaLogs migration assessment** (`admin-logs-victorialogs-migration-assessment-2026-08-15.md`) — **IN PROGRESS (another session is finalizing it)**: admin Logs + Security-scanning facilities are still 100% Winston-file-based; no app code queries VictoriaLogs; cloud has observability **off** (`enable_observability: "0"`); producer-side mandate — the shared logger needs a first-class VictoriaLogs transport. Roadmap item.
-- **OPEA 1.5 considerations doc** restructured by the parallel session (team-discussion input for the bump decision).
+> These are pre-PRD assessments produced alongside the branch work. They are **strictly preliminary planning artifacts**: nothing in them is scheduled, specced, or part of the OKF initiative's epics. They feed the pending-decisions brief (§ below / `roadmap-decisions-pending-2026-08-22.md`).
+
+- **PII/GDPR gap assessment** (`pii-gdpr-gap-assessment-2026-08-14.md`) — **COMPLETE** — whole-codebase, 51 findings adversarially verified (49 confirmed / 2 corrected / 0 refuted): erasure gaps (file hard-delete never retracts vectors; user-account delete cascades nowhere; IDOR), zero PII detection on the legacy single-document path (Presidio is OKF-write-path only), no license/consent checks, encryption-at-rest absent, chat content logged at INFO into 30-day VictoriaLogs. **5 decisions distilled into the pending-decisions doc (D1–D4, D7).**
+- **Admin-logs / VictoriaLogs migration assessment** (`admin-logs-victorialogs-migration-assessment-2026-08-15.md`) — **COMPLETE (finalized 2026-08-15)** — admin Logs + Security-scanning facilities are still 100% Winston-file-based; no app code queries VictoriaLogs; cloud has observability **off**. Ships a full **target architecture** (§6: producer-side Winston→OTLP VictoriaLogs transport in the shared logger + MELT provider), a **phased migration plan P0–P4** with measurable exit criteria (§7), and **6 pre-decisions with recommendations** (§8 — headline: VictoriaLogs becomes a hard dependency moved into the core stack, producer-first sequencing, all-services admin visibility). Roadmap item **D6**.
+- **OPEA 1.5 considerations doc** restructured by the parallel session (team-discussion input for the bump decision — part of the umbrella agentic-enablement pillar, not OKF scope).
 
 ## 5. Deploy/ops
 

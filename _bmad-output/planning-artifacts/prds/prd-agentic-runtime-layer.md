@@ -736,6 +736,7 @@ The Agent Runtime should support high-level configuration for common agents.
 
 Conceptually:
 
+```
 agent:
   name: research_assistant
 model:
@@ -753,15 +754,24 @@ context:
 tools:
   - rag
   - web_search
+```
+
 
 Advanced agents should be able to provide custom implementations.
 
 For example:
 
+```
 memory:
+  providers:
+    - working
+    - okf
+    - arangodb
   strategy:
     type: custom
     implementation: custom_memory.MyMemoryManager
+```
+
 
 The exact configuration format is a technical design decision and is outside the scope of this PRD.
 
@@ -797,11 +807,17 @@ UC-1: Agentic RAG
 The agent answers questions using GENIEAI RAG.
 
 Question
-   ↓
+
+↓
+
 Agent
-   ↓
+
+↓
+
 RAG
-   ↓
+
+↓
+
 Answer
 
 ⸻
@@ -811,17 +827,20 @@ UC-2: Agentic RAG + Web Search
 The agent can determine that available internal knowledge is insufficient and invoke web search.
 
 Question
-   ↓
-RAG
-   ↓
-Evidence sufficient?
-   ├── Yes → Answer
-   │
-   └── No → Web Search
-                 ↓
-               Answer
 
-⸻
+↓
+
+RAG
+
+↓
+
+Evidence sufficient?
+
+├── Yes → Answer
+
+
+└── No → Web Search → Answer
+            
 
 UC-3: Multi-Step Research
 

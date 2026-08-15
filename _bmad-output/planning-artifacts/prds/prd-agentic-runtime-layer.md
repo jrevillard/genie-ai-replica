@@ -15,9 +15,9 @@ authors: Genie.ai Dev
 
 1. Executive Summary
 
-GENIEAI is an open-source framework for building custom AI applications for the public sector. Its current core capabilities are centred around Retrieval-Augmented Generation (RAG), supported by an OPEA-based microservices architecture, custom backend extensions, a custom Vue.js frontend, vLLM-based model serving, and ArangoDB-based vector and graph storage.
+This draft PRD builds on the PRD — GENIE.AI Agentic Enablement ( ../prd-agentic-enablement.md ) and specifically addresses Pillar 2 (Agentic layer)
 
-The next stage of the GENIEAI roadmap is to introduce agentic capabilities that allow applications to execute multi-step, stateful, tool-using workflows rather than being limited to a single request/retrieval/generation interaction.
+The objective is to introduce agentic capabilities that allow applications to execute multi-step, stateful, tool-using workflows rather than being limited to a single request/retrieval/generation interaction.
 
 The proposed GENIEAI Agent Runtime will provide a standardized and extensible execution environment for building and running AI agents while preserving compatibility with the existing GENIEAI/OPEA microservice infrastructure.
 

@@ -18,6 +18,12 @@ logger = logging.getLogger("GENIE_DATAPREP_SERVICE_ACCOUNT")
 
 # Configuration from environment
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "")
+# Split-URL (Docker Desktop WSL2 / local build): the public KEYCLOAK_URL
+# (https://localhost/auth) is unreachable from the container. KEYCLOAK_INTERNAL_URL
+# points at the internal Keycloak (http://keycloak:8080) for the token fetch —
+# the same pattern chatqna's token validator uses. Additive: when unset, the
+# token endpoint falls back to KEYCLOAK_URL (unchanged behavior).
+KEYCLOAK_INTERNAL_URL = os.getenv("KEYCLOAK_INTERNAL_URL", "")
 KC_REALM = os.getenv("KC_REALM", "genie")
 KC_DATAPREP_CLIENT_ID = os.getenv("KC_DATAPREP_CLIENT_ID", "")
 KC_DATAPREP_CLIENT_SECRET = os.getenv("KC_DATAPREP_CLIENT_SECRET", "")
@@ -30,7 +36,8 @@ _token_lock = asyncio.Lock()
 
 
 def _get_token_endpoint() -> str:
-    return f"{KEYCLOAK_URL}/realms/{KC_REALM}/protocol/openid-connect/token"
+    base = KEYCLOAK_INTERNAL_URL or KEYCLOAK_URL
+    return f"{base}/realms/{KC_REALM}/protocol/openid-connect/token"
 
 
 async def get_service_account_token() -> str:

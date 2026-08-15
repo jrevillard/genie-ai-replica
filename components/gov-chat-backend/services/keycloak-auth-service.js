@@ -136,6 +136,21 @@ async function init(idpUrl) {
 
   const jwks = createJwksCache(doc.jwks_uri);
   issuerMap.set(doc.issuer, jwks);
+
+  // Alias a public-facing issuer for split internal/public OIDC URLs (e.g. local
+  // build behind Docker Desktop): the browser token iss (https://localhost) can
+  // differ from the discovery issuer fetched internally (http://kong:8000). Map
+  // the public issuer to the same JWKS so token lookup succeeds. No-op if unset.
+  // Mirrors shared/lib keycloak-auth-service (used by okf-server).
+  const publicUrl = process.env.KEYCLOAK_PUBLIC_URL;
+  if (publicUrl) {
+    const publicIssuer = `${publicUrl.replace(/\/$/, '')}/realms/${KEYCLOAK_REALM}`;
+    if (publicIssuer !== doc.issuer) {
+      issuerMap.set(publicIssuer, jwks);
+      logger.info(`[KeycloakAuth] Aliased public issuer ${publicIssuer} -> same JWKS`);
+    }
+  }
+
   initialized = true;
   initFailedAt = 0;
 

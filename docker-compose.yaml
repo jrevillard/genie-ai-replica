@@ -450,6 +450,10 @@ services:
       # Keycloak OIDC discovery — must use the public URL (via NGINX proxy),
       # not the internal Docker URL, so the issuer matches the JWT's iss claim.
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
+      # Split-URL OIDC: KEYCLOAK_PUBLIC_URL aliases the browser-facing issuer to
+      # the same JWKS when discovery is fetched via a different (internal) URL.
+      # No-op when unset (cloud) — mirrors the okf-server block.
+      - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
       - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       # Additional Keycloak realms for multi-realm token validation (JSON map: {"realm":"client-id"})
@@ -610,6 +614,9 @@ services:
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_URL=http://arango-vector-db:8529
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
+      # Split-URL OIDC: KEYCLOAK_PUBLIC_URL overrides the expected issuer when
+      # JWKS is fetched via a different (internal) URL. No-op when unset (cloud).
+      - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -1063,6 +1070,12 @@ services:
       DOCUMENT_REPOSITORY_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
       KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
+      # Split-URL OIDC (local builds): when the public KEYCLOAK_URL is
+      # unreachable from the container (Docker Desktop WSL2), set
+      # KEYCLOAK_INTERNAL_URL (e.g. http://keycloak:8080) to mint the
+      # service-account token internally. Empty default — cloud/Swarm use
+      # KEYCLOAK_URL unchanged (same pattern as chatqna's validator).
+      KEYCLOAK_INTERNAL_URL: ${KEYCLOAK_INTERNAL_URL:-}
       KC_REALM: ${KEYCLOAK_REALM:-genie}
       KC_DATAPREP_CLIENT_ID: ${KC_DATAPREP_CLIENT_ID:-dataprep-service-client}
       KC_DATAPREP_CLIENT_SECRET: ${KC_DATAPREP_CLIENT_SECRET:-}
@@ -1268,6 +1281,10 @@ services:
       DOC_REPO_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
       KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
+      # Split-URL OIDC (local builds): internal Keycloak for the JWKS fetch when
+      # the public URL is unreachable from the container. Empty default — cloud
+      # uses KEYCLOAK_URL unchanged.
+      KEYCLOAK_INTERNAL_URL: ${KEYCLOAK_INTERNAL_URL:-}
       KC_REALM: ${KEYCLOAK_REALM:-genie}
       KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}

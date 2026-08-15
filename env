@@ -441,6 +441,17 @@ HUGGING_FACE_HUB_TOKEN=
 # REQUIRED — app will not start without this value
 KEYCLOAK_URL=https://localhost/auth
 
+# Split-URL OIDC (optional — deployments where the public KEYCLOAK_URL is NOT
+# reachable from inside the container network, e.g. Docker Desktop WSL2):
+#   KEYCLOAK_PUBLIC_URL   — browser-facing issuer alias for token validation
+#                           (backend, document-repository, okf-server). Unset = disabled.
+#   KEYCLOAK_INTERNAL_URL — internal Keycloak base (http://keycloak:8080) used by
+#                           chatqna (JWKS fetch) and dataprep (service-account token
+#                           mint). Unset = disabled (services use KEYCLOAK_URL).
+# Cloud/Swarm deployments where the public URL resolves internally: leave both unset.
+# KEYCLOAK_PUBLIC_URL=https://localhost/auth
+# KEYCLOAK_INTERNAL_URL=http://keycloak:8080
+
 # Keycloak redirect URIs and web origins are auto-derived from NGINX_PUBLIC_DOMAIN + NGINX_HTTPS_PORT:
 #   KC_PUBLIC_ORIGIN=https://<NGINX_PUBLIC_DOMAIN>[:<NGINX_HTTPS_PORT>]
 # This is set internally in docker-compose.yaml (keycloak-config service).

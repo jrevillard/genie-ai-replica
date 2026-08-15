@@ -25,6 +25,19 @@ async function getJWKS() {
     const realm = appConfig.security.keycloakRealm;
     const jwksUri = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/certs`;
     expectedIssuer = `${keycloakUrl}/realms/${realm}`;
+    // Split internal/public OIDC URLs (same pattern as shared/lib
+    // keycloak-auth-service): JWKS is fetched via the internal KEYCLOAK_URL
+    // (reachable on the container network) while tokens minted through the
+    // public endpoint carry the public issuer. KEYCLOAK_PUBLIC_URL overrides
+    // the expected issuer only — no-op when unset (single-URL deployments).
+    const publicUrl = process.env.KEYCLOAK_PUBLIC_URL;
+    if (publicUrl) {
+      const publicIssuer = `${publicUrl.replace(/\/$/, '')}/realms/${realm}`;
+      if (publicIssuer !== expectedIssuer) {
+        logger.info(`[KEYCLOAK-AUTH] Issuer alias: validating ${publicIssuer} (JWKS via internal ${keycloakUrl})`);
+        expectedIssuer = publicIssuer;
+      }
+    }
     logger.info(`[KEYCLOAK-AUTH] Initializing JWKS from ${jwksUri}`);
     jwks = jose.createRemoteJWKSet(new URL(jwksUri));
   }

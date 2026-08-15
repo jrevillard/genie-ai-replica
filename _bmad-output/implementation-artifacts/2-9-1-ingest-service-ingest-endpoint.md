@@ -1,0 +1,107 @@
+---
+baseline_commit: d4d3c569c
+---
+# Story 2.9.1: `ingestService` + `POST /api/okf/repos/:repo_id/ingest`
+
+Status: ready-for-dev
+
+Story key: `2-9-1-ingest-service-ingest-endpoint` | GitLab: #917 (`prd::okf-server`, `okf-server::epic-2.9`)
+Epic: 2.9 (Write-side Orchestration — the trunk) | Branch: `feat/okf-server`
+FRs: **FR-34** (async ingestion pipeline), FR-4, FR-5 (PII leg), FR-6, NFR-S4 (idempotent re-ingest), NFR-R2 | Gap: **G1 (P0)** | ADRs: okf-021 (write-path), okf-022 (Node→Python handoff), okf-025 (authz)
+
+> **The G1 gap:** the OKF Server has a parser, a conformance service, a concepts-meta writer, and a PII scanner — but **no component sequences them**. The only ingest path is doc-repo's 2.5 route, which fire-and-forgets the WHOLE bundle at dataprep (racing the single-ingest 429 lock — proven live), with no parse/meta/conformance/PII at all. This story ships the **write-side orchestrator** (`services/ingest-service.js`) that owns the ADR-021 sequence end-to-end and the async 202 contract, making every downstream consumer (2.9.3–2.9.9, Epics 9/10) possible.
+
+## Story
+
+As a **steward**,
+I want **to trigger an end-to-end ingest that runs parse → meta → conformance → PII → dedup → enqueue per concept and returns 202 immediately**,
+so that **the HTTP call never blocks on dataprep, every concept is validated/scanned/deduped before indexing, and large repos don't time out**.
+
+## Acceptance Criteria
+
+1. **`services/ingest-service.js` (NEW)** — `ingestRepoConcepts(repo_id, inputs, actor)` executes the ADR-021 §2.3 per-concept sequence [4a–4f], for each concept **in order**:
+   - **4a** `parserService.parseConcept(markdown, { repo_id, path })` (direct import — pure, no DB; `parser-service.js:200`)
+   - **4b** `conceptMetaService.upsertConceptMeta(repo_id, parsed, { bundle_version })` — the FULL upsert (first-class fields, `index_status:'parsed'`, `pii_state:'unknown'` default; the writer's minimal-input patch-only semantics and pii_state/last_good_index_at protections apply automatically)
+   - **4c** `conformanceService.validateConcept(parsed)` then `persistConformanceIssues(repo_id, concept_id, issues)` — ALWAYS after 4b (the 2.9.2 review-proven 4b→4c order; persist is patch-only, never clobbers)
+   - **4d** `piiService.scanConcept(repo_id, concept_id, parsed.frontmatter, parsed.body)` — in-loop, fail-closed (sidecar down ⇒ `pii_state:'error'` ⇒ publish blocked; the ingest CONTINUES — an error state is a valid outcome, not a request failure)
+   - **4e** **content-hash dedup**: after 4b, re-read the stored doc's `content_hash` + `index_status`; if the hash is UNCHANGED and `index_status === 'indexed'` ⇒ skip enqueue for that concept, count it as `skipped_dedup` (cannot fire until 2.9.4 writes `indexed` — implement the rule now; hash scope = sha256(body) as written by the 2.9.2 writer, pinned)
+   - **4f** **enqueue**: store the concept body via doc-repo `POST /api/files/ingest-bundle` with `{ bundle: base64(concept .md), graph_name: OKF_{repo_id}, repo_id, originalFileName: '<concept_id>.md', labels: ACL_LABELS, defer_kick: true }` (see AC 4 for the flag; AC 6 for ACL labels) → the per-concept `files` doc lands at `dataprep.status='Pending'` for the 2.9.4 worker to drain. If the store call fails ⇒ per-concept `enqueue_errors[]`, other concepts proceed (isolation, FR-34).
+   The function returns a summary: `{ repo_id, total, parsed, created, updated, skipped_dedup, pii: { clean, hit, error }, enqueued, enqueue_errors: [{concept_id, error}] }`.
+2. **`POST /api/okf/repos/:repo_id/ingest`** (repos-routes.js, after the pii-scan route) — gate: `requireRepoScope('repo_id', 'admin')` (Story 6.1's middleware — supersedes the epic's "(tools-admin)"; tools-admin holders pass via the super-role). Controller pre-gate: `repoService.getById(repo_id, { authz: authzForService(req) })` — foreign/missing ⇒ **404** (anti-enumeration, mirrors piiScan at `repository-controller.js:149`). Body (Joi — mirror the pii-scan shapes exactly): **either** `{ concepts: [{ frontmatter?, body }] }` (explicit — 2.9.5 unzip and 7.2 producer call the SERVICE directly), **or** `{ file_ids: [...] }` / `{ discover: true }` — the repo's stored plain-`.md` docs fetched via `piiService.discoverRepoFiles` + `fetchFileBytes`. Resolves **202** with the AC-1 summary once every concept has completed 4a–4f (or its per-concept error). Malformed body ⇒ 400 `VALIDATION_ERROR`; repo 404 propagates.
+3. **`defer_kick` flag on the doc-repo bundle route (additive)** — `POST /api/files/ingest-bundle` accepts `defer_kick: boolean` (default `false` = today's fire-and-forget). When `true`, the route stores + ClamAV-scans + creates the `files` doc at `Pending` and does **NOT** `setImmediate(_ingestFileById)` — the 2.9.4 worker owns draining. Without this, N concurrent per-concept kicks race dataprep's single-ingest 429 lock (proven live 2026-08-15: 4 of 5 kicks failed). Existing callers unchanged (default false). Doc-repo tests: default kicks, `defer_kick:true` does not.
+4. **Service-account auth for okf-server → doc-repo (prereq fix)** — NEW `services/service-token.js`: mint a client-credentials bearer via `KEYCLOAK_URL` + `KC_OKF_SERVER_CLIENT_ID` (default `okf-server`) + `KC_OKF_SERVER_CLIENT_SECRET` (client + secret already provisioned by 6.1 in `genie-realm.yaml`), cached with expiry, used by an axios wrapper for ALL okf-server → doc-repo HTTP (`ingest-bundle`, `fetchFileBytes` at `pii-service.js:341` — which today sends NO auth and would 401 in production). Mirror the proven dataprep pattern (`genie-ai-overlay/dataprep/keycloak_service_account.py`). Compose: add the two env vars to the okf-server service (empty default ⇒ if unset, calls send no token and doc-repo 401s — log a loud one-time warning; the feature requires the env, same as dataprep's).
+5. **`repo_id` stamp-mismatch fix (2.8 dead-discovery repair)** — doc-repo stamps `files.repo_id` (`metadataService.js:34`); okf-server's `discoverRepoFiles`/`getRepoDocumentReferences` query `okf_repo_id` (`pii-service.js:293,319`) — **zero hits against real data** (fixtures masked it). Change the okf-server queries to `repo_id` (the doc-repo field is the deployed truth; two files ever used `okf_repo_id`); update fixtures. Add a regression test that seeds a files doc with `repo_id` (as doc-repo writes it) and asserts discovery finds it.
+6. **ACL-label injection (sole injector)** — the orchestrator derives `ACL_LABELS = ['t:<tenant>', 'r:<repo_id>', 'd:<domain>']` from the repo doc. **Tenant v1 = repo.domain** (the repo doc has no separate tenant field; both axes pinned to domain until 6.1b's resolver owns them — decision D-A). Labels are lowercase-prefixed, case-sensitive (dataprep pins this, `arangodb.py:89-96`), and dataprep skips the LLM labeler when ACL prefixes are present (2.6a) — so per-concept concepts carry ONLY ACL labels unless the caller supplied hierarchy labels, which are appended after the ACL set.
+7. **`bundle_version` threading** — `bundle_version = repo.version ?? null` (the repo doc field). `mintVersion()` is 2.9.7; publish-only minting is out of scope (decision D-B). The value flows: 4b opts → meta doc → (future) chunks/edges.
+8. **Idempotency (NFR-S4)** — re-running ingest with identical concepts: 4b updates (no duplicates — 2.9.2 writer), 4e skips already-`indexed` unchanged concepts, 4f creates a NEW Pending files doc per concept per run. Accepted v1 semantics: re-ingest before 2.9.4 duplicates Pending docs but not meta rows; 2.9.4's drain + the dedup rule absorb it. Document in the endpoint response (`enqueued` count) — no hidden dedup magic.
+9. **MELT + audit** — `withSpan('okf.ingest.repo')` with per-stage attributes (`okf.ingest.parsed/conformance_issues/pii_state/enqueued`); counter `okf_ingest_operations_total` (operation: ingest, status: accepted|partial|error); `auditService.writeAudit({ action: 'repo.ingest', actor: sub string, repo_id, source_ip })` best-effort on 202 (before respond). No raw concept bodies in logs (NFR-P2 pattern).
+10. **Standards + smoke (per the every-story rule)** — Jest: orchestrator unit tests (mocked services, full sequence order assertions: 4b before 4c — spy call order; dedup rule; ACL derivation; per-concept isolation), route tests in the repos-routes matrix style (authz gate, 404 foreign, 202 shape, body validation), doc-repo `defer_kick` tests, service-token tests (mocked token endpoint), discovery `repo_id` regression. ESLint/Prettier clean. **Extend `run-smoke.js`** with an ingest phase (minted tokens; small concept set incl. one unchanged-re-ingest): POST /ingest ⇒ 202 with the summary; assert per-concept meta rows (index_status parsed), pii states, files docs at `Pending` with `graph_name=OKF_{repo_id}` + ACL labels, and a second run's dedup-safe behavior; fix bugs until exit 0.
+
+## Tasks / Subtasks
+
+- [ ] **T1 — `services/service-token.js`** (AC: 4): client-credentials mint + cache + axios wrapper; compose env (`KC_OKF_SERVER_CLIENT_ID/SECRET` on okf-server); wire `fetchFileBytes` through it. Tests.
+- [ ] **T2 — `repo_id` discovery fix** (AC: 5): `pii-service.js` queries `repo_id`; fixtures updated; regression test (seed as doc-repo writes).
+- [ ] **T3 — doc-repo `defer_kick`** (AC: 3): Joi + conditional kick in `bundleIngest`; tests (kick default / no-kick flag).
+- [ ] **T4 — `services/ingest-service.js`** (AC: 1,6,7,8,9): the sequence, ACL derivation, dedup rule, per-concept isolation, summary, MELT. Unit tests incl. 4b→4c call order + fail-closed PII continuation.
+- [ ] **T5 — Route + controller** (AC: 2): Joi bodies (concepts/file_ids/discover), requireRepoScope + getById pre-gate, 202 + summary, audit. Route-matrix tests.
+- [ ] **T6 — Smoke extension** (AC: 10): ingest phase + re-ingest; local-build run; fix until exit 0.
+- [ ] **T7 — Verify**: full okf-server + doc-repo suites; eslint/prettier; evidence in Dev Agent Record.
+
+## Dev Notes
+
+### The ADR-021 sequence as implemented (verified against code — file:line)
+
+`[2]` resolve repo (`repository-service.getById:282` — authz-aware 404) → derive `graph_name=OKF_{repo_id}` + ACL labels + bundle_version → `[4 per concept]` 4a `parseConcept:200` → 4b `upsertConceptMeta:167` (FULL input) → 4c `validateConcept:49` + `persistConformanceIssues:131` (minimal patch) → 4d `scanConcept:121` (fail-closed, persists its own state) → 4e dedup (`content_hash:68-72` + `index_status`) → 4f enqueue (doc-repo bundle route, `defer_kick`) → `[202]`. Steps [5] worker drain / [6] sweeper / [7] lifecycle = 2.9.4/2.9.3/4.3 — **NOT this story** (see boundaries).
+
+### Decisions (ambiguities from the artifact analysis, resolved)
+
+- **D-A ACL tenant axis:** `t:` = `repo.domain` in v1 (no tenant field exists on repos; 6.1b's resolver owns per-axis derivation later). Both `t:`/`d:` carry domain until then — isolation is repo-scoped (`r:`) + domain-scoped (`d:`), which is what 6.1 enforces today.
+- **D-B bundle_version:** thread `repo.version ?? null`; `mintVersion()` (2.9.7) replaces this when it lands. The orchestrator NEVER mints.
+- **D-C unzip boundary:** the ENDPOINT accepts explicit `concepts[]` or already-stored `.md` docs — **no zip handling here**. 2.9.5 owns the zip contract and will call `ingestRepoConcepts` directly with unzipped concepts (the epic's "unzips the bundle" wording is satisfied by 2.9.5 → this service; orchestration ≠ format).
+- **D-D enqueue primitive (pre-2.9.4):** the "queue" is ArangoDB state — per-concept `files` docs at `dataprep.status='Pending'` (what the 2.9.4 worker polls, `epics.md:380`). **No Redis in this story**: ADR-021:11's "crawl worker drains Redis Streams" misstates the code (it's ArangoDB polling, `crawlWorker.js:95-101`) — there is NO in-repo Streams precedent, no ioredis dep in okf-server, and a stream with no consumer is dead weight. 2.9.4 introduces Streams + DLQ + the ioredis dep if it still wants them (its AC says it polls `files` anyway).
+- **D-E files-doc shape:** ONE `files` doc PER CONCEPT (the per-concept .md stored via the bundle route at enqueue), NOT one per bundle. Rationale: the 2.9.4 worker's contract is `_ingestFileById` per file (5.i) and retract/re-ingest are per-concept (FR-8); a bundle-level doc cannot carry per-concept statuses. The 2.5 route's whole-bundle upload remains for legacy/manual use.
+- **D-F PII in-loop (4d synchronous, bounded):** healthy sidecar ≈ tens of ms/concept (live-measured: 6 concepts < 1s); fail-closed worst case ~30s/concept (10s × 3 retries) writes `pii_state:'error'` and CONTINUES — the request duration risk is accepted for v1's explicit-concept inputs (small N); document `OKF_INGEST_MAX_CONCEPTS` (default 200, 400 above) as the bound. Async-PII is the 2.9.4-era option if real bundles prove slow.
+- **D-G index_status ownership:** 2.9.1 writes only `'parsed'` (via 4b). `indexed|failed` = 2.9.4's worker exclusively (epics 2.9.4 AC; the 2.9.2 story-file drift naming 2.9.1 as co-owner is corrected here).
+- **D-H sole-caller pin:** the ORCHESTRATOR is the only OKF-path caller of doc-repo's bundle route (its storage leg, per the amended 2.5). The route stays available to human admins (Admin role) for manual uploads — both paths converge on the same files-doc shape.
+- **D-I known-gated limitation (documented, not fixed here):** dataprep DROPS `graphName` (G5, `DocRepoIngestPayload:110-116` — pydantic discards it; verified live 2026-08-15). Chunks land in the default `GRAPH` until 2.9.6 (OPEA-bump-gated). The orchestrator stamps `graph_name` correctly on every files doc NOW so 2.9.6 needs zero orchestrator changes.
+
+### Verified code anchors (read before coding)
+
+- `services/parser-service.js:200` parseConcept (+ shape :237-251, links :112-143) — pure, direct import is its designed contract.
+- `services/concept-meta-service.js:167` upsertContract — minimal vs full semantics :76-79/:130, pii_state protection :136-138, create-path race :201-217, exports contentHash/buildMetaDoc :225.
+- `services/conformance-service.js:49/:131` — validate + persist (patch-only via the writer).
+- `services/pii-service.js:121` scanConcept (persists its own state, fail-closed), `:196` assertPiiClean, `:315` discoverRepoFiles (FIX the field name — AC 5), `:341` fetchFileBytes (ADD auth — AC 4).
+- `services/repository-service.js:282` getById authz gate (404 anti-enumeration — preserve EXACTLY), `:330` update (UPDATABLE_FIELDS — do NOT touch lifecycle here), no transition API exists (correctly out of scope).
+- `middleware/require-scope.js:88` requireRepoScope — level keys only; `routes/repos-routes.js:18-27` route table (slot after pii-scan); `routes/okf-routes.js:13-14` inherited gates.
+- doc-repo: `fileRoutes.js:772` bundle route + `fileController.js:1059-1124` (kick at :1103-1107 — the defer_kick conditional), `fileService.js:910-951` uploadBundle, `metadataService.js:33-40` stamps (`repo_id` + `dataprep.status='Pending'`).
+- `db/collections.js:13` — NO new collection needed (files docs live in doc-repo's `files` collection, same ArangoDB, already read by pii-service).
+- `config.js:15-17` DOCUMENT_REPOSITORY_URL default exists; compose env block `docker-compose.yaml:537-560` needs the two new token envs.
+- Dataprep gotchas (context, not modified): single-flight 429 lock `microservice.py:146-158`; ACL preserve + labeler skip `arangodb.py:89-96,1185-1194`; status callback contract (`chunk_count` at payload ROOT, `arangodb.py:325-328`); retract default-graph divergence `microservice.py:292`.
+
+### Test conventions
+
+Orchestrator units: prologue-mock shared-lib (see `concept-meta-service.test.js:7-19`), `mocks/arango-mock.js`, service mocks with jest.fn + call-order spies (`expect(spyA).toHaveBeenCalledBefore(spyB)` or manual order capture — 4b→4c is the assertion). Route tests: `repos-routes.test.js` matrix style (`authScoped`, `authzAwareServiceMock`); the ingest tests mock `ingest-service` + `repository-service`, assert gate order (getById before ingest) and 202 shape. Doc-repo: `bundleIngest.test.js` patterns. Service-token: mock the token endpoint via axios mock.
+
+### Inherited lessons (2.8/2.9.2/6.1 reviews)
+
+Writer's 4b→4c order is security-critical (clobber) · pii_state never downgrades without a rescan · fail-closed PII means 'error' blocks publish but not ingest · ACL prefixes case-sensitive lowercase · MELT on every method + audit actor = sub string · per-concept isolation (one bad concept must not fail the request) · smoke asserts EVERYTHING it claims, exits non-zero otherwise · extend the smoke with this story's features (standing rule) · no Co-Authored-By.
+
+### Scope boundary (do NOT build)
+
+Worker/Streams/DLQ/sweeper (2.9.4) · zip contract/unzip (2.9.5) · `graph_name` dataprep wiring + retract fix (2.9.6, gated) · `_LINKS_TO` edges (2.9.3) · `mintVersion`/`okf_versions` (2.9.7) · lifecycle transitions (4.3/2.9.4) · Kong OIDC (ADR-003 leg) · any Redis dependency.
+
+### References
+
+- ADR-okf-021 (§2.3 sequence, D1/D2/D5/D6, 202 contract, idempotency), ADR-okf-22 (pre-parsed body handoff — the additive dataprep payload change lands with 2.9.4/2.9.6, NOT here: this story's enqueue keeps the existing whole-file contract).
+- PRD FR-34 (`prd.md:185-191`), FR-4/5/6, NFR-S4/R2 · epics.md:358-362 (2.9.1), :376-380 (2.9.4 boundary), :382-386 (2.9.5 boundary) · course-correction §2.3 (:112-174), G1/G10/G11.
+- Code anchors above; live evidence 2026-08-15 (429 race, zip rejection, single-file lifecycle).
+
+## Dev Agent Record
+
+### Agent Model Used
+
+### Debug Log References
+
+### Completion Notes List
+
+### File List

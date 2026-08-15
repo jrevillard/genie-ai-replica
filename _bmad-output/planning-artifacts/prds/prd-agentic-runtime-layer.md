@@ -1036,6 +1036,30 @@ The Agent Runtime should ultimately provide the following model:
                                           │
                                      Vue.js UI
 
+
+
+
+                         Agent
+                           │
+                ┌──────────┴──────────┐
+                │                     │
+              State              Context Manager
+                │                     │
+                │              ┌──────┴───────┐
+                │              │              │
+                │           Memory         Knowledge
+                │           sources        sources
+                │              │              │
+                │       ┌──────┼──────┐       │
+                │       │      │      │       │
+                │     Arango  Files  Custom   OKF
+                │
+                └──────────────┬────────────────┘
+                               │
+                         Context Assembly
+                               │
+                              vLLM
+
 The central architectural principle is:
 
 GENIEAI should provide the platform and the contracts; individual agents should define the architecture they need.

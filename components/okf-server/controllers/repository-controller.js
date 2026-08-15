@@ -6,7 +6,6 @@
 const repoService = require('../services/repository-service');
 const piiService = require('../services/pii-service');
 const { createSchema, updateSchema } = require('../validators/repository-validator');
-const { logger } = require('../shared-lib/logger');
 
 class ValidationError extends Error {
   constructor(details) {
@@ -24,15 +23,32 @@ function actorFrom(req) {
 }
 
 /**
- * Basic domain filter (full per-tenant/repo/domain RBAC is Story 6.1).
- * Reads an optional 'okf_domain' claim; if absent, returns undefined (all repos).
+ * Default-deny authorization context (Story 6.1 — replaces the no-op
+ * okf_domain seam). Derived from req.okfScopes (set by middleware/auth.js):
+ * `okf:{tenant}:{repo}:{level}` → the caller's authorized repo set. Wildcard
+ * scopes and the tools-admin bootstrap super-role ⇒ isSuperAdmin (unrestricted).
+ * A caller with no okf scopes gets an EMPTY set — list returns nothing, and
+ * getById 404s every repo (G3 closed).
  */
-function callerDomain(req) {
-  const d = req.user && req.user.okf_domain;
-  if (!d) {
-    logger.debug('No okf_domain claim on token — returning all visible repos (full RBAC deferred to Story 6.1)');
+function callerAuthz(req) {
+  if (req.okfIsSuperAdmin) return { isSuperAdmin: true, authorizedRepoIds: null };
+  const scopes = Array.isArray(req.okfScopes) ? req.okfScopes : [];
+  const repos = new Set();
+  let wildcard = false;
+  for (const scope of scopes) {
+    const parts = scope.split(':');
+    if (parts.length !== 4 || parts[0] !== 'okf') continue;
+    if (parts[2] === '*') wildcard = true;
+    else if (parts[2]) repos.add(parts[2]);
   }
-  return d || undefined;
+  if (wildcard) return { isSuperAdmin: true, authorizedRepoIds: null };
+  return { isSuperAdmin: false, authorizedRepoIds: repos };
+}
+
+/** Service-facing authz param: null = unrestricted, Set = filter. */
+function authzForService(req) {
+  const { isSuperAdmin, authorizedRepoIds } = callerAuthz(req);
+  return isSuperAdmin ? null : authorizedRepoIds;
 }
 
 function validate(schema, body) {
@@ -55,7 +71,7 @@ async function listRepos(req, res, next) {
   try {
     const { cursor, limit } = req.query;
     const result = await repoService.list({
-      domain: callerDomain(req),
+      authz: authzForService(req),
       cursor,
       limit: parseInt(limit, 10)
     });
@@ -67,7 +83,7 @@ async function listRepos(req, res, next) {
 
 async function getRepo(req, res, next) {
   try {
-    const repo = await repoService.getById(req.params.repo_id, { domain: callerDomain(req) });
+    const repo = await repoService.getById(req.params.repo_id, { authz: authzForService(req) });
     res.status(200).json(repo);
   } catch (err) {
     next(err);
@@ -106,9 +122,10 @@ async function piiScan(req, res, next) {
     const { repo_id } = req.params;
     const { concepts, file_ids, discover } = req.body || {};
 
-    // Repo-existence + domain gate (mirrors every other mutating route) —
-    // fail BEFORE writing any meta docs (code-review fix #7).
-    await repoService.getById(repo_id, { domain: callerDomain(req) });
+    // Repo-existence + authorization gate (mirrors every other mutating route) —
+    // fail BEFORE writing any meta docs (code-review fix #7). A repo outside
+    // the caller's scopes 404s identically to a missing one (Story 6.1).
+    await repoService.getById(repo_id, { authz: authzForService(req) });
 
     let inputs = [];
     let sourceFileIds = [];

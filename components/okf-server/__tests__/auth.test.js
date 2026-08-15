@@ -45,7 +45,7 @@ describe('auth middleware (authenticate)', () => {
     const res = mockRes();
     const next = jest.fn();
     await authenticate(req, res, next);
-    expect(keycloakAuthService.verifyToken).toHaveBeenCalledWith('token-value');
+    expect(keycloakAuthService.verifyToken).toHaveBeenCalledWith('token-value', {});
     expect(req.user).toEqual({ sub: 'user-123', roles: ['user'] });
     expect(next).toHaveBeenCalled();
   });
@@ -59,5 +59,108 @@ describe('auth middleware (authenticate)', () => {
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
     expect(next).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Story 6.1: scope resolution + opt-in audience ───────────────────────────
+
+describe('auth middleware — okf scope resolution (Story 6.1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    delete process.env.OKF_AUDIENCE;
+  });
+  afterEach(() => delete process.env.OKF_AUDIENCE);
+
+  const mkReq = () => ({ headers: { authorization: 'Bearer test-token' } });
+
+  test('parses okf_scopes array claim → req.okfScopes (deduped, order preserved)', async () => {
+    keycloakAuthService.verifyToken.mockResolvedValue({
+      sub: 'u1',
+      okf_scopes: ['okf:t1:repoA:read', 'okf:t1:repoB:admin', 'okf:t1:repoA:read'],
+      realm_access: { roles: ['user'] }
+    });
+    const req = mkReq();
+    await authenticate(req, mockRes(), jest.fn());
+    expect(req.okfScopes).toEqual(['okf:t1:repoA:read', 'okf:t1:repoB:admin']);
+    expect(req.okfIsSuperAdmin).toBe(false);
+  });
+
+  test('parses okf_scopes as a space-separated string', async () => {
+    keycloakAuthService.verifyToken.mockResolvedValue({
+      sub: 'u1',
+      okf_scopes: 'okf:t1:repoA:read okf:t2:repoC:admin',
+      realm_access: { roles: [] }
+    });
+    const req = mkReq();
+    await authenticate(req, mockRes(), jest.fn());
+    expect(req.okfScopes).toEqual(['okf:t1:repoA:read', 'okf:t2:repoC:admin']);
+  });
+
+  test('parses the standard scope claim (space-separated) and keeps only okf: entries', async () => {
+    keycloakAuthService.verifyToken.mockResolvedValue({
+      sub: 'u1',
+      scope: 'openid profile okf:t1:repoA:admin',
+      realm_access: { roles: [] }
+    });
+    const req = mkReq();
+    await authenticate(req, mockRes(), jest.fn());
+    expect(req.okfScopes).toEqual(['okf:t1:repoA:admin']);
+  });
+
+  test('okf_scopes entries come FIRST when both claims are present, deduped', async () => {
+    keycloakAuthService.verifyToken.mockResolvedValue({
+      sub: 'u1',
+      okf_scopes: ['okf:t1:repoA:read'],
+      scope: 'openid okf:t1:repoB:admin okf:t1:repoA:read',
+      realm_access: { roles: [] }
+    });
+    const req = mkReq();
+    await authenticate(req, mockRes(), jest.fn());
+    expect(req.okfScopes).toEqual(['okf:t1:repoA:read', 'okf:t1:repoB:admin']);
+  });
+
+  test('tools-admin realm role → req.okfIsSuperAdmin true (bootstrap super-role)', async () => {
+    keycloakAuthService.verifyToken.mockResolvedValue({ sub: 'u1', realm_access: { roles: ['admin', 'tools-admin'] } });
+    const req = mkReq();
+    await authenticate(req, mockRes(), jest.fn());
+    expect(req.okfIsSuperAdmin).toBe(true);
+    expect(req.okfScopes).toEqual([]);
+  });
+
+  test('no okf scopes, no tools-admin → empty scopes, super=false (default-deny posture)', async () => {
+    keycloakAuthService.verifyToken.mockResolvedValue({
+      sub: 'u1',
+      scope: 'openid profile',
+      realm_access: { roles: ['admin'] }
+    });
+    const req = mkReq();
+    await authenticate(req, mockRes(), jest.fn());
+    expect(req.okfScopes).toEqual([]);
+    expect(req.okfIsSuperAdmin).toBe(false);
+  });
+
+  test('non-string garbage inside okf_scopes is ignored, not crashed on', async () => {
+    keycloakAuthService.verifyToken.mockResolvedValue({
+      sub: 'u1',
+      okf_scopes: [42, null, 'okf:t1:repoA:read'],
+      realm_access: {}
+    });
+    const req = mkReq();
+    await authenticate(req, mockRes(), jest.fn());
+    expect(req.okfScopes).toEqual(['okf:t1:repoA:read']);
+  });
+
+  test('OKF_AUDIENCE env set → verifyToken receives { audience } (RFC 8707 opt-in)', async () => {
+    process.env.OKF_AUDIENCE = 'okf-server';
+    keycloakAuthService.verifyToken.mockResolvedValue({ sub: 'u1', realm_access: {} });
+    await authenticate(mkReq(), mockRes(), jest.fn());
+    expect(keycloakAuthService.verifyToken).toHaveBeenCalledWith('test-token', { audience: 'okf-server' });
+  });
+
+  test('OKF_AUDIENCE unset → no audience option (historical behavior)', async () => {
+    keycloakAuthService.verifyToken.mockResolvedValue({ sub: 'u1', realm_access: {} });
+    await authenticate(mkReq(), mockRes(), jest.fn());
+    const opts = keycloakAuthService.verifyToken.mock.calls[0][1];
+    expect(opts && opts.audience).toBeUndefined();
   });
 });

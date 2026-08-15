@@ -555,6 +555,9 @@ services:
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
       # Repository soft-delete grace window (hours) before hard delete (sweep deferred to Story 4.6).
       - OKF_DELETE_GRACE_HOURS=${OKF_DELETE_GRACE_HOURS:-168}
+      # Story 6.1 (RFC 8707): activate audience binding by setting e.g. okf-server.
+      # Empty default = off (deployments without the audience mapper keep working).
+      - OKF_AUDIENCE=${OKF_AUDIENCE:-}
     networks:
       - genieai_network
     deploy:
@@ -1485,6 +1488,7 @@ services:
       - GENIE_ADMIN_EMAIL=${GENIE_ADMIN_EMAIL}
       - KC_PROXY_CLIENT_SECRET=${KEYCLOAK_PROXY_CLIENT_SECRET}
       - KC_DATAPREP_CLIENT_SECRET=${KC_DATAPREP_CLIENT_SECRET}
+      - KC_OKF_SERVER_CLIENT_SECRET=${KC_OKF_SERVER_CLIENT_SECRET:-}
       - KC_GRAFANA_CLIENT_ID=${KC_GRAFANA_CLIENT_ID:-grafana}
       - KC_GRAFANA_CLIENT_SECRET=${KC_GRAFANA_CLIENT_SECRET}
       - KC_MOBILE_CLIENT_ID=${KC_MOBILE_CLIENT_ID}

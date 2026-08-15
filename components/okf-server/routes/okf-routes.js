@@ -3,10 +3,15 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
+const { requireScope } = require('../middleware/require-scope');
 const { withSpan } = require('../shared-lib/tracing');
 
-// Auth on all OKF API routes (per-route via router.use, NOT global)
+// Auth on all OKF API routes (per-route via router.use, NOT global):
+// authenticate (verifyToken + scope/super-admin resolution), then the
+// default-deny router gate — a caller with no okf scope (and not the
+// tools-admin bootstrap super-role) gets 403 before any handler (Story 6.1).
 router.use(authenticate);
+router.use(requireScope('okf:read'));
 
 // Repository CRUD (Story 2.2) — inherits authenticate above.
 router.use('/repos', require('./repos-routes'));

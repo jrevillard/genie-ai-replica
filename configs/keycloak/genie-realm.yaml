@@ -57,8 +57,16 @@ users:
       - type: password
         value: $(env:GENIE_ADMIN_PASSWORD)
         temporary: false
+    # Story 6.1 (G3/G15): wildcard okf scope — the operator keeps full OKF
+    # access via scopes even without the tools-admin bootstrap role. The
+    # okf_scopes claim is minted by the user-attribute protocol mappers on the
+    # genie-app and okf-server clients (multivalued attribute → JSON array).
+    attributes:
+      okf_scopes:
+        - okf:*:*:admin
     realmRoles:
       - admin
+      - tools-admin
     clientRoles:
       realm-management:
         # Realm
@@ -132,6 +140,30 @@ clients:
       - $(env:KC_PUBLIC_ORIGIN)/*
     webOrigins:
       - $(env:KC_PUBLIC_ORIGIN)
+    # Story 6.1 (FR-18, RFC 8707): steward browser tokens carry the caller's
+    # okf scopes (user-attribute mapper, multivalued) and the okf-server
+    # audience. Direct mappers — NOT a shared client scope — so the client's
+    # standard optional-scope set is untouched (additive-only provisioning).
+    protocolMappers:
+      - name: okf-scopes
+        protocol: openid-connect
+        protocolMapper: oidc-usermodel-attribute-mapper
+        consentRequired: false
+        config:
+          user.attribute: okf_scopes
+          claim.name: okf_scopes
+          jsonType.label: String
+          id.token.claim: 'false'
+          access.token.claim: 'true'
+          userinfo.token.claim: 'false'
+          multivalued: 'true'
+      - name: okf-server-audience
+        protocol: openid-connect
+        protocolMapper: oidc-audience-mapper
+        consentRequired: false
+        config:
+          included.client.audience: okf-server
+          access.token.claim: 'true'
 
   # Service account for GENIE.AI backend → Keycloak Admin API proxy
   # Used to manage users, roles (CRUD, assign/remove) on behalf of GENIE.AI admin operations.
@@ -156,6 +188,33 @@ clients:
     implicitFlowEnabled: false
     serviceAccountsEnabled: true
     secret: $(env:KC_DATAPREP_CLIENT_SECRET)
+
+  # OKF server client (Story 6.1, ADR-okf-025): confidential service client for
+  # okf-server↔Keycloak service-to-service flows (token exchange etc.). Its own
+  # tokens carry the okf_scopes claim (same user-attribute mapper shape as
+  # genie-app). Audience binding is activated per deployment via OKF_AUDIENCE
+  # (empty default — off for existing deployments; see env template).
+  - clientId: okf-server
+    enabled: true
+    publicClient: false
+    standardFlowEnabled: false
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: true
+    secret: $(env:KC_OKF_SERVER_CLIENT_SECRET)
+    protocolMappers:
+      - name: okf-scopes
+        protocol: openid-connect
+        protocolMapper: oidc-usermodel-attribute-mapper
+        consentRequired: false
+        config:
+          user.attribute: okf_scopes
+          claim.name: okf_scopes
+          jsonType.label: String
+          id.token.claim: 'false'
+          access.token.claim: 'true'
+          userinfo.token.claim: 'false'
+          multivalued: 'true'
 
   # Mobile OIDC client for institutional deployments (Flutter app)
   # Each deployment configures its own clientId and redirect scheme via env vars.

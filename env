@@ -452,6 +452,13 @@ KEYCLOAK_URL=https://localhost/auth
 # KEYCLOAK_PUBLIC_URL=https://localhost/auth
 # KEYCLOAK_INTERNAL_URL=http://keycloak:8080
 
+# OKF audience binding (Story 6.1, RFC 8707 — optional): set to okf-server to make
+# the okf-server reject tokens whose aud does not include it (requires the realm
+# audience mapper — shipped in genie-realm.yaml). Unset = no audience check.
+# KC_OKF_SERVER_CLIENT_SECRET is the confidential-client secret for the
+# okf-server Keycloak client (service-to-service).
+# OKF_AUDIENCE=okf-server
+
 # Keycloak redirect URIs and web origins are auto-derived from NGINX_PUBLIC_DOMAIN + NGINX_HTTPS_PORT:
 #   KC_PUBLIC_ORIGIN=https://<NGINX_PUBLIC_DOMAIN>[:<NGINX_HTTPS_PORT>]
 # This is set internally in docker-compose.yaml (keycloak-config service).
@@ -539,6 +546,9 @@ KEYCLOAK_PROXY_CLIENT_SECRET=
 # Used by: Dataprep → Document Repository and Backend API calls
 # Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 KC_DATAPREP_CLIENT_ID=dataprep-service-client
+KC_OKF_SERVER_CLIENT_SECRET=
+
+# Dataprep service account secret (client_credentials grant)
 KC_DATAPREP_CLIENT_SECRET=
 
 # Mobile OIDC client for institutional deployments (Flutter app)

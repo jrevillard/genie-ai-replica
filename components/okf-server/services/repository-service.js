@@ -41,10 +41,7 @@ const ARANGO_UNIQUE_VIOLATION = (err) =>
  * wrapper THROW "no match"; the unit mock returns null). API smoke test caught
  * this divergence in repo-create's dup-check — a no-match caused a 500. */
 function notFoundAsNull(err) {
-  return (
-    err &&
-    (ARANGO_NOT_FOUND(err) || (err.message && /no match|not found/i.test(String(err.message))))
-  );
+  return err && (ARANGO_NOT_FOUND(err) || (err.message && /no match|not found/i.test(String(err.message))));
 }
 async function findExampleOrNull(col, example) {
   try {
@@ -201,10 +198,19 @@ async function create(input, actor) {
  * List repositories, optionally domain-filtered, cursor-paginated (created_at DESC).
  * @param {object} opts {domain?, cursor?, limit?}
  */
-async function list({ domain, cursor, limit } = {}) {
+async function list({ domain, authz, cursor, limit } = {}) {
   return withSpan('okf.repo.list', async (span) => {
     span.setAttribute('okf.operation', 'list');
     if (domain) span.setAttribute('okf.domain', domain);
+    // Default-deny (Story 6.1, G3): an EMPTY authorized set sees NOTHING —
+    // short-circuit before the query; it must never fall through to the full
+    // catalog. authz = null/absent ⇒ unrestricted (super-admin / internal).
+    if (authz instanceof Set && authz.size === 0) {
+      span.setAttribute('okf.result_count', 0);
+      recordOp('list', 'success');
+      logger.info('OKF repositories listed (empty authorized set)', { count: 0 });
+      return { items: [], next_cursor: null };
+    }
     const db = await getDb();
 
     const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 50, 100));
@@ -217,6 +223,7 @@ async function list({ domain, cursor, limit } = {}) {
     }
 
     const domainFilter = domain ? aql`FILTER d.domain == ${domain}` : aql``;
+    const authzFilter = authz instanceof Set ? aql`FILTER d.repo_id IN ${[...authz]}` : aql``;
     // Sort is created_at DESC, repo_id ASC — so "after the cursor" within the same
     // created_at means repo_id STRICTLY GREATER than the cursor's repo_id.
     const cursorFilter = cursor
@@ -227,6 +234,7 @@ async function list({ domain, cursor, limit } = {}) {
       FOR d IN ${db.collection(COLLECTION)}
         FILTER d.deleted_at == null
         ${domainFilter}
+        ${authzFilter}
         ${cursorFilter}
         SORT d.created_at DESC, d.repo_id ASC
         LIMIT ${safeLimit}
@@ -252,7 +260,7 @@ async function list({ domain, cursor, limit } = {}) {
  * @param {string} repo_id
  * @param {object} opts {domain?}
  */
-async function getById(repo_id, { domain } = {}) {
+async function getById(repo_id, { domain, authz } = {}) {
   return withSpan('okf.repo.getById', async (span) => {
     span.setAttribute('okf.operation', 'get');
     span.setAttribute('okf.repo_id', repo_id);
@@ -263,7 +271,10 @@ async function getById(repo_id, { domain } = {}) {
     } catch (err) {
       if (!ARANGO_NOT_FOUND(err)) throw err; // transient — surface, don't mask as 404
     }
-    if (!doc || doc.deleted_at || (domain && doc.domain !== domain)) {
+    // authz (Story 6.1): a repo outside the caller's authorized set is
+    // indistinguishable from a missing one (same 404 — anti-enumeration).
+    const outsideAuthz = authz instanceof Set && !authz.has(repo_id);
+    if (!doc || doc.deleted_at || (domain && doc.domain !== domain) || outsideAuthz) {
       recordOp('get', 'not_found');
       throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
     }

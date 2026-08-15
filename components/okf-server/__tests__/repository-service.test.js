@@ -244,3 +244,61 @@ describe('repository-service', () => {
     });
   });
 });
+
+// ─── Story 6.1: default-deny authz on list/getById (the G3 fix) ─────────────
+
+describe('authz scoping (Story 6.1 — G3 default-deny)', () => {
+  beforeEach(() => db._reset());
+
+  describe('getById authz', () => {
+    test('authorized repo_id in the set → returns the repo', async () => {
+      const created = await repoService.create(validCreateInput(), ACTOR);
+      const repo = await repoService.getById(created.repo_id, { authz: new Set([created.repo_id]) });
+      expect(repo.repo_id).toBe(created.repo_id);
+    });
+
+    test('repo OUTSIDE the set → REPO_NOT_FOUND — identical to a missing repo (anti-enumeration)', async () => {
+      const created = await repoService.create(validCreateInput(), ACTOR);
+      await expect(repoService.getById(created.repo_id, { authz: new Set(['some-other-repo']) })).rejects.toMatchObject(
+        {
+          code: 'REPO_NOT_FOUND',
+          status: 404
+        }
+      );
+    });
+
+    test('no authz (null/absent) → unrestricted (super-admin / internal callers)', async () => {
+      const created = await repoService.create(validCreateInput(), ACTOR);
+      const repo = await repoService.getById(created.repo_id, {});
+      expect(repo.repo_id).toBe(created.repo_id);
+    });
+  });
+
+  describe('list authz', () => {
+    test('EMPTY authorized set → { items: [], next_cursor: null } and NO query (never the full catalog)', async () => {
+      const result = await repoService.list({ authz: new Set() });
+      expect(result.items).toEqual([]);
+      expect(result.next_cursor).toBeNull();
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    test('non-empty set → the authorized repo ids ride the query as a bind var (repo_id IN)', async () => {
+      db.query.mockResolvedValue({ all: async () => [] });
+      await repoService.list({ authz: new Set(['repoA', 'repoB']) });
+      expect(db.query).toHaveBeenCalledTimes(1);
+      const arg = db.query.mock.calls[0][0];
+      const bindJson = JSON.stringify(arg.bindVars || {});
+      expect(String(arg.query)).toContain('IN @');
+      expect(bindJson).toContain('repoA');
+      expect(bindJson).toContain('repoB');
+    });
+
+    test('no authz → unrestricted query (super-admin keeps the full catalog)', async () => {
+      db.query.mockResolvedValue({ all: async () => [] });
+      await repoService.list({});
+      expect(db.query).toHaveBeenCalledTimes(1);
+      const bindJson = JSON.stringify(db.query.mock.calls[0][0].bindVars || {});
+      expect(bindJson).not.toContain('repoA'); // no authz set present
+    });
+  });
+});

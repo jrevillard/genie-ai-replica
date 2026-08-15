@@ -52,7 +52,7 @@ describe('piiScan controller (code-review #15)', () => {
         throw e;
       })
       .catch(() => {});
-    expect(repoService.getById).toHaveBeenCalledWith('r1', { domain: undefined });
+    expect(repoService.getById).toHaveBeenCalledWith('r1', { authz: expect.any(Set) });
     expect(piiService.scanConcept).not.toHaveBeenCalled();
   });
 

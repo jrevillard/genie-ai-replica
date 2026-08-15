@@ -240,7 +240,7 @@ const keycloakAuthService = {
    * @returns {Promise<Object>} Decoded JWT payload with iss_sub composite key
    * @throws {TokenVerificationError} On verification failure
    */
-  async verifyToken(token) {
+  async verifyToken(token, opts = {}) {
     if (!token || typeof token !== 'string') {
       throw new TokenVerificationError('TOKEN_INVALID', 'Token is empty or not a string');
     }
@@ -275,11 +275,19 @@ const keycloakAuthService = {
 
     // Helper function to verify token with JWT
     const verifyWithJwt = async () => {
-      const { payload: verifiedPayload } = await jwtVerify(token, jwks, {
+      // Opt-in audience binding (RFC 8707, Story 6.1): when the caller supplies
+      // an `audience`, jose additionally validates the token's `aud` claim.
+      // Omitted → no audience check (the historical resource-server behavior —
+      // see the azp note below; pinned by keycloak-auth-service.audience.test.js).
+      const jwtOptions = {
         issuer: unverifiedIss,
         algorithms: ['RS256'],
         requiredClaims: ['iss', 'exp']
-      });
+      };
+      if (opts && opts.audience) {
+        jwtOptions.audience = opts.audience;
+      }
+      const { payload: verifiedPayload } = await jwtVerify(token, jwks, jwtOptions);
 
       // Note: we do NOT validate azp (authorized party). Any client within
       // the trusted realm that obtains a valid token should be accepted by

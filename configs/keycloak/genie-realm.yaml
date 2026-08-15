@@ -215,6 +215,13 @@ clients:
           access.token.claim: 'true'
           userinfo.token.claim: 'false'
           multivalued: 'true'
+      - name: okf-server-audience
+        protocol: openid-connect
+        protocolMapper: oidc-audience-mapper
+        consentRequired: false
+        config:
+          included.client.audience: okf-server
+          access.token.claim: 'true'
 
   # Mobile OIDC client for institutional deployments (Flutter app)
   # Each deployment configures its own clientId and redirect scheme via env vars.

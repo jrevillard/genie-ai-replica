@@ -184,12 +184,21 @@ async function authzPhase(db) {
     return { status: res.status, body: j };
   }
 
-  // A second repo must EXIST so "foreign but present" is distinguishable from
-  // "missing" — both must 404 identically for the scoped caller.
+  // A second repo must EXIST (live — not soft-deleted) so "foreign but present"
+  // is distinguishable from "missing" — both must 404 identically for the scoped
+  // caller. Resurrected if a prior run soft-deleted it; removed at phase end.
   const repos = db.collection('okf_repositories');
-  try { await repos.document(OTHER_REPO); } catch (err) {
+  let otherLive = false;
+  try {
+    const existing = await repos.document(OTHER_REPO);
+    if (existing.deleted_at) {
+      await repos.update(OTHER_REPO, { deleted_at: null, name: 'Smoke Other Repo' });
+    }
+    otherLive = true;
+  } catch (err) {
     if (err && (err.errorNum === 1204 || err.code === 404 || err.statusCode === 404)) {
       await repos.save({ _key: OTHER_REPO, repo_id: OTHER_REPO, name: 'Smoke Other Repo', domain: 'smoke', graph_name: `OKF_${OTHER_REPO}`, okf_version: '0.2', lifecycle_state: 'register' });
+      otherLive = true;
     } else throw err;
   }
 
@@ -223,4 +232,9 @@ async function authzPhase(db) {
     : fail(`admin LIST → ${e1.status} ids=${JSON.stringify(adminIds)}`);
   const e2 = await call('PATCH', `/api/okf/repos/${OTHER_REPO}`, ADMIN, { name: 'Smoke Other Repo (renamed)' });
   e2.status === 200 ? pass('admin PATCH foreign repo → 200 (wildcard admin)') : fail(`admin PATCH → ${e2.status} ${JSON.stringify(e2.body).slice(0, 120)}`);
+
+  // Cleanup: soft-delete the helper repo so the catalog is not polluted.
+  if (otherLive) {
+    await repos.update(OTHER_REPO, { deleted_at: new Date().toISOString() });
+  }
 }

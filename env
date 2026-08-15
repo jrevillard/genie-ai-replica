@@ -546,6 +546,12 @@ KEYCLOAK_PROXY_CLIENT_SECRET=
 # Used by: Dataprep → Document Repository and Backend API calls
 # Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 KC_DATAPREP_CLIENT_ID=dataprep-service-client
+# OKF server confidential-client secret (REQUIRED for the okf-server Keycloak
+# client; empty ships a secretless confidential client). Generate: openssl rand -hex 24.
+# UPGRADE NOTE (Story 6.1): okf-server enforces okf-scope authorization after this
+# upgrade. Existing tools-admin holders are AUTO-GRANTED the wildcard scope by the
+# keycloak-config entrypoint (non-breaking). New stewards: set the user attribute
+# okf_scopes (e.g. ["okf:tenant:repo-id:admin"]) via the Keycloak admin API.
 KC_OKF_SERVER_CLIENT_SECRET=
 
 # Dataprep service account secret (client_credentials grant)

@@ -26,7 +26,12 @@ function parseOkfScopes(payload) {
   };
   const p = payload || {};
   if (Array.isArray(p.okf_scopes)) {
-    p.okf_scopes.forEach(push);
+    // Array elements may themselves be space-joined (a single multivalued
+    // attribute holding "okf:a:b:read okf:c:d:admin") — split them too.
+    p.okf_scopes.forEach((el) => {
+      if (typeof el === 'string') el.split(/\s+/).forEach(push);
+      else push(el);
+    });
   } else if (typeof p.okf_scopes === 'string') {
     p.okf_scopes.split(/\s+/).forEach(push);
   }
@@ -49,7 +54,9 @@ async function authenticate(req, res, next) {
   const token = match[1].trim();
   // Opt-in audience binding (RFC 8707, Story 6.1): OKF_AUDIENCE gates the check —
   // unset = historical behavior (no audience validation in the shared verifier).
-  const verifyOpts = process.env.OKF_AUDIENCE ? { audience: process.env.OKF_AUDIENCE } : {};
+  // Trimmed: a stray whitespace value must not silently reject every token.
+  const okfAudience = (process.env.OKF_AUDIENCE || '').trim();
+  const verifyOpts = okfAudience ? { audience: okfAudience } : {};
   try {
     const payload = await keycloakAuthService.verifyToken(token, verifyOpts);
     if (!payload) {

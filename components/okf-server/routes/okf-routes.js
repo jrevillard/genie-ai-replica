@@ -11,7 +11,7 @@ const { withSpan } = require('../shared-lib/tracing');
 // default-deny router gate — a caller with no okf scope (and not the
 // tools-admin bootstrap super-role) gets 403 before any handler (Story 6.1).
 router.use(authenticate);
-router.use(requireScope('okf:read'));
+router.use(requireScope('read'));
 
 // Repository CRUD (Story 2.2) — inherits authenticate above.
 router.use('/repos', require('./repos-routes'));

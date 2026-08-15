@@ -45,6 +45,50 @@ so that **a caller without a repository's scope cannot even see that repository 
 - [x] **T7 — Audit denials + env plumbing** (AC: 7): denial audit calls; `OKF_AUDIENCE` in okf-server compose env (empty default) + `env` template section + `env.j2` conditional.
 - [x] **T8 — Verify** (AC: 8,9): full okf-server + backend suites; `npx eslint . && npx prettier --check .`; red-green proof recorded in Dev Agent Record.
 
+### Review Findings (2026-08-16, 3-layer adversarial review)
+
+**Critical**
+
+- [x] [Review][Patch] **Privilege escalation: `unmanagedAttributePolicy: ENABLED` is user-writable, not admin-only** — any authenticated realm user can self-assign `okf_scopes=["okf:*:*:admin"]` via `POST /realms/genie/account` → wildcard super-admin token. **VERIFIED LIVE on the local build** (account POST 204; attribute persisted; backdoor removed immediately after the probe). Fix: `ADMIN_EDIT` (admin-API writes keep working; account self-writes rejected). Must re-verify live post-fix: admin-set attribute still mints the claim [configs/keycloak/config-and-sleep.sh]
+
+**Major**
+
+- [x] [Review][Patch] requireScope/requireRepoScope level-key mismatch + silent fallbacks — `requireScope('okf:read')` passes a scope STRING where LEVEL_SATISFIES keys are `read|admin`; works only via the `|| read` fallback (fail-open direction); deny message hardcoded "read"; `requireRepoScope`'s fallback goes fail-closed (inconsistent). Fix: pass level keys, no silent fallback on unknown level, level-aware message [middleware/require-scope.js, routes/okf-routes.js]
+- [x] [Review][Patch] requireRepoScope falls back to the LITERAL arg when the param is absent — authorizes against the string `'repo_id'`; the "defensive" test passes only by fixture accident. Fix: missing param ⇒ deny, no literal fallback [middleware/require-scope.js:81]
+- [x] [Review][Patch] callerAuthz is level-blind — `okf:t1:*:write` (typo level) sets wildcard ⇒ isSuperAdmin read-everything; `okf:t1:repoB:write` adds repoB to the read set. Fix: wildcard/repo-set only for levels read|admin [controllers/repository-controller.js callerAuthz]
+- [x] [Review][Patch] Fresh-realm provisioning order: the user-profile policy PUT runs AFTER config-cli created genie-admin WITH the yaml attribute — KC 26 strips it before the policy applies (local build only worked because the attribute was re-set manually). Fix: entrypoint re-applies the genie-admin wildcard attribute after the policy step (idempotent) [configs/keycloak/config-and-sleep.sh]
+- [x] [Review][Patch] Entrypoint robustness: master password not URL-encoded (`&`/`%`/`+` in vault secrets ⇒ 401 ⇒ policy silently skipped ⇒ all stewards default-denied); sed assumes compact JSON (no-op on spaced); `{}` ⇒ trailing-comma invalid JSON; no read-back verification. Fix: `--data-urlencode`, robust match, GET-after-PUT verify, handle `{}`; password out of argv [configs/keycloak/config-and-sleep.sh]
+- [x] [Review][Patch] Smoke authz phase silently skips when tokens absent + the host mint script is NOT committed (phase not reproducible from the tree). Fix: commit `data/okf/smoke-test/mint-tokens.mjs` + header usage; phase still skips standalone but is now reproducible [data/okf/smoke-test/]
+- [x] [Review][Patch] `KC_OKF_SERVER_CLIENT_SECRET` empty default ships a confidential service-account client with a BLANK secret. Fix: env.j2 required (no default) + env template generate-hint (mirror dataprep) [env, deploy/ansible/templates/env.j2, docker-compose.yaml]
+- [x] [Review][Patch] `OKF_AUDIENCE=okf-server` 401s every token from clients without the audience mapper (okf-server's own service client, mobile, dataprep). No current OKF consumers among them (verified), but the okf-server client should mint its own aud. Fix: add the audience mapper to the okf-server client + env note that mobile tokens must not call OKF while binding is on [configs/keycloak/genie-realm.yaml]
+
+**Medium**
+
+- [x] [Review][Patch] AC7 half-implemented: the getById-gate 404 denial writes NO audit row (only middleware 403s audited — the Dev Record's "denial audits confirmed" was overstated). Fix: controller getRepo catch → best-effort `authz.denied.repo` when a Set authz was in play (reason 'not_found_or_foreign' — indistinguishable by design) [controllers/repository-controller.js:84-91]
+- [x] [Review][Patch] Denial audit actor shape: object where every other writer stores the sub STRING — mixed-type `actor` breaks uniform audit queries. Fix: `actor: sub` string + top-level source_ip [middleware/require-scope.js]
+- [x] [Review][Patch] Service authz fails OPEN on wrong type — truthy non-Set `authz` (e.g. array) ⇒ unrestricted. Fix: null/undefined ⇒ unrestricted; any other non-Set ⇒ throw [services/repository-service.js list/getById]
+- [x] [Review][Patch] Mixed-case `KC_REALM` lowercased for the profile URL ⇒ 404 ⇒ silent skip. Fix: use the realm verbatim [config-and-sleep.sh]
+- [x] [Review][Patch] `OKF_AUDIENCE` not trimmed — whitespace value locks out the entire OKF surface undiagnosably. Fix: `.trim()` in auth.js [middleware/auth.js]
+- [x] [Review][Patch] Space-joined scopes inside a single array element yield zero scopes (array branch doesn't split elements). Fix: split array elements on whitespace too [middleware/auth.js parseOkfScopes]
+
+**Minor/Nit**
+
+- [x] [Review][Patch] ~~AC8(b) spec-text deviation unrecorded~~ (recorded here): the router gate 403s scopeless callers before the service empty-list short-circuit is reachable over HTTP — forced by AC2/D1; the short-circuit stays as service-level defense-in-depth. Also: Dev Record clarification — the earlier 'denial audits confirmed' claim covered middleware 403s only; the getById-gate denial audit was missing and is now added (fix above), with actor stored as the sub string (uniform okf_audit shape) (router gate 403s scopeless callers before the empty-list short-circuit is reachable over HTTP — forced by the AC2/D1 reconciliation). Record it in the Dev Agent Record + fix the contradicting test title [story, repos-routes.test.js (b)]
+- [x] [Review][Patch] Upgrade-path gap undocumented: existing realms get neither genie-admin's attribute nor the tools-admin role from the yaml (config-cli doesn't update existing users) — an upgrading operator is default-deny-locked until the attribute is set. Document in env/deploy note (folded with the entrypoint re-apply fix above) [env]
+- [x] [Review][Patch] JSDoc missing the new `authz` param on list/getById [services/repository-service.js]
+- [x] [Review][Patch] Smoke leaves `OTHER_REPO` behind every run + treats a soft-deleted OTHER_REPO as "exists" (admin LIST assertion false-fails). Fix: cleanup after the phase + `deleted_at` check in ensure [run-smoke.js authzPhase]
+- [x] [Review][Patch] auth.js stacked doc-comments; story file duplicate empty Dev-Record headers [middleware/auth.js, story file]
+
+**Decision needed**
+
+- [ ] [Review][Decision] **Breaking change has no migration path or escape hatch**: with the router-wide gate, every previously-authenticated non-`tools-admin` OKF reader 403s on upgrade (only genie-admin gets scopes provisioned). Options: (a) documented breaking change — default-deny IS the story's purpose (G3 closure); migration = operators assign `okf_scopes` before upgrade (recommended); (b) add an `OKF_AUTHZ_MODE=legacy` escape hatch (security downgrade, undermines the P0, another seam to retire later)
+
+**Deferred** (logged to deferred-work.md)
+
+- [x] [Review][Defer] Shared-lib copy of the audience change has no DIRECT unit test (only the backend copy is tested; the two hunks are byte-identical) — defer until shared/ gets its own jest harness
+- [x] [Review][Defer] Tenant segment (`okf:{tenant}:…`) unbound to repo domains — D3 defers tenant-axis matching to 6.1b's resolver
+- [x] [Review][Defer] Route tests mirror the service authz contract via mocks; the generated AQL executes only in the live smoke — test-depth limitation, revisit with 8.2's integration fixtures
+
 ## Dev Notes
 
 ### Decisions (resolving flagged doc ambiguities — sources in References)
@@ -138,8 +182,3 @@ glm-5.3[1m] (dev-story, 2026-08-15)
 - docker-compose.yaml, env, deploy/ansible/templates/env.j2 — OKF_AUDIENCE + KC_OKF_SERVER_CLIENT_SECRET
 - data/okf/smoke-test/run-smoke.js — Story 6.1 authz phase
 
-### Debug Log References
-
-### Completion Notes List
-
-### File List

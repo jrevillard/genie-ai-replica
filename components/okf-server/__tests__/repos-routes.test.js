@@ -195,7 +195,7 @@ describe('Story 6.1 — AC-8 isolation matrix', () => {
     expect(res.body.items).toEqual([{ repo_id: 'repoA' }]);
   });
 
-  test('(b) scopeless non-admin caller — LIST is empty set, repo GET is 403 at the router gate', async () => {
+  test('(b) scopeless non-admin caller — 403 FORBIDDEN_SCOPE at the router gate (service empty-list stays defense-in-depth, unreachable over HTTP)', async () => {
     authScoped([]);
     const list = await request(createApp()).get('/api/okf/repos').set('Authorization', TOKEN);
     expect(list.status).toBe(403);
@@ -257,5 +257,32 @@ describe('Story 6.1 — AC-8 isolation matrix', () => {
     repoService.create.mockResolvedValue({ repo_id: 'new' });
     const ok = await request(createApp()).post('/api/okf/repos').set('Authorization', TOKEN).send(validBody);
     expect(ok.status).toBe(201);
+  });
+});
+
+describe('getRepo denial audit (AC7 review fix)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('foreign-repo 404 with a scoped caller writes authz.denied.repo', async () => {
+    jest.mock('../services/audit-service', () => ({ writeAudit: jest.fn().mockResolvedValue(null) }), {
+      virtual: false
+    });
+    authScoped(['okf:t1:repoA:read']);
+    repoService.getById.mockRejectedValue(Object.assign(new Error('nf'), { code: 'REPO_NOT_FOUND', status: 404 }));
+    const res = await request(createApp()).get('/api/okf/repos/repoB').set('Authorization', TOKEN);
+    expect(res.status).toBe(404);
+    const { writeAudit } = require('../services/audit-service');
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'authz.denied.repo', actor: 'steward-1', repo_id: 'repoB' })
+    );
+  });
+
+  test('super-admin (null authz) 404 writes NO denial audit', async () => {
+    authScoped([], ['tools-admin']);
+    repoService.getById.mockRejectedValue(Object.assign(new Error('nf'), { code: 'REPO_NOT_FOUND', status: 404 }));
+    const res = await request(createApp()).get('/api/okf/repos/repoB').set('Authorization', TOKEN);
+    expect(res.status).toBe(404);
+    const { writeAudit } = require('../services/audit-service');
+    expect(writeAudit).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'authz.denied.repo' }));
   });
 });

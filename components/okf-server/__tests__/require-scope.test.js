@@ -28,54 +28,68 @@ const mkReq = ({ scopes = [], superAdmin = false, repo_id = 'repoA', sub = 'u1' 
   okfIsSuperAdmin: superAdmin
 });
 
-describe('requireScope("okf:read")', () => {
+describe('requireScope(read)', () => {
   beforeEach(() => jest.clearAllMocks());
 
   test('ANY okf read scope passes', async () => {
     const next = jest.fn();
-    await requireScope('okf:read')(mkReq({ scopes: ['okf:t1:repoA:read'] }), mockRes(), next);
+    await requireScope('read')(mkReq({ scopes: ['okf:t1:repoA:read'] }), mockRes(), next);
     expect(next).toHaveBeenCalled();
   });
 
   test('an admin scope satisfies read', async () => {
     const next = jest.fn();
-    await requireScope('okf:read')(mkReq({ scopes: ['okf:t1:repoA:admin'] }), mockRes(), next);
+    await requireScope('read')(mkReq({ scopes: ['okf:t1:repoA:admin'] }), mockRes(), next);
     expect(next).toHaveBeenCalled();
   });
 
   test('wildcard scope passes', async () => {
     const next = jest.fn();
-    await requireScope('okf:read')(mkReq({ scopes: ['okf:*:*:read'] }), mockRes(), next);
+    await requireScope('read')(mkReq({ scopes: ['okf:*:*:read'] }), mockRes(), next);
     expect(next).toHaveBeenCalled();
   });
 
   test('super-admin (tools-admin, no scopes) passes — operator regression', async () => {
     const next = jest.fn();
-    await requireScope('okf:read')(mkReq({ scopes: [], superAdmin: true }), mockRes(), next);
+    await requireScope('read')(mkReq({ scopes: [], superAdmin: true }), mockRes(), next);
     expect(next).toHaveBeenCalled();
   });
 
   test('scopeless non-admin → 403 FORBIDDEN_SCOPE + denial audit', async () => {
     const res = mockRes();
     const next = jest.fn();
-    await requireScope('okf:read')(mkReq({ scopes: [] }), res, next);
+    await requireScope('read')(mkReq({ scopes: [] }), res, next);
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(403);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'FORBIDDEN_SCOPE' }));
-    expect(writeAudit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'authz.denied.scope',
-        actor: expect.objectContaining({ sub: 'u1' }),
-        source_ip: '127.0.0.1'
-      })
-    );
+    expect(writeAudit).toHaveBeenCalledWith({
+      action: 'authz.denied.scope',
+      actor: 'u1',
+      repo_id: null,
+      source_ip: '127.0.0.1'
+    });
   });
 
   test('non-okf or malformed scopes do NOT pass', async () => {
     const res = mockRes();
     const next = jest.fn();
-    await requireScope('okf:read')(mkReq({ scopes: ['openid', 'okf:t1:repoA:write', 'okf:only-three'] }), res, next);
+    await requireScope('read')(mkReq({ scopes: ['openid', 'okf:t1:repoA:write', 'okf:only-three'] }), res, next);
     expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+});
+
+describe('requireScope/requireRepoScope strictness (2026-08-16 review fixes)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('unknown level THROWS at wiring time (no silent fail-open fallback)', () => {
+    expect(() => requireScope('okf:read')).toThrow(/unknown level/);
+    expect(() => requireRepoScope('repo_id', 'okf:admin')).toThrow(/unknown level/);
+  });
+
+  test('typo level (write) grants NOTHING — not wildcard, not read', async () => {
+    const res = mockRes();
+    await requireScope('read')(mkReq({ scopes: ['okf:t1:*:write'] }), res, jest.fn());
     expect(res.status).toHaveBeenCalledWith(403);
   });
 });
@@ -126,10 +140,33 @@ describe("requireRepoScope(repo_id, 'admin')", () => {
     expect(res.status).toHaveBeenCalledWith(403);
   });
 
-  test('explicit repo_id string arg (not a req param name) is honored', async () => {
-    const next = jest.fn();
-    const req = mkReq({ scopes: ['okf:t1:repoZ:admin'] });
-    await requireRepoScope('repoZ', 'admin')(req, mockRes(), next);
-    expect(next).toHaveBeenCalled();
+  test('a non-param literal argument DENIES (no literal-authorization mode — review fix)', async () => {
+    // The first arg is a req.params KEY; a repo id not present in params is
+    // treated as missing and denied — never authorized as the literal string.
+    const res = mockRes();
+    const req = mkReq({ scopes: ['okf:t1:repoZ:admin'] }); // scope for repoZ, but param key 'repoZ' is absent
+    await requireRepoScope('repoZ', 'admin')(req, res, jest.fn());
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+});
+
+describe('requireScope/requireRepoScope strictness (2026-08-16 review fixes)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('unknown level THROWS at wiring time (no silent fail-open fallback)', () => {
+    expect(() => requireScope('okf:read')).toThrow(/unknown level/);
+    expect(() => requireRepoScope('repo_id', 'okf:admin')).toThrow(/unknown level/);
+  });
+
+  test('typo level (write) grants NOTHING — not wildcard, not read', async () => {
+    const res = mockRes();
+    await requireScope('read')(mkReq({ scopes: ['okf:t1:*:write'] }), res, jest.fn());
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  test('typo-level repo scope does not satisfy requireRepoScope', async () => {
+    const res = mockRes();
+    await requireRepoScope('repo_id', 'admin')(mkReq({ scopes: ['okf:t1:repoA:write'] }), res, jest.fn());
+    expect(res.status).toHaveBeenCalledWith(403);
   });
 });

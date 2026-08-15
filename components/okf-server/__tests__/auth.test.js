@@ -164,3 +164,30 @@ describe('auth middleware — okf scope resolution (Story 6.1)', () => {
     expect(opts && opts.audience).toBeUndefined();
   });
 });
+
+describe('auth middleware — strictness additions (2026-08-16 review fixes)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    delete process.env.OKF_AUDIENCE;
+  });
+  afterEach(() => delete process.env.OKF_AUDIENCE);
+
+  test('OKF_AUDIENCE with stray whitespace is trimmed (not a silent lockout)', async () => {
+    process.env.OKF_AUDIENCE = '  okf-server  ';
+    keycloakAuthService.verifyToken.mockResolvedValue({ sub: 'u1', realm_access: {} });
+    const req = { headers: { authorization: 'Bearer test-token' } };
+    await authenticate(req, {}, jest.fn());
+    expect(keycloakAuthService.verifyToken).toHaveBeenCalledWith('test-token', { audience: 'okf-server' });
+  });
+
+  test('space-joined scopes inside ONE array element are split', async () => {
+    keycloakAuthService.verifyToken.mockResolvedValue({
+      sub: 'u1',
+      okf_scopes: ['okf:t1:repoA:read okf:t2:repoB:admin'],
+      realm_access: { roles: [] }
+    });
+    const req = { headers: { authorization: 'Bearer test-token' } };
+    await authenticate(req, {}, jest.fn());
+    expect(req.okfScopes).toEqual(['okf:t1:repoA:read', 'okf:t2:repoB:admin']);
+  });
+});

@@ -5,6 +5,7 @@
 
 const repoService = require('../services/repository-service');
 const piiService = require('../services/pii-service');
+const auditService = require('../services/audit-service');
 const { createSchema, updateSchema } = require('../validators/repository-validator');
 
 class ValidationError extends Error {
@@ -37,7 +38,11 @@ function callerAuthz(req) {
   let wildcard = false;
   for (const scope of scopes) {
     const parts = scope.split(':');
+    // STRICT (2026-08-16 review fix): a scope is only a grant when its LEVEL
+    // is grammar-valid — `okf:t1:*:write` (typo level) must NOT become a
+    // wildcard, and `okf:t1:repoB:write` must not enter the read set.
     if (parts.length !== 4 || parts[0] !== 'okf') continue;
+    if (parts[3] !== 'read' && parts[3] !== 'admin') continue;
     if (parts[2] === '*') wildcard = true;
     else if (parts[2]) repos.add(parts[2]);
   }
@@ -82,10 +87,26 @@ async function listRepos(req, res, next) {
 }
 
 async function getRepo(req, res, next) {
+  // AC7 (review fix): the getById-gate denial (foreign repo 404) is audited.
+  // Missing and foreign are indistinguishable BY DESIGN, so the row records
+  // the ambiguity; only written when a Set authz was actually in play.
+  const authz = authzForService(req);
   try {
-    const repo = await repoService.getById(req.params.repo_id, { authz: authzForService(req) });
+    const repo = await repoService.getById(req.params.repo_id, { authz });
     res.status(200).json(repo);
   } catch (err) {
+    if (authz instanceof Set && err && err.code === 'REPO_NOT_FOUND') {
+      auditService
+        .writeAudit({
+          action: 'authz.denied.repo',
+          actor: (req.user && req.user.sub) || null,
+          repo_id: req.params.repo_id,
+          source_ip: req.ip
+        })
+        .catch(() => {
+          /* best-effort */
+        });
+    }
     next(err);
   }
 }

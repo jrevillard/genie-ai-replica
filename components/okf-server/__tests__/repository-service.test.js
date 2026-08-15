@@ -302,3 +302,12 @@ describe('authz scoping (Story 6.1 — G3 default-deny)', () => {
     });
   });
 });
+
+describe('authz strictness (2026-08-16 review fixes)', () => {
+  beforeEach(() => db._reset());
+
+  test('wrong-typed authz (array) THROWS — never fails open to unrestricted', async () => {
+    await expect(repoService.list({ authz: ['repoA'] })).rejects.toMatchObject({ code: 'AUTHZ_TYPE_ERROR' });
+    await expect(repoService.getById('r1', { authz: ['repoA'] })).rejects.toMatchObject({ code: 'AUTHZ_TYPE_ERROR' });
+  });
+});

@@ -198,10 +198,20 @@ async function create(input, actor) {
  * List repositories, optionally domain-filtered, cursor-paginated (created_at DESC).
  * @param {object} opts {domain?, cursor?, limit?}
  */
+/**
+ * List repositories. Default-deny (Story 6.1): `authz` is a Set of authorized
+ * repo_ids (empty ⇒ NOTHING — never the full catalog) or null/absent ⇒
+ * unrestricted (super-admin / internal callers). Any other type THROWS —
+ * a wrong-typed authz must never fail open to unrestricted (review fix).
+ * @param {object} opts { domain?, authz?: Set<string>|null, cursor?, limit? }
+ */
 async function list({ domain, authz, cursor, limit } = {}) {
   return withSpan('okf.repo.list', async (span) => {
     span.setAttribute('okf.operation', 'list');
     if (domain) span.setAttribute('okf.domain', domain);
+    if (authz != null && !(authz instanceof Set)) {
+      throw new RepoError('AUTHZ_TYPE_ERROR', 'authz must be a Set of repo_ids or null', 500);
+    }
     // Default-deny (Story 6.1, G3): an EMPTY authorized set sees NOTHING —
     // short-circuit before the query; it must never fall through to the full
     // catalog. authz = null/absent ⇒ unrestricted (super-admin / internal).
@@ -260,10 +270,22 @@ async function list({ domain, authz, cursor, limit } = {}) {
  * @param {string} repo_id
  * @param {object} opts {domain?}
  */
+/**
+ * Read one repository by repo_id. Domain-scoped callers get 404 for foreign repos
+ * (avoid leakage; ADR-okf-006 philosophy). Transient DB errors are NOT masked as 404.
+ * `authz` (Story 6.1): Set of authorized repo_ids — a repo outside the set 404s
+ * identically to a missing one (anti-enumeration). null/absent ⇒ unrestricted;
+ * any other type THROWS (never fail open — review fix).
+ * @param {string} repo_id
+ * @param {object} opts {domain?, authz?: Set<string>|null}
+ */
 async function getById(repo_id, { domain, authz } = {}) {
   return withSpan('okf.repo.getById', async (span) => {
     span.setAttribute('okf.operation', 'get');
     span.setAttribute('okf.repo_id', repo_id);
+    if (authz != null && !(authz instanceof Set)) {
+      throw new RepoError('AUTHZ_TYPE_ERROR', 'authz must be a Set of repo_ids or null', 500);
+    }
     const db = await getDb();
     let doc;
     try {

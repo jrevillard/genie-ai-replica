@@ -691,6 +691,13 @@ describe('File Routes Integration', () => {
       expect(res.status).toBe(429);
       expect(res.body.success).toBe(false);
       expect(res.body.error).toBe('Too Many Requests');
+      // 429 = TRANSIENT busy, not a file failure: the file must NOT be marked
+      // 'Ingestion Error' (Story 2.9.4 — a poisoned file is never re-claimed
+      // by the ingestion worker; live-caught run 9). It stays Pending.
+      expect(metadataService.updateMetadata).not.toHaveBeenCalledWith(
+        'file-abc123',
+        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
+      );
     });
 
     it('should return 500 when dataprep service fails', async () => {
@@ -703,6 +710,12 @@ describe('File Routes Integration', () => {
 
       expect(res.status).toBe(500);
       expect(res.body.success).toBe(false);
+      // A REAL dataprep failure DOES transition the file to 'Ingestion Error'
+      // (contrast with the transient 429 above).
+      expect(metadataService.updateMetadata).toHaveBeenCalledWith(
+        'file-abc123',
+        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
+      );
     });
 
     it('should skip already ingested files', async () => {

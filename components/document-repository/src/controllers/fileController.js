@@ -1000,9 +1000,17 @@ class FileController {
       // API smoke test caught it on the bundle path). RETHROW so the caller's
       // error mapping is preserved (e.g. the regular path maps dataprep 429 busy
       // -> 429; the bundle fire-and-forget .catch() logs).
-      const detail =
-        (err.response && err.response.data && (err.response.data.detail || err.response.data.message)) || err.message;
-      await this._markIngestFailure(fileId, file, `dataprep call failed: ${detail}`);
+      //
+      // EXCEPT a 429: "dataprep busy" is TRANSIENT (single-flight), not a file
+      // failure — marking the file 'Ingestion Error' poisons it permanently
+      // (the 2.9.4 worker backs off and retries, but a poisoned file is never
+      // Pending again — live-caught run 9). Leave it Pending; rethrow the 429.
+      const busy = err && err.response && err.response.status === 429;
+      if (!busy) {
+        const detail =
+          (err.response && err.response.data && (err.response.data.detail || err.response.data.message)) || err.message;
+        await this._markIngestFailure(fileId, file, `dataprep call failed: ${detail}`);
+      }
       throw err;
     }
     if (response.data.success) {

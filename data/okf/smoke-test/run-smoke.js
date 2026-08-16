@@ -489,6 +489,76 @@ async function ingestPhase(db) {
   console.log('  REPOSITORY: "' + REPO_NAME + '" repo_id=' + INGEST_REPO + ' domain=smoke version=1');
   console.log('  GRAPH     : ' + OKF_GRAPH + ' (collections ' + OKF_GRAPH + '_SOURCE/_ENTITY/_HAS_SOURCE/_LINKS_TO)');
 
+  // ── (i-a) FACILITY A FIRST, drained ALONE (no worker contention) ──
+  // The single-document facility is uploaded + kicked + drained to terminal
+  // BEFORE the zip ingest: dataprep is single-flight, and the 2.9.4 worker
+  // starts claiming OKF docs the moment they exist — running facility A first
+  // means nothing contends (live-caught run 9: concurrent kicks → transient
+  // 429s; now also fixed doc-repo-side — 429 never poisons a file).
+  const singleUpload = await (async () => {
+    const fd = new FormData();
+    fd.append('file', new Blob([SINGLE_DOC_BODY], { type: 'text/markdown' }), SINGLE_DOC_NAME);
+    const upRes = await fetch(DOCREPO + '/api/files/upload', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + ADMIN },
+      body: fd
+    });
+    let upBody = null;
+    try {
+      upBody = await upRes.json();
+    } catch {
+      /* non-json */
+    }
+    if (upRes.status !== 201) {
+      fail('facility-A upload -> ' + upRes.status + ' ' + JSON.stringify(upBody).slice(0, 150));
+      return null;
+    }
+    pass('facility A: single-doc upload -> 201 (' + SINGLE_DOC_NAME + ')');
+    const singleFileId = upBody && upBody.data && (upBody.data.file_id || upBody.data.id);
+    if (!singleFileId) {
+      fail('facility A: no file_id in upload response: ' + JSON.stringify(upBody).slice(0, 150));
+      return null;
+    }
+    const singleDoc = (
+      await aqlAll(
+        "FOR f IN files FILTER f.file_id == '" +
+          singleFileId +
+          "' RETURN KEEP(f, ['file_name','graph_name','repo_id','dataprep'])"
+      )
+    )[0];
+    singleDoc &&
+    singleDoc.graph_name == null &&
+    singleDoc.repo_id == null &&
+    singleDoc.dataprep &&
+    singleDoc.dataprep.status === 'Pending'
+      ? pass('facility A: files doc Pending, NO graph_name/repo_id (default-graph facility — distinct from facility B)')
+      : fail('facility A files doc: ' + JSON.stringify(singleDoc));
+    // Kick (the existing UI action) and drain to terminal ALONE.
+    const kickA = await call('POST', DOCREPO + '/api/files/' + singleFileId + '/ingest', await serviceToken());
+    if (kickA.status !== 200) {
+      fail('facility A kick -> ' + kickA.status + ' ' + JSON.stringify(kickA.body).slice(0, 120));
+      return null;
+    }
+    let aStatus = null;
+    let aChunks = 0;
+    for (let i = 0; i < 96; i++) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const row = (
+        await aqlAll(
+          "FOR x IN files FILTER x.file_id == '" + singleFileId + "' RETURN KEEP(x, ['dataprep','chunk_count'])"
+        )
+      )[0];
+      aStatus = row && row.dataprep && row.dataprep.status;
+      aChunks = (row && row.chunk_count) || 0;
+      if (aStatus === 'Ingested' || aStatus === 'Ingestion Error' || aStatus === 'Killed') break;
+    }
+    aStatus === 'Ingested'
+      ? pass('facility A: single doc Ingested ALONE (' + aChunks + ' chunks — existing pipeline, manual kick)')
+      : fail('facility A drain ended "' + aStatus + '"');
+    return singleFileId;
+  })();
+  const singleFileId = singleUpload;
+
   // ── (i) scoped READ caller → 403 (ingest is an admin mutation) ──
   const zipB64 = fs.readFileSync(BUNDLE_ZIP).toString('base64');
   const s1 = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/ingest', SCOPED, { zip: zipB64 });
@@ -611,62 +681,14 @@ async function ingestPhase(db) {
     );
   }
 
-  // ── (v) FACILITY A: the EXISTING single-document upload (admin UI path) ──
-  const fd = new FormData();
-  fd.append('file', new Blob([SINGLE_DOC_BODY], { type: 'text/markdown' }), SINGLE_DOC_NAME);
-  const upRes = await fetch(DOCREPO + '/api/files/upload', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + ADMIN },
-    body: fd
-  });
-  let upBody = null;
-  try {
-    upBody = await upRes.json();
-  } catch {
-    /* non-json */
-  }
-  if (upRes.status !== 201) {
-    fail('facility-A upload -> ' + upRes.status + ' ' + JSON.stringify(upBody).slice(0, 150));
-  } else {
-    pass('facility A: single-doc upload -> 201 (' + SINGLE_DOC_NAME + ')');
-  }
-  const singleFileId = upBody && upBody.data && (upBody.data.file_id || upBody.data.id);
-  if (!singleFileId) {
-    fail('facility A: no file_id in upload response: ' + JSON.stringify(upBody).slice(0, 150));
-  } else {
-    const singleDoc = (
-      await aqlAll(
-        "FOR f IN files FILTER f.file_id == '" +
-          singleFileId +
-          "' RETURN KEEP(f, ['file_name','graph_name','repo_id','dataprep'])"
-      )
-    )[0];
-    singleDoc &&
-    singleDoc.graph_name == null &&
-    singleDoc.repo_id == null &&
-    singleDoc.dataprep &&
-    singleDoc.dataprep.status === 'Pending'
-      ? pass('facility A: files doc Pending, NO graph_name/repo_id (default-graph facility — distinct from facility B)')
-      : fail('facility A files doc: ' + JSON.stringify(singleDoc));
-  }
-
-  // ── (vi) DRAIN — the 2.9.4 INGESTION WORKER owns the OKF files ──
-  // Facility A stays manual (its per-file kick is the existing UI action AND
-  // proves the worker's repo_id filter leaves non-OKF docs alone); the OKF
-  // bundle's Pending docs are drained BY THE WORKER (no manual kicks — this
-  // is exactly what it does in production).
-  console.log(
-    '  draining: facility A (manual kick) + ' + pending.length + ' OKF concepts (WORKER-paced — the slow part)...'
-  );
+  // ── (v) DRAIN — the 2.9.4 INGESTION WORKER owns the OKF files ──
+  // Facility A was already drained ALONE (i-a); the worker ignores it (no
+  // repo_id — that filter is itself asserted by A draining via manual kick
+  // only). The OKF bundle's Pending docs are drained BY THE WORKER (no manual
+  // kicks — exactly what it does in production).
+  console.log('  draining: ' + pending.length + ' OKF concepts (WORKER-paced — the slow part)...');
   const statuses = {};
-  const kickA = await call('POST', DOCREPO + '/api/files/' + singleFileId + '/ingest', await serviceToken());
-  if (kickA.status !== 200) {
-    fail('facility A kick -> ' + kickA.status + ' ' + JSON.stringify(kickA.body).slice(0, 120));
-    statuses[singleFileId] = 'kick-failed';
-  }
-  // Poll EVERYTHING to terminal — the worker kicks the OKF docs one by one
-  // (crawlWorker pattern: one job per poll interval; dataprep single-flight).
-  const drainList = [{ file_id: singleFileId, file_name: SINGLE_DOC_NAME }].concat(pending).filter((x) => x.file_id);
+  const drainList = pending.slice();
   const drainIds = JSON.stringify(drainList.map((d) => d.file_id));
   for (let i = 0; i < 80; i++) {
     await new Promise((r) => setTimeout(r, 15000));
@@ -697,10 +719,6 @@ async function ingestPhase(db) {
       fail('drain ' + d.file_name + ' ended "' + statuses[d.file_id] + '"');
     }
   }
-  const singleIngested = singleFileId && statuses[singleFileId] && statuses[singleFileId].split(':')[0] === 'Ingested';
-  singleIngested
-    ? pass('facility A: single doc Ingested (existing pipeline, manual kick)')
-    : fail('facility A drain failed');
   const okfIds = pending.map((p) => p.file_id);
   const okfIngested = okfIds.filter((k) => statuses[k] && statuses[k].split(':')[0] === 'Ingested');
   okfIngested.length === EXPECTED_CONCEPTS

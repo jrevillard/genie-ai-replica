@@ -65,11 +65,11 @@ afterEach(() => {
   delete process.env.OKF_INGEST_WORKER_JOB_TIMEOUT_MS;
 });
 
-describe('ingestWorker.conceptIdFromFileName (2.9.1 4f contract)', () => {
-  test('derives concepts/<name> from the orchestrator-enqueued file name', () => {
-    expect(worker.conceptIdFromFileName('bad_concept.md')).toBe('concepts/bad_concept');
-    expect(worker.conceptIdFromFileName('nested/path.md')).toBe('concepts/nested/path');
-    expect(worker.conceptIdFromFileName('already.md')).toBe('concepts/already');
+describe('ingestWorker.conceptIdFromFileName (2.9.1 4f contract — the REAL parser strips only .md, no prefix)', () => {
+  test('derives the bare concept_id from the orchestrator-enqueued file name', () => {
+    expect(worker.conceptIdFromFileName('bad_concept.md')).toBe('bad_concept');
+    expect(worker.conceptIdFromFileName('nested/path.md')).toBe('nested/path');
+    expect(worker.conceptIdFromFileName('index.md')).toBe('index');
   });
   test('null for unshaped names', () => {
     expect(worker.conceptIdFromFileName('')).toBeNull();
@@ -113,7 +113,7 @@ describe('ingestWorker._processOneJob (drain one Pending OKF file)', () => {
     // The worker-EXCLUSIVE transition (minimal patch — never clobbers 4b fields)
     expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
       REPO,
-      { concept_id: 'concepts/bad_concept' },
+      { concept_id: 'bad_concept' },
       { patch: { index_status: 'indexed', last_good_index_at: expect.any(String) } }
     );
   });
@@ -128,7 +128,7 @@ describe('ingestWorker._processOneJob (drain one Pending OKF file)', () => {
     expect(res.terminal).toBe('Ingestion Error');
     expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
       REPO,
-      { concept_id: 'concepts/x' },
+      { concept_id: 'x' },
       { patch: { index_status: 'failed', last_error: expect.stringContaining('Ingestion Error') } }
     );
   });

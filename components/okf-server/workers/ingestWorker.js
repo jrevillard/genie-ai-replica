@@ -62,12 +62,13 @@ function safeInt(name, fallback) {
 }
 
 /** concept_id from the files doc the orchestrator enqueued
- * (originalFileName = '<concept_id>.md' — 2.9.1 4f). Null when unshaped. */
+ * (originalFileName = '<concept_id>.md' — 2.9.1 4f). The parser's
+ * conceptIdFromPath strips ONLY the .md suffix (no prefix — live-verified run
+ * 9: the zip entry 'index.md' → concept_id 'index'). Null when unshaped. */
 function conceptIdFromFileName(fileName) {
   if (typeof fileName !== 'string' || !fileName.endsWith('.md')) return null;
   const base = fileName.replace(/\.md$/, '');
-  if (!base) return null;
-  return base.startsWith('concepts/') ? base : `concepts/${base}`;
+  return base || null;
 }
 
 async function getDb() {
@@ -251,7 +252,7 @@ async function _sweepOnce() {
     await db.query(aql`
     FOR f IN files
       FILTER f.repo_id != null AND f.dataprep.status != 'Pending'
-      FILTER LENGTH(FOR m IN okf_concepts_meta FILTER m.repo_id == f.repo_id AND m.concept_id == CONCAT('concepts/', SUBSTRING(f.originalFileName, 0, LENGTH(f.originalFileName) - 3)) LIMIT 1 RETURN 1) == 0
+      FILTER LENGTH(FOR m IN okf_concepts_meta FILTER m.repo_id == f.repo_id AND m.concept_id == SUBSTRING(f.originalFileName, 0, LENGTH(f.originalFileName) - 3) LIMIT 1 RETURN 1) == 0
       LIMIT 10
       RETURN KEEP(f, ['file_id', 'file_name', 'repo_id'])
   `)

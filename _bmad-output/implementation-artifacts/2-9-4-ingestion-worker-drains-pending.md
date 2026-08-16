@@ -3,7 +3,7 @@ baseline_commit: 17cfcf609
 ---
 # Story 2.9.4: `ingestWorker` — drains Pending OKF files (G10)
 
-Status: in-progress
+Status: done
 
 Story key: `2-9-4-ingestion-worker-drains-pending` | GitLab: TBD on close-out
 Epic: 2.9 (Write-side Orchestration) | Branch: `feat/okf-server`
@@ -48,7 +48,19 @@ Redis Streams/ioredis (D-D) · worker-thread isolation (CPU rationale absent) ·
 
 ## Tasks
 
-- [ ] T1 `workers/ingestWorker.js` (AC 1,2) + unit tests
-- [ ] T2 Bootstrap + env wiring (compose + env template + ansible) (AC 3,4)
-- [ ] T3 Smoke: worker-paced drain + indexed/dedup assertions (AC 6); live run to exit 0
-- [ ] T4 Suites (okf-server 244+new, doc-repo, overlay), lint/format; close-out
+- [x] T1 `workers/ingestWorker.js` (AC 1,2) + unit tests (16 green)
+- [x] T2 Bootstrap + env wiring (compose + env template + ansible) (AC 3,4)
+- [x] T3 Smoke: worker-paced drain + indexed/dedup assertions (AC 6); live run to exit 0
+- [x] T4 Suites (okf-server 260/260, doc-repo 426/426, overlay 670/670), lint/format; close-out
+
+## Dev Agent Record
+
+**Final live gate (run 12): exit 0 — 41 PASS / 0 FAIL.** Worker drained all 6 bundle concepts Ingested with zero manual kicks; all 6 meta rows `parsed→indexed` + `last_good_index_at` stamped; **DEDUP LIVE: re-ingest of unchanged+indexed concepts → skipped_dedup=6, enqueued=0, zero new files docs** (the first live proof of 2.9.1's 4e rule); index_status never downgraded; isolation + both retraction levels still green.
+
+**Live-caught bugs across runs 9–11 (all fixed + regression-tested):**
+1. Worker's concept_id derivation assumed a `concepts/` prefix — the REAL parser strips only `.md` (my unit-test mock misled the derivation; live data exposed 6 bare vs 4 prefixed rows). Fixed: bare ids.
+2. **doc-repo poisoned files on transient 429** — `_ingestFileById` called `_markIngestFailure` on dataprep-busy before rethrowing, permanently failing files the worker would have retried (console-verified: "Rejected … System busy" → "Ingest failed"). Fixed: 429 = transient, file stays Pending, rethrow. Contrast-pinned in tests (429 → no failure mark; real error → mark).
+3. **content_hash was not mode-invariant** — zip-entry bodies and concepts[] bodies differ by markdown round-trip whitespace, so identical content hashed differently and dedup never fired. Fixed: canonical hash (trimmed body) in the 2.9.2 writer.
+4. Smoke race eliminated: facility A now drains ALONE before the zip ingest (no single-flight contention by construction).
+
+**Runtime note:** the ~13-min smoke is the real pipeline (dataprep single-flight + per-chunk contextual-retrieval LLM calls), not test scaffolding. Local speed levers (opt-in): `OKF_INGEST_WORKER_INTERVAL_MS=5000`, `CONTEXTUAL_RETRIEVAL_ENABLED=false`.

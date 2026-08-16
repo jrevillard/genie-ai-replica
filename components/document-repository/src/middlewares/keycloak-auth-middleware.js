@@ -73,6 +73,12 @@ function mapRole(roles) {
   if (roles.includes('dataprep-service')) {
     return 'dataprep-service';
   }
+  // Story 2.9.1: the okf-server orchestrator's service-account token — must
+  // map verbatim (like dataprep-service), else the scalar falls through to the
+  // first role ('offline_access') and authorizeRole rejects it.
+  if (roles.includes('okf-service')) {
+    return 'okf-service';
+  }
   return roles[0].charAt(0).toUpperCase() + roles[0].slice(1);
 }
 

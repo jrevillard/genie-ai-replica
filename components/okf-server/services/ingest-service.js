@@ -131,12 +131,20 @@ function markdownFor(input) {
   return matter.stringify(input.body || '', input.frontmatter || {});
 }
 
+/** Duplicate entry names in a bundle's central directory (crafted by foreign
+ * zip tools; adm-zip's own writer dedups) — an ambiguous bundle is rejected,
+ * never silently disambiguated. Pure, exported for unit tests. */
+function findDuplicateEntryNames(entryNames) {
+  return [...new Set(entryNames.filter((n, i) => entryNames.indexOf(n) !== i))];
+}
+
 /** OKF bundle zip intake (Story 2.9.5 contract, pulled into 2.9.1 by the
  * 2026-08-16 directive): a bundle IS a zip of `.md` concept files. Server-side
  * unzip → one raw input per entry; each entry's own frontmatter is lifted by
  * the 4a parser (frontmatter:{} + body passthrough — markdownFor emits no
  * block for empty fm, keeping the stored .md byte-faithful). Guards: .md-only
- * entries, junk filtered, entry cap, decompressed-size cap (zip bomb).
+ * entries, junk filtered, duplicate rejection, entry cap, decompressed-size
+ * cap (zip bomb).
  * @throws IngestError BAD_ZIP | VALIDATION_ERROR | TOO_MANY_CONCEPTS | ZIP_TOO_LARGE (400) */
 function zipToRawInputs(zipBase64, maxConcepts) {
   let zip;
@@ -156,6 +164,17 @@ function zipToRawInputs(zipBase64, maxConcepts) {
     );
   if (entries.length === 0) {
     throw new IngestError('VALIDATION_ERROR', 'bundle zip contains no .md concept files', 400);
+  }
+  // Input integrity (design addendum D-V3): a duplicate .md entry path makes
+  // the bundle AMBIGUOUS — which copy is the concept? Reject loudly instead of
+  // silently inventing a suffixed second concept.
+  const dupes = findDuplicateEntryNames(entries.map((e) => e.entryName));
+  if (dupes.length > 0) {
+    throw new IngestError(
+      'VALIDATION_ERROR',
+      `bundle zip contains duplicate concept entries: ${dupes.join(', ')}`,
+      400
+    );
   }
   if (entries.length > maxConcepts) {
     throw new IngestError(
@@ -422,5 +441,6 @@ module.exports = {
   uniquifySlug,
   markdownFor,
   zipToRawInputs,
+  findDuplicateEntryNames,
   IngestError
 };

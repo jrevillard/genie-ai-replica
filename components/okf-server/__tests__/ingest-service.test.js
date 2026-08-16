@@ -466,6 +466,15 @@ describe('ingestService bundle-zip intake (Story 2.9.5 contract, pulled forward)
     });
   });
 
+  test('DUPLICATE .md entry paths are detected (input integrity — ambiguous bundle)', () => {
+    // adm-zip's own writer dedups same-name adds, so crafted duplicates come
+    // from FOREIGN zip tools' central directories — the guard is pure logic,
+    // tested directly (the service rejects with VALIDATION_ERROR when it fires).
+    expect(ingestService.findDuplicateEntryNames(['a.md', 'b.md', 'a.md', 'b.md', 'c.md'])).toEqual(['a.md', 'b.md']);
+    expect(ingestService.findDuplicateEntryNames(['a.md', 'b.md'])).toEqual([]);
+    expect(ingestService.findDuplicateEntryNames([])).toEqual([]);
+  });
+
   test('zip above the entry cap → 400 TOO_MANY_CONCEPTS', async () => {
     const files = {};
     for (let i = 0; i < 3; i += 1) files[`c${i}.md`] = mdEntry(`c${i}`, `C${i}`);

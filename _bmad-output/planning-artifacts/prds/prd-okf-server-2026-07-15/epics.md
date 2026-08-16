@@ -395,7 +395,7 @@ So that **each repo is isolated and cleanly removable without destroying the wro
 As a **steward**,
 I want **each publish to mint an immutable, diffable version**,
 So that **agent citations can pin a version and changes are auditable**.
-**Acceptance Criteria:** **Given** a publish transition, **When** it completes, **Then** `mintVersion(repo_id)` increments the repo's version counter (repo-level `bundle_version`, threaded onto chunks/edges/meta) and snapshots an immutable `okf_versions` manifest (concept list + hashes + source ref + curator + ts; INSERT-only). *(FR-11; ADR-okf-031; G26; resolves PRD §13.2.)*
+**Acceptance Criteria:** **Given** a publish transition, **When** it completes, **Then** `mintVersion(repo_id)` increments the repo's version counter (repo-level `bundle_version`, threaded onto chunks/edges/meta) and snapshots an immutable `okf_versions` manifest (concept list + hashes + source ref + curator + ts; INSERT-only). *(FR-11; ADR-okf-031; G26; resolves PRD §13.2. **2026-08-16 addendum**: mint is ALSO triggered by every subsequent crawl of an associated origin — re-crawl ⇒ version N+1 of the same repository (never a new registry entry); the version tag `okf:v{N}` is appended to bundle `tags:`; manifests carry the crawl origin as `source_ref` — see the [design addendum](design-addendum-versioning-integrity-clone-2026-08-16.md) D-V1/D-V4.)*
 
 ### Story 2.9.8: `okf_sources` writer (source-sync backing store) *(G32)*
 As a **platform engineer**,
@@ -510,7 +510,18 @@ So that **agent citations can pin a version and changes are auditable**.
 **Given** a steward publish action,
 **When** it completes,
 **Then** an immutable version is created (monotonic, tied to source ref); stewards can list/diff versions; lineage (source ref → concept → served answer) is capturable for citation and audit,
-**And** superseded versions are retained until retention/TTL then retracted. *(FR-11; ADR-okf-005; **2026-08-13**: versioning is **repo-level** `bundle_version` minted on publish (ADR-okf-031 / Story 2.9.7), demoted to a publish side-effect; immutable `okf_versions` manifest backs list/diff — G26.)*
+**And** superseded versions are retained until retention/TTL then retracted. *(FR-11; ADR-okf-005; **2026-08-13**: versioning is **repo-level** `bundle_version` minted on publish (ADR-okf-031 / Story 2.9.7), demoted to a publish side-effect; immutable `okf_versions` manifest backs list/diff — G26. **2026-08-16 addendum**: per the [versioning/integrity/clone design addendum](design-addendum-versioning-integrity-clone-2026-08-16.md) — the ingestion-identity triple is `(title, bundle_version, content_hash)` (title + bundle_version asserted live by the smoke); a version tag `okf:v{N}` is appended to bundle `tags:` at mint; **each subsequent crawl of the same origin mints version N+1 of the SAME repository** (never a duplicate registry entry).)*
+
+### Story 4.8: Repository clone & curated forks *(NEW 2026-08-16 — design addendum D-V5)*
+As a **steward**,
+I want **to clone an OKF repository and curate my copy in-app**,
+So that **I can adapt a published knowledge base to my context without touching the original**.
+
+**Acceptance Criteria:**
+**Given** an existing repository (any lifecycle state ≥ registered),
+**When** a steward clones it (admin UI action / API),
+**Then** a NEW repository is created (new `repo_id`, new `OKF_{repo_id}` graph, new unique registry entry, `lifecycle_state='draft'`) carrying copies of the source's concepts + meta (`title`/`bundle_version`/`content_hash` preserved) **and** lineage `cloned_from: { repo_id, version }`;
+**And** the clone is fully curable via Epic 4 (4.1 CRUD, 4.2 editor, 4.3 lifecycle, 4.4 review) and mints its own versions; upstream changes never auto-propagate; stewards can diff the clone against its `cloned_from` version. *(FR-25; ADR-okf-005; [design addendum D-V5](design-addendum-versioning-integrity-clone-2026-08-16.md).)*
 
 ### Story 4.6: Retention / TTL
 As a **data-protection officer**,

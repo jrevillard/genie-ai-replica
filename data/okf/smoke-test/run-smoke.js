@@ -357,7 +357,9 @@ async function ingestPhase(db) {
   let _svc = null;
   let _svcAt = 0;
   async function serviceToken() {
-    if (_svc && Date.now() - _svcAt < 240000) return _svc;
+    // Re-mint at >3 min (realm TTL is 5 min — live-proven: a token cached longer
+    // 401s mid-drain). NEVER hoist the result into a long-lived const.
+    if (_svc && Date.now() - _svcAt < 180000) return _svc;
     const base = (
       process.env.KEYCLOAK_INTERNAL_URL ||
       process.env.KEYCLOAK_PUBLIC_URL ||
@@ -387,6 +389,19 @@ async function ingestPhase(db) {
   svcList.status === 200
     ? pass('service token (okf-server client) authenticates against doc-repo')
     : fail('service token rejected by doc-repo: ' + svcList.status + ' ' + JSON.stringify(svcList.body).slice(0, 100));
+
+  // Input-integrity negative check (design addendum D-V2): doc-repo REJECTS a
+  // bundle whose graph_name does not belong to its repo (ownership mismatch —
+  // live proof of the uniqueness guard).
+  const own = await call('POST', DOCREPO + '/api/files/ingest-bundle', svc, {
+    bundle: Buffer.from('# x').toString('base64'),
+    graph_name: 'OKF_00000000-0000-4000-8000-000000000000',
+    repo_id: INGEST_REPO,
+    originalFileName: 'ownership-probe.md'
+  });
+  own.status === 400
+    ? pass('integrity: doc-repo rejects graph_name != OKF_{repo_id} (ownership guard)')
+    : fail('ownership guard: expected 400, got ' + own.status + ' ' + JSON.stringify(own.body).slice(0, 100));
 
   // ── re-run safety: retract + delete prior artifacts at phase START ──
   const priorFiles = await aqlAll(
@@ -420,11 +435,14 @@ async function ingestPhase(db) {
   }
 
   // ── repo for this phase (direct save; resurrect if soft-deleted) ──
+  // version: 1 pins the bundle_version thread (repo.version → meta rows) —
+  // the version-tag integrity contract (title + version on every concept).
   const repos = db.collection('okf_repositories');
   try {
     const repoDoc = await repos.document(INGEST_REPO);
-    if (repoDoc.deleted_at) {
-      await repos.update(INGEST_REPO, { deleted_at: null, name: 'Smoke Ingest 291' });
+    const patch = { deleted_at: null, name: 'Smoke Ingest 291', version: 1 };
+    if (repoDoc.deleted_at || repoDoc.version !== 1) {
+      await repos.update(INGEST_REPO, patch);
     }
   } catch (err) {
     if (err && (err.errorNum === 1204 || err.code === 404 || err.statusCode === 404)) {
@@ -435,6 +453,7 @@ async function ingestPhase(db) {
         domain: 'smoke',
         graph_name: 'OKF_' + INGEST_REPO,
         okf_version: '0.2',
+        version: 1,
         lifecycle_state: 'register'
       });
     } else throw err;
@@ -481,7 +500,7 @@ async function ingestPhase(db) {
   const metaRows = await aqlAll(
     "FOR d IN okf_concepts_meta FILTER d.repo_id == '" +
       INGEST_REPO +
-      "' RETURN KEEP(d, ['concept_id','index_status','graph_name','pii_state','conformance_issues'])"
+      "' RETURN KEEP(d, ['concept_id','title','bundle_version','index_status','graph_name','pii_state','conformance_issues'])"
   );
   metaRows.length === EXPECTED_CONCEPTS
     ? pass('meta rows: ' + metaRows.length + '/' + EXPECTED_CONCEPTS + ' bundle concepts (4b)')
@@ -494,6 +513,17 @@ async function ingestPhase(db) {
           JSON.stringify(metaRows.map((m) => m.concept_id)) +
           ')'
       );
+  // Title + version tag on EVERY concept — the ingestion-identity contract:
+  // frontmatter title preserved and the repo's version threaded as
+  // bundle_version (the version key the 2.9.7 manifests pin).
+  const allTitled = metaRows.every((m) => typeof m.title === 'string' && m.title.length > 0);
+  allTitled
+    ? pass('meta rows: title present on every concept (frontmatter identity preserved)')
+    : fail('meta rows missing title: ' + JSON.stringify(metaRows.map((m) => [m.concept_id, m.title])));
+  const allVersioned = metaRows.every((m) => m.bundle_version === 1);
+  allVersioned
+    ? pass('meta rows: bundle_version=1 on every concept (repo.version threaded)')
+    : fail('meta rows bundle_version: ' + JSON.stringify(metaRows.map((m) => [m.concept_id, m.bundle_version])));
   const allParsed = metaRows.every((m) => m.index_status === 'parsed' && m.graph_name === OKF_GRAPH);
   allParsed
     ? pass('meta rows: all index_status=parsed + graph_name=OKF_{repo}')
@@ -609,7 +639,7 @@ async function ingestPhase(db) {
   const drainList = [{ file_id: singleFileId, file_name: SINGLE_DOC_NAME }].concat(pending).filter((x) => x.file_id);
   const statuses = {};
   for (const f of drainList) {
-    const kick = await call('POST', DOCREPO + '/api/files/' + f.file_id + '/ingest', svc);
+    const kick = await call('POST', DOCREPO + '/api/files/' + f.file_id + '/ingest', await serviceToken());
     if (kick.status !== 200) {
       fail('drain kick ' + f.file_name + ' -> ' + kick.status + ' ' + JSON.stringify(kick.body).slice(0, 120));
       statuses[f.file_id] = 'kick-failed';
@@ -657,10 +687,12 @@ async function ingestPhase(db) {
     ? pass('facility A graph: ' + aChunks + ' chunks in the DEFAULT ' + GRAPH + '_SOURCE')
     : fail('facility A: no chunks for ' + singleFileId + ' in ' + GRAPH + '_SOURCE');
 
+  // The OKF graph name is hyphenated (OKF_<uuid>) — AQL needs backtick-quoted
+  // identifiers for it (live-caught: unquoted → lexer error at the first '-').
   const bChunkRows = await aqlAll(
-    'FOR c IN ' +
+    'FOR c IN `' +
       OKF_GRAPH +
-      '_SOURCE FILTER c.file_id IN ' +
+      '_SOURCE` FILTER c.file_id IN ' +
       JSON.stringify(okfIds) +
       ' COLLECT fid = c.file_id WITH COUNT INTO n RETURN {fid, n}'
   );

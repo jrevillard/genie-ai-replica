@@ -61,20 +61,21 @@ async function retractRepoGraph(repo_id, actor) {
     }
 
     const dropped = [];
-    // 1. Delete the named graph definition WITH its member collections
-    //    (dropCollections=true — one call drops the graph AND its collections).
-    //    Order matters: ArangoDB REFUSES to drop collections that still belong
-    //    to a graph (live-caught run 7: 4× "collection drop failed").
+    // 1. CASCADE DROP: deleting the graph with dropCollections=true removes the
+    //    definition AND all its member tables in one server-side call. (Why the
+    //    definition must go first either way — ArangoDB hard rule, live-verified
+    //    errorNum 1942: "must not drop collection while part of graph"; member
+    //    tables cannot be dropped while a definition references them.)
     try {
       await db.route(`_api/gharial/${encodeURIComponent(graph)}?dropCollections=true`).delete();
-      dropped.push(`${graph} (graph definition + member collections)`);
+      dropped.push(`${graph} (graph definition + member collections, cascade)`);
     } catch (err) {
       if (!NOT_FOUND(err)) {
-        logger.warn('Graph retract: graph definition drop failed', { repo_id, graph, error: err.message });
+        logger.warn('Graph retract: graph cascade drop failed', { repo_id, graph, error: err.message });
       }
     }
-    // 2. Sweep any ORPHANED collections (definition absent but collections
-    //    left behind by older flows) — unblocked now the definition is gone.
+    // 2. Sweep ORPHANED tables (no definition — e.g. a prior partial retract):
+    //    droppable now that nothing references them. No-op after a clean cascade.
     for (const suffix of GRAPH_SUFFIXES) {
       const name = `${graph}${suffix}`;
       try {

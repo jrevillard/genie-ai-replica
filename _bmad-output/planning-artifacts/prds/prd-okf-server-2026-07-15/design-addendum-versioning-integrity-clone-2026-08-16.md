@@ -37,7 +37,9 @@ Three version axes, never conflated:
 1. **Per-concept content hash**: `content_hash = sha256(body)` on every meta row (2.9.2 writer). Re-ingest of an unchanged, already-indexed concept skips enqueue (`skipped_dedup`) — idempotent by construction, live-proven.
 2. **Version manifests (2.9.7)**: every minted version snapshots an INSERT-only `okf_versions` manifest — concept list + per-concept hashes + source ref + curator + timestamp. The manifest is the integrity ledger: any later mutation of a concept is detectable against the manifest of the version that ingested it.
 3. **Gates before publish**: PII scan (fail-closed) + conformance validation run on every concept at ingest; a version can only publish through the lifecycle gate with both recorded.
-4. **Retraction integrity**: retract targets the file's OWN graph (the file's `graph_name`; unified `GRAPH` fallback — G5 fix, live 2026-08-16) — deletion can never destroy the wrong repository's data.
+4. **Retraction integrity — two levels, never conflated**:
+   - **Per-concept (single file)**: dataprep `retract_file(file_id, graph_name)` surgically deletes that file's chunks + orphaned edges from the file's OWN graph (unified `GRAPH` fallback — G5 fix, live-verified 2026-08-16: chunks physically removed, siblings untouched). This path is deliberately untouched by bundle-level retraction.
+   - **Per-bundle (repository)**: a per-repo graph serves EXACTLY ONE bundle, so repo-level retraction is simply **dropping the graph** — `retractRepoGraph(repo_id)` (wired into repository delete) drops the named graph definition + the 4 `OKF_{repo_id}_*` collections and removes the repo's `okf_concepts_meta` rows + dangling files docs. Footgun guard: the graph name is read from the registry (immutable field) and anything not `OKF_*` — notably the free-form default `GRAPH` — is refused. Live-verified by the smoke (collections physically gone).
 
 ## D-V4 — Crawl versioning (re-crawl ⇒ new version)
 

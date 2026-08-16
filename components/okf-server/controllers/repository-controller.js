@@ -127,13 +127,22 @@ async function ingestRepo(req, res, next) {
     const { concepts, file_ids, discover, labels } = body;
     if (!Array.isArray(concepts) || concepts.length === 0) {
       if (!Array.isArray(file_ids) || file_ids.length === 0) {
-        if (!discover) {
+        if (discover !== true) {
           throw new ValidationError(['body must contain concepts[], file_ids[], or discover:true']);
         }
       }
     }
-    if (concepts && concepts.length > parseInt(process.env.OKF_INGEST_MAX_CONCEPTS || '200', 10)) {
-      const cap = process.env.OKF_INGEST_MAX_CONCEPTS || 200;
+    // Explicit concepts must carry a non-empty body — an empty concept has
+    // nothing to parse/index and would silently count as "processed"
+    // (2026-08-16 review fix).
+    if (Array.isArray(concepts)) {
+      const badIndex = concepts.findIndex((c) => !c || typeof c.body !== 'string' || c.body.trim() === '');
+      if (badIndex >= 0) {
+        throw new ValidationError([`concepts[${badIndex}].body must be a non-empty string`]);
+      }
+    }
+    const cap = ingestService.maxConceptsFromEnv();
+    if (concepts && concepts.length > cap) {
       return res.status(400).json({
         error: 'TOO_MANY_CONCEPTS',
         message: `body contains ${concepts.length} concepts; the cap is ${cap} (OKF_INGEST_MAX_CONCEPTS)`

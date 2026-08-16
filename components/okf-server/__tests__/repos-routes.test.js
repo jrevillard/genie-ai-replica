@@ -290,7 +290,8 @@ describe('getRepo denial audit (AC7 review fix)', () => {
 // ─── Story 2.9.1: POST /api/okf/repos/:repo_id/ingest ─────────────────────────
 
 jest.mock('../services/ingest-service', () => ({
-  ingestRepoConcepts: jest.fn()
+  ingestRepoConcepts: jest.fn(),
+  maxConceptsFromEnv: jest.fn(() => 200)
 }));
 const ingestService = require('../services/ingest-service');
 
@@ -365,6 +366,31 @@ describe('POST /api/okf/repos/:repo_id/ingest (Story 2.9.1)', () => {
     const res = await request(createApp()).post('/api/okf/repos/repoA/ingest').set('Authorization', TOKEN).send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  test('400 VALIDATION_ERROR on empty-body concepts (review fix — nothing to parse/index)', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke', graph_name: 'OKF_repoA' });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/ingest')
+      .set('Authorization', TOKEN)
+      .send({ concepts: [{ frontmatter: { title: 'Hollow' } }, { frontmatter: { title: 'Ok' }, body: '# ok' }] });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+    expect(JSON.stringify(res.body.details)).toContain('concepts[0].body');
+    expect(ingestService.ingestRepoConcepts).not.toHaveBeenCalled();
+  });
+
+  test('discover must be strictly true at the route too — truthy non-boolean is a 400 (review fix)', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke', graph_name: 'OKF_repoA' });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/ingest')
+      .set('Authorization', TOKEN)
+      .send({ discover: 'yes' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+    expect(ingestService.ingestRepoConcepts).not.toHaveBeenCalled();
   });
 
   test('TOO_MANY_CONCEPTS (4e cap) surfaces as 400', async () => {

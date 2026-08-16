@@ -14,9 +14,11 @@
 //    {concept_id, repo_id} persist) writes ONLY the caller's patch fields:
 //    it must never clobber the first-class fields a full upsert wrote
 //    (ADR-021 write-path order: 4b full upsert → 4c conformance persist).
-//  - A FULL re-ingest never downgrades pii_state back to 'unknown' and never
-//    clears last_good_index_at — the fail-closed publish gate (2.8) must not
-//    be silently un-blocked without a rescan.
+//  - A FULL re-ingest never downgrades pii_state back to 'unknown', never
+//    clears last_good_index_at, and never downgrades index_status from
+//    'indexed' back to 'parsed' — the fail-closed publish gate (2.8) must not
+//    be silently un-blocked without a rescan, and indexed|failed transitions
+//    belong to the 2.9.4 worker alone.
 
 const { createHash } = require('node:crypto');
 const { DateTime } = require('luxon');
@@ -132,12 +134,17 @@ async function applyUpdate(col, existing, repo_id, conceptId, parsed, opts, mini
     patch = { ...buildMetaDoc(repo_id, parsed, opts), ...(opts.patch || {}) };
     delete patch.created_at; // keep the original created_at on update
     // Fail-closed protection: a re-ingest must not silently un-block the PII
-    // gate or erase indexing provenance.
+    // gate, erase indexing provenance, or downgrade an indexed concept back to
+    // 'parsed' — indexed|failed transitions belong to the 2.9.4 worker alone
+    // (2026-08-16 review fix; mirrors the pii_state rule).
     if (existing.pii_state && existing.pii_state !== 'unknown' && patch.pii_state === 'unknown') {
       delete patch.pii_state;
     }
     if (existing.last_good_index_at != null && patch.last_good_index_at == null) {
       delete patch.last_good_index_at;
+    }
+    if (existing.index_status === 'indexed' && patch.index_status === 'parsed') {
+      delete patch.index_status;
     }
   }
   patch.updated_at = nowIso();
@@ -222,4 +229,13 @@ async function upsertConceptMeta(repo_id, parsed, opts = {}) {
   });
 }
 
-module.exports = { upsertConceptMeta, buildMetaDoc, contentHash };
+/** Read one concept's meta doc (null when absent). The orchestrator's 4e
+ * PRE-upsert read — the stored content_hash + index_status is the dedup basis
+ * (2026-08-16 review fix: the post-upsert doc always carries the new hash). */
+async function getConceptMeta(repo_id, concept_id) {
+  if (!repo_id || !concept_id) return null;
+  const db = await getDb();
+  return findConceptDoc(db.collection(COLLECTION), repo_id, concept_id);
+}
+
+module.exports = { upsertConceptMeta, getConceptMeta, buildMetaDoc, contentHash };

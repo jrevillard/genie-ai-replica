@@ -271,7 +271,19 @@ async function authzPhase(db) {
   }
 }
 
-// ─── Story 2.9.1: HTTP ingest phase ───────────────────────────────────────────
+// ─── Story 2.9.1: FULL-BUNDLE ingest phase (bundle → orchestrator → graph) ───
+//
+// Per the every-story smoke rule this phase grows with the ingest feature:
+// it ingests the ENTIRE kenya bundle (all .md fixtures) through the real
+// orchestrator endpoint, then — because the 2.9.4 worker does not exist yet —
+// drains each enqueued concept SEQUENTIALLY via doc-repo's per-file ingest
+// route (sequential by necessity: dataprep's single-flight 429 lock), and
+// asserts chunks land in the graph per file.
+//
+// GRAPH BOUNDARY (honest): dataprep drops graph_name (G5) until Story 2.9.6
+// (OPEA-bump gated) — chunks physically land in the DEFAULT GRAPH today. This
+// phase asserts exactly that, and asserts every files doc carries
+// graph_name=OKF_{repo} so 2.9.6 activates the split with zero changes here.
 
 async function ingestPhase(db) {
   const ADMIN = process.env.OKF_SMOKE_TOKEN_ADMIN;
@@ -280,12 +292,15 @@ async function ingestPhase(db) {
     console.log('NOTICE: ingest phase skipped (needs ADMIN+SCOPED tokens — run via mint-tokens.mjs)');
     return;
   }
+  const matter = require('gray-matter');
   const BASE = process.env.OKF_SMOKE_BASE_URL || 'http://localhost:3002';
+  const DOCREPO = process.env.OKF_SMOKE_DOCREPO_URL || 'http://document-repository:3001';
   // Must be a UUID — doc-repo's ingest-bundle validates repo_id:uuid().
   const INGEST_REPO = '99999999-9999-4999-8999-999999999999';
+  const GRAPH = process.env.ARANGO_GRAPH_NAME || 'GRAPH';
   const h = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' });
-  async function call(method, path, token, body) {
-    const res = await fetch(BASE + path, { method, headers: h(token), body: body ? JSON.stringify(body) : undefined });
+  async function call(method, url, token, body) {
+    const res = await fetch(url, { method, headers: h(token), body: body ? JSON.stringify(body) : undefined });
     let j = null;
     try {
       j = await res.json();
@@ -294,11 +309,19 @@ async function ingestPhase(db) {
     }
     return { status: res.status, body: j };
   }
-  console.log('Ingest phase (Story 2.9.1):');
+  const aqlAll = async (query) => await (await db.query(query)).all();
+  console.log('Ingest phase (Story 2.9.1 — FULL bundle):');
 
+  // Repo for this phase (direct save — the controller gate needs it to exist;
+  // unique (name,domain,deleted_at) → distinct name; resurrect if soft-deleted).
   const repos = db.collection('okf_repositories');
+  let repoDoc = null;
   try {
-    await repos.document(INGEST_REPO);
+    repoDoc = await repos.document(INGEST_REPO);
+    if (repoDoc.deleted_at) {
+      await repos.update(INGEST_REPO, { deleted_at: null, name: 'Smoke Ingest 291' });
+      repoDoc = await repos.document(INGEST_REPO);
+    }
   } catch (err) {
     if (err && (err.errorNum === 1204 || err.code === 404 || err.statusCode === 404)) {
       await repos.save({
@@ -313,31 +336,69 @@ async function ingestPhase(db) {
     } else throw err;
   }
 
-  // (i) scoped READ caller -> 403 FORBIDDEN_SCOPE
-  const s1 = await call('POST', '/api/okf/repos/' + INGEST_REPO + '/ingest', SCOPED, {
+  // RE-RUN SAFETY (review fix 10 — live-proven accumulation): a prior run's
+  // files docs + meta rows MUST be removed at phase START or the pending-count
+  // and meta-count assertions false-fail. Retract is best-effort (removes
+  // chunks; a Pending/erroring retract is tolerated with a NOTE); the DELETE
+  // is the load-bearing cleanup and is asserted.
+  const priorFiles = await aqlAll(
+    "FOR f IN files FILTER f.repo_id == '" + INGEST_REPO + "' RETURN KEEP(f, ['file_id','file_name','dataprep'])"
+  );
+  if (priorFiles.length > 0) {
+    console.log('  cleanup: ' + priorFiles.length + ' prior-run files docs (retract best-effort + delete)');
+    for (const f of priorFiles) {
+      const retr = await call('POST', DOCREPO + '/api/files/' + f.file_id + '/retract', ADMIN);
+      if (retr.status !== 200) {
+        console.log(
+          '    NOTE retract ' +
+            f.file_name +
+            ' -> ' +
+            retr.status +
+            ' (best-effort; was ' +
+            (f.dataprep && f.dataprep.status) +
+            ')'
+        );
+      }
+      const del = await call('DELETE', DOCREPO + '/api/files/' + f.file_id, ADMIN);
+      if (del.status !== 200 && del.status !== 404) {
+        fail('cleanup DELETE ' + f.file_name + ' -> ' + del.status + ' ' + JSON.stringify(del.body).slice(0, 100));
+      }
+    }
+  }
+  const removedMeta = await aqlAll(
+    "FOR d IN okf_concepts_meta FILTER d.repo_id == '" +
+      INGEST_REPO +
+      "' REMOVE d IN okf_concepts_meta RETURN OLD.concept_id"
+  );
+  if (removedMeta.length > 0) {
+    console.log('  cleanup: removed ' + removedMeta.length + ' prior-run meta rows');
+  }
+
+  // (i) scoped READ caller → 403 (ingest is an admin mutation)
+  const s1 = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/ingest', SCOPED, {
     concepts: [{ frontmatter: { title: 'Nope' }, body: '# nope' }]
   });
   s1.status === 403 && s1.body && s1.body.error === 'FORBIDDEN_SCOPE'
     ? pass('ingest: scoped READ caller -> 403 FORBIDDEN_SCOPE')
     : fail('ingest scoped-read -> ' + s1.status + ' ' + JSON.stringify(s1.body).slice(0, 100));
 
-  // (ii) admin ingest of two concepts -> 202 + summary
-  const concepts = [
-    {
-      frontmatter: { title: 'Smoke Ingest Alpha', type: 'service' },
-      body: '# Smoke Ingest Alpha\nGovernment service description for smoke testing.'
-    },
-    {
-      frontmatter: { title: 'Smoke Ingest Beta', type: 'service' },
-      body: '# Smoke Ingest Beta\nAnother government service concept.'
-    }
-  ];
-  const r1 = await call('POST', '/api/okf/repos/' + INGEST_REPO + '/ingest', ADMIN, {
+  // (ii) FULL bundle through the orchestrator: every .md fixture, real
+  // frontmatter (gray-matter — same lib the parser uses), path = file name so
+  // concept ids match the control-plane phase.
+  const bundleFiles = fs
+    .readdirSync(BUNDLE_DIR)
+    .filter((f) => f.endsWith('.md'))
+    .sort();
+  const concepts = bundleFiles.map((f) => {
+    const { data, content } = matter(fs.readFileSync(path.join(BUNDLE_DIR, f), 'utf8'));
+    return { path: f, frontmatter: data, body: content.trim() };
+  });
+  const r1 = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/ingest', ADMIN, {
     concepts,
     labels: ['Service Directory']
   });
   if (r1.status !== 202) {
-    fail('ingest 202 expected, got ' + r1.status + ': ' + JSON.stringify(r1.body).slice(0, 200));
+    fail('ingest 202 expected, got ' + r1.status + ': ' + JSON.stringify(r1.body).slice(0, 220));
   } else {
     pass(
       'ingest admin -> 202 (total=' +
@@ -348,79 +409,153 @@ async function ingestPhase(db) {
         r1.body.pii.clean +
         ')'
     );
-    if (r1.body.total !== 2) fail('summary.total expected 2, got ' + r1.body.total);
-    if (r1.body.enqueued !== 2) fail('summary.enqueued expected 2, got ' + r1.body.enqueued);
+    if (r1.body.total !== EXPECTED_CONCEPTS)
+      fail('summary.total expected ' + EXPECTED_CONCEPTS + ', got ' + r1.body.total);
+    if (r1.body.enqueued !== EXPECTED_CONCEPTS)
+      fail('summary.enqueued expected ' + EXPECTED_CONCEPTS + ', got ' + r1.body.enqueued);
     if (r1.body.enqueue_errors.length !== 0)
       fail('unexpected enqueue_errors: ' + JSON.stringify(r1.body.enqueue_errors));
   }
 
-  // (iii) meta rows: parsed + graph + conformance
-  const metaA = (
-    await (
-      await db.query(
-        "FOR d IN okf_concepts_meta FILTER d.repo_id == '" +
-          INGEST_REPO +
-          "' AND d.concept_id == 'smoke-ingest-alpha' RETURN d"
-      )
-    ).all()
-  )[0];
-  const metaB = (
-    await (
-      await db.query(
-        "FOR d IN okf_concepts_meta FILTER d.repo_id == '" +
-          INGEST_REPO +
-          "' AND d.concept_id == 'smoke-ingest-beta' RETURN d"
-      )
-    ).all()
-  )[0];
-  metaA && metaA.index_status === 'parsed' && metaA.graph_name === 'OKF_' + INGEST_REPO
-    ? pass('meta row: index_status=parsed, graph_name=OKF_{repo} (4b full upsert)')
-    : fail('meta row alpha: ' + JSON.stringify(metaA).slice(0, 160));
-  metaB && Array.isArray(metaB.conformance_issues)
-    ? pass('meta row: conformance_issues persisted (4c)')
-    : fail('meta row beta conformance: ' + JSON.stringify(metaB).slice(0, 120));
+  // (iii) meta rows for EVERY bundle concept: parsed + graph-stamped
+  const metaRows = await aqlAll(
+    "FOR d IN okf_concepts_meta FILTER d.repo_id == '" +
+      INGEST_REPO +
+      "' RETURN KEEP(d, ['concept_id','index_status','graph_name','pii_state','conformance_issues'])"
+  );
+  metaRows.length === EXPECTED_CONCEPTS
+    ? pass('meta rows: ' + metaRows.length + '/' + EXPECTED_CONCEPTS + ' bundle concepts (4b)')
+    : fail(
+        'meta rows: expected ' +
+          EXPECTED_CONCEPTS +
+          ', got ' +
+          metaRows.length +
+          ' (' +
+          JSON.stringify(metaRows.map((m) => m.concept_id)) +
+          ')'
+      );
+  const allParsed = metaRows.every((m) => m.index_status === 'parsed' && m.graph_name === 'OKF_' + INGEST_REPO);
+  allParsed
+    ? pass('meta rows: all index_status=parsed + graph_name=OKF_{repo}')
+    : fail('meta rows: not all parsed/graph-stamped: ' + JSON.stringify(metaRows));
+  const badRow = metaRows.find((m) => m.concept_id === 'bad_concept');
+  badRow && Array.isArray(badRow.conformance_issues) && badRow.conformance_issues.length === EXPECTED_ISSUES
+    ? pass('meta rows: bad_concept carries exactly ' + EXPECTED_ISSUES + ' conformance issues (4c)')
+    : fail('bad_concept conformance: ' + JSON.stringify(badRow && badRow.conformance_issues));
+  const cleanPii = metaRows.filter((m) => m.pii_state === 'clean').length;
+  cleanPii === EXPECTED_CONCEPTS
+    ? pass('PII: all ' + EXPECTED_CONCEPTS + ' concepts clean (4d)')
+    : fail('PII clean count: ' + cleanPii + '/' + EXPECTED_CONCEPTS);
 
   // (iv) per-concept files docs: Pending + graph + ACL labels (defer_kick)
-  const docs = await (
-    await db.query(
-      "FOR f IN files FILTER f.repo_id == '" +
-        INGEST_REPO +
-        "' SORT f.file_name RETURN KEEP(f, ['file_name','dataprep','graph_name','labels'])"
-    )
-  ).all();
-  const pending = docs.filter((f) => f.dataprep && f.dataprep.status === 'Pending');
-  pending.length >= 2
+  const fileDocs = await aqlAll(
+    "FOR f IN files FILTER f.repo_id == '" +
+      INGEST_REPO +
+      "' SORT f.file_name RETURN KEEP(f, ['file_id','file_name','dataprep','graph_name','labels'])"
+  );
+  const pending = fileDocs.filter((f) => f.dataprep && f.dataprep.status === 'Pending');
+  pending.length === EXPECTED_CONCEPTS
     ? pass('files docs: ' + pending.length + ' per-concept docs at Pending (4f + defer_kick)')
     : fail(
-        'files docs at Pending: expected >=2, got ' +
+        'files docs at Pending: expected ' +
+          EXPECTED_CONCEPTS +
+          ', got ' +
           pending.length +
           ' (' +
-          JSON.stringify(docs.map((d) => d.dataprep && d.dataprep.status)) +
+          JSON.stringify(fileDocs.map((d) => d.dataprep && d.dataprep.status)) +
           ')'
       );
   const withAcl = pending.filter(
     (f) =>
+      (f.labels || []).includes('t:smoke') &&
       (f.labels || []).includes('r:' + INGEST_REPO) &&
       (f.labels || []).includes('d:smoke') &&
-      (f.labels || []).includes('Service Directory')
+      (f.labels || []).includes('Service Directory') &&
+      f.graph_name === 'OKF_' + INGEST_REPO
   );
-  withAcl.length >= 2
-    ? pass('files docs: ACL labels (t:/r:/d: from the repo) + caller label, graph stamped')
-    : fail('files docs labels: ' + JSON.stringify(pending.map((f) => f.labels)));
+  withAcl.length === EXPECTED_CONCEPTS
+    ? pass('files docs: ACL labels (t:/r:/d:) + caller label + graph_name stamped (sole injector)')
+    : fail('files docs labels/graph: ' + JSON.stringify(pending.map((f) => [f.graph_name, f.labels])));
 
-  // (v) re-ingest idempotency
+  // (v) DRAIN — the graph leg. The 2.9.4 worker does not exist yet, so the
+  // smoke drains sequentially via doc-repo's per-file ingest route (admin
+  // token; sequential because dataprep is single-flight 429). Each kick is
+  // polled to a terminal status before the next.
+  console.log('  draining ' + pending.length + ' concepts sequentially into the graph (this is the slow part)...');
+  const statuses = {};
+  for (const f of pending) {
+    const kick = await call('POST', DOCREPO + '/api/files/' + f.file_id + '/ingest', ADMIN);
+    if (kick.status !== 200) {
+      fail('drain kick ' + f.file_name + ' -> ' + kick.status + ' ' + JSON.stringify(kick.body).slice(0, 120));
+      statuses[f.file_id] = 'kick-failed';
+      continue;
+    }
+    // Poll to terminal (Ingested | Ingestion Error | Killed), 8 min cap each.
+    let st = null;
+    for (let i = 0; i < 96; i++) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const row = (
+        await aqlAll(
+          "FOR x IN files FILTER x.file_id == '" + f.file_id + "' RETURN KEEP(x, ['dataprep','chunk_count'])"
+        )
+      )[0];
+      st = row && row.dataprep && row.dataprep.status;
+      if (st === 'Ingested' || st === 'Ingestion Error' || st === 'Killed') {
+        statuses[f.file_id] = st + ':' + (row.chunk_count || 0);
+        break;
+      }
+    }
+    if (!statuses[f.file_id]) statuses[f.file_id] = 'timeout:' + st;
+    console.log('    ' + f.file_name + ' -> ' + statuses[f.file_id]);
+    if (statuses[f.file_id].split(':')[0] !== 'Ingested') {
+      fail('drain ' + f.file_name + ' ended "' + statuses[f.file_id] + '"');
+    }
+  }
+  const ingestedIds = Object.keys(statuses).filter((k) => statuses[k].split(':')[0] === 'Ingested');
+  ingestedIds.length === EXPECTED_CONCEPTS
+    ? pass('drain: all ' + EXPECTED_CONCEPTS + ' bundle concepts Ingested (sequential, no 429 race)')
+    : fail('drain: ' + ingestedIds.length + '/' + EXPECTED_CONCEPTS + ' Ingested');
+
+  // (vi) CHUNKS IN THE GRAPH — the physical proof. Default GRAPH until 2.9.6.
+  const chunkRows = await aqlAll(
+    'FOR c IN ' +
+      GRAPH +
+      '_SOURCE FILTER c.file_id IN ' +
+      JSON.stringify(ingestedIds) +
+      ' COLLECT fid = c.file_id WITH COUNT INTO n RETURN {fid, n}'
+  );
+  chunkRows.length === ingestedIds.length && chunkRows.every((r) => r.n > 0)
+    ? pass(
+        'graph: chunks present for every ingested concept (' +
+          chunkRows.map((r) => r.n).join('+') +
+          ' chunks in ' +
+          GRAPH +
+          '_SOURCE)'
+      )
+    : fail('graph chunks: ' + JSON.stringify(chunkRows));
+  const totalChunks = chunkRows.reduce((a, r) => a + r.n, 0);
+  totalChunks >= EXPECTED_CONCEPTS
+    ? pass('graph: total ' + totalChunks + ' chunks from the full bundle')
+    : fail('graph total chunks: ' + totalChunks);
+  console.log(
+    '  NOTE: chunks land in the DEFAULT ' +
+      GRAPH +
+      ' graph — per-repo OKF_{repo_id} collections arrive with Story 2.9.6 (dataprep graph_name wiring, OPEA-bump gated).'
+  );
+
+  // (vii) re-ingest idempotency (meta not duplicated)
   const countQuery = "RETURN LENGTH(FOR d IN okf_concepts_meta FILTER d.repo_id == '" + INGEST_REPO + "' RETURN 1)";
-  const beforeCount = (await (await db.query(countQuery)).all())[0];
-  const r2 = await call('POST', '/api/okf/repos/' + INGEST_REPO + '/ingest', ADMIN, { concepts });
+  const beforeCount = (await aqlAll(countQuery))[0];
+  const r2 = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/ingest', ADMIN, { concepts });
   if (r2.status !== 202) {
     fail('re-ingest 202 expected, got ' + r2.status);
   } else {
-    const afterCount = (await (await db.query(countQuery)).all())[0];
-    afterCount === beforeCount && beforeCount === 2
+    const afterCount = (await aqlAll(countQuery))[0];
+    afterCount === beforeCount && beforeCount === EXPECTED_CONCEPTS
       ? pass('re-ingest: meta rows NOT duplicated (writer idempotency)')
       : fail('re-ingest meta rows: before=' + beforeCount + ' after=' + afterCount);
-    r2.body.created === 0 && r2.body.updated === 2
-      ? pass('re-ingest: summary updated=2 (dedup rule intact pre-2.9.4)')
+    r2.body.created === 0 && r2.body.updated === EXPECTED_CONCEPTS
+      ? pass('re-ingest: summary updated=' + EXPECTED_CONCEPTS + ' (dedup rule intact pre-2.9.4)')
       : fail('re-ingest summary: ' + JSON.stringify(r2.body).slice(0, 140));
   }
 }

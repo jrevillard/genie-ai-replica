@@ -92,29 +92,47 @@ async function getServiceToken() {
 }
 
 /** Authenticated axios surface for okf-server → doc-repo HTTP. Injects the
- * Bearer when configured; never throws on mint failure beyond axios's own
- * error (the caller decides retry policy). */
+ * Bearer when configured. A 401 from doc-repo (stale cached token — e.g.
+ * Keycloak restarted) resets the cache, re-mints, and retries ONCE; a second
+ * 401 propagates (the caller decides retry policy). */
+function withAuth(token, opts) {
+  return { ...opts, headers: { ...(opts.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } };
+}
+function isUnauthorized(err) {
+  return Boolean(err && err.response && err.response.status === 401);
+}
 const authedAxios = {
   async get(url, opts = {}) {
     const token = await getServiceToken();
-    return axios.get(url, {
-      ...opts,
-      headers: { ...(opts.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-    });
+    try {
+      return await axios.get(url, withAuth(token, opts));
+    } catch (err) {
+      if (!isUnauthorized(err)) throw err;
+      _clearTokenCache();
+      return axios.get(url, withAuth(await getServiceToken(), opts));
+    }
   },
   async post(url, body, opts = {}) {
     const token = await getServiceToken();
-    return axios.post(url, body, {
-      ...opts,
-      headers: { ...(opts.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-    });
+    try {
+      return await axios.post(url, body, withAuth(token, opts));
+    } catch (err) {
+      if (!isUnauthorized(err)) throw err;
+      _clearTokenCache();
+      return axios.post(url, body, withAuth(await getServiceToken(), opts));
+    }
   }
 };
 
-/** Test hook: drop the cache. */
-function _resetForTesting() {
+/** Drop the cached token (401-retry path: the cached token was rejected). */
+function _clearTokenCache() {
   _cachedToken = null;
   _tokenExpiry = 0;
+}
+
+/** Test hook: drop the cache. */
+function _resetForTesting() {
+  _clearTokenCache();
   _mintPromise = null;
   _warnedUnconfigured = false;
 }

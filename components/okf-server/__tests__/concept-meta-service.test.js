@@ -260,6 +260,40 @@ describe('concept-meta-service — review findings (2026-08-15 code review)', ()
   });
 });
 
+describe('concept-meta-service — 2.9.1 review findings (2026-08-16 code review)', () => {
+  beforeEach(() => mockDb._reset());
+
+  it('REGRESSION: full re-ingest does NOT downgrade index_status indexed → parsed (2.9.4 owns the transition)', async () => {
+    await conceptMeta.upsertConceptMeta('r1', parsedInput(), {
+      patch: { index_status: 'indexed', last_good_index_at: '2026-08-16T00:00:00Z' }
+    });
+    await conceptMeta.upsertConceptMeta('r1', parsedInput()); // FULL re-ingest writes index_status:'parsed'
+    const doc = Object.values(mockDb._stores.okf_concepts_meta)[0];
+    expect(doc.index_status).toBe('indexed'); // the worker's terminal state survives re-ingest
+  });
+
+  it('a non-indexed doc still takes the fresh "parsed" status (protection is not a freeze)', async () => {
+    await conceptMeta.upsertConceptMeta('r1', parsedInput());
+    const doc = Object.values(mockDb._stores.okf_concepts_meta)[0];
+    expect(doc.index_status).toBe('parsed');
+    await conceptMeta.upsertConceptMeta('r1', parsedInput());
+    expect(Object.values(mockDb._stores.okf_concepts_meta)[0].index_status).toBe('parsed');
+  });
+
+  it('getConceptMeta returns the stored doc / null when absent (the 4e PRE-upsert read)', async () => {
+    expect(await conceptMeta.getConceptMeta('r1', 'concepts/health-policy')).toBeNull();
+    await conceptMeta.upsertConceptMeta('r1', parsedInput());
+    const doc = await conceptMeta.getConceptMeta('r1', 'concepts/health-policy');
+    expect(doc).toMatchObject({ repo_id: 'r1', concept_id: 'concepts/health-policy', index_status: 'parsed' });
+    expect(doc.content_hash).toBe(conceptMeta.contentHash('# Health Policy\nGuidance for the ministry.'));
+  });
+
+  it('getConceptMeta guards falsy keys (repo-wide read hazard)', async () => {
+    expect(await conceptMeta.getConceptMeta('', 'concepts/x')).toBeNull();
+    expect(await conceptMeta.getConceptMeta('r1', undefined)).toBeNull();
+  });
+});
+
 describe('concept-meta-service — real-arangojs no-match tolerance (smoke-test catch)', () => {
   beforeEach(() => mockDb._reset());
 

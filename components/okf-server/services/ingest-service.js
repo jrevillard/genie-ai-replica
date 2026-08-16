@@ -9,7 +9,13 @@
 // The HTTP layer returns 202 once every concept completes 4a–4f (or its
 // per-concept error) — the request NEVER blocks on dataprep; draining Pending
 // files docs is the 2.9.4 worker's job. No Redis here (decision D-D).
+//
+// 2026-08-16 review fixes: markdown serialization via gray-matter (js-yaml),
+// 4a parse isolation, pre-upsert 4e dedup read, caller ACL-label stripping,
+// slug collision handling, 30s enqueue timeout, file_ids not_found
+// reconciliation, stored-file branch always re-parses, summary.parsed/success.
 
+const matter = require('gray-matter');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
@@ -21,6 +27,9 @@ const repositoryService = require('./repository-service');
 const auditService = require('./audit-service');
 const { authedAxios } = require('./service-token');
 const config = require('../config');
+
+const DEFAULT_MAX_CONCEPTS = 200;
+const ENQUEUE_TIMEOUT_MS = 30000; // 4f cap — never hang the request on doc-repo
 
 const meter = getMeter();
 const opsCounter = meter.createCounter('okf_ingest_operations_total', {
@@ -34,12 +43,24 @@ function recordOp(operation, status) {
   }
 }
 
+/** Caller-supplied labels with an ACL prefix are NEVER trusted — the
+ * orchestrator is the sole injector (a caller must not re-scope concepts). */
+const ACL_LABEL_RE = /^t:|^r:|^d:/i;
+
 class IngestError extends Error {
   constructor(code, message, status) {
     super(message);
     this.code = code;
     this.status = status;
   }
+}
+
+/** OKF_INGEST_MAX_CONCEPTS resolver shared by the controller pre-check and
+ * the service cap (a garbage env value falls back to the default — parseInt's
+ * NaN silently disables a hand-rolled `x > NaN` comparison). */
+function maxConceptsFromEnv() {
+  const parsed = parseInt(process.env.OKF_INGEST_MAX_CONCEPTS || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_CONCEPTS;
 }
 
 /** Sole ACL injector (D-A): t: and d: carry the repo domain in v1 (no tenant
@@ -50,42 +71,56 @@ function deriveAclLabels(repo) {
 }
 
 /** Slugify a title (or name) into a stable path component: "Service Directory"
- * → "service-directory". ASCII-fold, lowercase, non-alphanum → '-'. */
+ * → "service-directory". ASCII-fold, lowercase, non-alphanum → '-'. May return
+ * '' for non-Latin input — uniquifySlug() handles that (empty is a collision
+ * class of its own: every non-Latin title would otherwise collide). */
 function slugify(value) {
-  return (
-    String(value || '')
-      .normalize('NFKD')
-      .replace(/[̀-ͯ]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'concept'
-  );
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/** Collision-free slug per batch (review fix): an empty slug (non-Latin) or an
+ * in-batch duplicate gets a '-' + 8-hex content-hash suffix; identical title
+ * AND body (hash collision too) falls back to a numeric tiebreaker. */
+function uniquifySlug(base, body, seen) {
+  let slug = base;
+  if (!slug || seen.has(slug)) {
+    const hash8 = conceptMetaService.contentHash(body).slice(0, 8);
+    slug = `${slug || 'concept'}-${hash8}`;
+    for (let n = 2; seen.has(slug); n += 1) slug = `${base || 'concept'}-${hash8}-${n}`;
+  }
+  seen.add(slug);
+  return slug;
 }
 
 /** Explicit concepts[] input → parse inputs (path from explicit path, else the
- * frontmatter title slug, else an index — concept_id derives concepts/<slug>).
- * Stored-file inputs arrive already shaped. */
+ * frontmatter title slug, else an index — concept_id derives concepts/<slug>). */
 function normalizeInputs(input) {
   const { concepts } = input || {};
   if (Array.isArray(concepts) && concepts.length > 0) {
+    const seen = new Set();
     return concepts.map((c, i) => {
       const fm = c.frontmatter || {};
+      const body = c.body || '';
       const name = c.path || fm.title || `concept-${i + 1}`;
-      const slug = name.includes('.md') ? name.replace(/\.md$/, '') : slugify(name);
-      return { concept_id: null, path: `${slug}.md`, frontmatter: fm, body: c.body || '' };
+      const base = name.includes('.md') ? name.replace(/\.md$/, '') : slugify(name);
+      return { concept_id: null, path: `${uniquifySlug(base, body, seen)}.md`, frontmatter: fm, body };
     });
   }
   return null; // file_ids/discover handled by the caller (async fetch)
 }
 
+/** Serialize concept input back to .md via gray-matter's js-yaml engine
+ * (review fix — live-confirmed corruption: the hand-rolled line emitter
+ * produced invalid YAML the moment a value carried a colon/quote, so 4a
+ * re-parse threw PARSE_ERROR 400 mid-batch). Empty frontmatter emits NO block
+ * (verified) — a stored file's own frontmatter stays intact for 4a to lift. */
 function markdownFor(input) {
-  const fm =
-    input.frontmatter && Object.keys(input.frontmatter).length
-      ? `---\n${Object.entries(input.frontmatter)
-          .map(([k, v]) => `${k}: ${Array.isArray(v) ? JSON.stringify(v) : JSON.stringify(v).replace(/^"|"$/g, '')}`)
-          .join('\n')}\n---\n\n`
-      : '';
-  return `${fm}${input.body}`;
+  return matter.stringify(input.body || '', input.frontmatter || {});
 }
 
 /**
@@ -99,32 +134,49 @@ function markdownFor(input) {
 async function ingestRepoConcepts(repo_id, input, actor) {
   return withSpan('okf.ingest.repo', async (span) => {
     span.setAttribute('okf.repo_id', repo_id);
-    const maxConcepts = parseInt(process.env.OKF_INGEST_MAX_CONCEPTS || '200', 10);
-    return _ingestWithCap(repo_id, input, actor, maxConcepts, span);
+    return _ingestWithCap(repo_id, input, actor, maxConceptsFromEnv(), span);
   });
 }
 
 /** Cap-enforcing core (test hook: pass an explicit cap). */
-async function _ingestWithCap(repo_id, input, actor, maxConcepts = 200, span) {
+async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFromEnv(), span) {
   // [2] Resolve repo — authz/existence handled by the controller's getById
   // pre-gate; this fetch carries the derivation fields (domain/graph/version).
   const repo = await repositoryService.getById(repo_id);
   const graphName = repo.graph_name || `OKF_${repo_id}`;
   const aclLabels = deriveAclLabels(repo);
   const bundleVersion = repo.version != null ? repo.version : null;
-  const callerLabels = Array.isArray(input && input.labels) ? input.labels.filter((l) => typeof l === 'string') : [];
+
+  // Caller labels are appended AFTER the ACL set — but an ACL-prefixed caller
+  // label would re-scope the concept, so it is stripped + warned (sole
+  // injector invariant; review fix).
+  const rawCallerLabels = Array.isArray(input && input.labels) ? input.labels.filter((l) => typeof l === 'string') : [];
+  const strippedLabels = rawCallerLabels.filter((l) => ACL_LABEL_RE.test(l));
+  if (strippedLabels.length > 0) {
+    logger.warn('Caller-supplied ACL-prefixed labels stripped (sole-injector invariant)', {
+      repo_id,
+      stripped: strippedLabels
+    });
+  }
+  const callerLabels = rawCallerLabels.filter((l) => !ACL_LABEL_RE.test(l));
   const labels = [...aclLabels, ...callerLabels]; // ACL set FIRST (sole injector)
 
   // Gather concept inputs: explicit concepts[] (D-C — 2.9.5 unzip and the 7.2
   // producer call this service directly with unzipped concepts) or the repo's
   // stored plain-.md docs (file_ids / discover via 2.8's discovery).
   let rawInputs = normalizeInputs(input);
+  let notFound = [];
   if (!rawInputs) {
     const { file_ids, discover } = input || {};
     let files;
     if (Array.isArray(file_ids) && file_ids.length > 0) {
-      files = (await piiService.discoverRepoFiles(repo_id)).filter((f) => file_ids.includes(f.file_id));
-    } else if (discover) {
+      // Reconcile requested vs found — a silently-dropped id must be visible
+      // in the summary (review fix), never a phantom success.
+      const discovered = await piiService.discoverRepoFiles(repo_id);
+      const foundIds = new Set(discovered.map((f) => f.file_id));
+      notFound = file_ids.filter((id) => !foundIds.has(id));
+      files = discovered.filter((f) => file_ids.includes(f.file_id));
+    } else if (discover === true) {
       files = await piiService.discoverRepoFiles(repo_id);
     } else {
       throw new IngestError('VALIDATION_ERROR', 'body must contain concepts[], file_ids[], or discover:true', 400);
@@ -147,29 +199,50 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = 200, span) {
   const summary = {
     repo_id,
     total: rawInputs.length,
+    parsed: 0,
     created: 0,
     updated: 0,
     skipped_dedup: 0,
     pii: { clean: 0, hit: 0, error: 0 },
     enqueued: 0,
-    enqueue_errors: []
+    enqueue_errors: [],
+    not_found: notFound
   };
 
   for (const raw of rawInputs) {
-    // [4a] parse (pure) — or the stored concept's already-parsed shape.
+    // [4a] parse — ALWAYS through the real parser (review fix: the old
+    // raw.concept_id skip-branch bypassed frontmatter/link derivation for
+    // stored files), and ISOLATED: a malformed concept records a per-concept
+    // error; the request stays 202 (AC-2 contract).
     let parsed;
-    if (raw.concept_id && raw.frontmatter && Object.keys(raw.frontmatter).length) {
-      parsed = { concept_id: raw.concept_id, repo_id, path: raw.path, ...raw };
-    } else {
+    try {
       parsed = await parserService.parseConcept(markdownFor(raw), { repo_id, path: raw.path });
+    } catch (err) {
+      logger.error('Ingest 4a parse failed (isolated)', { repo_id, path: raw.path, error: err.message });
+      summary.enqueue_errors.push({ concept_id: raw.concept_id || raw.path, stage: 'parse', error: err.message });
+      continue;
+    }
+    summary.parsed += 1;
+
+    // [4e-pre] read the PRE-upsert meta doc (review fix: the post-upsert doc
+    // always carries THIS run's hash + 'parsed' status — dedupping against it
+    // was dead code). The stored hash + index_status is the dedup basis.
+    let preDoc = null;
+    try {
+      preDoc = await conceptMetaService.getConceptMeta(repo_id, parsed.concept_id);
+    } catch (err) {
+      logger.warn('Ingest 4e pre-read failed (dedup disabled for this concept)', {
+        repo_id,
+        concept_id: parsed.concept_id,
+        error: err.message
+      });
     }
 
     // [4b] FULL upsert (first-class fields; index_status='parsed'; the
-    // writer's minimal-input and pii_state protections apply automatically).
-    let stored;
+    // writer's minimal-input, pii_state and index_status protections apply
+    // automatically).
     try {
       const r = await conceptMetaService.upsertConceptMeta(repo_id, parsed, { bundle_version: bundleVersion });
-      stored = r.doc;
       summary[r.action === 'created' ? 'created' : 'updated'] += 1;
     } catch (err) {
       logger.error('Ingest 4b meta upsert failed', { repo_id, concept_id: parsed.concept_id, error: err.message });
@@ -204,10 +277,12 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = 200, span) {
       });
     }
 
-    // [4e] content-hash dedup: unchanged hash AND already indexed → skip.
-    if (stored && stored.index_status === 'indexed' && stored.content_hash) {
+    // [4e] content-hash dedup on the PRE-upsert doc: unchanged hash AND
+    // already indexed → skip enqueue (cannot fire until 2.9.4 writes
+    // 'indexed'; the rule is implemented now — NFR-S4).
+    if (preDoc && preDoc.index_status === 'indexed' && preDoc.content_hash) {
       const newHash = conceptMetaService.contentHash ? conceptMetaService.contentHash(parsed.body) : null;
-      if (newHash && newHash === stored.content_hash) {
+      if (newHash && newHash === preDoc.content_hash) {
         summary.skipped_dedup += 1;
         continue;
       }
@@ -216,16 +291,21 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = 200, span) {
     // [4f] enqueue: per-concept .md stored via doc-repo's bundle route with
     // defer_kick — the files doc lands at 'Pending' for the 2.9.4 worker
     // (per-concept enqueues must NOT race dataprep's single-ingest lock).
+    // 30s timeout caps the total request risk (review fix).
     try {
       const conceptMd = markdownFor({ frontmatter: parsed.frontmatter, body: parsed.body });
-      await authedAxios.post(`${config.documentRepository.url}/api/files/ingest-bundle`, {
-        bundle: Buffer.from(conceptMd).toString('base64'),
-        graph_name: graphName,
-        repo_id,
-        originalFileName: `${parsed.concept_id.replace(/^concepts\//, '')}.md`,
-        labels,
-        defer_kick: true
-      });
+      await authedAxios.post(
+        `${config.documentRepository.url}/api/files/ingest-bundle`,
+        {
+          bundle: Buffer.from(conceptMd).toString('base64'),
+          graph_name: graphName,
+          repo_id,
+          originalFileName: `${parsed.concept_id.replace(/^concepts\//, '')}.md`,
+          labels,
+          defer_kick: true
+        },
+        { timeout: ENQUEUE_TIMEOUT_MS }
+      );
       summary.enqueued += 1;
     } catch (err) {
       summary.enqueue_errors.push({ concept_id: parsed.concept_id, stage: 'enqueue', error: err.message });
@@ -237,13 +317,18 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = 200, span) {
     }
   }
 
+  // success=false + metric 'error' when every enqueue failed (nothing was
+  // queued and nothing was a dedup skip — the request accomplished nothing).
+  const allEnqueuesFailed = summary.enqueue_errors.length > 0 && summary.enqueued === 0;
+  summary.success = !allEnqueuesFailed;
   if (span) {
     span.setAttribute('okf.ingest.total', summary.total);
+    span.setAttribute('okf.ingest.parsed', summary.parsed);
     span.setAttribute('okf.ingest.enqueued', summary.enqueued);
     span.setAttribute('okf.ingest.skipped_dedup', summary.skipped_dedup);
     span.setAttribute('okf.ingest.pii_error', summary.pii.error);
   }
-  recordOp('ingest', summary.enqueue_errors.length === 0 ? 'accepted' : 'partial');
+  recordOp('ingest', allEnqueuesFailed ? 'error' : summary.enqueue_errors.length === 0 ? 'accepted' : 'partial');
   logger.info('OKF repo ingest orchestrated', { repo_id, total: summary.total, enqueued: summary.enqueued });
 
   // Audit (best-effort, actor = sub string — AC 9).
@@ -261,4 +346,13 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = 200, span) {
   return summary;
 }
 
-module.exports = { ingestRepoConcepts, _ingestWithCap, deriveAclLabels, IngestError };
+module.exports = {
+  ingestRepoConcepts,
+  _ingestWithCap,
+  deriveAclLabels,
+  maxConceptsFromEnv,
+  slugify,
+  uniquifySlug,
+  markdownFor,
+  IngestError
+};

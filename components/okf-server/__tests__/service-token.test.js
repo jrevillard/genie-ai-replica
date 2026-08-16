@@ -76,4 +76,57 @@ describe('service-token (client_credentials, cached, single-flight)', () => {
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok-3' }) })
     );
   });
+
+  test('401 from doc-repo → cache reset, re-mint, retried ONCE with the fresh token (review fix)', async () => {
+    const unauthorized = Object.assign(new Error('Request failed with status code 401'), {
+      response: { status: 401 }
+    });
+    let call = 0;
+    axios.post.mockImplementation((_url) => {
+      call += 1;
+      if (call === 1) return Promise.resolve({ data: { access_token: 'stale-token', expires_in: 3600 } });
+      if (call === 2) return Promise.reject(unauthorized);
+      if (call === 3) return Promise.resolve({ data: { access_token: 'fresh-token', expires_in: 3600 } });
+      return Promise.resolve({ status: 202, data: { file_id: 'f1' } });
+    });
+    const res = await authedAxios.post(
+      'http://docrepo/api/files/ingest-bundle',
+      { bundle: 'eA==' },
+      { timeout: 30000 }
+    );
+    expect(res.status).toBe(202);
+    // call 1 = mint (stale), 2 = ingest attempt (401), 3 = re-mint, 4 = retry with fresh
+    const retryHeaders = axios.post.mock.calls[3][2].headers;
+    expect(retryHeaders.Authorization).toBe('Bearer fresh-token');
+    expect(axios.post).toHaveBeenCalledTimes(4);
+  });
+
+  test('a SECOND 401 propagates (retry is once, not a loop)', async () => {
+    const unauthorized = Object.assign(new Error('401'), { response: { status: 401 } });
+    let call = 0;
+    axios.post.mockImplementation(() => {
+      call += 1;
+      if (call === 1) return Promise.resolve({ data: { access_token: 't1', expires_in: 3600 } });
+      if (call === 2 || call === 4) return Promise.reject(unauthorized);
+      if (call === 3) return Promise.resolve({ data: { access_token: 't2', expires_in: 3600 } });
+      return Promise.reject(unauthorized);
+    });
+    await expect(authedAxios.post('http://docrepo/api/files/ingest-bundle', {})).rejects.toMatchObject({
+      response: { status: 401 }
+    });
+    expect(axios.post).toHaveBeenCalledTimes(4); // mint, attempt, re-mint, retry — then stop
+  });
+
+  test('non-401 errors do NOT trigger a re-mint', async () => {
+    axios.post.mockImplementation((url) =>
+      url.includes('/token')
+        ? Promise.resolve({ data: { access_token: 'tok-9', expires_in: 3600 } })
+        : Promise.reject(Object.assign(new Error('500'), { response: { status: 500 } }))
+    );
+    await expect(authedAxios.post('http://docrepo/api/files/ingest-bundle', {})).rejects.toMatchObject({
+      response: { status: 500 }
+    });
+    // exactly one mint + one attempt
+    expect(axios.post).toHaveBeenCalledTimes(2);
+  });
 });

@@ -71,7 +71,10 @@ async function ensureRepoDoc(db) {
 }
 
 async function main() {
-  const files = fs.readdirSync(BUNDLE_DIR).filter((f) => f.endsWith('.md')).sort();
+  const files = fs
+    .readdirSync(BUNDLE_DIR)
+    .filter((f) => f.endsWith('.md'))
+    .sort();
   console.log(`OKF smoke test: bundle=${BUNDLE_DIR} concepts=${files.length} repo=${REPO_ID}`);
   if (files.length !== EXPECTED_CONCEPTS) {
     fail(`expected ${EXPECTED_CONCEPTS} concept files, found ${files.length}`);
@@ -125,9 +128,13 @@ async function main() {
   // 5: PII scan every concept — fixtures are authored PII-free; 'clean' REQUIRED.
   for (const { parsed } of perFile) {
     const pii = await piiService.scanConcept(REPO_ID, parsed.concept_id, parsed.frontmatter, parsed.body);
-    console.log(`  pii ${path.basename(parsed.path)}: state=${pii.pii_state}${pii.pii_hits_summary && Object.keys(pii.pii_hits_summary).length ? ' hits=' + JSON.stringify(pii.pii_hits_summary) : ''}`);
+    console.log(
+      `  pii ${path.basename(parsed.path)}: state=${pii.pii_state}${pii.pii_hits_summary && Object.keys(pii.pii_hits_summary).length ? ' hits=' + JSON.stringify(pii.pii_hits_summary) : ''}`
+    );
     if (pii.pii_state !== 'clean') {
-      fail(`PII scan of ${parsed.path}: expected clean, got '${pii.pii_state}' (${JSON.stringify(pii.pii_hits_summary)})`);
+      fail(
+        `PII scan of ${parsed.path}: expected clean, got '${pii.pii_state}' (${JSON.stringify(pii.pii_hits_summary)})`
+      );
     }
   }
 
@@ -181,9 +188,17 @@ async function authzPhase(db) {
   const OTHER_REPO = `${REPO_ID}-other`;
   const h = (t) => ({ Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' });
   async function call(method, path, token, body) {
-    const res = await fetch(`${BASE}${path}`, { method, headers: h(token), body: body ? JSON.stringify(body) : undefined });
+    const res = await fetch(`${BASE}${path}`, {
+      method,
+      headers: h(token),
+      body: body ? JSON.stringify(body) : undefined
+    });
     let j = null;
-    try { j = await res.json(); } catch { /* non-json */ }
+    try {
+      j = await res.json();
+    } catch {
+      /* non-json */
+    }
     return { status: res.status, body: j };
   }
 
@@ -200,7 +215,15 @@ async function authzPhase(db) {
     otherLive = true;
   } catch (err) {
     if (err && (err.errorNum === 1204 || err.code === 404 || err.statusCode === 404)) {
-      await repos.save({ _key: OTHER_REPO, repo_id: OTHER_REPO, name: 'Smoke Other Repo', domain: 'smoke', graph_name: `OKF_${OTHER_REPO}`, okf_version: '0.2', lifecycle_state: 'register' });
+      await repos.save({
+        _key: OTHER_REPO,
+        repo_id: OTHER_REPO,
+        name: 'Smoke Other Repo',
+        domain: 'smoke',
+        graph_name: `OKF_${OTHER_REPO}`,
+        okf_version: '0.2',
+        lifecycle_state: 'register'
+      });
       otherLive = true;
     } else throw err;
   }
@@ -208,11 +231,15 @@ async function authzPhase(db) {
   console.log('Authz matrix (Story 6.1):');
   // (a) scoped caller — read on REPO_ID only.
   const a1 = await call('GET', `/api/okf/repos/${REPO_ID}`, SCOPED);
-  a1.status === 200 ? pass(`scoped GET own repo → 200`) : fail(`scoped GET own repo → ${a1.status} ${JSON.stringify(a1.body).slice(0, 120)}`);
+  a1.status === 200
+    ? pass(`scoped GET own repo → 200`)
+    : fail(`scoped GET own repo → ${a1.status} ${JSON.stringify(a1.body).slice(0, 120)}`);
   const a2 = await call('GET', `/api/okf/repos/${OTHER_REPO}`, SCOPED);
-  a2.status === 404 ? pass('scoped GET foreign (existing) repo → 404 (anti-enumeration)') : fail(`scoped GET foreign repo → ${a2.status}`);
+  a2.status === 404
+    ? pass('scoped GET foreign (existing) repo → 404 (anti-enumeration)')
+    : fail(`scoped GET foreign repo → ${a2.status}`);
   const a3 = await call('GET', '/api/okf/repos', SCOPED);
-  const ids = (a3.body && a3.body.items || []).map((i) => i.repo_id);
+  const ids = ((a3.body && a3.body.items) || []).map((i) => i.repo_id);
   a3.status === 200 && ids.includes(REPO_ID) && !ids.includes(OTHER_REPO)
     ? pass(`scoped LIST → own repo only (${ids.length} item(s))`)
     : fail(`scoped LIST → status=${a3.status} ids=${JSON.stringify(ids)}`);
@@ -229,15 +256,171 @@ async function authzPhase(db) {
 
   // (e/f) admin — wildcard attribute (+ tools-admin): full visibility + mutation.
   const e1 = await call('GET', '/api/okf/repos', ADMIN);
-  const adminIds = (e1.body && e1.body.items || []).map((i) => i.repo_id);
+  const adminIds = ((e1.body && e1.body.items) || []).map((i) => i.repo_id);
   e1.status === 200 && adminIds.includes(REPO_ID) && adminIds.includes(OTHER_REPO)
     ? pass('admin LIST → sees both repos (wildcard)')
     : fail(`admin LIST → ${e1.status} ids=${JSON.stringify(adminIds)}`);
   const e2 = await call('PATCH', `/api/okf/repos/${OTHER_REPO}`, ADMIN, { name: 'Smoke Other Repo (renamed)' });
-  e2.status === 200 ? pass('admin PATCH foreign repo → 200 (wildcard admin)') : fail(`admin PATCH → ${e2.status} ${JSON.stringify(e2.body).slice(0, 120)}`);
+  e2.status === 200
+    ? pass('admin PATCH foreign repo → 200 (wildcard admin)')
+    : fail(`admin PATCH → ${e2.status} ${JSON.stringify(e2.body).slice(0, 120)}`);
 
   // Cleanup: soft-delete the helper repo so the catalog is not polluted.
   if (otherLive) {
     await repos.update(OTHER_REPO, { deleted_at: new Date().toISOString() });
+  }
+}
+
+// ─── Story 2.9.1: HTTP ingest phase ───────────────────────────────────────────
+
+async function ingestPhase(db) {
+  const ADMIN = process.env.OKF_SMOKE_TOKEN_ADMIN;
+  const SCOPED = process.env.OKF_SMOKE_TOKEN_SCOPED;
+  if (!ADMIN || !SCOPED) {
+    console.log('NOTICE: ingest phase skipped (needs ADMIN+SCOPED tokens — run via mint-tokens.mjs)');
+    return;
+  }
+  const BASE = process.env.OKF_SMOKE_BASE_URL || 'http://localhost:3002';
+  // Must be a UUID — doc-repo's ingest-bundle validates repo_id:uuid().
+  const INGEST_REPO = '99999999-9999-4999-8999-999999999999';
+  const h = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' });
+  async function call(method, path, token, body) {
+    const res = await fetch(BASE + path, { method, headers: h(token), body: body ? JSON.stringify(body) : undefined });
+    let j = null;
+    try {
+      j = await res.json();
+    } catch {
+      /* non-json */
+    }
+    return { status: res.status, body: j };
+  }
+  console.log('Ingest phase (Story 2.9.1):');
+
+  const repos = db.collection('okf_repositories');
+  try {
+    await repos.document(INGEST_REPO);
+  } catch (err) {
+    if (err && (err.errorNum === 1204 || err.code === 404 || err.statusCode === 404)) {
+      await repos.save({
+        _key: INGEST_REPO,
+        repo_id: INGEST_REPO,
+        name: 'Smoke Ingest 291',
+        domain: 'smoke',
+        graph_name: 'OKF_' + INGEST_REPO,
+        okf_version: '0.2',
+        lifecycle_state: 'register'
+      });
+    } else throw err;
+  }
+
+  // (i) scoped READ caller -> 403 FORBIDDEN_SCOPE
+  const s1 = await call('POST', '/api/okf/repos/' + INGEST_REPO + '/ingest', SCOPED, {
+    concepts: [{ frontmatter: { title: 'Nope' }, body: '# nope' }]
+  });
+  s1.status === 403 && s1.body && s1.body.error === 'FORBIDDEN_SCOPE'
+    ? pass('ingest: scoped READ caller -> 403 FORBIDDEN_SCOPE')
+    : fail('ingest scoped-read -> ' + s1.status + ' ' + JSON.stringify(s1.body).slice(0, 100));
+
+  // (ii) admin ingest of two concepts -> 202 + summary
+  const concepts = [
+    {
+      frontmatter: { title: 'Smoke Ingest Alpha', type: 'service' },
+      body: '# Smoke Ingest Alpha\nGovernment service description for smoke testing.'
+    },
+    {
+      frontmatter: { title: 'Smoke Ingest Beta', type: 'service' },
+      body: '# Smoke Ingest Beta\nAnother government service concept.'
+    }
+  ];
+  const r1 = await call('POST', '/api/okf/repos/' + INGEST_REPO + '/ingest', ADMIN, {
+    concepts,
+    labels: ['Service Directory']
+  });
+  if (r1.status !== 202) {
+    fail('ingest 202 expected, got ' + r1.status + ': ' + JSON.stringify(r1.body).slice(0, 200));
+  } else {
+    pass(
+      'ingest admin -> 202 (total=' +
+        r1.body.total +
+        ', enqueued=' +
+        r1.body.enqueued +
+        ', pii.clean=' +
+        r1.body.pii.clean +
+        ')'
+    );
+    if (r1.body.total !== 2) fail('summary.total expected 2, got ' + r1.body.total);
+    if (r1.body.enqueued !== 2) fail('summary.enqueued expected 2, got ' + r1.body.enqueued);
+    if (r1.body.enqueue_errors.length !== 0)
+      fail('unexpected enqueue_errors: ' + JSON.stringify(r1.body.enqueue_errors));
+  }
+
+  // (iii) meta rows: parsed + graph + conformance
+  const metaA = (
+    await (
+      await db.query(
+        "FOR d IN okf_concepts_meta FILTER d.repo_id == '" +
+          INGEST_REPO +
+          "' AND d.concept_id == 'smoke-ingest-alpha' RETURN d"
+      )
+    ).all()
+  )[0];
+  const metaB = (
+    await (
+      await db.query(
+        "FOR d IN okf_concepts_meta FILTER d.repo_id == '" +
+          INGEST_REPO +
+          "' AND d.concept_id == 'smoke-ingest-beta' RETURN d"
+      )
+    ).all()
+  )[0];
+  metaA && metaA.index_status === 'parsed' && metaA.graph_name === 'OKF_' + INGEST_REPO
+    ? pass('meta row: index_status=parsed, graph_name=OKF_{repo} (4b full upsert)')
+    : fail('meta row alpha: ' + JSON.stringify(metaA).slice(0, 160));
+  metaB && Array.isArray(metaB.conformance_issues)
+    ? pass('meta row: conformance_issues persisted (4c)')
+    : fail('meta row beta conformance: ' + JSON.stringify(metaB).slice(0, 120));
+
+  // (iv) per-concept files docs: Pending + graph + ACL labels (defer_kick)
+  const docs = await (
+    await db.query(
+      "FOR f IN files FILTER f.repo_id == '" +
+        INGEST_REPO +
+        "' SORT f.file_name RETURN KEEP(f, ['file_name','dataprep','graph_name','labels'])"
+    )
+  ).all();
+  const pending = docs.filter((f) => f.dataprep && f.dataprep.status === 'Pending');
+  pending.length >= 2
+    ? pass('files docs: ' + pending.length + ' per-concept docs at Pending (4f + defer_kick)')
+    : fail(
+        'files docs at Pending: expected >=2, got ' +
+          pending.length +
+          ' (' +
+          JSON.stringify(docs.map((d) => d.dataprep && d.dataprep.status)) +
+          ')'
+      );
+  const withAcl = pending.filter(
+    (f) =>
+      (f.labels || []).includes('r:' + INGEST_REPO) &&
+      (f.labels || []).includes('d:smoke') &&
+      (f.labels || []).includes('Service Directory')
+  );
+  withAcl.length >= 2
+    ? pass('files docs: ACL labels (t:/r:/d: from the repo) + caller label, graph stamped')
+    : fail('files docs labels: ' + JSON.stringify(pending.map((f) => f.labels)));
+
+  // (v) re-ingest idempotency
+  const countQuery = "RETURN LENGTH(FOR d IN okf_concepts_meta FILTER d.repo_id == '" + INGEST_REPO + "' RETURN 1)";
+  const beforeCount = (await (await db.query(countQuery)).all())[0];
+  const r2 = await call('POST', '/api/okf/repos/' + INGEST_REPO + '/ingest', ADMIN, { concepts });
+  if (r2.status !== 202) {
+    fail('re-ingest 202 expected, got ' + r2.status);
+  } else {
+    const afterCount = (await (await db.query(countQuery)).all())[0];
+    afterCount === beforeCount && beforeCount === 2
+      ? pass('re-ingest: meta rows NOT duplicated (writer idempotency)')
+      : fail('re-ingest meta rows: before=' + beforeCount + ' after=' + afterCount);
+    r2.body.created === 0 && r2.body.updated === 2
+      ? pass('re-ingest: summary updated=2 (dedup rule intact pre-2.9.4)')
+      : fail('re-ingest summary: ' + JSON.stringify(r2.body).slice(0, 140));
   }
 }

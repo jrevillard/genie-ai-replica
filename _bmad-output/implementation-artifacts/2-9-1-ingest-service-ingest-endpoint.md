@@ -3,7 +3,7 @@ baseline_commit: d4d3c569c
 ---
 # Story 2.9.1: `ingestService` + `POST /api/okf/repos/:repo_id/ingest`
 
-Status: ready-for-dev
+Status: review
 
 Story key: `2-9-1-ingest-service-ingest-endpoint` | GitLab: #917 (`prd::okf-server`, `okf-server::epic-2.9`)
 Epic: 2.9 (Write-side Orchestration — the trunk) | Branch: `feat/okf-server`
@@ -39,13 +39,13 @@ so that **the HTTP call never blocks on dataprep, every concept is validated/sca
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — `services/service-token.js`** (AC: 4): client-credentials mint + cache + axios wrapper; compose env (`KC_OKF_SERVER_CLIENT_ID/SECRET` on okf-server); wire `fetchFileBytes` through it. Tests.
-- [ ] **T2 — `repo_id` discovery fix** (AC: 5): `pii-service.js` queries `repo_id`; fixtures updated; regression test (seed as doc-repo writes).
-- [ ] **T3 — doc-repo `defer_kick`** (AC: 3): Joi + conditional kick in `bundleIngest`; tests (kick default / no-kick flag).
-- [ ] **T4 — `services/ingest-service.js`** (AC: 1,6,7,8,9): the sequence, ACL derivation, dedup rule, per-concept isolation, summary, MELT. Unit tests incl. 4b→4c call order + fail-closed PII continuation.
-- [ ] **T5 — Route + controller** (AC: 2): Joi bodies (concepts/file_ids/discover), requireRepoScope + getById pre-gate, 202 + summary, audit. Route-matrix tests.
-- [ ] **T6 — Smoke extension** (AC: 10): ingest phase + re-ingest; local-build run; fix until exit 0.
-- [ ] **T7 — Verify**: full okf-server + doc-repo suites; eslint/prettier; evidence in Dev Agent Record.
+- [x] **T1 — `services/service-token.js`** (AC: 4): client-credentials mint + cache + axios wrapper; compose env (`KC_OKF_SERVER_CLIENT_ID/SECRET` on okf-server); wire `fetchFileBytes` through it. Tests.
+- [x] **T2 — `repo_id` discovery fix** (AC: 5): `pii-service.js` queries `repo_id`; fixtures updated; regression test (seed as doc-repo writes).
+- [x] **T3 — doc-repo `defer_kick`** (AC: 3): Joi + conditional kick in `bundleIngest`; tests (kick default / no-kick flag).
+- [x] **T4 — `services/ingest-service.js`** (AC: 1,6,7,8,9): the sequence, ACL derivation, dedup rule, per-concept isolation, summary, MELT. Unit tests incl. 4b→4c call order + fail-closed PII continuation.
+- [x] **T5 — Route + controller** (AC: 2): Joi bodies (concepts/file_ids/discover), requireRepoScope + getById pre-gate, 202 + summary, audit. Route-matrix tests.
+- [x] **T6 — Smoke extension** (AC: 10): ingest phase + re-ingest; local-build run; fix until exit 0.
+- [x] **T7 — Verify**: full okf-server + doc-repo suites; eslint/prettier; evidence in Dev Agent Record.
 
 ## Dev Notes
 
@@ -100,6 +100,35 @@ Worker/Streams/DLQ/sweeper (2.9.4) · zip contract/unzip (2.9.5) · `graph_name`
 
 ### Agent Model Used
 
+glm-5.3[1m] (dev-story, 2026-08-16)
+
+### Debug Log References
+
+- **Red-green per task:** service-token (module-absent → 5/5); discovery repo_id contract tests (1 fail pre-fix → 29/29); defer_kick (3 fails pre-fix → green); orchestrator (module-absent → 11/11 incl. 4b→4c invocation-order + ACL + dedup + isolation); route matrix (5 fails → green incl. the 403-route-layer vs 404-controller-layer split).
+- **Suites:** okf-server 204/204 (12 suites), doc-repo 425/425 (20 suites), ESLint 0 errors, Prettier clean.
+- **Live smoke (local build, exit 0):** full control-plane + Story 6.1 authz matrix + the NEW Story 2.9.1 ingest phase — scoped read caller 403; admin ingest 202 (total=2, enqueued=2, pii.clean=2); per-concept meta rows parsed+graph-stamped+conformance-persisted; 2 per-concept files docs at Pending with t:/r:/d: ACL labels + caller label + graph_name; re-ingest meta rows NOT duplicated (updated=2). **Two live-caught integration bugs fixed:** (1) the okf-server SA token was 403'd by doc-repo — mapRole collapsed okf-service to roles[0] (Offline_access); fixed with a verbatim mapping + the okf-service realm role provisioned on the client's service-account user (genie-realm.yaml, linked via serviceAccountClientId); (2) doc-repo's ingest-bundle validates repo_id:uuid() — the smoke's ingest repo id had to be a UUID (documented in the phase).
+
+### Completion Notes List
+
+- All 7 tasks complete; 10 ACs satisfied. Commits: 9e4ad615c (T1-T5 + smoke phase), a1a2aff16 (okf-service role), mapRole fix + smoke polish.
+- The endpoint accepts concepts[]/file_ids[]/discover per D-C; zip arrives with 2.9.5 calling ingestRepoConcepts directly.
+- Known gated limitation (D-I, live-confirmed): dataprep drops graphName (G5) — chunks land in default GRAPH until 2.9.6; every files doc is stamped graph_name=OKF_{repo} now so 2.9.6 needs zero orchestrator changes.
+
+### File List
+
+- components/okf-server/services/ingest-service.js — NEW (the orchestrator)
+- components/okf-server/services/service-token.js — NEW (client-credentials + authedAxios)
+- components/okf-server/services/pii-service.js — fetchFileBytes via authedAxios; discovery queries repo_id (2.8 dead-discovery fix)
+- components/okf-server/controllers/repository-controller.js — ingestRepo controller
+- components/okf-server/routes/repos-routes.js — POST /:repo_id/ingest (requireRepoScope admin)
+- components/okf-server/__tests__/service-token.test.js, ingest-service.test.js — NEW; repos-routes/pii-service tests extended
+- components/document-repository/src/controllers/fileController.js — defer_kick
+- components/document-repository/src/routes/fileRoutes.js — ingest-bundle allows okf-service
+- components/document-repository/src/middlewares/keycloak-auth-middleware.js — mapRole okf-service verbatim
+- components/document-repository/src/__tests__/routes/bundleIngest.test.js — defer_kick tests
+- configs/keycloak/genie-realm.yaml — okf-service role + service-account-okf-server user
+- docker-compose.yaml — KC_OKF_SERVER_CLIENT_ID/SECRET on okf-server
+- data/okf/smoke-test/run-smoke.js — ingest phase; mint-tokens.mjs — committed (2.9.1 usage)
 ### Debug Log References
 
 ### Completion Notes List

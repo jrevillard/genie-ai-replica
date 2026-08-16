@@ -48,6 +48,16 @@ function createMockDb() {
         }
         s[k] = { ...s[k], ...patch };
         return { ...s[k] };
+      }),
+      drop: jest.fn(async () => {
+        if (!stores[name]) {
+          const e = new Error('not found');
+          e.code = 404;
+          e.errorNum = 1204;
+          throw e;
+        }
+        delete stores[name];
+        delete handles[name];
       })
     };
     handles[name] = handle;
@@ -56,8 +66,16 @@ function createMockDb() {
 
   const collection = jest.fn((name) => handleFor(name));
 
+  // Raw _api routes (gharial graph definitions etc.) — minimal passthrough.
+  const route = jest.fn((_path) => ({
+    get: jest.fn(async () => ({ body: {} })),
+    delete: jest.fn(async () => ({ body: {} })),
+    post: jest.fn(async () => ({ body: {} }))
+  }));
+
   return {
     collection,
+    route,
     query: jest.fn(async () => ({ all: async () => [] })),
     exists: jest.fn(async () => true),
     /** Clear all stored docs + reset call history + drop cached handles (call in beforeEach). */
@@ -65,6 +83,7 @@ function createMockDb() {
       for (const k of Object.keys(stores)) delete stores[k];
       for (const k of Object.keys(handles)) delete handles[k];
       collection.mockClear();
+      route.mockClear();
       this.query.mockReset();
       this.query.mockResolvedValue({ all: async () => [] });
     },

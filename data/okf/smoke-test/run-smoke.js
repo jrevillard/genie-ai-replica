@@ -39,6 +39,12 @@
 //  10. Facility A: single-doc upload (existing route) → Ingested → chunks in
 //      the DEFAULT GRAPH. Facility B: zip bundle drains → chunks in
 //      OKF_{repo_id}_SOURCE and NOT in the default graph (the split, 2.9.6).
+//  11. Bundle retraction VERIFIED: retracting one concept physically removes
+//      its chunks from OKF_{repo_id}_SOURCE (right graph, real delete — never
+//      a silent 200) and leaves the other concepts' chunks untouched.
+//  12. Bundle-level retraction VERIFIED: repo delete DROPS the per-repo graph
+//      (definition + all 4 collections physically gone from ArangoDB) and
+//      removes the repo's meta rows + dangling files docs.
 
 const fs = require('fs');
 const path = require('path');
@@ -757,7 +763,142 @@ async function ingestPhase(db) {
     ? pass('isolation: ZERO OKF bundle chunks in the default ' + GRAPH + '_SOURCE (the graphs are split)')
     : fail('isolation broken: ' + leaked + ' OKF chunks found in default ' + GRAPH + '_SOURCE');
 
+  // ── (ix) BUNDLE RETRACTION — VERIFIED, not just a 200 ──
+  // History lesson (G5): retract once returned success while deleting NOTHING
+  // (wrong-graph fallback). A retract is only proven when the concept's chunks
+  // are physically GONE from the per-repo graph and the other concepts'
+  // chunks survive. Retract ONE concept (bad_concept — deliberately
+  // non-conforming, the natural deletion candidate).
+  const retractFile = pending.find((p) => p.file_name === 'bad_concept.md') || pending[0];
+  const retractChunksBefore = (
+    await aqlAll(
+      'FOR c IN `' +
+        OKF_GRAPH +
+        '_SOURCE` FILTER c.file_id == "' +
+        retractFile.file_id +
+        '" COLLECT WITH COUNT INTO n RETURN n'
+    )
+  )[0];
+  const retr = await call('POST', DOCREPO + '/api/files/' + retractFile.file_id + '/retract', await serviceToken());
+  if (retr.status !== 200) {
+    fail('retract ' + retractFile.file_name + ' -> ' + retr.status + ' ' + JSON.stringify(retr.body).slice(0, 120));
+  } else {
+    // Poll the files doc to the terminal 'retracted' state (retract also runs
+    // cascading LINKS_TO/HAS_SOURCE cleanup in the graph — give it time).
+    let rStatus = null;
+    for (let i = 0; i < 24; i++) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const row = (
+        await aqlAll(
+          "FOR x IN files FILTER x.file_id == '" + retractFile.file_id + "' RETURN KEEP(x, ['dataprep','chunk_count'])"
+        )
+      )[0];
+      rStatus = row && row.dataprep && (row.dataprep.status || '').toLowerCase();
+      if (rStatus === 'retracted') break;
+    }
+    (rStatus === 'retracted' ? pass : fail)(
+      'retract: files doc -> ' + (rStatus || 'never-terminal') + ' (' + retractFile.file_name + ')'
+    );
+    // THE physical proof: that concept's chunks are GONE from the per-repo graph.
+    const chunksAfter = (
+      await aqlAll(
+        'FOR c IN `' +
+          OKF_GRAPH +
+          '_SOURCE` FILTER c.file_id == "' +
+          retractFile.file_id +
+          '" COLLECT WITH COUNT INTO n RETURN n'
+      )
+    )[0];
+    retractChunksBefore > 0 && (chunksAfter || 0) === 0
+      ? pass(
+          'retract VERIFIED: ' +
+            retractChunksBefore +
+            ' chunks of ' +
+            retractFile.file_name +
+            ' physically removed from ' +
+            OKF_GRAPH +
+            '_SOURCE (right graph, real delete)'
+        )
+      : fail(
+          'retract NOT verified: before=' +
+            retractChunksBefore +
+            ' after=' +
+            (chunksAfter || 0) +
+            ' in ' +
+            OKF_GRAPH +
+            '_SOURCE (silent no-op?)'
+        );
+    // The rest of the bundle must be untouched.
+    const survivors = await aqlAll(
+      'FOR c IN `' +
+        OKF_GRAPH +
+        '_SOURCE` FILTER c.file_id IN ' +
+        JSON.stringify(okfIds.filter((id) => id !== retractFile.file_id)) +
+        ' COLLECT fid = c.file_id WITH COUNT INTO n RETURN {fid, n}'
+    );
+    survivors.length === EXPECTED_CONCEPTS - 1 && survivors.every((r) => r.n > 0)
+      ? pass(
+          'retract VERIFIED: the other ' +
+            (EXPECTED_CONCEPTS - 1) +
+            ' concepts keep their chunks (no collateral damage)'
+        )
+      : fail('retract collateral: survivors=' + JSON.stringify(survivors));
+  }
+
+  // ── (x) BUNDLE-LEVEL RETRACTION — repo delete DROPS the graph ──
+  // A per-repo graph serves exactly ONE bundle: the simplest correct
+  // retraction is dropping the graph definition + the 4 collections
+  // (retractRepoGraph, wired into repository delete). Verified via the real
+  // remove() flow (the service function — the HTTP DELETE route's authz is
+  // unit-tested; the user token has expired by this point in the run).
+  const repositoryService = require('./services/repository-service');
+  const delResult = await repositoryService.remove(INGEST_REPO, { sub: 'smoke-run' });
+  delResult && delResult.deleted_at
+    ? pass('bundle retract: repo soft-deleted (pending_hard_delete) → graph drop executed')
+    : fail('bundle retract: remove() returned ' + JSON.stringify(delResult));
+  const collectionGone = async (name) => {
+    try {
+      await db.collection(name).get();
+      return false;
+    } catch {
+      return true; // 404 — physically dropped
+    }
+  };
+  const allDropped = (
+    await Promise.all(['_SOURCE', '_ENTITY', '_HAS_SOURCE', '_LINKS_TO'].map((s) => collectionGone(OKF_GRAPH + s)))
+  ).every(Boolean);
+  allDropped
+    ? pass('bundle retract VERIFIED: all 4 ' + OKF_GRAPH + '_* collections physically DROPPED from ArangoDB')
+    : fail('bundle retract: some ' + OKF_GRAPH + '_* collections still exist');
+  let graphDefGone = false;
+  try {
+    await db.route('_api/gharial/' + OKF_GRAPH).get();
+  } catch {
+    graphDefGone = true;
+  }
+  graphDefGone
+    ? pass('bundle retract VERIFIED: named graph definition ' + OKF_GRAPH + ' removed')
+    : fail('bundle retract: graph definition ' + OKF_GRAPH + ' still exists');
+  const leftoverMeta = (
+    await aqlAll("RETURN LENGTH(FOR m IN okf_concepts_meta FILTER m.repo_id == '" + INGEST_REPO + "' RETURN 1)")
+  )[0];
+  leftoverMeta === 0
+    ? pass('bundle retract VERIFIED: all okf_concepts_meta rows for the repo removed')
+    : fail('bundle retract: ' + leftoverMeta + ' meta rows remain');
+  const leftoverFiles = (
+    await aqlAll("RETURN LENGTH(FOR f IN files FILTER f.repo_id == '" + INGEST_REPO + "' RETURN 1)")
+  )[0];
+  leftoverFiles === 0
+    ? pass('bundle retract VERIFIED: dangling files docs removed')
+    : fail('bundle retract: ' + leftoverFiles + ' files docs remain');
+
+  // Registry hygiene for the NEXT run: purge the smoke tombstone (fixed _key).
+  await aqlAll("REMOVE '" + INGEST_REPO + "' IN okf_repositories");
+
   console.log(
     '  NOTE: multi-graph READ (retriever fan-out over OKF_{repo_id} graphs) is Epic 1 — the retriever still queries the default graph until then.'
+  );
+  console.log(
+    '  NOTE: per-CONCEPT retraction (dataprep retract_file — surgical chunk deletion) is the separate single-file path, untouched by the bundle-level drop.'
   );
 }

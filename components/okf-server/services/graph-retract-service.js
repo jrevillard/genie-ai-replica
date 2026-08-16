@@ -61,7 +61,20 @@ async function retractRepoGraph(repo_id, actor) {
     }
 
     const dropped = [];
-    // 1. Drop the 4 graph collections (idempotent).
+    // 1. Delete the named graph definition WITH its member collections
+    //    (dropCollections=true — one call drops the graph AND its collections).
+    //    Order matters: ArangoDB REFUSES to drop collections that still belong
+    //    to a graph (live-caught run 7: 4× "collection drop failed").
+    try {
+      await db.route(`_api/gharial/${encodeURIComponent(graph)}?dropCollections=true`).delete();
+      dropped.push(`${graph} (graph definition + member collections)`);
+    } catch (err) {
+      if (!NOT_FOUND(err)) {
+        logger.warn('Graph retract: graph definition drop failed', { repo_id, graph, error: err.message });
+      }
+    }
+    // 2. Sweep any ORPHANED collections (definition absent but collections
+    //    left behind by older flows) — unblocked now the definition is gone.
     for (const suffix of GRAPH_SUFFIXES) {
       const name = `${graph}${suffix}`;
       try {
@@ -71,15 +84,6 @@ async function retractRepoGraph(repo_id, actor) {
         if (!NOT_FOUND(err)) {
           logger.warn('Graph retract: collection drop failed', { repo_id, name, error: err.message });
         }
-      }
-    }
-    // 2. Drop the named graph definition (gharial) if present.
-    try {
-      await db.route(`_api/gharial/${encodeURIComponent(graph)}`).delete();
-      dropped.push(`${graph} (graph definition)`);
-    } catch (err) {
-      if (!NOT_FOUND(err)) {
-        logger.warn('Graph retract: graph definition drop failed', { repo_id, graph, error: err.message });
       }
     }
     // 3. The repo's concept meta rows died with the graph — remove them.

@@ -49,7 +49,7 @@ describe('graph-retract-service.retractRepoGraph (bundle-level drop)', () => {
     expect(result.retracted).toBe(true);
     expect(result.graph_name).toBe(GRAPH);
     expect(result.dropped).toEqual(expect.arrayContaining(SUFFIXES.map((s) => GRAPH + s)));
-    expect(result.dropped).toContain(`${GRAPH} (graph definition)`);
+    expect(result.dropped).toContain(`${GRAPH} (graph definition + member collections)`);
     for (const s of SUFFIXES) {
       expect(mockDb._stores[GRAPH + s]).toBeUndefined(); // physically gone
     }

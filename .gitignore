@@ -136,3 +136,6 @@ _bmad-worktrees/
 
 # Bash crash dumps
 bash.exe.stackdump
+
+# OKF smoke tokens (host-side mint output — never commit)
+okf-smoke-tokens.json

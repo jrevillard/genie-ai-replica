@@ -15,6 +15,7 @@
 // slug collision handling, 30s enqueue timeout, file_ids not_found
 // reconciliation, stored-file branch always re-parses, summary.parsed/success.
 
+const AdmZip = require('adm-zip');
 const matter = require('gray-matter');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
@@ -30,6 +31,7 @@ const config = require('../config');
 
 const DEFAULT_MAX_CONCEPTS = 200;
 const ENQUEUE_TIMEOUT_MS = 30000; // 4f cap — never hang the request on doc-repo
+const DEFAULT_MAX_ZIP_BYTES = 26214400; // 25 MiB decompressed cap (zip-bomb guard)
 
 const meter = getMeter();
 const opsCounter = meter.createCounter('okf_ingest_operations_total', {
@@ -61,6 +63,12 @@ class IngestError extends Error {
 function maxConceptsFromEnv() {
   const parsed = parseInt(process.env.OKF_INGEST_MAX_CONCEPTS || '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_CONCEPTS;
+}
+
+/** Decompressed zip size cap (zip-bomb guard). */
+function maxZipBytesFromEnv() {
+  const parsed = parseInt(process.env.OKF_INGEST_MAX_ZIP_BYTES || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_ZIP_BYTES;
 }
 
 /** Sole ACL injector (D-A): t: and d: carry the repo domain in v1 (no tenant
@@ -123,11 +131,65 @@ function markdownFor(input) {
   return matter.stringify(input.body || '', input.frontmatter || {});
 }
 
+/** OKF bundle zip intake (Story 2.9.5 contract, pulled into 2.9.1 by the
+ * 2026-08-16 directive): a bundle IS a zip of `.md` concept files. Server-side
+ * unzip → one raw input per entry; each entry's own frontmatter is lifted by
+ * the 4a parser (frontmatter:{} + body passthrough — markdownFor emits no
+ * block for empty fm, keeping the stored .md byte-faithful). Guards: .md-only
+ * entries, junk filtered, entry cap, decompressed-size cap (zip bomb).
+ * @throws IngestError BAD_ZIP | VALIDATION_ERROR | TOO_MANY_CONCEPTS | ZIP_TOO_LARGE (400) */
+function zipToRawInputs(zipBase64, maxConcepts) {
+  let zip;
+  try {
+    zip = new AdmZip(Buffer.from(String(zipBase64), 'base64'));
+  } catch (err) {
+    throw new IngestError('BAD_ZIP', `bundle zip could not be read: ${err.message}`, 400);
+  }
+  const entries = zip
+    .getEntries()
+    .filter(
+      (e) =>
+        !e.isDirectory &&
+        e.entryName.endsWith('.md') &&
+        !e.entryName.startsWith('__MACOSX/') &&
+        !e.entryName.split('/').pop().startsWith('.')
+    );
+  if (entries.length === 0) {
+    throw new IngestError('VALIDATION_ERROR', 'bundle zip contains no .md concept files', 400);
+  }
+  if (entries.length > maxConcepts) {
+    throw new IngestError(
+      'TOO_MANY_CONCEPTS',
+      `bundle zip contains ${entries.length} concepts; the cap is ${maxConcepts} (OKF_INGEST_MAX_CONCEPTS)`,
+      400
+    );
+  }
+  const maxZipBytes = maxZipBytesFromEnv();
+  const seen = new Set();
+  const inputs = [];
+  let totalBytes = 0;
+  for (const e of entries) {
+    const text = e.getData().toString('utf8');
+    totalBytes += text.length;
+    if (totalBytes > maxZipBytes) {
+      throw new IngestError(
+        'ZIP_TOO_LARGE',
+        `bundle zip decompresses beyond the ${maxZipBytes}-byte cap (OKF_INGEST_MAX_ZIP_BYTES)`,
+        400
+      );
+    }
+    const base = e.entryName.replace(/\.md$/, '');
+    inputs.push({ concept_id: null, path: `${uniquifySlug(base, text, seen)}.md`, frontmatter: {}, body: text });
+  }
+  return inputs;
+}
+
 /**
  * Execute the write-side ingest sequence for a repo's concepts.
  * @param {string} repo_id
- * @param {object} input { concepts: [{frontmatter?, body, path?}] } OR
- *        { file_ids: [...] } OR { discover: true } (+ optional labels[])
+ * @param {object} input { zip: base64 } (bundle zip of .md — 2.9.5 contract)
+ *        OR { concepts: [{frontmatter?, body, path?}] } OR { file_ids: [...] }
+ *        OR { discover: true } (+ optional labels[])
  * @param {object} actor { sub, name?, source_ip? }
  * @returns {Promise<object>} summary (see AC 1)
  */
@@ -161,10 +223,14 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
   const callerLabels = rawCallerLabels.filter((l) => !ACL_LABEL_RE.test(l));
   const labels = [...aclLabels, ...callerLabels]; // ACL set FIRST (sole injector)
 
-  // Gather concept inputs: explicit concepts[] (D-C — 2.9.5 unzip and the 7.2
-  // producer call this service directly with unzipped concepts) or the repo's
-  // stored plain-.md docs (file_ids / discover via 2.8's discovery).
-  let rawInputs = normalizeInputs(input);
+  // Gather concept inputs: a bundle ZIP (the 2.9.5 contract — server-side
+  // unzip, one concept per .md entry), explicit concepts[] (D-C — the 7.2
+  // producer calls this service directly), or the repo's stored plain-.md docs
+  // (file_ids / discover via 2.8's discovery).
+  let rawInputs =
+    typeof (input || {}).zip === 'string' && input.zip
+      ? zipToRawInputs(input.zip, maxConcepts)
+      : normalizeInputs(input);
   let notFound = [];
   if (!rawInputs) {
     const { file_ids, discover } = input || {};
@@ -351,8 +417,10 @@ module.exports = {
   _ingestWithCap,
   deriveAclLabels,
   maxConceptsFromEnv,
+  maxZipBytesFromEnv,
   slugify,
   uniquifySlug,
   markdownFor,
+  zipToRawInputs,
   IngestError
 };

@@ -1192,7 +1192,13 @@ class FileController {
       return { success: false, error: 'File has already been retracted' };
     }
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.retractPath}`;
-    const response = await axios.post(dataprepUrl, { fileId: file.file_id });
+    // G5 fix (Story 2.9.6): retract must target the graph the file was ingested
+    // into — the file's graph_name (OKF per-repo graphs), falling back to
+    // dataprep's unified default when unset.
+    const response = await axios.post(dataprepUrl, {
+      fileId: file.file_id,
+      graphName: file.graph_name || null
+    });
     if (response.data.success) {
       await metadataService.updateMetadata(fileId, {
         chunk_count: 0, // Reset chunk count on retract

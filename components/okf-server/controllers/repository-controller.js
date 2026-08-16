@@ -124,17 +124,23 @@ async function ingestRepo(req, res, next) {
   try {
     const { repo_id } = req.params;
     const body = req.body || {};
-    const { concepts, file_ids, discover, labels } = body;
-    if (!Array.isArray(concepts) || concepts.length === 0) {
-      if (!Array.isArray(file_ids) || file_ids.length === 0) {
-        if (discover !== true) {
-          throw new ValidationError(['body must contain concepts[], file_ids[], or discover:true']);
+    const { concepts, file_ids, discover, labels, zip } = body;
+    const hasZip = typeof zip === 'string' && zip.length > 0;
+    if (!hasZip) {
+      if (!Array.isArray(concepts) || concepts.length === 0) {
+        if (!Array.isArray(file_ids) || file_ids.length === 0) {
+          if (discover !== true) {
+            throw new ValidationError([
+              'body must contain zip (base64 bundle), concepts[], file_ids[], or discover:true'
+            ]);
+          }
         }
       }
     }
     // Explicit concepts must carry a non-empty body — an empty concept has
     // nothing to parse/index and would silently count as "processed"
-    // (2026-08-16 review fix).
+    // (2026-08-16 review fix). (zip concept bodies are validated post-unzip
+    // by the service — BAD_ZIP/VALIDATION_ERROR there.)
     if (Array.isArray(concepts)) {
       const badIndex = concepts.findIndex((c) => !c || typeof c.body !== 'string' || c.body.trim() === '');
       if (badIndex >= 0) {
@@ -152,7 +158,7 @@ async function ingestRepo(req, res, next) {
     await repoService.getById(repo_id, { authz: authzForService(req) });
     const summary = await ingestService.ingestRepoConcepts(
       repo_id,
-      { concepts, file_ids, discover, labels },
+      { concepts, file_ids, discover, labels, zip },
       actorFrom(req)
     );
     res.status(202).json({ success: true, ...summary });

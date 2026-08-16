@@ -1,16 +1,25 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
-// OKF partial smoke test: exercises the write-side control plane end-to-end
-// against a real bundle WITHOUT the gated dataprep graph leg (2.9.6). Run
-// INSIDE the okf-server container (has shared-lib + ArangoDB + pii-service
-// reachability):
+// OKF smoke test: exercises the write-side control plane end-to-end AND both
+// ingestion facilities against a real bundle. Run INSIDE the okf-server
+// container (has shared-lib + ArangoDB + pii-service + doc-repo reachability):
 //   docker cp data/okf/smoke-test/kenya-bundle <container>:/app/kenya-bundle
+//   docker cp data/okf/smoke-test/kenya-bundle.zip <container>:/app/kenya-bundle.zip
 //   docker cp data/okf/smoke-test/run-smoke.js <container>:/app/run-smoke.js
-//   docker exec <container> node /app/run-smoke.js
+//   docker exec -e OKF_SMOKE_TOKEN_*=<...> <container> node /app/run-smoke.js
 //
 // Exercised: parser (2.3) -> conformance (2.4) -> persistConformanceIssues
 // (2.9.2 G9 REWIRED path) -> concepts-meta UPSERT writer -> PII scan + gate
-// (2.8). Every assertion below is HARD: any failure exits non-zero.
+// (2.8) -> 6.1 authz matrix -> 2.9.1 orchestrator (ZIP bundle + concepts[])
+// -> dual-facility graphs: (A) the EXISTING single-document facility (upload →
+// per-file ingest → default GRAPH) and (B) the OKF repository facility (zip →
+// orchestrator → per-repo OKF_{repo_id} graph, Story 2.9.6 wiring).
+// Every assertion below is HARD: any failure exits non-zero.
+//
+// TOKEN LIFETIME (live-proven pitfall): user tokens are 5-min TTL and the
+// sequential drain takes ~10 min — all user-token calls run EARLY; the drain
+// and cleanup use the okf-server SERVICE token (client_credentials —
+// re-mintable without the ROPC window).
 //
 // Success criteria (all must hold — smoke-test-integrity rule):
 //   1. All 6 concepts parse WITH frontmatter (title + type present on the
@@ -22,6 +31,14 @@
 //      Arango — non-tautological proof the writer wrote and metrics compute.
 //   5. Every concept scans pii_state='clean' (fixtures are authored PII-free).
 //   6. After markRepoPiiScanned, the publish gate is OPEN (blocked=false).
+//   7. The 6.1 authz matrix holds (scoped read-only, default-deny, admin).
+//   8. ZIP ingest: POST kenya-bundle.zip → 202 with total=6/parsed=6/enqueued=6;
+//      6 meta rows parsed+graph-stamped; bad_concept carries 2 issues; PII clean;
+//      6 per-concept files docs at Pending with t:/r:/d: ACL labels + graph_name.
+//   9. concepts[] re-ingest is idempotent (meta rows NOT duplicated).
+//  10. Facility A: single-doc upload (existing route) → Ingested → chunks in
+//      the DEFAULT GRAPH. Facility B: zip bundle drains → chunks in
+//      OKF_{repo_id}_SOURCE and NOT in the default graph (the split, 2.9.6).
 
 const fs = require('fs');
 const path = require('path');
@@ -32,6 +49,7 @@ const piiService = require('./services/pii-service');
 const dbService = require('./shared-lib/db-connection-service');
 
 const BUNDLE_DIR = process.env.OKF_SMOKE_BUNDLE_DIR || '/app/kenya-bundle';
+const BUNDLE_ZIP = process.env.OKF_SMOKE_BUNDLE_ZIP || '/app/kenya-bundle.zip';
 const REPO_ID = process.env.OKF_SMOKE_REPO_ID || 'smoke-kenya-repo-0001';
 const EXPECTED_CONCEPTS = 6; // 5 conforming + bad_concept.md
 const EXPECTED_ISSUES = 2; // MISSING_TYPE + BAD_ACTOR_PREFIX on bad_concept.md
@@ -155,17 +173,23 @@ async function main() {
   //   OKF_SMOKE_TOKEN_ADMIN    — genie-admin (wildcard attribute + tools-admin)
   // The phase is SKIPPED (with a notice) when no tokens are provided so the
   // control-plane phases stay runnable standalone.
-  // 8 (Story 2.9.1): HTTP ingest via the orchestrator (needs tokens; skips standalone).
-  await ingestPhase(db);
-
+  // ORDER: the user-token phases run FIRST (tokens are 5-min TTL; the ~10-min
+  // sequential drain at the end uses the re-mintable okf-server service token).
   await authzPhase(db);
+
+  // 8 (Stories 2.9.1 + 2.9.5-zip + 2.9.6-graph, pulled forward 2026-08-16):
+  // dual-facility ingest — (A) the EXISTING single-document facility (upload →
+  // per-file ingest → default GRAPH) and (B) the OKF repository facility
+  // (zipped kenya bundle → orchestrator → per-repo OKF_{repo_id} graph).
+  await ingestPhase(db);
 
   if (failures > 0) {
     console.error(`\nSMOKE TEST FAILED — ${failures} assertion(s) failed`);
     process.exit(1);
   }
-  console.log('\nSMOKE TEST PASSED (control-plane: parser+conformance+persist+meta-writer+PII-gate, all asserted)');
-  console.log('Note: the dataprep graph leg (bundle -> OKF_{repo_id} graph) is gated by 2.9.6 (OPEA 1.5 bump).');
+  console.log(
+    '\nSMOKE TEST PASSED (control-plane + 6.1 authz matrix + 2.9.1 orchestrator + zip bundle + dual-facility graphs, all asserted)'
+  );
   process.exit(0); // the db-connection cleanup timer keeps the loop alive otherwise
 }
 
@@ -271,19 +295,35 @@ async function authzPhase(db) {
   }
 }
 
-// ─── Story 2.9.1: FULL-BUNDLE ingest phase (bundle → orchestrator → graph) ───
+// ─── 2.9.1+: dual-facility ingest (existing single-doc + OKF zip bundle) ──────
 //
-// Per the every-story smoke rule this phase grows with the ingest feature:
-// it ingests the ENTIRE kenya bundle (all .md fixtures) through the real
-// orchestrator endpoint, then — because the 2.9.4 worker does not exist yet —
-// drains each enqueued concept SEQUENTIALLY via doc-repo's per-file ingest
-// route (sequential by necessity: dataprep's single-flight 429 lock), and
-// asserts chunks land in the graph per file.
-//
-// GRAPH BOUNDARY (honest): dataprep drops graph_name (G5) until Story 2.9.6
-// (OPEA-bump gated) — chunks physically land in the DEFAULT GRAPH today. This
-// phase asserts exactly that, and asserts every files doc carries
-// graph_name=OKF_{repo} so 2.9.6 activates the split with zero changes here.
+// Per the every-story smoke rule this phase covers BOTH ingestion facilities:
+//   A. the EXISTING single-document facility: doc-repo multipart upload (the
+//      admin UI path) → per-file ingest kick → chunks in the DEFAULT graph.
+//   B. the OKF repository facility: the FULL kenya bundle as a ZIP through the
+//      orchestrator endpoint (one process, 202) → per-concept Pending files
+//      docs → sequential drain (dataprep is single-flight) → chunks in the
+//      per-repo OKF_{repo_id} graph (Story 2.9.6 graph_name wiring) and NOT in
+//      the default graph.
+// The 2.9.4 worker does not exist yet, so the drain is manual (the smoke stands
+// in for it) using the okf-server SERVICE token — re-mintable client_credentials
+// that outlive the 5-min user tokens (live-proven TTL pitfall).
+
+const SINGLE_DOC_NAME = 'smoke-single-doc.md';
+const SINGLE_DOC_BODY = `# Public Service Announcement (Smoke Fixture)
+
+This single document exercises the EXISTING document ingestion facility:
+a plain English markdown file uploaded through document-repository's standard
+upload route and ingested into the default knowledge graph. It carries no OKF
+frontmatter and belongs to no repository — it must land in the shared GRAPH
+collections, distinct from OKF repository bundles which land in their own
+per-repository graphs.
+
+## Notes
+
+- Facility A: single document, default graph.
+- The OKF facility (zip bundles) is exercised separately by the same smoke run.
+`;
 
 async function ingestPhase(db) {
   const ADMIN = process.env.OKF_SMOKE_TOKEN_ADMIN;
@@ -297,6 +337,7 @@ async function ingestPhase(db) {
   const DOCREPO = process.env.OKF_SMOKE_DOCREPO_URL || 'http://document-repository:3001';
   // Must be a UUID — doc-repo's ingest-bundle validates repo_id:uuid().
   const INGEST_REPO = '99999999-9999-4999-8999-999999999999';
+  const OKF_GRAPH = 'OKF_' + INGEST_REPO;
   const GRAPH = process.env.ARANGO_GRAPH_NAME || 'GRAPH';
   const h = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' });
   async function call(method, url, token, body) {
@@ -310,17 +351,80 @@ async function ingestPhase(db) {
     return { status: res.status, body: j };
   }
   const aqlAll = async (query) => await (await db.query(query)).all();
-  console.log('Ingest phase (Story 2.9.1 — FULL bundle):');
+  console.log('Ingest phase (2.9.1 orchestrator + zip bundle + dual-facility graphs):');
 
-  // Repo for this phase (direct save — the controller gate needs it to exist;
-  // unique (name,domain,deleted_at) → distinct name; resurrect if soft-deleted).
+  // ── okf-server SERVICE token (client_credentials, re-mintable — no ROPC) ──
+  let _svc = null;
+  let _svcAt = 0;
+  async function serviceToken() {
+    if (_svc && Date.now() - _svcAt < 240000) return _svc;
+    const base = (
+      process.env.KEYCLOAK_INTERNAL_URL ||
+      process.env.KEYCLOAK_PUBLIC_URL ||
+      'http://keycloak:8080'
+    ).replace(/\/$/, '');
+    const realm = process.env.KEYCLOAK_REALM || 'genie';
+    const r = await fetch(`${base}/realms/${realm}/protocol/openid-connect/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: process.env.KC_OKF_SERVER_CLIENT_ID || 'okf-server',
+        client_secret: process.env.KC_OKF_SERVER_CLIENT_SECRET || ''
+      })
+    });
+    if (!r.ok) throw new Error('service token mint failed: ' + r.status + ' ' + (await r.text()).slice(0, 120));
+    const j = await r.json();
+    _svc = j.access_token;
+    _svcAt = Date.now();
+    return _svc;
+  }
+
+  // The service token + its okf-service ROLE are load-bearing for the drain
+  // (doc-repo ingest/retract allow okf-service) — assert them UP FRONT.
+  const svc = await serviceToken();
+  const svcList = await call('GET', DOCREPO + '/api/files', svc);
+  svcList.status === 200
+    ? pass('service token (okf-server client) authenticates against doc-repo')
+    : fail('service token rejected by doc-repo: ' + svcList.status + ' ' + JSON.stringify(svcList.body).slice(0, 100));
+
+  // ── re-run safety: retract + delete prior artifacts at phase START ──
+  const priorFiles = await aqlAll(
+    `FOR f IN files FILTER f.repo_id == '${INGEST_REPO}' || f.file_name == '${SINGLE_DOC_NAME}' RETURN KEEP(f, ['file_id','file_name','repo_id','dataprep'])`
+  );
+  if (priorFiles.length > 0) {
+    console.log('  cleanup: ' + priorFiles.length + ' prior-run files docs (retract via service token + delete)');
+    for (const f of priorFiles) {
+      const retr = await call('POST', DOCREPO + '/api/files/' + f.file_id + '/retract', svc);
+      if (retr.status === 403) {
+        fail('retract as okf-service -> 403 (role wiring broken): ' + JSON.stringify(retr.body).slice(0, 100));
+      } else if (retr.status !== 200) {
+        console.log(
+          '    NOTE retract ' +
+            f.file_name +
+            ' -> ' +
+            retr.status +
+            ' (best-effort; was ' +
+            (f.dataprep && f.dataprep.status) +
+            ')'
+        );
+      }
+      await aqlAll("FOR x IN files FILTER x.file_id == '" + f.file_id + "' REMOVE x IN files");
+    }
+  }
+  const removedMeta = await aqlAll(
+    `FOR d IN okf_concepts_meta FILTER d.repo_id == '${INGEST_REPO}' REMOVE d IN okf_concepts_meta RETURN OLD.concept_id`
+  );
+  if (removedMeta.length > 0) {
+    console.log('  cleanup: removed ' + removedMeta.length + ' prior-run meta rows');
+  }
+
+  // ── repo for this phase (direct save; resurrect if soft-deleted) ──
   const repos = db.collection('okf_repositories');
-  let repoDoc = null;
   try {
-    repoDoc = await repos.document(INGEST_REPO);
+    const repoDoc = await repos.document(INGEST_REPO);
     if (repoDoc.deleted_at) {
       await repos.update(INGEST_REPO, { deleted_at: null, name: 'Smoke Ingest 291' });
-      repoDoc = await repos.document(INGEST_REPO);
     }
   } catch (err) {
     if (err && (err.errorNum === 1204 || err.code === 404 || err.statusCode === 404)) {
@@ -336,73 +440,26 @@ async function ingestPhase(db) {
     } else throw err;
   }
 
-  // RE-RUN SAFETY (review fix 10 — live-proven accumulation): a prior run's
-  // files docs + meta rows MUST be removed at phase START or the pending-count
-  // and meta-count assertions false-fail. Retract is best-effort (removes
-  // chunks; a Pending/erroring retract is tolerated with a NOTE); the DELETE
-  // is the load-bearing cleanup and is asserted.
-  const priorFiles = await aqlAll(
-    "FOR f IN files FILTER f.repo_id == '" + INGEST_REPO + "' RETURN KEEP(f, ['file_id','file_name','dataprep'])"
-  );
-  if (priorFiles.length > 0) {
-    console.log('  cleanup: ' + priorFiles.length + ' prior-run files docs (retract best-effort + delete)');
-    for (const f of priorFiles) {
-      const retr = await call('POST', DOCREPO + '/api/files/' + f.file_id + '/retract', ADMIN);
-      if (retr.status !== 200) {
-        console.log(
-          '    NOTE retract ' +
-            f.file_name +
-            ' -> ' +
-            retr.status +
-            ' (best-effort; was ' +
-            (f.dataprep && f.dataprep.status) +
-            ')'
-        );
-      }
-      const del = await call('DELETE', DOCREPO + '/api/files/' + f.file_id, ADMIN);
-      if (del.status !== 200 && del.status !== 404) {
-        fail('cleanup DELETE ' + f.file_name + ' -> ' + del.status + ' ' + JSON.stringify(del.body).slice(0, 100));
-      }
-    }
-  }
-  const removedMeta = await aqlAll(
-    "FOR d IN okf_concepts_meta FILTER d.repo_id == '" +
-      INGEST_REPO +
-      "' REMOVE d IN okf_concepts_meta RETURN OLD.concept_id"
-  );
-  if (removedMeta.length > 0) {
-    console.log('  cleanup: removed ' + removedMeta.length + ' prior-run meta rows');
-  }
-
-  // (i) scoped READ caller → 403 (ingest is an admin mutation)
-  const s1 = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/ingest', SCOPED, {
-    concepts: [{ frontmatter: { title: 'Nope' }, body: '# nope' }]
-  });
+  // ── (i) scoped READ caller → 403 (ingest is an admin mutation) ──
+  const zipB64 = fs.readFileSync(BUNDLE_ZIP).toString('base64');
+  const s1 = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/ingest', SCOPED, { zip: zipB64 });
   s1.status === 403 && s1.body && s1.body.error === 'FORBIDDEN_SCOPE'
-    ? pass('ingest: scoped READ caller -> 403 FORBIDDEN_SCOPE')
+    ? pass('ingest: scoped READ caller -> 403 FORBIDDEN_SCOPE (zip body)')
     : fail('ingest scoped-read -> ' + s1.status + ' ' + JSON.stringify(s1.body).slice(0, 100));
 
-  // (ii) FULL bundle through the orchestrator: every .md fixture, real
-  // frontmatter (gray-matter — same lib the parser uses), path = file name so
-  // concept ids match the control-plane phase.
-  const bundleFiles = fs
-    .readdirSync(BUNDLE_DIR)
-    .filter((f) => f.endsWith('.md'))
-    .sort();
-  const concepts = bundleFiles.map((f) => {
-    const { data, content } = matter(fs.readFileSync(path.join(BUNDLE_DIR, f), 'utf8'));
-    return { path: f, frontmatter: data, body: content.trim() };
-  });
+  // ── (ii) THE FULL KENYA BUNDLE AS A ZIP, through the orchestrator ──
   const r1 = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/ingest', ADMIN, {
-    concepts,
+    zip: zipB64,
     labels: ['Service Directory']
   });
   if (r1.status !== 202) {
-    fail('ingest 202 expected, got ' + r1.status + ': ' + JSON.stringify(r1.body).slice(0, 220));
+    fail('zip ingest 202 expected, got ' + r1.status + ': ' + JSON.stringify(r1.body).slice(0, 220));
   } else {
     pass(
-      'ingest admin -> 202 (total=' +
+      'zip ingest admin -> 202 (total=' +
         r1.body.total +
+        ', parsed=' +
+        r1.body.parsed +
         ', enqueued=' +
         r1.body.enqueued +
         ', pii.clean=' +
@@ -411,13 +468,16 @@ async function ingestPhase(db) {
     );
     if (r1.body.total !== EXPECTED_CONCEPTS)
       fail('summary.total expected ' + EXPECTED_CONCEPTS + ', got ' + r1.body.total);
+    if (r1.body.parsed !== EXPECTED_CONCEPTS)
+      fail('summary.parsed expected ' + EXPECTED_CONCEPTS + ', got ' + r1.body.parsed);
     if (r1.body.enqueued !== EXPECTED_CONCEPTS)
       fail('summary.enqueued expected ' + EXPECTED_CONCEPTS + ', got ' + r1.body.enqueued);
     if (r1.body.enqueue_errors.length !== 0)
       fail('unexpected enqueue_errors: ' + JSON.stringify(r1.body.enqueue_errors));
+    if (r1.body.success !== true) fail('summary.success expected true');
   }
 
-  // (iii) meta rows for EVERY bundle concept: parsed + graph-stamped
+  // ── (iii) meta rows for EVERY bundle concept: parsed + graph-stamped ──
   const metaRows = await aqlAll(
     "FOR d IN okf_concepts_meta FILTER d.repo_id == '" +
       INGEST_REPO +
@@ -434,7 +494,7 @@ async function ingestPhase(db) {
           JSON.stringify(metaRows.map((m) => m.concept_id)) +
           ')'
       );
-  const allParsed = metaRows.every((m) => m.index_status === 'parsed' && m.graph_name === 'OKF_' + INGEST_REPO);
+  const allParsed = metaRows.every((m) => m.index_status === 'parsed' && m.graph_name === OKF_GRAPH);
   allParsed
     ? pass('meta rows: all index_status=parsed + graph_name=OKF_{repo}')
     : fail('meta rows: not all parsed/graph-stamped: ' + JSON.stringify(metaRows));
@@ -447,7 +507,7 @@ async function ingestPhase(db) {
     ? pass('PII: all ' + EXPECTED_CONCEPTS + ' concepts clean (4d)')
     : fail('PII clean count: ' + cleanPii + '/' + EXPECTED_CONCEPTS);
 
-  // (iv) per-concept files docs: Pending + graph + ACL labels (defer_kick)
+  // ── (iv) per-concept files docs: Pending + graph + ACL labels (defer_kick) ──
   const fileDocs = await aqlAll(
     "FOR f IN files FILTER f.repo_id == '" +
       INGEST_REPO +
@@ -471,20 +531,85 @@ async function ingestPhase(db) {
       (f.labels || []).includes('r:' + INGEST_REPO) &&
       (f.labels || []).includes('d:smoke') &&
       (f.labels || []).includes('Service Directory') &&
-      f.graph_name === 'OKF_' + INGEST_REPO
+      f.graph_name === OKF_GRAPH
   );
   withAcl.length === EXPECTED_CONCEPTS
     ? pass('files docs: ACL labels (t:/r:/d:) + caller label + graph_name stamped (sole injector)')
     : fail('files docs labels/graph: ' + JSON.stringify(pending.map((f) => [f.graph_name, f.labels])));
 
-  // (v) DRAIN — the graph leg. The 2.9.4 worker does not exist yet, so the
-  // smoke drains sequentially via doc-repo's per-file ingest route (admin
-  // token; sequential because dataprep is single-flight 429). Each kick is
-  // polled to a terminal status before the next.
-  console.log('  draining ' + pending.length + ' concepts sequentially into the graph (this is the slow part)...');
+  // ── (v) FACILITY A: the EXISTING single-document upload (admin UI path) ──
+  const fd = new FormData();
+  fd.append('file', new Blob([SINGLE_DOC_BODY], { type: 'text/markdown' }), SINGLE_DOC_NAME);
+  const upRes = await fetch(DOCREPO + '/api/files/upload', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + ADMIN },
+    body: fd
+  });
+  let upBody = null;
+  try {
+    upBody = await upRes.json();
+  } catch {
+    /* non-json */
+  }
+  if (upRes.status !== 201) {
+    fail('facility-A upload -> ' + upRes.status + ' ' + JSON.stringify(upBody).slice(0, 150));
+  } else {
+    pass('facility A: single-doc upload -> 201 (' + SINGLE_DOC_NAME + ')');
+  }
+  const singleFileId = upBody && upBody.data && (upBody.data.file_id || upBody.data.id);
+  if (!singleFileId) {
+    fail('facility A: no file_id in upload response: ' + JSON.stringify(upBody).slice(0, 150));
+  } else {
+    const singleDoc = (
+      await aqlAll(
+        "FOR f IN files FILTER f.file_id == '" +
+          singleFileId +
+          "' RETURN KEEP(f, ['file_name','graph_name','repo_id','dataprep'])"
+      )
+    )[0];
+    singleDoc &&
+    singleDoc.graph_name == null &&
+    singleDoc.repo_id == null &&
+    singleDoc.dataprep &&
+    singleDoc.dataprep.status === 'Pending'
+      ? pass('facility A: files doc Pending, NO graph_name/repo_id (default-graph facility — distinct from facility B)')
+      : fail('facility A files doc: ' + JSON.stringify(singleDoc));
+  }
+
+  // ── (vi) concepts[] re-ingest: idempotency + the explicit-input surface ──
+  const bundleFiles = fs
+    .readdirSync(BUNDLE_DIR)
+    .filter((f) => f.endsWith('.md'))
+    .sort();
+  const concepts = bundleFiles.map((f) => {
+    const { data, content } = matter(fs.readFileSync(path.join(BUNDLE_DIR, f), 'utf8'));
+    return { path: f, frontmatter: data, body: content.trim() };
+  });
+  const countQuery = "RETURN LENGTH(FOR d IN okf_concepts_meta FILTER d.repo_id == '" + INGEST_REPO + "' RETURN 1)";
+  const beforeCount = (await aqlAll(countQuery))[0];
+  const r2 = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/ingest', ADMIN, { concepts });
+  if (r2.status !== 202) {
+    fail('re-ingest 202 expected, got ' + r2.status);
+  } else {
+    const afterCount = (await aqlAll(countQuery))[0];
+    afterCount === beforeCount && beforeCount === EXPECTED_CONCEPTS
+      ? pass('re-ingest (concepts[]): meta rows NOT duplicated (writer idempotency)')
+      : fail('re-ingest meta rows: before=' + beforeCount + ' after=' + afterCount);
+    r2.body.created === 0 && r2.body.updated === EXPECTED_CONCEPTS
+      ? pass('re-ingest (concepts[]): summary updated=' + EXPECTED_CONCEPTS + ' (dedup rule intact pre-2.9.4)')
+      : fail('re-ingest summary: ' + JSON.stringify(r2.body).slice(0, 140));
+  }
+
+  // ── (vii) DRAIN — sequential (dataprep single-flight), SERVICE token ──
+  // Facility A first (its per-file kick is the existing UI action), then the
+  // OKF bundle's per-concept Pending docs (what the 2.9.4 worker will own).
+  console.log(
+    '  draining sequentially (facility A single doc + ' + pending.length + ' OKF concepts — the slow part)...'
+  );
+  const drainList = [{ file_id: singleFileId, file_name: SINGLE_DOC_NAME }].concat(pending).filter((x) => x.file_id);
   const statuses = {};
-  for (const f of pending) {
-    const kick = await call('POST', DOCREPO + '/api/files/' + f.file_id + '/ingest', ADMIN);
+  for (const f of drainList) {
+    const kick = await call('POST', DOCREPO + '/api/files/' + f.file_id + '/ingest', svc);
     if (kick.status !== 200) {
       fail('drain kick ' + f.file_name + ' -> ' + kick.status + ' ' + JSON.stringify(kick.body).slice(0, 120));
       statuses[f.file_id] = 'kick-failed';
@@ -511,51 +636,61 @@ async function ingestPhase(db) {
       fail('drain ' + f.file_name + ' ended "' + statuses[f.file_id] + '"');
     }
   }
-  const ingestedIds = Object.keys(statuses).filter((k) => statuses[k].split(':')[0] === 'Ingested');
-  ingestedIds.length === EXPECTED_CONCEPTS
-    ? pass('drain: all ' + EXPECTED_CONCEPTS + ' bundle concepts Ingested (sequential, no 429 race)')
-    : fail('drain: ' + ingestedIds.length + '/' + EXPECTED_CONCEPTS + ' Ingested');
+  const singleIngested = singleFileId && statuses[singleFileId] && statuses[singleFileId].split(':')[0] === 'Ingested';
+  singleIngested ? pass('facility A: single doc Ingested (existing pipeline)') : fail('facility A drain failed');
+  const okfIds = pending.map((p) => p.file_id);
+  const okfIngested = okfIds.filter((k) => statuses[k] && statuses[k].split(':')[0] === 'Ingested');
+  okfIngested.length === EXPECTED_CONCEPTS
+    ? pass('facility B drain: all ' + EXPECTED_CONCEPTS + ' bundle concepts Ingested (sequential, no 429 race)')
+    : fail('facility B drain: ' + okfIngested.length + '/' + EXPECTED_CONCEPTS + ' Ingested');
 
-  // (vi) CHUNKS IN THE GRAPH — the physical proof. Default GRAPH until 2.9.6.
-  const chunkRows = await aqlAll(
+  // ── (viii) CHUNKS — the physical proof, per facility/graph ──
+  // Facility A: default GRAPH. Facility B: the per-repo OKF_{repo_id} graph
+  // (Story 2.9.6 wiring: doc-repo sends graph_name → dataprep writes the
+  // per-repo collections) — and NOT in the default graph.
+  const aChunks = (
+    await aqlAll(
+      'FOR c IN ' + GRAPH + "_SOURCE FILTER c.file_id == '" + singleFileId + "' COLLECT WITH COUNT INTO n RETURN n"
+    )
+  )[0];
+  aChunks > 0
+    ? pass('facility A graph: ' + aChunks + ' chunks in the DEFAULT ' + GRAPH + '_SOURCE')
+    : fail('facility A: no chunks for ' + singleFileId + ' in ' + GRAPH + '_SOURCE');
+
+  const bChunkRows = await aqlAll(
     'FOR c IN ' +
-      GRAPH +
+      OKF_GRAPH +
       '_SOURCE FILTER c.file_id IN ' +
-      JSON.stringify(ingestedIds) +
+      JSON.stringify(okfIds) +
       ' COLLECT fid = c.file_id WITH COUNT INTO n RETURN {fid, n}'
   );
-  chunkRows.length === ingestedIds.length && chunkRows.every((r) => r.n > 0)
+  bChunkRows.length === okfIds.length && bChunkRows.every((r) => r.n > 0)
     ? pass(
-        'graph: chunks present for every ingested concept (' +
-          chunkRows.map((r) => r.n).join('+') +
+        'facility B graph: chunks present for EVERY bundle concept (' +
+          bChunkRows.map((r) => r.n).join('+') +
           ' chunks in ' +
-          GRAPH +
-          '_SOURCE)'
+          OKF_GRAPH +
+          '_SOURCE — per-repo graph created)'
       )
-    : fail('graph chunks: ' + JSON.stringify(chunkRows));
-  const totalChunks = chunkRows.reduce((a, r) => a + r.n, 0);
-  totalChunks >= EXPECTED_CONCEPTS
-    ? pass('graph: total ' + totalChunks + ' chunks from the full bundle')
-    : fail('graph total chunks: ' + totalChunks);
-  console.log(
-    '  NOTE: chunks land in the DEFAULT ' +
-      GRAPH +
-      ' graph — per-repo OKF_{repo_id} collections arrive with Story 2.9.6 (dataprep graph_name wiring, OPEA-bump gated).'
-  );
+    : fail('facility B chunks in ' + OKF_GRAPH + '_SOURCE: ' + JSON.stringify(bChunkRows));
+  const bTotal = bChunkRows.reduce((a, r) => a + r.n, 0);
+  bTotal >= EXPECTED_CONCEPTS
+    ? pass('facility B graph: total ' + bTotal + ' chunks from the full zip bundle')
+    : fail('facility B total chunks: ' + bTotal);
+  const leaked = (
+    await aqlAll(
+      'FOR c IN ' +
+        GRAPH +
+        '_SOURCE FILTER c.file_id IN ' +
+        JSON.stringify(okfIds) +
+        ' COLLECT WITH COUNT INTO n RETURN n'
+    )
+  )[0];
+  (leaked || 0) === 0
+    ? pass('isolation: ZERO OKF bundle chunks in the default ' + GRAPH + '_SOURCE (the graphs are split)')
+    : fail('isolation broken: ' + leaked + ' OKF chunks found in default ' + GRAPH + '_SOURCE');
 
-  // (vii) re-ingest idempotency (meta not duplicated)
-  const countQuery = "RETURN LENGTH(FOR d IN okf_concepts_meta FILTER d.repo_id == '" + INGEST_REPO + "' RETURN 1)";
-  const beforeCount = (await aqlAll(countQuery))[0];
-  const r2 = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/ingest', ADMIN, { concepts });
-  if (r2.status !== 202) {
-    fail('re-ingest 202 expected, got ' + r2.status);
-  } else {
-    const afterCount = (await aqlAll(countQuery))[0];
-    afterCount === beforeCount && beforeCount === EXPECTED_CONCEPTS
-      ? pass('re-ingest: meta rows NOT duplicated (writer idempotency)')
-      : fail('re-ingest meta rows: before=' + beforeCount + ' after=' + afterCount);
-    r2.body.created === 0 && r2.body.updated === EXPECTED_CONCEPTS
-      ? pass('re-ingest: summary updated=' + EXPECTED_CONCEPTS + ' (dedup rule intact pre-2.9.4)')
-      : fail('re-ingest summary: ' + JSON.stringify(r2.body).slice(0, 140));
-  }
+  console.log(
+    '  NOTE: multi-graph READ (retriever fan-out over OKF_{repo_id} graphs) is Epic 1 — the retriever still queries the default graph until then.'
+  );
 }

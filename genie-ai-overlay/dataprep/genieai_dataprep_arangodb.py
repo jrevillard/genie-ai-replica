@@ -1283,6 +1283,29 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     except Exception as inner_e:
                         logger.error(f"Skipping individual bad document: {inner_e}")
 
+    def _ensure_graph_collections(self, graph_name: str):
+        """Create the 4 graph collections for a (possibly new) per-repo graph.
+
+        The default graph's collections are provisioned at deployment time; OKF
+        per-repo graphs (``OKF_{repo_id}``, Story 2.9.6) are created lazily on
+        first ingest so a new repository needs no manual ArangoDB step.
+        Idempotent: existing collections are left untouched (indexes included).
+        Read-side views/indexes for retrieval are Epic 1's concern.
+        """
+        try:
+            existing = {c["name"] for c in self.db.collections() if not c["name"].startswith("_")}
+        except Exception as e:  # pragma: no cover - listing hiccup; insert surfaces real errors
+            logger.warning(f"[ ensure-graph ] Could not list collections: {e}")
+            return
+        for suffix, edge in (("_SOURCE", False), ("_ENTITY", False), ("_HAS_SOURCE", True), ("_LINKS_TO", True)):
+            name = f"{graph_name}{suffix}"
+            if name not in existing:
+                try:
+                    self.db.create_collection(name, edge=edge)
+                    logger.info(f"[ ensure-graph ] Created collection {name} (edge={edge})")
+                except Exception as e:
+                    logger.warning(f"[ ensure-graph ] Could not create {name}: {e}")
+
     async def ingest_file_with_guardrail(self, input: ArangoDBDataprepRequestFromDocRepo, lock_file=None):
         """
         Asynchronous ingestion task with support for graceful 'Killed' status transitions.
@@ -1345,6 +1368,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
                 # 5. Graph Insertion (BATCHED & CONCURRENT)
                 graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH"))
+                # OKF per-repo graph (Story 2.9.6, G5): ensure the graph's
+                # collections exist before writing (no-op for the default graph).
+                self._ensure_graph_collections(graph_name)
 
                 documents_to_process = []
                 for i, doc in enumerate(labelled_docs):

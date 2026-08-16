@@ -114,10 +114,16 @@ class DocRepoIngestPayload(BaseModel):
     fileType: str
     fileLabels: list[str] | None = None
     storagePath: str | None = None
+    # OKF per-repo graph (Story 2.9.6): OKF_{repo_id}. Absent/None → the env
+    # default (ARANGO_GRAPH_NAME) — the legacy single-graph behavior is unchanged.
+    graphName: str | None = None
 
 
 class DocRepoRetractPayload(BaseModel):
     fileId: str
+    # Target graph for the retract (OKF_{repo_id}); None → env default. Retract
+    # MUST hit the graph the file was ingested into (G5: wrong-graph retract).
+    graphName: str | None = None
 
 
 # ------------------------------------------------------------------------------
@@ -188,7 +194,9 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 file_path=save_path,
                 file_type=payload.fileType,
                 file_labels=payload.fileLabels,
-                graph_name=ARANGO_GRAPH_NAME,
+                # Story 2.9.6 (G5): honor the per-repo graph from the request;
+                # fall back to the env default when absent (legacy behavior).
+                graph_name=payload.graphName or ARANGO_GRAPH_NAME,
                 insert_async=ARANGO_INSERT_ASYNC,
                 insert_batch_size=ARANGO_BATCH_SIZE,
                 embed_nodes=True,
@@ -289,7 +297,10 @@ async def retract_file(payload: DocRepoRetractPayload):
     """Deletes a file and its entities/relations from the graph."""
     start = time.time()
     file_id = payload.fileId
-    graph_name = os.getenv("ARANGO_GRAPH_NAME", "genie_graph")
+    # Unified fallback (G5 fix): the ingest default is GRAPH — retract used a
+    # divergent 'genie_graph' default, silently retracting NOTHING for files in
+    # the default graph. Payload graphName (the file's actual graph) wins.
+    graph_name = payload.graphName or os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 
     logger.info(f"[ retract ] Start to delete ingested file {file_id}")
 

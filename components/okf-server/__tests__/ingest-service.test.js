@@ -406,3 +406,85 @@ describe('ingestService.maxConceptsFromEnv (review fix: NaN-safe cap)', () => {
     expect(ingestService.maxConceptsFromEnv()).toBe(200);
   });
 });
+
+describe('ingestService bundle-zip intake (Story 2.9.5 contract, pulled forward)', () => {
+  const AdmZip = require('adm-zip');
+  const mdEntry = (name, title) => `---\ntitle: ${title}\ntype: service\n---\n\n# ${title}\n\nBody of ${title}.`;
+
+  const zipB64 = (files) => {
+    const zip = new AdmZip();
+    for (const [name, content] of Object.entries(files)) zip.addFile(name, Buffer.from(content));
+    return zip.toBuffer().toString('base64');
+  };
+
+  beforeEach(() => jest.clearAllMocks());
+
+  test('zip of .md concepts → one concept per entry, full markdown preserved for 4a', async () => {
+    const b64 = zipB64({
+      'index.md': mdEntry('index', 'Government Services KB'),
+      'service_directory.md': mdEntry('service_directory', 'Service Directory')
+    });
+    const summary = await ingestService.ingestRepoConcepts(REPO, { zip: b64 }, ACTOR);
+    expect(summary).toMatchObject({ total: 2, parsed: 2, enqueued: 2, enqueue_errors: [] });
+    // entry name → path → concept_id (matches the concepts[] mode for the same names)
+    const fileNames = authedAxios.post.mock.calls.map((c) => c[1].originalFileName).sort();
+    expect(fileNames).toEqual(['index.md', 'service_directory.md']);
+    // the parser receives the ENTRY'S OWN markdown (frontmatter intact, not re-serialized)
+    const firstMarkdown = parserService.parseConcept.mock.calls[0][0];
+    expect(firstMarkdown).toContain('title: Government Services KB');
+    expect(firstMarkdown).toContain('# Government Services KB');
+    // enqueued .md round-trips the parsed concept (gray-matter serializer)
+    expect(authedAxios.post.mock.calls[0][1].graph_name).toBe(`OKF_${REPO}`);
+  });
+
+  test('zip junk filtered: directories, __MACOSX/, dotfiles, non-.md entries ignored', async () => {
+    const b64 = zipB64({
+      'concepts/': '',
+      'ok.md': mdEntry('ok', 'Ok'),
+      '__MACOSX/junk.md': 'junk',
+      '.DS_Store': 'junk',
+      'image.png': 'junk',
+      'notes.txt': 'junk'
+    });
+    const summary = await ingestService.ingestRepoConcepts(REPO, { zip: b64 }, ACTOR);
+    expect(summary.total).toBe(1);
+    expect(summary.enqueued).toBe(1);
+  });
+
+  test('zip with NO .md entries → 400 VALIDATION_ERROR', async () => {
+    const b64 = zipB64({ 'a.png': 'x', 'b.txt': 'y' });
+    await expect(ingestService.ingestRepoConcepts(REPO, { zip: b64 }, ACTOR)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      status: 400
+    });
+  });
+
+  test('corrupt zip base64 → 400 BAD_ZIP', async () => {
+    await expect(ingestService.ingestRepoConcepts(REPO, { zip: 'aGVsbG8=' }, ACTOR)).rejects.toMatchObject({
+      code: 'BAD_ZIP',
+      status: 400
+    });
+  });
+
+  test('zip above the entry cap → 400 TOO_MANY_CONCEPTS', async () => {
+    const files = {};
+    for (let i = 0; i < 3; i += 1) files[`c${i}.md`] = mdEntry(`c${i}`, `C${i}`);
+    await expect(ingestService._ingestWithCap(REPO, { zip: zipB64(files) }, ACTOR, 2)).rejects.toMatchObject({
+      code: 'TOO_MANY_CONCEPTS',
+      status: 400
+    });
+  });
+
+  test('zip above the decompressed-size cap → 400 ZIP_TOO_LARGE', async () => {
+    process.env.OKF_INGEST_MAX_ZIP_BYTES = '10';
+    try {
+      const b64 = zipB64({ 'big.md': mdEntry('big', 'x'.repeat(200)) });
+      await expect(ingestService.ingestRepoConcepts(REPO, { zip: b64 }, ACTOR)).rejects.toMatchObject({
+        code: 'ZIP_TOO_LARGE',
+        status: 400
+      });
+    } finally {
+      delete process.env.OKF_INGEST_MAX_ZIP_BYTES;
+    }
+  });
+});

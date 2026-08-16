@@ -423,4 +423,28 @@ describe('POST /api/okf/repos/:repo_id/ingest (Story 2.9.1)', () => {
       .send({ discover: true });
     expect(res.status).toBe(202);
   });
+
+  test('zip body (base64 bundle) is accepted and passed through to the service', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke', graph_name: 'OKF_repoA' });
+    ingestService.ingestRepoConcepts.mockResolvedValue({
+      repo_id: 'repoA',
+      total: 2,
+      parsed: 2,
+      enqueued: 2,
+      enqueue_errors: [],
+      pii: { clean: 2, hit: 0, error: 0 }
+    });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/ingest')
+      .set('Authorization', TOKEN)
+      .send({ zip: 'UEsDBAoAAAAAAA' });
+    expect(res.status).toBe(202);
+    expect(res.body).toMatchObject({ repo_id: 'repoA', enqueued: 2 });
+    expect(ingestService.ingestRepoConcepts).toHaveBeenCalledWith(
+      'repoA',
+      expect.objectContaining({ zip: 'UEsDBAoAAAAAAA' }),
+      expect.anything()
+    );
+  });
 });

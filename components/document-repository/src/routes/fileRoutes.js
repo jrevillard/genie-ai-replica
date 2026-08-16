@@ -677,7 +677,10 @@ router.patch('/:fileId', authorizeRole(['Admin']), fileController.updateFile);
  *       '404':
  *         description: File not found
  */
-router.post('/:fileId/ingest', authorizeRole(['Admin']), fileController.ingestFile);
+// okf-service allowed (Story 2.9.6/2.9.4): the OKF orchestrator's worker owns
+// draining per-concept Pending files — it authenticates as the okf-server
+// service client (okf-service role), same as the enqueue route below.
+router.post('/:fileId/ingest', authorizeRole(['Admin', 'okf-service']), fileController.ingestFile);
 
 /**
  * @swagger
@@ -704,7 +707,9 @@ router.post('/:fileId/ingest', authorizeRole(['Admin']), fileController.ingestFi
  *       '404':
  *         description: File not found
  */
-router.post('/:fileId/retract', authorizeRole(['Admin']), fileController.retractFile);
+// okf-service allowed: the 2.9.4 orphan sweeper retracts chunks via the service
+// client; retracts carry the file's graph_name (G5 — never the wrong graph).
+router.post('/:fileId/retract', authorizeRole(['Admin', 'okf-service']), fileController.retractFile);
 
 /**
  * @swagger

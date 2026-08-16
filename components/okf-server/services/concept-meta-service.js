@@ -66,10 +66,14 @@ async function findConceptDoc(col, repo_id, concept_id) {
   }
 }
 
-/** sha256 hex of the concept body — the 2.9.1/2.9.5 content-hash dedup key. */
+/** sha256 hex of the concept body — the 2.9.1/2.9.5 content-hash dedup key.
+ * CANONICAL (2026-08-16, live-caught run 11): hashed on the TRIMMED body —
+ * different input modes (zip entry vs concepts[] vs stored file) round-trip
+ * markdown with differing trailing/leading whitespace, and the dedup key
+ * must be mode-invariant (identity = the content, not its edge whitespace). */
 function contentHash(body) {
   return createHash('sha256')
-    .update(String(body || ''))
+    .update(String(body || '').trim())
     .digest('hex');
 }
 

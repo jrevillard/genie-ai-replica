@@ -46,7 +46,7 @@ development_status:
   2-9-3-links-to-edge-writer-within-repo: backlog  # G7,G22 — post-index, within-repo validated
   2-9-4-ingestion-worker-redis-streams-dlq: backlog # G10 — drains Pending, concurrency 1 configurable, orphan sweeper (okf-service drain rights + per-file graph_name already live via 2.9.1)
   2-9-5-bundle-zip-format-unzip-dedup: partial     # zip intake + server unzip + content-hash dedup LIVE via 2.9.1 pull-forward; remaining ACs (atomicity/compensation review) get this story's own pass
-  2-9-6-graph-name-wiring-retract-fix: partial     # UNGATED 2026-08-16 (D24 lifted): graphName payload wiring + unified retract fallback + lazy OKF_{repo} collections LIVE + smoke-asserted; remaining: retractRepoGraph cascade (repo-level delete) — keep story for the remainder
+  2-9-6-graph-name-wiring-retract-fix: done        # UNGATED 2026-08-16 (D24 lifted), landed via 2.9.1 fix-pass: graphName payload wiring + unified retract fallback + lazy OKF_{repo} collections + retractRepoGraph CASCADE DROP (gharial dropCollections=true — definition + member tables; ArangoDB 1942 membership rule live-verified) — ALL smoke-asserted physically (collections gone from ArangoDB)
   2-9-7-okf-versions-mint-version-publish: backlog # G26 — repo-level bundle_version, immutable manifest (resolves PRD §13.2)
   2-9-8-okf-sources-writer-source-sync: backlog    # G32 — SHRUNK: source-sync deferred; now ingest-health backing only (fold into admin UI later)
   2-9-9-retention-ttl-sweep-deletion-reason: backlog # G27 — sweep + deletion_reason discriminator

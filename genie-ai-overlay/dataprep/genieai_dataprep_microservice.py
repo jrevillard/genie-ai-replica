@@ -117,6 +117,10 @@ class DocRepoIngestPayload(BaseModel):
     # OKF per-repo graph (Story 2.9.6): OKF_{repo_id}. Absent/None → the env
     # default (ARANGO_GRAPH_NAME) — the legacy single-graph behavior is unchanged.
     graphName: str | None = None
+    # OKF minted repo version (Story 2.9.7, ADR-031): stamped onto every chunk
+    # doc so citations can pin (repo_id, bundle_version, concept_id).
+    # Absent/None → chunks carry no version (legacy behavior unchanged).
+    bundleVersion: int | None = None
 
 
 class DocRepoRetractPayload(BaseModel):
@@ -197,6 +201,8 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 # Story 2.9.6 (G5): honor the per-repo graph from the request;
                 # fall back to the env default when absent (legacy behavior).
                 graph_name=payload.graphName or ARANGO_GRAPH_NAME,
+                # Story 2.9.7: the minted version rides through to chunk docs.
+                bundle_version=payload.bundleVersion,
                 insert_async=ARANGO_INSERT_ASYNC,
                 insert_batch_size=ARANGO_BATCH_SIZE,
                 embed_nodes=True,

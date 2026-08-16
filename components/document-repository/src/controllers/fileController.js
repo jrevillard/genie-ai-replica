@@ -991,7 +991,9 @@ class FileController {
         fileLabels: file.labels,
         storagePath: file.storage_path,
         fileBase64: base64String,
-        graphName: file.graph_name || null
+        graphName: file.graph_name || null,
+        // Story 2.9.7: chunk-doc version stamping (null = unminted legacy).
+        bundleVersion: file.bundle_version != null ? file.bundle_version : null
       });
     } catch (err) {
       // Follow the ingestion state machine: a dataprep failure MUST transition
@@ -1066,7 +1068,7 @@ class FileController {
   // will replace this kick when it lands.
   async bundleIngest(req, res) {
     try {
-      const { bundle, graph_name, repo_id, originalFileName, labels, defer_kick } = req.body;
+      const { bundle, graph_name, repo_id, originalFileName, labels, defer_kick, bundle_version } = req.body;
 
       // Joi validation
       const schema = Joi.object({
@@ -1080,13 +1082,24 @@ class FileController {
         // the single-upload path) and flow to dataprep as file_labels, where
         // they scope chunk labeling (see dataprep _finalize_chunk_labels).
         labels: Joi.array().items(Joi.string().max(200)).default([]),
+        // Story 2.9.7 (ADR-031): the minted repo version rides the files doc
+        // and is forwarded to datapretreat at kick time (null = unminted).
+        bundle_version: Joi.number().integer().min(1).allow(null).default(null),
         // Story 2.9.1: when true, store + ClamAV-scan + create the Pending
         // files doc but do NOT kick dataprep — the OKF ingestionWorker (2.9.4)
         // owns draining. Per-concept orchestrator enqueues use this so they
         // never race dataprep's single-ingest lock (429).
         defer_kick: Joi.boolean().default(false)
       });
-      const { error, value } = schema.validate({ bundle, graph_name, repo_id, originalFileName, labels, defer_kick });
+      const { error, value } = schema.validate({
+        bundle,
+        graph_name,
+        repo_id,
+        originalFileName,
+        labels,
+        defer_kick,
+        bundle_version
+      });
       if (error) {
         return res.status(400).json({ error: 'VALIDATION_ERROR', message: error.details[0].message });
       }
@@ -1102,11 +1115,13 @@ class FileController {
       // Decode base64 → buffer
       const buffer = Buffer.from(bundle, 'base64');
 
-      // Store + ClamAV scan + files doc (graph_name + repo_id persisted via T5)
+      // Store + ClamAV scan + files doc (graph_name + repo_id + bundle_version
+      // persisted via T5 + Story 2.9.7)
       const result = await fileService.uploadBundle(buffer, {
         originalFileName,
         graph_name,
         repo_id,
+        bundle_version: value.bundle_version,
         labels: value.labels
       });
 

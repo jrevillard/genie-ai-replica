@@ -1385,6 +1385,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         "chunk_index": i,
                         "chunk_labels": doc["labels"],
                     }
+                    # Story 2.9.7 (ADR-031): the minted repo version is stamped
+                    # onto every chunk doc (version-pinned citation). Absent on
+                    # the request → no stamp (legacy behavior unchanged).
+                    if getattr(input, "bundle_version", None) is not None:
+                        metadata["bundle_version"] = input.bundle_version
                     if CONTEXTUAL_RETRIEVAL_ENABLED and i < len(original_chunks):
                         metadata["chunk_text"] = original_chunks[i]
                     # Embed the contextualized text (subject propagation); falls back

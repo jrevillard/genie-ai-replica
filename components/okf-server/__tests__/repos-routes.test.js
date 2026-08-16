@@ -293,7 +293,21 @@ jest.mock('../services/ingest-service', () => ({
   ingestRepoConcepts: jest.fn(),
   maxConceptsFromEnv: jest.fn(() => 200)
 }));
+jest.mock('../services/version-service', () => ({
+  mintVersion: jest.fn(),
+  listVersions: jest.fn(),
+  getVersion: jest.fn(),
+  VersionError: class VersionError extends Error {
+    constructor(code, message, status) {
+      super(message);
+      this.code = code;
+      this.status = status;
+    }
+  },
+  TRIGGERS: ['manual', 'publish', 'crawl']
+}));
 const ingestService = require('../services/ingest-service');
+const versionService = require('../services/version-service');
 
 describe('POST /api/okf/repos/:repo_id/ingest (Story 2.9.1)', () => {
   beforeEach(() => {
@@ -446,5 +460,121 @@ describe('POST /api/okf/repos/:repo_id/ingest (Story 2.9.1)', () => {
       expect.objectContaining({ zip: 'UEsDBAoAAAAAAA' }),
       expect.anything()
     );
+  });
+});
+
+// ─── Story 2.9.7: version mint + manifests ─────────────────────────────────────
+
+describe('POST /api/okf/repos/:repo_id/versions (Story 2.9.7)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+  });
+
+  test('admin scope + valid trigger → 201 with the mint summary', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke', graph_name: 'OKF_repoA' });
+    versionService.mintVersion.mockResolvedValue({
+      repo_id: 'repoA',
+      bundle_version: 1,
+      okf_tag: 'okf:v1',
+      concept_count: 6,
+      manifest_key: 'repoA_1',
+      minted_at: '2026-08-16T00:00:00Z'
+    });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/versions')
+      .set('Authorization', TOKEN)
+      .send({ trigger: 'crawl', source_ref: 'https://example.gov' });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ repo_id: 'repoA', bundle_version: 1, okf_tag: 'okf:v1' });
+    // gate order: getById BEFORE mint
+    expect(repoService.getById).toHaveBeenCalledWith('repoA', expect.anything());
+    expect(versionService.mintVersion).toHaveBeenCalledWith(
+      'repoA',
+      { trigger: 'crawl', source_ref: 'https://example.gov' },
+      expect.objectContaining({ sub: 'steward-1' })
+    );
+  });
+
+  test('read scope → 403 FORBIDDEN_SCOPE (minting is an admin mutation)', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    const res = await request(createApp()).post('/api/okf/repos/repoA/versions').set('Authorization', TOKEN).send({});
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('FORBIDDEN_SCOPE');
+    expect(versionService.mintVersion).not.toHaveBeenCalled();
+  });
+
+  test('foreign repo (super-admin) → 404 via getById gate; mint never called', async () => {
+    authScoped([], ['tools-admin']);
+    repoService.getById.mockRejectedValue(Object.assign(new Error('nf'), { code: 'REPO_NOT_FOUND', status: 404 }));
+    const res = await request(createApp()).post('/api/okf/repos/repoB/versions').set('Authorization', TOKEN).send({});
+    expect(res.status).toBe(404);
+    expect(versionService.mintVersion).not.toHaveBeenCalled();
+  });
+
+  test('invalid trigger propagates 400 VALIDATION_ERROR', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke' });
+    versionService.mintVersion.mockRejectedValue(
+      Object.assign(new Error('trigger must be one of manual|publish|crawl'), { code: 'VALIDATION_ERROR', status: 400 })
+    );
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/versions')
+      .set('Authorization', TOKEN)
+      .send({ trigger: 'oops' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+});
+
+describe('GET /api/okf/repos/:repo_id/versions (list + manifest)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+  });
+
+  test('read scope → 200 newest-first list', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke' });
+    versionService.listVersions.mockResolvedValue([
+      { bundle_version: 2, okf_tag: 'okf:v2' },
+      { bundle_version: 1, okf_tag: 'okf:v1' }
+    ]);
+    const res = await request(createApp()).get('/api/okf/repos/repoA/versions').set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ repo_id: 'repoA' });
+    expect(res.body.versions.map((v) => v.bundle_version)).toEqual([2, 1]);
+  });
+
+  test('manifest read → 200 full manifest', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke' });
+    versionService.getVersion.mockResolvedValue({
+      repo_id: 'repoA',
+      bundle_version: 1,
+      concepts: [{ concept_id: 'x' }]
+    });
+    const res = await request(createApp()).get('/api/okf/repos/repoA/versions/1').set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body.concepts).toEqual([{ concept_id: 'x' }]);
+    expect(versionService.getVersion).toHaveBeenCalledWith('repoA', 1);
+  });
+
+  test('unknown version → 404 VERSION_NOT_FOUND', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke' });
+    versionService.getVersion.mockRejectedValue(
+      Object.assign(new Error('nope'), { code: 'VERSION_NOT_FOUND', status: 404 })
+    );
+    const res = await request(createApp()).get('/api/okf/repos/repoA/versions/9').set('Authorization', TOKEN);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('VERSION_NOT_FOUND');
+  });
+
+  test('scopeless caller → 403 default-deny', async () => {
+    authScoped([]);
+    const res = await request(createApp()).get('/api/okf/repos/repoA/versions').set('Authorization', TOKEN);
+    expect(res.status).toBe(403);
   });
 });

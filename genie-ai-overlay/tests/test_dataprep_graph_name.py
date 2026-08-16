@@ -111,6 +111,47 @@ class TestIngestGraphName:
             await micro.ingest_file_from_repo(_ingest_call(file_id="f-legacy"))
         assert captured["graph_name"] == "GRAPH"
 
+    async def test_bundleversion_threads_into_the_loader_request(self, isolated_env):
+        """Story 2.9.7 (ADR-031): the minted repo version rides the payload →
+        request → chunk docs (version-pinned citation)."""
+        captured = {}
+
+        def _capture_request(**kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(**kwargs)
+
+        with (
+            patch.object(micro, "loader") as mock_loader,
+            patch.object(micro, "ArangoDBDataprepRequestFromDocRepo", side_effect=_capture_request),
+        ):
+            mock_loader.ingest_file_with_guardrail = AsyncMock(return_value={"status": 200, "success": True})
+            payload = micro.DocRepoIngestPayload(
+                fileId="f-v3",
+                fileName="concept.md",
+                fileBase64=_b64("# concept"),
+                fileType="md",
+                graphName="OKF_99999999-9999-4999-8999-999999999999",
+                bundleVersion=3,
+            )
+            await micro.ingest_file_from_repo(payload)
+        assert captured["bundle_version"] == 3
+        assert captured["graph_name"] == "OKF_99999999-9999-4999-8999-999999999999"
+
+    async def test_bundleversion_defaults_none_legacy(self, isolated_env):
+        captured = {}
+
+        def _capture_request(**kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(**kwargs)
+
+        with (
+            patch.object(micro, "loader") as mock_loader,
+            patch.object(micro, "ArangoDBDataprepRequestFromDocRepo", side_effect=_capture_request),
+        ):
+            mock_loader.ingest_file_with_guardrail = AsyncMock(return_value={"status": 200, "success": True})
+            await micro.ingest_file_from_repo(_ingest_call(file_id="f-legacy"))
+        assert captured["bundle_version"] is None
+
 
 class TestRetractGraphName:
     async def test_graphname_from_payload_targets_the_files_graph(self, isolated_env):

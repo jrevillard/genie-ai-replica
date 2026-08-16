@@ -30,4 +30,11 @@ router.post('/:repo_id/pii-scan', requireRepoScope('repo_id', 'admin'), ctrl.pii
 // PII→dedup→enqueue per concept; 202 once enqueued (never blocks on dataprep).
 router.post('/:repo_id/ingest', requireRepoScope('repo_id', 'admin'), ctrl.ingestRepo);
 
+// Version mint + manifests (Story 2.9.7 — ADR-031): mint is an admin mutation
+// (publish/crawl/manual trigger); listing/reading versions is read-scope
+// (backs 4.5's diff/list UI and version-pinned citation).
+router.post('/:repo_id/versions', requireRepoScope('repo_id', 'admin'), ctrl.mintRepoVersion);
+router.get('/:repo_id/versions', requireRepoScope('repo_id', 'read'), ctrl.listRepoVersions);
+router.get('/:repo_id/versions/:bundle_version', requireRepoScope('repo_id', 'read'), ctrl.getRepoVersion);
+
 module.exports = router;

@@ -113,6 +113,21 @@ async function retractRepoGraph(repo_id, actor) {
     } catch (err) {
       logger.warn('Graph retract: files-doc removal failed', { repo_id, error: err.message });
     }
+    // 5. The repo's version manifests (Story 2.9.7): a deleted repository's
+    // manifests are repo-scoped data — they go with the teardown (retention of
+    // LIVE repos' superseded versions is 4.6's concern, not this path).
+    let versionsRemoved = 0;
+    try {
+      const removed = await (
+        await db.query(aql`
+        FOR v IN okf_versions FILTER v.repo_id == ${repo_id}
+          REMOVE v IN okf_versions RETURN OLD
+      `)
+      ).all();
+      versionsRemoved = removed.length;
+    } catch (err) {
+      logger.warn('Graph retract: version-manifest removal failed', { repo_id, error: err.message });
+    }
 
     span.setAttribute('okf.graph.retracted', true);
     span.setAttribute('okf.graph.dropped', dropped.length);
@@ -139,7 +154,8 @@ async function retractRepoGraph(repo_id, actor) {
       retracted: true,
       dropped,
       meta_removed: metaRemoved,
-      files_removed: filesRemoved
+      files_removed: filesRemoved,
+      versions_removed: versionsRemoved
     };
   });
 }

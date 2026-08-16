@@ -677,6 +677,26 @@ describe('File Routes Integration', () => {
       );
     });
 
+    it('forwards the minted bundle_version to datapretreat (Story 2.9.7)', async () => {
+      const mockVersionedFile = {
+        ...mockFileRecord,
+        bundle_version: 3,
+        dataprep: { status: 'Pending', ingest_date: '', retract_date: '' }
+      };
+      metadataService.getMetadataById.mockResolvedValue(mockVersionedFile);
+      readFile.mockResolvedValue(Buffer.from('test file content'));
+      access.mockResolvedValue();
+      axios.post.mockResolvedValue({ data: { success: true, chunk_count: 2 } });
+
+      const res = await request(app).post('/api/files/file-abc123/ingest');
+
+      expect(res.status).toBe(200);
+      expect(axios.post).toHaveBeenCalledWith(
+        'http://dataprep:5000/v1/dataprep',
+        expect.objectContaining({ fileId: 'file-abc123', bundleVersion: 3 })
+      );
+    });
+
     it('should return 429 when dataprep service is busy', async () => {
       metadataService.getMetadataById.mockResolvedValue(mockFileRecord);
       readFile.mockResolvedValue(Buffer.from('test file content'));

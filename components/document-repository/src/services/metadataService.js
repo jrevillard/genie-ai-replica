@@ -32,6 +32,9 @@ async function extractMetadata(filePath, fileInfo = {}) {
     language: fileInfo.language || 'unknown',
     graph_name: fileInfo.graph_name || null,
     repo_id: fileInfo.repo_id || null,
+    // Story 2.9.7 (ADR-031): the minted repo version rides the files doc →
+    // forwarded to datapretreat at kick time → stamped onto every chunk doc.
+    bundle_version: fileInfo.bundle_version != null ? fileInfo.bundle_version : null,
     chunk_count: 0,
     dataprep: {
       status: 'Pending', // Changed to capitalized 'Pending' per spec

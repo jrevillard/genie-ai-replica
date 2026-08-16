@@ -6,6 +6,7 @@
 const repoService = require('../services/repository-service');
 const piiService = require('../services/pii-service');
 const ingestService = require('../services/ingest-service');
+const versionService = require('../services/version-service');
 const auditService = require('../services/audit-service');
 const { createSchema, updateSchema } = require('../validators/repository-validator');
 
@@ -167,6 +168,46 @@ async function ingestRepo(req, res, next) {
   }
 }
 
+/**
+ * Story 2.9.7 — mint the repository's next version (ADR-031: repo-level,
+ * monotonic, immutable manifest; a publish/crawl side-effect, never a
+ * lifecycle state). Body: { trigger?: 'manual'|'publish'|'crawl', source_ref? }.
+ * Gate order mirrors ingest: requireRepoScope (route) → getById (404 foreign).
+ */
+async function mintRepoVersion(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    const { trigger, source_ref } = req.body || {};
+    await repoService.getById(repo_id, { authz: authzForService(req) });
+    const minted = await versionService.mintVersion(repo_id, { trigger, source_ref }, actorFrom(req));
+    res.status(201).json(minted);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** Story 2.9.7 — list a repo's version manifests, newest first (read scope). */
+async function listRepoVersions(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    await repoService.getById(repo_id, { authz: authzForService(req) });
+    res.status(200).json({ repo_id, versions: await versionService.listVersions(repo_id) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** Story 2.9.7 — one full manifest (read scope; version-pinned citation). */
+async function getRepoVersion(req, res, next) {
+  try {
+    const { repo_id, bundle_version } = req.params;
+    await repoService.getById(repo_id, { authz: authzForService(req) });
+    res.status(200).json(await versionService.getVersion(repo_id, parseInt(bundle_version, 10)));
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function updateRepo(req, res, next) {
   try {
     const patch = validate(updateSchema, req.body);
@@ -252,4 +293,16 @@ async function piiScan(req, res, next) {
   }
 }
 
-module.exports = { createRepo, listRepos, getRepo, updateRepo, deleteRepo, piiScan, ingestRepo, ValidationError };
+module.exports = {
+  createRepo,
+  listRepos,
+  getRepo,
+  updateRepo,
+  deleteRepo,
+  piiScan,
+  ingestRepo,
+  mintRepoVersion,
+  listRepoVersions,
+  getRepoVersion,
+  ValidationError
+};

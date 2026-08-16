@@ -66,6 +66,7 @@ jest.mock('../services/repository-service', () => ({
     domain: 'social',
     graph_name: `OKF_${repo_id}`,
     version: 3,
+    okf_tag: 'okf:v3',
     lifecycle_state: 'register'
   }))
 }));
@@ -128,35 +129,54 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
     expect(writerInput.body).toBeDefined();
   });
 
-  test('derives ACL labels from the repo (t:domain r:repo d:domain — D-A) and appends caller labels after', async () => {
+  test('derives ACL labels from the repo (t:domain r:repo d:domain — D-A), caller labels, then the minted okf:v tag', async () => {
     await ingestService.ingestRepoConcepts(
       REPO,
       { labels: ['Service Directory'], concepts: [conceptInput('Acl')] },
       ACTOR
     );
     const body = authedAxios.post.mock.calls[0][1];
-    expect(body.labels).toEqual([`t:social`, `r:${REPO}`, `d:social`, 'Service Directory']);
+    expect(body.labels).toEqual([`t:social`, `r:${REPO}`, `d:social`, 'Service Directory', 'okf:v3']);
     expect(body.graph_name).toBe(`OKF_${REPO}`);
     expect(body.repo_id).toBe(REPO);
     expect(body.defer_kick).toBe(true);
     expect(body.originalFileName).toBe('acl.md');
+    expect(body.bundle_version).toBe(3); // Story 2.9.7: version rides the files doc
   });
 
-  test('ACL-prefixed caller labels are STRIPPED + warned (sole-injector invariant — review fix)', async () => {
+  test('ACL-prefixed AND caller okf:v tags are STRIPPED + warned (sole-injector invariant)', async () => {
     await ingestService.ingestRepoConcepts(
       REPO,
-      { labels: ['t:evil', 'r:evil', 'd:evil', 'T:EVIL', 'Service Directory'], concepts: [conceptInput('Acl')] },
+      {
+        labels: ['t:evil', 'r:evil', 'd:evil', 'T:EVIL', 'okf:v99', 'Service Directory'],
+        concepts: [conceptInput('Acl')]
+      },
       ACTOR
     );
     const body = authedAxios.post.mock.calls[0][1];
-    expect(body.labels).toEqual([`t:social`, `r:${REPO}`, `d:social`, 'Service Directory']);
+    expect(body.labels).toEqual([`t:social`, `r:${REPO}`, `d:social`, 'Service Directory', 'okf:v3']);
     expect(logger.warn).toHaveBeenCalledWith(
-      'Caller-supplied ACL-prefixed labels stripped (sole-injector invariant)',
+      'Caller-supplied ACL/version-tag labels stripped (sole-injector invariant)',
       expect.objectContaining({
         repo_id: REPO,
-        stripped: expect.arrayContaining(['t:evil', 'r:evil', 'd:evil', 'T:EVIL'])
+        stripped: expect.arrayContaining(['t:evil', 'r:evil', 'd:evil', 'T:EVIL', 'okf:v99'])
       })
     );
+  });
+
+  test('unminted repo (no version/okf_tag) → no tag in labels, bundle_version null (legacy shape)', async () => {
+    const repoService = require('../services/repository-service');
+    repoService.getById.mockResolvedValueOnce({
+      repo_id: REPO,
+      domain: 'social',
+      graph_name: `OKF_${REPO}`,
+      version: null,
+      okf_tag: null
+    });
+    await ingestService.ingestRepoConcepts(REPO, { concepts: [conceptInput('NoV')] }, ACTOR);
+    const body = authedAxios.post.mock.calls[0][1];
+    expect(body.labels).toEqual([`t:social`, `r:${REPO}`, `d:social`]);
+    expect(body.bundle_version).toBeNull();
   });
 
   test('threads bundle_version from repo.version (D-B) into the writer opts', async () => {

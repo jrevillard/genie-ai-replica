@@ -84,16 +84,18 @@ describe('graph-retract-service.retractRepoGraph (bundle-level drop)', () => {
     expect(result.dropped).toContain(`${GRAPH} (graph definition + member collections, cascade)`);
   });
 
-  test('removes the repo meta rows and dangling files docs', async () => {
+  test('removes the repo meta rows, dangling files docs, and version manifests (2.9.7)', async () => {
     seedRepo(GRAPH);
     seedGraphCollections();
-    // query() returns removed docs — program it for the two REMOVE queries
+    // query() returns removed docs — program it for the three REMOVE queries
     mockDb.query
       .mockResolvedValueOnce({ all: async () => [{ concept_id: 'a' }, { concept_id: 'b' }] }) // meta REMOVE
-      .mockResolvedValueOnce({ all: async () => [{ file_id: 'f1' }] }); // files REMOVE
+      .mockResolvedValueOnce({ all: async () => [{ file_id: 'f1' }] }) // files REMOVE
+      .mockResolvedValueOnce({ all: async () => [{ bundle_version: 1 }] }); // versions REMOVE
     const result = await retractRepoGraph(REPO);
     expect(result.meta_removed).toBe(2);
     expect(result.files_removed).toBe(1);
+    expect(result.versions_removed).toBe(1);
     // writes the audit row (actor defaults to system when called from remove())
     const { writeAudit } = require('../services/audit-service');
     expect(writeAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'repo.graph_retract', repo_id: REPO }));

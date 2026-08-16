@@ -126,6 +126,33 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
     const callArgs = fileService.uploadBundle.mock.calls[0][1];
     expect(callArgs.graph_name).toBe(`OKF_${repoId}`);
     expect(callArgs.repo_id).toBe(repoId);
+    // Unminted bundle → bundle_version null (Story 2.9.7 default)
+    expect(callArgs.bundle_version).toBeNull();
+  });
+
+  it('should accept and persist the minted bundle_version (Story 2.9.7)', async () => {
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'versioned-file-id',
+      file_name: 'concept.md',
+      storage_path: '/uploads/versioned-file-id.md'
+    });
+
+    const res = await request(app)
+      .post('/api/files/ingest-bundle')
+      .send({ ...validBody, bundle_version: 3 });
+
+    expect(res.status).toBe(202);
+    const callArgs = fileService.uploadBundle.mock.calls[0][1];
+    expect(callArgs.bundle_version).toBe(3);
+  });
+
+  it('should reject a non-integer bundle_version with 400', async () => {
+    const res = await request(app)
+      .post('/api/files/ingest-bundle')
+      .send({ ...validBody, bundle_version: 'three' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+    expect(fileService.uploadBundle).not.toHaveBeenCalled();
   });
 
   it('should reject malware with 400 and not store anything', async () => {

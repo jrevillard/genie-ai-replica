@@ -50,6 +50,12 @@
 //  12. Bundle-level retraction VERIFIED: repo delete DROPS the per-repo graph
 //      (definition + all 4 collections physically gone from ArangoDB) and
 //      removes the repo's meta rows + dangling files docs.
+//  13. Versioning VERIFIED (2.9.7): mint v1 (publish trigger) → manifest with
+//      the 6 concepts + STORED canonical hashes + okf:v1; repo.version stamped;
+//      a modified re-ingest dedup-skips the 5 unchanged + enqueues the changed
+//      concept WITH bundle_version=1 + the okf:v1 label; the worker drains it
+//      and EVERY new chunk doc carries bundle_version=1; mint v2 (crawl
+//      trigger, D-V4) → list [v2, v1], manifest v1 INTACT (INSERT-only).
 
 const fs = require('fs');
 const path = require('path');
@@ -444,13 +450,19 @@ async function ingestPhase(db) {
   if (removedMeta.length > 0) {
     console.log('  cleanup: removed ' + removedMeta.length + ' prior-run meta rows');
   }
+  const removedVersions = await aqlAll(
+    `FOR v IN okf_versions FILTER v.repo_id == '${INGEST_REPO}' REMOVE v IN okf_versions RETURN OLD.bundle_version`
+  );
+  if (removedVersions.length > 0) {
+    console.log('  cleanup: removed ' + removedVersions.length + ' prior-run version manifests');
+  }
 
   // ── repo for this phase (direct save; resurrect if soft-deleted) ──
   // PROPERLY NAMED (design addendum D-V1/D-V2): the repository name derives
   // from the BUNDLE's own identity (index.md title) — the registry entry,
   // graph, and bundle are one named association, not an anonymous UUID.
-  // version: 1 pins the bundle_version thread (repo.version → meta rows) —
-  // the version-tag integrity contract (title + version on every concept).
+  // UNMINTED start (Story 2.9.7): version null + no okf_tag — the MINT phase
+  // below sets version 1 via the real mintVersion() (never hand-set here).
   const idxMatter = matter(fs.readFileSync(path.join(BUNDLE_DIR, 'index.md'), 'utf8'));
   const bundleTitle = (idxMatter.data && idxMatter.data.title) || 'Kenya Government Services Knowledge Base';
   const bundleOkfVersion = (idxMatter.data && idxMatter.data.okf_version) || '0.2';
@@ -458,8 +470,8 @@ async function ingestPhase(db) {
   const repos = db.collection('okf_repositories');
   try {
     const repoDoc = await repos.document(INGEST_REPO);
-    const patch = { deleted_at: null, name: REPO_NAME, version: 1 };
-    if (repoDoc.deleted_at || repoDoc.version !== 1 || repoDoc.name !== REPO_NAME) {
+    const patch = { deleted_at: null, name: REPO_NAME, version: null, okf_tag: null, version_minted_at: null };
+    if (repoDoc.deleted_at || repoDoc.name !== REPO_NAME || repoDoc.version != null) {
       await repos.update(INGEST_REPO, patch);
     }
   } catch (err) {
@@ -471,7 +483,7 @@ async function ingestPhase(db) {
         domain: 'smoke',
         graph_name: 'OKF_' + INGEST_REPO,
         okf_version: bundleOkfVersion,
-        version: 1,
+        version: null,
         lifecycle_state: 'register'
       });
     } else throw err;
@@ -486,7 +498,9 @@ async function ingestPhase(db) {
       EXPECTED_CONCEPTS +
       ' concepts)'
   );
-  console.log('  REPOSITORY: "' + REPO_NAME + '" repo_id=' + INGEST_REPO + ' domain=smoke version=1');
+  console.log(
+    '  REPOSITORY: "' + REPO_NAME + '" repo_id=' + INGEST_REPO + ' domain=smoke (unminted — minted live below)'
+  );
   console.log('  GRAPH     : ' + OKF_GRAPH + ' (collections ' + OKF_GRAPH + '_SOURCE/_ENTITY/_HAS_SOURCE/_LINKS_TO)');
 
   // ── (i-a) FACILITY A FIRST, drained ALONE (no worker contention) ──
@@ -620,9 +634,9 @@ async function ingestPhase(db) {
   allTitled
     ? pass('meta rows: title present on every concept (frontmatter identity preserved)')
     : fail('meta rows missing title: ' + JSON.stringify(metaRows.map((m) => [m.concept_id, m.title])));
-  const allVersioned = metaRows.every((m) => m.bundle_version === 1);
+  const allVersioned = metaRows.every((m) => m.bundle_version == null);
   allVersioned
-    ? pass('meta rows: bundle_version=1 on every concept (repo.version threaded)')
+    ? pass('meta rows: bundle_version null pre-mint (unminted repo — the MINT phase stamps v1)')
     : fail('meta rows bundle_version: ' + JSON.stringify(metaRows.map((m) => [m.concept_id, m.bundle_version])));
   const allParsed = metaRows.every((m) => m.index_status === 'parsed' && m.graph_name === OKF_GRAPH);
   allParsed
@@ -779,6 +793,133 @@ async function ingestPhase(db) {
   filesAfter === filesBefore
     ? pass('re-ingest: ZERO new files docs (dedup enqueued nothing)')
     : fail('re-ingest created files docs: before=' + filesBefore + ' after=' + filesAfter);
+
+  // ── (ix) MINT v1 (Story 2.9.7 — ADR-031) ──
+  // In-container service call (the HTTP route's authz matrix is unit-tested;
+  // user tokens are expired by this point in the run).
+  const versionService = require('./services/version-service');
+  const mint1 = await versionService.mintVersion(
+    INGEST_REPO,
+    { trigger: 'publish', source_ref: 'smoke://kenya-bundle/v1' },
+    { sub: 'smoke-run' }
+  );
+  mint1.bundle_version === 1 && mint1.okf_tag === 'okf:v1'
+    ? pass('mint v1: ' + mint1.okf_tag + ' (' + mint1.concept_count + ' concepts, trigger=publish)')
+    : fail('mint v1: ' + JSON.stringify(mint1));
+  const repoAfterMint = await repos.document(INGEST_REPO);
+  repoAfterMint.version === 1 && repoAfterMint.okf_tag === 'okf:v1'
+    ? pass('mint v1: repo doc version=1 + okf_tag=okf:v1 stamped')
+    : fail(
+        'repo doc after mint: ' + JSON.stringify({ version: repoAfterMint.version, okf_tag: repoAfterMint.okf_tag })
+      );
+  const manifest1 = await versionService.getVersion(INGEST_REPO, 1);
+  const metaHashes = await aqlAll(
+    "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
+      INGEST_REPO +
+      "' SORT m.concept_id RETURN KEEP(m, ['concept_id','content_hash'])"
+  );
+  manifest1.concept_count === EXPECTED_CONCEPTS &&
+  manifest1.concepts.every(
+    (c, i) => c.concept_id === metaHashes[i].concept_id && c.content_hash === metaHashes[i].content_hash
+  )
+    ? pass('manifest v1: all ' + EXPECTED_CONCEPTS + ' concepts snapshotted with the STORED canonical hashes')
+    : fail(
+        'manifest v1 mismatch: ' +
+          JSON.stringify(manifest1.concepts.slice(0, 2)) +
+          ' vs ' +
+          JSON.stringify(metaHashes.slice(0, 2))
+      );
+  manifest1.okf_tag === 'okf:v1' && manifest1.trigger === 'publish' && typeof manifest1.minted_at === 'string'
+    ? pass('manifest v1: okf:v1 + trigger + minted_at recorded')
+    : fail('manifest v1 metadata: ' + JSON.stringify(manifest1));
+
+  // ── (x) MODIFIED re-ingest → version threading onto files docs + CHUNKS ──
+  // Change ONE concept (service_directory): the other 5 dedup-skip (unchanged +
+  // indexed), the changed one enqueues carrying bundle_version=1 + the okf:v1
+  // tag — the worker drains it and datapretreat stamps bundle_version onto its
+  // chunk docs (ADR-031 "threaded everywhere").
+  const modifiedConcepts = concepts.map((c) =>
+    c.path === 'service_directory.md'
+      ? {
+          ...c,
+          body:
+            c.body +
+            '\n\n## Amended (version-threading probe)\n\nAdded post-v1 to prove the minted version rides new chunks.\n'
+        }
+      : c
+  );
+  const r3 = await ingestService.ingestRepoConcepts(
+    INGEST_REPO,
+    { concepts: modifiedConcepts, labels: ['Service Directory'] },
+    { sub: 'smoke-run', source_ip: null }
+  );
+  r3.skipped_dedup === EXPECTED_CONCEPTS - 1 && r3.enqueued === 1
+    ? pass('modified re-ingest: ' + (EXPECTED_CONCEPTS - 1) + ' dedup-skipped, 1 enqueued (changed concept carries v1)')
+    : fail('modified re-ingest summary: ' + JSON.stringify({ skipped: r3.skipped_dedup, enqueued: r3.enqueued }));
+  const versionedFile = (
+    await aqlAll(
+      "FOR f IN files FILTER f.repo_id == '" +
+        INGEST_REPO +
+        "' AND f.bundle_version == 1 SORT f.uploaded_date DESC LIMIT 1 RETURN KEEP(f, ['file_id','file_name','bundle_version','labels','dataprep'])"
+    )
+  )[0];
+  versionedFile && versionedFile.file_name === 'service_directory.md' && (versionedFile.labels || []).includes('okf:v1')
+    ? pass('version threading: files doc carries bundle_version=1 + the okf:v1 label (sole-injector tag)')
+    : fail('versioned files doc: ' + JSON.stringify(versionedFile));
+  // Wait for the WORKER to drain the versioned file (worker-paced).
+  let vStatus = null;
+  for (let i = 0; i < 60; i++) {
+    await new Promise((r) => setTimeout(r, 15000));
+    const row = (
+      await aqlAll("FOR x IN files FILTER x.file_id == '" + versionedFile.file_id + "' RETURN KEEP(x, ['dataprep'])")
+    )[0];
+    vStatus = row && row.dataprep && row.dataprep.status;
+    if (vStatus === 'Ingested' || vStatus === 'Ingestion Error' || vStatus === 'Killed') break;
+  }
+  vStatus === 'Ingested'
+    ? pass('version threading: worker drained the v1 concept to Ingested')
+    : fail('versioned file drain ended "' + vStatus + '"');
+  const versionedChunks = (
+    await aqlAll(
+      'FOR c IN `' +
+        OKF_GRAPH +
+        '_SOURCE` FILTER c.file_id == "' +
+        versionedFile.file_id +
+        '" COLLECT WITH COUNT INTO n RETURN n'
+    )
+  )[0];
+  const versionedChunkStamps = await aqlAll(
+    'FOR c IN `' +
+      OKF_GRAPH +
+      '_SOURCE` FILTER c.file_id == "' +
+      versionedFile.file_id +
+      '" AND c.bundle_version == 1 COLLECT WITH COUNT INTO n RETURN n'
+  )[0];
+  versionedChunks > 0 && versionedChunkStamps === versionedChunks
+    ? pass(
+        'version threading VERIFIED: all ' +
+          versionedChunkStamps +
+          ' new chunk docs carry bundle_version=1 (citation pinning real)'
+      )
+    : fail('chunk version stamps: ' + versionedChunkStamps + '/' + versionedChunks + ' carry bundle_version=1');
+
+  // ── (xi) MINT v2 + list/immutability (D-V4: every mint = N+1 of the SAME repo) ──
+  const mint2 = await versionService.mintVersion(
+    INGEST_REPO,
+    { trigger: 'crawl', source_ref: 'https://example.gov.ke' },
+    { sub: 'smoke-run' }
+  );
+  mint2.bundle_version === 2 && mint2.okf_tag === 'okf:v2'
+    ? pass('mint v2 (crawl trigger): okf:v2 of the SAME repository (D-V4)')
+    : fail('mint v2: ' + JSON.stringify(mint2));
+  const versionList = await versionService.listVersions(INGEST_REPO);
+  versionList.length === 2 && versionList[0].bundle_version === 2 && versionList[1].bundle_version === 1
+    ? pass('version list: [v2, v1] newest-first (4.5 diff/list backing)')
+    : fail('version list: ' + JSON.stringify(versionList.map((v) => v.bundle_version)));
+  const manifest1Still = await versionService.getVersion(INGEST_REPO, 1);
+  manifest1Still && manifest1Still.bundle_version === 1
+    ? pass('immutability: manifest v1 INTACT after minting v2 (INSERT-only ledger)')
+    : fail('manifest v1 not intact: ' + JSON.stringify(manifest1Still));
 
   // ── (viii) CHUNKS — the physical proof, per facility/graph ──
   // Facility A: default GRAPH. Facility B: the per-repo OKF_{repo_id} graph

@@ -927,7 +927,8 @@ class FileService {
     try {
       await fs.writeFile(filePath, buffer);
 
-      // Create files doc (graph_name + repo_id persisted via T5 extractMetadata fix)
+      // Create files doc (graph_name + repo_id + bundle_version persisted via
+      // the T5 extractMetadata fix + Story 2.9.7)
       await metadataService.addMetadata(filePath, {
         file_id: fileId,
         file_name: bundleInfo.originalFileName || fileName,
@@ -935,7 +936,8 @@ class FileService {
         storage_path: filePath,
         labels: bundleInfo.labels || [],
         graph_name: bundleInfo.graph_name,
-        repo_id: bundleInfo.repo_id
+        repo_id: bundleInfo.repo_id,
+        bundle_version: bundleInfo.bundle_version != null ? bundleInfo.bundle_version : null
       });
     } catch (error) {
       try {

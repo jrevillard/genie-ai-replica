@@ -10,7 +10,7 @@ const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 
 // repo_id IS the document _key (natural uniqueness) — no separate repo_id index.
-const COLLECTIONS = ['okf_repositories', 'okf_concepts_meta', 'okf_audit', 'okf_sources'];
+const COLLECTIONS = ['okf_repositories', 'okf_concepts_meta', 'okf_audit', 'okf_sources', 'okf_versions'];
 
 const INDEXES = {
   okf_repositories: [
@@ -24,6 +24,13 @@ const INDEXES = {
   okf_concepts_meta: [
     { type: 'persistent', fields: ['repo_id'] },
     { type: 'persistent', fields: ['repo_id', 'concept_id'], unique: true }
+  ],
+  // Story 2.9.7 (ADR-031): the immutable version manifests. INSERT-only; the
+  // [repo_id, bundle_version] unique index doubles as the concurrent-mint race
+  // guard (a racing mint hits it and retries with the re-read counter).
+  okf_versions: [
+    { type: 'persistent', fields: ['repo_id'] },
+    { type: 'persistent', fields: ['repo_id', 'bundle_version'], unique: true }
   ],
   okf_audit: [
     { type: 'persistent', fields: ['ts'] },

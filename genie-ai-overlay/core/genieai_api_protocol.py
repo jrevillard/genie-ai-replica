@@ -218,6 +218,7 @@ class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
         edge_properties: list[str] | None = None,
         text_capitalization_strategy: str | None = None,
         include_chunks: bool | None = None,
+        bundle_version: int | None = None,
     ):
         super().__init__(
             files=files,
@@ -247,3 +248,6 @@ class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
         self.file_type = file_type
         self.upload_date = upload_date
         self.file_labels = file_labels
+        # OKF minted repo version (Story 2.9.7, ADR-031) — stamped onto every
+        # chunk doc (version-pinned citation); None = unminted legacy.
+        self.bundle_version = bundle_version

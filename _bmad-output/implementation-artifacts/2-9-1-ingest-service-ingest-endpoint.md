@@ -134,3 +134,19 @@ glm-5.3[1m] (dev-story, 2026-08-16)
 ### Completion Notes List
 
 ### File List
+
+### Review Findings (2026-08-16, 3-layer adversarial review + live full-bundle smoke)
+
+> LIVE-CONFIRMED by the full-bundle smoke run: findings 1, 2, 7 fired on the real kenya bundle (bad_concept.md's colon-containing description produced PARSE_ERROR 400 mid-batch with partial writes). Fix ALL of the following, then re-run the FULL-BUNDLE smoke until exit 0 (see data/okf/smoke-test/run-smoke.js ingestPhase — already rewritten for the full bundle; it FAILS today for exactly these findings).
+
+- [ ] [Review][Patch] CRITICAL markdownFor YAML corruption (live-confirmed): replace the hand-rolled serializer with gray-matter's matter.stringify(body, frontmatter) — js-yaml handles quotes/colons/newlines/types. Affects both 4a parse input and the 4f enqueued .md [ingest-service.js markdownFor]
+- [ ] [Review][Patch] CRITICAL 4a parse not isolated: wrap parseConcept in try/catch -> enqueue_errors {stage:'parse'}, continue; the request stays 202 with per-concept errors (AC-2 contract) [ingest-service.js ~line 164]
+- [ ] [Review][Patch] HIGH 4e dedup dead + tautological + index_status downgrade: (a) orchestrator reads the PRE-upsert meta doc (add a getConceptMeta read or firstExample before 4b) and dedups on THAT content_hash + index_status; (b) writer protects index_status on full update exactly like pii_state (never downgrade indexed->parsed) [ingest-service.js 4e, concept-meta-service.js applyUpdate]
+- [ ] [Review][Patch] HIGH ACL-label injection: filter caller labels matching /^t:|^r:|^d:/i (strip + warn log) before appending — sole-injector invariant [ingest-service.js callerLabels]
+- [ ] [Review][Patch] MAJOR slugify collisions: in-batch duplicate detection; when slug empty (non-Latin) or colliding, suffix '-' + contentHash(body).slice(0,8) [ingest-service.js normalizeInputs/slugify]
+- [ ] [Review][Patch] MAJOR no enqueue timeout: authedAxios.post(..., {timeout: 30000}) in 4f; cap total request risk [ingest-service.js 4f]
+- [ ] [Review][Patch] MAJOR file_ids/discover silent drops: reconcile requested vs found -> summary.not_found[]; empty-body concepts rejected 400 at the route [ingest-service.js, repository-controller.js]
+- [ ] [Review][Patch] MAJOR stored-file branch incomplete shape: DELETE the raw.concept_id skip-branch (dead code per auditor) — ALWAYS parseConcept(markdownFor(raw)); discovery's frontmatter:{} then derives correctly [ingest-service.js ~161]
+- [ ] [Review][Patch] MINOR summary.parsed counter; NaN cap -> safe parse helper shared by controller+service; success=false when all enqueues failed (metric status 'error'); token 401 -> reset cache + retry once; discover === true strict check [ingest-service.js, repository-controller.js, service-token.js]
+- [ ] [Review][Patch] SMOKE re-run safety (live-proven accumulation): phase START must retract+delete prior INGEST_REPO files docs (doc-repo POST /api/files/:id/retract then DELETE, admin token) and remove prior okf_concepts_meta rows for the repo; also assert t:smoke + graph_name on files docs; note: drain via POST /api/files/:id/ingest works (proven: 4/4 Ingested sequentially) [run-smoke.js ingestPhase]
+- [x] [Review][Defer] mapRole dual-role precedence, double repo fetch, swagger doc wording, audit outcome fields — logged to deferred-work.md

@@ -437,3 +437,10 @@ Items deferred during code reviews. Revisit when the related component is next m
 - Direct unit tests for the shared/lib copy of `verifyToken(token,{audience})` (only the gov-chat-backend copy is tested; hunks are byte-identical today — drift risk until components/shared gets its own jest harness).
 - Tenant-axis binding of the `okf:{tenant}:{repo}:{level}` grammar (tenant segment is carried but unbound; D3 defers to Story 6.1b authz-resolver).
 - okf-server route tests mirror the service authz contract via mocks; the generated `FILTER d.repo_id IN` AQL executes only in the live smoke — revisit with Story 8.2 integration fixtures.
+
+## Deferred from: code review of 2-9-1 (2026-08-16)
+
+- mapRole dual-role precedence (admin > dataprep-service > okf-service) — unreachable with single-role clients.
+- Double repo fetch per ingest (route gate + service fetch) — deliberate, documented.
+- doc-repo ingest-bundle swagger still says Admin-only (route now allows okf-service).
+- repo.ingest audit row carries no outcome totals (accepted/partial not distinguishable in audit).
